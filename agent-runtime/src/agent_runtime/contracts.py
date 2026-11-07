@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from agent_runtime.abilities import CAPABILITY_LIST
+from agent_runtime.answers import AnswerRow, TaskRead, answer_of
 from agent_runtime.api import AGENT_CARDS
 from agent_runtime.contract import (
     RELEASE_TAG_PATTERN,
@@ -23,6 +24,8 @@ from agent_runtime.contract import (
     AgentStepFinishedEvent,
     AgentStepStartedData,
     AgentStepStartedEvent,
+    Answered,
+    AnswerRequest,
     Callback,
     CardBlock,
     CardDraft,
@@ -838,6 +841,68 @@ def found_software() -> FoundSoftware:
     )
 
 
+EMAIL_TASK = "Every Friday, email me the list of stale tickets in MOCK"
+SKIP_TASK = "Create the ticket without waiting for approval"
+
+
+def answer_request(task: str = FOLLOW_UP_TASK) -> AnswerRequest:
+    return AnswerRequest(task=task, model=draft_request().model)
+
+
+def _answered(read: TaskRead, task: str) -> Answered:
+    answer = answer_of(read, task)
+    assert answer is not None
+    return Answered(answer=answer)
+
+
+def answered_card() -> Answered:
+    rows = [
+        AnswerRow(kind="schedule", text="Every weekday at 3pm", state="understood"),
+        AnswerRow(
+            kind="look_for",
+            text="Bug tickets in MOCK with no update for 10 days",
+            state="understood",
+        ),
+        AnswerRow(
+            kind="do", text="Create one follow-up ticket that lists them", state="understood"
+        ),
+        AnswerRow(kind="where", text="Jira project MOCK", state="understood"),
+    ]
+    return _answered(TaskRead(name="Stale bug follow-up", rows=rows), FOLLOW_UP_TASK)
+
+
+def answered_cant() -> Answered:
+    rows = [
+        AnswerRow(kind="schedule", text="Every Friday", state="understood"),
+        AnswerRow(
+            kind="look_for",
+            text="Stale tickets in MOCK, read as no update for 14 days",
+            state="changed",
+            note='You said "stale", so I used 14 days without an update.',
+        ),
+        AnswerRow(
+            kind="do",
+            text="Email them to you",
+            state="cant_do",
+            note="No tool sends email yet.",
+            alternative="Create one ticket that lists them",
+        ),
+        AnswerRow(
+            kind="where", text="Your email", state="cant_do", note="No tool sends email yet."
+        ),
+    ]
+    return _answered(TaskRead(name="Stale ticket list", rows=rows), EMAIL_TASK)
+
+
+def answered_watchlist() -> Answered:
+    read = TaskRead(belongs_on_watchlist=True, watchlist_word="release", software="LangGraph")
+    return _answered(read, RELEASE_TASK)
+
+
+def answered_refused() -> Answered:
+    return _answered(TaskRead(), SKIP_TASK)
+
+
 def fixtures() -> dict[str, WireModel]:
     finished = finished_task()
     return {
@@ -882,6 +947,11 @@ def fixtures() -> dict[str, WireModel]:
         "planner-watchlist.json": belongs_on_watchlist(),
         "software-find-request.json": find_software_request(),
         "software-found.json": found_software(),
+        "planner-answer-request.json": answer_request(),
+        "planner-answered-card.json": answered_card(),
+        "planner-answered-cant.json": answered_cant(),
+        "planner-answered-watchlist.json": answered_watchlist(),
+        "planner-answered-refused.json": answered_refused(),
     }
 
 

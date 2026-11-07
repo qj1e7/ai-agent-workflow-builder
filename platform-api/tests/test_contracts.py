@@ -31,6 +31,7 @@ from platform_api.monitoring.events import DeniedReason, WireVerdict, activity_e
 from platform_api.monitoring.http import TroubleshootingOut
 from platform_api.orchestration.agents import (
     AgentCards,
+    AnswerRequest,
     ChooseRequest,
     ConnectRequest,
     DraftRequest,
@@ -40,6 +41,7 @@ from platform_api.orchestration.agents import (
     TaskRequest,
     UnderstandRequest,
     WatchlistInputs,
+    answer_result_adapter,
     choose_result_adapter,
     connect_result_adapter,
     draft_result_adapter,
@@ -119,6 +121,11 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "agent/planner-watchlist.json": understand_result_adapter,
     "agent/software-find-request.json": TypeAdapter(FindSoftwareRequest),
     "agent/software-found.json": find_software_result_adapter,
+    "agent/planner-answer-request.json": TypeAdapter(AnswerRequest),
+    "agent/planner-answered-card.json": answer_result_adapter,
+    "agent/planner-answered-cant.json": answer_result_adapter,
+    "agent/planner-answered-watchlist.json": answer_result_adapter,
+    "agent/planner-answered-refused.json": answer_result_adapter,
     "views/success.awaiting_approval.json": run_view_adapter,
     "views/success.final.json": run_view_adapter,
     "views/failure.working.json": run_view_adapter,

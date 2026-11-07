@@ -438,6 +438,22 @@ def test_the_software_is_a_whole_word_of_the_task(software: str, task: str, show
 @pytest.mark.parametrize(
     ("said", "task", "word"),
     [
+        ("newer version", "Is there a newer version of FastAPI", "version"),
+        ("new release", "Tell me when LangGraph has a new release", "release"),
+        ("security patches", "Tell me about Log4j security patches", "security patches"),
+        ("version or release", "Tell me about each new release of Redis", "release"),
+    ],
+)
+def test_a_watchlist_word_said_in_more_than_one_word_is_the_tasks_own_word(
+    said: str, task: str, word: str
+):
+    answer = UnderstandAnswer(belongs_on_watchlist=True, watchlist_word=said)
+    assert understood_of(answer, task) == BelongsOnWatchlist(word=word)
+
+
+@pytest.mark.parametrize(
+    ("said", "task", "word"),
+    [
         ("version", "Our versioned docs need the new version of FastAPI", "version"),
         ("versions", "Our versioned docs need the new version of FastAPI", "version"),
         ("release", "The released notes list every new release", "release"),

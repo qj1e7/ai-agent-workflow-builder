@@ -438,6 +438,110 @@ type FindSoftwareResult = Annotated[
 find_software_result_adapter: TypeAdapter[FindSoftwareResult] = TypeAdapter(FindSoftwareResult)
 
 
+class AnswerRequest(WireModel):
+    task: str
+    model: ModelAccess
+
+
+type CantNeed = Literal["new_tool", "new_system"]
+
+
+class CantRow(WireModel):
+    kind: RowKind
+    text: str = Field(max_length=200)
+    note: str = Field(max_length=300)
+    needs: CantNeed
+    system: str | None = Field(default=None, max_length=40)
+
+
+class SetupCardAnswer(WireModel):
+    kind: Literal["setup_card"] = "setup_card"
+    name: str = Field(min_length=1, max_length=60)
+    rows: list[UnderstoodRow] = Field(min_length=4, max_length=8)
+
+
+class PartAnswer(WireModel):
+    kind: Literal["part"] = "part"
+    name: str = Field(min_length=1, max_length=60)
+    rows: list[UnderstoodRow] = Field(min_length=4, max_length=8)
+    cant: list[CantRow] = Field(min_length=1)
+
+
+type Alternative = Annotated[SetupCardAnswer | WatchlistAnswer, Field(discriminator="kind")]
+
+
+class CantAnswer(WireModel):
+    kind: Literal["cant"] = "cant"
+    cant: list[CantRow] = Field(min_length=1)
+    alternative: Alternative | None = None
+
+
+class WatchlistAnswer(WireModel):
+    kind: Literal["watchlist"] = "watchlist"
+    word: str = Field(min_length=1, max_length=80)
+    software: str | None = Field(default=None, max_length=80)
+    also: (
+        Annotated[SetupCardAnswer | PartAnswer | CantAnswer, Field(discriminator="kind")] | None
+    ) = None
+
+
+CantAnswer.model_rebuild()
+
+
+class WhichSoftwareAnswer(WireModel):
+    kind: Literal["which_software"] = "which_software"
+    word: str = Field(min_length=1, max_length=80)
+
+
+class RefusedAnswer(WireModel):
+    kind: Literal["refused"] = "refused"
+    reason: Literal["skip_approval"] = "skip_approval"
+    rest: str = Field(max_length=2000)
+
+
+class CheckWorkflowsAnswer(WireModel):
+    kind: Literal["check_workflows"] = "check_workflows"
+    workflow_words: str | None = Field(default=None, max_length=80)
+
+
+class WhyStoppedAnswer(WireModel):
+    kind: Literal["why_stopped"] = "why_stopped"
+    workflow_words: str | None = Field(default=None, max_length=80)
+
+
+class NeedsMeAnswer(WireModel):
+    kind: Literal["needs_me"] = "needs_me"
+
+
+class AbilitiesAnswer(WireModel):
+    kind: Literal["abilities"] = "abilities"
+
+
+type PlannerAnswer = Annotated[
+    SetupCardAnswer
+    | PartAnswer
+    | CantAnswer
+    | WatchlistAnswer
+    | WhichSoftwareAnswer
+    | RefusedAnswer
+    | CheckWorkflowsAnswer
+    | WhyStoppedAnswer
+    | NeedsMeAnswer
+    | AbilitiesAnswer,
+    Field(discriminator="kind"),
+]
+
+
+class Answered(WireModel):
+    status: Literal["answered"] = "answered"
+    answer: PlannerAnswer
+
+
+type AnswerResult = Annotated[Answered | ModelProblem, Field(discriminator="status")]
+
+answer_result_adapter: TypeAdapter[AnswerResult] = TypeAdapter(AnswerResult)
+
+
 class AgentCard(WireModel):
     id: str
     display: str

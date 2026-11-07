@@ -11,6 +11,7 @@ from agent_runtime.contract import (
     AgentCards,
     AgentEventPost,
     CapabilityList,
+    AnswerRequest,
     ChooseRequest,
     ChooseResult,
     ConnectRequest,
@@ -26,6 +27,7 @@ from agent_runtime.contract import (
     ToolList,
     UnderstandRequest,
     UnderstandResult,
+    answer_result_adapter,
     task_result_adapter,
 )
 
@@ -64,6 +66,11 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "planner-watchlist.json": TypeAdapter(UnderstandResult),
     "software-find-request.json": TypeAdapter(FindSoftwareRequest),
     "software-found.json": TypeAdapter(FindSoftwareResult),
+    "planner-answer-request.json": TypeAdapter(AnswerRequest),
+    "planner-answered-card.json": answer_result_adapter,
+    "planner-answered-cant.json": answer_result_adapter,
+    "planner-answered-watchlist.json": answer_result_adapter,
+    "planner-answered-refused.json": answer_result_adapter,
 }
 
 

@@ -1,6 +1,17 @@
 import pytest
 
-from agent_runtime.abilities import ABILITIES, Ability, why_not, words
+from agent_runtime.abilities import (
+    ABILITIES,
+    Ability,
+    Need,
+    need_of,
+    sets_a_ticket_field,
+    skip_of_a_yes,
+    vulnerability_phrase,
+    why_not,
+    without_the_skip,
+    words,
+)
 from agent_runtime.contract import RowKind
 from agent_runtime.planner import why_no_tool
 
@@ -472,6 +483,10 @@ def test_a_read_or_a_new_jira_ticket_stays_as_the_model_said(text: str):
         ("do", "Look up Log4j in the NVD"),
         ("do", "Check our packages for security advisories"),
         ("schedule", "Whenever a new CVE is published"),
+        ("look_for", "Log4j security patches"),
+        ("do", "Tell me about Log4j security fixes"),
+        ("do", "Watch for security alerts about Redis"),
+        ("look_for", "New security bulletins for Kubernetes"),
     ],
 )
 def test_a_vulnerability_check_is_cant_do_and_the_note_says_it_is_planned(kind: RowKind, text: str):
@@ -485,6 +500,7 @@ def test_a_vulnerability_check_is_cant_do_and_the_note_says_it_is_planned(kind: 
         ("look_for", "Bug tickets in MOCK labelled vulnerability"),
         ("look_for", "Jira issues that mention CVE-2021-44228"),
         ("do", "Create a ticket for the Log4j vulnerability"),
+        ("look_for", "Tickets in MOCK about security patches"),
     ],
 )
 def test_a_search_of_jira_tickets_about_a_vulnerability_stays_as_the_model_said(
@@ -534,3 +550,106 @@ def test_a_new_tool_is_one_more_line_in_the_table():
         "software for new releases, create a Jira ticket after a yes, and post a message in "
         "Teams."
     )
+
+
+@pytest.mark.parametrize(
+    ("text", "phrase"),
+    [
+        ("Warn me about any known vulnerabilities in Log4j", "vulnerabilities"),
+        ("Tell me about Log4j security patches", "security patches"),
+        ("Check whether we are affected by CVE-2021-44228", "CVE-2021-44228"),
+        ("Tell me when Log4j has a security patch and a new release", "security patch"),
+        ("find tickets about security patches in MOCK", None),
+        ("Tell me when Log4j is patched", None),
+        ("Keep our security team's tickets in MOCK up to date", None),
+    ],
+)
+def test_the_vulnerability_words_are_found_as_the_text_wrote_them(text: str, phrase: str | None):
+    assert vulnerability_phrase(text) == phrase
+
+
+@pytest.mark.parametrize(
+    ("text", "skip", "rest"),
+    [
+        (
+            "Create the ticket without waiting for approval",
+            "without waiting for approval",
+            "Create the ticket",
+        ),
+        ("Skip the approval and file it", "Skip the approval", "file it"),
+        ("File it with no approval", "with no approval", "File it"),
+        ("File the ticket, no approval needed", "no approval needed", "File the ticket"),
+        (
+            "Approve it automatically and close the tickets",
+            "Approve it automatically",
+            "close the tickets",
+        ),
+        ("Auto-approve every ticket", "Auto-approve", "every ticket"),
+        ("Don't wait for an approver, just create it", "Don't wait for an approver", "create it"),
+        ("Create it and never ask anyone", "never ask anyone", "Create it"),
+        ("Let it approve its own requests", "approve its own", "Let it requests"),
+        ("Bypass the approval gate", "Bypass the approval", "gate"),
+    ],
+)
+def test_words_that_skip_a_yes_are_found_and_removed(text: str, skip: str, rest: str):
+    assert skip_of_a_yes(text) == skip
+    assert without_the_skip(text) == rest
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Run it by itself every Monday",
+        "Without asking me each time, list the tickets",
+        "Every Monday, list the tickets and ask an Approver to approve each one",
+        "Automatically list the open tickets every morning",
+        "Create one ticket after the approval",
+        "List who approved each ticket",
+    ],
+)
+def test_the_products_own_words_do_not_skip_a_yes(text: str):
+    assert skip_of_a_yes(text) is None
+
+
+@pytest.mark.parametrize(
+    ("kind", "text", "need"),
+    [
+        ("do", "Email them to you", Need("new_system", "email")),
+        ("where", "Your email", Need("new_system", "email")),
+        ("do", "Post it in Teams", Need("new_system", "Teams")),
+        ("where", "The Weekly summary page in Confluence", Need("new_system", "Confluence")),
+        ("do", "Write them to the ops teams chat", Need("new_system", None)),
+        ("do", "Warn you about them", Need("new_system", None)),
+        ("look_for", "Who has admin access in GitLab", Need("new_system", "GitLab")),
+        ("look_for", "Known vulnerabilities in Log4j", Need("new_system", None)),
+        ("do", "Change their component", Need("new_tool", "Jira")),
+        ("do", "Close every ticket", Need("new_tool", "Jira")),
+        ("do", "Add a comment to each ticket", Need("new_tool", "Jira")),
+        ("do", "Create one GitHub issue that lists them", Need("new_tool", "GitHub")),
+    ],
+)
+def test_a_part_the_platform_cant_do_needs_a_new_tool_or_a_new_system(
+    kind: RowKind, text: str, need: Need
+):
+    assert need_of(kind, text) == need
+
+
+def test_a_part_that_acts_on_what_another_system_holds_needs_that_system():
+    assert need_of("do", "Remove anyone who has left the team", "GitLab") == Need(
+        "new_system", "GitLab"
+    )
+    assert need_of("do", "Close every ticket", "GitLab") == Need("new_tool", "Jira")
+
+
+@pytest.mark.parametrize(
+    ("text", "field"),
+    [
+        ("Change their component", True),
+        ("Set the priority to high", True),
+        ("Add the label stale", True),
+        ("Close every ticket", False),
+        ("Delete them", False),
+    ],
+)
+def test_only_a_field_on_tickets_is_a_tool_the_team_can_add(text: str, field: bool):
+    assert sets_a_ticket_field(text) is field

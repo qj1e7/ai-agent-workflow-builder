@@ -1,0 +1,52 @@
+{
+  "status": "answered",
+  "answer": {
+    "kind": "cant",
+    "cant": [
+      {
+        "kind": "do",
+        "text": "Email them to you",
+        "note": "No tool sends email yet.",
+        "needs": "new_system",
+        "system": "email"
+      },
+      {
+        "kind": "where",
+        "text": "Your email",
+        "note": "No tool sends email yet.",
+        "needs": "new_system",
+        "system": "email"
+      }
+    ],
+    "alternative": {
+      "kind": "setup_card",
+      "name": "Stale ticket list",
+      "rows": [
+        {
+          "kind": "schedule",
+          "text": "Every Friday",
+          "state": "understood",
+          "note": null
+        },
+        {
+          "kind": "look_for",
+          "text": "Stale tickets in MOCK, read as no update for 14 days",
+          "state": "changed",
+          "note": "You said \"stale\", so I used 14 days without an update."
+        },
+        {
+          "kind": "do",
+          "text": "Create one ticket that lists them",
+          "state": "changed",
+          "note": "Suggested instead of \"Email them to you\"."
+        },
+        {
+          "kind": "where",
+          "text": "",
+          "state": "missing",
+          "note": "Please choose something I can do instead."
+        }
+      ]
+    }
+  }
+}
