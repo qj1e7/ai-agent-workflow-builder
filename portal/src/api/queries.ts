@@ -348,6 +348,11 @@ export function useFindSoftware() {
   })
 }
 
+/** A watched repository that moved or went missing is in Home's Needs you, so a change to the list reads Home again with the workflows. */
+export function refreshAfterWatchlistChange(queryClient: QueryClient): Promise<unknown> {
+  return Promise.all(['use-cases', 'home'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })))
+}
+
 export function useAddSoftware() {
   const client = useApiClient()
   const queryClient = useQueryClient()
@@ -356,7 +361,7 @@ export function useAddSoftware() {
     mutationFn: async (body: AddSoftware) => unwrap(await client.POST('/api/v1/watchlist/software', { body })),
     onSuccess: (view) => {
       queryClient.setQueryData(keys.watchlist(user), view)
-      return queryClient.invalidateQueries({ queryKey: ['use-cases'] })
+      return refreshAfterWatchlistChange(queryClient)
     },
   })
 }
@@ -371,7 +376,10 @@ export function useRemoveSoftware() {
       unwrap(
         await client.DELETE('/api/v1/watchlist/software/{software_id}', { params: { path: { software_id: softwareId } } }),
       ),
-    onSuccess: (view) => queryClient.setQueryData(keys.watchlist(user), view),
+    onSuccess: (view) => {
+      queryClient.setQueryData(keys.watchlist(user), view)
+      return refreshAfterWatchlistChange(queryClient)
+    },
     onError: rereadIfAlreadyRemoved,
   })
 }
@@ -385,7 +393,10 @@ export function useRestoreSoftware() {
       unwrap(
         await client.POST('/api/v1/watchlist/software/{software_id}/restore', { params: { path: { software_id: softwareId } } }),
       ),
-    onSuccess: (view) => queryClient.setQueryData(keys.watchlist(user), view),
+    onSuccess: (view) => {
+      queryClient.setQueryData(keys.watchlist(user), view)
+      return refreshAfterWatchlistChange(queryClient)
+    },
     onError: () => queryClient.invalidateQueries({ queryKey: keys.watchlist(user) }),
   })
 }
@@ -403,7 +414,7 @@ function useSwitchAddress(tail: 'address' | 'address/undo') {
       ),
     onSuccess: (view) => {
       queryClient.setQueryData(keys.watchlist(user), view)
-      return queryClient.invalidateQueries({ queryKey: ['use-cases'] })
+      return refreshAfterWatchlistChange(queryClient)
     },
     onError: () => queryClient.invalidateQueries({ queryKey: keys.watchlist(user) }),
   })
