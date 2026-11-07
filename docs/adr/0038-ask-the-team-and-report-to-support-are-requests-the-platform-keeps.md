@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Ask the team and Report to support are requests the platform keeps
@@ -15,9 +15,9 @@ Three facts limit the choice.
 - **No new outbound channels.** Email isn't on the team's plan, and agents can't post messages in Teams (ADR 0036 uses Teams only for the approval card).
 - **Private networks.** The app must later run inside DevNet, so the answer can't depend on an outside service.
 
-## Proposed decision
+## Decision
 
-This is a draft. The team and the sponsor must confirm the open questions below before it is accepted.
+Accepted on 7 Nov 2026 by the team lead, with the recommended answers below. Questions 1 and 3 still need the sponsor. Their answers change the handover guide and the retention setting, not the code.
 
 - **The platform keeps every request in its own database,** in the builder context. Each request records:
   - who asked, and when;
@@ -46,7 +46,7 @@ The confirmation in the app then says what is true, for example "Saved as a requ
 
 ## Open questions, with recommended answers
 
-The team lead recommended these answers on 7 Nov. Questions 1 and 3 still need the sponsor, or NCS through the sponsor.
+The team lead accepted these answers on 7 Nov. Questions 1 and 3 still need the sponsor, or NCS through the sponsor.
 
 1. **After handover, who looks at "Platform problem" reports?**
    - Recommended:
