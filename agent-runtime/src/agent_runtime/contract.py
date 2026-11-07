@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter
@@ -259,6 +259,13 @@ type TaskInputs = Annotated[WatchlistInputs | CardsInputs, Field(discriminator="
 
 class CarryForward(WireModel):
     """What a run hands to the next run of its use case."""
+
+    last_run_on: date | None = Field(
+        default=None,
+        description="The day the workflow's last finished run started, as a UTC day. None when "
+        "it has no finished run yet. The platform sets it on a task. It is empty in a task's "
+        "output.",
+    )
 
 
 class Callback(WireModel):

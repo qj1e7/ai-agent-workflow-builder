@@ -771,7 +771,22 @@
     "CarryForward": {
       "additionalProperties": false,
       "description": "What a run hands to the next run of its use case.",
-      "properties": {},
+      "properties": {
+        "last_run_on": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The day the workflow's last finished run started, as a UTC day. None when it has no finished run yet. The platform sets it on a task. It is empty in a task's output.",
+          "title": "Last Run On"
+        }
+      },
       "title": "CarryForward",
       "type": "object"
     },

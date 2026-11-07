@@ -1,7 +1,25 @@
-from harness import Api, Json, approval_requested, assert_gapless, bob_decides, tickets_for
+from collections.abc import Iterator
+from datetime import UTC, datetime
+
+import pytest
+from harness import (
+    Api,
+    Json,
+    SeededTicket,
+    approval_requested,
+    assert_gapless,
+    bob_decides,
+    remove_tickets,
+    seed_tickets,
+    tickets_for,
+)
 
 SUMMARY_TASK = "Every Friday summarise the tickets we finished in MOCK."
 RELEASE_TASK = "Check acme/planted for a new release and raise a ticket in MOCK."
+STALE_TASK = (
+    "Every Friday, list bug tickets with no update for 10 days and create one follow-up "
+    "ticket that lists them. Where it goes: Jira project MOCK."
+)
 PLANTED = {"GitHub repository": "acme/planted", "Jira project": "MOCK"}
 
 
@@ -100,3 +118,82 @@ def test_the_plan_for_a_task_the_platform_cannot_do_says_so(api: Api, mock_model
         "alice", "/api/v1/builder/plan", {"task": "Book a meeting room for Friday."}, expect=(200,)
     ).json()
     assert plan["decision"] == "cannot_do"
+
+
+@pytest.fixture
+def quiet_project() -> Iterator[dict[str, str]]:
+    """Practice tickets in MOCK. Two bugs are stale, one bug is fresh, and one old ticket is not
+    a bug. The names map each ticket to its key."""
+    seeded = {
+        "stale bug": SeededTicket("E2E stale bug", "Bug", 12, "Dana Tan"),
+        "older stale bug": SeededTicket("E2E older stale bug", "Bug", 30),
+        "fresh bug": SeededTicket("E2E fresh bug", "Bug", 2, "Dana Tan"),
+        "stale task": SeededTicket("E2E stale task", "Task", 20, "Dana Tan"),
+    }
+    keys = seed_tickets("MOCK", list(seeded.values()))
+    try:
+        yield dict(zip(seeded, keys, strict=True))
+    finally:
+        remove_tickets(keys)
+
+
+def test_a_stale_bug_agent_lists_exactly_the_bugs_with_no_update_for_ten_days(
+    api: Api, mock_model: None, quiet_project: dict[str, str]
+) -> None:
+    plan = api.post("alice", "/api/v1/builder/plan", {"task": STALE_TASK}, expect=(200,)).json()
+    assert plan["decision"] == "new_agent"
+    assert plan["problems"] == []
+    [search, _propose] = plan["draft"]["blocks"]
+    assert search["say"] == "Find bug tickets with no update for 10 days."
+
+    saved = api.post("alice", "/api/v1/agent-cards", plan["draft"], expect=(201,)).json()
+    run_id = run_agents(api, saved["card_id"], {"Jira project": "MOCK"}, "e2e stale bugs")
+    view = approve(api, run_id)
+
+    [action] = view["actions"]
+    listed = {key.strip(" .,") for key in action["fields"]["body"].split() if "-" in key}
+    assert listed == {quiet_project["stale bug"], quiet_project["older stale bug"]}, (
+        "only bugs that had no update for 10 days are listed, not the fresh bug or the old task"
+    )
+    api.wait_for_state("alice", run_id, {"succeeded"})
+
+
+def test_a_second_run_tells_its_agent_the_day_the_first_run_started(
+    api: Api, mock_model: None, quiet_project: dict[str, str]
+) -> None:
+    plan = api.post("alice", "/api/v1/builder/plan", {"task": STALE_TASK}, expect=(200,)).json()
+    saved = api.post("alice", "/api/v1/agent-cards", plan["draft"], expect=(201,)).json()
+    body: Json = {
+        "name": "e2e last run",
+        "instruction": "Run the agent.",
+        "agents": [{"card_id": saved["card_id"], "values": {"Jira project": "MOCK"}}],
+    }
+    made = api.post("alice", "/api/v1/agent-use-cases", body, expect=(201,)).json()
+
+    first_day = datetime.now(UTC).date()
+    first, _ = api.start_run("alice", made["use_case_id"])
+    approve(api, first)
+    api.wait_for_state("alice", first, {"succeeded"})
+    second, _ = api.start_run("alice", made["use_case_id"])
+    api.stream_until("alice", second, {"approval_requested"})
+
+    def search_line(run_id: str) -> str:
+        [line] = [
+            e["summary"]
+            for e in api.events_after("alice", run_id)
+            if e["kind"] == "agent_step_started" and "searches" in e["summary"]
+        ]
+        return line
+
+    assert "created on or after" not in search_line(first)
+    assert search_line(second).endswith(
+        f"created on or after {first_day.day} {first_day:%b} (the last run)."
+    )
+    view = api.get(
+        "bob",
+        f"/api/v1/approvals/{approval_requested(api.events_after('alice', second))['approval_id']}",
+    )
+    [action] = view["actions"]
+    assert not any(key in action["fields"]["body"] for key in quiet_project.values()), (
+        "the seeded bugs were created long before the last run, so the second search skips them"
+    )

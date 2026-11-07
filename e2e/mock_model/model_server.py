@@ -14,7 +14,9 @@ can be tested without a real model:
   the real model does.
 - A request with tools and no forced tool is a card run. The mock calls github_read_releases,
   then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
-  The ticket's title follows the card: a release, a follow-up or a summary.
+  The ticket's title follows the card: a release, a follow-up or a summary. The follow-up card
+  searches for bug tickets with no update for the days its plan names, working the day out from
+  the date in the prompt, and its ticket body lists the tickets the search returned.
 - Anything else is a summary or a connection test and gets one plain sentence.
 
 When a tool result tells it to use another Jira project (the planted instruction in a release
@@ -30,6 +32,7 @@ import argparse
 import json
 import re
 import time
+from datetime import date, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, cast
 
@@ -117,6 +120,11 @@ FOLLOW_UP_DRAFT: dict[str, Any] = {
     ],
 }
 CARD_NAME = re.compile(r"^Agent card: (.+)$", re.MULTILINE)
+DAYS = re.compile(r"\b(\d+)\s+days?\b", re.IGNORECASE)
+TODAY = re.compile(r"Today is [^(\n]*\((\d{4}-\d{2}-\d{2})\)")
+LAST_RUN = re.compile(r"started on [^(\n]*\((\d{4}-\d{2}-\d{2})\)\. For tickets since the last run")
+STALE_STEP = re.compile(r"no update for (\d+) days?", re.IGNORECASE)
+FOUND_KEY = re.compile(r'"key": "([A-Z][A-Z0-9_]*-\d+)"')
 
 
 def text_of(content: Any) -> str:
@@ -307,12 +315,42 @@ def understanding(task: str, carried_on: bool = False) -> dict[str, Any]:
     return {"belongs_on_watchlist": False, "rows": [no_vulnerability_tool(r) for r in parts(task)]}
 
 
+def follow_up_draft(task: str) -> dict[str, Any]:
+    """The follow-up card, with the days the staff member named in its search step."""
+    named = DAYS.search(task)
+    if named is None:
+        return FOLLOW_UP_DRAFT
+    first, *rest = FOLLOW_UP_DRAFT["blocks"]
+    search = {**first, "say": f"Find bug tickets with no update for {named.group(1)} days."}
+    return {**FOLLOW_UP_DRAFT, "blocks": [search, *rest]}
+
+
+def stale_search(system: str, project: str) -> dict[str, Any]:
+    """The search a follow-up card asks for: bug tickets last updated on or before the day that
+    is N days before the date in the prompt, and, when the prompt names the last run's day, only
+    tickets created since then."""
+    arguments: dict[str, Any] = {"project": project}
+    days = STALE_STEP.search(system)
+    today = TODAY.search(system)
+    if days is not None and today is not None:
+        cutoff = date.fromisoformat(today.group(1)) - timedelta(days=int(days.group(1)))
+        arguments |= {"issue_type": "Bug", "updated_before": cutoff.isoformat()}
+    last_run = LAST_RUN.search(system)
+    if last_run is not None:
+        arguments["created_since"] = last_run.group(1)
+    return arguments
+
+
 def forced(body: dict[str, Any], name: str) -> dict[str, Any]:
     lowered = name.lower()
     if mode == "broken":
         return call(name, BROKEN, 0)
     if "draft" in lowered:
-        return call(name, FOLLOW_UP_DRAFT if FOLLOW_UP.search(task_text(body)) else DRAFT, 0)
+        return call(
+            name,
+            follow_up_draft(task_text(body)) if FOLLOW_UP.search(task_text(body)) else DRAFT,
+            0,
+        )
     if "choice" in lowered:
         return call(name, choice(task_text(body)), 0)
     if "understand" in lowered:
@@ -348,19 +386,23 @@ def run_step(body: dict[str, Any]) -> dict[str, Any]:
     number = sum(calls.values())
     if "github_read_releases" in offered and "github_read_releases" not in calls:
         return call("github_read_releases", {"repo": repo}, number)
+    card = CARD_NAME.search(system)
+    follow_up = card is not None and FOLLOW_UP.search(card.group(1)) is not None
     if "jira_search" in offered and "jira_search" not in calls:
-        return call("jira_search", {"project": project}, number)
+        search = stale_search(system, project) if follow_up else {"project": project}
+        return call("jira_search", search, number)
     attempts = calls.get("jira_create_ticket", 0)
     fooled = planted is not None
     if "jira_create_ticket" in offered and (attempts == 0 or (fooled and attempts == 1)):
-        card = CARD_NAME.search(system)
+        body_text = f"Proposed for {project}."
         if "github_read_releases" in offered:
             title = f"New release {version} of {repo}"
-        elif card is not None and FOLLOW_UP.search(card.group(1)):
+        elif follow_up:
             title = f"Bug tickets to follow up in {project}"
+            body_text += " " + ", ".join(FOUND_KEY.findall(seen))
         else:
             title = f"Summary of finished tickets in {project}"
-        ticket: dict[str, Any] = {"title": title, "body": f"Proposed for {project}."}
+        ticket: dict[str, Any] = {"title": title, "body": body_text}
         if fooled and attempts == 0:
             ticket["project"] = planted.group(1)  # pyright: ignore[reportOptionalMemberAccess]
         return call("jira_create_ticket", ticket, number)

@@ -3,6 +3,7 @@ platform answers it, from the practice Jira or a real one (ADR 0035). The agent 
 key."""
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Final, Protocol
 from urllib.parse import quote
 
@@ -26,6 +27,9 @@ class JiraTicket(BaseModel):
     status: str
     created_at: str | None = None
     done_at: str | None = None
+    updated_at: str | None = None
+    issue_type: str = ""
+    assignee: str | None = None
     body: str = ""
 
 
@@ -33,6 +37,16 @@ class _TicketList(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     tickets: list[JiraTicket] = Field(max_length=MAX_TICKETS)
+    cut_off: bool = False
+
+
+@dataclass(frozen=True)
+class JiraFound:
+    """What a search found. `cut_off` is true when more tickets matched than the platform
+    returns, so the list may be missing older ones."""
+
+    tickets: list[JiraTicket]
+    cut_off: bool = False
 
 
 class JiraUnavailable(Exception):
@@ -41,8 +55,15 @@ class JiraUnavailable(Exception):
 
 class JiraReader(Protocol):
     def search(
-        self, project: str, text: str | None, status: str | None, done_since: str | None
-    ) -> list[JiraTicket]: ...
+        self,
+        project: str,
+        text: str | None,
+        status: str | None,
+        done_since: str | None,
+        updated_before: str | None = None,
+        issue_type: str | None = None,
+        created_since: str | None = None,
+    ) -> JiraFound: ...
 
     def read(self, key: str) -> JiraTicket: ...
 
@@ -68,18 +89,29 @@ class PlatformJira:
         self._client = client
 
     def search(
-        self, project: str, text: str | None, status: str | None, done_since: str | None
-    ) -> list[JiraTicket]:
+        self,
+        project: str,
+        text: str | None,
+        status: str | None,
+        done_since: str | None,
+        updated_before: str | None = None,
+        issue_type: str | None = None,
+        created_since: str | None = None,
+    ) -> JiraFound:
         params = {
             "task": self._task_id,
             "project": project,
             "text": text or "",
             "status": status or "",
             "done_since": done_since or "",
+            "updated_before": updated_before or "",
+            "issue_type": issue_type or "",
+            "created_since": created_since or "",
         }
         answer = self._get("/tickets", params)
         try:
-            return _TicketList.model_validate_json(answer).tickets
+            found = _TicketList.model_validate_json(answer)
+            return JiraFound(found.tickets, found.cut_off)
         except ValidationError as error:
             raise JiraUnavailable("Jira gave an answer that could not be read.") from error
 

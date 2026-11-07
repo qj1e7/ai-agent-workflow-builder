@@ -62,6 +62,9 @@ services:
       MOCK_MODEL_URL: http://mock-model:8300
       E2E_WAIT_SECONDS: ${E2E_WAIT_SECONDS:-90}
       STEP_KEY: ${STEP_KEY:?run deploy/make-env.sh}
+      # Only to seed practice Jira tickets that were last updated long ago, which no API call can
+      # do. It is the same role the practice Jira itself uses.
+      E2E_DATABASE_URL: postgresql://wab_orchestration:${WAB_ORCHESTRATION_PASSWORD:?run deploy/make-env.sh}@postgres:5432/platform
     depends_on:
       platform-api:
         condition: service_healthy

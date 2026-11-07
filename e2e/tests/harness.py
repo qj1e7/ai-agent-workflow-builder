@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 import httpx
+import psycopg
 import pytest
 
 type Json = dict[str, Any]
@@ -16,6 +17,7 @@ PLATFORM_API_URL = os.environ.get("PLATFORM_API_URL", "http://platform-api:8000"
 MOCK_GITHUB_URL = os.environ.get("MOCK_GITHUB_URL", "http://mock-github:8200")
 MOCK_MODEL_URL = os.environ.get("MOCK_MODEL_URL", "http://mock-model:8300")
 STEP_KEY = os.environ.get("STEP_KEY", "")
+DATABASE_URL = os.environ.get("E2E_DATABASE_URL", "")
 WAIT_SECONDS = float(os.environ.get("E2E_WAIT_SECONDS", "90"))
 CONTRACTS_DIR = Path(os.environ.get("CONTRACTS_DIR", Path(__file__).parents[2] / "contracts"))
 
@@ -322,3 +324,52 @@ def bob_decides(api: Api, approval_id: str, verdict: str, digest: str) -> httpx.
         {"step": 0, "verdict": verdict, "digest": digest},
         expect=(201,),
     )
+
+
+@dataclass(frozen=True)
+class SeededTicket:
+    title: str
+    issue_type: str
+    days_since_update: int
+    assignee: str | None = None
+
+
+def seed_tickets(project: str, tickets: list[SeededTicket]) -> list[str]:
+    """Practice Jira tickets last updated some days ago, as a project that has been quiet for a
+    while would hold. No API call can set a ticket's update time, so this writes the rows. It
+    returns the keys in the order given."""
+    if not DATABASE_URL:
+        fail("E2E_DATABASE_URL is not set, so the practice Jira cannot be seeded.")
+    keys: list[str] = []
+    with psycopg.connect(DATABASE_URL) as connection:
+        connection.execute("LOCK TABLE orchestration.mock_jira_tickets IN EXCLUSIVE MODE")
+        for ticket in tickets:
+            row = connection.execute(
+                "INSERT INTO orchestration.mock_jira_tickets "
+                "(key, number, project, title, body, created_at, labels, issue_type, creator, "
+                "updated_at, assignee) "
+                "SELECT %s || '-' || n, n, %s, %s, '', now() - make_interval(days => %s), "
+                "'{}', %s, 'e2e', now() - make_interval(days => %s), %s "
+                "FROM (SELECT coalesce(max(number), 0) + 1 AS n "
+                "FROM orchestration.mock_jira_tickets) AS next "
+                "RETURNING key",
+                (
+                    project,
+                    project,
+                    ticket.title,
+                    ticket.days_since_update + 30,
+                    ticket.issue_type,
+                    ticket.days_since_update,
+                    ticket.assignee,
+                ),
+            ).fetchone()
+            assert row is not None
+            keys.append(str(row[0]))
+    return keys
+
+
+def remove_tickets(keys: list[str]) -> None:
+    with psycopg.connect(DATABASE_URL) as connection:
+        connection.execute(
+            "DELETE FROM orchestration.mock_jira_tickets WHERE key = ANY(%s)", (keys,)
+        )

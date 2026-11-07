@@ -145,7 +145,7 @@
       "id": "crd_version_checker",
       "display": "Version checker"
     },
-    "summary": "Version checker searches Jira project MOCK.",
+    "summary": "Version checker searches MOCK for tickets with \"1.2.16\" in the title or body.",
     "kind": "agent_step_started",
     "data": {
       "step": "jira_search"
