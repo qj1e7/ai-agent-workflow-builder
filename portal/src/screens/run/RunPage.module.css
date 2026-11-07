@@ -101,3 +101,34 @@
     font-size: 1.5rem;
   }
 }
+
+.detail {
+  margin-top: 20px;
+}
+
+.detail > summary {
+  list-style: none;
+}
+
+.detail > summary::-webkit-details-marker {
+  display: none;
+}
+
+.detailToggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-bottom: 16px;
+  padding: 0 16px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-ctl);
+  background: var(--surface);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .detailToggle:hover {
+    background: var(--sunk);
+  }
+}

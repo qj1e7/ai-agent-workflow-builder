@@ -85,6 +85,7 @@ from platform_api.orchestration.runs import (
     Rejected,
     Replay,
     RunState,
+    Stage,
     StepName,
     Succeeded,
     Supersede,
@@ -459,13 +460,14 @@ class Orchestrator:
             events.append(_denied("out_of_order", detail))
         events.append(step_finished(step, execution, 1, "refused", detail))
         if fails_run:
+            active = _active(record.state)
+            then = "report it to support" if isinstance(active, Acting) else "start a new run"
             failure = Failure(
                 FailureReason.OUT_OF_ORDER_STEP,
-                f"The workflow called {step.value} out of order. Reload it from git and start "
-                "a new run",
+                f"The workflow called {step.value} out of order. Reload it from git, then {then}",
                 retryable=False,
             )
-            moved = fail(_active(record.state), failure).preceded_by(*events)
+            moved = fail(active, failure).preceded_by(*events)
             await self._commit(uow, record, moved)
             await self._store.cancel_outbox(uow, record.run_id)
         else:
@@ -870,9 +872,8 @@ class Orchestrator:
             if not isinstance(state, Failed):
                 return NotRetryable(f"The run is {state_name(state)}, not failed")
             if not state.failure.retryable:
-                return NotRetryable(
-                    f"{state.failure.reason.value} cannot be retried. Start a new run"
-                )
+                then = "Report it to support" if state.stage is Stage.ACTING else "Start a new run"
+                return NotRetryable(f"{state.failure.reason.value} cannot be retried. {then}")
             moved = state.retry(user_actor(principal.user_id, principal.display), uow.now)
             record = await self._commit(uow, record, moved, retried_by=principal.user_id)
             leg = Leg.ACT if isinstance(moved.state, Acting) else Leg.WORK

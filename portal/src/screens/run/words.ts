@@ -115,6 +115,8 @@ export function lineOf(item: ChatItem, nameOf: NameOf, trigger: Trigger): Line {
         text: item.stage === 'acting' ? 'The run stopped while writing.' : 'The run stopped. Nothing was written.',
         tone: 'bad',
       }
+    case 'reported':
+      return { speaker: app, text: `${nameOf(item.by)} reported this run to support.`, tone: 'plain' }
   }
 }
 
@@ -178,6 +180,12 @@ function sameTicketProject(actions: readonly WriteActionView[]): string | null {
   return projects.size === 1 && typeof only === 'string' ? only : null
 }
 
+/** Ticket keys in the agents' words, only those in a project the proposal writes to, so no other word becomes a link. */
+export function ticketKeysIn(text: string, projects: readonly string[]): string[] {
+  const keys = text.match(/(?<![A-Za-z0-9_-])[A-Z][A-Z0-9_]*-[1-9][0-9]*(?![A-Za-z0-9_-])/g) ?? []
+  return [...new Set(keys.filter((key) => projects.includes(key.slice(0, key.lastIndexOf('-')))))]
+}
+
 export function proposalTitle(actions: readonly WriteActionView[]): string {
   const project = sameTicketProject(actions)
   if (project) return `${count(actions.length, 'ticket')} will be created in Jira project ${project}`
@@ -189,8 +197,9 @@ export function approveLabel(actions: readonly WriteActionView[]): string {
   return sameTicketProject(actions) ? `Approve ${count(actions.length, 'ticket')}` : 'Approve'
 }
 
-/** How the signed-in person is tied to the run. */
+/** How the signed-in person is tied to the run, as the approval says it. */
 export interface Party {
+  readonly ownsIt: boolean
   readonly startedIt: boolean
   readonly retriedIt: boolean
   readonly schedule: boolean
@@ -198,14 +207,23 @@ export interface Party {
 
 const NOBODY = ' Nobody approves their own work.'
 
+function tiesOf(party: Party): string[] {
+  const ties: string[] = []
+  if (party.startedIt && party.schedule) ties.push('set up the schedule that started this run')
+  else {
+    if (party.ownsIt) ties.push('set this workflow up')
+    if (party.startedIt) ties.push('started this run')
+  }
+  if (party.retriedIt) ties.push('retried this run')
+  return ties
+}
+
 export function lockWords(whyNot: Refusal | null, party: Party | null): string {
   switch (whyNot) {
     case 'own_work': {
-      let why = 'This run is your own work, so you can’t approve it.'
-      if (party?.startedIt) why = party.schedule ? 'Your schedule started this run, so you can’t approve it.' : 'You started this run, so you can’t approve it.'
-      else if (party?.retriedIt) why = 'You retried this run, so you can’t approve it.'
-      else if (party) why = 'You own this workflow, so you can’t approve its runs.'
-      return `${why}${NOBODY}`
+      const ties = party ? tiesOf(party) : []
+      const why = ties.length > 0 ? `You ${andList(ties)}` : 'This run is your own work'
+      return `${why}, so another Approver must decide.${NOBODY}`
     }
     case 'not_an_approver':
       return 'Only an Approver can decide.'

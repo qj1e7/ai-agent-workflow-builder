@@ -3,8 +3,9 @@ import { Link, useParams } from 'react-router'
 import { ApiError } from '../../api/client'
 import { useSession } from '../../api/context'
 import { displayName, usePeople } from '../../api/people'
+import { isOperator } from '../../api/me'
 import { useApproval, useMe, useRun, useTroubleshoot, useUseCase } from '../../api/queries'
-import type { ApprovalView, RunView, UseCaseView, Verdict } from '../../api/types'
+import type { ApprovalView, Me, RunView, UseCaseView, Verdict } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
 import { PRODUCT } from '../../shell/product'
 import { Button } from '../../ui/Button'
@@ -12,13 +13,13 @@ import { cx } from '../../ui/cx'
 import { useFocusWhenReady } from '../../ui/focus'
 import { motionAllowed } from '../../ui/motion'
 import { ApprovalGate } from './ApprovalGate'
-import { Chat, DECISION_ID, LastWord, Typing } from './Chat'
-import { useDecision } from './decision'
+import { Chat, DECISION_ID, LastWord, NeedsYou, Typing } from './Chat'
+import { askedWords, foundOf, partyOf, useDecision, yourPart } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { Outcome, Troubleshooting } from './Outcome'
 import { RunLine } from './RunLine'
 import { isFinished, PLANNER_ID, reachOf, stationsOf, type PlanBlock, type RunModel } from './runModel'
-import { feedTroubleOf, headlineOf, lineOf, lockWords, RUN_MISSING, RUN_PROBLEM, shortTime, speakerName, writeLabel, type NameOf, type Party, type Speaker } from './words'
+import { feedTroubleOf, headlineOf, lineOf, RUN_MISSING, RUN_PROBLEM, shortTime, speakerName, writeLabel, type NameOf, type Speaker } from './words'
 import styles from './RunPage.module.css'
 
 const LANDS_ON_DECISION = new Set(['awaiting_approval', 'failed', 'rejected'])
@@ -105,11 +106,12 @@ function LiveRunPage({ run, fromApproval }: { run: RunView; fromApproval: boolea
   const failed = live.head.phase.state === 'failed'
   const latest = useRun(run.run_id, { poll: failed ? POLL_FAILED_MS : false }).data ?? run
   const useCase = useUseCase(run.use_case_id)
+  const [detail, setDetail] = useState<boolean | null>(null)
   useReconnectWhenBehind(failed && live.loaded && latest.last_seq > live.head.seq, restart)
 
   const ready = live.loaded || live.connection.is === 'live' || live.connection.is === 'settled'
   if (!ready) return <FeedNotReady connection={live.connection} onRetry={tryAgain} />
-  return <RunView run={latest} useCase={useCase.data} live={live} fromApproval={fromApproval} />
+  return <RunView run={latest} useCase={useCase.data} live={live} fromApproval={fromApproval} detail={{ choice: detail, choose: setDetail }} />
 }
 
 /** After a failure the stream may close. When the run has moved on without it, as after a retry, reconnect now. */
@@ -176,9 +178,18 @@ interface RunViewProps {
   readonly useCase: UseCaseView | undefined
   readonly live: LiveRun
   readonly fromApproval: boolean
+  /** Whether the agents' conversation is open, once the person chose. Null follows the run. */
+  readonly detail: { readonly choice: boolean | null; readonly choose: (open: boolean) => void }
 }
 
-function RunView({ run, useCase, live, fromApproval }: RunViewProps) {
+const WORKING = new Set<RunModel['phase']['state']>(['pending', 'working', 'proposed', 'acting'])
+
+/** The default level follows the run: the conversation is open while the agents work, and folded once the run needs the person or is over. */
+function detailOpen(choice: boolean | null, model: RunModel): boolean {
+  return choice ?? WORKING.has(model.phase.state)
+}
+
+function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const { shown, head, loadedUpTo } = live
   const me = useMe().data
   const nameOf = useNameOf(head)
@@ -192,14 +203,15 @@ function RunView({ run, useCase, live, fromApproval }: RunViewProps) {
   const showFailure = shown.phase.state === 'failed' && head.phase.state === 'failed'
   const troubleshoot = useTroubleshoot(run.run_id, showFailure, attempt)
 
-  const party: Party | null = me
-    ? { startedIt: run.started_by === me.id, retriedIt: head.retriedBy.includes(me.id), schedule: run.trigger === 'schedule' }
-    : null
+  const party = partyOf(approval.data, me?.id)
   const saidByMe = me ? shown.chat.findLast((item) => item.kind === 'decided' && item.by === me.id) : undefined
-  const focusGateLine = useFocusWhenReady(saidByMe !== undefined, () =>
-    chatList.current?.querySelector<HTMLElement>(`[data-gate-said="${saidByMe?.seq ?? ''}"]`),
+  const open = detailOpen(detail.choice, shown)
+  const focusAfterDeciding = useFocusWhenReady(saidByMe !== undefined, () =>
+    open
+      ? chatList.current?.querySelector<HTMLElement>(`[data-gate-said="${saidByMe?.seq ?? ''}"]`)
+      : document.querySelector<HTMLElement>('main h1'),
   )
-  const decision = useDecision(approval.data, party, focusGateLine)
+  const decision = useDecision(approval.data, party, focusAfterDeciding)
 
   const stations = stationsOf(shown, planOf(useCase), writeLabel)
   const reach = reachOf(stations)
@@ -227,6 +239,10 @@ function RunView({ run, useCase, live, fromApproval }: RunViewProps) {
 
   useFollowUntilScrolled(newest?.seq ?? 0, loadedUpTo, chatList)
 
+  const working = WORKING.has(shown.phase.state)
+  const resting = working ? <Typing {...workingNow(shown)} /> : null
+  const last = <LastWordFor model={shown} approval={approval.data} found={foundOf(head.found, approval.data?.found)} decision={decision} troubleshoot={troubleshoot} nameOf={nameOf} me={me} runId={run.run_id} />
+
   return (
     <div className={styles['page']}>
       <Link to={backTo(useCase)} className={styles['back']}>
@@ -243,14 +259,19 @@ function RunView({ run, useCase, live, fromApproval }: RunViewProps) {
         {statusWords(decision.recorded, live)}
       </p>
       <RunLine stations={stations} reach={reach} arrivedLive={arrivedLive} startedAt={shortTime(run.started_at)} nameOf={nameOf} />
-      <Chat
-        ref={chatList}
-        items={shown.chat}
-        loadedUpTo={loadedUpTo}
-        nameOf={nameOf}
-        trigger={run.trigger}
-        last={<LastWordFor model={shown} approval={approval.data} cannotDecide={lockWords(approval.data?.why_not ?? null, party)} decision={decision} troubleshoot={troubleshoot} nameOf={nameOf} />}
-      />
+      {working ? null : <NeedsYou>{last}</NeedsYou>}
+      <details className={styles['detail']} open={open}>
+        <summary
+          className={styles['detailToggle']}
+          onClick={(event) => {
+            event.preventDefault()
+            detail.choose(!open)
+          }}
+        >
+          {open ? 'Hide what each agent did' : 'Show what each agent did'}
+        </summary>
+        <Chat ref={chatList} items={shown.chat} loadedUpTo={loadedUpTo} nameOf={nameOf} trigger={run.trigger} last={resting} />
+      </details>
       <div className="visually-hidden" aria-live="polite">
         {announce ? `${speakerName(announce.speaker)}: ${announce.text}` : ''}
       </div>
@@ -270,20 +291,28 @@ function statusWords(recorded: Verdict | null, live: LiveRun): string {
 interface LastWordForProps {
   readonly model: RunModel
   readonly approval: ApprovalView | undefined
-  readonly cannotDecide: string
+  readonly found: string
   readonly decision: ReturnType<typeof useDecision>
   readonly troubleshoot: ReturnType<typeof useTroubleshoot>
   readonly nameOf: NameOf
+  readonly me: Me | undefined
+  readonly runId: string
 }
 
-function LastWordFor({ model, approval, cannotDecide, decision, troubleshoot, nameOf }: LastWordForProps) {
+function LastWordFor({ model, approval, found, decision, troubleshoot, nameOf, me, runId }: LastWordForProps) {
   const { phase } = model
   switch (phase.state) {
     case 'awaiting_approval':
       return (
         <LastWord speaker={{ kind: 'gate' }}>
           {approval ? (
-            <ApprovalGate approval={approval} cannotDecide={cannotDecide} decision={decision} />
+            <ApprovalGate
+              approval={approval}
+              found={found}
+              part={yourPart(approval, partyOf(approval, me?.id), nameOf)}
+              askedBy={askedWords(approval, nameOf)}
+              decision={decision}
+            />
           ) : (
             <p className="muted" role="status">
               Loading what will be written
@@ -294,7 +323,15 @@ function LastWordFor({ model, approval, cannotDecide, decision, troubleshoot, na
     case 'failed':
       return (
         <LastWord speaker={{ kind: 'troubleshooter' }}>
-          <Troubleshooting failure={phase} advice={troubleshoot.data} loading={troubleshoot.isPending} />
+          <Troubleshooting
+            runId={runId}
+            failure={phase}
+            advice={troubleshoot.data}
+            loading={troubleshoot.isPending}
+            me={me ? { id: me.id, name: me.display, operator: isOperator(me) } : undefined}
+            reports={model.reports}
+            nameOf={nameOf}
+          />
         </LastWord>
       )
     case 'succeeded':
@@ -304,9 +341,7 @@ function LastWordFor({ model, approval, cannotDecide, decision, troubleshoot, na
           <Outcome model={model} nameOf={nameOf} />
         </LastWord>
       )
-    default: {
-      const now = workingNow(model)
-      return <Typing speaker={now.speaker} thinking={now.thinking} />
-    }
+    default:
+      return null
   }
 }

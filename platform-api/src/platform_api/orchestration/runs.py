@@ -166,8 +166,22 @@ def _leg_dispatched(leg: Leg, attempt: int) -> PendingEvent:
     )
 
 
+def _what_next(stage: Stage, failure: Failure) -> str:
+    """Before the write step nothing can have been written, so a new run is safe. From the
+    write step on, a new run can make a second ticket, so the advice is to retry, which
+    resumes the same approved proposal, or to report it."""
+    if failure.retryable:
+        return " You can retry."
+    if stage is Stage.ACTING:
+        return (
+            " Do not start a new run, because it can make a duplicate."
+            " Check Jira for a ticket with this run's label first, then report it to support."
+        )
+    return " Start a new run."
+
+
 def _run_failed(stage: Stage, failure: Failure) -> PendingEvent:
-    tail = " You can retry." if failure.retryable else " Start a new run."
+    tail = _what_next(stage, failure)
     return PendingEvent(
         PLATFORM,
         "run_failed",

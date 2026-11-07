@@ -31,6 +31,19 @@ def test_a_refused_write_is_told_to_check_jira_before_any_new_run():
     assert advice.suggestion.index("check Jira") < advice.suggestion.index("new run")
 
 
+def test_no_advice_uses_the_word_key_for_the_label_a_person_looks_for():
+    stops = [
+        failure(reason, retryable)
+        for reason in get_args(FailureReason.__value__)
+        for retryable in (True, False)
+    ]
+    for stop in stops:
+        said = " ".join(
+            [explain_failure(stop).likely_cause, explain_failure(stop).suggestion]
+        ).lower()
+        assert "write key" not in said
+
+
 def test_other_reasons_ignore_the_retryable_flag():
     for reason in get_args(FailureReason.__value__):
         if reason in {"AgentError", "WriteFailed"}:
@@ -169,8 +182,8 @@ STOPS: list[tuple[FailureStage, FailureReason, bool, str, str]] = [
         "acting",
         "WriteFailed",
         False,
-        "jira create_ticket was refused: Jira already has MOCK-1 with this write's label, but "
-        "the platform did not make it. A person needs to check that ticket, then start a new run.",
+        "jira create_ticket was refused: Jira already has MOCK-1 with this run's label, but "
+        "the platform did not make it. A person needs to check that ticket.",
         "The approved write was refused.",
     ),
     (

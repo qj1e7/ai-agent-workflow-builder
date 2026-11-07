@@ -121,7 +121,7 @@ WRITE_REFUSED = Advice(
     "ticket it can't prove it made. The failure text says which one happened.",
     suggested_action="ask_maintainer",
     suggestion="Read the failure text, then check Jira for a ticket carrying this run's label "
-    "before anyone starts a new run. A new run doesn't share this run's write key and can "
+    "before anyone starts a new run. A new run doesn't look for this run's ticket, so it can "
     "make a duplicate. If Jira refused the write, ask a maintainer to fix the Jira "
     "settings or the project.",
 )

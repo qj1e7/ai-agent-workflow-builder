@@ -94,6 +94,20 @@
   line-height: 1.6;
 }
 
+.changeTitle {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.found {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.qa dd > .ticket + .ticket {
+  margin-top: 6px;
+}
+
 .qa {
   display: grid;
   gap: 4px;
@@ -109,6 +123,54 @@
 .qa dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.report {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.report label {
+  font-weight: 600;
+}
+
+.report textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 10px 12px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-ctl);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--text-16);
+  line-height: 1.5;
+}
+
+.sentNote {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--green-line);
+  border-radius: var(--r-well);
+  background: var(--green-soft);
+}
+
+.sentNote p {
+  margin: 2px 0 6px;
+}
+
+.failureText {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.problem {
+  color: var(--red-ink);
+  font-weight: 600;
 }
 
 @media (max-width: 600px) {

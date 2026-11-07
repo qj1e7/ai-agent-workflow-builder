@@ -105,6 +105,15 @@ export function Chat({ items, loadedUpTo, nameOf, trigger, last, ref }: ChatProp
   )
 }
 
+/** The one place that says what needs the person, kept above the agents' conversation. */
+export function NeedsYou({ children }: { children: ReactNode }) {
+  return (
+    <ol className={styles['chat']} aria-label="What needs you">
+      {children}
+    </ol>
+  )
+}
+
 interface LastWordProps {
   readonly speaker: Speaker | { kind: 'troubleshooter' }
   readonly children: ReactNode

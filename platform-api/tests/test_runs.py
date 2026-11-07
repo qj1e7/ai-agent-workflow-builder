@@ -278,6 +278,28 @@ def test_a_failure_reads_with_one_closing_full_stop(message: str):
     assert ".." not in summary
 
 
+WRITE_REFUSED = Failure(
+    FailureReason.WRITE_FAILED, "jira create_ticket was refused", retryable=False
+)
+UNBOUND = Failure(FailureReason.UNBOUND_INTENT, "The template has no binding", retryable=False)
+
+
+def test_a_stop_at_the_write_step_never_advises_a_new_run():
+    summary = ACTING.fail(WRITE_REFUSED).events[0].summary
+    assert "Start a new run" not in summary
+    assert "Do not start a new run" in summary
+    assert "this run's label" in summary
+    assert "report it to support" in summary
+
+
+def test_a_stop_before_the_write_step_still_advises_a_new_run():
+    assert WORKING.fail(UNBOUND).events[0].summary.endswith(" Start a new run.")
+
+
+def test_a_retryable_stop_at_the_write_step_says_retry():
+    assert ACTING.fail(WRITE_DOWN).events[0].summary.endswith(" You can retry.")
+
+
 def test_retry_after_a_work_leg_failure_starts_the_work_leg_again():
     moved = FAILED.retry(ALICE, LATER)
     assert isinstance(moved.state, Pending)

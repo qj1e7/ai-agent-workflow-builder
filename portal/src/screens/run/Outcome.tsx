@@ -1,9 +1,14 @@
+import { useId, type ReactNode } from 'react'
 import { failureReasonLabel } from '../../api/labels'
 import type { TroubleshootingOut } from '../../api/types'
 import { ButtonLink } from '../../ui/Button'
 import { IconCheck } from '../../ui/icons'
+import { RetryButton } from '../home/HomeItem'
+import { stoppedActions } from '../home/home'
 import { TicketLink } from '../jira/TicketKeys'
+import { ReportToSupport } from './Report'
 import type { Phase, RunModel } from './runModel'
+import { failureText, suggestionFor } from './support'
 import { andList, withCurrentNames, type NameOf } from './words'
 import styles from './panels.module.css'
 
@@ -59,31 +64,71 @@ export function Outcome({ model, nameOf }: { model: RunModel; nameOf: NameOf }) 
 
 type Failed = Extract<Phase, { state: 'failed' }>
 
-export function Troubleshooting({ failure, advice, loading }: { failure: Failed; advice: TroubleshootingOut | undefined; loading: boolean }) {
-  if (!advice) {
-    return (
-      <div className={styles['panel']}>
-        <dl className={styles['qa']}>
-          <dt>What happened</dt>
-          <dd>{failureReasonLabel[failure.reason] ?? failure.reason}.</dd>
-        </dl>
+export const OPERATORS_RETRY = 'An Operator can retry this run.'
+
+interface TroubleshootingProps {
+  readonly runId: string
+  readonly failure: Failed
+  readonly advice: TroubleshootingOut | undefined
+  readonly loading: boolean
+  readonly me: { readonly id: string; readonly name: string; readonly operator: boolean } | undefined
+  readonly reports: RunModel['reports']
+  readonly nameOf: NameOf
+}
+
+function Qa({ name, id, children }: { name: string; id?: string; children: ReactNode }) {
+  return (
+    <dl className={styles['qa']}>
+      <dt id={id}>{name}</dt>
+      <dd>{children}</dd>
+    </dl>
+  )
+}
+
+/**
+ * The AI troubleshooter's four answers. The last one is the action: Retry when the platform says the run can run again,
+ * or Report to support when it can't. Both ask stoppedActions, the same rule Home uses.
+ */
+export function Troubleshooting({ runId, failure, advice, loading, me, reports, nameOf }: TroubleshootingProps) {
+  const doId = useId()
+  const note = failureText(failure.message)
+  const happened = advice
+    ? withCurrentNames(`${advice.answers.what_happened} ${advice.advice.likely_cause}`)
+    : `${failureReasonLabel[failure.reason] ?? failure.reason}.`
+  const [first] = stoppedActions(runId, failure.retryable)
+  const retry = first?.kind === 'retry'
+  const suggestion = advice ? suggestionFor(advice.advice.suggestion) : ''
+  const found = [happened, note].filter((part) => part !== '').join(' ')
+  return (
+    <div className={styles['panel']}>
+      <Qa name="What happened">
+        {happened}
+        {note ? <span className={styles['failureText']}>The failure text: {note}</span> : null}
+      </Qa>
+      {advice ? (
+        <>
+          <Qa name="What was affected">{advice.answers.what_affected}</Qa>
+          <Qa name="Can it be fixed safely">{advice.answers.can_fix}</Qa>
+        </>
+      ) : (
         <p className={styles['note']} role="status">
           {loading ? 'The AI troubleshooter is looking at what happened.' : 'The AI troubleshooter could not explain this one.'}
         </p>
-      </div>
-    )
-  }
-  const { explanation, likely_cause: cause, suggestion } = advice.advice
-  return (
-    <div className={styles['panel']}>
-      <dl className={styles['qa']}>
-        <dt>What happened</dt>
-        <dd>{withCurrentNames(`${explanation} ${cause}`)}</dd>
-      </dl>
-      <dl className={styles['qa']}>
-        <dt>What to do</dt>
-        <dd>{withCurrentNames(suggestion)}</dd>
-      </dl>
+      )}
+      <Qa name="What should you do" id={doId}>
+        {suggestion ? <span>{suggestion}</span> : null}
+        {retry ? (
+          me?.operator ? (
+            <span className={styles['buttons']}>
+              <RetryButton runId={runId} label="Retry the run" primary describedBy={doId} />
+            </span>
+          ) : (
+            <span className={styles['note']}>{OPERATORS_RETRY}</span>
+          )
+        ) : (
+          <ReportToSupport runId={runId} found={found} me={me?.id} meName={me?.name ?? 'A teammate'} reports={reports} nameOf={nameOf} />
+        )}
+      </Qa>
     </div>
   )
 }

@@ -190,11 +190,40 @@ describe('a run that failed', () => {
 })
 
 describe('a report to support', () => {
-  it('moves only the cursor, so the page draws nothing new for it', () => {
-    const failed = replay(failure)
+  const alice = { kind: 'user', id: 'alice', display: 'Alice' }
+  const failed = replay(failure)
+  const reported = fold(failed, event(15, 'support_reported', { request_id: 'trq_1', reported_by: 'alice' }, alice))
+
+  it('is kept once for each request, with who made it, and says so in the activity once', () => {
+    expect(reported.reports).toEqual([{ requestId: 'trq_1', by: 'alice' }])
+    expect(reported.chat.at(-1)).toMatchObject({ kind: 'reported', by: 'alice', requestId: 'trq_1' })
+    const again = fold(reported, event(16, 'support_reported', { request_id: 'trq_1', reported_by: 'alice' }, alice))
+    expect(again.reports).toHaveLength(1)
+    expect(again.chat.filter((item) => item.kind === 'reported')).toHaveLength(1)
+  })
+
+  it('leaves the run as it was, still stopped', () => {
+    expect(reported.phase).toEqual(failed.phase)
+    expect(reported.seq).toBe(15)
+  })
+
+  it('is forgotten when the run is retried, so a new stop can be reported again', () => {
+    const retried = fold(reported, event(16, 'run_retried', { leg: 'work', attempt: 2 }, alice))
+    expect(retried.reports).toEqual([])
+  })
+})
+
+describe('what the agents found', () => {
+  it('is read from the step that closed their work, and stays after the run is decided', () => {
+    expect(replay(success).found).toBe('LangGraph has a new release: 1.2.16.')
+    expect(replay(success, 20).found).toBe('LangGraph has a new release: 1.2.16.')
+    expect(replay(failure).found).toBe('')
+  })
+
+  it('starts again when the work is retried', () => {
     const alice = { kind: 'user', id: 'alice', display: 'Alice' }
-    const reported = fold(failed, event(15, 'support_reported', { request_id: 'trq_1', reported_by: 'alice' }, alice))
-    expect(reported).toEqual({ ...failed, seq: 15 })
+    const retried = fold(replay(success.slice(0, 20)), event(21, 'run_retried', { leg: 'work', attempt: 2 }, alice))
+    expect(retried.found).toBe('')
   })
 })
 
