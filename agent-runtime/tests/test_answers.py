@@ -239,6 +239,47 @@ def test_a_number_the_request_never_said_is_a_guess_shown_as_filled_in():
     assert rows_of(answer)[2] == ("do", "Sum them up", "understood")
 
 
+def _csd_bugs(where: str) -> PlannerAnswer:
+    """F09 of the round-6 check, read as the model read it: the update filter, before 5 days."""
+    task = f"Every Thursday, list the CSD bugs {where} and create one ticket with them"
+    return answer_of(
+        read(
+            schedule="Every Thursday",
+            search=search(
+                project="CSD",
+                issue_types=["bug"],
+                updated=DaysRead(how="before", days=5),
+                said=where,
+            ),
+            ticket=TicketRead(creates=True, says="list", said=task.split(", ", 1)[1]),
+        ),
+        task,
+    )
+
+
+def test_a_day_filter_on_a_date_the_request_never_names_is_dropped_and_its_words_come_back():
+    """ "The last comment is older than 5 days" names a comment's date, which the search can't
+    filter by. The card never offers the update filter the model filled in its place: the
+    request's words come back as a part the platform can't do."""
+    answer = _csd_bugs("where the last comment is older than 5 days")
+    assert isinstance(answer, PartAnswer | CantAnswer)
+    assert cant_of(answer) == ["last comment is older than 5 days"]
+    assert rows_of(answer)[1] == ("look_for", "Bug tickets in CSD", "understood")
+
+
+@pytest.mark.parametrize(
+    "where", ["where the last update is older than 5 days", "with no update for 5 days"]
+)
+def test_a_day_filter_on_the_date_the_request_names_is_kept(where: str):
+    answer = _csd_bugs(where)
+    assert isinstance(answer, SetupCardAnswer)
+    assert rows_of(answer)[1] == (
+        "look_for",
+        "Bug tickets in CSD, with no update for 5 days",
+        "understood",
+    )
+
+
 def test_a_project_key_the_request_never_said_is_never_shown():
     answer = answer_of(
         read(search=search(project="MOCK", said="bug tickets"), place=PlaceRead(project="MOCK")),
