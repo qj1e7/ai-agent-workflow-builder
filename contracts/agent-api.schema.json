@@ -1835,7 +1835,7 @@
       "type": "object"
     },
     "TagPattern": {
-      "description": "Which release tags count. Only a pattern from a fixed list is accepted, never one the caller writes. Allowed values: `^[vV]?\\d+\\.\\d+\\.\\d+$`, `^\\d+\\.\\d+\\.\\d+$`.",
+      "description": "Which release tags count. Only a pattern from a fixed list is accepted, never one the caller writes. Allowed values: `^(?:[vV]|docker-v|n8n@|langchain==)?\\d+\\.\\d+\\.\\d+$`, `^[vV]?\\d+\\.\\d+\\.\\d+$`, `^\\d+\\.\\d+\\.\\d+$`.",
       "type": "string"
     },
     "TaskError": {

@@ -10,12 +10,16 @@ from platform_api.orchestration.agents import (
     ChosenAgent,
     Drafted,
     DraftResult,
+    FindSoftwareResult,
+    FoundSoftware,
     InputKind,
     LibraryCard,
     LibraryInput,
     ModelProblem,
     RowKind,
     RowState,
+    SoftwareNotChecked,
+    SoftwareNotKnown,
     ToolId,
     ToolKind,
     UnderstandResult,
@@ -48,7 +52,7 @@ from platform_api.orchestration.person_runs import (
     Stopped,
     Waiting,
 )
-from platform_api.orchestration.planning import CardPlanning, NoModel, RuntimeDown
+from platform_api.orchestration.planning import CardPlanning, NoModel, ProjectFinding, RuntimeDown
 from platform_api.orchestration.schedule import AT_PATTERN, Day, Schedule, parse_at
 from platform_api.orchestration.schedule_store import (
     CheckSpecs,
@@ -123,6 +127,11 @@ __all__ = [
     "Change",
     "Choice",
     "ChooseResult",
+    "FindSoftwareResult",
+    "FoundSoftware",
+    "ProjectFinding",
+    "SoftwareNotChecked",
+    "SoftwareNotKnown",
     "Chosen",
     "ChosenAgent",
     "ConfirmationKind",

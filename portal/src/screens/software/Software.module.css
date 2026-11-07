@@ -317,3 +317,55 @@ a.src {
     max-width: none;
   }
 }
+
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.guess {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.why {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-4);
+  color: var(--muted);
+  font-size: var(--text-14);
+}
+
+.noMatch {
+  margin: 0;
+  color: var(--ink);
+}
+
+.pick {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.pick legend {
+  margin-bottom: var(--space-2);
+  font-weight: 600;
+}
+
+.pickRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-card);
+}
+
+.pickRow input {
+  margin-top: 4px;
+}

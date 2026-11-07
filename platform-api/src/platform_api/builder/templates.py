@@ -5,9 +5,15 @@ from typing import Literal
 
 from platform_api.orchestration import AnyApprover, ApprovalPolicy, ApprovalStep, Binding
 
-TAG_PATTERN = r"^[vV]?\d+\.\d+\.\d+$"
-"""A plain version number, with or without one v in front, such as 1.2.14 or v2.14.2. The
-Agent API takes only patterns from its fixed list, and this is one of them."""
+TAG_PATTERN = r"^(?:[vV]|docker-v|n8n@|langchain==)?\d+\.\d+\.\d+$"
+"""Which release tags the watchlist counts: a version number, with or without one v in front,
+such as 1.2.14 or v2.14.2, or with the prefix three projects put on the tags of their main
+product (moby's docker-v29.1.0, n8n's n8n@2.4.2, LangChain's langchain==0.3.1). The Agent API
+takes only patterns from its fixed list, and this is one of them. The watchlist and the
+finder both send it, so they agree on what counts as a release."""
+VERSION_PATTERN = r"^[vV]?\d+\.\d+\.\d+$"
+"""The version a person types for the software the team runs. No project prefix: the check
+compares a bare number with the prefixed tags of its project."""
 
 
 @dataclass(frozen=True)

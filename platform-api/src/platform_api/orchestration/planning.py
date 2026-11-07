@@ -15,6 +15,8 @@ from platform_api.orchestration.agents import (
     ChooseResult,
     DraftRequest,
     DraftResult,
+    FindSoftwareRequest,
+    FindSoftwareResult,
     HttpAgentRuntime,
     LibraryCard,
     UnderstandRequest,
@@ -78,6 +80,22 @@ class CardPlanning:
             return NoModel()
         reply = await self._agents.understand(
             UnderstandRequest(task=task, model=model, carried_on=carried_on)
+        )
+        if isinstance(reply, AgentUnavailable | AgentRejected):
+            return RuntimeDown(reply.detail)
+        return reply
+
+
+class ProjectFinding:
+    """Finds the GitHub project of a software's name. The runtime does it from a reviewed list
+    and checks each match on GitHub. No model and no model key are involved."""
+
+    def __init__(self, agents: HttpAgentRuntime) -> None:
+        self._agents = agents
+
+    async def find(self, name: str, tag_pattern: str) -> FindSoftwareResult | RuntimeDown:
+        reply = await self._agents.find_software(
+            FindSoftwareRequest(name=name, tag_pattern=tag_pattern)
         )
         if isinstance(reply, AgentUnavailable | AgentRejected):
             return RuntimeDown(reply.detail)

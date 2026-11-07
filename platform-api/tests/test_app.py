@@ -44,6 +44,7 @@ ROUTES = {
     ("POST", "/api/v1/builder/understand"),
     ("POST", "/api/v1/agent-use-cases"),
     ("GET", "/api/v1/watchlist"),
+    ("POST", "/api/v1/watchlist/find"),
     ("POST", "/api/v1/watchlist/software"),
     ("PUT", "/api/v1/watchlist/schedule"),
     ("DELETE", "/api/v1/watchlist/schedule"),

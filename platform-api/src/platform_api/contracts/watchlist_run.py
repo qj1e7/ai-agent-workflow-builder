@@ -225,6 +225,7 @@ def _status_before(w: Watched) -> str:
 
 
 def _row_before(w: Watched) -> WatchedSoftwareView:
+    first_check = w.our_version_source is not None and w.our_version_source.kind == "first_check"
     return WatchedSoftwareView.model_validate(
         {
             "id": w.id,
@@ -232,8 +233,9 @@ def _row_before(w: Watched) -> WatchedSoftwareView:
             "source": SourceView(
                 kind="github", ref=w.ref, url=f"https://github.com/{w.ref}/releases"
             ),
-            "our_version": w.our_version,
+            "our_version": None if first_check else w.our_version,
             "our_version_source": w.our_version_source,
+            "compared_from": w.our_version if first_check else None,
             "newest_version": w.seen,
             "newest_read_at": None if w.seen is None else LAST_WEEK,
             "checked_at": None if w.seen is None and w.problem is None else LAST_WEEK,

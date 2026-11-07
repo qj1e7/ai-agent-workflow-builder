@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field, JsonValue, StringConstraints, field_validator
 
-from platform_api.builder.templates import TAG_PATTERN
+from platform_api.builder.templates import VERSION_PATTERN
 from platform_api.orchestration import (
     AT_PATTERN,
     Day,
@@ -151,7 +151,7 @@ class RunStarted(WireModel):
 type SoftwareName = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)
 ]
-type Version = Annotated[str, Field(pattern=TAG_PATTERN)]
+type Version = Annotated[str, Field(pattern=VERSION_PATTERN)]
 
 
 class AddSoftware(WireIn):
@@ -159,9 +159,58 @@ class AddSoftware(WireIn):
     repo: RepoName
     our_version: Version | None = Field(
         default=None,
-        description="The version the team runs now, such as 1.2.14. Leave it out to take the "
-        "newest release at the first check as ours.",
+        description="The version the team runs now, such as 1.2.14. Leave it out when nobody "
+        "knows it: the list then says Not known, and the check tells about releases newer than "
+        "the newest one it first reads.",
     )
+
+
+class FindIn(WireIn):
+    name: SoftwareName
+
+
+class ProjectGuess(WireModel):
+    repo: RepoName = Field(
+        description="A GitHub project that exists, as owner/name, at the address GitHub gives it "
+        "now. Checked just now."
+    )
+    what: str = Field(description="What the project is, so the person can tell matches apart.")
+    why: str = Field(description="Where the guess came from, in plain words.")
+    releases: Literal["published", "none"] = Field(
+        description="none when the project has no release the watchlist counts, so a watch "
+        "would have nothing to compare."
+    )
+    newest: str | None = Field(description="The newest release the watchlist counts, if any.")
+    already_listed: str | None = Field(
+        description="The name this project already has on the watchlist, or null."
+    )
+
+
+class FoundProjects(WireModel):
+    status: Literal["found"] = "found"
+    matches: list[ProjectGuess] = Field(
+        min_length=1,
+        description="Every project the name could mean. More than one means the person "
+        "chooses. Each is a guess from a reviewed list, never a certainty.",
+    )
+
+
+class NoProjectKnown(WireModel):
+    status: Literal["not_known"] = "not_known"
+    message: str
+
+
+class NoProjectChecked(WireModel):
+    status: Literal["not_checked"] = "not_checked"
+    message: str = Field(
+        description="What went wrong, in plain words. No project is offered, because nothing "
+        "unchecked is shown."
+    )
+
+
+type FindOut = Annotated[
+    FoundProjects | NoProjectKnown | NoProjectChecked, Field(discriminator="status")
+]
 
 
 class SourceView(WireModel):
@@ -183,8 +232,15 @@ class WatchedSoftwareView(WireModel):
     id: SoftwareId
     name: str
     source: SourceView
-    our_version: str | None
+    our_version: str | None = Field(
+        description="The version the team runs, when somebody said so or a ticket marked Done "
+        "moved it. Null means Not known. It is never filled from the newest release."
+    )
     our_version_source: VersionSourceView | None
+    compared_from: str | None = Field(
+        description="With no version known, the newest release the first check read. Later "
+        "checks tell about releases newer than this. It is not the version the team runs."
+    )
     newest_version: str | None = Field(
         description="The newest release read from the source. A check that cannot read the "
         "source keeps the version an earlier check read."

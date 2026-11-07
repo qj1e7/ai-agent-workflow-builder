@@ -1,10 +1,12 @@
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from agent_runtime.api import HttpCallbacks, Runtime, create_app
 from agent_runtime.contract import (
     PLAIN_TAG_PATTERN,
     RELEASE_TAG_PATTERN,
+    FindSoftwareRequest,
     FoundSoftware,
     SoftwareMatch,
     SoftwareNotChecked,
@@ -126,9 +128,47 @@ def test_the_newest_release_is_the_newest_tag_the_watch_would_count():
 
 
 def test_a_project_whose_tags_the_watch_ignores_has_no_release_to_compare():
-    source = FakeProjectSource({"n8n-io/n8n": [Release("stable"), Release("n8n@2.46.6")]})
+    source = FakeProjectSource({"n8n-io/n8n": [Release("stable"), Release("n8n-nightly@2.46.6")]})
     (match,) = found(find(source, "n8n")).matches
     assert (match.releases, match.newest) == ("none", None)
+
+
+@pytest.mark.parametrize(
+    ("name", "repo", "tags", "newest"),
+    [
+        (
+            "Docker Engine",
+            "moby/moby",
+            ["docker-v29.1.0", "docker-v29.0.4", "v25.0.18"],
+            "docker-v29.1.0",
+        ),
+        ("n8n", "n8n-io/n8n", ["n8n@2.4.2", "n8n@2.4.1", "stable"], "n8n@2.4.2"),
+        (
+            "LangChain",
+            "langchain-ai/langchain",
+            ["langchain-core==0.3.9", "langchain==0.3.4", "langchain==0.3.3"],
+            "langchain==0.3.4",
+        ),
+    ],
+    ids=["moby", "n8n", "langchain"],
+)
+def test_a_project_that_prefixes_its_tags_has_a_release_to_compare(
+    name: str, repo: str, tags: list[str], newest: str
+):
+    source = FakeProjectSource({repo: [Release(tag) for tag in tags]})
+    (match,) = found(find(source, name)).matches
+    assert (match.releases, match.newest) == ("published", newest)
+
+
+@pytest.mark.parametrize("blank", ["", "   ", "\t\n"])
+def test_a_blank_name_is_refused_before_it_is_looked_up(blank: str):
+    with pytest.raises(ValidationError, match="at least 1 character"):
+        FindSoftwareRequest(name=blank, tag_pattern=RELEASE_TAG_PATTERN)
+
+
+def test_a_name_is_trimmed_before_it_is_looked_up():
+    request = FindSoftwareRequest(name="  Kubernetes ", tag_pattern=RELEASE_TAG_PATTERN)
+    assert request.name == "Kubernetes"
 
 
 def test_the_tag_rule_comes_from_the_request():
@@ -242,6 +282,7 @@ def test_the_route_answers_with_a_status_and_needs_the_key():
     unknown = http.post("/v1/software/find", json={**ask, "name": "Zorblax"}).json()
     assert unknown["status"] == "not_known"
     assert http.post("/v1/software/find", json={**ask, "name": ""}).status_code == 422
+    assert http.post("/v1/software/find", json={**ask, "name": "   "}).status_code == 422
     assert http.post("/v1/software/find", json={"name": "n8n"}).status_code == 422
     assert http.post("/v1/software/find", json={**ask, "tag_pattern": ".*"}).status_code == 422
     assert (

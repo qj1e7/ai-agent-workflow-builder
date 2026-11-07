@@ -146,6 +146,27 @@ class MockGithubTest(unittest.TestCase):
             self.assertEqual(call(base, "/repos/someone/else/releases")[0], 404)
             self.assertEqual(call(base, "/repos/redis/releases")[0], 404)
 
+    def test_a_repository_answers_with_the_address_github_gives_it(self) -> None:
+        with running() as base:
+            status, body = call(base, "/repos/langchain-ai/langgraph")
+            _, other = call(base, "/repos/redis/redis/")
+        self.assertEqual(status, 200)
+        self.assertEqual(body["full_name"], "langchain-ai/langgraph")
+        self.assertEqual(other["full_name"], "redis/redis")
+
+    def test_an_unknown_repository_has_no_address_and_follows_its_mode(self) -> None:
+        with running() as base:
+            self.assertEqual(call(base, "/repos/someone/else")[0], 404)
+            call(base, "/_admin/mode", {"mode": "not_found", "repo": "redis/redis"})
+            self.assertEqual(call(base, "/repos/redis/redis")[0], 404)
+            call(base, "/_admin/mode", {"mode": "unavailable"})
+            self.assertEqual(call(base, "/repos/langchain-ai/langgraph")[0], 503)
+
+    def test_n8n_tags_carry_its_prefix(self) -> None:
+        with running() as base:
+            _, releases = call(base, "/repos/n8n-io/n8n/releases")
+        self.assertEqual([r["tag_name"] for r in releases[:2]], ["n8n@2.4.2", "n8n@2.4.1"])
+
     def test_a_second_repository_has_its_own_releases(self) -> None:
         with running() as base:
             status, releases = call(base, "/repos/redis/redis/releases")

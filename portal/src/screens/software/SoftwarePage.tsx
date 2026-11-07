@@ -28,7 +28,7 @@ import {
   type Named,
 } from './removal'
 import { SoftwareHistory } from './SoftwareHistory'
-import { cantCheckWords, countIn, emptyWords, groupsOf, newestOf, scheduleRuns, singaporeTime, statusLabel, statusTone, stoppedWords, ticketsOf, versionSourceWords } from './software'
+import { cantCheckWords, countIn, emptyWords, groupsOf, newestOf, oursOf, scheduleRuns, singaporeTime, SOURCES_NOTE, statusTone, statusWords, stoppedWords, ticketsOf } from './software'
 import styles from './Software.module.css'
 
 const REFRESH_MS = 15_000
@@ -59,6 +59,7 @@ interface RowProps {
 function Row({ row, operator, scheduled, paused, open, removing, nameOf, onToggle, onRemove }: RowProps) {
   const historyId = `history-${row.id}`
   const newest = newestOf(row)
+  const ours = oursOf(row)
   return (
     <li className={styles['row']} data-status={row.status}>
       <div className={styles['who']}>
@@ -76,8 +77,8 @@ function Row({ row, operator, scheduled, paused, open, removing, nameOf, onToggl
         <div>
           <dt>Ours</dt>
           <dd>
-            {row.our_version ?? 'Not known yet'}
-            <span className={styles['src']}><TicketKeys text={versionSourceWords(row.our_version_source)} keys={ticketsOf(row)} /></span>
+            {ours.version}
+            <span className={styles['src']}><TicketKeys text={ours.note} keys={ticketsOf(row)} /></span>
           </dd>
         </div>
         <div>
@@ -90,7 +91,7 @@ function Row({ row, operator, scheduled, paused, open, removing, nameOf, onToggl
       </dl>
       <div className={styles['state']}>
         <span className={styles['pill']} data-tone={statusTone[row.status]}>
-          {statusLabel[row.status]}
+          {statusWords(row)}
         </span>
         {row.status === 'cant_check' ? <span className={styles['src']}>{cantCheckWords(row.problem, { scheduled, paused })}</span> : null}
         {row.status === 'ticket_open' && row.open_ticket ? (
@@ -120,8 +121,7 @@ function Row({ row, operator, scheduled, paused, open, removing, nameOf, onToggl
   )
 }
 
-interface SectionProps {
-  readonly title: string
+interface RowsProps {
   readonly rows: readonly WatchedSoftwareView[]
   readonly operator: boolean
   readonly scheduled: boolean
@@ -133,30 +133,25 @@ interface SectionProps {
   readonly onRemove: (row: WatchedSoftwareView) => void
 }
 
-function Section({ title, rows, ...rest }: SectionProps) {
+function Rows({ rows, ...rest }: RowsProps) {
   if (rows.length === 0) return null
   return (
-    <section className={styles['section']} aria-label={title}>
-      <h2>
-        {title} <span className={styles['count']}>{rows.length}</span>
-      </h2>
-      <ul className={styles['list']}>
-        {rows.map((row) => (
-          <Row
-            key={row.id}
-            row={row}
-            operator={rest.operator}
-            scheduled={rest.scheduled}
-            paused={rest.paused}
-            open={rest.opened === row.id}
-            removing={rest.removing === row.id}
-            nameOf={rest.nameOf}
-            onToggle={() => rest.onToggle(row.id)}
-            onRemove={() => rest.onRemove(row)}
-          />
-        ))}
-      </ul>
-    </section>
+    <ul className={styles['list']}>
+      {rows.map((row) => (
+        <Row
+          key={row.id}
+          row={row}
+          operator={rest.operator}
+          scheduled={rest.scheduled}
+          paused={rest.paused}
+          open={rest.opened === row.id}
+          removing={rest.removing === row.id}
+          nameOf={rest.nameOf}
+          onToggle={() => rest.onToggle(row.id)}
+          onRemove={() => rest.onRemove(row)}
+        />
+      ))}
+    </ul>
   )
 }
 
@@ -269,59 +264,69 @@ function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; op
   const shown = countIn(groups)
   const searching = query.trim() !== ''
 
+  const rowProps = {
+    operator,
+    scheduled,
+    paused,
+    opened,
+    removing: feedback.busy?.act === 'remove' ? feedback.busy.id : null,
+    nameOf,
+    onToggle: (id: string) => setOpened((current) => (current === id ? null : id)),
+    onRemove: (row: WatchedSoftwareView) => pressRemove(changes, removal.mutate, row, dispatch, words),
+  }
+
   return (
     <>
       {operator && view && !paused && software.length > 0 ? <CheckNow useCaseId={view.use_case_id} /> : null}
       {view?.last_check?.state === 'failed' ? <LastCheckStopped last={view.last_check} /> : null}
-      {view ? (
-        <Schedule
-          schedule={view.schedule}
-          operator={operator}
-          useCaseId={view.use_case_id}
-          paused={paused}
-          answeredAt={answeredAt}
-          onResumed={() => dispatch({ type: 'resumed' })}
-        />
-      ) : null}
       <Notice box={noticeBox} feedback={feedback} scheduled={scheduled} paused={paused} onUndo={(row) => pressUndo(changes, restore.mutate, row, dispatch, words)} onDismiss={dismiss} />
-      {software.length > 0 || searching ? <FindSoftware query={query} shown={shown} onChange={setQuery} /> : null}
-      {software.length === 0 && !searching ? (
-        <div className={styles['empty']}>
-          <b>No software yet</b>
-          <span>{emptyWords({ operator, scheduled: view === null || scheduleRuns(view.schedule), paused })}</span>
-        </div>
+      {groups.attention.length > 0 ? (
+        <section className={styles['section']} aria-labelledby="needs-attention-heading">
+          <h2 id="needs-attention-heading">
+            Needs attention <span className={styles['count']}>{groups.attention.length}</span>
+          </h2>
+          <Rows rows={groups.attention} {...rowProps} />
+        </section>
       ) : null}
-      {searching && shown === 0 ? (
-        <div className={styles['empty']}>
-          <b>Nothing matches</b>
-          <span>Try another name.</span>
-          <div>
-            <Button onClick={() => setQuery('')}>Clear the search</Button>
+      <section className={styles['section']} aria-labelledby="software-we-watch-heading">
+        <h2 id="software-we-watch-heading">
+          Software we watch <span className={styles['count']}>{groups.watched.length}</span>
+        </h2>
+        {software.length > 0 || searching ? <FindSoftware query={query} shown={shown} onChange={setQuery} /> : null}
+        {software.length === 0 && !searching ? (
+          <div className={styles['empty']}>
+            <b>No software yet</b>
+            <span>{emptyWords({ operator, scheduled: view === null || scheduleRuns(view.schedule), paused })}</span>
           </div>
-        </div>
-      ) : null}
-      {[
-        { title: 'Needs a person', rows: groups.needs },
-        { title: 'Not checked yet', rows: groups.notChecked },
-        { title: 'Up to date', rows: groups.upToDate },
-      ].map(({ title, rows }) => (
-        <Section
-          key={title}
-          title={title}
-          rows={rows}
-          operator={operator}
-          scheduled={scheduled}
-          paused={paused}
-          opened={opened}
-          removing={feedback.busy?.act === 'remove' ? feedback.busy.id : null}
-          nameOf={nameOf}
-          onToggle={(id) => setOpened((current) => (current === id ? null : id))}
-          onRemove={(row) => pressRemove(changes, removal.mutate, row, dispatch, words)}
-        />
-      ))}
-      {operator ? (
-        <AddSoftware names={software.map((row) => row.name)} repos={software.map((row) => row.source.ref)} onAdded={(name) => dispatch({ type: 'added', name })} />
-      ) : null}
+        ) : null}
+        {searching && shown === 0 ? (
+          <div className={styles['empty']}>
+            <b>Nothing matches</b>
+            <span>Try another name.</span>
+            <div>
+              <Button onClick={() => setQuery('')}>Clear the search</Button>
+            </div>
+          </div>
+        ) : null}
+        <Rows rows={groups.watched} {...rowProps} />
+        {operator ? (
+          <AddSoftware names={software.map((row) => row.name)} repos={software.map((row) => row.source.ref)} onAdded={(name) => dispatch({ type: 'added', name })} />
+        ) : null}
+      </section>
+      <section className={styles['section']} aria-labelledby="how-checked-heading">
+        <h2 id="how-checked-heading">How it’s checked</h2>
+        {view ? (
+          <Schedule
+            schedule={view.schedule}
+            operator={operator}
+            useCaseId={view.use_case_id}
+            paused={paused}
+            answeredAt={answeredAt}
+            onResumed={() => dispatch({ type: 'resumed' })}
+          />
+        ) : null}
+        <p className="muted">{SOURCES_NOTE}</p>
+      </section>
     </>
   )
 }

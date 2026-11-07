@@ -70,6 +70,11 @@ export const statusLabel: Record<SoftwareStatus, string> = {
   not_checked: 'Not checked yet',
 }
 
+/** Up to date needs a version to be up to date with. With none known, the row says what the check can truthfully say. */
+export function statusWords(row: Pick<WatchedSoftwareView, 'status' | 'our_version'>): string {
+  return row.status === 'up_to_date' && row.our_version === null ? 'Nothing newer yet' : statusLabel[row.status]
+}
+
 type StatusTone = 'bad' | 'wait' | 'open' | 'good' | 'quiet'
 
 export const statusTone: Record<SoftwareStatus, StatusTone> = {
@@ -142,7 +147,7 @@ export function checkName(text: string, watched: readonly string[] = []): Checke
   return { ok: true, value: name }
 }
 
-export const VERSION_HELP = 'Left empty, the first check takes the newest.'
+export const VERSION_HELP = 'Leave it empty if you don’t know. It shows as Not known, and the check tells you about releases newer than the newest one it first reads.'
 
 const VERSION_BAD = 'Type the version as three numbers, such as 1.2.14.'
 
@@ -192,9 +197,10 @@ export function matches(count: number): string {
 }
 
 interface Groups {
-  readonly needs: readonly WatchedSoftwareView[]
-  readonly notChecked: readonly WatchedSoftwareView[]
-  readonly upToDate: readonly WatchedSoftwareView[]
+  /** A yes that waits, or a check that could not read the source. */
+  readonly attention: readonly WatchedSoftwareView[]
+  /** Everything else, in the order the platform gives: behind first, up to date last. */
+  readonly watched: readonly WatchedSoftwareView[]
 }
 
 function matchesQuery(row: WatchedSoftwareView, query: string): boolean {
@@ -204,15 +210,12 @@ function matchesQuery(row: WatchedSoftwareView, query: string): boolean {
 
 export function groupsOf(rows: readonly WatchedSoftwareView[], query: string): Groups {
   const shown = rows.filter((row) => matchesQuery(row, query))
-  return {
-    needs: shown.filter((row) => row.status !== 'up_to_date' && row.status !== 'not_checked'),
-    notChecked: shown.filter((row) => row.status === 'not_checked'),
-    upToDate: shown.filter((row) => row.status === 'up_to_date'),
-  }
+  const needsAttention = (row: WatchedSoftwareView) => row.status === 'awaiting_approval' || row.status === 'cant_check'
+  return { attention: shown.filter(needsAttention), watched: shown.filter((row) => !needsAttention(row)) }
 }
 
 export function countIn(groups: Groups): number {
-  return groups.needs.length + groups.notChecked.length + groups.upToDate.length
+  return groups.attention.length + groups.watched.length
 }
 
 export function versionSourceWords(source: VersionSourceView | null): string {
@@ -221,10 +224,24 @@ export function versionSourceWords(source: VersionSourceView | null): string {
     case 'given':
       return 'Given when added'
     case 'first_check':
-      return 'Taken from the first check'
+      return 'Compared from the first check'
     case 'ticket_done':
       return source.ticket ? `From ${source.ticket}, marked Done` : 'From a ticket marked Done'
   }
+}
+
+export const NOT_KNOWN = 'Not known'
+
+interface Ours {
+  readonly version: string
+  readonly note: string
+}
+
+/** What the row says the team runs. When nobody knows, it says so, and never shows the newest release in its place. */
+export function oursOf(row: WatchedSoftwareView): Ours {
+  if (row.our_version !== null) return { version: row.our_version, note: versionSourceWords(row.our_version_source) }
+  if (row.compared_from) return { version: NOT_KNOWN, note: `Telling you about releases newer than ${row.compared_from}, the newest the first check read` }
+  return { version: NOT_KNOWN, note: 'The first check reads the newest release. Later checks tell you about newer ones' }
 }
 
 interface Newest {
@@ -289,6 +306,9 @@ export function historyOf(row: WatchedSoftwareView, nameOf: (id: string) => stri
   if (readAt) dated.push({ at: readAt, words: `Checked. The newest version is ${row.newest_version ?? 'unknown'}.` })
   if (!row.checked_at) now.push({ when: 'Not yet', words: 'Not checked yet.' })
   const source = row.our_version_source
+  if (source && row.our_version === null && row.compared_from) {
+    dated.push({ at: source.at, words: `Our version is not known. Later checks tell about releases newer than ${row.compared_from}, the newest the first check read.` })
+  }
   if (source && row.our_version) {
     const words = source.kind === 'ticket_done' ? `Our version moved to ${row.our_version}. It came from ${source.ticket ?? 'a ticket'}, marked Done.` : `Our version is ${row.our_version}. ${versionSourceWords(source)}.`
     dated.push({ at: source.at, words })

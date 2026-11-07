@@ -9,6 +9,9 @@ from urllib.parse import parse_qs, urlparse
 REPO = "langchain-ai/langgraph"
 REDIS = "redis/redis"
 FASTAPI = "fastapi/fastapi"
+N8N = "n8n-io/n8n"
+TERRAFORM = "hashicorp/terraform"
+OPENTOFU = "opentofu/opentofu"
 MODES = ("ok", "unavailable", "not_found")
 REPO_NAME = re.compile(r"^[^/\s]+/[^/\s]+$")
 DEFAULT_PER_PAGE = 30
@@ -33,6 +36,9 @@ REDIS_TAGS = ["8.2.1", "8.2.0", "8.0.3", "8.0.2", "7.4.5", "7.4.4"]
 FASTAPI_TAGS = [
     "0.115.6", "0.115.5", "0.115.4", "0.115.3", "0.115.2", "0.115.1", "0.115.0", "0.114.2",
 ]  # fmt: skip
+TERRAFORM_TAGS = ["v1.9.8", "v1.9.7", "v1.9.6"]
+OPENTOFU_TAGS = ["v1.8.5", "v1.8.4", "v1.8.3"]
+N8N_TAGS = ["n8n@2.4.2", "n8n@2.4.1", "n8n@2.4.0", "n8n@2.3.9"]
 LATEST_PUBLISHED = datetime(2026, 10, 28, 9, 0, tzinfo=UTC)
 
 GOOD_TOKEN = "ghp_mock_good_token"
@@ -100,11 +106,29 @@ RELEASES_BY_REPO: dict[str, list[dict[str, Any]]] = {
     REPO: build_releases(REPO, release_order(), LATEST_PUBLISHED),
     REDIS: build_releases(REDIS, REDIS_TAGS, LATEST_PUBLISHED - timedelta(days=2)),
     FASTAPI: build_releases(FASTAPI, FASTAPI_TAGS, LATEST_PUBLISHED - timedelta(days=1)),
+    N8N: build_releases(N8N, N8N_TAGS, LATEST_PUBLISHED - timedelta(days=3)),
+    TERRAFORM: build_releases(TERRAFORM, TERRAFORM_TAGS, LATEST_PUBLISHED - timedelta(days=4)),
+    OPENTOFU: build_releases(OPENTOFU, OPENTOFU_TAGS, LATEST_PUBLISHED - timedelta(days=5)),
     PLANTED: planted_releases(),
 }
 """The repositories the mock knows. Any other repository answers 404, as GitHub does."""
 RELEASES = RELEASES_BY_REPO[REPO]
 RELEASES_PATH = re.compile(r"^/repos/([^/]+)/([^/]+)/releases/?$")
+REPO_PATH = re.compile(r"^/repos/([^/]+)/([^/]+)/?$")
+
+
+def repo_body(repo: str) -> dict[str, Any]:
+    """The part of GitHub's repository answer the finder reads: the address GitHub gives now."""
+    owner, name = repo.split("/")
+    return {
+        "id": 700_000 + len(repo),
+        "name": name,
+        "full_name": repo,
+        "private": False,
+        "owner": {"login": owner, "type": "Organization"},
+        "html_url": f"https://github.com/{repo}",
+        "default_branch": "main",
+    }
 
 
 class State:
@@ -202,6 +226,16 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
                     self.send_json(422, {"message": "Validation Failed"})
                     return
                 self.send_json(200, page)
+            elif (match := REPO_PATH.match(url.path)) is not None:
+                repo = f"{match.group(1)}/{match.group(2)}"
+                mode = state.mode_of(repo)
+                if mode == "unavailable":
+                    self.send_json(503, {"message": "Service Unavailable"})
+                    return
+                if mode == "not_found" or repo not in RELEASES_BY_REPO:
+                    self.send_json(404, {"message": "Not Found"})
+                    return
+                self.send_json(200, repo_body(repo))
             else:
                 self.send_json(404, {"message": "Not Found"})
 

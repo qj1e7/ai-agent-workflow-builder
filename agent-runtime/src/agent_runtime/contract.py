@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter
 
 
 class WireModel(BaseModel):
@@ -114,11 +114,16 @@ def _not_a_dot_segment(repo: str) -> str:
 type RepoName = Annotated[str, Field(pattern=REPO_PATTERN), AfterValidator(_not_a_dot_segment)]
 
 
-RELEASE_TAG_PATTERN = r"^[vV]?\d+\.\d+\.\d+$"
-"""A plain version number, with or without one v in front, such as 1.2.14 or v2.14.2."""
+RELEASE_TAG_PATTERN = r"^(?:[vV]|docker-v|n8n@|langchain==)?\d+\.\d+\.\d+$"
+"""A version number, with or without one v in front, such as 1.2.14 or v2.14.2, or with the
+prefix three projects put on the tags of their main product: moby's docker-v29.1.0, n8n's
+n8n@2.4.2 and LangChain's langchain==0.3.1. The same project's other tags, such as
+langchain-core==0.3.1 or cli==0.4.37, do not count."""
+V_TAG_PATTERN = r"^[vV]?\d+\.\d+\.\d+$"
+"""The pattern from before those prefixes counted. Runs saved with it still send it."""
 PLAIN_TAG_PATTERN = r"^\d+\.\d+\.\d+$"
 """The pattern from before v tags counted. Runs saved with it still send it."""
-VETTED_TAG_PATTERNS = frozenset({RELEASE_TAG_PATTERN, PLAIN_TAG_PATTERN})
+VETTED_TAG_PATTERNS = frozenset({RELEASE_TAG_PATTERN, V_TAG_PATTERN, PLAIN_TAG_PATTERN})
 
 
 def _vetted_tag_pattern(pattern: str) -> str:
@@ -635,10 +640,8 @@ type UnderstandResult = Annotated[
 
 
 class FindSoftwareRequest(WireModel):
-    name: str = Field(
-        min_length=1,
-        max_length=80,
-        description="The software as a person wrote it, such as Kubernetes.",
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)] = (
+        Field(description="The software as a person wrote it, such as Kubernetes.")
     )
     tag_pattern: TagPattern
 

@@ -16,7 +16,7 @@ from platform_api.orchestration.jira import JiraWriteConnector
 from platform_api.orchestration.jira_rest import JiraAuth, JiraRestAdapter
 from platform_api.orchestration.model_settings import KeyBox, ModelSettings
 from platform_api.orchestration.people_store import People
-from platform_api.orchestration.planning import CardPlanning
+from platform_api.orchestration.planning import CardPlanning, ProjectFinding
 from platform_api.orchestration.runs import Leg
 from platform_api.orchestration.schedule_store import ScheduleBook, ScheduleTicker
 from platform_api.orchestration.service import Orchestrator
@@ -181,7 +181,13 @@ async def build(settings: Settings) -> Services:
         public_base_url=settings.public_base_url,
     )
     schedules = ScheduleBook(db)
-    watchlist = Watchlist(db, WatchFacts(db, jira), schedules, settings.watchlist_jira_project)
+    watchlist = Watchlist(
+        db,
+        WatchFacts(db, jira),
+        schedules,
+        settings.watchlist_jira_project,
+        ProjectFinding(agents),
+    )
     await watchlist.adopt_ticket_project()
     builder = Builder(
         db,

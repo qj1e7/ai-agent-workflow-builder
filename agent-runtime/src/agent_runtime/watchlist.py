@@ -59,7 +59,7 @@ def decide(item: SoftwareToCheck, read: Read) -> Finding:
         return _finding(
             item, "cant_check", newest, [], f"Our version {our} is not a version number."
         )
-    newer = newer_than(our, read)
+    newer = newer_than(our, read, any_family=True)
     if not newer:
         return _finding(item, "up_to_date", newest, [], f"Nothing is newer than {our}.")
     count = plural(len(newer), "release")

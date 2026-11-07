@@ -204,6 +204,36 @@ def test_a_run_saved_with_the_plain_pattern_still_reads_plain_versions_only():
     assert finding(result, LANGGRAPH_ID).new_versions == ["1.2.16", "1.2.15"]
 
 
+@pytest.mark.parametrize(
+    ("repo", "ours", "tags", "newest"),
+    [
+        ("moby/moby", "29.1.0", ["docker-v29.2.0", "docker-v29.1.0", "v25.0.18"], "docker-v29.2.0"),
+        ("n8n-io/n8n", "2.4.1", ["n8n@2.4.2", "n8n@2.4.1", "stable"], "n8n@2.4.2"),
+        (
+            "langchain-ai/langchain",
+            "0.3.1",
+            ["langchain-core==0.9.0", "langchain==0.3.2", "langchain==0.3.1"],
+            "langchain==0.3.2",
+        ),
+    ],
+    ids=["moby", "n8n", "langchain"],
+)
+def test_a_project_that_prefixes_its_tags_is_compared_with_the_number_we_run(
+    repo: str, ours: str, tags: list[str], newest: str
+):
+    watched = software("sw_01JC2A3B4C5D6E7F8G9H0J1K2R", "Prefixed", repo, ours)
+    result = finished(Room(RepoSource({repo: tags})).run(request_for(watched)))
+    found = finding(result, watched.id)
+    assert (found.state, found.newest, found.new_versions) == ("behind", newest, [newest])
+
+
+def test_a_prefixed_project_with_no_version_given_starts_from_its_newest_tag():
+    watched = software("sw_01JC2A3B4C5D6E7F8G9H0J1K2R", "n8n", "n8n-io/n8n", None)
+    source = RepoSource({"n8n-io/n8n": ["n8n@2.4.2", "n8n@2.4.1"]})
+    found = finding(finished(Room(source).run(request_for(watched))), watched.id)
+    assert (found.state, found.newest) == ("starting_point", "n8n@2.4.2")
+
+
 def test_a_network_error_is_retried_the_same_way_as_a_5xx():
     source = RepoSource(TAGS, down={LANGGRAPH: None})
     room = Room(source)

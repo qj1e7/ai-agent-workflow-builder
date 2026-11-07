@@ -49,14 +49,17 @@ def family_of(tag: str) -> str | None:
     return parsed.family if parsed else None
 
 
-def newer_than(last: str, tags: Iterable[str]) -> list[str]:
+def newer_than(last: str, tags: Iterable[str], *, any_family: bool = False) -> list[str]:
+    """Tags newer than last, in last's family. With any_family, a bare number such as 1.2.14
+    is compared with tags of every family, for a caller that already chose which tags count."""
     anchor = parse_tag(last)
     if anchor is None:
         raise UnparseableTag(f"{last!r} is not a version tag")
+    everywhere = any_family and anchor.family == ""
     found = {
         parsed.tag: parsed
         for parsed in map(parse_tag, tags)
-        if parsed and parsed.family == anchor.family and parsed.key > anchor.key
+        if parsed and (everywhere or parsed.family == anchor.family) and parsed.key > anchor.key
     }
     return [p.tag for p in sorted(found.values(), key=lambda p: p.key, reverse=True)]
 

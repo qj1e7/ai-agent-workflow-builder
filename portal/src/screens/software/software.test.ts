@@ -19,12 +19,14 @@ import {
   newestOf,
   nextCheckWords,
   noScheduleWords,
+  oursOf,
   repoOf,
   scheduleOwnerWords,
   scheduleRuns,
   scheduleWords,
   singaporeTime,
   statusLabel,
+  statusWords,
   versionSourceWords,
 } from './software'
 import { formatterFactory, nextRunWords } from '../workflows/workflow'
@@ -126,7 +128,7 @@ describe('status labels', () => {
 
   it('says where our version came from', () => {
     expect(versionSourceWords({ kind: 'given', at: '2026-11-02T10:00:00Z', ticket: null })).toBe('Given when added')
-    expect(versionSourceWords({ kind: 'first_check', at: '2026-11-02T10:00:00Z', ticket: null })).toBe('Taken from the first check')
+    expect(versionSourceWords({ kind: 'first_check', at: '2026-11-02T10:00:00Z', ticket: null })).toBe('Compared from the first check')
     expect(versionSourceWords({ kind: 'ticket_done', at: '2026-11-02T10:00:00Z', ticket: 'MOCK-9' })).toBe('From MOCK-9, marked Done')
     expect(versionSourceWords(null)).toBe('Not known until the first check')
   })
@@ -135,9 +137,8 @@ describe('status labels', () => {
 describe('the list', () => {
   it('splits rows by whether a person has to look', () => {
     const groups = groupsOf(ROWS, '')
-    expect(groups.needs.map((row) => row.status)).toEqual(['cant_check', 'behind', 'awaiting_approval', 'ticket_open'])
-    expect(groups.notChecked.map((row) => row.name)).toEqual(['Terraform'])
-    expect(groups.upToDate.map((row) => row.name)).toEqual(['n8n'])
+    expect(groups.attention.map((row) => row.status)).toEqual(['cant_check', 'awaiting_approval'])
+    expect(groups.watched.map((row) => row.status)).toEqual(['behind', 'ticket_open', 'not_checked', 'up_to_date'])
     expect(countIn(groups)).toBe(ROWS.length)
   })
 
@@ -299,5 +300,39 @@ describe('a row’s history', () => {
   it('says a new row was not checked yet', () => {
     const row = ROWS.find((r) => r.status === 'not_checked') as WatchedSoftwareView
     expect(historyOf(row, nameOf)[0]).toEqual({ when: 'Not yet', words: 'Not checked yet.' })
+  })
+})
+
+describe('what the team runs', () => {
+  const base = ROWS[0] as WatchedSoftwareView
+
+  it('shows the version somebody gave, with where it came from', () => {
+    const given = { ...base, our_version: '1.2.14', our_version_source: { kind: 'given', at: '2026-11-02T10:00:00Z', ticket: null }, compared_from: null } as WatchedSoftwareView
+    expect(oursOf(given)).toEqual({ version: '1.2.14', note: 'Given when added' })
+  })
+
+  it('says Not known, with the version the checks compare from, never as the version the team runs', () => {
+    const first = { ...base, our_version: null, our_version_source: { kind: 'first_check', at: '2026-11-09T01:00:00Z', ticket: null }, compared_from: '8.2.0' } as WatchedSoftwareView
+    expect(oursOf(first)).toEqual({ version: 'Not known', note: 'Telling you about releases newer than 8.2.0, the newest the first check read' })
+  })
+
+  it('says Not known before any check has read the newest release', () => {
+    const fresh = { ...base, our_version: null, our_version_source: null, compared_from: null } as WatchedSoftwareView
+    expect(oursOf(fresh)).toEqual({ version: 'Not known', note: 'The first check reads the newest release. Later checks tell you about newer ones' })
+  })
+
+  it('tells the row history what the checks compare from', () => {
+    const first = { ...base, our_version: null, our_version_source: { kind: 'first_check', at: '2026-11-09T01:00:00Z', ticket: null }, compared_from: '8.2.0' } as WatchedSoftwareView
+    const words = historyOf(first, nameOf).map((line) => line.words)
+    expect(words).toContain('Our version is not known. Later checks tell about releases newer than 8.2.0, the newest the first check read.')
+    expect(words.some((line) => line.startsWith('Our version is 8.2.0'))).toBe(false)
+  })
+})
+
+describe('the status of a row whose version is not known', () => {
+  it('does not claim Up to date when nothing is known to be up to date with', () => {
+    expect(statusWords({ status: 'up_to_date', our_version: null })).toBe('Nothing newer yet')
+    expect(statusWords({ status: 'up_to_date', our_version: '1.2.16' })).toBe('Up to date')
+    expect(statusWords({ status: 'behind', our_version: null })).toBe('Behind')
   })
 })

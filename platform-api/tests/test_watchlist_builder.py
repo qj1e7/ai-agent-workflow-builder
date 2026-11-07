@@ -5,7 +5,7 @@ from datetime import timedelta
 
 import pytest
 
-from platform_api.builder import Builder, Watchlist
+from platform_api.builder import TAG_PATTERN, Builder, Watchlist
 from platform_api.builder.lifecycle import RESTORE_WINDOW, TooLate
 from platform_api.builder.models import AddSoftware, WatchlistView
 from platform_api.builder.service import NothingToCheck
@@ -419,8 +419,11 @@ async def test_the_view_shows_each_fact_the_platform_learned(
         "MOCK-7",
     )
     assert alpha.our_version_source.at == LATER
-    assert (beta.our_version, beta.status, beta.approval_id) == ("1.5.0", "awaiting_approval", None)
+    assert (beta.status, beta.approval_id) == ("awaiting_approval", None)
     assert beta.our_version_source is not None and beta.our_version_source.kind == "first_check"
+    # Nobody said what Beta runs, so the row says Not known. The newest release read at the first
+    # check is only what later checks compare with.
+    assert (beta.our_version, beta.compared_from) == (None, "1.5.0")
     assert (gamma.status, gamma.problem, gamma.newest_version, gamma.checked_at) == (
         "cant_check",
         "GitHub answered 404 Not Found.",
@@ -488,7 +491,7 @@ async def test_a_check_carries_our_version_the_open_ticket_and_the_waiting_appro
     )
     assert spec.bindings == {"create_ticket": Binding("jira", "create_ticket", {"project": "MOCK"})}
     assert spec.task == WatchlistTask(
-        tag_pattern=r"^[vV]?\d+\.\d+\.\d+$",
+        tag_pattern=TAG_PATTERN,
         software=(
             WatchedSoftware(
                 by_name["Alpha"], "Alpha", SoftwareSource("owner/alpha"), "2.0.0", None, False
