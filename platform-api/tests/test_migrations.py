@@ -286,14 +286,14 @@ def test_migration_0007_keeps_team_requests_and_a_downgrade_drops_them(postgres:
         assert present(conn) == tables
         conn.execute(
             "INSERT INTO builder.team_requests (request_id, kind, about, note, asked_by,"
-            " asked_by_name, asked_at, idempotency_key) VALUES ('trq_1', 'ask_the_team',"
-            " '{}', 'n', 'alice', 'Alice', now(), 'k')"
+            " asked_by_name, asked_at, idempotency_key, teams_post) VALUES ('trq_1',"
+            " 'ask_the_team', '{}', 'n', 'alice', 'Alice', now(), 'k', 'posted')"
         )
         with pytest.raises(psycopg.errors.UniqueViolation):
             conn.execute(
                 "INSERT INTO builder.team_requests (request_id, kind, about, note, asked_by,"
-                " asked_by_name, asked_at, idempotency_key) VALUES ('trq_2', 'support', '{}',"
-                " 'n', 'alice', 'Alice', now(), 'k')"
+                " asked_by_name, asked_at, idempotency_key, teams_post) VALUES ('trq_2',"
+                " 'support', '{}', 'n', 'alice', 'Alice', now(), 'k', 'posted')"
             )
         with pytest.raises(psycopg.errors.CheckViolation):
             conn.execute("UPDATE builder.team_requests SET status = 'done'")
@@ -307,6 +307,12 @@ def test_migration_0007_keeps_team_requests_and_a_downgrade_drops_them(postgres:
         builder.rollback()
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             builder.execute("DELETE FROM builder.team_requests")
+        builder.rollback()
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            builder.execute("UPDATE builder.team_requests SET note = 'changed'")
+        builder.rollback()
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            builder.execute("UPDATE builder.team_requests SET asked_by = 'bob'")
 
 
 def test_migration_0006_adds_the_people_tables_and_folds_the_model_history_into_them(

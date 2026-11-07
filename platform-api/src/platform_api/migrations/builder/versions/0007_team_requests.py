@@ -17,8 +17,9 @@ def upgrade() -> None:
             idempotency_key text NOT NULL,
             status text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'answered', 'done')),
             done_at timestamptz,
-            teams_post text NOT NULL DEFAULT 'failed'
-                CHECK (teams_post IN ('posted', 'no_channel', 'failed')),
+            teams_post text NOT NULL
+                CHECK (teams_post IN ('posting', 'posted', 'no_channel', 'failed')),
+            posting_at timestamptz,
             UNIQUE (asked_by, idempotency_key),
             CONSTRAINT team_requests_done_has_a_time
                 CHECK ((status = 'done') = (done_at IS NOT NULL))
@@ -39,7 +40,9 @@ def upgrade() -> None:
         CREATE INDEX team_request_replies_by_request
             ON builder.team_request_replies (request_id, replied_at);
 
-        GRANT SELECT, INSERT, UPDATE ON builder.team_requests TO wab_builder;
+        GRANT SELECT, INSERT ON builder.team_requests TO wab_builder;
+        GRANT UPDATE (status, done_at, teams_post, posting_at)
+            ON builder.team_requests TO wab_builder;
         GRANT SELECT, INSERT ON builder.team_request_replies TO wab_builder;
     """)
 

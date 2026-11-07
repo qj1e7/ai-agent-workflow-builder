@@ -110,7 +110,7 @@ async def lab(postgres: PostgresUrls) -> AsyncIterator[Lab]:
         app.state.watchlist = watchlist
         app.state.orchestrator = h.orchestrator
         app.state.people = people
-        requests = TeamRequests(h.db, NoTeams(), h.orchestrator, "http://localhost:8000")
+        requests = TeamRequests(h.db, NoTeams(), h.orchestrator, h.log, "http://localhost:8000")
         app.state.team_requests = requests
         app.state.home = Home(builder, h.orchestrator, people, requests)
         transport = httpx.ASGITransport(app=app)

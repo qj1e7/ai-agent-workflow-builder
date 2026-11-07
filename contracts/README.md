@@ -111,6 +111,7 @@ Every event has `run_id`, `seq` (gapless from 1 per run), `ts`, `actor {kind, id
 | `run_rejected` | platform | `by`, `step` |
 | `run_failed` | platform | `stage`, `reason`, `retryable`, `message` |
 | `run_retried` | user | `leg`, `attempt` |
+| `support_reported` | user | `request_id`, `reported_by` |
 
 `run_failed.reason` is one of `AgentError`, `WorkflowNodeError`, `TimedOut`, `DispatchFailed`, `WriteFailed`, `SafetyDenied`, `UnboundIntent`, `OutOfOrderStep`. The AI troubleshooter has one rule per reason.
 

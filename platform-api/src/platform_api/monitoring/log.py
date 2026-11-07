@@ -14,10 +14,12 @@ from platform_api.monitoring.agent_events import AgentEvent
 from platform_api.monitoring.events import (
     ActivityEvent,
     PendingEvent,
+    SupportReportedData,
     activity_event_adapter,
     agent_actor,
+    user_actor,
 )
-from platform_api.shared import RunId, TaskId
+from platform_api.shared import RunId, TaskId, UserId
 
 CHANNEL = "run_events"
 Generation = NewType("Generation", str)
@@ -271,6 +273,22 @@ class ActivityLog:
             stored.append(activity_event_adapter.validate_python(row))
         await uow.conn.execute("SELECT pg_notify(%s, %s)", (CHANNEL, run_id))
         return stored
+
+    async def note_support_report(
+        self, run_id: RunId, request_id: str, reported_by: UserId, display: str
+    ) -> None:
+        """Marks on the run that a person reported a problem with it to the team. Once per
+        request: asking again for the same request writes nothing. It holds no copy of the
+        person's note."""
+        event = PendingEvent(
+            user_actor(reported_by, display),
+            "support_reported",
+            f"{display} reported a problem with this run to the team.",
+            SupportReportedData(request_id=request_id, reported_by=reported_by),
+            dedupe_key=f"support:{request_id}",
+        )
+        async with self._db.transaction("monitoring") as uow:
+            await self.append(uow, run_id, [event])
 
     async def last_seq(self, uow: UnitOfWork, run_id: RunId) -> int:
         row = await (

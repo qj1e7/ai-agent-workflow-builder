@@ -1,3 +1,4 @@
+import asyncio
 import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -10,8 +11,9 @@ import pytest
 
 from platform_api.app import create_app
 from platform_api.builder import Builder, TeamRequests, Watchlist
-from platform_api.builder.team_requests import DONE_STAYS_LISTED
+from platform_api.builder.team_requests import DONE_STAYS_LISTED, POSTING_GIVES_UP_AFTER
 from platform_api.db import Database
+from platform_api.monitoring import ActivityLog
 from platform_api.orchestration import (
     RequestNotice,
     ScheduleBook,
@@ -19,7 +21,7 @@ from platform_api.orchestration import (
     TeamsRequestChannel,
 )
 from platform_api.orchestration.team_request_card import request_card
-from platform_api.shared import ExternalIdentity
+from platform_api.shared import ExternalIdentity, RunId, UserId
 from tests.conftest import PostgresUrls
 from tests.declared import declared_status
 from tests.support import LOCAL_ENV
@@ -61,6 +63,10 @@ class Lab:
     app: Any
     channel: RecordingChannel
     db: Database
+    log: ActivityLog
+
+    async def events(self) -> list[Any]:
+        return await self.log.read_after(RunId("run_1"), 0)
 
     async def send(
         self, body: dict[str, Any], who: dict[str, str] = ALICE, key: str = "k1"
@@ -79,10 +85,11 @@ async def lab(db: Database) -> AsyncIterator[Lab]:
     app.state.builder = Builder(db, SecondCallRepeats(), watchlist, "http://localhost:8000")
     app.state.watchlist = watchlist
     channel = RecordingChannel()
-    app.state.team_requests = TeamRequests(db, channel, SomeRuns(), "http://localhost:8080")
+    log = ActivityLog(db)
+    app.state.team_requests = TeamRequests(db, channel, SomeRuns(), log, "http://localhost:8080")
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        yield Lab(client, app, channel, db)
+        yield Lab(client, app, channel, db, log)
 
 
 async def test_an_operator_asks_the_team_and_the_request_is_kept_and_listed(lab: Lab):
@@ -114,6 +121,50 @@ async def test_a_report_to_support_names_the_run(lab: Lab):
 
     assert response.status_code == 201, response.text
     assert response.json()["about"] == {"run_id": "run_1"}
+
+
+async def test_a_report_to_support_marks_the_run_once_and_holds_no_note(lab: Lab):
+    first = await lab.send({**SUPPORT, "note": "my password is hunter2"}, key="p1")
+    again = await lab.send({**SUPPORT, "note": "my password is hunter2"}, key="p1")
+    ask = await lab.send(ASK, key="p2")
+
+    assert (first.status_code, again.status_code, ask.status_code) == (201, 200, 201)
+    [event] = await lab.events()
+    assert event.kind == "support_reported"
+    assert event.actor.id == "alice"
+    assert event.summary == "Alice reported a problem with this run to the team."
+    assert event.data.request_id == first.json()["request_id"]
+    assert "hunter2" not in event.model_dump_json()
+
+
+class StopsOnce:
+    def __init__(self, log: ActivityLog) -> None:
+        self.log = log
+        self.stop = True
+
+    async def note_support_report(
+        self, run_id: RunId, request_id: str, reported_by: UserId, display: str
+    ) -> None:
+        if self.stop:
+            self.stop = False
+            raise RuntimeError("stopped before the event was written")
+        await self.log.note_support_report(run_id, request_id, reported_by, display)
+
+
+async def test_a_repeat_writes_the_event_a_stop_before_it_left_out(lab: Lab):
+    lab.app.state.team_requests = TeamRequests(
+        lab.db, lab.channel, SomeRuns(), StopsOnce(lab.log), "http://localhost:8080"
+    )
+    with pytest.raises(RuntimeError):
+        await lab.send(SUPPORT)
+    assert await lab.events() == []
+
+    again = await lab.send(SUPPORT)
+
+    assert again.status_code == 200
+    assert [e.kind for e in await lab.events()] == ["support_reported"]
+    await lab.send(SUPPORT)
+    assert [e.kind for e in await lab.events()] == ["support_reported"]
 
 
 async def test_a_report_about_a_run_that_does_not_exist_is_refused_and_nothing_is_kept(lab: Lab):
@@ -184,11 +235,12 @@ async def test_an_approver_who_is_not_an_operator_can_ask_list_and_reply(lab: La
 
 
 async def test_the_card_names_the_person_and_holds_no_note(lab: Lab):
-    await lab.send({**ASK, "note": "my password is hunter2"}, CAROL)
+    made = (await lab.send({**ASK, "note": "my password is hunter2"}, CAROL)).json()
+    request_id = made["request_id"]
 
     [notice] = lab.channel.sent
     assert (notice.kind, notice.asked_by_name) == ("ask_the_team", "Carol")
-    assert notice.open_url == "http://localhost:8080/settings?tab=team-requests"
+    assert notice.open_url == f"http://localhost:8080/workflows?request={request_id}"
     assert "hunter2" not in json.dumps(request_card(notice).as_json())
 
 
@@ -291,6 +343,80 @@ async def test_a_done_request_leaves_the_list_after_30_days_but_stays_in_the_rec
     assert row == {"n": 1}
 
 
+async def test_the_builder_can_change_only_the_columns_the_service_changes(lab: Lab):
+    await lab.send(ASK)
+    async with lab.db.transaction("builder") as uow:
+        await uow.conn.execute(
+            "UPDATE builder.team_requests SET status = 'answered', teams_post = 'posted'"
+        )
+    for statement in (
+        "UPDATE builder.team_requests SET note = 'changed'",
+        "UPDATE builder.team_requests SET asked_by = 'bob'",
+        "UPDATE builder.team_requests SET kind = 'support'",
+    ):
+        async with lab.db.transaction("builder") as uow:
+            with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                await uow.conn.execute(statement)  # pyright: ignore[reportArgumentType]
+
+
+class SlowChannel:
+    def __init__(self) -> None:
+        self.sent = 0
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def post(self, notice: RequestNotice) -> TeamsPost:
+        self.sent += 1
+        self.started.set()
+        await self.release.wait()
+        return "posted"
+
+
+async def test_a_second_press_while_the_card_is_going_out_says_it_is_being_posted(lab: Lab):
+    slow = SlowChannel()
+    lab.app.state.team_requests = TeamRequests(
+        lab.db, slow, SomeRuns(), lab.log, "http://localhost:8080"
+    )
+    first = asyncio.create_task(lab.send(ASK, key="race"))
+    await slow.started.wait()
+
+    second = await lab.send(ASK, key="race")
+    listed = (await lab.client.get("/api/v1/team-requests", headers=ALICE)).json()["requests"]
+
+    assert second.status_code == 200
+    assert (second.json()["posted_to_teams"], second.json()["not_posted_because"]) == (
+        False,
+        "posting",
+    )
+    assert listed[0]["not_posted_because"] == "posting"
+    slow.release.set()
+    done = await first
+    assert (done.status_code, done.json()["posted_to_teams"]) == (201, True)
+    assert slow.sent == 1
+    after = await lab.send(ASK, key="race")
+    assert (after.json()["posted_to_teams"], slow.sent) == (True, 1)
+
+
+async def test_a_request_whose_post_was_lost_to_a_crash_is_posted_by_the_next_press(lab: Lab):
+    slow = SlowChannel()
+    slow.release.set()
+    lab.app.state.team_requests = TeamRequests(
+        lab.db, slow, SomeRuns(), lab.log, "http://localhost:8080"
+    )
+    made = (await lab.send(ASK, key="crash")).json()
+    async with lab.db.transaction("builder") as uow:
+        await uow.conn.execute(
+            "UPDATE builder.team_requests SET teams_post = 'posting', posting_at = %s",
+            (uow.now - POSTING_GIVES_UP_AFTER - timedelta(seconds=1),),
+        )
+
+    again = await lab.send(ASK, key="crash")
+
+    assert again.status_code == 200
+    assert again.json()["request_id"] == made["request_id"]
+    assert (again.json()["posted_to_teams"], slow.sent) == (True, 2)
+
+
 async def test_requests_and_replies_can_not_be_deleted_by_the_builder(lab: Lab):
     made = (await lab.send(ASK)).json()
     await lab.client.post(
@@ -328,9 +454,7 @@ def teams_channel(
     return TeamsRequestChannel("https://teams.example.test/hook?sig=secret", client), seen
 
 
-NOTICE = RequestNotice(
-    "support", "Alice **bold**", "http://localhost:8080/settings?tab=team-requests"
-)
+NOTICE = RequestNotice("support", "Alice **bold**", "http://localhost:8080/workflows?request=trq_1")
 
 
 async def test_the_channel_posts_one_card_with_one_button_and_no_note():

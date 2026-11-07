@@ -179,6 +179,7 @@
             "step_finished": "#/components/schemas/StepFinished",
             "step_retried": "#/components/schemas/StepRetried",
             "step_started": "#/components/schemas/StepStarted",
+            "support_reported": "#/components/schemas/SupportReported",
             "write_action_denied": "#/components/schemas/WriteActionDenied",
             "write_action_done": "#/components/schemas/WriteActionDone",
             "write_action_proposed": "#/components/schemas/WriteActionProposed"
@@ -248,6 +249,9 @@
           },
           {
             "$ref": "#/components/schemas/RunRetried"
+          },
+          {
+            "$ref": "#/components/schemas/SupportReported"
           }
         ]
       },
@@ -6297,6 +6301,70 @@
         ],
         "type": "string"
       },
+      "SupportReported": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SupportReportedData"
+          },
+          "kind": {
+            "const": "support_reported",
+            "default": "support_reported",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "SupportReported",
+        "type": "object"
+      },
+      "SupportReportedData": {
+        "additionalProperties": false,
+        "properties": {
+          "reported_by": {
+            "title": "Reported By",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "reported_by"
+        ],
+        "title": "SupportReportedData",
+        "type": "object"
+      },
       "TeamRequestList": {
         "additionalProperties": false,
         "properties": {
@@ -6350,6 +6418,7 @@
             "anyOf": [
               {
                 "enum": [
+                  "posting",
                   "no_channel",
                   "failed"
                 ],
@@ -6359,7 +6428,7 @@
                 "type": "null"
               }
             ],
-            "description": "`no_channel` when no Teams channel is set up. `failed` when Teams refused or did not answer. Null when it was posted.",
+            "description": "`posting` while the card is still going out, so the answer is not final. `no_channel` when no Teams channel is set up. `failed` when Teams refused or did not answer. Null when it was posted.",
             "title": "Not Posted Because"
           },
           "note": {

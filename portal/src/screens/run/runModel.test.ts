@@ -189,6 +189,15 @@ describe('a run that failed', () => {
   })
 })
 
+describe('a report to support', () => {
+  it('moves only the cursor, so the page draws nothing new for it', () => {
+    const failed = replay(failure)
+    const alice = { kind: 'user', id: 'alice', display: 'Alice' }
+    const reported = fold(failed, event(15, 'support_reported', { request_id: 'trq_1', reported_by: 'alice' }, alice))
+    expect(reported).toEqual({ ...failed, seq: 15 })
+  })
+})
+
 describe('a retry', () => {
   const alice = { kind: 'user', id: 'alice', display: 'Alice' }
   const failed = replay(failure)

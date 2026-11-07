@@ -192,7 +192,9 @@ async def build(settings: Settings) -> Services:
         schedules,
     )
     request_channel = request_channel_for(settings)
-    team_requests = TeamRequests(db, request_channel, orchestrator, settings.public_base_url)
+    team_requests = TeamRequests(
+        db, request_channel, orchestrator, activity, settings.public_base_url
+    )
     return Services(
         settings=settings,
         db=db,

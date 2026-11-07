@@ -1492,6 +1492,70 @@
       "title": "StepStartedData",
       "type": "object"
     },
+    "SupportReported": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/SupportReportedData"
+        },
+        "kind": {
+          "const": "support_reported",
+          "default": "support_reported",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "SupportReported",
+      "type": "object"
+    },
+    "SupportReportedData": {
+      "additionalProperties": false,
+      "properties": {
+        "reported_by": {
+          "title": "Reported By",
+          "type": "string"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "reported_by"
+      ],
+      "title": "SupportReportedData",
+      "type": "object"
+    },
     "Trigger": {
       "enum": [
         "person",
@@ -1751,6 +1815,7 @@
       "step_finished": "#/$defs/StepFinished",
       "step_retried": "#/$defs/StepRetried",
       "step_started": "#/$defs/StepStarted",
+      "support_reported": "#/$defs/SupportReported",
       "write_action_denied": "#/$defs/WriteActionDenied",
       "write_action_done": "#/$defs/WriteActionDone",
       "write_action_proposed": "#/$defs/WriteActionProposed"
@@ -1820,6 +1885,9 @@
     },
     {
       "$ref": "#/$defs/RunRetried"
+    },
+    {
+      "$ref": "#/$defs/SupportReported"
     }
   ]
 }
