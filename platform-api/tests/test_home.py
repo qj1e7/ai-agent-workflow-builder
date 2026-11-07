@@ -374,6 +374,18 @@ async def test_drafts_show_to_their_author_and_only_to_an_operator(lab: Lab):
     assert (await lab.home("bob"))["drafts"] == []
 
 
+async def test_a_draft_saved_without_a_step_lists_with_no_step(lab: Lab):
+    saved = await lab.call("alice", "PUT", "/api/v1/drafts/d-card", {"content": {"name": "Card"}})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["step"] is None
+
+    listed = await lab.call("alice", "GET", "/api/v1/drafts")
+
+    assert [(d["draft_id"], d["step"]) for d in listed.json()["drafts"]] == [("d-card", None)]
+    (item,) = (await lab.home("alice"))["drafts"]
+    assert (item["name"], item["step"]) == ("Card", None)
+
+
 async def test_a_long_draft_name_is_cut_to_what_a_row_can_show(lab: Lab):
     long = {"step": 1, "content": {"name": "Nudge " * 40}}
     assert (await lab.call("alice", "PUT", "/api/v1/drafts/d-1", long)).status_code == 200

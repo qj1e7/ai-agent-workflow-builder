@@ -246,6 +246,30 @@ def test_migration_0005_adds_the_lifecycle_and_drafts_and_stops_hard_deletes(
         conn.execute("DELETE FROM builder.use_cases")
 
 
+def test_migration_0006_lets_a_draft_have_no_step_and_a_downgrade_gives_it_step_1(
+    postgres: PostgresUrls,
+):
+    insert = (
+        "INSERT INTO builder.drafts (author, draft_id, step, content, created_at, saved_at) "
+        "VALUES ('alice', %s, %s, '{}', %s, %s)"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute("DELETE FROM builder.drafts")
+        downgrade("builder", postgres.owner, "0005")
+        with pytest.raises(psycopg.errors.NotNullViolation):
+            conn.execute(insert, ("d-none", None, NOW, NOW))
+        conn.execute(insert, ("d-old", 3, NOW, NOW))
+        upgrade("builder", postgres.owner)
+        conn.execute(insert, ("d-new", None, NOW, NOW))
+        steps = conn.execute("SELECT draft_id, step FROM builder.drafts ORDER BY 1").fetchall()
+        assert steps == [("d-new", None), ("d-old", 3)]
+        downgrade("builder", postgres.owner, "0005")
+        steps = conn.execute("SELECT draft_id, step FROM builder.drafts ORDER BY 1").fetchall()
+        assert steps == [("d-new", 1), ("d-old", 3)]
+        upgrade("builder", postgres.owner)
+        conn.execute("DELETE FROM builder.drafts")
+
+
 def test_migration_0006_adds_the_people_tables_and_folds_the_model_history_into_them(
     postgres: PostgresUrls,
 ):
