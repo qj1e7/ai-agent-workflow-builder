@@ -2,14 +2,14 @@ import { useId, type AnimationEvent, type CSSProperties } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
-import { useCheckConnection, useModelOff, useRetry } from '../../api/queries'
+import { useModelOff, useRetry } from '../../api/queries'
 import type { DraftItem, WaitingItem } from '../../api/types'
 import { AgentFace } from '../../ui/AgentFace'
 import { Button, ButtonLink } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { IconAlert, IconChevronRight, IconInfo, IconShield, type Icon } from '../../ui/icons'
 import { draftPath } from '../new/starters'
-import { actionsOf, checkWords, draftWords, retryProblem, waitingWords, wordsOf, type Action, type Need, type Tone } from './home'
+import { actionsOf, draftWords, retryProblem, waitingWords, wordsOf, type Action, type Need, type Tone } from './home'
 import styles from './Home.module.css'
 
 const TONE_ICON: Record<Tone, Icon> = { wait: IconShield, tool: IconShield, bad: IconAlert, info: IconInfo }
@@ -53,31 +53,7 @@ export function RetryButton({ runId, label, primary, describedBy }: { runId: str
   )
 }
 
-export function CheckButton({ connectionId, label, primary, describedBy }: { connectionId: string; label: string; primary: boolean; describedBy: string }) {
-  const check = useCheckConnection(connectionId)
-  const latch = useLatch()
-  const words = useErrorWords()
-  const press = () => latch.run((settled) => check.mutate(undefined, { onSettled: settled }))
-  return (
-    <>
-      <Button variant={primary ? 'primary' : 'secondary'} loading={check.isPending} onClick={press} aria-describedby={describedBy}>
-        {label}
-      </Button>
-      {check.isError ? (
-        <p className={styles['problem']} role="alert">
-          Could not check. {words(check.error)}
-        </p>
-      ) : check.isSuccess ? (
-        <p className={styles['note']} role="status">
-          {checkWords(check.data.state)}
-        </p>
-      ) : null}
-    </>
-  )
-}
-
 function ActionButton({ action, primary, describedBy }: { action: Action; primary: boolean; describedBy: string }) {
-  if (action.kind === 'check') return <CheckButton connectionId={action.connectionId} label={action.label} primary={primary} describedBy={describedBy} />
   if (action.kind === 'retry') return <RetryButton runId={action.runId} label={action.label} primary={primary} describedBy={describedBy} />
   return (
     <ButtonLink to={action.to} variant={primary ? 'primary' : 'secondary'} aria-describedby={describedBy}>

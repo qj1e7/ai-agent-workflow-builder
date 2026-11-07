@@ -6,16 +6,21 @@ import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import cardsFixture from '../../../../contracts/fixtures/cards/list.json'
 import toolsFixture from '../../../../contracts/fixtures/cards/tools.json'
+import capabilitiesFixture from '../../../../contracts/fixtures/planner/capabilities.json'
+import troubleFixture from '../../../../contracts/fixtures/planner/capabilities.trouble.json'
 import { App } from '../../App'
 import { ApiError } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { CardView, Me, ToolView } from '../../api/types'
+import type { CapabilitiesView, CardView, Me, ToolView } from '../../api/types'
 import { CARDS_UNAVAILABLE_WORDS, NOT_FOUND_WORDS } from './AgentsPage'
 import { CHANGE_LATER_NOTE, PLATFORM_NOTE, toolsUnavailableWords } from './agents'
+import { CAPABILITIES_UNAVAILABLE_WORDS, NEW_TOOL_WORDS } from './capabilities'
 
 const CARDS = cardsFixture.cards as unknown as CardView[]
 const TOOLS = toolsFixture.tools as unknown as ToolView[]
+const CAPABILITIES = capabilitiesFixture as unknown as CapabilitiesView
+const TROUBLE = troubleFixture as unknown as CapabilitiesView
 const ALICE: Me = { id: '0a11ce00-0000-4000-8000-000000000001', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: '0b0b0000-0000-4000-8000-000000000002', display: 'Bob', roles: ['approver'] }
 
@@ -24,9 +29,10 @@ interface Setup {
   readonly me?: Me
   readonly cards?: CardView[] | Error
   readonly tools?: ToolView[] | Error
+  readonly capabilities?: CapabilitiesView | Error
 }
 
-function render({ path = '/agents', me = ALICE, cards = CARDS, tools = TOOLS }: Setup = {}): string {
+function render({ path = '/agents?tab=agents', me = ALICE, cards = CARDS, tools = TOOLS, capabilities = CAPABILITIES }: Setup = {}): string {
   const session = createDevSession(null)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   const seed = (key: readonly unknown[], value: unknown) => {
@@ -36,11 +42,12 @@ function render({ path = '/agents', me = ALICE, cards = CARDS, tools = TOOLS }: 
   queryClient.setQueryData(['me', session.cacheScope()], me)
   seed(['agent-cards', session.cacheScope()], cards)
   seed(['tools'], tools)
+  seed(['capabilities', session.cacheScope()], capabilities)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
         <MemoryRouter initialEntries={[path]}>
-          <App now={() => new Date('2026-10-29T03:00:00Z')} />
+          <App now={() => new Date('2026-11-09T03:00:00Z')} />
         </MemoryRouter>
       </ApiProvider>
     </QueryClientProvider>,
@@ -52,6 +59,58 @@ const mainOf = (html: string) => text(/<main\b[\s\S]*<\/main>/.exec(html)?.[0] ?
 const dialogOf = (html: string) => /<dialog\b[\s\S]*<\/dialog>/.exec(/<main\b[\s\S]*<\/main>/.exec(html)?.[0] ?? '')?.[0] ?? ''
 const tileNames = (html: string) => [...html.matchAll(/<h3><a id="agent-tile-[^"]*"[^>]*>(.*?)<\/a>/g)].map((match) => match[1])
 const down = new ApiError(503, { message: 'The agent runtime is down.' })
+
+describe('the What it can do tab', () => {
+  const main = mainOf(render({ path: '/agents' }))
+
+  it('opens first, with the registry grouped as I can and the Not yet lines behind a question', () => {
+    expect(main).toContain('What it can do')
+    expect(main.indexOf('I can')).toBeGreaterThan(-1)
+    expect(main).toContain('Read Jira tickets')
+    expect(main).toContain('Check software for new releases on GitHub')
+    const html = render({ path: '/agents' })
+    const fold = /<details[^>]*>([\s\S]*?)<\/details>/.exec(html)?.[1] ?? ''
+    expect(text(fold)).toContain('What can’t I do yet?')
+    expect(text(fold)).toContain('Post messages in Teams')
+    expect(text(fold)).toContain('Close, edit, move or delete tickets')
+    expect(text(html.replace(fold, ''))).not.toContain('Post messages in Teams')
+    expect(tileNames(html)).toEqual([])
+  })
+
+  it('names the agents that use a line by their card name, and says the platform does its own', () => {
+    expect(main).toContain('Used by Version checker.')
+    expect(main).toContain('The platform does this for every workflow.')
+  })
+
+  it('shows the fields a ticket reaches the agents with, on the line that reads tickets only', () => {
+    expect(main.match(/A ticket reaches the agents with these fields only: key, project, title, status, created date, done date, last updated date, type, assignee, body\./g)).toHaveLength(1)
+  })
+
+  it('does not put Planned or roadmap words on a Not yet line', () => {
+    expect(main).not.toMatch(/\bPlanned\b|roadmap|ADR/i)
+  })
+
+  it('says what is down or needs setup, with where to fix it', () => {
+    const html = render({ path: '/agents', capabilities: TROUBLE })
+    const words = mainOf(html)
+    expect(words).toContain('Not working right now')
+    expect(words).toContain('Last seen working today, 9:00')
+    expect(words).toContain('Try again in a minute.')
+    expect(words).toContain('Needs setup')
+    expect(html).toContain('href="/settings?tab=model"')
+    expect(html).toContain('href="/settings?tab=connections"')
+  })
+
+  it('says it is not available when the registry is, and keeps the tabs', () => {
+    const words = mainOf(render({ path: '/agents', capabilities: down }))
+    expect(words).toContain(CAPABILITIES_UNAVAILABLE_WORDS)
+    expect(words).toContain('Agents')
+  })
+
+  it('opens an agent’s own address on the Agents tab', () => {
+    expect(tileNames(render({ path: '/agents/crd_version_checker' }))).toContain('Version checker')
+  })
+})
 
 describe('the Agent library list', () => {
   it('shows the two platform agents and every card once, each with its tool count', () => {
@@ -68,8 +127,8 @@ describe('the Agent library list', () => {
 
   it('links each tile to its own address', () => {
     const html = render()
-    expect(html).toContain('href="/agents/crd_version_checker"')
-    expect(html).toContain('href="/agents/planner"')
+    expect(html).toContain('href="/agents/crd_version_checker?tab=agents"')
+    expect(html).toContain('href="/agents/planner?tab=agents"')
   })
 
   it('looks the same to an Approver, with no change controls', () => {
@@ -167,6 +226,24 @@ describe('the Tools tab', () => {
     expect(main).toContain('No agent uses it yet')
     expect(main).not.toContain('Platform agents')
   })
+
+  it('gives each tool its health from the registry, and says what is down', () => {
+    const ok = mainOf(render({ path: '/agents?tab=tools' }))
+    expect(ok).toContain('Ready. Last seen working today, 9:00.')
+    expect(ok).not.toContain('Not working right now')
+    const bad = mainOf(render({ path: '/agents?tab=tools', capabilities: TROUBLE }))
+    expect(bad).toContain('Not working right now. Jira isn’t answering. Last seen working today, 9:00.')
+  })
+
+  it('says the team decides on new tools, with no Draft button', () => {
+    const html = render({ path: '/agents?tab=tools' })
+    expect(mainOf(html)).toContain(NEW_TOOL_WORDS)
+    expect(mainOf(html)).not.toMatch(/Draft/)
+  })
+
+  it('leaves out a health line while the registry is not there', () => {
+    expect(mainOf(render({ path: '/agents?tab=tools', capabilities: down }))).not.toContain('Ready.')
+  })
 })
 
 describe('when the agent runtime is down', () => {
@@ -175,6 +252,7 @@ describe('when the agent runtime is down', () => {
     const main = mainOf(html)
     expect(main).toContain(toolsUnavailableWords(true))
     expect(tileNames(html)).toEqual(['Planner', 'AI troubleshooter', 'Version checker', 'Weekly summary'])
+    expect(mainOf(render({ path: '/agents', tools: down }))).not.toContain(toolsUnavailableWords(true))
   })
 
   it('says it on the Tools tab too, with no tool rows and no cards below to point at', () => {

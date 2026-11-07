@@ -260,3 +260,37 @@
     transform: scale(0.96);
   }
 }
+
+.capList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.capRow {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--hair);
+}
+
+.capRow:first-child {
+  border-top: 0;
+}
+
+.capMark {
+  display: inline-flex;
+  margin-right: var(--space-2);
+  vertical-align: -2px;
+}
+
+.fold {
+  margin-bottom: var(--space-6);
+}
+
+.fold summary {
+  min-height: 44px;
+  cursor: pointer;
+  font-weight: 600;
+}

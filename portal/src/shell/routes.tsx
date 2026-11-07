@@ -161,7 +161,7 @@ export function AppRoutes({ context }: { context: PageContext }) {
     <Routes>
       <Route
         path={`${PAGES.agents.path}/:agentId?`}
-        element={<AgentsPage heading={wordsOf(PAGES.agents.heading, context)} lead={wordsOf(PAGES.agents.lead, context)} />}
+        element={<AgentsPage heading={wordsOf(PAGES.agents.heading, context)} now={context.now} />}
       />
       <Route
         path={PAGES.workflows.path}
@@ -191,7 +191,7 @@ export function AppRoutes({ context }: { context: PageContext }) {
           </>
         }
       />
-      <Route path={PAGES.settings.path} element={<SettingsPage heading={wordsOf(PAGES.settings.heading, context)} lead={wordsOf(PAGES.settings.lead, context)} />} />
+      <Route path={PAGES.settings.path} element={<SettingsPage heading={wordsOf(PAGES.settings.heading, context)} lead={wordsOf(PAGES.settings.lead, context)} now={context.now} />} />
       {oldNewWorkflowRoutes(context, oldNewWorkflow)}
       {oldNewWorkflow ? null : <Route path={`${PAGES.new.path}/*`} element={<Navigate to={PAGES.home.path} replace />} />}
       <Route path="/runs/:runId" element={<Lazy><RunRoute /></Lazy>} />

@@ -18,7 +18,7 @@ export const PLATFORM_AGENTS: readonly PlatformAgent[] = [
     steps: [
       'Read the task and say what it understood',
       'Pick saved agents that fit, or draft a new agent card',
-      'Send release and vulnerability checks to the Software watchlist',
+      'Send release checks to the Software watchlist',
     ],
     rules: ['Never chooses who approves', 'Can only give an agent tools from the tool list'],
   },

@@ -93,7 +93,7 @@ describe('Home for an Approver with a run waiting for his yes', () => {
   it('lists the confirmations as rows that open Settings', () => {
     expect(text(itemOf(html, 'confirmation:cfm_01JD4VE'))).toContain('Confirm Dave as an Approver')
     expect(linksIn(itemOf(html, 'confirmation:cfm_01JD4VE'))).toEqual([['Review in Settings', '/settings?tab=people']])
-    expect(linksIn(itemOf(html, 'confirmation:cfm_01JADDR'))).toEqual([['Review in Settings', '/settings']])
+    expect(linksIn(itemOf(html, 'confirmation:cfm_01JADDR'))).toEqual([['Review in Settings', '/settings?tab=model']])
   })
 
   it('never offers a decision on Home', () => {
@@ -113,10 +113,10 @@ describe('Home for an Approver with a run waiting for his yes', () => {
 describe('Home for the Operator who started that run', () => {
   const html = mainOf(render(ALICE, ALICE_HOME))
 
-  it('offers Check again on a connection that does not work, and no link to a Settings tab that has none', () => {
+  it('sends a connection that does not work to the Connections tab in Settings, with nothing to press here', () => {
     const item = itemOf(html, 'connection:jira')
-    expect(buttonsIn(item)).toEqual(['Check again'])
-    expect(linksIn(item)).toEqual([])
+    expect(buttonsIn(item)).toEqual([])
+    expect(linksIn(item)).toEqual([['See it in Settings', '/settings?tab=connections']])
   })
 
   it('shows her stopped run with the AI troubleshooter’s reason, a retry, and the run', () => {

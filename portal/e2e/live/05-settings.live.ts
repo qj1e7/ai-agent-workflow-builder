@@ -16,9 +16,10 @@ test.afterAll(async () => {
   await api.dispose()
 })
 
-test('Settings opens on the AI model, and People and roles lists everyone with their roles', async ({ page }, info) => {
-  await openSettings(page)
-  await expect(settingsTab(page, 'AI model')).toHaveAttribute('aria-pressed', 'true')
+test('Settings opens on Connections, and People and roles lists everyone with their roles', async ({ page }, info) => {
+  await page.goto('/settings')
+  await expect(settingsTab(page, 'Connections')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('heading', { level: 2, name: 'Connections' })).toBeVisible()
   await settingsTab(page, 'People and roles').click()
   await expect(page).toHaveURL(/\/settings\?tab=people$/)
   await expect(settingsTab(page, 'People and roles')).toBeFocused()
@@ -68,10 +69,38 @@ test('an Operator adds a person, asks for them as an Approver, and another Appro
   }
 })
 
-test('an Approver who is not an Operator sees both tabs read-only', async ({ browser }, info) => {
+test('Connections lists Jira, GitHub and Teams with what uses each, and Check now says what it found', async ({ page }, info) => {
+  await openSettings(page, 'connections')
+  for (const name of ['Jira', 'GitHub', 'Teams']) await expect(page.getByRole('article').filter({ has: page.getByRole('heading', { level: 3, name }) })).toBeVisible()
+  const jira = page.locator('[data-connection="jira"]')
+  await expect(jira).toContainText('Practice copy')
+  await expect(jira).toContainText('Read Jira tickets')
+  await expect(page.getByRole('main')).not.toContainText('Replace the key')
+  await jira.getByRole('button', { name: 'Check now for Jira' }).click()
+  await expect(jira.getByRole('status')).toContainText(/^(Checked just now\.|Not checked yet\.)/)
+  await expect(jira).toContainText(/Checked today, \d+:\d\d/)
+  await shot(page, info, 'n19-01-connections')
+  const teams = page.locator('[data-connection="teams"]')
+  await teams.getByRole('button', { name: 'Check now for Teams' }).click()
+  const said = (await teams.getByRole('status').innerText()).trim()
+  if (/answered/.test(said)) expect(said).toBe('Checked just now. Teams answered.')
+  else expect(said).not.toMatch(/Checked just now/)
+})
+
+test('Connections works by keyboard alone', async ({ page }) => {
+  await openSettings(page, 'connections')
+  await settingsTab(page, 'Connections').focus()
+  const check = page.getByRole('button', { name: 'Check now for Jira' })
+  for (let presses = 0; presses < 8 && !(await check.evaluate((el) => el === document.activeElement)); presses += 1) await page.keyboard.press('Tab')
+  await expect(check).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('[data-connection="jira"]').getByRole('status')).toBeVisible()
+})
+
+test('an Approver who is not an Operator sees every tab read-only', async ({ browser }, info) => {
   const bob = await signedInAs(browser, 'bob')
   const page = await bob.newPage()
-  for (const tab of ['model', 'people'] as const) {
+  for (const tab of ['connections', 'model', 'people'] as const) {
     await openSettings(page, tab)
     await expect(page.getByRole('main')).toContainText(ONLY_OPERATORS)
     await expect(page.getByRole('main').locator('form')).toHaveCount(0)
@@ -113,7 +142,7 @@ for (const phone of [false, true]) {
   test(`WCAG 2.2 AA: no violations on either Settings tab at ${phone ? 'phone' : 'desktop'} width`, async ({ browser }) => {
     const alice = await signedInAs(browser, 'alice', { phone })
     const page = await alice.newPage()
-    for (const tab of ['model', 'people'] as const) {
+    for (const tab of ['connections', 'model', 'people'] as const) {
       await openSettings(page, tab)
       await expectAccessible(page, path.join(OUT, 'axe'), `settings-${tab}-${phone ? 'phone' : 'desktop'}`)
       const widths = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }))
