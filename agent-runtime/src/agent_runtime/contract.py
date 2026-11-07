@@ -534,6 +534,9 @@ class CapabilitySpec(WireModel):
     needs_model: bool = Field(
         description="True when the agents do it with the AI model, so it needs one connected."
     )
+    platform: bool = Field(
+        description="True for what the platform does by itself, which Home leaves out of its lists."
+    )
     tools: list[ToolId] = Field(description="The tools that do it. Empty unless it is ready.")
 
 

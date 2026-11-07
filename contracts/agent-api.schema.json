@@ -602,6 +602,11 @@
           "title": "Plain",
           "type": "string"
         },
+        "platform": {
+          "description": "True for what the platform does by itself, which Home leaves out of its lists.",
+          "title": "Platform",
+          "type": "boolean"
+        },
         "state": {
           "$ref": "#/$defs/CapabilityState",
           "description": "The base state. A missing key or a system that is not answering is worked out from the connection, not here."
@@ -649,6 +654,7 @@
         "why",
         "connection",
         "needs_model",
+        "platform",
         "tools"
       ],
       "title": "CapabilitySpec",

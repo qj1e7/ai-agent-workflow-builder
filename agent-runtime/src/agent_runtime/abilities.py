@@ -108,6 +108,7 @@ def _ready(
     connection: ConnectionId | None,
     tools: list[ToolId],
     needs_model: bool = False,
+    platform: bool = False,
 ) -> CapabilitySpec:
     return CapabilitySpec(
         id=id,
@@ -119,6 +120,7 @@ def _ready(
         why=None,
         connection=connection,
         needs_model=needs_model,
+        platform=platform,
         tools=tools,
     )
 
@@ -143,6 +145,7 @@ def _not_yet(
         why=why,
         connection=connection,
         needs_model=False,
+        platform=False,
         tools=[],
     )
 
@@ -164,6 +167,16 @@ CAPABILITIES: Final = (
         "Jira",
         "jira",
         ["jira.search"],
+        needs_model=True,
+    ),
+    _not_yet(
+        "jira.find_by_detail",
+        "Find tickets by their component or priority",
+        "read",
+        "Jira",
+        "jira",
+        "see a ticket's component or priority",
+        "Those details don't reach the agents yet.",
     ),
     _not_yet(
         "jira.find_older",
@@ -192,7 +205,15 @@ CAPABILITIES: Final = (
         ["jira.create_ticket"],
         needs_model=True,
     ),
-    _ready("teams.ask", "Ask Approvers for a yes in Teams", "notify", "Teams", "teams", []),
+    _ready(
+        "teams.ask",
+        "Ask Approvers for a yes in Teams",
+        "notify",
+        "Teams",
+        "teams",
+        [],
+        platform=True,
+    ),
     _not_yet(
         "teams.post",
         "Post messages in Teams",
@@ -272,7 +293,7 @@ EXAMPLES: Final = (
     ExampleSpec(
         text="Every Friday, sum up the tickets we closed this week",
         kind="automate",
-        needs=["jira.read", "summarise"],
+        needs=["jira.read", "summarise", "jira.create"],
     ),
     ExampleSpec(text="Keep track of the React version", kind="monitor", needs=["github.releases"]),
     ExampleSpec(text="What can you do?", kind="learn", needs=[]),

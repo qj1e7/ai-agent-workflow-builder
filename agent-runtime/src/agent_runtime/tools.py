@@ -192,6 +192,9 @@ TOOLS: Final = (
         target_kind="jira_project",
     ),
 )
+# The tools that run with no AI model. The Software watchlist reads releases itself
+# (watchlist.py). Only the card runner, which is a model, calls the others.
+MODEL_FREE_TOOLS: Final = frozenset({"github.read_releases"})
 TOOL_IDS: Final = frozenset(get_args(ToolId.__value__))
 BY_ID: Final = {tool.id: tool for tool in TOOLS}
 BY_MODEL_NAME: Final = {tool.model_name: tool for tool in TOOLS}

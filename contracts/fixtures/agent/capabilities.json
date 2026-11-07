@@ -10,6 +10,7 @@
       "why": null,
       "connection": "jira",
       "needs_model": true,
+      "platform": false,
       "tools": [
         "jira.search",
         "jira.read_ticket"
@@ -24,10 +25,24 @@
       "cant": null,
       "why": null,
       "connection": "jira",
-      "needs_model": false,
+      "needs_model": true,
+      "platform": false,
       "tools": [
         "jira.search"
       ]
+    },
+    {
+      "id": "jira.find_by_detail",
+      "plain": "Find tickets by their component or priority",
+      "kind": "read",
+      "system": "Jira",
+      "state": "planned",
+      "cant": "see a ticket's component or priority",
+      "why": "Those details don't reach the agents yet.",
+      "connection": "jira",
+      "needs_model": false,
+      "platform": false,
+      "tools": []
     },
     {
       "id": "jira.find_older",
@@ -39,6 +54,7 @@
       "why": "A search stops there.",
       "connection": "jira",
       "needs_model": false,
+      "platform": false,
       "tools": []
     },
     {
@@ -51,6 +67,7 @@
       "why": null,
       "connection": null,
       "needs_model": true,
+      "platform": false,
       "tools": []
     },
     {
@@ -63,6 +80,7 @@
       "why": null,
       "connection": "github",
       "needs_model": false,
+      "platform": false,
       "tools": [
         "github.read_releases"
       ]
@@ -77,6 +95,7 @@
       "why": null,
       "connection": "jira",
       "needs_model": true,
+      "platform": false,
       "tools": [
         "jira.create_ticket"
       ]
@@ -91,6 +110,7 @@
       "why": null,
       "connection": "teams",
       "needs_model": false,
+      "platform": true,
       "tools": []
     },
     {
@@ -103,6 +123,7 @@
       "why": "Teams carries approval requests only.",
       "connection": "teams",
       "needs_model": false,
+      "platform": false,
       "tools": []
     },
     {
@@ -115,6 +136,7 @@
       "why": "Confluence isn't connected to the platform.",
       "connection": null,
       "needs_model": false,
+      "platform": false,
       "tools": []
     },
     {
@@ -127,6 +149,7 @@
       "why": "There's no tool for that yet.",
       "connection": "github",
       "needs_model": false,
+      "platform": false,
       "tools": []
     },
     {
@@ -139,6 +162,7 @@
       "why": "Those systems aren't connected to the platform.",
       "connection": null,
       "needs_model": false,
+      "platform": false,
       "tools": []
     },
     {
@@ -151,6 +175,7 @@
       "why": "Only GitHub releases are checked today.",
       "connection": null,
       "needs_model": false,
+      "platform": false,
       "tools": []
     },
     {
@@ -163,6 +188,7 @@
       "why": "That needs a new tool. The team decides on new tools.",
       "connection": "jira",
       "needs_model": false,
+      "platform": false,
       "tools": []
     },
     {
@@ -175,6 +201,7 @@
       "why": "Email and Slack aren't on the team's plan. Ask the team if you need them.",
       "connection": null,
       "needs_model": false,
+      "platform": false,
       "tools": []
     },
     {
@@ -187,6 +214,7 @@
       "why": "Only people do that here.",
       "connection": "jira",
       "needs_model": false,
+      "platform": false,
       "tools": []
     }
   ],
@@ -196,7 +224,8 @@
       "kind": "automate",
       "needs": [
         "jira.read",
-        "summarise"
+        "summarise",
+        "jira.create"
       ]
     },
     {

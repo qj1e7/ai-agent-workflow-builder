@@ -1,7 +1,10 @@
+import inspect
 from collections import Counter
 
+import pytest
 from fastapi.testclient import TestClient
 
+from agent_runtime import watchlist
 from agent_runtime.abilities import (
     ABILITIES,
     ABILITY_OF,
@@ -12,7 +15,7 @@ from agent_runtime.abilities import (
 )
 from agent_runtime.api import Settings, create_app
 from agent_runtime.contract import CapabilityList
-from agent_runtime.tools import TOOLS
+from agent_runtime.tools import MODEL_FREE_TOOLS, TOOLS
 
 READY = [c for c in CAPABILITIES if c.state == "ready"]
 NOT_READY = [c for c in CAPABILITIES if c.state != "ready"]
@@ -61,7 +64,27 @@ def test_ability_lines_name_only_known_capabilities():
 
 
 def test_only_the_platform_duty_is_ready_without_an_ability_line():
-    assert [c.id for c in READY if c.id not in ABILITY_OF] == ["teams.ask"]
+    assert [c.id for c in READY if c.id not in ABILITY_OF] == [
+        c.id for c in CAPABILITIES if c.platform
+    ]
+    assert [c.id for c in CAPABILITIES if c.platform] == ["teams.ask"]
+
+
+def test_a_ready_entry_needs_the_model_when_a_tool_only_the_card_runner_calls_is_its_tool():
+    for entry in READY:
+        if entry.tools:
+            assert entry.needs_model == bool(set(entry.tools) - MODEL_FREE_TOOLS), entry.id
+
+
+def test_the_tools_that_need_no_model_are_the_ones_the_watchlist_reads_by_itself():
+    source = inspect.getsource(watchlist)
+    assert "read_releases" in source
+    assert "jira" not in source.lower()
+    assert sorted(MODEL_FREE_TOOLS) == ["github.read_releases"]
+
+
+def test_the_model_does_the_summary_and_nothing_else_without_tools_does():
+    assert [c.id for c in READY if not c.tools and c.needs_model] == ["summarise"]
 
 
 def test_a_refusal_has_words_and_a_ready_entry_has_none():
@@ -79,6 +102,17 @@ def test_the_jira_filters_n5_built_are_ready_and_older_tickets_are_not():
     assert BY_ID["jira.find_by_update"].state == "ready"
     assert BY_ID["jira.find_by_update"].tools == ["jira.search"]
     assert BY_ID["jira.find_older"].state == "planned"
+
+
+def test_component_and_priority_are_named_as_something_the_agents_cannot_see():
+    entry = BY_ID["jira.find_by_detail"]
+    assert entry.state == "planned"
+    assert entry.cant == "see a ticket's component or priority"
+
+
+def test_the_friday_example_needs_what_an_agent_workflow_needs_to_run():
+    friday = next(e for e in EXAMPLES if e.kind == "automate")
+    assert friday.needs == ["jira.read", "summarise", "jira.create"]
 
 
 def test_every_example_needs_only_ready_capabilities():
@@ -107,3 +141,24 @@ def test_the_route_serves_the_registry_and_the_examples():
     served = CapabilityList.model_validate(response.json())
     assert served.capabilities == list(CAPABILITIES)
     assert served.examples == list(EXAMPLES)
+
+
+# The Planner's refusal still builds its "I can only ..." sentence from ABILITIES, and says "yet"
+# about what the registry marks Unsupported. Making it read CAPABILITIES is N7. These words get
+# no refusal today, so each xfail turns into a failure the moment N7 closes the gap.
+NOT_REFUSED_YET = {"jira.find_older", "jira.find_by_detail", "github.issues"}
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        pytest.param(
+            c,
+            id=c.id,
+            marks=pytest.mark.xfail(strict=True, reason="N7") if c.id in NOT_REFUSED_YET else (),
+        )
+        for c in NOT_READY
+    ],
+)
+def test_every_entry_that_is_not_ready_is_refused_when_its_own_words_are_asked_for(entry):
+    assert why_not("do", entry.plain) is not None
