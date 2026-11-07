@@ -8,6 +8,7 @@ from agent_runtime.abilities import VULNERABILITIES_PLANNED
 from agent_runtime.answers import (
     ANSWER_SYSTEM,
     LEFT_OUT_DO,
+    LEFT_OUT_PART,
     LEFT_OUT_SEARCH,
     LEFT_OUT_YES,
     SkipRead,
@@ -357,6 +358,110 @@ def test_words_about_what_to_do_that_no_structure_holds_come_back_as_a_cant(
     assert (cant.kind, cant.text, cant.needs, cant.system) == ("do", left, needs, system)
     assert cant.note.startswith(note_start)
     assert rows_of(answer)[2] == ("do", "Create one ticket that lists them", "understood")
+
+
+@pytest.mark.parametrize(
+    ("task", "fields", "ticket_said", "left", "kind", "note"),
+    [
+        (
+            "Every Monday, list the OPS tasks with over 10 hours logged against them and create "
+            "one ticket listing them",
+            {"project": "OPS", "issue_types": ["task"], "said": "OPS tasks"},
+            "list the OPS tasks with over 10 hours logged against them and create one ticket "
+            "listing them",
+            "10 hours logged",
+            "look_for",
+            LEFT_OUT_SEARCH,
+        ),
+        (
+            "Every Monday, take the 5 top-ranked bugs in the HELP backlog and create one ticket "
+            "listing them",
+            {
+                "project": "HELP",
+                "issue_types": ["bug"],
+                "status": "open",
+                "said": "the 5 top-ranked bugs in the HELP backlog",
+            },
+            "take the 5 top-ranked bugs in the HELP backlog and create one ticket listing them",
+            "take the 5 top-ranked bugs in the HELP backlog and create one ticket listing them",
+            "look_for",
+            LEFT_OUT_SEARCH,
+        ),
+        (
+            "Every Tuesday at 10am, list the open HELP stories and raise one ticket that lists "
+            "them. By 10:05 it should already be sitting in Jira.",
+            {
+                "project": "HELP",
+                "issue_types": ["story"],
+                "status": "open",
+                "said": "open HELP stories",
+            },
+            "list the open HELP stories and raise one ticket that lists them",
+            "By 10:05 it should already be sitting in Jira",
+            "look_for",
+            LEFT_OUT_PART,
+        ),
+        (
+            "Every Thursday, list the ITS bugs updated in the last 3 days and create one ticket "
+            "with them; whether it goes in is my call",
+            {
+                "project": "ITS",
+                "issue_types": ["bug"],
+                "updated": DaysRead(how="within", days=3),
+                "said": "ITS bugs updated in the last 3 days",
+            },
+            "list the ITS bugs updated in the last 3 days and create one ticket with them",
+            "my call",
+            "look_for",
+            LEFT_OUT_PART,
+        ),
+    ],
+)
+def test_a_cant_gets_the_note_its_own_words_fit(
+    task: str, fields: dict[str, Any], ticket_said: str, left: str, kind: str, note: str
+):
+    """F04, F06, K13 and K18 of the round-6 check, as the model read them. The change note
+    claims the words ask for a change, and the search note that they filter the search, so
+    each is given only when the words say so: a filter beside the search's words is the
+    search's, whatever the model's quote for the ticket covers, and words beside no part get
+    a plain note."""
+    answer = answer_of(
+        read(
+            schedule=task.split(",")[0],
+            search=search(**fields),
+            ticket=TicketRead(creates=True, says="list", said=ticket_said),
+        ),
+        task,
+    )
+    assert isinstance(answer, CantAnswer)
+    [cant] = answer.cant
+    assert (cant.kind, cant.text, cant.note) == (kind, left, note)
+
+
+def test_the_where_row_stands_on_the_key_not_on_a_word_spelled_like_it():
+    """F14 of the round-6 check: the model quoted "create one ticket" for the place, so the row
+    stands on the key's last mention, which is ITS in "open ITS bugs", never "its" in "with its
+    Environment". The Environment part then stays the new ticket's, a change."""
+    task = (
+        "Every Monday, list the open ITS bugs and create one ticket that lists them, with its "
+        "Environment set to Production"
+    )
+    answer = answer_of(
+        read(
+            schedule="Every Monday",
+            search=search(project="ITS", issue_types=["bug"], status="open", said="open ITS bugs"),
+            ticket=TicketRead(
+                creates=True, says="list", said="list them, with its Environment set to Production"
+            ),
+            place=PlaceRead(project="ITS", said="create one ticket"),
+        ),
+        task,
+    )
+    assert isinstance(answer, CantAnswer) and isinstance(answer.alternative, SetupCardAnswer)
+    where = answer.alternative.rows[3]
+    assert (where.text, where.note) == ("Jira project ITS", 'Read from your words "ITS".')
+    [cant] = answer.cant
+    assert (cant.kind, cant.text, cant.note) == ("do", "Environment set to Production", LEFT_OUT_DO)
 
 
 def test_a_field_the_table_knows_is_named_in_the_note_and_makes_a_part():
