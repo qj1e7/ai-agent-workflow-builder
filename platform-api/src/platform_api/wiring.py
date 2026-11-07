@@ -11,6 +11,14 @@ from platform_api.builder import Builder, Home, TeamRequests, Watchlist
 from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
 from platform_api.orchestration.agents import HttpAgentRuntime
+from platform_api.orchestration.connections import (
+    Connections,
+    Entry,
+    github_probe,
+    jira_probe,
+    model_probe,
+    teams_probe,
+)
 from platform_api.orchestration.dispatch import ApprovalChannel, N8nWebhooks
 from platform_api.orchestration.jira import JiraWriteConnector
 from platform_api.orchestration.jira_rest import JiraAuth, JiraRestAdapter
@@ -46,6 +54,7 @@ class Services:
     jira: JiraRestAdapter
     jira_client: httpx.AsyncClient
     model_settings: ModelSettings
+    connections: Connections
     people: People
     copier: Copier | None = None
     cosmos: CosmosEvents | None = None
@@ -54,6 +63,8 @@ class Services:
 
 
 JIRA_TIMEOUT_SECONDS = 10.0
+KEY_HINT_MIN_LENGTH = 8
+"""A token shorter than this shows no last two characters, as they would give too much away."""
 
 
 def jira_for(
@@ -95,6 +106,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.jira = services.jira
     app.state.practice_jira = services.practice_jira
     app.state.model_settings = services.model_settings
+    app.state.connections = services.connections
     app.state.people = services.people
 
 
@@ -180,6 +192,9 @@ async def build(settings: Settings) -> Services:
         people=people,
         public_base_url=settings.public_base_url,
     )
+    jira_is_practice = settings.jira.practice
+    token = settings.jira.token
+    jira_key_hint = token[-2:] if token and len(token) >= KEY_HINT_MIN_LENGTH else None
     schedules = ScheduleBook(db)
     watchlist = Watchlist(
         db,
@@ -189,6 +204,20 @@ async def build(settings: Settings) -> Services:
         ProjectFinding(agents),
     )
     await watchlist.adopt_ticket_project()
+    connections = Connections(
+        db,
+        [
+            Entry("jira", "Jira", jira_is_practice, jira_probe(jira, "Jira", jira_key_hint)),
+            Entry("github", "GitHub", False, github_probe(agents)),
+            Entry(
+                "teams",
+                "Teams",
+                webhook is None,
+                teams_probe(db, practice=webhook is None),
+            ),
+            Entry("model", "AI model", False, model_probe(model_settings)),
+        ],
+    )
     builder = Builder(
         db,
         orchestrator,
@@ -207,7 +236,7 @@ async def build(settings: Settings) -> Services:
         activity_log=activity,
         orchestrator=orchestrator,
         builder=builder,
-        home=Home(builder, orchestrator, people, team_requests),
+        home=Home(builder, orchestrator, people, team_requests, connections),
         watchlist=watchlist,
         team_requests=team_requests,
         request_channel=request_channel,
@@ -217,6 +246,7 @@ async def build(settings: Settings) -> Services:
         jira_client=jira_client,
         practice_jira=practice_jira,
         model_settings=model_settings,
+        connections=connections,
         people=people,
         copier=copier,
         cosmos=cosmos,

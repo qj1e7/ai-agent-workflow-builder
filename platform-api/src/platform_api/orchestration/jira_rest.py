@@ -10,7 +10,7 @@ from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
-from typing import Any, Final
+from typing import Any, Final, Literal
 from urllib.parse import quote
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -30,6 +30,7 @@ from platform_api.orchestration.jira import (
 )
 
 type Sleep = Callable[[float], Awaitable[None]]
+type JiraReach = Literal["working", "token_refused", "not_answering"]
 
 ATTEMPTS: Final = 3
 """Each call is tried at most three times when Jira is busy or down."""
@@ -250,6 +251,23 @@ class JiraRestAdapter:
             if isinstance(value, str) and value:
                 return value
         return None
+
+    async def check(self) -> JiraReach:
+        """Asks Jira who the token is, once and with no retry, so the answer is what Jira says
+        now. It reads and writes nothing."""
+        try:
+            response = await self._client.get(
+                f"{self._api}/myself",
+                headers={"Authorization": self._auth.header, "Accept": "application/json"},
+                follow_redirects=False,
+            )
+        except httpx.HTTPError, httpx.InvalidURL:
+            return "not_answering"
+        if response.status_code in {401, 403}:
+            return "token_refused"
+        if response.status_code == 200 and self._account(_body(response)) is not None:
+            return "working"
+        return "not_answering"
 
     async def whoami(self) -> str:
         """The platform's own Jira account, from Jira's /myself. Asked once."""

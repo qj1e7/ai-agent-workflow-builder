@@ -498,14 +498,19 @@ class HttpAgentRuntime:
     ) -> FindSoftwareResult | AgentUnavailable | AgentRejected:
         return await self._model_call("/v1/software/find", request, find_software_result_adapter)
 
+    async def check_github(self) -> GitHubCheckResult | AgentUnavailable | AgentRejected:
+        return await self._model_call(
+            "/v1/connections/github/check", None, github_check_result_adapter
+        )
+
     async def _model_call[T](
-        self, path: str, body: WireModel, adapter: TypeAdapter[T]
+        self, path: str, body: WireModel | None, adapter: TypeAdapter[T]
     ) -> T | AgentUnavailable | AgentRejected:
         # The body holds a model key, and an error answer can echo the body, so no text is kept.
         try:
             response = await self._client.post(
                 f"{self._base_url}{path}",
-                json=body.model_dump(mode="json"),
+                json=None if body is None else body.model_dump(mode="json"),
                 headers={AGENT_KEY_HEADER: self._api_key},
                 timeout=AGENT_TIMEOUT_SECONDS,
             )

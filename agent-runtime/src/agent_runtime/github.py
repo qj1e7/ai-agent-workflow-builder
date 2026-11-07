@@ -12,7 +12,7 @@ NOTES_LENGTH = 400
 TIMEOUT_SECONDS = 10.0
 RETRY_STATUSES = {429}
 EXPIRY_HEADER = "github-authentication-token-expiration"
-EXPIRY_FORMAT = "%Y-%m-%d %H:%M:%S UTC"
+EXPIRY_FORMATS = ("%Y-%m-%d %H:%M:%S UTC", "%Y-%m-%d %H:%M:%S %z")
 TOKEN_REFUSED = "GitHub does not accept the token. Ask whoever set it up for a new one."
 UNREACHABLE = "GitHub could not be reached just now."
 UNEXPECTED = "GitHub answered in a way the platform did not expect."
@@ -50,10 +50,14 @@ def _expiry_of(response: httpx.Response) -> datetime | None:
     raw = response.headers.get(EXPIRY_HEADER)
     if raw is None:
         return None
-    try:
-        return datetime.strptime(raw.strip(), EXPIRY_FORMAT).replace(tzinfo=UTC)
-    except ValueError:
-        return None
+    text = raw.strip()
+    for shape in EXPIRY_FORMATS:
+        try:
+            parsed = datetime.strptime(text, shape)
+        except ValueError:
+            continue
+        return parsed.astimezone(UTC) if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    return None
 
 
 class GitHubConnection:

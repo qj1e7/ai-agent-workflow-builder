@@ -233,6 +233,11 @@ def jira_from_env(
         token = env.get("JIRA_API_TOKEN", "").strip()
         if not token:
             raise ConfigError("JIRA_BASE_URL is set but JIRA_API_TOKEN is not.")
+        if not all(33 <= ord(character) < 127 for character in token):
+            raise ConfigError(
+                "JIRA_API_TOKEN holds a space, a line break or a character that is not a plain "
+                "letter, digit or symbol. Paste the token again."
+            )
         email = env.get("JIRA_EMAIL", "").strip() or None
         if flavor == "cloud" and email is None:
             raise ConfigError("JIRA_API_FLAVOR=cloud signs in with JIRA_EMAIL and JIRA_API_TOKEN.")

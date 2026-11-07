@@ -14,6 +14,9 @@ from platform_api.orchestration import (
     Change,
     ConfirmationKind,
     ConfirmationRow,
+    ConnectionCheck,
+    ConnectionId,
+    ConnectionState,
     PersonRuns,
     Stopped,
     Waiting,
@@ -103,6 +106,19 @@ class ComingUp(WireModel):
     more: int = Field(description="How many other workflows have a next run.")
 
 
+class ConnectionItem(WireModel):
+    id: ConnectionId
+    name: str
+    state: ConnectionState
+    problem: str | None
+    fix: str | None
+    last_ok_at: datetime | None
+    expires_at: datetime | None = Field(
+        description="When the system says the key runs out. A working connection is here only "
+        "when that is soon."
+    )
+
+
 class HomeOut(WireModel):
     approvals: list[ApprovalItem] = Field(
         description="Runs waiting for a yes this person may give, the newest first. At most 10."
@@ -129,16 +145,36 @@ class HomeOut(WireModel):
     following_up_total: int
     coming_up: ComingUp | None = Field(description="The workflow that runs next, if any.")
     workflows: int = Field(description="How many workflows the team has.")
+    connections: list[ConnectionItem] = Field(
+        description="For an Operator, the connections that do not work and the keys that run "
+        "out soon, as the last check left them. Home never starts a check."
+    )
 
 
 class RunsForPerson(Protocol):
     async def runs_for(self, viewer: Principal) -> PersonRuns: ...
 
 
+class ConnectionsForHome(Protocol):
+    async def needing_attention(self) -> list[ConnectionCheck]: ...
+
+
 class PeopleForHome(Protocol):
     async def confirmations(self, viewer: Principal) -> list[ConfirmationRow]: ...
 
     async def listed(self) -> list[Principal]: ...
+
+
+def _connection(check: ConnectionCheck) -> ConnectionItem:
+    return ConnectionItem(
+        id=check.id,
+        name=check.name,
+        state=check.state,
+        problem=check.problem,
+        fix=check.fix,
+        last_ok_at=check.last_ok_at,
+        expires_at=check.expires_at,
+    )
 
 
 def _change(change: Change) -> ChangeLine:
@@ -241,11 +277,13 @@ class Home:
         runs: RunsForPerson,
         people: PeopleForHome,
         requests: TeamRequests,
+        connections: ConnectionsForHome,
     ) -> None:
         self._builder = builder
         self._runs = runs
         self._people = people
         self._requests = requests
+        self._connections = connections
 
     async def for_person(self, viewer: Principal) -> HomeOut:
         runs = await self._runs.runs_for(viewer)
@@ -264,6 +302,8 @@ class Home:
             else []
         )
         following_up, following_up_total = await self._requests.following_up(viewer)
+        operator = Role.OPERATOR in viewer.roles
+        connections = await self._connections.needing_attention() if operator else []
         return HomeOut(
             approvals=[_approval(a, names) for a in runs.asks[:SHOWN]],
             approvals_total=len(runs.asks),
@@ -277,4 +317,5 @@ class Home:
             following_up_total=following_up_total,
             coming_up=_coming_up(use_cases),
             workflows=len(use_cases),
+            connections=[_connection(c) for c in connections],
         )

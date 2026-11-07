@@ -150,6 +150,8 @@ def test_a_cloud_jira_takes_an_email_an_issue_type_and_a_browse_address():
         ),
         pytest.param({**REAL_JIRA, "JIRA_ISSUE_TYPE": " "}, "JIRA_ISSUE_TYPE", id="blank type"),
         pytest.param({"PRACTICE_SYSTEMS": "off"}, "JIRA_BASE_URL", id="no Jira at all"),
+        pytest.param({**REAL_JIRA, "JIRA_API_TOKEN": "pat-tökén"}, "JIRA_API_TOKEN", id="accent"),
+        pytest.param({**REAL_JIRA, "JIRA_API_TOKEN": "pat 123"}, "JIRA_API_TOKEN", id="space"),
     ],
 )
 def test_jira_settings_that_cannot_work_refuse_to_start(env: dict[str, str], reason: str):

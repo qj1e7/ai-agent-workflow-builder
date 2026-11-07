@@ -6,7 +6,13 @@ from pydantic import Field, model_validator
 
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.orchestration.agents import ConnectResult, ModelProblem, ModelStyle
-from platform_api.orchestration.http import Operator
+from platform_api.orchestration.connections import (
+    ConnectionCheck,
+    ConnectionId,
+    Connections,
+    ConnectionState,
+)
+from platform_api.orchestration.http import Operator, current_connections
 from platform_api.orchestration.model_settings import (
     KNOWN_PROVIDERS,
     AddressDecided,
@@ -77,6 +83,26 @@ class ModelSettingsView(WireModel):
     changes: list[ModelChangeOut]
 
 
+class ConnectionOut(WireModel):
+    id: ConnectionId
+    name: str
+    practice: bool = Field(description="True while it is the practice copy, not the real system.")
+    state: ConnectionState
+    checked_at: datetime
+    last_ok_at: datetime | None = Field(description="The last time a check found it working.")
+    problem: str | None = Field(description="Plain words, never the system's own error text.")
+    key_ends_in: str | None = Field(description="The key's last two characters, when it has one.")
+    expires_at: datetime | None = Field(
+        description="When the system says the key runs out. Null when it does not say."
+    )
+    fix: str | None
+
+
+class ConnectionsView(WireModel):
+    connections: list[ConnectionOut]
+    you_can_check: bool = Field(description="True for an Operator.")
+
+
 class ConnectIn(WireIn):
     provider_id: KnownProviderId | None = None
     base_url: str | None = Field(default=None, max_length=2048)
@@ -145,6 +171,7 @@ def require_approver(principal: CurrentPrincipal) -> Principal:
     return principal
 
 
+CurrentConnections = Annotated[Connections, Depends(current_connections)]
 CurrentModelSettings = Annotated[ModelSettings, Depends(current_model_settings)]
 Approver = Annotated[Principal, Depends(require_approver)]
 
@@ -294,3 +321,46 @@ async def decide_address(
             raise HTTPException(status_code=404, detail="No address is waiting for confirmation")
         case SettingsOff(message):
             raise HTTPException(status_code=503, detail=message)
+
+
+def connection_out(check: ConnectionCheck) -> ConnectionOut:
+    return ConnectionOut(
+        id=check.id,
+        name=check.name,
+        practice=check.practice,
+        state=check.state,
+        checked_at=check.checked_at,
+        last_ok_at=check.last_ok_at,
+        problem=check.problem,
+        key_ends_in=check.key_ends_in,
+        expires_at=check.expires_at,
+        fix=check.fix,
+    )
+
+
+@router.get("/api/v1/settings/connections", tags=["settings"], responses=SIGNED_IN)
+async def get_connections(
+    principal: CurrentPrincipal, connections: CurrentConnections
+) -> ConnectionsView:
+    return ConnectionsView(
+        connections=[connection_out(c) for c in await connections.view()],
+        you_can_check=Role.OPERATOR in principal.roles,
+    )
+
+
+@router.post(
+    "/api/v1/settings/connections/{connection}/check",
+    tags=["settings"],
+    description=(
+        "Checks one connection now and keeps the result. A check only reads: it never writes "
+        "to Jira, GitHub or Teams."
+    ),
+    responses={**OPERATORS_ONLY, 404: error_response("No such connection")},
+)
+async def check_connection(
+    connection: str, principal: Operator, connections: CurrentConnections
+) -> ConnectionOut:
+    checked = await connections.check_now(connection)
+    if checked is None:
+        raise HTTPException(status_code=404, detail="No such connection")
+    return connection_out(checked)

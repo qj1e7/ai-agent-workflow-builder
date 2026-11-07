@@ -270,6 +270,23 @@ def test_settings_default_to_the_public_api_and_no_model():
     assert isinstance(build_runtime(settings).checker, VersionChecker)
 
 
+def test_a_github_token_with_a_trailing_newline_is_kept_without_it():
+    settings = Settings.from_env({**BASE_ENV, "GITHUB_TOKEN": "ghp_example\n"})
+    assert settings.github_token == "ghp_example"
+
+
+def test_a_blank_github_token_means_no_token():
+    assert Settings.from_env({**BASE_ENV, "GITHUB_TOKEN": " \n"}).github_token is None
+
+
+@pytest.mark.parametrize("token", ["ghp_tökén", "ghp_two words", "ghp_a\nb"])
+def test_a_github_token_that_cannot_be_sent_is_refused_without_quoting_it(token: str):
+    with pytest.raises(SettingsError) as refused:
+        Settings.from_env({**BASE_ENV, "GITHUB_TOKEN": token})
+    assert "GITHUB_TOKEN" in str(refused.value)
+    assert token not in str(refused.value)
+
+
 def test_settings_read_the_environment():
     settings = Settings.from_env(
         {

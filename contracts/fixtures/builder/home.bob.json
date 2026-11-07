@@ -56,5 +56,6 @@
     "time_zone": "Asia/Singapore",
     "more": 0
   },
-  "workflows": 1
+  "workflows": 1,
+  "connections": []
 }

@@ -91,6 +91,9 @@ class PracticeJira:
         self.portal_url = portal_url.rstrip("/")
         self._failures: list[Failure] = []
         self.time_zone = PRACTICE_ZONE
+        self.answering = True
+        """False while the dev toggle has the practice Jira refuse every REST call with a 503,
+        as a Jira that is down would."""
         self.calls: deque[str] = deque(maxlen=200)
         """The latest signed-in REST calls, as "GET /rest/api/2/search", so a test can see what
         was asked. Bounded, because the practice Jira may be reached from outside."""

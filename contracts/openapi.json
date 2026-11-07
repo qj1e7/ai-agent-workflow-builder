@@ -2649,6 +2649,220 @@
         "title": "Connected",
         "type": "object"
       },
+      "ConnectionId": {
+        "enum": [
+          "jira",
+          "github",
+          "teams",
+          "model"
+        ],
+        "type": "string"
+      },
+      "ConnectionItem": {
+        "additionalProperties": false,
+        "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the system says the key runs out. A working connection is here only when that is soon.",
+            "title": "Expires At"
+          },
+          "fix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fix"
+          },
+          "id": {
+            "$ref": "#/components/schemas/ConnectionId"
+          },
+          "last_ok_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Ok At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ConnectionState"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "state",
+          "problem",
+          "fix",
+          "last_ok_at",
+          "expires_at"
+        ],
+        "title": "ConnectionItem",
+        "type": "object"
+      },
+      "ConnectionOut": {
+        "additionalProperties": false,
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the system says the key runs out. Null when it does not say.",
+            "title": "Expires At"
+          },
+          "fix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fix"
+          },
+          "id": {
+            "$ref": "#/components/schemas/ConnectionId"
+          },
+          "key_ends_in": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key's last two characters, when it has one.",
+            "title": "Key Ends In"
+          },
+          "last_ok_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The last time a check found it working.",
+            "title": "Last Ok At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "practice": {
+            "description": "True while it is the practice copy, not the real system.",
+            "title": "Practice",
+            "type": "boolean"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Plain words, never the system's own error text.",
+            "title": "Problem"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ConnectionState"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "practice",
+          "state",
+          "checked_at",
+          "last_ok_at",
+          "problem",
+          "key_ends_in",
+          "expires_at",
+          "fix"
+        ],
+        "title": "ConnectionOut",
+        "type": "object"
+      },
+      "ConnectionState": {
+        "enum": [
+          "working",
+          "needs_attention",
+          "not_answering",
+          "not_set_up"
+        ],
+        "type": "string"
+      },
+      "ConnectionsView": {
+        "additionalProperties": false,
+        "properties": {
+          "connections": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectionOut"
+            },
+            "title": "Connections",
+            "type": "array"
+          },
+          "you_can_check": {
+            "description": "True for an Operator.",
+            "title": "You Can Check",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "connections",
+          "you_can_check"
+        ],
+        "title": "ConnectionsView",
+        "type": "object"
+      },
       "CreateAgentUseCase": {
         "additionalProperties": false,
         "properties": {
@@ -3395,6 +3609,14 @@
             "title": "Confirmations",
             "type": "array"
           },
+          "connections": {
+            "description": "For an Operator, the connections that do not work and the keys that run out soon, as the last check left them. Home never starts a check.",
+            "items": {
+              "$ref": "#/components/schemas/ConnectionItem"
+            },
+            "title": "Connections",
+            "type": "array"
+          },
           "drafts": {
             "description": "An Operator's own drafts, the last saved first.",
             "items": {
@@ -3457,7 +3679,8 @@
           "following_up",
           "following_up_total",
           "coming_up",
-          "workflows"
+          "workflows",
+          "connections"
         ],
         "title": "HomeOut",
         "type": "object"
@@ -10844,6 +11067,156 @@
         "summary": "Troubleshoot",
         "tags": [
           "monitoring"
+        ]
+      }
+    },
+    "/api/v1/settings/connections": {
+      "get": {
+        "operationId": "get_connections_api_v1_settings_connections_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Get Connections",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/settings/connections/{connection}/check": {
+      "post": {
+        "description": "Checks one connection now and keeps the result. A check only reads: it never writes to Jira, GitHub or Teams.",
+        "operationId": "check_connection_api_v1_settings_connections__connection__check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection",
+            "required": true,
+            "schema": {
+              "title": "Connection",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such connection"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Check Connection",
+        "tags": [
+          "settings"
         ]
       }
     },

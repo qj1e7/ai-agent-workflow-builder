@@ -8,6 +8,8 @@ from platform_api.orchestration.model_settings import (
 )
 from platform_api.orchestration.settings_http import (
     AwaitingConfirmationOut,
+    ConnectionOut,
+    ConnectionsView,
     SavedOut,
     view_of,
 )
@@ -59,12 +61,73 @@ ACTIVE_STATE = SettingsState(True, ACTIVE, None, [TURNED_ON_CHANGE])
 PENDING_STATE = SettingsState(True, ACTIVE, PENDING, [ASKED_CHANGE, TURNED_ON_CHANGE])
 
 
+CHECKED = datetime(2026, 11, 9, 1, 0, tzinfo=UTC)
+
+
+def connections_view() -> ConnectionsView:
+    return ConnectionsView(
+        connections=[
+            ConnectionOut(
+                id="jira",
+                name="Jira",
+                practice=True,
+                state="working",
+                checked_at=CHECKED,
+                last_ok_at=CHECKED,
+                problem=None,
+                key_ends_in=None,
+                expires_at=None,
+                fix=None,
+            ),
+            ConnectionOut(
+                id="github",
+                name="GitHub",
+                practice=False,
+                state="working",
+                checked_at=CHECKED,
+                last_ok_at=CHECKED,
+                problem="The key runs out soon.",
+                key_ends_in=None,
+                expires_at=datetime(2026, 11, 18, 9, 0, tzinfo=UTC),
+                fix="Ask whoever set up GitHub for a new key before this one runs out.",
+            ),
+            ConnectionOut(
+                id="teams",
+                name="Teams",
+                practice=False,
+                state="not_answering",
+                checked_at=CHECKED,
+                last_ok_at=datetime(2026, 11, 8, 3, 0, tzinfo=UTC),
+                problem="Teams did not take the last message.",
+                key_ends_in=None,
+                expires_at=None,
+                fix="Ask whoever set up the Teams address to check that it still works.",
+            ),
+            ConnectionOut(
+                id="model",
+                name="AI model",
+                practice=False,
+                state="not_set_up",
+                checked_at=CHECKED,
+                last_ok_at=None,
+                problem="No AI model is turned on.",
+                key_ends_in=None,
+                expires_at=None,
+                fix="Add an AI model under Settings, AI model.",
+            ),
+        ],
+        you_can_check=True,
+    )
+
+
 def settings_fixtures() -> dict[str, WireModel]:
     return {
         "settings/model.empty.json": view_of(SettingsState(True, None, None, []), ALICE),
         "settings/model.active.json": view_of(ACTIVE_STATE, ALICE),
         "settings/model.pending.alice.json": view_of(PENDING_STATE, ALICE),
         "settings/model.pending.bob.json": view_of(PENDING_STATE, BOB),
+        "settings/connections.json": connections_view(),
+        "settings/connection.checked.json": connections_view().connections[0],
         "settings/connect.connected.json": Connected(
             style="anthropic",
             base_url="https://llm-gateway.aisg.sg",

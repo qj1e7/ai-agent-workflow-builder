@@ -134,6 +134,16 @@ def _platform_jira_url(env: Mapping[str, str], origins: frozenset[Origin]) -> st
     return url
 
 
+def _github_token(env: Mapping[str, str]) -> str | None:
+    token = env.get("GITHUB_TOKEN", "").strip()
+    if not all(33 <= ord(character) < 127 for character in token):
+        raise SettingsError(
+            "GITHUB_TOKEN holds a space, a line break or a character that is not a plain "
+            "letter, digit or symbol. Paste the token again."
+        )
+    return token or None
+
+
 @dataclass(frozen=True)
 class Settings:
     agent_api_key: str
@@ -158,7 +168,7 @@ class Settings:
             agent_api_key=api_key,
             callback_allowed_origins=origins,
             github_api_base=env.get("GITHUB_API_BASE") or DEFAULT_GITHUB_API_BASE,
-            github_token=env.get("GITHUB_TOKEN") or None,
+            github_token=_github_token(env),
             summary_model=env.get("AGENT_SUMMARY_MODEL") or None,
             model_base_url=env.get("AGENT_MODEL_BASE_URL") or None,
             model_api_key=env.get("AGENT_MODEL_API_KEY") or None,

@@ -1,0 +1,12 @@
+{
+  "id": "jira",
+  "name": "Jira",
+  "practice": true,
+  "state": "working",
+  "checked_at": "2026-11-09T01:00:00Z",
+  "last_ok_at": "2026-11-09T01:00:00Z",
+  "problem": null,
+  "key_ends_in": null,
+  "expires_at": null,
+  "fix": null
+}
