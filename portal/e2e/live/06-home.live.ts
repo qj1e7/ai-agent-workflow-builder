@@ -41,15 +41,18 @@ test('bob sees the run alice started at the top of Home, and its one button open
   await context.close()
 })
 
-test('alice sees the run she started under Waiting on others, with no Approve button', async ({ browser, backend }, info) => {
+test('alice sees nothing under Waiting on others on Home, because it moved to Workflows', async ({ browser, backend }, info) => {
   const { runId, approvalId } = await backend.waitingRun('alice')
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
   await page.goto('/')
-  await expect(waitingOnOthers(page).locator(`a[href="/runs/${runId}"]`)).toContainText('You started it')
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await expect(waitingOnOthers(page)).toHaveCount(0)
   await expect(itemOf(page, approvalId)).toHaveCount(0)
   await expect(page.getByRole('button', { name: /^Approve/ })).toHaveCount(0)
   await shot(page, info, 'p11-06-alice-home')
+  await page.goto('/workflows')
+  await expect(waitingOnOthers(page).locator(`a[href="/runs/${runId}"]`)).toContainText('You started it')
   await context.close()
 })
 

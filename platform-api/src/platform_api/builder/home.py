@@ -26,6 +26,9 @@ from platform_api.shared import ApprovalId, Principal, Role, RunId, UserId
 from platform_api.wire import FailureReason, Trigger, WireModel
 
 SHOWN = 10
+LISTED = 50
+"""Waiting on others and Following up list every row they have, up to this many, so nobody meets
+an "And more" with no way to see the rest. Past it the section says how many it shows."""
 NAME_SHOWN = 80
 
 
@@ -137,16 +140,22 @@ class HomeOut(WireModel):
     )
     stopped_total: int
     waiting_on_others: list[WaitingItem] = Field(
-        description="Runs waiting for someone else's yes that this person is part of. At most 10."
+        description="Runs waiting for someone else's yes that this person is part of. At most 50."
     )
     waiting_on_others_total: int
     drafts: list[DraftItem] = Field(description="An Operator's own drafts, the last saved first.")
     following_up: list[FollowingUpItem] = Field(
         description="This person's own requests to the team, Ask the team and Report to "
-        "support, the newest first, with the status and the latest reply. At most 10. A request "
+        "support, the newest first, with the status and the latest reply. At most 50. A request "
         "marked Done leaves after 30 days."
     )
     following_up_total: int
+    replied: list[FollowingUpItem] = Field(
+        description="This person's own requests that someone on the team has replied to since "
+        "they last opened them, the newest reply first, each with that reply. They are part of "
+        "Needs you, and a request leaves this list when its asker opens it. Done requests "
+        "leave after 30 days."
+    )
     coming_up: ComingUp | None = Field(description="The workflow that runs next, if any.")
     workflows: int = Field(description="How many workflows the team has.")
     connections: list[ConnectionItem] = Field(
@@ -309,17 +318,19 @@ class Home:
         following_up, following_up_total = await self._requests.following_up(viewer)
         operator = Role.OPERATOR in viewer.roles
         connections = await self._connections.needing_attention() if operator else []
+        replied = await self._requests.replied(viewer)
         return HomeOut(
             approvals=[_approval(a, names) for a in runs.asks[:SHOWN]],
             approvals_total=len(runs.asks),
             confirmations=[_confirmation(row) for row in confirmations],
             stopped=[_stopped(s) for s in stopped[:SHOWN]],
             stopped_total=len(stopped),
-            waiting_on_others=[_waiting(w) for w in runs.waiting[:SHOWN]],
+            waiting_on_others=[_waiting(w) for w in runs.waiting[:LISTED]],
             waiting_on_others_total=len(runs.waiting),
             drafts=[_draft(d) for d in drafts],
             following_up=following_up,
             following_up_total=following_up_total,
+            replied=replied,
             coming_up=_coming_up(use_cases),
             workflows=len(use_cases),
             connections=[_connection(c) for c in connections],

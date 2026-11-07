@@ -828,6 +828,62 @@ async def test_saving_again_replaces_the_draft_and_keeps_when_it_was_started(lab
     assert await drafts_of(lab, "alice") == [again.json()]
 
 
+async def test_a_draft_put_back_after_a_discard_keeps_its_times(lab: Lab):
+    await save_draft(lab, "alice", "d1")
+    lab.h.advance(timedelta(minutes=5))
+    kept = (await drafts_of(lab, "alice"))[0]
+    await lab.call("alice", "DELETE", "/api/v1/drafts/d1")
+    lab.h.advance(timedelta(minutes=2))
+
+    back = await save_draft(
+        lab,
+        "alice",
+        "d1",
+        {**DRAFT, "put_back": {"created_at": kept["created_at"], "saved_at": kept["saved_at"]}},
+    )
+
+    assert (back.json()["created_at"], back.json()["saved_at"]) == (
+        kept["created_at"],
+        kept["saved_at"],
+    )
+
+
+async def test_put_back_times_never_run_ahead_and_never_touch_a_draft_that_exists(lab: Lab):
+    future = stamp(NOW + timedelta(days=1))
+    first = await save_draft(
+        lab, "alice", "d1", {**DRAFT, "put_back": {"created_at": future, "saved_at": future}}
+    )
+    assert (first.json()["created_at"], first.json()["saved_at"]) == (stamp(NOW), stamp(NOW))
+
+    lab.h.advance(timedelta(minutes=3))
+    old = stamp(NOW - timedelta(days=9))
+    again = await save_draft(
+        lab, "alice", "d1", {**DRAFT, "put_back": {"created_at": old, "saved_at": old}}
+    )
+    assert (again.json()["created_at"], again.json()["saved_at"]) == (
+        stamp(NOW),
+        stamp(NOW + timedelta(minutes=3)),
+    )
+
+
+async def test_put_back_saved_before_created_is_lifted_to_created(lab: Lab):
+    created = stamp(NOW - timedelta(hours=2))
+    earlier = stamp(NOW - timedelta(hours=3))
+    back = await save_draft(
+        lab, "alice", "d1", {**DRAFT, "put_back": {"created_at": created, "saved_at": earlier}}
+    )
+    assert (back.json()["created_at"], back.json()["saved_at"]) == (created, created)
+
+
+async def test_put_back_times_without_a_time_zone_are_refused(lab: Lab):
+    naive = "2026-11-04T06:00:00"
+    refused = await save_draft(
+        lab, "alice", "d1", {**DRAFT, "put_back": {"created_at": naive, "saved_at": naive}}
+    )
+    assert refused.status_code == 422
+    assert await drafts_of(lab, "alice") == []
+
+
 async def test_the_same_draft_id_is_separate_for_each_author(lab: Lab):
     await save_draft(lab, "alice", "d1")
     await save_draft(lab, "carol", "d1", {"step": 4, "content": {"intent": "Carol's"}})

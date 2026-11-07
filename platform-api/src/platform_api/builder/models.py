@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import Field, JsonValue, StringConstraints, field_validator
+from pydantic import AwareDatetime, Field, JsonValue, StringConstraints, field_validator
 
 from platform_api.builder.templates import VERSION_PATTERN
 from platform_api.orchestration import (
@@ -537,6 +537,11 @@ DRAFT_STEPS = 4
 DRAFT_LIMIT_BYTES = 32 * 1024
 
 
+class DraftTimes(WireIn):
+    created_at: AwareDatetime
+    saved_at: AwareDatetime
+
+
 class DraftIn(WireIn):
     step: Annotated[int, Field(ge=1, le=DRAFT_STEPS)] | None = Field(
         default=None,
@@ -546,6 +551,12 @@ class DraftIn(WireIn):
     content: dict[str, JsonValue] = Field(
         description="The New workflow form as the Portal keeps it, at most 32 KB as JSON. "
         "The platform stores it as it is. It reads only a top-level `name`, which Home shows."
+    )
+    put_back: DraftTimes | None = Field(
+        default=None,
+        description="Set when Undo puts back a draft that was just discarded: the times it had. "
+        "They are used only if no draft with this id exists, and never later than now, so "
+        "`Last saved` stays true. An ordinary save leaves it out.",
     )
 
     @field_validator("content")

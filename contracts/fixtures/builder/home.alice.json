@@ -61,6 +61,25 @@
     }
   ],
   "following_up_total": 1,
+  "replied": [
+    {
+      "request_id": "trq_01JD5RP",
+      "kind": "support",
+      "about": {
+        "run_id": "run_01JB9"
+      },
+      "note": "It stopped again.",
+      "asked_at": "2026-11-04T07:02:00Z",
+      "status": "answered",
+      "latest_reply": {
+        "replied_by": "bob",
+        "replied_by_name": "Bob",
+        "replied_at": "2026-11-04T08:30:00Z",
+        "text": "Looking into it.",
+        "status": "answered"
+      }
+    }
+  ],
   "coming_up": {
     "use_case_id": "uc_01JB7",
     "name": "Software watchlist",

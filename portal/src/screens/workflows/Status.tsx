@@ -1,8 +1,7 @@
 import { useState } from 'react'
-import type { RunView, UseCaseView } from '../../api/types'
-import { AgentFace } from '../../ui/AgentFace'
+import type { UseCaseView } from '../../api/types'
 import { IconCheck, IconLock, IconPause, IconX } from '../../ui/icons'
-import { faceStates, lifeWords, type AgentLink, type RunFact } from './workflow'
+import { lifeWords, type RunFact } from './workflow'
 import styles from './Workflows.module.css'
 
 export function useChanges(value: string): number {
@@ -33,17 +32,6 @@ export function StatusPills({ state, fact }: { state: UseCaseView['state']; fact
           {fact.pill}
         </span>
       ) : null}
-    </span>
-  )
-}
-
-export function Faces({ agents, useCase, latest }: { agents: readonly AgentLink[]; useCase: Pick<UseCaseView, 'state'>; latest: RunView | null }) {
-  const states = faceStates(useCase, latest, agents.length)
-  return (
-    <span className={styles['faces']}>
-      {agents.map((agent, index) => (
-        <AgentFace key={agent.to} id={agent.face} display={agent.name} size={26} state={states[index] ?? 'idle'} />
-      ))}
     </span>
   )
 }

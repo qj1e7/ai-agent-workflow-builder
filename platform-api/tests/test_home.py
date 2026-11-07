@@ -64,6 +64,7 @@ EMPTY = {
     "drafts": [],
     "following_up": [],
     "following_up_total": 0,
+    "replied": [],
     "coming_up": None,
     "workflows": 0,
     "connections": [],
@@ -508,8 +509,8 @@ async def test_following_up_shows_a_persons_own_requests_with_the_latest_reply(l
     assert (await lab.home("erin"))["following_up"] == []
 
 
-async def test_following_up_shows_at_most_ten_and_counts_them_all(lab: Lab):
-    for n in range(12):
+async def test_following_up_shows_every_request_up_to_fifty_and_counts_them_all(lab: Lab):
+    for n in range(52):
         await ask(
             lab,
             "alice",
@@ -519,8 +520,8 @@ async def test_following_up_shows_at_most_ten_and_counts_them_all(lab: Lab):
 
     home = await lab.home("alice")
 
-    assert (len(home["following_up"]), home["following_up_total"]) == (10, 12)
-    assert home["following_up"][0]["note"] == "n11"
+    assert (len(home["following_up"]), home["following_up_total"]) == (50, 52)
+    assert home["following_up"][0]["note"] == "n51"
 
 
 async def test_a_done_request_leaves_following_up_after_30_days(lab: Lab):
@@ -572,3 +573,32 @@ async def test_home_leaves_connections_to_the_operators(lab: Lab):
     await lab.rig.connections.check_now("jira")
     assert (await lab.home("bob"))["connections"] == []
     assert len((await lab.home("carol"))["connections"]) == 1
+
+
+async def test_a_reply_is_in_the_askers_needs_you_list_until_they_open_it(lab: Lab):
+    made = await ask(
+        lab, "alice", {"kind": "ask_the_team", "about": {"capability": "x"}, "note": "n"}, "k"
+    )
+    base = f"/api/v1/team-requests/{made['request_id']}"
+    assert (await lab.home("alice"))["replied"] == []
+    reply = await lab.client.post(
+        base + "/replies", json={"text": "Not on the plan."}, headers={"X-Dev-User": "bob"}
+    )
+
+    mine = await lab.home("alice")
+
+    assert [(i["request_id"], i["latest_reply"]["text"]) for i in mine["replied"]] == [
+        (made["request_id"], "Not on the plan.")
+    ]
+    assert [i["request_id"] for i in mine["following_up"]] == [made["request_id"]]
+    assert (await lab.home("bob"))["replied"] == []
+    assert (await lab.home("carol"))["replied"] == []
+
+    through = reply.json()["replies"][-1]["replied_at"]
+    seen = await lab.client.post(
+        base + "/seen", json={"through": through}, headers={"X-Dev-User": "alice"}
+    )
+    assert seen.status_code == 200
+    after = await lab.home("alice")
+    assert after["replied"] == []
+    assert [i["request_id"] for i in after["following_up"]] == [made["request_id"]]

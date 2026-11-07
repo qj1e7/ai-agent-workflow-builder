@@ -315,6 +315,64 @@ def test_migration_0007_keeps_team_requests_and_a_downgrade_drops_them(postgres:
             builder.execute("UPDATE builder.team_requests SET asked_by = 'bob'")
 
 
+def test_migration_0008_adds_the_asker_seen_mark_and_a_downgrade_removes_it(
+    postgres: PostgresUrls,
+):
+    def column_present(conn: psycopg.Connection) -> bool:
+        return (
+            conn.execute(
+                "SELECT 1 FROM information_schema.columns WHERE table_schema = 'builder'"
+                " AND table_name = 'team_requests' AND column_name = 'asker_seen_at'"
+            ).fetchone()
+            is not None
+        )
+
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        assert column_present(conn)
+        conn.execute("DELETE FROM builder.team_request_replies")
+        conn.execute("DELETE FROM builder.team_requests")
+        downgrade("builder", postgres.owner, "0007")
+        assert not column_present(conn)
+        conn.execute(
+            "INSERT INTO builder.team_requests (request_id, kind, about, note, asked_by,"
+            " asked_by_name, asked_at, idempotency_key, teams_post) VALUES ('trq_old',"
+            " 'ask_the_team', '{}', 'n', 'alice', 'Alice', now(), 'k', 'posted')"
+        )
+        conn.execute(
+            "INSERT INTO builder.team_request_replies (reply_id, request_id, replied_by,"
+            " replied_by_name, replied_at, text, status) VALUES ('trr_old', 'trq_old', 'bob',"
+            " 'Bob', now(), 'Done.', 'answered')"
+        )
+        conn.execute(
+            "INSERT INTO builder.team_request_replies (reply_id, request_id, replied_by,"
+            " replied_by_name, replied_at, text, status) VALUES ('trr_mine', 'trq_old', 'alice',"
+            " 'Alice', now(), 'Thanks.', 'answered')"
+        )
+        upgrade("builder", postgres.owner)
+        assert column_present(conn)
+        [seen] = conn.execute(
+            "SELECT asker_seen_at IS NOT NULL FROM builder.team_requests"
+        ).fetchone() or [None]
+        assert seen is True
+        stored = conn.execute(
+            "SELECT reply_id, status FROM builder.team_request_replies ORDER BY reply_id"
+        ).fetchall()
+        assert stored == [("trr_mine", "added"), ("trr_old", "answered")]
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute("UPDATE builder.team_request_replies SET status = 'bogus'")
+        downgrade("builder", postgres.owner, "0007")
+        back = conn.execute(
+            "SELECT status FROM builder.team_request_replies ORDER BY reply_id"
+        ).fetchall()
+        assert back == [("answered",), ("answered",)]
+        upgrade("builder", postgres.owner)
+        conn.execute("DELETE FROM builder.team_request_replies")
+        conn.execute("DELETE FROM builder.team_requests")
+    with psycopg.connect(postgres.contexts.builder) as builder:
+        builder.execute("UPDATE builder.team_requests SET asker_seen_at = now()")
+        builder.rollback()
+
+
 def test_migration_0006_adds_the_people_tables_and_folds_the_model_history_into_them(
     postgres: PostgresUrls,
 ):

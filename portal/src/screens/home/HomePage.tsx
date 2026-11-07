@@ -1,18 +1,17 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useHome } from '../../api/homeQueries'
 import { isOperator } from '../../api/me'
 import { useMe } from '../../api/queries'
-import type { HomeOut, WaitingItem } from '../../api/types'
+import type { HomeOut } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
 import { Button } from '../../ui/Button'
 import { useFocusWhenReady } from '../../ui/focus'
 import { IconClock } from '../../ui/icons'
-import { useGlide, usePresence } from '../../ui/presence'
 import { comingUpOf, HOME_NEEDS_SHOWN, HOW_IT_WORKS, leadLine, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, type Next } from './home'
 import { FirstWorkflow } from './FirstWorkflow'
-import { DraftRow, WaitingRow } from './HomeItem'
-import { NeedsSection, useArrival, type Arrival } from './NeedsSection'
+import { DraftRow } from './HomeItem'
+import { NeedsSection, useArrival } from './NeedsSection'
 import styles from './Home.module.css'
 
 const HOW_ID = 'how-it-works'
@@ -82,23 +81,6 @@ function AllQuiet({ next }: { next: Next | null }) {
   )
 }
 
-function WaitingList({ items, total, now, arrival }: { items: readonly WaitingItem[]; total: number; now: Date; arrival: Arrival }) {
-  const list = useRef<HTMLUListElement>(null)
-  const shown = usePresence(items, (item) => `waiting:${item.run_id}`)
-  useGlide(list)
-  return (
-    <section className={styles['section']} aria-labelledby="waiting-h">
-      <h2 id="waiting-h">Waiting on others</h2>
-      <ul ref={list} className={styles['rows']}>
-        {shown.map(({ key, item, leaving, onAnimationEnd }) => (
-          <WaitingRow key={key} item={item} now={now} motion={{ glide: key, arrive: arrival.arrive(key), stagger: arrival.stagger(key), leaving, onAnimationEnd }} />
-        ))}
-      </ul>
-      {total > items.length ? <p className={styles['more']}>And {total - items.length} more.</p> : null}
-    </section>
-  )
-}
-
 function HowItWorks() {
   return (
     <section className={styles['section']} aria-labelledby={HOW_ID}>
@@ -126,7 +108,6 @@ function Loaded({ now, home, next }: { now: Date; home: HomeOut; next: Next | nu
   const firstWorkflow = dayOne && operator
   const arrival = useArrival([
     ...needs.shown.map((need) => need.key),
-    ...home.waiting_on_others.map((item) => `waiting:${item.run_id}`),
     ...home.drafts.map((draft) => `draft:${draft.draft_id}`),
   ])
   const [showHow, setShowHow] = useState(false)
@@ -146,7 +127,6 @@ function Loaded({ now, home, next }: { now: Date; home: HomeOut; next: Next | nu
           whenNone={<AllQuiet next={next} />}
         />
       )}
-      {home.waiting_on_others.length > 0 ? <WaitingList items={home.waiting_on_others} total={home.waiting_on_others_total} now={now} arrival={arrival} /> : null}
       {home.drafts.length > 0 ? (
         <section className={styles['section']} aria-labelledby="drafts-h">
           <h2 id="drafts-h">Your drafts</h2>

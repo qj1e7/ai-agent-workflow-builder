@@ -78,7 +78,8 @@
   color: var(--red);
 }
 
-.tool {
+.tool,
+.info {
   color: var(--muted);
 }
 
@@ -98,6 +99,13 @@
   min-width: 0;
 }
 
+.cardTitle,
+.rowText,
+.rowName,
+.rowSub {
+  overflow-wrap: anywhere;
+}
+
 .cardTitle {
   font-size: 1.125rem;
   font-weight: 700;
@@ -107,6 +115,7 @@
 .note {
   color: var(--muted);
   font-size: 0.875rem;
+  overflow-wrap: anywhere;
 }
 
 .lines {
@@ -261,6 +270,10 @@
 
 .rowLink:hover {
   background: var(--sunk);
+}
+
+.rowLink > :first-child {
+  min-width: 0;
 }
 
 .rowLink svg {

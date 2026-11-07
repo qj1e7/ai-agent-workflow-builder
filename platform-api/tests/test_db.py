@@ -12,7 +12,7 @@ pytestmark = pytest.mark.anyio
 def test_each_context_has_a_version_table_in_its_own_schema(postgres: PostgresUrls):
     with psycopg.connect(postgres.owner) as conn:
         for context, head in (
-            ("builder", "0007"),
+            ("builder", "0008"),
             ("orchestration", "0013"),
             ("monitoring", "0002"),
         ):

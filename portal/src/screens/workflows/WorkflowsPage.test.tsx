@@ -13,7 +13,8 @@ import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import aliceHome from '../../../../contracts/fixtures/builder/home.alice.json'
 import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
-import type { HomeOut, Me, RunView, UseCaseView } from '../../api/types'
+import draftsFixture from '../../../../contracts/fixtures/builder/drafts.json'
+import type { DraftView, HomeOut, Me, ReplyView, RunView, TeamRequestView, UseCaseView } from '../../api/types'
 import { needsTotal } from '../home/home'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
@@ -37,13 +38,15 @@ interface Setup {
   readonly runs?: RunView[]
   readonly state?: unknown
   readonly home?: HomeOut
+  readonly drafts?: DraftView[]
+  readonly request?: { readonly id: string; readonly data?: TeamRequestView | Error }
 }
 
 /** The platform answers for the person asking. In these tests only Bob may decide the waiting run. */
 const asSeenBy = (me: Me, runs: RunView[]): RunView[] =>
   runs.map((run) => (run.state === 'awaiting_approval' ? { ...run, you_can_decide: me.id === 'bob' } : run))
 
-function render({ me = ALICE, useCases = [BUGS, WATCHLIST, LANGGRAPH], runs = RUNS, state, home }: Setup = {}): string {
+function render({ me = ALICE, useCases = [BUGS, WATCHLIST, LANGGRAPH], runs = RUNS, state, home, drafts, request }: Setup = {}): string {
   const session = createDevSession(null)
   const scope = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
@@ -51,12 +54,15 @@ function render({ me = ALICE, useCases = [BUGS, WATCHLIST, LANGGRAPH], runs = RU
   queryClient.setQueryData(['dev-users'], [ALICE, BOB, CAROL])
   queryClient.setQueryData(['runs', scope], asSeenBy(me, runs))
   if (home) queryClient.setQueryData(['home', scope], home)
+  if (drafts) queryClient.setQueryData(['drafts', scope], drafts)
+  if (request?.data instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: ['team-request', scope, request.id] }).setState({ status: 'error', error: request.data, fetchStatus: 'idle' })
+  else if (request?.data) queryClient.setQueryData(['team-request', scope, request.id], request.data)
   if (useCases instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: ['use-cases', scope] }).setState({ status: 'error', error: useCases, fetchStatus: 'idle' })
   else if (useCases !== 'loading') queryClient.setQueryData(['use-cases', scope], useCases)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
-        <MemoryRouter initialEntries={[{ pathname: '/workflows', state }]}>
+        <MemoryRouter initialEntries={[{ pathname: '/workflows', search: request ? `?request=${request.id}` : '', state }]}>
           <App now={() => NOW} />
         </MemoryRouter>
       </ApiProvider>
@@ -77,13 +83,13 @@ describe('the Workflows list', () => {
     expect(bugs).toMatch(/data-life="on"[^>]*>.*On<\/span>/)
     expect(bugs).toMatch(/data-tone="bad"[^>]*>.*Stopped<\/span>/)
     expect(text(bugs)).toContain('Morning bug report check')
-    expect(text(bugs)).toContain('Today 10:14: stopped. An agent could not finish its work.')
+    expect(text(bugs)).toContain('Raise a ticket for each new bug report.')
     const watchlist = rowOf(html, 'uc_01JB7')
     expect(watchlist).toMatch(/data-tone="wait"[^>]*>.*Needs a yes<\/span>/)
-    expect(text(watchlist)).toContain('Tue 3 Nov: 1 ticket is waiting for a yes.')
+    expect(text(watchlist)).toContain('Check the team\'s watched software for new releases')
     const paused = rowOf(html, 'uc_lang')
     expect(paused).toMatch(/data-life="paused"[^>]*>.*Paused<\/span>/)
-    expect(text(paused)).toContain('No runs yet.')
+    expect(text(paused)).toContain('Check langchain-ai/langgraph for a new release')
   })
 
   it('shows the next run beside it: a date, Paused, or Not scheduled', () => {
@@ -98,7 +104,6 @@ describe('the Workflows list', () => {
     const ran = { ...(done as RunView), use_case_id: 'uc_bugs', started_at: '2026-11-04T06:00:00Z' }
     const row = text(rowOf(render({ useCases: [london], runs: [ran] }), 'uc_bugs'))
     expect(row).toContain('Next: Today, 9:00 London time')
-    expect(row).toContain('Today 14:00: done.')
   })
 
   it('promises no next run on a row whose schedule is held, because its owner can no longer run it', () => {
@@ -129,23 +134,17 @@ describe('the Workflows list', () => {
     expect(text(rowOf(render(), 'uc_01JB7'))).not.toContain('Review and decide')
   })
 
-  it('closes the faces of a paused workflow and marks the agent whose work waits', () => {
-    const html = render()
-    expect(rowOf(html, 'uc_lang')).not.toMatch(/data-state="(idle|waiting)"/)
-    expect(rowOf(html, 'uc_lang')).toContain('data-state="stopped"')
-    expect(rowOf(html, 'uc_01JB7')).toContain('data-state="waiting"')
+  it('draws no agent faces and no step details in a row', () => {
+    const main = mainOf(render())
+    expect(main).not.toContain('data-state=')
+    expect(main).not.toContain('/agents/')
   })
 
-  it('has a search box and the three filters, with All pressed', () => {
+  it('hides the search box and the filters until the search button is pressed', () => {
     const main = mainOf(render())
-    expect(main).toMatch(/<label[^>]*for="find-workflows"[^>]*>Find a workflow<\/label>/)
-    expect(main).toMatch(/<input[^>]*type="search"[^>]*id="find-workflows"|<input[^>]*id="find-workflows"[^>]*type="search"/)
-    const pressed = [...main.matchAll(/<button[^>]*aria-pressed="(true|false)"[^>]*>([^<]*)<\/button>/g)].map((m) => [m[2], m[1]])
-    expect(pressed).toEqual([
-      ['All', 'true'],
-      ['Stopped', 'false'],
-      ['Paused', 'false'],
-    ])
+    expect(main).not.toContain('find-workflows')
+    expect(main).not.toContain('aria-pressed')
+    expect(main).toMatch(/<button[^>]*aria-expanded="false"[^>]*aria-controls="findbar-workflows"[^>]*aria-label="Search workflows"/)
   })
 
   it('looks the same to an Approver apart from the row buttons, and has no change controls', () => {
@@ -155,9 +154,9 @@ describe('the Workflows list', () => {
   })
 
   it('says when there is nothing yet, in words for the person reading', () => {
-    expect(text(mainOf(render({ useCases: [] })))).toContain('No workflows yet')
-    expect(text(mainOf(render({ useCases: [], me: BOB })))).toContain('An Operator sets them up. You approve their changes.')
-    expect(mainOf(render({ useCases: [] }))).not.toContain('find-workflows')
+    expect(text(mainOf(render({ useCases: [] })))).toContain('Nothing here yet Ask the Planner on Home, and your first workflow shows up here.')
+    expect(text(mainOf(render({ useCases: [], me: BOB })))).toContain('Operators set up workflows, and you approve their changes.')
+    expect(mainOf(render({ useCases: [] }))).not.toContain('aria-controls="findbar-workflows"')
   })
 
   it('says the list could not be loaded and offers Try again', () => {
@@ -217,7 +216,7 @@ describe('one action per workflow on Workflows', () => {
   })
 
   it('still offers a row its button when Needs you does not list that run', () => {
-    const quiet: HomeOut = { ...(bobHome as HomeOut), approvals: [], approvals_total: 0, confirmations: [], stopped: [], stopped_total: 0 }
+    const quiet: HomeOut = { ...(bobHome as HomeOut), approvals: [], approvals_total: 0, confirmations: [], stopped: [], stopped_total: 0, replied: [] }
     const html = render({ me: BOB, home: quiet })
     expect(primaries(mainOf(html))).toBe(1)
     expect(rowOf(html, 'uc_01JB7')).toContain('Review and decide')
@@ -238,8 +237,159 @@ describe('Needs you at the top of Workflows', () => {
   })
 
   it('shows no section when nothing needs the person', () => {
-    const quiet: HomeOut = { ...HOME, approvals: [], approvals_total: 0, confirmations: [], stopped: [], stopped_total: 0 }
+    const quiet: HomeOut = { ...HOME, approvals: [], approvals_total: 0, confirmations: [], stopped: [], stopped_total: 0, replied: [], connections: [] }
     expect(render({ home: quiet })).not.toContain('aria-label="Needs you"')
     expect(render()).not.toContain('aria-label="Needs you"')
+  })
+})
+
+
+const REPLY: ReplyView = { replied_by: 'bob', replied_by_name: 'Bob', replied_at: '2026-11-04T08:30:00Z', text: 'Looking into it.', status: 'answered' }
+const REQUEST: TeamRequestView = {
+  request_id: 'trq_01JD5RP',
+  kind: 'support',
+  about: { run_id: 'run_01JB9' },
+  note: 'It stopped again.',
+  asked_by: 'alice',
+  asked_by_name: 'Alice',
+  asked_at: '2026-11-04T07:02:00Z',
+  status: 'answered',
+  replies: [REPLY],
+  posted_to_teams: true,
+  not_posted_because: null,
+}
+const sectionOf = (html: string, name: string) => new RegExp(`<section[^>]*data-section="${name}"[\\s\\S]*?</section>`).exec(html)?.[0] ?? ''
+
+describe('the sections under Needs you', () => {
+  const HOME = aliceHome as HomeOut
+  const DRAFTS = draftsFixture.drafts as DraftView[]
+
+  it('come in order: Needs you, Drafts, Waiting on others, Following up, All workflows', () => {
+    const html = mainOf(render({ home: HOME, drafts: DRAFTS }))
+    const at = ['aria-label="Needs you"', 'data-section="drafts"', 'data-section="waiting"', 'data-section="following"', 'aria-labelledby="all-workflows-h"'].map((marker) => html.indexOf(marker))
+    expect(at.every((index) => index >= 0)).toBe(true)
+    expect(at).toEqual([...at].sort((a, b) => a - b))
+  })
+
+  it('lists a draft with its step, Resume and Discard, each named for the draft', () => {
+    const drafts = sectionOf(mainOf(render({ home: HOME, drafts: DRAFTS })), 'drafts')
+    expect(text(drafts)).toContain('Drafts 1')
+    expect(text(drafts)).toContain('Nudge stale tickets Step 2 of 4. Last saved Today, 14:24.')
+    expect(drafts).toMatch(/<a[^>]*href="\/new\?draft=drf-7f3a2c"[^>]*>Resume<span[^>]*> Nudge stale tickets<\/span><\/a>/)
+    expect(drafts).toMatch(/<button[^>]*>Discard<span[^>]*> Nudge stale tickets<\/span><\/button>/)
+  })
+
+  it('shows no Drafts section without drafts, and none to an Approver who is not an Operator', () => {
+    expect(render({ home: HOME, drafts: [] })).not.toContain('data-section="drafts"')
+    expect(render({ me: BOB, home: bobHome as HomeOut, drafts: DRAFTS })).not.toContain('data-section="drafts"')
+  })
+
+  it('moves Waiting on others here from Home, with no Approve button', () => {
+    const waitingSection = sectionOf(mainOf(render({ home: HOME })), 'waiting')
+    expect(text(waitingSection)).toContain('Waiting on others An Approver’s yes on Software watchlist You started it')
+    expect(waitingSection).toContain('href="/runs/run_01JB8"')
+    expect(waitingSection).not.toContain('<button')
+  })
+
+  it('lists the person’s requests under Following up with the status and the latest reply, each opening that request', () => {
+    const following = sectionOf(mainOf(render({ home: HOME })), 'following')
+    expect(text(following)).toContain('It stopped again. Platform problem')
+    expect(text(following)).toContain('Answered by Bob: Looking into it.')
+    expect(following).toContain('href="/workflows?request=trq_01JD5RP"')
+  })
+
+  it('says how many requests Following up shows when there are more than the platform lists, and never offers a link that goes nowhere', () => {
+    const many: HomeOut = { ...HOME, following_up_total: 63, waiting_on_others_total: 61 }
+    const html = render({ home: many })
+    expect(text(sectionOf(mainOf(html), 'following'))).toContain('Showing the newest 1 of 63.')
+    expect(text(sectionOf(mainOf(html), 'waiting'))).toContain('Showing the newest 1 of 61.')
+    expect(text(sectionOf(mainOf(render({ home: HOME })), 'following'))).not.toContain('Showing the newest')
+  })
+
+  it('shows a reply the person has not opened in Needs you, with the same count as the tab', () => {
+    const html = render({ home: HOME })
+    expect(mainOf(html)).toContain('data-home-item="reply:trq_01JD5RP"')
+    expect(text(mainOf(html))).toContain('Bob replied to your report')
+    expect(text(mainOf(html))).toContain('Looking into it.')
+    expect(mainOf(html)).toMatch(/<a[^>]*href="\/workflows\?request=trq_01JD5RP"[^>]*>Read the reply<\/a>/)
+    expect(navNames(html).filter((name) => name.startsWith('Workflows'))).toEqual([`Workflows, ${needsTotal(HOME)} need you`, `Workflows, ${needsTotal(HOME)} need you`])
+  })
+
+  it('leaves a request in Following up but not in Needs you once the person has opened it', () => {
+    const opened: HomeOut = { ...HOME, replied: [] }
+    const html = mainOf(render({ home: opened }))
+    expect(html).not.toContain('reply:trq_01JD5RP')
+    expect(html).toContain('data-request="trq_01JD5RP"')
+  })
+})
+
+describe('a request opened by its link', () => {
+  const open = (setup: Setup) => mainOf(render({ home: aliceHome as HomeOut, ...setup, request: { id: 'trq_01JD5RP', ...setup.request } }))
+
+  it('shows the request, who asked, the replies and a reply form to anyone on the team', () => {
+    for (const me of [BOB, CAROL]) {
+      const html = open({ me, request: { id: 'trq_01JD5RP', data: REQUEST } })
+      expect(text(html)).toContain('Alice reported a platform problem')
+      expect(text(html)).toContain('It stopped again.')
+      expect(text(html)).toContain('Bob')
+      expect(text(html)).toContain('Looking into it.')
+      expect(html).toContain('href="/runs/run_01JB9"')
+      expect(html).toMatch(/<label[^>]*>Your reply<\/label>/)
+      expect(html).toMatch(/<button[^>]*>Send reply<\/button>/)
+    }
+  })
+
+  it('offers someone else Answered, and Done for when nothing more will happen', () => {
+    const html = open({ me: BOB, request: { id: 'trq_01JD5RP', data: REQUEST } })
+    expect(html).toMatch(/<input[^>]*type="radio"[^>]*checked=""[^>]*\/>Answered/)
+    expect(text(html)).toContain('Done, nothing more will happen')
+  })
+
+  it('speaks to the asker as you, and offers her only Add and Mark done', () => {
+    const html = open({ me: ALICE, request: { id: 'trq_01JD5RP', data: REQUEST } })
+    expect(text(html)).toContain('You reported a platform problem')
+    expect(text(html)).not.toContain('Alice reported')
+    expect(text(html)).toContain('Add to your request')
+    expect(html).toMatch(/<button[^>]*>Add<\/button>/)
+    expect(html).toMatch(/<button[^>]*>Mark done<\/button>/)
+    expect(html).not.toContain('type="radio"')
+    expect(html).not.toContain('Send reply')
+  })
+
+  it('labels the asker’s own note as an addition, never as an answer', () => {
+    const noted: TeamRequestView = { ...REQUEST, status: 'open', replies: [{ ...REQUEST.replies[0]!, replied_by: 'alice', replied_by_name: 'Alice', status: 'added' }] }
+    const html = open({ me: BOB, request: { id: 'trq_01JD5RP', data: noted } })
+    expect(text(html)).toContain('Added to the request')
+    expect(text(html)).not.toMatch(/· Answered/)
+  })
+
+  it('replaces the list while it is open, and offers the way back', () => {
+    const html = open({ request: { id: 'trq_01JD5RP', data: REQUEST } })
+    expect(html).not.toContain('aria-label="Workflows"')
+    expect(html).not.toContain('aria-label="Needs you"')
+    expect(html).toMatch(/<a[^>]*href="\/workflows"[^>]*>[\s\S]*Workflows<\/a>/)
+  })
+
+  it('says plainly when the id is unknown, without a Try again', () => {
+    const html = open({ request: { id: 'trq_01JD5RP', data: new ApiError(404, null) } })
+    expect(text(html)).toContain('There is no request with that link')
+    expect(html).not.toContain('Try again')
+  })
+
+  it('offers Try again when the platform did not answer', () => {
+    const html = open({ request: { id: 'trq_01JD5RP', data: new ApiError(503, null) } })
+    expect(text(html)).toContain('The request could not be loaded')
+    expect(html).toContain('Try again')
+  })
+
+  it('says when the card did not reach Teams, and when nobody has replied', () => {
+    const html = open({ request: { id: 'trq_01JD5RP', data: { ...REQUEST, replies: [], status: 'open', posted_to_teams: false, not_posted_because: 'no_channel' } } })
+    expect(text(html)).toContain('Nobody has replied yet.')
+    expect(text(html)).toContain('No Teams channel is set up')
+  })
+
+  it('has nothing on it that approves', () => {
+    const html = open({ request: { id: 'trq_01JD5RP', data: REQUEST } })
+    expect(html).not.toMatch(/Approve|Decline|Review and decide/)
   })
 })

@@ -125,7 +125,7 @@ From top to bottom:
    - "Why did Morning new-ticket check stop?" when a workflow is stopped and that stop isn't already the first Needs you row, otherwise "What can I ask for?"
    - "Set up another workflow". It answers with three starting points she can pick from.
 4. **Needs you,** shown only when `needs()` has items:
-   - Up to three rows, most urgent first. Stopped runs come first, then approvals (urgent ones first), then connection keys that are running out, then confirmations.
+   - Up to three rows, most urgent first. Stopped runs come first, then approvals (urgent ones first), then connection keys that are running out, then confirmations, then replies to her own requests. A reply sits last, most urgent first: a reply holds nobody up, while a confirmation can hold up someone else's work.
    - Each row says what happened, why in one line, and offers one action, such as "Retry the run" or "Review and decide". Only the first row's action is primary, so the screen keeps one primary action (rule 1).
    - "See all on Workflows" appears when there are more than three.
 

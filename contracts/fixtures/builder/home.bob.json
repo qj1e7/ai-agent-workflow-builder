@@ -48,6 +48,7 @@
   "drafts": [],
   "following_up": [],
   "following_up_total": 0,
+  "replied": [],
   "coming_up": {
     "use_case_id": "uc_01JB7",
     "name": "Software watchlist",
