@@ -440,7 +440,7 @@ def test_the_dev_toggle_is_there_only_while_the_practice_jira_is_the_jira_in_use
     real = {
         **LOCAL_ENV,
         "JIRA_BASE_URL": "https://jira.example.com",
-        "JIRA_API_TOKEN": "pat-12345678",
+        "JIRA_API_TOKEN": "pat-123",
     }
     assert (
         TestClient(create_app(real))
