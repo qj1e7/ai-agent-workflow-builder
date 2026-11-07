@@ -460,6 +460,40 @@ def test_a_read_or_a_new_jira_ticket_stays_as_the_model_said(text: str):
 
 
 @pytest.mark.parametrize(
+    ("kind", "text"),
+    [
+        ("do", "check Log4j for known vulnerabilities"),
+        ("do", "Check Log4j for known vulnerabilities and raise a ticket in MOCK"),
+        ("do", "Warn me about any known vulnerabilities in Log4j"),
+        ("look_for", "Known vulnerabilities in Log4j"),
+        ("look_for", "Is Log4j vulnerable"),
+        ("do", "Check Log4j for CVEs"),
+        ("do", "Check whether we are affected by CVE-2021-44228"),
+        ("do", "Look up Log4j in the NVD"),
+        ("do", "Check our packages for security advisories"),
+        ("schedule", "Whenever a new CVE is published"),
+    ],
+)
+def test_a_vulnerability_check_is_cant_do_and_the_note_says_it_is_planned(kind: RowKind, text: str):
+    assert why_no_tool(kind, text) == "I can't check for known vulnerabilities yet. It's planned."
+
+
+@pytest.mark.parametrize(
+    ("kind", "text"),
+    [
+        ("look_for", "Tickets about the Log4j vulnerability"),
+        ("look_for", "Bug tickets in MOCK labelled vulnerability"),
+        ("look_for", "Jira issues that mention CVE-2021-44228"),
+        ("do", "Create a ticket for the Log4j vulnerability"),
+    ],
+)
+def test_a_search_of_jira_tickets_about_a_vulnerability_stays_as_the_model_said(
+    kind: RowKind, text: str
+):
+    assert why_no_tool(kind, text) is None
+
+
+@pytest.mark.parametrize(
     "text",
     [
         "Jira project MOCK",

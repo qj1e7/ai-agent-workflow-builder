@@ -7,10 +7,11 @@ can be tested without a real model:
 - A request that forces a tool is a draft, a choice or the Planner reading a task back. The canned
   answer follows the task's words. A task that names a GitHub repository picks the Version
   checker, any other gets a drafted agent (a follow-up one for a follow-up ticket task, else a
-  summary one), and a release task belongs on the Software watchlist. One named part, such as
-  "Where it goes: Jira project MOCK", is read as that part alone, the others missing. When the
-  Planner says before the task that the staff member already chose a new workflow, a release
-  task is read back in parts like any other, as the real model does.
+  summary one), and a release task belongs on the Software watchlist unless it also asks for
+  known vulnerabilities. One named part, such as "Where it goes: Jira project MOCK", is read as
+  that part alone, the others missing. When the Planner says before the task that the staff
+  member already chose a new workflow, a release task is read back in parts like any other, as
+  the real model does.
 - A request with tools and no forced tool is a card run. The mock calls github_read_releases,
   then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
   The ticket's title follows the card: a release, a follow-up or a summary.
@@ -47,9 +48,9 @@ BROKEN: dict[str, Any] = {
     "belongs_on_watchlist": False,
     "rows": '[{"kind": "schedule", "text": "Every',
 }
-RELEASE_WORDS = re.compile(
-    r"\b(?:releases?|versions?|upgrades?|patch(?:es)?|cves?|vulnerabilit\w*)\b", re.IGNORECASE
-)
+RELEASE_WORDS = re.compile(r"\b(?:releases?|versions?|upgrades?|patch(?:es)?)\b", re.IGNORECASE)
+VULNERABILITY_WORDS = re.compile(r"\b(?:vulnerab\w*|cves?|nvd|advisor(?:y|ies))\b", re.IGNORECASE)
+TICKET_WORDS = re.compile(r"\b(?:tickets?|jira)\b", re.IGNORECASE)
 SOFTWARE = ("LangGraph", "Redis", "FastAPI", "PostgreSQL", "Terraform", "Log4j", "Kubernetes")
 SCHEDULE = re.compile(
     r"\b(?:every|each)\s+(?:week ?day|day|morning|monday|tuesday|wednesday|thursday|friday|"
@@ -259,26 +260,15 @@ def obey_fooling_orders(sentences: list[str]) -> list[dict[str, Any]]:
     return [{"kind": "do", "text": first_up(order), "state": "understood"} for order in orders]
 
 
-def understanding(task: str, carried_on: bool = False) -> dict[str, Any]:
-    if not carried_on and (word := RELEASE_WORDS.search(task)) is not None:
-        named = next((name for name in SOFTWARE if name.lower() in task.lower()), None)
-        return {
-            "belongs_on_watchlist": True,
-            "watchlist_word": word.group(0),
-            "software": named,
-            "rows": [],
-        }
+def parts(task: str) -> list[dict[str, Any]]:
     if (named := ONE_PART.match(task.strip())) is not None:
         kind = PART_KINDS[named.group(1)]
-        return {
-            "belongs_on_watchlist": False,
-            "rows": [
-                {"kind": each, "text": named.group(2), "state": "understood"}
-                if each == kind
-                else {"kind": each, "state": "missing"}
-                for each in PART_KINDS.values()
-            ],
-        }
+        return [
+            {"kind": each, "text": named.group(2), "state": "understood"}
+            if each == kind
+            else {"kind": each, "state": "missing"}
+            for each in PART_KINDS.values()
+        ]
     sentences = [part for part in re.split(r"(?<=[.!?])\s+", task.strip()) if part]
     first = sentences[0].rstrip(".!?") if sentences else ""
     when = SCHEDULE.search(first)
@@ -294,7 +284,27 @@ def understanding(task: str, carried_on: bool = False) -> dict[str, Any]:
         look = of.group(1)
     rows += [look_row(look), *fooled_action_rows(act, task)]
     rows += obey_fooling_orders(sentences[1:])
-    return {"belongs_on_watchlist": False, "rows": rows}
+    return rows
+
+
+def no_vulnerability_tool(row: dict[str, Any]) -> dict[str, Any]:
+    text = row.get("text", "")
+    if VULNERABILITY_WORDS.search(text) is None or TICKET_WORDS.search(text) is not None:
+        return row
+    return {**row, "state": "cant_do", "note": "No tool checks for known vulnerabilities yet."}
+
+
+def understanding(task: str, carried_on: bool = False) -> dict[str, Any]:
+    word = RELEASE_WORDS.search(task)
+    if not carried_on and word is not None and VULNERABILITY_WORDS.search(task) is None:
+        named = next((name for name in SOFTWARE if name.lower() in task.lower()), None)
+        return {
+            "belongs_on_watchlist": True,
+            "watchlist_word": word.group(0),
+            "software": named,
+            "rows": [],
+        }
+    return {"belongs_on_watchlist": False, "rows": [no_vulnerability_tool(r) for r in parts(task)]}
 
 
 def forced(body: dict[str, Any], name: str) -> dict[str, Any]:

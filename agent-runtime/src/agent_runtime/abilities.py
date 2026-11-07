@@ -36,8 +36,13 @@ RELEASE_ROOTS: Final = {
     **dict.fromkeys(("release", "releases", "released", "releasing"), "release"),
     **dict.fromkeys(("upgrade", "upgrades", "upgraded", "upgrading"), "upgrade"),
     **dict.fromkeys(("patch", "patches", "patched", "patching"), "patch"),
-    **dict.fromkeys(("vulnerability", "vulnerabilities", "vulnerable"), "vulnerability"),
 }
+VULNERABILITY_ROOTS: Final = dict.fromkeys(
+    ("vulnerability", "vulnerabilities", "vulnerable"), "vulnerability"
+)
+VULNERABILITIES: Final = frozenset(VULNERABILITY_ROOTS) | words("cve cves nvd advisory advisories")
+CVE_ID: Final = re.compile(r"cve-\d{4}-\d+")
+VULNERABILITIES_PLANNED: Final = "I can't check for known vulnerabilities yet. It's planned."
 
 
 @dataclass(frozen=True)
@@ -146,10 +151,14 @@ PLACING: Final = words("put go")
 PLACE_ADVERBS: Final = words("somewhere anywhere everywhere elsewhere wherever here there")
 PLACING_FORMS: Final = words("put puts putting go goes going went gone")
 DELIVERS: Final = words("post send share save publish")
-TOPICS: Final = words(
-    "outage outages incident incidents migration migrations rollout rollouts downtime "
-    "problem problems error errors decommission decommissioning review reviews"
-) | frozenset(RELEASE_ROOTS)
+TOPICS: Final = (
+    words(
+        "outage outages incident incidents migration migrations rollout rollouts downtime "
+        "problem problems error errors decommission decommissioning review reviews"
+    )
+    | frozenset(RELEASE_ROOTS)
+    | VULNERABILITIES
+)
 SUBJECTS: Final = words("i we you")
 WANTING: Final = words("want wants need needs would like prefer")
 
@@ -808,11 +817,21 @@ def _where_row(row: Clause, reader: _Reader) -> str | None:
     return None
 
 
+def _asks_for_vulnerabilities(row: Clause, reader: _Reader) -> bool:
+    return any(
+        any(w.low in VULNERABILITIES or CVE_ID.fullmatch(w.low) for w in clause)
+        and not any(w.low in TICKETS or w.system == JIRA for w in clause)
+        for clause in _clauses(row, reader, True)
+    )
+
+
 def why_not(kind: RowKind, text: str, abilities: tuple[Ability, ...] = ABILITIES) -> str | None:
     """Why the platform can't do this part, in plain words, or None when every action in it fits
     one of the abilities."""
     reader = _reader(abilities)
     row = _tokens(text)
+    if _asks_for_vulnerabilities(row, reader):
+        return VULNERABILITIES_PLANNED
     match kind:
         case "schedule":
             what = _schedule_row(row, reader)
