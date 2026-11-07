@@ -72,6 +72,7 @@ CUT_OFF_NOTE = (
     "More tickets matched than came back, so older ones are missing. Do not say this list is "
     "complete. Say it was cut at the limit."
 )
+EARLIEST_DAY: Final = date(2000, 1, 1)
 NO_PROJECT = "This agent has no Jira project, so it cannot read Jira."
 
 
@@ -97,7 +98,23 @@ def tools_of(agent: CardToRun) -> list[Tool]:
     return [BY_ID[tool_id] for tool_id in ids]
 
 
-def system_prompt(agent: CardToRun, earlier: Sequence[str], today: date) -> str:
+def _last_run_line(last_run: date | None, today: date) -> str:
+    if last_run is None:
+        return (
+            "This workflow has no finished earlier run, so there is no last run date. For "
+            "tickets since the last run, search without a created_since date and say that "
+            "this is the first run."
+        )
+    return (
+        f"The last run of this workflow that finished started on {_day(last_run, today)} "
+        f"({last_run.isoformat()}). For tickets since the last run, search with created_since "
+        "set to that day."
+    )
+
+
+def system_prompt(
+    agent: CardToRun, earlier: Sequence[str], today: date, last_run: date | None = None
+) -> str:
     card = agent.card
     plan = "\n".join(
         f"{number}. {block.say}" + (f" (tool: {_model_name(block)})" if block.tool else "")
@@ -113,7 +130,8 @@ def system_prompt(agent: CardToRun, earlier: Sequence[str], today: date) -> str:
         )
     return (
         "You are an agent on a platform used by the support staff of CODESparks, a team in NCS. "
-        f"Today is {today:%A} {today.day} {today:%B %Y} ({today.isoformat()}). Do the task on "
+        f"Today is {today:%A} {today.day} {today:%B %Y} ({today.isoformat()}). "
+        f"{_last_run_line(last_run, today)} Do the task on "
         "your agent card below, following its plan in order.\n\n"
         f"Agent card: {card.name}\nPurpose: {card.purpose}\nPlan:\n{plan}\n"
         f"Inputs for this run:\n{values}\n{reports}\n"
@@ -244,6 +262,10 @@ class CardTask:
         return self._today
 
     @property
+    def last_run(self) -> date | None:
+        return self._request.carry_forward.last_run_on
+
+    @property
     def budget(self) -> Budget:
         return self._budget
 
@@ -275,7 +297,7 @@ class _AgentRun:
         task = self._task
         start = AgentState(
             messages=[
-                SystemMessage(system_prompt(self._agent, self._earlier, task.today)),
+                SystemMessage(system_prompt(self._agent, self._earlier, task.today, task.last_run)),
                 HumanMessage(
                     f"Run your plan now. The staff member's own words for the task: "
                     f"{task.instruction}"
@@ -424,7 +446,10 @@ class _AgentRun:
             args = args.model_copy(update={"project": self._projects[0]})
         elif args.project not in self._projects:
             return _error(_only_projects(self._projects))
-        write(self._started(tool, f"searches Jira project {args.project}."))
+        refused = _refused_day(args, self._task.today)
+        if refused is not None:
+            return _error(refused)
+        write(self._started(tool, _searching(args, self._task.today, self._task.last_run)))
         if jira is None:
             return self._read_failed(tool, "could not search Jira.", JIRA_OFF, write)
         try:
@@ -435,6 +460,7 @@ class _AgentRun:
                 args.done_since,
                 args.updated_before,
                 args.issue_type,
+                args.created_since,
             )
         except JiraUnavailable as unavailable:
             return self._read_failed(tool, "could not search Jira.", str(unavailable), write)
@@ -608,6 +634,56 @@ def _why(invalid: ValidationError) -> str:
         f"{'.'.join(str(part) for part in item['loc']) or 'arguments'}: {item['msg']}"
         for item in found[:3]
     )
+
+
+def _day(day: date, today: date) -> str:
+    text = f"{day.day} {day:%b}"
+    return text if day.year == today.year else f"{text} {day.year}"
+
+
+def _refused_day(args: JiraSearchArguments, today: date) -> str | None:
+    """A day after today, or before 2000, narrows or widens a search into nonsense without any
+    error from Jira, so the model is told and asks again."""
+    for name, text in (
+        ("updated_before", args.updated_before),
+        ("created_since", args.created_since),
+    ):
+        if text is None:
+            continue
+        day = date.fromisoformat(text)
+        if day > today:
+            return (
+                f"{name} is {text}, which is after today ({today.isoformat()}). A day in the "
+                "future would match every ticket or none. Use today's date or an earlier day."
+            )
+        if day < EARLIEST_DAY:
+            return (
+                f"{name} is {text}, which is before {EARLIEST_DAY.isoformat()}. No ticket is "
+                "that old. Use a day from the year 2000 on."
+            )
+    return None
+
+
+def _searching(args: JiraSearchArguments, today: date, last_run: date | None) -> str:
+    """The search in plain words, so a person sees every filter the agent chose."""
+    wanted: list[str] = []
+    if args.text:
+        wanted.append(f'with "{one_line(args.text, 40)}" in the title or body')
+    if args.status:
+        wanted.append(f"in status {args.status}")
+    if args.done_since:
+        wanted.append(f"finished on or after {_day(date.fromisoformat(args.done_since), today)}")
+    if args.updated_before:
+        day = _day(date.fromisoformat(args.updated_before), today)
+        wanted.append(f"last updated on or before {day}")
+    if args.created_since:
+        since = date.fromisoformat(args.created_since)
+        note = " (the last run)" if since == last_run else ""
+        wanted.append(f"created on or after {_day(since, today)}{note}")
+    if not wanted and not args.issue_type:
+        return f"searches Jira project {args.project}."
+    kind = f"{one_line(args.issue_type, 40)} tickets" if args.issue_type else "tickets"
+    return f"searches {args.project} for {' '.join([kind, ', '.join(wanted)]).strip()}."
 
 
 def _headline(ticket: JiraTicket) -> str:

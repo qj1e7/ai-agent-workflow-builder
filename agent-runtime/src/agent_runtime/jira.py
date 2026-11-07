@@ -62,6 +62,7 @@ class JiraReader(Protocol):
         done_since: str | None,
         updated_before: str | None = None,
         issue_type: str | None = None,
+        created_since: str | None = None,
     ) -> JiraFound: ...
 
     def read(self, key: str) -> JiraTicket: ...
@@ -95,6 +96,7 @@ class PlatformJira:
         done_since: str | None,
         updated_before: str | None = None,
         issue_type: str | None = None,
+        created_since: str | None = None,
     ) -> JiraFound:
         params = {
             "task": self._task_id,
@@ -104,6 +106,7 @@ class PlatformJira:
             "done_since": done_since or "",
             "updated_before": updated_before or "",
             "issue_type": issue_type or "",
+            "created_since": created_since or "",
         }
         answer = self._get("/tickets", params)
         try:

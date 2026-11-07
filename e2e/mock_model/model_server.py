@@ -122,6 +122,7 @@ FOLLOW_UP_DRAFT: dict[str, Any] = {
 CARD_NAME = re.compile(r"^Agent card: (.+)$", re.MULTILINE)
 DAYS = re.compile(r"\b(\d+)\s+days?\b", re.IGNORECASE)
 TODAY = re.compile(r"Today is [^(\n]*\((\d{4}-\d{2}-\d{2})\)")
+LAST_RUN = re.compile(r"started on [^(\n]*\((\d{4}-\d{2}-\d{2})\)\. For tickets since the last run")
 STALE_STEP = re.compile(r"no update for (\d+) days?", re.IGNORECASE)
 FOUND_KEY = re.compile(r'"key": "([A-Z][A-Z0-9_]*-\d+)"')
 
@@ -326,13 +327,17 @@ def follow_up_draft(task: str) -> dict[str, Any]:
 
 def stale_search(system: str, project: str) -> dict[str, Any]:
     """The search a follow-up card asks for: bug tickets last updated on or before the day that
-    is N days before the date in the prompt."""
+    is N days before the date in the prompt, and, when the prompt names the last run's day, only
+    tickets created since then."""
     arguments: dict[str, Any] = {"project": project}
     days = STALE_STEP.search(system)
     today = TODAY.search(system)
     if days is not None and today is not None:
         cutoff = date.fromisoformat(today.group(1)) - timedelta(days=int(days.group(1)))
         arguments |= {"issue_type": "Bug", "updated_before": cutoff.isoformat()}
+    last_run = LAST_RUN.search(system)
+    if last_run is not None:
+        arguments["created_since"] = last_run.group(1)
     return arguments
 
 

@@ -500,3 +500,120 @@ def test_a_card_with_no_jira_project_cannot_read_jira():
     Room(chat, jira=jira, request=request).run()
     assert jira.searches == []
     assert "no Jira project" in tool_answers(chat)[0]["error"]
+
+
+def started_lines(result: TaskResult) -> list[str]:
+    return [e.summary for e in result.events if e.kind == "agent_step_started"]
+
+
+def test_the_prompt_gives_the_last_runs_date_in_words_and_as_a_day():
+    agent = CardToRun(card=version_checker_card(), values=VALUES)
+    prompt = system_prompt(agent, [], TODAY, date(2026, 10, 18))
+    assert "started on 18 Oct (2026-10-18)" in prompt
+    assert "created_since set to that day" in prompt
+
+
+def test_the_prompt_says_plainly_when_there_was_no_earlier_run():
+    agent = CardToRun(card=version_checker_card(), values=VALUES)
+    prompt = system_prompt(agent, [], TODAY)
+    assert "no finished earlier run" in prompt
+    assert "created_since set to that day" not in prompt
+
+
+def test_the_date_the_platform_sends_reaches_the_models_first_message():
+    request = request_with("jira.search")
+    request = request.model_copy(
+        update={
+            "carry_forward": request.carry_forward.model_copy(
+                update={"last_run_on": date(2026, 10, 18)}
+            )
+        }
+    )
+    chat = ScriptedChat(script=[AIMessage("Nothing to do.")])
+    Room(chat, jira=FakeJira(), request=request).run()
+    first = chat.calls[0][0]
+    assert "started on 18 Oct (2026-10-18)" in str(first.content)
+
+
+def test_created_since_passes_through_and_the_step_line_names_it_as_the_last_run():
+    request = request_with("jira.search")
+    request = request.model_copy(
+        update={
+            "carry_forward": request.carry_forward.model_copy(
+                update={"last_run_on": date(2026, 10, 18)}
+            )
+        }
+    )
+    jira = FakeJira()
+    args = {"project": "MOCK", "created_since": "2026-10-18"}
+    chat = ScriptedChat(script=[asks(call("jira_search", args, "t1")), AIMessage("None.")])
+    result = Room(chat, jira=jira, request=request).run()
+    assert isinstance(result, TaskFinished)
+    assert jira.created_since == ["2026-10-18"]
+    assert started_lines(result) == [
+        "Version checker searches MOCK for tickets created on or after 18 Oct (the last run)."
+    ]
+
+
+def test_the_step_line_names_every_filter_the_agent_chose_in_plain_words():
+    args = {
+        "project": "MOCK",
+        "issue_type": "Bug",
+        "status": "To Do",
+        "updated_before": "2026-10-15",
+        "created_since": "2026-09-01",
+        "done_since": "2025-12-30",
+        "text": "login",
+    }
+    chat = ScriptedChat(script=[asks(call("jira_search", args, "t1")), AIMessage("None.")])
+    result = Room(chat, jira=FakeJira(), request=request_with("jira.search")).run()
+    assert isinstance(result, TaskFinished)
+    assert started_lines(result) == [
+        'Version checker searches MOCK for Bug tickets with "login" in the title or body, '
+        "in status To Do, finished on or after 30 Dec 2025, last updated on or before 15 Oct, "
+        "created on or after 1 Sep."
+    ]
+
+
+def test_a_search_with_only_a_type_says_the_type():
+    args = {"project": "MOCK", "issue_type": "Bug", "updated_before": "2026-10-15"}
+    chat = ScriptedChat(script=[asks(call("jira_search", args, "t1")), AIMessage("None.")])
+    result = Room(chat, jira=FakeJira(), request=request_with("jira.search")).run()
+    assert isinstance(result, TaskFinished)
+    assert started_lines(result) == [
+        "Version checker searches MOCK for Bug tickets last updated on or before 15 Oct."
+    ]
+
+
+@pytest.mark.parametrize("name", ["updated_before", "created_since"])
+@pytest.mark.parametrize(
+    ("day", "why"),
+    [
+        ("2026-10-26", "after today (2026-10-25)"),
+        ("2027-10-27", "after today (2026-10-25)"),
+        ("0001-01-01", "before 2000-01-01"),
+        ("1999-12-31", "before 2000-01-01"),
+    ],
+)
+def test_a_day_after_today_or_before_2000_is_refused_and_nothing_is_searched(name, day, why):
+    jira = FakeJira()
+    chat = ScriptedChat(
+        script=[asks(call("jira_search", {"project": "MOCK", name: day}, "t1")), AIMessage("Ok.")]
+    )
+    result = Room(chat, jira=jira, request=request_with("jira.search")).run()
+    assert isinstance(result, TaskFinished)
+    assert jira.searches == []
+    [answer] = tool_answers(chat)
+    assert name in answer["error"] and why in answer["error"]
+    assert started_lines(result) == []
+
+
+@pytest.mark.parametrize("name", ["updated_before", "created_since"])
+def test_today_and_the_first_day_of_2000_are_accepted(name):
+    for day in ("2026-10-25", "2000-01-01"):
+        jira = FakeJira()
+        chat = ScriptedChat(
+            script=[asks(call("jira_search", {"project": "MOCK", name: day}, "t1")), AIMessage("k")]
+        )
+        Room(chat, jira=jira, request=request_with("jira.search")).run()
+        assert len(jira.searches) == 1

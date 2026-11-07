@@ -24,7 +24,7 @@
       "id": "jira.search",
       "kind": "read",
       "name": "Search Jira",
-      "description": "Find Jira tickets in one project. Filters are optional: words in the title or body, status, finished on or after a date, last updated on or before a date, and type. Each ticket comes with its last update, type and assignee. At most 50 tickets come back, newest first. When cut_off is true, more tickets matched than came back, so never say the list is complete.",
+      "description": "Find Jira tickets in one project. Filters are optional: words in the title or body, status, finished or created on or after a date, last updated on or before a date, and type. Each ticket comes with its last update, type and assignee. At most 50 tickets come back, newest first. When cut_off is true, more tickets matched than came back, so never say the list is complete.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -55,6 +55,11 @@
             "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
             "type": "string",
             "description": "Only tickets last updated on or before this date, YYYY-MM-DD. For no update for N days, use today's date minus N days."
+          },
+          "created_since": {
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "type": "string",
+            "description": "Only tickets created on or after this date, YYYY-MM-DD. For tickets since the last run, use the last run's date from your instructions."
           },
           "issue_type": {
             "maxLength": 60,

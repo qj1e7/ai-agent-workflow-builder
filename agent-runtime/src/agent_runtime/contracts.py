@@ -595,7 +595,7 @@ def card_finished() -> TaskFinished:
         AgentStepStartedEvent,
         5.6,
         checker,
-        "Version checker searches Jira project MOCK.",
+        'Version checker searches MOCK for tickets with "1.2.16" in the title or body.',
         AgentStepStartedData(step="jira_search"),
     )
     rec.add(

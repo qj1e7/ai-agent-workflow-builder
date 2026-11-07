@@ -133,6 +133,7 @@ class FakeJira:
         self.cut_off = cut_off
         self.searches: list[tuple[str, str | None, str | None, str | None]] = []
         self.filters: list[tuple[str | None, str | None]] = []
+        self.created_since: list[str | None] = []
         self.reads: list[str] = []
 
     def search(
@@ -143,9 +144,11 @@ class FakeJira:
         done_since: str | None,
         updated_before: str | None = None,
         issue_type: str | None = None,
+        created_since: str | None = None,
     ) -> JiraFound:
         self.searches.append((project, text, status, done_since))
         self.filters.append((updated_before, issue_type))
+        self.created_since.append(created_since)
         return JiraFound([t for t in self.tickets if t.project == project], self.cut_off)
 
     def read(self, key: str) -> JiraTicket:

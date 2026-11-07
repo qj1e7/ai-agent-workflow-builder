@@ -262,7 +262,7 @@ def card_run_events() -> Timeline:
         AgentStepStarted,
         5.6,
         AGENT_CARD,
-        "Version checker searches Jira project MOCK.",
+        'Version checker searches MOCK for tickets with "1.2.16" in the title or body.',
         AgentStepStartedData(step="jira_search"),
     )
     tl.add(

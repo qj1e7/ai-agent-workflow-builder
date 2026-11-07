@@ -12,7 +12,7 @@
       "id": "jira.search",
       "kind": "read",
       "name": "Search Jira",
-      "description": "Finds tickets in a Jira project by words, status, type, the day they were done or the day they were last updated. Each ticket comes with its type and assignee. A long list is cut at 50, and the agent says so.",
+      "description": "Finds tickets in a Jira project by words, status, type, the day they were done, the day they were created or the day they were last updated. Each ticket comes with its type and assignee. A long list is cut at 50, and the agent says so.",
       "target_input": null,
       "min_approvers": null
     },

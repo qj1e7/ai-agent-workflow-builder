@@ -130,6 +130,19 @@ class MockModelTest(unittest.TestCase):
             {"project": "MOCK", "issue_type": "Bug", "updated_before": "2026-10-15"},
         )
 
+    def test_the_follow_up_search_adds_the_last_runs_day_when_the_prompt_names_one(self) -> None:
+        system = (
+            "You are an agent. Today is Sunday 25 October 2026 (2026-10-25). The last run of "
+            "this workflow that finished started on 18 Oct (2026-10-18). For tickets since the "
+            "last run, search with created_since set to that day. Do the task.\n"
+            "Agent card: Stale bug follow-up\nPlan:\n"
+            "1. Find bug tickets with no update for 10 days. (tool: jira_search)\n"
+            "Inputs for this run:\n- Jira project: MOCK\n"
+        )
+        body = {"system": system, "messages": run()["messages"], "tools": TOOLS[1:]}
+        arguments = tool_use(post(body))[1]
+        self.assertEqual(arguments["created_since"], "2026-10-18")
+
     def test_the_follow_up_ticket_lists_the_tickets_the_search_returned(self) -> None:
         system = "Agent card: Stale bug follow-up\nInputs for this run:\n- Jira project: MOCK\n"
         found = '{"data": [{"key": "MOCK-4"}, {"key": "MOCK-9"}]}'

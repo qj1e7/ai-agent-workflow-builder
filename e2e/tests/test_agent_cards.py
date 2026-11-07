@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from datetime import UTC, datetime
 
 import pytest
 from harness import (
@@ -155,3 +156,44 @@ def test_a_stale_bug_agent_lists_exactly_the_bugs_with_no_update_for_ten_days(
         "only bugs that had no update for 10 days are listed, not the fresh bug or the old task"
     )
     api.wait_for_state("alice", run_id, {"succeeded"})
+
+
+def test_a_second_run_tells_its_agent_the_day_the_first_run_started(
+    api: Api, mock_model: None, quiet_project: dict[str, str]
+) -> None:
+    plan = api.post("alice", "/api/v1/builder/plan", {"task": STALE_TASK}, expect=(200,)).json()
+    saved = api.post("alice", "/api/v1/agent-cards", plan["draft"], expect=(201,)).json()
+    body: Json = {
+        "name": "e2e last run",
+        "instruction": "Run the agent.",
+        "agents": [{"card_id": saved["card_id"], "values": {"Jira project": "MOCK"}}],
+    }
+    made = api.post("alice", "/api/v1/agent-use-cases", body, expect=(201,)).json()
+
+    first_day = datetime.now(UTC).date()
+    first, _ = api.start_run("alice", made["use_case_id"])
+    approve(api, first)
+    api.wait_for_state("alice", first, {"succeeded"})
+    second, _ = api.start_run("alice", made["use_case_id"])
+    api.stream_until("alice", second, {"approval_requested"})
+
+    def search_line(run_id: str) -> str:
+        [line] = [
+            e["summary"]
+            for e in api.events_after("alice", run_id)
+            if e["kind"] == "agent_step_started" and "searches" in e["summary"]
+        ]
+        return line
+
+    assert "created on or after" not in search_line(first)
+    assert search_line(second).endswith(
+        f"created on or after {first_day.day} {first_day:%b} (the last run)."
+    )
+    view = api.get(
+        "bob",
+        f"/api/v1/approvals/{approval_requested(api.events_after('alice', second))['approval_id']}",
+    )
+    [action] = view["actions"]
+    assert not any(key in action["fields"]["body"] for key in quiet_project.values()), (
+        "the seeded bugs were created long before the last run, so the second search skips them"
+    )

@@ -74,8 +74,9 @@ TOOL_RULES: tuple[ToolRule, ...] = (
         "read",
         "Search Jira",
         (
-            "Finds tickets in a Jira project by words, status, type, the day they were done "
-            "or the day they were last updated. Each ticket comes with its type and assignee. "
+            "Finds tickets in a Jira project by words, status, type, the day they were done, "
+            "the day they were created or the day they were last updated. Each ticket comes "
+            "with its type and assignee. "
             "A long list is cut at 50, and the agent says so."
         ),
         scope_input="jira_project",

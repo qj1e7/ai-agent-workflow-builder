@@ -47,6 +47,7 @@ def test_a_search_asks_the_platform_with_the_task_and_the_token_in_a_header():
         "done_since": "2026-10-01",
         "updated_before": "",
         "issue_type": "",
+        "created_since": "",
     }
     assert sent.headers["x-callback-token"] == request.callback.token
     assert request.callback.token not in str(sent.url)

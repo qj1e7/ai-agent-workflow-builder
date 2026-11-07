@@ -4,7 +4,7 @@ import logging
 import traceback
 from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import UTC, date, datetime
 from typing import Any, Protocol
 
 from platform_api.db import Database, UnitOfWork
@@ -490,8 +490,10 @@ class Orchestrator:
                     raise AssertionError("the referee admits run_agents only in Pending or Working")
             record = await self._commit(uow, record, moved)
             model = await self._models.access(uow) if self._models is not None else None
+            last_start = await self._store.last_finished_start(uow, record.spec.use_case_id, run_id)
         working = moved.state
-        request = self._task_request(record, working, model)
+        last_run_on = None if last_start is None else last_start.astimezone(UTC).date()
+        request = self._task_request(record, working, model, last_run_on)
         reply = await self._agents.run_task(request)
 
         async with self._db.transaction("orchestration") as uow:
@@ -610,7 +612,11 @@ class Orchestrator:
         return StepReply(False, "failed", detail)
 
     def _task_request(
-        self, record: RunRecord, working: Working, model: ModelAccess | None
+        self,
+        record: RunRecord,
+        working: Working,
+        model: ModelAccess | None,
+        last_run_on: date | None,
     ) -> TaskRequest:
         url, token = self._mint_callback(
             record.run_id, working.task_id, working.callback_expires_at
@@ -642,7 +648,7 @@ class Orchestrator:
             run_id=record.run_id,
             instruction=spec.instruction,
             inputs=inputs,
-            carry_forward=CarryForward(),
+            carry_forward=CarryForward(last_run_on=last_run_on),
             callback=Callback(url=url, token=token),
             model=model,
         )

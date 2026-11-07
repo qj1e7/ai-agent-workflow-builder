@@ -1,6 +1,7 @@
 """A run of agent cards through the orchestrator: the request, the review, and the binding."""
 
 from collections.abc import AsyncIterator
+from datetime import timedelta
 
 import pytest
 
@@ -81,10 +82,12 @@ async def h(postgres: PostgresUrls) -> AsyncIterator[Harness]:
         yield harness
 
 
-async def run_work(h: Harness, run_spec: RunSpec):
-    started = await h.orchestrator.start_run(run_spec, ALICE, "k")
+async def run_work(h: Harness, run_spec: RunSpec, key: str = "k", execution: str = "41"):
+    started = await h.orchestrator.start_run(run_spec, ALICE, key)
     await h.orchestrator.tick()
-    reply = await h.orchestrator.on_step(started.run_id, StepName.RUN_AGENTS, WORK)
+    reply = await h.orchestrator.on_step(
+        started.run_id, StepName.RUN_AGENTS, N8nExecutionId(execution)
+    )
     return started.run_id, reply
 
 
@@ -179,3 +182,31 @@ async def test_the_spec_round_trips_through_the_store(h: Harness):
     detail = await h.orchestrator.get_run(run_id)
     assert detail is not None
     assert detail.record.spec == spec("AAA", "BBB")
+
+
+async def test_the_first_run_has_no_last_run_date(h: Harness):
+    h.agent.output = output()
+    await run_work(h, spec("AAA"))
+    [request] = h.agent.requests
+    assert request.carry_forward.last_run_on is None
+
+
+async def test_a_second_run_carries_the_day_the_first_finished_run_started(h: Harness):
+    h.agent.output = output()
+    first_day = h.clock["now"].date()
+    await run_work(h, spec("AAA"), "first")
+    h.advance(timedelta(days=3))
+    await run_work(h, spec("AAA"), "second", "42")
+    first, second = h.agent.requests
+    assert first.carry_forward.last_run_on is None
+    assert second.carry_forward.last_run_on == first_day
+
+
+async def test_a_run_that_did_not_finish_is_not_the_last_run(h: Harness):
+    h.agent.output = output(ticket("crd_0", project="SECRET"))
+    run_id, _ = await run_work(h, spec("AAA"), "broken")
+    assert isinstance(await h.state(run_id), Failed)
+    h.advance(timedelta(days=2))
+    h.agent.output = output()
+    await run_work(h, spec("AAA"), "next", "43")
+    assert h.agent.requests[-1].carry_forward.last_run_on is None

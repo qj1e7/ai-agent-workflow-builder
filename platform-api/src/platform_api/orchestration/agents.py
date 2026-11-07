@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Any, Literal, Protocol
 
 import httpx
@@ -71,7 +71,7 @@ type TaskInputs = Annotated[WatchlistInputs | CardsInputs, Field(discriminator="
 
 
 class CarryForward(WireModel):
-    pass
+    last_run_on: date | None = None
 
 
 class Callback(WireModel):

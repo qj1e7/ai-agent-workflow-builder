@@ -29,6 +29,7 @@ from platform_api.shared import (
     N8nExecutionId,
     ProposalId,
     RunId,
+    UseCaseId,
     UserId,
 )
 
@@ -219,6 +220,21 @@ class Store:
             )
         ).fetchall()
         return [_record(row) for row in rows]
+
+    async def last_finished_start(
+        self, uow: UnitOfWork, use_case_id: UseCaseId, before: RunId
+    ) -> datetime | None:
+        """When the latest earlier run of this use case that finished (succeeded) started."""
+        row = await (
+            await uow.conn.execute(
+                "SELECT started_at FROM orchestration.runs "
+                "WHERE use_case_id = %s AND state = 'Succeeded' AND run_id <> %s "
+                "AND started_at < (SELECT started_at FROM orchestration.runs WHERE run_id = %s) "
+                "ORDER BY started_at DESC, run_id DESC LIMIT 1",
+                (use_case_id, before, before),
+            )
+        ).fetchone()
+        return None if row is None else row["started_at"]
 
     async def open_runs(self, uow: UnitOfWork) -> list[RunRecord]:
         rows = await (
