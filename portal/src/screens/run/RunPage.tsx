@@ -10,7 +10,6 @@ import { PageHead } from '../../shell/PageHead'
 import { PRODUCT } from '../../shell/product'
 import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
-import { useFocusWhenReady } from '../../ui/focus'
 import { motionAllowed } from '../../ui/motion'
 import { ApprovalGate } from './ApprovalGate'
 import { Chat, DECISION_ID, LastWord, NeedsYou, Typing } from './Chat'
@@ -206,12 +205,15 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const party = partyOf(approval.data, me?.id)
   const saidByMe = me ? shown.chat.findLast((item) => item.kind === 'decided' && item.by === me.id) : undefined
   const open = detailOpen(detail.choice, shown)
-  const focusAfterDeciding = useFocusWhenReady(saidByMe !== undefined && !waiting, () =>
-    open
-      ? chatList.current?.querySelector<HTMLElement>(`[data-gate-said="${saidByMe?.seq ?? ''}"]`)
-      : document.querySelector<HTMLElement>('main h1'),
-  )
-  const decision = useDecision(approval.data, party, focusAfterDeciding)
+  const decision = useDecision(approval.data, party)
+  const answered = decision.recorded !== null && !waiting
+  const focused = useRef(false)
+  useEffect(() => {
+    if (!answered || focused.current) return
+    focused.current = true
+    const line = chatList.current?.querySelector<HTMLElement>(`[data-gate-said="${saidByMe?.seq ?? ''}"]`)
+    ;(open ? line : document.querySelector<HTMLElement>('main h1'))?.focus({ preventScroll: true })
+  })
 
   const stations = stationsOf(shown, planOf(useCase), writeLabel)
   const reach = reachOf(stations)
