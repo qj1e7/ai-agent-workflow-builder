@@ -33,7 +33,7 @@ function motionProps({ glide, arrive, stagger, leaving, onAnimationEnd }: Motion
   }
 }
 
-function RetryButton({ runId, label, primary, describedBy }: { runId: string; label: string; primary: boolean; describedBy: string }) {
+export function RetryButton({ runId, label, primary, describedBy }: { runId: string; label: string; primary: boolean; describedBy: string }) {
   const navigate = useNavigate()
   const retry = useRetry(runId, () => void navigate(`/runs/${runId}`))
   const latch = useLatch()

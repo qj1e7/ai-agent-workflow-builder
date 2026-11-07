@@ -19,8 +19,10 @@ import { placeAfterRedraw } from '../../ui/focus'
 import { nextCheckWords, TAKE_OVER_WORDS } from '../software/software'
 import {
   agentsOf,
+  bannerOf,
   changeProblem,
   controlsOf,
+  deleteWords,
   faceStates,
   formatterFactory,
   changeWords,
@@ -29,6 +31,7 @@ import {
   lifeWords,
   lineWhen,
   meansOutOfDate,
+  menuActionsOf,
   nextRunAt,
   nextRunWords,
   placeOf,
@@ -343,10 +346,10 @@ describe('the manage controls of a workflow page', () => {
     expect(controlsOf({ ...AGENTS, state: 'paused' }, BOB)).toEqual([])
   })
 
-  it('keep Pause and Resume in one place, so a refused Run now on a workflow someone paused hands focus to Resume', () => {
+  it('keep Pause and Resume in one place, and Run now and Delete in the menu, so a press that finds the workflow changed hands focus to a control still on the page', () => {
     const shown = (useCase: UseCaseView) => controlsOf(useCase, ALICE).map(placeOf)
-    expect(shown({ ...AGENTS, state: 'paused' })).toEqual(['switch', 'delete'])
-    expect(placeAfterRedraw(PLACES_IN_PAGE_ORDER, placeOf('run'), shown({ ...AGENTS, state: 'paused' }))).toBe('switch')
+    expect(shown({ ...AGENTS, state: 'paused' })).toEqual(['switch', 'more'])
+    expect(placeAfterRedraw(PLACES_IN_PAGE_ORDER, placeOf('run'), shown({ ...AGENTS, state: 'paused' }))).toBe('more')
     expect(placeAfterRedraw(PLACES_IN_PAGE_ORDER, placeOf('pause'), shown({ ...AGENTS, state: 'paused' }))).toBe('switch')
   })
 
@@ -571,5 +574,102 @@ describe('what happens when a schedule is saved', () => {
 
   it('only shows any other refusal', () => {
     expect(setup((answers) => answers.onError(new ApiError(403, { detail: 'x' })))).toEqual(['shown 403'])
+  })
+})
+
+describe('the More actions menu', () => {
+  it('holds Run now, Change schedule and Delete in that order, with Delete last', () => {
+    expect(menuActionsOf(AGENTS, ALICE)).toEqual(['run', 'schedule', 'delete'])
+  })
+
+  it('drops Run now while paused, because a paused workflow starts nothing', () => {
+    expect(menuActionsOf({ ...AGENTS, state: 'paused' }, ALICE)).toEqual(['schedule', 'delete'])
+  })
+
+  it('is empty for an Approver who is not an Operator, and for the Software watchlist', () => {
+    expect(menuActionsOf(AGENTS, BOB)).toEqual([])
+    expect(menuActionsOf(WATCHLIST, ALICE)).toEqual([])
+  })
+})
+
+describe('the status banner', () => {
+  const nameOf = (id: string) => id
+  const NOW = new Date('2026-11-04T15:00:00+08:00')
+  const on = { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null } } as UseCaseView
+  const facts = (change: object) => ({ useCase: on, latest: null, viewer: ALICE, now: NOW, nameOf, ...change })
+
+  it('says a workflow that is on has its next run, and offers no button', () => {
+    expect(bannerOf(facts({}))).toEqual({ tone: 'ok', text: 'On. Next run Mon 9 Nov, 9:00.', action: null })
+  })
+
+  it('says a workflow with no schedule runs when an Operator presses Run now', () => {
+    expect(bannerOf(facts({ useCase: AGENTS })).text).toBe('On. It has no schedule, so it runs when an Operator presses Run now.')
+  })
+
+  it('holds Resume for an Operator while paused, and nothing for an Approver', () => {
+    const paused = { ...on, state: 'paused' } as UseCaseView
+    expect(bannerOf(facts({ useCase: paused }))).toEqual({ tone: 'off', text: 'Paused. It won’t run until you resume it.', action: { kind: 'resume' } })
+    expect(bannerOf(facts({ useCase: paused, viewer: BOB })).action).toBeNull()
+  })
+
+  it('lets a paused workflow say Paused even when its latest run stopped', () => {
+    const paused = { ...on, state: 'paused' } as UseCaseView
+    expect(bannerOf(facts({ useCase: paused, latest: run(failed) })).tone).toBe('off')
+  })
+
+  it('for a stopped run, says when it stopped and the list’s reason, as one sentence', () => {
+    const stopped = run(failed, { started_at: '2026-11-04T00:00:00Z', retryable: false, message: 'UpstreamUnavailable: Could not check LangGraph: GitHub returned 503' })
+    const banner = bannerOf(facts({ latest: stopped }))
+    expect(banner).toEqual({ tone: 'bad', text: 'Stopped today at 8:00. An agent could not finish its work.', action: { kind: 'stopped', runId: stopped.run_id, retryable: false } })
+  })
+
+  it('names the stop from the run’s reason, as the Workflows list does', () => {
+    const stopped = run(failed, { reason: 'TimedOut' })
+    expect(bannerOf(facts({ latest: stopped })).text).toMatch(/^Stopped .+\. A step took too long\.$/)
+    expect(bannerOf(facts({ latest: stopped, viewer: BOB })).text).toBe(bannerOf(facts({ latest: stopped })).text)
+  })
+
+  it('carries whether the platform says a stopped run can be retried', () => {
+    const retryable = run(failed, { retryable: true })
+    expect(bannerOf(facts({ latest: retryable })).action).toEqual({ kind: 'stopped', runId: retryable.run_id, retryable: true })
+  })
+
+  it('gives an Approver the stop without an action', () => {
+    expect(bannerOf(facts({ latest: run(failed), viewer: BOB })).action).toBeNull()
+  })
+
+  it('for a run waiting for a yes, offers Review and decide only when the platform says the person may decide', () => {
+    const mayDecide = run(waiting, { you_can_decide: true })
+    const mayNot = run(waiting, { you_can_decide: false })
+    expect(bannerOf(facts({ latest: mayDecide })).action).toEqual({ kind: 'decide', runId: mayDecide.run_id })
+    expect(bannerOf(facts({ latest: mayNot })).action).toBeNull()
+    expect(bannerOf(facts({ latest: mayNot })).tone).toBe('wait')
+  })
+
+  it('says a held schedule is not running, and why', () => {
+    const held = { ...on, next_run_at: null, schedule: { ...on.schedule, held: 'owner_removed' } } as UseCaseView
+    expect(bannerOf(facts({ useCase: held })).text).toContain('Not running')
+  })
+})
+
+describe('what Delete says is lost', () => {
+  it('names the workflow, its schedule, the runs that stay and the Undo', () => {
+    expect(deleteWords('LangGraph release check', 3)).toBe(
+      'LangGraph release check leaves Workflows, and its schedule stops, so no more runs start. Its 3 past runs stay in the record, with who approved what. Undo stays in the message that follows.',
+    )
+  })
+
+  it('says so when it has no runs', () => {
+    expect(deleteWords('Nudge', 0)).toContain('It has no runs yet.')
+  })
+
+  it('says one past run stays, in the singular', () => {
+    expect(deleteWords('Nudge', 1)).toContain('Its 1 past run stays in the record')
+  })
+
+  it('says nothing about runs until they have loaded', () => {
+    const words = deleteWords('Nudge', null)
+    expect(words).not.toMatch(/runs yet|past run/)
+    expect(words).toBe('Nudge leaves Workflows, and its schedule stops, so no more runs start. Undo stays in the message that follows.')
   })
 })

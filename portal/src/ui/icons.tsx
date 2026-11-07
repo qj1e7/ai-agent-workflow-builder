@@ -84,6 +84,8 @@ export const IconSearch = drawn(
 
 export const IconChevronRight = drawn('IconChevronRight', <path d="M9.5 6l6 6-6 6" />, 2.2)
 
+export const IconChevronDown = drawn('IconChevronDown', <path d="M6 9.5l6 6 6-6" />, 2.2)
+
 export const IconChevronLeft = drawn('IconChevronLeft', <path d="M14.5 6l-6 6 6 6" />, 2.2)
 
 export const IconAlert = drawn(

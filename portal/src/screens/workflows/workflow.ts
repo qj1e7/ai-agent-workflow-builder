@@ -7,7 +7,7 @@ import { agentIdentity } from '../../ui/agents'
 import { andList, count, type NameOf } from '../run/words'
 import { faceId } from '../agents/agents'
 import { heldWords, repeatWords, TAKE_OVER_WORDS } from '../software/software'
-import { nextRunAt, zoneWords } from './times'
+import { nextRunAt, runWhen, zoneWords } from './times'
 
 export type Tone = 'ok' | 'wait' | 'bad' | 'new'
 
@@ -129,9 +129,10 @@ export function workflowPath(useCase: Pick<UseCaseView, 'template' | 'use_case_i
 
 export type Control = 'run' | 'pause' | 'resume' | 'delete'
 
-export type Place = 'run' | 'switch' | 'delete'
-export const PLACES_IN_PAGE_ORDER: readonly Place[] = ['run', 'switch', 'delete']
-const PLACE_OF: Record<Control, Place> = { run: 'run', pause: 'switch', resume: 'switch', delete: 'delete' }
+/** Pause and Resume sit apart from the More actions menu, which holds Run now and Delete. */
+export type Place = 'switch' | 'more'
+export const PLACES_IN_PAGE_ORDER: readonly Place[] = ['switch', 'more']
+const PLACE_OF: Record<Control, Place> = { run: 'more', pause: 'switch', resume: 'switch', delete: 'more' }
 export const placeOf = (control: Control): Place => PLACE_OF[control]
 
 /** Only an Operator changes a schedule. The Software watchlist's is changed on the Software page. */
@@ -177,6 +178,18 @@ export function scheduleSaver(mutate: (body: ScheduleIn, answers: SavedAnswers) 
         rereadIfOutOfDate(failure)
       },
     })
+}
+
+/** What the More actions menu holds, in order. Delete is last. A workflow with none shows no menu. */
+export type MenuAction = 'run' | 'schedule' | 'delete'
+
+export function menuActionsOf(useCase: Pick<UseCaseView, 'template' | 'state'>, viewer: Viewer): readonly MenuAction[] {
+  const controls = controlsOf(useCase, viewer)
+  const actions: MenuAction[] = []
+  if (controls.includes('run')) actions.push('run')
+  if (mayChangeSchedule(useCase, viewer)) actions.push('schedule')
+  if (controls.includes('delete')) actions.push('delete')
+  return actions
 }
 
 export function controlsOf(useCase: Pick<UseCaseView, 'template' | 'state'>, viewer: Viewer): readonly Control[] {
@@ -319,4 +332,55 @@ export function changeProblem(change: Change, name: string, error: unknown, word
   if (change === 'restore' && answered(error, 410)) return `${start} It was deleted more than a day ago.`
   if (answered(error, 404)) return change === 'restore' ? `${start} The platform has no record of it.` : `${start} It was deleted.`
   return `${start} ${words(error)}`
+}
+
+export type BannerTone = 'ok' | 'wait' | 'bad' | 'off' | 'new'
+
+export type BannerAction =
+  | { readonly kind: 'decide'; readonly runId: string }
+  | { readonly kind: 'stopped'; readonly runId: string; readonly retryable: boolean }
+  | { readonly kind: 'resume' }
+
+export interface Banner {
+  readonly tone: BannerTone
+  readonly text: string
+  readonly action: BannerAction | null
+}
+
+interface BannerFacts {
+  readonly useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule'>
+  readonly latest: RunView | null
+  readonly viewer: Viewer
+  readonly now: Date
+  readonly nameOf: NameOf
+}
+
+const atWords = (when: string) => when.replace(/^Today, /, 'today at ').replace(/^(.+), (\d+:\d+)$/, '$1 at $2')
+
+/** One sentence on the state, and the one action that moves it on. Pause wins over the latest run, because a paused workflow starts nothing. */
+export function bannerOf({ useCase, latest, viewer, now, nameOf }: BannerFacts): Banner {
+  if (useCase.state === 'paused') {
+    return { tone: 'off', text: 'Paused. It won’t run until you resume it.', action: viewer.operator ? { kind: 'resume' } : null }
+  }
+  if (latest?.state === 'awaiting_approval') {
+    return { tone: 'wait', text: runFact(latest, nameOf).words, action: latest.you_can_decide ? { kind: 'decide', runId: latest.run_id } : null }
+  }
+  if (latest?.state === 'failed') {
+    return {
+      tone: 'bad',
+      text: `Stopped ${atWords(runWhen(latest.started_at, now))}. ${failureReasonLabel[latest.reason]}.`,
+      action: viewer.operator ? { kind: 'stopped', runId: latest.run_id, retryable: latest.retryable } : null,
+    }
+  }
+  if (latest && runFact(latest, nameOf).tone === 'new') return { tone: 'new', text: 'Running now.', action: null }
+  const held = heldNote(useCase)
+  if (held) return { tone: 'ok', text: held, action: null }
+  if (!useCase.schedule) return { tone: 'ok', text: 'On. It has no schedule, so it runs when an Operator presses Run now.', action: null }
+  return { tone: 'ok', text: `On. Next run ${nextRunWords(useCase, now)}.`, action: null }
+}
+
+/** What Delete takes away, said before the person confirms. */
+export function deleteWords(name: string, pastRuns: number | null): string {
+  const kept = pastRuns === null ? '' : pastRuns === 0 ? ' It has no runs yet.' : ` ${pastRuns === 1 ? 'Its 1 past run stays' : `Its ${pastRuns} past runs stay`} in the record, with who approved what.`
+  return `${name} leaves Workflows, and its schedule stops, so no more runs start.${kept} Undo stays in the message that follows.`
 }

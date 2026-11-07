@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router'
 import { ApiError } from '../../api/client'
 import { useErrorWords } from '../../api/context'
@@ -8,12 +8,15 @@ import { useDisplayName } from '../../api/people'
 import { useMe, useRuns, useStartRun, useUseCase } from '../../api/queries'
 import type { Me, UseCaseView } from '../../api/types'
 import { useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow, useSaveWorkflowSchedule } from '../../api/workflowQueries'
+import { stoppedActions } from '../home/home'
+import { RetryButton } from '../home/HomeItem'
 import { PageHead } from '../../shell/PageHead'
 import { AgentFace } from '../../ui/AgentFace'
+import { ActionMenu, type MenuItem } from '../../ui/ActionMenu'
 import { Button, ButtonLink } from '../../ui/Button'
 import { useFocusAfterReread } from '../../ui/focus'
 import { FROM_LIST, openedFromList } from '../../ui/fromList'
-import { IconChevronLeft, IconPause, IconPlay, IconTrash } from '../../ui/icons'
+import { IconAlert, IconCheck, IconChevronLeft, IconLock, IconPause, IconPencil, IconPlay, IconTrash, type Icon } from '../../ui/icons'
 import { Toast, type ToastMessage } from '../../ui/Toast'
 import { ScheduleForm, useEditorThatRefocusesItsOpener, type SaveSchedule } from '../software/Schedule'
 import { useArrivalScroll } from './arrival'
@@ -21,11 +24,14 @@ import { RecentRuns } from './RecentRuns'
 import { StatusPills, useChanges } from './Status'
 import {
   agentsOf,
+  bannerOf,
   changeProblem,
   changeWords,
   controlsOf,
+  deleteWords,
   heldNote,
   mayChangeSchedule,
+  menuActionsOf,
   nextRunWords,
   placeOf,
   PLACES_IN_PAGE_ORDER,
@@ -33,7 +39,6 @@ import {
   pressRunNow,
   REFRESH_MS,
   rereadWhenOutOfDate,
-  rowAction,
   runFact,
   runsOf,
   scheduleSaver,
@@ -42,6 +47,7 @@ import {
   viewerOf,
   whenWords,
   workflowPath,
+  type Banner,
   type Place,
 } from './workflow'
 import styles from './Workflows.module.css'
@@ -64,14 +70,25 @@ function BackToList() {
   )
 }
 
-function When({ useCase }: { useCase: UseCaseView }) {
+function Schedule({ useCase, now, change }: { useCase: UseCaseView; now: Date; change: ReactNode }) {
   const { words, small } = whenWords(useCase)
+  const next = heldNote(useCase) ?? nextRunWords(useCase, now)
+  const changes = useChanges(next)
   return (
-    <dd>
-      {words}
-      <small>{small}</small>
-      {useCase.schedule ? <small>Set by {useCase.schedule.owner_name}.</small> : null}
-    </dd>
+    <div>
+      <dt>Schedule</dt>
+      <dd>
+        {words}
+        <small>{small}</small>
+        {useCase.schedule ? <small>Set by {useCase.schedule.owner_name}.</small> : null}
+        <small>
+          <span key={changes} className={changes > 0 ? styles['changed'] : undefined}>
+            Next run: {next}
+          </span>
+        </small>
+      </dd>
+      {change ? <dd className={styles['rowAction']}>{change}</dd> : null}
+    </div>
   )
 }
 
@@ -100,23 +117,10 @@ export function ScheduleChangePanel({ useCase, now, onSaved, onDone }: PanelProp
   )
 }
 
-function NextRun({ useCase, now }: { useCase: UseCaseView; now: Date }) {
-  const words = heldNote(useCase) ?? nextRunWords(useCase, now)
-  const changes = useChanges(words)
-  return (
-    <dd>
-      <span key={changes} className={changes > 0 ? styles['changed'] : undefined}>
-        {words}
-      </span>
-    </dd>
-  )
-}
-
 function Steps({ useCase }: { useCase: UseCaseView }) {
-  const headingId = useId()
   return (
-    <section className={styles['panel']} aria-labelledby={headingId}>
-      <h2 id={headingId}>What it does</h2>
+    <section>
+      <h3>What it does</h3>
       <ol className={styles['steps']}>
         {useCase.plan.map((block) => {
           const tag = stepTag(block.kind)
@@ -137,15 +141,94 @@ function Steps({ useCase }: { useCase: UseCaseView }) {
   )
 }
 
+function Technical({ useCase, paused }: { useCase: UseCaseView; paused: boolean }) {
+  return (
+    <details className={styles['tech']}>
+      <summary>Technical details</summary>
+      <div className={styles['techBody']}>
+        <Steps useCase={useCase} />
+        <section>
+          <h3>Agents</h3>
+          <span className={styles['chips']}>
+            {agentsOf(useCase).map((agent) => (
+              <Link key={agent.to} to={agent.to} state={FROM_LIST} className={styles['chip']}>
+                <AgentFace id={agent.face} display={agent.name} size={28} state={paused ? 'stopped' : 'idle'} />
+                {agent.name}
+              </Link>
+            ))}
+          </span>
+        </section>
+      </div>
+    </details>
+  )
+}
+
+const BANNER_ICON: Record<Banner['tone'], Icon | null> = { ok: IconCheck, wait: IconLock, bad: IconAlert, off: IconPause, new: null }
+
+interface BannerViewProps {
+  readonly banner: Banner
+  readonly resuming: boolean
+  readonly onResume: () => void
+}
+
+interface ButtonProps {
+  readonly action: NonNullable<Banner['action']>
+  readonly resuming: boolean
+  readonly onResume: () => void
+  readonly describedBy: string
+}
+
+function BannerButton({ action, resuming, onResume, describedBy }: ButtonProps) {
+  switch (action.kind) {
+    case 'resume':
+      return (
+        <Button variant="primary" icon={IconPlay} data-place="switch" loading={resuming} onClick={onResume}>
+          Resume
+        </Button>
+      )
+    case 'decide':
+      return (
+        <ButtonLink to={`/runs/${action.runId}`} variant="primary">
+          Review and decide
+        </ButtonLink>
+      )
+    case 'stopped': {
+      const [first] = stoppedActions(action.runId, action.retryable)
+      if (first?.kind === 'retry') return <RetryButton runId={first.runId} label={first.label} primary describedBy={describedBy} />
+      return (
+        <ButtonLink to={`/runs/${action.runId}`} variant="primary">
+          {first?.kind === 'open' ? first.label : 'See why it stopped'}
+        </ButtonLink>
+      )
+    }
+  }
+}
+
+/** One sentence on the state and the one action that moves it on. The tone is also in the words, never in colour alone. */
+function StatusBanner({ banner, resuming, onResume }: BannerViewProps) {
+  const Mark = BANNER_ICON[banner.tone]
+  const { action } = banner
+  const textId = useId()
+  return (
+    <div className={styles['banner']} data-tone={banner.tone}>
+      <span className={styles['bannerMark']}>{Mark ? <Mark size={20} /> : null}</span>
+      <p id={textId}>{banner.text}</p>
+      {action ? <BannerButton action={action} resuming={resuming} onResume={onResume} describedBy={textId} /> : null}
+    </div>
+  )
+}
+
 interface DeleteDialogProps {
   readonly name: string
+  /** Null until the runs have loaded, when the dialog says nothing about them. */
+  readonly pastRuns: number | null
   readonly busy: boolean
   readonly problem: string | null
   readonly onClose: () => void
   readonly onConfirm: () => void
 }
 
-function DeleteDialog({ name, busy, problem, onClose, onConfirm }: DeleteDialogProps) {
+function DeleteDialog({ name, pastRuns, busy, problem, onClose, onConfirm }: DeleteDialogProps) {
   const dialog = useRef<HTMLDialogElement>(null)
   const cancel = useRef<HTMLButtonElement>(null)
   const titleId = useId()
@@ -155,17 +238,32 @@ function DeleteDialog({ name, busy, problem, onClose, onConfirm }: DeleteDialogP
     if (element && !element.open) element.showModal()
     cancel.current?.focus()
   }, [])
+  // The dialog's own close event arrives in a later task, after the next key press may have opened the menu behind it. So Escape and Cancel close it here and tell the page at once.
+  const finish = () => {
+    dialog.current?.close()
+    onClose()
+  }
   return (
-    <dialog ref={dialog} className={styles['dialog']} role="alertdialog" aria-labelledby={titleId} aria-describedby={textId} onClose={onClose}>
+    <dialog
+      ref={dialog}
+      className={styles['dialog']}
+      role="alertdialog"
+      aria-labelledby={titleId}
+      aria-describedby={textId}
+      onCancel={(event) => {
+        event.preventDefault()
+        finish()
+      }}
+    >
       <h2 id={titleId}>Delete {name}?</h2>
-      <p id={textId}>It stops running and leaves Workflows. Its past runs stay in the record.</p>
+      <p id={textId}>{deleteWords(name, pastRuns)}</p>
       {problem ? (
         <p className={styles['problem']} role="alert">
           {problem}
         </p>
       ) : null}
       <div className={styles['btns']}>
-        <Button ref={cancel} onClick={() => dialog.current?.close()}>
+        <Button ref={cancel} onClick={finish}>
           Cancel
         </Button>
         <Button variant="danger-outline" icon={IconTrash} loading={busy} onClick={onConfirm}>
@@ -213,28 +311,46 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const reread = useRereadWorkflow()
   const changes = useLatch()
   const rereadIfOutOfDate = rereadWhenOutOfDate(id, onReread, reread)
-  const runNow = useRunNow(id, rereadIfOutOfDate('run'))
-  const deleteButton = useRef<HTMLButtonElement>(null)
+  const runNow = useRunNow(id, rereadIfOutOfDate('more'))
+  const moreButton = useRef<HTMLButtonElement>(null)
   const { editing: changingSchedule, opener: scheduleOpener, open: openSchedule, close: closeSchedule } = useEditorThatRefocusesItsOpener()
+  const scheduleFromMenu = useRef(false)
   const [asking, setAsking] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const [deleteProblem, setDeleteProblem] = useState<string | null>(null)
   const [said, setSaid] = useState<Said | null>(null)
+  const switchedTo = useRef<UseCaseView['state'] | null>(null)
   useArrivalScroll()
+
+  // A form the menu opened hands focus back to the menu button. The hook that closed it has already focused the form's own opener, so this runs after it.
+  useEffect(() => {
+    if (changingSchedule || !scheduleFromMenu.current) return
+    scheduleFromMenu.current = false
+    moreButton.current?.focus()
+  }, [changingSchedule])
 
   const recent = runsOf(runs.data ?? [], id)
   const latest = recent[0] ?? null
   const fact = latest ? runFact(latest, nameOf) : null
-  const action = rowAction(latest, viewer)
   const paused = useCase.state === 'paused'
   const controls = controlsOf(useCase, viewer)
-  const onOff = controls.find((control) => control === 'pause' || control === 'resume')
+  const menuActions = menuActionsOf(useCase, viewer)
+  const mayPause = controls.includes('pause')
+  const banner = bannerOf({ useCase, latest, viewer, now, nameOf })
+
+  // The control that took the press leaves the page, so focus follows to its replacement: Resume in the banner, or Pause in the header.
+  useEffect(() => {
+    if (switchedTo.current !== useCase.state) return
+    switchedTo.current = null
+    document.querySelector<HTMLElement>('main [data-place="switch"]')?.focus()
+  })
 
   function pauseOrResume(what: 'pause' | 'resume') {
     pressChange(changes, (outcome) => move.mutate({ move: what, useCaseId: id }, outcome), {
       onSuccess: (view: UseCaseView) => {
         setProblem(null)
         runNow.reset()
+        switchedTo.current = view.state
         setSaid((before) => ({ id: (before?.id ?? 0) + 1, text: changeWords(what, view, now) }))
       },
       onError: (error) => {
@@ -248,14 +364,51 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
     pressChange(changes, (outcome) => removal.mutate(id, outcome), {
       onSuccess: () => void navigate('/workflows', { state: { deleted: { id, name: useCase.name } } }),
       onError: (error) => {
-        rereadIfOutOfDate('delete')(error)
+        rereadIfOutOfDate('more')(error)
         setDeleteProblem(changeProblem('delete', useCase.name, error, words))
       },
     })
   }
 
+  const items: MenuItem[] = menuActions.map((action): MenuItem => {
+    switch (action) {
+      case 'run':
+        return { key: 'run', label: 'Run now', icon: IconPlay, onSelect: runNow.press }
+      case 'schedule':
+        return { key: 'schedule', label: useCase.schedule ? 'Change schedule' : 'Set a schedule', icon: IconPencil, onSelect: () => {
+            scheduleFromMenu.current = true
+            openSchedule()
+          },
+        }
+      case 'delete':
+        return {
+          key: 'delete',
+          label: 'Delete',
+          icon: IconTrash,
+          danger: true,
+          onSelect: () => {
+            setDeleteProblem(null)
+            setAsking(true)
+          },
+        }
+    }
+  })
+
   const message: ToastMessage | null = said ? { id: said.id, text: said.text } : null
-  const runNowVariant = action ? 'secondary' : 'primary'
+  const changeSchedule =
+    mayChangeSchedule(useCase, viewer) && !changingSchedule ? (
+      <Button
+        ref={scheduleOpener}
+        data-place="schedule"
+        onClick={() => {
+          scheduleFromMenu.current = false
+          openSchedule()
+        }}
+      >
+        {useCase.schedule ? 'Change' : 'Set'}
+        <span className="visually-hidden"> schedule</span>
+      </Button>
+    ) : null
   return (
     <>
       <BackToList />
@@ -265,97 +418,47 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           <h1 tabIndex={-1}>{useCase.name}</h1>
           <p>{useCase.instruction}</p>
         </div>
-        <div className={styles['btns']}>
-          {action ? (
-            <ButtonLink to={`/runs/${action.runId}`} variant="primary">
-              {action.kind === 'decide' ? 'Review and decide' : 'See why it stopped'}
-            </ButtonLink>
-          ) : null}
-          {controls.includes('run') ? (
-            <Button variant={runNowVariant} data-place={placeOf('run')} loading={runNow.pending} onClick={runNow.press}>
-              Run now
-            </Button>
-          ) : null}
-        </div>
+        {mayPause || items.length > 0 ? (
+          <div className={styles['btns']}>
+            {mayPause ? (
+              <Button icon={IconPause} data-place={placeOf('pause')} loading={move.isPending} onClick={() => pauseOrResume('pause')}>
+                Pause
+              </Button>
+            ) : null}
+            {items.length > 0 ? <ActionMenu items={items} buttonRef={moreButton} busy={runNow.pending} place={placeOf('run')} /> : null}
+          </div>
+        ) : null}
       </div>
+      <StatusBanner banner={banner} resuming={move.isPending} onResume={() => pauseOrResume('resume')} />
       {runNow.error ? (
         <p className={styles['problem']} role="alert">
           {words(runNow.error)}
         </p>
-      ) : null}
-      {controls.length > 0 ? (
-        <div className={styles['btns']}>
-          {mayChangeSchedule(useCase, viewer) && !changingSchedule ? (
-            <Button ref={scheduleOpener} data-place="schedule" onClick={openSchedule}>
-              {useCase.schedule ? 'Change schedule' : 'Set a schedule'}
-            </Button>
-          ) : null}
-          {onOff ? (
-            <Button icon={onOff === 'resume' ? IconPlay : IconPause} data-place={placeOf(onOff)} loading={move.isPending} onClick={() => pauseOrResume(onOff)}>
-              {onOff === 'resume' ? 'Resume' : 'Pause'}
-            </Button>
-          ) : null}
-          {controls.includes('delete') ? (
-            <Button
-              ref={deleteButton}
-              data-place={placeOf('delete')}
-              variant="danger-outline"
-              icon={IconTrash}
-              onClick={() => {
-                setDeleteProblem(null)
-                setAsking(true)
-              }}
-            >
-              Delete
-            </Button>
-          ) : null}
-        </div>
       ) : null}
       {problem ? (
         <p className={styles['problem']} role="alert">
           {problem}
         </p>
       ) : null}
-      <dl className={styles['facts']}>
+      <dl className={styles['factrows']}>
+        <Schedule useCase={useCase} now={now} change={changeSchedule} />
         <div>
-          <dt>When</dt>
-          <When useCase={useCase} />
-        </div>
-        <div>
-          <dt>Next run</dt>
-          <NextRun useCase={useCase} now={now} />
-        </div>
-        <div>
-          <dt>Who approves</dt>
+          <dt>Approval</dt>
           <dd>
             {WHO_APPROVES}
             <small>Owned by {nameOf(useCase.owner)}.</small>
-          </dd>
-        </div>
-        <div className={styles['wide']}>
-          <dt>Agents</dt>
-          <dd>
-            <span className={styles['chips']}>
-              {agentsOf(useCase).map((agent) => (
-                <Link key={agent.to} to={agent.to} state={FROM_LIST} className={styles['chip']}>
-                  <AgentFace id={agent.face} display={agent.name} size={28} state={paused ? 'stopped' : 'idle'} />
-                  {agent.name}
-                </Link>
-              ))}
-            </span>
           </dd>
         </div>
       </dl>
       {changingSchedule && mayChangeSchedule(useCase, viewer) ? (
         <ScheduleChangePanel useCase={useCase} now={now} onSaved={(text) => setSaid((before) => ({ id: (before?.id ?? 0) + 1, text }))} onDone={closeSchedule} />
       ) : null}
-      <div className={styles['body']}>
-        <Steps useCase={useCase} />
+      <div className={styles['stack']}>
         {runs.data ? (
           <RecentRuns runs={recent} now={now} nameOf={nameOf} firstRun={useCase.next_run_at && !paused ? nextRunWords(useCase, now) : null} />
         ) : (
           <section className={styles['panel']}>
-            <h2>Recent runs</h2>
+            <h2>Recent activity</h2>
             {runs.isError ? (
               <p>
                 The runs could not be loaded. <Button onClick={() => void runs.refetch()}>Try again</Button>
@@ -367,15 +470,17 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
             )}
           </section>
         )}
+        <Technical useCase={useCase} paused={paused} />
       </div>
       {asking ? (
         <DeleteDialog
           name={useCase.name}
+          pastRuns={runs.data ? recent.length : null}
           busy={removal.isPending}
           problem={deleteProblem}
           onClose={() => {
             setAsking(false)
-            deleteButton.current?.focus()
+            moreButton.current?.focus()
           }}
           onConfirm={confirmDelete}
         />

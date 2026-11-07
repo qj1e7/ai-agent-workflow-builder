@@ -4,13 +4,14 @@ import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import agentUseCase from '../../../../contracts/fixtures/cards/use-case.json'
 import watchlistUseCase from '../../../../contracts/fixtures/builder/use-case.json'
+import troubleshooting from '../../../../contracts/fixtures/troubleshooting/failure.json'
 import failed from '../../../../contracts/fixtures/views/failure.final.json'
 import done from '../../../../contracts/fixtures/views/success.final.json'
 import { App } from '../../App'
 import { ApiError } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { Me, RunView, UseCaseView } from '../../api/types'
+import type { Me, RunView, TroubleshootingOut, UseCaseView } from '../../api/types'
 import { formatterFactory } from './workflow'
 import { ScheduleChangePanel, WHO_APPROVES } from './WorkflowPage'
 
@@ -26,9 +27,10 @@ interface Setup {
   readonly useCase?: UseCaseView | Error
   readonly runs?: RunView[]
   readonly id?: string
+  readonly advice?: TroubleshootingOut
 }
 
-function render({ me = ALICE, useCase = AGENTS, runs = [], id }: Setup = {}): string {
+function render({ me = ALICE, useCase = AGENTS, runs = [], id, advice }: Setup = {}): string {
   const session = createDevSession(null)
   const scope = session.cacheScope()
   const useCaseId = id ?? (useCase instanceof Error ? 'uc_gone' : useCase.use_case_id)
@@ -36,6 +38,8 @@ function render({ me = ALICE, useCase = AGENTS, runs = [], id }: Setup = {}): st
   queryClient.setQueryData(['me', scope], me)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB])
   queryClient.setQueryData(['runs', scope], runs)
+  const stopped = runs.find((run) => run.use_case_id === useCaseId && run.state === 'failed')
+  if (advice && stopped?.state === 'failed') queryClient.setQueryData(['troubleshoot', scope, stopped.run_id, stopped.last_seq], advice)
   const key = ['use-case', scope, useCaseId]
   if (useCase instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: key }).setState({ status: 'error', error: useCase, fetchStatus: 'idle' })
   else queryClient.setQueryData(key, useCase)
@@ -67,8 +71,10 @@ const mainOf = (html: string) => /<main\b[\s\S]*<\/main>/.exec(html)?.[0] ?? ''
 const buttons = (html: string) => [...mainOf(html).matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((m) => text(m[1] ?? ''))
 const factOf = (html: string, term: string) => text(new RegExp(`<dt>${term}</dt><dd>([\\s\\S]*?)</dd>`).exec(html)?.[1] ?? '')
 
-/** The When section's words, without who set it. */
-const whenOf = (html: string) => factOf(html, 'When').replace(/ Set by \w+\.$/, '')
+/** The Schedule row's words, without who set it and without the next run. */
+const whenOf = (html: string) => factOf(html, 'Schedule').replace(/ Next run: .*$/, '').replace(/ Set by \w+\.$/, '')
+/** The next run, said in the Schedule row. */
+const nextOf = (html: string) => /Next run: (.*)$/.exec(factOf(html, 'Schedule'))?.[1] ?? ''
 
 describe('a workflow page', () => {
   it('shows its name, what it does, and whether it is on', () => {
@@ -81,22 +87,22 @@ describe('a workflow page', () => {
   it('says when it runs, when it runs next, and who may approve', () => {
     const html = render()
     expect(whenOf(html)).toBe('No schedule An Operator starts it with Run now.')
-    expect(factOf(html, 'Next run')).toBe('Not scheduled')
-    expect(factOf(html, 'Who approves')).toBe(`${WHO_APPROVES} Owned by Alice.`)
+    expect(nextOf(html)).toBe('Not scheduled')
+    expect(factOf(html, 'Approval')).toBe(`${WHO_APPROVES} Owned by Alice.`)
     expect(WHO_APPROVES).toBe('Any Approver except the people who start or own it')
   })
 
   it('gives its schedule’s day and time, and its next run', () => {
     const html = render({ useCase: { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice' } } })
     expect(whenOf(html)).toBe('Every Monday at 9:00 Singapore time (SGT).')
-    expect(factOf(html, 'Next run')).toBe('Mon 9 Nov, 9:00')
+    expect(nextOf(html)).toBe('Mon 9 Nov, 9:00')
   })
 
-  it('for a London schedule, gives the next run in London time and says so, under When, in Next run and in Recent runs', () => {
+  it('for a London schedule, gives the next run in London time and says so, in the Schedule row and in Recent activity', () => {
     const london: UseCaseView = { ...AGENTS, next_run_at: '2026-11-04T09:00:00Z', schedule: { day: 'every_day', at: '09:00', time_zone: 'Europe/London', owner_name: 'Alice' } }
     const html = render({ useCase: london })
     expect(whenOf(html)).toBe('Every day at 9:00 London time.')
-    expect(factOf(html, 'Next run')).toBe('Today, 9:00 London time')
+    expect(nextOf(html)).toBe('Today, 9:00 London time')
     expect(text(mainOf(html))).toContain('No runs yet. The first one is Today, 9:00 London time.')
   })
 
@@ -104,7 +110,7 @@ describe('a workflow page', () => {
     const london: UseCaseView = { ...AGENTS, next_run_at: '2026-11-04T09:00:00Z', schedule: { day: 'every_day', at: '09:00', time_zone: 'Europe/London', owner_name: 'Alice' } }
     const ran = { ...(done as RunView), use_case_id: london.use_case_id, started_at: '2026-11-03T09:00:00Z' }
     const html = render({ useCase: london, runs: [ran] })
-    expect(factOf(html, 'Next run')).toBe('Today, 9:00 London time')
+    expect(nextOf(html)).toBe('Today, 9:00 London time')
     expect(text(mainOf(html))).toContain('Tue 3 Nov, 17:00 Done.')
   })
 
@@ -117,35 +123,35 @@ describe('a workflow page', () => {
     try {
       const html = render({ useCase: { ...AGENTS, next_run_at: '2026-11-04T07:00:00Z', schedule: { day: 'every_day', at: '09:00', time_zone: 'Europe/Kyiv', owner_name: 'Alice' } } })
       expect(whenOf(html)).toBe('Every day at 9:00 Kyiv time.')
-      expect(factOf(html, 'Next run')).toBe('Today, 15:00 Singapore time')
+      expect(nextOf(html)).toBe('Today, 15:00 Singapore time')
       expect(text(mainOf(html))).toContain('The first one is Today, 15:00 Singapore time.')
     } finally {
       spy.mockRestore()
     }
   })
 
-  it('while paused, keeps its schedule in When and says Paused only in Next run', () => {
+  it('while paused, keeps its schedule in the Schedule row and says Paused only for the next run', () => {
     const html = render({ useCase: { ...AGENTS, state: 'paused', next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice' } } })
     expect(whenOf(html)).toBe('Every Monday at 9:00 Singapore time (SGT).')
-    expect(factOf(html, 'Next run')).toBe('Paused')
+    expect(nextOf(html)).toBe('Paused')
   })
 
-  it('while its schedule is held, keeps the schedule in When and says in Next run why it is not running', () => {
+  it('while its schedule is held, keeps the schedule in the Schedule row and says for the next run why it is not running', () => {
     const removed = render({ useCase: { ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: 'owner_removed' } } })
     const notOperator = render({ useCase: { ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: 'owner_not_an_operator' } } })
     expect(whenOf(removed)).toBe('Every Monday at 9:00 Singapore time (SGT).')
-    expect(factOf(removed, 'Next run')).toBe('Not running: Alice is no longer on the People list. An Operator can take it over by saving the schedule.')
-    expect(factOf(notOperator, 'Next run')).toBe('Not running: Alice can no longer run workflows. An Operator can take it over by saving the schedule.')
+    expect(nextOf(removed)).toBe('Not running: Alice is no longer on the People list. An Operator can take it over by saving the schedule.')
+    expect(nextOf(notOperator)).toBe('Not running: Alice can no longer run workflows. An Operator can take it over by saving the schedule.')
   })
 
   it('while paused and held, says Paused only, as the Software page does', () => {
     const html = render({ useCase: { ...AGENTS, state: 'paused', next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: 'owner_removed' } } })
-    expect(factOf(html, 'Next run')).toBe('Paused')
+    expect(nextOf(html)).toBe('Paused')
     expect(text(mainOf(html))).not.toContain('Not running')
   })
 
   it('names its agents, each opening its card', () => {
-    const agents = new RegExp('<dt>Agents</dt><dd>([\\s\\S]*?)</dd>').exec(render())?.[1] ?? ''
+    const agents = /<h3>Agents<\/h3>([\s\S]*?)<\/section>/.exec(render())?.[1] ?? ''
     expect([...agents.matchAll(/<a[^>]*href="([^"]+)"/g)].map((m) => m[1])).toEqual(['/agents/planner', '/agents/crd_version_checker'])
     expect(text(agents)).toBe('Planner Version checker')
   })
@@ -157,21 +163,38 @@ describe('a workflow page', () => {
     expect(said).toContain('Create Jira tickets Create a Jira ticket, written only after approval. Changes data, waits for a yes')
   })
 
-  it('gives an Operator Run now, Pause and Delete', () => {
-    expect(buttons(render())).toEqual(expect.arrayContaining(['Run now', 'Pause', 'Delete']))
+  it('gives an Operator Pause and a More actions button, and keeps Run now and Delete inside the closed menu', () => {
+    const html = render()
+    expect(buttons(html)).toEqual(expect.arrayContaining(['Pause', 'More actions']))
+    expect(buttons(html)).not.toContain('Run now')
+    expect(buttons(html)).not.toContain('Delete')
+    expect(mainOf(html)).toMatch(/<button[^>]*aria-haspopup="menu"[^>]*aria-expanded="false"[^>]*>More actions/)
+  })
+
+  it('orders the page by decision: purpose, status banner, schedule, approval, recent activity, then Technical details', () => {
+    const html = mainOf(render({ runs: [{ ...(done as RunView), use_case_id: 'uc_01JD0' }] }))
+    const at = (needle: string) => html.indexOf(needle)
+    const order = [at('<h1'), at('data-tone='), at('<dt>Schedule</dt>'), at('<dt>Approval</dt>'), at('Recent activity'), at('Technical details')]
+    expect(order.every((place) => place >= 0)).toBe(true)
+    expect(order).toEqual([...order].sort((a, b) => a - b))
+  })
+
+  it('keeps the steps and the agents folded under Technical details', () => {
+    const html = mainOf(render())
+    expect(html).toMatch(/<details[^>]*><summary>Technical details<\/summary>[\s\S]*What it does[\s\S]*<h3>Agents<\/h3>/)
+    expect(html).not.toMatch(/<details[^>]*\bopen\b/)
   })
 
   const SCHEDULED: UseCaseView = { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: null } }
 
-  it('puts Change schedule first in an Operator’s button row, or Set a schedule when there is none', () => {
-    const row = (html: string) => buttons(html).filter((label) => /schedule|Pause|Delete/.test(label))
-    expect(row(render({ useCase: SCHEDULED }))).toEqual(['Change schedule', 'Pause', 'Delete'])
-    expect(row(render())).toEqual(['Set a schedule', 'Pause', 'Delete'])
-    expect(factOf(render({ useCase: SCHEDULED }), 'When')).not.toContain('schedule')
+  it('puts the schedule change beside the Schedule row, as Change, or Set when there is none', () => {
+    expect(buttons(render({ useCase: SCHEDULED }))).toContain('Change schedule')
+    expect(buttons(render())).toContain('Set schedule')
+    expect(whenOf(render({ useCase: SCHEDULED }))).not.toContain('Change')
   })
 
-  it('says in When who set the schedule', () => {
-    expect(factOf(render({ useCase: SCHEDULED }), 'When')).toContain('Set by Carol.')
+  it('says in the Schedule row who set the schedule', () => {
+    expect(factOf(render({ useCase: SCHEDULED }), 'Schedule')).toContain('Set by Carol.')
   })
 
   it('shows an Approver who is not an Operator neither schedule control', () => {
@@ -188,16 +211,16 @@ describe('a workflow page', () => {
   it('tells everyone a held schedule can be taken over by saving it', () => {
     const held: UseCaseView = { ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: 'owner_removed' } }
     for (const me of [ALICE, BOB]) {
-      expect(factOf(render({ me, useCase: held }), 'Next run')).toContain('An Operator can take it over by saving the schedule.')
+      expect(nextOf(render({ me, useCase: held }))).toContain('An Operator can take it over by saving the schedule.')
     }
   })
 
   it('gives an Approver who may approve and the recent runs, but no manage buttons', () => {
     const html = render({ me: BOB, runs: [{ ...(done as RunView), use_case_id: 'uc_01JD0' }] })
-    expect(factOf(html, 'Who approves')).toContain(WHO_APPROVES)
-    expect(text(mainOf(html))).toContain('Recent runs')
+    expect(factOf(html, 'Approval')).toContain(WHO_APPROVES)
+    expect(text(mainOf(html))).toContain('Recent activity')
     expect(mainOf(html)).toContain('href="/runs/run_01JB8"')
-    expect(buttons(html).filter((label) => /Run now|Pause|Resume|Delete/.test(label))).toEqual([])
+    expect(buttons(html).filter((label) => /Run now|Pause|Resume|Delete|More actions/.test(label))).toEqual([])
   })
 
   it('while paused, offers Resume instead of Pause and Run now, and its next run reads Paused', () => {
@@ -205,16 +228,54 @@ describe('a workflow page', () => {
     expect(buttons(html)).toContain('Resume')
     expect(buttons(html)).not.toContain('Pause')
     expect(buttons(html)).not.toContain('Run now')
-    expect(factOf(html, 'Next run')).toBe('Paused')
+    expect(nextOf(html)).toBe('Paused')
     expect(mainOf(html)).toMatch(/data-life="paused"[^>]*>.*Paused<\/span>/)
   })
 
-  it('shows a stopped latest run, linking to it, and lets an Operator see why', () => {
+  it('shows a stopped latest run, linking to it', () => {
     const html = render({ runs: [{ ...(failed as RunView), use_case_id: 'uc_01JD0' }, { ...(done as RunView), use_case_id: 'uc_01JD0' }] })
     expect(mainOf(html)).toMatch(/data-tone="bad"[^>]*>.*Stopped<\/span>/)
     const first = /<li[^>]*data-run-id="([^"]+)"[^>]*data-state="([^"]+)"/.exec(html)
     expect([first?.[1], first?.[2]]).toEqual(['run_01JB9', 'failed'])
+  })
+
+  const bannerOfHtml = (html: string) => /<div[^>]*data-tone="bad"[\s\S]*?<\/(?:a|button)><\/div>/.exec(mainOf(html))?.[0] ?? ''
+  const stoppedRun = (change: object) => [{ ...(failed as RunView), ...change, use_case_id: 'uc_01JD0' }]
+
+  it('for a retryable stop, the banner’s one action is Retry the run', () => {
+    const banner = bannerOfHtml(render({ runs: stoppedRun({ retryable: true }) }))
+    expect(text(banner)).toBe('Stopped today at 10:14. An agent could not finish its work. Retry the run')
+    expect(banner).toMatch(/<button[^>]*>Retry the run<\/button>/)
+    expect(text(mainOf(render({ runs: stoppedRun({ retryable: true }) })))).not.toContain('See why it stopped')
+  })
+
+  it('for a stop that cannot be retried, the banner’s one action is See why it stopped', () => {
+    const html = render({ runs: stoppedRun({ retryable: false }) })
+    expect(text(bannerOfHtml(html))).toBe('Stopped today at 10:14. An agent could not finish its work. See why it stopped')
     expect(mainOf(html)).toMatch(/<a[^>]*href="\/runs\/run_01JB9"[^>]*>See why it stopped<\/a>/)
+    expect(text(mainOf(html))).not.toContain('Retry the run')
+  })
+
+  it('says the same words as the Workflows list, whatever the AI troubleshooter says', () => {
+    const advice = { ...(troubleshooting as TroubleshootingOut), answers: { ...(troubleshooting as TroubleshootingOut).answers, what_happened: 'GitHub did not answer three times.' } }
+    const html = render({ runs: stoppedRun({ reason: 'TimedOut' }), advice })
+    expect(text(bannerOfHtml(html))).toContain('A step took too long.')
+    expect(text(mainOf(html))).not.toContain('GitHub did not answer')
+    expect(text(mainOf(html))).not.toMatch(/write key/i)
+  })
+
+  it('gives an Approver the stop in words, with no action', () => {
+    const html = render({ me: BOB, runs: [{ ...(failed as RunView), use_case_id: 'uc_01JD0' }] })
+    expect(mainOf(html)).toMatch(/data-tone="bad"/)
+    expect(text(mainOf(html))).not.toMatch(/See why it stopped|Retry the run/)
+  })
+
+  it('while paused, holds Resume in the banner as the one primary action and has no Pause', () => {
+    const html = render({ useCase: { ...AGENTS, state: 'paused' } })
+    const banner = /<div[^>]*data-tone="off"[\s\S]*?<\/button><\/div>/.exec(mainOf(html))?.[0] ?? ''
+    expect(text(banner)).toBe('Paused. It won’t run until you resume it. Resume')
+    expect(buttons(html)).not.toContain('Pause')
+    expect(text(mainOf(html)).match(/Resume/g)).toHaveLength(1)
   })
 
   it('goes back to the list', () => {

@@ -24,7 +24,7 @@ export function RecentRuns({ runs, now, nameOf, firstRun }: RecentRunsProps) {
   const older = runs.length - shown.length
   return (
     <section className={styles['panel']} aria-labelledby={headingId}>
-      <h2 id={headingId}>Recent runs</h2>
+      <h2 id={headingId}>Recent activity</h2>
       {runs.length === 0 ? (
         <p className="muted">No runs yet.{firstRun ? ` The first one is ${firstRun}.` : ''}</p>
       ) : (
