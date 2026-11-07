@@ -88,6 +88,14 @@ class FakeWatchlist:
         return NoWatchlist()
 
 
+class FakeTeamRequests:
+    async def create(self, *args: object) -> object:
+        raise AssertionError("not asked in these tests")
+
+    async def reply(self, *args: object) -> None:
+        return None
+
+
 class FakeTicker:
     async def tick(self) -> list[Any]:
         return []
@@ -122,6 +130,7 @@ def app_with(
     app.state.activity_log = log or FakeLog()
     app.state.practice_jira = FakeMockJira()
     app.state.watchlist = FakeWatchlist()
+    app.state.team_requests = FakeTeamRequests()
     app.state.schedule_ticker = FakeTicker()
     return app
 

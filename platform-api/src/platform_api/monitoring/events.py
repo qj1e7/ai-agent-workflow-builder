@@ -148,6 +148,11 @@ class RunRetriedData(WireModel):
     attempt: int
 
 
+class SupportReportedData(WireModel):
+    request_id: str
+    reported_by: UserId
+
+
 class _Envelope(WireModel):
     run_id: RunId
     seq: int = Field(ge=1)
@@ -261,6 +266,11 @@ class RunRetried(_Envelope):
     data: RunRetriedData
 
 
+class SupportReported(_Envelope):
+    kind: Literal["support_reported"] = "support_reported"
+    data: SupportReportedData
+
+
 type ActivityEvent = Annotated[
     RunCreated
     | LegDispatched
@@ -282,7 +292,8 @@ type ActivityEvent = Annotated[
     | RunSucceeded
     | RunRejected
     | RunFailed
-    | RunRetried,
+    | RunRetried
+    | SupportReported,
     Field(discriminator="kind"),
 ]
 

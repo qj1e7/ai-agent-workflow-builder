@@ -314,6 +314,7 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     case 'step_started':
     case 'step_finished':
     case 'step_retried':
+    case 'support_reported':
     case 'opaque':
       return model
   }

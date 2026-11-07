@@ -93,3 +93,7 @@ The team lead accepted these answers on 7 Nov. Questions 1 and 3 still need the 
 - **The glossary gains "Team request".**
 - **Plan N14 builds the store,** the two routes and the Settings list. Plan N15 links Report to support from the run page.
 - **Nothing here touches the approval gate or the safety checker.**
+
+## Note, 7 Nov 2026
+
+The list of a person's requests and their updates sits under Following up on Workflows, as prototype version 4 shows, and not in a Settings list. Plan N14 builds the store and the two routes. Plan item N9b builds the Following up section, and the Teams card's button opens `/workflows?request=<id>` so it can land on that request. The decisions above do not change.

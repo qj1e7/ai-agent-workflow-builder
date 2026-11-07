@@ -83,6 +83,7 @@ class Settings:
     callback_signing_key: str
     teams_channel: str
     teams_webhook_url: str | None = None
+    teams_requests_webhook_url: str | None = None
     settings_encryption_key: str | None = None
     first_people: FirstPeople | None = None
     activity_reader: ActivityReader = "postgres"
@@ -148,14 +149,14 @@ def activity_reader_from_env(
             raise ConfigError(f"ACTIVITY_READER takes postgres or cosmos, not {other!r}.")
 
 
-def teams_webhook_from_env(env: Mapping[str, str]) -> str | None:
+def teams_webhook_from_env(env: Mapping[str, str], name: str = "TEAMS_WEBHOOK_URL") -> str | None:
     """A Teams Workflows webhook (ADR 0036). Unset keeps the practice copy. The address carries
     its own signature, so it comes from Key Vault and is never logged."""
-    url = env.get("TEAMS_WEBHOOK_URL", "").strip()
+    url = env.get(name, "").strip()
     if not url:
         return None
     if not url.startswith("https://") or len(url) <= len("https://"):
-        raise ConfigError("TEAMS_WEBHOOK_URL must be the https:// address Teams Workflows gave.")
+        raise ConfigError(f"{name} must be the https:// address Teams Workflows gave.")
     return url
 
 
@@ -267,6 +268,7 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         callback_signing_key=_required(env, "CALLBACK_SIGNING_KEY"),
         teams_channel=env.get("TEAMS_CHANNEL") or "CODESparks Ops",
         teams_webhook_url=teams_webhook_from_env(env),
+        teams_requests_webhook_url=teams_webhook_from_env(env, "TEAMS_REQUESTS_WEBHOOK_URL"),
         settings_encryption_key=env.get("SETTINGS_ENCRYPTION_KEY") or None,
         activity_reader=activity_reader_from_env(env, cosmos),
         cosmos=cosmos,

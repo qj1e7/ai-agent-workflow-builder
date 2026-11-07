@@ -271,6 +271,50 @@ def test_migration_0006_lets_a_draft_have_no_step_and_a_downgrade_gives_it_step_
         conn.execute("DELETE FROM builder.drafts")
 
 
+def test_migration_0007_keeps_team_requests_and_a_downgrade_drops_them(postgres: PostgresUrls):
+    tables = ["team_request_replies", "team_requests"]
+
+    def present(conn: psycopg.Connection) -> list[str]:
+        rows = conn.execute(
+            "SELECT table_name FROM information_schema.tables"
+            " WHERE table_schema = 'builder' AND table_name = ANY(%s) ORDER BY 1",
+            (tables,),
+        ).fetchall()
+        return [str(r[0]) for r in rows]
+
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        assert present(conn) == tables
+        conn.execute(
+            "INSERT INTO builder.team_requests (request_id, kind, about, note, asked_by,"
+            " asked_by_name, asked_at, idempotency_key, teams_post) VALUES ('trq_1',"
+            " 'ask_the_team', '{}', 'n', 'alice', 'Alice', now(), 'k', 'posted')"
+        )
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            conn.execute(
+                "INSERT INTO builder.team_requests (request_id, kind, about, note, asked_by,"
+                " asked_by_name, asked_at, idempotency_key, teams_post) VALUES ('trq_2',"
+                " 'support', '{}', 'n', 'alice', 'Alice', now(), 'k', 'posted')"
+            )
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute("UPDATE builder.team_requests SET status = 'done'")
+        downgrade("builder", postgres.owner, "0006")
+        assert present(conn) == []
+        upgrade("builder", postgres.owner)
+        assert present(conn) == tables
+        assert conn.execute("SELECT count(*) FROM builder.team_requests").fetchone() == (0,)
+    with psycopg.connect(postgres.contexts.builder) as builder:
+        builder.execute("SELECT count(*) FROM builder.team_request_replies")
+        builder.rollback()
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            builder.execute("DELETE FROM builder.team_requests")
+        builder.rollback()
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            builder.execute("UPDATE builder.team_requests SET note = 'changed'")
+        builder.rollback()
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            builder.execute("UPDATE builder.team_requests SET asked_by = 'bob'")
+
+
 def test_migration_0006_adds_the_people_tables_and_folds_the_model_history_into_them(
     postgres: PostgresUrls,
 ):

@@ -10,7 +10,7 @@ from fastapi import FastAPI
 
 from platform_api.app import create_app
 from platform_api.auth import DEV_PEOPLE
-from platform_api.builder import Builder, Home, Watchlist
+from platform_api.builder import Builder, Home, TeamRequests, Watchlist
 from platform_api.builder.cards import VERSION_CHECKER_ID
 from platform_api.orchestration import (
     AnyApprover,
@@ -18,6 +18,7 @@ from platform_api.orchestration import (
     ApprovalStep,
     Schedule,
     ScheduleBook,
+    TeamsPost,
 )
 from platform_api.orchestration.people import Person
 from platform_api.orchestration.people_store import People, PersonRow
@@ -60,9 +61,16 @@ EMPTY = {
     "waiting_on_others": [],
     "waiting_on_others_total": 0,
     "drafts": [],
+    "following_up": [],
+    "following_up_total": 0,
     "coming_up": None,
     "workflows": 0,
 }
+
+
+class NoTeams:
+    async def post(self, notice: object) -> TeamsPost:
+        return "no_channel"
 
 
 @dataclass
@@ -102,7 +110,9 @@ async def lab(postgres: PostgresUrls) -> AsyncIterator[Lab]:
         app.state.watchlist = watchlist
         app.state.orchestrator = h.orchestrator
         app.state.people = people
-        app.state.home = Home(builder, h.orchestrator, people)
+        requests = TeamRequests(h.db, NoTeams(), h.orchestrator, h.log, "http://localhost:8000")
+        app.state.team_requests = requests
+        app.state.home = Home(builder, h.orchestrator, people, requests)
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             yield Lab(h, app, client, people)
@@ -444,3 +454,84 @@ async def test_someone_signed_in_but_not_on_the_list_is_refused(lab: Lab):
 
     assert response.status_code == 403
     declared_status(lab.app, "GET", "/api/v1/home", response)
+
+
+async def ask(lab: Lab, user: str, body: dict[str, Any], key: str) -> dict[str, Any]:
+    response = await lab.client.post(
+        "/api/v1/team-requests", json=body, headers={"X-Dev-User": user, "Idempotency-Key": key}
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+async def test_following_up_shows_a_persons_own_requests_with_the_latest_reply(lab: Lab):
+    use_case_id = await workflow(lab)
+    run_id = await stopped_run(lab, use_case_id)
+    report = await ask(
+        lab, "alice", {"kind": "support", "about": {"run_id": run_id}, "note": "It stopped."}, "a"
+    )
+    ask_the_team = await ask(
+        lab,
+        "alice",
+        {"kind": "ask_the_team", "about": {"capability": "email.send"}, "note": "By email."},
+        "b",
+    )
+    await ask(
+        lab,
+        "bob",
+        {"kind": "ask_the_team", "about": {"capability": "chat.post"}, "note": "Bob's."},
+        "c",
+    )
+    await lab.client.post(
+        f"/api/v1/team-requests/{report['request_id']}/replies",
+        json={"text": "Fixed in the next release."},
+        headers={"X-Dev-User": "bob"},
+    )
+
+    mine = await lab.home("alice")
+
+    assert mine["following_up_total"] == 2
+    assert [(i["request_id"], i["kind"], i["status"]) for i in mine["following_up"]] == [
+        (ask_the_team["request_id"], "ask_the_team", "open"),
+        (report["request_id"], "support", "answered"),
+    ]
+    assert mine["following_up"][0]["latest_reply"] is None
+    reply = mine["following_up"][1]["latest_reply"]
+    assert (reply["replied_by_name"], reply["text"]) == ("Bob", "Fixed in the next release.")
+    assert mine["following_up"][1]["about"] == {"run_id": run_id}
+    assert [i["note"] for i in (await lab.home("bob"))["following_up"]] == ["Bob's."]
+    assert (await lab.home("erin"))["following_up"] == []
+
+
+async def test_following_up_shows_at_most_ten_and_counts_them_all(lab: Lab):
+    for n in range(12):
+        await ask(
+            lab,
+            "alice",
+            {"kind": "ask_the_team", "about": {"capability": "x"}, "note": f"n{n}"},
+            f"k{n}",
+        )
+
+    home = await lab.home("alice")
+
+    assert (len(home["following_up"]), home["following_up_total"]) == (10, 12)
+    assert home["following_up"][0]["note"] == "n11"
+
+
+async def test_a_done_request_leaves_following_up_after_30_days(lab: Lab):
+    made = await ask(
+        lab, "alice", {"kind": "ask_the_team", "about": {"capability": "x"}, "note": "n"}, "k"
+    )
+    await lab.client.post(
+        f"/api/v1/team-requests/{made['request_id']}/replies",
+        json={"text": "No.", "status": "done"},
+        headers={"X-Dev-User": "bob"},
+    )
+    assert (await lab.home("alice"))["following_up_total"] == 1
+
+    async with lab.h.db.transaction("builder") as uow:
+        await uow.conn.execute(
+            "UPDATE builder.team_requests SET done_at = %s", (uow.now - timedelta(days=31),)
+        )
+
+    assert (await lab.home("alice"))["following_up"] == []
