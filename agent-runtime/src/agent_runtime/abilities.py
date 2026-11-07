@@ -871,13 +871,30 @@ def _schedule_row(row: Clause, reader: _Reader) -> str | None:
     return None
 
 
+OWN_REQUESTS: Final = {"merge": "gitlab", "pull": "github"}
+"""Whose a request is when no system is named: merge requests are GitLab's, pull requests
+GitHub's."""
+
+
+def _own_requests(clause: Clause) -> str | None:
+    """The system whose requests a clause names without naming the system, as in "merge
+    requests merged without approval"."""
+    if any(w.system is not None for w in clause):
+        return None
+    for word, after in zip(clause, clause[1:], strict=False):
+        if word.low in OWN_REQUESTS and after.low in ("request", "requests"):
+            return OWN_REQUESTS[word.low]
+    return None
+
+
 def _its_own_tickets(clause: Clause, reaches: frozenset[str]) -> str | None:
     for word, after in zip(clause, clause[1:], strict=False):
         system = word.system
         names_its_own = after.low in TICKETS or after.low in ("merge", "pull")
         if system in TICKET_SYSTEMS and system not in reaches and names_its_own:
             return SYSTEMS[system]
-    return None
+    own = _own_requests(clause)
+    return SYSTEMS[own] if own is not None and own not in reaches else None
 
 
 def _read_from(clause: Clause, reaches: frozenset[str]) -> str | None:
@@ -904,6 +921,9 @@ def _look_for_row(row: Clause, reader: _Reader) -> str | None:
     if not clauses:
         return None
     first, *later = clauses
+    own = _own_requests(first)
+    if own is not None and own not in REACHED:
+        return f"read {SYSTEMS[own]}"
     at = _action_at(first)
     if at is not None:
         found = reader.verb(first[at])
@@ -995,6 +1015,20 @@ def _not_a_place(part: Clause, reader: _Reader, places: frozenset[str]) -> str |
     return f"put results in {_cant_phrase(lead, reader)}"
 
 
+A_YES_WORDS: Final = words("yes approval approvals approver approvers approve approves approved")
+AFTER: Final = words("after once when")
+
+
+def _place_only(part: Clause) -> Clause:
+    """A part of where it goes without what only describes the ticket or the platform's own
+    step: a relative clause, as in "one new Jira ticket that lists them", and an "after an
+    Approver says yes" clause, which every write goes through anyway."""
+    if part and part[0].low in AFTER and any(w.low in A_YES_WORDS for w in part):
+        return ()
+    end = next((i for i, w in enumerate(part) if i and w.low in RELATIVES), len(part))
+    return part[:end]
+
+
 def _where_row(row: Clause, reader: _Reader) -> str | None:
     at = _action_at(row)
     if at is None:
@@ -1024,7 +1058,7 @@ def _where_row(row: Clause, reader: _Reader) -> str | None:
         else:
             parts[-1].append(word)
     for number, words_of_part in enumerate(parts):
-        part = tuple(words_of_part)
+        part = _place_only(tuple(words_of_part))
         if not part or _is_place(part, places):
             continue
         if number == 0 and verb_at is not None and part[0].low not in TO_PLACE | IN_PLACE:
@@ -1101,10 +1135,17 @@ def why_not(kind: RowKind, text: str, abilities: tuple[Ability, ...] = ABILITIES
     if what is not None:
         return f"I can't {what} yet. {reader.can()}"
     field = unread_field_in(text) if kind in ("look_for", "do") else None
-    if field is not None:
-        verb = "set" if kind == "do" and _sets_on_a_new_ticket(row, reader) else "tell"
-        return f"I can't {verb} {field.plain} yet. {reader.can()}"
-    return None
+    return None if field is None else why_not_the_field(kind, text, field)
+
+
+def why_not_the_field(kind: RowKind, text: str, field: TicketField) -> str:
+    """Why the platform can't do a part that reads or sets `field`, in the words `why_not` uses:
+    a field put on the new ticket is one it can't set, one read from the found tickets one it
+    can't tell."""
+    reader = _reader(ABILITIES)
+    row = _tokens(text)
+    verb = "set" if kind == "do" and _sets_on_a_new_ticket(row, reader) else "tell"
+    return f"I can't {verb} {field.plain} yet. {reader.can()}"
 
 
 def _sets_on_a_new_ticket(row: Clause, reader: _Reader) -> bool:
@@ -1137,31 +1178,72 @@ NOT_SOFTWARE: Final = words(
 every name against a real project."""
 
 
+type TicketFieldName = Literal[
+    "assignee",
+    "issue_type",
+    "status",
+    "created",
+    "updated",
+    "done",
+    "component",
+    "priority",
+    "label",
+    "epic",
+    "sprint",
+    "due_date",
+    "reporter",
+    "fix_version",
+    "story_points",
+    "severity",
+    "other",
+]
+"""The closed set of ticket fields the model names on a row it read. The model reads which
+field a request filters by, in whatever words; this table decides whether the agents can read
+it. N6's registry entry `jira.find_by_detail` should derive from the same table."""
+
+
 @dataclass(frozen=True)
 class TicketField:
     """A field of a Jira ticket that a request can name. `read_as` is the `JiraTicket` attribute
-    the agents see, or None while no tool gives it. `words` are consulted only for a field the
-    agents can't read; for the others they record how a request names it."""
+    the agents see, or None while no tool gives it. `words` are the first net, consulted with no
+    model and only for a field the agents can't read; for the others they record how a request
+    names it. A value the request gives instead of the field's name, such as P1 for priority,
+    is in the words too when it can mean nothing else."""
 
+    name: TicketFieldName
     plain: str
     words: frozenset[str]
     read_as: str | None = None
 
 
 TICKET_FIELDS: Final = (
-    TicketField("who owns a ticket", words("assignee assignees owner owners"), "assignee"),
-    TicketField("a ticket's type", words("type types"), "issue_type"),
-    TicketField("a ticket's status", words("status statuses"), "status"),
-    TicketField("when a ticket was created", words("created"), "created_at"),
-    TicketField("when a ticket was last updated", words("updated update"), "updated_at"),
-    TicketField("when a ticket was done", words("done closed"), "done_at"),
-    TicketField("a ticket's component", words("component components")),
-    TicketField("a ticket's priority", words("priority priorities")),
-    TicketField("a ticket's labels", words("label labels labelled labeled tagged")),
-    TicketField("a ticket's epic", words("epic epics")),
-    TicketField("a ticket's sprint", words("sprint sprints")),
+    TicketField(
+        "assignee", "who owns a ticket", words("assignee assignees owner owners"), "assignee"
+    ),
+    TicketField("issue_type", "a ticket's type", words("type types"), "issue_type"),
+    TicketField("status", "a ticket's status", words("status statuses"), "status"),
+    TicketField("created", "when a ticket was created", words("created"), "created_at"),
+    TicketField("updated", "when a ticket was last updated", words("updated update"), "updated_at"),
+    TicketField("done", "when a ticket was done", words("done closed"), "done_at"),
+    TicketField("component", "a ticket's component", words("component components")),
+    TicketField(
+        "priority",
+        "a ticket's priority",
+        words("priority priorities p1 p2 p3 p4 p5 critical blocker blockers urgent"),
+    ),
+    TicketField("label", "a ticket's labels", words("label labels labelled labeled tagged")),
+    TicketField("epic", "a ticket's epic", words("epic epics")),
+    TicketField("sprint", "a ticket's sprint", words("sprint sprints")),
+    TicketField("due_date", "a ticket's due date", words("due overdue deadline deadlines")),
+    TicketField("reporter", "a ticket's reporter", words("reporter reporters")),
+    TicketField("fix_version", "a ticket's fix version", frozenset()),
+    TicketField("story_points", "a ticket's story points", words("points")),
+    TicketField("severity", "a ticket's severity", words("severity severities")),
+    TicketField("other", "that detail of a ticket", frozenset()),
 )
+FIELD_BY_NAME: Final[dict[TicketFieldName, TicketField]] = {f.name: f for f in TICKET_FIELDS}
 UNREAD_FIELDS: Final = tuple(field for field in TICKET_FIELDS if field.read_as is None)
+UNREAD_FIELD_PLAIN: Final = tuple(field.plain for field in UNREAD_FIELDS)
 READ_FIELD_WORDS: Final = frozenset(
     word for field in TICKET_FIELDS if field.read_as is not None for word in field.words
 )
@@ -1171,9 +1253,10 @@ EPIC_LEADS: Final = words("in under of by per with within for their its")
 """The words that make "epic" a field of the tickets looked for, as in "in the epic", rather
 than the tickets themselves, as in "list epics"."""
 TOPIC_LEADS: Final = words(
-    "about mentioning mention mentions mentioned titled called named regarding"
+    "about mentioning mention mentions mentioned titled called named regarding word words"
 )
-"""A field word after these is what tickets are about, as in "about the login component"."""
+"""A field word after these is what tickets are about, as in "about the login component" or
+"the word urgent in the title"."""
 PHRASE_ENDS: Final = PREPS | words("and or plus")
 RELATIVES: Final = words("that which who whose where")
 COPULAS: Final = words("is are was were be been being has have had")
@@ -1222,9 +1305,11 @@ def unread_field_in(text: str) -> TicketField | None:
 
 
 def names_a_ticket_field(text: str) -> bool:
-    """Whether the text names a field of a ticket, read or set, that a new Jira tool could give."""
+    """Whether the text names a field of a ticket, read or set, that a new Jira tool could give:
+    by one of its words, or by the plain name the hold's own note uses."""
     row = _tokens(text)
-    return any(
+    low = text.casefold()
+    return any(plain in low for plain in UNREAD_FIELD_PLAIN) or any(
         _field_at(row, at) is not None or row[at].low in SETTABLE_TOO for at in range(len(row))
     )
 
@@ -1334,7 +1419,8 @@ def _cut_field(row: Clause, at: int, reader: _Reader) -> Clause | None:
 
 def _reads_well(kept: Clause, row: Clause, reader: _Reader) -> bool:
     """Whether what is left after a cut still names what the row named, and ends on a whole
-    phrase rather than on "their", "by", "one's" or "grouped"."""
+    phrase rather than on "their", "by", "one's" or "grouped". An ending the row itself had, as
+    in "List the bugs found", is whole."""
     while kept and kept[-1].mark:
         kept = kept[:-1]
     if not kept or kept[0].mark or kept[0].low in PHRASE_ENDS:
@@ -1343,6 +1429,8 @@ def _reads_well(kept: Clause, row: Clause, reader: _Reader) -> bool:
     if named and not any(w.low in named for w in kept):
         return False
     last = kept[-1]
+    if row and last.raw == row[-1].raw:
+        return True
     found = reader.verb(last)
     return not (
         last.mark
@@ -1350,6 +1438,81 @@ def _reads_well(kept: Clause, row: Clause, reader: _Reader) -> bool:
         or last.low.endswith("'s")
         or (found is not None and found[1] in ("ed", "ing"))
     )
+
+
+def _capitalised(text: str) -> str:
+    return text[:1].upper() + text[1:] if text[:1].islower() else text
+
+
+def _phrase_pattern(phrase: str) -> str | None:
+    """A pattern for the phrase's words in order, whatever the case, spaces or marks between
+    them, or None when it has no words."""
+    found = re.findall(r"\w+", phrase)
+    return r"\W+".join(re.escape(word) for word in found) if found else None
+
+
+def phrase_in(text: str, phrase: str) -> str | None:
+    """The phrase as the text writes it, or None when the text lacks it."""
+    pattern = _phrase_pattern(phrase)
+    if pattern is None:
+        return None
+    found = re.search(rf"(?<!\w){pattern}(?!\w)", text, re.IGNORECASE)
+    return None if found is None else found.group(0)
+
+
+COMPARISONS: Final = words("over under above below more less than least most greater fewer")
+_VALUE: Final = rf"(?:{'|'.join(sorted(COMPARISONS))}|\d+(?:\.\d+)*)"
+_VALUE_TAIL: Final = re.compile(rf"^\s*(?:{_VALUE}\b\s*)+", re.IGNORECASE)
+_VALUE_LEAD: Final = re.compile(rf"(?:\s*\b{_VALUE})+\s*$", re.IGNORECASE)
+
+
+def _without(text: str, phrase: str) -> str | None:
+    """The text with the phrase cut, and with a value left dangling beside it, as in "over 5"
+    after "story points" or "more than 3" before "watchers", cut too."""
+    pattern = _phrase_pattern(phrase)
+    if pattern is None:
+        return None
+    found = re.search(rf"(?<!\w){pattern}(?!\w)", text, re.IGNORECASE)
+    if found is None:
+        return None
+    tail = _VALUE_TAIL.match(text[found.end() :])
+    end = found.end() + (tail.end() if tail else 0)
+    lead = _VALUE_LEAD.search(text[: found.start()])
+    start = lead.start() if lead else found.start()
+    return f"{text[:start]} {text[end:]}"
+
+
+def without_the_words(text: str, said: list[str]) -> str | None:
+    """The text with each of the person's phrases in `said` cut out, as in "Tickets in MOCK" for
+    "Tickets in MOCK reported by Bob" with "reported by Bob" said. The words come from the
+    model's reading, so the cut is at the phrase it named, not at a word a list knows. None when
+    a phrase is not in the text, or when what is left no longer names what the text named."""
+    reader = _reader(ABILITIES)
+    kept: str | None = text
+    for phrase in said:
+        kept = _without(kept, phrase) if kept is not None else None
+    if kept is None:
+        return None
+    row = list(_tokens(kept))
+    while row and (row[-1].mark or row[-1].low in PHRASE_ENDS | RELATIVES | COPULAS):
+        row.pop()
+    while row and (row[0].mark or row[0].low in ("and", "or", "plus")):
+        row.pop(0)
+    while True:
+        doubled = next(
+            (
+                i
+                for i in range(len(row) - 1)
+                if row[i].low in PHRASE_ENDS and row[i + 1].low in PHRASE_ENDS
+            ),
+            None,
+        )
+        if doubled is None:
+            break
+        del row[doubled + 1 if row[doubled + 1].low in ("and", "or", "plus") else doubled]
+    if not _reads_well(tuple(row), _tokens(text), reader):
+        return None
+    return _capitalised(_joined(tuple(row)))
 
 
 def without_the_field(text: str) -> str | None:
@@ -1364,7 +1527,7 @@ def without_the_field(text: str) -> str | None:
         if kept is None or not _reads_well(kept, original, reader):
             return None
         row, cut = kept, True
-    return _joined(row) or None if cut else text
+    return _capitalised(_joined(row)) or None if cut else text
 
 
 _A_YES: Final = (
@@ -1391,17 +1554,29 @@ SKIPS_A_YES: Final = re.compile(
             |to\s+(?:wait\s+for|ask|check\s+with|bother)\s+{_SOMEONE_ELSE})\b
       | \b(?:nobody|no\s+one)\s+(?:needs?|has)\s+to\s+{_SAYS_YES}\b
       | \bno\s+(?:[\w']+\s+)?{_A_YES}(?:\s+from\s+[\w']+)?\s+(?:{_NOT_NEEDED}|first|at\s+all)\b
-      | \b{_A_YES}\s+(?:isn'?t|aren'?t|is\s+not|are\s+not|not)\s+{_NOT_NEEDED}\b
       | (?:^|[,;:(\-]\s*)no\s+{_A_YES}\s*(?:[,;.!)]|$)
       | \bno\s+questions\s+asked\b
+      | \bno\s+human\s+in\s+the\s+loop\b
+      | \bon\s+my\s+(?:authority|say-so)\b
+      | \b{_A_YES}\s+can\s+wait\b
+      | \b(?:with\s+)?approvals?\s+(?:off|turned\s+off|switched\s+off|disabled)\b
+      | \b(?:(?:treat|consider|take)\s+{_IT}\s+(?:as\s+)?)?pre-?approv(?:e|es|ed|ing|al)\b
+      | \b(?:treat|consider|take)\s+{_IT}\s+as\s+approved\b
+      | \b(?:i|we)(?:'ve|\s+have)?\s+already\s+approved(?:\s+{_IT})?\b
+      | \bsign\s+{_IT}\s+off\s+(?:yourself|yourselves|itself)\b
       | \bskip(?:s|ped|ping)?\s+(?:the\s+|an?\s+|any\s+|all\s+|my\s+)?(?:{_A_YES}|teams)\b
-      | \bbypass(?:es|ed|ing)?\s+(?:the\s+|an?\s+)?(?:{_A_YES}|gate|check|teams)\b
-      | \b(?:don'?t|do\s+not|never)\s+(?:ask(?:ing)?|wait(?:ing)?|bother(?:ing)?)\s+(?:for\s+)?
+      | \bbypass(?:es|ed|ing)?\s+(?:the\s+|an?\s+)?(?:{_A_YES}|gate|check|teams|{_SOMEONE_ELSE})\b
+      | \b(?:don'?t|do\s+not|never)\s+(?:ask(?:ing)?|wait(?:ing)?|bother(?:ing)?)\s+
+            (?:getting\s+|to\s+get\s+|with\s+)?(?:for\s+)?
             (?:an?\s+|any\s+|the\s+)?(?:{_A_YES}|{_PEOPLE}){_THEIR_YES}\b
+      | \b(?:don'?t|do\s+not|never)\s+(?:route|send|submit|put|pass)\s+{_IT}\s+
+            (?:for|to|through|by|past)\s+(?:an?\s+|the\s+|any\s+)?(?:{_A_YES}|{_SOMEONE_ELSE})\b
+      | \bwithout\s+(?:sending|routing|submitting|passing|putting)\s+{_IT}\s+
+            (?:for|to|through|by|past)\s+(?:an?\s+|the\s+|any\s+)?(?:{_A_YES}|{_SOMEONE_ELSE})\b
       | \b(?:auto|self)-?approv(?:e|es|ing|al|als)\b
       | \bapprov(?:e|es|ing)\s+(?:{_IT}\s+)?(?:(?:of\s+)?\w+\s+)?
-            (?:automatically|by\s+itself|itself|on\s+its\s+own|myself|ourselves|for\s+me|for\s+us|
-            on\s+(?:my|our)\s+behalf)\b
+            (?:automatically|by\s+itself|itself|on\s+its\s+own|myself|ourselves|yourself|
+            yourselves|for\s+me|for\s+us|as\s+me|as\s+us|on\s+(?:my|our)\s+behalf)\b
       | \bautomatic\s+approv\w*
       | \bautomatically\s+approv(?:e|es|ing)\b
       | \bapprov\w*\s+(?:my\s+own|our\s+own)\b
@@ -1417,6 +1592,9 @@ SKIPS_A_YES: Final = re.compile(
             {_NOT_FROM_ME}
       | \bwithout\s+(?:[\w']+\s+){{0,2}}?{_A_YES}\b{_NOT_FROM_ME}
       | \bwith\s+no\s+(?:[\w']+\s+)?{_A_YES}\b
+      | \b{_A_YES}\s+(?:isn'?t|aren'?t|is\s+not|are\s+not|not)\s+{_NOT_NEEDED}\b
+      | \bwithout\s+(?:an?\s+)?(?:review|reviews)\b
+      | \bwithout\s+(?:going\s+through\s+|using\s+)?teams\b
       | \bauto-?approved\b
       | \bapproved\s+(?:automatically|by\s+itself|on\s+its\s+own)\b
       | \bautomatically\s+approved\b
@@ -1425,10 +1603,13 @@ SKIPS_A_YES: Final = re.compile(
 """,
     re.IGNORECASE | re.VERBOSE,
 )
-"""A command skips a yes wherever it stands. A filter-shaped phrase, such as "without an
-approver" or "auto-approved", can also describe the tickets looked for, so it skips a yes only
-when the clause before it writes or approves rather than reads. "skip" and "bypass" are
-commands, except right after "that" or "which", as in "tickets that bypass the gate"."""
+"""The first net, kept so a refusal works with no model and before any model call. A command
+skips a yes wherever it stands. A filter-shaped phrase, such as "without an approver",
+"approval is not needed" or "auto-approved", can also describe the tickets looked for, so it
+skips a yes only when the clause before it writes or approves rather than reads. "skip" and
+"bypass" are commands, except right after "that" or "which", as in "tickets that bypass the
+gate". The model's own answer to the same question, `TaskRead.skips_the_yes`, is the second
+net, because no list of phrases is complete."""
 _CONNECTOR: Final = r"(?:and|but|then|so|just|please)"
 READS_TOO: Final = words("show tell")
 READ_VERBS: Final = (
@@ -1462,7 +1643,10 @@ def _reads_before(text: str, at: int) -> bool:
         if found is None or word.proper or found[1] == "ed":
             continue
         before = clause[back - 1] if back else None
+        after = clause[back + 1] if back + 1 < len(clause) else None
         if found[1] == "s" and before is not None and before.low not in RELATIVES | PRONOUNS:
+            continue
+        if after is not None and word.low in OWN_REQUESTS and after.low in ("request", "requests"):
             continue
         return found[0] in READ_VERBS
     return any(w.low in NOUNS_TOO for w in clause)
@@ -1490,20 +1674,51 @@ def skip_of_a_yes(text: str) -> str | None:
     return found[0].group(0) if found else None
 
 
+NOT_A_SKIP: Final = re.compile(
+    r"\b(?:ask(?:ing)?|check(?:ing)?\s+with|confirm(?:ing)?\s+with|confirmation\s+from|"
+    r"tell(?:ing)?|bother(?:ing)?|consult(?:ing)?)\s+(?:me|us)\b"
+    r"|\b(?:by\s+itself|on\s+its\s+own|automatically|unattended)\b",
+    re.IGNORECASE,
+)
+"""Words the model has quoted as a skipped yes that are not one: the staff member asking not
+to be asked themselves (the Operator is never the Approver), and the product's own words for a
+schedule. A phrase that also approves, as in "approve it automatically", is caught by the word
+rule first, so this never lets one through."""
+
+
+def not_a_skip(said: str) -> bool:
+    return NOT_A_SKIP.search(said) is not None
+
+
+def _tidied(rest: str) -> str:
+    rest = re.sub(r"\s+([,;:.!?])", r"\1", " ".join(rest.split()))
+    rest = re.sub(r"\s*,(?:\s*,)+", ",", rest).strip(" ,;.")
+    rest = re.sub(rf"^{_CONNECTOR}\b[\s,]*", "", rest, flags=re.IGNORECASE)
+    rest = re.sub(rf"[\s,]*\b{_CONNECTOR}$", "", rest, flags=re.IGNORECASE)
+    return rest.strip(" ,;.")
+
+
 def without_the_skip(text: str) -> str:
     rest = text
     for found in reversed(_skips(text)):
         rest = f"{rest[: found.start()]} {rest[found.end() :]}"
-    rest = re.sub(r"\s*,(?:\s*,)+", ",", " ".join(rest.split())).strip(" ,;.")
-    rest = re.sub(rf"^{_CONNECTOR}\b[\s,]*", "", rest, flags=re.IGNORECASE)
-    rest = re.sub(rf"[\s,]*\b{_CONNECTOR}$", "", rest, flags=re.IGNORECASE)
-    return rest.strip(" ,;.")
+    return _tidied(rest)
+
+
+def without_the_phrase(text: str, phrase: str) -> str | None:
+    """The text with the person's phrase cut out and the edges tidied, as `without_the_skip`
+    does, or None when the text lacks the phrase."""
+    cut = _without(text, phrase)
+    return None if cut is None else _tidied(cut)
 
 
 def need_of(kind: RowKind, text: str, unreached_source: str | None = None) -> Need:
     reader = _reader(ABILITIES)
     row = _tokens(text)
     named = [w.system for w in row if w.system is not None]
+    own = _own_requests(row)
+    if own is not None:
+        named.append(own)
     other = next((s for s in named if s not in REACHED), None)
     if other is not None:
         return Need("new_system", SYSTEMS[other])
@@ -1512,7 +1727,7 @@ def need_of(kind: RowKind, text: str, unreached_source: str | None = None) -> Ne
     reached = next((s for s in named if s in REACHED), None)
     if reached is not None:
         return Need("new_tool", SYSTEMS[reached])
-    if any(w.low in TICKETS or w.low in JIRA_ANCHORS for w in row) or unread_field_in(text):
+    if any(w.low in TICKETS or w.low in JIRA_ANCHORS for w in row) or names_a_ticket_field(text):
         return Need("new_tool", SYSTEMS[JIRA])
     if kind in ("look_for", "where"):
         return Need("new_system", None)

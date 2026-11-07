@@ -1973,9 +1973,16 @@
           "maxLength": 2000,
           "title": "Rest",
           "type": "string"
+        },
+        "said": {
+          "description": "The words that asked to skip a yes, as the request wrote them, so the refusal names the part. Empty only when the model said so without quoting them.",
+          "maxLength": 200,
+          "title": "Said",
+          "type": "string"
         }
       },
       "required": [
+        "said",
         "rest"
       ],
       "title": "RefusedAnswer",

@@ -9,7 +9,7 @@ from evals.checks import Check, jargon, mentions, write_claims
 from evals.choose import CHOOSE, ChooseCase
 from evals.draft import DRAFT, DraftCase
 from evals.explain import EXPLAIN, ExplainCase, Explanation
-from evals.jobs import Answer, marked
+from evals.jobs import Answer, _structured_answer, marked
 from evals.providers import Target, plan
 from evals.runner import (
     JOBS,
@@ -164,6 +164,18 @@ def test_a_flawed_explanation_fails_the_check_that_names_its_flaw(
 
 def test_an_unparsed_answer_fails_as_not_answered() -> None:
     assert failed(EXPLAIN.score(explain_case("declined"), text("{not json"))) == {"answered"}
+
+
+def test_a_reading_that_did_not_parse_is_kept_from_the_models_tool_call() -> None:
+    """The run file shows what the model gave, so the next check can read why it failed."""
+    raw = AIMessage(
+        content="", tool_calls=[{"name": "TaskRead", "args": {"rows": [], "x": 1}, "id": "c1"}]
+    )
+    answer = _structured_answer({"raw": raw, "parsed": None, "parsing_error": ValueError()})
+    assert answer.value is None
+    assert json.loads(answer.text) == {"rows": [], "x": 1}
+    plain = AIMessage(content="not a call")
+    assert _structured_answer({"raw": plain, "parsed": None}).text == "not a call"
 
 
 @pytest.mark.parametrize(
@@ -610,7 +622,7 @@ def answer_case(name: str) -> AnswerCase:
 
 
 def read_answer(**fields: Any) -> Answer:
-    read = TaskRead.model_validate(fields)
+    read = TaskRead.model_validate({"skips_the_yes": {"asked": False}, **fields})
     return Answer(read, read.model_dump_json(), None)
 
 
@@ -659,7 +671,10 @@ def test_a_guessed_time_and_an_invented_key_fail_the_card():
     }
     checks = ANSWER.score(answer_case("day-one-weekly-summary"), read_answer(**read))
     assert failed(checks) == {"no_invented_keys", "reads_the_parts", "schedule_state"}
-    shown = answer_of(TaskRead.model_validate(read), answer_case("day-one-weekly-summary").task)
+    shown = answer_of(
+        TaskRead.model_validate({"skips_the_yes": {"asked": False}, **read}),
+        answer_case("day-one-weekly-summary").task,
+    )
     assert isinstance(shown, SetupCardAnswer) and shown.rows[0].state == "missing"
     assert shown.rows[0].note == 'Your words said "Every Friday" but not a time. Please choose one.'
     guessed = shown.model_copy(

@@ -873,6 +873,11 @@ class WhichSoftwareAnswer(WireModel):
 class RefusedAnswer(WireModel):
     kind: Literal["refused"] = "refused"
     reason: Literal["skip_approval"] = "skip_approval"
+    said: str = Field(
+        max_length=200,
+        description="The words that asked to skip a yes, as the request wrote them, so the "
+        "refusal names the part. Empty only when the model said so without quoting them.",
+    )
     rest: str = Field(
         max_length=2000,
         description="The request without the words that asked to skip a yes, so it can be set "

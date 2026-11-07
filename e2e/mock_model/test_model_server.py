@@ -429,9 +429,31 @@ class ReadTest(unittest.TestCase):
             ],
         )
 
+    def test_a_task_names_the_fields_it_filters_by_and_answers_the_skip_question(self) -> None:
+        read = server.reading(
+            "Every Monday, find P1 bugs in MOCK reported by Bob and create one ticket that "
+            "lists them"
+        )
+        self.assertEqual(read["skips_the_yes"], {"asked": False, "said": None})
+        look = next(r for r in read["rows"] if r["kind"] == "look_for")
+        self.assertEqual(
+            look["fields"],
+            [{"field": "priority", "said": "P1"}, {"field": "reporter", "said": "reported by Bob"}],
+        )
+        self.assertEqual(next(r for r in read["rows"] if r["kind"] == "where").get("fields"), None)
+        skipped = server.reading(
+            "Every Monday, find bug tickets in MOCK and create one ticket, no human in the loop"
+        )
+        self.assertEqual(skipped["skips_the_yes"], {"asked": True, "said": "no human in the loop"})
+        self.assertEqual(server.reading("Check my workflows")["skips_the_yes"]["asked"], False)
+
     def test_the_request_mark_and_the_task_mark_both_find_the_request(self) -> None:
         self.assertEqual(reading(FOLLOW_UP)["rows"], server.reading(FOLLOW_UP)["rows"])
-        self.assertEqual(server.understanding(FOLLOW_UP)["rows"], server.reading(FOLLOW_UP)["rows"])
+        without_fields = [
+            {key: value for key, value in r.items() if key != "fields"}
+            for r in server.reading(FOLLOW_UP)["rows"]
+        ]
+        self.assertEqual(server.understanding(FOLLOW_UP)["rows"], without_fields)
 
     def test_a_question_about_the_persons_workflows_is_answered_by_its_kind(self) -> None:
         for task, about, words in (

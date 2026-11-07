@@ -5,14 +5,16 @@ can be tested without a real model:
 
 - GET /v1/models lists one model.
 - A request that forces a tool is a draft, a choice, the Planner reading a task back, or the
-  Planner reading a request typed on Home (TaskRead). The canned answer follows the task's
-  words. A task that names a GitHub repository picks the Version checker, any other gets a
-  drafted agent (a follow-up one for a follow-up ticket task, else a summary one), and a
-  release task belongs on the Software watchlist unless it also asks for known
-  vulnerabilities. One named part, such as "Where it goes: Jira project MOCK", is read as that
-  part alone, the others missing. When the Planner says before the task that the staff member
-  already chose a new workflow, a release task is read back in parts like any other, as the
-  real model does.
+  Planner reading a request typed on Home (TaskRead). The canned answer follows the task's words.
+  A TaskRead also names the ticket fields a part filters by (a priority value such as P1, a
+  component, a reporter, a due date) and answers the skip question for a few plain phrasings,
+  such as "no human in the loop". A task that names a GitHub repository picks the Version
+  checker, any other gets a drafted agent (a follow-up one for a follow-up ticket task, else a
+  summary one), and a release task belongs on the Software watchlist unless it also asks for
+  known vulnerabilities. One named part, such as "Where it goes: Jira project MOCK", is read as
+  that part alone, the others missing. When the Planner says before the task that the staff
+  member already chose a new workflow, a release task is read back in parts like any other, as
+  the real model does.
 - A request with tools and no forced tool is a card run. The mock calls github_read_releases,
   then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
   The ticket's title follows the card: a release, a follow-up or a summary. The follow-up card
@@ -128,6 +130,16 @@ WORKFLOW_NAMED = re.compile(
 )
 CLAUSE = re.compile(r"\s+and\s+|,\s*(?:then\s+)?")
 LISTS_THEM = "Create one ticket that lists them"
+SKIP_WORDS = re.compile(
+    r"\b(?:no human in the loop|pre-approved|approvals? (?:turned )?off|approve it as me)\b",
+    re.IGNORECASE,
+)
+FIELD_WORDS = (
+    (re.compile(r"\b(?:P[1-5]|critical|blocker|urgent|priority)\b", re.IGNORECASE), "priority"),
+    (re.compile(r"\bcomponents?\b", re.IGNORECASE), "component"),
+    (re.compile(r"\breported by \w+\b", re.IGNORECASE), "reporter"),
+    (re.compile(r"\b(?:overdue|due (?:this|next) \w+)\b", re.IGNORECASE), "due_date"),
+)
 PART_KINDS = {"When": "schedule", "Looks for": "look_for", "Does": "do", "Where it goes": "where"}
 mode = "ok"
 
@@ -409,6 +421,24 @@ def no_email_tool(row: dict[str, Any]) -> dict[str, Any]:
     return {**row, "state": "cant_do", "note": "No tool sends email yet."}
 
 
+def with_fields(row: dict[str, Any]) -> dict[str, Any]:
+    """The ticket fields a look-for or do part names, as the real model is asked to list them."""
+    if row["kind"] not in ("look_for", "do"):
+        return row
+    text = row.get("text", "")
+    fields = [
+        {"field": field, "said": found.group(0)}
+        for pattern, field in FIELD_WORDS
+        if (found := pattern.search(text)) is not None
+    ]
+    return {**row, "fields": fields}
+
+
+def skip_read(task: str) -> dict[str, Any]:
+    found = SKIP_WORDS.search(task)
+    return {"asked": found is not None, "said": found.group(0) if found else None}
+
+
 def with_alternative(row: dict[str, Any], task: str) -> dict[str, Any]:
     text = row.get("text", "")
     if row["state"] != "cant_do":
@@ -432,17 +462,24 @@ def reading(task: str) -> dict[str, Any]:
             "asks_about": about,
             "workflow_words": words,
             "belongs_on_watchlist": False,
+            "skips_the_yes": skip_read(task),
             "rows": [],
         }
-    read: dict[str, Any] = {"asks_about": "none", "workflow_words": None, **understanding(task)}
+    read: dict[str, Any] = {
+        "asks_about": "none",
+        "workflow_words": None,
+        "skips_the_yes": skip_read(task),
+        **understanding(task),
+    }
     if read["belongs_on_watchlist"]:
         rest = " and ".join(c for c in CLAUSE.split(task) if not RELEASE_WORDS.search(c))
         if TICKET_WORDS.search(rest):
-            read["rows"] = [with_alternative(no_email_tool(r), task) for r in parts(rest)]
+            rows = [with_alternative(no_email_tool(r), task) for r in parts(rest)]
+            read["rows"] = [with_fields(r) for r in rows]
             read["name"] = name_of(rest)
         return read
     read["name"] = name_of(task)
-    read["rows"] = [with_alternative(no_email_tool(r), task) for r in read["rows"]]
+    read["rows"] = [with_fields(with_alternative(no_email_tool(r), task)) for r in read["rows"]]
     return read
 
 

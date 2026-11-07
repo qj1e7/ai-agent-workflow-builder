@@ -1,11 +1,15 @@
+from typing import get_args
+
 import pytest
 
 from agent_runtime.abilities import (
     ABILITIES,
+    FIELD_BY_NAME,
     TICKET_FIELDS,
     UNREAD_FIELDS,
     Ability,
     Need,
+    TicketFieldName,
     names_a_ticket_field,
     need_of,
     skip_of_a_yes,
@@ -706,8 +710,15 @@ def test_the_ticket_field_table_matches_what_the_agents_read():
         "a ticket's labels",
         "a ticket's epic",
         "a ticket's sprint",
+        "a ticket's due date",
+        "a ticket's reporter",
+        "a ticket's fix version",
+        "a ticket's story points",
+        "a ticket's severity",
+        "that detail of a ticket",
     }
     assert not any(word in JiraTicket.model_fields for f in UNREAD_FIELDS for word in f.words)
+    assert set(FIELD_BY_NAME) == set(get_args(TicketFieldName.__value__))
 
 
 @pytest.mark.parametrize(
@@ -749,7 +760,9 @@ def test_a_read_of_a_field_the_agents_cant_see_is_held_and_a_change_to_one_is_no
             "Create one ticket that lists them and their component(s)",
             "Create one ticket that lists them",
         ),
-        ("High priority bug tickets in MOCK", "bug tickets in MOCK"),
+        ("High priority bug tickets in MOCK", "Bug tickets in MOCK"),
+        ("List the P1 bugs found", "List the bugs found"),
+        ("List the overdue tickets", "List the tickets"),
         ("Tickets labelled security in MOCK", "Tickets in MOCK"),
         (
             "Open tickets with priority High, sorted by created date",

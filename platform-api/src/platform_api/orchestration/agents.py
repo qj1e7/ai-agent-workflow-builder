@@ -496,6 +496,7 @@ class WhichSoftwareAnswer(WireModel):
 class RefusedAnswer(WireModel):
     kind: Literal["refused"] = "refused"
     reason: Literal["skip_approval"] = "skip_approval"
+    said: str = Field(max_length=200)
     rest: str = Field(max_length=2000)
 
 

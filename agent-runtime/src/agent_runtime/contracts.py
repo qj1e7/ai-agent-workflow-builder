@@ -6,6 +6,7 @@ from pathlib import Path
 
 from agent_runtime.abilities import CAPABILITY_LIST
 from agent_runtime.answers import AnswerRow, TaskRead, answer_of
+from agent_runtime.answers import AnswerRow, SkipRead, TaskRead, answer_of
 from agent_runtime.api import AGENT_CARDS
 from agent_runtime.contract import (
     RELEASE_TAG_PATTERN,
@@ -843,6 +844,7 @@ def found_software() -> FoundSoftware:
 
 EMAIL_TASK = "Every Friday, email me the list of stale tickets in MOCK"
 SKIP_TASK = "Create the ticket without waiting for approval"
+NO_SKIP = SkipRead(asked=False)
 
 
 def answer_request(task: str = FOLLOW_UP_TASK) -> AnswerRequest:
@@ -868,7 +870,9 @@ def answered_card() -> Answered:
         ),
         AnswerRow(kind="where", text="Jira project MOCK", state="understood"),
     ]
-    return _answered(TaskRead(name="Stale bug follow-up", rows=rows), FOLLOW_UP_TASK)
+    return _answered(
+        TaskRead(name="Stale bug follow-up", rows=rows, skips_the_yes=NO_SKIP), FOLLOW_UP_TASK
+    )
 
 
 def answered_cant() -> Answered:
@@ -891,16 +895,23 @@ def answered_cant() -> Answered:
             kind="where", text="Your email", state="cant_do", note="No tool sends email yet."
         ),
     ]
-    return _answered(TaskRead(name="Stale ticket list", rows=rows), EMAIL_TASK)
+    return _answered(
+        TaskRead(name="Stale ticket list", rows=rows, skips_the_yes=NO_SKIP), EMAIL_TASK
+    )
 
 
 def answered_watchlist() -> Answered:
-    read = TaskRead(belongs_on_watchlist=True, watchlist_word="release", software="LangGraph")
+    read = TaskRead(
+        belongs_on_watchlist=True,
+        watchlist_word="release",
+        software="LangGraph",
+        skips_the_yes=NO_SKIP,
+    )
     return _answered(read, RELEASE_TASK)
 
 
 def answered_refused() -> Answered:
-    return _answered(TaskRead(), SKIP_TASK)
+    return _answered(TaskRead(skips_the_yes=NO_SKIP), SKIP_TASK)
 
 
 def fixtures() -> dict[str, WireModel]:

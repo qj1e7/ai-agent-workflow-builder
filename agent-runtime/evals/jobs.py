@@ -66,4 +66,6 @@ def _structured_answer(reply: dict[str, Any]) -> Answer:
     parsed = reply["parsed"]
     if isinstance(parsed, BaseModel):
         return Answer(parsed, parsed.model_dump_json(), raw)
-    return Answer(None, raw.text, raw)
+    calls = getattr(raw, "tool_calls", None) or []
+    given = json.dumps(calls[0]["args"]) if calls and "args" in calls[0] else raw.text
+    return Answer(None, given, raw)
