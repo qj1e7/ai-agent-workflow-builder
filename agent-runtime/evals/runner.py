@@ -16,6 +16,7 @@ from urllib.parse import unquote
 from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, Field
 
+from evals.answer import ANSWER
 from evals.checks import Check
 from evals.choose import CHOOSE
 from evals.draft import DRAFT
@@ -25,7 +26,7 @@ from evals.providers import PROVIDERS, Env, NotRun, Target, plan
 from evals.summarise import SUMMARISE
 from evals.understand import UNDERSTAND
 
-JOBS: tuple[Job[Any], ...] = (SUMMARISE, EXPLAIN, DRAFT, CHOOSE, UNDERSTAND)
+JOBS: tuple[Job[Any], ...] = (SUMMARISE, EXPLAIN, DRAFT, CHOOSE, UNDERSTAND, ANSWER)
 PRICING = Path(__file__).parent / "pricing.json"
 # CI keeps the endpoints as secrets too. A URL can hold a password or a private host name.
 URL_ENVS = ("AZURE_OPENAI_ENDPOINT", "OLLAMA_BASE_URL", "AGENT_MODEL_BASE_URL")
@@ -258,12 +259,24 @@ def model_for(job: Job[Any], target: Target, shared: BaseChatModel) -> BaseChatM
     return shared
 
 
+def jobs_chosen(env: Env) -> tuple[Job[Any], ...]:
+    """The jobs to run: every one, or those named in EVAL_JOBS, comma separated."""
+    wanted = [name.strip() for name in env.get("EVAL_JOBS", "").split(",") if name.strip()]
+    if not wanted:
+        return JOBS
+    unknown = sorted(set(wanted) - {job.name for job in JOBS})
+    if unknown:
+        raise ValueError(f"EVAL_JOBS names no job: {', '.join(unknown)}")
+    return tuple(job for job in JOBS if job.name in wanted)
+
+
 def run_target(
     target: Target,
     env: Env,
     judge_model: BaseChatModel | None,
     pricing: Mapping[str, Any],
     marker: str = "",
+    jobs: tuple[Job[Any], ...] = JOBS,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     try:
         # Building can fail on a malformed setting, and the error can quote it.
@@ -271,11 +284,11 @@ def run_target(
         started = time.perf_counter()
         model.invoke(marked(WARM_UP, marker))
         warm_up_ms = round((time.perf_counter() - started) * 1000)
-        models = {job.name: model_for(job, target, model) for job in JOBS}
+        models = {job.name: model_for(job, target, model) for job in jobs}
     except Exception as error:
         return {"error": _failure(error, env)}, []
     rows: list[dict[str, Any]] = []
-    for job in JOBS:
+    for job in jobs:
         outcomes: list[Outcome] = []
         for case in job.cases():
             outcome = run_case(models[job.name], job, case, env, marker)
@@ -346,9 +359,10 @@ def main(out: Path, env: Env | None = None) -> int:
     results: list[dict[str, Any]] = []
     models: list[dict[str, Any]] = []
     marker = env.get("EVAL_MARKER") or uuid.uuid4().hex[:12]
+    jobs = jobs_chosen(env)
     for target in targets:
         print(f"Running {target.label}", flush=True)
-        status, rows = run_target(target, env, judge_model, pricing, marker)
+        status, rows = run_target(target, env, judge_model, pricing, marker, jobs)
         if "error" in status:
             not_run.append(_redacted(NotRun(target.provider, target.model, status["error"]), env))
             continue
@@ -357,7 +371,7 @@ def main(out: Path, env: Env | None = None) -> int:
     report = {
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "marker": marker,
-        "cases": {job.name: len(job.cases()) for job in JOBS},
+        "cases": {job.name: len(job.cases()) for job in jobs},
         "judge": judge_spec.label if judge_spec else None,
         "models": models,
         "not_run": [n.__dict__ for n in not_run],

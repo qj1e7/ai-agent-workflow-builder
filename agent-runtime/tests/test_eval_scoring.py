@@ -4,18 +4,29 @@ from typing import Any
 
 import httpx
 import pytest
+from evals.answer import ANSWER, AnswerCase
 from evals.checks import Check, jargon, mentions, write_claims
 from evals.choose import CHOOSE, ChooseCase
 from evals.draft import DRAFT, DraftCase
 from evals.explain import EXPLAIN, ExplainCase, Explanation
 from evals.jobs import Answer, marked
 from evals.providers import Target, plan
-from evals.runner import JOBS, Outcome, main, model_for, redact, run_case, summarise_job
+from evals.runner import (
+    JOBS,
+    Outcome,
+    jobs_chosen,
+    main,
+    model_for,
+    redact,
+    run_case,
+    summarise_job,
+)
 from evals.summarise import SUMMARISE, SummariseCase, checked
 from evals.understand import UNDERSTAND, UnderstandCase
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
+from agent_runtime.answers import TaskRead
 from agent_runtime.summary import SUMMARY_TIMEOUT_SECONDS, ModelSummarizer, template_check_summary
 
 
@@ -255,7 +266,14 @@ def test_a_cloud_provider_with_a_key_runs_its_default_models() -> None:
 
 
 def test_every_job_is_registered_once() -> None:
-    assert [job.name for job in JOBS] == ["summarise", "explain", "draft", "choose", "understand"]
+    assert [job.name for job in JOBS] == [
+        "summarise",
+        "explain",
+        "draft",
+        "choose",
+        "understand",
+        "answer",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -584,3 +602,107 @@ def test_the_explain_logs_are_watchlist_runs() -> None:
 def test_the_recorded_explain_cases_replay_their_recorded_run(case_id: str, story: str) -> None:
     recorded = [e["summary"] for e in json.loads((RUNS / f"{story}.json").read_text())]
     assert explain_case(case_id).events == recorded[:-1]
+
+
+def answer_case(name: str) -> AnswerCase:
+    return next(c for c in ANSWER.cases() if c.id == name)
+
+
+def read_answer(**fields: Any) -> Answer:
+    read = TaskRead.model_validate(fields)
+    return Answer(read, read.model_dump_json(), None)
+
+
+EMAIL_READ = {
+    "name": "Stale ticket list",
+    "rows": [
+        {"kind": "schedule", "text": "Every week", "state": "changed", "note": "Weekly."},
+        {"kind": "look_for", "text": "Stale tickets", "state": "changed", "note": "14 days."},
+        {
+            "kind": "do",
+            "text": "Email them to you",
+            "state": "cant_do",
+            "note": "No tool sends email.",
+            "alternative": "Create one ticket that lists them",
+        },
+        {"kind": "where", "text": "Your email", "state": "cant_do", "note": "No tool sends email."},
+    ],
+}
+
+
+def test_every_answer_case_names_a_kind_or_a_kind_to_avoid():
+    cases = ANSWER.cases()
+    assert len(cases) >= 40
+    assert all(c.kind or c.not_kind for c in cases)
+
+
+def test_the_answer_job_scores_the_decided_answer_not_the_reading():
+    case = answer_case("email-stale-list")
+    assert failed(ANSWER.score(case, read_answer(**EMAIL_READ))) == set()
+    fooled = [{**r, "state": "understood", "note": None} for r in EMAIL_READ["rows"]]
+    assert failed(ANSWER.score(case, read_answer(**{**EMAIL_READ, "rows": fooled}))) == set()
+    bare = [{**r, "alternative": None} for r in EMAIL_READ["rows"]]
+    checks = ANSWER.score(case, read_answer(**{**EMAIL_READ, "rows": bare}))
+    assert failed(checks) == {"offers_alternative", "reads_the_parts"}
+
+
+def test_a_guessed_time_and_an_invented_key_fail_the_card():
+    read = {
+        "name": "Weekly summary",
+        "rows": [
+            {"kind": "schedule", "text": "Every Friday at 5pm", "state": "understood"},
+            {"kind": "look_for", "text": "Tickets closed this week", "state": "understood"},
+            {"kind": "do", "text": "Create one ticket that sums them up", "state": "understood"},
+            {"kind": "where", "text": "Jira project SUP", "state": "understood"},
+        ],
+    }
+    checks = ANSWER.score(answer_case("day-one-weekly-summary"), read_answer(**read))
+    assert {"no_guessed_time", "no_invented_keys"} <= failed(checks)
+
+
+def test_a_refusal_and_a_question_are_scored_on_their_kind_and_words():
+    checks = ANSWER.score(answer_case("without-approval"), read_answer())
+    assert failed(checks) == set()
+    checks = ANSWER.score(answer_case("by-itself"), read_answer(asks_about="abilities"))
+    assert failed(checks) == set()
+    said = read_answer(asks_about="why_stopped", workflow_words="Morning new-ticket check")
+    assert failed(ANSWER.score(answer_case("why-did-it-stop"), said)) == set()
+    wrong = read_answer(asks_about="why_stopped", workflow_words="Weekly summary")
+    assert failed(ANSWER.score(answer_case("why-did-it-stop"), wrong)) == {"names_the_workflow"}
+
+
+def test_a_mixed_request_is_scored_on_the_watchlist_and_the_rest():
+    read = {
+        "belongs_on_watchlist": True,
+        "watchlist_word": "releases",
+        "software": "React",
+        "name": "Stale bug list",
+        "rows": [
+            {"kind": "schedule", "text": "Every Friday", "state": "understood"},
+            {
+                "kind": "look_for",
+                "text": "Stale bug tickets",
+                "state": "changed",
+                "note": "14 days.",
+            },
+            {"kind": "do", "text": "List them in one ticket", "state": "changed", "note": "Guess."},
+            {"kind": "where", "text": "", "state": "missing"},
+        ],
+    }
+    assert failed(ANSWER.score(answer_case("mixed-watch-and-list"), read_answer(**read))) == set()
+    alone = read_answer(belongs_on_watchlist=True, watchlist_word="releases", software="React")
+    assert failed(ANSWER.score(answer_case("mixed-watch-and-list"), alone)) == {
+        "carries_the_rest",
+        "reads_the_parts",
+    }
+
+
+def test_only_the_jobs_named_in_eval_jobs_run():
+    assert [j.name for j in jobs_chosen({"EVAL_JOBS": "answer"})] == ["answer"]
+    assert [j.name for j in jobs_chosen({"EVAL_JOBS": " understand, answer "})] == [
+        "understand",
+        "answer",
+    ]
+    assert jobs_chosen({}) == JOBS
+    with pytest.raises(ValueError, match="no job: nope"):
+        jobs_chosen({"EVAL_JOBS": "nope"})
