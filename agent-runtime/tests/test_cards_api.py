@@ -1,9 +1,11 @@
 import json
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from langchain_core.messages import AIMessage
 
 from agent_runtime.api import (
     HttpCallbacks,
@@ -36,8 +38,10 @@ from tests.test_card_runner import releases_then_search_then_create
 from tests.test_drafting import answer as draft_answer
 
 
-def make_app(chat: ScriptedChat | None, posts: Posts | None = None) -> TestClient:
-    clock = FakeClock()
+def make_app(
+    chat: ScriptedChat | None, posts: Posts | None = None, clock: FakeClock | None = None
+) -> TestClient:
+    clock = clock or FakeClock()
     callbacks = HttpCallbacks(transport=httpx.MockTransport(posts or Posts()))
     checker = VersionChecker(FakeSource(langgraph_tags()), TemplateSummarizer(), sleep=clock.sleep)
     runner = CardRunner(FakeSource(langgraph_tags()[:8]), lambda _: FakeJira(), sleep=clock.sleep)
@@ -114,6 +118,29 @@ def test_a_card_task_without_any_model_says_connect_one_and_is_not_remembered():
     # The same task id runs once a model is connected, because the failure was not stored.
     again = client.post("/v1/tasks", json=card_body()).json()
     assert again["status"] == "finished"
+
+
+@pytest.mark.parametrize(
+    ("zone", "today"),
+    [
+        ("Asia/Singapore", "Today is Tuesday 3 November 2026 (2026-11-03)."),
+        ("Europe/London", "Today is Monday 2 November 2026 (2026-11-02)."),
+    ],
+)
+def test_the_agents_today_is_the_day_in_the_tasks_time_zone(zone: str, today: str):
+    clock = FakeClock()
+    clock.now = datetime(2026, 11, 2, 16, 30, tzinfo=UTC)
+    chat = ScriptedChat(script=[AIMessage("Nothing to do.")])
+    body = card_body() | {"time_zone": zone}
+    assert make_app(chat, clock=clock).post("/v1/tasks", json=body).status_code == 200
+    assert today in str(chat.calls[0][0].content)
+
+
+@pytest.mark.parametrize("zone", ["Singapore Time", "Mars/Olympus", "", "+08:00"])
+def test_a_task_in_a_zone_that_is_not_a_zone_name_is_refused(zone: str):
+    body = card_body() | {"time_zone": zone}
+    response = make_app(ScriptedChat(script=[])).post("/v1/tasks", json=body)
+    assert response.status_code == 422
 
 
 def test_a_value_that_does_not_fit_its_input_kind_is_refused_before_anything_runs():

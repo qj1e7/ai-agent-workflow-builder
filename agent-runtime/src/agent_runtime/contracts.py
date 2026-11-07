@@ -79,6 +79,7 @@ TO_CHECKER = AgentAddressee(id=CHECKER.id, display=CHECKER.display)
 TO_ROOM = RoomAddressee()
 
 REPO = "langchain-ai/langgraph"
+TIME_ZONE = "Asia/Singapore"
 OUR_VERSION = "1.2.14"
 NEWEST = "1.2.16"
 NEW_TAGS = ["1.2.16", "1.2.15"]
@@ -117,6 +118,7 @@ def task_request(run_id: str) -> TaskRequest:
         instruction=INSTRUCTION,
         inputs=WatchlistInputs(tag_pattern=RELEASE_TAG_PATTERN, software=[langgraph()]),
         carry_forward=CarryForward(),
+        time_zone=TIME_ZONE,
         callback=Callback(
             url=f"http://platform-api:8000/internal/v1/runs/{run_id}/agent-events?task={task_id}",
             token="example-callback-token-not-a-secret",
@@ -150,6 +152,7 @@ def watchlist_request(run_id: str) -> TaskRequest:
         instruction=INSTRUCTION,
         inputs=WatchlistInputs(tag_pattern=RELEASE_TAG_PATTERN, software=watchlist_software()),
         carry_forward=CarryForward(),
+        time_zone=TIME_ZONE,
         callback=Callback(
             url=f"http://platform-api:8000/internal/v1/runs/{run_id}/agent-events?task={task_id}",
             token="example-callback-token-not-a-secret",
@@ -543,6 +546,7 @@ def card_request(run_id: str) -> TaskRequest:
             ]
         ),
         carry_forward=CarryForward(),
+        time_zone=TIME_ZONE,
         callback=Callback(
             url=f"http://platform-api:8000/internal/v1/runs/{run_id}/agent-events?task={task_id}",
             token="example-callback-token-not-a-secret",

@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter
 
@@ -273,9 +274,9 @@ class CarryForward(WireModel):
 
     last_run_on: date | None = Field(
         default=None,
-        description="The day the workflow's last finished run started, as a UTC day. None when "
-        "it has no finished run yet. The platform sets it on a task. It is empty in a task's "
-        "output.",
+        description="The day the workflow's last finished run started, in the task's time_zone, "
+        "so it is the day the run list shows. None when it has no finished run yet. The platform "
+        "sets it on a task. It is empty in a task's output.",
     )
 
 
@@ -305,12 +306,24 @@ class ModelAccess(WireModel):
     )
 
 
+def _known_zone(name: str) -> str:
+    try:
+        ZoneInfo(name)
+    except ValueError, ZoneInfoNotFoundError:
+        raise ValueError("not a time zone name, such as Asia/Singapore") from None
+    return name
+
+
 class TaskRequest(WireModel):
     task_id: str
     run_id: str
     instruction: str
     inputs: TaskInputs
     carry_forward: CarryForward
+    time_zone: Annotated[str, AfterValidator(_known_zone)] = Field(
+        description="The zone the team works in, such as Asia/Singapore. The agents' today and "
+        "every plain day they read or send, last_run_on included, are days in it."
+    )
     callback: Callback
     model: ModelAccess | None = Field(
         default=None,

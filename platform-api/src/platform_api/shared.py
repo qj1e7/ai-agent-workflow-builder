@@ -2,8 +2,11 @@ import re
 import secrets
 import time
 from dataclasses import dataclass
+from datetime import date, datetime
+from datetime import time as clock_time
 from enum import Enum
 from typing import Literal, NewType
+from zoneinfo import ZoneInfo
 
 RunId = NewType("RunId", str)
 ApprovalId = NewType("ApprovalId", str)
@@ -28,6 +31,15 @@ JIRA_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{1,254}-[1-9][0-9]{0,8}\Z")
 """A ticket key: a project key, a dash and the ticket's number, such as AB_1-12."""
 STORED_JIRA_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,254}-[1-9][0-9]{0,8}\Z")
 """A ticket key in a project of the older shape, such as A-12."""
+
+TEAM_TIME_ZONE = ZoneInfo("Asia/Singapore")
+"""The zone the team works in, unless the TEAM_TIME_ZONE setting names another. The agents'
+today, a run's day and every plain day an agent sends are days in it."""
+
+
+def day_start(day: date, zone: ZoneInfo) -> datetime:
+    """The first moment of a plain day in a zone. A day ends where the next day starts."""
+    return datetime.combine(day, clock_time(), zone)
 
 
 WRITE_STOP_ADVICE = (

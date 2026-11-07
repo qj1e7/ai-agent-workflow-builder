@@ -90,6 +90,7 @@ infra/
 | `TEAMS_CHANNEL` | `CODESparks Ops` unless `.env` sets it | the `TEAMS_CHANNEL` variable when it is set, else platform-api's default, `CODESparks Ops` |
 | `TEAMS_WEBHOOK_URL` | `.env`, empty by default, so the practice Teams copy | a Key Vault secret from `TEAMS_WEBHOOK_URL`, only when that secret is set (ADR 0036) |
 | `TEAMS_REQUESTS_WEBHOOK_URL` | `.env`, empty by default, so new team requests go to the approvals channel's webhook, or nowhere | not wired in Terraform yet, so it is unset and new team requests use `TEAMS_WEBHOOK_URL` (ADR 0038) |
+| `TEAM_TIME_ZONE` | not set, so `Asia/Singapore`. platform-api reads the agents' Jira days in it, gives the last run's day in it, and sends it to the agent runtime as the zone of the agents' today | not set, so the same `Asia/Singapore` |
 | `MAX_BODY_BYTES` | not set, so 2 MiB (2097152). platform-api refuses a larger request body with 413 | not set, so the same 2 MiB |
 | `SETTINGS_ENCRYPTION_KEY` | `.env` | a generated Key Vault secret. If it is lost, an Operator pastes the model key again |
 | `FIRST_OPERATOR`, `FIRST_APPROVERS` | `.env`, empty by default | from `first_operator` and `first_approvers`, only when they are set |

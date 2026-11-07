@@ -211,6 +211,10 @@ _Avoid_: Integration, credential
 A stand-in for Jira or Teams that the platform runs itself, so demos and tests write without touching a real system. Each one answers the same API as the real system, so moving to the real one is a change of settings (ADR 0035). The setting `PRACTICE_SYSTEMS` turns their own pages on or off.
 _Avoid_: Mock (in the app), sandbox
 
+**Team time zone**:
+The zone the team works in, Singapore unless the setting `TEAM_TIME_ZONE` names another. The agents' today, the day a run started, and every day an agent searches Jira by are days in it, so a search "since 18 Oct" starts at midnight there.
+_Avoid_: Server time, UTC day
+
 **Confirmation**:
 A second person's yes to a setup change before it takes effect, such as making someone an Approver or using a new AI model address. Any Approver may confirm, except the person who asked and the person it is about.
 _Avoid_: Approval (that is for a run's proposal), sign-off

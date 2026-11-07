@@ -102,6 +102,7 @@ class TaskRequest(WireModel):
     instruction: str
     inputs: TaskInputs
     carry_forward: CarryForward
+    time_zone: str
     callback: Callback
     model: ModelAccess | None = None
 

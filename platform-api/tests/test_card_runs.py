@@ -102,6 +102,7 @@ async def test_the_runtime_is_asked_for_the_cards_and_values_of_the_run(h: Harne
         ("crd_1", {"Project": "BBB"}),
     ]
     assert request.carry_forward == CarryForward()
+    assert request.time_zone == "Asia/Singapore"
     assert request.model is None
 
 
