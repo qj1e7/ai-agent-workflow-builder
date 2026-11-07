@@ -18,7 +18,7 @@
 }
 
 /* At rest it breathes twice when it appears, then holds still, so nothing moves for more than a few seconds. */
-.bot[data-state='idle'] .body {
+.bot[data-state='idle']:not([data-still]) .body {
   animation: breathe 2.1s var(--ease-in-out) 2 alternate;
 }
 

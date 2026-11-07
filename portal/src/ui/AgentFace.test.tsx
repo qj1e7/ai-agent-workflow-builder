@@ -1,23 +1,40 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { AgentFace, type FaceState } from './AgentFace'
+import { AgentFace, JOB_BADGE_MIN_SIZE, type FaceState } from './AgentFace'
 
 const STATES: FaceState[] = ['idle', 'thinking', 'working', 'waiting', 'success', 'error', 'stopped']
-const draw = (state: FaceState, id = 'version_checker') => renderToStaticMarkup(<AgentFace id={id} state={state} />)
+const draw = (state: FaceState, id = 'version_checker', size = 54) => renderToStaticMarkup(<AgentFace id={id} state={state} size={size} />)
 const circles = (html: string) => (html.match(/<circle\b/g) ?? []).length
 
-describe('an agent face', () => {
+describe('an Orb', () => {
   it.each(STATES)('says it is %s on the face itself, hidden from screen readers', (state) => {
     const html = draw(state)
     expect(html).toContain(`data-state="${state}"`)
     expect(html).toContain('aria-hidden="true"')
+    expect(html).toContain('data-face="orb"')
   })
 
   it('does not react on its first draw, so a run that loads finished stays still', () => {
     for (const state of STATES) expect(draw(state)).not.toContain('data-react')
   })
 
-  it('wears a badge only while waiting, after an error, or once it succeeds', () => {
+  it('is drawn in its own colour, and unknown agents keep the colour their id always gets', () => {
+    expect(draw('idle', 'version_checker')).toContain('stop-color="var(--checker)"')
+    expect(draw('idle', 'troubleshooter')).toContain('stop-color="var(--trouble)"')
+    expect(draw('idle', 'security_reviewer')).toContain('stop-color="var(--agent-2)"')
+  })
+
+  it('wears its job badge from 32 px up and none below', () => {
+    expect(draw('idle', 'version_checker', JOB_BADGE_MIN_SIZE)).toContain('data-job="magnifier"')
+    expect(draw('idle', 'troubleshooter', 56)).toContain('data-job="wrench"')
+    expect(draw('idle', 'version_checker', JOB_BADGE_MIN_SIZE - 1)).not.toContain('data-job')
+  })
+
+  it('does not claim a job for an agent whose job it does not know', () => {
+    expect(draw('idle', 'patch_planner', 56)).not.toContain('data-job')
+  })
+
+  it('wears a status badge only while waiting, after an error, or once it succeeds', () => {
     const plain = circles(draw('idle'))
     expect(circles(draw('waiting'))).toBe(plain + 2)
     expect(circles(draw('error'))).toBe(plain + 2)
@@ -25,9 +42,50 @@ describe('an agent face', () => {
     expect(circles(draw('stopped'))).toBe(plain)
   })
 
-  it('thinks with three dots, and types only when it has no tool to move', () => {
+  it('thinks with three dots outside its body, and only then', () => {
     expect(circles(draw('thinking'))).toBe(circles(draw('idle')) + 3)
-    expect(draw('working', 'patch_planner').match(/<rect\b/g)).toHaveLength(5)
-    expect(draw('working', 'version_checker').match(/<rect\b/g)).toHaveLength(2)
+    expect(circles(draw('working'))).toBe(circles(draw('idle')))
+  })
+
+  it('closes its eyes when stopped and looks up when waiting', () => {
+    const eyeHeights = (state: FaceState) => [...draw(state).matchAll(/<rect [^>]*height="([\d.]+)"/g)].map((m) => m[1])
+    expect(eyeHeights('stopped')).toEqual(['1.8', '1.8'])
+    expect(eyeHeights('waiting')).toEqual(['5.5', '5.5'])
+    expect(eyeHeights('idle')).toEqual(['6.5', '6.5'])
+  })
+})
+
+describe('the Planner', () => {
+  it.each(STATES)('is the Visor bot on every screen while %s', (state) => {
+    const html = draw(state, 'planner', 40)
+    expect(html).toContain('data-face="visor"')
+    expect(html).not.toContain('data-face="orb"')
+    expect(html).toContain('aria-hidden="true"')
+  })
+
+  it('shows the same bot as Home, with the visor and its ear lights', () => {
+    const html = draw('idle', 'planner', 48)
+    expect(html).toContain('radialGradient')
+    expect(html).toContain('width="48"')
+    expect(html).not.toContain('data-job')
+  })
+
+  it('keeps the status badge, so waiting, a problem and success still show', () => {
+    const plain = circles(draw('idle', 'planner'))
+    for (const state of ['waiting', 'error', 'success'] as const) expect(circles(draw(state, 'planner'))).toBe(plain + 2)
+    expect(circles(draw('stopped', 'planner'))).toBe(plain)
+  })
+
+  it('gives every state its own eyes, and none looks like Home\'s "I can\'t do that" face', () => {
+    const eyes = (state: FaceState) => draw(state, 'planner').match(/<g [^>]*data-part="eyes"[^>]*>.*?<\/g>/)?.[0] ?? ''
+    const bot = (state: FaceState) => draw(state, 'planner').replace(/data-state="\w+"/g, '').replace(/<\/?span[^>]*>/g, '')
+    const four = (['waiting', 'success', 'error', 'stopped'] as const).map(bot)
+    expect(new Set([...four, bot('idle')]).size).toBe(5)
+    expect(eyes('error')).not.toContain('<path')
+    expect(eyes('waiting')).not.toBe('')
+    expect(draw('error', 'planner')).toContain('M13.5 17l4.5-2')
+    expect(draw('success', 'planner')).toContain('data-part="happy"')
+    expect(eyes('stopped')).toContain('height="1.8"')
+    expect(eyes('waiting')).toContain('height="5.6"')
   })
 })

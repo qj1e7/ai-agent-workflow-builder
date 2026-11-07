@@ -3,11 +3,11 @@ import { agentIdentity, KNOWN_AGENT_IDS } from './agents'
 import { personTone } from './personTone'
 
 describe('agentIdentity', () => {
-  it('gives the three known agents their names and accessories', () => {
+  it('gives the three known agents their names and jobs', () => {
     expect(KNOWN_AGENT_IDS).toEqual(['planner', 'version_checker', 'troubleshooter'])
-    expect(agentIdentity('planner')).toMatchObject({ name: 'Planner', accessory: 'headset', hue: 'var(--lead)', tint: 'var(--lead-tint)' })
-    expect(agentIdentity('version_checker')).toMatchObject({ name: 'Version checker', accessory: 'magnifier', hue: 'var(--checker)' })
-    expect(agentIdentity('troubleshooter')).toMatchObject({ name: 'AI troubleshooter', accessory: 'wrench', hue: 'var(--trouble)' })
+    expect(agentIdentity('planner')).toMatchObject({ name: 'Planner', hue: 'var(--lead)', tint: 'var(--lead-tint)' })
+    expect(agentIdentity('version_checker')).toMatchObject({ name: 'Version checker', job: 'magnifier', hue: 'var(--checker)' })
+    expect(agentIdentity('troubleshooter')).toMatchObject({ name: 'AI troubleshooter', job: 'wrench', hue: 'var(--trouble)' })
   })
 
   it('keeps a known agent its own name whatever the event calls it', () => {
@@ -15,7 +15,7 @@ describe('agentIdentity', () => {
   })
 
   it('gives an unknown agent a plain face and a name from the event, or from its id', () => {
-    expect(agentIdentity('patch_planner', 'Patch planner')).toMatchObject({ id: 'patch_planner', name: 'Patch planner', accessory: 'none' })
+    expect(agentIdentity('patch_planner', 'Patch planner')).toMatchObject({ id: 'patch_planner', name: 'Patch planner', job: undefined })
     expect(agentIdentity('patch_planner').name).toBe('Patch planner')
     expect(agentIdentity('access_auditor').name).toBe('Access auditor')
   })

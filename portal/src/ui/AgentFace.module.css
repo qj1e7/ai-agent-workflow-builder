@@ -5,26 +5,11 @@
 
 .body,
 .eyes,
-.accessory,
 .badge,
 .ok,
 .happy {
   transform-box: fill-box;
   transform-origin: center;
-}
-
-.typing rect {
-  transform-box: fill-box;
-  transform-origin: center bottom;
-  animation: type 0.9s var(--ease-in-out) infinite;
-}
-
-.typing rect:nth-child(2) {
-  animation-delay: 0.15s;
-}
-
-.typing rect:nth-child(3) {
-  animation-delay: 0.3s;
 }
 
 .face[data-state='thinking'] .eyes {
@@ -44,12 +29,18 @@
   animation-delay: 0.4s;
 }
 
-.face[data-state='working'] .eyes {
-  animation: scan 1.6s var(--ease-in-out) infinite alternate;
+.spin {
+  transform-box: view-box;
+  transform-origin: 24px 25px;
 }
 
-.face[data-state='working']:not([data-accessory='headset']) .accessory {
-  animation: tool 1.6s var(--ease-in-out) infinite alternate;
+.face[data-state='thinking'] .spin,
+.face[data-state='working'] .spin {
+  animation: orbit 1.6s linear infinite;
+}
+
+.face[data-state='working'] .eyes {
+  animation: scan 1.6s var(--ease-in-out) infinite alternate;
 }
 
 .ok,
@@ -91,7 +82,8 @@
   animation: doze var(--dur-attn) ease-out both;
 }
 
-:global([data-paused]) .face * {
+:global([data-paused]) .face *,
+:global([data-paused]) .planner * {
   animation-play-state: paused;
 }
 
@@ -103,6 +95,12 @@
 
   50% {
     transform: translate(1.2px, -0.6px);
+  }
+}
+
+@keyframes orbit {
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -124,27 +122,6 @@
 
   to {
     transform: translateX(1.4px);
-  }
-}
-
-@keyframes tool {
-  from {
-    transform: rotate(-6deg);
-  }
-
-  to {
-    transform: rotate(6deg);
-  }
-}
-
-@keyframes type {
-  0%,
-  100% {
-    transform: scaleY(0.35);
-  }
-
-  50% {
-    transform: none;
   }
 }
 
@@ -232,5 +209,72 @@
   from {
     filter: none;
     opacity: 1;
+  }
+}
+
+.planner {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  vertical-align: middle;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.planner[data-state='stopped'] {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+
+.planner[data-react][data-state='stopped'] {
+  animation: doze var(--dur-attn) ease-out both;
+}
+
+.planner[data-react][data-state='waiting'] .badge,
+.planner[data-react][data-state='error'] .badge {
+  animation: badge-in var(--dur-attn) var(--ease-out) both;
+}
+
+.planner[data-react][data-state='success'] .ok {
+  animation: ok-badge var(--dur-success) var(--ease-out) both;
+}
+
+/* The Planner's happy eyes and plain eyes swap while it cheers, as the Orb's do. */
+.planner [data-part='happy'] {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.planner[data-react][data-state='success'] [data-part='happy'] {
+  animation: shown var(--dur-success) ease-out both;
+}
+
+.planner[data-react][data-state='success'] [data-part='eyes'] {
+  animation: hidden var(--dur-success) ease-out both;
+}
+
+@keyframes ok-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+
+  20%,
+  75% {
+    opacity: 1;
+  }
+}
+
+/* With motion off the green check still shows, because it is the only sign of success on the face, but it fades out as in the prototype. */
+@media (prefers-reduced-motion: reduce) {
+  .face[data-react][data-state='success'] .ok,
+  .planner[data-react][data-state='success'] .ok {
+    animation: ok-fade var(--dur-success) ease-out both !important;
   }
 }

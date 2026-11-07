@@ -1,56 +1,79 @@
-import { useState, type ReactNode } from 'react'
-import { agentIdentity, type Accessory } from './agents'
+import { useId, useState, type ReactNode } from 'react'
+import { agentIdentity, type Job } from './agents'
+import { PlannerBot, type BotState } from './PlannerBot'
 import styles from './AgentFace.module.css'
 
 export type FaceState = 'idle' | 'thinking' | 'working' | 'waiting' | 'success' | 'error' | 'stopped'
 
-/** Where the head sits in the 48 by 48 box. An accessory that hangs off one side moves the head away from it. */
-const HEAD: Record<Accessory, readonly [number, number]> = {
-  headset: [24, 26],
-  magnifier: [22, 24],
-  wrench: [22, 24],
-  none: [24, 24],
-}
-
+const PLANNER_ID = 'planner'
 const INK = 'var(--face-ink)'
 
-const ACCESSORY: Record<Accessory, (hue: string) => ReactNode> = {
-  headset: (hue) => (
-    <>
-      <path d="M7.5 25a16.5 16.5 0 0 1 33 0" fill="none" stroke={hue} strokeWidth="3.2" strokeLinecap="round" />
-      <rect x="4.5" y="21" width="6.5" height="11" rx="3.2" fill={hue} />
-      <rect x="37" y="21" width="6.5" height="11" rx="3.2" fill={hue} />
-      <path d="M40 31.5c0 6-4 8.5-9.5 8.5" fill="none" stroke={hue} strokeWidth="2.6" strokeLinecap="round" />
-      <circle cx="30" cy="40" r="2.8" fill={hue} />
-    </>
-  ),
-  magnifier: (hue) => (
-    <>
-      <circle cx="34.5" cy="33.5" r="7" fill="var(--face-lens)" stroke={hue} strokeWidth="3.2" />
-      <path d="M39.6 38.6l5 5" stroke={hue} strokeWidth="4.2" strokeLinecap="round" />
-    </>
-  ),
-  wrench: (hue) => (
-    <g transform="rotate(-45 36 36)" fill={hue}>
-      <rect x="33.6" y="33" width="4.8" height="15" rx="2.4" />
-      <path d="M30 31.5a6 6 0 1 1 12 0v1.2h-3.3v-4.4h-5.4v4.4H30z" />
-    </g>
-  ),
-  none: () => null,
+/** An Orb shows its job badge from this size up. Below it the badge would be a smudge. */
+export const JOB_BADGE_MIN_SIZE = 32
+
+const BOT_STATE: Record<FaceState, BotState> = {
+  idle: 'idle',
+  thinking: 'thinking',
+  working: 'thinking',
+  waiting: 'waiting',
+  success: 'success',
+  error: 'error',
+  stopped: 'stopped',
 }
 
-function Eyes({ x, y, state }: { x: number; y: number; state: FaceState }) {
-  const [top, height] = state === 'stopped' ? [0.5, 1.8] : state === 'waiting' ? [-5, 5.5] : [-4, 6.5]
-  const eye = (dx: number) => <rect x={x + dx} y={y + top} width="4" height={height} rx={Math.min(2, height / 2)} fill={INK} />
+const GLYPH: Record<Job, ReactNode> = {
+  magnifier: (
+    <>
+      <circle cx="38.7" cy="38.7" r="2.4" fill="none" stroke="#fff" strokeWidth="1.5" />
+      <path d="M40.5 40.5l2 2" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" />
+    </>
+  ),
+  wrench: <path d="M42.6 36.4a2.6 2.6 0 0 1-3.1 3.3l-2.9 2.9-1.4-1.4 2.9-2.9a2.6 2.6 0 0 1 3.3-3.1l-1.5 1.5 1.2 1.2z" fill="#fff" />,
+}
+
+function Eyes({ state }: { state: FaceState }) {
+  const rect = (x: number, y: number, height: number) => (
+    <rect x={x - 2} y={y - height / 2} width="4" height={height} rx={Math.min(2, height / 2)} fill={INK} />
+  )
+  const [left, right] = [19, 29]
+  const eyes =
+    state === 'stopped' ? (
+      <>
+        {rect(left, 26.5, 1.8)}
+        {rect(right, 26.5, 1.8)}
+      </>
+    ) : state === 'waiting' ? (
+      <>
+        {rect(left, 23, 5.5)}
+        {rect(right, 23, 5.5)}
+      </>
+    ) : (
+      <>
+        {rect(left, 25, 6.5)}
+        {rect(right, 25, 6.5)}
+      </>
+    )
   return (
-    <g className={styles['eyes']}>
-      {eye(-7)}
-      {eye(3)}
-    </g>
+    <>
+      {state === 'error' ? (
+        <path d="M15.5 19.6l4.5-2M32.5 19.6l-4.5-2" stroke={INK} strokeWidth="1.8" strokeLinecap="round" fill="none" />
+      ) : null}
+      <g className={styles['eyes']}>{eyes}</g>
+      {state === 'success' ? (
+        <path
+          className={styles['happy']}
+          d="M17 26q2-3.4 4 0M27 26q2-3.4 4 0"
+          stroke={INK}
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          fill="none"
+        />
+      ) : null}
+    </>
   )
 }
 
-function Badge({ fill, className, children }: { fill: string; className: string | undefined; children: ReactNode }) {
+function Ring({ fill, className, children }: { fill: string; className: string | undefined; children: ReactNode }) {
   return (
     <g className={className}>
       <circle cx="40" cy="9" r="7.5" fill="var(--surface)" />
@@ -60,6 +83,32 @@ function Badge({ fill, className, children }: { fill: string; className: string 
   )
 }
 
+/** The status badge, top right on a ring, shared by the Orb and the Visor bot. It says the same as the words beside the face. */
+function StatusBadge({ state }: { state: FaceState }) {
+  if (state === 'waiting') {
+    return (
+      <Ring fill="var(--amber)" className={styles['badge']}>
+        <path d="M40 5.6v3.6l2.2 1.3" stroke={INK} strokeWidth="1.6" strokeLinecap="round" fill="none" />
+      </Ring>
+    )
+  }
+  if (state === 'error') {
+    return (
+      <Ring fill="var(--red)" className={styles['badge']}>
+        <path d="M40 5.4v4.2M40 12.3v.2" stroke="var(--on-status)" strokeWidth="1.9" strokeLinecap="round" />
+      </Ring>
+    )
+  }
+  if (state === 'success') {
+    return (
+      <Ring fill="var(--green)" className={styles['ok']}>
+        <path d="M37.3 9.2l1.9 1.9 3.6-3.8" stroke="var(--on-status)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      </Ring>
+    )
+  }
+  return null
+}
+
 interface AgentFaceProps {
   id: string
   display?: string
@@ -67,47 +116,56 @@ interface AgentFaceProps {
   state?: FaceState
 }
 
-/** A round head in the agent's tint, two eyes, and one accessory in its hue. The name beside it is the text, so the face is hidden from screen readers. */
+/**
+ * Every agent has a face. The Planner is the Visor bot and every other agent is a flat Orb in its own colour, with a
+ * badge for its job from 32 px up. The state comes from the real state of the work. The name beside the face is the
+ * text, so the face is hidden from screen readers.
+ */
 export function AgentFace({ id, display, size = 54, state = 'idle' }: AgentFaceProps) {
-  const { accessory, hue, tint } = agentIdentity(id, display)
-  const [x, y] = HEAD[accessory]
+  const { hue, tint, job } = agentIdentity(id, display)
+  const gradient = useId()
   const [firstState] = useState(state)
+  const react = state !== firstState || undefined
+
+  if (id === PLANNER_ID) {
+    return (
+      <span className={styles['planner']} data-face="visor" data-state={state} data-react={react} style={{ width: size, height: size }} aria-hidden="true">
+        <PlannerBot state={BOT_STATE[state]} size={size} still />
+        <svg className={styles['overlay']} viewBox="0 0 48 48" width={size} height={size} focusable="false">
+          <StatusBadge state={state} />
+        </svg>
+      </span>
+    )
+  }
+
+  const showJob = job !== undefined && size >= JOB_BADGE_MIN_SIZE
   return (
     <svg
       className={styles['face']}
+      data-face="orb"
       data-state={state}
-      data-accessory={accessory}
-      data-react={state !== firstState || undefined}
+      data-react={react}
+      data-job={showJob ? job : undefined}
       viewBox="0 0 48 48"
       width={size}
       height={size}
       aria-hidden="true"
       focusable="false"
     >
+      <defs>
+        <radialGradient id={gradient} cx="40%" cy="34%" r="72%">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="0.5" stopColor={tint} />
+          <stop offset="1" stopColor={hue} />
+        </radialGradient>
+      </defs>
       <g className={styles['body']}>
-        <circle cx={x} cy={y} r="15" fill={tint} />
-        {state === 'error' ? (
-          <path d={`M${x - 8} ${y - 6.5}l4.5-2.2M${x + 8} ${y - 6.5}l-4.5-2.2`} stroke={INK} strokeWidth="1.8" strokeLinecap="round" fill="none" />
-        ) : null}
-        <Eyes x={x} y={y} state={state} />
-        {state === 'success' ? (
-          <path
-            className={styles['happy']}
-            d={`M${x - 7} ${y + 0.5}q2-3.2 4 0M${x + 3} ${y + 0.5}q2-3.2 4 0`}
-            stroke={INK}
-            strokeWidth="2"
-            strokeLinecap="round"
-            fill="none"
-          />
-        ) : null}
-        <g className={styles['accessory']}>{ACCESSORY[accessory](hue)}</g>
-        {state === 'working' && accessory === 'none' ? (
-          <g className={styles['typing']} fill={hue}>
-            <rect x={x - 6} y="42" width="3" height="4" rx="1" />
-            <rect x={x - 1.5} y="42" width="3" height="4" rx="1" />
-            <rect x={x + 3} y="42" width="3" height="4" rx="1" />
-          </g>
-        ) : null}
+        <circle cx="24" cy="25" r="21" fill={hue} opacity="0.12" />
+        <circle cx="24" cy="25" r="17" fill={`url(#${gradient})`} />
+        <g className={styles['spin']}>
+          <ellipse cx="15.5" cy="16.5" rx="4.6" ry="2.4" fill="#fff" opacity="0.8" transform="rotate(-38 15.5 16.5)" />
+        </g>
+        <Eyes state={state} />
       </g>
       {state === 'thinking' ? (
         <g className={styles['think']}>
@@ -116,21 +174,14 @@ export function AgentFace({ id, display, size = 54, state = 'idle' }: AgentFaceP
           <circle cx="45" cy="2" r="2.1" />
         </g>
       ) : null}
-      {state === 'waiting' ? (
-        <Badge fill="var(--amber)" className={styles['badge']}>
-          <path d="M40 5.6v3.6l2.2 1.3" stroke={INK} strokeWidth="1.6" strokeLinecap="round" fill="none" />
-        </Badge>
+      {showJob ? (
+        <g>
+          <circle cx="39.5" cy="39.5" r="7.2" fill="var(--surface)" />
+          <circle cx="39.5" cy="39.5" r="5.9" fill={hue} />
+          {GLYPH[job]}
+        </g>
       ) : null}
-      {state === 'error' ? (
-        <Badge fill="var(--red)" className={styles['badge']}>
-          <path d="M40 5.4v4.2M40 12.3v.2" stroke="var(--on-status)" strokeWidth="1.9" strokeLinecap="round" />
-        </Badge>
-      ) : null}
-      {state === 'success' ? (
-        <Badge fill="var(--green)" className={styles['ok']}>
-          <path d="M37.3 9.2l1.9 1.9 3.6-3.8" stroke="var(--on-status)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        </Badge>
-      ) : null}
+      <StatusBadge state={state} />
     </svg>
   )
 }
