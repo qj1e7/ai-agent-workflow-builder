@@ -1240,7 +1240,9 @@ def _joined(clause: Clause) -> str:
 def _bounds(row: Clause, reader: _Reader) -> list[int]:
     """Where a phrase starts: a preposition, a conjunction, a mark, a relative word before a
     copula, a field or a verb ("whose priority", "that are", "that lists"), and a verb's past or
-    -ing form after a noun ("closed this week", "labelled urgent", "listing them")."""
+    -ing form after a noun ("closed this week", "labelled urgent", "listing them"). A cut never
+    takes a verb and its object with it, so "that lists each one's component" is left to the
+    model's alternative; a verb that ends the span, as in "no component filter", is a noun."""
     found: list[int] = []
     for at, word in enumerate(row):
         after = row[at + 1] if at + 1 < len(row) else None
@@ -1307,7 +1309,13 @@ def _cut_field(row: Clause, at: int, reader: _Reader) -> Clause | None:
         start -= 1
     if row[start].raw == "(" and end < len(row) and row[end].raw == ")":
         return row[:start] + row[end + 1 :]
-    if any(reader.acts(w) for w in row[start + 1 : end]):
+    inside = row[start + 1 : end]
+    if any(
+        reader.acts(w)
+        and not _noun_place(inside[i - 1] if i else row[start])
+        and i + 1 < len(inside)
+        for i, w in enumerate(inside)
+    ):
         return None
     while end < len(row) and row[end].low in ("and", "or", ","):
         after_end = next((i for i in bounds if i > end), len(row))

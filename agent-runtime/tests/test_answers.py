@@ -332,6 +332,20 @@ def test_an_alternative_that_still_reads_the_field_is_offered_without_it():
     assert not any("component" in r.text for r in answer.rows)
 
 
+def test_a_filter_the_model_split_into_its_own_cant_row_leaves_the_part_it_can_do():
+    rows = (
+        row("schedule", "", "missing"),
+        row("look_for", "Bug tickets in MOCK project"),
+        row("look_for", "In the Backend component", "cant_do", "Can't see components.", None),
+        row("do", "List the bug tickets found"),
+        row("where", "", "missing"),
+    )
+    answer = answer_of(read(*rows), "List bug tickets in MOCK in the Backend component")
+    assert isinstance(answer, PartAnswer)
+    assert [r.text for r in answer.rows if r.kind == "look_for"] == ["Bug tickets in MOCK project"]
+    assert answer.cant[0].text == "In the Backend component"
+
+
 def test_a_field_read_with_nothing_left_to_look_for_is_a_cant_with_no_card():
     rows = (
         row("schedule", "", "missing"),

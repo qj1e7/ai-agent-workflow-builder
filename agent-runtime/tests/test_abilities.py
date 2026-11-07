@@ -777,6 +777,7 @@ def test_a_read_of_a_field_the_agents_cant_see_is_held_and_a_change_to_one_is_no
             "Create one ticket that lists them",
         ),
         ("Create one ticket that lists each one's component and priority", None),
+        ("Bug tickets in MOCK, with no component filter", "Bug tickets in MOCK"),
         ("List their components", None),
         ("Components of open tickets", None),
         ("Change their component", None),

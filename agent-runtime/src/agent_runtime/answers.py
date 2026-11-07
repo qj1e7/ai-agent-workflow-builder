@@ -248,11 +248,19 @@ def _name_of(said: str | None, request: str) -> str:
 
 
 def _offered(answers: list[AnswerRow], request: str) -> list[UnderstoodRow] | None:
+    """The card offered instead: every accepted row, and for a can't row the nearest part the
+    tools can do. A can't half of a part the model split in two, as the prompt asks, needs
+    nothing instead when the other half is accepted. None when nothing can be offered."""
+    marked = [(answer, _with_guess_marked(answer, request)) for answer in answers]
     rows: list[UnderstoodRow] = []
-    for answer in answers:
-        row = _with_guess_marked(answer, request)
+    for answer, row in marked:
         instead = row if row.state != "cant_do" else _instead_of(answer, row)
         if instead is None:
+            split = any(
+                r.kind == row.kind and r.state in ACCEPTED for a, r in marked if a is not answer
+            )
+            if split:
+                continue
             return None
         rows.append(instead)
     arranged = arrange(rows)
