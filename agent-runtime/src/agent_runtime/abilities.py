@@ -1645,6 +1645,7 @@ SKIPS_A_YES: Final = re.compile(
       | \bapproved\s+(?:automatically|by\s+itself|on\s+its\s+own)\b
       | \bautomatically\s+approved\b
       | \bapprov\w*\s+(?:its\s+own|their\s+own)\b
+      | \b{_A_YES}\s+(?:afterwards|afterward|later|after\s+that|after\s+the\s+fact)\b
     )
 """,
     re.IGNORECASE | re.VERBOSE,

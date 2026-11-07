@@ -1558,3 +1558,29 @@ def test_an_other_field_with_no_words_takes_the_field_the_word_net_reads():
     answer = answer_of(read(*rows), "Every Monday, list critical bugs in MOCK")
     assert isinstance(answer, PartAnswer)
     assert answer.cant[0].note.startswith("I can't tell a ticket's priority yet.")
+
+
+@pytest.mark.parametrize(
+    ("task", "said"),
+    [
+        (
+            "Every Monday, list open bug tickets in MOCK and create one ticket that lists them, "
+            "create it first and get the approval afterwards",
+            "approval afterwards",
+        ),
+        ("Create the ticket now, sign-off later", "sign-off later"),
+    ],
+)
+def test_an_approval_after_the_write_is_refused_by_the_word_rule(task: str, said: str):
+    answer = answer_of(read(*FOLLOW_UP_ROWS), task)
+    assert isinstance(answer, RefusedAnswer) and answer.said == said
+
+
+def test_approvals_after_a_date_in_a_read_are_not_refused():
+    rows = (
+        row("schedule", "", "missing"),
+        row("look_for", "Approvals after Monday"),
+        row("do", "Count them"),
+        row("where", "", "missing"),
+    )
+    assert not isinstance(answer_of(read(*rows), "Count the approvals after Monday"), RefusedAnswer)

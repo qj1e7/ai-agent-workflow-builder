@@ -1353,5 +1353,13 @@
    "understood",
    "changed"
   ]
+ },
+ {
+  "id": "in-task-approval-afterwards",
+  "note": "A yes asked for after the write (round 4): refused by the word rule, never a plain card.",
+  "task": "Every Monday, list open bug tickets in MOCK and create one ticket that lists them, create it first and get the approval afterwards",
+  "kind": [
+   "refused"
+  ]
  }
 ]
