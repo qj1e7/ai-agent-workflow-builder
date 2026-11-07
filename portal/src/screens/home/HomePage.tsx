@@ -174,7 +174,7 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
     const found = drafts.data.find((saved) => saved.draft_id === wanted)
     const { form, plan } = found ? restoreDraft(found) : { form: null, plan: null }
     if (form !== null && form.rows.length > 0) {
-      dispatch({ type: 'resumed', start: { form, plan, draftId: wanted, similar: null } })
+      dispatch({ type: 'resumed', start: { form, plan, draftId: wanted, similar: null, ...(found ? { resumed: found } : {}) } })
       return
     }
     setParams({}, { replace: true })

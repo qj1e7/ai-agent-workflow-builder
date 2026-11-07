@@ -620,7 +620,7 @@ describe('the Planner’s set-up card', () => {
 
     it('adds the plan’s empty inputs, such as the Jira project, to the same list', () => {
       const plan = AGENTS([{ name: 'Jira project', kind: 'jira_project' }])
-      expect(setupLeft(fresh(), plan)).toEqual(['when it runs', 'the jira project'])
+      expect(setupLeft(fresh(), plan)).toEqual(['when it runs', 'the Jira project'])
       const form = { ...fresh(), typed: { '0:Jira project': 'mock' } }
       expect(setupLeft(form, plan)).toEqual(['when it runs'])
     })
@@ -636,7 +636,7 @@ describe('the Planner’s set-up card', () => {
     it('is the one source of the footer line, with a count that follows the list', () => {
       expect(leftWords([])).toBe('Nothing is unclear. Turn it on when you’re ready.')
       expect(leftWords(['when it runs'])).toBe('1 choice left: when it runs.')
-      expect(leftWords(['when it runs', 'the jira project'])).toBe('2 choices left: when it runs and the jira project.')
+      expect(leftWords(['when it runs', 'the Jira project'])).toBe('2 choices left: when it runs and the Jira project.')
       expect(andList(['a', 'b', 'c'])).toBe('a, b and c')
     })
   })

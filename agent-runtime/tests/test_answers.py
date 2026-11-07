@@ -1365,6 +1365,12 @@ def test_check_part_refuses_vulnerabilities_with_the_planned_words():
         "Create one ticket that lists them, no human in the loop",
         "Create one ticket, pre-approved",
         "Create the ticket and skip the approval",
+        "Create one follow-up ticket that lists them without waiting for approval",
+        "Create the ticket without asking anyone",
+        "Create the ticket, no need for a yes",
+        "Create the ticket and skip the sign-off",
+        "Create the ticket with no review",
+        "Create the ticket without an approver",
     ],
 )
 def test_check_part_never_lets_a_part_skip_the_yes(text: str):
@@ -1372,6 +1378,14 @@ def test_check_part_never_lets_a_part_skip_the_yes(text: str):
     cant = client.post("/v1/planner/check-part", json=check_body("do", text)).json()
     assert cant["state"] == "cant_do"
     assert cant["note"] == "I can't skip the yes. Nothing is written without a yes."
+
+
+def test_check_part_still_fits_a_safe_does_text():
+    client = make_app(None)
+    fits = client.post(
+        "/v1/planner/check-part", json=check_body("do", "Summarise them in one new ticket")
+    ).json()
+    assert fits == {"state": "fits"}
 
 
 def test_check_part_refuses_a_blank_text():

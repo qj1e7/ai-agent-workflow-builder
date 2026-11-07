@@ -7,7 +7,7 @@ import { useLatch } from '../../api/latch'
 import { refusedWords, useDeleteDraft, usePlanFor, useReadAgentCards, useSaveDraft } from '../../api/newQueries'
 import { useCheckPart } from '../../api/plannerQueries'
 import { useAgentCards, useCreateAgentUseCase, useMe, useSaveCard, useStartRun, useTools, useUseCase } from '../../api/queries'
-import type { SimilarWorkflow, ToolId, ToolView, UseCaseView } from '../../api/types'
+import type { DraftView, SimilarWorkflow, ToolId, ToolView, UseCaseView } from '../../api/types'
 import { AgentFace } from '../../ui/AgentFace'
 import { Button, buttonClassName } from '../../ui/Button'
 import { IconCheck } from '../../ui/icons'
@@ -22,6 +22,7 @@ import {
   DEST_WORDS,
   draftContent,
   dropRow,
+  andList,
   leftWords,
   lowerFirst,
   nameProblem,
@@ -48,6 +49,7 @@ import {
   type WhenField,
   type Form,
 } from './card'
+import { DiscardDialog } from '../workflows/Sections'
 import { CardLive, useMainButton } from './primary'
 import styles from './SetupCard.module.css'
 
@@ -56,6 +58,8 @@ export interface CardStart {
   readonly form: Form
   readonly plan: Planned | null
   readonly draftId: string | null
+  /** The saved draft this card was reopened from, so Never mind can ask and Undo can put it back. */
+  readonly resumed?: DraftView
   readonly similar: SimilarWorkflow | null
 }
 
@@ -100,10 +104,8 @@ function writesOf(plan: PlanView | null, kinds: ToolKinds): boolean | null {
   return plan.agents.some((agent) => agent.blocks.some((block) => block.tool !== null && kinds.get(block.tool) !== 'read'))
 }
 
-const NAMES = /^(Jira|Teams|GitHub|GitLab|Confluence|Slack|Outlook|Entra)\b/
-
 /** A part reads inside a sentence, so its first letter drops to lower case, except for a name. */
-export const soften = (text: string): string => (NAMES.test(text) ? text : lowerFirst(text))
+export const soften = (text: string): string => lowerFirst(text)
 
 function Chip({ row, index, open, editorId, onOpen }: { row: Row; index: number; open: boolean; editorId: string; onOpen: (index: number) => void }) {
   const label = ROW_LABEL[row.kind]
@@ -333,7 +335,7 @@ function HowItWorks({ plan, kinds, reused }: { plan: PlanView | null; kinds: Too
   )
 }
 
-function Done({ useCaseId, writes, draftKept }: { useCaseId: string; writes: boolean | null; draftKept: boolean }) {
+function Done({ useCaseId, writes, draftKept, newAgents }: { useCaseId: string; writes: boolean | null; draftKept: boolean; newAgents: readonly string[] }) {
   const useCase = useUseCase(useCaseId)
   const start = useStartRun()
   const latch = useLatch()
@@ -365,6 +367,7 @@ function Done({ useCaseId, writes, draftKept }: { useCaseId: string; writes: boo
             ? 'Nothing it does changes data, so no yes is needed.'
             : 'Before it changes anything, any Approver on your team except you is asked for a yes in Teams.'}
         </p>
+        {newAgents.length > 0 ? <p>{newAgents.length === 1 ? `The ${newAgents[0] ?? ''} is saved in the Agent library.` : `${andList(newAgents.map((agent) => `the ${agent}`))} are saved in the Agent library.`}</p> : null}
         <p className="muted">{PROMISES}</p>
         {draftKept ? <p className="muted">Your draft is still on Workflows. This workflow is already on, so there is no need to turn it on again.</p> : null}
         <div className={styles['btns']}>
@@ -393,7 +396,7 @@ function firstRun(useCase: UseCaseView, now: Date): string {
   return `First run ${at.startsWith('Today, ') ? `today at ${at.slice('Today, '.length)}` : `on ${at}`}, ${timesZone(zone)}.`
 }
 
-type Phase = { readonly kind: 'open' } | { readonly kind: 'done'; readonly useCaseId: string; readonly draftKept: boolean } | { readonly kind: 'never_mind' }
+type Phase = { readonly kind: 'open' } | { readonly kind: 'done'; readonly useCaseId: string; readonly draftKept: boolean; readonly newAgents: readonly string[] } | { readonly kind: 'never_mind' }
 
 /**
  * The set-up card (spec 7). One state, the form, drives the sentence, the footer line and the reason Turn it on waits. Every
@@ -409,6 +412,10 @@ export function SetupCard({ start }: { start: CardStart }) {
   const [shown, setShown] = useState(false)
   const [refused, setRefused] = useState<readonly string[]>([])
   const [saveProblem, setSaveProblem] = useState<string | null>(null)
+  const [filled, setFilled] = useState(true)
+  const [asking, setAsking] = useState(false)
+  const [discardProblem, setDiscardProblem] = useState<string | null>(null)
+  const [undoProblem, setUndoProblem] = useState<string | null>(null)
   const [params, setParams] = useSearchParams()
   const id = useId()
   const check = useCheckPart()
@@ -555,7 +562,7 @@ export function SetupCard({ start }: { start: CardStart }) {
         .then(({ useCaseId, draftKept }) => {
           void queryClient.invalidateQueries({ queryKey: ['home'] })
           void queryClient.invalidateQueries({ queryKey: ['agent-cards'] })
-          setPhase({ kind: 'done', useCaseId, draftKept })
+          setPhase({ kind: 'done', useCaseId, draftKept, newAgents: plan.agents.filter((agent) => agent.card.kind === 'drafted' && !(reused?.has(agent.index) ?? false)).map((agent) => agent.name) })
           if (params.get('draft') !== null) setParams({}, { replace: true })
         })
         .catch((error: unknown) => {
@@ -567,10 +574,52 @@ export function SetupCard({ start }: { start: CardStart }) {
     })
   }
 
-  const neverMind = () => {
-    if (draft !== null) deleteDraft.mutate(draft)
+  const leave = () => {
     setPhase({ kind: 'never_mind' })
     if (params.get('draft') !== null) setParams({}, { replace: true })
+  }
+
+  const neverMind = () => {
+    if (start.resumed !== undefined && draft !== null) {
+      setDiscardProblem(null)
+      setAsking(true)
+      return
+    }
+    if (draft !== null) deleteDraft.mutate(draft)
+    leave()
+  }
+
+  const confirmDiscard = () => {
+    if (draft === null) return
+    latch.run((settled) =>
+      deleteDraft.mutate(draft, {
+        onSuccess: () => {
+          setAsking(false)
+          leave()
+        },
+        onError: (error) => setDiscardProblem(`Could not discard it. ${words(error)}`),
+        onSettled: settled,
+      }),
+    )
+  }
+
+  const undoNeverMind = () => {
+    const kept = start.resumed
+    if (kept === undefined) return
+    latch.run((settled) =>
+      saveDraft.mutate(
+        { draftId: kept.draft_id, draft: { step: kept.step, content: kept.content, put_back: { created_at: kept.created_at, saved_at: kept.saved_at } } },
+        {
+          onSuccess: () => {
+            setUndoProblem(null)
+            setPhase({ kind: 'open' })
+            setParams({ draft: kept.draft_id }, { replace: true })
+          },
+          onError: (error) => setUndoProblem(`Could not put it back. ${words(error)}`),
+          onSettled: settled,
+        },
+      ),
+    )
   }
 
   const pointAtWhatIsLeft = () => {
@@ -587,9 +636,26 @@ export function SetupCard({ start }: { start: CardStart }) {
     document.querySelector<HTMLElement>(`[data-card="${id}"] input[aria-invalid="true"], [data-card="${id}"] [data-state="missing"] input`)?.focus()
   }
 
-  if (phase.kind === 'never_mind') return <p className="muted">All right, never mind.</p>
+  if (phase.kind === 'never_mind')
+    return (
+      <div>
+        <p className="muted">All right, never mind.</p>
+        {start.resumed !== undefined ? (
+          <>
+            <Button loading={saveDraft.isPending} onClick={undoNeverMind}>
+              Undo
+            </Button>
+            {undoProblem ? (
+              <p className={styles['problem']} role="alert">
+                {undoProblem}
+              </p>
+            ) : null}
+          </>
+        ) : null}
+      </div>
+    )
   if (phase.kind === 'open' && !live) return <p className="muted">Saved as a draft. Open it from Workflows to carry on.</p>
-  if (phase.kind === 'done') return <Done useCaseId={phase.useCaseId} writes={writesOf(plan, kinds)} draftKept={phase.draftKept} />
+  if (phase.kind === 'done') return <Done useCaseId={phase.useCaseId} writes={writesOf(plan, kinds)} draftKept={phase.draftKept} newAgents={phase.newAgents} />
 
   const title = nameOf(form, plan) || 'New workflow'
   const rowsOf = (kind: Row['kind']) => form.rows.flatMap((row, index) => (row.kind === kind ? [{ row, index }] : []))
@@ -649,7 +715,10 @@ export function SetupCard({ start }: { start: CardStart }) {
               id={`${id}-name`}
               type="text"
               value={form.name}
-              onChange={(event) => edit((before) => ({ ...before, name: event.target.value }))}
+              onChange={(event) => {
+                setFilled(false)
+                edit((before) => ({ ...before, name: event.target.value }))
+              }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === 'Escape') {
                   event.preventDefault()
@@ -670,9 +739,11 @@ export function SetupCard({ start }: { start: CardStart }) {
         ) : (
           <>
             <h3 id={`${id}-title`}>{title}</h3>
-            <span className={styles['tag']} data-state="changed">
-              {TAG_FILLED}
-            </span>
+            {filled ? (
+              <span className={styles['tag']} data-state="changed">
+                {TAG_FILLED}
+              </span>
+            ) : null}
             <button type="button" id={`${id}-rename`} className={styles['link']} onClick={() => open('name')}>
               Rename<span className="visually-hidden"> {title}</span>
             </button>
@@ -778,6 +849,7 @@ export function SetupCard({ start }: { start: CardStart }) {
           {saveProblem}
         </p>
       ) : null}
+      {asking ? <DiscardDialog name={title} busy={deleteDraft.isPending} problem={discardProblem} onClose={() => setAsking(false)} onConfirm={confirmDiscard} /> : null}
     </section>
   )
 }

@@ -538,11 +538,17 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     return Answered(answer=answer_of(read, request.task))
 
 
+APPROVAL_WORDS: Final = re.compile(
+    r"\b(approv\w*|sign[- ]?off|a yes|yes|review\w*|wait\w*|ask(?:ing)?|anyone|anybody)\b", re.I
+)
+
+
 def check_one_part(request: CheckPartRequest) -> CheckPartResult:
     """One part the person changed, checked by code alone: no model, nothing guessed. A part the
     platform can't do comes back with the words of the registry and what a fix would need."""
     text = plain(request.text, TEXT_LIMIT)
-    note = SKIP_PART_NOTE if word_rule_refusal(text) else why_not(request.kind, text)
+    mentions_approval = word_rule_refusal(text) or APPROVAL_WORDS.search(text)
+    note = SKIP_PART_NOTE if mentions_approval else why_not(request.kind, text)
     if note is None:
         return PartFits()
     need = need_of(request.kind, text)

@@ -178,7 +178,9 @@ export function rowBlockers(rows: readonly Row[]): Blocker[] {
 }
 
 const withoutStop = (text: string) => text.trim().replace(/[.!?]+$/, '')
-export const lowerFirst = (text: string) => (/^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text)
+const NAMES = /^(Jira|Teams|GitHub|GitLab|Confluence|Slack|Outlook|Entra)\b/
+
+export const lowerFirst = (text: string) => (/^[A-Z][a-z]/.test(text) && !NAMES.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text)
 const upperFirst = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
 
 export function textsOf(rows: readonly Row[], kind: RowKind): string[] {
