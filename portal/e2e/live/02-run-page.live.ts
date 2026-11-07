@@ -59,7 +59,9 @@ test('alice starts a check; bob opens the waiting run, sees the ticket it will c
   await expect(steps(bob)).toHaveCount(6)
   for (const step of await steps(bob).all()) await expect(step).toHaveAttribute('data-state', 'done')
   await expect(steps(bob).last()).toContainText('Done: Done')
-  await expect(bob.locator('[data-gate-said]').last(), 'after the yes, focus moves to what the gate said').toBeFocused()
+  await expect(heading(bob), 'the agents’ chat stays folded, so after the yes focus moves to the heading').toBeFocused()
+  await expect(toggle(bob)).toHaveText('Show what each agent did')
+  await toggle(bob).click()
   await expect(bob.locator('[data-gate-said]').last()).toHaveText('Bob approved.')
 
   const written = (await backend.tickets()).filter((ticket) => ticket.run_id === runId)

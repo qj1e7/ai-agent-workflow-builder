@@ -206,7 +206,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const party = partyOf(approval.data, me?.id)
   const saidByMe = me ? shown.chat.findLast((item) => item.kind === 'decided' && item.by === me.id) : undefined
   const open = detailOpen(detail.choice, shown)
-  const focusAfterDeciding = useFocusWhenReady(saidByMe !== undefined, () =>
+  const focusAfterDeciding = useFocusWhenReady(saidByMe !== undefined && !waiting, () =>
     open
       ? chatList.current?.querySelector<HTMLElement>(`[data-gate-said="${saidByMe?.seq ?? ''}"]`)
       : document.querySelector<HTMLElement>('main h1'),
