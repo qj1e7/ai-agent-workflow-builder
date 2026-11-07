@@ -30,6 +30,7 @@ from platform_api.orchestration.connections import (
     jira_probe,
     model_probe,
     settle,
+    source_of,
     teams_probe,
 )
 from platform_api.orchestration.dispatch import MessageRef
@@ -458,6 +459,7 @@ async def test_the_model_row_is_read_fresh_on_every_view_and_never_kept(db: Data
     )
     (working,) = await connections.view()
     assert (working.state, working.key_ends_in) == ("working", "x7")
+    assert (working.checked_at, working.last_ok_at) == (None, None)
 
     models.state = SettingsState(True, None, None, [])
     (gone,) = await connections.view()
@@ -532,3 +534,80 @@ async def test_an_answer_that_is_not_jiras_is_not_a_working_jira():
     client = httpx.AsyncClient(transport=httpx.MockTransport(sign_in_page))
     jira = JiraRestAdapter(BASE, "datacenter", JiraAuth.bearer("t"), client, sleep=no_wait)
     assert await jira.check() == "not_answering"
+
+
+LIVE_SOURCE = source_of("teams_workflows", "https://example.invalid/hook?sig=secret-value")
+
+
+def pair(db: Database, id: ConnectionId, name: str, first: Scripted, second: Scripted):
+    """The same connection before and after a switch, sharing one table."""
+    return (
+        Connections(db, [Entry(id, name, True, first, "practice")]),
+        Connections(db, [Entry(id, name, False, second, LIVE_SOURCE)]),
+    )
+
+
+@pytest.mark.parametrize(
+    ("id", "name", "real_reading"),
+    [
+        ("teams", "Teams", Reading("not_checked", "Not checked yet.")),
+        ("jira", "Jira", REFUSED),
+        ("github", "GitHub", Reading("needs_attention", "GitHub does not accept the key.")),
+    ],
+)
+async def test_going_live_starts_with_no_history_from_the_practice_copy(
+    db: Database, id: ConnectionId, name: str, real_reading: Reading
+):
+    practice, real = pair(db, id, name, Scripted(), Scripted(real_reading))
+    (before,) = await practice.view()
+    assert (before.state, before.last_ok_at) == ("working", before.checked_at)
+
+    (after,) = await real.view()
+    assert after.state == real_reading.state
+    assert after.last_ok_at is None
+    assert after.practice is False
+    checked = await real.check_now(id)
+    assert checked is not None and checked.last_ok_at is None
+    assert [c.id for c in await real.needing_attention()] == (
+        [] if real_reading.state == "not_checked" else [id]
+    )
+
+
+async def test_a_real_copy_that_worked_is_not_shown_as_the_practice_copy(db: Database):
+    real_side = Connections(db, [Entry("teams", "Teams", False, Scripted(), LIVE_SOURCE)])
+    practice_side = Connections(db, [Entry("teams", "Teams", True, Scripted(DOWN), "practice")])
+    await real_side.view()
+    assert [c.id for c in await practice_side.needing_attention()] == []
+    (back,) = await practice_side.view()
+    assert (back.state, back.practice) == ("not_answering", True)
+    assert back.last_ok_at is None
+
+
+async def test_a_new_address_is_a_new_connection(db: Database):
+    other = source_of("teams_workflows", "https://example.invalid/other-hook")
+    old = Connections(db, [Entry("teams", "Teams", False, Scripted(), LIVE_SOURCE)])
+    new = Connections(db, [Entry("teams", "Teams", False, Scripted(DOWN), other)])
+    await old.view()
+    (after,) = await new.view()
+    assert (after.state, after.last_ok_at) == ("not_answering", None)
+
+
+async def test_a_tick_checks_a_row_another_source_made_as_never_checked(db: Database):
+    practice, real = pair(db, "jira", "Jira", Scripted(), Scripted(WORKING))
+    await practice.view()
+    await real.check_due()
+    (after,) = await real.view()
+    assert after.state == "working" and after.last_ok_at == after.checked_at
+
+
+async def test_the_source_kept_is_a_fingerprint_never_the_address(db: Database):
+    address = "https://example.invalid/hook?sig=secret-value"
+    await Connections(
+        db, [Entry("teams", "Teams", False, Scripted(), source_of("teams_workflows", address))]
+    ).view()
+    async with db.transaction("orchestration") as uow:
+        rows = await (
+            await uow.conn.execute("SELECT * FROM orchestration.connection_checks")
+        ).fetchall()
+    assert "secret-value" not in repr(rows) and "example.invalid" not in repr(rows)
+    assert rows[0]["source"].startswith("teams_workflows:")

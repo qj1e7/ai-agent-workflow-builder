@@ -6,8 +6,9 @@ never a token, so it is safe to store and to show.
 """
 
 import asyncio
+import hashlib
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Any, Final, Literal, Protocol, cast
@@ -67,9 +68,21 @@ class Entry:
     name: str
     practice: bool
     probe: Probe
+    source: str = ""
+    """Which copy the probe talks to: "practice", or the adapter with a fingerprint of its
+    address. A stored result made by another source is another connection's history and is ignored,
+    so a practice copy's good result never stands in for a real one after go-live."""
     live: bool = False
     """A live connection is read fresh on every view and never stored, because another screen
     owns the fact and a stored copy could disagree with it."""
+
+
+def source_of(kind: str, address: str | None) -> str:
+    """A name for the target that a stored result can be compared with. The address can hold a
+    key, so only a one-way fingerprint of it is kept."""
+    if address is None:
+        return "practice"
+    return f"{kind}:{hashlib.sha256(address.encode()).hexdigest()[:16]}"
 
 
 @dataclass(frozen=True)
@@ -122,7 +135,8 @@ class ConnectionCheck:
     practice: bool
     state: ConnectionState
     checked_at: datetime | None
-    """None while nothing has been tried, so no time implies a test happened."""
+    """None while nothing has been tried, and for a live connection, which is read and not
+    checked, so no time implies a test happened."""
     last_ok_at: datetime | None
     problem: str | None
     key_ends_in: str | None
@@ -160,32 +174,41 @@ def fix_for(entry: Entry, state: ConnectionState, *, expiring: bool) -> str | No
 
 
 class ConnectionStore:
-    async def load_all(self, uow: UnitOfWork) -> dict[ConnectionId, Shown]:
+    async def load_all(
+        self, uow: UnitOfWork, sources: Mapping[ConnectionId, str]
+    ) -> dict[ConnectionId, Shown]:
+        """Only results made by the source each connection has now."""
         rows = await (
             await uow.conn.execute("SELECT * FROM orchestration.connection_checks")
         ).fetchall()
-        return {cast(ConnectionId, row["connection"]): _shown(row) for row in rows}
+        return {
+            cast(ConnectionId, row["connection"]): _shown(row)
+            for row in rows
+            if sources.get(cast(ConnectionId, row["connection"])) == row["source"]
+        }
 
-    async def lock(self, uow: UnitOfWork, id: ConnectionId) -> Shown | None:
+    async def lock(self, uow: UnitOfWork, id: ConnectionId, source: str) -> Shown | None:
         row = await (
             await uow.conn.execute(
                 "SELECT * FROM orchestration.connection_checks WHERE connection = %s FOR UPDATE",
                 (id,),
             )
         ).fetchone()
-        return None if row is None else _shown(row)
+        return None if row is None or row["source"] != source else _shown(row)
 
-    async def save(self, uow: UnitOfWork, id: ConnectionId, shown: Shown) -> None:
+    async def save(self, uow: UnitOfWork, id: ConnectionId, source: str, shown: Shown) -> None:
         await uow.conn.execute(
-            "INSERT INTO orchestration.connection_checks (connection, state, problem, "
+            "INSERT INTO orchestration.connection_checks (connection, source, state, problem, "
             "checked_at, last_ok_at, expires_at, key_ends_in, unconfirmed_state) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
-            "ON CONFLICT (connection) DO UPDATE SET state = EXCLUDED.state, "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+            "ON CONFLICT (connection) DO UPDATE SET source = EXCLUDED.source, "
+            "state = EXCLUDED.state, "
             "problem = EXCLUDED.problem, checked_at = EXCLUDED.checked_at, "
             "last_ok_at = EXCLUDED.last_ok_at, expires_at = EXCLUDED.expires_at, "
             "key_ends_in = EXCLUDED.key_ends_in, unconfirmed_state = EXCLUDED.unconfirmed_state",
             (
                 id,
+                source,
                 shown.state,
                 shown.problem,
                 shown.checked_at,
@@ -219,11 +242,12 @@ class Connections:
         self._db = db
         self._entries: dict[ConnectionId, Entry] = {entry.id: entry for entry in entries}
         self._store = store or ConnectionStore()
+        self._sources: dict[ConnectionId, str] = {e.id: e.source for e in entries}
 
     async def view(self) -> list[ConnectionCheck]:
         """Every connection with its last result. One never checked is checked now, once."""
         async with self._db.transaction("orchestration") as uow:
-            stored = await self._store.load_all(uow)
+            stored = await self._store.load_all(uow, self._sources)
         for id, entry in self._entries.items():
             if entry.live:
                 stored[id] = await self._live(entry)
@@ -243,7 +267,7 @@ class Connections:
     async def check_due(self) -> None:
         """The scheduled tick's part: checks what is due, and lets nothing go wrong on the way."""
         async with self._db.transaction("orchestration") as uow:
-            stored = await self._store.load_all(uow)
+            stored = await self._store.load_all(uow, self._sources)
         now = self._db.clock()
         waiting = [e for e in self._entries.values() if not e.live and due(stored.get(e.id), now)]
         await asyncio.gather(*(self._check(e, at_once=False) for e in waiting))
@@ -252,7 +276,7 @@ class Connections:
         """Connections that do not work, and keys that run out soon. Reads what was stored and
         asks nobody, so a fresh stack shows none until a check found something."""
         async with self._db.transaction("orchestration") as uow:
-            stored = await self._store.load_all(uow)
+            stored = await self._store.load_all(uow, self._sources)
         now = self._db.clock()
         found = [
             self._present(self._entries[id], shown, now)
@@ -270,8 +294,13 @@ class Connections:
     async def _check(self, entry: Entry, *, at_once: bool) -> Shown:
         reading = await self._read(entry)
         async with self._db.transaction("orchestration") as uow:
-            shown = settle(await self._store.lock(uow, entry.id), reading, uow.now, at_once=at_once)
-            await self._store.save(uow, entry.id, shown)
+            shown = settle(
+                await self._store.lock(uow, entry.id, entry.source),
+                reading,
+                uow.now,
+                at_once=at_once,
+            )
+            await self._store.save(uow, entry.id, entry.source, shown)
         return shown
 
     async def _live(self, entry: Entry) -> Shown:
@@ -301,8 +330,8 @@ class Connections:
             name=entry.name,
             practice=entry.practice,
             state=shown.state,
-            checked_at=None if shown.state == "not_checked" else shown.checked_at,
-            last_ok_at=shown.last_ok_at,
+            checked_at=None if shown.state == "not_checked" or entry.live else shown.checked_at,
+            last_ok_at=None if entry.live else shown.last_ok_at,
             problem=shown.problem,
             key_ends_in=shown.key_ends_in,
             expires_at=shown.expires_at,

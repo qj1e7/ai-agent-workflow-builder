@@ -17,6 +17,7 @@ from platform_api.orchestration.connections import (
     github_probe,
     jira_probe,
     model_probe,
+    source_of,
     teams_probe,
 )
 from platform_api.orchestration.dispatch import ApprovalChannel, N8nWebhooks
@@ -210,15 +211,22 @@ async def build(settings: Settings) -> Services:
     connections = Connections(
         db,
         [
-            Entry("jira", "Jira", jira_is_practice, jira_probe(jira, "Jira", jira_key_hint)),
-            Entry("github", "GitHub", False, github_probe(agents)),
+            Entry(
+                "jira",
+                "Jira",
+                jira_is_practice,
+                jira_probe(jira, "Jira", jira_key_hint),
+                source_of("jira", settings.jira.base_url),
+            ),
+            Entry("github", "GitHub", False, github_probe(agents), "github"),
             Entry(
                 "teams",
                 "Teams",
                 webhook is None,
                 teams_probe(db, practice=webhook is None, adapter=channel.adapter),
+                source_of(channel.adapter, settings.teams_webhook_url),
             ),
-            Entry("model", "AI model", False, model_probe(model_settings), live=True),
+            Entry("model", "AI model", False, model_probe(model_settings), "model", live=True),
         ],
     )
     builder = Builder(

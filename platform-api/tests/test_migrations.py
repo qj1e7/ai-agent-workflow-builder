@@ -506,8 +506,8 @@ def test_migration_0013_adds_the_connection_checks_and_a_downgrade_drops_them(
     postgres: PostgresUrls,
 ):
     insert = (
-        "INSERT INTO orchestration.connection_checks (connection, state, checked_at) "
-        "VALUES (%s, %s, %s)"
+        "INSERT INTO orchestration.connection_checks (connection, source, state, checked_at) "
+        "VALUES (%s, 'practice', %s, %s)"
     )
     with psycopg.connect(postgres.owner, autocommit=True) as conn:
         conn.execute("DELETE FROM orchestration.connection_checks")
