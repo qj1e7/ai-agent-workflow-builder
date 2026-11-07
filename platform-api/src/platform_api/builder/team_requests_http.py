@@ -17,8 +17,8 @@ router = APIRouter(prefix="/api/v1", tags=["builder"])
 
 
 def current_team_requests(request: Request) -> TeamRequests:
-    requests: TeamRequests = request.app.state.team_requests
-    return requests
+    kept: TeamRequests = request.app.state.team_requests
+    return kept
 
 
 CurrentTeamRequests = Annotated[TeamRequests, Depends(current_team_requests)]
@@ -43,10 +43,10 @@ async def create_team_request(
     body: CreateTeamRequest,
     principal: CurrentPrincipal,
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=200)],
-    requests: CurrentTeamRequests,
+    kept: CurrentTeamRequests,
     response: Response,
 ) -> TeamRequestView:
-    match await requests.create(principal, idempotency_key, body):
+    match await kept.create(principal, idempotency_key, body):
         case NoSuchRun(run_id):
             problem = {
                 "type": "no_such_run",
@@ -69,9 +69,9 @@ async def create_team_request(
     responses=SIGNED_IN,
 )
 async def list_team_requests(
-    principal: CurrentPrincipal, requests: CurrentTeamRequests
+    principal: CurrentPrincipal, kept: CurrentTeamRequests
 ) -> TeamRequestList:
-    return await requests.list()
+    return await kept.list()
 
 
 @router.post(
@@ -84,9 +84,9 @@ async def list_team_requests(
     responses={**SIGNED_IN, 404: error_response("No such request")},
 )
 async def reply_to_team_request(
-    request_id: str, body: ReplyIn, principal: CurrentPrincipal, requests: CurrentTeamRequests
+    request_id: str, body: ReplyIn, principal: CurrentPrincipal, kept: CurrentTeamRequests
 ) -> TeamRequestView:
-    replied = await requests.reply(principal, request_id, body)
+    replied = await kept.reply(principal, request_id, body)
     if replied is None:
         raise HTTPException(404, "No such request")
     return replied
