@@ -60,7 +60,6 @@ from agent_runtime.planner import (
     CANT_YET,
     NOTE_LIMIT,
     TEXT_LIMIT,
-    UNDERSTAND_TIMEOUT_SECONDS,
     arrange,
     plain,
     task_form_of,
@@ -98,7 +97,7 @@ __all__ = [
 
 log = logging.getLogger(__name__)
 
-ANSWER_TIMEOUT_SECONDS: Final = UNDERSTAND_TIMEOUT_SECONDS
+ANSWER_TIMEOUT_SECONDS: Final = 8.0
 NAME_LIMIT: Final = 60
 ACCEPTED: Final = ("understood", "changed")
 ARTICLES: Final = re.compile(r"^(?:the|my|our|a|an)\s+", re.IGNORECASE)

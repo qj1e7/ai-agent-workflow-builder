@@ -1,9 +1,7 @@
 import { useId, useState, type ReactNode } from 'react'
-import { useNewWorkflowSteps } from '../../api/flags'
 import type { CantReply, OfflineReply, PartReply, PlannerReply, SetupCardReply, WatchlistReply } from '../../api/types'
 import { useCapabilities } from '../../api/plannerQueries'
 import { Button, ButtonLink } from '../../ui/Button'
-import { NEW_WORKFLOW_PATH } from '../new/starters'
 import { AskTheTeam } from './AskTheTeam'
 import { cantLines, refusalNext, SAY_ANOTHER_WAY, startingPoints, TAG_CANT, TAG_CHOICE } from './answers'
 import { cardFrom } from './card'
@@ -21,7 +19,6 @@ export interface Page {
   readonly edit: (text: string) => void
 }
 
-const OLD_NEW_WORKFLOW = 'Set it up in New workflow'
 
 /** A set-up card from the Planner’s rows. The person’s own words go with it, so a saved draft keeps them. */
 function startOf(reply: SetupCardReply | PartReply, typed: string): CardStart {
@@ -214,7 +211,6 @@ function IdeasAnswer({ page }: { page: Page }) {
 }
 
 export function OfflineAnswer({ reply }: { reply: OfflineReply }) {
-  const oldNewWorkflow = useNewWorkflowSteps()
   const main = useMainButton()
   return (
     <>
@@ -225,13 +221,7 @@ export function OfflineAnswer({ reply }: { reply: OfflineReply }) {
               <b>{starter.name}</b>
               <span className={styles['note']}>{starter.what}</span>
             </div>
-            {starter.opens === 'software_watchlist' ? (
-              <ButtonLink to="/software">Open the Software watchlist</ButtonLink>
-            ) : oldNewWorkflow && starter.task ? (
-              <ButtonLink to={NEW_WORKFLOW_PATH} state={{ task: starter.task }}>
-                {OLD_NEW_WORKFLOW}
-              </ButtonLink>
-            ) : null}
+            {starter.opens === 'software_watchlist' ? <ButtonLink to="/software">Open the Software watchlist</ButtonLink> : null}
           </li>
         ))}
       </ul>

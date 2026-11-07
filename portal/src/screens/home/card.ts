@@ -10,15 +10,12 @@ import type {
   RowState,
   ScheduleIn,
   ToolId,
-  UnderstandOut,
   UseCaseCreated,
 } from '../../api/types'
 import { checkClock, checkRepo, repeatWords, repoOf } from '../software/software'
 
 export type Step = 1 | 2 | 3 | 4
-export const STEP_NAMES = ['Describe it', 'Check what I understood', 'When it runs', 'Turn it on'] as const
 
-export const TEXT_LIMIT = 2000
 export const NAME_LIMIT = 80
 const VALUE_LIMIT = 200
 const DRAFT_NAME_LIMIT = 60
@@ -39,12 +36,6 @@ export interface Row {
   readonly planner: PlannerRow | null
 }
 
-export interface Redirect {
-  readonly word: string
-  readonly software: string | null
-  readonly note: string
-}
-
 export type Often = '' | 'every_day' | 'weekdays' | 'week'
 export type Weekday = Exclude<Day, 'every_day' | 'weekdays'>
 
@@ -59,8 +50,6 @@ export interface Form {
   readonly step: Step
   readonly text: string
   readonly rows: readonly Row[]
-  readonly redirect: Redirect | null
-  readonly plannerSaid: string | null
   readonly typed: Readonly<Record<string, string>>
   readonly when: When
   readonly name: string
@@ -70,7 +59,7 @@ export interface Form {
 
 export const EMPTY_WHEN: When = { often: '', day: '', at: '', filledFrom: null }
 
-export const EMPTY_FORM: Form = { step: 1, text: '', rows: [], redirect: null, plannerSaid: null, typed: {}, when: EMPTY_WHEN, name: '', carriedOn: false }
+export const EMPTY_FORM: Form = { step: 1, text: '', rows: [], typed: {}, when: EMPTY_WHEN, name: '', carriedOn: false }
 
 export const ROW_LABEL: Record<RowKind, string> = { schedule: 'When', look_for: 'Looks for', do: 'Does', where: 'Where it goes' }
 
@@ -86,34 +75,6 @@ const NOT_CHECKED = 'I couldn’t check your new words just now. Change them to 
 const CANT_YET = 'I can’t do this yet.'
 const KINDS: readonly RowKind[] = ['schedule', 'look_for', 'do', 'where']
 
-export function textProblem(text: string): string | null {
-  if (text.trim() === '') return 'Write what should happen first.'
-  return text.trim().length > TEXT_LIMIT ? 'Keep it to 2,000 characters.' : null
-}
-
-export function afterReading(form: Form, answer: UnderstandOut): Form {
-  switch (answer.answer) {
-    case 'rows':
-      return {
-        ...form,
-        step: 2,
-        plannerSaid: null,
-        redirect: null,
-        carriedOn: false,
-        when: EMPTY_WHEN,
-        rows: answer.rows.map((row) => ({ kind: row.kind, text: row.text, state: row.state, note: row.note, planner: null })),
-      }
-    case 'watchlist':
-      return { ...form, step: 2, plannerSaid: null, rows: [], when: EMPTY_WHEN, carriedOn: false, redirect: { word: answer.word, software: answer.software, note: answer.note } }
-    case 'starters':
-      return { ...form, step: 1, plannerSaid: answer.message }
-  }
-}
-
-export function carryOn(form: Form): Form {
-  return { ...form, step: 2, redirect: null, carriedOn: true, rows: KINDS.map((kind) => ({ kind, text: '', state: 'missing', note: null, planner: null })) }
-}
-
 export function changeRow(form: Form, index: number, typed: string): Form {
   const rows = form.rows.map((row, at): Row => {
     if (at !== index) return row
@@ -127,26 +88,6 @@ export function changeRow(form: Form, index: number, typed: string): Form {
 }
 
 type Part = Pick<Row, 'kind' | 'text'>
-
-export const partWords = (part: Part) => `${ROW_LABEL[part.kind]}: ${part.text}`
-
-/** What the Planner is asked to check for a changed part. */
-export const checkOf = (form: Form, part: Part) => ({ text: partWords(part), carriedOn: form.carriedOn })
-
-function stillCantDo(answer: UnderstandOut | null): string | null {
-  if (answer === null || answer.answer === 'starters') return NOT_CHECKED
-  if (answer.answer === 'watchlist') return answer.note
-  const cant = answer.rows.find((row) => row.state === 'cant_do')
-  return cant ? (cant.note ?? CANT_YET) : null
-}
-
-export function afterChecking(form: Form, part: Part, answer: UnderstandOut | null): Form {
-  const why = stillCantDo(answer)
-  const rows = form.rows.map((row): Row =>
-    row.state === 'checking' && row.kind === part.kind && row.text === part.text ? { ...row, state: why === null ? 'edited' : 'cant_do', note: why } : row,
-  )
-  return { ...form, rows }
-}
 
 export function canDrop(rows: readonly Row[], index: number): boolean {
   const row = rows[index]
@@ -596,6 +537,9 @@ export const andList = (items: readonly string[]): string =>
 
 export const leftWords = (left: readonly string[]): string =>
   left.length === 0 ? 'Nothing is unclear. Turn it on when you’re ready.' : `${left.length === 1 ? '1 choice left' : `${left.length} choices left`}: ${andList(left)}.`
+
+/** Resume reopens the card on Home, where the draft's id sits in the address. */
+export const draftPath = (draftId: string) => `/?draft=${encodeURIComponent(draftId)}`
 
 export const CARD_STEP: Step = 2
 

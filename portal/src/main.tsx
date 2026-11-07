@@ -6,7 +6,6 @@ import { App } from './App'
 import { ApiError } from './api/client'
 import { loadConfig, PortalConfigError, type PortalConfig } from './api/config'
 import { ApiProvider } from './api/context'
-import { FlagsProvider } from './api/flags'
 import { TicketLinksProvider } from './api/ticketLinks'
 import { createDevSession, type Boot } from './api/session'
 import { ErrorBoundary, ErrorScreen } from './ui/ErrorBoundary'
@@ -47,13 +46,11 @@ async function start(): Promise<void> {
       <QueryClientProvider client={queryClient}>
         <ApiProvider session={boot.session} platformFetch={(input, init) => window.fetch(input, init)}>
           <TicketLinksProvider config={config}>
-            <FlagsProvider config={config}>
-              <BrowserRouter>
-                <SignInGate>
-                  <App />
-                </SignInGate>
-              </BrowserRouter>
-            </FlagsProvider>
+            <BrowserRouter>
+              <SignInGate>
+                <App />
+              </SignInGate>
+            </BrowserRouter>
           </TicketLinksProvider>
         </ApiProvider>
       </QueryClientProvider>

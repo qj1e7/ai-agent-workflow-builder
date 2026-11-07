@@ -553,43 +553,6 @@
       "title": "Answered",
       "type": "object"
     },
-    "BelongsOnWatchlist": {
-      "additionalProperties": false,
-      "properties": {
-        "software": {
-          "anyOf": [
-            {
-              "maxLength": 80,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The software the task names, as the task wrote it.",
-          "title": "Software"
-        },
-        "status": {
-          "const": "watchlist",
-          "default": "watchlist",
-          "title": "Status",
-          "type": "string"
-        },
-        "word": {
-          "description": "The word that made the Planner think so, as the task wrote it: a form of version, release, upgrade, patch or vulnerability.",
-          "maxLength": 80,
-          "minLength": 1,
-          "title": "Word",
-          "type": "string"
-        }
-      },
-      "required": [
-        "word"
-      ],
-      "title": "BelongsOnWatchlist",
-      "type": "object"
-    },
     "Callback": {
       "additionalProperties": false,
       "properties": {
@@ -2807,79 +2770,6 @@
       "title": "ToolSpec",
       "type": "object"
     },
-    "UnderstandRequest": {
-      "additionalProperties": false,
-      "properties": {
-        "carried_on": {
-          "default": false,
-          "description": "True when the Operator chose a new workflow over the Software watchlist. Then the task is read back in parts, never sent to the watchlist.",
-          "title": "Carried On",
-          "type": "boolean"
-        },
-        "model": {
-          "$ref": "#/$defs/ModelAccess"
-        },
-        "task": {
-          "maxLength": 2000,
-          "minLength": 1,
-          "title": "Task",
-          "type": "string"
-        }
-      },
-      "required": [
-        "task",
-        "model"
-      ],
-      "title": "UnderstandRequest",
-      "type": "object"
-    },
-    "UnderstandResult": {
-      "discriminator": {
-        "mapping": {
-          "problem": "#/$defs/ModelProblem",
-          "understood": "#/$defs/Understood",
-          "watchlist": "#/$defs/BelongsOnWatchlist"
-        },
-        "propertyName": "status"
-      },
-      "oneOf": [
-        {
-          "$ref": "#/$defs/Understood"
-        },
-        {
-          "$ref": "#/$defs/BelongsOnWatchlist"
-        },
-        {
-          "$ref": "#/$defs/ModelProblem"
-        }
-      ]
-    },
-    "Understood": {
-      "additionalProperties": false,
-      "properties": {
-        "rows": {
-          "description": "One schedule row, then at least one row for what to look for, what to do and where, in that order.",
-          "items": {
-            "$ref": "#/$defs/UnderstoodRow"
-          },
-          "maxItems": 8,
-          "minItems": 4,
-          "title": "Rows",
-          "type": "array"
-        },
-        "status": {
-          "const": "understood",
-          "default": "understood",
-          "title": "Status",
-          "type": "string"
-        }
-      },
-      "required": [
-        "rows"
-      ],
-      "title": "Understood",
-      "type": "object"
-    },
     "UnderstoodRow": {
       "additionalProperties": false,
       "properties": {
@@ -3114,12 +3004,6 @@
     "planner_choose_result": {
       "$ref": "#/$defs/ChooseResult"
     },
-    "planner_understand_request": {
-      "$ref": "#/$defs/UnderstandRequest"
-    },
-    "planner_understand_result": {
-      "$ref": "#/$defs/UnderstandResult"
-    },
     "software_find_request": {
       "$ref": "#/$defs/FindSoftwareRequest"
     },
@@ -3152,8 +3036,6 @@
     "card_draft_result",
     "planner_choose_request",
     "planner_choose_result",
-    "planner_understand_request",
-    "planner_understand_result",
     "software_find_request",
     "software_find_result",
     "planner_answer_request",

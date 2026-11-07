@@ -13,8 +13,6 @@ from platform_api.orchestration.agents import (
     HttpAgentRuntime,
     ModelAccess,
     ModelTestPassed,
-    UnderstandRequest,
-    Understood,
 )
 
 pytestmark = pytest.mark.anyio
@@ -117,41 +115,6 @@ async def test_a_refused_draft_does_not_keep_the_key():
     assert isinstance(
         await runtime(503, {}, seen).draft(DraftRequest(task="x", model=ACCESS)), AgentUnavailable
     )
-
-
-async def test_understand_posts_the_task_and_model_and_parses_the_rows():
-    seen: list[httpx.Request] = []
-    row = {"kind": "schedule", "text": "Every weekday", "state": "understood", "note": None}
-    missing = {"text": "", "state": "missing", "note": "I couldn't tell from your words."}
-    rows = [row] + [{"kind": kind, **missing} for kind in ("look_for", "do", "where")]
-    result = await runtime(200, {"status": "understood", "rows": rows}, seen).understand(
-        UnderstandRequest(task="Every weekday", model=ACCESS)
-    )
-    assert isinstance(result, Understood) and len(result.rows) == 4
-    assert seen[0].url.path == "/v1/planner/understand"
-    assert seen[0].headers["X-Agent-Key"] == "agent-key-not-real"
-    assert json.loads(seen[0].content)["task"] == "Every weekday"
-    assert json.loads(seen[0].content)["carried_on"] is False
-
-
-async def test_understand_posts_that_the_operator_chose_a_new_workflow_over_the_watchlist():
-    seen: list[httpx.Request] = []
-    row = {"kind": "where", "text": "Teams", "state": "cant_do", "note": "I can't yet."}
-    missing = {"text": "", "state": "missing", "note": "I couldn't tell from your words."}
-    rows = [row] + [{"kind": kind, **missing} for kind in ("schedule", "look_for", "do")]
-    await runtime(200, {"status": "understood", "rows": rows}, seen).understand(
-        UnderstandRequest(task="Where it goes: Teams", model=ACCESS, carried_on=True)
-    )
-    assert json.loads(seen[0].content)["carried_on"] is True
-
-
-async def test_understand_rows_of_an_unknown_kind_are_refused():
-    seen: list[httpx.Request] = []
-    bad = {"kind": "when", "text": "x", "state": "understood"}
-    result = await runtime(200, {"status": "understood", "rows": [bad] * 4}, seen).understand(
-        UnderstandRequest(task="x", model=ACCESS)
-    )
-    assert isinstance(result, AgentRejected)
 
 
 async def test_the_github_check_posts_nothing_but_the_agent_key_and_reads_both_answers():

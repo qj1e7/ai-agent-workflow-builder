@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import { expectAccessible } from '../support/axe'
 import { assertClean, watchPage } from '../support/test'
 import type { Backend } from './support/stack'
@@ -40,6 +40,21 @@ async function draftFor(backend: Backend, label: string): Promise<{ id: string; 
   const saved = await backend.send('PUT', 'alice', `/api/v1/drafts/${id}`, { step: null, content: { name, intent: 'Every Monday, list the tickets closed last week.' } })
   expect(saved.status, `alice saves a draft: ${JSON.stringify(saved.body)}`).toBe(200)
   return { id, name }
+}
+
+/**
+ * Presses Enter on the Discard button until the question is open. The page re-reads on its polls, and a press that lands while
+ * the button is not the focused element does nothing, so each try looks first and presses only while the button holds focus
+ * and no question is open. Once the question is open, focus is in it, so a later try never presses inside it.
+ */
+async function openDiscardQuestion(page: Page, discard: Locator, dialog: Locator): Promise<void> {
+  await expect(async () => {
+    if ((await dialog.count()) === 0) {
+      await discard.focus()
+      if (await discard.evaluate((el) => el === document.activeElement)) await page.keyboard.press('Enter')
+    }
+    await expect(dialog).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 20_000 })
 }
 
 async function homeOf(backend: Backend, user: string) {
@@ -200,10 +215,10 @@ test('alice discards a draft by keyboard, after a question that says what is los
   expect(kept, 'the draft is saved before it is discarded').toBeDefined()
   await row.getByRole('link', { name: `Resume ${draft.name}` }).focus()
   await page.keyboard.press('Tab')
-  await expect(row.getByRole('button', { name: `Discard ${draft.name}` })).toBeFocused()
-  await page.keyboard.press('Enter')
+  const discard = row.getByRole('button', { name: `Discard ${draft.name}` })
+  await expect(discard).toBeFocused()
   const dialog = page.getByRole('alertdialog', { name: `Discard ${draft.name}?` })
-  await expect(dialog).toBeVisible()
+  await openDiscardQuestion(page, discard, dialog)
   await expect(dialog).toContainText('Nothing has run, and nothing changes in Jira or Teams')
   await expect(dialog.getByRole('button', { name: 'Keep the draft' })).toBeFocused()
   await shot(page, info, 'n9b-discard-asks')
@@ -212,9 +227,7 @@ test('alice discards a draft by keyboard, after a question that says what is los
   await expect(dialog).toHaveCount(0)
   await expect(row, 'asking and then backing out keeps the draft').toBeVisible()
 
-  await row.getByRole('button', { name: `Discard ${draft.name}` }).focus()
-  await page.keyboard.press('Enter')
-  await expect(dialog).toBeVisible()
+  await openDiscardQuestion(page, discard, dialog)
   await page.keyboard.press('Tab')
   await expect(dialog.getByRole('button', { name: 'Discard draft' })).toBeFocused()
   await page.keyboard.press('Enter')

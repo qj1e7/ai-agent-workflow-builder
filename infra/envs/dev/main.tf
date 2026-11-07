@@ -345,8 +345,6 @@ locals {
           OIDC_CLIENT_ID = var.oidc_client_id
           OIDC_SCOPE     = var.oidc_scope
         },
-        # On Azure the old New workflow stays reachable at /new until the new Home is proven (plan section 10).
-        { PORTAL_NEW_WORKFLOW_STEPS = "on" },
         var.jira_base_url == "" ? {} : {
           JIRA_BROWSE_URL = var.jira_browse_url != "" ? var.jira_browse_url : "${trimsuffix(var.jira_base_url, "/")}/browse/{key}"
         },

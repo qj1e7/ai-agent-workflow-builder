@@ -68,14 +68,12 @@ from agent_runtime.contract import (
     TaskFinished,
     TaskOutput,
     TaskRequest,
-    UnderstandRequest,
     WatchlistInputs,
     WireModel,
     agent_event_adapter,
 )
 from agent_runtime.github import TOKEN_REFUSED
 from agent_runtime.model_access import KEY_REFUSED
-from agent_runtime.planner import RowAnswer, UnderstandAnswer, understood_of
 from agent_runtime.reading import DaysRead, PlaceRead, SearchRead, TicketRead
 from agent_runtime.tools import tool_list
 
@@ -784,40 +782,6 @@ FOLLOW_UP_TASK = (
 RELEASE_TASK = "Tell me when LangGraph has a new release"
 
 
-def understand_request() -> UnderstandRequest:
-    return UnderstandRequest(task=FOLLOW_UP_TASK, model=draft_request().model)
-
-
-def understood() -> WireModel:
-    answer = UnderstandAnswer(
-        belongs_on_watchlist=False,
-        rows=[
-            RowAnswer(kind="schedule", text="Every weekday at 3pm", state="understood"),
-            RowAnswer(
-                kind="look_for",
-                text="Bug tickets in MOCK with no update for 10 days",
-                state="understood",
-            ),
-            RowAnswer(
-                kind="do", text="Create one follow-up ticket that lists them", state="understood"
-            ),
-            RowAnswer(kind="where", text="Jira project MOCK", state="understood"),
-        ],
-    )
-    result = understood_of(answer, FOLLOW_UP_TASK)
-    assert result is not None
-    return result
-
-
-def belongs_on_watchlist() -> WireModel:
-    answer = UnderstandAnswer(
-        belongs_on_watchlist=True, watchlist_word="release", software="LangGraph"
-    )
-    result = understood_of(answer, RELEASE_TASK)
-    assert result is not None
-    return result
-
-
 def find_software_request() -> FindSoftwareRequest:
     return FindSoftwareRequest(name="Terraform", tag_pattern=RELEASE_TAG_PATTERN)
 
@@ -944,9 +908,6 @@ def fixtures() -> dict[str, WireModel]:
         "card-drafted.json": drafted(),
         "planner-choose-request.json": choose_request(),
         "planner-chosen.json": chosen(),
-        "planner-understand-request.json": understand_request(),
-        "planner-understood.json": understood(),
-        "planner-watchlist.json": belongs_on_watchlist(),
         "software-find-request.json": find_software_request(),
         "software-found.json": found_software(),
         "planner-answer-request.json": answer_request(),

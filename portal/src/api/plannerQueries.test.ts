@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from './client'
-import { refusedWords } from './newQueries'
+import { refusedWords } from './plannerQueries'
 
 describe('the words of a workflow the platform refused', () => {
   it('names the agent’s input a problem is about', () => {

@@ -4,7 +4,7 @@ import { Link, NavigationType, useLocation, useNavigate, useNavigationType, useS
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useHome } from '../../api/homeQueries'
-import { useDeleteDraft, useDrafts, useSaveDraft } from '../../api/newQueries'
+import { useDeleteDraft, useDrafts, useSaveDraft } from '../../api/plannerQueries'
 import { useDisplayName } from '../../api/people'
 import { useMe, useRuns, useUseCases } from '../../api/queries'
 import type { DraftView, HomeOut, Me, RunView, UseCaseView } from '../../api/types'

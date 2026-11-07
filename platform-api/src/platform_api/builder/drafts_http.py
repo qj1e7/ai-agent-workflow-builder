@@ -23,7 +23,7 @@ NO_SUCH = "No such draft"
 
 @router.put(
     "/drafts/{draft_id}",
-    description="Saves a New workflow draft for the signed-in Operator. Saving again replaces it.",
+    description="Saves a set-up card draft for the signed-in Operator. Saving again replaces it.",
     responses={**OPERATORS_ONLY, 409: error_response("The Operator has the most drafts kept")},
 )
 async def save_draft(

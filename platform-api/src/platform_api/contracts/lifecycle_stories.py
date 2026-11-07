@@ -1,4 +1,4 @@
-"""A workflow paused, held and deleted, the watchlist paused, and a New workflow draft, as the
+"""A workflow paused, held and deleted, the watchlist paused, and a set-up card draft, as the
 API answers them."""
 
 from datetime import UTC, datetime, timedelta

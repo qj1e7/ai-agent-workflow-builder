@@ -3,7 +3,7 @@ import type { Locator, Page } from '@playwright/test'
 import { expectAccessible } from '../support/axe'
 import { tabTo, walkTabs, withoutVisibleFocus } from '../support/keyboard'
 import { assertClean, watchPage } from '../support/test'
-import { connectMockModel } from './support/newWorkflow'
+import { connectMockModel } from './support/settings'
 import { SettingsApi } from './support/settings'
 import type { Backend } from './support/stack'
 import { expect, test } from './support/test'
@@ -457,13 +457,18 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
-  test('the old New workflow has no menu entry and is reached only at its address, while its setting is on', async ({ browser }) => {
+  test('the old New workflow address leads to Home, with a saved draft’s id kept, and never to a blank page', async ({ browser }) => {
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     await page.goto('/')
     await expect(page.getByRole('link', { name: 'New workflow' })).toHaveCount(0)
-    await page.goto('/new')
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^New workflow, step 1 of 4/)
+    for (const old of ['/new', '/new/done/uc_1']) {
+      await page.goto(old)
+      await expect(page).toHaveURL(/\/$/)
+      await expect(page.getByLabel('Describe a task for the Planner')).toBeVisible()
+    }
+    await page.goto('/new?draft=drf-1')
+    await expect(page).toHaveURL(/\/\?draft=drf-1$/)
     await context.close()
   })
 })

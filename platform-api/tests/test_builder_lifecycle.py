@@ -46,7 +46,6 @@ from platform_api.orchestration import (
     Schedule,
     ScheduleBook,
     ScheduleTicker,
-    UnderstandResult,
 )
 from platform_api.orchestration.people_store import People
 from platform_api.orchestration.runs import AwaitingApproval, StepName
@@ -185,11 +184,6 @@ class ModelConnected:
         raise AssertionError("not asked")
 
     async def draft(self, task: str) -> DraftResult | NoModel | RuntimeDown:
-        raise AssertionError("not asked")
-
-    async def understand(
-        self, task: str, carried_on: bool = False
-    ) -> UnderstandResult | NoModel | RuntimeDown:
         raise AssertionError("not asked")
 
 

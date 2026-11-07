@@ -20,7 +20,6 @@ from platform_api.builder.models import (
     PlanOut,
     ScheduleIn,
     ToolList,
-    UnderstandOut,
     UseCaseDeleted,
     UseSaved,
     WatchlistOut,
@@ -47,7 +46,6 @@ from platform_api.orchestration.agents import (
     ModelAccess,
     TaskFinished,
     TaskRequest,
-    UnderstandRequest,
     WatchlistInputs,
     answer_result_adapter,
     check_part_result_adapter,
@@ -58,7 +56,6 @@ from platform_api.orchestration.agents import (
     github_check_result_adapter,
     model_test_result_adapter,
     task_result_adapter,
-    understand_result_adapter,
 )
 from platform_api.orchestration.agents import CapabilityList as AgentCapabilityList
 from platform_api.orchestration.agents import ToolList as AgentToolList
@@ -125,9 +122,6 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "agent/card-drafted.json": draft_result_adapter,
     "agent/planner-choose-request.json": TypeAdapter(ChooseRequest),
     "agent/planner-chosen.json": choose_result_adapter,
-    "agent/planner-understand-request.json": TypeAdapter(UnderstandRequest),
-    "agent/planner-understood.json": understand_result_adapter,
-    "agent/planner-watchlist.json": understand_result_adapter,
     "agent/software-find-request.json": TypeAdapter(FindSoftwareRequest),
     "agent/software-found.json": find_software_result_adapter,
     "agent/planner-answer-request.json": TypeAdapter(AnswerRequest),
@@ -152,9 +146,6 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "builder/templates.json": TypeAdapter(TemplateList),
     "builder/use-case.json": TypeAdapter(UseCaseView),
     "builder/suggest.json": TypeAdapter(SuggestOut),
-    "builder/understand.rows.json": TypeAdapter(UnderstandOut),
-    "builder/understand.watchlist.json": TypeAdapter(UnderstandOut),
-    "builder/understand.starters.json": TypeAdapter(UnderstandOut),
     "planner/answer.text.json": TypeAdapter(AnswerIn),
     "planner/answer.intent.json": TypeAdapter(AnswerIn),
     "planner/answer.setup_card.json": TypeAdapter(PlannerReply),

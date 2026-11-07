@@ -163,3 +163,21 @@ export async function everythingOnThePage(page: Page): Promise<string> {
   const fields = await page.locator('input, textarea, select').evaluateAll((els) => els.map((el) => (el as HTMLInputElement).value))
   return `${await page.content()}\n${fields.join('\n')}`
 }
+
+export async function connectMockModel(baseURL: string): Promise<void> {
+  const settings = await SettingsApi.connect(baseURL)
+  try {
+    if ((await settings.model()).active?.base_url === MOCK_MODEL_URL) return
+    const saved = await settings.send<{ status: string }>('alice', 'PUT', '/api/v1/settings/model', {
+      style: 'anthropic',
+      base_url: MOCK_MODEL_URL,
+      model: MOCK_MODEL,
+      api_key: 'p13-live-key-not-real',
+    })
+    expect(saved.status, `alice saves the mock model: ${JSON.stringify(saved.body)}`).toBe(200)
+    await settings.confirmAddress('bob')
+    expect((await settings.model()).active?.base_url, 'the mock model is active').toBe(MOCK_MODEL_URL)
+  } finally {
+    await settings.dispose()
+  }
+}
