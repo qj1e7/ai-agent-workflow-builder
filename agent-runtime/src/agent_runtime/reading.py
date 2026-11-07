@@ -312,7 +312,7 @@ CREATE_VOCAB: Final = words(
     "create creates creating make makes making raise raises raising file files filing log logs "
     "logging propose proposes draft drafts write writes submit submits add adds generate "
     "generates put puts one single new another jira that which ticket tickets issue issues "
-    "follow-up follow-ups followup followups"
+    "follow-up follow-ups followup followups summary"
 )
 OPEN_AS_CREATE_AFTER: Final = words("a an one single new another the up")
 SAYS_VOCAB: Final[dict[Says, frozenset[str]]] = {
@@ -352,6 +352,13 @@ SOMEONE: Final = re.compile(
 """Words that name a person who could give a yes. With a "no", "not" or "without" beside them,
 or as "nobody", they skip that person; alone, as in "remove anyone who has left", they do not."""
 NOBODY: Final = re.compile(r"\b(?:nobody|no\s+one|no-one)\b", re.IGNORECASE)
+FROM_ME: Final = re.compile(
+    r"\b(?:approval|approvals|confirmation|permission|sign[- ]?off|okay|ok|yes|go-ahead|consent)\s+"
+    r"(?:from|of|by)\s+(?:me|myself)\b",
+    re.IGNORECASE,
+)
+"""A yes the staff member gives, as "confirmation from me": theirs to skip, because the Operator
+is never the Approver. The word rule makes the same exception."""
 NEGATED: Final = re.compile(
     r"\b(?:no|not|without|neither|nor|never|don't|doesn't|shouldn't|needn't|spare|skip\w*|"
     r"bypass\w*)\b|n't\b",
@@ -729,6 +736,7 @@ def _kind_of(text: str, start: int, end: int, said: Said) -> RowKind:
 
 def names_a_yes(text: str) -> bool:
     """Whether the words name a yes, or a person left out of one."""
+    text = FROM_ME.sub(" ", text)
     if A_YES.search(text) is not None or NOBODY.search(text) is not None:
         return True
     return SOMEONE.search(text) is not None and NEGATED.search(text) is not None
@@ -752,6 +760,7 @@ def leftovers(
     for c_start, c_end in _clauses(text):
         clause = text[c_start:c_end]
         tokens = _request_tokens(clause)
+        theirs = [(c_start + m.start(), c_start + m.end()) for m in FROM_ME.finditer(clause)]
         content: list[tuple[int, int]] = []
         unread: list[tuple[int, int]] = []
         before = ""
@@ -763,7 +772,7 @@ def leftovers(
                 or SOMEONE.fullmatch(raw) is not None
                 or (low == "one" and before == "no")
                 or (low in ("team", "boss") and before == "the")
-            )
+            ) and not any(a <= start and end <= b for a, b in theirs)
             filler = (low in FILLER and not (raw[:1].isupper() and at)) or _a_schedule_word(raw)
             filler = filler and not names
             before = low
@@ -798,6 +807,7 @@ def speaks_only_of_self(quote: str) -> bool:
     """Whether a quote the model called the staff member's own really names them and nobody
     else: the words say I, me, my, mine or myself, and no yes or other person."""
     named = any(re.fullmatch(r"[A-Z][a-z]+", w) for w in re.findall(r"\w+", quote)[1:])
+    quote = FROM_ME.sub(" me ", quote)
     return (
         SPEAKS_OF_SELF.search(quote) is not None
         and A_YES.search(quote) is None

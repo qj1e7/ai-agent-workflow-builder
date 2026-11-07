@@ -1235,7 +1235,7 @@ TICKET_FIELDS: Final = (
     TicketField("epic", "a ticket's epic", words("epic epics")),
     TicketField("sprint", "a ticket's sprint", words("sprint sprints")),
     TicketField("due_date", "a ticket's due date", words("due overdue deadline deadlines")),
-    TicketField("reporter", "a ticket's reporter", words("reporter reporters")),
+    TicketField("reporter", "a ticket's reporter", words("reporter reporters reported")),
     TicketField("fix_version", "a ticket's fix version", frozenset()),
     TicketField("story_points", "a ticket's story points", words("points")),
     TicketField("severity", "a ticket's severity", words("severity severities")),

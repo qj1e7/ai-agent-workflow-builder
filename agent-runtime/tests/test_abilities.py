@@ -863,3 +863,14 @@ def test_a_part_that_acts_on_what_another_system_holds_needs_that_system():
 )
 def test_only_a_field_on_tickets_is_a_tool_the_team_can_add(text: str, field: bool):
     assert names_a_ticket_field(text) is field
+
+
+def test_the_search_structure_reads_exactly_the_fields_the_table_says_the_agents_read():
+    """The registry tie: a field the table says the agents read is one the search structure can
+    fill, and the other way round, so adding a readable field to one without the other fails."""
+    from agent_runtime.reading import SearchRead
+
+    read = {field.name for field in TICKET_FIELDS if field.read_as is not None}
+    assert read == {"assignee", "issue_type", "status", "created", "updated", "done"}
+    structure = set(SearchRead.model_fields) - {"project", "words", "said"}
+    assert structure == {"assignee", "issue_types", "status", "created", "updated", "done"}

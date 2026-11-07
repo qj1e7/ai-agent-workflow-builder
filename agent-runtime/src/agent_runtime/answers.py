@@ -128,7 +128,8 @@ ANSWER_SYSTEM: Final = (
     "A request for known vulnerabilities, CVEs, security advisories or security patches does "
     "not belong on the Software watchlist, even if it names software or releases, because no "
     "tool checks for them yet. Set belongs_on_watchlist to false and fill in no search for it.\n"
-    "Fill in software whenever the request names one, whichever answer applies.\n\n"
+    "Fill in software whenever the request names one, whichever answer applies, even when "
+    "asks_about is abilities.\n\n"
     "For a task, fill in its parts:\n"
     '- schedule: when it runs, in the request\'s own words, such as "Every weekday at 3pm". '
     "Null when the request does not say. Never add a day or a time the request does not say.\n"
@@ -164,7 +165,9 @@ ANSWER_SYSTEM: Final = (
     "staff member who typed the request is never the Approver. Answer whose with one of:\n"
     "- nobody: the request skips no one. A request that only reads, lists, counts or reports "
     "on approvals, approvers, reviews or tickets, including tickets that skipped or lacked an "
-    "approval, skips nobody. So does one that only says the task runs by itself, "
+    "approval, skips nobody. So does one that asks to tell, ask or message a person as part "
+    "of the task, such as asking a ticket's owner in Teams, and one that only says the task "
+    "runs by itself, "
     "automatically, hands-free, on autopilot, set and forget, or on a schedule, naming no "
     'person. "Ask the team" is a button on the platform that asks the team for a new tool, so '
     "a request with no change in it, such as \"don't ask the team, just tell me what you can "
