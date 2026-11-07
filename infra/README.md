@@ -83,6 +83,7 @@ infra/
 | `CALLBACK_ALLOWED_ORIGINS` | `http://platform-api:8000` | platform-api's HTTPS origin |
 | `PLATFORM_JIRA_URL` (agent-runtime) | `http://platform-api:8000` | platform-api's HTTPS URL. It must be one of `CALLBACK_ALLOWED_ORIGINS` (ADR 0035) |
 | `JIRA_BASE_URL`, `JIRA_API_FLAVOR`, `JIRA_EMAIL`, `JIRA_ISSUE_TYPE`, `JIRA_BROWSE_URL`, `WATCHLIST_JIRA_PROJECT` | `.env`, unset by default: the practice Jira, `datacenter`, `Task`, `MOCK` | the `JIRA_*` and `WATCHLIST_JIRA_PROJECT` variables, unset by default ([A real Jira](#a-real-jira)) |
+| `PORTAL_NEW_WORKFLOW_STEPS` (Portal) | `off` unless `.env` sets it, and `on` on the end-to-end stack | `on`, set in `infra/envs/dev/main.tf`, until the Planner's box is proven (`docs/design/ai-native-redesign/IMPLEMENTATION-PLAN.md`, section 10). `on` keeps the old New workflow at `/new` with no menu entry |
 | `JIRA_API_TOKEN` | `.env`, empty | a Key Vault secret, `jira-api-token`, from `JIRA_API_TOKEN`, only when that secret is set |
 | `COSMOS_ENDPOINT` | `http://cosmos:8081`, the emulator | the account's endpoint |
 | `COSMOS_KEY` | the emulator's published key | a Key Vault secret, copied from the account |

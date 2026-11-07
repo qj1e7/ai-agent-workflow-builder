@@ -32,7 +32,7 @@ function Count({ value }: { value: number }) {
   )
 }
 
-function NeedsList({ needs, now, arrival }: { needs: readonly Need[]; now: Date; arrival: Arrival }) {
+function NeedsList({ needs, now, arrival, quiet }: { needs: readonly Need[]; now: Date; arrival: Arrival; quiet: boolean }) {
   const list = useRef<HTMLUListElement>(null)
   const shown = usePresence(needs, (need) => need.key)
   useGlide(list)
@@ -43,6 +43,7 @@ function NeedsList({ needs, now, arrival }: { needs: readonly Need[]; now: Date;
           key={key}
           need={item}
           card={index === 0}
+          quiet={quiet}
           now={now}
           motion={{ glide: key, arrive: arrival.arrive(key), stagger: arrival.stagger(key) + 1, leaving, onAnimationEnd }}
         />
@@ -57,10 +58,12 @@ interface NeedsSectionProps {
   readonly arrival: Arrival
   readonly more: ReactNode
   readonly whenNone: ReactNode
+  /** No main button: another answer on the page has it. */
+  readonly quiet?: boolean
 }
 
 /** Needs you, drawn the same on Home and on Workflows. `whenNone` is what shows with nothing in it, or null to show nothing. */
-export function NeedsSection({ needs, now, arrival, more, whenNone }: NeedsSectionProps) {
+export function NeedsSection({ needs, now, arrival, more, whenNone, quiet = false }: NeedsSectionProps) {
   const headingId = useId()
   if (needs.shown.length === 0 && whenNone === null) return null
   return (
@@ -68,7 +71,7 @@ export function NeedsSection({ needs, now, arrival, more, whenNone }: NeedsSecti
       <h2 id={headingId}>
         Needs you <Count value={needs.total} />
       </h2>
-      {needs.shown.length > 0 ? <NeedsList needs={needs.shown} now={now} arrival={arrival} /> : whenNone}
+      {needs.shown.length > 0 ? <NeedsList needs={needs.shown} now={now} arrival={arrival} quiet={quiet} /> : whenNone}
       {more}
     </section>
   )

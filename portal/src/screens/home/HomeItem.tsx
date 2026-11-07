@@ -89,11 +89,13 @@ function ActionButton({ action, primary, describedBy }: { action: Action; primar
 interface NeedProps {
   readonly need: Need
   readonly card: boolean
+  /** Its action is not the page's main button. */
+  readonly quiet?: boolean
   readonly now: Date
   readonly motion: Motion
 }
 
-export function NeedItem({ need, card, now, motion }: NeedProps) {
+export function NeedItem({ need, card, quiet = false, now, motion }: NeedProps) {
   const titleId = useId()
   const words = wordsOf(need, now)
   const actions = actionsOf(need)
@@ -149,7 +151,7 @@ export function NeedItem({ need, card, now, motion }: NeedProps) {
         ) : null}
         <div className={styles['buttons']}>
           {actions.map((action, index) => (
-            <ActionButton key={action.label} action={action} primary={index === 0} describedBy={titleId} />
+            <ActionButton key={action.label} action={action} primary={index === 0 && !quiet} describedBy={titleId} />
           ))}
         </div>
       </div>

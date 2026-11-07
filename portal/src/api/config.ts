@@ -9,6 +9,8 @@ export interface PortalConfig {
   readonly signIn: SignInConfig
   /** Where a ticket is viewed in a real Jira, with {key} for the ticket key. null means the Portal's practice Jira page. */
   readonly jiraBrowseUrl: string | null
+  /** The old four-step New workflow: when true, /new answers (with no menu entry). It is the way back if the Planner's Home fails. */
+  readonly newWorkflowSteps: boolean
 }
 
 export class PortalConfigError extends Error {
@@ -18,7 +20,7 @@ export class PortalConfigError extends Error {
   }
 }
 
-const LIVE_DEV: PortalConfig = { mode: 'live', signIn: { kind: 'dev' }, jiraBrowseUrl: null }
+const LIVE_DEV: PortalConfig = { mode: 'live', signIn: { kind: 'dev' }, jiraBrowseUrl: null, newWorkflowSteps: false }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -53,10 +55,17 @@ function parseJiraBrowseUrl(value: unknown): string | null {
   return value
 }
 
+function parseNewWorkflowSteps(value: unknown): boolean {
+  if (value === undefined) return false
+  if (typeof value !== 'boolean') throw new PortalConfigError('The new_workflow_steps value in /config.json is not true or false.')
+  return value
+}
+
 export function parseConfig(raw: unknown): PortalConfig {
   if (!isRecord(raw)) return LIVE_DEV
   const jiraBrowseUrl = parseJiraBrowseUrl(raw['jira_browse_url'])
-  return { mode: 'live', signIn: raw['auth'] === undefined ? LIVE_DEV.signIn : parseSignIn(raw['auth']), jiraBrowseUrl }
+  const newWorkflowSteps = parseNewWorkflowSteps(raw['new_workflow_steps'])
+  return { mode: 'live', signIn: raw['auth'] === undefined ? LIVE_DEV.signIn : parseSignIn(raw['auth']), jiraBrowseUrl, newWorkflowSteps }
 }
 
 export async function loadConfig(fetchConfig: typeof fetch = (input, init) => fetch(input, init)): Promise<PortalConfig> {

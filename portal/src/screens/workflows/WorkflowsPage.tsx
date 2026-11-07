@@ -66,7 +66,7 @@ interface RowProps {
   readonly nameOf: (id: string) => string
 }
 
-function WorkflowRow({ row, index, primary, arrive, now, nameOf }: RowProps) {
+export function WorkflowRow({ row, index, primary, arrive, now, nameOf }: RowProps) {
   const { useCase, latest, action } = row
   const fact = latest ? runFact(latest, nameOf) : null
   return (

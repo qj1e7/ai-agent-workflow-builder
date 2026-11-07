@@ -3,7 +3,12 @@ import type { Page } from '@playwright/test'
 import { expectAccessible } from '../support/axe'
 import { assertClean, watchPage } from '../support/test'
 import { expect, test } from './support/test'
+import { connectMockModel } from './support/newWorkflow'
 import { devContext, OUT, shot } from './support/ui'
+
+test.beforeAll(async ({ baseURL }) => {
+  await connectMockModel(String(baseURL))
+})
 
 const needsYou = (page: Page) => page.getByRole('list', { name: 'Needs you' })
 const itemOf = (page: Page, approvalId: string) => page.locator(`li[data-home-item="approval:${approvalId}"]`)

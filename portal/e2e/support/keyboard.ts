@@ -28,7 +28,7 @@ const MAX_TABS = 120
 async function stampTabbables(page: Page): Promise<number> {
   return page.evaluate(() => {
     const name = (el: HTMLElement) => {
-      const words = el.getAttribute('aria-label') ?? (el instanceof HTMLInputElement ? el.labels?.[0]?.textContent : null) ?? el.textContent ?? ''
+      const words = el.getAttribute('aria-label') ?? (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? el.labels?.[0]?.textContent : null) ?? el.textContent ?? ''
       return words.trim().replace(/\s+/g, ' ').slice(0, 50) || el.tagName
     }
     // Tab enters a radio group once: on the checked radio, or on the first when none is checked.

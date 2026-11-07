@@ -1,7 +1,7 @@
 import { ApiError } from '../../api/client'
 import { DRAFT_STEPS } from '../../api/drafts'
 import { connectorLabel, starterName } from '../../api/labels'
-import type { AddressItem, ApprovalItem, ConfirmationItem, ConnectionItem, DraftItem, FollowingUpItem, HomeOut, StoppedItem, WaitingItem } from '../../api/types'
+import type { AddressItem, CapabilitiesView, PlannerAnswerIn, ApprovalItem, ConfirmationItem, ConnectionItem, DraftItem, FollowingUpItem, HomeOut, StoppedItem, WaitingItem } from '../../api/types'
 import { count, withCurrentNames } from '../run/words'
 import { requestKindWords, requestPath } from '../workflows/requests'
 import { movedHeadline, notFoundHeadline } from '../software/software'
@@ -55,12 +55,47 @@ export function needsOf(home: HomeOut, limit = Infinity): Needs {
   return { shown, total, more: { approvals, others: total - shown.length - approvals } }
 }
 
-export function leadLine(total: number, workflows: number): string {
-  if (total === 1) return '1 thing needs you. Everything else is running.'
-  if (total > 1) return `${total} things need you. Everything else is running.`
-  return workflows === 0
-    ? 'Nothing needs you yet. When a workflow wants to change something, it shows up here and in Teams.'
-    : 'Nothing needs you right now. Your workflows are running.'
+/** The one line under the greeting. It never repeats the count, because Needs you under it carries that. */
+export function stateLine(home: HomeOut, now: Date): string {
+  const total = needsTotal(home)
+  if (total > 0) return total === 1 ? 'Something needs you.' : 'Some things need you.'
+  const next = comingUpOf(home, now)
+  return next ? `Nothing needs you. Next up: ${next.name}, ${next.when}.` : 'Nothing needs you. Nothing is scheduled yet.'
+}
+
+/** The line under an Approver’s greeting. An Approver has no box, so it says what waits for a yes. */
+export function approverLine(home: HomeOut): string {
+  const total = needsTotal(home)
+  if (total === 0) return 'Nothing needs you right now.'
+  if (total === home.approvals_total) return `${count(total, 'request')} ${total === 1 ? 'is' : 'are'} waiting for your yes.`
+  return total === 1 ? '1 thing needs you.' : `${total} things need you.`
+}
+
+export interface Suggestion {
+  readonly label: string
+  readonly ask: PlannerAnswerIn
+}
+
+/**
+ * The three chips under the box, chosen from what is going on now. A chip sends an intent, which never asks the model.
+ * Day one offers the platform’s own examples instead, and a typed example does ask the model.
+ */
+export function suggestionsOf(home: HomeOut, capabilities: CapabilitiesView | undefined): readonly Suggestion[] {
+  if (home.workflows === 0) {
+    return (capabilities?.examples ?? []).map((example) => ({
+      label: example.text,
+      ask: example.kind === 'learn' ? { intent: 'abilities' } : { text: example.text },
+    }))
+  }
+  const first = needsOf(home, 1).shown[0]
+  const stopped = home.stopped.find((item) => first?.key !== `stopped:${item.run_id}`)
+  return [
+    { label: 'Check my workflows', ask: { intent: 'check_workflows' } },
+    stopped
+      ? { label: `Why did ${stopped.use_case_name} stop?`, ask: { intent: 'why_stopped', use_case_id: stopped.use_case_id } }
+      : { label: 'What can I ask for?', ask: { intent: 'abilities' } },
+    { label: 'Set up another workflow', ask: { intent: 'setup_ideas' } },
+  ]
 }
 
 export const SEE_ALL_WORDS = 'See all on Workflows'
@@ -278,10 +313,3 @@ export function comingUpOf(home: HomeOut, now: Date): Next | null {
   if (!next) return null
   return { name: next.name, to: workflowPath(next), when: nextRunAt(next.next_run_at, now, next.time_zone), more: next.more }
 }
-
-export const HOW_IT_WORKS: readonly (readonly [string, string])[] = [
-  ['Describe a task', 'In plain English, the way you would ask a colleague.'],
-  ['Check what was understood', 'Fix anything that doesn’t match, then choose when it runs.'],
-  ['Say yes in Teams', 'Nothing changes in Jira or Confluence until an Approver agrees.'],
-  ['See the result here', 'If something stops, the AI troubleshooter tells you why.'],
-]

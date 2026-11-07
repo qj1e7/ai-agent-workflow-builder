@@ -1,20 +1,24 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react'
 import { Link } from 'react-router'
 import { useHome } from '../../api/homeQueries'
 import { isOperator } from '../../api/me'
-import { useMe } from '../../api/queries'
-import type { HomeOut } from '../../api/types'
+import { useCapabilities, usePlannerAnswer } from '../../api/plannerQueries'
+import { useMe, useModelSettings } from '../../api/queries'
+import type { HomeOut, PlannerAnswerIn } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
-import { Button } from '../../ui/Button'
-import { useFocusWhenReady } from '../../ui/focus'
+import { Button, ButtonLink } from '../../ui/Button'
 import { IconClock } from '../../ui/icons'
-import { comingUpOf, HOME_NEEDS_SHOWN, HOW_IT_WORKS, leadLine, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, type Next } from './home'
-import { FirstWorkflow } from './FirstWorkflow'
-import { DraftRow } from './HomeItem'
+import { PlannerBot, type BotState } from '../../ui/PlannerBot'
+import { AskTheTeam } from './AskTheTeam'
+import type { Page } from './AnswerCards'
+import { CapabilityLists } from './CapabilityLists'
+import { approverLine, comingUpOf, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, stateLine, suggestionsOf, type Needs, type Next } from './home'
 import { NeedsSection, useArrival } from './NeedsSection'
-import styles from './Home.module.css'
-
-const HOW_ID = 'how-it-works'
+import { PlannerBox } from './PlannerBox'
+import { EMPTY, isThinking, threadReducer } from './threadState'
+import { Thread } from './Thread'
+import homeStyles from './Home.module.css'
+import styles from './Planner.module.css'
 
 interface HomePageProps {
   readonly heading: string
@@ -25,22 +29,18 @@ interface HomePageProps {
 export function HomePage({ heading, today, now }: HomePageProps) {
   const home = useHome()
   const loaded = home.data
-  const total = loaded ? needsTotal(loaded) : 0
-  const next = loaded ? comingUpOf(loaded, now) : null
   return (
-    <div className={styles['home']}>
-      <PageHead heading={heading} lead={loaded ? `${today} ${leadLine(total, loaded.workflows)}` : today}>
-        {total > 0 && next ? <ComingNext next={next} /> : null}
-      </PageHead>
+    <div className={homeStyles['home']}>
       {loaded && home.isError ? (
         <p className="muted" role="status">
           Could not refresh. Trying again in a moment.
         </p>
       ) : null}
       {loaded ? (
-        <Loaded now={now} home={loaded} next={next} />
+        <HomeBody heading={heading} home={loaded} now={now} />
       ) : home.isError ? (
         <>
+          <PageHead heading={heading} lead={today} />
           <p role="alert">Home could not be loaded.</p>
           <Button onClick={() => void home.refetch()}>Try again</Button>
         </>
@@ -53,9 +53,15 @@ export function HomePage({ heading, today, now }: HomePageProps) {
   )
 }
 
+/** One heading for the whole visit, so the shell's focus stays on it. Home draws no heading while it loads, and the shell moves focus to the first one drawn. */
+export function HomeBody({ heading, home, now }: { heading: string; home: HomeOut; now: Date }) {
+  const operator = isOperator(useMe().data)
+  return operator ? <OperatorHome heading={heading} home={home} now={now} /> : <ApproverHome heading={heading} home={home} now={now} />
+}
+
 function ComingNext({ next }: { next: Next }) {
   return (
-    <div className={styles['coming']}>
+    <div className={homeStyles['coming']}>
       <IconClock size={16} />
       <span>
         <b>Coming up next:</b> <Link to={next.to}>{next.name}</Link>, {next.when}
@@ -68,7 +74,7 @@ function ComingNext({ next }: { next: Next }) {
 
 function AllQuiet({ next }: { next: Next | null }) {
   return (
-    <div className={styles['quiet']}>
+    <div className={homeStyles['quiet']}>
       <b>All quiet</b>
       {next ? (
         <>
@@ -81,76 +87,231 @@ function AllQuiet({ next }: { next: Next | null }) {
   )
 }
 
-function HowItWorks() {
+/** An Approver who is not an Operator: what waits for a yes, in full. No box, no suggestions, nothing to create. */
+function ApproverHome({ heading, home, now }: { heading: string; home: HomeOut; now: Date }) {
+  const needs = useMemo(() => needsOf(home), [home])
+  const next = comingUpOf(home, now)
+  const arrival = useArrival(needs.shown.map((need) => need.key))
+  const total = needsTotal(home)
   return (
-    <section className={styles['section']} aria-labelledby={HOW_ID}>
-      <h2 id={HOW_ID} tabIndex={-1}>
-        How it works
-      </h2>
-      <ol className={styles['steps']}>
-        {HOW_IT_WORKS.map(([what, how]) => (
-          <li key={what}>
-            <div>
-              <div className={styles['what']}>{what}</div>
-              <div className={styles['how']}>{how}</div>
-            </div>
-          </li>
-        ))}
-      </ol>
-    </section>
+    <>
+      <PageHead heading={heading} lead={approverLine(home)}>
+        {total > 0 && next ? <ComingNext next={next} /> : null}
+      </PageHead>
+      <NeedsSection
+        needs={needs}
+        now={now}
+        arrival={arrival}
+        more={moreWords(needs.more) ? <p className={homeStyles['more']}>{moreWords(needs.more)}</p> : null}
+        whenNone={<AllQuiet next={next} />}
+      />
+      <p className="muted">You’re an Approver, so you decide on requests. Operators set up workflows.</p>
+    </>
   )
 }
 
-function Loaded({ now, home, next }: { now: Date; home: HomeOut; next: Next | null }) {
-  const operator = isOperator(useMe().data)
-  const needs = useMemo(() => (operator ? needsOf(home, HOME_NEEDS_SHOWN) : needsOf(home)), [home, operator])
+const PHONE = '(max-width: 600px)'
+
+function usePhone(): boolean {
+  return useSyncExternalStore(
+    (notify) => {
+      if (typeof window.matchMedia !== 'function') return () => undefined
+      const query = window.matchMedia(PHONE)
+      query.addEventListener('change', notify)
+      return () => query.removeEventListener('change', notify)
+    },
+    () => typeof window.matchMedia === 'function' && window.matchMedia(PHONE).matches,
+    () => false,
+  )
+}
+
+const SEND_FAILED = 'That didn’t send. Try again.'
+const DAY_ONE_HEADING = 'What does your team do again and again?'
+const DAY_ONE_LEAD =
+  'Tell me a task in plain English. I’ll set it up to run by itself. Anything that changes data waits for a yes from an Approver in Teams.'
+const OFFLINE_HEADING = 'I can’t read new requests until an AI model is connected'
+const OFFLINE_LEAD =
+  'Until then, agent workflows can’t run and new ones can’t be planned. Only the Software watchlist keeps going, with a simple summary instead of a written one. Approvers can still decide.'
+
+/** Needs you on Home, without the “no AI model” row while the page already offers Connect a model. The count stays the platform’s. */
+function needsHere(home: HomeOut, withoutModel: boolean): Needs {
+  const shown = needsOf(withoutModel ? { ...home, connections: home.connections.filter((item) => item.id !== 'model') } : home, HOME_NEEDS_SHOWN)
+  return { ...shown, total: needsTotal(home) }
+}
+
+function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; now: Date }) {
+  const model = useModelSettings()
+  const capabilities = useCapabilities()
+  const answer = usePlannerAnswer()
+  const [thread, dispatch] = useReducer(threadReducer, EMPTY)
+  const [text, setText] = useState('')
+  const [problem, setProblem] = useState<string | null>(null)
+  const [keys, setKeys] = useState(0)
+  const [lists, setLists] = useState(false)
+  const boxRef = useRef<HTMLTextAreaElement>(null)
+  const phone = usePhone()
+  const offline = model.data !== undefined && model.data.active === null
   const dayOne = home.workflows === 0
-  const firstWorkflow = dayOne && operator
-  const arrival = useArrival([
-    ...needs.shown.map((need) => need.key),
-    ...home.drafts.map((draft) => `draft:${draft.draft_id}`),
-  ])
-  const [showHow, setShowHow] = useState(false)
-  const focusHow = useFocusWhenReady(showHow, () => document.getElementById(HOW_ID))
-  const left = needs.total - needs.shown.length
-  const more = operator ? (left > 0 ? <Link to="/workflows">{SEE_ALL_WORDS}</Link> : null) : moreWords(needs.more)
+  const empty = thread.messages.length === 0
+  const busy = isThinking(thread)
+  const needs = useMemo(() => needsHere(home, offline), [home, offline])
+  const arrival = useArrival(needs.shown.map((need) => need.key))
+  const suggestions = useMemo(() => suggestionsOf(home, capabilities.data), [home, capabilities.data])
+
+  useEffect(() => {
+    if (thread.messages.length > 0) document.querySelector('#thread-h + ol > li:last-child')?.scrollIntoView({ block: 'nearest' })
+  }, [thread.messages.length])
+
+  function send(ask: PlannerAnswerIn, shown: string, restore: string | null) {
+    setProblem(null)
+    dispatch({ type: 'sent', text: shown })
+    setText('')
+    answer.mutate(ask, {
+      onSuccess: (reply) => dispatch({ type: 'answered', reply, typed: shown }),
+      onError: () => {
+        dispatch({ type: 'failed' })
+        if (restore !== null) setText(restore)
+        setProblem(SEND_FAILED)
+      },
+    })
+  }
+
+  const sendText = () => {
+    const typed = text.trim()
+    if (typed !== '' && !busy) send({ text: typed }, typed, text)
+  }
+  const page: Page = {
+    ask: (words) => {
+      if (!busy) send({ text: words }, words, null)
+    },
+    edit: (words) => {
+      setText(words)
+      setTimeout(() => boxRef.current?.focus(), 0)
+    },
+  }
+
+  const hero: BotState = offline ? 'sorry' : busy ? 'thinking' : text.trim() !== '' ? 'listening' : 'idle'
+  const look = ((text.length % 24) - 12) / 12
+
+  if (offline) {
+    return (
+      <div className={styles['planner']}>
+        <div className={`${styles['welcome']} ${styles['offline']}`}>
+          <PlannerBot state="sorry" size={phone ? 96 : 128} />
+          <h1 tabIndex={-1}>{OFFLINE_HEADING}</h1>
+          <p className={styles['lead']}>{OFFLINE_LEAD}</p>
+          <div className={styles['buttons']}>
+            <ButtonLink variant="primary" to="/settings?tab=model">
+              Connect a model
+            </ButtonLink>
+          </div>
+        </div>
+        {needs.shown.length > 0 ? <NeedsHere needs={needs} now={now} arrival={arrival} quiet /> : null}
+        {capabilities.data ? <CapabilityLists view={capabilities.data} /> : null}
+        <div className={styles['centred']}>
+          <AskTheTeam capability="something new" starter="" label="Ask the team for something new" />
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <>
-      {firstWorkflow ? <FirstWorkflow /> : null}
-      {firstWorkflow && needs.total === 0 ? null : (
-        <NeedsSection
-          needs={needs}
-          now={now}
-          arrival={arrival}
-          more={more ? <p className={styles['more']}>{more}</p> : null}
-          whenNone={<AllQuiet next={next} />}
-        />
-      )}
-      {home.drafts.length > 0 ? (
-        <section className={styles['section']} aria-labelledby="drafts-h">
-          <h2 id="drafts-h">Your drafts</h2>
-          <ul className={styles['rows']}>
-            {home.drafts.map((draft, index) => (
-              <DraftRow key={draft.draft_id} draft={draft} now={now} arrive={arrival.arrive(`draft:${draft.draft_id}`)} stagger={index} />
-            ))}
-          </ul>
-        </section>
-      ) : null}
-      {dayOne || showHow ? (
-        <HowItWorks />
+    <div className={styles['planner']}>
+      <div className={`${styles['welcome']} ${empty ? '' : styles['compact']}`}>
+        <PlannerBot state={hero} size={empty ? (phone ? 96 : 128) : 52} keys={keys} look={look} />
+        <div>
+          {empty ? (
+            dayOne ? (
+              <>
+                <h1 tabIndex={-1}>{DAY_ONE_HEADING}</h1>
+                <p className={styles['lead']}>{DAY_ONE_LEAD}</p>
+              </>
+            ) : (
+              <>
+                <h1 tabIndex={-1}>{heading}</h1>
+                <p className={styles['lead']}>{stateLine(home, now)}</p>
+              </>
+            )
+          ) : (
+            <h1 tabIndex={-1}>Planner</h1>
+          )}
+        </div>
+      </div>
+      {empty ? null : <Thread thread={thread} now={now} page={page} />}
+      <PlannerBox
+        text={text}
+        busy={busy}
+        empty={empty}
+        phone={phone}
+        problem={problem}
+        boxRef={boxRef}
+        onChange={(value) => {
+          setText(value)
+          setKeys((count) => count + 1)
+        }}
+        onSend={sendText}
+      />
+      {empty ? (
+        <div className={styles['chips']} role="group" aria-label={dayOne ? 'Starting points' : 'Suggestions'}>
+          {suggestions.map((suggestion) => (
+            <button
+              key={suggestion.label}
+              type="button"
+              className={styles['chip']}
+              aria-disabled={busy || undefined}
+              onClick={() => {
+                if (!busy) send(suggestion.ask, suggestion.label, null)
+              }}
+            >
+              {suggestion.label}
+            </button>
+          ))}
+        </div>
       ) : (
-        <button
-          type="button"
-          className={styles['linkButton']}
-          onClick={() => {
-            setShowHow(true)
-            focusHow()
-          }}
-        >
-          How it works
-        </button>
+        <div className={styles['centred']}>
+          <button
+            type="button"
+            className={styles['linkButton']}
+            onClick={() => {
+              dispatch({ type: 'new_chat' })
+              setText('')
+              setProblem(null)
+            }}
+          >
+            New chat
+          </button>
+        </div>
       )}
-    </>
+      {empty && needs.shown.length > 0 ? <NeedsHere needs={needs} now={now} arrival={arrival} /> : null}
+      {empty && !dayOne && !suggestions.some((suggestion) => suggestion.ask.intent === 'abilities') ? (
+        <div className={styles['centred']}>
+          <button type="button" className={styles['linkButton']} aria-expanded={lists} onClick={() => setLists((open) => !open)}>
+            {lists ? 'Hide what I can do' : 'What can I ask for?'}
+          </button>
+        </div>
+      ) : null}
+      {empty && (dayOne || lists) && capabilities.data ? <CapabilityLists view={capabilities.data} folded={dayOne} /> : null}
+    </div>
+  )
+}
+
+/** `quiet`: the page has its own main button, so Needs you has none. */
+function NeedsHere({ needs, now, arrival, quiet = false }: { needs: Needs; now: Date; arrival: ReturnType<typeof useArrival>; quiet?: boolean }) {
+  const left = needs.total - needs.shown.length
+  return (
+    <NeedsSection
+      needs={needs}
+      now={now}
+      arrival={arrival}
+      quiet={quiet}
+      more={
+        left > 0 ? (
+          <p className={homeStyles['more']}>
+            <Link to="/workflows">{SEE_ALL_WORDS}</Link>
+          </p>
+        ) : null
+      }
+      whenNone={null}
+    />
   )
 }

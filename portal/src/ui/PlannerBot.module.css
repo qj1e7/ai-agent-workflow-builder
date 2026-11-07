@@ -1,0 +1,121 @@
+.bot {
+  flex: none;
+  overflow: visible;
+}
+
+.body,
+.eyes,
+.wave rect,
+.ping {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.body {
+  transform-box: view-box;
+  transform-origin: 24px 26px;
+  transition: transform var(--dur-small) var(--ease-out);
+}
+
+/* At rest it breathes twice when it appears, then holds still, so nothing moves for more than a few seconds. */
+.bot[data-state='idle'] .body {
+  animation: breathe 2.1s var(--ease-in-out) 2 alternate;
+}
+
+.bot[data-state='listening'] .body {
+  transform: rotate(-4deg) translateY(1px);
+}
+
+.bot[data-state='listening'] .eyes {
+  transform: translateX(var(--lx, 0px));
+  transition: transform 140ms var(--ease-out);
+}
+
+.bot[data-state='sorry'] .body {
+  transform: rotate(-6deg) translateY(1px);
+}
+
+.bot[data-state='thinking'] .eyes {
+  animation: look 2.4s var(--ease-in-out) infinite;
+}
+
+.think circle {
+  animation: think 1.5s ease-in-out infinite;
+}
+
+.think circle:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.think circle:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.wave rect {
+  animation: talk 300ms ease-in-out infinite alternate;
+}
+
+.wave rect:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.wave rect:nth-child(3) {
+  animation-delay: 0.2s;
+}
+
+.wave rect:nth-child(4) {
+  animation-delay: 0.05s;
+}
+
+.wave rect:nth-child(5) {
+  animation-delay: 0.15s;
+}
+
+.ping {
+  animation: ping 320ms var(--ease-out);
+}
+
+:global([data-paused]) .bot * {
+  animation-play-state: paused;
+}
+
+@keyframes breathe {
+  to {
+    transform: scale(1.03);
+  }
+}
+
+@keyframes look {
+  0%,
+  100% {
+    transform: translate(-1.2px, -0.6px);
+  }
+  50% {
+    transform: translate(1.2px, -0.6px);
+  }
+}
+
+@keyframes think {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+@keyframes talk {
+  from {
+    transform: scaleY(0.3);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes ping {
+  40% {
+    transform: scale(1.5);
+  }
+}

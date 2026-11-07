@@ -84,7 +84,7 @@ const partRead = (kind: RowKind, text: string, state: RowState, note: string | n
   rows: KINDS.map((each) => (each === kind ? { kind, text, state, note } : { kind: each, text: '', state: 'missing', note: 'I couldn’t tell from your words.' })),
 })
 const NOT_CHECKED = 'I couldn’t check your new words just now. Change them to try again.'
-const CAN = 'I can only read Jira tickets, sum up what I find, check software for new releases, and create a Jira ticket after a yes.'
+const CAN = 'I can only read Jira tickets, sum up what I find, check software for new releases, create a Jira ticket after a yes, and ask Approvers for a yes in Teams.'
 const fixed = (form: Form, index: number, text: string): Form => {
   const kind = form.rows[index]?.kind ?? 'where'
   return afterChecking(changeRow(form, index, text), { kind, text }, partRead(kind, text, 'understood'))

@@ -23,7 +23,6 @@ import { expect, test } from './support/test'
 import { devContext, OUT, shot } from './support/ui'
 
 const settled = (page: Page) => page.waitForFunction(() => document.getAnimations().length === 0)
-const mainMenu = (page: Page) => page.getByRole('navigation', { name: 'Main' }).filter({ visible: true })
 
 test.beforeAll(async ({ baseURL }) => {
   await connectMockModel(String(baseURL))
@@ -34,10 +33,8 @@ test('alice sets up the follow-up ticket workflow, fixes one row, turns it on an
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
   const watch = watchPage(page)
-  await page.goto('/')
-  await mainMenu(page).getByRole('link', { name: 'New workflow' }).click()
+  await page.goto('/new')
   await expect(heading(page)).toHaveText(stepHeading(1, 'Describe it'))
-  await expect(heading(page)).toBeFocused()
   await planIt(page, FOLLOW_UP)
   await expect(heading(page), 'each step’s heading takes focus').toBeFocused()
   for (const label of ['When', 'Looks for', 'Does', 'Where it goes'] as const) await expect(rowOf(page, label)).toContainText('from your words')
@@ -151,7 +148,7 @@ test('a part the Planner could do, once changed or filled in, goes back to the P
   await context.close()
 })
 
-test('a saved draft shows on Home and opens at the step it was saved at', async ({ browser }) => {
+test('a saved draft shows on Workflows and opens at the step it was saved at', async ({ browser }) => {
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
   await page.goto('/new')
@@ -160,10 +157,10 @@ test('a saved draft shows on Home and opens at the step it was saved at', async 
   await fixRow(page, 'Does', `Create one follow-up ticket that lists them for ${name}`)
   await page.getByRole('button', { name: 'Save draft and close' }).click()
   await expect(page).toHaveURL(/\/$/)
-  const drafts = page.getByRole('region', { name: 'Your drafts' })
-  const row = drafts.getByRole('link').filter({ hasText: 'Step 2 of 4' }).first()
+  await page.goto('/workflows')
+  const row = page.locator('li[data-draft]').filter({ hasText: 'Step 2 of 4' }).first()
   await expect(row).toBeVisible()
-  await row.click()
+  await row.getByRole('link', { name: /^Resume/ }).click()
   await expect(heading(page)).toHaveText(stepHeading(2, 'Check what I understood'))
   await expect(rowOf(page, 'Does')).toContainText(name)
   await context.close()

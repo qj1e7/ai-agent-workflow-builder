@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ReactNode } from 'react'
-import { Route, Routes } from 'react-router'
+import { Navigate, Route, Routes } from 'react-router'
+import { useNewWorkflowSteps } from '../api/flags'
 import { AgentsPage } from '../screens/agents/AgentsPage'
 import { HomePage } from '../screens/home/HomePage'
 import { SettingsPage } from '../screens/settings/SettingsPage'
@@ -80,7 +81,7 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
     icon: IconPlus,
     heading: 'New workflow',
     lead: 'Describe a repeated task. Agents do it, and nothing changes without a yes.',
-    inMenu: true,
+    inMenu: false,
     forOperators: true,
   },
   jira: {
@@ -137,7 +138,16 @@ export function wordsOf(words: Words, context: PageContext): string {
   return typeof words === 'function' ? words(context) : words
 }
 
+/** The old four-step screen, kept at its address while the flag is on. Off, its address leads to Home, where a request now starts. */
+function oldNewWorkflowRoutes(context: PageContext) {
+  return [
+    <Route key="new" path={PAGES.new.path} element={<Lazy><NewWorkflowRoute heading={wordsOf(PAGES.new.heading, context)} lead={wordsOf(PAGES.new.lead, context)} /></Lazy>} />,
+    <Route key="done" path={`${PAGES.new.path}/done/:useCaseId`} element={<Lazy><DoneRoute now={context.now} /></Lazy>} />,
+  ]
+}
+
 export function AppRoutes({ context }: { context: PageContext }) {
+  const oldNewWorkflow = useNewWorkflowSteps()
   return (
     <Routes>
       <Route
@@ -173,8 +183,11 @@ export function AppRoutes({ context }: { context: PageContext }) {
         }
       />
       <Route path={PAGES.settings.path} element={<SettingsPage heading={wordsOf(PAGES.settings.heading, context)} lead={wordsOf(PAGES.settings.lead, context)} />} />
-      <Route path={PAGES.new.path} element={<Lazy><NewWorkflowRoute heading={wordsOf(PAGES.new.heading, context)} lead={wordsOf(PAGES.new.lead, context)} /></Lazy>} />
-      <Route path={`${PAGES.new.path}/done/:useCaseId`} element={<Lazy><DoneRoute now={context.now} /></Lazy>} />
+      {oldNewWorkflow ? (
+        oldNewWorkflowRoutes(context)
+      ) : (
+        <Route path={`${PAGES.new.path}/*`} element={<Navigate to={PAGES.home.path} replace />} />
+      )}
       <Route path="/runs/:runId" element={<Lazy><RunRoute /></Lazy>} />
       <Route path="/approvals/:approvalId" element={<Lazy><ApprovalRoute /></Lazy>} />
       <Route path="*" element={<NotFoundPage />} />

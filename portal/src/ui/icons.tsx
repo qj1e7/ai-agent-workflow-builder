@@ -118,3 +118,5 @@ export const IconInfo = drawn(
   </>,
   2.4,
 )
+
+export const IconSend = drawn('IconSend', <path d="M4 12l16-8-6 16-2.5-6.5z" />, 2)

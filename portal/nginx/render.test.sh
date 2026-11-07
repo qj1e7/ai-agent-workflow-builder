@@ -136,6 +136,30 @@ expect_jira() {
 }
 expect_jira
 
+expect_steps() {
+  if ! render steps -e PORTAL_MODE=live -e PORTAL_NEW_WORKFLOW_STEPS=on >"$work/steps.conf"; then
+    bad "steps renders"
+    return
+  fi
+  diff "$work/live.conf" "$work/steps.conf" | grep '^[<>]' >"$work/steps.changes" || true
+  config="    return 200 '{\"mode\":\"live\",\"new_workflow_steps\":true}';"
+  if [ "$(grep -c '^[<>]' "$work/steps.changes")" = 2 ] && grep -Fxq "> $config" "$work/steps.changes"; then
+    ok "steps on changes only the /config.json body"
+  else
+    bad "steps on changed these lines against dev:" && cat "$work/steps.changes"
+  fi
+  if ! render steps-off -e PORTAL_MODE=live -e PORTAL_NEW_WORKFLOW_STEPS=off >"$work/steps-off.conf"; then
+    bad "steps-off renders"
+    return
+  fi
+  if diff "$work/live.conf" "$work/steps-off.conf" >/dev/null; then
+    ok "steps off renders the same config as no setting"
+  else
+    bad "steps off differs from no setting"
+  fi
+}
+expect_steps
+
 expect_refused jira-no-key JIRA_BROWSE_URL -e 'JIRA_BROWSE_URL=https://jira.example.test/browse/'
 expect_refused jira-no-host JIRA_BROWSE_URL -e 'JIRA_BROWSE_URL=https:///{key}'
 expect_refused jira-ftp JIRA_BROWSE_URL -e 'JIRA_BROWSE_URL=ftp://jira.example.test/browse/{key}'
@@ -143,6 +167,7 @@ expect_refused jira-quote JIRA_BROWSE_URL -e 'JIRA_BROWSE_URL=https://jira.examp
 expect_refused jira-query JIRA_BROWSE_URL -e 'JIRA_BROWSE_URL=https://jira.example.test/browse/{key}?x=1'
 expect_refused jira-newline JIRA_BROWSE_URL -e "JIRA_BROWSE_URL=https://jira.example.test/browse/{key}
 \"}"
+expect_refused steps-typo PORTAL_NEW_WORKFLOW_STEPS -e PORTAL_NEW_WORKFLOW_STEPS=yes
 expect_refused only-authority OIDC_CLIENT_ID -e "OIDC_AUTHORITY=$ENTRA"
 expect_refused only-client-id OIDC_AUTHORITY -e "OIDC_CLIENT_ID=$CLIENT"
 expect_refused only-scope OIDC_AUTHORITY -e "OIDC_SCOPE=$SCOPE"

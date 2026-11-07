@@ -150,7 +150,7 @@ test('alice sees the run she started under Waiting on others on Workflows, and n
   await page.goto('/workflows')
   await expect(page.getByRole('region', { name: 'Waiting on others' }).locator(`a[href="/runs/${runId}"]`)).toContainText('You started it')
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 2, name: /Needs you|All quiet|Start your first/ }).first()).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Waiting on others' })).toHaveCount(0)
   await expect(page.locator(`[data-waiting="${runId}"]`)).toHaveCount(0)
   await context.close()
