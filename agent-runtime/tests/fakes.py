@@ -8,7 +8,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.runnables import Runnable, RunnableLambda
 from pydantic import BaseModel, Field
 
-from agent_runtime.jira import JiraTicket, JiraUnavailable
+from agent_runtime.jira import JiraFound, JiraTicket, JiraUnavailable
 from agent_runtime.release_source import Release, SourceRejected, SourceUnavailable
 
 
@@ -128,16 +128,25 @@ def asks(*calls: dict[str, Any]) -> AIMessage:
 class FakeJira:
     """A Jira with a few tickets. It records what it was asked."""
 
-    def __init__(self, tickets: Sequence[JiraTicket] = ()) -> None:
+    def __init__(self, tickets: Sequence[JiraTicket] = (), cut_off: bool = False) -> None:
         self.tickets = list(tickets)
+        self.cut_off = cut_off
         self.searches: list[tuple[str, str | None, str | None, str | None]] = []
+        self.filters: list[tuple[str | None, str | None]] = []
         self.reads: list[str] = []
 
     def search(
-        self, project: str, text: str | None, status: str | None, done_since: str | None
-    ) -> list[JiraTicket]:
+        self,
+        project: str,
+        text: str | None,
+        status: str | None,
+        done_since: str | None,
+        updated_before: str | None = None,
+        issue_type: str | None = None,
+    ) -> JiraFound:
         self.searches.append((project, text, status, done_since))
-        return [t for t in self.tickets if t.project == project]
+        self.filters.append((updated_before, issue_type))
+        return JiraFound([t for t in self.tickets if t.project == project], self.cut_off)
 
     def read(self, key: str) -> JiraTicket:
         self.reads.append(key)

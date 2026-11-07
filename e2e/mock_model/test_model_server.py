@@ -109,11 +109,34 @@ class MockModelTest(unittest.TestCase):
         self.assertEqual(
             [(block["say"], block["tool"]) for block in draft["blocks"]],
             [
-                ("Find bug tickets with no recent update.", "jira.search"),
+                ("Find bug tickets with no update for 14 days.", "jira.search"),
                 ("Propose one follow-up ticket that lists them.", "jira.create_ticket"),
             ],
         )
         self.assertEqual([i["name"] for i in draft["inputs"]], ["Jira project"])
+
+    def test_the_follow_up_search_names_the_type_and_the_day_it_works_out(self) -> None:
+        system = (
+            "You are an agent. Today is Sunday 25 October 2026 (2026-10-25).\n"
+            "Agent card: Stale bug follow-up\nPlan:\n"
+            "1. Find bug tickets with no update for 10 days. (tool: jira_search)\n"
+            "Inputs for this run:\n- Jira project: MOCK\n"
+        )
+        body = {"system": system, "messages": run()["messages"], "tools": TOOLS[1:]}
+        name, arguments = tool_use(post(body))
+        self.assertEqual(name, "jira_search")
+        self.assertEqual(
+            arguments,
+            {"project": "MOCK", "issue_type": "Bug", "updated_before": "2026-10-15"},
+        )
+
+    def test_the_follow_up_ticket_lists_the_tickets_the_search_returned(self) -> None:
+        system = "Agent card: Stale bug follow-up\nInputs for this run:\n- Jira project: MOCK\n"
+        found = '{"data": [{"key": "MOCK-4"}, {"key": "MOCK-9"}]}'
+        body = {**run(("jira_search", {"project": "MOCK"}, found)), "system": system}
+        body["tools"] = TOOLS[1:]
+        arguments = tool_use(post(body))[1]
+        self.assertEqual(arguments["body"], "Proposed for MOCK. MOCK-4, MOCK-9")
 
     def test_the_follow_up_agent_proposes_a_follow_up_ticket(self) -> None:
         system = "Agent card: Stale bug follow-up\nInputs for this run:\n- Jira project: MOCK\n"

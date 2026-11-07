@@ -59,6 +59,16 @@ class JiraSearchArguments(_Arguments):
     done_since: Annotated[str, Field(pattern=DATE_PATTERN), AfterValidator(_real_date)] | None = (
         Field(default=None, description="Only tickets finished on or after this date, YYYY-MM-DD.")
     )
+    updated_before: (
+        Annotated[str, Field(pattern=DATE_PATTERN), AfterValidator(_real_date)] | None
+    ) = Field(
+        default=None,
+        description="Only tickets last updated on or before this date, YYYY-MM-DD. For no "
+        "update for N days, use today's date minus N days.",
+    )
+    issue_type: Annotated[str, StringConstraints(min_length=1, max_length=60)] | None = Field(
+        default=None, description="Only tickets of this type, such as Bug or Task."
+    )
 
 
 class JiraReadArguments(_Arguments):
@@ -151,7 +161,10 @@ TOOLS: Final = (
         "read",
         "Search Jira",
         "Find Jira tickets in one project. Filters are optional: words in the title or body, "
-        "status, and finished on or after a date.",
+        "status, finished on or after a date, last updated on or before a date, and type. "
+        "Each ticket comes with its last update, type and assignee. At most 50 tickets come "
+        "back, newest first. When cut_off is true, more tickets matched than came back, so "
+        "never say the list is complete.",
         JiraSearchArguments,
     ),
     Tool(

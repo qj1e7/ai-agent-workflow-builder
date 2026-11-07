@@ -68,6 +68,10 @@ SAYING_LENGTH: Final = 80
 
 GITHUB_FAILED = "GitHub could not be read."
 JIRA_OFF = "Jira is not connected."
+CUT_OFF_NOTE = (
+    "More tickets matched than came back, so older ones are missing. Do not say this list is "
+    "complete. Say it was cut at the limit."
+)
 NO_PROJECT = "This agent has no Jira project, so it cannot read Jira."
 
 
@@ -109,8 +113,8 @@ def system_prompt(agent: CardToRun, earlier: Sequence[str], today: date) -> str:
         )
     return (
         "You are an agent on a platform used by the support staff of CODESparks, a team in NCS. "
-        f"Today is {today:%A} {today.day} {today:%B %Y}. Do the task on your agent card below, "
-        "following its plan in order.\n\n"
+        f"Today is {today:%A} {today.day} {today:%B %Y} ({today.isoformat()}). Do the task on "
+        "your agent card below, following its plan in order.\n\n"
         f"Agent card: {card.name}\nPurpose: {card.purpose}\nPlan:\n{plan}\n"
         f"Inputs for this run:\n{values}\n{reports}\n"
         "Rules:\n"
@@ -424,15 +428,24 @@ class _AgentRun:
         if jira is None:
             return self._read_failed(tool, "could not search Jira.", JIRA_OFF, write)
         try:
-            tickets = jira.search(args.project, args.text, args.status, args.done_since)
+            found = jira.search(
+                args.project,
+                args.text,
+                args.status,
+                args.done_since,
+                args.updated_before,
+                args.issue_type,
+            )
         except JiraUnavailable as unavailable:
             return self._read_failed(tool, "could not search Jira.", str(unavailable), write)
+        tickets = found.tickets
         count = len(tickets)
-        found = "found no tickets" if count == 0 else f"found {_tickets(count)}"
+        what = "found no tickets" if count == 0 else f"found {_tickets(count)}"
+        more = " More matched than the limit, so older ones are missing." if found.cut_off else ""
         write(
             self._finished(
                 tool,
-                f"{found} in {args.project}.",
+                f"{what} in {args.project}.{more}",
                 {"count": count, "tickets": [_headline(t) for t in tickets]},
             )
         )
@@ -442,11 +455,15 @@ class _AgentRun:
                     "key": t.key,
                     "title": t.title,
                     "status": t.status,
+                    "issue_type": t.issue_type,
+                    "assignee": t.assignee,
                     "created_at": t.created_at,
+                    "updated_at": t.updated_at,
                     "done_at": t.done_at,
                 }
                 for t in tickets
-            ]
+            ],
+            cut_off=found.cut_off,
         )
 
     def _jira_read(self, tool: Tool, args: JiraReadArguments, write: Emit) -> str:
@@ -470,7 +487,10 @@ class _AgentRun:
                 "key": ticket.key,
                 "title": ticket.title,
                 "status": ticket.status,
+                "issue_type": ticket.issue_type,
+                "assignee": ticket.assignee,
                 "created_at": ticket.created_at,
+                "updated_at": ticket.updated_at,
                 "done_at": ticket.done_at,
                 "body": cut(ticket.body, 2000),
             }
@@ -567,8 +587,15 @@ def _offer(tool: Tool) -> dict[str, Any]:
     }
 
 
-def _result(value: object) -> str:
-    return cut(json.dumps({"data": value}, ensure_ascii=False), RESULT_LENGTH)
+def _result(value: object, cut_off: bool | None = None) -> str:
+    """`cut_off` goes first so cutting a long answer short never loses it."""
+    answer: dict[str, object] = {}
+    if cut_off is not None:
+        answer["cut_off"] = cut_off
+        if cut_off:
+            answer["note"] = CUT_OFF_NOTE
+    answer["data"] = value
+    return cut(json.dumps(answer, ensure_ascii=False), RESULT_LENGTH)
 
 
 def _error(message: str) -> str:

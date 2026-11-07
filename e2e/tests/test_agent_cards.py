@@ -1,7 +1,24 @@
-from harness import Api, Json, approval_requested, assert_gapless, bob_decides, tickets_for
+from collections.abc import Iterator
+
+import pytest
+from harness import (
+    Api,
+    Json,
+    SeededTicket,
+    approval_requested,
+    assert_gapless,
+    bob_decides,
+    remove_tickets,
+    seed_tickets,
+    tickets_for,
+)
 
 SUMMARY_TASK = "Every Friday summarise the tickets we finished in MOCK."
 RELEASE_TASK = "Check acme/planted for a new release and raise a ticket in MOCK."
+STALE_TASK = (
+    "Every Friday, list bug tickets with no update for 10 days and create one follow-up "
+    "ticket that lists them. Where it goes: Jira project MOCK."
+)
 PLANTED = {"GitHub repository": "acme/planted", "Jira project": "MOCK"}
 
 
@@ -100,3 +117,41 @@ def test_the_plan_for_a_task_the_platform_cannot_do_says_so(api: Api, mock_model
         "alice", "/api/v1/builder/plan", {"task": "Book a meeting room for Friday."}, expect=(200,)
     ).json()
     assert plan["decision"] == "cannot_do"
+
+
+@pytest.fixture
+def quiet_project() -> Iterator[dict[str, str]]:
+    """Practice tickets in MOCK. Two bugs are stale, one bug is fresh, and one old ticket is not
+    a bug. The names map each ticket to its key."""
+    seeded = {
+        "stale bug": SeededTicket("E2E stale bug", "Bug", 12, "Dana Tan"),
+        "older stale bug": SeededTicket("E2E older stale bug", "Bug", 30),
+        "fresh bug": SeededTicket("E2E fresh bug", "Bug", 2, "Dana Tan"),
+        "stale task": SeededTicket("E2E stale task", "Task", 20, "Dana Tan"),
+    }
+    keys = seed_tickets("MOCK", list(seeded.values()))
+    try:
+        yield dict(zip(seeded, keys, strict=True))
+    finally:
+        remove_tickets(keys)
+
+
+def test_a_stale_bug_agent_lists_exactly_the_bugs_with_no_update_for_ten_days(
+    api: Api, mock_model: None, quiet_project: dict[str, str]
+) -> None:
+    plan = api.post("alice", "/api/v1/builder/plan", {"task": STALE_TASK}, expect=(200,)).json()
+    assert plan["decision"] == "new_agent"
+    assert plan["problems"] == []
+    [search, _propose] = plan["draft"]["blocks"]
+    assert search["say"] == "Find bug tickets with no update for 10 days."
+
+    saved = api.post("alice", "/api/v1/agent-cards", plan["draft"], expect=(201,)).json()
+    run_id = run_agents(api, saved["card_id"], {"Jira project": "MOCK"}, "e2e stale bugs")
+    view = approve(api, run_id)
+
+    [action] = view["actions"]
+    listed = {key.strip(" .,") for key in action["fields"]["body"].split() if "-" in key}
+    assert listed == {quiet_project["stale bug"], quiet_project["older stale bug"]}, (
+        "only bugs that had no update for 10 days are listed, not the fresh bug or the old task"
+    )
+    api.wait_for_state("alice", run_id, {"succeeded"})
