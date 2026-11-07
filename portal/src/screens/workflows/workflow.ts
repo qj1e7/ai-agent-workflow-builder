@@ -336,20 +336,15 @@ export function changeProblem(change: Change, name: string, error: unknown, word
 
 export type BannerTone = 'ok' | 'wait' | 'bad' | 'off' | 'new'
 
-export type BannerAction = { readonly kind: 'decide' | 'why'; readonly runId: string } | { readonly kind: 'resume' }
+export type BannerAction =
+  | { readonly kind: 'decide'; readonly runId: string }
+  | { readonly kind: 'stopped'; readonly runId: string; readonly retryable: boolean }
+  | { readonly kind: 'resume' }
 
 export interface Banner {
   readonly tone: BannerTone
   readonly text: string
-  /** The run's own failure text in plain words, for an Operator who can act on it. */
-  readonly detail: string | null
   readonly action: BannerAction | null
-}
-
-/** The run's failure text without its error type, and without the platform's word for a run's label. */
-export function plainFailure(message: string): string {
-  const withoutType = message.replace(/^[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+: /, '')
-  return withoutType.replace(/\b(?:(?:this|the|its|a) )?write keys?\b/gi, 'this run’s label')
 }
 
 interface BannerFacts {
@@ -358,39 +353,34 @@ interface BannerFacts {
   readonly viewer: Viewer
   readonly now: Date
   readonly nameOf: NameOf
-  /** What the AI troubleshooter said happened, once it has answered. */
-  readonly whatHappened: string | null
 }
 
 const atWords = (when: string) => when.replace(/^Today, /, 'today at ').replace(/^(.+), (\d+:\d+)$/, '$1 at $2')
 
 /** One sentence on the state, and the one action that moves it on. Pause wins over the latest run, because a paused workflow starts nothing. */
-export function bannerOf({ useCase, latest, viewer, now, nameOf, whatHappened }: BannerFacts): Banner {
+export function bannerOf({ useCase, latest, viewer, now, nameOf }: BannerFacts): Banner {
   if (useCase.state === 'paused') {
-    return { tone: 'off', text: 'Paused. It won’t run until you resume it.', detail: null, action: viewer.operator ? { kind: 'resume' } : null }
+    return { tone: 'off', text: 'Paused. It won’t run until you resume it.', action: viewer.operator ? { kind: 'resume' } : null }
   }
-  const action = rowAction(latest, viewer)
   if (latest?.state === 'awaiting_approval') {
-    return { tone: 'wait', text: runFact(latest, nameOf).words, detail: null, action }
+    return { tone: 'wait', text: runFact(latest, nameOf).words, action: latest.you_can_decide ? { kind: 'decide', runId: latest.run_id } : null }
   }
   if (latest?.state === 'failed') {
-    const happened = whatHappened ?? `${failureReasonLabel[latest.reason]}.`
     return {
       tone: 'bad',
-      text: `Stopped ${atWords(runWhen(latest.started_at, now))}. ${happened}`,
-      detail: viewer.operator ? plainFailure(latest.message) : null,
-      action,
+      text: `Stopped ${atWords(runWhen(latest.started_at, now))}. ${failureReasonLabel[latest.reason]}.`,
+      action: viewer.operator ? { kind: 'stopped', runId: latest.run_id, retryable: latest.retryable } : null,
     }
   }
-  if (latest && runFact(latest, nameOf).tone === 'new') return { tone: 'new', text: 'Running now.', detail: null, action: null }
+  if (latest && runFact(latest, nameOf).tone === 'new') return { tone: 'new', text: 'Running now.', action: null }
   const held = heldNote(useCase)
-  if (held) return { tone: 'ok', text: held, detail: null, action: null }
-  if (!useCase.schedule) return { tone: 'ok', text: 'On. It has no schedule, so it runs when an Operator presses Run now.', detail: null, action: null }
-  return { tone: 'ok', text: `On. Next run ${nextRunWords(useCase, now)}.`, detail: null, action: null }
+  if (held) return { tone: 'ok', text: held, action: null }
+  if (!useCase.schedule) return { tone: 'ok', text: 'On. It has no schedule, so it runs when an Operator presses Run now.', action: null }
+  return { tone: 'ok', text: `On. Next run ${nextRunWords(useCase, now)}.`, action: null }
 }
 
 /** What Delete takes away, said before the person confirms. */
-export function deleteWords(name: string, pastRuns: number): string {
-  const kept = pastRuns === 0 ? 'It has no runs yet.' : `Its ${count(pastRuns, 'past run')} stay in the record, with who approved what.`
-  return `${name} leaves Workflows, and its schedule stops, so no more runs start. ${kept} Undo stays in the message that follows.`
+export function deleteWords(name: string, pastRuns: number | null): string {
+  const kept = pastRuns === null ? '' : pastRuns === 0 ? ' It has no runs yet.' : ` ${pastRuns === 1 ? 'Its 1 past run stays' : `Its ${pastRuns} past runs stay`} in the record, with who approved what.`
+  return `${name} leaves Workflows, and its schedule stops, so no more runs start.${kept} Undo stays in the message that follows.`
 }

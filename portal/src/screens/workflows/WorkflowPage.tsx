@@ -5,9 +5,11 @@ import { useErrorWords } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
-import { useMe, useRuns, useStartRun, useTroubleshoot, useUseCase } from '../../api/queries'
+import { useMe, useRuns, useStartRun, useUseCase } from '../../api/queries'
 import type { Me, UseCaseView } from '../../api/types'
 import { useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow, useSaveWorkflowSchedule } from '../../api/workflowQueries'
+import { stoppedActions } from '../home/home'
+import { RetryButton } from '../home/HomeItem'
 import { PageHead } from '../../shell/PageHead'
 import { AgentFace } from '../../ui/AgentFace'
 import { ActionMenu, type MenuItem } from '../../ui/ActionMenu'
@@ -169,33 +171,57 @@ interface BannerViewProps {
   readonly onResume: () => void
 }
 
+interface ButtonProps {
+  readonly action: NonNullable<Banner['action']>
+  readonly resuming: boolean
+  readonly onResume: () => void
+  readonly describedBy: string
+}
+
+function BannerButton({ action, resuming, onResume, describedBy }: ButtonProps) {
+  switch (action.kind) {
+    case 'resume':
+      return (
+        <Button variant="primary" icon={IconPlay} data-place="switch" loading={resuming} onClick={onResume}>
+          Resume
+        </Button>
+      )
+    case 'decide':
+      return (
+        <ButtonLink to={`/runs/${action.runId}`} variant="primary">
+          Review and decide
+        </ButtonLink>
+      )
+    case 'stopped': {
+      const [first] = stoppedActions(action.runId, action.retryable)
+      if (first?.kind === 'retry') return <RetryButton runId={first.runId} label={first.label} primary describedBy={describedBy} />
+      return (
+        <ButtonLink to={`/runs/${action.runId}`} variant="primary">
+          {first?.kind === 'open' ? first.label : 'See why it stopped'}
+        </ButtonLink>
+      )
+    }
+  }
+}
+
 /** One sentence on the state and the one action that moves it on. The tone is also in the words, never in colour alone. */
 function StatusBanner({ banner, resuming, onResume }: BannerViewProps) {
   const Mark = BANNER_ICON[banner.tone]
   const { action } = banner
+  const textId = useId()
   return (
     <div className={styles['banner']} data-tone={banner.tone}>
       <span className={styles['bannerMark']}>{Mark ? <Mark size={20} /> : null}</span>
-      <div>
-        <p>{banner.text}</p>
-        {banner.detail ? <p className={styles['bannerDetail']}>{banner.detail}</p> : null}
-      </div>
-      {action?.kind === 'resume' ? (
-        <Button variant="primary" icon={IconPlay} data-place="switch" loading={resuming} onClick={onResume}>
-          Resume
-        </Button>
-      ) : action ? (
-        <ButtonLink to={`/runs/${action.runId}`} variant="primary">
-          {action.kind === 'decide' ? 'Review and decide' : 'See why it stopped'}
-        </ButtonLink>
-      ) : null}
+      <p id={textId}>{banner.text}</p>
+      {action ? <BannerButton action={action} resuming={resuming} onResume={onResume} describedBy={textId} /> : null}
     </div>
   )
 }
 
 interface DeleteDialogProps {
   readonly name: string
-  readonly pastRuns: number
+  /** Null until the runs have loaded, when the dialog says nothing about them. */
+  readonly pastRuns: number | null
   readonly busy: boolean
   readonly problem: string | null
   readonly onClose: () => void
@@ -212,8 +238,23 @@ function DeleteDialog({ name, pastRuns, busy, problem, onClose, onConfirm }: Del
     if (element && !element.open) element.showModal()
     cancel.current?.focus()
   }, [])
+  // The dialog's own close event arrives in a later task, after the next key press may have opened the menu behind it. So Escape and Cancel close it here and tell the page at once.
+  const finish = () => {
+    dialog.current?.close()
+    onClose()
+  }
   return (
-    <dialog ref={dialog} className={styles['dialog']} role="alertdialog" aria-labelledby={titleId} aria-describedby={textId} onClose={onClose}>
+    <dialog
+      ref={dialog}
+      className={styles['dialog']}
+      role="alertdialog"
+      aria-labelledby={titleId}
+      aria-describedby={textId}
+      onCancel={(event) => {
+        event.preventDefault()
+        finish()
+      }}
+    >
       <h2 id={titleId}>Delete {name}?</h2>
       <p id={textId}>{deleteWords(name, pastRuns)}</p>
       {problem ? (
@@ -222,7 +263,7 @@ function DeleteDialog({ name, pastRuns, busy, problem, onClose, onConfirm }: Del
         </p>
       ) : null}
       <div className={styles['btns']}>
-        <Button ref={cancel} onClick={() => dialog.current?.close()}>
+        <Button ref={cancel} onClick={finish}>
           Cancel
         </Button>
         <Button variant="danger-outline" icon={IconTrash} loading={busy} onClick={onConfirm}>
@@ -273,12 +314,20 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const runNow = useRunNow(id, rereadIfOutOfDate('more'))
   const moreButton = useRef<HTMLButtonElement>(null)
   const { editing: changingSchedule, opener: scheduleOpener, open: openSchedule, close: closeSchedule } = useEditorThatRefocusesItsOpener()
+  const scheduleFromMenu = useRef(false)
   const [asking, setAsking] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const [deleteProblem, setDeleteProblem] = useState<string | null>(null)
   const [said, setSaid] = useState<Said | null>(null)
   const switchedTo = useRef<UseCaseView['state'] | null>(null)
   useArrivalScroll()
+
+  // A form the menu opened hands focus back to the menu button. The hook that closed it has already focused the form's own opener, so this runs after it.
+  useEffect(() => {
+    if (changingSchedule || !scheduleFromMenu.current) return
+    scheduleFromMenu.current = false
+    moreButton.current?.focus()
+  }, [changingSchedule])
 
   const recent = runsOf(runs.data ?? [], id)
   const latest = recent[0] ?? null
@@ -287,9 +336,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const controls = controlsOf(useCase, viewer)
   const menuActions = menuActionsOf(useCase, viewer)
   const mayPause = controls.includes('pause')
-  const stopped = latest?.state === 'failed' && viewer.operator
-  const advice = useTroubleshoot(latest?.run_id ?? '', stopped, latest?.state === 'failed' ? latest.last_seq : 0)
-  const banner = bannerOf({ useCase, latest, viewer, now, nameOf, whatHappened: advice.data?.answers.what_happened ?? null })
+  const banner = bannerOf({ useCase, latest, viewer, now, nameOf })
 
   // The control that took the press leaves the page, so focus follows to its replacement: Resume in the banner, or Pause in the header.
   useEffect(() => {
@@ -328,7 +375,11 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
       case 'run':
         return { key: 'run', label: 'Run now', icon: IconPlay, onSelect: runNow.press }
       case 'schedule':
-        return { key: 'schedule', label: useCase.schedule ? 'Change schedule' : 'Set a schedule', icon: IconPencil, onSelect: openSchedule }
+        return { key: 'schedule', label: useCase.schedule ? 'Change schedule' : 'Set a schedule', icon: IconPencil, onSelect: () => {
+            scheduleFromMenu.current = true
+            openSchedule()
+          },
+        }
       case 'delete':
         return {
           key: 'delete',
@@ -346,7 +397,14 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const message: ToastMessage | null = said ? { id: said.id, text: said.text } : null
   const changeSchedule =
     mayChangeSchedule(useCase, viewer) && !changingSchedule ? (
-      <Button ref={scheduleOpener} data-place="schedule" onClick={openSchedule}>
+      <Button
+        ref={scheduleOpener}
+        data-place="schedule"
+        onClick={() => {
+          scheduleFromMenu.current = false
+          openSchedule()
+        }}
+      >
         {useCase.schedule ? 'Change' : 'Set'}
         <span className="visually-hidden"> schedule</span>
       </Button>
@@ -417,7 +475,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
       {asking ? (
         <DeleteDialog
           name={useCase.name}
-          pastRuns={recent.length}
+          pastRuns={runs.data ? recent.length : null}
           busy={removal.isPending}
           problem={deleteProblem}
           onClose={() => {

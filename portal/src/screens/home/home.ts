@@ -148,13 +148,18 @@ export function actionsOf(need: Need): readonly Action[] {
     case 'confirmation':
       return [{ kind: 'open', label: 'Review in Settings', to: need.item.kind === 'approver' ? '/settings?tab=people' : '/settings' }]
     case 'stopped':
-      return need.item.retryable
-        ? [
-            { kind: 'retry', label: 'Retry the run', runId: need.item.run_id },
-            { kind: 'open', label: 'See the run', to: `/runs/${need.item.run_id}` },
-          ]
-        : [{ kind: 'open', label: 'See why it stopped', to: `/runs/${need.item.run_id}` }]
+      return stoppedActions(need.item.run_id, need.item.retryable)
   }
+}
+
+/** A stopped run offers Retry when the platform says it can be retried, and always a way to read why it stopped. */
+export function stoppedActions(runId: string, retryable: boolean): readonly Action[] {
+  return retryable
+    ? [
+        { kind: 'retry', label: 'Retry the run', runId },
+        { kind: 'open', label: 'See the run', to: `/runs/${runId}` },
+      ]
+    : [{ kind: 'open', label: 'See why it stopped', to: `/runs/${runId}` }]
 }
 
 const noLongerStopped = (error: unknown) => error instanceof ApiError && error.status === 409

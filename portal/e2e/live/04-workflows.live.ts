@@ -203,7 +203,7 @@ test('scenario H: alice changes the schedule, pauses and deletes through the pag
   await expect(page.getByRole('heading', { name: 'Change schedule' })).toHaveCount(0)
   await expect(page.getByRole('main')).toContainText('Every Monday at 9:00')
   await expect(page.getByRole('main')).toContainText('Set by Alice.')
-  await expect(page.getByRole('button', { name: 'Change schedule' }), 'focus returns to the control that opened the form').toBeFocused()
+  await expect(moreActions(page), 'focus returns to More actions, the control that opened the form').toBeFocused()
 
   await page.getByRole('button', { name: 'Pause' }).focus()
   await page.keyboard.press('Enter')
@@ -258,3 +258,32 @@ for (const phone of [false, true]) {
     await context.close()
   })
 }
+
+test('Escape on the delete dialog closes it at once, and the next Enter keeps focus in the menu it opens', async ({ browser, request }) => {
+  test.setTimeout(120_000)
+  const workflow = await agentWorkflow(request, 'escape')
+  const context = await devContext(browser, 'alice')
+  const page = await context.newPage()
+  await page.goto(`/workflows/${workflow.id}`)
+  await expect(heading(page)).toHaveText(workflow.name)
+  const dialog = page.getByRole('alertdialog')
+  for (const round of [1, 2, 3, 4, 5, 6, 7, 8]) {
+    await moreActions(page).focus()
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('End')
+    await expect(menuItem(page, 'Delete'), `round ${round}: Delete has focus`).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(dialog.getByRole('button', { name: 'Cancel' }), `round ${round}: Cancel has focus`).toBeFocused()
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('Enter')
+    await expect(menuItem(page, 'Run now'), `round ${round}: the menu opened and has focus`).toBeFocused()
+    await page.waitForTimeout(250)
+    await expect(dialog, `round ${round}: the dialog stayed closed`).toHaveCount(0)
+    await expect(menuItem(page, 'Run now'), `round ${round}: nothing took focus out of the menu`).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(moreActions(page)).toBeFocused()
+  }
+  const kept = await request.get(`/api/v1/use-cases/${workflow.id}`, { headers: { 'X-Dev-User': 'alice' } })
+  expect(kept.status(), 'cancelling deleted nothing').toBe(200)
+  await context.close()
+})

@@ -36,7 +36,6 @@ import {
   nextRunWords,
   placeOf,
   PLACES_IN_PAGE_ORDER,
-  plainFailure,
   pressChange,
   pressRunNow,
   rereadWhenOutOfDate,
@@ -597,10 +596,10 @@ describe('the status banner', () => {
   const nameOf = (id: string) => id
   const NOW = new Date('2026-11-04T15:00:00+08:00')
   const on = { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null } } as UseCaseView
-  const facts = (change: object) => ({ useCase: on, latest: null, viewer: ALICE, now: NOW, nameOf, whatHappened: null, ...change })
+  const facts = (change: object) => ({ useCase: on, latest: null, viewer: ALICE, now: NOW, nameOf, ...change })
 
   it('says a workflow that is on has its next run, and offers no button', () => {
-    expect(bannerOf(facts({}))).toEqual({ tone: 'ok', text: 'On. Next run Mon 9 Nov, 9:00.', detail: null, action: null })
+    expect(bannerOf(facts({}))).toEqual({ tone: 'ok', text: 'On. Next run Mon 9 Nov, 9:00.', action: null })
   })
 
   it('says a workflow with no schedule runs when an Operator presses Run now', () => {
@@ -609,7 +608,7 @@ describe('the status banner', () => {
 
   it('holds Resume for an Operator while paused, and nothing for an Approver', () => {
     const paused = { ...on, state: 'paused' } as UseCaseView
-    expect(bannerOf(facts({ useCase: paused }))).toEqual({ tone: 'off', text: 'Paused. It won’t run until you resume it.', detail: null, action: { kind: 'resume' } })
+    expect(bannerOf(facts({ useCase: paused }))).toEqual({ tone: 'off', text: 'Paused. It won’t run until you resume it.', action: { kind: 'resume' } })
     expect(bannerOf(facts({ useCase: paused, viewer: BOB })).action).toBeNull()
   })
 
@@ -618,23 +617,25 @@ describe('the status banner', () => {
     expect(bannerOf(facts({ useCase: paused, latest: run(failed) })).tone).toBe('off')
   })
 
-  it('for a stopped run, says when it stopped and what happened, with the run’s own failure text for an Operator and See why it stopped', () => {
-    const stopped = run(failed, { started_at: '2026-11-04T00:00:00Z', message: 'UpstreamUnavailable: Could not check LangGraph: GitHub returned 503' })
-    const banner = bannerOf(facts({ latest: stopped, whatHappened: 'An agent could not finish its work.' }))
-    expect(banner.tone).toBe('bad')
-    expect(banner.text).toBe('Stopped today at 8:00. An agent could not finish its work.')
-    expect(banner.detail).toBe('Could not check LangGraph: GitHub returned 503')
-    expect(banner.action).toEqual({ kind: 'why', runId: stopped.run_id })
+  it('for a stopped run, says when it stopped and the list’s reason, as one sentence', () => {
+    const stopped = run(failed, { started_at: '2026-11-04T00:00:00Z', retryable: false, message: 'UpstreamUnavailable: Could not check LangGraph: GitHub returned 503' })
+    const banner = bannerOf(facts({ latest: stopped }))
+    expect(banner).toEqual({ tone: 'bad', text: 'Stopped today at 8:00. An agent could not finish its work.', action: { kind: 'stopped', runId: stopped.run_id, retryable: false } })
   })
 
-  it('names the stop from the run’s reason until the AI troubleshooter has answered', () => {
-    expect(bannerOf(facts({ latest: run(failed, { reason: 'TimedOut' }) })).text).toMatch(/^Stopped .+\. A step took too long\.$/)
+  it('names the stop from the run’s reason, as the Workflows list does', () => {
+    const stopped = run(failed, { reason: 'TimedOut' })
+    expect(bannerOf(facts({ latest: stopped })).text).toMatch(/^Stopped .+\. A step took too long\.$/)
+    expect(bannerOf(facts({ latest: stopped, viewer: BOB })).text).toBe(bannerOf(facts({ latest: stopped })).text)
   })
 
-  it('gives an Approver the stop without the failure text or an action', () => {
-    const banner = bannerOf(facts({ latest: run(failed), viewer: BOB }))
-    expect(banner.detail).toBeNull()
-    expect(banner.action).toBeNull()
+  it('carries whether the platform says a stopped run can be retried', () => {
+    const retryable = run(failed, { retryable: true })
+    expect(bannerOf(facts({ latest: retryable })).action).toEqual({ kind: 'stopped', runId: retryable.run_id, retryable: true })
+  })
+
+  it('gives an Approver the stop without an action', () => {
+    expect(bannerOf(facts({ latest: run(failed), viewer: BOB })).action).toBeNull()
   })
 
   it('for a run waiting for a yes, offers Review and decide only when the platform says the person may decide', () => {
@@ -651,21 +652,6 @@ describe('the status banner', () => {
   })
 })
 
-describe('a stopped run’s failure text', () => {
-  it('loses the error type in front of it', () => {
-    expect(plainFailure('UpstreamUnavailable: Could not check LangGraph')).toBe('Could not check LangGraph')
-  })
-
-  it('keeps a plain message as it is', () => {
-    expect(plainFailure('Jira: refused the ticket')).toBe('Jira: refused the ticket')
-  })
-
-  it('never says write key, and says this run’s label instead', () => {
-    expect(plainFailure('WriteFailed: found a ticket for this write key it cannot prove it made')).toBe('found a ticket for this run’s label it cannot prove it made')
-    expect(plainFailure('A new run does not share its Write Key')).toBe('A new run does not share this run’s label')
-  })
-})
-
 describe('what Delete says is lost', () => {
   it('names the workflow, its schedule, the runs that stay and the Undo', () => {
     expect(deleteWords('LangGraph release check', 3)).toBe(
@@ -675,5 +661,15 @@ describe('what Delete says is lost', () => {
 
   it('says so when it has no runs', () => {
     expect(deleteWords('Nudge', 0)).toContain('It has no runs yet.')
+  })
+
+  it('says one past run stays, in the singular', () => {
+    expect(deleteWords('Nudge', 1)).toContain('Its 1 past run stays in the record')
+  })
+
+  it('says nothing about runs until they have loaded', () => {
+    const words = deleteWords('Nudge', null)
+    expect(words).not.toMatch(/runs yet|past run/)
+    expect(words).toBe('Nudge leaves Workflows, and its schedule stops, so no more runs start. Undo stays in the message that follows.')
   })
 })
