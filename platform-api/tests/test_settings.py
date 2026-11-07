@@ -1,4 +1,5 @@
 import re
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -162,3 +163,15 @@ def test_jira_settings_that_cannot_work_refuse_to_start(env: dict[str, str], rea
 def test_a_real_jira_with_practice_systems_off_starts():
     settings = settings_from_env({**LOCAL_ENV, **REAL_JIRA, "PRACTICE_SYSTEMS": "off"})
     assert not settings.practice_systems and not settings.jira.practice
+
+
+def test_the_team_works_in_singapore_unless_team_time_zone_says_otherwise():
+    assert settings_from_env(LOCAL_ENV).team_time_zone == ZoneInfo("Asia/Singapore")
+    london = settings_from_env({**LOCAL_ENV, "TEAM_TIME_ZONE": " Europe/London "})
+    assert london.team_time_zone == ZoneInfo("Europe/London")
+
+
+@pytest.mark.parametrize("zone", ["Singapore Time", "Mars/Olympus", "../etc/passwd", "+08:00"])
+def test_a_team_time_zone_that_is_not_a_zone_name_refuses_to_start(zone: str):
+    with pytest.raises(ConfigError, match="TEAM_TIME_ZONE"):
+        settings_from_env({**LOCAL_ENV, "TEAM_TIME_ZONE": zone})

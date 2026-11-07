@@ -6,8 +6,9 @@ import threading
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime
 from typing import Protocol, Self
+from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException
@@ -68,8 +69,6 @@ CALLBACK_TIMEOUT_SECONDS = 2.0
 DEFAULT_GITHUB_API_BASE = "https://api.github.com"
 TOKEN_HEADER = "X-Callback-Token"
 KEY_HEADER = "X-Agent-Key"
-# The staff are in Singapore, so "today" in an agent's prompt is the date there.
-SINGAPORE = timezone(timedelta(hours=8))
 
 AGENT_CARDS = AgentCards(
     agents=[
@@ -393,7 +392,7 @@ def create_app(
         if chat is None:
             # Not stored: the same task id can run once a model is connected.
             return TaskFailed(task_id=body.task_id, error=MODEL_NEEDED, events=[])
-        today = active.clock().astimezone(SINGAPORE).date()
+        today = active.clock().astimezone(ZoneInfo(body.time_zone)).date()
 
         def run() -> TaskResult:
             events = EventLog(active.clock, active.callbacks.sink_for(body))

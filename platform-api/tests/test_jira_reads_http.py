@@ -3,6 +3,7 @@ the practice Jira through the one adapter, over HTTP, as it would read a real Ji
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -33,6 +34,7 @@ OTHER_RUN = RunId("run_release")
 TASK = TaskId("run_card/work/1")
 PRP = ProposalId("prp_1")
 KEY = LOCAL_ENV["CALLBACK_SIGNING_KEY"]
+SINGAPORE = ZoneInfo("Asia/Singapore")
 
 
 def token_for(run_id: RunId = CARD_RUN, task: TaskId = TASK, minutes: int = 60) -> str:
@@ -73,7 +75,10 @@ def practice(db: Database) -> PracticeKit:
 
 
 @pytest.fixture
-async def client(db: Database, practice: PracticeKit) -> AsyncIterator[httpx.AsyncClient]:
+async def client(
+    request: pytest.FixtureRequest, db: Database, practice: PracticeKit
+) -> AsyncIterator[httpx.AsyncClient]:
+    """The platform's routes. A test that parametrizes it names the TEAM_TIME_ZONE setting."""
     async with db.transaction("orchestration") as uow:
         for run_id, spec, name in ((CARD_RUN, card_spec(), "a"), (OTHER_RUN, SPEC, "b")):
             await Store().insert_run(
@@ -105,7 +110,8 @@ async def client(db: Database, practice: PracticeKit) -> AsyncIterator[httpx.Asy
         )
         await jira.execute(action, WriteKey(CARD_RUN, PRP, index))
     await jira.mark_done("MOCK-2")
-    app = create_app(LOCAL_ENV)
+    zone = getattr(request, "param", None)
+    app = create_app({**LOCAL_ENV, "TEAM_TIME_ZONE": zone} if zone else LOCAL_ENV)
     app.state.jira = jira.jira
     app.state.db = db
     async with httpx.AsyncClient(
@@ -152,7 +158,7 @@ async def test_a_search_can_filter_by_words_status_and_done_day(client: httpx.As
     assert [t["key"] for t in by_body.json()["tickets"]] == ["MOCK-2"]
     done = await search(client, status="Done")
     assert [t["key"] for t in done.json()["tickets"]] == ["MOCK-2"]
-    today = datetime.now(UTC).date()
+    today = datetime.now(SINGAPORE).date()
     since = await search(client, done_since=today.isoformat())
     assert [t["key"] for t in since.json()["tickets"]] == ["MOCK-2"]
     later = await search(client, done_since=(today + timedelta(days=1)).isoformat())
@@ -170,7 +176,7 @@ async def test_a_ticket_carries_its_last_update_type_and_owner(client: httpx.Asy
 
 
 async def test_a_search_can_filter_by_created_day_last_update_and_type(client: httpx.AsyncClient):
-    today = datetime.now(UTC).date()
+    today = datetime.now(SINGAPORE).date()
     tomorrow = (today + timedelta(days=1)).isoformat()
     yesterday = (today - timedelta(days=1)).isoformat()
     assert (await search(client, created_since=today.isoformat())).json()["tickets"] != []
@@ -183,21 +189,75 @@ async def test_a_search_can_filter_by_created_day_last_update_and_type(client: h
     assert [t["key"] for t in kinds.json()["tickets"]] == ["MOCK-2", "MOCK-1"]
 
 
-async def test_updated_before_takes_in_the_whole_utc_day_and_not_the_next(
-    client: httpx.AsyncClient, practice: PracticeKit
+def singapore(day: int, hour: int, minute: int) -> datetime:
+    return datetime(2026, 10, day, hour, minute, tzinfo=SINGAPORE)
+
+
+async def bugs_made_at(db: Database, practice: PracticeKit, *moments: datetime, done: bool) -> None:
+    """One bug made, last updated and, when `done`, finished at each moment."""
+    for at in moments:
+        made = await practice.store.create(
+            "MOCK", f"{at:%d %b %H:%M}", "", [], "Bug", created_at=at
+        )
+        if done:
+            async with db.transaction("orchestration") as uow:
+                await uow.conn.execute(
+                    "UPDATE orchestration.mock_jira_tickets SET status = 'Done', done_at = %s "
+                    "WHERE key = %s",
+                    (at, made.key),
+                )
+
+
+@pytest.mark.parametrize(
+    ("name", "moments", "found"),
+    [
+        (
+            "created_since",
+            (singapore(17, 23, 30), singapore(18, 0, 30), singapore(18, 23, 30)),
+            ["18 Oct 23:30", "18 Oct 00:30"],
+        ),
+        (
+            "done_since",
+            (singapore(17, 23, 30), singapore(18, 0, 30), singapore(18, 23, 30)),
+            ["18 Oct 23:30", "18 Oct 00:30"],
+        ),
+        (
+            "updated_before",
+            (singapore(18, 0, 30), singapore(18, 23, 30), singapore(19, 0, 30)),
+            ["18 Oct 23:30", "18 Oct 00:30"],
+        ),
+    ],
+)
+async def test_a_day_filter_takes_the_whole_singapore_day_from_00_00_to_23_59(
+    client: httpx.AsyncClient,
+    db: Database,
+    practice: PracticeKit,
+    name: str,
+    moments: tuple[datetime, ...],
+    found: list[str],
 ):
-    day = datetime(2026, 10, 20, tzinfo=UTC)
-    for title, at in (
-        ("Start of the day", day),
-        ("Last seconds of the day", day + timedelta(hours=23, minutes=59, seconds=30)),
-        ("Start of the next day", day + timedelta(days=1)),
-    ):
-        await practice.store.create("MOCK", title, "", [], "Bug", created_at=at)
-    found = await search(client, updated_before="2026-10-20", issue_type="Bug")
-    assert [t["title"] for t in found.json()["tickets"]] == [
-        "Last seconds of the day",
-        "Start of the day",
-    ]
+    await bugs_made_at(db, practice, *moments, done=name == "done_since")
+    query = {"task": TASK, "issue_type": "Bug", name: "2026-10-18"}
+    answer = await client.get(
+        f"/internal/v1/runs/{CARD_RUN}/jira/tickets", params=query, headers=header()
+    )
+    assert [t["title"] for t in answer.json()["tickets"]] == found
+
+
+@pytest.mark.parametrize("client", ["Europe/London"], indirect=True)
+async def test_the_days_are_the_team_time_zone_settings_days(
+    client: httpx.AsyncClient, db: Database, practice: PracticeKit
+):
+    london = ZoneInfo("Europe/London")
+    await bugs_made_at(
+        db,
+        practice,
+        datetime(2026, 10, 17, 23, 30, tzinfo=london),
+        datetime(2026, 10, 18, 0, 30, tzinfo=london),
+        done=False,
+    )
+    tickets = (await search(client, issue_type="Bug", created_since="2026-10-18")).json()
+    assert [t["title"] for t in tickets["tickets"]] == ["18 Oct 00:30"]
 
 
 async def test_a_bad_day_in_the_new_filters_is_a_422(client: httpx.AsyncClient):

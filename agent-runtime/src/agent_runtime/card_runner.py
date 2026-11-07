@@ -645,6 +645,7 @@ def _refused_day(args: JiraSearchArguments, today: date) -> str | None:
     """A day after today, or before 2000, narrows or widens a search into nonsense without any
     error from Jira, so the model is told and asks again."""
     for name, text in (
+        ("done_since", args.done_since),
         ("updated_before", args.updated_before),
         ("created_since", args.created_since),
     ):

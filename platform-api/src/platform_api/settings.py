@@ -2,9 +2,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
 from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from platform_api.auth import AuthConfig, ConfigError, auth_config
-from platform_api.shared import JIRA_PROJECT_PATTERN
+from platform_api.shared import JIRA_PROJECT_PATTERN, TEAM_TIME_ZONE
 
 type Context = Literal["builder", "orchestration", "monitoring"]
 type ActivityReader = Literal["postgres", "cosmos"]
@@ -92,6 +93,7 @@ class Settings:
     practice_systems: bool = True
     watchlist_jira_project: str = PRACTICE_JIRA_PROJECT
     jira: JiraSettings = JiraSettings()
+    team_time_zone: ZoneInfo = TEAM_TIME_ZONE
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -195,6 +197,18 @@ def watchlist_jira_project_from_env(env: Mapping[str, str]) -> str:
     return project
 
 
+def team_time_zone_from_env(env: Mapping[str, str]) -> ZoneInfo:
+    name = env.get("TEAM_TIME_ZONE", "").strip()
+    if not name:
+        return TEAM_TIME_ZONE
+    try:
+        return ZoneInfo(name)
+    except ValueError, ZoneInfoNotFoundError:
+        raise ConfigError(
+            f"TEAM_TIME_ZONE must be a time zone name, such as Asia/Singapore. {name!r} is not one."
+        ) from None
+
+
 def _web_address(name: str, value: str, *, https_only: bool) -> str:
     parts = urlsplit(value)
     schemes = {"https"} if https_only else {"http", "https"}
@@ -281,6 +295,7 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         practice_systems=practice_systems,
         watchlist_jira_project=watchlist_jira_project_from_env(env),
         jira=jira_from_env(env, public_base_url, practice_systems),
+        team_time_zone=team_time_zone_from_env(env),
     )
 
 

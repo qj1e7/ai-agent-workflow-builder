@@ -7,6 +7,7 @@ values. The practice Jira must answer in the same shape, so the adapter can't te
 import json
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -26,6 +27,7 @@ from tests.support import FIXTURES
 pytestmark = pytest.mark.anyio
 
 SGT = timezone(timedelta(hours=8))
+HOUR = timedelta(hours=1)
 NOTES = "Release notes: https://github.com/langchain-ai/langgraph/releases"
 BASES = {"datacenter": "https://jira.example.com", "cloud": "https://example.atlassian.net"}
 
@@ -225,6 +227,19 @@ async def test_with_no_zone_updated_before_keeps_only_the_tickets_updated_before
     jira = practice_without_zone(kit)
     found = await jira.search(IssueSearch(("MOCK",), updated_before=moment))
     assert [issue.title for issue in found.issues] == ["A minute before", "A day before"]
+
+
+async def test_with_no_zone_a_moment_from_the_far_side_of_the_world_still_finds_the_next_hour(
+    db: Database,
+):
+    kit = PracticeKit(db)
+    kit.store.time_zone = "Etc/GMT+12"
+    moment = datetime(2026, 10, 20, tzinfo=ZoneInfo("Pacific/Kiritimati"))
+    await kit.store.create("MOCK", "An hour before", "", [], "Bug", created_at=moment - HOUR)
+    await kit.store.create("MOCK", "An hour after", "", [], "Bug", created_at=moment + HOUR)
+    jira = practice_without_zone(kit)
+    found = await jira.search(IssueSearch(("MOCK",), created_since=moment))
+    assert [issue.title for issue in found.issues] == ["An hour after"]
 
 
 async def test_a_search_in_an_unknown_zone_widens_the_day_and_still_says_it_was_cut_off():

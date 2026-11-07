@@ -6,8 +6,9 @@ it for that task alone. The routes are under /internal/, so the Portal's proxy n
 """
 
 import re
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from typing import Annotated
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
@@ -29,6 +30,7 @@ from platform_api.shared import (
     STORED_JIRA_PROJECT_PATTERN,
     RunId,
     TaskId,
+    day_start,
 )
 from platform_api.wire import WireModel, error_response
 
@@ -74,11 +76,11 @@ def _summary(ticket: JiraIssue) -> PracticeTicketSummary:
     )
 
 
-def _midnight(name: str, text: str, days_later: int = 0) -> datetime | None:
+def _start(name: str, text: str, zone: ZoneInfo, days_later: int = 0) -> datetime | None:
     if not text:
         return None
     try:
-        return datetime.combine(date.fromisoformat(text) + timedelta(days=days_later), time(), UTC)
+        return day_start(date.fromisoformat(text) + timedelta(days=days_later), zone)
     except ValueError, OverflowError:
         raise HTTPException(422, f"{name} is a day, YYYY-MM-DD") from None
 
@@ -137,19 +139,23 @@ async def search_tickets(
     """At most 50 tickets, newest first, and `cut_off` says when more matched. An empty filter is
     not applied.
 
-    Days are UTC days, written YYYY-MM-DD. `done_since` and `created_since` mean on or after that
-    day, and `updated_before` means last updated on or before that day. `issue_type` is one type
-    or a comma-separated list, such as `Bug,Task`. Words of `text` shorter than 3 characters are
-    ignored, and text with no word left matches nothing."""
+    Days are written YYYY-MM-DD and are days in the team's time zone (TEAM_TIME_ZONE, Singapore
+    unless set), the zone of the agents' today and of the last run's day. `done_since` and
+    `created_since` mean on or after that day, and `updated_before` means last updated on or
+    before that day. `issue_type` is one type or a comma-separated list, such as `Bug,Task`.
+    Words of `text` shorter than 3 characters are ignored, and text with no word left matches
+    nothing."""
     allowed = await _admit(request, run_id, task, token)
     if project and STORED_JIRA_PROJECT_PATTERN.match(project) is None:
         raise HTTPException(422, "project is not a Jira project key")
     wanted: dict[str, TicketStatus | None] = {"": None, "To Do": "To Do", "Done": "Done"}
     if status not in wanted:
         raise HTTPException(422, "status is To Do or Done")
-    since = _midnight("done_since", done_since)
-    created = _midnight("created_since", created_since)
-    updated = _midnight("updated_before", updated_before, days_later=1)
+    settings: Settings = request.app.state.settings
+    zone = settings.team_time_zone
+    since = _start("done_since", done_since, zone)
+    created = _start("created_since", created_since, zone)
+    updated = _start("updated_before", updated_before, zone, days_later=1)
     kinds = tuple(dict.fromkeys(name.strip() for name in issue_type.split(",") if name.strip()))
     if project and project not in allowed:
         raise HTTPException(403, "This run may not read that Jira project")

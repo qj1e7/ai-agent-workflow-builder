@@ -783,7 +783,7 @@
             }
           ],
           "default": null,
-          "description": "The day the workflow's last finished run started, as a UTC day. None when it has no finished run yet. The platform sets it on a task. It is empty in a task's output.",
+          "description": "The day the workflow's last finished run started, in the task's time_zone, so it is the day the run list shows. None when it has no finished run yet. The platform sets it on a task. It is empty in a task's output.",
           "title": "Last Run On"
         }
       },
@@ -2034,6 +2034,11 @@
         "task_id": {
           "title": "Task Id",
           "type": "string"
+        },
+        "time_zone": {
+          "description": "The zone the team works in, such as Asia/Singapore. The agents' today and every plain day they read or send, last_run_on included, are days in it.",
+          "title": "Time Zone",
+          "type": "string"
         }
       },
       "required": [
@@ -2042,6 +2047,7 @@
         "instruction",
         "inputs",
         "carry_forward",
+        "time_zone",
         "callback"
       ],
       "title": "TaskRequest",

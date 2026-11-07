@@ -4,8 +4,9 @@ import logging
 import traceback
 from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo
 
 from platform_api.db import Database, UnitOfWork
 from platform_api.monitoring import (
@@ -131,6 +132,7 @@ from platform_api.orchestration.write_actions import (
     intents,
 )
 from platform_api.shared import (
+    TEAM_TIME_ZONE,
     ApprovalId,
     Digest,
     N8nExecutionId,
@@ -368,9 +370,11 @@ class Orchestrator:
         people: RolesNow | None = None,
         *,
         public_base_url: str,
+        time_zone: ZoneInfo = TEAM_TIME_ZONE,
     ) -> None:
         self._db = db
         self._public_base_url = public_base_url.rstrip("/")
+        self._time_zone = time_zone
         self._models = models
         self._people = people
         self._store = Store()
@@ -495,7 +499,9 @@ class Orchestrator:
             model = await self._models.access(uow) if self._models is not None else None
             last_start = await self._store.last_finished_start(uow, record.spec.use_case_id, run_id)
         working = moved.state
-        last_run_on = None if last_start is None else last_start.astimezone(UTC).date()
+        # The last run's own day in the team's zone, so it is the day the run list shows. It
+        # starts at or before the run did, so created_since on it leaves no gap.
+        last_run_on = None if last_start is None else last_start.astimezone(self._time_zone).date()
         request = self._task_request(record, working, model, last_run_on)
         reply = await self._agents.run_task(request)
 
@@ -653,6 +659,7 @@ class Orchestrator:
             instruction=spec.instruction,
             inputs=inputs,
             carry_forward=CarryForward(last_run_on=last_run_on),
+            time_zone=self._time_zone.key,
             callback=Callback(url=url, token=token),
             model=model,
         )

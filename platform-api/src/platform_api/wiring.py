@@ -261,6 +261,7 @@ async def build(settings: Settings) -> Services:
         models=model_settings,
         people=people,
         public_base_url=settings.public_base_url,
+        time_zone=settings.team_time_zone,
     )
     schedules = ScheduleBook(db)
     watchlist = Watchlist(

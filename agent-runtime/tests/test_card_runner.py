@@ -585,7 +585,7 @@ def test_a_search_with_only_a_type_says_the_type():
     ]
 
 
-@pytest.mark.parametrize("name", ["updated_before", "created_since"])
+@pytest.mark.parametrize("name", ["done_since", "updated_before", "created_since"])
 @pytest.mark.parametrize(
     ("day", "why"),
     [
@@ -608,7 +608,7 @@ def test_a_day_after_today_or_before_2000_is_refused_and_nothing_is_searched(nam
     assert started_lines(result) == []
 
 
-@pytest.mark.parametrize("name", ["updated_before", "created_since"])
+@pytest.mark.parametrize("name", ["done_since", "updated_before", "created_since"])
 def test_today_and_the_first_day_of_2000_are_accepted(name):
     for day in ("2026-10-25", "2000-01-01"):
         jira = FakeJira()

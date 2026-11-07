@@ -109,8 +109,9 @@ def _display_name(raw: object) -> str | None:
 
 
 def _moment(at: datetime, zone: ZoneInfo | None, widen: timedelta) -> str:
-    """A moment as a quoted JQL date. Without the account's zone it is moved by `widen`."""
-    shown = at.astimezone(zone) if zone else at + widen
+    """A moment as a quoted JQL date. Without the account's zone it is written in UTC and moved
+    by `widen`, a day, which is more than any zone is away from UTC."""
+    shown = at.astimezone(zone) if zone else at.astimezone(UTC) + widen
     return _quoted(shown.strftime("%Y-%m-%d %H:%M"))
 
 

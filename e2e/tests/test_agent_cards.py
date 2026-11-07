@@ -1,5 +1,6 @@
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 from harness import (
@@ -170,7 +171,7 @@ def test_a_second_run_tells_its_agent_the_day_the_first_run_started(
     }
     made = api.post("alice", "/api/v1/agent-use-cases", body, expect=(201,)).json()
 
-    first_day = datetime.now(UTC).date()
+    first_day = datetime.now(ZoneInfo("Asia/Singapore")).date()
     first, _ = api.start_run("alice", made["use_case_id"])
     approve(api, first)
     api.wait_for_state("alice", first, {"succeeded"})
