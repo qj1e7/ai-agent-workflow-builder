@@ -25,7 +25,7 @@ interface Made {
   readonly note: string
 }
 
-const LONG_LINK = `https://example.com/${'long-link-without-a-break-'.repeat(8)}`
+const LONG_LINK = `https://example.com/${'a'.repeat(190)}`
 
 async function askAndAnswer(backend: Backend, word: string, long = false): Promise<Made> {
   const note = `Please add ${word} ${randomUUID().slice(0, 6)}${long ? ` ${LONG_LINK}` : ''}`
