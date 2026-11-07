@@ -1,5 +1,5 @@
 import { ApiError } from '../../api/client'
-import type { FollowingUpItem, TeamRequestView } from '../../api/types'
+import type { FollowingUpItem, ReplyView, TeamRequestView } from '../../api/types'
 import { lineWhen } from './times'
 
 export const REQUEST_PARAM = 'request'
@@ -25,10 +25,20 @@ export function oneLine(words: string, limit = LINE_SHOWN): string {
 }
 
 /** A request in the person's Following up list: what they asked, and where it stands. */
-export function followingWords(item: FollowingUpItem, now: Date): { readonly name: string; readonly sub: string } {
+export function followingWords(item: FollowingUpItem, now: Date, meId: string | undefined): { readonly name: string; readonly sub: string } {
   const reply = item.latest_reply
-  const stand = reply ? `${requestStatusWords(item.status)} by ${reply.replied_by_name}: ${oneLine(reply.text, 70)}` : `${requestStatusWords(item.status)}. Nobody has replied yet.`
+  const stand = !reply
+    ? `${requestStatusWords(item.status)}. Nobody has replied yet.`
+    : reply.replied_by === meId
+      ? `${requestStatusWords(item.status)}. You added: ${oneLine(reply.text, 70)}`
+      : `${requestStatusWords(item.status)} by ${reply.replied_by_name}: ${oneLine(reply.text, 70)}`
   return { name: oneLine(item.note), sub: `${requestKindWords(item.kind)} · ${lineWhen(item.asked_at, now)} · ${stand}` }
+}
+
+/** What a reply did. The asker's own note leaves the status alone, so it never reads as an answer. */
+export function replyWords(reply: ReplyView, askedBy: string): string {
+  if (reply.status === 'done') return 'Marked Done'
+  return reply.replied_by === askedBy ? 'Added to the request' : 'Answered'
 }
 
 /** The newest reply from someone other than the asker, which is the one the asker marks as read. */

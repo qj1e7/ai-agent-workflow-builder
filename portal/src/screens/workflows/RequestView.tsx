@@ -8,7 +8,7 @@ import type { TeamRequestView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { IconChevronLeft } from '../../ui/icons'
 import { lineWhen } from './times'
-import { MAX_REPLY, newestReplyToAsker, requestKindWords, requestProblem, requestStatusWords } from './requests'
+import { MAX_REPLY, newestReplyToAsker, replyWords, requestKindWords, requestProblem, requestStatusWords } from './requests'
 import styles from './Workflows.module.css'
 
 const NOT_POSTED: Record<NonNullable<TeamRequestView['not_posted_because']>, string> = {
@@ -72,7 +72,7 @@ function Request({ request, now }: { request: TeamRequestView; now: Date }) {
   const runId = request.about['run_id']
   return (
     <article className={styles['request']} aria-labelledby={headingId} data-request={request.request_id} data-status={request.status}>
-      <h2 id={headingId}>{support ? `${request.asked_by_name} reported a platform problem` : `${request.asked_by_name} asked the team`}</h2>
+      <h2 id={headingId}>{support ? `${mine ? 'You' : request.asked_by_name} reported a platform problem` : `${mine ? 'You' : request.asked_by_name} asked the team`}</h2>
       <p className={styles['requestMeta']}>
         <span className={styles['pill']} data-status={request.status}>
           {requestStatusWords(request.status)}
@@ -100,7 +100,7 @@ function Replies({ request, now }: { request: TeamRequestView; now: Date }) {
         <li key={`${reply.replied_by}:${reply.replied_at}`}>
           <b>{reply.replied_by_name}</b>
           <span className={styles['replyWhen']}>
-            {lineWhen(reply.replied_at, now)} · {reply.status === 'done' ? 'Marked Done' : 'Answered'}
+            {lineWhen(reply.replied_at, now)} · {replyWords(reply, request.asked_by)}
           </span>
           <p>{reply.text}</p>
         </li>
@@ -122,7 +122,7 @@ function ReplyForm({ requestId, mine }: { requestId: string; mine: boolean }) {
   const hintId = useId()
   const empty = text.trim() === ''
 
-  function send() {
+  function send(sets: 'answered' | 'done') {
     if (empty) {
       setNeedText(true)
       box.current?.focus()
@@ -132,7 +132,7 @@ function ReplyForm({ requestId, mine }: { requestId: string; mine: boolean }) {
     setSent(false)
     latch.run((settled) =>
       reply.mutate(
-        { text: text.trim(), status },
+        { text: text.trim(), status: sets },
         {
           onSuccess: () => {
             setText('')
@@ -150,44 +150,51 @@ function ReplyForm({ requestId, mine }: { requestId: string; mine: boolean }) {
       className={styles['replyForm']}
       onSubmit={(event) => {
         event.preventDefault()
-        send()
+        send(mine ? 'answered' : status)
       }}
     >
       <h3>{mine ? 'Add to your request' : 'Reply'}</h3>
-      <label htmlFor={boxId}>Your reply</label>
+      <label htmlFor={boxId}>{mine ? 'Your note' : 'Your reply'}</label>
       <textarea id={boxId} ref={box} rows={4} maxLength={MAX_REPLY} value={text} onChange={(event) => {
           setText(event.target.value)
           setNeedText(false)
         }} aria-describedby={hintId} />
       <p id={hintId} className="muted">
-        Everyone on the team can read this. Don’t paste passwords or keys. A reply changes no workflow and approves nothing.
+        Everyone on the team can read this. Don’t paste passwords or keys. {mine ? 'Adding a note keeps the request as it is. Mark done when nothing more is needed.' : 'A reply changes no workflow and approves nothing.'}
       </p>
-      <fieldset className={styles['replyStatus']}>
-        <legend>After this reply, the request is</legend>
-        <label>
-          <input type="radio" name={`status-${boxId}`} checked={status === 'answered'} onChange={() => setStatus('answered')} />
-          Answered
-        </label>
-        <label>
-          <input type="radio" name={`status-${boxId}`} checked={status === 'done'} onChange={() => setStatus('done')} />
-          Done, nothing more will happen
-        </label>
-      </fieldset>
+      {mine ? null : (
+        <fieldset className={styles['replyStatus']}>
+          <legend>After this reply, the request is</legend>
+          <label>
+            <input type="radio" name={`status-${boxId}`} checked={status === 'answered'} onChange={() => setStatus('answered')} />
+            Answered
+          </label>
+          <label>
+            <input type="radio" name={`status-${boxId}`} checked={status === 'done'} onChange={() => setStatus('done')} />
+            Done, nothing more will happen
+          </label>
+        </fieldset>
+      )}
       {needText ? (
         <p className={styles['problem']} role="alert">
-          Write a reply first.
+          {mine ? 'Write a note first.' : 'Write a reply first.'}
         </p>
       ) : null}
       {reply.isError ? (
         <p className={styles['problem']} role="alert">
-          Could not send the reply. {words(reply.error)}
+          Could not {mine ? 'add the note' : 'send the reply'}. {words(reply.error)}
         </p>
       ) : null}
-      {sent ? <p role="status">Reply sent.</p> : null}
+      {sent ? <p role="status">{mine ? 'Added.' : 'Reply sent.'}</p> : null}
       <div className={styles['btns']}>
         <Button variant="primary" type="submit" loading={reply.isPending}>
-          Send reply
+          {mine ? 'Add' : 'Send reply'}
         </Button>
+        {mine ? (
+          <Button type="button" disabled={reply.isPending} onClick={() => send('done')}>
+            Mark done
+          </Button>
+        ) : null}
       </div>
     </form>
   )

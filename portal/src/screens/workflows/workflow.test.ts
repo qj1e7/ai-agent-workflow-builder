@@ -23,7 +23,6 @@ import {
   changeProblem,
   controlsOf,
   deleteWords,
-  faceStates,
   formatterFactory,
   changeWords,
   heldNote,

@@ -124,18 +124,18 @@ export function WaitingSection({ items, total, now }: { items: readonly WaitingI
           )
         })}
       </ul>
-      {total > items.length ? <p className={homeStyles['more']}>And {total - items.length} more.</p> : null}
+      {total > items.length ? <p className={homeStyles['more']}>Showing the newest {items.length} of {total}.</p> : null}
     </Section>
   )
 }
 
-export function FollowingSection({ items, total, now }: { items: readonly FollowingUpItem[]; total: number; now: Date }) {
+export function FollowingSection({ items, total, now, meId }: { items: readonly FollowingUpItem[]; total: number; now: Date; meId: string | undefined }) {
   if (items.length === 0) return null
   return (
     <Section id="following" title="Following up">
       <ul className={homeStyles['rows']}>
         {items.map((item) => {
-          const words = followingWords(item, now)
+          const words = followingWords(item, now, meId)
           return (
             <li key={item.request_id} data-request={item.request_id}>
               <Link to={requestPath(item.request_id)} className={homeStyles['rowLink']}>
@@ -149,7 +149,7 @@ export function FollowingSection({ items, total, now }: { items: readonly Follow
           )
         })}
       </ul>
-      {total > items.length ? <p className={homeStyles['more']}>And {total - items.length} older ones.</p> : null}
+      {total > items.length ? <p className={homeStyles['more']}>Showing the newest {items.length} of {total}.</p> : null}
     </Section>
   )
 }

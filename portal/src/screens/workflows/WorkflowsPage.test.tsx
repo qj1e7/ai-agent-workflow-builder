@@ -298,9 +298,12 @@ describe('the sections under Needs you', () => {
     expect(following).toContain('href="/workflows?request=trq_01JD5RP"')
   })
 
-  it('says how many older requests Following up leaves out', () => {
-    const many: HomeOut = { ...HOME, following_up_total: 14 }
-    expect(text(sectionOf(mainOf(render({ home: many })), 'following'))).toContain('And 13 older ones.')
+  it('says how many requests Following up shows when there are more than the platform lists, and never offers a link that goes nowhere', () => {
+    const many: HomeOut = { ...HOME, following_up_total: 63, waiting_on_others_total: 61 }
+    const html = render({ home: many })
+    expect(text(sectionOf(mainOf(html), 'following'))).toContain('Showing the newest 1 of 63.')
+    expect(text(sectionOf(mainOf(html), 'waiting'))).toContain('Showing the newest 1 of 61.')
+    expect(text(sectionOf(mainOf(render({ home: HOME })), 'following'))).not.toContain('Showing the newest')
   })
 
   it('shows a reply the person has not opened in Needs you, with the same count as the tab', () => {
@@ -324,7 +327,7 @@ describe('a request opened by its link', () => {
   const open = (setup: Setup) => mainOf(render({ home: aliceHome as HomeOut, ...setup, request: { id: 'trq_01JD5RP', ...setup.request } }))
 
   it('shows the request, who asked, the replies and a reply form to anyone on the team', () => {
-    for (const me of [ALICE, BOB, CAROL]) {
+    for (const me of [BOB, CAROL]) {
       const html = open({ me, request: { id: 'trq_01JD5RP', data: REQUEST } })
       expect(text(html)).toContain('Alice reported a platform problem')
       expect(text(html)).toContain('It stopped again.')
@@ -336,10 +339,28 @@ describe('a request opened by its link', () => {
     }
   })
 
-  it('offers Answered, and Done for when nothing more will happen', () => {
-    const html = open({ request: { id: 'trq_01JD5RP', data: REQUEST } })
+  it('offers someone else Answered, and Done for when nothing more will happen', () => {
+    const html = open({ me: BOB, request: { id: 'trq_01JD5RP', data: REQUEST } })
     expect(html).toMatch(/<input[^>]*type="radio"[^>]*checked=""[^>]*\/>Answered/)
     expect(text(html)).toContain('Done, nothing more will happen')
+  })
+
+  it('speaks to the asker as you, and offers her only Add and Mark done', () => {
+    const html = open({ me: ALICE, request: { id: 'trq_01JD5RP', data: REQUEST } })
+    expect(text(html)).toContain('You reported a platform problem')
+    expect(text(html)).not.toContain('Alice reported')
+    expect(text(html)).toContain('Add to your request')
+    expect(html).toMatch(/<button[^>]*>Add<\/button>/)
+    expect(html).toMatch(/<button[^>]*>Mark done<\/button>/)
+    expect(html).not.toContain('type="radio"')
+    expect(html).not.toContain('Send reply')
+  })
+
+  it('labels the asker’s own note as an addition, never as an answer', () => {
+    const noted: TeamRequestView = { ...REQUEST, status: 'open', replies: [{ ...REQUEST.replies[0]!, replied_by: 'alice', replied_by_name: 'Alice', status: 'answered' }] }
+    const html = open({ me: BOB, request: { id: 'trq_01JD5RP', data: noted } })
+    expect(text(html)).toContain('Added to the request')
+    expect(text(html)).not.toMatch(/· Answered/)
   })
 
   it('replaces the list while it is open, and offers the way back', () => {

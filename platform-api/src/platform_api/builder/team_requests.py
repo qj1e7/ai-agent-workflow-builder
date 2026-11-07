@@ -21,7 +21,7 @@ from platform_api.wire import WireIn, WireModel
 NOTE_LIMIT = 1000
 REPLY_LIMIT = 1000
 LIST_LIMIT = 200
-FOLLOWING_UP_SHOWN = 10
+FOLLOWING_UP_SHOWN = 50
 DONE_STAYS_LISTED = timedelta(days=30)
 """A request marked Done leaves the list after this long. It stays in the record."""
 POSTING_GIVES_UP_AFTER = timedelta(minutes=2)
@@ -81,7 +81,9 @@ class ReplyIn(WireIn):
     status: Literal["answered", "done"] = Field(
         default="answered",
         description="Answered when the team has replied. Done when nothing more will happen, "
-        "including when the team says it won't be done, and why in the text.",
+        "including when the team says it won't be done, and why in the text. A reply by the "
+        "person who asked changes the request's status only when this is `done`. Otherwise the "
+        "request keeps the status it had.",
     )
 
 
@@ -90,7 +92,10 @@ class ReplyView(WireModel):
     replied_by_name: str
     replied_at: datetime
     text: str
-    status: Literal["answered", "done"]
+    status: Literal["answered", "done"] = Field(
+        description="What the reply asked for. For a reply by the person who asked, `answered` "
+        "means a note that left the request's status alone."
+    )
 
 
 class TeamRequestView(WireModel):
@@ -417,7 +422,9 @@ class TeamRequests:
                     f" AND {_LISTED} AND EXISTS (SELECT 1 FROM builder.team_request_replies p"
                     " WHERE p.request_id = r.request_id AND p.replied_by <> r.asked_by"
                     " AND (r.asker_seen_at IS NULL OR p.replied_at > r.asker_seen_at))"
-                    " LIMIT %(limit)s",
+                    " ORDER BY (SELECT max(p.replied_at) FROM builder.team_request_replies p"
+                    " WHERE p.request_id = r.request_id AND p.replied_by <> r.asked_by) DESC,"
+                    " r.request_id DESC LIMIT %(limit)s",
                     {
                         "who": asker.user_id,
                         "since": uow.now - DONE_STAYS_LISTED,
@@ -437,16 +444,37 @@ class TeamRequests:
         self, replier: Principal, request_id: str, body: ReplyIn
     ) -> TeamRequestView | None:
         async with self._db.transaction("builder") as uow:
-            row = await (
+            kept = await (
                 await uow.conn.execute(
-                    "UPDATE builder.team_requests SET status = %s,"
-                    " done_at = CASE WHEN %s = 'done' THEN %s END"
-                    " WHERE request_id = %s RETURNING *",
-                    (body.status, body.status, uow.now, request_id),
+                    "SELECT status, asked_by FROM builder.team_requests"
+                    " WHERE request_id = %s FOR UPDATE",
+                    (request_id,),
                 )
             ).fetchone()
-            if row is None:
+            if kept is None:
                 return None
+            by_the_asker = kept["asked_by"] == replier.user_id
+            status = (
+                (body.status if body.status == "done" else kept["status"])
+                if by_the_asker
+                else body.status
+            )
+            keeps_done_at = by_the_asker and kept["status"] == "done" and body.status != "done"
+            row = await (
+                await uow.conn.execute(
+                    "UPDATE builder.team_requests SET status = %(status)s,"
+                    " done_at = CASE WHEN %(status)s <> 'done' THEN NULL"
+                    " WHEN %(keeps)s THEN done_at ELSE %(now)s END"
+                    " WHERE request_id = %(id)s RETURNING *",
+                    {
+                        "status": status,
+                        "keeps": keeps_done_at,
+                        "now": uow.now,
+                        "id": request_id,
+                    },
+                )
+            ).fetchone()
+            assert row is not None
             await uow.conn.execute(
                 "INSERT INTO builder.team_request_replies (reply_id, request_id, replied_by,"
                 " replied_by_name, replied_at, text, status) VALUES (%s, %s, %s, %s, %s, %s, %s)",

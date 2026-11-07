@@ -82,6 +82,7 @@ async def list_team_requests(
     status_code=201,
     description=(
         "Replies to a request and sets its status. Any Operator or Approver can reply. A reply "
+        "by the person who asked leaves the status alone unless it says `done`. A reply "
         "changes no workflow, writes nothing outside the app and approves nothing."
     ),
     responses={**SIGNED_IN, 404: error_response("No such request")},

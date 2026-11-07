@@ -509,8 +509,8 @@ async def test_following_up_shows_a_persons_own_requests_with_the_latest_reply(l
     assert (await lab.home("erin"))["following_up"] == []
 
 
-async def test_following_up_shows_at_most_ten_and_counts_them_all(lab: Lab):
-    for n in range(12):
+async def test_following_up_shows_every_request_up_to_fifty_and_counts_them_all(lab: Lab):
+    for n in range(52):
         await ask(
             lab,
             "alice",
@@ -520,8 +520,8 @@ async def test_following_up_shows_at_most_ten_and_counts_them_all(lab: Lab):
 
     home = await lab.home("alice")
 
-    assert (len(home["following_up"]), home["following_up_total"]) == (10, 12)
-    assert home["following_up"][0]["note"] == "n11"
+    assert (len(home["following_up"]), home["following_up_total"]) == (50, 52)
+    assert home["following_up"][0]["note"] == "n51"
 
 
 async def test_a_done_request_leaves_following_up_after_30_days(lab: Lab):

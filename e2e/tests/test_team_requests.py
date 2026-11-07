@@ -41,3 +41,30 @@ def test_a_reply_waits_in_the_askers_needs_you_until_they_open_it(api: Api) -> N
     home = api.get("alice", "/api/v1/home")
     assert request_id in [item["request_id"] for item in home["following_up"]]
     assert api.get("carol", base)["replies"][0]["text"] == "Not on the plan."
+
+
+def test_the_askers_own_note_keeps_the_status_and_only_others_answer(api: Api) -> None:
+    made = api.post(
+        "alice",
+        "/api/v1/team-requests",
+        ASK,
+        expect=(201,),
+        headers={"Idempotency-Key": str(uuid4())},
+    )
+    base = f"/api/v1/team-requests/{made.json()['request_id']}"
+
+    noted = api.post("alice", f"{base}/replies", {"text": "For Friday."}, expect=(201,)).json()
+    claimed = api.post(
+        "alice", f"{base}/replies", {"text": "Still open.", "status": "answered"}, expect=(201,)
+    ).json()
+    answered = api.post("bob", f"{base}/replies", {"text": "On it."}, expect=(201,)).json()
+    closed = api.post(
+        "alice", f"{base}/replies", {"text": "Not needed.", "status": "done"}, expect=(201,)
+    ).json()
+
+    assert [r["status"] for r in (noted, claimed, answered, closed)] == [
+        "open",
+        "open",
+        "answered",
+        "done",
+    ]

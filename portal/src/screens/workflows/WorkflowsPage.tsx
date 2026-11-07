@@ -156,6 +156,7 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
   const [filter, setFilter] = useState<Filter>('all')
   const [finding, setFinding] = useState(false)
   const [restored, setRestored] = useState<string | null>(null)
+  const [restoredDraft, setRestoredDraft] = useState<string | null>(null)
   const [discarding, setDiscarding] = useState<DraftView | null>(null)
   const [discardProblem, setDiscardProblem] = useState<string | null>(null)
   const queryClient = useQueryClient()
@@ -173,6 +174,12 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
     document.getElementById(rowLinkId(restored ?? '')),
   )
 
+  const home = useHome().data
+  const drafts = useDrafts(viewer.operator).data
+  const focusRestoredDraft = useFocusWhenReady(restoredDraft !== null && (drafts ?? []).some((draft) => draft.draft_id === restoredDraft), () =>
+    document.querySelector<HTMLElement>(`[data-draft="${restoredDraft ?? ''}"] a`),
+  )
+
   useEffect(() => {
     if (handedOver) document.getElementById(UNDO_ID)?.focus()
   }, [handedOver])
@@ -187,8 +194,6 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
     if (noteKind === 'discarded') document.getElementById(UNDO_ID)?.focus()
   }, [noteKind, noteId])
 
-  const home = useHome().data
-  const drafts = useDrafts(viewer.operator).data
   const inNeeds = useMemo(() => (home ? runsInNeeds(home) : undefined), [home])
   const needsCard = home !== undefined && needsTotal(home) > 0
   const rows = rowsOf(useCases, runs, viewer, filter, query, inNeeds)
@@ -224,9 +229,11 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
   }
 
   function putDraftBack(draft: DraftView) {
-    pressChange(changes, (outcome) => saveDraft.mutate({ draftId: draft.draft_id, draft: { step: draft.step, content: draft.content } }, outcome), {
+    pressChange(changes, (outcome) => saveDraft.mutate({ draftId: draft.draft_id, draft: { step: draft.step, content: draft.content, put_back: { created_at: draft.created_at, saved_at: draft.saved_at } } }, outcome), {
       onSuccess: () => {
         setProblem(null)
+        setRestoredDraft(draft.draft_id)
+        focusRestoredDraft()
         rereadDrafts()
         setNote((before) => ({ kind: 'said', id: (before?.id ?? 0) + 1, text: 'Put back.' }))
       },
@@ -263,7 +270,7 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
       {runsFailed ? <p className={styles['problem']}>The latest runs could not be loaded, so each workflow shows none. They load again in a moment.</p> : null}
       {viewer.operator && drafts ? <DraftsSection drafts={drafts} now={now} onDiscard={(draft) => { setDiscardProblem(null); setDiscarding(draft) }} /> : null}
       {home ? <WaitingSection items={home.waiting_on_others} total={home.waiting_on_others_total} now={now} /> : null}
-      {home ? <FollowingSection items={home.following_up} total={home.following_up_total} now={now} /> : null}
+      {home ? <FollowingSection items={home.following_up} total={home.following_up_total} now={now} meId={me.id} /> : null}
       <section className={homeStyles['section']} aria-labelledby="all-workflows-h">
         <h2 id="all-workflows-h">
           All workflows <span className={homeStyles['count']}>{useCases.length}</span>

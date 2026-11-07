@@ -98,8 +98,9 @@ The team lead accepted these answers on 7 Nov. Questions 1 and 3 still need the 
 
 The list of a person's requests and their updates sits under Following up on Workflows, as prototype version 4 shows, and not in a Settings list. Plan N14 builds the store and the two routes. Plan item N9b builds the Following up section, and the Teams card's button opens `/workflows?request=<id>` so it can land on that request. The decisions above do not change.
 
-## Note, 8 Nov 2026
+## Note, 7 Nov 2026
 
 Plan item N9b built Following up and the request page. Two details follow from the decisions above.
 - **The seen mark.** A request keeps `asker_seen_at`, the time up to which its asker has read the replies (builder migration 0008). A reply from anyone but the asker newer than that time puts the request in the asker's Needs you, as `replied` on `GET /api/v1/home`. The asker's Portal sends `POST /api/v1/team-requests/{request_id}/seen` with the time of the newest reply on screen when the request opens. Only the asker can send it, and it never moves back. A reply that arrives while the page is open stays new. The mark changes nothing else, and it is not an audit event.
 - **Anyone on the team can open the link.** `GET /api/v1/team-requests/{request_id}` returns one request to any Operator or Approver, so the Teams card's link works for the whole team, and for a request that has left the list. Replying uses the rules above.
+- **The asker's own words.** A reply by the person who asked leaves the request's status alone unless it picks Done. Only someone else's reply sets Answered. The API enforces this, not only the form, so a note the asker adds to an Open request does not read as an answer.

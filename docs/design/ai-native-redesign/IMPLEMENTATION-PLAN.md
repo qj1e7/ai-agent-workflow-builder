@@ -547,7 +547,7 @@ These guard the rules the redesign must not move. A PR that needs to change one 
 
 | Test | Change | PR |
 |---|---|---|
-| `portal/src/screens/home/home.test.ts` | Order stopped, approval, connection, confirmation. Limit 3 on Home. | N9 |
+| `portal/src/screens/home/home.test.ts` | Order stopped, approval, connection, confirmation, then reply (a reply sits last, most urgent first: a reply holds nobody up, a confirmation can hold up someone else's work). Limit 3 on Home. | N9, N9b |
 | `portal/src/shell/shell.test.tsx` | No New workflow in the menu. No Agent library for Approver only. The tab count. | N9, N10 |
 | `portal/src/screens/home/HomePage.test.tsx`, `HomePage.heading.test.tsx`, `portal/src/shell/today.test.ts` | The four Homes. The greeting, if the team agrees. | N10 |
 | `portal/src/screens/home/HomeItem.test.tsx` | The exported `RetryButton` | N10 |

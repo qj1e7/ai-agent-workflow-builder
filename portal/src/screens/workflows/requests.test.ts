@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../api/client'
 import type { FollowingUpItem, ReplyView, TeamRequestView } from '../../api/types'
-import { followingWords, newestReplyToAsker, oneLine, requestPath, requestProblem } from './requests'
+import { followingWords, newestReplyToAsker, oneLine, replyWords, requestPath, requestProblem } from './requests'
 
 const NOW = new Date('2026-11-05T15:00:00+08:00')
 const reply = (by: string, at: string, text = 'ok'): ReplyView => ({ replied_by: by, replied_by_name: by, replied_at: at, text, status: 'answered' })
@@ -41,15 +41,21 @@ describe('a line under Following up', () => {
   const item: FollowingUpItem = { request_id: 'trq_1', kind: 'support', about: {}, note: 'It stopped again.', asked_at: '2026-11-05T01:00:00Z', status: 'open', latest_reply: null }
 
   it('says nobody has replied yet, or who answered and what', () => {
-    expect(followingWords(item, NOW).sub).toBe('Platform problem · Today 9:00 · Open. Nobody has replied yet.')
-    const answered = followingWords({ ...item, status: 'done', latest_reply: reply('Bob', '2026-11-05T02:00:00Z', 'Fixed.') }, NOW)
+    expect(followingWords(item, NOW, 'alice').sub).toBe('Platform problem · Today 9:00 · Open. Nobody has replied yet.')
+    const answered = followingWords({ ...item, status: 'done', latest_reply: reply('Bob', '2026-11-05T02:00:00Z', 'Fixed.') }, NOW, 'alice')
     expect(answered.sub).toContain('Done by Bob: Fixed.')
+  })
+
+  it('says "You added" for the person’s own note, never that it was answered', () => {
+    const noted = followingWords({ ...item, latest_reply: reply('alice', '2026-11-05T02:00:00Z', 'One more thing.') }, NOW, 'alice')
+    expect(noted.sub).toContain('Open. You added: One more thing.')
+    expect(noted.sub).not.toContain('Answered')
   })
 
   it('keeps long words to one line', () => {
     expect(oneLine('a\n  b   c')).toBe('a b c')
     expect(oneLine('x'.repeat(200))).toHaveLength(90)
-    expect(followingWords({ ...item, note: 'y'.repeat(200) }, NOW).name).toHaveLength(90)
+    expect(followingWords({ ...item, note: 'y'.repeat(200) }, NOW, 'alice').name).toHaveLength(90)
   })
 })
 
@@ -58,5 +64,13 @@ describe('a request that cannot be shown', () => {
     expect(requestProblem(new ApiError(404, null))).toBe('missing')
     expect(requestProblem(new ApiError(503, null))).toBe('failed')
     expect(requestProblem(new Error('offline'))).toBe('failed')
+  })
+})
+
+describe('what a reply did', () => {
+  it('reads the asker’s own note as an addition, someone else’s as an answer, and Done as Done', () => {
+    expect(replyWords(reply('alice', '2026-11-04T04:00:00Z'), 'alice')).toBe('Added to the request')
+    expect(replyWords(reply('bob', '2026-11-04T04:00:00Z'), 'alice')).toBe('Answered')
+    expect(replyWords({ ...reply('alice', '2026-11-04T04:00:00Z'), status: 'done' }, 'alice')).toBe('Marked Done')
   })
 })

@@ -319,6 +319,59 @@ async def test_a_reply_is_logged_with_who_wrote_it_and_sets_the_status(lab: Lab)
     assert empty.status_code == 422
 
 
+async def test_the_asker_adding_a_note_keeps_the_status_unless_she_picks_done(lab: Lab):
+    made = (await lab.send(ASK)).json()
+    url = f"/api/v1/team-requests/{made['request_id']}/replies"
+
+    added = (await lab.client.post(url, json={"text": "One more thing."}, headers=ALICE)).json()
+    claimed = (
+        await lab.client.post(
+            url, json={"text": "Still open.", "status": "answered"}, headers=ALICE
+        )
+    ).json()
+    assert (added["status"], claimed["status"]) == ("open", "open")
+
+    answered = (await lab.client.post(url, json={"text": "Looking."}, headers=BOB)).json()
+    noted = (await lab.client.post(url, json={"text": "Thanks."}, headers=ALICE)).json()
+    assert (answered["status"], noted["status"]) == ("answered", "answered")
+
+    done = (
+        await lab.client.post(url, json={"text": "Not needed.", "status": "done"}, headers=ALICE)
+    ).json()
+    assert done["status"] == "done"
+    after = (await lab.client.post(url, json={"text": "Sorry."}, headers=ALICE)).json()
+    assert after["status"] == "done"
+    listed = (await lab.client.get("/api/v1/team-requests", headers=BOB)).json()["requests"]
+    assert [r["request_id"] for r in listed] == [made["request_id"]]
+
+
+async def test_someone_else_may_still_answer_or_close_the_askers_request(lab: Lab):
+    made = (await lab.send(ASK)).json()
+    url = f"/api/v1/team-requests/{made['request_id']}/replies"
+    await lab.client.post(url, json={"text": "Mine."}, headers=ALICE)
+
+    answered = (await lab.client.post(url, json={"text": "Yes."}, headers=BOB)).json()
+    done = (
+        await lab.client.post(url, json={"text": "No.", "status": "done"}, headers=CAROL)
+    ).json()
+
+    assert (answered["status"], done["status"]) == ("answered", "done")
+
+
+async def test_replied_lists_the_newest_reply_first(lab: Lab):
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
+    first = (await lab.send(ASK, key="a")).json()["request_id"]
+    second = (await lab.send(ASK, key="b")).json()["request_id"]
+    for request_id in (second, first):
+        await lab.client.post(
+            f"/api/v1/team-requests/{request_id}/replies", json={"text": "ok"}, headers=BOB
+        )
+
+    ids = [i.request_id for i in await lab.app.state.team_requests.replied(alice)]
+
+    assert ids == [first, second]
+
+
 async def test_a_done_request_leaves_the_list_after_30_days_but_stays_in_the_record(lab: Lab):
     made = (await lab.send(ASK)).json()
     await lab.client.post(

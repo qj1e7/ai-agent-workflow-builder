@@ -25,10 +25,12 @@ interface Made {
   readonly note: string
 }
 
-async function askAndAnswer(backend: Backend, word: string): Promise<Made> {
-  const note = `Please add ${word} ${randomUUID().slice(0, 6)}`
+const LONG_LINK = `https://example.com/${'long-link-without-a-break-'.repeat(8)}`
+
+async function askAndAnswer(backend: Backend, word: string, long = false): Promise<Made> {
+  const note = `Please add ${word} ${randomUUID().slice(0, 6)}${long ? ` ${LONG_LINK}` : ''}`
   const made = await backend.post<{ request_id: string }>('alice', '/api/v1/team-requests', { kind: 'ask_the_team', about: { capability: 'email.send' }, note }, { 'Idempotency-Key': randomUUID() }, [201])
-  await backend.post('bob', `/api/v1/team-requests/${made.request_id}/replies`, { text: 'Not on the plan yet, we will tell you.' }, undefined, [201])
+  await backend.post('bob', `/api/v1/team-requests/${made.request_id}/replies`, { text: `Not on the plan yet, we will tell you.${long ? ` ${LONG_LINK}` : ''}` }, undefined, [201])
   return { requestId: made.request_id, note }
 }
 
@@ -61,6 +63,7 @@ test('a reply is in the asker’s Needs you until they open it, then it stays un
   await replyItem(page, requestId).getByRole('link', { name: 'Read the reply' }).click()
   await expect(page).toHaveURL(new RegExp(`/workflows\\?request=${requestId}$`))
   await expect(page.getByRole('article')).toContainText(note)
+  await expect(page.getByRole('article')).toContainText('You asked the team')
   await expect(page.getByRole('list', { name: 'Replies' })).toContainText('Not on the plan yet')
   await expect.poll(async () => (await homeOf(backend, 'alice')).replied.map((item) => item.request_id), { message: 'opening it marks the reply as read' }).not.toContain(requestId)
   await shot(page, info, 'n9b-asker-request')
@@ -103,6 +106,34 @@ test('a teammate opens the card’s link, reads who asked, and replies; the aske
   expect(refused.status, 'only the asker can mark it read').toBe(403)
 })
 
+test('the asker adds a note to her own request and it stays Open, then she marks it done', async ({ browser, backend }, info) => {
+  const asked = await backend.post<{ request_id: string }>('alice', '/api/v1/team-requests', { kind: 'ask_the_team', about: { capability: 'chat.post' }, note: `Post to our chat ${randomUUID().slice(0, 6)}` }, { 'Idempotency-Key': randomUUID() }, [201])
+  const context = await devContext(browser, 'alice')
+  const page = await context.newPage()
+  await page.goto(`/workflows?request=${asked.request_id}`)
+  const article = page.getByRole('article')
+  await expect(article).toContainText('You asked the team')
+  await expect(page.getByRole('radio')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Add', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Mark done' })).toBeVisible()
+  await page.getByLabel('Your note').fill('It is for the Friday report.')
+  await page.getByRole('button', { name: 'Add', exact: true }).click()
+  await expect(page.getByText('Added.')).toBeVisible()
+  const replies = page.getByRole('list', { name: 'Replies' })
+  await expect(replies).toContainText('It is for the Friday report.')
+  await expect(replies).toContainText('Added to the request')
+  await expect(replies).not.toContainText('Answered')
+  await expect(article.locator('[data-status]').first()).toHaveAttribute('data-status', 'open')
+  expect((await backend.get<{ status: string }>('alice', `/api/v1/team-requests/${asked.request_id}`)).status).toBe('open')
+  await shot(page, info, 'n9b-asker-adds-a-note')
+
+  await page.getByLabel('Your note').fill('Not needed any more.')
+  await page.getByRole('button', { name: 'Mark done' }).click()
+  await expect(replies).toContainText('Marked Done')
+  expect((await backend.get<{ status: string }>('alice', `/api/v1/team-requests/${asked.request_id}`)).status).toBe('done')
+  await context.close()
+})
+
 test('a link to a request that does not exist says so plainly', async ({ browser }) => {
   const context = await devContext(browser, 'bob')
   const page = await context.newPage()
@@ -132,6 +163,8 @@ test('alice discards a draft by keyboard, after a question that says what is los
   await page.goto('/workflows')
   const row = draftRow(page, draft.id)
   await expect(row).toContainText(draft.name)
+  const kept = (await backend.get<{ drafts: { draft_id: string; created_at: string; saved_at: string }[] }>('alice', '/api/v1/drafts')).drafts.find((item) => item.draft_id === draft.id)
+  expect(kept, 'the draft is saved before it is discarded').toBeDefined()
   await row.getByRole('link', { name: `Resume ${draft.name}` }).focus()
   await page.keyboard.press('Tab')
   await expect(row.getByRole('button', { name: `Discard ${draft.name}` })).toBeFocused()
@@ -162,8 +195,11 @@ test('alice discards a draft by keyboard, after a question that says what is los
   await page.keyboard.press('Enter')
   await expect(row).toBeVisible()
   await expect(page.getByText('Put back.').last()).toBeVisible()
-  const back = await backend.get<{ drafts: { draft_id: string; content: { name?: string } }[] }>('alice', '/api/v1/drafts')
-  expect(back.drafts.find((item) => item.draft_id === draft.id)?.content.name, 'Undo saved the same draft').toBe(draft.name)
+  await expect(row.getByRole('link', { name: `Resume ${draft.name}` }), 'focus moves to the restored draft').toBeFocused()
+  const back = await backend.get<{ drafts: { draft_id: string; created_at: string; saved_at: string; content: { name?: string } }[] }>('alice', '/api/v1/drafts')
+  const again = back.drafts.find((item) => item.draft_id === draft.id)
+  expect(again?.content.name, 'Undo saved the same draft').toBe(draft.name)
+  expect([again?.created_at, again?.saved_at], 'Undo keeps the times, so Last saved stays true').toEqual([kept?.created_at, kept?.saved_at])
   await backend.delete('alice', `/api/v1/drafts/${draft.id}`)
   await context.close()
 })
@@ -190,8 +226,8 @@ test('the search and the filters stay hidden until the search button is pressed'
 })
 
 for (const phone of [false, true]) {
-  test(`Workflows with every section, and a request, pass WCAG 2.2 AA and do not scroll sideways at ${phone ? '390' : '1440'} px`, async ({ browser, backend }, info) => {
-    const { requestId } = await askAndAnswer(backend, phone ? 'phone' : 'desktop')
+  test(`Workflows with every section, and a request, pass WCAG 2.2 AA and do not scroll sideways at ${phone ? '390' : '1440'} px, even with a long link in a request and in a reply`, async ({ browser, backend }, info) => {
+    const { requestId } = await askAndAnswer(backend, phone ? 'phone' : 'desktop', true)
     const draft = await draftFor(backend, phone ? 'phone' : 'desktop')
     await backend.waitingRun('alice')
     const context = await devContext(browser, 'alice', { phone })
@@ -210,6 +246,23 @@ for (const phone of [false, true]) {
     await expectAccessible(page, path.join(OUT, 'axe'), `workflows-sections-${name}`)
     await sideways()
     await shot(page, info, `n9b-workflows-${name}`)
+    const row = await followingRow(page, requestId).evaluate((li) => {
+      const box = li.getBoundingClientRect()
+      return Math.max(0, ...[...li.querySelectorAll('span')].map((span) => span.getBoundingClientRect().right - box.right))
+    })
+    expect(row, 'the words of a Following up row stay inside it').toBeLessThanOrEqual(0)
+
+    await page.goto('/')
+    await expect(replyItem(page, requestId)).toBeVisible()
+    await page.waitForFunction(() => document.getAnimations().length === 0)
+    await sideways()
+    await shot(page, info, `n9b-home-long-link-${name}`)
+    const overhang = await page.evaluate(() => {
+      const card = document.querySelector('li[data-home-item^="reply:"]')?.getBoundingClientRect()
+      const words = document.querySelector('li[data-home-item^="reply:"] p')?.getBoundingClientRect()
+      return card && words ? words.right - card.right : 0
+    })
+    expect(overhang, 'the words of a reply stay inside its card').toBeLessThanOrEqual(0)
 
     await page.goto(`/workflows?request=${requestId}`)
     await expect(page.getByRole('article')).toBeVisible()
@@ -217,6 +270,7 @@ for (const phone of [false, true]) {
     await expectAccessible(page, path.join(OUT, 'axe'), `request-${name}`)
     await sideways()
     await shot(page, info, `n9b-request-${name}`)
+
     await backend.delete('alice', `/api/v1/drafts/${draft.id}`)
     await context.close()
   })

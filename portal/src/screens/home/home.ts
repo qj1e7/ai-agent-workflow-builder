@@ -171,3 +171,72 @@ export function actionsOf(need: Need): readonly Action[] {
       return stoppedActions(need.item.run_id, need.item.retryable)
     case 'reply':
       return [{ kind: 'open', label: 'Read the reply', to: requestPath(need.item.request_id) }]
+  }
+}
+
+/** A stopped run offers Retry when the platform says it can be retried, and always a way to read why it stopped. */
+export function stoppedActions(runId: string, retryable: boolean): readonly Action[] {
+  return retryable
+    ? [
+        { kind: 'retry', label: 'Retry the run', runId },
+        { kind: 'open', label: 'See the run', to: `/runs/${runId}` },
+      ]
+    : [{ kind: 'open', label: 'See why it stopped', to: `/runs/${runId}` }]
+}
+
+const noLongerStopped = (error: unknown) => error instanceof ApiError && error.status === 409
+
+export function retryProblem(error: unknown, words: (error: unknown) => string): string {
+  if (noLongerStopped(error)) return 'It can’t be retried now. Someone may have retried it already, so look at the run.'
+  return `Could not retry the run. ${words(error)}`
+}
+
+export interface RowWords {
+  readonly name: string
+  readonly sub: string
+}
+
+function whyNotYours(item: WaitingItem): string {
+  switch (item.because) {
+    case 'started':
+      return item.trigger === 'schedule' ? 'Your schedule started it' : 'You started it'
+    case 'retried':
+      return 'You retried it'
+    case 'owns':
+      return 'It is your workflow'
+    case 'decided_earlier':
+      return 'You already said yes to an earlier step'
+  }
+}
+
+export function waitingWords(item: WaitingItem, now: Date): RowWords & { readonly to: string } {
+  return {
+    name: `${item.because === 'decided_earlier' ? 'Another' : 'An'} Approver’s yes on ${item.use_case_name}`,
+    sub: `${whyNotYours(item)} · ${lineWhen(item.started_at, now)}`,
+    to: `/runs/${item.run_id}`,
+  }
+}
+
+export function draftWords(draft: DraftItem, now: Date): RowWords {
+  return { name: draft.name ?? 'New workflow', sub: `${draft.step === null ? '' : `Step ${draft.step} of ${DRAFT_STEPS}. `}Last saved ${runWhen(draft.saved_at, now)}.` }
+}
+
+export interface Next {
+  readonly name: string
+  readonly to: string
+  readonly when: string
+  readonly more: number
+}
+
+export function comingUpOf(home: HomeOut, now: Date): Next | null {
+  const next = home.coming_up
+  if (!next) return null
+  return { name: next.name, to: workflowPath(next), when: nextRunAt(next.next_run_at, now, next.time_zone), more: next.more }
+}
+
+export const HOW_IT_WORKS: readonly (readonly [string, string])[] = [
+  ['Describe a task', 'In plain English, the way you would ask a colleague.'],
+  ['Check what was understood', 'Fix anything that doesn’t match, then choose when it runs.'],
+  ['Say yes in Teams', 'Nothing changes in Jira or Confluence until an Approver agrees.'],
+  ['See the result here', 'If something stops, the AI troubleshooter tells you why.'],
+]

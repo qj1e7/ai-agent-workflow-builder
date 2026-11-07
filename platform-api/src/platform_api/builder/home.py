@@ -26,6 +26,9 @@ from platform_api.shared import ApprovalId, Principal, Role, RunId, UserId
 from platform_api.wire import FailureReason, Trigger, WireModel
 
 SHOWN = 10
+LISTED = 50
+"""Waiting on others and Following up list every row they have, up to this many, so nobody meets
+an "And more" with no way to see the rest. Past it the section says how many it shows."""
 NAME_SHOWN = 80
 
 
@@ -137,13 +140,13 @@ class HomeOut(WireModel):
     )
     stopped_total: int
     waiting_on_others: list[WaitingItem] = Field(
-        description="Runs waiting for someone else's yes that this person is part of. At most 10."
+        description="Runs waiting for someone else's yes that this person is part of. At most 50."
     )
     waiting_on_others_total: int
     drafts: list[DraftItem] = Field(description="An Operator's own drafts, the last saved first.")
     following_up: list[FollowingUpItem] = Field(
         description="This person's own requests to the team, Ask the team and Report to "
-        "support, the newest first, with the status and the latest reply. At most 10. A request "
+        "support, the newest first, with the status and the latest reply. At most 50. A request "
         "marked Done leaves after 30 days."
     )
     following_up_total: int
@@ -322,7 +325,7 @@ class Home:
             confirmations=[_confirmation(row) for row in confirmations],
             stopped=[_stopped(s) for s in stopped[:SHOWN]],
             stopped_total=len(stopped),
-            waiting_on_others=[_waiting(w) for w in runs.waiting[:SHOWN]],
+            waiting_on_others=[_waiting(w) for w in runs.waiting[:LISTED]],
             waiting_on_others_total=len(runs.waiting),
             drafts=[_draft(d) for d in drafts],
             following_up=following_up,

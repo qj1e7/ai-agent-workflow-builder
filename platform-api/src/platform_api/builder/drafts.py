@@ -49,13 +49,16 @@ class Drafts:
             assert kept is not None
             if kept["this"] == 0 and kept["kept"] >= MAX_DRAFTS_PER_AUTHOR:
                 return TooManyDrafts(MAX_DRAFTS_PER_AUTHOR)
+            first = draft.put_back
+            created = min(first.created_at, uow.now) if first else uow.now
+            saved = min(first.saved_at, uow.now) if first else uow.now
             row = await (
                 await uow.conn.execute(
                     "INSERT INTO builder.drafts (author, draft_id, step, content, created_at,"
                     " saved_at) VALUES (%s, %s, %s, %s, %s, %s)"
                     " ON CONFLICT (author, draft_id) DO UPDATE SET step = EXCLUDED.step,"
-                    " content = EXCLUDED.content, saved_at = EXCLUDED.saved_at RETURNING *",
-                    (author, draft_id, draft.step, json(draft.content), uow.now, uow.now),
+                    " content = EXCLUDED.content, saved_at = %s RETURNING *",
+                    (author, draft_id, draft.step, json(draft.content), created, saved, uow.now),
                 )
             ).fetchone()
         assert row is not None
