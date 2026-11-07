@@ -928,6 +928,22 @@ def test_a_capitalised_value_is_a_field_not_a_person(task: str, left: str):
     assert isinstance(answer, PartAnswer | CantAnswer) and cant_of(answer) == [left]
 
 
+def test_a_person_the_change_acts_on_is_a_cant_not_a_refusal():
+    """ "remove anyone who has left the team" names people as what the change acts on, not as
+    someone whose yes is skipped: a can't for GitLab, as the access review needs."""
+    task = (
+        "Every quarter, list who has admin access in GitLab and remove anyone who has left the team"
+    )
+    answer = answer_of(read(schedule="Every quarter"), task)
+    assert isinstance(answer, CantAnswer) and answer.cant[0].system == "GitLab"
+    listed = answer_of(
+        read(search=search(project="SUP", said="tickets in SUP"), ticket=LISTS),
+        "List the tickets in SUP that someone raised for the team and create one ticket that "
+        "lists them",
+    )
+    assert not isinstance(listed, RefusedAnswer)
+
+
 def test_review_is_the_searchs_verb_only_at_the_front_of_its_clause():
     task = "Every Monday, review the open bugs in SUP and create one ticket that lists them"
     answer = answer_of(

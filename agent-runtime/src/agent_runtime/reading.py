@@ -394,13 +394,16 @@ NAMED_AFTER: Final = (
     r"agreed|agrees|signed|signs|normally|usually|already|also|wants|needs|prefers|likes|"
     r"asked|wanted|knows|isn't|hasn't|doesn't|won't|to|or\s+me|and\s+me)"
 )
+WHO: Final = rf"(?:(?i:{SOMEONE.pattern[2:-2]})|{CAPITALISED})"
 NAMED_ACTOR: Final = re.compile(
-    rf"\b{NAMED_BEFORE.format(name=CAPITALISED)}\s+(?:the\s+)?(?P<before>{CAPITALISED})\b|"
-    rf"\b(?P<after>{CAPITALISED})(?:\s+{CAPITALISED})?\s*{NAMED_AFTER}\b"
+    rf"\b(?i:{NAMED_BEFORE.format(name=CAPITALISED)})\s+(?i:the\s+)?(?P<before>{WHO})\b|"
+    rf"\b(?P<after>{WHO})(?:\s+{CAPITALISED})?\s*(?i:{NAMED_AFTER})\b"
 )
-"""A capitalised word framed as a person who acts: asked, waited for, or the subject of a verb
-("get Ravi to", "Joanne normally okays", "Wei Ling's inbox", "me or Bob"). A value such as
-"flagged Highest" or "the Checkout component" is never framed so, and stays a can't."""
+"""A person, a role, a group or a capitalised word framed as someone who acts: asked, waited
+for, or the subject of a verb ("get Ravi to", "Joanne normally okays", "the change board
+can", "the duty lead doesn't", "Wei Ling's inbox", "me or Bob"). A value such as "flagged
+Highest" or "the Checkout component" is never framed so, and stays a can't; nor is a person
+the change acts on, as "remove anyone who has left the team", which is a can't for GitLab."""
 NOBODY: Final = re.compile(r"\b(?:nobody|no\s+one|no-one)\b", re.IGNORECASE)
 FROM_ME: Final = re.compile(
     r"\b(?:approval|approvals|confirmation|permission|sign[- ]?off|okay|ok|yes|go-ahead|consent)\s+"
@@ -947,13 +950,15 @@ def a_statement(text: str) -> bool:
 
 def names_a_person(text: str, start: int, end: int) -> bool:
     """Whether the request's words from `start` to `end` name another person, a role or a
-    group: one of `SOMEONE`, or a capitalised word framed as someone who acts, that is not the
-    request's first word, a project key, a system, or a word a structure could explain."""
-    words_ = text[start:end]
-    if SOMEONE.search(words_) is not None:
-        return True
-    for match in NAMED_ACTOR.finditer(words_):
+    group as someone who acts: one of `SOMEONE`, or a capitalised word that is not the
+    request's first word, a project key, a system, or a word a structure could explain, framed
+    as `NAMED_ACTOR` says. A person left out, as "without anyone", is `names_a_yes`'s."""
+    for match in NAMED_ACTOR.finditer(text[start:end]):
         name = match.group("before") or match.group("after")
+        if SOMEONE.fullmatch(name) is not None:
+            return True
+        if not NAME.fullmatch(name):
+            continue
         at = start + match.start(match.lastgroup or "after")
         if at == 0 or name.casefold() in KNOWN_WORDS or name.casefold() in SYSTEMS:
             continue
