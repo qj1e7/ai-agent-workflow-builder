@@ -156,7 +156,7 @@ test('alice sees the run she started under Waiting on others on Workflows, and n
   await context.close()
 })
 
-test('a connection that does not answer is checked again in place, and clears everywhere once it works', async ({ browser, backend }) => {
+test('a connection that does not answer sends Alice to the Connections tab, where Check now clears it everywhere once it works', async ({ browser, backend }) => {
   const answering = (on: boolean) => backend.post('alice', '/api/v1/dev/practice-jira/answering', { answering: on })
   await answering(false)
   await backend.post('alice', '/api/v1/settings/connections/jira/check')
@@ -166,16 +166,20 @@ test('a connection that does not answer is checked again in place, and clears ev
     await page.goto('/workflows')
     const item = page.locator('li[data-home-item="connection:jira"]')
     await expect(item).toBeVisible()
-    await expect(item.getByRole('link')).toHaveCount(0)
+    await expect(item.getByRole('button')).toHaveCount(0)
     const before = await countInHeading(page)
-    await item.getByRole('button', { name: 'Check again' }).click()
-    await expect(item.getByRole('status')).toHaveText('Checked just now. It still does not work.')
-    await expect(item).toBeVisible()
-    expect(await countInHeading(page)).toBe(before)
+    await item.getByRole('link', { name: 'See it in Settings' }).click()
+    await expect(page).toHaveURL(/\/settings$|\/settings\?tab=connections$/)
+    const card = page.locator('[data-connection="jira"]')
+    await card.getByRole('button', { name: 'Check now for Jira' }).click()
+    await expect(card.getByRole('status')).toContainText('Checked just now.')
+    await expect(card.getByRole('status')).not.toContainText('answered')
 
     await answering(true)
-    await item.getByRole('button', { name: 'Check again' }).click()
-    await expect(item).toHaveCount(0)
+    await card.getByRole('button', { name: 'Check now for Jira' }).click()
+    await expect(card.getByRole('status')).toHaveText('Checked just now. Jira answered.')
+    await page.goto('/workflows')
+    await expect(page.locator('li[data-home-item="connection:jira"]')).toHaveCount(0)
     await expect.poll(() => countInHeading(page)).toBe(before - 1)
     await expect.poll(() => countOnTab(page)).toBe(before - 1)
   } finally {

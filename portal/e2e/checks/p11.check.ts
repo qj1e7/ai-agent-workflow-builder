@@ -702,7 +702,7 @@ test('@model-confirm a new AI model address: an Approver other than the one who 
       expect(homes.bob.confirmations.length).toBeGreaterThan(0)
       expect(homes.alice.confirmations, 'the person who entered it does not confirm it').toEqual([])
       expect(homes.carol.confirmations, 'carol is not an Approver').toEqual([])
-      expect(href).toBe('/settings')
+      expect(href).toBe('/settings?tab=model')
     } finally {
       await decideModelAddress(api, 'decline')
     }

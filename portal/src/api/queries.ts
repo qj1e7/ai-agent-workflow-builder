@@ -272,17 +272,6 @@ export function useRetry(runId: string, onRetried: () => void) {
   })
 }
 
-/** A check only reads the system, so it changes nothing there. Home is read again so a connection that works leaves Needs you. */
-export function useCheckConnection(connectionId: string) {
-  const client = useApiClient()
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async () =>
-      unwrap(await client.POST('/api/v1/settings/connections/{connection}/check', { params: { path: { connection: connectionId } } })),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['home'] }),
-  })
-}
-
 /** Keyed by attempt, so a second failure never shows the first one's cached advice. */
 export function useTroubleshoot(runId: string, enabled: boolean, attempt: number) {
   const client = useApiClient()

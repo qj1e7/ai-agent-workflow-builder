@@ -79,7 +79,7 @@ function onlyDev(): void {
 }
 
 /** Opens the page and returns what the platform answered for the cards and the tools. */
-async function openLibrary(page: Page, url = '/agents'): Promise<{ cards: Card[]; tools: Tool[] | null }> {
+async function openLibrary(page: Page, url = '/agents?tab=agents'): Promise<{ cards: Card[]; tools: Tool[] | null }> {
   const cardsReply = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/agent-cards')
   const toolsReply = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/tools').catch(() => null)
   await page.goto(url)
@@ -97,7 +97,7 @@ test('@lane1 the library lists every card once, beside the two platform agents',
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
   if (TARGET === 'trunk') {
-    await page.goto('/agents')
+    await page.goto('/agents?tab=agents')
     await expect(h1(page)).toBeVisible()
     save(1, 'p7-library-trunk.json', { target: 'trunk', heading: await h1(page).innerText(), main: await page.locator('main').innerText() })
     await shotTo(page, path.join(laneDir(1), 'p7-library-trunk.png'))
@@ -380,7 +380,7 @@ test('@lane10 the Tools tab says the tool list is not available and keeps the ca
     .then(async (r) => ({ status: r.status(), tools: r.ok() ? ((await r.json()) as { tools: Tool[] }).tools.length : 0 }))
     .catch(() => ({ status: -1, tools: 0 }))
   const cardsReal = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/agent-cards')
-  await page.goto('/agents')
+  await page.goto('/agents?tab=agents')
   await expect(h1(page)).toHaveText('Agent library')
   const cardCount = ((await (await cardsReal).json()) as { cards: Card[] }).cards.length
   await expect(tiles(page), 'every tile has drawn').toHaveCount(PLATFORM_AGENTS.length + cardCount)
@@ -405,7 +405,7 @@ test('@lane10 the Tools tab says the tool list is not available and keeps the ca
   const forced = await context.newPage()
   await forced.route('**/api/v1/tools', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'The agent runtime did not answer' }) }))
   const cardsForced = forced.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/agent-cards')
-  await forced.goto('/agents')
+  await forced.goto('/agents?tab=agents')
   await expect(h1(forced)).toHaveText('Agent library')
   const forcedCount = ((await (await cardsForced).json()) as { cards: Card[] }).cards.length
   await expect(tiles(forced), 'every tile has drawn').toHaveCount(PLATFORM_AGENTS.length + forcedCount)
@@ -500,7 +500,7 @@ test('@perf largest contentful paint of the Agent library', async ({ browser }) 
   test.skip(TARGET === 'trunk', 'trunk has no Agent library')
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
-  await page.goto('/agents', { waitUntil: 'load' })
+  await page.goto('/agents?tab=agents', { waitUntil: 'load' })
   await expect(tiles(page).first()).toBeVisible({ timeout: 30_000 })
   await page.waitForTimeout(2_000)
   const measured = await page.evaluate(

@@ -1,3 +1,4 @@
+import capabilitiesFixture from '@contracts/fixtures/planner/capabilities.json'
 import failedRun from '@contracts/fixtures/views/failure.final.json'
 import empty from '@contracts/fixtures/watchlist/empty.json'
 import paused from '@contracts/fixtures/watchlist/paused.json'
@@ -24,13 +25,14 @@ import { ScheduleEditor, ScheduleNote } from './Schedule'
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
 
-function render(view: unknown, me: Me, runs: readonly { run_id: string }[] = [], page: ReactNode = <SoftwareRoute />): string {
+function render(view: unknown, me: Me, runs: readonly { run_id: string }[] = [], page: ReactNode = <SoftwareRoute />, capabilities: unknown = capabilitiesFixture): string {
   const session = createDevSession(null)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', session.cacheScope()], me)
   queryClient.setQueryData(['watchlist', session.cacheScope()], view)
   for (const run of runs) queryClient.setQueryData(['run', session.cacheScope(), run.run_id], run)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB])
+  if (capabilities !== null) queryClient.setQueryData(['capabilities', session.cacheScope()], capabilities)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
@@ -263,7 +265,13 @@ describe('the order of the page', () => {
   it('says how it is checked with the schedule and the one source that works', () => {
     const words = text(render(statuses, ALICE))
     expect(words).toContain('How it’s checked')
-    expect(words).toContain('GitHub is the only place we can check today')
+    expect(words).toContain('GitHub is the only place we can check today. We can’t check registries or security advisories yet.')
+  })
+
+  it('says GitHub is not working when the registry says so, and says nothing about sources without the registry', () => {
+    const down = capabilitiesFixture.capabilities.map((c) => (c.id === 'github.releases' ? { ...c, state: 'down' as const } : c))
+    expect(text(render(statuses, ALICE, [], <SoftwareRoute />, { capabilities: down, examples: [] }))).toContain('GitHub is the only place we check, and it is not working right now.')
+    expect(text(render(statuses, ALICE, [], <SoftwareRoute />, null))).not.toContain('only place')
   })
 
   it('puts Add software inside Software we watch for an Operator, and not at all for an Approver', () => {

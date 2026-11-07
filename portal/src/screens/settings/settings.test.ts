@@ -340,9 +340,10 @@ describe('the AI model', () => {
 })
 
 describe('the tabs', () => {
-  it('open on the AI model unless the address names People and roles', () => {
-    expect(tabFrom(null)).toBe('model')
+  it('open on Connections unless the address names another tab', () => {
+    expect(tabFrom(null)).toBe('connections')
     expect(tabFrom('people')).toBe('people')
-    expect(tabFrom('nonsense')).toBe('model')
+    expect(tabFrom('model')).toBe('model')
+    expect(tabFrom('nonsense')).toBe('connections')
   })
 })

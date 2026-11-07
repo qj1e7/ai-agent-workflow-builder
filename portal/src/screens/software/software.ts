@@ -1,10 +1,18 @@
 import { ApiError } from '../../api/client'
 import { failureReasonLabel } from '../../api/labels'
-import type { Day, FailureReason, Refusal, ScheduleHold, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView } from '../../api/types'
+import type { CapabilityView, Day, FailureReason, Refusal, ScheduleHold, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView } from '../../api/types'
 import { dateAndClock, scheduleZoneName, timesZone } from '../workflows/times'
 
-export const SOURCES_NOTE =
-  'GitHub is the only place we can check today. Other places, such as npm or PyPI, are not available yet.'
+/** Where releases are read from, said from the capability registry so this page never claims more than Agent library does. Null while the registry is not there. */
+export function sourcesNote(capabilities: readonly CapabilityView[] | undefined): string | null {
+  if (capabilities === undefined) return null
+  const sources = capabilities.filter((c) => c.id.endsWith('.releases') && c.system !== null)
+  const working = sources.filter((c) => c.state === 'ready')
+  const systems = (list: readonly CapabilityView[]) => list.map((c) => c.system).join(' and ')
+  const first = working.length > 0 ? `${systems(working)} is the only place we can check today.` : sources.length > 0 ? `${systems(sources)} is the only place we check, and it is not working right now.` : 'No place can be checked right now.'
+  const notYet = capabilities.find((c) => c.id === 'registries.check' && (c.state === 'planned' || c.state === 'unsupported'))
+  return notYet?.cant ? `${first} We can’t ${notYet.cant} yet.` : first
+}
 
 interface Checking {
   readonly scheduled: boolean

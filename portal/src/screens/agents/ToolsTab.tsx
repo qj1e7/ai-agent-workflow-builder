@@ -1,5 +1,7 @@
-import type { CardView, ToolView } from '../../api/types'
+import type { CapabilityView, CardView, ToolView } from '../../api/types'
+import { AskTheTeam } from '../home/AskTheTeam'
 import { approvalWords, kindLabel, systemOf } from './agents'
+import { NEW_TOOL_WORDS, toolHealth } from './capabilities'
 import styles from './AgentsPage.module.css'
 
 function usedBy(tool: ToolView, cards: readonly CardView[]): string {
@@ -7,8 +9,9 @@ function usedBy(tool: ToolView, cards: readonly CardView[]): string {
   return names.length > 0 ? `Used by ${names.join(', ')}` : 'No agent uses it yet'
 }
 
-function ToolRow({ tool, cards }: { tool: ToolView; cards: readonly CardView[] | undefined }) {
+function ToolRow({ tool, cards, capabilities, now }: { tool: ToolView; cards: readonly CardView[] | undefined; capabilities: readonly CapabilityView[] | undefined; now: Date }) {
   const write = tool.kind === 'write'
+  const health = toolHealth(tool, capabilities, now)
   return (
     <li className={styles['toolRow']} data-tool-id={tool.id}>
       <div>
@@ -20,12 +23,23 @@ function ToolRow({ tool, cards }: { tool: ToolView; cards: readonly CardView[] |
         <span className={write ? styles['writeTag'] : styles['tag']}>{kindLabel(tool.kind)}</span>
         {write ? <span className="muted"> {approvalWords(tool.min_approvers)}</span> : null}
       </p>
+      {health ? (
+        <p className={styles['small']} data-health={health.ok ? 'ok' : 'warn'}>
+          <b>{health.label}.</b> {health.text}
+        </p>
+      ) : null}
       {cards ? <p className={styles['small'] + ' muted'}>{usedBy(tool, cards)}</p> : null}
     </li>
   )
 }
 
-function Group({ title, sub, tools, cards }: { title: string; sub: string; tools: readonly ToolView[]; cards: readonly CardView[] | undefined }) {
+interface Shared {
+  readonly cards: readonly CardView[] | undefined
+  readonly capabilities: readonly CapabilityView[] | undefined
+  readonly now: Date
+}
+
+function Group({ title, sub, tools, ...shared }: { title: string; sub: string; tools: readonly ToolView[] } & Shared) {
   if (tools.length === 0) return null
   return (
     <section className={styles['section']}>
@@ -35,18 +49,20 @@ function Group({ title, sub, tools, cards }: { title: string; sub: string; tools
       <p className={styles['small'] + ' muted'}>{sub}</p>
       <ul className={styles['toolRows']}>
         {tools.map((tool) => (
-          <ToolRow key={tool.id} tool={tool} cards={cards} />
+          <ToolRow key={tool.id} tool={tool} {...shared} />
         ))}
       </ul>
     </section>
   )
 }
 
-export function ToolsTab({ tools, cards }: { tools: readonly ToolView[]; cards: readonly CardView[] | undefined }) {
+export function ToolsTab({ tools, ...shared }: { tools: readonly ToolView[] } & Shared) {
   return (
     <>
-      <Group title="Tools that change data" sub="Each one waits for a yes, every time." tools={tools.filter((tool) => tool.kind === 'write')} cards={cards} />
-      <Group title="Tools that only read" sub="They never change anything, so they do not need a yes." tools={tools.filter((tool) => tool.kind === 'read')} cards={cards} />
+      <Group title="Tools that change data" sub="Each one waits for a yes, every time." tools={tools.filter((tool) => tool.kind === 'write')} {...shared} />
+      <Group title="Tools that only read" sub="They never change anything, so they do not need a yes." tools={tools.filter((tool) => tool.kind === 'read')} {...shared} />
+      <p className={styles['small'] + ' muted'}>{NEW_TOOL_WORDS}</p>
+      <AskTheTeam capability="a new tool" starter="I would like a tool that: " />
     </>
   )
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState, type RefObject } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
+import { useCapabilities } from '../../api/capabilityQueries'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
@@ -45,7 +46,7 @@ import {
   rowsMatching,
   scheduleRuns,
   singaporeTime,
-  SOURCES_NOTE,
+  sourcesNote,
   statusTone,
   statusWords,
   stoppedWords,
@@ -287,6 +288,7 @@ function Notice({ box, feedback, scheduled, paused, onUndo, onDismiss }: NoticeP
 }
 
 function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; operator: boolean; answeredAt: number }) {
+  const sources = sourcesNote(useCapabilities().data?.capabilities)
   const [query, setQuery] = useState('')
   const [opened, setOpened] = useState<string | null>(null)
   const [feedback, dispatch] = useReducer(changeFeedback, NO_FEEDBACK)
@@ -438,7 +440,7 @@ function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; op
             onResumed={() => dispatch({ type: 'resumed' })}
           />
         ) : null}
-        <p className="muted">{SOURCES_NOTE}</p>
+        {sources ? <p className="muted">{sources}</p> : null}
       </section>
     </>
   )

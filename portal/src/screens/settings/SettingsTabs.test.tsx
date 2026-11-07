@@ -6,7 +6,9 @@ import confirmationsAlice from '../../../../contracts/fixtures/people/confirmati
 import confirmationsBob from '../../../../contracts/fixtures/people/confirmations.bob.json'
 import list from '../../../../contracts/fixtures/people/list.json'
 import personApprover from '../../../../contracts/fixtures/people/person.approver.json'
+import capabilities from '../../../../contracts/fixtures/planner/capabilities.json'
 import history from '../../../../contracts/fixtures/settings/history.json'
+import connections from '../../../../contracts/fixtures/settings/connections.json'
 import modelActive from '../../../../contracts/fixtures/settings/model.active.json'
 import modelEmpty from '../../../../contracts/fixtures/settings/model.empty.json'
 import pendingAlice from '../../../../contracts/fixtures/settings/model.pending.alice.json'
@@ -14,15 +16,23 @@ import pendingBob from '../../../../contracts/fixtures/settings/model.pending.bo
 import { App } from '../../App'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { ConfirmationOut, Me, ModelOut, PersonOut } from '../../api/types'
+import type { ConfirmationOut, ConnectionOut, ConnectionsView, Me, ModelOut, PersonOut } from '../../api/types'
 import { MODEL_READ_ONLY_WORDS, NO_MODEL_WORDS, notNowWords } from './ModelTab'
 import { PEOPLE_LEAD } from './PeopleTab'
+import { checkResultWords, GITHUB_KEY_NOTE } from './connections'
 import { ONLY_OPERATORS_WORDS, SETTINGS_OFF_WORDS } from './settings'
 import { SettingsTabs } from './SettingsTabs'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'], on_list: true }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'], on_list: true }
 const CAROL: Me = { id: 'carol', display: 'Carol', roles: ['operator'], on_list: true }
+
+const ALL = connections as ConnectionsView
+const withConnection = (id: string, change: Partial<ConnectionOut>): ConnectionsView => ({ ...ALL, connections: ALL.connections.map((c) => (c.id === id ? { ...c, ...change } : c)) })
+const CALM: ConnectionsView = {
+  ...ALL,
+  connections: ALL.connections.map((c) => ({ ...c, state: c.id === 'model' ? c.state : 'working', problem: c.id === 'model' ? c.problem : null, fix: c.id === 'model' ? c.fix : null, expires_at: null })),
+}
 
 const PEOPLE = list.people as PersonOut[]
 const DAVE_ID = 'per_01JD4VE'
@@ -34,13 +44,14 @@ const approverOnly = (confirmations: { confirmations: unknown[] }) =>
 
 interface Setup {
   readonly me?: Me
-  readonly tab?: 'model' | 'people'
+  readonly tab?: 'connections' | 'model' | 'people'
+  readonly connections?: ConnectionsView | Error
   readonly model?: unknown
   readonly people?: PersonOut[]
   readonly confirmations?: ConfirmationOut[]
 }
 
-function render({ me = ALICE, tab = 'model', model = modelActive, people = PEOPLE, confirmations = [] }: Setup = {}): string {
+function render({ me = ALICE, tab = 'model', model = modelActive, people = PEOPLE, confirmations = [], connections: shown = CALM }: Setup = {}): string {
   const session = createDevSession({ getItem: () => me.id, setItem: () => undefined })
   const user = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
@@ -49,11 +60,13 @@ function render({ me = ALICE, tab = 'model', model = modelActive, people = PEOPL
   queryClient.setQueryData(['people', user], people)
   queryClient.setQueryData(['confirmations', user], confirmations)
   queryClient.setQueryData(['settings-history', user], history.changes)
+  queryClient.setQueryData(['connections', user], shown)
+  queryClient.setQueryData(['capabilities', user], capabilities)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
-        <MemoryRouter initialEntries={[tab === 'people' ? '/settings?tab=people' : '/settings']}>
-          <SettingsTabs />
+        <MemoryRouter initialEntries={[tab === 'connections' ? '/settings' : `/settings?tab=${tab}`]}>
+          <SettingsTabs now={new Date('2026-11-09T03:00:00Z')} />
         </MemoryRouter>
       </ApiProvider>
     </QueryClientProvider>,
@@ -74,12 +87,12 @@ const checkboxes = (html: string) => [...html.matchAll(/<input[^>]*type="checkbo
 const buttonsIn = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))
 
 describe('the Settings tabs', () => {
-  it('offer the AI model and People and roles, with the one shown marked pressed', () => {
-    const html = render()
+  it('offer Connections, People and roles and the AI model in that order, with the one shown marked pressed', () => {
+    const html = render({ tab: 'connections' })
     expect(html).toMatch(/role="group" aria-label="Settings sections"/)
-    expect(html).toMatch(/<button type="button" aria-pressed="true">AI model/)
-    expect(html).toMatch(/<button type="button" aria-pressed="false">People and roles/)
+    expect(html).toMatch(/<button type="button" aria-pressed="true">Connections.*<button type="button" aria-pressed="false">People and roles.*<button type="button" aria-pressed="false">AI model/s)
     expect(render({ tab: 'people' })).toMatch(/<button type="button" aria-pressed="true">People and roles/)
+    expect(render({ tab: 'model' })).toMatch(/<button type="button" aria-pressed="true">AI model/)
   })
 
   it('mark the tabs that need the viewer', () => {
@@ -109,6 +122,79 @@ describe('the Settings tabs', () => {
     )
     expect(html).toMatch(/<h1 tabindex="-1">Settings<\/h1>/)
     expect(text(html)).toContain('Every change here is recorded with who made it.')
+  })
+})
+
+const cardOf = (html: string, id: string) => new RegExp(`<article[^>]*data-connection="${id}"[\\s\\S]*?</article>`).exec(html)?.[0] ?? ''
+
+describe('the Connections tab', () => {
+  const html = render({ tab: 'connections', connections: ALL })
+
+  it('opens first and shows Jira, GitHub and Teams, but not the AI model, which has its own tab', () => {
+    expect(['jira', 'github', 'teams'].map((id) => cardOf(html, id) !== '')).toEqual([true, true, true])
+    expect(cardOf(html, 'model')).toBe('')
+  })
+
+  it('says a working connection works, when it was checked, what uses it and the key’s last two characters', () => {
+    const jira = text(cardOf(render({ tab: 'connections', connections: withConnection('jira', { key_ends_in: '9c' }) }), 'jira'))
+    expect(jira).toContain('Jira is working.')
+    expect(jira).toContain('Checked today, 9:00')
+    expect(jira).toContain('Practice copy')
+    expect(jira).toContain('What uses it Read Jira tickets; Find tickets by when they were last updated, their type or who owns them; Create a Jira ticket after a yes')
+    expect(jira).toContain('Key Ends in 9c')
+    expect(jira).not.toContain('Post messages')
+  })
+
+  it('says a key that runs out soon, with the one fix the platform gave, and that the result may be old for GitHub', () => {
+    const github = text(cardOf(html, 'github'))
+    expect(github).toContain('Key running out')
+    expect(github).toContain('The key runs out soon. Ask whoever set up GitHub for a new key before this one runs out.')
+    expect(github).toContain(GITHUB_KEY_NOTE)
+    expect(text(cardOf(html, 'jira'))).not.toContain(GITHUB_KEY_NOTE)
+  })
+
+  it('says a connection that does not answer, when it last worked, and the one fix', () => {
+    const teams = text(cardOf(html, 'teams'))
+    expect(teams).toContain('Not working right now')
+    expect(teams).toContain('Teams did not take the last message. Last seen working')
+    expect(teams).toContain('Ask whoever set up the Teams address to check that it still works.')
+  })
+
+  it('never says a connection that was not checked works, and leaves out a time it has not got', () => {
+    const teams = text(cardOf(render({ tab: 'connections', connections: withConnection('teams', { state: 'not_checked', checked_at: null, problem: 'Not checked yet. Teams is tried when the first approval request is sent.', fix: null }) }), 'teams'))
+    expect(teams).toContain('Not checked yet. Teams is tried when the first approval request is sent.')
+    expect(teams).not.toMatch(/is working|Checked /)
+  })
+
+  it('offers Check now to an Operator on each of the three, and nothing to replace a key', () => {
+    expect(buttonsIn(html).filter((b) => b.startsWith('Check now'))).toEqual(['Check now for Jira', 'Check now for GitHub', 'Check now for Teams'])
+    expect(text(html)).not.toMatch(/Replace the key/)
+  })
+
+  it('is read-only for an Approver who is not an Operator, and says only Operators change settings', () => {
+    const forBob = render({ me: BOB, tab: 'connections', connections: { ...ALL, you_can_check: false } })
+    expect(buttonsIn(forBob).filter((b) => b.startsWith('Check now'))).toEqual([])
+    expect(text(forBob)).toContain(ONLY_OPERATORS_WORDS)
+  })
+
+  it('marks the tab when a connection needs someone, and not when all is well', () => {
+    expect(render({ tab: 'people', connections: ALL })).toMatch(/Connections[^<]*<span class="[^"]*dot[^"]*"/)
+    expect(render({ tab: 'people' })).not.toMatch(/Connections[^<]*<span class="[^"]*dot[^"]*"/)
+  })
+})
+
+describe('what a Check now found', () => {
+  const found = (change: Partial<ConnectionOut>): ConnectionOut => ({ ...(ALL.connections[0] as ConnectionOut), ...change })
+  it('says it answered only when the state is working', () => {
+    expect(checkResultWords(found({ state: 'working' }))).toBe('Checked just now. Jira answered.')
+  })
+  it('says nothing was tried when the platform tried nothing, and never claims a test', () => {
+    const words = checkResultWords(found({ id: 'teams', name: 'Teams', state: 'not_checked', problem: 'Not checked yet. Teams is tried when the first approval request is sent.' }))
+    expect(words).toBe('Not checked yet. Teams is tried when the first approval request is sent.')
+    expect(words).not.toMatch(/Checked just now|answered|works/)
+  })
+  it('says what is still wrong when the connection does not work', () => {
+    expect(checkResultWords(found({ state: 'not_answering', problem: 'Jira is not answering.' }))).toBe('Checked just now. Jira is not answering.')
   })
 })
 
@@ -269,7 +355,7 @@ describe('the People and roles tab', () => {
     expect(boxes.length).toBe(PEOPLE.length * 2)
     expect(boxes.every((box) => box.includes('disabled=""'))).toBe(true)
     expect(html).not.toContain('<form')
-    expect(buttonsIn(html).filter((name) => !['AI model', 'People and roles'].includes(name))).toEqual([])
+    expect(buttonsIn(html).filter((name) => !['Connections', 'AI model', 'People and roles'].includes(name))).toEqual([])
   })
 
   it('explains the rules, two Approvers and one Operator among them', () => {
@@ -290,5 +376,14 @@ describe('the People and roles tab', () => {
     for (const html of [render(), render({ tab: 'people' }), render({ me: BOB, tab: 'people' })]) {
       expect(text(html)).not.toMatch(/room lead|release checker|use case/i)
     }
+  })
+})
+
+describe('the Teams card', () => {
+  it('says Teams sends approval requests to Approvers, and nothing about messages', () => {
+    const teams = text(cardOf(render({ tab: 'connections' }), 'teams'))
+    expect(teams).toContain('What it does Sends approval requests to Approvers')
+    expect(teams).not.toMatch(/post|message/i)
+    expect(text(cardOf(render({ tab: 'connections' }), 'jira'))).not.toContain('What it does')
   })
 })

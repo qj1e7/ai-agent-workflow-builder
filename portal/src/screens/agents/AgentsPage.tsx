@@ -1,17 +1,31 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useParams, useSearchParams } from 'react-router'
+import { useCapabilities } from '../../api/capabilityQueries'
 import { useAgentCards, useTools } from '../../api/queries'
 import { PageHead } from '../../shell/PageHead'
 import { Button } from '../../ui/Button'
 import { CardDialog, CardTile, PlatformDialog, PlatformTile, tileId, useCloseWithoutHistoryEntry, type ToolIndex } from './AgentCard'
 import { faceId, PLATFORM_AGENTS, toolsUnavailableWords } from './agents'
+import { CapabilitiesTab } from './CapabilitiesTab'
 import { ToolsTab } from './ToolsTab'
 import styles from './AgentsPage.module.css'
 
 export const CARDS_UNAVAILABLE_WORDS = 'The specialist agents are not available right now.'
 export const NOT_FOUND_WORDS = 'That agent is not in the library.'
 
-type Tab = 'agents' | 'tools'
+type Tab = 'can' | 'agents' | 'tools'
+
+const LEADS: Record<Tab, string> = {
+  can: 'What the platform can do today, and what it can’t yet. An agent can use only what is listed under I can.',
+  agents: 'The agents your team can use. For each workflow, the Planner picks the ones it needs. Anything that changes data waits for a yes.',
+  tools: 'Tools are how agents reach other systems. A tool that changes data waits for a yes, every time.',
+}
+
+/** An agent's own address opens on the Agents tab, which is where its tile is. */
+function tabOf(param: string | null, agentId: string | null): Tab {
+  if (param === 'agents' || param === 'tools') return param
+  return agentId === null ? 'can' : 'agents'
+}
 
 function useFocusBackToTile(shownId: string | null, cardOpen: boolean): boolean {
   const [lastShown, setLastShown] = useState<string | null>(null)
@@ -22,13 +36,14 @@ function useFocusBackToTile(shownId: string | null, cardOpen: boolean): boolean 
   return lastShown !== null
 }
 
-export function AgentsPage({ heading, lead }: { heading: string; lead: string }) {
+export function AgentsPage({ heading, now }: { heading: string; now: Date }) {
   const { agentId = null } = useParams()
   const [params, setParams] = useSearchParams()
   const { search } = useLocation()
   const cards = useAgentCards()
   const tools = useTools()
-  const tab: Tab = params.get('tab') === 'tools' ? 'tools' : 'agents'
+  const capabilities = useCapabilities()
+  const tab = tabOf(params.get('tab'), agentId)
 
   const toolIndex: ToolIndex = new Map((tools.data ?? []).map((tool) => [tool.id, tool]))
   const card = agentId === null ? undefined : cards.data?.find((entry) => entry.card_id === agentId)
@@ -40,9 +55,12 @@ export function AgentsPage({ heading, lead }: { heading: string; lead: string })
   const specialists = cards.data ?? []
   return (
     <>
-      <PageHead heading={heading} lead={lead} movesFocus={movesFocus} />
+      <PageHead heading={heading} lead={LEADS[tab]} movesFocus={movesFocus} />
       <div className={styles['tabs']} role="group" aria-label="Show">
-        <button type="button" aria-pressed={tab === 'agents'} onClick={() => setParams({}, { replace: true })}>
+        <button type="button" aria-pressed={tab === 'can'} onClick={() => setParams({}, { replace: true })}>
+          What it can do
+        </button>
+        <button type="button" aria-pressed={tab === 'agents'} onClick={() => setParams({ tab: 'agents' }, { replace: true })}>
           Agents <span className={styles['count']}>{PLATFORM_AGENTS.length + specialists.length}</span>
         </button>
         <button type="button" aria-pressed={tab === 'tools'} onClick={() => setParams({ tab: 'tools' }, { replace: true })}>
@@ -54,7 +72,7 @@ export function AgentsPage({ heading, lead }: { heading: string; lead: string })
           {NOT_FOUND_WORDS}
         </p>
       ) : null}
-      {tools.isError ? (
+      {tools.isError && tab !== 'can' ? (
         <p className={styles['notice']} role="status">
           {toolsUnavailableWords(tab === 'agents' && cards.isSuccess)}{' '}
           <Button onClick={() => void tools.refetch()}>Try again</Button>
@@ -62,12 +80,14 @@ export function AgentsPage({ heading, lead }: { heading: string; lead: string })
       ) : null}
       {tab === 'tools' ? (
         tools.data ? (
-          <ToolsTab tools={tools.data} cards={cards.data} />
+          <ToolsTab tools={tools.data} cards={cards.data} capabilities={capabilities.data?.capabilities} now={now} />
         ) : tools.isError ? null : (
           <p className="muted" role="status">
             Loading
           </p>
         )
+      ) : tab === 'can' ? (
+        <CapabilitiesTab cards={cards.data} now={now} />
       ) : (
         <>
           <section className={styles['section']}>

@@ -15,15 +15,16 @@ import type {
   SettingsChangeOut,
 } from '../../api/types'
 
-export type SettingsTab = 'model' | 'people'
+export type SettingsTab = 'connections' | 'people' | 'model'
 
 export const SETTINGS_TABS: readonly { readonly id: SettingsTab; readonly label: string }[] = [
-  { id: 'model', label: 'AI model' },
+  { id: 'connections', label: 'Connections' },
   { id: 'people', label: 'People and roles' },
+  { id: 'model', label: 'AI model' },
 ]
 
 export function tabFrom(param: string | null): SettingsTab {
-  return param === 'people' ? 'people' : 'model'
+  return param === 'people' || param === 'model' ? param : 'connections'
 }
 
 export const ONLY_OPERATORS_WORDS = 'Only Operators change settings.'

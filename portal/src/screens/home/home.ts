@@ -10,6 +10,8 @@ import { lineWhen, nextRunAt, runWhen, workflowPath } from '../workflows/workflo
 /** Home for an Operator shows the most urgent few. Workflows, and Home for someone who is not an Operator, show everything the platform returned. */
 export const HOME_NEEDS_SHOWN = 3
 
+const CONNECTIONS_PATH = '/settings?tab=connections'
+
 export type Need =
   | { readonly kind: 'approval'; readonly key: string; readonly at: string; readonly item: ApprovalItem }
   | { readonly kind: 'connection'; readonly key: string; readonly at: string; readonly item: ConnectionItem }
@@ -229,19 +231,17 @@ export function wordsOf(need: Need, now: Date, modelOff = false): ItemWords {
 export type Action =
   | { readonly kind: 'open'; readonly label: string; readonly to: string }
   | { readonly kind: 'retry'; readonly label: string; readonly runId: string }
-  | { readonly kind: 'check'; readonly label: string; readonly connectionId: string }
 
 export function actionsOf(need: Need, modelOff = false): readonly Action[] {
   switch (need.kind) {
     case 'approval':
       return [{ kind: 'open', label: 'Review and decide', to: `/runs/${need.item.run_id}` }]
     case 'connection':
-      // Settings has no Connections tab yet (plan item N19). Until it does, the item checks in place.
-      return [{ kind: 'check', label: 'Check again', connectionId: need.item.id }]
+      return [{ kind: 'open', label: 'See it in Settings', to: CONNECTIONS_PATH }]
     case 'address':
       return [{ kind: 'open', label: 'Show it on the watchlist', to: `/software?row=${encodeURIComponent(need.item.software_id)}` }]
     case 'confirmation':
-      return [{ kind: 'open', label: 'Review in Settings', to: need.item.kind === 'approver' ? '/settings?tab=people' : '/settings' }]
+      return [{ kind: 'open', label: 'Review in Settings', to: need.item.kind === 'approver' ? '/settings?tab=people' : '/settings?tab=model' }]
     case 'stopped':
       return stoppedActions(need.item.run_id, need.item.retryable, modelOff)
     case 'reply':
@@ -263,11 +263,6 @@ export function stoppedActions(runId: string, retryable: boolean, modelOff = fal
         { kind: 'open', label: 'See the run', to: `/runs/${runId}` },
       ]
     : [{ kind: 'open', label: 'See why it stopped', to: `/runs/${runId}` }]
-}
-
-/** What a check found, in words that stay true when the item is still there. */
-export function checkWords(state: string): string {
-  return state === 'working' ? 'Checked just now. It works.' : 'Checked just now. It still does not work.'
 }
 
 const noLongerStopped = (error: unknown) => error instanceof ApiError && error.status === 409
