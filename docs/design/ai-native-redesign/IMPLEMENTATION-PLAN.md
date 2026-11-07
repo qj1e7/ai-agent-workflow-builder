@@ -268,11 +268,11 @@ An intent never calls the model, so suggestions work offline. The three state an
 
 `state` is one of `working`, `needs_attention`, `not_answering`, `not_set_up`.
 
-**`GET /api/v1/runs/{run_id}/troubleshoot` (changed).** Owner monitoring. Keeps `failure` and `advice`, and adds `answers`. Monitoring computes it from its own activity log, which already holds `WriteActionDone`, `ApprovalDecided` and `RunFailed` events (`platform-api/src/platform_api/monitoring/events.py`). It needs nothing from orchestration.
+**`GET /api/v1/runs/{run_id}/troubleshoot` (changed).** Owner monitoring. Keeps `failure` and `advice`, and adds `answers`. Monitoring computes it from the run's `RunFailed` event in its own activity log (`platform-api/src/platform_api/monitoring/events.py`). It needs nothing from orchestration.
 
 ```json
 {"run_id": "run_01", "failure": {}, "advice": {},
- "answers": {"what_happened": "...", "written": 0, "retry": {"possible": true, "asks_again": true}, "next": "retry"}}
+ "answers": {"what_happened": "...", "what_affected": "Nothing was written.", "can_fix": "...", "retry": {"possible": true, "asks_again": true}, "next": "retry"}}
 ```
 
 `next` is `retry` when the run can be retried, otherwise `report`.
@@ -361,11 +361,11 @@ Checks run on Check now and on the existing schedule tick (`POST /internal/v1/sc
 
 ### 4.4 The troubleshooter's four answers (monitoring)
 
-`platform-api/src/platform_api/monitoring/troubleshooter.py` gains a pure function from the run's events to the four answers:
+`platform-api/src/platform_api/monitoring/troubleshooter.py` gains a pure function from the run's failure to the four answers:
 
 - **What happened.** Today's `explanation`.
-- **What was affected.** How many writes were done before the stop, counted from `WriteActionDone`.
-- **Can it be fixed safely.** From `retryable` and the stage. A `WriteFailed` after the yes carries on without a new yes. This is safe in the built app, and stays so: the retry reuses the same stored proposal and approval (`test_runs.py`, `test_retry_after_an_act_leg_failure_keeps_the_approval`), the safety checker checks the approved digest again before every write and denies on a mismatch (`write_actions.py`, `DIGEST_MISMATCH`), and each write carries a write key and a Jira label, so a retry finds a ticket an earlier attempt made instead of making a second one (`jira.py`, `_write`). Any change to this needs its own ADR. Any other retry runs again and waits for a yes.
+- **What was affected.** Before the write step, nothing was written. At the write step (stage `acting`), the answer says a write may or may not have reached Jira. The log can't count writes there: `WriteActionDone` is logged only when the whole write step succeeds, and Jira can make a ticket and lose its answer (`jira.py`).
+- **Can it be fixed safely.** From `retryable` and the stage. Any retryable failure at the write step resumes with the same approval, without a new yes. This is safe in the built app, and stays so: the retry reuses the same stored proposal and approval (`test_runs.py`, `test_retry_after_an_act_leg_failure_keeps_the_approval`), the safety checker checks the approved digest again before every write and denies on a mismatch (`write_actions.py`, `DIGEST_MISMATCH`), and each write carries a write key and a Jira label, so a retry finds a ticket an earlier attempt made instead of making a second one (`jira.py`, `_write`). Any change to this needs its own ADR. A failure before the write step runs again and waits for a yes.
 - **What should you do.** `retry` or `report`.
 
 The text stays a fixed table. It does not claim a cause it can't know, such as "down for maintenance".

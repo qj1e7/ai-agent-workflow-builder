@@ -55,7 +55,7 @@ from platform_api.monitoring.events import (
     activity_event_adapter,
 )
 from platform_api.monitoring.http import TroubleshootingOut
-from platform_api.monitoring.troubleshooter import explain
+from platform_api.monitoring.troubleshooter import answers, explain
 from platform_api.orchestration import BelongsOnWatchlist, Understood, UnderstoodRow
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.dispatch import ApprovalNotice, ApprovalOutcome, AskedStep
@@ -754,7 +754,10 @@ def troubleshooting(tl: Timeline) -> TroubleshootingOut:
     failed = tl.last
     assert failed.kind == "run_failed"
     return TroubleshootingOut(
-        run_id=FAILURE.run_id, failure=failed.data, advice=explain(failed.data.reason)
+        run_id=FAILURE.run_id,
+        failure=failed.data,
+        advice=explain(failed.data.reason),
+        answers=answers(failed.data),
     )
 
 

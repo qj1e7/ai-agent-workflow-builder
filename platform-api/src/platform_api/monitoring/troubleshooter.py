@@ -57,8 +57,9 @@ ADVICE: Mapping[FailureReason, Advice] = {
         likely_cause="The approval no longer matches the proposal, or the action is not "
         "a registered connector operation.",
         suggested_action="ask_maintainer",
-        suggestion="Start a new run. If this happens again, ask a maintainer to check "
-        "the approval records.",
+        suggestion="Check Jira for a ticket carrying this run's label before starting a new "
+        "run, because a new run can make a duplicate. If this happens again, ask a "
+        "maintainer to check the approval records.",
     ),
     "UnboundIntent": Advice(
         explanation="The agents proposed an action this use case cannot carry out.",
@@ -76,25 +77,53 @@ ADVICE: Mapping[FailureReason, Advice] = {
 }
 
 
-AGENT_REFUSED = Advice(
-    explanation="The agent was refused by the service it reads from, so retrying would "
-    "get the same answer.",
-    likely_cause="The use case names a repository that does not exist or that the token "
-    "cannot read, or the task input was not valid.",
+AGENTS_STOPPED = Advice(
+    explanation="The agents couldn't finish this step.",
+    likely_cause="The run's activity shows the error they stopped with.",
     suggested_action="ask_maintainer",
-    suggestion="Check the repository name and the token in the use case, fix them, "
-    "then start a new run.",
+    suggestion="Ask a maintainer to look at the error in the run's activity and fix what it "
+    "names, then start a new run.",
 )
 
 
+LOOK_AT_THE_AGENT = (
+    "Ask a maintainer to look at what the agent did in the run's activity, then start a new run."
+)
+
+
+# Agent error types whose meaning is certain. UpstreamRejected is not one: a watchlist check also
+# gives it when it finds no plain version, which nothing refused.
+KNOWN_AGENT_STOPS: Mapping[str, Advice] = {
+    "ModelNeeded": Advice(
+        explanation="No AI model is connected, so the agents couldn't start.",
+        likely_cause="Agents need an AI model, and none is connected in Settings.",
+        suggested_action="ask_maintainer",
+        suggestion="Ask an Operator to connect an AI model in Settings, then start a new run.",
+    ),
+    "AgentTooSlow": Advice(
+        explanation="An agent ran out of time before it finished.",
+        likely_cause="An agent's task has a time limit, and this one went over it.",
+        suggested_action="ask_maintainer",
+        suggestion=LOOK_AT_THE_AGENT,
+    ),
+    "AgentTooLong": Advice(
+        explanation="An agent used all its steps without finishing.",
+        likely_cause="An agent's task has a limit on its steps, and this one reached it.",
+        suggested_action="ask_maintainer",
+        suggestion=LOOK_AT_THE_AGENT,
+    ),
+}
+
+
 WRITE_REFUSED = Advice(
-    explanation="The other system refused the approved write, so retrying would get the same "
-    "answer.",
-    likely_cause="Jira does not accept the ticket as it is: the project, the issue type or a "
-    "required field is not what Jira expects, or the platform's Jira account may not write there.",
+    explanation="The approved write was refused.",
+    likely_cause="Either Jira refused the write and made nothing, or the platform found a "
+    "ticket it can't prove it made. The failure text says which one happened.",
     suggested_action="ask_maintainer",
-    suggestion="Read what Jira said in the run's failure, ask a maintainer to fix the Jira "
-    "settings or the project, then start a new run.",
+    suggestion="Read the failure text, then check Jira for a ticket carrying this run's label "
+    "before anyone starts a new run. A new run doesn't share this run's write key and can "
+    "make a duplicate. If Jira refused the write, ask a maintainer to fix the Jira "
+    "settings or the project.",
 )
 
 
@@ -104,7 +133,55 @@ def explain(reason: FailureReason) -> Advice:
 
 def explain_failure(failure: RunFailedData) -> Advice:
     if failure.reason == "AgentError" and not failure.retryable:
-        return AGENT_REFUSED
+        # The work leg's failure message starts with the agent's error type, as "ModelNeeded: ...".
+        return KNOWN_AGENT_STOPS.get(failure.message.partition(": ")[0], AGENTS_STOPPED)
     if failure.reason == "WriteFailed" and not failure.retryable:
         return WRITE_REFUSED
     return ADVICE[failure.reason]
+
+
+class RetryAnswer(WireModel):
+    possible: bool
+    asks_again: bool
+    """True only when a retry runs the work again, so any write waits for a new yes. A retry at
+    the write step carries on from the approved write."""
+
+
+class Answers(WireModel):
+    what_happened: str
+    what_affected: str
+    can_fix: str
+    retry: RetryAnswer
+    next: Literal["retry", "report"]
+
+
+NOTHING_WRITTEN = "Nothing was written."
+# The log holds a write's done event only once the whole write step succeeds, and Jira can make a
+# ticket and lose its answer, so at the write step nobody can say from the log what was written.
+MAYBE_WRITTEN = "The approved write may or may not have reached Jira."
+
+
+def _can_fix(retry: RetryAnswer) -> str:
+    if not retry.possible:
+        return "This kind of stop can't be retried."
+    if retry.asks_again:
+        return "Yes. A retry runs the work again, and any write still waits for a yes."
+    return (
+        "Yes. A retry carries on from the write that was already approved, so nobody has to "
+        "approve again. It checks the approval before it writes, and it finds a ticket an "
+        "earlier try made instead of making a second one."
+    )
+
+
+def answers(failure: RunFailedData) -> Answers:
+    at_the_write = failure.stage == "acting"
+    retry = RetryAnswer(
+        possible=failure.retryable, asks_again=failure.retryable and not at_the_write
+    )
+    return Answers(
+        what_happened=explain_failure(failure).explanation,
+        what_affected=MAYBE_WRITTEN if at_the_write else NOTHING_WRITTEN,
+        can_fix=_can_fix(retry),
+        retry=retry,
+        next="retry" if retry.possible else "report",
+    )
