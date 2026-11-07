@@ -288,7 +288,7 @@ def test_a_part_the_platform_cannot_do_is_cant_do_even_when_the_model_accepts_it
     [
         ("look_for", "Tickets with no update for 10 days"),
         ("look_for", "Tickets without an update this week"),
-        ("look_for", "Tickets with the label urgent"),
+        ("look_for", "Tickets with the word urgent in the title"),
         ("look_for", "Tickets raised by the support teams"),
         ("look_for", "Closed tickets"),
         ("look_for", "Bug tickets assigned to Mark"),

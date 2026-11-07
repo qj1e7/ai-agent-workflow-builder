@@ -2,17 +2,23 @@ import pytest
 
 from agent_runtime.abilities import (
     ABILITIES,
+    TICKET_FIELDS,
+    UNREAD_FIELDS,
     Ability,
     Need,
+    names_a_ticket_field,
+    names_software,
     need_of,
-    sets_a_ticket_field,
     skip_of_a_yes,
+    unread_field_of,
     vulnerability_phrase,
     why_not,
+    without_the_field,
     without_the_skip,
     words,
 )
 from agent_runtime.contract import RowKind
+from agent_runtime.jira import JiraTicket
 from agent_runtime.planner import why_no_tool
 
 CAN = (
@@ -418,7 +424,7 @@ def test_a_search_that_starts_with_a_write_is_cant_do():
         "Bug tickets in MOCK with no update for 10 days",
         "Tickets with no update for 10 days",
         "Tickets without an update this week",
-        "Tickets with the label urgent",
+        "Tickets with the word urgent in the title",
         "Tickets raised by the support teams",
         "Closed tickets",
         "Tickets closed this week",
@@ -497,7 +503,7 @@ def test_a_vulnerability_check_is_cant_do_and_the_note_says_it_is_planned(kind: 
     ("kind", "text"),
     [
         ("look_for", "Tickets about the Log4j vulnerability"),
-        ("look_for", "Bug tickets in MOCK labelled vulnerability"),
+        ("look_for", "Bug tickets in MOCK that mention a vulnerability"),
         ("look_for", "Jira issues that mention CVE-2021-44228"),
         ("do", "Create a ticket for the Log4j vulnerability"),
         ("look_for", "Tickets in MOCK about security patches"),
@@ -580,6 +586,27 @@ def test_the_vulnerability_words_are_found_as_the_text_wrote_them(text: str, phr
         ("File it with no approval", "with no approval", "File it"),
         ("File the ticket, no approval needed", "no approval needed", "File the ticket"),
         (
+            "Create the ticket, no need for anyone to sign off",
+            "no need for anyone to sign off",
+            "Create the ticket",
+        ),
+        ("Just do it without checking with Bob", "without checking with Bob", "do it"),
+        ("Create the ticket with no sign off", "with no sign off", "Create the ticket"),
+        ("Create the ticket, no approval", ", no approval", "Create the ticket"),
+        (
+            "Create the ticket without Teams approval",
+            "without Teams approval",
+            "Create the ticket",
+        ),
+        (
+            "Create the ticket and I'll approve it myself",
+            "I'll approve it myself",
+            "Create the ticket",
+        ),
+        ("Create the ticket and approve it for me", "approve it for me", "Create the ticket"),
+        ("Get it approved automatically", "approved automatically", "Get it"),
+        ("Don't wait for Bob, just create the ticket", "Don't wait for Bob", "create the ticket"),
+        (
             "Approve it automatically and close the tickets",
             "Approve it automatically",
             "close the tickets",
@@ -611,10 +638,100 @@ def test_words_that_skip_a_yes_are_found_and_removed(text: str, skip: str, rest:
         "Create one ticket after the approval",
         "List who approved each ticket",
         "Automatically list the tickets and ask an Approver to approve them",
+        "Find tickets in MOCK without an approver",
+        "List the tickets that were auto-approved last week",
+        "Show requests approved automatically by mistake",
+        "Don't ask the team, just tell me what you can do",
+        "Every Monday, list open tickets without asking for confirmation from me",
+        "Tickets with no approver, every Monday",
+        "Keep track of tickets without an approver",
     ],
 )
-def test_the_products_own_words_do_not_skip_a_yes(text: str):
+def test_the_products_own_words_and_a_filter_on_tickets_do_not_skip_a_yes(text: str):
     assert skip_of_a_yes(text) is None
+
+
+def test_the_ticket_field_table_matches_what_the_agents_read():
+    read = {field.read_as for field in TICKET_FIELDS if field.read_as is not None}
+    assert read <= set(JiraTicket.model_fields)
+    assert {field.plain for field in UNREAD_FIELDS} == {
+        "a ticket's component",
+        "a ticket's priority",
+        "a ticket's labels",
+        "a ticket's epic",
+        "a ticket's sprint",
+    }
+    assert not any(word in JiraTicket.model_fields for f in UNREAD_FIELDS for word in f.words)
+
+
+@pytest.mark.parametrize(
+    ("kind", "text", "field"),
+    [
+        ("look_for", "Bug tickets in MOCK in the Backend component", "a ticket's component"),
+        ("look_for", "High priority bug tickets in MOCK", "a ticket's priority"),
+        ("look_for", "Tickets labelled security in MOCK", "a ticket's labels"),
+        ("look_for", "Tickets in the epic MOCK-100", "a ticket's epic"),
+        ("look_for", "Tickets in sprint 12", "a ticket's sprint"),
+        ("do", "Create one ticket that lists them and their component(s)", "a ticket's component"),
+        ("do", "Group them by priority", "a ticket's priority"),
+        ("look_for", "List epics in MOCK", None),
+        ("look_for", "Open tickets with their owners", None),
+        ("look_for", "Bug tickets with no update for 10 days", None),
+        ("do", "Set their priority to high", None),
+        ("do", "Change their component", None),
+        ("where", "The Backend component", None),
+    ],
+)
+def test_a_read_of_a_field_the_agents_cant_see_is_held_and_a_change_to_one_is_not(
+    kind: RowKind, text: str, field: str | None
+):
+    found = unread_field_of(kind, text)
+    assert (found.plain if found else None) == field
+    if field is not None:
+        assert why_not(kind, text) == cant(f"tell {field}")
+
+
+@pytest.mark.parametrize(
+    ("text", "left"),
+    [
+        ("Bug tickets in MOCK in the Backend component", "Bug tickets in MOCK"),
+        (
+            "Create one ticket that lists them and their component(s)",
+            "Create one ticket that lists them",
+        ),
+        ("High priority bug tickets in MOCK", "bug tickets in MOCK"),
+        ("Tickets labelled security in MOCK", "Tickets in MOCK"),
+        (
+            "Open tickets with priority High, sorted by created date",
+            "Open tickets, sorted by created date",
+        ),
+        ("Tickets with priority High and status Done", "Tickets with status Done"),
+        ("Tickets with their component and priority", "Tickets"),
+        ("Group them by priority and list them", "Group them and list them"),
+        ("Tickets in the epic MOCK-100", "Tickets"),
+        ("Bug tickets in MOCK", "Bug tickets in MOCK"),
+        ("Components of open tickets", None),
+        ("Change their component", None),
+    ],
+)
+def test_the_part_without_the_field_keeps_the_rest_of_the_words(text: str, left: str | None):
+    assert without_the_field(text) == left
+
+
+@pytest.mark.parametrize(
+    ("name", "software"),
+    [
+        ("React", True),
+        ("Log4j", True),
+        ("NVD", False),
+        ("CVE-2021-44228", False),
+        ("GitHub", False),
+        ("Jira", False),
+        ("packages", False),
+    ],
+)
+def test_a_vulnerability_word_a_system_or_a_common_word_is_not_software(name: str, software: bool):
+    assert names_software(name) is software
 
 
 @pytest.mark.parametrize(
@@ -653,9 +770,11 @@ def test_a_part_that_acts_on_what_another_system_holds_needs_that_system():
         ("Change their component", True),
         ("Set the priority to high", True),
         ("Add the label stale", True),
+        ("Bug tickets in the Backend component", True),
         ("Close every ticket", False),
+        ("Close every epic", False),
         ("Delete them", False),
     ],
 )
 def test_only_a_field_on_tickets_is_a_tool_the_team_can_add(text: str, field: bool):
-    assert sets_a_ticket_field(text) is field
+    assert names_a_ticket_field(text) is field

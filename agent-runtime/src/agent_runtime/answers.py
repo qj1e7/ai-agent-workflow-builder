@@ -9,13 +9,16 @@ from pydantic import BaseModel, ConfigDict, Field
 from agent_runtime.abilities import (
     VULNERABILITIES_PLANNED,
     guessable_words,
+    names_a_ticket_field,
+    names_software,
     need_of,
     other_systems,
     release_word_in,
-    sets_a_ticket_field,
     skip_of_a_yes,
+    unread_field_of,
     vulnerability_phrase,
     why_not,
+    without_the_field,
     without_the_skip,
     words,
 )
@@ -64,12 +67,18 @@ NAME_LIMIT: Final = 60
 ACCEPTED: Final = ("understood", "changed")
 CHOOSE_INSTEAD: Final = "Please choose something I can do instead."
 FILLED_IN: Final = "I filled this in. Your words didn't say it, so please check it."
+NO_TIME_SAID: Final = "Your words didn't say a time. Please choose one."
+NO_TIME_BUT: Final = 'Your words said "{}" but not a time. Please choose one.'
 SUGGESTED: Final = 'Suggested instead of "{}".'
 ARTICLES: Final = re.compile(r"^(?:the|my|our|a|an)\s+", re.IGNORECASE)
-NOT_SOFTWARE: Final = words(
-    "software package packages dependency dependencies library libraries tool tools app apps "
-    "system systems service services component components version versions release releases "
-    "code"
+TIME_OF_DAY: Final = re.compile(
+    r"\b(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\b(?:at\s+)?\d{1,2}:\d{2}\b|\bat\s+\d{1,2}\b|"
+    r"\b(?:noon|midday|midnight)\b",
+    re.IGNORECASE,
+)
+SCHEDULE_WORDS: Final = words(
+    "monday tuesday wednesday thursday friday saturday sunday weekday weekdays daily weekly "
+    "monthly hourly quarterly morning afternoon evening night"
 )
 
 type AsksAbout = Literal["none", "my_workflows", "why_stopped", "needs_me", "abilities"]
@@ -127,7 +136,11 @@ ANSWER_SYSTEM: Final = (
     "So the only change they can make is a new Jira ticket, and only after an Approver says "
     "yes. They cannot post in Teams, send email, change Confluence, or close, edit, move or "
     "delete tickets. Summing up, listing, counting or comparing what they found needs no tool: "
-    "the agent writes that itself, and the result goes into one new Jira ticket after a yes.\n\n"
+    "the agent writes that itself, and the result goes into one new Jira ticket after a yes.\n"
+    "A ticket search sees each ticket's type, status, owner, and when it was created, last "
+    "updated and done. It cannot see a ticket's component, priority, labels, epic or sprint. A "
+    "part that needs one of those is cant_do, with the same part without that field as its "
+    "alternative.\n\n"
     "Rules:\n"
     "- For a task, give exactly one schedule row, then at least one row for each other part. "
     "When only some of a part can be done, split it into two rows and mark the part that "
@@ -186,11 +199,27 @@ class TaskRead(BaseModel):
     )
 
 
+def _no_time_said(schedule: str) -> str:
+    """The note on a schedule asked for because its time was a guess, keeping the words that
+    were the person's own, such as "Every Friday"."""
+    day = " ".join(TIME_OF_DAY.sub(" ", schedule).split()).strip(" ,").removesuffix(" at")
+    return NO_TIME_BUT.format(day) if day else NO_TIME_SAID
+
+
 def _with_guess_marked(answer: AnswerRow, request: str) -> UnderstoodRow:
+    """A time the request never said is asked for, not filled in. A day, a number, a key or
+    another system the request never said is a guess, shown as filled in."""
     row = row_of(answer)
+    if row.state not in ACCEPTED:
+        return row
+    if row.kind == "schedule" and TIME_OF_DAY.search(row.text) and not TIME_OF_DAY.search(request):
+        return missing_row("schedule", _no_time_said(row.text))
     if row.state != "understood":
         return row
-    if all(said_in(word, request) for word in guessable_words(row.text)):
+    guessed = guessable_words(row.text)
+    if row.kind == "schedule":
+        guessed += [w for w in re.findall(r"\w+", row.text) if w.casefold() in SCHEDULE_WORDS]
+    if all(said_in(word, request) for word in guessed):
         return row
     return row.model_copy(update={"state": "changed", "note": FILLED_IN})
 
@@ -223,18 +252,26 @@ def _offered(answers: list[AnswerRow], request: str) -> list[UnderstoodRow] | No
 
 
 def _instead_of(answer: AnswerRow, row: UnderstoodRow) -> UnderstoodRow | None:
-    """The model's alternative for a part it can't do, held to the tools. A place or a time with
-    no alternative is left for the person to choose. A part to look for or do with none means
-    there is no card to offer."""
-    instead = plain(answer.alternative, TEXT_LIMIT)
-    if not instead and answer.kind in ("look_for", "do"):
-        return None
-    if not instead:
-        return missing_row(answer.kind, CHOOSE_INSTEAD)
+    """The nearest part the tools can do instead of one they can't: the model's alternative, or
+    the part itself without the ticket field the agents can't read, each held to the tools. A
+    place or a time with nothing instead is left for the person to choose. A part to look for or
+    do with nothing instead means there is no card to offer."""
+    said = [plain(answer.alternative, TEXT_LIMIT)]
+    if unread_field_of(row.kind, row.text) is not None:
+        said.append(row.text)
     note = plain(SUGGESTED.format(row.text or answer.kind.replace("_", " ")), 300)
-    return held_to_the_tools(
-        UnderstoodRow(kind=answer.kind, text=instead, state="changed", note=note)
-    )
+    for text in said:
+        instead = without_the_field(text) if text else None
+        if not instead:
+            continue
+        held = held_to_the_tools(
+            UnderstoodRow(kind=answer.kind, text=instead, state="changed", note=note)
+        )
+        if held.state != "cant_do":
+            return held
+    if answer.kind in ("look_for", "do"):
+        return None
+    return missing_row(answer.kind, CHOOSE_INSTEAD)
 
 
 def _said(row: UnderstoodRow) -> str:
@@ -260,15 +297,17 @@ def _asks_for_vulnerabilities(cant: list[CantRow]) -> bool:
     return any(vulnerability_phrase(f"{c.text} {c.note}") is not None for c in cant)
 
 
-def _is_part(rows: list[UnderstoodRow], cant: list[CantRow]) -> bool:
-    finds = any(r.kind == "look_for" and r.state in ACCEPTED for r in rows)
-    fields = all(c.needs == "new_tool" and sets_a_ticket_field(c.text or c.note) for c in cant)
+def _is_part(offered: list[UnderstoodRow], cant: list[CantRow]) -> bool:
+    """Whether the can't rows are all a ticket field a new Jira tool could give, and the card
+    offered instead still finds tickets."""
+    finds = any(r.kind == "look_for" and r.state in ACCEPTED for r in offered)
+    fields = all(c.needs == "new_tool" and names_a_ticket_field(c.text or c.note) for c in cant)
     return finds and fields
 
 
 def _software_of(read: TaskRead, request: str) -> str | None:
     software = whole_word_of(request, read.software)
-    if software is None or software.casefold() in NOT_SOFTWARE:
+    if software is None or not names_software(software):
         return None
     return software
 
@@ -302,7 +341,7 @@ def _from_rows(read: TaskRead, request: str) -> PlannerAnswer:
     source = _source_of(cant_rows)
     cant = [_cant_row(row, source) for row in cant_rows]
     offered = _offered(read.rows, request)
-    if offered is not None and _is_part(rows, cant):
+    if offered is not None and _is_part(offered, cant):
         return PartAnswer(name=name, rows=offered, cant=cant)
     watch = _watch_instead(cant, read, request)
     if watch is not None or _asks_for_vulnerabilities(cant):

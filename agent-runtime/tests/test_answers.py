@@ -9,6 +9,8 @@ from agent_runtime.answers import (
     ANSWER_SYSTEM,
     CHOOSE_INSTEAD,
     FILLED_IN,
+    NO_TIME_BUT,
+    NO_TIME_SAID,
     AnswerRow,
     TaskRead,
     answer_of,
@@ -104,7 +106,6 @@ def test_a_card_with_no_name_from_the_model_is_named_after_the_request():
             "Stale tickets with no update for 14 days",
             "Every Friday, list stale tickets",
         ),
-        ("schedule", "Every Friday at 9am", "Every Friday, list the open tickets in MOCK"),
         ("where", "Jira project SUP", "Every Friday, list the open tickets"),
         (
             "look_for",
@@ -112,7 +113,7 @@ def test_a_card_with_no_name_from_the_model_is_named_after_the_request():
             "Every Friday, list the tickets about the chat outage",
         ),
     ],
-    ids=["a-number", "a-time", "a-project-key", "another-system"],
+    ids=["a-number", "a-project-key", "another-system"],
 )
 def test_a_part_marked_understood_whose_key_words_are_not_in_the_request_is_a_guess(
     kind: str, text: str, task: str
@@ -122,6 +123,58 @@ def test_a_part_marked_understood_whose_key_words_are_not_in_the_request_is_a_gu
     assert isinstance(answer, SetupCardAnswer)
     guessed = next(r for r in answer.rows if r.kind == kind)
     assert (guessed.state, guessed.note) == ("changed", FILLED_IN)
+
+
+@pytest.mark.parametrize(
+    ("text", "state", "task", "expected"),
+    [
+        ("Every Friday at 4pm", "understood", "Every Friday, sum up the closed tickets", "missing"),
+        ("Every Friday at 16:00", "changed", "Every Friday, sum up the closed tickets", "missing"),
+        ("Every day at 9am", "understood", "Every morning, list the open tickets", "missing"),
+        (
+            "Every Friday at 4pm",
+            "understood",
+            "Every Friday at 4pm, sum up the tickets",
+            "understood",
+        ),
+        ("Every Friday", "understood", "Every week, sum up the closed tickets", "changed"),
+        ("Every weekday", "understood", "Monday to Friday, list the open tickets", "changed"),
+        ("Every Friday", "understood", "Every Friday, sum up the closed tickets", "understood"),
+    ],
+    ids=[
+        "a-time",
+        "a-time-the-model-called-a-guess",
+        "morning",
+        "said-time",
+        "a-day",
+        "weekday",
+        "said-day",
+    ],
+)
+def test_a_time_the_request_never_said_is_asked_for_and_a_day_is_shown_as_a_guess(
+    text: str, state: str, task: str, expected: str
+):
+    rows = [
+        row("schedule", text, state, "A guess."),
+        row("look_for", "Tickets"),
+        row("do", "List them"),
+    ]
+    answer = answer_of(read(*rows), task)
+    assert isinstance(answer, SetupCardAnswer)
+    schedule = answer.rows[0]
+    assert schedule.state == expected
+    if expected == "missing":
+        day = text.split(" at ")[0]
+        assert (schedule.text, schedule.note) == ("", NO_TIME_BUT.format(day))
+    if expected == "changed":
+        assert (schedule.text, schedule.note) == (text, FILLED_IN)
+
+
+def test_a_schedule_that_is_only_a_guessed_time_is_asked_for_with_the_plain_note():
+    rows = [row("schedule", "9am"), row("look_for", "Open tickets"), row("do", "List them")]
+    answer = answer_of(read(*rows), "List the open tickets")
+    assert isinstance(answer, SetupCardAnswer)
+    assert (answer.rows[0].state, answer.rows[0].note) == ("missing", NO_TIME_SAID)
 
 
 def test_jira_and_the_persons_own_numbers_do_not_make_a_part_a_guess():
@@ -158,6 +211,57 @@ def test_a_field_change_on_tickets_is_a_part_with_a_new_tool_in_jira():
     offered = next(r for r in answer.rows if r.kind == "do")
     assert (offered.text, offered.state) == ("Create one ticket that lists them", "changed")
     assert offered.note == 'Suggested instead of "Change their component".'
+
+
+def test_a_filter_on_a_field_the_agents_cant_read_is_a_part_with_the_same_tickets_offered():
+    task = "List bug tickets in MOCK in the Backend component"
+    rows = (
+        row("schedule", "", "missing"),
+        row("look_for", "Bug tickets in MOCK in the Backend component"),
+        row("do", "List them"),
+        row("where", "Jira project MOCK"),
+    )
+    answer = answer_of(read(*rows, name="Backend bug list"), task)
+    assert isinstance(answer, PartAnswer)
+    assert [(c.kind, c.needs, c.system) for c in answer.cant] == [("look_for", "new_tool", "Jira")]
+    assert answer.cant[0].note.startswith("I can't tell a ticket's component yet.")
+    offered = next(r for r in answer.rows if r.kind == "look_for")
+    assert (offered.text, offered.state) == ("Bug tickets in MOCK", "changed")
+    assert offered.note == 'Suggested instead of "Bug tickets in MOCK in the Backend component".'
+
+
+def test_an_alternative_that_still_reads_the_field_is_offered_without_it():
+    task = "Find bug tickets in MOCK and list them with their components"
+    rows = (
+        row("schedule", "", "missing"),
+        row("look_for", "Bug tickets in MOCK"),
+        row(
+            "do",
+            "List them with their components",
+            "cant_do",
+            "The search cannot see a ticket's component.",
+            "Create one ticket that lists the bug tickets and their component(s)",
+        ),
+        row("where", "", "missing"),
+    )
+    answer = answer_of(read(*rows), task)
+    assert isinstance(answer, PartAnswer)
+    offered = next(r for r in answer.rows if r.kind == "do")
+    assert offered.text == "Create one ticket that lists the bug tickets"
+    assert not any("component" in r.text for r in answer.rows)
+
+
+def test_a_field_read_with_nothing_left_to_look_for_is_a_cant_with_no_card():
+    rows = (
+        row("schedule", "", "missing"),
+        row("look_for", "Components of every open ticket"),
+        row("do", "List them"),
+        row("where", "", "missing"),
+    )
+    answer = answer_of(read(*rows), "List the components of every open ticket")
+    assert isinstance(answer, CantAnswer)
+    assert answer.alternative is None
+    assert [(c.needs, c.system) for c in answer.cant] == [("new_tool", "Jira")]
 
 
 def test_email_is_a_cant_for_a_new_system_with_the_checked_alternative():
@@ -247,6 +351,22 @@ def test_a_vulnerability_check_is_a_cant_that_offers_to_watch_the_named_software
     assert answer.alternative == WatchlistAnswer(word="vulnerabilities", software="Log4j")
     unnamed = answer_of(read(*rows), "Check our packages for security advisories")
     assert isinstance(unnamed, CantAnswer) and unnamed.alternative is None
+
+
+def test_a_vulnerability_word_or_a_system_named_as_software_gets_no_watch():
+    rows = (
+        row("schedule", "", "missing"),
+        row("look_for", "Software vulnerabilities in NVD", "cant_do", "No tool checks.", None),
+        row("do", "", "missing"),
+        row("where", "", "missing"),
+    )
+    answer = answer_of(read(*rows, software="NVD"), "Monitor software vulnerabilities in NVD")
+    assert isinstance(answer, CantAnswer) and answer.alternative is None
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word="version", software="Jira"),
+        "Tell me when Jira has a new version",
+    )
+    assert answer == WhichSoftwareAnswer(word="version")
 
 
 def test_a_release_request_goes_to_the_watchlist_with_the_requests_own_word():
@@ -369,6 +489,12 @@ def test_nothing_understood_is_the_abilities_answer():
             "Every Monday, list open tickets",
         ),
         ("File the ticket, no approval needed", "File the ticket"),
+        ("Create the ticket, no need for anyone to sign off", "Create the ticket"),
+        ("Just do it without checking with Bob", "do it"),
+        ("Create the ticket with no sign off", "Create the ticket"),
+        ("Create the ticket, no approval", "Create the ticket"),
+        ("Create the ticket without Teams approval", "Create the ticket"),
+        ("Create the ticket and I'll approve it myself", "Create the ticket"),
     ],
 )
 def test_a_request_to_skip_a_yes_is_refused_before_anything_else(task: str, rest: str):
@@ -391,9 +517,14 @@ def test_a_request_to_skip_a_yes_is_refused_before_anything_else(task: str, rest
         "Without asking me each time, list the tickets",
         "Every Monday, list the tickets and ask an Approver to approve each one",
         "Automatically list the open tickets every morning",
+        "Find tickets in MOCK without an approver",
+        "List the tickets that were auto-approved last week",
+        "Show requests approved automatically by mistake",
+        "Don't ask the team, just tell me what you can do",
+        "Every Monday, list open tickets without asking for confirmation from me",
     ],
 )
-def test_the_products_own_words_are_not_refused(task: str):
+def test_the_products_own_words_and_a_filter_on_tickets_are_not_refused(task: str):
     answer = answer_of(read(*FOLLOW_UP_ROWS), task)
     assert not isinstance(answer, RefusedAnswer)
 
