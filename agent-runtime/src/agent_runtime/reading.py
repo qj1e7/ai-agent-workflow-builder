@@ -777,9 +777,26 @@ def render_ticket(read: TicketRead, text: str) -> Rendered:
         shown = {"list": "List them", "count": "Count them", "summary": "Sum them up"}[read.says]
         shown += with_details
     row = UnderstoodRow(
-        kind="do", text=plain(shown, TEXT_LIMIT), state="understood", note=_note(text, said, True)
+        kind="do",
+        text=plain(shown, TEXT_LIMIT),
+        state="understood",
+        note=_note(text, _joined(text, verbatim, also), True),
     )
     return Rendered(row, frozenset(explained), said, also)
+
+
+def _joined(
+    text: str, said: tuple[int, int] | None, also: tuple[int, int] | None
+) -> tuple[int, int] | None:
+    """The request's words for the ticket, as one span when the model's quote and the request's
+    own words for the new ticket stand together ("create one follow-up ticket that lists
+    them" for a quote of "lists them"), so the note quotes the person's whole phrase."""
+    if said is None or also is None:
+        return said if said is not None else also
+    start, end = min(said[0], also[0]), max(said[1], also[1])
+    gap = text[min(said[1], also[1]) : max(said[0], also[0])]
+    between = [_low(t) for t, _, _ in _request_tokens(gap)]
+    return (start, end) if all(t in FILLER for t in between) else said
 
 
 def render_place(read: PlaceRead, text: str) -> Rendered:
@@ -1055,6 +1072,11 @@ def leftovers(
                 region |= _region(tokens, clause_of, core, r.explained)
         explains.append({i for i in region if _low(tokens[i][0]) in r.explained})
     known = set[int]().union(*explains) if explains else set[int]()
+    # A cover inside the search's own quote ("by me" in "the PAY tickets opened by me") would
+    # hide a filter the search can't run, so the staff member's attention is only ever theirs
+    # to skip outside it.
+    quoted = [r.said for r in rendered if r.row.kind == "look_for" and r.said is not None]
+    covered = [(a, b) for a, b in covered if not any(q[0] <= a and b <= q[1] for q in quoted)]
     known |= {
         i
         for i, (_, start, end) in enumerate(tokens)

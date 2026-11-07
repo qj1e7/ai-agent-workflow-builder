@@ -798,6 +798,42 @@ def test_a_structure_explains_its_words_only_where_it_stands(
     assert rows_of(answer)[2][1] == "Create one ticket that lists them"
 
 
+def test_the_do_rows_note_quotes_the_persons_whole_phrase_for_the_ticket():
+    """The model quoted only "lists them"; the ticket also stands on the request's own "create
+    one follow-up ticket", and the two stand together, so the note quotes the whole phrase."""
+    read_ = follow_up().model_copy(
+        update={"ticket": TicketRead(creates=True, says="list", said="lists them")}
+    )
+    answer = answer_of(read_, FOLLOW_UP_TASK)
+    assert isinstance(answer, SetupCardAnswer)
+    assert (
+        answer.rows[2].note == 'Read from your words "create one follow-up ticket that lists them".'
+    )
+
+
+def test_an_only_me_cover_inside_the_searchs_quote_hides_nothing():
+    """The model called "by me" the staff member's own attention; it stands inside the search's
+    quote, where it is the reporter, so it comes back with its verb."""
+    task = (
+        "Every Monday, list the PAY tickets opened by me in the last 14 days and raise one "
+        "ticket that lists them"
+    )
+    answer = answer_of(
+        read(
+            skips_the_yes=SkipRead(whose="only_me", said="by me"),
+            schedule="Every Monday",
+            search=search(
+                project="PAY",
+                created=DaysRead(how="within", days=14),
+                said="the PAY tickets opened by me in the last 14 days",
+            ),
+            ticket=TicketRead(creates=True, says="list", said="raise one ticket that lists them"),
+        ),
+        task,
+    )
+    assert isinstance(answer, PartAnswer | CantAnswer) and cant_of(answer) == ["opened by me"]
+
+
 def test_a_detail_the_request_never_asked_for_is_dropped_from_the_do_row():
     task = "Every Monday, list the open SUP bugs and create one ticket that lists them"
     answer = answer_of(
