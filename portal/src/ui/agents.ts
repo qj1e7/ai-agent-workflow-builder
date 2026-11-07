@@ -1,14 +1,15 @@
 import { pickStable } from './pickStable'
 
-export type Accessory = 'headset' | 'magnifier' | 'wrench' | 'none'
+/** The small glyph on an Orb's badge. An agent without a known job has none, so the badge never claims one. */
+export type Job = 'magnifier' | 'wrench'
 
 export interface AgentIdentity {
   readonly id: string
   readonly name: string
-  readonly accessory: Accessory
-  /** A CSS colour for the accessory, the acting ring and the name beside the face. It follows the theme. */
+  readonly job: Job | undefined
+  /** A CSS colour for the Orb, its badge and the name beside it. It follows the theme. */
   readonly hue: string
-  /** A CSS colour for the head. It stays light in both themes. */
+  /** A CSS colour for the Orb's light side. It stays light in both themes. */
   readonly tint: string
 }
 
@@ -20,19 +21,19 @@ interface Colours {
 const known: Readonly<Record<string, Omit<AgentIdentity, 'id'>>> = {
   planner: {
     name: 'Planner',
-    accessory: 'headset',
+    job: undefined,
     hue: 'var(--lead)',
     tint: 'var(--lead-tint)',
   },
   version_checker: {
     name: 'Version checker',
-    accessory: 'magnifier',
+    job: 'magnifier',
     hue: 'var(--checker)',
     tint: 'var(--checker-tint)',
   },
   troubleshooter: {
     name: 'AI troubleshooter',
-    accessory: 'wrench',
+    job: 'wrench',
     hue: 'var(--trouble)',
     tint: 'var(--trouble-tint)',
   },
@@ -53,8 +54,8 @@ function sentenceCase(id: string): string {
 }
 
 /**
- * Every agent has a face. A known agent has its own accessory and colours. Any other id gets a plain face in one of
- * the fixed agent colours, chosen from the id, so it looks the same on every screen and in every run.
+ * Every agent has a face: the Planner is the Visor bot, every other agent an Orb. A known agent has its own job badge
+ * and colours. Any other id gets a plain Orb in one of the fixed agent colours, chosen from the id, so it looks the same on every screen and in every run.
  */
 export function agentIdentity(id: string, display?: string): AgentIdentity {
   const registered = known[id]
@@ -62,7 +63,7 @@ export function agentIdentity(id: string, display?: string): AgentIdentity {
   return {
     id,
     name: display ?? sentenceCase(id),
-    accessory: 'none',
+    job: undefined,
     ...pickStable(OTHER_AGENT_COLOURS, id),
   }
 }
