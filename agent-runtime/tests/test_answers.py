@@ -548,3 +548,38 @@ def test_a_watchlist_label_that_is_not_a_watchlist_word_takes_the_requests_own(
     )
     found = answer.alternative if isinstance(answer, CantAnswer) else answer
     assert found == WatchlistAnswer(word=word, software="Kubernetes")
+
+
+def test_a_common_word_the_model_calls_software_gets_no_watch():
+    task = "Check our packages for security advisories"
+    rows = (
+        row("schedule", "", "missing"),
+        row("look_for", "Security advisories for our packages", "cant_do", "No tool checks.", None),
+        row("do", "", "missing"),
+        row("where", "", "missing"),
+    )
+    answer = answer_of(read(*rows, software="packages"), task)
+    assert isinstance(answer, CantAnswer) and answer.alternative is None
+    plain = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word="versions", software="versions"),
+        "Keep track of our versions",
+    )
+    assert plain == WhichSoftwareAnswer(word="versions")
+
+
+def test_a_field_change_whose_text_the_model_left_empty_is_still_a_part():
+    rows = (
+        row("schedule", "", "missing"),
+        row("look_for", "Bug tickets in MOCK"),
+        row(
+            "do",
+            "",
+            "cant_do",
+            "The tools cannot change a ticket's component.",
+            "Create one ticket that lists them",
+        ),
+        row("where", "", "missing"),
+    )
+    answer = answer_of(read(*rows), COMPONENT_TASK)
+    assert isinstance(answer, PartAnswer)
+    assert [(c.needs, c.system) for c in answer.cant] == [("new_tool", "Jira")]

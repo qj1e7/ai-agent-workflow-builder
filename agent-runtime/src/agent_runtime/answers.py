@@ -23,6 +23,7 @@ from agent_runtime.abilities import (
     vulnerability_phrase,
     why_not,
     without_the_skip,
+    words,
 )
 from agent_runtime.contract import (
     AbilitiesAnswer,
@@ -70,6 +71,12 @@ CHOOSE_INSTEAD: Final = "Please choose something I can do instead."
 FILLED_IN: Final = "I filled this in. Your words didn't say it, so please check it."
 SUGGESTED: Final = 'Suggested instead of "{}".'
 ARTICLES: Final = re.compile(r"^(?:the|my|our|a|an)\s+", re.IGNORECASE)
+NOT_SOFTWARE: Final = words(
+    "software package packages dependency dependencies library libraries tool tools app apps "
+    "system systems service services component components version versions release releases "
+    "code"
+)
+"""Common words the model names as software, which no watch can be made for."""
 
 type AsksAbout = Literal["none", "my_workflows", "why_stopped", "needs_me", "abilities"]
 
@@ -95,8 +102,8 @@ ANSWER_SYSTEM: Final = (
     "watchlist, where the team keeps all its software. Then set belongs_on_watchlist to true, "
     "copy the word from the request that made you think so, and name the software if the "
     "request names one. When the request also asks for something else, such as a weekly ticket "
-    "list, read only that other part back in rows, and leave the software out of them. "
-    "Otherwise give no rows.\n"
+    "list, read that other part back in rows as fully as you would a task of its own, and "
+    "leave only the software part out of the rows. Otherwise give no rows.\n"
     "A request for known vulnerabilities, CVEs, security advisories or security patches does "
     "not belong on the Software watchlist, even if it names software or releases, because no "
     "tool checks for them yet. Set belongs_on_watchlist to false, read it back in parts, and "
@@ -270,13 +277,22 @@ def _is_part(rows: list[UnderstoodRow], cant: list[CantRow]) -> bool:
     """A part answer: the platform can find what they asked for, and each part it can't do is
     a field on Jira tickets, which a new tool could set. Any other can't do part is a can't."""
     finds = any(r.kind == "look_for" and r.state in ACCEPTED for r in rows)
-    return finds and all(c.needs == "new_tool" and sets_a_ticket_field(c.text) for c in cant)
+    fields = all(c.needs == "new_tool" and sets_a_ticket_field(c.text or c.note) for c in cant)
+    return finds and fields
+
+
+def _software_of(read: TaskRead, request: str) -> str | None:
+    """The software the model named, as the request wrote it, unless it is a common word."""
+    software = whole_word_of(request, read.software)
+    if software is None or software.casefold() in NOT_SOFTWARE:
+        return None
+    return software
 
 
 def _watch_instead(cant: list[CantRow], read: TaskRead, request: str) -> WatchlistAnswer | None:
     """Watching software for new releases instead: for a vulnerability check, only when the
     software is named; for any other release request, even when it isn't."""
-    software = whole_word_of(request, read.software)
+    software = _software_of(read, request)
     if _asks_for_vulnerabilities(cant):
         asked = " ".join(f"{c.text} {c.note}" for c in cant)
         word = vulnerability_phrase(request) or vulnerability_phrase(asked)
@@ -301,7 +317,8 @@ def _from_rows(read: TaskRead, request: str) -> PlannerAnswer:
     name = _name_of(read.name, request)
     if not cant_rows:
         return SetupCardAnswer(name=name, rows=rows)
-    cant = [_cant_row(row, _source_of(cant_rows)) for row in cant_rows]
+    source = _source_of(cant_rows)
+    cant = [_cant_row(row, source) for row in cant_rows]
     offered = _offered(read.rows, request)
     if offered is not None and _is_part(rows, cant):
         return PartAnswer(name=name, rows=offered, cant=cant)
@@ -331,7 +348,7 @@ def _watchlist(read: TaskRead, request: str) -> PlannerAnswer | None:
     )
     if word is None:
         return None
-    software = whole_word_of(request, read.software)
+    software = _software_of(read, request)
     security = vulnerability_phrase(request)
     if security is not None:
         cant = CantRow(
