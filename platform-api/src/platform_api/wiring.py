@@ -12,16 +12,23 @@ from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
 from platform_api.orchestration.agents import HttpAgentRuntime
 from platform_api.orchestration.connections import (
+    PRACTICE,
+    TEAMS_NOT_CHECKED,
+    Checked,
     Connections,
     Entry,
     GitHubChecker,
+    Identity,
     JiraChecker,
     ModelView,
+    Observed,
+    ReadFresh,
+    WatchedChannel,
     github_probe,
+    identity_of,
     jira_probe,
     model_probe,
-    source_of,
-    teams_probe,
+    practice_teams,
 )
 from platform_api.orchestration.dispatch import ApprovalChannel, N8nWebhooks
 from platform_api.orchestration.jira import JiraWriteConnector
@@ -155,31 +162,50 @@ def connections_for(
     agents: GitHubChecker,
     models: ModelView,
 ) -> tuple[Connections, ApprovalChannel]:
-    """The connection checks, and the approval channel the outbox posts through."""
+    """The connection checks, and the approval channel the outbox posts through. Each
+    connection's identity is worked out here from the settings, and nowhere else: the practice
+    copy, or the adapter with a fingerprint of the address and the key."""
+    jira_settings = settings.jira
+    jira_identity = (
+        PRACTICE
+        if jira_settings.base_url is None
+        else identity_of(
+            "jira",
+            jira_settings.base_url,
+            jira_settings.flavor,
+            jira_settings.email or "",
+            jira_settings.token or "",
+        )
+    )
+    teams = (
+        Entry("teams", "Teams", PRACTICE, Checked(practice_teams))
+        if settings.teams_webhook_url is None
+        else Entry(
+            "teams",
+            "Teams",
+            identity_of(channel.adapter, settings.teams_webhook_url),
+            Observed(TEAMS_NOT_CHECKED),
+        )
+    )
     connections = Connections(
         db,
         [
             Entry(
                 "jira",
                 "Jira",
-                settings.jira.practice,
-                jira_probe(jira, "Jira", key_hint(settings.jira.token)),
-                source_of("jira", settings.jira.base_url),
+                jira_identity,
+                Checked(jira_probe(jira, "Jira", key_hint(jira_settings.token))),
             ),
-            Entry("github", "GitHub", False, github_probe(agents), "github"),
-            Entry(
-                "teams",
-                "Teams",
-                settings.teams_webhook_url is None,
-                teams_probe(
-                    db, practice=settings.teams_webhook_url is None, adapter=channel.adapter
-                ),
-                source_of(channel.adapter, settings.teams_webhook_url),
-            ),
-            Entry("model", "AI model", False, model_probe(models), "model", live=True),
+            # GitHub's address and key are the agent runtime's settings, which platform-api cannot
+            # see, so a change there is found by the next check, not here.
+            Entry("github", "GitHub", Identity("github"), Checked(github_probe(agents))),
+            teams,
+            Entry("model", "AI model", Identity("model"), ReadFresh(model_probe(models))),
         ],
     )
-    return connections, channel
+    if teams.practice:
+        return connections, channel
+    return connections, WatchedChannel(channel, teams.identity, connections)
 
 
 async def build(settings: Settings) -> Services:

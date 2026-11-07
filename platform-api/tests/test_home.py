@@ -549,8 +549,9 @@ async def test_home_shows_an_operator_the_connections_that_do_not_work_and_start
     assert [p.calls for p in lab.rig.probes.values()] == [0, 0, 0, 0]
 
     lab.rig.probes["jira"].reading = DOWN
-    await lab.rig.connections.check_now("jira")
+    checked = await lab.rig.connections.check_now("jira")
     await lab.rig.connections.check_now("github")
+    assert checked is not None and checked.checked_at is not None
 
     (item,) = (await lab.home("alice"))["connections"]
     assert item == {
@@ -559,6 +560,7 @@ async def test_home_shows_an_operator_the_connections_that_do_not_work_and_start
         "state": "not_answering",
         "problem": "Jira is not answering.",
         "fix": "Nothing to change yet. Check again in a few minutes.",
+        "checked_at": checked.checked_at.isoformat().replace("+00:00", "Z"),
         "last_ok_at": None,
         "expires_at": None,
     }

@@ -314,7 +314,7 @@ SCRIPTED: list[Step] = [
 ]
 
 
-def generated(seed: int, length: int = 40) -> Iterator[Step]:
+def generated(seed: int, length: int = 50) -> Iterator[Step]:
     pick = random.Random(seed)
     makers: list[Callable[[], Step]] = [
         lambda: ("teams", pick.randrange(len(TEAMS_COPIES))),
@@ -356,7 +356,7 @@ async def walk(postgres: PostgresUrls) -> AsyncIterator[Walk]:
         await db.close()
 
 
-@pytest.mark.parametrize("seed", ["scripted", *range(12)])
+@pytest.mark.parametrize("seed", ["scripted", *range(20)])
 async def test_every_screen_shows_only_what_the_copy_in_use_now_was_found_to_do(
     walk: Walk, seed: str | int
 ):

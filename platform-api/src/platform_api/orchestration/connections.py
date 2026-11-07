@@ -3,15 +3,19 @@
 A check only reads. It never writes to Jira, GitHub or Teams, and it changes nothing the safety
 checker allows. A result holds plain words chosen here, never a system's own error text, and
 never a token, so it is safe to store and to show.
+
+Each result belongs to one identity: the practice copy, or the adapter with a one-way fingerprint
+of the address and the key it used. Only results of the identity in use now are read, so a new
+address or a new key starts with no history, and no screen shows what another copy found.
 """
 
 import asyncio
 import hashlib
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
-from typing import Any, Final, Literal, Protocol, cast
+from typing import Any, Final, Literal, NewType, Protocol, cast
 
 from platform_api.db import Database, UnitOfWork
 from platform_api.orchestration.agents import (
@@ -21,21 +25,32 @@ from platform_api.orchestration.agents import (
     GitHubProblem,
     GitHubWorking,
 )
+from platform_api.orchestration.dispatch import (
+    ApprovalChannel,
+    ApprovalNotice,
+    ApprovalOutcome,
+    MessageRef,
+)
 from platform_api.orchestration.jira_rest import JiraReach
 from platform_api.orchestration.model_settings import SettingsOff, SettingsState
-from platform_api.orchestration.store import ANNOUNCE, SHOW_OUTCOME
 
 log = logging.getLogger(__name__)
 
 type ConnectionId = Literal["jira", "github", "teams", "model"]
+type Found = Literal["working", "needs_attention", "not_answering", "not_set_up"]
+"""What a reading can find, and so the only states a kept result has."""
 type ConnectionState = Literal[
     "working", "needs_attention", "not_answering", "not_set_up", "not_checked"
 ]
 
+Identity = NewType("Identity", str)
+PRACTICE: Final = Identity("practice")
+
 CONNECTION_IDS: Final[tuple[ConnectionId, ...]] = ("jira", "github", "teams", "model")
 RECHECK_AFTER: Final = timedelta(hours=1)
-"""A scheduled tick checks a connection at most this often, because unauthenticated GitHub allows
-60 calls an hour."""
+"""A scheduled tick checks a working connection at most this often. One that does not work is
+checked on every tick, so its warning ends soon after it is fixed. Neither spends a limit:
+GitHub's rate limit call does not count against it, and Jira's check is one read."""
 EXPIRY_WARNING: Final = timedelta(days=14)
 """A key that runs out within this long is raised on Home."""
 CHECK_DEADLINE_SECONDS: Final = 15.0
@@ -43,6 +58,7 @@ CHECK_DEADLINE_SECONDS: Final = 15.0
 TEAMS_NOT_CHECKED: Final = (
     "Not checked yet. Teams is tried when the first approval request is sent."
 )
+TEAMS_REFUSED: Final = "Teams did not take the last message."
 NOT_ANSWERING: Final = "{name} is not answering."
 TOKEN_REFUSED: Final = "{name} does not accept the key."
 CHECK_FAILED: Final = "The check of {name} did not finish."
@@ -50,9 +66,9 @@ CHECK_FAILED: Final = "The check of {name} did not finish."
 
 @dataclass(frozen=True)
 class Reading:
-    """What one probe saw."""
+    """What one probe, or one real use, saw."""
 
-    state: ConnectionState
+    state: Found
     problem: str | None = None
     expires_at: datetime | None = None
     key_ends_in: str | None = None
@@ -62,52 +78,72 @@ class Probe(Protocol):
     async def __call__(self) -> Reading: ...
 
 
+def identity_of(adapter: str, *parts: str) -> Identity:
+    """The adapter, with a one-way fingerprint of everything that decides what it reaches, such
+    as the address and the key. A part can be a secret, so only the fingerprint is kept. A change
+    to any part is another identity."""
+    fingerprint = hashlib.sha256("\0".join(parts).encode()).hexdigest()[:16]
+    return Identity(f"{adapter}:{fingerprint}")
+
+
+@dataclass(frozen=True)
+class Checked:
+    """Asked on Check now and by the tick, and the result kept."""
+
+    probe: Probe
+
+
+@dataclass(frozen=True)
+class ReadFresh:
+    """Read on every view and never kept, because another screen owns the fact and a kept copy
+    could disagree with it."""
+
+    probe: Probe
+
+
+@dataclass(frozen=True)
+class Observed:
+    """Known only from real use, because a check may not post to the channel. Check now and the
+    tick try nothing, and `waiting` says so until the first result."""
+
+    waiting: str
+
+
+type Known = Checked | ReadFresh | Observed
+
+
 @dataclass(frozen=True)
 class Entry:
     id: ConnectionId
     name: str
-    practice: bool
-    probe: Probe
-    source: str = ""
-    """Which copy the probe talks to: "practice", or the adapter with a fingerprint of its
-    address. A stored result made by another source is another connection's history and is ignored,
-    so a practice copy's good result never stands in for a real one after go-live."""
-    live: bool = False
-    """A live connection is read fresh on every view and never stored, because another screen
-    owns the fact and a stored copy could disagree with it."""
+    identity: Identity
+    known: Known
 
-
-def source_of(kind: str, address: str | None) -> str:
-    """A name for the target that a stored result can be compared with. The address can hold a
-    key, so only a one-way fingerprint of it is kept."""
-    if address is None:
-        return "practice"
-    return f"{kind}:{hashlib.sha256(address.encode()).hexdigest()[:16]}"
+    @property
+    def practice(self) -> bool:
+        return self.identity == PRACTICE
 
 
 @dataclass(frozen=True)
 class Shown:
     """The result a person is shown, and the one different result waiting for a second to agree."""
 
-    state: ConnectionState
+    state: Found
     problem: str | None
     checked_at: datetime
+    """When the reading that set the state was made."""
     last_ok_at: datetime | None
     expires_at: datetime | None
     key_ends_in: str | None
-    unconfirmed_state: ConnectionState | None = None
+    unconfirmed_state: Found | None = None
 
 
 def settle(shown: Shown | None, reading: Reading, now: datetime, *, at_once: bool) -> Shown:
-    """The new result after one reading. Check now shows what it found. A scheduled check
-    changes the state only when two readings in a row agree, so one failed call raises no alarm."""
+    """The new result after one reading. Check now shows what it found. A scheduled check, or a
+    real use, changes the state only when two readings in a row agree, so one failed call raises
+    no alarm."""
     last_ok = reading_ok_at(shown, reading, now)
-    first_result = shown is not None and shown.state == "not_checked"
-    if shown is None or at_once or first_result or reading.state == shown.state:
-        return Shown(
-            reading.state, reading.problem, now, last_ok, reading.expires_at, reading.key_ends_in
-        )
-    if shown.unconfirmed_state == reading.state:
+    if shown is None or at_once or reading.state in (shown.state, shown.unconfirmed_state):
         return Shown(
             reading.state, reading.problem, now, last_ok, reading.expires_at, reading.key_ends_in
         )
@@ -121,9 +157,9 @@ def reading_ok_at(shown: Shown | None, reading: Reading, now: datetime) -> datet
 
 
 def due(shown: Shown | None, now: datetime) -> bool:
-    """A tick checks a connection that was never checked, one waiting for a second reading or for
-    its first result, and any other after an hour."""
-    if shown is None or shown.unconfirmed_state is not None or shown.state == "not_checked":
+    """A tick checks a connection never checked with what it uses now, one that does not work or
+    waits for a second reading, and a working one after an hour."""
+    if shown is None or shown.state != "working" or shown.unconfirmed_state is not None:
         return True
     return now - shown.checked_at >= RECHECK_AFTER
 
@@ -135,8 +171,8 @@ class ConnectionCheck:
     practice: bool
     state: ConnectionState
     checked_at: datetime | None
-    """None while nothing has been tried, and for a live connection, which is read and not
-    checked, so no time implies a test happened."""
+    """None while nothing has been tried with what it uses now, and for one read fresh, which is
+    not checked, so no time implies a test happened."""
     last_ok_at: datetime | None
     problem: str | None
     key_ends_in: str | None
@@ -174,41 +210,46 @@ def fix_for(entry: Entry, state: ConnectionState, *, expiring: bool) -> str | No
 
 
 class ConnectionStore:
-    async def load_all(
-        self, uow: UnitOfWork, sources: Mapping[ConnectionId, str]
+    async def load(
+        self, uow: UnitOfWork, identities: Mapping[ConnectionId, Identity]
     ) -> dict[ConnectionId, Shown]:
-        """Only results made by the source each connection has now."""
+        """The result kept for each connection's identity now. Other identities' results stay in
+        the table, and are read again only if that identity comes back."""
+        ids = list(identities)
         rows = await (
-            await uow.conn.execute("SELECT * FROM orchestration.connection_checks")
+            await uow.conn.execute(
+                "SELECT c.* FROM orchestration.connection_checks c "
+                "JOIN unnest(%s::text[], %s::text[]) AS now (connection, identity) "
+                "USING (connection, identity)",
+                (ids, [identities[id] for id in ids]),
+            )
         ).fetchall()
-        return {
-            cast(ConnectionId, row["connection"]): _shown(row)
-            for row in rows
-            if sources.get(cast(ConnectionId, row["connection"])) == row["source"]
-        }
+        return {cast(ConnectionId, row["connection"]): _shown(row) for row in rows}
 
-    async def lock(self, uow: UnitOfWork, id: ConnectionId, source: str) -> Shown | None:
+    async def lock(self, uow: UnitOfWork, id: ConnectionId, identity: Identity) -> Shown | None:
         row = await (
             await uow.conn.execute(
-                "SELECT * FROM orchestration.connection_checks WHERE connection = %s FOR UPDATE",
-                (id,),
+                "SELECT * FROM orchestration.connection_checks "
+                "WHERE connection = %s AND identity = %s FOR UPDATE",
+                (id, identity),
             )
         ).fetchone()
-        return None if row is None or row["source"] != source else _shown(row)
+        return None if row is None else _shown(row)
 
-    async def save(self, uow: UnitOfWork, id: ConnectionId, source: str, shown: Shown) -> None:
+    async def save(
+        self, uow: UnitOfWork, id: ConnectionId, identity: Identity, shown: Shown
+    ) -> None:
         await uow.conn.execute(
-            "INSERT INTO orchestration.connection_checks (connection, source, state, problem, "
+            "INSERT INTO orchestration.connection_checks (connection, identity, state, problem, "
             "checked_at, last_ok_at, expires_at, key_ends_in, unconfirmed_state) "
             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
-            "ON CONFLICT (connection) DO UPDATE SET source = EXCLUDED.source, "
-            "state = EXCLUDED.state, "
+            "ON CONFLICT (connection, identity) DO UPDATE SET state = EXCLUDED.state, "
             "problem = EXCLUDED.problem, checked_at = EXCLUDED.checked_at, "
             "last_ok_at = EXCLUDED.last_ok_at, expires_at = EXCLUDED.expires_at, "
             "key_ends_in = EXCLUDED.key_ends_in, unconfirmed_state = EXCLUDED.unconfirmed_state",
             (
                 id,
-                source,
+                identity,
                 shown.state,
                 shown.problem,
                 shown.checked_at,
@@ -222,13 +263,13 @@ class ConnectionStore:
 
 def _shown(row: dict[str, Any]) -> Shown:
     return Shown(
-        state=cast(ConnectionState, row["state"]),
+        state=cast(Found, row["state"]),
         problem=row["problem"],
         checked_at=row["checked_at"],
         last_ok_at=row["last_ok_at"],
         expires_at=row["expires_at"],
         key_ends_in=row["key_ends_in"],
-        unconfirmed_state=cast(ConnectionState | None, row["unconfirmed_state"]),
+        unconfirmed_state=cast(Found | None, row["unconfirmed_state"]),
     )
 
 
@@ -242,46 +283,59 @@ class Connections:
         self._db = db
         self._entries: dict[ConnectionId, Entry] = {entry.id: entry for entry in entries}
         self._store = store or ConnectionStore()
-        self._sources: dict[ConnectionId, str] = {e.id: e.source for e in entries}
+        self._identities: dict[ConnectionId, Identity] = {e.id: e.identity for e in entries}
 
     async def view(self) -> list[ConnectionCheck]:
-        """Every connection with its last result. One never checked is checked now, once."""
-        async with self._db.transaction("orchestration") as uow:
-            stored = await self._store.load_all(uow, self._sources)
+        """Every connection with its last result. One the platform checks, and never checked with
+        what it uses now, is checked now, once."""
+        kept = await self._kept()
+        shown: dict[ConnectionId, Shown | None] = {}
         for id, entry in self._entries.items():
-            if entry.live:
-                stored[id] = await self._live(entry)
-            elif id not in stored:
-                stored[id] = await self._check(entry, at_once=True)
+            match entry.known:
+                case ReadFresh(probe):
+                    shown[id] = await self._read_fresh(entry, probe)
+                case Checked(probe) if id not in kept:
+                    shown[id] = await self._check(entry, probe, at_once=True)
+                case _:
+                    shown[id] = kept.get(id)
         now = self._db.clock()
-        return [self._present(self._entries[id], stored[id], now) for id in self._entries]
+        return [self._present(entry, shown[id], now) for id, entry in self._entries.items()]
 
     async def check_now(self, id: str) -> ConnectionCheck | None:
-        """Checks one connection and shows what was found. None for a name nobody has."""
+        """Checks one connection and shows what was found. One known only from real use is shown
+        as it is, because a check may not post. None for a name nobody has."""
         entry = next((e for e in self._entries.values() if e.id == id), None)
         if entry is None:
             return None
-        shown = await (self._live(entry) if entry.live else self._check(entry, at_once=True))
+        match entry.known:
+            case Checked(probe):
+                shown = await self._check(entry, probe, at_once=True)
+            case ReadFresh(probe):
+                shown = await self._read_fresh(entry, probe)
+            case Observed():
+                shown = (await self._kept()).get(entry.id)
         return self._present(entry, shown, self._db.clock())
 
     async def check_due(self) -> None:
         """The scheduled tick's part: checks what is due, and lets nothing go wrong on the way."""
-        async with self._db.transaction("orchestration") as uow:
-            stored = await self._store.load_all(uow, self._sources)
+        kept = await self._kept()
         now = self._db.clock()
-        waiting = [e for e in self._entries.values() if not e.live and due(stored.get(e.id), now)]
-        await asyncio.gather(*(self._check(e, at_once=False) for e in waiting))
+        waiting = [
+            (entry, entry.known.probe)
+            for entry in self._entries.values()
+            if isinstance(entry.known, Checked) and due(kept.get(entry.id), now)
+        ]
+        await asyncio.gather(*(self._check(e, probe, at_once=False) for e, probe in waiting))
 
     async def needing_attention(self) -> list[ConnectionCheck]:
         """Connections that do not work, and keys that run out soon. Reads what was stored and
         asks nobody, so a fresh stack shows none until a check found something."""
-        async with self._db.transaction("orchestration") as uow:
-            stored = await self._store.load_all(uow, self._sources)
+        kept = await self._kept()
         now = self._db.clock()
         found = [
             self._present(self._entries[id], shown, now)
-            for id, shown in stored.items()
-            if id in self._entries and not self._entries[id].live
+            for id, shown in kept.items()
+            if not isinstance(self._entries[id].known, ReadFresh)
         ]
         trouble = [c for c in found if c.state in ("needs_attention", "not_answering")]
         ending = sorted(
@@ -291,20 +345,33 @@ class Connections:
         order = {id: place for place, id in enumerate(CONNECTION_IDS)}
         return sorted(trouble, key=lambda c: order[c.id]) + ending
 
-    async def _check(self, entry: Entry, *, at_once: bool) -> Shown:
-        reading = await self._read(entry)
+    async def observe(self, id: ConnectionId, identity: Identity, reading: Reading) -> None:
+        """What real use found, such as a post to Teams, kept for the identity that made it. As on
+        a tick, a state changes only when two results in a row agree."""
         async with self._db.transaction("orchestration") as uow:
             shown = settle(
-                await self._store.lock(uow, entry.id, entry.source),
+                await self._store.lock(uow, id, identity), reading, uow.now, at_once=False
+            )
+            await self._store.save(uow, id, identity, shown)
+
+    async def _kept(self) -> dict[ConnectionId, Shown]:
+        async with self._db.transaction("orchestration") as uow:
+            return await self._store.load(uow, self._identities)
+
+    async def _check(self, entry: Entry, probe: Probe, *, at_once: bool) -> Shown:
+        reading = await self._read(entry, probe)
+        async with self._db.transaction("orchestration") as uow:
+            shown = settle(
+                await self._store.lock(uow, entry.id, entry.identity),
                 reading,
                 uow.now,
                 at_once=at_once,
             )
-            await self._store.save(uow, entry.id, entry.source, shown)
+            await self._store.save(uow, entry.id, entry.identity, shown)
         return shown
 
-    async def _live(self, entry: Entry) -> Shown:
-        reading = await self._read(entry)
+    async def _read_fresh(self, entry: Entry, probe: Probe) -> Shown:
+        reading = await self._read(entry, probe)
         now = self._db.clock()
         return Shown(
             reading.state,
@@ -315,23 +382,37 @@ class Connections:
             reading.key_ends_in,
         )
 
-    async def _read(self, entry: Entry) -> Reading:
+    async def _read(self, entry: Entry, probe: Probe) -> Reading:
         try:
             async with asyncio.timeout(CHECK_DEADLINE_SECONDS):
-                return await entry.probe()
+                return await probe()
         except Exception as error:
             # Only the type is logged, because an error can quote the address or a key.
             log.warning("the check of %s did not finish: %s", entry.id, type(error).__name__)
             return Reading("not_answering", CHECK_FAILED.format(name=entry.name))
 
-    def _present(self, entry: Entry, shown: Shown, now: datetime) -> ConnectionCheck:
+    def _present(self, entry: Entry, shown: Shown | None, now: datetime) -> ConnectionCheck:
+        if shown is None:
+            return ConnectionCheck(
+                id=entry.id,
+                name=entry.name,
+                practice=entry.practice,
+                state="not_checked",
+                checked_at=None,
+                last_ok_at=None,
+                problem=entry.known.waiting if isinstance(entry.known, Observed) else None,
+                key_ends_in=None,
+                expires_at=None,
+                fix=None,
+            )
+        fresh = isinstance(entry.known, ReadFresh)
         check = ConnectionCheck(
             id=entry.id,
             name=entry.name,
             practice=entry.practice,
             state=shown.state,
-            checked_at=None if shown.state == "not_checked" or entry.live else shown.checked_at,
-            last_ok_at=None if entry.live else shown.last_ok_at,
+            checked_at=None if fresh else shown.checked_at,
+            last_ok_at=None if fresh else shown.last_ok_at,
             problem=shown.problem,
             key_ends_in=shown.key_ends_in,
             expires_at=shown.expires_at,
@@ -372,7 +453,7 @@ def jira_probe(jira: JiraChecker, name: str, key_ends_in: str | None) -> Probe:
     return probe
 
 
-GITHUB_PROBLEMS: Final[dict[str, tuple[ConnectionState, str]]] = {
+GITHUB_PROBLEMS: Final[dict[str, tuple[Found, str]]] = {
     "token_refused": ("needs_attention", "GitHub does not accept the key."),
     "unreachable": ("not_answering", "GitHub is not answering."),
     "unexpected_answer": ("not_answering", "GitHub answered in a way the platform did not expect."),
@@ -407,34 +488,49 @@ def model_probe(models: ModelView) -> Probe:
     return probe
 
 
-def teams_probe(db: Database, *, practice: bool, adapter: str = "teams_workflows") -> Probe:
-    """The practice copy always takes a message. A real channel is judged by how the last
-    message the outbox tried to send through it went, because a check must not post to a channel.
-    Messages the practice copy took say nothing about the real channel, so only a message posted
-    through `adapter` counts, and a failed announcement, which was never posted, counts as one."""
+async def practice_teams() -> Reading:
+    """The practice copy of Teams always takes a message."""
+    return Reading("working")
 
-    async def probe() -> Reading:
-        if practice:
-            return Reading("working")
-        async with db.transaction("orchestration") as uow:
-            row = await (
-                await uow.conn.execute(
-                    "SELECT o.status FROM orchestration.outbox o "
-                    "LEFT JOIN orchestration.approval_messages m "
-                    "ON m.approval_id = o.payload->>'approval_id' "
-                    "WHERE o.kind IN (%s, %s) "
-                    "AND (o.status IN ('sent', 'given_up') OR "
-                    "(o.status = 'pending' AND o.last_error IS NOT NULL)) "
-                    "AND (m.adapter = %s OR "
-                    "(m.adapter IS NULL AND o.kind = %s AND o.status <> 'sent')) "
-                    "ORDER BY o.id DESC LIMIT 1",
-                    (ANNOUNCE, SHOW_OUTCOME, adapter, ANNOUNCE),
-                )
-            ).fetchone()
-        if row is None:
-            return Reading("not_checked", TEAMS_NOT_CHECKED)
-        if row["status"] != "sent":
-            return Reading("not_answering", "Teams did not take the last message.")
-        return Reading("working")
 
-    return probe
+class WatchedChannel:
+    """The approval channel, keeping how each post went as the result of the channel that
+    posted it. A real Teams channel is judged by its own posts, and a check never posts."""
+
+    def __init__(
+        self, channel: ApprovalChannel, identity: Identity, connections: Connections
+    ) -> None:
+        self._channel = channel
+        self._identity = identity
+        self._connections = connections
+
+    @property
+    def name(self) -> str:
+        return self._channel.name
+
+    @property
+    def adapter(self) -> str:
+        return self._channel.adapter
+
+    async def announce(self, notice: ApprovalNotice) -> MessageRef:
+        return await self._watched(self._channel.announce(notice))
+
+    async def update(self, ref: MessageRef, outcome: ApprovalOutcome) -> None:
+        await self._watched(self._channel.update(ref, outcome))
+
+    async def _watched[T](self, post: Awaitable[T]) -> T:
+        try:
+            result = await post
+        except Exception:
+            await self._keep(Reading("not_answering", TEAMS_REFUSED))
+            raise
+        await self._keep(Reading("working"))
+        return result
+
+    async def _keep(self, reading: Reading) -> None:
+        try:
+            await self._connections.observe("teams", self._identity, reading)
+        except Exception as error:
+            # The post's own result stands either way: a post that went out and then failed its
+            # outbox row would be posted again.
+            log.warning("the result of a Teams post was not kept: %s", type(error).__name__)

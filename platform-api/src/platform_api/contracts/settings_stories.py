@@ -108,7 +108,7 @@ def connections_view() -> ConnectionsView:
                 name="AI model",
                 practice=False,
                 state="not_set_up",
-                checked_at=CHECKED,
+                checked_at=None,
                 last_ok_at=None,
                 problem="No AI model is turned on.",
                 key_ends_in=None,

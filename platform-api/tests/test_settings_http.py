@@ -10,6 +10,8 @@ from platform_api.app import create_app
 from platform_api.db import Database
 from platform_api.orchestration.agents import Connected, FoundModel, ModelProblem, ModelTestPassed
 from platform_api.orchestration.connections import (
+    PRACTICE,
+    Checked,
     ConnectionCheck,
     Connections,
     Entry,
@@ -391,7 +393,7 @@ async def practice(db: Database):
     app = create_app(LOCAL_ENV)
     app.state.practice_jira = kit.store
     app.state.connections = Connections(
-        db, [Entry("jira", "Jira", True, jira_probe(kit.jira, "Jira", None))]
+        db, [Entry("jira", "Jira", PRACTICE, Checked(jira_probe(kit.jira, "Jira", None)))]
     )
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:

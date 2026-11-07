@@ -12,37 +12,41 @@ from platform_api.orchestration.agents import (
     GitHubProblem,
     GitHubWorking,
 )
-from platform_api.orchestration.approvals import (
-    AnyApprover,
-    ApprovalPolicy,
-    ApprovalRequest,
-    ApprovalStep,
-)
 from platform_api.orchestration.connections import (
     RECHECK_AFTER,
+    TEAMS_NOT_CHECKED,
+    Checked,
     ConnectionId,
     Connections,
     Entry,
+    Identity,
+    Observed,
+    ReadFresh,
     Reading,
     Shown,
+    WatchedChannel,
     due,
     github_probe,
+    identity_of,
     jira_probe,
     model_probe,
+    practice_teams,
     settle,
-    source_of,
-    teams_probe,
 )
-from platform_api.orchestration.dispatch import MessageRef
+from platform_api.orchestration.dispatch import (
+    ApprovalNotice,
+    ApprovalOutcome,
+    DispatchFailure,
+    MessageRef,
+)
 from platform_api.orchestration.jira_rest import JiraAuth, JiraReach, JiraRestAdapter
 from platform_api.orchestration.model_settings import SettingsState
-from platform_api.orchestration.runs import Pending
-from platform_api.orchestration.store import ANNOUNCE, SHOW_OUTCOME, START_LEG, RunRecord, Store
-from platform_api.orchestration.write_actions import Proposal, WriteAction, digest
-from platform_api.shared import ApprovalId, ProposalId, RunId
-from platform_api.wiring import KEY_HINT_MIN_LENGTH, key_hint
+from platform_api.orchestration.teams import TeamsStub
+from platform_api.settings import settings_from_env
+from platform_api.shared import ApprovalId, RunId
+from platform_api.wiring import KEY_HINT_MIN_LENGTH, approval_channel, connections_for, key_hint
 from tests.practice import BASE, PracticeKit, no_wait
-from tests.support import ALICE, NOW, SPEC
+from tests.support import LOCAL_ENV
 from tests.test_settings_http import ACTIVE
 
 pytestmark = pytest.mark.anyio
@@ -109,9 +113,11 @@ def test_working_again_sets_the_last_time_it_worked():
     assert healed.last_ok_at is not None and healed.last_ok_at > T0
 
 
-def test_a_tick_checks_what_was_never_checked_what_waits_for_a_second_reading_and_the_hourly():
+def test_a_tick_checks_what_was_never_checked_what_does_not_work_and_the_rest_hourly():
     assert due(None, T0)
     assert due(shown(unconfirmed_state="not_answering"), T0 + timedelta(minutes=5))
+    assert due(shown("not_answering"), T0 + timedelta(minutes=5))
+    assert due(shown("needs_attention"), T0 + timedelta(minutes=5))
     assert not due(shown(), T0 + RECHECK_AFTER - timedelta(seconds=1))
     assert due(shown(), T0 + RECHECK_AFTER)
 
@@ -146,7 +152,12 @@ class Rig:
         }
         self.probes = {id: Scripted() for id in names}
         entries = [
-            Entry(id, name, False, self.probes[id], live=id == "model")
+            Entry(
+                id,
+                name,
+                Identity(id),
+                ReadFresh(self.probes[id]) if id == "model" else Checked(self.probes[id]),
+            )
             for id, name in names.items()
         ]
         self.connections = Connections(self.db, entries)
@@ -205,6 +216,24 @@ async def test_a_tick_checks_only_what_is_due_and_needs_two_readings_to_raise_a_
     jira = next(c for c in await rig.connections.view() if c.id == "jira")
     assert jira.state == "not_answering"
     assert [p.calls for p in rig.probes.values()] == [3, 1, 1, 3]
+
+
+async def test_a_tick_checks_a_failing_connection_every_time_and_a_working_one_hourly(rig: Rig):
+    rig.probes["jira"].reading = DOWN
+    await rig.connections.check_now("jira")
+    await rig.connections.check_due()
+    await rig.connections.check_due()
+    assert [rig.probes[id].calls for id in ("jira", "github", "teams")] == [3, 1, 1]
+
+    rig.probes["jira"].reading = WORKING
+    await rig.connections.check_due()
+    jira = next(c for c in await rig.connections.view() if c.id == "jira")
+    assert jira.state == "not_answering"
+    await rig.connections.check_due()
+    jira = next(c for c in await rig.connections.view() if c.id == "jira")
+    assert jira.state == "working"
+    await rig.connections.check_due()
+    assert [rig.probes[id].calls for id in ("jira", "github", "teams")] == [5, 1, 1]
 
 
 async def _age(db: Database, connection: str, by: timedelta) -> None:
@@ -310,54 +339,55 @@ async def test_the_model_is_read_from_its_settings():
     assert off.state == "not_set_up"
 
 
-async def test_the_practice_teams_always_takes_a_message(db: Database):
-    assert await teams_probe(db, practice=True)() == Reading("working")
+async def test_the_practice_teams_always_takes_a_message():
+    assert await practice_teams() == Reading("working")
 
 
-REAL = "teams_workflows"
+REAL_TEAMS = identity_of("teams_workflows", "https://example.invalid/hook?sig=secret-value")
+NOTICE = ApprovalNotice(
+    run_id=RunId("run_t1"),
+    approval_id=ApprovalId("apr_t1"),
+    use_case_name="Watch LangGraph",
+    actions=("create a Jira ticket",),
+    link="/approvals/apr_t1",
+    open_url="http://localhost:8080/approvals/apr_t1",
+)
+OUTCOME = ApprovalOutcome("approved", ("Bob",), "Watch LangGraph", NOTICE.open_url)
 
 
-async def _post(db: Database, store: Store, kind: str, n: int, adapter: str | None) -> int:
-    """An outbox row for approval n, with a posted message when adapter is given. Returns its id."""
-    approval = ApprovalId(f"apr_t{n}")
-    action = WriteAction("jira", "create_ticket", {"project": "MOCK"}, {"title": "t"})
-    proposal = Proposal(ProposalId(f"prp_t{n}"), RUN, (action,), digest((action,)))
-    request = ApprovalRequest(
-        approval,
-        RUN,
-        proposal.id,
-        proposal.digest,
-        ApprovalPolicy((ApprovalStep("Team approver", AnyApprover()),)),
-        frozenset({ALICE.user_id}),
+@dataclass
+class Channel:
+    """A Teams channel that takes a post, or refuses the next `refusing` of them."""
+
+    refusing: int = 0
+    posts: int = 0
+    name: str = "Ops"
+    adapter: str = "teams_workflows"
+
+    async def announce(self, notice: ApprovalNotice) -> MessageRef:
+        await self._post()
+        return MessageRef(self.name, notice.approval_id, self.adapter)
+
+    async def update(self, ref: MessageRef, outcome: ApprovalOutcome) -> None:
+        await self._post()
+
+    async def _post(self) -> None:
+        self.posts += 1
+        if self.refusing:
+            self.refusing -= 1
+            raise DispatchFailure("Teams answered 500 at https://example.invalid/hook?sig=x")
+
+
+def real_teams(db: Database, channel: Channel) -> tuple[Connections, WatchedChannel]:
+    connections = Connections(
+        db, [Entry("teams", "Teams", REAL_TEAMS, Observed(TEAMS_NOT_CHECKED))]
     )
-    async with db.transaction("orchestration") as uow:
-        await store.insert_proposal(uow, proposal)
-        await store.insert_approval(uow, request)
-        if adapter is not None:
-            await store.save_message_ref(uow, approval, MessageRef("channel", f"m{n}", adapter))
-        await store.enqueue(uow, RUN, kind, {"approval_id": approval}, NOW)
-        row = await (
-            await uow.conn.execute(
-                "SELECT max(id) AS id FROM orchestration.outbox WHERE kind = %s", (kind,)
-            )
-        ).fetchone()
-    assert row is not None
-    return int(row["id"])
+    return connections, WatchedChannel(channel, REAL_TEAMS, connections)
 
 
-async def _insert_run(db: Database, store: Store) -> None:
-    async with db.transaction("orchestration") as uow:
-        pending = Pending(RUN, 1, None, NOW)
-        record = RunRecord(RUN, SPEC, ALICE.user_id, NOW, NOW, 1, pending, (), None)
-        await store.insert_run(uow, record, "k")
-
-
-async def test_a_real_teams_channel_with_no_history_is_not_checked_yet(db: Database):
-    result = await teams_probe(db, practice=False)()
-    assert result == Reading(
-        "not_checked", "Not checked yet. Teams is tried when the first approval request is sent."
-    )
-    connections = Connections(db, [Entry("teams", "Teams", False, teams_probe(db, practice=False))])
+async def test_a_real_teams_channel_with_no_post_yet_is_not_checked_and_never_tried(db: Database):
+    channel = Channel()
+    connections, _ = real_teams(db, channel)
     (teams,) = await connections.view()
     assert (teams.state, teams.checked_at, teams.last_ok_at, teams.fix) == (
         "not_checked",
@@ -365,97 +395,107 @@ async def test_a_real_teams_channel_with_no_history_is_not_checked_yet(db: Datab
         None,
         None,
     )
-    assert teams.problem == result.problem
-    assert await connections.needing_attention() == []
-
-
-async def test_the_first_outbox_result_turns_not_checked_into_a_state_at_once(db: Database):
-    store = Store()
-    await _insert_run(db, store)
-    connections = Connections(db, [Entry("teams", "Teams", False, teams_probe(db, practice=False))])
-    await connections.view()
-    first = await _post(db, store, ANNOUNCE, 1, REAL)
-    async with db.transaction("orchestration") as uow:
-        await store.outbox_sent(uow, first)
+    assert teams.problem == TEAMS_NOT_CHECKED
+    assert await connections.check_now("teams") == teams
     await connections.check_due()
+    assert await connections.view() == [teams]
+    assert await connections.needing_attention() == []
+    assert channel.posts == 0
+
+
+async def test_the_first_post_is_the_result_at_once(db: Database):
+    connections, watched = real_teams(db, Channel())
+    assert await watched.announce(NOTICE) == MessageRef("Ops", "apr_t1", "teams_workflows")
     (teams,) = await connections.view()
     assert (teams.state, teams.problem) == ("working", None)
-    assert teams.checked_at is not None and teams.last_ok_at is not None
+    assert teams.checked_at is not None and teams.last_ok_at == teams.checked_at
 
 
-async def test_a_first_failure_shows_not_answering_at_once(db: Database):
-    store = Store()
-    await _insert_run(db, store)
-    connections = Connections(db, [Entry("teams", "Teams", False, teams_probe(db, practice=False))])
-    await connections.view()
-    failing = await _post(db, store, ANNOUNCE, 1, None)
-    async with db.transaction("orchestration") as uow:
-        await store.outbox_retry(uow, failing, NOW, "Teams answered 500 at https://secret")
-    await connections.check_due()
+async def test_a_first_post_teams_refuses_shows_not_answering_without_its_error(db: Database):
+    connections, watched = real_teams(db, Channel(refusing=1))
+    with pytest.raises(DispatchFailure):
+        await watched.announce(NOTICE)
     (teams,) = await connections.view()
-    assert (teams.state, teams.last_ok_at) == ("not_answering", None)
-    assert "secret" not in repr(teams)
-
-
-async def test_messages_the_practice_copy_took_say_nothing_about_a_real_channel(db: Database):
-    store = Store()
-    await _insert_run(db, store)
-    probe = teams_probe(db, practice=False)
-    sent = await _post(db, store, ANNOUNCE, 1, "practice")
-    async with db.transaction("orchestration") as uow:
-        await store.outbox_sent(uow, sent)
-    assert (await probe()).state == "not_checked"
-
-    outcome = await _post(db, store, SHOW_OUTCOME, 2, "practice")
-    async with db.transaction("orchestration") as uow:
-        await store.outbox_give_up(uow, outcome, "gone")
-    assert (await probe()).state == "not_checked"
-
-    real = await _post(db, store, ANNOUNCE, 3, REAL)
-    async with db.transaction("orchestration") as uow:
-        await store.outbox_sent(uow, real)
-    assert await probe() == Reading("working")
-
-
-async def test_a_real_teams_channel_is_judged_by_the_last_message_the_outbox_tried(db: Database):
-    store = Store()
-    await _insert_run(db, store)
-    probe = teams_probe(db, practice=False)
-    pending = await _post(db, store, ANNOUNCE, 1, None)
-    leg = await _post(db, store, START_LEG, 2, None)
-    assert (await probe()).state == "not_checked"
-
-    async with db.transaction("orchestration") as uow:
-        await store.outbox_retry(uow, pending, NOW, "Teams answered 500 at https://secret")
-    failing = await probe()
-    assert (failing.state, failing.problem) == (
+    assert (teams.state, teams.problem, teams.last_ok_at) == (
         "not_answering",
         "Teams did not take the last message.",
+        None,
     )
-    assert "secret" not in repr(failing)
+    assert teams.fix == "Ask whoever set up the Teams address to check that it still works."
+    assert "secret" not in repr(teams) and "500" not in repr(teams)
+    assert [c.id for c in await connections.needing_attention()] == ["teams"]
 
-    async with db.transaction("orchestration") as uow:
-        await store.outbox_sent(uow, pending)
-        await store.save_message_ref(uow, ApprovalId("apr_t1"), MessageRef("channel", "m1", REAL))
-    assert await probe() == Reading("working")
 
-    outcome = await _post(db, store, SHOW_OUTCOME, 3, REAL)
-    async with db.transaction("orchestration") as uow:
-        await store.outbox_give_up(uow, outcome, "gone")
-    assert (await probe()).state == "not_answering"
+async def test_one_refused_post_after_working_waits_for_a_second_to_agree(db: Database):
+    channel = Channel()
+    connections, watched = real_teams(db, channel)
+    await watched.announce(NOTICE)
+    channel.refusing = 2
+    with pytest.raises(DispatchFailure):
+        await watched.update(MessageRef("Ops", "apr_t1", "teams_workflows"), OUTCOME)
+    (teams,) = await connections.view()
+    assert teams.state == "working"
+    with pytest.raises(DispatchFailure):
+        await watched.announce(NOTICE)
+    (teams,) = await connections.view()
+    assert teams.state == "not_answering"
+    assert teams.last_ok_at is not None and teams.last_ok_at < teams.checked_at  # type: ignore[operator]
+    await watched.announce(NOTICE)
+    await watched.announce(NOTICE)
+    (teams,) = await connections.view()
+    assert teams.state == "working"
 
-    again = await _post(db, store, ANNOUNCE, 4, REAL)
-    async with db.transaction("orchestration") as uow:
-        await store.outbox_sent(uow, again)
-        await store.outbox_retry(uow, leg, NOW, "n8n is down")
-    assert await probe() == Reading("working")
+
+async def test_a_result_that_cannot_be_kept_never_fails_the_post(db: Database):
+    channel = Channel()
+    connections, watched = real_teams(db, channel)
+
+    async def broken(*args: object) -> None:
+        raise RuntimeError("the database went away")
+
+    connections.observe = broken  # type: ignore[method-assign]
+    assert await watched.announce(NOTICE) == MessageRef("Ops", "apr_t1", "teams_workflows")
+    channel.refusing = 1
+    with pytest.raises(DispatchFailure):
+        await watched.announce(NOTICE)
+    assert channel.posts == 2
+
+
+async def test_the_wiring_watches_only_a_real_teams_channel(db: Database):
+    practice = settings_from_env(LOCAL_ENV)
+    stub = TeamsStub(db, "Ops")
+    channel, _ = approval_channel(practice, stub)
+    _, used = connections_for(
+        practice,
+        db,
+        FakeJira("working"),
+        channel,
+        FakeRuntime(GitHubWorking(using_token=False)),
+        FakeModels(SettingsState(True, ACTIVE, None, [])),
+    )
+    assert used is stub
+
+    real = settings_from_env({**LOCAL_ENV, "TEAMS_WEBHOOK_URL": "https://example.invalid/hook"})
+    channel, webhook = approval_channel(real, stub)
+    connections, used = connections_for(
+        real,
+        db,
+        FakeJira("working"),
+        channel,
+        FakeRuntime(GitHubWorking(using_token=False)),
+        FakeModels(SettingsState(True, ACTIVE, None, [])),
+    )
+    assert isinstance(used, WatchedChannel) and webhook is not None
+    await webhook.close()
+    (teams,) = [c for c in await connections.view() if c.id == "teams"]
+    assert (teams.state, teams.practice) == ("not_checked", False)
 
 
 async def test_the_model_row_is_read_fresh_on_every_view_and_never_kept(db: Database):
     state = SettingsState(True, ACTIVE, None, [])
     models = FakeModels(state)
     connections = Connections(
-        db, [Entry("model", "AI model", False, model_probe(models), live=True)]
+        db, [Entry("model", "AI model", Identity("model"), ReadFresh(model_probe(models)))]
     )
     (working,) = await connections.view()
     assert (working.state, working.key_ends_in) == ("working", "x7")
@@ -536,78 +576,48 @@ async def test_an_answer_that_is_not_jiras_is_not_a_working_jira():
     assert await jira.check() == "not_answering"
 
 
-LIVE_SOURCE = source_of("teams_workflows", "https://example.invalid/hook?sig=secret-value")
+def jira_at(db: Database, identity: Identity, probe: Scripted) -> Connections:
+    return Connections(db, [Entry("jira", "Jira", identity, Checked(probe))])
 
 
-def pair(db: Database, id: ConnectionId, name: str, first: Scripted, second: Scripted):
-    """The same connection before and after a switch, sharing one table."""
-    return (
-        Connections(db, [Entry(id, name, True, first, "practice")]),
-        Connections(db, [Entry(id, name, False, second, LIVE_SOURCE)]),
+async def test_going_back_to_an_address_and_key_shows_what_was_found_with_them(db: Database):
+    first, second = identity_of("jira", "https://a", "k1"), identity_of("jira", "https://a", "k2")
+    refused = Scripted(Reading("needs_attention", REFUSED.problem, key_ends_in="k1"))
+    (before,) = await jira_at(db, first, refused).view()
+    (other,) = await jira_at(db, second, Scripted(Reading("working", key_ends_in="k2"))).view()
+    assert (other.state, other.key_ends_in) == ("working", "k2")
+    asked = Scripted()
+    (back,) = await jira_at(db, first, asked).view()
+    assert back == before and asked.calls == 0
+
+
+async def test_the_identity_kept_is_a_fingerprint_never_the_address_or_the_key(db: Database):
+    env = {
+        **LOCAL_ENV,
+        "TEAMS_WEBHOOK_URL": "https://example.invalid/hook?sig=secret-value",
+        "JIRA_BASE_URL": "https://jira.example.invalid",
+        "JIRA_API_TOKEN": "jira-token-secret-q4",
+    }
+    settings = settings_from_env(env)
+    connections, watched = connections_for(
+        settings,
+        db,
+        FakeJira("token_refused"),
+        Channel(),
+        FakeRuntime(GitHubWorking(using_token=False)),
+        FakeModels(SettingsState(True, ACTIVE, None, [])),
     )
-
-
-@pytest.mark.parametrize(
-    ("id", "name", "real_reading"),
-    [
-        ("teams", "Teams", Reading("not_checked", "Not checked yet.")),
-        ("jira", "Jira", REFUSED),
-        ("github", "GitHub", Reading("needs_attention", "GitHub does not accept the key.")),
-    ],
-)
-async def test_going_live_starts_with_no_history_from_the_practice_copy(
-    db: Database, id: ConnectionId, name: str, real_reading: Reading
-):
-    practice, real = pair(db, id, name, Scripted(), Scripted(real_reading))
-    (before,) = await practice.view()
-    assert (before.state, before.last_ok_at) == ("working", before.checked_at)
-
-    (after,) = await real.view()
-    assert after.state == real_reading.state
-    assert after.last_ok_at is None
-    assert after.practice is False
-    checked = await real.check_now(id)
-    assert checked is not None and checked.last_ok_at is None
-    assert [c.id for c in await real.needing_attention()] == (
-        [] if real_reading.state == "not_checked" else [id]
-    )
-
-
-async def test_a_real_copy_that_worked_is_not_shown_as_the_practice_copy(db: Database):
-    real_side = Connections(db, [Entry("teams", "Teams", False, Scripted(), LIVE_SOURCE)])
-    practice_side = Connections(db, [Entry("teams", "Teams", True, Scripted(DOWN), "practice")])
-    await real_side.view()
-    assert [c.id for c in await practice_side.needing_attention()] == []
-    (back,) = await practice_side.view()
-    assert (back.state, back.practice) == ("not_answering", True)
-    assert back.last_ok_at is None
-
-
-async def test_a_new_address_is_a_new_connection(db: Database):
-    other = source_of("teams_workflows", "https://example.invalid/other-hook")
-    old = Connections(db, [Entry("teams", "Teams", False, Scripted(), LIVE_SOURCE)])
-    new = Connections(db, [Entry("teams", "Teams", False, Scripted(DOWN), other)])
-    await old.view()
-    (after,) = await new.view()
-    assert (after.state, after.last_ok_at) == ("not_answering", None)
-
-
-async def test_a_tick_checks_a_row_another_source_made_as_never_checked(db: Database):
-    practice, real = pair(db, "jira", "Jira", Scripted(), Scripted(WORKING))
-    await practice.view()
-    await real.check_due()
-    (after,) = await real.view()
-    assert after.state == "working" and after.last_ok_at == after.checked_at
-
-
-async def test_the_source_kept_is_a_fingerprint_never_the_address(db: Database):
-    address = "https://example.invalid/hook?sig=secret-value"
-    await Connections(
-        db, [Entry("teams", "Teams", False, Scripted(), source_of("teams_workflows", address))]
-    ).view()
+    await connections.view()
+    await watched.announce(NOTICE)
     async with db.transaction("orchestration") as uow:
         rows = await (
             await uow.conn.execute("SELECT * FROM orchestration.connection_checks")
         ).fetchall()
-    assert "secret-value" not in repr(rows) and "example.invalid" not in repr(rows)
-    assert rows[0]["source"].startswith("teams_workflows:")
+    for secret in ("secret-value", "example.invalid", "jira-token-secret"):
+        assert secret not in repr(rows)
+    assert sorted(row["identity"].split(":")[0] for row in rows) == [
+        "github",
+        "jira",
+        "teams_workflows",
+    ]
+    assert {row["key_ends_in"] for row in rows} == {None, "q4"}

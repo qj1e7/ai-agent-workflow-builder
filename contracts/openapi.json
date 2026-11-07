@@ -2661,6 +2661,19 @@
       "ConnectionItem": {
         "additionalProperties": false,
         "properties": {
+          "checked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the result shown was found. Null while nothing has been tried with the address and key in use now.",
+            "title": "Checked At"
+          },
           "expires_at": {
             "anyOf": [
               {
@@ -2725,6 +2738,7 @@
           "state",
           "problem",
           "fix",
+          "checked_at",
           "last_ok_at",
           "expires_at"
         ],
@@ -2744,7 +2758,7 @@
                 "type": "null"
               }
             ],
-            "description": "When it was last checked. Null while nothing has been tried.",
+            "description": "When the result shown was found. Null while nothing has been tried with the address and key in use now, and for the AI model, which is read, not checked.",
             "title": "Checked At"
           },
           "expires_at": {

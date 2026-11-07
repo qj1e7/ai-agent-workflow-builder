@@ -89,7 +89,8 @@ class ConnectionOut(WireModel):
     practice: bool = Field(description="True while it is the practice copy, not the real system.")
     state: ConnectionState
     checked_at: datetime | None = Field(
-        description="When it was last checked. Null while nothing has been tried."
+        description="When the result shown was found. Null while nothing has been tried with "
+        "the address and key in use now, and for the AI model, which is read, not checked."
     )
     last_ok_at: datetime | None = Field(description="The last time a check found it working.")
     problem: str | None = Field(description="Plain words, never the system's own error text.")

@@ -112,6 +112,10 @@ class ConnectionItem(WireModel):
     state: ConnectionState
     problem: str | None
     fix: str | None
+    checked_at: datetime | None = Field(
+        description="When the result shown was found. Null while nothing has been tried with "
+        "the address and key in use now."
+    )
     last_ok_at: datetime | None
     expires_at: datetime | None = Field(
         description="When the system says the key runs out. A working connection is here only "
@@ -172,6 +176,7 @@ def _connection(check: ConnectionCheck) -> ConnectionItem:
         state=check.state,
         problem=check.problem,
         fix=check.fix,
+        checked_at=check.checked_at,
         last_ok_at=check.last_ok_at,
         expires_at=check.expires_at,
     )
