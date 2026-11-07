@@ -37,7 +37,8 @@ from agent_runtime.contracts import FOLLOW_UP_TASK, answer_request
 from tests.fakes import ScriptedChat
 from tests.test_cards_api import make_app
 
-NO_SKIP = SkipRead(asked=False)
+NO_SKIP = SkipRead(whose="nobody")
+SKIPS_AN_APPROVER = "an_approver_or_anyone_else"
 EMAIL_TASK = "Every Friday, email me the list of stale tickets in MOCK"
 COMPONENT_TASK = "Find bug tickets in MOCK and change their component"
 
@@ -918,8 +919,12 @@ def test_a_field_change_whose_text_the_model_left_empty_is_still_a_part():
     assert [(c.needs, c.system) for c in answer.cant] == [("new_tool", "Jira")]
 
 
-def with_fields(kind: str, text: str, *uses: tuple[str, str], **rest: Any) -> AnswerRow:
-    fields = [FieldUse.model_validate({"field": f, "said": said}) for f, said in uses]
+def with_fields(kind: str, text: str, *uses: tuple[str | None, ...], **rest: Any) -> AnswerRow:
+    """A row with its fields, each (field, said) or (field, said, value) for a status."""
+    fields = [
+        FieldUse.model_validate({"field": use[0], "said": use[1], "value": (use + (None,))[2]})
+        for use in uses
+    ]
     return row(kind, text, **rest).model_copy(update={"fields": fields})
 
 
@@ -1067,7 +1072,7 @@ def test_a_field_the_agents_read_is_not_held():
         "look_for",
         "Open tickets in MOCK assigned to Bob",
         ("assignee", "assigned to Bob"),
-        ("status", "open"),
+        ("status", "open", "open"),
     )
     rows = (
         row("schedule", "Every Monday"),
@@ -1149,17 +1154,43 @@ def test_a_cant_row_with_no_text_and_no_field_takes_the_first_sentence_of_its_no
 def test_the_models_answer_to_the_skip_question_refuses_the_part_named_by_the_requests_words(
     task: str, said: str, rest: str
 ):
-    skip = SkipRead(asked=True, said=said.upper())
+    skip = SkipRead(whose=SKIPS_AN_APPROVER, said=said.upper())
     answer = answer_of(read(*FOLLOW_UP_ROWS, skips_the_yes=skip), task)
     assert answer == RefusedAnswer(said=said, rest=rest)
 
 
+@pytest.mark.parametrize(
+    "said",
+    [
+        "no need to ask me or anyone",
+        "don't ask me or Bob",
+        "without asking me or the approver",
+        "don't bother me or the approvers with it",
+        "by itself, the approver doesn't need to see it",
+        "automatically, unattended, with nobody in the loop",
+    ],
+)
+def test_a_skip_of_anyone_elses_yes_is_refused_whatever_other_words_stand_beside_it(said: str):
+    """Round 4: a word list overruled these because they also name the staff member or a
+    schedule. The model's closed answer says whose yes is skipped, and code refuses only a skip
+    of an Approver's or anyone else's."""
+    task = (
+        f"Every Monday, list open bug tickets in MOCK and create one ticket that lists them, {said}"
+    )
+    skip = SkipRead(whose=SKIPS_AN_APPROVER, said=said)
+    answer = answer_of(read(*FOLLOW_UP_ROWS, skips_the_yes=skip), task)
+    assert answer == RefusedAnswer(
+        said=said,
+        rest="Every Monday, list open bug tickets in MOCK and create one ticket that lists them",
+    )
+
+
 def test_the_models_skip_answer_with_words_the_request_lacks_still_refuses_and_keeps_the_request():
-    skip = SkipRead(asked=True, said="approve it yourself")
+    skip = SkipRead(whose=SKIPS_AN_APPROVER, said="approve it yourself")
     task = "Every Monday, create one ticket in MOCK, nobody needs to look"
     answer = answer_of(read(*FOLLOW_UP_ROWS, skips_the_yes=skip), task)
     assert answer == RefusedAnswer(said="approve it yourself", rest=task)
-    answer = answer_of(read(*FOLLOW_UP_ROWS, skips_the_yes=SkipRead(asked=True)), task)
+    answer = answer_of(read(*FOLLOW_UP_ROWS, skips_the_yes=SkipRead(whose=SKIPS_AN_APPROVER)), task)
     assert answer == RefusedAnswer(said="", rest=task)
 
 
@@ -1173,19 +1204,24 @@ def test_the_models_skip_answer_with_words_the_request_lacks_still_refuses_and_k
             "without asking for confirmation from me",
         ),
         ("Automatically list the open tickets every morning", "Automatically"),
+        ("Every Monday, list the tickets, don't ping me", "don't ping me"),
+        ("Every Monday, list the tickets, leave me out of it", "leave me out of it"),
+        ("Every Monday, list the tickets, run it without me", "run it without me"),
+        ("Every Monday, list the tickets, no need to notify me", "no need to notify me"),
     ],
 )
-def test_the_models_skip_answer_is_ignored_for_the_staff_member_and_the_schedule_words(
-    task: str, said: str
-):
-    """The Operator is never the Approver, and "by itself" is the product's own word for a
-    schedule, so a model that quotes them as a skipped yes is overruled."""
-    answer = answer_of(read(*FOLLOW_UP_ROWS, skips_the_yes=SkipRead(asked=True, said=said)), task)
-    assert not isinstance(answer, RefusedAnswer)
+def test_only_the_staff_members_own_attention_skipped_is_not_a_refusal(task: str, said: str):
+    """The Operator is never the Approver, so a request to skip only their own attention, or
+    one the model reads as skipping nobody's, is set up like any other. No word list decides
+    it: the model's closed answer does."""
+    for whose in ("only_me", "nobody"):
+        skip = SkipRead(whose=whose, said=said)
+        answer = answer_of(read(*FOLLOW_UP_ROWS, skips_the_yes=skip), task)
+        assert not isinstance(answer, RefusedAnswer), whose
 
 
 def test_the_models_skip_answer_comes_before_the_watchlist_and_a_question():
-    skip = SkipRead(asked=True, said="approvals off")
+    skip = SkipRead(whose=SKIPS_AN_APPROVER, said="approvals off")
     task = "Monitor Kubernetes releases, approvals off"
     answer = answer_of(
         read(
@@ -1234,8 +1270,11 @@ def test_the_prompt_asks_for_the_fields_and_the_skip_question():
     assert "P1, P2, critical, blocker, urgent" in ANSWER_SYSTEM
     assert "reported by, raised by" in ANSWER_SYSTEM
     assert "the login area" in ANSWER_SYSTEM
-    assert "asks to skip nothing" in ANSWER_SYSTEM
+    assert "whose yes or attention" in ANSWER_SYSTEM
+    assert "only_me" in ANSWER_SYSTEM and "an_approver_or_anyone_else" in ANSWER_SYSTEM
+    assert "open for open, to do" in ANSWER_SYSTEM
     assert "skips_the_yes" in TaskRead.model_json_schema()["required"]
+    assert "whose" in SkipRead.model_json_schema()["required"]
 
 
 def test_a_where_row_with_a_relative_clause_or_the_approval_step_is_a_place():
@@ -1315,3 +1354,149 @@ def test_a_cant_row_the_model_gave_that_is_the_part_offered_anyway_is_not_a_cant
     assert isinstance(answer, PartAnswer)
     assert [c.text for c in answer.cant] == ["Tickets in MOCK reported by Bob"]
     assert [r.text for r in answer.rows if r.kind == "look_for"] == ["Tickets in MOCK"]
+
+
+@pytest.mark.parametrize(
+    ("look", "field", "said", "left", "do", "do_instead"),
+    [
+        (
+            "Sev-1 bugs in MOCK",
+            "severity",
+            "sev-1",
+            "Bugs in MOCK",
+            "List the sev-1 bugs",
+            "List the bugs",
+        ),
+        (
+            "S1 incidents in MOCK",
+            "other",
+            "S1",
+            "Incidents in MOCK",
+            "List the S1 incidents",
+            "List the incidents",
+        ),
+        (
+            "P0 tickets in MOCK",
+            "priority",
+            "P0",
+            "Tickets in MOCK",
+            "List the P0 tickets",
+            "List the tickets",
+        ),
+    ],
+)
+def test_a_do_row_that_repeats_a_held_fields_words_is_held_and_cut_too(
+    look: str, field: str, said: str, left: str, do: str, do_instead: str
+):
+    """Round 4: the model tags a filter once, on the look-for part. The do part that repeats
+    the person's words for it can't read the field either, so the card offers it with those
+    words cut, and the can't is listed once, where the model tagged it."""
+    rows = (
+        row("schedule", "Every Monday"),
+        with_fields("look_for", look, (field, said)),
+        row("do", do),
+        row("do", "Create one ticket that lists them"),
+        row("where", "Jira project MOCK"),
+    )
+    task = f"Every Monday, list {look[0].lower()}{look[1:]} and create one ticket that lists them"
+    answer = answer_of(read(*rows), task)
+    assert isinstance(answer, PartAnswer)
+    assert [c.text for c in answer.cant] == [look]
+    assert [(r.text, r.state) for r in answer.rows if r.kind in ("look_for", "do")] == [
+        (left, "changed"),
+        (do_instead, "changed"),
+        ("Create one ticket that lists them", "understood"),
+    ]
+    assert said.casefold() not in " ".join(r.text for r in answer.rows).casefold()
+
+
+def test_a_do_row_that_repeats_held_words_and_cannot_be_cut_is_listed_as_a_cant():
+    rows = (
+        row("schedule", "Every Monday"),
+        with_fields("look_for", "P0 tickets in MOCK", ("priority", "P0")),
+        row("do", "P0"),
+        row("where", "Jira project MOCK"),
+    )
+    answer = answer_of(read(*rows), "Every Monday, list P0 tickets in MOCK, P0")
+    assert isinstance(answer, CantAnswer)
+    assert [c.text for c in answer.cant] == ["P0 tickets in MOCK", "P0"]
+
+
+def test_a_cant_row_tagged_with_an_unread_field_stays_a_cant_beside_its_doable_twin():
+    """Round 4: the model wrote the same text as a changed row and a cant_do row. The cant_do
+    row carries the field the agents can't read, so it is a can't whatever the card offers, and
+    the twin is held by the same words. The cut leaves "Tickets in MOCK closed", which the
+    cut's ending rule rejects, so nothing is offered: a cautious can't, never a card that
+    offers the filter."""
+    rows = (
+        row("schedule", "Every Monday"),
+        with_fields(
+            "look_for",
+            "Tickets in MOCK closed without approval",
+            ("status", "closed", "done"),
+            state="changed",
+            note="no tool can see approvals",
+        ),
+        with_fields(
+            "look_for",
+            "Tickets in MOCK closed without approval",
+            ("other", "without approval"),
+            state="cant_do",
+            note="no tool can see approvals",
+        ),
+        row("do", "List the tickets that were found"),
+        row("where", "Jira project MOCK"),
+    )
+    answer = answer_of(
+        read(*rows), "Every Monday, list tickets in MOCK that were closed without approval"
+    )
+    assert isinstance(answer, CantAnswer)
+    assert [c.text for c in answer.cant] == ["Tickets in MOCK closed without approval"]
+    assert answer.cant[0].note.startswith("I can't tell that detail of a ticket yet.")
+    assert answer.alternative is None
+
+
+@pytest.mark.parametrize(
+    ("text", "said", "value", "left"),
+    [
+        (
+            "Tickets in MOCK that went straight through",
+            "went straight through",
+            "other",
+            "Tickets in MOCK",
+        ),
+        ("Tickets in MOCK in progress", "in progress", "other", "Tickets in MOCK"),
+        ("Tickets in MOCK pending approval", "pending approval", None, "Tickets in MOCK"),
+    ],
+)
+def test_a_status_the_search_cannot_filter_by_is_held_like_an_unread_field(
+    text: str, said: str, value: str | None, left: str
+):
+    """Round 4: the Jira search filters status only as open or done. Any other value, or none
+    given, is held, with a note that names the two it can tell."""
+    rows = (
+        row("schedule", "Every Monday"),
+        with_fields("look_for", text, ("status", said, value)),
+        row("do", "Create one ticket that lists them"),
+        row("where", "Jira project MOCK"),
+    )
+    answer = answer_of(read(*rows), f"Every Monday, list {text.lower()}")
+    assert isinstance(answer, PartAnswer)
+    assert answer.cant[0].text == text
+    assert answer.cant[0].note.startswith("I can't tell a ticket's status beyond done or open yet.")
+    assert answer.cant[0].needs == "new_tool"
+    assert states(answer)[1] == ("look_for", left, "changed")
+
+
+@pytest.mark.parametrize(
+    ("said", "value"), [("open", "open"), ("closed", "done"), ("done", "done")]
+)
+def test_a_status_the_search_filters_by_is_read(said: str, value: str):
+    rows = (
+        row("schedule", "Every Monday"),
+        with_fields("look_for", f"{said.capitalize()} tickets in MOCK", ("status", said, value)),
+        row("do", "Create one ticket that lists them"),
+        row("where", "Jira project MOCK"),
+    )
+    answer = answer_of(read(*rows), f"Every Monday, list {said} tickets in MOCK")
+    assert isinstance(answer, SetupCardAnswer)

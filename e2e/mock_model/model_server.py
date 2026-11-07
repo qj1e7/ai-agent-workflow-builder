@@ -131,15 +131,21 @@ WORKFLOW_NAMED = re.compile(
 CLAUSE = re.compile(r"\s+and\s+|,\s*(?:then\s+)?")
 LISTS_THEM = "Create one ticket that lists them"
 SKIP_WORDS = re.compile(
-    r"\b(?:no human in the loop|pre-approved|approvals? (?:turned )?off|approve it as me)\b",
+    r"\b(?:no human in the loop|pre-approved|approvals? (?:turned )?off|approve it as me"
+    r"|no need to ask me or anyone|don't ask me or \w+)\b",
     re.IGNORECASE,
+)
+ONLY_ME_WORDS = re.compile(
+    r"\b(?:without asking me(?: each time)?|don't ping me|leave me out of it)\b", re.IGNORECASE
 )
 FIELD_WORDS = (
     (re.compile(r"\b(?:P[1-5]|critical|blocker|urgent|priority)\b", re.IGNORECASE), "priority"),
     (re.compile(r"\bcomponents?\b", re.IGNORECASE), "component"),
     (re.compile(r"\breported by \w+\b", re.IGNORECASE), "reporter"),
     (re.compile(r"\b(?:overdue|due (?:this|next) \w+)\b", re.IGNORECASE), "due_date"),
+    (re.compile(r"\b(?:open|closed|done|in progress)\b", re.IGNORECASE), "status"),
 )
+STATUS_VALUES = {"open": "open", "closed": "done", "done": "done"}
 PART_KINDS = {"When": "schedule", "Looks for": "look_for", "Does": "do", "Where it goes": "where"}
 mode = "ok"
 
@@ -427,16 +433,31 @@ def with_fields(row: dict[str, Any]) -> dict[str, Any]:
         return row
     text = row.get("text", "")
     fields = [
-        {"field": field, "said": found.group(0)}
+        {"field": field, "said": found.group(0), "value": status_value(field, found.group(0))}
         for pattern, field in FIELD_WORDS
         if (found := pattern.search(text)) is not None
     ]
     return {**row, "fields": fields}
 
 
+def status_value(field: str, said: str) -> str | None:
+    """The closed status value the real model is asked for: open, done, or other for a status
+    the search can't filter by, such as in progress. Null on every other field."""
+    if field != "status":
+        return None
+    return STATUS_VALUES.get(said.lower(), "other")
+
+
 def skip_read(task: str) -> dict[str, Any]:
+    """Whose yes or attention the task asks to skip, as the real model is asked: an Approver's
+    or anyone else's for a few plain phrasings, only the staff member's own for a few more."""
     found = SKIP_WORDS.search(task)
-    return {"asked": found is not None, "said": found.group(0) if found else None}
+    if found is not None:
+        return {"whose": "an_approver_or_anyone_else", "said": found.group(0)}
+    found = ONLY_ME_WORDS.search(task)
+    if found is not None:
+        return {"whose": "only_me", "said": found.group(0)}
+    return {"whose": "nobody", "said": None}
 
 
 def with_alternative(row: dict[str, Any], task: str) -> dict[str, Any]:

@@ -1141,11 +1141,12 @@ def why_not(kind: RowKind, text: str, abilities: tuple[Ability, ...] = ABILITIES
 def why_not_the_field(kind: RowKind, text: str, field: TicketField) -> str:
     """Why the platform can't do a part that reads or sets `field`, in the words `why_not` uses:
     a field put on the new ticket is one it can't set, one read from the found tickets one it
-    can't tell."""
+    can't tell. A field read only in some values, as status, names them."""
     reader = _reader(ABILITIES)
     row = _tokens(text)
     verb = "set" if kind == "do" and _sets_on_a_new_ticket(row, reader) else "tell"
-    return f"I can't {verb} {field.plain} yet. {reader.can()}"
+    beyond = f" beyond {' or '.join(sorted(field.values))}" if field.values else ""
+    return f"I can't {verb} {field.plain}{beyond} yet. {reader.can()}"
 
 
 def _sets_on_a_new_ticket(row: Clause, reader: _Reader) -> bool:
@@ -1202,18 +1203,34 @@ field a request filters by, in whatever words; this table decides whether the ag
 it. N6's registry entry `jira.find_by_detail` should derive from the same table."""
 
 
+type StatusValue = Literal["open", "done", "other"]
+"""The closed set of status values the model names on a status field: the two the Jira search
+can filter by (`JiraSearchArguments.status`, To Do for anything not done and Done), and other
+for a status it can't single out, such as in progress or pending approval."""
+
+
 @dataclass(frozen=True)
 class TicketField:
     """A field of a Jira ticket that a request can name. `read_as` is the `JiraTicket` attribute
-    the agents see, or None while no tool gives it. `words` are the first net, consulted with no
-    model and only for a field the agents can't read; for the others they record how a request
-    names it. A value the request gives instead of the field's name, such as P1 for priority,
-    is in the words too when it can mean nothing else."""
+    the agents see, or None while no tool gives it. `values` are the values the search can
+    filter by when it reads only a closed set of them, as status; empty when it reads any
+    value. `words` are the first net, consulted with no model and only for a field the agents
+    can't read; for the others they record how a request names it. A value the request gives
+    instead of the field's name, such as P1 for priority, is in the words too when it can mean
+    nothing else."""
 
     name: TicketFieldName
     plain: str
     words: frozenset[str]
     read_as: str | None = None
+    values: frozenset[str] = frozenset()
+
+    def reads(self, value: str | None) -> bool:
+        """Whether the agents can filter by this field with this value: the field is read, and
+        either any value is, or the value is one of the closed set."""
+        if self.read_as is None:
+            return False
+        return not self.values or value in self.values
 
 
 TICKET_FIELDS: Final = (
@@ -1221,7 +1238,13 @@ TICKET_FIELDS: Final = (
         "assignee", "who owns a ticket", words("assignee assignees owner owners"), "assignee"
     ),
     TicketField("issue_type", "a ticket's type", words("type types"), "issue_type"),
-    TicketField("status", "a ticket's status", words("status statuses"), "status"),
+    TicketField(
+        "status",
+        "a ticket's status",
+        words("status statuses"),
+        "status",
+        frozenset({"open", "done"}),
+    ),
     TicketField("created", "when a ticket was created", words("created"), "created_at"),
     TicketField("updated", "when a ticket was last updated", words("updated update"), "updated_at"),
     TicketField("done", "when a ticket was done", words("done closed"), "done_at"),
@@ -1243,7 +1266,11 @@ TICKET_FIELDS: Final = (
 )
 FIELD_BY_NAME: Final[dict[TicketFieldName, TicketField]] = {f.name: f for f in TICKET_FIELDS}
 UNREAD_FIELDS: Final = tuple(field for field in TICKET_FIELDS if field.read_as is None)
-UNREAD_FIELD_PLAIN: Final = tuple(field.plain for field in UNREAD_FIELDS)
+HELD_FIELD_PLAIN: Final = tuple(
+    field.plain for field in TICKET_FIELDS if field.read_as is None or field.values
+)
+"""The plain names a hold's own note can use: the fields the agents can't read, and the ones
+they read only some values of."""
 READ_FIELD_WORDS: Final = frozenset(
     word for field in TICKET_FIELDS if field.read_as is not None for word in field.words
 )
@@ -1309,7 +1336,7 @@ def names_a_ticket_field(text: str) -> bool:
     by one of its words, or by the plain name the hold's own note uses."""
     row = _tokens(text)
     low = text.casefold()
-    return any(plain in low for plain in UNREAD_FIELD_PLAIN) or any(
+    return any(plain in low for plain in HELD_FIELD_PLAIN) or any(
         _field_at(row, at) is not None or row[at].low in SETTABLE_TOO for at in range(len(row))
     )
 
@@ -1672,22 +1699,6 @@ def _skips(text: str) -> list[re.Match[str]]:
 def skip_of_a_yes(text: str) -> str | None:
     found = _skips(text)
     return found[0].group(0) if found else None
-
-
-NOT_A_SKIP: Final = re.compile(
-    r"\b(?:ask(?:ing)?|check(?:ing)?\s+with|confirm(?:ing)?\s+with|confirmation\s+from|"
-    r"tell(?:ing)?|bother(?:ing)?|consult(?:ing)?)\s+(?:me|us)\b"
-    r"|\b(?:by\s+itself|on\s+its\s+own|automatically|unattended)\b",
-    re.IGNORECASE,
-)
-"""Words the model has quoted as a skipped yes that are not one: the staff member asking not
-to be asked themselves (the Operator is never the Approver), and the product's own words for a
-schedule. A phrase that also approves, as in "approve it automatically", is caught by the word
-rule first, so this never lets one through."""
-
-
-def not_a_skip(said: str) -> bool:
-    return NOT_A_SKIP.search(said) is not None
 
 
 def _tidied(rest: str) -> str:

@@ -434,18 +434,50 @@ class ReadTest(unittest.TestCase):
             "Every Monday, find P1 bugs in MOCK reported by Bob and create one ticket that "
             "lists them"
         )
-        self.assertEqual(read["skips_the_yes"], {"asked": False, "said": None})
+        self.assertEqual(read["skips_the_yes"], {"whose": "nobody", "said": None})
         look = next(r for r in read["rows"] if r["kind"] == "look_for")
         self.assertEqual(
             look["fields"],
-            [{"field": "priority", "said": "P1"}, {"field": "reporter", "said": "reported by Bob"}],
+            [
+                {"field": "priority", "said": "P1", "value": None},
+                {"field": "reporter", "said": "reported by Bob", "value": None},
+            ],
         )
         self.assertEqual(next(r for r in read["rows"] if r["kind"] == "where").get("fields"), None)
         skipped = server.reading(
             "Every Monday, find bug tickets in MOCK and create one ticket, no human in the loop"
         )
-        self.assertEqual(skipped["skips_the_yes"], {"asked": True, "said": "no human in the loop"})
-        self.assertEqual(server.reading("Check my workflows")["skips_the_yes"]["asked"], False)
+        self.assertEqual(
+            skipped["skips_the_yes"],
+            {"whose": "an_approver_or_anyone_else", "said": "no human in the loop"},
+        )
+        both = server.reading(
+            "Every Monday, find bug tickets in MOCK and create one ticket, don't ask me or Bob"
+        )
+        self.assertEqual(both["skips_the_yes"]["whose"], "an_approver_or_anyone_else")
+        mine = server.reading(
+            "Every Monday, find bug tickets in MOCK and create one ticket, don't ping me"
+        )
+        self.assertEqual(mine["skips_the_yes"], {"whose": "only_me", "said": "don't ping me"})
+        self.assertEqual(server.reading("Check my workflows")["skips_the_yes"]["whose"], "nobody")
+
+    def test_a_status_carries_the_value_the_search_filters_by_or_other(self) -> None:
+        def status_of(task: str) -> dict[str, Any]:
+            read = server.reading(task)
+            look = next(r for r in read["rows"] if r["kind"] == "look_for")
+            return next(f for f in look["fields"] if f["field"] == "status")
+
+        self.assertEqual(
+            status_of("Every Monday, find open bugs in MOCK and create one ticket")["value"], "open"
+        )
+        self.assertEqual(
+            status_of("Every Monday, find closed bugs in MOCK and create one ticket")["value"],
+            "done",
+        )
+        self.assertEqual(
+            status_of("Every Monday, find in progress bugs in MOCK and create one ticket")["value"],
+            "other",
+        )
 
     def test_the_request_mark_and_the_task_mark_both_find_the_request(self) -> None:
         self.assertEqual(reading(FOLLOW_UP)["rows"], server.reading(FOLLOW_UP)["rows"])

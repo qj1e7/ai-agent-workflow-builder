@@ -844,7 +844,7 @@ def found_software() -> FoundSoftware:
 
 EMAIL_TASK = "Every Friday, email me the list of stale tickets in MOCK"
 SKIP_TASK = "Create the ticket without waiting for approval"
-NO_SKIP = SkipRead(asked=False)
+NO_SKIP = SkipRead(whose="nobody")
 
 
 def answer_request(task: str = FOLLOW_UP_TASK) -> AnswerRequest:

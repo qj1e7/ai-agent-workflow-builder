@@ -622,7 +622,7 @@ def answer_case(name: str) -> AnswerCase:
 
 
 def read_answer(**fields: Any) -> Answer:
-    read = TaskRead.model_validate({"skips_the_yes": {"asked": False}, **fields})
+    read = TaskRead.model_validate({"skips_the_yes": {"whose": "nobody"}, **fields})
     return Answer(read, read.model_dump_json(), None)
 
 
@@ -672,7 +672,7 @@ def test_a_guessed_time_and_an_invented_key_fail_the_card():
     checks = ANSWER.score(answer_case("day-one-weekly-summary"), read_answer(**read))
     assert failed(checks) == {"no_invented_keys", "reads_the_parts", "schedule_state"}
     shown = answer_of(
-        TaskRead.model_validate({"skips_the_yes": {"asked": False}, **read}),
+        TaskRead.model_validate({"skips_the_yes": {"whose": "nobody"}, **read}),
         answer_case("day-one-weekly-summary").task,
     )
     assert isinstance(shown, SetupCardAnswer) and shown.rows[0].state == "missing"
