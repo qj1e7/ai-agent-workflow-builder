@@ -39,7 +39,15 @@ from platform_api.orchestration.runs import (
     created_events,
     referee,
 )
-from platform_api.shared import ApprovalId, Digest, N8nExecutionId, ProposalId, RunId, UserId
+from platform_api.shared import (
+    WRITE_STOP_ADVICE,
+    ApprovalId,
+    Digest,
+    N8nExecutionId,
+    ProposalId,
+    RunId,
+    UserId,
+)
 from platform_api.wire import ApprovalStepView
 
 RUN = RunId("run_1")
@@ -276,6 +284,26 @@ def test_a_failure_reads_with_one_closing_full_stop(message: str):
     summary = moved.events[0].summary
     assert summary.endswith(". You can retry.")
     assert ".." not in summary
+
+
+WRITE_REFUSED = Failure(
+    FailureReason.WRITE_FAILED, "jira create_ticket was refused", retryable=False
+)
+UNBOUND = Failure(FailureReason.UNBOUND_INTENT, "The template has no binding", retryable=False)
+
+
+def test_a_stop_at_the_write_step_says_to_look_for_the_ticket_first():
+    summary = ACTING.fail(WRITE_REFUSED).events[0].summary
+    assert summary.endswith(" " + WRITE_STOP_ADVICE)
+    assert "Start a new run." not in summary
+
+
+def test_a_stop_before_the_write_step_still_advises_a_new_run():
+    assert WORKING.fail(UNBOUND).events[0].summary.endswith(" Start a new run.")
+
+
+def test_a_retryable_stop_at_the_write_step_says_retry():
+    assert ACTING.fail(WRITE_DOWN).events[0].summary.endswith(" You can retry.")
 
 
 def test_retry_after_a_work_leg_failure_starts_the_work_leg_again():

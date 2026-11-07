@@ -3,8 +3,9 @@ import bob from '@contracts/fixtures/approvals/apr_01JB8.bob.json'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { ApprovalView } from '../../api/types'
+import { MemoryRouter } from 'react-router'
 import { ApprovalGate, EXACT_WORDS } from './ApprovalGate'
-import { decisionFor, type Decision } from './decision'
+import { askedWords, decisionFor, foundOf, partyOf, yourPart, type Decision } from './decision'
 import { lockWords, withCurrentNames, proposalTitle, type Party } from './words'
 
 const BOB = bob as ApprovalView
@@ -17,31 +18,97 @@ const DECIDED: ApprovalView = {
   steps: BOB.steps.map((step) => ({ ...step, status: 'approved', decided_by: 'bob', decided_at: '2026-11-03T02:20:23Z' })),
 }
 
-const STARTER: Party = { startedIt: true, retriedIt: false, schedule: false }
-const OTHER: Party = { startedIt: false, retriedIt: false, schedule: false }
+const nameOf = (id: string) => ({ alice: 'Alice', bob: 'Bob', carol: 'Carol' })[id] ?? id
+const NOBODY = { ownsIt: false, startedIt: false, retriedIt: false, schedule: false } as const
+const STARTER: Party = { ...NOBODY, ownsIt: true, startedIt: true }
+const OTHER: Party = NOBODY
 const idle: Pick<Decision, 'pending' | 'error' | 'decide'> = { pending: null, error: null, decide: () => undefined }
 
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replaceAll('&amp;', '&').replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))
 
-function draw(approval: ApprovalView, party: Party | null, decision = idle): string {
-  return renderToStaticMarkup(<ApprovalGate approval={approval} cannotDecide={lockWords(approval.why_not, party)} decision={decision} />)
+function draw(approval: ApprovalView, party: Party | null, decision = idle, found = approval.found): string {
+  return renderToStaticMarkup(
+    <MemoryRouter>
+      <ApprovalGate approval={approval} found={found} part={yourPart(approval, party, nameOf)} askedBy={askedWords(approval, nameOf)} decision={decision} />
+    </MemoryRouter>,
+  )
 }
 
 describe('the approval gate', () => {
   it('shows bob, an Approver who is not a party to the run, Approve and Decline', () => {
     const html = draw(BOB, OTHER)
     expect(buttons(html)).toEqual(['Approve 1 ticket', 'Decline'])
-    expect(text(html)).not.toContain('can’t approve')
+    expect(text(html)).toContain('You can decide because you didn’t set this up or start this run.')
+    expect(text(html)).not.toContain('another Approver must decide')
+  })
+
+  it('has the five parts the spec names, in order', () => {
+    const html = text(draw(BOB, OTHER))
+    const at = ['What will change', 'Why', 'Who asked', 'What happens', 'Your part'].map((name) => html.indexOf(name))
+    expect(at.every((index) => index >= 0)).toBe(true)
+    expect(at).toEqual([...at].sort((a, b) => a - b))
+  })
+
+  it('says why the agents think so, who asked, and what happens, in plain words', () => {
+    const html = text(draw(BOB, OTHER))
+    expect(html).toContain('LangGraph has a new release: 1.2.16.')
+    expect(html).toContain('Software watchlist, set up by Alice. Alice started this run.')
+    expect(html).toContain('Nothing is written until you say yes.')
+    expect(html).toContain('The request waits until someone decides. If you decline, the run stops there.')
+  })
+
+  it('says it once that nothing is written until a yes, and names no stop time or backup', () => {
+    const html = text(draw(BOB, OTHER))
+    expect(html.match(/Nothing is written until/g)).toHaveLength(1)
+    expect(html).not.toMatch(/backup|expires|stops at|reminder/i)
+  })
+
+  it('says that the summary helps the reader and is not the check', () => {
+    expect(text(draw(BOB, OTHER))).toContain('What will be written is listed above.')
+  })
+
+  it('links a ticket key in the summary only when the proposal writes to that project', () => {
+    const html = draw(BOB, OTHER, idle, 'MOCK-12 already covers part of this. GPT-4 is not a ticket.')
+    expect(html).toMatch(/<a[^>]*>MOCK-12<\/a>/)
+    expect(html).not.toMatch(/<a[^>]*>GPT-4<\/a>/)
+  })
+
+  it('reads the summary from the activity once the approval no longer carries it', () => {
+    const decided = { ...BOB, found: '' }
+    const fromActivity = foundOf('The agents found 1.2.16.', decided.found)
+    expect(text(draw(decided, OTHER, idle, fromActivity))).toContain('The agents found 1.2.16.')
+    expect(foundOf('', 'From the approval.')).toBe('From the approval.')
+    expect(foundOf('', undefined)).toBe('')
+    expect(text(draw(decided, OTHER, idle, ''))).toContain('The agents left no summary.')
+  })
+
+  it('says who asked by a schedule, and who retried', () => {
+    const scheduled: ApprovalView = { ...BOB, trigger: 'schedule', retried_by: ['carol'] }
+    expect(askedWords(scheduled, nameOf)).toBe("Software watchlist, set up by Alice. Alice's schedule started this run. Carol retried it.")
   })
 
   it.each([
-    ['alice, who started the run', ALICE, STARTER, 'You started this run, so you can’t approve it. Nobody approves their own work.'],
+    ['alice, who set it up and started the run', ALICE, STARTER, 'You set this workflow up and started this run, so another Approver must decide. Nobody approves their own work.'],
+    ['a retrier', { ...ALICE, retried_by: ['dave'] }, { ...OTHER, retriedIt: true }, 'You retried this run, so another Approver must decide. Nobody approves their own work.'],
+    ['the owner of a scheduled run', { ...ALICE, trigger: 'schedule' as const }, { ...STARTER, schedule: true }, 'You set up the schedule that started this run, so another Approver must decide. Nobody approves their own work.'],
     ['carol, who is not an Approver', CAROL, OTHER, 'Only an Approver can decide.'],
   ])('shows %s no buttons, and says why', (_who, approval, party, words) => {
     const html = draw(approval, party)
     expect(buttons(html)).toEqual([])
     expect(text(html)).toContain(words)
+  })
+
+  it('says whose yes came first when this is the second of two', () => {
+    const two: ApprovalView = {
+      ...BOB,
+      steps: [
+        { index: 0, label: 'First approver', status: 'approved', decided_by: 'carol', decided_at: '2026-11-03T02:20:23Z' },
+        { index: 1, label: 'Second approver', status: 'open', decided_by: null, decided_at: null },
+      ],
+    }
+    expect(yourPart(two, OTHER, nameOf)).toBe('Carol said yes. Your yes is the second of two.')
+    expect(text(draw(two, OTHER))).toContain('It needs two Approvers, one after the other.')
   })
 
   it.each([
@@ -66,6 +133,8 @@ describe('the approval gate', () => {
     const html = draw(DECIDED, OTHER)
     expect(buttons(html)).toEqual([])
     expect(text(html)).not.toContain('already decided')
+    expect(text(html)).not.toContain('Your part')
+    expect(text(html)).not.toContain('What happens')
   })
 
   it('keeps focus on the pressed button while the decision is on its way, and holds the other one', () => {
@@ -77,6 +146,15 @@ describe('the approval gate', () => {
 
   it('says what went wrong as an alert', () => {
     expect(draw(BOB, OTHER, { ...idle, error: 'Another Approver decided this step first.' })).toMatch(/role="alert"[^>]*>Another Approver decided this step first\./)
+  })
+})
+
+describe('how the person is tied to the run', () => {
+  it('reads the owner, the starter and the retriers from the approval', () => {
+    expect(partyOf(ALICE, 'alice')).toEqual({ ownsIt: true, startedIt: true, retriedIt: false, schedule: false })
+    expect(partyOf({ ...ALICE, retried_by: ['bob'] }, 'bob')).toEqual({ ownsIt: false, startedIt: false, retriedIt: true, schedule: false })
+    expect(partyOf(BOB, undefined)).toBeNull()
+    expect(partyOf(undefined, 'bob')).toBeNull()
   })
 })
 
@@ -96,10 +174,10 @@ describe('what a decision posts', () => {
 
 describe('why someone cannot decide', () => {
   it('names how the person is tied to the run', () => {
-    expect(lockWords('own_work', { ...STARTER, schedule: true })).toBe('Your schedule started this run, so you can’t approve it. Nobody approves their own work.')
-    expect(lockWords('own_work', { ...OTHER, retriedIt: true })).toBe('You retried this run, so you can’t approve it. Nobody approves their own work.')
-    expect(lockWords('own_work', OTHER)).toBe('You own this workflow, so you can’t approve its runs. Nobody approves their own work.')
-    expect(lockWords('own_work', null)).toBe('This run is your own work, so you can’t approve it. Nobody approves their own work.')
+    expect(lockWords('own_work', { ...STARTER, schedule: true })).toBe('You set up the schedule that started this run, so another Approver must decide. Nobody approves their own work.')
+    expect(lockWords('own_work', { ...OTHER, retriedIt: true })).toBe('You retried this run, so another Approver must decide. Nobody approves their own work.')
+    expect(lockWords('own_work', { ...OTHER, ownsIt: true })).toBe('You set this workflow up, so another Approver must decide. Nobody approves their own work.')
+    expect(lockWords('own_work', null)).toBe('This run is your own work, so another Approver must decide. Nobody approves their own work.')
   })
 })
 

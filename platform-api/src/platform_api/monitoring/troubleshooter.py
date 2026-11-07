@@ -2,6 +2,7 @@ from collections.abc import Mapping
 from typing import Literal
 
 from platform_api.monitoring.events import RunFailedData
+from platform_api.shared import WRITE_STOP_ADVICE
 from platform_api.wire import FailureReason, WireModel
 
 type SuggestedAction = Literal[
@@ -57,9 +58,8 @@ ADVICE: Mapping[FailureReason, Advice] = {
         likely_cause="The approval no longer matches the proposal, or the action is not "
         "a registered connector operation.",
         suggested_action="ask_maintainer",
-        suggestion="Check Jira for a ticket carrying this run's label before starting a new "
-        "run, because a new run can make a duplicate. If this happens again, ask a "
-        "maintainer to check the approval records.",
+        suggestion=f"{WRITE_STOP_ADVICE} If this happens again, ask a maintainer to check "
+        "the approval records.",
     ),
     "UnboundIntent": Advice(
         explanation="The agents proposed an action this use case cannot carry out.",
@@ -120,10 +120,8 @@ WRITE_REFUSED = Advice(
     likely_cause="Either Jira refused the write and made nothing, or the platform found a "
     "ticket it can't prove it made. The failure text says which one happened.",
     suggested_action="ask_maintainer",
-    suggestion="Read the failure text, then check Jira for a ticket carrying this run's label "
-    "before anyone starts a new run. A new run doesn't share this run's write key and can "
-    "make a duplicate. If Jira refused the write, ask a maintainer to fix the Jira "
-    "settings or the project.",
+    suggestion=f"Read the failure text. {WRITE_STOP_ADVICE} If Jira refused the write, ask a "
+    "maintainer to fix the Jira settings or the project.",
 )
 
 

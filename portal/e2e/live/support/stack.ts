@@ -190,7 +190,7 @@ export class Backend {
   }
 }
 
-export async function setMockGithubMode(mode: 'ok' | 'unavailable'): Promise<void> {
+export async function setMockGithubMode(mode: 'ok' | 'unavailable' | 'not_found'): Promise<void> {
   const http = await request.newContext()
   try {
     const response = await http.post(`${MOCK_GITHUB_URL}/_admin/mode`, { data: { mode } })

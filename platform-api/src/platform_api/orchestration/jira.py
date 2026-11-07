@@ -309,15 +309,15 @@ class JiraWriteConnector:
     async def _accept(
         self, found: JiraIssue, key: WriteKey, label: str, title: str, started_at: datetime
     ) -> None:
-        """Refuses, for a person to check, a ticket found by this write's label that the
+        """Refuses, for a person to check, a ticket found by this run's label that the
         platform can't prove it made for this write: made by another account, or by no
         account; made before the write began; already recorded for another write; carrying
         another write's label; or with another title."""
 
         def refuse(why: str) -> WriteRefused:
             return WriteRefused(
-                f"Jira already has {found.key} with this write's label, but {why}. A person "
-                "needs to check that ticket, then start a new run."
+                f"Jira already has {found.key} with this run's label, but {why}. A person "
+                "needs to check that ticket."
             )
 
         if found.creator is None or found.creator != await self._jira.whoami():

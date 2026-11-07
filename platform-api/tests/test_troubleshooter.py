@@ -4,6 +4,7 @@ import pytest
 
 from platform_api.monitoring.events import RunFailedData
 from platform_api.monitoring.troubleshooter import ADVICE, answers, explain, explain_failure
+from platform_api.shared import WRITE_STOP_ADVICE
 from platform_api.wire import FailureReason, FailureStage
 
 
@@ -28,7 +29,20 @@ def test_a_refused_write_is_told_to_check_jira_before_any_new_run():
     assert advice.suggested_action == "ask_maintainer"
     assert "refused the write" in advice.likely_cause
     assert "can't prove it made" in advice.likely_cause
-    assert advice.suggestion.index("check Jira") < advice.suggestion.index("new run")
+    assert WRITE_STOP_ADVICE in advice.suggestion
+
+
+def test_no_advice_uses_the_word_key_for_the_label_a_person_looks_for():
+    stops = [
+        failure(reason, retryable)
+        for reason in get_args(FailureReason.__value__)
+        for retryable in (True, False)
+    ]
+    for stop in stops:
+        said = " ".join(
+            [explain_failure(stop).likely_cause, explain_failure(stop).suggestion]
+        ).lower()
+        assert "write key" not in said
 
 
 def test_other_reasons_ignore_the_retryable_flag():
@@ -169,8 +183,8 @@ STOPS: list[tuple[FailureStage, FailureReason, bool, str, str]] = [
         "acting",
         "WriteFailed",
         False,
-        "jira create_ticket was refused: Jira already has MOCK-1 with this write's label, but "
-        "the platform did not make it. A person needs to check that ticket, then start a new run.",
+        "jira create_ticket was refused: Jira already has MOCK-1 with this run's label, but "
+        "the platform did not make it. A person needs to check that ticket.",
         "The approved write was refused.",
     ),
     (

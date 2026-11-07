@@ -68,6 +68,7 @@ export type ChatItem =
   | { readonly kind: 'finished'; readonly seq: number; readonly outcome: RunOutcome; readonly count: number; readonly operation: string | null }
   | { readonly kind: 'declined'; readonly seq: number }
   | { readonly kind: 'stopped'; readonly seq: number; readonly stage: FailureStage }
+  | { readonly kind: 'reported'; readonly seq: number; readonly by: string; readonly requestId: string }
 
 export interface RunModel {
   /** The last event folded in. Events are taken only in order, so this is also how many there are. */
@@ -87,6 +88,10 @@ export interface RunModel {
   readonly written: readonly Written[]
   readonly approvedBy: readonly string[]
   readonly retriedBy: readonly string[]
+  /** What the agents said they found, from the step that closed their work. Kept after the approval stops carrying it. */
+  readonly found: string
+  /** The reports to support about this stop, one for each request. A retry starts the list again. */
+  readonly reports: readonly { readonly requestId: string; readonly by: string }[]
   readonly people: Readonly<Record<string, string>>
   readonly chat: readonly ChatItem[]
 }
@@ -108,6 +113,8 @@ export const emptyModel: RunModel = {
   written: [],
   approvedBy: [],
   retriedBy: [],
+  found: '',
+  reports: [],
   people: {},
   chat: [],
 }
@@ -233,12 +240,22 @@ function retried(model: RunModel, event: EventOf<'run_retried'>): RunModel {
     failedAt: null,
     retriedBy: by === null || model.retriedBy.includes(by) ? model.retriedBy : [...model.retriedBy, by],
     spotSeq: event.seq,
+    reports: [],
   }
   const next: RunModel =
     event.data.leg === 'work'
-      ? { ...base, phase: { state: 'pending' }, spot: { at: 'started' }, agents: [], approvalId: null, steps: [], proposed: 0, written: [] }
+      ? { ...base, phase: { state: 'pending' }, spot: { at: 'started' }, agents: [], approvalId: null, steps: [], proposed: 0, written: [], found: '' }
       : { ...base, phase: { state: 'acting' }, spot: { at: 'write' } }
   return say(next, { kind: 'retried', seq: event.seq, by })
+}
+
+/** The outcomes of the agents' step that carry their summary. A failed step carries an error. */
+const FOUND_OUTCOMES: ReadonlySet<string> = new Set(['proposed', 'nothing_to_write'])
+
+function reported(model: RunModel, event: EventOf<'support_reported'>): RunModel {
+  const { request_id: requestId, reported_by: by } = event.data
+  if (model.reports.some((report) => report.requestId === requestId)) return model
+  return say({ ...model, reports: [...model.reports, { requestId, by }] }, { kind: 'reported', seq: event.seq, by, requestId })
 }
 
 function apply(model: RunModel, event: RunEvent): RunModel {
@@ -310,11 +327,13 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     }
     case 'run_retried':
       return retried(model, event)
+    case 'step_finished':
+      return event.data.step === 'run_agents' && FOUND_OUTCOMES.has(event.data.outcome) && event.data.detail ? { ...model, found: event.data.detail } : model
+    case 'support_reported':
+      return reported(model, event)
     case 'leg_dispatched':
     case 'step_started':
-    case 'step_finished':
     case 'step_retried':
-    case 'support_reported':
     case 'opaque':
       return model
   }

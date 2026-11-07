@@ -403,8 +403,10 @@ async def test_a_found_ticket_with_no_creator_is_refused(target: Target, db: Dat
     connector = JiraWriteConnector(target.jira, db)
     await practice.create("MOCK", "Upgrade", "", [write_label(WRITE)], "Task", creator=None)
     await crashed(connector, WRITE)
-    with pytest.raises(WriteRefused, match="did not make it"):
+    with pytest.raises(WriteRefused, match="did not make it") as refused:
         await connector.execute(ACTION, WRITE)
+    assert "this run's label" in str(refused.value)
+    assert "new run" not in str(refused.value)
 
 
 async def test_a_found_ticket_already_recorded_for_another_write_is_refused(

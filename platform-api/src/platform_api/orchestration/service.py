@@ -89,6 +89,7 @@ from platform_api.orchestration.runs import (
     Succeeded,
     Supersede,
     Working,
+    cannot_retry,
     created_events,
     deadline,
     fail,
@@ -459,13 +460,15 @@ class Orchestrator:
             events.append(_denied("out_of_order", detail))
         events.append(step_finished(step, execution, 1, "refused", detail))
         if fails_run:
+            # The referee refuses only before the work is approved, so nothing can be written yet.
+            active = _active(record.state)
             failure = Failure(
                 FailureReason.OUT_OF_ORDER_STEP,
-                f"The workflow called {step.value} out of order. Reload it from git and start "
+                f"The workflow called {step.value} out of order. Reload it from git, then start "
                 "a new run",
                 retryable=False,
             )
-            moved = fail(_active(record.state), failure).preceded_by(*events)
+            moved = fail(active, failure).preceded_by(*events)
             await self._commit(uow, record, moved)
             await self._store.cancel_outbox(uow, record.run_id)
         else:
@@ -870,9 +873,7 @@ class Orchestrator:
             if not isinstance(state, Failed):
                 return NotRetryable(f"The run is {state_name(state)}, not failed")
             if not state.failure.retryable:
-                return NotRetryable(
-                    f"{state.failure.reason.value} cannot be retried. Start a new run"
-                )
+                return NotRetryable(cannot_retry(state.stage, state.failure))
             moved = state.retry(user_actor(principal.user_id, principal.display), uow.now)
             record = await self._commit(uow, record, moved, retried_by=principal.user_id)
             leg = Leg.ACT if isinstance(moved.state, Acting) else Leg.WORK
