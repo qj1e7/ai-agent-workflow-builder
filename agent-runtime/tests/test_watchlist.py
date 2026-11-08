@@ -32,6 +32,7 @@ from agent_runtime.contracts import (
     watchlist_request,
 )
 from agent_runtime.events import EventLog
+from agent_runtime.github import GitHubReleaseSource
 from agent_runtime.planner import FixedPlanner, run_task
 from agent_runtime.release_source import MovableSource, Release
 from agent_runtime.summary import ModelSummarizer, Summarizer, TemplateSummarizer
@@ -429,6 +430,20 @@ def test_every_software_refused_fails_the_task_for_good():
     result = Room(source).run(request_for(fastapi("0.115.0"), redis("8.2.1")))
     assert isinstance(result, TaskFailed)
     assert (result.error.type, result.error.retryable) == ("UpstreamRejected", False)
+
+
+def test_github_limiting_how_often_we_ask_stops_the_check_at_once_and_it_can_be_retried():
+    limited = httpx.Response(403, json={}, headers={"x-ratelimit-remaining": "0"})
+    github = httpx.Client(transport=httpx.MockTransport(lambda request: limited))
+    room = Room(GitHubReleaseSource("https://github.test", client=github))
+    result = room.run(request_for(fastapi("0.115.0"), redis("8.2.1")))
+    assert isinstance(result, TaskFailed)
+    assert (result.error.type, result.error.retryable) == ("UpstreamUnavailable", True)
+    assert result.error.message == (
+        "None of the 2 watched software could be checked. "
+        "GitHub is limiting how often we can ask it. Try again later"
+    )
+    assert room.clock.slept == []
 
 
 def test_a_task_that_could_check_nothing_still_gives_each_software_its_own_reason():
