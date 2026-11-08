@@ -2,7 +2,7 @@ from typing import Any, cast
 
 import pytest
 
-from agent_runtime.answers import TaskRead, answer_task
+from agent_runtime.answers import ASK_THE_QUESTION_LANE, TaskRead, answer_task, decide
 from agent_runtime.contract import (
     AbilitiesAnswer,
     Answered,
@@ -190,3 +190,45 @@ def test_more_offer_phrasings_fall_back_to_the_fixed_text(offer: str):
 
 def test_the_prompt_keeps_the_facts_out_of_the_answer():
     assert 'Never say "the facts"' in QUESTION_SYSTEM
+
+
+def _read_of(**fields: Any) -> TaskRead:
+    return reading().model_copy(update=fields)
+
+
+@pytest.mark.parametrize(
+    ("task", "software"),
+    [
+        ("Is there a newer version of FastAPI?", "FastAPI"),
+        ("What is the newest version of FastAPI?", "FastAPI"),
+        ("Which version of Grafana do we run?", "Grafana"),
+    ],
+)
+def test_decide_offers_to_watch_unwatched_software(task: str, software: str):
+    request = AnswerRequest(task=task, model=answer_request().model, facts=FACTS)
+    decided = decide(_read_of(software=software), request)
+    assert isinstance(decided, WatchlistAnswer) and decided.software == software
+
+
+@pytest.mark.parametrize(
+    ("task", "software"),
+    [
+        ("What is the newest version of LangGraph?", "LangGraph"),
+        ("What is the newest version of LangGraph?", None),
+        ("Which version of Redis do we run?", "Redis"),
+        ("Which version of Redis do we run?", None),
+        ("How many software are on our watchlist?", None),
+    ],
+)
+def test_decide_sends_questions_about_held_data_to_the_question_lane(
+    task: str, software: str | None
+):
+    request = AnswerRequest(task=task, model=answer_request().model, facts=FACTS)
+    assert decide(_read_of(software=software), request) is ASK_THE_QUESTION_LANE
+
+
+def test_decide_does_not_send_a_jira_count_to_the_question_lane():
+    request = AnswerRequest(
+        task="How many Jira tickets are open in MOCK?", model=answer_request().model, facts=FACTS
+    )
+    assert decide(reading("none"), request) is not ASK_THE_QUESTION_LANE

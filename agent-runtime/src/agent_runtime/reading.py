@@ -194,7 +194,9 @@ class TaskRead(BaseModel):
         default=None, description="The word from the request that made you think so."
     )
     software: str | None = Field(
-        default=None, description="The software the request names, as it writes it."
+        default=None,
+        description="The software the request names, as it writes it, also for a my_data "
+        'question about one software: "Which version of Grafana do we run?" means Grafana.',
     )
     name: str | None = Field(
         default=None, description="For a task: 2 to 5 plain words that say what it does."

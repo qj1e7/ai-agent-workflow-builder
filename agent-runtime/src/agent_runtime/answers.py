@@ -560,6 +560,23 @@ def _unwatched(read: TaskRead, request: AnswerRequest) -> WatchlistAnswer | None
     return None if word is None else WatchlistAnswer(word=word, software=software)
 
 
+class AskTheQuestionLane:
+    """The decision that no fixed answer fits and the question lane answers from the facts."""
+
+
+ASK_THE_QUESTION_LANE: Final = AskTheQuestionLane()
+
+
+def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQuestionLane:
+    """The final answer for a reading, or the question lane when the person asked about their own
+    data and nothing else took the request over."""
+    answer = answer_of(read, request.task)
+    if not _is_question(read, answer):
+        return answer
+    unwatched = _unwatched(read, request)
+    return ASK_THE_QUESTION_LANE if unwatched is None else unwatched
+
+
 def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     refused = word_rule_refusal(request.task)
     if refused is not None:
@@ -573,14 +590,11 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     )
     if isinstance(read, ModelProblem):
         return read
-    answer = answer_of(read, request.task)
-    if _is_question(read, answer):
-        unwatched = _unwatched(read, request)
-        if unwatched is not None:
-            return Answered(answer=unwatched)
+    decided = decide(read, request)
+    if isinstance(decided, AskTheQuestionLane):
         asked = answer_question(request, chat_for)
         return asked if isinstance(asked, ModelProblem) else Answered(answer=asked)
-    return Answered(answer=answer)
+    return Answered(answer=decided)
 
 
 APPROVAL_WORDS: Final = re.compile(
