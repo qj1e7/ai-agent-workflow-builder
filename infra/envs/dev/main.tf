@@ -388,6 +388,16 @@ locals {
       }
     }
 
+    migrate = {
+      image           = local.images["platform-api"]
+      timeout_seconds = 300
+      command         = ["python", "-m", "platform_api.migrate"]
+      env             = {}
+      secrets = {
+        DATABASE_URL_OWNER = local.secret["database-url-owner"]
+      }
+    }
+
     bootstrap = {
       image           = local.images["platform-api"]
       timeout_seconds = 600

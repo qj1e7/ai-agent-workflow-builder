@@ -23,7 +23,8 @@ One environment, `dev`, in the resource group `rg-wab-dev`. The region is Southe
 | Container App | `n8n` | Internal ingress on 5678, or external when `N8N_EDITOR_EXTERNAL` is `true` ([n8n's editor](#n8ns-editor)), 0.5 vCPU, exactly 1 replica |
 | Container App | `portal` | External ingress on 8080, 0.25 vCPU, scales to zero |
 | Container Apps Job | `db-init` | Creates the per-context database roles. Runs on every deploy |
-| Container Apps Job | `bootstrap` | Migrations, n8n owner, workflow load and lint. Runs on every deploy |
+| Container Apps Job | `migrate` | Applies the database migrations with the new platform-api image, before the apps change ([Migrations on a deploy](#migrations-on-a-deploy)). Runs on every deploy |
+| Container Apps Job | `bootstrap` | Migrations again, which finds nothing to do on Azure, then n8n owner, workflow load and lint. Runs on every deploy |
 | Managed identities | `id-<app>-wab-dev`, one per app and job | AcrPull on the registry, and Key Vault Secrets User on each secret it reads. platform-api's also has Cosmos DB's built-in Data Contributor role on the `activity` database |
 
 PostgreSQL 17 matches Compose and is listed as supported in [Azure's version list](https://learn.microsoft.com/en-us/azure/postgresql/configure-maintain/concepts-supported-versions). We did not check that the Southeast Asia region offers it, because nothing here contacts Azure. If the first deploy says it does not, set `version = "16"` in `modules/postgres/main.tf`.
@@ -103,6 +104,17 @@ infra/
 Apps call each other over HTTPS, because Container Apps redirects plain HTTP and our HTTP clients do not follow redirects. Traffic between apps in one environment stays inside it.
 
 Every app's address comes from the Container Apps environment's default domain: `https://<app>.<domain>`, or `https://<app>.internal.<domain>` for an internal app. So the Portal and platform-api can each know the other's address without waiting for the other app to exist. Azure picks the domain when it creates the environment, so a new environment gets a new one. n8n's address changes with `N8N_EDITOR_EXTERNAL`, and platform-api and the bootstrap job follow it.
+
+## Migrations on a deploy
+
+The deploy applies the database migrations before it changes the apps (issue #131). It updates only the `migrate` job to the new platform-api image, runs it, and only then applies everything, which starts the new platform-api. So the new code never runs on the old schema.
+
+The old platform-api keeps running on the new schema until the new revision takes over, a few minutes later. If the full apply fails, the old code keeps running on the new schema until the next deploy. So every migration must keep the running code working:
+
+- Add things: a table, an index, or a column that is nullable or has a default.
+- Do not drop or rename a table or a column, or add a `NOT NULL` column without a default, in the same deploy as the code that stops using it or starts filling it. Do that in a later deploy, once no running code needs the old shape.
+
+Compose starts platform-api only after its bootstrap has migrated the database, so the gap exists only on Azure.
 
 ## Known risk: the database is reachable from Azure
 
@@ -234,10 +246,11 @@ If the repository is made public later, add required reviewers and "Prevent self
    1. creates the registry if it is missing,
    2. copies n8n and PostgreSQL into the registry by digest, then builds and pushes our three images, tagged with the commit SHA,
    3. creates the `db-init` job if it is missing and runs it, so the database roles exist before any app starts. This step also creates the Cosmos DB account, because the job reads its secrets from Key Vault and Key Vault holds the account's key. A new account takes about 5 to 10 minutes,
-   4. plans everything, puts the count of changes in the run summary, and applies that exact plan,
-   5. runs the `bootstrap` job, and prints the Portal's and platform-api's addresses and the Cosmos DB account's name.
+   4. creates or updates the `migrate` job with the new platform-api image and runs it, so the database is at the new schema before the new platform-api starts ([Migrations on a deploy](#migrations-on-a-deploy)). Step 3 already brought everything the job depends on up to date, so this apply changes only the job and its identity,
+   5. plans everything, puts the count of changes in the run summary, and applies that exact plan,
+   6. runs the `bootstrap` job, and prints the Portal's and platform-api's addresses and the Cosmos DB account's name.
 
-   Each apply in steps 1, 3 and 4 first saves its plan and checks it. If the plan would destroy or replace any resource, the deploy stops before that apply and prints only the counts. Run it again with `allow_destroy` ticked only when you mean it, for example after renaming a resource on purpose.
+   Each apply in steps 1, 3, 4 and 5 first saves its plan and checks it. If the plan would destroy or replace any resource, the deploy stops before that apply and prints only the counts. Run it again with `allow_destroy` ticked only when you mean it, for example after renaming a resource on purpose.
 
    The workflow never runs on a push. Only `workflow_dispatch` starts it. It prints summaries only: Terraform's summary lines, the plan's counts, the job names, the two public addresses and the Cosmos DB account's name. The full plan and Terraform's full output stay in files on the runner and are never uploaded. On a failure it prints Terraform's errors, which can name a resource.
 9. **Add the Portal's redirect URIs.** In the Portal's app registration, add `https://<portal-host>/auth/callback` and `https://<portal-host>/signed-out` as single-page application redirect URIs, with the address the deploy printed. Sign-in works from then on. Repeat this after any deploy that creates a new environment, because its address changes.
@@ -252,7 +265,7 @@ These were not testable offline, so they are guesses until a real deploy confirm
   - **What a plan shows.** On an environment that is already converted, the first plan adds one resource, the action, and its PATCH changes nothing. Later plans show no change. The plan guard only stops on a destroy or a replace, so the deploy goes ahead.
   - **Why an action.** It is an `azapi_resource_action`, not an `azapi_update_resource`. That resource sends a PUT that keeps only the fields in azapi's own copy of the API, and that copy has no `environmentMode`, so it would drop the setting without an error. An action has nothing to read back, though. If the mode ever changes in Azure, Terraform does not see it. To send the PATCH again, replace the action by hand (`terraform apply -replace='module.container_env.azapi_resource_action.workload_profiles_mode'`). Removing the action from the code changes nothing in Azure.
 - Azure RBAC can take a few minutes to reach Key Vault and the registry. Microsoft says up to 10 minutes. Each app's identity waits 90 seconds after its role assignments before its app is created. The deploy identity waits 90 seconds after giving itself AcrPush and Key Vault Secrets Officer, before it pushes images or writes secrets. The workflow also tries `az acr login` and each `docker push` up to five times, 30 seconds apart. If an app still fails to read a secret, or Terraform cannot write one, rerun the workflow.
-- The workflow waits for each job twice as long as the job's own timeout: 600 seconds for `db-init` and 1200 for `bootstrap`. Pulling the image on a cold start counts against the wait, not the timeout. If a wait still runs out, check the job's execution in the Azure portal before you rerun.
+- The workflow waits for each job twice as long as the job's own timeout: 600 seconds for `db-init` and `migrate`, and 1200 for `bootstrap`. Pulling the image on a cold start counts against the wait, not the timeout. If a wait still runs out, check the job's execution in the Azure portal before you rerun.
 - `az acr import` should keep each image's digest, since the Terraform code pulls n8n and PostgreSQL by digest. If a pull fails with "manifest unknown", compare the digest in the registry with `public-images.json`.
 - The Azure admin role is not a superuser. `db-init` grants itself membership in `n8n` and `wab_owner` before it hands them their databases. A local PostgreSQL 17 run showed that the handover fails without that grant and works with it. On Azure it is still untested.
 - Container Apps ingress ends any request after 240 seconds. The live view's event stream reconnects on its own. Check that the live view keeps up after 4 minutes.
