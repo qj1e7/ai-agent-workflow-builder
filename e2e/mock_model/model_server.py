@@ -558,7 +558,8 @@ def question_reply(text: str) -> dict[str, Any]:
     if not COUNT_QUESTION.search(question):
         return {"about_their_data": False, "text": ""}
     try:
-        watchlist = json.loads(facts_text[facts_text.find("{") :]).get("watchlist", [])
+        facts = cast(dict[str, Any], json.loads(facts_text[facts_text.find("{") :]))
+        watchlist = cast(list[Any], facts.get("watchlist", []))
     except ValueError:
         watchlist = []
     return {"about_their_data": True, "text": f"Your watchlist holds {len(watchlist)} software."}
