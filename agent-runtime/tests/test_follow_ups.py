@@ -177,3 +177,12 @@ def test_decide_sends_a_watched_follow_up_to_the_lane_but_not_a_task_or_a_stoppe
     assert not isinstance(needs, AskTheQuestionLane)
     why = decide(reading("why_stopped"), request("and Redis?"))
     assert not isinstance(why, AskTheQuestionLane) or why.first_on_reject
+
+
+def test_a_bare_cant_for_the_words_of_a_follow_up_goes_to_the_lane_and_stands_if_it_says_no():
+    cant = reading("none", software="LangGraph")
+    out, _ = run("and LangGraph?", cant)
+    assert out.answer.kind == "question" and out.answer.text == "Redis is up to date."
+    no = QuestionReply(about_their_data=False)
+    out, _ = run("and LangGraph?", cant, lane=no)
+    assert out.answer.kind == "cant"

@@ -586,11 +586,13 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
 
 def _follows(answer: PlannerAnswer) -> bool:
     """Whether a follow-up about watched software may replace this first answer with the lane's. A
-    task, a can't or a refusal stays as it is, and so do the two answers that carry buttons."""
+    set-up card, a part or a refusal stays as it is, and so do the two answers that carry buttons.
+    A bare can't may go: a follow-up has no change verb, so the can't is only the words of the
+    follow-up itself, and it stands if the lane says no."""
     match answer:
         case AbilitiesAnswer() | WhichSoftwareAnswer() | CheckWorkflowsAnswer():
             return True
-        case WatchlistAnswer(also=None):
+        case WatchlistAnswer(also=None) | CantAnswer(alternative=None):
             return True
         case _:
             return False
