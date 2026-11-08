@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from platform_api.builder.lifecycle import On
+from platform_api.builder.watchlist import ListedSoftware, WatchlistRecord, given_versions, task
 from platform_api.orchestration.agents import (
     CarryForward,
     Finding,
@@ -16,6 +18,7 @@ from platform_api.orchestration.agents import (
 )
 from platform_api.orchestration.approvals import Verdict
 from platform_api.orchestration.dispatch import identity_of
+from platform_api.orchestration.jira import PRACTICE_SITE, JiraWriteConnector
 from platform_api.orchestration.runs import (
     Acting,
     AwaitingApproval,
@@ -25,7 +28,7 @@ from platform_api.orchestration.runs import (
     StepName,
     Succeeded,
 )
-from platform_api.orchestration.service import Decided, StepReply
+from platform_api.orchestration.service import Decided, Orchestrator, StepReply
 from platform_api.orchestration.spec import RunSpec
 from platform_api.orchestration.watch import (
     Checked,
@@ -43,6 +46,13 @@ from platform_api.orchestration.watch import (
     TicketToPropose,
 )
 from platform_api.orchestration.watch_store import WatchFacts, WatchlistStanding, WatchStore
+from platform_api.orchestration.write_actions import (
+    Json,
+    Site,
+    WriteAction,
+    WriteGateway,
+    WriteKey,
+)
 from platform_api.shared import N8nExecutionId, RunId, SoftwareId
 from tests.conftest import PostgresUrls
 from tests.support import (
@@ -57,7 +67,7 @@ from tests.support import (
     WATCHLIST_TASK,
     watched,
 )
-from tests.test_orchestrator import Harness, open_harness
+from tests.test_orchestrator import PUBLIC_BASE_URL, Harness, mint, open_harness
 
 pytestmark = pytest.mark.anyio
 
@@ -281,15 +291,46 @@ async def test_approving_writes_the_tickets_and_marking_one_done_moves_our_versi
     assert (await standings(h)).software[LANGGRAPH] == moved, "a second refresh changes nothing"
 
 
+B_SITE = Site(identity_of("jira", "https://jira-b.example"), "jira-b.example")
+
+
 @dataclass
 class JiraB:
-    """A second Jira site, with its own MOCK-1 that someone closed long ago."""
+    """A second Jira site with a project MOCK. It makes MOCK-901 onwards, and its own MOCK-1 was
+    closed long ago."""
 
+    name = "jira"
+    operations = JiraWriteConnector.operations
+    site = B_SITE
     asked: list[list[str]] = field(default_factory=list[list[str]])
+    made: list[str] = field(default_factory=list[str])
+
+    async def execute(self, action: WriteAction, key: WriteKey) -> str:
+        self.made.append(str(action.fields["title"]))
+        return f"MOCK-{900 + len(self.made)}"
+
+    def link(self, reference: str) -> str | None:
+        return None
 
     async def done_tickets(self, keys: Collection[str]) -> Mapping[str, datetime]:
         self.asked.append(list(keys))
         return {key: NOW - timedelta(days=300) for key in keys if key == "MOCK-1"}
+
+
+def restart_on_jira_b(h: Harness, b: JiraB) -> WatchFacts:
+    """platform-api again with JIRA_BASE_URL set to Jira B, as wiring builds it: the write
+    connector and the watchlist's Done check both go to Jira B."""
+    h.orchestrator = Orchestrator(
+        h.db,
+        h.log,
+        h.engine,
+        h.teams,
+        h.agent,
+        WriteGateway(h.db, [b], poll=0.05),
+        mint,
+        public_base_url=PUBLIC_BASE_URL,
+    )
+    return WatchFacts(h.db, b, B_SITE.identity)
 
 
 async def a_written_ticket(h: Harness) -> None:
@@ -299,31 +340,167 @@ async def a_written_ticket(h: Harness) -> None:
     assert [t.key for t in await h.jira.tickets()] == ["MOCK-1"]
 
 
-async def test_the_done_check_asks_another_jira_nothing_about_a_ticket_written_on_this_one(
+LISTED = WatchlistRecord(
+    USE_CASE,
+    WATCHLIST_SPEC.use_case_version,
+    ALICE.user_id,
+    "MOCK",
+    tuple(
+        ListedSoftware(s.id, s.name, s.source, s.our_version, ALICE.user_id, NOW)
+        for s in TASK.software
+    ),
+    On(),
+)
+CHECKED_AGAIN = ONE_BEHIND.model_copy(
+    update={
+        "findings": [
+            finding(LANGGRAPH, "behind", "1.2.16"),
+            finding(REDIS, "up_to_date", "8.2.1"),
+            finding(FASTAPI, "cant_check", None, NOT_FOUND),
+            finding(POSTGRES, "up_to_date", "17.2.0"),
+        ]
+    }
+)
+
+
+async def check_again(h: Harness, shown: WatchlistStanding) -> AwaitingApproval:
+    """The next check, told what the watchlist shows, as the builder starts it."""
+    assert given_versions(LISTED) == GIVEN
+    h.agent.output = CHECKED_AGAIN
+    run_id = await start_check(h, replace(WATCHLIST_SPEC, task=task(LISTED, shown)), "check-2")
+    reply = await h.orchestrator.on_step(run_id, StepName.RUN_AGENTS, N8nExecutionId("43"))
+    assert reply.outcome == "proposed", reply.detail
+    await h.orchestrator.on_step(run_id, StepName.ASK_APPROVAL, N8nExecutionId("43"))
+    await h.orchestrator.tick()
+    state = await h.state(run_id)
+    assert isinstance(state, AwaitingApproval)
+    return state
+
+
+async def proposed_on(h: Harness, waiting: AwaitingApproval) -> list[tuple[Json, dict[str, Json]]]:
+    detail = await h.orchestrator.get_approval(waiting.approval_id, BOB)
+    assert detail is not None
+    return [(a.fields["title"], dict(a.target)) for a in detail.proposal.actions]
+
+
+async def test_on_jira_b_a_ticket_written_on_the_practice_jira_is_not_open_and_holds_nothing(
     h: Harness,
 ):
+    """Live case A11: after a switch to Jira B, LangGraph's MOCK-1 on the practice Jira is not
+    Jira B's open ticket. It is not shown, so never linked to Jira B's own MOCK-1, and the next
+    check on Jira B proposes LangGraph's upgrade there."""
     await a_written_ticket(h)
     b = JiraB()
-    on_b = WatchFacts(h.db, b, identity_of("jira", "https://jira-b.example"))
-    found = (await on_b.standings(USE_CASE, GIVEN)).software[LANGGRAPH]
+    on_b = restart_on_jira_b(h, b)
+    shown = await on_b.standings(USE_CASE, GIVEN)
+    langgraph = shown.software[LANGGRAPH]
+    assert (langgraph.status, langgraph.facts.open_ticket) == ("behind", None)
+    assert langgraph.facts.our_version == Given("1.2.14", NOW)
     assert b.asked == [], "Jira B's own MOCK-1 is another ticket"
-    assert found.status == "ticket_open"
-    assert found.facts.our_version == Given("1.2.14", NOW)
 
-    await h.jira.mark_done("MOCK-1")
-    back = (await standings(h)).software[LANGGRAPH]
-    assert back.status == "up_to_date", "the practice Jira is still asked about its own ticket"
-    assert isinstance(back.facts.our_version, FromTicketDone)
+    waiting = await check_again(h, shown)
+    assert await proposed_on(h, waiting) == [
+        ("Upgrade LangGraph from 1.2.14 to 1.2.16", {"project": "MOCK", "site": B_SITE.identity})
+    ]
+    await bob_decides(h, waiting.run_id, Verdict.APPROVE)
+    reply = await h.orchestrator.on_step(
+        waiting.run_id, StepName.WRITE_ACTION, N8nExecutionId("44")
+    )
+    assert reply.outcome == "written"
+    assert b.made == ["Upgrade LangGraph from 1.2.14 to 1.2.16"]
+    on_jira_b = (await on_b.standings(USE_CASE, GIVEN)).software[LANGGRAPH]
+    assert on_jira_b.facts.open_ticket == OpenTicket("MOCK-901", "1.2.16")
+    on_practice = (await standings(h)).software[LANGGRAPH]
+    assert on_practice.facts.open_ticket == OpenTicket("MOCK-1", "1.2.16"), "each its own"
 
 
-async def test_a_ticket_written_before_sites_were_kept_is_never_asked_about(h: Harness):
+async def test_a_ticket_written_before_sites_were_kept_is_not_open_and_its_done_moves_nothing(
+    h: Harness,
+):
+    """Live case A12: a ticket row from before migration 0016 has no site. Deny by default keeps
+    its Done from moving our version, and it does not hold the software's next ticket either."""
     await a_written_ticket(h)
     async with h.db.transaction("orchestration") as uow:
         await uow.conn.execute("UPDATE orchestration.proposed_tickets SET site = NULL")
     await h.jira.mark_done("MOCK-1")
-    found = (await standings(h)).software[LANGGRAPH]
-    assert found.status == "ticket_open", "a ticket with no site is not taken as the practice's"
-    assert found.facts.our_version == Given("1.2.14", NOW)
+    shown = await standings(h)
+    langgraph = shown.software[LANGGRAPH]
+    assert (langgraph.status, langgraph.facts.open_ticket) == ("behind", None)
+    assert langgraph.facts.our_version == Given("1.2.14", NOW), "not taken as the practice's"
+
+    waiting = await check_again(h, shown)
+    assert await proposed_on(h, waiting) == [
+        ("Upgrade LangGraph from 1.2.14 to 1.2.16", {"project": "MOCK", "site": "practice"})
+    ]
+
+
+@dataclass
+class SiteJira:
+    """One Jira site's answer to the Done check. Once `closed`, every ticket asked about is Done."""
+
+    closed: bool = False
+    asked: list[str] = field(default_factory=list[str])
+
+    async def done_tickets(self, keys: Collection[str]) -> Mapping[str, datetime]:
+        self.asked.extend(keys)
+        return {key: NOW + timedelta(days=1) for key in keys} if self.closed else {}
+
+
+async def tickets_in_three_places(h: Harness) -> None:
+    """LangGraph's MOCK-1 written on the practice Jira, Redis's MOCK-1 on Jira B, and FastAPI's
+    MOCK-2 from before sites were kept."""
+    await a_written_ticket(h)
+    async with h.db.transaction("orchestration") as uow:
+        row = await (
+            await uow.conn.execute("SELECT proposal_id, run_id FROM orchestration.proposed_tickets")
+        ).fetchone()
+        assert row is not None
+        for index, software, version, key, site in (
+            (1, REDIS, "8.2.2", "MOCK-1", B_SITE.identity),
+            (2, FASTAPI, "0.115.6", "MOCK-2", None),
+        ):
+            await uow.conn.execute(
+                "INSERT INTO orchestration.proposed_tickets (proposal_id, action_index, run_id, "
+                "use_case_id, software_id, version, status, ticket_key, site) "
+                "VALUES (%s, %s, %s, %s, %s, %s, 'written', %s, %s)",
+                (row["proposal_id"], index, row["run_id"], USE_CASE, software, version, key, site),
+            )
+
+
+@pytest.mark.parametrize(
+    ("site", "own", "version"),
+    [(PRACTICE_SITE, LANGGRAPH, "1.2.16"), (B_SITE, REDIS, "8.2.2")],
+    ids=["practice Jira", "Jira B"],
+)
+async def test_the_open_check_and_the_done_check_read_the_same_tickets_on_each_jira(
+    h: Harness, site: Site, own: SoftwareId, version: str
+):
+    await tickets_in_three_places(h)
+    jira = SiteJira()
+    facts = WatchFacts(h.db, jira, site.identity)
+    shown = (await facts.standings(USE_CASE, GIVEN)).software
+    assert {sid: s.facts.open_ticket for sid, s in shown.items() if s.facts.open_ticket} == {
+        own: OpenTicket("MOCK-1", version)
+    }
+    assert jira.asked == ["MOCK-1"], "the Done check asks about the open ticket and no other"
+
+    jira.closed = True
+    moved = (await facts.standings(USE_CASE, GIVEN)).software
+    assert {sid: s.facts.our_version for sid, s in moved.items() if s.facts.our_version} == {
+        **{sid: shown[sid].facts.our_version for sid in shown if shown[sid].facts.our_version},
+        own: FromTicketDone(version, NOW + timedelta(days=1), "MOCK-1"),
+    }
+    assert all(s.facts.open_ticket is None for s in moved.values())
+
+
+async def test_the_ticket_our_version_came_from_is_named_only_on_its_own_jira(h: Harness):
+    await a_written_ticket(h)
+    await h.jira.mark_done("MOCK-1")
+    here = (await standings(h)).software[LANGGRAPH].facts.our_version
+    assert here == FromTicketDone("1.2.16", NOW, "MOCK-1")
+    on_b = WatchFacts(h.db, JiraB(), B_SITE.identity)
+    there = (await on_b.standings(USE_CASE, GIVEN)).software[LANGGRAPH].facts.our_version
+    assert there == FromTicketDone("1.2.16", NOW, None), "Jira B's MOCK-1 is another ticket"
 
 
 async def test_marking_a_ticket_done_twice_keeps_the_first_done_time(h: Harness):
@@ -577,9 +754,9 @@ async def test_recording_the_same_review_twice_changes_nothing(h: Harness):
         record = await h.orchestrator._store.load_run(uow, run_id)  # pyright: ignore[reportPrivateUsage]
         assert record is not None
         await store.record_review(uow, record, reviewed, None)
-        once = await store.facts(uow, USE_CASE)
+        once = await store.facts(uow, USE_CASE, PRACTICE_SITE.identity)
         await store.record_review(uow, record, reviewed, None)
-        twice = await store.facts(uow, USE_CASE)
+        twice = await store.facts(uow, USE_CASE, PRACTICE_SITE.identity)
     assert once == twice
     assert once.learned == {REDIS: FromFirstCheck("8.2.1", NOW)}
     assert once.checks[LANGGRAPH] == Checked(run_id, NOW, "1.2.16")
