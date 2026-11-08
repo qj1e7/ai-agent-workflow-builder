@@ -1499,9 +1499,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     /* A search returns the 50 newest tickets (platform-api jira.py, SEARCH_LIMIT), so anything older is out of reach. */
     older: { name: 'Find older tickets, beyond the newest 50', kind: 'read', base: 'planned', conn: 'jira', sys: 'Jira', tools: [], cant: 'look past the 50 newest tickets', why: 'A search stops there.', note: 'A backend change: a created-date filter and paging in the Jira search.' },
     summarise: { name: 'Sum up what I find', kind: 'none', base: 'ready', model: true, tools: [] },
-    ghReleases: { name: 'Check software for new releases on GitHub', kind: 'read', base: 'ready', conn: 'github', sys: 'GitHub', tools: ['ghReleases'], focus: true },
-    jiraCreate: { name: 'Create a Jira ticket after a yes', kind: 'write', base: 'ready', conn: 'jira', sys: 'Jira', model: true, tools: ['jiraCreate'], focus: true },
-    teamsAsk: { name: 'Ask Approvers for a yes in Teams', kind: 'notify', base: 'ready', conn: 'teams', sys: 'Teams', tools: [], platform: true, focus: true },
+    ghReleases: { focus: true, name: 'Check software for new releases on GitHub', kind: 'read', base: 'ready', conn: 'github', sys: 'GitHub', tools: ['ghReleases'], focus: true },
+    jiraCreate: { focus: true, name: 'Create a Jira ticket after a yes', kind: 'write', base: 'ready', conn: 'jira', sys: 'Jira', model: true, tools: ['jiraCreate'], focus: true },
+    teamsAsk: { focus: true, name: 'Ask Approvers for a yes in Teams', kind: 'notify', base: 'ready', conn: 'teams', sys: 'Teams', tools: [], platform: true, focus: true },
     teamsPost: { name: 'Post messages in Teams', kind: 'write', base: 'planned', conn: 'teams', sys: 'Teams', tools: ['teamsPost'], cant: 'post messages in Teams', why: 'Teams carries approval requests, run outcomes and requests for the team. It posts nothing else.' },
     confluence: { name: 'Change Confluence pages', kind: 'write', base: 'planned', tools: [], cant: 'change Confluence pages', why: 'Confluence isn’t connected to the platform.' },
     ghIssues: { name: 'Read GitHub issues', kind: 'read', base: 'planned', conn: 'github', sys: 'GitHub', tools: ['ghIssues'], cant: 'read GitHub issues', why: 'There’s no tool for that yet.' },
@@ -3376,7 +3376,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     cant: { say: cantSay, card: (m) => cantCard(m), mood: 'sorry' },
     down: { say: () => 'Jira isn’t answering right now, so I can’t check that. I’ll be able to once it’s back.', card: (m) => downCard(m), mood: 'sorry' },
     refuse: { say: () => 'I can’t set that up. Anything that changes data waits for a yes, every time.', card: (m) => refuseCard(m), mood: 'sorry' },
-    abilities: { say: (a) => (a.unknown ? 'I can’t help with that here. I set up tasks your team repeats. Here’s what I can do.' : 'Here’s what I can do for software versions.'), card: () => abilitiesHTML(), mood: (a) => (a.unknown ? 'sorry' : 'idle') },
+    abilities: { say: (a) => (a.unknown ? 'I can’t help with that here. I check software versions and watch for new releases. Here’s what I can do.' : 'Here’s what I can do for software versions.'), card: () => abilitiesHTML(), mood: (a) => (a.unknown ? 'sorry' : 'idle') },
     check: { say: checkSay, card: () => checkCard() },
     why: { say: whySay, card: (m) => whyCard(m), mood: (a) => (stoppedNow(a.id) ? 'sorry' : 'idle') },
     mine: { say: mineSay, card: () => mineCard() },
@@ -3631,8 +3631,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
 
   /* ---------- What the Planner can do ----------
-     The registry's software versioning lines, grouped by state: I can, Needs setup, Not working right now. The approval request isn't listed, because the platform does it for every
-     workflow. The lists hold only what software versioning uses, so the first screen stays light. */
+     The registry's software versioning lines, grouped by state: I can, Needs setup, Not working right now. The approval request is listed too, as Ask Approvers for a yes in Teams. The lists hold only what software versioning uses, so the first screen stays light. */
   const GROUP_ICON = { ready: I.check(14), setup: I.alert(14), down: I.alert(14), not: I.x(13) };
   const groupTitle = (g) => stateWord(g === 'not' ? 'planned' : g);
   const capNote = (c) => (c.st === 'down' ? `Last seen working ${lastOk(c.id)}` : c.st === 'setup' ? setupFix(c.id) : '');
@@ -4079,7 +4078,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const tab = S.libTab;
     const lead = { can: 'What the platform can do for software versioning. An agent can use only what is listed under I can.', agents: 'The agents behind software version checks. Anything that changes data waits for a yes.', tools: 'Tools are how agents reach GitHub and Jira. A tool that changes data waits for a yes, every time.' }[tab];
     const head = `<div class="pagehead"><div><h1 tabindex="-1">Agent library</h1><p>${lead}</p></div></div>
-      <div class="seg lib-tabs" role="group" aria-label="Show">${[['can', 'What it can do', 0], ['agents', 'Agents', list.length], ['tools', 'Tools', Object.keys(TOOLS).filter(toolLive).length]].map(([k, l, n]) => `<button data-act="libTab" data-arg="${k}" aria-pressed="${tab === k}">${l}${n ? ` <span class="seg-n">${n}</span>` : ''}</button>`).join('')}</div>`;
+      <div class="seg lib-tabs" role="group" aria-label="Show">${[['can', 'What it can do', 0], ['agents', 'Agents', list.length], ['tools', 'Tools', Object.keys(TOOLS).filter((k) => toolLive(k) && (k === 'jiraComp' || (CAPS[capOfTool(k)] || {}).focus)).length]].map(([k, l, n]) => `<button data-act="libTab" data-arg="${k}" aria-pressed="${tab === k}">${l}${n ? ` <span class="seg-n">${n}</span>` : ''}</button>`).join('')}</div>`;
     if (tab === 'tools') return head + toolsTab();
     if (tab === 'can') return head + capabilitiesTab();
     return `${head}
@@ -4122,7 +4121,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     </li>`;
   }
   function toolsTab() {
-    const live = Object.keys(TOOLS).filter(toolLive);
+    const live = Object.keys(TOOLS).filter((k) => toolLive(k) && (k === 'jiraComp' || (CAPS[capOfTool(k)] || {}).focus));
     const pending = shows('toolDraft') ? ['jiraComp'].filter((k) => toolState(k) === 'asked' || (S.jiraComp === 'draft' && me().op)) : [];
     const sec = (title, sub, keys) => (keys.length ? `<section class="section"><h2>${title} <span class="count">${keys.length}</span></h2><p class="small muted sec-sub">${sub}</p><ul class="tool-rows">${keys.map(toolRow).join('')}</ul></section>` : '');
     const team = S.teamReqs.length ? `<section class="section"><h2>Asked the team <span class="count">${S.teamReqs.length}</span></h2><p class="small muted sec-sub">New systems and anything that deletes data are the team’s decision.</p><ul class="tool-rows">${S.teamReqs.map((q) => `<li class="tool-row team"><div class="tool-name"><b>${esc(q.sys)}</b><span class="small muted">“${esc(q.text)}” Asked by ${q.by} today${q.for ? ` for the ${AGENTS[q.for].name}` : ''}.</span></div><span class="pill wait">Saved for the team</span></li>`).join('')}</ul></section>` : '';

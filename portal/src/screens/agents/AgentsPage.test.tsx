@@ -205,19 +205,26 @@ describe('a card', () => {
 })
 
 describe('the Tools tab', () => {
-  it('lists the four tools by name and system, marks Create a Jira ticket as a write that waits for a yes, and names who uses each', () => {
+  it('lists the focus tools by name and system, marks Create a Jira ticket as a write that waits for a yes, and names who uses each', () => {
     const html = render({ path: '/agents?tab=tools' })
     const main = mainOf(html)
-    expect((html.match(/<li class="[^"]*" data-tool-id=/g) ?? []).length).toBe(4)
+    expect((html.match(/<li class="[^"]*" data-tool-id=/g) ?? []).length).toBe(2)
     expect(main).toContain('Tools that change data 1')
-    expect(main).toContain('Tools that only read 3')
+    expect(main).toContain('Tools that only read 1')
     expect(main).toContain('Create a Jira ticket Jira')
     expect(main).toContain('Read GitHub releases GitHub')
     expect(main).not.toContain('jira.create_ticket')
     expect(main).toContain('Changes data Waits for a yes from 1 Approver')
     expect(main).toContain('Used by Version checker')
-    expect(main).toContain('No agent uses it yet')
     expect(main).not.toContain('Platform agents')
+  })
+
+  it('shows only the tools behind a focus capability, so the Jira search and read tools stay out', () => {
+    const html = render({ path: '/agents?tab=tools' })
+    expect(html).not.toContain('data-tool-id="jira.search"')
+    expect(html).not.toContain('data-tool-id="jira.read_ticket"')
+    expect(html).toContain('data-tool-id="github.read_releases"')
+    expect(html).toContain('data-tool-id="jira.create_ticket"')
   })
 
   it('gives each tool its health from the registry, and says what is down', () => {

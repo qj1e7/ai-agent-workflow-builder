@@ -55,7 +55,15 @@ function Group({ title, sub, tools, ...shared }: { title: string; sub: string; t
   )
 }
 
-export function ToolsTab({ tools, ...shared }: { tools: readonly ToolView[] } & Shared) {
+/** Only the tools behind a focus capability. Without the registry there is nothing to go by, so every tool shows. */
+export function focusTools(tools: readonly ToolView[], capabilities: readonly CapabilityView[] | undefined): readonly ToolView[] {
+  if (!capabilities) return tools
+  const ids = new Set(capabilities.filter((capability) => capability.focus).flatMap((capability) => capability.tools))
+  return tools.filter((tool) => ids.has(tool.id))
+}
+
+export function ToolsTab({ tools: all, ...shared }: { tools: readonly ToolView[] } & Shared) {
+  const tools = focusTools(all, shared.capabilities)
   return (
     <>
       <Group title="Tools that change data" sub="Each one waits for a yes, every time." tools={tools.filter((tool) => tool.kind === 'write')} {...shared} />
