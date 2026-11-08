@@ -38,7 +38,7 @@ type DayHow = Literal["within", "before", "since_last_run"]
 type Detail = Literal["owner", "type", "status", "created", "updated", "done"]
 type Says = Literal["list", "count", "summary"]
 type SkipWhose = Literal["nobody", "only_me", "an_approver_or_anyone_else"]
-type AsksAbout = Literal["none", "my_workflows", "why_stopped", "needs_me", "abilities", "my_data"]
+type AsksAbout = Literal["none", "my_workflows", "why_stopped", "needs_me", "abilities"]
 
 FILLED_IN: Final = "I filled this in. Your words didn't say it, so please check it."
 FILLED_IN_FROM: Final = 'I filled some of this in from your words "{}". Please check it.'
@@ -177,8 +177,7 @@ class TaskRead(BaseModel):
     asks_about: AsksAbout = Field(
         default="none",
         description="What the request is: a task or software to set up (none), a question "
-        "about the person's workflows, a question about what the platform holds for them "
-        "(my_data), or what you can do.",
+        "about the person's workflows, or what you can do.",
     )
     workflow_words: str | None = Field(
         default=None,
@@ -194,9 +193,7 @@ class TaskRead(BaseModel):
         default=None, description="The word from the request that made you think so."
     )
     software: str | None = Field(
-        default=None,
-        description="The software the request names, as it writes it, also for a my_data "
-        'question about one software: "Which version of Grafana do we run?" means Grafana.',
+        default=None, description="The software the request names, as it writes it."
     )
     name: str | None = Field(
         default=None, description="For a task: 2 to 5 plain words that say what it does."

@@ -12,7 +12,7 @@ A staff member types "help me check how many software in the watchlist" on Home.
 
 ## Decision
 
-**A question about what the platform holds for the person gets an answer in the model's own words.** The reading gains one more kind, `my_data`. A question about the software on the watchlist and its versions, about the person's workflows and their last runs, or about what needs them, is `my_data`. When code reaches that kind, it asks the model once more, with the question and a facts snapshot as JSON. The reply is a `question` answer: its text (600 characters at most) and `looked_at`, the sections it used (`watchlist`, `workflows`, `needs_you`).
+**A question about what the platform holds for the person gets an answer in the model's own words.** The first reading is unchanged: the model still fills the same reading, and code still picks the fixed answer from it. The lane replaces two of the dead ends that answer reaches. One is the catch-all, the abilities list, which a plain question about the Software page, the Workflows page or Needs you lands on. The other is the offer to watch a software the watchlist already holds, such as "Is there a newer version of LangGraph?" when LangGraph is on the list. In those two cases, and only when the platform sent facts, code asks the model once more, with the question and a facts snapshot as JSON. The reply says first whether the question is about the person's own data. If it is not ("What can you do?"), the fixed answer stands. If it is, the reply is a `question` answer: its text (600 characters at most) and `looked_at`, the sections it used (`watchlist`, `workflows`, `needs_you`).
 
 **The facts are read when the question arrives, by the code the screens use.** platform-api builds them from the Software page's rows, the Workflows page's workflows and newest runs, and the counts Home shows under Needs you. The Software and Workflows facts are the team's, as those pages are. Needs you is the signed-in person's. A section that cannot be read, or would not fit the cap (100 software, 50 workflows), is left out.
 
@@ -26,23 +26,24 @@ A staff member types "help me check how many software in the watchlist" on Home.
 
 ## What stays fixed
 
-Set-up cards, parts, can'ts, refusals, watchlist set-ups, "what can you do" and the chips keep their fixed text. A request that asks for a change stays a task even when it also asks a question, so no part of it is dropped. The approval gate, the safety checker and the word rule for skipped yes answers are unchanged.
+Set-up cards, parts, can'ts, refusals, "which software", offers to watch software the watchlist does not hold, "what can you do" and the chips keep their fixed text. A request that asks for a change stays a task even when it also asks a question, so no part of it is dropped. The approval gate, the safety checker and the word rule for skipped yes answers are unchanged.
 
 ## Not now
 
-Questions about Jira tickets are not `my_data` in this phase. A search still becomes a set-up card. A read of live Jira for an answer needs its own decision.
+Questions about Jira tickets get no answer from this lane in this phase. A search still becomes a set-up card. A read of live Jira for an answer needs its own decision.
 
 ## Considered options
 
 - **Fixed text per question kind.** Safe, but each new question needs new code and text, and a count or a version lookup cannot be fixed text.
 - **Let the model call tools.** It could answer anything, but it would need a read tool per source and a way to keep it from writing. The snapshot is smaller and cannot write.
+- **Teach the first reading a new kind, `my_data`.** We tried this. It moved unrelated answers in the eval, so "Tell me when there's a new version" became a can't and a Jira count became a question. Routing in code leaves the first reading alone.
 - **Send the facts with the first call.** One call less, but the model would see the data on every request, including tasks.
 
 ## Consequences
 
 - A typed request that is a question costs a second model call, so the platform's limit around the answer is 20 seconds, up from 10.
 - The facts go to the AI model provider. They are names, versions and counts the team already keeps on its pages.
-- The eval set gains five cases for the reading. The reply guards are covered by unit tests and a live check.
+- The eval set gains cases for the routing, including each Home chip. The first reading is unchanged, so the cases that passed before still do. The reply guards are covered by unit tests and a live check.
 - The glossary gains "Question answer".
 
 ## Decision record
