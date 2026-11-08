@@ -1476,3 +1476,154 @@ def test_the_word_rule_refuses_a_skipped_yes(request_text: str):
 )
 def test_the_word_rule_leaves_the_staff_members_own_attention_alone(request_text: str):
     assert word_rule_refusal(request_text) is None
+
+
+@pytest.mark.parametrize(
+    ("task", "verb", "software"),
+    [
+        ("add nodejs for me", "add", "nodejs"),
+        ("check nodejs", "check", "nodejs"),
+        ("watch Grafana", "watch", "Grafana"),
+        ("keep an eye on Redis", "keep an eye on", "Redis"),
+        ("monitor fastapi", "monitor", "fastapi"),
+        ("track the n8n releases", "releases", "n8n"),
+    ],
+)
+def test_a_watch_verb_the_model_read_with_a_software_name_is_a_watch_request(
+    task: str, verb: str, software: str
+):
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word=verb, software=software), task
+    )
+    assert answer == WatchlistAnswer(word=verb, software=software)
+
+
+def test_a_watch_verb_the_request_lacks_or_a_name_it_lacks_is_not_accepted():
+    unsaid = read(belongs_on_watchlist=True, watchlist_word="monitor", software="Redis")
+    assert answer_of(unsaid, "Redis please") == AbilitiesAnswer()
+    wrong_name = read(belongs_on_watchlist=True, watchlist_word="monitor", software="Redis")
+    assert not isinstance(answer_of(wrong_name, "monitor fastapi"), WatchlistAnswer)
+    other = read(belongs_on_watchlist=True, watchlist_word="delete", software="Redis")
+    assert not isinstance(answer_of(other, "delete Redis"), WatchlistAnswer)
+
+
+def test_a_watch_verb_request_with_a_change_still_fails_closed():
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word="watch", software="Redis"),
+        "watch Redis and delete the old branches",
+    )
+    assert isinstance(answer, CantAnswer)
+    assert answer.cant[0].kind == "do" and "delete" in answer.cant[0].text
+    assert answer.alternative == WatchlistAnswer(word="watch", software="Redis")
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "add a software for me",
+        "Add another software",
+        "please watch some software for me please",
+        "track a new software",
+    ],
+)
+def test_a_watch_verb_with_no_software_name_asks_which_software(task: str):
+    answer = answer_of(read(asks_about="abilities"), task)
+    assert isinstance(answer, WhichSoftwareAnswer)
+
+
+def test_more_words_after_a_software_noun_are_not_the_which_software_ask():
+    answer = answer_of(read(asks_about="abilities"), "add a software and email the team")
+    assert not isinstance(answer, WhichSoftwareAnswer)
+
+
+@pytest.mark.parametrize(
+    ("task", "source"),
+    [
+        ("add a software from maven instead", "maven"),
+        ("check lodash releases on npm", "npm"),
+        ("watch requests on PyPI", "PyPI"),
+        ("track nginx on Docker Hub", "Docker Hub"),
+    ],
+)
+def test_a_release_source_other_than_github_is_a_cant_in_the_persons_words(task: str, source: str):
+    answer = answer_of(read(asks_about="abilities"), task)
+    assert isinstance(answer, CantAnswer)
+    [row] = answer.cant
+    assert (row.kind, row.text, row.system) == ("where", source, source)
+    name = {"maven": "Maven"}.get(source, source)
+    assert row.note == f"I only read releases on GitHub. {name} isn't a source I read yet."
+
+
+def test_a_release_source_with_a_software_name_offers_to_watch_it_on_github():
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word="check", software="lodash"),
+        "check lodash on npm",
+    )
+    assert isinstance(answer, CantAnswer)
+    assert answer.cant[0].system == "npm"
+    assert answer.alternative == WatchlistAnswer(word="check", software="lodash")
+
+
+@pytest.mark.parametrize(
+    ("task", "verb", "software"),
+    [
+        ("check my workflows", "check", "workflows"),
+        ("add a Jira ticket for Redis", "add", "Jira ticket"),
+        ("add Bob as an approver", "add", "Bob"),
+        ("monitor the MOCK project", "monitor", "MOCK"),
+        ("watch the Jira board", "watch", "Jira"),
+        ("check MOCK-12", "check", "MOCK-12"),
+        ("track my approvals", "track", "approvals"),
+        ("add a comment to MOCK-3", "add", "MOCK-3"),
+    ],
+)
+def test_a_wrong_reading_of_a_ticket_person_or_system_is_not_a_watch_offer(
+    task: str, verb: str, software: str
+):
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word=verb, software=software), task
+    )
+    assert not isinstance(answer, WatchlistAnswer)
+    assert not isinstance(answer, WhichSoftwareAnswer)
+    if isinstance(answer, CantAnswer):
+        assert not isinstance(answer.alternative, WatchlistAnswer) or "Redis" in task
+
+
+@pytest.mark.parametrize(
+    ("task", "verb"),
+    [
+        ("watch Redis and delete the old branches", "watch"),
+        ("check Redis and close the old alerts", "check"),
+    ],
+)
+def test_a_watch_with_a_change_names_only_the_change_in_the_cant(task: str, verb: str):
+    answer = answer_of(read(belongs_on_watchlist=True, watchlist_word=verb, software="Redis"), task)
+    assert isinstance(answer, CantAnswer)
+    [row] = answer.cant
+    change = task.split(" and ", 1)[1]
+    assert row.text == change
+    assert "redis" not in row.note.casefold()
+    assert row.note.startswith(f"I can't {change}")
+    assert answer.alternative == WatchlistAnswer(word=verb, software="Redis")
+
+
+def test_a_hyphen_is_a_word_boundary_for_a_release_source():
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word="watch", software="npm-check-updates"),
+        "watch npm-check-updates",
+    )
+    assert answer == WatchlistAnswer(word="watch", software="npm-check-updates")
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word="watch", software="lodash"),
+        "watch lodash on npm",
+    )
+    assert isinstance(answer, CantAnswer)
+    assert answer.cant[0].system == "npm"
+
+
+@pytest.mark.parametrize("spelled", ["node.js", "Node JS", "nodejs"])
+def test_a_software_spelled_differently_in_the_reading_still_matches_the_text(spelled: str):
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word="add", software=spelled), "add nodejs"
+    )
+    assert answer == WatchlistAnswer(word="add", software="nodejs")

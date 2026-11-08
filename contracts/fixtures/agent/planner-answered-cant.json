@@ -6,7 +6,7 @@
       {
         "kind": "do",
         "text": "email me the list of stale tickets in MOCK",
-        "note": "I can't email me the list of stale tickets in MOCK. I can only read Jira tickets, sum up what I find, check software for new releases, create a Jira ticket after a yes, and ask Approvers for a yes in Teams.",
+        "note": "I can't email me the list of stale tickets in MOCK. I can only check software for new releases on GitHub, create a Jira ticket after a yes, and ask Approvers for a yes in Teams.",
         "needs": "new_system",
         "system": "email"
       }

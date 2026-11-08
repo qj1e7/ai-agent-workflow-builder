@@ -20,7 +20,9 @@ from agent_runtime.abilities import (
     commands_a_change,
     names_a_ticket_field,
     need_of,
+    other_release_source,
     other_systems,
+    release_source_note,
     release_word_in,
     skip_of_a_yes,
     software_name,
@@ -61,6 +63,7 @@ from agent_runtime.follow_ups import follow_up_of, watch_offer_of
 from agent_runtime.planner import (
     CANT_YET,
     NOTE_LIMIT,
+    QUOTES,
     TEXT_LIMIT,
     arrange,
     plain,
@@ -367,7 +370,18 @@ def _asks_for_vulnerabilities(cant: list[CantRow]) -> bool:
 
 
 def _software_of(read: TaskRead, request: str) -> str | None:
-    return whole_word_of(request, software_name(read.software))
+    """The software as the request wrote it. A reading spelled differently ("node.js" for
+    "nodejs") matches when dots, hyphens, spaces and case are ignored."""
+    said = software_name(read.software)
+    exact = whole_word_of(request, said)
+    if exact is not None:
+        return exact
+    letters = re.sub(r"[\W_]+", "", visible_words(said).casefold())
+    if not letters:
+        return None
+    loose = r"[\s.\-]*".join(re.escape(c) for c in letters)
+    found = re.search(rf"(?<![\w.\-]){loose}(?![\w\-])", request, re.IGNORECASE)
+    return None if found is None else found.group(0)
 
 
 def _watch_instead(cant: list[CantRow], read: TaskRead, request: str) -> WatchlistAnswer | None:
@@ -439,12 +453,89 @@ def _also(
     return rest if isinstance(rest, SetupCardAnswer | PartAnswer | CantAnswer) else None
 
 
+WATCH_VERBS: Final = (
+    "add",
+    "watch",
+    "track",
+    "monitor",
+    "follow",
+    "check",
+    "keep an eye on",
+    "keep track of",
+    "keep tabs on",
+)
+"""Verbs that start a watch request. The model's reading of one is taken only when the request
+says it and names the software."""
+_VERB_PATTERN: Final = "|".join(r"\s+".join(v.split()) for v in WATCH_VERBS)
+_WHICH_SOFTWARE: Final = re.compile(
+    rf"\s*(?:(?:can|could|would|will)\s+you\s+|please\s+)*({_VERB_PATTERN})\s+"
+    r"(?:a\s+new|another|some|new|a)\s+software(?:\s+(?:for\s+me|please))*\s*[.!?]*\s*",
+    re.IGNORECASE,
+)
+_TICKET_KEY: Final = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
+_NOT_A_WATCH: Final = re.compile(
+    r"\b(?:tickets?|issues?|projects?|boards?|approvers?|approvals?|workflows?|comments?|"
+    r"people|persons?|users?|teams?)\b",
+    re.IGNORECASE,
+)
+"""Words that make a watch verb a ticket, person or workflow request, whatever name the model
+read as the software."""
+
+
+def _which_software(text: str) -> WhichSoftwareAnswer | None:
+    """A watch verb and "a software" with nothing else: which software is the only question."""
+    found = _WHICH_SOFTWARE.fullmatch(text)
+    return None if found is None else WhichSoftwareAnswer(word=" ".join(found.group(1).split()))
+
+
+def _watch_verb(read: TaskRead, request: str) -> str | None:
+    """The watch verb the model read, as the request wrote it, when it is one of `WATCH_VERBS`,
+    the request says it, and the request names the software the model read."""
+    said = " ".join(visible_words(read.watchlist_word).strip(QUOTES).casefold().split())
+    if not read.belongs_on_watchlist or said not in WATCH_VERBS:
+        return None
+    software = _software_of(read, request)
+    if software is None or _TICKET_KEY.fullmatch(software) or names_a_ticket_field(software):
+        return None
+    if _TICKET_KEY.search(request) or _NOT_A_WATCH.search(request):
+        return None
+    return whole_word_of(request, said)
+
+
+def _without(request: str, word: str) -> str:
+    return re.sub(rf"(?<!\w){re.escape(word)}(?!\w)", " ", request, count=1, flags=re.IGNORECASE)
+
+
+def _verb_in(request: str) -> str | None:
+    found = re.search(rf"(?<!\w)(?:{_VERB_PATTERN})(?!\w)", request, re.IGNORECASE)
+    return None if found is None else found.group(0)
+
+
+def _other_source(read: TaskRead, request: str) -> CantAnswer | None:
+    """A can't for a release source other than GitHub, with the watch offered when a software
+    name was read."""
+    source = other_release_source(request)
+    word = _watch_verb(read, request) or _verb_in(request) or release_word_in(request)
+    asks_for_software = word is not None or re.search(r"\bsoftware\b", request, re.IGNORECASE)
+    if source is None or not asks_for_software:
+        return None
+    note = release_source_note(source)
+    cant = CantRow(kind="where", text=source, note=note, needs="new_system", system=source)
+    software = _software_of(read, request)
+    if software is None or word is None or software.casefold() == source.casefold():
+        return CantAnswer(cant=[cant])
+    return CantAnswer(cant=[cant], alternative=WatchlistAnswer(word=word, software=software))
+
+
 def _watchlist(read: TaskRead, task: _Task | None, request: str) -> PlannerAnswer | None:
+    verb = None
     word = (
         task_form_of(request, read.watchlist_word)
         or vulnerability_phrase(request)
         or release_word_in(request)
     )
+    if word is None:
+        word = verb = _watch_verb(read, request)
     if word is None:
         return None
     software = _software_of(read, request)
@@ -472,7 +563,9 @@ def _watchlist(read: TaskRead, task: _Task | None, request: str) -> PlannerAnswe
     watching = WatchlistAnswer(word=word, software=software, also=_also(read, task, request))
     if watching.also is not None:
         return watching
-    return _with_the_change_cant(watching, request)
+    return _with_the_change_cant(
+        watching, request if verb is None else _without(request, f"{verb} {software}")
+    )
 
 
 # Words that are write verbs for a ticket but read plainly beside software: "which version do we
@@ -533,9 +626,15 @@ def answer_of(read: TaskRead, request: str) -> PlannerAnswer:
     refused = _refusal(text)
     if refused is not None:
         return refused
+    asked_which = _which_software(text)
+    if asked_which is not None:
+        return asked_which
     skip = _skip_verdict(read.skips_the_yes, text)
     if skip.refused is not None:
         return skip.refused
+    elsewhere = _other_source(read, text)
+    if elsewhere is not None:
+        return elsewhere
     task = None
     if read.asks_about == "none" or task_shaped(read, text):
         covered = [skip.covered] if skip.covered is not None else []
