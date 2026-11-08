@@ -80,6 +80,7 @@ READ_FIRST = (
 JIRA_OFF: Final = TaskError(
     type="JiraNotConnected", message="Jira is not connected.", retryable=False
 )
+DRAFTS_DROPPED = "The draft ticket was not sent for approval."
 NO_SUCH_TICKET = "Jira has no such ticket."
 CUT_OFF_NOTE = (
     "More tickets matched than came back, so older ones are missing. Do not say this list is "
@@ -334,7 +335,7 @@ class _AgentRun:
                 final = cast(dict[str, object], chunk)
         error = final.get("error")
         if isinstance(error, TaskError):
-            return error
+            return self._with_drafts_note(error)
         report = final.get("report")
         assert isinstance(report, str)
         self._emit(self._say(report))
@@ -628,7 +629,14 @@ class _AgentRun:
             data=AgentStepFinishedData(step=tool.model_name, result=result),
         )
 
+    def _with_drafts_note(self, error: TaskError) -> TaskError:
+        # A stopped task sends no proposal, so a draft it holds is dropped. Say so.
+        if not self._task.proposed or DRAFTS_DROPPED in error.message:
+            return error
+        return error.model_copy(update={"message": f"{error.message} {DRAFTS_DROPPED}"})
+
     def _failed(self, error: TaskError, reason: str, step: str | None = None) -> Draft:
+        error = self._with_drafts_note(error)
         return Draft(
             agent=self._ref,
             summary=f"{self._ref.display} failed: {reason}",
@@ -664,6 +672,8 @@ def _from_jira[T](jira: JiraReader | None, ask: Callable[[JiraReader], T]) -> T 
         return JIRA_OFF
     try:
         return ask(jira)
+    except JiraRefused as refused:
+        return TaskError(type="JiraRefused", message=str(refused), retryable=False)
     except JiraUnavailable as unavailable:
         return TaskError(type="UpstreamUnavailable", message=str(unavailable), retryable=True)
 
@@ -672,8 +682,6 @@ def _wants_tools(reply: AIMessage) -> bool:
     return bool(reply.tool_calls or reply.invalid_tool_calls)
 
 
-    except JiraRefused as refused:
-        return TaskError(type="JiraRefused", message=str(refused), retryable=False)
 def _offer(tool: Tool) -> dict[str, Any]:
     return {
         "type": "function",

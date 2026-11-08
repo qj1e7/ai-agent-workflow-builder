@@ -535,6 +535,32 @@ def test_a_jira_read_that_did_not_happen_stops_the_agent_before_it_can_propose(
     assert (failed.data.step, failed.data.message) == (asked["name"], message)
 
 
+def test_a_task_that_stops_while_it_holds_a_draft_says_the_draft_was_not_sent():
+    chat = ScriptedChat(
+        script=[
+            asks(call(READ, {"repo": REPO}, "t1")),
+            asks(call(CREATE, {"title": "New release 1.2.16", "body": ""}, "t2")),
+            asks(call(SEARCH, {"project": "MOCK"}, "t3")),
+            AIMessage("Done."),
+        ]
+    )
+    request = request_with("github.read_releases", "jira.create_ticket", "jira.search")
+    result = Room(chat, jira=FakeJira(down=True), request=request).run()
+    assert isinstance(result, TaskFailed)
+    note = "The draft ticket was not sent for approval."
+    assert result.error.message.endswith(f"Jira could not answer. {note}")
+    failed = result.events[-1]
+    assert isinstance(failed, AgentFailedEvent)
+    assert failed.data.message == result.error.message
+
+
+def test_a_task_that_stops_with_no_draft_says_nothing_about_drafts():
+    chat = ScriptedChat(script=[asks(call(SEARCH, {"project": "MOCK"}, "t1")), AIMessage("Done.")])
+    result = Room(chat, jira=FakeJira(down=True), request=request_with("jira.search")).run()
+    assert isinstance(result, TaskFailed)
+    assert "draft" not in result.error.message
+
+
 def test_a_jira_read_that_finds_nothing_is_data_and_the_agent_carries_on():
     chat = ScriptedChat(
         script=[
