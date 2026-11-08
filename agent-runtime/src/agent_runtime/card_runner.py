@@ -35,7 +35,13 @@ from agent_runtime.contract import (
     TaskRequest,
 )
 from agent_runtime.events import Draft
-from agent_runtime.jira import JiraReader, JiraReaderFor, JiraTicket, JiraUnavailable
+from agent_runtime.jira import (
+    JiraReader,
+    JiraReaderFor,
+    JiraRefused,
+    JiraTicket,
+    JiraUnavailable,
+)
 from agent_runtime.model_access import problem_for
 from agent_runtime.release_source import (
     DEFAULT_RETRY,
@@ -666,6 +672,8 @@ def _wants_tools(reply: AIMessage) -> bool:
     return bool(reply.tool_calls or reply.invalid_tool_calls)
 
 
+    except JiraRefused as refused:
+        return TaskError(type="JiraRefused", message=str(refused), retryable=False)
 def _offer(tool: Tool) -> dict[str, Any]:
     return {
         "type": "function",

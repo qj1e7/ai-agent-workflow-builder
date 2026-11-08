@@ -3,6 +3,7 @@ the practice Jira through the one adapter, over HTTP, as it would read a real Ji
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -14,6 +15,7 @@ from platform_api.monitoring import callback_for
 from platform_api.orchestration import AnyApprover, ApprovalPolicy, ApprovalStep, CardRun, CardsTask
 from platform_api.orchestration.agents import CardBlock, CardInput, CardSpec
 from platform_api.orchestration.cards import card_bindings
+from platform_api.orchestration.jira import JiraRefused, JiraUnavailable
 from platform_api.orchestration.runs import Pending
 from platform_api.orchestration.spec import RunSpec
 from platform_api.orchestration.store import RunRecord, Store
@@ -366,3 +368,31 @@ async def test_filters_that_make_no_sense_are_refused(
     client: httpx.AsyncClient, query: dict[str, str]
 ):
     assert (await search(client, **query)).status_code == 422  # pyright: ignore[reportArgumentType]
+
+
+async def _refused(*_: object) -> None:
+    raise JiraRefused("Jira refused to search (403). Jira said: secret detail")
+
+
+async def _unavailable(*_: object) -> None:
+    raise JiraUnavailable("Jira could not search (500).")
+
+
+@pytest.mark.parametrize(
+    ("failing", "status", "said"),
+    [(_refused, 424, "Jira refused the request"), (_unavailable, 503, "Jira could not answer")],
+)
+@pytest.mark.parametrize("route", ["search", "read"])
+async def test_a_refusal_is_told_apart_from_an_outage_and_leaks_nothing(
+    client: httpx.AsyncClient,
+    practice: PracticeKit,
+    monkeypatch: pytest.MonkeyPatch,
+    failing: Any,
+    status: int,
+    said: str,
+    route: str,
+):
+    monkeypatch.setattr(practice.jira, "search" if route == "search" else "get_issue", failing)
+    r = await (search(client) if route == "search" else read(client, "MOCK-1"))
+    assert r.status_code == status
+    assert said in r.text and "secret detail" not in r.text

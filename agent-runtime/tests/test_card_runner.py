@@ -36,7 +36,7 @@ from agent_runtime.contracts import (
 )
 from agent_runtime.events import EventLog
 from agent_runtime.github import GitHubReleaseSource
-from agent_runtime.jira import JiraReader, JiraTicket
+from agent_runtime.jira import REFUSED, JiraReader, JiraTicket
 from agent_runtime.planner import FixedPlanner, run_cards
 from agent_runtime.release_source import MovableSource, Release
 from tests.fakes import (
@@ -479,10 +479,17 @@ READ_TICKET = "jira_read_ticket"
 SUMMARY_TICKET = call(CREATE, {"title": "Summary of finished tickets in MOCK", "body": ""}, "t9")
 JIRA_DOWN = ("Jira could not answer.", "UpstreamUnavailable", True)
 JIRA_OFF = ("Jira is not connected.", "JiraNotConnected", False)
+JIRA_REFUSED = (REFUSED, "JiraRefused", False)
 
 
 @pytest.mark.parametrize(
-    ("jira", "said"), [(FakeJira(down=True), JIRA_DOWN), (None, JIRA_OFF)], ids=["down", "off"]
+    ("jira", "said"),
+    [
+        (FakeJira(down=True), JIRA_DOWN),
+        (None, JIRA_OFF),
+        (FakeJira(refused=True), JIRA_REFUSED),
+    ],
+    ids=["down", "off", "refused"],
 )
 @pytest.mark.parametrize(
     ("asked", "tool", "could_not", "failed_because"),

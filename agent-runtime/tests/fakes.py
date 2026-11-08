@@ -8,7 +8,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.runnables import Runnable, RunnableLambda
 from pydantic import BaseModel, Field
 
-from agent_runtime.jira import JiraFound, JiraTicket, JiraUnavailable
+from agent_runtime.jira import REFUSED, JiraFound, JiraRefused, JiraTicket, JiraUnavailable
 from agent_runtime.release_source import Fetched, Release, SourceRejected, SourceUnavailable
 
 
@@ -154,11 +154,16 @@ class FakeJira:
     """A Jira with a few tickets. It records what it was asked."""
 
     def __init__(
-        self, tickets: Sequence[JiraTicket] = (), cut_off: bool = False, down: bool = False
+        self,
+        tickets: Sequence[JiraTicket] = (),
+        cut_off: bool = False,
+        down: bool = False,
+        refused: bool = False,
     ) -> None:
         self.tickets = list(tickets)
         self.cut_off = cut_off
         self.down = down
+        self.refused = refused
         self.searches: list[tuple[str, str | None, str | None, str | None]] = []
         self.filters: list[tuple[str | None, str | None]] = []
         self.created_since: list[str | None] = []
@@ -177,12 +182,16 @@ class FakeJira:
         self.searches.append((project, text, status, done_since))
         self.filters.append((updated_before, issue_type))
         self.created_since.append(created_since)
+        if self.refused:
+            raise JiraRefused(REFUSED)
         if self.down:
             raise JiraUnavailable("Jira could not answer.")
         return JiraFound([t for t in self.tickets if t.project == project], self.cut_off)
 
     def read(self, key: str) -> JiraTicket | None:
         self.reads.append(key)
+        if self.refused:
+            raise JiraRefused(REFUSED)
         if self.down:
             raise JiraUnavailable("Jira could not answer.")
         return next((t for t in self.tickets if t.key == key), None)
