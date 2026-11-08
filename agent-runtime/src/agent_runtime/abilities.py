@@ -1479,6 +1479,7 @@ _PEOPLE: Final = (
 )
 _SOMEONE_ELSE: Final = rf"(?:{_PEOPLE}|the\s+team)"
 _THEIR_YES: Final = rf"(?:'s\s+{_A_YES})?"
+_NOT_ME: Final = r"(?!\s+(?:me|us|myself|ourselves|my)\b)"
 _NOT_FROM_ME: Final = r"(?!\s+(?:from|of)\s+(?:me|us)\b)"
 _SAYS_YES: Final = r"(?:sign[- ]?off|approve|say\s+yes|ok|okay|check|confirm|agree)"
 _NOT_NEEDED: Final = r"(?:needed|required|necessary)"
@@ -1492,6 +1493,7 @@ SKIPS_A_YES: Final = re.compile(
             |to\s+(?:get|ask\s+for|wait\s+for|have)\s+(?:an?\s+|any\s+)?{_A_YES}
             |to\s+(?:wait\s+for|ask|check\s+with|bother)\s+{_SOMEONE_ELSE})\b
       | \b(?:nobody|no\s+one)\s+(?:needs?|has)\s+to\s+{_SAYS_YES}\b
+      | \bno\s+need\s+to\s+ask\b{_NOT_ME}
       | \bno\s+(?:[\w']+\s+)?{_A_YES}(?:\s+from\s+[\w']+)?\s+(?:{_NOT_NEEDED}|first|at\s+all)\b
       | (?:^|[,;:(\-]\s*)no\s+{_A_YES}\s*(?:[,;.!)]|$)
       | \bno\s+questions\s+asked\b
@@ -1505,7 +1507,8 @@ SKIPS_A_YES: Final = re.compile(
       | \b(?:treat|consider|take)\s+{_IT}\s+as\s+approved\b
       | \b(?:i|we)(?:'ve|\s+have)?\s+already\s+approved(?:\s+{_IT})?\b
       | \bsign\s+{_IT}\s+off\s+(?:yourself|yourselves|itself)\b
-      | \bskip(?:s|ped|ping)?\s+(?:the\s+|an?\s+|any\s+|all\s+|my\s+)?(?:{_A_YES}|teams)\b
+      | \bskip(?:s|ped|ping)?\s+(?:asking\s+(?:for\s+)?)?
+            (?:the\s+|an?\s+|any\s+|all\s+|my\s+)?(?:{_A_YES}|teams)\b
       | \bbypass(?:es|ed|ing)?\s+(?:the\s+|an?\s+)?(?:{_A_YES}|gate|check|teams|{_SOMEONE_ELSE})\b
       | \b(?:don'?t|do\s+not|never)\s+(?:ask(?:ing)?|wait(?:ing)?|bother(?:ing)?)\s+
             (?:getting\s+|to\s+get\s+|with\s+)?(?:for\s+)?
@@ -1528,7 +1531,8 @@ SKIPS_A_YES: Final = re.compile(
       | \bi(?:'ll|\s+will|\s+can|\s+could|\s+should)?\s+(?:be|am)\s+the\s+approver\b
     )
   | (?P<filter>
-        \bwithout\s+(?:asking|waiting(?:\s+for)?|checking\s+with|telling|consulting|bothering|
+        \bwithout\s+asking\b{_NOT_ME}(?!\s+for\s+[\w\s]*?\bfrom\s+(?:me|us)\b)
+      | \bwithout\s+(?:asking|waiting(?:\s+for)?|checking\s+with|telling|consulting|bothering|
             running\s+it\s+(?:by|past)|clearing\s+it\s+with)\s+
             (?:for\s+)?(?:an?\s+|any\s+|the\s+|my\s+)?(?:{_A_YES}|{_SOMEONE_ELSE}){_THEIR_YES}\b
             {_NOT_FROM_ME}

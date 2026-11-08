@@ -2,7 +2,7 @@ import httpx
 import pytest
 
 from agent_runtime.contracts import card_request
-from agent_runtime.jira import JiraUnavailable, PlatformJiraFor
+from agent_runtime.jira import REFUSED, JiraRefused, JiraUnavailable, PlatformJiraFor
 
 BASE = "http://platform-api:8000"
 TICKET = {
@@ -170,3 +170,16 @@ def test_an_answer_from_before_the_new_fields_still_reads():
     found = jira.search("MOCK", None, None, None)
     assert found.cut_off is False
     assert (found.tickets[0].updated_at, found.tickets[0].issue_type) == (None, "")
+
+
+def test_the_platforms_refusal_is_not_an_outage_and_says_to_check_settings():
+    handler = httpx.MockTransport(lambda r: httpx.Response(424, text="secret detail"))
+    jira, _ = reader(handler)
+    for ask in (
+        lambda: jira.search("MOCK", None, None, None),
+        lambda: jira.read("MOCK-7"),
+    ):
+        with pytest.raises(JiraRefused) as raised:
+            ask()
+        assert str(raised.value) == REFUSED
+        assert "Settings" in REFUSED and "secret detail" not in str(raised.value)

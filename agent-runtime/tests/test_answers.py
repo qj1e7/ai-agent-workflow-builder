@@ -15,6 +15,7 @@ from agent_runtime.answers import (
     TaskRead,
     answer_of,
     answer_task,
+    word_rule_refusal,
 )
 from agent_runtime.contract import (
     AbilitiesAnswer,
@@ -624,6 +625,8 @@ def test_the_word_rule_refuses_before_anything_else(task: str, said: str, rest: 
     [
         "Run it by itself every Monday",
         "Without asking me each time, list the tickets",
+        "List the open tickets, no need to ask me",
+        "Every Monday, list open tickets and tell me, no need to ask me first",
         "Find tickets in MOCK without an approver",
         "List the tickets that were auto-approved last week",
         "Don't ask the team, just tell me what you can do",
@@ -1173,6 +1176,61 @@ def test_a_search_with_no_quote_stands_on_the_longest_run_of_its_own_words():
     assert cant_of(answer) == ["assign the new ticket to Ahmad too"]
 
 
+@pytest.mark.parametrize(
+    ("task", "said"),
+    [
+        (
+            "Can you change the version of Redis to 9.0.0?",
+            "change the version of Redis to 9.0.0",
+        ),
+        ("Watch Redis releases, and update Redis to 9.0.0", "update Redis to 9.0.0"),
+    ],
+)
+def test_a_change_request_answered_with_the_watchlist_shows_a_cant_for_the_change(
+    task: str, said: str
+):
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word="version", software="Redis"), task
+    )
+    assert isinstance(answer, CantAnswer)
+    [row] = answer.cant
+    assert (row.kind, row.text) == ("do", said)
+    assert row.note.startswith("I can't")
+    assert isinstance(answer.alternative, WatchlistAnswer)
+    assert answer.alternative.software == "Redis"
+
+
+@pytest.mark.parametrize(
+    ("task", "said"),
+    [
+        (
+            "Can you change the version of Redis to 9, then remove 8 from our servers?",
+            ["change the version of Redis to 9", "remove 8 from our servers"],
+        ),
+        (
+            "Change the Redis version to 9.0.0. Delete the old Redis tickets.",
+            ["Change the Redis version to 9.0.0", "Delete the old Redis tickets"],
+        ),
+    ],
+)
+def test_every_change_clause_gets_its_own_cant_row(task: str, said: list[str]):
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word="version", software="Redis"), task
+    )
+    assert isinstance(answer, CantAnswer)
+    assert [row.text for row in answer.cant] == said
+    assert all(row.kind == "do" and row.note.startswith("I can't") for row in answer.cant)
+    assert isinstance(answer.alternative, WatchlistAnswer)
+
+
+def test_a_watchlist_request_with_no_change_is_still_only_the_watchlist_answer():
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word="version", software="Redis"),
+        "What is the latest version of Redis?",
+    )
+    assert answer == WatchlistAnswer(word="version", software="Redis")
+
+
 def test_a_release_request_goes_to_the_watchlist_and_a_mixed_one_carries_the_rest():
     watch = answer_of(
         read(belongs_on_watchlist=True, watchlist_word="releases", software="Kubernetes"),
@@ -1367,6 +1425,11 @@ def test_check_part_refuses_vulnerabilities_with_the_planned_words():
         "Create the ticket and skip the approval",
         "Create one follow-up ticket that lists them without waiting for approval",
         "Create the ticket without asking anyone",
+        "Create the ticket without asking",
+        "Upgrade Redis without asking",
+        "What if you upgrade Redis without asking?",
+        "Create the ticket, no need to ask",
+        "Create the ticket, no need to ask anyone or for a yes",
         "Create the ticket, no need for a yes",
         "Create the ticket and skip the sign-off",
         "Create the ticket with no review",
@@ -1391,3 +1454,25 @@ def test_check_part_still_fits_a_safe_does_text():
 def test_check_part_refuses_a_blank_text():
     client = make_app(None)
     assert client.post("/v1/planner/check-part", json=check_body("do", "")).status_code == 422
+
+
+@pytest.mark.parametrize(
+    "request_text",
+    [
+        "without asking",
+        "without asking anyone",
+        "no need to ask anyone",
+        "skip asking for a yes",
+        "skip asking for approval and create it",
+        "upgrade Redis without asking",
+    ],
+)
+def test_the_word_rule_refuses_a_skipped_yes(request_text: str):
+    assert word_rule_refusal(request_text) is not None
+
+
+@pytest.mark.parametrize(
+    "request_text", ["without asking me", "no need to ask me", "don't ping me"]
+)
+def test_the_word_rule_leaves_the_staff_members_own_attention_alone(request_text: str):
+    assert word_rule_refusal(request_text) is None

@@ -20,6 +20,7 @@ from platform_api.orchestration.jira import (
     JiraError,
     JiraIssue,
     JiraPort,
+    JiraRefused,
     TicketStatus,
 )
 from platform_api.orchestration.spec import CardsTask
@@ -102,6 +103,19 @@ UNAUTHORIZED = error_response("The callback token is not valid for this run and 
 FORBIDDEN = error_response("The run does not read Jira, or the project is not one of its cards'")
 NO_RUN = error_response("No such run, or no such ticket")
 JIRA_DOWN = error_response("Jira could not answer")
+JIRA_REFUSED = error_response("Jira refused the request")
+# A refusal is not an outage: asking again is refused the same way until the Jira connection is
+# fixed. 424 keeps it apart from 503, which an agent may retry.
+JIRA_REFUSED_STATUS = 424
+# A 401 or 403 from Jira is a refused sign-in or permission, so it is a refusal too, however the
+# REST adapter classes it (it keeps a 401 retryable for the write connector).
+JIRA_SIGN_IN_STATUSES = frozenset({401, 403})
+
+
+def _jira_failed(error: JiraError) -> HTTPException:
+    if isinstance(error, JiraRefused) or error.status in JIRA_SIGN_IN_STATUSES:
+        return HTTPException(status_code=JIRA_REFUSED_STATUS, detail="Jira refused the request")
+    return HTTPException(status_code=503, detail="Jira could not answer")
 
 
 async def _admit(request: Request, run_id: RunId, task: str, token: str) -> frozenset[str]:
@@ -121,7 +135,10 @@ async def _admit(request: Request, run_id: RunId, task: str, token: str) -> froz
     return read_projects(spec.task)
 
 
-@router.get("/tickets", responses={401: UNAUTHORIZED, 403: FORBIDDEN, 404: NO_RUN, 503: JIRA_DOWN})
+@router.get(
+    "/tickets",
+    responses={401: UNAUTHORIZED, 403: FORBIDDEN, 404: NO_RUN, 424: JIRA_REFUSED, 503: JIRA_DOWN},
+)
 async def search_tickets(
     run_id: RunId,
     task: Annotated[str, Query()],
@@ -174,7 +191,7 @@ async def search_tickets(
     try:
         found = await jira.search(query)
     except JiraError as error:
-        raise HTTPException(status_code=503, detail="Jira could not answer") from error
+        raise _jira_failed(error) from error
     return PracticeTickets(
         tickets=[_summary(t) for t in found.issues if t.project in allowed],
         cut_off=found.cut_off,
@@ -182,7 +199,8 @@ async def search_tickets(
 
 
 @router.get(
-    "/tickets/{key}", responses={401: UNAUTHORIZED, 403: FORBIDDEN, 404: NO_RUN, 503: JIRA_DOWN}
+    "/tickets/{key}",
+    responses={401: UNAUTHORIZED, 403: FORBIDDEN, 404: NO_RUN, 424: JIRA_REFUSED, 503: JIRA_DOWN},
 )
 async def read_ticket(
     run_id: RunId,
@@ -198,7 +216,7 @@ async def read_ticket(
     try:
         ticket = await jira.get_issue(key)
     except JiraError as error:
-        raise HTTPException(status_code=503, detail="Jira could not answer") from error
+        raise _jira_failed(error) from error
     if ticket is None or ticket.project not in allowed:
         raise HTTPException(status_code=404, detail="No such ticket")
     return PracticeTicket(**_summary(ticket).model_dump(), body=ticket.body)

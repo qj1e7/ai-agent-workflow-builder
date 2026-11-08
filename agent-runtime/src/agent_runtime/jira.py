@@ -17,6 +17,11 @@ MAX_TICKETS: Final = 50
 MAX_ANSWER_BYTES: Final = 1_000_000
 TOKEN_HEADER: Final = "X-Callback-Token"
 NO_ANSWER: Final = "Jira could not answer."
+# The platform answers this when Jira refused our request, apart from 503 for an outage.
+REFUSED_STATUS: Final = 424
+REFUSED: Final = (
+    "Jira refused the request. Check the Jira connection in Settings, then start a new run."
+)
 
 
 class JiraTicket(BaseModel):
@@ -52,6 +57,11 @@ class JiraFound:
 
 class JiraUnavailable(Exception):
     """Jira could not be reached or gave an answer we cannot use. The message is plain words."""
+
+
+class JiraRefused(JiraUnavailable):
+    """Jira refused our request. Asking again is refused the same way until someone fixes the
+    Jira connection, so this is not an outage and a retry would not help."""
 
 
 class JiraReader(Protocol):
@@ -140,6 +150,8 @@ class PlatformJira:
             raise JiraUnavailable("Jira could not be reached.") from error
         if response.status_code == 404:
             return None
+        if response.status_code == REFUSED_STATUS:
+            raise JiraRefused(REFUSED)
         if response.status_code != 200 or len(response.content) > MAX_ANSWER_BYTES:
             raise JiraUnavailable(NO_ANSWER)
         return response.content

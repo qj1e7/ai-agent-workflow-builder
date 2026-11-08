@@ -20,8 +20,7 @@ class Advice(WireModel):
 ADVICE: Mapping[FailureReason, Advice] = {
     "AgentError": Advice(
         explanation="An agent could not finish its work.",
-        likely_cause="A service the agent reads from, such as GitHub, was unavailable "
-        "or answered with an error.",
+        likely_cause="A service the agent reads from was unavailable or answered with an error.",
         suggested_action="retry",
         suggestion="Retry the run. If it fails again, check whether that service is up.",
     ),
@@ -93,12 +92,36 @@ LOOK_AT_THE_AGENT = (
 
 # Agent error types whose meaning is certain. UpstreamRejected is not one: a watchlist check also
 # gives it when it finds no plain version, which nothing refused.
+RATE_LIMITED = Advice(
+    explanation="An agent could not finish its work.",
+    likely_cause="A service the agent reads from is limiting how often it can be asked.",
+    suggested_action="retry",
+    suggestion="Wait a few minutes, then retry the run. Retrying at once is likely to hit the "
+    "same limit.",
+)
+RATE_LIMIT_WORDS = "limiting how often"
+
+
 KNOWN_AGENT_STOPS: Mapping[str, Advice] = {
     "ModelNeeded": Advice(
         explanation="No AI model is connected, so the agents couldn't start.",
         likely_cause="Agents need an AI model, and none is connected in Settings.",
         suggested_action="ask_maintainer",
         suggestion="Ask an Operator to connect an AI model in Settings, then start a new run.",
+    ),
+    "JiraNotConnected": Advice(
+        explanation="Jira is not connected, so an agent couldn't read it.",
+        likely_cause="An agent needs Jira, and none is connected in Settings.",
+        suggested_action="ask_maintainer",
+        suggestion="Ask an Operator to connect Jira in Settings, then start a new run.",
+    ),
+    "JiraRefused": Advice(
+        explanation="Jira refused an agent's request, so it couldn't read Jira.",
+        likely_cause="The Jira connection in Settings may be wrong, or it may lack the right "
+        "to read that project. Trying again is refused the same way.",
+        suggested_action="ask_maintainer",
+        suggestion="Ask an Operator to check the Jira connection in Settings, then start a "
+        "new run.",
     ),
     "AgentTooSlow": Advice(
         explanation="An agent ran out of time before it finished.",
@@ -143,6 +166,8 @@ def explain_failure(failure: RunFailedData) -> Advice:
     if failure.reason == "AgentError" and not failure.retryable:
         # The work leg's failure message starts with the agent's error type, as "ModelNeeded: ...".
         return KNOWN_AGENT_STOPS.get(failure.message.partition(": ")[0], AGENTS_STOPPED)
+    if failure.reason == "AgentError" and failure.retryable and RATE_LIMIT_WORDS in failure.message:
+        return RATE_LIMITED
     if failure.reason == "WriteFailed" and not failure.retryable:
         return WRITE_REFUSED
     if failure.reason == "SafetyDenied" and failure.message == JIRA_SITE_CHANGED:
