@@ -153,9 +153,12 @@ def asks(*calls: dict[str, Any]) -> AIMessage:
 class FakeJira:
     """A Jira with a few tickets. It records what it was asked."""
 
-    def __init__(self, tickets: Sequence[JiraTicket] = (), cut_off: bool = False) -> None:
+    def __init__(
+        self, tickets: Sequence[JiraTicket] = (), cut_off: bool = False, down: bool = False
+    ) -> None:
         self.tickets = list(tickets)
         self.cut_off = cut_off
+        self.down = down
         self.searches: list[tuple[str, str | None, str | None, str | None]] = []
         self.filters: list[tuple[str | None, str | None]] = []
         self.created_since: list[str | None] = []
@@ -174,11 +177,12 @@ class FakeJira:
         self.searches.append((project, text, status, done_since))
         self.filters.append((updated_before, issue_type))
         self.created_since.append(created_since)
+        if self.down:
+            raise JiraUnavailable("Jira could not answer.")
         return JiraFound([t for t in self.tickets if t.project == project], self.cut_off)
 
-    def read(self, key: str) -> JiraTicket:
+    def read(self, key: str) -> JiraTicket | None:
         self.reads.append(key)
-        for ticket in self.tickets:
-            if ticket.key == key:
-                return ticket
-        raise JiraUnavailable("Jira has no such ticket.")
+        if self.down:
+            raise JiraUnavailable("Jira could not answer.")
+        return next((t for t in self.tickets if t.key == key), None)

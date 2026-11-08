@@ -456,13 +456,84 @@ def test_with_two_repositories_on_the_card_a_third_is_refused_without_asking_git
     }
 
 
-def test_jira_tools_say_jira_is_not_connected_when_no_jira_is_set_up():
+SEARCH = "jira_search"
+READ_TICKET = "jira_read_ticket"
+SUMMARY_TICKET = call(CREATE, {"title": "Summary of finished tickets in MOCK", "body": ""}, "t9")
+JIRA_DOWN = ("Jira could not answer.", "UpstreamUnavailable", True)
+JIRA_OFF = ("Jira is not connected.", "JiraNotConnected", False)
+
+
+@pytest.mark.parametrize(
+    ("jira", "said"), [(FakeJira(down=True), JIRA_DOWN), (None, JIRA_OFF)], ids=["down", "off"]
+)
+@pytest.mark.parametrize(
+    ("asked", "tool", "could_not", "failed_because"),
+    [
+        (
+            call(SEARCH, {"project": "MOCK"}, "t1"),
+            "jira.search",
+            "Could not search Jira project MOCK",
+            "Jira project MOCK could not be searched.",
+        ),
+        (
+            call(READ_TICKET, {"key": "MOCK-7"}, "t1"),
+            "jira.read_ticket",
+            "Could not read ticket MOCK-7",
+            "ticket MOCK-7 could not be read.",
+        ),
+    ],
+    ids=["search", "read"],
+)
+def test_a_jira_read_that_did_not_happen_stops_the_agent_before_it_can_propose(
+    jira: FakeJira | None,
+    said: tuple[str, str, bool],
+    asked: dict[str, Any],
+    tool: str,
+    could_not: str,
+    failed_because: str,
+):
+    problem, kind, retryable = said
     chat = ScriptedChat(
-        script=[asks(call("jira_search", {"project": "MOCK"}, "t1")), AIMessage("No Jira.")]
+        script=[asks(asked), asks(SUMMARY_TICKET), AIMessage("I proposed one ticket.")]
     )
-    result = Room(chat, jira=None).run()
+    request = request_with(tool, "jira.create_ticket")
+    result = Room(chat, jira=jira, request=request).run()
+    assert isinstance(result, TaskFailed)
+    message = f"{could_not}: {problem}"
+    assert result.error == TaskError(type=kind, message=message, retryable=retryable)
+    assert steps_started(result) == [asked["name"]]
+    finished = [e.data.result for e in result.events if isinstance(e, AgentStepFinishedEvent)]
+    assert finished == [{"problem": problem}]
+    failed = result.events[-1]
+    assert isinstance(failed, AgentFailedEvent)
+    assert failed.summary == f"Version checker failed: {failed_because}"
+    assert (failed.data.step, failed.data.message) == (asked["name"], message)
+
+
+def test_a_jira_read_that_finds_nothing_is_data_and_the_agent_carries_on():
+    chat = ScriptedChat(
+        script=[
+            asks(call(SEARCH, {"project": "MOCK"}, "t1")),
+            asks(call(READ_TICKET, {"key": "MOCK-404"}, "t2")),
+            asks(SUMMARY_TICKET),
+            AIMessage("No ticket was finished in MOCK."),
+        ]
+    )
+    request = request_with("jira.search", "jira.read_ticket", "jira.create_ticket")
+    result = Room(chat, jira=FakeJira(), request=request).run()
     assert isinstance(result, TaskFinished)
-    assert tool_answers(chat)[0] == {"error": "Jira is not connected."}
+    assert tool_answers(chat)[:2] == [
+        {"cut_off": False, "data": []},
+        {"error": "Jira has no such ticket."},
+    ]
+    finished = [e.summary for e in result.events if isinstance(e, AgentStepFinishedEvent)]
+    assert finished[:2] == [
+        "Version checker found no tickets in MOCK.",
+        "Version checker found no ticket MOCK-404.",
+    ]
+    assert [i.fields["title"] for i in result.output.proposed] == [
+        "Summary of finished tickets in MOCK"
+    ]
 
 
 def test_jira_reads_come_back_as_data_and_show_the_ticket_keys():
