@@ -34,9 +34,9 @@ describe('the thread', () => {
     expect(draw({ ...(question as PlannerReply), read_as: null })).not.toContain('I read this as')
   })
 
-  it('says Working on it while the answer is pending, and claims no step', () => {
+  it('shows a status region while the answer is pending, and claims no step', () => {
     const html = draw(question as PlannerReply, true)
-    expect(html).toContain('Working on it…')
+    expect(html).toContain('role="status"')
     expect(html).not.toMatch(/Reading|Checking|Looking/)
   })
 })

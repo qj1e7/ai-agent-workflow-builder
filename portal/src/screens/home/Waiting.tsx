@@ -11,14 +11,19 @@ export const waitingWords = (elapsedMs: number): string => (elapsedMs >= STILL_W
 
 /** What the Planner says while an answer is pending. No step is named, because none is known. The words are static, so reduced motion needs nothing. */
 export function Waiting() {
-  const [long, setLong] = useState(false)
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null)
   useEffect(() => {
-    const timer = setTimeout(() => setLong(true), STILL_WORKING_MS)
-    return () => clearTimeout(timer)
+    const first = setTimeout(() => setElapsedMs(0), 0)
+    const timer = setTimeout(() => setElapsedMs(STILL_WORKING_MS), STILL_WORKING_MS)
+    return () => {
+      clearTimeout(first)
+      clearTimeout(timer)
+    }
   }, [])
+  // The status region mounts empty and gets its words after, so screen readers announce them.
   return (
     <p className={styles['waiting']} role="status">
-      {waitingWords(long ? STILL_WORKING_MS : 0)}
+      {elapsedMs === null ? '' : waitingWords(elapsedMs)}
     </p>
   )
 }

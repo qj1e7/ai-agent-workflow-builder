@@ -11,10 +11,10 @@ describe('the words while an answer is pending', () => {
     expect(STILL_WORKING).not.toContain('step')
   })
 
-  it('starts with Working on it in a polite status region, and moves nothing', () => {
+  it('mounts a status region with no words, so a screen reader announces them when they arrive, and moves nothing', () => {
     const html = renderToStaticMarkup(<Waiting />)
-    expect(html).toContain('role="status"')
-    expect(html).toContain(WORKING)
+    expect(html).toMatch(/<p [^>]*role="status"[^>]*><\/p>/)
+    expect(html).not.toContain(WORKING)
     expect(html).not.toContain('style=')
   })
 })

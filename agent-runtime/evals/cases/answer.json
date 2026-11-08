@@ -2933,6 +2933,7 @@
     "note": "Step 2a: the lane reads awaiting_approval.",
     "task": "Is anything waiting for my yes?",
     "kind": [
+      "needs_me",
       "question"
     ],
     "facts": {
