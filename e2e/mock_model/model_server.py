@@ -550,6 +550,7 @@ def reading(task: str) -> dict[str, Any]:
 
 COUNT_QUESTION = re.compile(r"\bhow many\b.*\b(software|watch\w*)\b", re.I)
 NEWER_QUESTION = re.compile(r"\bwhich software\b.*\bnewer version\b", re.I)
+FOLLOW_ON = re.compile(r"^(?:and|what about|how about)\s+(.+?)\s*\??$", re.I)
 
 
 def question_reply(text: str) -> dict[str, Any]:
@@ -557,13 +558,26 @@ def question_reply(text: str) -> dict[str, Any]:
     has a newer version, is about their data. The sentence is built from the facts it was sent."""
     facts_text, _, question = text.partition("\n\nThe question:\n")
     counting, newer = COUNT_QUESTION.search(question), NEWER_QUESTION.search(question)
-    if not counting and not newer:
+    followed = FOLLOW_ON.match(question.strip())
+    if not counting and not newer and not followed:
         return {"about_their_data": False, "text": ""}
     try:
-        facts = cast(dict[str, Any], json.loads(facts_text[facts_text.find("{") :]))
+        facts, _ = json.JSONDecoder().raw_decode(facts_text[facts_text.find("{") :])
+        facts = cast(dict[str, Any], facts)
         watchlist = cast(list[Any], facts.get("watchlist", []))
     except ValueError:
         watchlist = []
+    if followed and not counting and not newer:
+        held = next((w for w in watchlist if w["name"].lower() == followed.group(1).lower()), None)
+        if held is None:
+            return {"about_their_data": False, "text": ""}
+        ours = held.get("our_version") or "a version nobody has given"
+        newest = held.get("newest_version") or "not read yet"
+        return {
+            "about_their_data": True,
+            "text": f"{held['name']} runs {ours}. The newest is {newest}.",
+            "about_software": [held["name"]],
+        }
     if counting:
         return {
             "about_their_data": True,
