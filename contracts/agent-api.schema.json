@@ -2979,7 +2979,7 @@
         "newest_version": {
           "anyOf": [
             {
-              "maxLength": 40,
+              "maxLength": 100,
               "type": "string"
             },
             {

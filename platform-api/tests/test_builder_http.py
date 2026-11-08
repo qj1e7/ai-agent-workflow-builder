@@ -47,6 +47,7 @@ from platform_api.orchestration import (
     SoftwareFacts,
     Standing,
     UnderstoodRow,
+    WatchedFact,
     WatchlistAnswer,
     WatchlistStanding,
     WhichSoftwareAnswer,
@@ -719,3 +720,17 @@ async def test_the_capabilities_say_503_when_the_runtime_has_never_answered(fron
     front.registry.listed = RuntimeDown("asleep")
     r = await front.client.get(CAPABILITIES, headers=ALICE)
     assert r.status_code == 503
+
+
+def test_a_long_raw_tag_is_cut_instead_of_failing_the_watchlist_fact():
+    tag = "@langchain/langgraph-checkpoint-postgres@1.0.0" * 4
+    fact = WatchedFact(
+        name="LangGraph", repo="a/b", our_version=None, newest_version=tag, state="New version"
+    )
+    assert fact.newest_version == tag[:100]
+
+
+def test_a_real_long_tag_is_kept_whole():
+    tag = "@langchain/langgraph-checkpoint-postgres@1.0.0"
+    fact = WatchedFact(name="x", repo="a/b", our_version=None, newest_version=tag, state="s")
+    assert fact.newest_version == tag

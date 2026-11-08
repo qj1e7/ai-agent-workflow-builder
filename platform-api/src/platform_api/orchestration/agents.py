@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Annotated, Any, Literal, Protocol
+from typing import Annotated, Any, Final, Literal, Protocol
 
 import httpx
-from pydantic import Field, StringConstraints, TypeAdapter
+from pydantic import Field, StringConstraints, TypeAdapter, field_validator
 
 from platform_api.monitoring import AgentEvent
 from platform_api.wire import RepoName, WireModel
@@ -417,12 +417,22 @@ find_software_result_adapter: TypeAdapter[FindSoftwareResult] = TypeAdapter(Find
 type FactSection = Literal["watchlist", "workflows", "needs_you"]
 
 
+NEWEST_VERSION_LIMIT: Final = 100
+
+
 class WatchedFact(WireModel):
     name: str = Field(max_length=80)
     repo: str = Field(max_length=140)
     our_version: str | None = Field(max_length=40)
-    newest_version: str | None = Field(max_length=40)
+    newest_version: str | None = Field(max_length=NEWEST_VERSION_LIMIT)
     state: str = Field(max_length=40)
+
+    @field_validator("newest_version", mode="before")
+    @classmethod
+    def _cut_a_long_tag(cls, value: object) -> object:
+        """A raw tag such as `@langchain/langgraph-checkpoint-postgres@1.0.0` can run long. It is
+        cut at the limit, so one odd tag does not drop the whole watchlist section."""
+        return value[:NEWEST_VERSION_LIMIT] if isinstance(value, str) else value
 
 
 class WorkflowFact(WireModel):

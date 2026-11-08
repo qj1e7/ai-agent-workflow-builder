@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Final, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter
@@ -737,6 +737,9 @@ type FindSoftwareResult = Annotated[
 type FactSection = Literal["watchlist", "workflows", "needs_you"]
 
 
+NEWEST_VERSION_LIMIT: Final = 100
+
+
 class WatchedFact(WireModel):
     name: str = Field(max_length=80)
     repo: str = Field(max_length=140)
@@ -744,7 +747,7 @@ class WatchedFact(WireModel):
         max_length=40, description="The version the team runs. None means Not known."
     )
     newest_version: str | None = Field(
-        max_length=40, description="The newest release read from the source. None when unread."
+        max_length=NEWEST_VERSION_LIMIT, description="The newest release read from the source. None when unread."
     )
     state: str = Field(max_length=40, description="The state in the words the Software page shows.")
 
