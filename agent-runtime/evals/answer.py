@@ -27,6 +27,7 @@ from agent_runtime.contract import (
     UnderstoodRow,
     WatchlistAnswer,
 )
+from agent_runtime.follow_ups import watch_offer
 from agent_runtime.planner import said_in
 from agent_runtime.questions import QuestionReply, answer_of_reply, question_messages
 from evals.checks import (
@@ -253,8 +254,11 @@ def follow_up(model: BaseChatModel, case: AnswerCase, first: Answer, marker: str
 def score(case: AnswerCase, answer: Answer) -> list[Check]:
     value = answer.value
     refused = word_rule_refusal(case.task)
+    offered = watch_offer(_request(case))
     if refused is not None:
         shown: PlannerAnswer | None = refused
+    elif offered is not None:
+        shown = offered
     elif not isinstance(value, TaskRead):
         return [check("answered", ["no structured answer"])]
     else:

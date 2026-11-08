@@ -815,6 +815,12 @@ class PreviousTurn(WireModel):
         max_length=600,
         description="The text of the Planner's answer, when it had one.",
     )
+    kind: str | None = Field(
+        default=None,
+        max_length=40,
+        description="The kind of answer the Planner gave, such as question or watchlist. Client "
+        "input: it only decides whether a follow-up applies.",
+    )
 
 
 class AnswerRequest(WireModel):

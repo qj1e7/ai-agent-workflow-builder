@@ -31,13 +31,13 @@ describe('the thread', () => {
     expect(threadReducer(two, { type: 'new_chat' })).toEqual(EMPTY)
   })
 
-  it('hands the next typed request the turn before it: the words, the software it named, and the text it answered with', () => {
+  it('hands the next typed request the turn before it: the words, the software it named, the text it answered with, and the kind of answer it was', () => {
     const ask = (reply: PlannerReply, typed: string) => threadReducer(threadReducer(EMPTY, { type: 'sent', text: typed }), { type: 'answered', reply, typed })
     expect(previousOf(EMPTY)).toBeNull()
     const watch = ask({ answer: 'watchlist', word: 'version', software: 'FastAPI', already_listed: null, also: null }, 'Is there a newer FastAPI?')
-    expect(previousOf(watch)).toEqual({ request: 'Is there a newer FastAPI?', software: 'FastAPI', answer: null })
+    expect(previousOf(watch)).toEqual({ request: 'Is there a newer FastAPI?', software: 'FastAPI', answer: null, kind: 'watchlist' })
     const said = ask({ answer: 'question', text: 'LangGraph is at 1.2.14.', looked_at: ['watchlist'] }, 'What is the newest version of LangGraph?')
-    expect(previousOf(said)).toEqual({ request: 'What is the newest version of LangGraph?', software: null, answer: 'LangGraph is at 1.2.14.' })
+    expect(previousOf(said)).toEqual({ request: 'What is the newest version of LangGraph?', software: null, answer: 'LangGraph is at 1.2.14.', kind: 'question' })
     expect(previousOf(ask({ answer: 'offline', why: 'trouble', message: 'x', starters: [] }, 'x'))).toBeNull()
   })
 

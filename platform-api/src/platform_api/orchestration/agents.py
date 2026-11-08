@@ -475,6 +475,7 @@ class PreviousTurn(WireModel):
     request: str = Field(max_length=2000)
     software: str | None = Field(default=None, max_length=80)
     answer: str | None = Field(default=None, max_length=600)
+    kind: str | None = Field(default=None, max_length=40)
 
 
 class AnswerRequest(WireModel):

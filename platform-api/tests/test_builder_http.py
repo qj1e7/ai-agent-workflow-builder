@@ -508,6 +508,7 @@ async def test_a_follow_up_passes_the_previous_turn_on_and_changes_nothing_else(
         "request": "What is the newest version of LangGraph?",
         "software": "LangGraph",
         "answer": "1.2.16.",
+        "kind": "question",
     }
     r = await front.client.post(
         ANSWER, json={"text": "and Redis?", "previous": previous}, headers=ALICE

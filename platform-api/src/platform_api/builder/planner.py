@@ -78,6 +78,11 @@ class PreviousIn(WireIn):
     answer: Annotated[str, StringConstraints(max_length=600)] | None = Field(
         default=None, description="The text of the Planner's answer to it, when it had one."
     )
+    kind: Annotated[str, StringConstraints(max_length=40)] | None = Field(
+        default=None,
+        description="The kind of answer it was, such as question or watchlist. It only decides "
+        "whether a short follow-up applies.",
+    )
 
 
 class AnswerIn(WireIn):

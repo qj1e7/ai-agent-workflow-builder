@@ -56,6 +56,7 @@ from agent_runtime.contract import (
     WhyStoppedAnswer,
 )
 from agent_runtime.drafting import ask_model
+from agent_runtime.follow_ups import follow_up_of, watch_offer
 from agent_runtime.planner import (
     CANT_YET,
     NOTE_LIMIT,
@@ -559,6 +560,11 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     if question_messages(request) is None:
         return answer
     text = visible_words(request.task)
+    followed = follow_up_of(request)
+    if followed is not None and followed.watched is not None and _follows(answer):
+        return AskTheQuestionLane(
+            otherwise=answer, first_on_reject=not isinstance(answer, AbilitiesAnswer)
+        )
     if isinstance(answer, AbilitiesAnswer) or (
         isinstance(answer, WatchlistAnswer) and _watched(answer, request)
     ):
@@ -576,6 +582,18 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     if isinstance(answer, WhyStoppedAnswer) and _nothing_stopped(request):
         return AskTheQuestionLane(otherwise=answer, first_on_reject=True)
     return answer
+
+
+def _follows(answer: PlannerAnswer) -> bool:
+    """Whether a follow-up about watched software may replace this first answer with the lane's. A
+    task, a can't or a refusal stays as it is, and so do the two answers that carry buttons."""
+    match answer:
+        case AbilitiesAnswer() | WhichSoftwareAnswer() | CheckWorkflowsAnswer():
+            return True
+        case WatchlistAnswer(also=None):
+            return True
+        case _:
+            return False
 
 
 def _nothing_stopped(request: AnswerRequest) -> bool:
@@ -598,6 +616,9 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     refused = word_rule_refusal(request.task)
     if refused is not None:
         return Answered(answer=refused)
+    offer = watch_offer(request)
+    if offer is not None:
+        return Answered(answer=offer)
     read = ask_model(
         chat_for,
         ANSWER_SYSTEM,
