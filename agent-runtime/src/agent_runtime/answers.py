@@ -543,11 +543,12 @@ def _watched(answer: WatchlistAnswer, request: AnswerRequest) -> bool:
 QUESTION_SHAPE: Final = re.compile(
     r"^\s*(?:which|what|how|is|are|do|does|did|when)\b|\?\s*$", re.IGNORECASE
 )
-OPENS_A_QUESTION: Final = re.compile(
-    r"^\s*(?:which|what|how|is|are|do|does|did|when)\b", re.IGNORECASE
+LANE_BLOCKERS: Final = re.compile(
+    r"\b(?:stop\s+watching|unwatch(?:ing)?|stop\s+tracking)\b", re.IGNORECASE
 )
-"""A change word inside a question, such as "Is the watchlist running?", is still a question. A
-request that does not open as one and carries a change word keeps its first answer."""
+"""The gate fails closed: any change word, or these phrases that change_verbs_in misses, keeps the
+first answer, whatever the shape of the sentence. They stay here because change_verbs_in feeds
+other answers."""
 WATCHLIST_WORDS: Final = re.compile(r"\b(?:watchlist|watching|watched)\b", re.IGNORECASE)
 
 
@@ -565,7 +566,7 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     if question_messages(request) is None:
         return answer
     text = visible_words(request.task)
-    if (change_verbs_in(text) or commands_a_change(text)) and not OPENS_A_QUESTION.match(text):
+    if change_verbs_in(text) or commands_a_change(text) or LANE_BLOCKERS.search(text):
         return answer
     followed = follow_up_of(request)
     if followed is not None:

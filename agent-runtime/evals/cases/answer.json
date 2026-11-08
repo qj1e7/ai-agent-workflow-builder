@@ -2454,10 +2454,11 @@
   },
   {
     "id": "question-not-in-facts",
-    "note": "A question the facts cannot hold (who added a software).  The reply then says the facts do not hold it.",
+    "note": "A question the facts cannot hold (who added a software).  The reply then says the facts do not hold it. A change word keeps the first answer, so a can't is also right.",
     "task": "who added Redis to the watchlist",
     "kind": [
-      "question"
+      "question",
+      "abilities"
     ],
     "facts": {
       "watchlist": [
@@ -2871,10 +2872,11 @@
   },
   {
     "id": "watch-q-3",
-    "note": "Step 2a: the lane reads open_ticket.",
+    "note": "Step 2a: the lane reads open_ticket. A change word keeps the first answer, so a can't is also right.",
     "task": "Did it open a ticket for Redis?",
     "kind": [
-      "question"
+      "question",
+      "cant"
     ],
     "facts": {
       "watchlist": [
@@ -3346,10 +3348,11 @@
   },
   {
     "id": "sw-behind",
-    "note": "Software versioning set, 8 Nov.",
+    "note": "Software versioning set, 8 Nov. A change word keeps the first answer, so a can't is also right.",
     "task": "Which of our software is behind?",
     "kind": [
-      "question"
+      "question",
+      "cant"
     ],
     "facts": {
       "watchlist": [
@@ -3497,10 +3500,11 @@
   },
   {
     "id": "sw-ticket",
-    "note": "Software versioning set, 8 Nov.",
+    "note": "Software versioning set, 8 Nov. A change word keeps the first answer, so a can't is also right.",
     "task": "Did the watchlist open a ticket for Redis?",
     "kind": [
-      "question"
+      "question",
+      "cant"
     ],
     "facts": {
       "watchlist": [
