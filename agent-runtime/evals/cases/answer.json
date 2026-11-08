@@ -2849,6 +2849,7 @@
     "note": "Step 2a: the lane reads checked_at.",
     "task": "When did it last check?",
     "kind": [
+      "check_workflows",
       "question"
     ],
     "facts": {
@@ -2924,6 +2925,14 @@
           "checked_at": "2026-11-08T02:00:00Z",
           "awaiting_approval": true,
           "our_version_source": "first_check"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Watchlist check",
+          "state": "on",
+          "last_run": "Done",
+          "last_run_at": "2026-11-08T02:00:00Z"
         }
       ]
     }

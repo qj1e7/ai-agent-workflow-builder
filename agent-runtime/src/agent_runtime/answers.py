@@ -611,7 +611,16 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
         return AskTheQuestionLane(otherwise=answer, first_on_reject=True)
     if _state_answer_about_the_watchlist(answer, text, request):
         return AskTheQuestionLane(otherwise=answer, first_on_reject=True)
+    if isinstance(answer, WhyStoppedAnswer) and _nothing_stopped(request):
+        return AskTheQuestionLane(otherwise=answer, first_on_reject=True)
     return answer
+
+
+def _nothing_stopped(request: AnswerRequest) -> bool:
+    """The workflows section is there and no workflow's last run is Stopped, so the fixed answer
+    has nothing to show. Missing facts keep it."""
+    workflows = None if request.facts is None else request.facts.workflows
+    return workflows is not None and all(w.last_run != "Stopped" for w in workflows)
 
 
 def _state_answer_about_the_watchlist(

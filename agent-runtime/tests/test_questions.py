@@ -21,6 +21,7 @@ from agent_runtime.contract import (
     SetupCardAnswer,
     WatchedFact,
     WatchlistAnswer,
+    WhyStoppedAnswer,
     WorkflowFact,
 )
 from agent_runtime.contracts import answer_request
@@ -387,7 +388,6 @@ def test_check_workflows_for_a_request_that_names_the_watchlist_goes_to_the_lane
     [
         ("Check my workflows", reading("my_workflows")),
         ("When did it last check?", reading("my_workflows")),
-        ("Did it open a ticket for Redis?", reading("why_stopped", workflow_words="Redis")),
         ("Is anything waiting for my yes?", reading("needs_me")),
         ("Is Redis waiting for my approval?", reading("needs_me")),
         ("Why is the watchlist stopped?", reading("why_stopped")),
@@ -438,3 +438,26 @@ def test_a_rewritten_text_that_carries_skip_words_is_refused_by_the_word_rule(
     result = answer_task(follow("and LangGraph?"), lambda timeout: chat)
     assert isinstance(result, Answered) and isinstance(result.answer, RefusedAnswer)
     assert chat.calls == []
+
+
+def _workflow(last_run: str | None) -> WorkflowFact:
+    return WorkflowFact(name="Watchlist check", state="on", last_run=last_run, last_run_at=None)
+
+
+def _why(facts: PlannerFacts | None):
+    return decided("Did it open a ticket for Redis?", reading("why_stopped"), facts)
+
+
+def test_why_stopped_goes_to_the_lane_when_no_run_has_stopped():
+    out = _why(PlannerFacts(workflows=[_workflow("Done"), _workflow(None)]))
+    assert isinstance(out, AskTheQuestionLane) and out.first_on_reject
+
+
+def test_why_stopped_keeps_the_fixed_answer_when_a_run_has_stopped():
+    out = _why(PlannerFacts(workflows=[_workflow("Done"), _workflow("Stopped")]))
+    assert isinstance(out, WhyStoppedAnswer)
+
+
+@pytest.mark.parametrize("facts", [None, FACTS])
+def test_why_stopped_keeps_the_fixed_answer_when_the_workflows_are_missing(facts):
+    assert isinstance(_why(facts), WhyStoppedAnswer)
