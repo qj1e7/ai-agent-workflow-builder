@@ -2,13 +2,20 @@ from typing import Any, cast
 
 import pytest
 
-from agent_runtime.answers import AskTheQuestionLane, TaskRead, answer_task, decide
+from agent_runtime.answers import (
+    AskTheQuestionLane,
+    TaskRead,
+    answer_task,
+    decide,
+    rewrite_follow_up,
+)
 from agent_runtime.contract import (
     AbilitiesAnswer,
     Answered,
     AnswerRequest,
     NeedsYouFact,
     PlannerFacts,
+    PreviousTurn,
     QuestionAnswer,
     SetupCardAnswer,
     WatchedFact,
@@ -212,3 +219,180 @@ def test_more_offer_phrasings_fall_back_to_the_fixed_text(offer: str):
 
 def test_the_prompt_keeps_the_facts_out_of_the_answer():
     assert 'Never say "the facts"' in QUESTION_SYSTEM
+
+
+def which_reading() -> TaskRead:
+    return watch_reading(None)
+
+
+def decided(task: str, first: TaskRead, facts: PlannerFacts | None = FACTS):
+    request = AnswerRequest(task=task, model=answer_request().model, facts=facts)
+    return decide(first, request)
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "Which software has a newer version?",
+        "Does anything need a newer version",
+        "Any new versions?",
+    ],
+)
+def test_which_software_for_a_question_goes_to_the_lane_when_the_watchlist_holds_software(
+    task: str,
+):
+    out = decided(task, which_reading())
+    assert isinstance(out, AskTheQuestionLane) and out.first_on_reject
+
+
+@pytest.mark.parametrize(
+    "task", ["Tell me when there's a new version", "Notify me about new versions", "Watch Redis"]
+)
+def test_a_statement_stays_which_software(task: str):
+    assert not isinstance(decided(task, which_reading()), AskTheQuestionLane)
+
+
+def test_which_software_stays_when_the_watchlist_is_empty_or_unsent():
+    task = "Which software has a newer version?"
+    empty = PlannerFacts(watchlist=[])
+    assert not isinstance(decided(task, which_reading(), empty), AskTheQuestionLane)
+    assert not isinstance(decided(task, which_reading(), None), AskTheQuestionLane)
+
+
+def test_check_workflows_that_names_the_watchlist_goes_to_the_lane():
+    first = reading("my_workflows")
+    assert isinstance(decided("Is anything on the watchlist behind?", first), AskTheQuestionLane)
+    assert isinstance(decided("What are we watching?", first), AskTheQuestionLane)
+    assert not isinstance(decided("Check my workflows", first), AskTheQuestionLane)
+
+
+def test_a_rejected_reply_on_the_new_routes_gives_the_first_answer_not_the_fixed_text():
+    reply = QuestionReply(about_their_data=True, text="Three. I can set up a check for you.")
+    out, _ = ask(reply, task="Which software has a newer version?", first=which_reading())
+    assert out.answer.kind == "which_software"
+    task = "Is there a newer version of langgraph?"
+    out, _ = ask(reply, task=task, first=watch_reading("LangGraph"))
+    assert isinstance(out.answer, WatchlistAnswer)
+
+
+def test_a_second_call_that_fails_on_the_watched_watchlist_route_gives_the_first_answer():
+    slow = type("ReadTimeout", (Exception,), {})("took too long")
+    task = "Is there a newer version of LangGraph?"
+    out, chat = ask(slow, task=task, first=watch_reading("LangGraph"))
+    assert isinstance(out.answer, WatchlistAnswer) and out.answer.software == "LangGraph"
+    assert chat.asked == [TaskRead, QuestionReply]
+
+
+def test_the_catch_all_keeps_the_fixed_text_when_the_guards_reject():
+    reply = QuestionReply(about_their_data=True, text="Three. I can set up a check for you.")
+    out, _ = ask(reply)
+    assert out.answer == QuestionAnswer(text=COULD_NOT_ANSWER, looked_at=[])
+
+
+PREVIOUS = PreviousTurn(request="What is the newest version of LangGraph?", software=None)
+
+
+def follow(task: str, previous: PreviousTurn | None = PREVIOUS) -> AnswerRequest:
+    return AnswerRequest(task=task, model=answer_request().model, facts=FACTS, previous=previous)
+
+
+@pytest.mark.parametrize(
+    ("task", "wanted"),
+    [
+        ("and FastAPI?", "What is the newest version of FastAPI?"),
+        ("What about Redis?", "What is the newest version of Redis?"),
+        ("how about n8n", "What is the newest version of n8n?"),
+        ("and Spring Boot?", "What is the newest version of Spring Boot?"),
+    ],
+)
+def test_a_short_follow_up_becomes_the_previous_request_with_the_software_swapped(
+    task: str, wanted: str
+):
+    assert rewrite_follow_up(follow(task)) == wanted
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "and then email everyone in the team about it?",
+        "Which version of Redis do we run?",
+        "and",
+    ],
+)
+def test_anything_else_is_not_rewritten(task: str):
+    assert rewrite_follow_up(follow(task)) is None
+
+
+def test_no_rewrite_without_a_previous_turn_or_a_named_software():
+    assert rewrite_follow_up(follow("and FastAPI?", None)) is None
+    nameless = PreviousTurn(request="What can you do?", software=None)
+    assert rewrite_follow_up(follow("and FastAPI?", nameless)) is None
+
+
+def test_the_software_the_platform_named_is_swapped_even_when_unwatched():
+    previous = PreviousTurn(request="Is there a newer FastAPI?", software="FastAPI")
+    assert rewrite_follow_up(follow("and Redis?", previous)) == "Is there a newer Redis?"
+
+
+def test_a_rewritten_follow_up_runs_the_normal_path_and_is_reported_as_read_as():
+    request = follow("what about Redis?")
+    chat = ScriptedChat(
+        structured=[watch_reading("Redis"), QuestionReply(about_their_data=True, text="8.0.2.")]
+    )
+    result = answer_task(request, lambda timeout: chat)
+    assert isinstance(result, Answered)
+    assert result.read_as == "What is the newest version of Redis?"
+    assert result.answer == QuestionAnswer(text="8.0.2.", looked_at=["watchlist"])
+    first = cast(tuple[str, str], chat.calls[0][1])[1]
+    assert first == "The request:\nWhat is the newest version of Redis?"
+
+
+def test_the_lane_gets_the_previous_request_and_answer_and_the_first_reading_does_not():
+    previous = PreviousTurn(request=PREVIOUS.request, answer="LangGraph is at 1.2.14.")
+    request = follow("what about Redis?", previous)
+    chat = ScriptedChat(
+        structured=[watch_reading("Redis"), QuestionReply(about_their_data=True, text="8.0.2.")]
+    )
+    answer_task(request, lambda timeout: chat)
+    first = cast(tuple[str, str], chat.calls[0][1])[1]
+    lane = cast(tuple[str, str], chat.calls[1][1])[1]
+    assert "LangGraph" not in first
+    assert "The question before this one:\nWhat is the newest version of LangGraph?" in lane
+    assert "The answer to it:\nLangGraph is at 1.2.14." in lane
+    assert lane.endswith("The question:\nWhat is the newest version of Redis?")
+
+
+def test_a_request_that_is_not_a_follow_up_has_no_read_as():
+    result, _ = ask(QuestionReply(about_their_data=True, text="Three."))
+    assert result.read_as is None
+
+
+@pytest.mark.parametrize(
+    ("task", "first"),
+    [
+        ("When did it last check?", reading("my_workflows")),
+        ("Did it open a ticket for Redis?", reading("why_stopped", workflow_words="Redis")),
+        ("Is anything waiting for my yes?", reading("needs_me")),
+        ("Is Redis waiting for my approval?", reading("needs_me")),
+    ],
+)
+def test_a_state_answer_for_a_question_about_the_watchlist_goes_to_the_lane(
+    task: str, first: TaskRead
+):
+    out = decided(task, first)
+    assert isinstance(out, AskTheQuestionLane) and out.first_on_reject
+
+
+@pytest.mark.parametrize(
+    ("task", "first"),
+    [
+        ("Check my workflows", reading("my_workflows")),
+        ("What needs me?", reading("needs_me")),
+        ("Anything to approve?", reading("needs_me")),
+        ("Why did Morning new-ticket check stop?", reading("why_stopped")),
+        ("Why did the Redis check stop?", reading("why_stopped")),
+        ("Is the morning new-ticket check running?", reading("my_workflows")),
+    ],
+)
+def test_the_state_answers_about_workflows_stay_where_they_were(task: str, first: TaskRead):
+    assert not isinstance(decided(task, first), AskTheQuestionLane)

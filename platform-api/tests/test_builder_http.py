@@ -35,6 +35,7 @@ from platform_api.orchestration import (
     PartCantDo,
     PartFits,
     PlannerFacts,
+    PreviousTurn,
     QuestionAnswer,
     RefusedAnswer,
     RowKind,
@@ -213,13 +214,15 @@ class FakeAnswers:
     wait: float = 0.0
     asked: list[str] = field(default_factory=list[str])
     facts: list[PlannerFacts | None] = field(default_factory=list[PlannerFacts | None])
+    previous: list[PreviousTurn | None] = field(default_factory=list[PreviousTurn | None])
     checked: list[tuple[str, str]] = field(default_factory=list[tuple[str, str]])
 
     async def answer(
-        self, task: str, facts: PlannerFacts | None = None
+        self, task: str, facts: PlannerFacts | None = None, previous: PreviousTurn | None = None
     ) -> AnswerResult | NoModel | RuntimeDown:
         self.asked.append(task)
         self.facts.append(facts)
+        self.previous.append(previous)
         await asyncio.sleep(self.wait)
         return self.result
 
@@ -452,6 +455,7 @@ async def test_a_question_answer_comes_back_with_the_sections_it_looked_at(front
         "answer": "question",
         "text": "Nothing is on the watchlist yet.",
         "looked_at": ["watchlist"],
+        "read_as": None,
     }
 
 
@@ -472,11 +476,45 @@ async def test_the_runtime_gets_the_facts_the_screens_show_for_the_signed_in_per
         row["newest_version"],
     )
     assert fact.state == STATUS_WORDS[row["status"]]
+    assert fact.checked_at == (
+        None if row["checked_at"] is None else datetime.fromisoformat(row["checked_at"])
+    )
+    assert (fact.open_ticket, fact.problem) == (row["open_ticket"], row["problem"])
+    assert fact.awaiting_approval is (row["approval_id"] is not None)
+    source = row["our_version_source"]
+    assert fact.our_version_source == (None if source is None else source["kind"])
+    assert fact.our_version_ticket == (None if source is None else source["ticket"])
     assert facts.needs_you is not None and facts.needs_you.total == 4
     assert [u.name for u in (await front.builder.list_use_cases()).use_cases] == [
         w.name for w in facts.workflows or []
     ]
     assert [v.user_id for v in front.home.viewers] == ["alice"]
+
+
+async def test_a_follow_up_passes_the_previous_turn_on_and_the_reading_comes_back(front: Front):
+    front.answers.result = Answered(
+        answer=WhichSoftwareAnswer(word="version"), read_as="What is the newest version of Redis?"
+    )
+    previous = {
+        "request": "What is the newest version of LangGraph?",
+        "software": "LangGraph",
+        "answer": "1.2.16.",
+    }
+    r = await front.client.post(
+        ANSWER, json={"text": "and Redis?", "previous": previous}, headers=ALICE
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["read_as"] == "What is the newest version of Redis?"
+    (sent,) = front.answers.previous
+    assert sent is not None and sent.model_dump() == previous
+    front.answers.result = answered(WhichSoftwareAnswer(word="version"))
+    assert (await say(front, "Watch Redis"))["read_as"] is None
+
+
+async def test_the_previous_turn_goes_with_typed_text_only(front: Front):
+    body = {"intent": "abilities", "previous": {"request": "x"}}
+    r = await front.client.post(ANSWER, json=body, headers=ALICE)
+    assert r.status_code == 422
 
 
 async def test_a_section_that_cannot_be_read_is_left_out_not_guessed(front: Front):
@@ -499,25 +537,26 @@ async def test_a_watchlist_row_carries_the_rest_of_a_mixed_request(front: Front)
 
 async def test_the_other_kinds_come_back_as_they_were_read(front: Front):
     front.answers.result = answered(WhichSoftwareAnswer(word="version"))
-    assert await say(front) == {"answer": "which_software", "word": "version"}
+    assert await say(front) == {"answer": "which_software", "word": "version", "read_as": None}
     front.answers.result = answered(RefusedAnswer(said="skip the yes", rest="close every ticket"))
     assert await say(front) == {
         "answer": "refused",
         "reason": "skip_approval",
         "said": "skip the yes",
         "rest": "close every ticket",
+        "read_as": None,
     }
     front.answers.result = answered(AbilitiesAnswer())
-    assert await say(front) == {"answer": "abilities"}
+    assert await say(front) == {"answer": "abilities", "read_as": None}
     front.answers.result = answered(NeedsMeAnswer())
-    assert await say(front) == {"answer": "needs_me"}
+    assert await say(front) == {"answer": "needs_me", "read_as": None}
 
 
 async def test_a_workflow_named_in_a_question_is_matched_to_the_one_that_has_the_name(front: Front):
     first = await make_workflow(front, "Morning new-ticket check")
     await make_workflow(front, "Friday summary")
     front.answers.result = answered(CheckWorkflowsAnswer(workflow_words=None))
-    assert await say(front) == {"answer": "check_workflows", "use_case_id": None}
+    assert await say(front) == {"answer": "check_workflows", "use_case_id": None, "read_as": None}
     front.answers.result = answered(CheckWorkflowsAnswer(workflow_words="morning new-ticket check"))
     assert (await say(front))["use_case_id"] == first
     front.answers.result = answered(WhyStoppedAnswer(workflow_words="the morning check"))
@@ -556,7 +595,7 @@ async def test_why_stopped_for_a_workflow_that_does_not_exist_is_a_404(front: Fr
     r = await front.client.post(
         ANSWER, json={"intent": "why_stopped", "use_case_id": made}, headers=ALICE
     )
-    assert r.json() == {"answer": "why_stopped", "use_case_id": made}
+    assert r.json() == {"answer": "why_stopped", "use_case_id": made, "read_as": None}
 
 
 async def test_with_no_model_the_answer_is_the_plain_offline_one_and_the_starters(front: Front):
@@ -596,7 +635,7 @@ async def test_a_broken_answer_is_the_offline_answer_never_a_guess(
     front.answers.result = result
     reply = await say(front)
     assert (reply["answer"], reply["why"]) == ("offline", why)
-    assert set(reply) == {"answer", "why", "message", "starters"}
+    assert set(reply) == {"answer", "why", "message", "starters", "read_as"}
 
 
 async def test_only_an_operator_is_answered_and_a_blank_or_double_request_is_refused(

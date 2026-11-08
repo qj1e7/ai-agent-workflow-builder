@@ -45,6 +45,7 @@ from platform_api.orchestration import (
     PartCantDo,
     PlannerAnswer,
     PlannerFacts,
+    PreviousTurn,
     QuestionAnswer,
     RefusedAnswer,
     RowKind,
@@ -69,6 +70,16 @@ type CapabilityState = Literal["ready", "needs_setup", "down", "planned", "unsup
 type Intent = Literal["check_workflows", "needs_me", "abilities", "setup_ideas", "why_stopped"]
 
 
+class PreviousIn(WireIn):
+    request: Annotated[str, StringConstraints(max_length=2000)]
+    software: Annotated[str, StringConstraints(max_length=80)] | None = Field(
+        default=None, description="The software the Planner named in its answer to it."
+    )
+    answer: Annotated[str, StringConstraints(max_length=600)] | None = Field(
+        default=None, description="The text of the Planner's answer to it, when it had one."
+    )
+
+
 class AnswerIn(WireIn):
     text: (
         Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
@@ -86,11 +97,18 @@ class AnswerIn(WireIn):
         max_length=100,
         description="With the why_stopped intent, the workflow the person asks about.",
     )
+    previous: PreviousIn | None = Field(
+        default=None,
+        description='With text: the turn before it. A short follow-up such as "and Redis?" is '
+        "read as that turn's request with its software swapped.",
+    )
 
     @model_validator(mode="after")
     def _one_of_text_or_intent(self) -> Self:
         if (self.text is None) == (self.intent is None):
             raise ValueError("Send the text the person typed, or the intent they tapped, not both")
+        if self.previous is not None and self.text is None:
+            raise ValueError("The previous turn goes with typed text only")
         return self
 
 
@@ -120,7 +138,16 @@ class ListedSoftware(WireModel):
     name: str
 
 
-class SetupCardReply(WireModel):
+class ReplyBase(WireModel):
+    read_as: str | None = Field(
+        default=None,
+        description='Set when the Planner read a short follow-up, such as "and Redis?", as an '
+        "earlier request with its software swapped. The request as it was read, for the Portal "
+        'to show as "I read this as".',
+    )
+
+
+class SetupCardReply(ReplyBase):
     answer: Literal["setup_card"] = "setup_card"
     name: str
     rows: list[UnderstoodRowView]
@@ -129,7 +156,7 @@ class SetupCardReply(WireModel):
     )
 
 
-class PartReply(WireModel):
+class PartReply(ReplyBase):
     answer: Literal["part"] = "part"
     name: str
     rows: list[UnderstoodRowView]
@@ -137,7 +164,7 @@ class PartReply(WireModel):
     similar: SimilarWorkflow | None
 
 
-class WatchlistReply(WireModel):
+class WatchlistReply(ReplyBase):
     answer: Literal["watchlist"] = "watchlist"
     word: str
     software: str | None
@@ -150,49 +177,49 @@ class WatchlistReply(WireModel):
     )
 
 
-class CantReply(WireModel):
+class CantReply(ReplyBase):
     answer: Literal["cant"] = "cant"
     cant: list[CantRowView]
     alternative: Annotated[SetupCardReply | WatchlistReply, Field(discriminator="answer")] | None
 
 
-class WhichSoftwareReply(WireModel):
+class WhichSoftwareReply(ReplyBase):
     answer: Literal["which_software"] = "which_software"
     word: str
 
 
-class RefusedReply(WireModel):
+class RefusedReply(ReplyBase):
     answer: Literal["refused"] = "refused"
     reason: Literal["skip_approval"]
     said: str
     rest: str
 
 
-class AbilitiesReply(WireModel):
+class AbilitiesReply(ReplyBase):
     answer: Literal["abilities"] = "abilities"
 
 
-class IdeasReply(WireModel):
+class IdeasReply(ReplyBase):
     answer: Literal["ideas"] = "ideas"
 
 
-class CheckWorkflowsReply(WireModel):
+class CheckWorkflowsReply(ReplyBase):
     answer: Literal["check_workflows"] = "check_workflows"
     use_case_id: str | None = Field(
         description="The workflow the request names, when one name matches. Null for all."
     )
 
 
-class WhyStoppedReply(WireModel):
+class WhyStoppedReply(ReplyBase):
     answer: Literal["why_stopped"] = "why_stopped"
     use_case_id: str | None
 
 
-class NeedsMeReply(WireModel):
+class NeedsMeReply(ReplyBase):
     answer: Literal["needs_me"] = "needs_me"
 
 
-class QuestionReply(WireModel):
+class QuestionReply(ReplyBase):
     answer: Literal["question"] = "question"
     text: str = Field(
         description="The Planner's answer to a question about the person's own data, in its own "
@@ -204,7 +231,7 @@ class QuestionReply(WireModel):
     )
 
 
-class OfflineReply(WireModel):
+class OfflineReply(ReplyBase):
     answer: Literal["offline"] = "offline"
     why: FallbackWhy = Field(
         description="no_model: none is connected. too_slow: it took too long. trouble: it "
@@ -287,7 +314,7 @@ class CapabilitiesView(WireModel):
 
 class Answering(Protocol):
     async def answer(
-        self, task: str, facts: PlannerFacts | None = None
+        self, task: str, facts: PlannerFacts | None = None, previous: PreviousTurn | None = None
     ) -> AnswerResult | NoModel | RuntimeDown: ...
 
     async def check_part(self, kind: RowKind, text: str) -> CheckPartResult | RuntimeDown: ...
@@ -362,7 +389,7 @@ class PlannerFront:
 
     async def answer(self, body: AnswerIn, viewer: Principal) -> PlannerReply | NoSuchWorkflow:
         if body.text is not None:
-            return await self._typed(body.text, viewer)
+            return await self._typed(body.text, viewer, body.previous)
         assert body.intent is not None
         return await self._intent(body.intent, body.use_case_id)
 
@@ -386,10 +413,13 @@ class PlannerFront:
                     return NoSuchWorkflow()
                 return WhyStoppedReply(use_case_id=use_case_id)
 
-    async def _typed(self, text: str, viewer: Principal) -> PlannerReply:
+    async def _typed(
+        self, text: str, viewer: Principal, previous: PreviousIn | None = None
+    ) -> PlannerReply:
+        earlier = None if previous is None else PreviousTurn(**previous.model_dump())
         try:
             async with asyncio.timeout(ANSWER_LIMIT_SECONDS):
-                result = await self._answers.answer(text, await self._facts.read(viewer))
+                result = await self._answers.answer(text, await self._facts.read(viewer), earlier)
         except TimeoutError:
             log.warning("The Planner's answer took longer than %g seconds", ANSWER_LIMIT_SECONDS)
             return offline("too_slow")
@@ -402,8 +432,9 @@ class PlannerFront:
             case ModelProblem(reason=reason):
                 log.warning("The Planner's answer fell back to the starters: %s", reason)
                 return offline("too_slow" if reason == "too_slow" else "trouble")
-            case Answered(answer=answer):
-                return await self._finish(answer)
+            case Answered(answer=answer, read_as=read_as):
+                reply = await self._finish(answer)
+                return reply if read_as is None else reply.model_copy(update={"read_as": read_as})
 
     async def _finish(self, answer: PlannerAnswer) -> PlannerReply:
         match answer:

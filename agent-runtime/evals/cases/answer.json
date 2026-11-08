@@ -2801,5 +2801,390 @@
     "facts": {
       "watchlist": []
     }
+  },
+  {
+    "id": "watch-q-1",
+    "note": "Step 2a: which_software for a question goes to the lane.",
+    "task": "Which software has a newer version?",
+    "kind": [
+      "question"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "our_version_source": "given"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.2.0",
+          "state": "Ticket open",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "open_ticket": "MOCK-142",
+          "our_version_source": "ticket_done",
+          "our_version_ticket": "MOCK-98"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": "2.40.0",
+          "newest_version": "2.42.6",
+          "state": "Ticket waiting for a yes",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "awaiting_approval": true,
+          "our_version_source": "first_check"
+        }
+      ]
+    }
+  },
+  {
+    "id": "watch-q-2",
+    "note": "Step 2a: the lane reads checked_at.",
+    "task": "When did it last check?",
+    "kind": [
+      "question"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "our_version_source": "given"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.2.0",
+          "state": "Ticket open",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "open_ticket": "MOCK-142",
+          "our_version_source": "ticket_done",
+          "our_version_ticket": "MOCK-98"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": "2.40.0",
+          "newest_version": "2.42.6",
+          "state": "Ticket waiting for a yes",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "awaiting_approval": true,
+          "our_version_source": "first_check"
+        }
+      ]
+    }
+  },
+  {
+    "id": "watch-q-3",
+    "note": "Step 2a: the lane reads open_ticket.",
+    "task": "Did it open a ticket for Redis?",
+    "kind": [
+      "question"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "our_version_source": "given"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.2.0",
+          "state": "Ticket open",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "open_ticket": "MOCK-142",
+          "our_version_source": "ticket_done",
+          "our_version_ticket": "MOCK-98"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": "2.40.0",
+          "newest_version": "2.42.6",
+          "state": "Ticket waiting for a yes",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "awaiting_approval": true,
+          "our_version_source": "first_check"
+        }
+      ]
+    }
+  },
+  {
+    "id": "watch-q-4",
+    "note": "Step 2a: the lane reads awaiting_approval.",
+    "task": "Is anything waiting for my yes?",
+    "kind": [
+      "question"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "our_version_source": "given"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.2.0",
+          "state": "Ticket open",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "open_ticket": "MOCK-142",
+          "our_version_source": "ticket_done",
+          "our_version_ticket": "MOCK-98"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": "2.40.0",
+          "newest_version": "2.42.6",
+          "state": "Ticket waiting for a yes",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "awaiting_approval": true,
+          "our_version_source": "first_check"
+        }
+      ]
+    }
+  },
+  {
+    "id": "watch-q-5",
+    "note": "Step 2a: a question that names the watchlist.",
+    "task": "What's behind on our watchlist?",
+    "kind": [
+      "question"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "our_version_source": "given"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.2.0",
+          "state": "Ticket open",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "open_ticket": "MOCK-142",
+          "our_version_source": "ticket_done",
+          "our_version_ticket": "MOCK-98"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": "2.40.0",
+          "newest_version": "2.42.6",
+          "state": "Ticket waiting for a yes",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "awaiting_approval": true,
+          "our_version_source": "first_check"
+        }
+      ]
+    }
+  },
+  {
+    "id": "watch-statement",
+    "note": "Step 2a: a statement is not a question, so it stays which_software.",
+    "task": "Tell me when there's a new version",
+    "kind": [
+      "which_software"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "our_version_source": "given"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.2.0",
+          "state": "Ticket open",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "open_ticket": "MOCK-142",
+          "our_version_source": "ticket_done",
+          "our_version_ticket": "MOCK-98"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": "2.40.0",
+          "newest_version": "2.42.6",
+          "state": "Ticket waiting for a yes",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "awaiting_approval": true,
+          "our_version_source": "first_check"
+        }
+      ]
+    }
+  },
+  {
+    "id": "watch-jira-count",
+    "note": "Step 2a: a Jira question is still not a question for the lane.",
+    "task": "How many Jira tickets are open in MOCK?",
+    "not_kind": [
+      "question"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "our_version_source": "given"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.2.0",
+          "state": "Ticket open",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "open_ticket": "MOCK-142",
+          "our_version_source": "ticket_done",
+          "our_version_ticket": "MOCK-98"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": "2.40.0",
+          "newest_version": "2.42.6",
+          "state": "Ticket waiting for a yes",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "awaiting_approval": true,
+          "our_version_source": "first_check"
+        }
+      ]
+    }
+  },
+  {
+    "id": "follow-up-unwatched",
+    "note": "Step 2a: the follow-up names FastAPI, which is not watched, so the offer stands.",
+    "task": "and FastAPI?",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "FastAPI",
+    "previous": {
+      "request": "What is the newest version of LangGraph?"
+    },
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "our_version_source": "given"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.2.0",
+          "state": "Ticket open",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "open_ticket": "MOCK-142",
+          "our_version_source": "ticket_done",
+          "our_version_ticket": "MOCK-98"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": "2.40.0",
+          "newest_version": "2.42.6",
+          "state": "Ticket waiting for a yes",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "awaiting_approval": true,
+          "our_version_source": "first_check"
+        }
+      ]
+    }
+  },
+  {
+    "id": "follow-up-watched",
+    "note": "Step 2a: the follow-up names Redis, which is watched, so the lane answers.",
+    "task": "what about Redis?",
+    "kind": [
+      "question"
+    ],
+    "previous": {
+      "request": "What is the newest version of LangGraph?"
+    },
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "our_version_source": "given"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.2.0",
+          "state": "Ticket open",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "open_ticket": "MOCK-142",
+          "our_version_source": "ticket_done",
+          "our_version_ticket": "MOCK-98"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": "2.40.0",
+          "newest_version": "2.42.6",
+          "state": "Ticket waiting for a yes",
+          "checked_at": "2026-11-08T02:00:00Z",
+          "awaiting_approval": true,
+          "our_version_source": "first_check"
+        }
+      ]
+    }
   }
 ]

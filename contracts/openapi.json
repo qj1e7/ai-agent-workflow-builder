@@ -9,6 +9,18 @@
             "default": "abilities",
             "title": "Answer",
             "type": "string"
+          },
+          "read_as": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the Planner read a short follow-up, such as \"and Redis?\", as an earlier request with its software swapped. The request as it was read, for the Portal to show as \"I read this as\".",
+            "title": "Read As"
           }
         },
         "title": "AbilitiesReply",
@@ -1247,6 +1259,17 @@
             ],
             "description": "A chip the person tapped. It never asks the model. Send this or text."
           },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreviousIn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With text: the turn before it. A short follow-up such as \"and Redis?\" is read as that turn's request with its software swapped."
+          },
           "text": {
             "anyOf": [
               {
@@ -2193,6 +2216,18 @@
             },
             "title": "Cant",
             "type": "array"
+          },
+          "read_as": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the Planner read a short follow-up, such as \"and Redis?\", as an earlier request with its software swapped. The request as it was read, for the Portal to show as \"I read this as\".",
+            "title": "Read As"
           }
         },
         "required": [
@@ -2853,6 +2888,18 @@
             "default": "check_workflows",
             "title": "Answer",
             "type": "string"
+          },
+          "read_as": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the Planner read a short follow-up, such as \"and Redis?\", as an earlier request with its software swapped. The request as it was read, for the Portal to show as \"I read this as\".",
+            "title": "Read As"
           },
           "use_case_id": {
             "anyOf": [
@@ -4402,6 +4449,18 @@
             "default": "ideas",
             "title": "Answer",
             "type": "string"
+          },
+          "read_as": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the Planner read a short follow-up, such as \"and Redis?\", as an earlier request with its software swapped. The request as it was read, for the Portal to show as \"I read this as\".",
+            "title": "Read As"
           }
         },
         "title": "IdeasReply",
@@ -4937,6 +4996,18 @@
             "default": "needs_me",
             "title": "Answer",
             "type": "string"
+          },
+          "read_as": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the Planner read a short follow-up, such as \"and Redis?\", as an earlier request with its software swapped. The request as it was read, for the Portal to show as \"I read this as\".",
+            "title": "Read As"
           }
         },
         "title": "NeedsMeReply",
@@ -5056,6 +5127,18 @@
           "message": {
             "title": "Message",
             "type": "string"
+          },
+          "read_as": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the Planner read a short follow-up, such as \"and Redis?\", as an earlier request with its software swapped. The request as it was read, for the Portal to show as \"I read this as\".",
+            "title": "Read As"
           },
           "starters": {
             "items": {
@@ -5230,6 +5313,18 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "read_as": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the Planner read a short follow-up, such as \"and Redis?\", as an earlier request with its software swapped. The request as it was read, for the Portal to show as \"I read this as\".",
+            "title": "Read As"
           },
           "rows": {
             "items": {
@@ -5849,6 +5944,47 @@
         "title": "PracticeTickets",
         "type": "object"
       },
+      "PreviousIn": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "anyOf": [
+              {
+                "maxLength": 600,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The text of the Planner's answer to it, when it had one.",
+            "title": "Answer"
+          },
+          "request": {
+            "maxLength": 2000,
+            "title": "Request",
+            "type": "string"
+          },
+          "software": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The software the Planner named in its answer to it.",
+            "title": "Software"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "title": "PreviousIn",
+        "type": "object"
+      },
       "ProblemReason": {
         "enum": [
           "address_not_allowed",
@@ -6039,6 +6175,18 @@
             "title": "Looked At",
             "type": "array"
           },
+          "read_as": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the Planner read a short follow-up, such as \"and Redis?\", as an earlier request with its software swapped. The request as it was read, for the Portal to show as \"I read this as\".",
+            "title": "Read As"
+          },
           "text": {
             "description": "The Planner's answer to a question about the person's own data, in its own words, from the facts read when the question arrived (ADR 0042).",
             "title": "Text",
@@ -6138,6 +6286,18 @@
             "default": "refused",
             "title": "Answer",
             "type": "string"
+          },
+          "read_as": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the Planner read a short follow-up, such as \"and Redis?\", as an earlier request with its software swapped. The request as it was read, for the Portal to show as \"I read this as\".",
+            "title": "Read As"
           },
           "reason": {
             "const": "skip_approval",
@@ -7201,6 +7361,18 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "read_as": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the Planner read a short follow-up, such as \"and Redis?\", as an earlier request with its software swapped. The request as it was read, for the Portal to show as \"I read this as\".",
+            "title": "Read As"
           },
           "rows": {
             "items": {
@@ -8998,6 +9170,18 @@
             "title": "Answer",
             "type": "string"
           },
+          "read_as": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the Planner read a short follow-up, such as \"and Redis?\", as an earlier request with its software swapped. The request as it was read, for the Portal to show as \"I read this as\".",
+            "title": "Read As"
+          },
           "software": {
             "anyOf": [
               {
@@ -9100,6 +9284,18 @@
             "title": "Answer",
             "type": "string"
           },
+          "read_as": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the Planner read a short follow-up, such as \"and Redis?\", as an earlier request with its software swapped. The request as it was read, for the Portal to show as \"I read this as\".",
+            "title": "Read As"
+          },
           "word": {
             "title": "Word",
             "type": "string"
@@ -9119,6 +9315,18 @@
             "default": "why_stopped",
             "title": "Answer",
             "type": "string"
+          },
+          "read_as": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the Planner read a short follow-up, such as \"and Redis?\", as an earlier request with its software swapped. The request as it was read, for the Portal to show as \"I read this as\".",
+            "title": "Read As"
           },
           "use_case_id": {
             "anyOf": [

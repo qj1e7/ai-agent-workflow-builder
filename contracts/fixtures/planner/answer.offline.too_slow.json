@@ -1,4 +1,5 @@
 {
+  "read_as": null,
   "answer": "offline",
   "why": "too_slow",
   "message": "The Planner took too long to read your task. Start from one of these, or try again.",

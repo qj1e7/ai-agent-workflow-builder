@@ -16,7 +16,7 @@ import { CapabilityLists } from './CapabilityLists'
 import { approverLine, comingUpOf, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, stateLine, suggestionsOf, type Needs, type Next } from './home'
 import { NeedsSection, useArrival } from './NeedsSection'
 import { PlannerBox } from './PlannerBox'
-import { EMPTY, isThinking, threadReducer } from './threadState'
+import { EMPTY, isThinking, previousOf, threadReducer } from './threadState'
 import { Thread } from './Thread'
 import homeStyles from './Home.module.css'
 import styles from './Planner.module.css'
@@ -213,7 +213,9 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
 
   const sendText = () => {
     const typed = text.trim()
-    if (typed !== '' && !busy) send({ text: typed }, typed, text)
+    if (typed === '' || busy) return
+    const previous = previousOf(thread)
+    send(previous === null ? { text: typed } : { text: typed, previous }, typed, text)
   }
   const page: Page = {
     ask: (words) => {

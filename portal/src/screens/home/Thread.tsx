@@ -6,6 +6,7 @@ import { SetupCard } from './SetupCard'
 import { sayOf } from './answers'
 import { CheckWorkflowsAnswer, NeedsMeAnswer, useSaidOnce, WhyStoppedAnswer, type Say } from './StateAnswers'
 import type { Message, Thread as ThreadState } from './threadState'
+import { Waiting } from './Waiting'
 import styles from './Planner.module.css'
 
 const SORRY = new Set(['cant', 'refused', 'offline'])
@@ -23,6 +24,7 @@ function ReplyBody({ message, now, page, say }: { message: Extract<Message, { ki
   useSaidOnce(sentence, say)
   return (
     <div className={styles['reply']}>
+      {reply.read_as != null ? <p className={styles['readAs']}>I read this as: {reply.read_as}</p> : null}
       {sentence !== null ? <p>{sentence}</p> : null}
       {reply.answer === 'check_workflows' ? <CheckWorkflowsAnswer useCaseId={reply.use_case_id} now={now} say={say} /> : null}
       {reply.answer === 'why_stopped' ? <WhyStoppedAnswer useCaseId={reply.use_case_id} say={say} /> : null}
@@ -71,11 +73,14 @@ export function Thread({ thread, now, page }: ThreadProps) {
                     </>
                   </CardLive.Provider>
                 ) : message.kind === 'thinking' ? (
-                  <span className={styles['dots']} aria-hidden="true">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
+                  <>
+                    <span className={styles['dots']} aria-hidden="true">
+                      <i />
+                      <i />
+                      <i />
+                    </span>
+                    <Waiting />
+                  </>
                 ) : (
                   <NewestAnswer.Provider value={message.id === newest}>
                     <CardLive.Provider value={message.id === newest}>
@@ -89,7 +94,7 @@ export function Thread({ thread, now, page }: ThreadProps) {
         })}
       </ol>
       <div className="visually-hidden" role="status" aria-live="polite">
-        {thread.messages.at(-1)?.kind === 'thinking' ? 'The Planner is answering' : said?.text ?? ''}
+        {thread.messages.at(-1)?.kind === 'thinking' ? '' : said?.text ?? ''}
       </div>
     </>
   )

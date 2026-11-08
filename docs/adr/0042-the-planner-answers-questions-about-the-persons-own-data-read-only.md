@@ -24,6 +24,22 @@ A staff member types "help me check how many software in the watchlist" on Home.
 - **Sources shown.** Code keeps only the sections that were really sent. The Portal shows them as "Looked at", linked to the screens.
 - **A fixed fallback.** If the facts are missing, or the reply offers to act or runs long, the answer is the fixed text "I couldn't answer that from what I can see." with no sections.
 
+## Routes added for the watchlist (8 Nov 2026)
+
+The first reading stays as it is. Everything below is code routing, the lane's own prompt, or the Portal. A change to the first reading moved unrelated answers on 8 Nov, so it is off limits.
+
+**More fixed answers can reach the lane.** Each keeps the same escape: if the lane says the question is not about their data, or its call fails, the first answer stands.
+
+- **2a. Which software.** A request that is a question goes to the lane when the facts hold at least one watched software. A question ends with "?" or starts with which, what, how, is, are, do, does, did or when. "Tell me when there's a new version" is not a question and stays "which software".
+- **2b. The three state answers.** The reading often takes a question about the watchlist for one about workflows. "When did it last check?" reads as check my workflows, "Did it open a ticket for Redis?" as why did it stop, and "Is anything waiting for my yes?" as what needs me. Code sends them to the lane when the words tie them to the watchlist: the words watchlist, watching or watched, the name of a watched software, "last check", or "waiting for my yes". Check my workflows with the word "watchlist" goes whatever its shape. "Why did ... stop?" never goes, and "What needs me?" and "Check my workflows" stay as they were.
+- **2c. A reply the guards reject.** On the watched-software offer, which software and the state answers, a reply the guards reject returns the first answer, not the fixed text. Only the catch-all keeps "I couldn't answer that from what I can see."
+
+**More facts per software.** Each watched software now carries when it was last checked, its open ticket, whether a ticket waits for a yes, why the last check failed, and how the version the team runs was set (given, first check or a ticket marked Done, with the ticket). They come from the same row the Software page shows, so one fact has one source. The lane can answer "When did it last check?", "Did it open a ticket for Redis?" and "Is anything waiting for my yes?".
+
+**Follow-ups, read by code.** The Portal sends the previous turn with the next typed request: its words, the software the Planner named, and the text it answered with. A short follow-up ("and X?", "what about X?", "how about X?") after a turn that named one software becomes that turn's request with the name swapped for X, and then takes the normal path. The first reading sees only the rewritten text. The answer carries the rewrite as `read_as`, and the Portal shows it as "I read this as: ...", so the guess is visible (principle 4). The lane's prompt, and only that, also gets the previous request and its answer.
+
+**Waiting words.** While an answer is pending the Portal says "Working on it…". After 8 seconds it says "Still working. Questions about your data take a little longer." It names no step, because none is known (principle 8).
+
 ## What stays fixed
 
 Set-up cards, parts, can'ts, refusals, "which software", offers to watch software the watchlist does not hold, "what can you do" and the chips keep their fixed text. A request that asks for a change stays a task even when it also asks a question, so no part of it is dropped. The approval gate, the safety checker and the word rule for skipped yes answers are unchanged.

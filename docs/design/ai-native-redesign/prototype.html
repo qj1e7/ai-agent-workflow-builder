@@ -637,6 +637,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 /* While a run replays, the next speaker shows as working, so the chat never looks stuck. */
 .cmsg.typing .cmsg-who { color: var(--muted); font-weight: 600; }
 .dots { display: inline-flex; gap: 4px; padding: 6px 0; }
+.wait, .read-as { margin: 0; }
 .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); opacity: 0.35; animation: dot 1.2s var(--ease-in-out) infinite both; }
 .dots i:nth-child(2) { animation-delay: 150ms; }
 .dots i:nth-child(3) { animation-delay: 300ms; }
@@ -2545,7 +2546,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* Home for an Operator (spec 5): a greeting with the state in one line, the Planner's box, three suggestions from that
      state, and Needs you while something needs her. Day one has three starting points and the capability lists instead. */
   const DAY_ONE = ['Keep track of the LangGraph version', 'What can you do?'];
-  const WATCHED = ['How many software are we watching?', 'Watch another software for new versions', 'What can you do?'];
+  const WATCHED = ['Which software has a newer version?', 'Watch another software for new versions', 'What can you do?'];
   const stoppedIds = () => routineIds().filter((id) => !S.paused[id] && status(id).tone === 'bad');
   /* The rows Home shows under the box. Offline, the hero already carries Connect a model, so its row is left out. */
   const homeNeeds = () => needs().filter((t) => curModel() || t.id !== 'model');
@@ -3545,14 +3546,20 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The conversation. The person's words sit right; the Planner's replies carry its face in the state it is in. */
   /* The heading is for screen readers: the answers' card headings sit under it, not straight under the page's h1. */
   const threadHTML = () => `<h2 class="vh" id="thread-h">Conversation with the Planner</h2><ol class="chat thread" aria-labelledby="thread-h" data-flip-group="chat">${S.chat.msgs.map(msgHTML).join('')}</ol>`;
+  /* While an answer is pending (principle 8): plain words, no step named, because none is known. After 8 seconds the
+     words say why it takes longer. They are static, so reduced motion needs nothing. */
+  const WAIT_SHORT = 'Working on it…';
+  const WAIT_LONG = 'Still working. Questions about your data take a little longer.';
   function msgHTML(m) {
     if (m.from === 'me') return `<li class="cmsg me" data-flip="msg:${m.id}" data-mid="${m.id}"><div class="cmsg-body"><div class="cmsg-bubble"><span class="vh">You: </span>${esc(m.text)}</div></div></li>`;
     const st = m.thinking ? 'thinking' : m.mood || 'idle';
     /* An answer about her workflows is read from live state on every redraw, so the sentence and the card under it
        never disagree (I8). While the words are still being typed, the partial text shows. */
     const say = m.live && !m.typing ? ANSWERS[m.card.kind].say(m.card) : m.say;
-    const body = m.thinking ? '<div class="cmsg-bubble"><span class="dots" role="status" aria-label="The Planner is thinking"><i></i><i></i><i></i></span></div>'
-      : `${say != null ? `<div class="cmsg-bubble" data-say>${esc(say)}</div>` : ''}${m.card ? `<div data-pres="card:${m.id}">${cardHTML(m)}</div>` : ''}`;
+    /* A short follow-up is shown as the request it was read as (principle 4), so the person can see and correct it. */
+    const readAs = m.readAs ? `<p class="read-as small muted">I read this as: ${esc(m.readAs)}</p>` : '';
+    const body = m.thinking ? `<div class="cmsg-bubble"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><p class="wait small muted" role="status">${m.slow ? WAIT_LONG : WAIT_SHORT}</p></div>`
+      : `${readAs}${say != null ? `<div class="cmsg-bubble" data-say>${esc(say)}</div>` : ''}${m.card ? `<div data-pres="card:${m.id}">${cardHTML(m)}</div>` : ''}`;
     return `<li class="cmsg" data-flip="msg:${m.id}" data-mid="${m.id}"><span class="cmsg-av">${face('lead', 40, st, { k: `chat:${m.id}` })}</span><div class="cmsg-body"><span class="cmsg-who" style="color:${AGENTS.lead.hue}">Planner</span>${body}</div></li>`;
   }
   const msgById = (id) => S.chat.msgs.find((m) => m.id === +id);
@@ -3564,15 +3571,28 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* A request goes in, the Planner thinks for a moment, then its answer shows at once: the card, and the sentence
      written word by word with the speaking face. Nothing waits for the words. Reduced motion shows it all at once.
      force: 'setup' makes a set-up card whatever the words say, for "No, set it up as a new workflow". */
+  const FOLLOW_UP = /^(?:and|what about|how about)\s+(\w[\w.+#/-]*(?:\s+\w[\w.+#/-]*){0,2})\s*[?.!]*$/i;
+  const KNOWN_SOFTWARE = ['LangGraph', 'Redis', 'n8n', 'FastAPI'];
+  /* The earlier request with its software swapped for the new one, or null. Only code does this: the model's first reading is untouched. */
+  function followUp(t, previous) {
+    const f = FOLLOW_UP.exec(t);
+    const named = previous && KNOWN_SOFTWARE.find((n) => new RegExp(`\\b${n}\\b`, 'i').test(previous));
+    return f && named ? previous.replace(new RegExp(`\\b${named}\\b`, 'i'), f[1]) : null;
+  }
   function ask(text, force) {
-    const t = text.trim();
+    let t = text.trim();
     const c = S.chat;
     if (!t || c.busy) return;
+    const readAs = followUp(t, c.last);
+    if (readAs) t = readAs;
+    const typed = text.trim();
+    c.last = t;
     c.text = '';
     c.busy = true;
     c.hero = 'thinking';
-    const wait = { id: c.seq + 2, from: 'planner', thinking: true };
-    c.msgs.push({ id: c.seq + 1, from: 'me', text: t }, wait);
+    const wait = { id: c.seq + 2, from: 'planner', thinking: true, readAs };
+    c.msgs.push({ id: c.seq + 1, from: 'me', text: typed }, wait);
+    setTimeout(() => { if (wait.thinking) { wait.slow = true; if (onHome()) render(); } }, 8000);
     c.seq += 2;
     if (S.view.name !== 'home') go('home'); else render();
     scrollToMsg(wait.id);

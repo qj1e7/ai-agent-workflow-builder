@@ -189,7 +189,7 @@ describe('Home for an Operator in a normal week', () => {
     expect(html).toContain('<textarea')
     expect(html.indexOf('<textarea')).toBeLessThan(html.indexOf('Needs you'))
     const chips = [...html.matchAll(/<button[^>]*class="[^"]*_chip_[^"]*"[^>]*>([^<]*)<\/button>/g)].map((m) => m[1])
-    expect(chips).toEqual(['How many software are we watching?', 'Watch another software for new versions', 'What can you do?'])
+    expect(chips).toEqual(['Which software has a newer version?', 'Watch another software for new versions', 'What can you do?'])
   })
 
   it('sets up no general workflow from a chip, and keeps What can I ask for? one press away', () => {

@@ -82,6 +82,14 @@ def watched_facts(software: Sequence[WatchedSoftwareView]) -> list[WatchedFact]:
             our_version=s.our_version,
             newest_version=s.newest_version,
             state=status_words(s),
+            checked_at=s.checked_at,
+            open_ticket=s.open_ticket,
+            awaiting_approval=s.approval_id is not None,
+            problem=s.problem,
+            our_version_source=None if s.our_version_source is None else s.our_version_source.kind,
+            our_version_ticket=None
+            if s.our_version_source is None
+            else s.our_version_source.ticket,
         )
         for s in software
     ]

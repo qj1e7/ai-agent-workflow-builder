@@ -66,7 +66,7 @@ from agent_runtime.planner import (
     visible_words,
     whole_word_of,
 )
-from agent_runtime.questions import answer_question, question_messages
+from agent_runtime.questions import answer_question, is_fallback, question_messages
 from agent_runtime.reading import (
     SAID_LIMIT,
     SkipRead,
@@ -528,6 +528,9 @@ class AskTheQuestionLane:
     question lane decides: if it is not, `otherwise` stands."""
 
     otherwise: PlannerAnswer
+    first_on_reject: bool = False
+    """True for a route whose first answer is a better stand-in than the fixed text when the
+    guards reject the reply: the watchlist, which software, and check workflows routes."""
 
 
 def _watched(answer: WatchlistAnswer, request: AnswerRequest) -> bool:
@@ -536,22 +539,119 @@ def _watched(answer: WatchlistAnswer, request: AnswerRequest) -> bool:
     return bool(name) and any(w.name.strip().casefold() == name for w in held or [])
 
 
-def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQuestionLane:
-    """The fixed answer for a reading, or the question lane when that answer is the catch-all or
-    a watchlist offer for software the watchlist already holds. Every other answer stands."""
-    answer = answer_of(read, request.task)
-    asks = isinstance(answer, AbilitiesAnswer) or (
-        isinstance(answer, WatchlistAnswer) and _watched(answer, request)
+QUESTION_SHAPE: Final = re.compile(
+    r"^\s*(?:which|what|how|is|are|do|does|did|when)\b|\?\s*$", re.IGNORECASE
+)
+WATCHLIST_WORDS: Final = re.compile(r"\b(?:watchlist|watching|watched)\b", re.IGNORECASE)
+LAST_CHECK: Final = re.compile(r"\blast\s+check(?:ed)?\b", re.IGNORECASE)
+WAITING_FOR_YES: Final = re.compile(
+    r"\b(?:waiting|awaiting)\s+(?:for\s+)?(?:my|a|the|your)?\s*(?:yes|approval)\b", re.IGNORECASE
+)
+STARTS_WITH_WHY: Final = re.compile(r"^\s*why\b", re.IGNORECASE)
+FOLLOW_UP: Final = re.compile(
+    r"^\s*(?:and|what\s+about|how\s+about)\s+"
+    r"(?P<name>\w[\w.+#/-]*(?:\s+\w[\w.+#/-]*){0,2})\s*[?.!]*\s*$",
+    re.IGNORECASE,
+)
+
+
+def _watched_names(request: AnswerRequest) -> list[str]:
+    held = request.facts.watchlist if request.facts is not None else None
+    return [name for w in held or [] if (name := w.name.strip())]
+
+
+def _in(text: str, name: str) -> bool:
+    return re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text, re.IGNORECASE) is not None
+
+
+def rewrite_follow_up(request: AnswerRequest) -> str | None:
+    """A short follow-up ("and X?", "what about X?", "how about X?") after a turn that named one
+    software, as that turn's request with its software swapped for X. None when the request is
+    not such a follow-up, so the first reading is never touched."""
+    earlier = request.previous
+    follow = FOLLOW_UP.match(visible_words(request.task))
+    if earlier is None or follow is None:
+        return None
+    previous = visible_words(earlier.request)
+    named = (earlier.software or "").strip() or _named_in(previous, request)
+    if not named:
+        return None
+    swapped, count = re.subn(
+        rf"(?<!\w){re.escape(named)}(?!\w)",
+        lambda _: follow.group("name").strip(),
+        previous,
+        flags=re.IGNORECASE,
     )
-    if not asks or question_messages(request) is None:
+    return plain(swapped, 2000) if count == 1 else None
+
+
+def _named_in(text: str, request: AnswerRequest) -> str | None:
+    """The one watched software the text names, when the platform did not say which."""
+    found = {name for name in _watched_names(request) if _in(text, name)}
+    return next(iter(found)) if len(found) == 1 else None
+
+
+def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQuestionLane:
+    """The fixed answer for a reading, or the question lane when that answer is the catch-all, a
+    watchlist offer for software the watchlist already holds, which software for a question
+    while the watchlist holds some, or check workflows for a request that names the watchlist.
+    Every other answer stands. Only code routes: the reading itself is never changed."""
+    answer = answer_of(read, request.task)
+    if question_messages(request) is None:
         return answer
-    return AskTheQuestionLane(otherwise=answer)
+    text = visible_words(request.task)
+    if isinstance(answer, AbilitiesAnswer) or (
+        isinstance(answer, WatchlistAnswer) and _watched(answer, request)
+    ):
+        return AskTheQuestionLane(
+            otherwise=answer, first_on_reject=not isinstance(answer, AbilitiesAnswer)
+        )
+    if (
+        isinstance(answer, WhichSoftwareAnswer)
+        and QUESTION_SHAPE.search(text)
+        and bool(_watched_names(request))
+    ):
+        return AskTheQuestionLane(otherwise=answer, first_on_reject=True)
+    if _state_answer_about_the_watchlist(answer, text, request):
+        return AskTheQuestionLane(otherwise=answer, first_on_reject=True)
+    return answer
+
+
+def _names_watched(text: str, request: AnswerRequest) -> bool:
+    return any(_in(text, name) for name in _watched_names(request))
+
+
+def _state_answer_about_the_watchlist(
+    answer: PlannerAnswer, text: str, request: AnswerRequest
+) -> bool:
+    """The reading took a question about the watchlist for a question about the person's
+    workflows ("When did it last check?"), their stopped runs ("Did it open a ticket for
+    Redis?") or what needs them ("Is anything waiting for my yes?"). Code sends it to the lane
+    when the words tie it to the watchlist: the word, a software it holds, the last check, or a
+    yes that waits. The first answer stands if the lane says no."""
+    if isinstance(answer, CheckWorkflowsAnswer) and WATCHLIST_WORDS.search(text):
+        return True
+    if not QUESTION_SHAPE.search(text):
+        return False
+    watched = bool(WATCHLIST_WORDS.search(text)) or _names_watched(text, request)
+    match answer:
+        case CheckWorkflowsAnswer():
+            return watched or bool(LAST_CHECK.search(text))
+        case WhyStoppedAnswer():
+            return watched and not STARTS_WITH_WHY.search(text)
+        case NeedsMeAnswer():
+            return watched or bool(WAITING_FOR_YES.search(text))
+        case _:
+            return False
 
 
 def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     refused = word_rule_refusal(request.task)
     if refused is not None:
         return Answered(answer=refused)
+    rewritten = rewrite_follow_up(request)
+    if rewritten is not None:
+        request = request.model_copy(update={"task": rewritten})
     read = ask_model(
         chat_for,
         ANSWER_SYSTEM,
@@ -563,12 +663,14 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
         return read
     decided = decide(read, request)
     if not isinstance(decided, AskTheQuestionLane):
-        return Answered(answer=decided)
+        return Answered(answer=decided, read_as=rewritten)
     asked = answer_question(request, chat_for)
     # The lane may improve an answer, never make it worse: when its call fails, the first stands.
     if asked is None or isinstance(asked, ModelProblem):
-        return Answered(answer=decided.otherwise)
-    return Answered(answer=asked)
+        return Answered(answer=decided.otherwise, read_as=rewritten)
+    if decided.first_on_reject and is_fallback(asked):
+        return Answered(answer=decided.otherwise, read_as=rewritten)
+    return Answered(answer=asked, read_as=rewritten)
 
 
 APPROVAL_WORDS: Final = re.compile(

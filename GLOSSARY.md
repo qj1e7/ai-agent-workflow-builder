@@ -48,6 +48,9 @@ _Avoid_: Reply, response, intent (in the app)
 **Question answer**:
 The Planner's reply to a question about the person's own data, such as how many software are on the watchlist. The model writes it in its own words from a facts snapshot read when the question arrives, and only from those facts. It names the sections it used, and it never offers to act. It is the one answer whose text is not fixed (ADR 0042).
 
+**I read this as**:
+The line the Portal shows above an answer when the Planner took a short follow-up, such as "and Redis?", to mean an earlier request with its software swapped. It shows the request as it was read, so the person can see and change it (ADR 0042).
+
 **Capability**:
 Something the platform can do for a workflow, such as reading Jira tickets. It is in exactly one state: Ready, Needs setup, Not answering, Planned or Unsupported. Every screen and the Planner read the same state.
 _Avoid_: Ability, feature (in the app)

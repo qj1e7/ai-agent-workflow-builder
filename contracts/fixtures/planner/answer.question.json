@@ -1,4 +1,5 @@
 {
+  "read_as": null,
   "answer": "question",
   "text": "Three: LangGraph, Redis and n8n.",
   "looked_at": [

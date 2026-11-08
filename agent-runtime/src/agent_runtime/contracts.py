@@ -60,6 +60,7 @@ from agent_runtime.contract import (
     ModelProblem,
     ModelTestPassed,
     PlannerFacts,
+    PreviousTurn,
     ProposedIntent,
     QuestionAnswer,
     RoomAddressee,
@@ -881,10 +882,20 @@ def question_request() -> AnswerRequest:
             ("n8n", "n8n-io/n8n", None, "2.42.6", "Not checked yet"),
         )
     ]
+    watched[1] = watched[1].model_copy(
+        update={
+            "state": "Ticket open",
+            "checked_at": datetime(2026, 11, 8, 2, 0, tzinfo=UTC),
+            "open_ticket": "MOCK-142",
+            "our_version_source": "ticket_done",
+            "our_version_ticket": "MOCK-98",
+        }
+    )
     return AnswerRequest(
         task="how many software are on our watchlist",
         model=draft_request().model,
         facts=PlannerFacts(watchlist=watched),
+        previous=PreviousTurn(request="What is the newest version of LangGraph?"),
     )
 
 

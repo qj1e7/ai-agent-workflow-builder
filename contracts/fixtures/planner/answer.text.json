@@ -1,5 +1,6 @@
 {
   "text": "Every Friday, sum up the tickets we closed this week",
   "intent": null,
-  "use_case_id": null
+  "use_case_id": null,
+  "previous": null
 }

@@ -1,4 +1,4 @@
-import type { PlannerReply } from '../../api/types'
+import type { PlannerAnswerIn, PlannerReply } from '../../api/types'
 import type { CardStart } from './SetupCard'
 
 export type Message =
@@ -40,3 +40,17 @@ export function threadReducer(state: Thread, action: ThreadAction): Thread {
 }
 
 export const isThinking = (thread: Thread): boolean => thread.messages.some((m) => m.kind === 'thinking')
+
+/** The turn the next typed request may follow on from: what the person asked, the software the Planner named, and the words it answered with. */
+export type PreviousTurn = NonNullable<PlannerAnswerIn['previous']>
+
+export function previousOf(thread: Thread): PreviousTurn | null {
+  const last = thread.messages.findLast((m) => m.kind === 'reply')
+  if (last === undefined || last.kind !== 'reply' || last.reply.answer === 'offline') return null
+  const { reply, typed } = last
+  return {
+    request: typed,
+    software: reply.answer === 'watchlist' ? reply.software : null,
+    answer: reply.answer === 'question' ? reply.text : null,
+  }
+}

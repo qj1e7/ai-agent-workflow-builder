@@ -751,6 +751,24 @@ class WatchedFact(WireModel):
         description="The newest release read from the source. None when unread.",
     )
     state: str = Field(max_length=40, description="The state in the words the Software page shows.")
+    checked_at: datetime | None = Field(
+        default=None, description="When the software was last checked. None when never."
+    )
+    open_ticket: str | None = Field(
+        default=None, max_length=40, description="The upgrade ticket that is open, if any."
+    )
+    awaiting_approval: bool = Field(
+        default=False, description="True when a ticket for it waits for an Approver's yes."
+    )
+    problem: str | None = Field(
+        default=None, max_length=200, description="Why the last check could not read it."
+    )
+    our_version_source: Literal["given", "first_check", "ticket_done"] | None = Field(
+        default=None, description="How the version the team runs was set. None when not known."
+    )
+    our_version_ticket: str | None = Field(
+        default=None, max_length=40, description="The ticket that moved the version, if any."
+    )
 
 
 class WorkflowFact(WireModel):
@@ -781,9 +799,28 @@ class PlannerFacts(WireModel):
     needs_you: NeedsYouFact | None = None
 
 
+class PreviousTurn(WireModel):
+    """The turn before the one being answered, sent by the Portal with the next typed request."""
+
+    request: str = Field(max_length=2000, description="What the person typed, or the chip's words.")
+    software: str | None = Field(
+        default=None, max_length=80, description="The software the Planner named in its answer."
+    )
+    answer: str | None = Field(
+        default=None,
+        max_length=600,
+        description="The text of the Planner's answer, when it had one.",
+    )
+
+
 class AnswerRequest(WireModel):
     task: str = Field(min_length=1, max_length=2000)
     model: ModelAccess
+    previous: PreviousTurn | None = Field(
+        default=None,
+        description='The turn before this one. A short follow-up such as "and X?" is read as '
+        "that turn's request with its software swapped for X.",
+    )
     facts: PlannerFacts | None = Field(
         default=None,
         description="Read by the platform when the request arrives. Only a question about the "
@@ -952,6 +989,12 @@ type PlannerAnswer = Annotated[
 class Answered(WireModel):
     status: Literal["answered"] = "answered"
     answer: PlannerAnswer
+    read_as: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="The request as the Planner read it, when it rewrote a follow-up. The Portal "
+        'shows it as "I read this as".',
+    )
 
 
 type AnswerResult = Annotated[Answered | ModelProblem, Field(discriminator="status")]
