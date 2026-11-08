@@ -747,6 +747,11 @@
             }
           ]
         },
+        "focus": {
+          "description": "True for what software versioning uses: checking releases, asking for a yes, creating the upgrade ticket. Home's lists show only these.",
+          "title": "Focus",
+          "type": "boolean"
+        },
         "id": {
           "pattern": "^[a-z]+(\\.[a-z_]+)?$",
           "title": "Id",
@@ -818,6 +823,7 @@
         "connection",
         "needs_model",
         "platform",
+        "focus",
         "tools"
       ],
       "title": "CapabilitySpec",

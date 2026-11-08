@@ -147,19 +147,17 @@ export function workflowsSay(rows: readonly Row[]): string {
 export interface CapabilityGroups {
   readonly can: readonly CapabilityView[]
   readonly setup: readonly CapabilityView[]
-  readonly notYet: readonly CapabilityView[]
 }
 
-/** The team’s focus is software versioning, so these lines lead each list. The sort is stable, so every other line keeps its order. */
-const SOFTWARE_VERSIONING: ReadonlySet<string> = new Set(['github.releases'])
-
-/** The “I can” and “Not yet” lists, split by the state the platform gave each entry. */
+/**
+ * The lists Home shows without being asked, split by the state the platform gave each entry. They hold only what software
+ * versioning uses (the registry's `focus` mark). A request for anything else is answered when it is asked, with the can't.
+ */
 export function capabilityGroups(view: CapabilitiesView): CapabilityGroups {
-  const all = [...view.capabilities].sort((a, b) => Number(SOFTWARE_VERSIONING.has(b.id)) - Number(SOFTWARE_VERSIONING.has(a.id)))
+  const all = view.capabilities.filter((entry) => entry.focus)
   return {
     can: all.filter((entry) => entry.state === 'ready'),
     setup: all.filter((entry) => entry.state === 'needs_setup' || entry.state === 'down'),
-    notYet: all.filter((entry) => entry.state === 'planned' || entry.state === 'unsupported'),
   }
 }
 

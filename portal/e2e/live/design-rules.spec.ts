@@ -17,7 +17,7 @@ interface Capability {
 }
 
 const main = (page: Page) => page.getByRole('main')
-const box = (page: Page) => page.getByLabel('Describe a task for the Planner')
+const box = (page: Page) => page.getByLabel('Ask the Planner about software versions')
 
 async function ask(page: Page, text: string): Promise<void> {
   await box(page).fill(text)

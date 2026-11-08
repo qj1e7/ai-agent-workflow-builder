@@ -1490,7 +1490,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
      connection it needs, `sys` the system in the Operator's words, `cant` the verb phrase a refusal uses, `tools` the
      tool cards that carry it, and `why` the plain reason it can't be done, said after "I can't ...". A planned
      capability's `why` names the limit only: the Planned tag carries the roadmap, and only with Planned features shown.
-     `model` marks what the agents do with the AI model, so it is Needs setup while no model is connected. */
+     `model` marks what the agents do with the AI model, so it is Needs setup while no model is connected. `focus` marks what
+     software versioning uses, and the lists shown without being asked hold only those (8 Nov 2026). */
   const CAPS = {
     /* A ticket reaches the agents with these fields only (agent-runtime jira.py). The set-up card's ticket choices come from them. */
     jiraRead: { name: 'Read Jira tickets', kind: 'read', base: 'ready', conn: 'jira', sys: 'Jira', model: true, tools: ['jiraSearch', 'jiraRead'], fields: ['key', 'project', 'title', 'status', 'created date', 'done date', 'body'] },
@@ -1498,9 +1499,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     /* A search returns the 50 newest tickets (platform-api jira.py, SEARCH_LIMIT), so anything older is out of reach. */
     older: { name: 'Find older tickets, beyond the newest 50', kind: 'read', base: 'planned', conn: 'jira', sys: 'Jira', tools: [], cant: 'look past the 50 newest tickets', why: 'A search stops there.', note: 'A backend change: a created-date filter and paging in the Jira search.' },
     summarise: { name: 'Sum up what I find', kind: 'none', base: 'ready', model: true, tools: [] },
-    ghReleases: { name: 'Check software for new releases on GitHub', kind: 'read', base: 'ready', conn: 'github', sys: 'GitHub', tools: ['ghReleases'] },
-    jiraCreate: { name: 'Create a Jira ticket after a yes', kind: 'write', base: 'ready', conn: 'jira', sys: 'Jira', model: true, tools: ['jiraCreate'] },
-    teamsAsk: { name: 'Ask Approvers for a yes in Teams', kind: 'notify', base: 'ready', conn: 'teams', sys: 'Teams', tools: [], platform: true },
+    ghReleases: { name: 'Check software for new releases on GitHub', kind: 'read', base: 'ready', conn: 'github', sys: 'GitHub', tools: ['ghReleases'], focus: true },
+    jiraCreate: { name: 'Create a Jira ticket after a yes', kind: 'write', base: 'ready', conn: 'jira', sys: 'Jira', model: true, tools: ['jiraCreate'], focus: true },
+    teamsAsk: { name: 'Ask Approvers for a yes in Teams', kind: 'notify', base: 'ready', conn: 'teams', sys: 'Teams', tools: [], platform: true, focus: true },
     teamsPost: { name: 'Post messages in Teams', kind: 'write', base: 'planned', conn: 'teams', sys: 'Teams', tools: ['teamsPost'], cant: 'post messages in Teams', why: 'Teams carries approval requests, run outcomes and requests for the team. It posts nothing else.' },
     confluence: { name: 'Change Confluence pages', kind: 'write', base: 'planned', tools: [], cant: 'change Confluence pages', why: 'Confluence isn’t connected to the platform.' },
     ghIssues: { name: 'Read GitHub issues', kind: 'read', base: 'planned', conn: 'github', sys: 'GitHub', tools: ['ghIssues'], cant: 'read GitHub issues', why: 'There’s no tool for that yet.' },
@@ -1523,8 +1524,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The one place a state becomes words (spec 4). A watchlist source says Ready where a capability says I can. */
   const STATE_WORDS = { ready: 'I can', setup: 'Needs setup', down: 'Not working right now', planned: 'Not yet', unsupported: 'Not yet' };
   const stateWord = (st, { source = false } = {}) => (st === 'ready' && source ? 'Ready' : STATE_WORDS[st]);
-  /* The groups every capability list shows, in order. Planned and Unsupported share Not yet. */
-  const STATE_GROUPS = [['ready', ['ready']], ['setup', ['setup']], ['down', ['down']], ['not', ['planned', 'unsupported']]];
+  /* The groups every capability list shows, in order. There is no Not yet group: a request for something else gets its can't when it is asked. */
+  const STATE_GROUPS = [['ready', ['ready']], ['setup', ['setup']], ['down', ['down']]];
   /* The one fix for a Needs setup capability: the model is connected here; a key is replaced by whoever runs the platform. */
   const setupFix = (id) => (CAPS[id].model && !curModel() ? 'Connect an AI model in Settings' : 'Ask whoever looks after the platform to replace the key');
   const capOfTool = (k) => Object.keys(CAPS).find((id) => CAPS[id].tools.includes(k));
@@ -2573,10 +2574,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The box, disabled and labelled while the Planner answers (spec 5.5). */
   function composer(c, empty) {
     const busy = c.busy;
-    const label = busy ? 'The Planner is answering' : 'Describe a task for the Planner';
+    const label = busy ? 'The Planner is answering' : 'Ask the Planner about software versions';
     /* The phone box is too narrow for the full question, so it asks a shorter one that fits. */
     const phone = window.matchMedia('(max-width: 600px)').matches;
-    const ph = busy ? 'The Planner is answering' : empty ? (phone ? 'Automate, check or fix something' : 'What would you like to automate, check or fix?') : 'Ask for something else';
+    const ph = busy ? 'The Planner is answering' : empty ? (phone ? 'Ask about your software versions' : 'Ask about your software versions, or name software to watch') : 'Ask for something else';
     return `<form class="composer" data-submit="ask"><label class="vh" for="ask">${label}</label><textarea id="ask" data-ask rows="1" placeholder="${ph}" enterkeyhint="send"${busy ? ' disabled aria-disabled="true"' : ''}>${esc(c.text)}</textarea><button class="send" type="submit" aria-label="Send to the Planner"${c.text.trim() && !busy ? '' : ' disabled'}>${I.send(20)}</button></form>`;
   }
   /* Day one starts with nothing in Needs you because its keys are fresh and nothing has run. Anything real that comes
@@ -2588,7 +2589,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (!curModel()) return offlineHome();
     const items = homeNeeds();
     const hello = !empty ? '<h1 tabindex="-1">Planner</h1>'
-      : dayOne ? '<h1 tabindex="-1">What does your team do again and again?</h1><p class="lead">Tell me a task in plain English. I’ll set it up to run by itself. Anything that changes data waits for a yes from an Approver in Teams.</p>'
+      : dayOne ? '<h1 tabindex="-1">Which software should we keep up to date?</h1><p class="lead">Ask about your watchlist, or tell me what software to watch.</p>'
         : `<h1 tabindex="-1">Good morning! ${me().name}</h1><p class="lead">${stateLine(items)}</p>`;
     return `<div class="home planner" data-unbuilt="The Planner’s box on Home (ADR 0037)">
       <div class="welcome${empty ? '' : ' compact'}">${face('lead', empty ? 128 : 52, c.hero, { live: empty && c.hero === 'idle', id: 'hero' })}<div class="hello-text">${hello}</div></div>
@@ -2596,7 +2597,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       ${composer(c, empty)}
       ${empty ? `<div class="chips examples" role="group" aria-label="${onWatchlist() ? 'Suggestions' : 'Starting points'}">${suggestions().map((e, i) => `<button class="chip" data-act="example" data-arg="${i}">${e}</button>`).join('')}</div>` : '<div class="btns"><button class="linkbtn" data-act="newChat">New chat</button></div>'}
       ${empty && items.length ? needsStrip(items) : ''}
-      ${empty && (dayOne || c.abil) ? abilitiesHTML(dayOne) : ''}
+      ${empty && (dayOne || c.abil) ? abilitiesHTML() : ''}
       ${empty && !dayOne ? `<p class="small muted" style="text-align:center"><button class="linkbtn" data-act="abil" data-unbuilt="What can I ask for">${c.abil ? 'Hide what I can do' : 'What can I ask for?'}</button></p>` : ''}
     </div>`;
   }
@@ -2607,11 +2608,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function offlineHome() {
     const items = homeNeeds();
     return `<div class="home planner" data-unbuilt="The offline Home (ADR 0037)">
-      <div class="welcome offline">${face('lead', 128, 'sorry', { id: 'hero' })}<div class="hello-text"><h1 tabindex="-1">I can’t read new requests until an AI model is connected</h1><p class="lead">Until then, agent workflows can’t run and new ones can’t be planned. Only the Software watchlist keeps going, with a simple summary instead of a written one. Approvers can still decide.</p>
+      <div class="welcome offline">${face('lead', 128, 'sorry', { id: 'hero' })}<div class="hello-text"><h1 tabindex="-1">I can’t read new requests until an AI model is connected</h1><p class="lead">Without an AI model, the Planner can’t answer questions. The Software watchlist keeps checking for new releases.</p>
         <div class="btns"><button class="btn primary" data-act="setGo" data-arg="model">Connect a model</button></div></div></div>
       ${items.length ? needsStrip(items, 3, '', { total: needs().length, primary: false }) : ''}
       ${abilitiesHTML()}
-      <form class="composer team-ask" data-submit="askTeamOffline" data-unbuilt="Ask the team (ADR 0038)"><label class="vh" for="ask-team">Ask the team for something that isn’t here</label><textarea id="ask-team" data-askteam rows="1" placeholder="Ask the team for something new" enterkeyhint="send">${esc(S.teamAskText)}</textarea><button class="send" type="submit" aria-label="Ask the team">${I.send(20)}</button></form>
     </div>`;
   }
 
@@ -2684,8 +2684,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const canAdd = me().op && !q && S.filter === 'all';
     const add = canAdd ? `<li data-flip="wf:add"><button class="wf-add" data-act="askPlanner">${I.plus(18)}<b>Ask the Planner for a new one</b><span>Describe it in plain English, on Home</span></button></li>` : '';
     const finding = S.findOpen || !!q || S.filter !== 'all';
-    const empty = !ids.length ? `<div class="quiet"><b>Nothing here yet</b>${me().op ? 'Ask the Planner on Home, and your first workflow shows up here.' : 'Operators set up workflows, and you approve their changes.'}</div>` : '';
-    return `<div class="pagehead"><div><h1 tabindex="-1">Workflows</h1><p>Your team’s repeated tasks. Each one runs by itself and asks before it changes anything.</p></div></div>
+    const empty = !ids.length ? `<div class="quiet"><b>Nothing here yet</b>${me().op ? 'Watch software on the Software page, or ask the Planner on Home. Its checks show up here.' : 'Operators set up workflows, and you approve their changes.'}</div>` : '';
+    return `<div class="pagehead"><div><h1 tabindex="-1">Workflows</h1><p>The jobs that run by themselves, such as the Software watchlist, and what needs you.</p></div></div>
       ${attention()}
       <section class="section" aria-labelledby="all-h"><h2 id="all-h">All workflows <span class="count">${ids.length}</span>
         ${ids.length ? `<button class="iconbtn sec-tool" data-act="findOpen" aria-expanded="${finding}" aria-controls="findbar-workflows" aria-label="${finding ? 'Hide search' : 'Search workflows'}" title="${finding ? 'Hide search' : 'Search'}">${I.search()}</button>` : ''}</h2>
@@ -3376,7 +3376,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     cant: { say: cantSay, card: (m) => cantCard(m), mood: 'sorry' },
     down: { say: () => 'Jira isn’t answering right now, so I can’t check that. I’ll be able to once it’s back.', card: (m) => downCard(m), mood: 'sorry' },
     refuse: { say: () => 'I can’t set that up. Anything that changes data waits for a yes, every time.', card: (m) => refuseCard(m), mood: 'sorry' },
-    abilities: { say: (a) => (a.unknown ? 'I can’t help with that here. I set up tasks your team repeats. Here’s what I can do.' : 'Here’s what I can do today, and what I can’t do yet.'), card: () => abilitiesHTML(), mood: (a) => (a.unknown ? 'sorry' : 'idle') },
+    abilities: { say: (a) => (a.unknown ? 'I can’t help with that here. I set up tasks your team repeats. Here’s what I can do.' : 'Here’s what I can do for software versions.'), card: () => abilitiesHTML(), mood: (a) => (a.unknown ? 'sorry' : 'idle') },
     check: { say: checkSay, card: () => checkCard() },
     why: { say: whySay, card: (m) => whyCard(m), mood: (a) => (stoppedNow(a.id) ? 'sorry' : 'idle') },
     mine: { say: mineSay, card: () => mineCard() },
@@ -3631,14 +3631,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
 
   /* ---------- What the Planner can do ----------
-     The registry, grouped by state: I can, Needs setup, Not working right now, Not yet. A planned line carries its
-     tag only with Planned features shown. The approval request isn't listed, because the platform does it for every
-     workflow. On day one the Not yet lines sit behind "What can't I do yet?", so the first screen stays light. */
+     The registry's software versioning lines, grouped by state: I can, Needs setup, Not working right now. The approval request isn't listed, because the platform does it for every
+     workflow. The lists hold only what software versioning uses, so the first screen stays light. */
   const GROUP_ICON = { ready: I.check(14), setup: I.alert(14), down: I.alert(14), not: I.x(13) };
   const groupTitle = (g) => stateWord(g === 'not' ? 'planned' : g);
   const capNote = (c) => (c.st === 'down' ? `Last seen working ${lastOk(c.id)}` : c.st === 'setup' ? setupFix(c.id) : '');
-  function abilitiesHTML(foldNot = false) {
-    const caps = Object.keys(CAPS).filter((id) => !CAPS[id].platform).map((id) => ({ id, st: capState(id) }));
+  function abilitiesHTML() {
+    const caps = Object.keys(CAPS).filter((id) => CAPS[id].focus).map((id) => ({ id, st: capState(id) }));
     const line = (c, note) => `<li>${GROUP_ICON[c.st === 'planned' || c.st === 'unsupported' ? 'not' : c.st]}<span>${CAPS[c.id].name}${c.st === 'planned' && shows(c.id) ? ` ${PLANNED_TAG}` : ''}${note ? `<small class="cap-note">${note}</small>` : ''}</span></li>`;
     const group = (g, states) => {
       const list = caps.filter((c) => states.includes(c.st));
@@ -3647,11 +3646,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const notes = list.map(capNote);
       const shared = list.length > 1 && notes.every((x) => x && x === notes[0]) ? notes[0] : '';
       const body = `<ul>${list.map((c, i) => line(c, shared ? '' : notes[i])).join('')}</ul>`;
-      return g === 'not' && foldNot ? `<details class="abil-not"><summary>What can’t I do yet?</summary>${body}</details>` : `<div class="abil-${g}"><h3>${groupTitle(g)}${shared ? `<small class="cap-note">${shared}</small>` : ''}</h3>${body}</div>`;
+      return `<div class="abil-${g}"><h3>${groupTitle(g)}${shared ? `<small class="cap-note">${shared}</small>` : ''}</h3>${body}</div>`;
     };
     return `<div class="abil"><h2 class="vh">What I can do</h2>
       ${STATE_GROUPS.map(([g, states]) => group(g, states)).join('')}
-      <p class="abil-foot">Anything that changes data waits for a yes in Teams. Need something that isn’t here? Ask, and I’ll save it as a request for the team.</p>
+      <p class="abil-foot">Anything that changes data waits for a yes in Teams.</p>
     </div>`;
   }
   function focusComposer() {
@@ -3916,7 +3915,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* Agents whose job is a planned capability show only with Planned features (`planned`). A drafted agent shows once
      a workflow that uses it is on (`drafted`). The Version checker's card narrows to GitHub releases without ADR 0025. */
   const LIBRARY = [
-    { id: 'lead', platform: true, what: 'Reads each task, says what it understood, and picks the agents for each workflow. When none of them fits, it drafts a new agent card for you to check.', tools: [], none: 'No access to other systems. It only plans.',
+    { id: 'lead', platform: true, what: 'Answers questions about your watchlist and sets up software to watch.', tools: [], none: 'No access to other systems. It only plans.',
       plan: ['Read the task and say what it understood', 'Pick saved agents that fit, or draft a new agent card', 'Send release checks to the Software watchlist'],
       rules: ['Never chooses who approves', 'Can only give an agent tools from the tool list'], last: 'Today, 9:10: planned Weekly closed-ticket summary.' },
     { id: 'trouble', platform: true, what: 'When a run stops, it explains why in plain words, and says whether you can fix it or support should.', tools: [], none: 'No access to other systems. It reads the run’s own record.',
@@ -4046,7 +4045,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const capUsers = (id) => (id === 'summarise' ? ['summary', 'wow'] : visibleAgents().filter((a) => (agentNow(a.id).tools || a.tools).some((t) => CAPS[id].tools.includes(t))).map((a) => a.id)).filter((a) => visibleAgents().some((v) => v.id === a));
   /* What it can do (spec 12): the registry in plain words, grouped by state, each line naming the agents that use it. */
   function capabilitiesTab() {
-    const caps = Object.keys(CAPS).map((id) => ({ id, st: capState(id) }));
+    const caps = Object.keys(CAPS).filter((id) => CAPS[id].focus).map((id) => ({ id, st: capState(id) }));
     const line = (c) => {
       const cp = CAPS[c.id];
       const users = capUsers(c.id);
@@ -4058,12 +4057,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const more = [why, who].filter(Boolean).join(' ');
       return `<li><div><span><b>${cp.name}</b>${mark}</span>${more ? `<span class="small muted">${more}</span>` : ''}</div></li>`;
     };
-    /* What it can do comes first. The Not yet lines sit behind the question day-one Home asks (F-18). */
-    const group = (g, list) => (g === 'not'
-      ? `<details class="cap-fold"><summary>What can’t I do yet?</summary><section class="cap-${g}" aria-label="${groupTitle(g)}"><ul class="cap-list">${list.map(line).join('')}</ul></section></details>`
-      : `<section class="section cap-${g}" aria-labelledby="cap-${g}-h"><h2 id="cap-${g}-h"><span class="cap-ic" aria-hidden="true">${GROUP_ICON[g]}</span>${groupTitle(g)} <span class="count">${list.length}</span></h2><ul class="cap-list">${list.map(line).join('')}</ul></section>`);
+    /* What it can do lists only the software versioning lines, so there is no Not yet group. */
+    const group = (g, list) => (`<section class="section cap-${g}" aria-labelledby="cap-${g}-h"><h2 id="cap-${g}-h"><span class="cap-ic" aria-hidden="true">${GROUP_ICON[g]}</span>${groupTitle(g)} <span class="count">${list.length}</span></h2><ul class="cap-list">${list.map(line).join('')}</ul></section>`);
     return `<div data-unbuilt="What it can do tab">${STATE_GROUPS.map(([g, states]) => { const list = caps.filter((c) => states.includes(c.st)); return list.length ? group(g, list) : ''; }).join('')}
-      <p class="note" style="margin-top:24px">Anything that changes data waits for a yes in Teams. Need something that isn’t here? Ask the Planner on Home, and it saves it as a request for the team.</p></div>`;
+      <p class="note" style="margin-top:24px">Anything that changes data waits for a yes in Teams.</p></div>`;
   }
   const oneLine = (a) => a.what.split(/(?<=\.)\s/)[0];
   function libraryView() {
@@ -4080,7 +4077,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     };
     const specialists = list.filter((a) => !a.platform);
     const tab = S.libTab;
-    const lead = { can: 'What the platform can do today, and what it can’t yet. An agent can use only what is listed under I can.', agents: 'The agents your team can use. For each workflow, the Planner picks the ones it needs. Anything that changes data waits for a yes.', tools: 'Tools are how agents reach other systems. A tool that changes data waits for a yes, every time.' }[tab];
+    const lead = { can: 'What the platform can do for software versioning. An agent can use only what is listed under I can.', agents: 'The agents behind software version checks. Anything that changes data waits for a yes.', tools: 'Tools are how agents reach GitHub and Jira. A tool that changes data waits for a yes, every time.' }[tab];
     const head = `<div class="pagehead"><div><h1 tabindex="-1">Agent library</h1><p>${lead}</p></div></div>
       <div class="seg lib-tabs" role="group" aria-label="Show">${[['can', 'What it can do', 0], ['agents', 'Agents', list.length], ['tools', 'Tools', Object.keys(TOOLS).filter(toolLive).length]].map(([k, l, n]) => `<button data-act="libTab" data-arg="${k}" aria-pressed="${tab === k}">${l}${n ? ` <span class="seg-n">${n}</span>` : ''}</button>`).join('')}</div>`;
     if (tab === 'tools') return head + toolsTab();

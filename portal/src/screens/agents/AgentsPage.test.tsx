@@ -15,7 +15,7 @@ import { createDevSession } from '../../api/session'
 import type { CapabilitiesView, CardView, Me, ToolView } from '../../api/types'
 import { CARDS_UNAVAILABLE_WORDS, NOT_FOUND_WORDS } from './AgentsPage'
 import { CHANGE_LATER_NOTE, PLATFORM_NOTE, toolsUnavailableWords } from './agents'
-import { CAPABILITIES_UNAVAILABLE_WORDS, NEW_TOOL_WORDS } from './capabilities'
+import { CAPABILITIES_UNAVAILABLE_WORDS } from './capabilities'
 
 const CARDS = cardsFixture.cards as unknown as CardView[]
 const TOOLS = toolsFixture.tools as unknown as ToolView[]
@@ -63,17 +63,15 @@ const down = new ApiError(503, { message: 'The agent runtime is down.' })
 describe('the What it can do tab', () => {
   const main = mainOf(render({ path: '/agents' }))
 
-  it('opens first, with the registry grouped as I can and the Not yet lines behind a question', () => {
+  it('opens first, with the software versioning lines grouped as I can and no Not yet group', () => {
     expect(main).toContain('What it can do')
     expect(main.indexOf('I can')).toBeGreaterThan(-1)
-    expect(main).toContain('Read Jira tickets')
     expect(main).toContain('Check software for new releases on GitHub')
+    expect(main).toContain('Create a Jira ticket after a yes')
+    expect(main).toContain('Ask Approvers for a yes in Teams')
     const html = render({ path: '/agents' })
-    const fold = /<details[^>]*>([\s\S]*?)<\/details>/.exec(html)?.[1] ?? ''
-    expect(text(fold)).toContain('What can’t I do yet?')
-    expect(text(fold)).toContain('Post messages in Teams')
-    expect(text(fold)).toContain('Close, edit, move or delete tickets')
-    expect(text(html.replace(fold, ''))).not.toContain('Post messages in Teams')
+    expect(html).not.toContain('<details')
+    expect(main).not.toMatch(/Read Jira tickets|Post messages in Teams|Close, edit, move|Not yet|can’t I do yet|Ask the team/)
     expect(tileNames(html)).toEqual([])
   })
 
@@ -82,11 +80,7 @@ describe('the What it can do tab', () => {
     expect(main).toContain('The platform does this for every workflow.')
   })
 
-  it('shows the fields a ticket reaches the agents with, on the line that reads tickets only', () => {
-    expect(main.match(/A ticket reaches the agents with these fields only: key, project, title, status, created date, done date, last updated date, type, assignee, body\./g)).toHaveLength(1)
-  })
-
-  it('does not put Planned or roadmap words on a Not yet line', () => {
+  it('puts no Planned or roadmap words on any line', () => {
     expect(main).not.toMatch(/\bPlanned\b|roadmap|ADR/i)
   })
 
@@ -96,8 +90,7 @@ describe('the What it can do tab', () => {
     expect(words).toContain('Not working right now')
     expect(words).toContain('Last seen working today, 9:00')
     expect(words).toContain('Try again in a minute.')
-    expect(words).toContain('Needs setup')
-    expect(html).toContain('href="/settings?tab=model"')
+    expect(words).not.toContain('Needs setup')
     expect(html).toContain('href="/settings?tab=connections"')
   })
 
@@ -235,12 +228,9 @@ describe('the Tools tab', () => {
     expect(bad).toContain('Not working right now. Jira isn’t answering. Last seen working today, 9:00.')
   })
 
-  it('says the team decides on new tools, with no Draft button', () => {
+  it('offers no Draft button and no request for new tools', () => {
     const html = render({ path: '/agents?tab=tools' })
-    expect(mainOf(html)).toContain(NEW_TOOL_WORDS)
-    expect(mainOf(html)).not.toMatch(/Draft/)
-    expect(mainOf(html)).toContain('I can’t add that yet. The team decides on new tools.')
-    expect(mainOf(html)).toContain('Ask the team')
+    expect(mainOf(html)).not.toMatch(/Draft|Ask the team|new tools/)
   })
 
   it('leaves out a health line while the registry is not there', () => {

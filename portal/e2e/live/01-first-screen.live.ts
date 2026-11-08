@@ -8,7 +8,7 @@ import { openContext, OUT, shot } from './support/ui'
 
 const GREETING = (name: string) => new RegExp(`^Good (morning|afternoon|evening)! ${name}$`)
 /** Alice's Home greets her once her team has a workflow. On day one it asks what the team does again and again. */
-const DAY_ONE = 'What does your team do again and again?'
+const DAY_ONE = 'Which software should we keep up to date?'
 const HOME_ALICE = new RegExp(`^(Good (morning|afternoon|evening)! Alice|${DAY_ONE.replace('?', '\\?')})$`)
 
 test.beforeAll(async ({ baseURL }) => {
@@ -60,7 +60,7 @@ test('Home greets the signed-in person and the menu reads Home, Workflows, Softw
   await expect(mainMenu(page).getByRole('link')).toHaveText(MENU.map((item) => linkText(item.label)))
   await expect(mainMenu(page).getByRole('link', { name: 'New workflow' }), 'New workflow has no entry in the menu').toHaveCount(0)
   await expect(mainMenu(page).getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
-  await expect(page).toHaveTitle(/^(Good (morning|afternoon|evening)! Alice|What does your team do again and again\?) · AI Workflow Builder$/)
+  await expect(page).toHaveTitle(/^(Good (morning|afternoon|evening)! Alice|Which software should we keep up to date\?) · AI Workflow Builder$/)
   await shot(page, info, 'p1-01-home')
 })
 

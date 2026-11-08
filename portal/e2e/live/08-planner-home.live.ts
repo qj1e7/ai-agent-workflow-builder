@@ -13,7 +13,7 @@ import { devContext, OUT, shot } from './support/ui'
 const GREETING = /^Good (morning|afternoon|evening)! Alice$/
 const OFFLINE = 'I can’t read new requests until an AI model is connected'
 
-const box = (page: Page) => page.getByLabel('Describe a task for the Planner')
+const box = (page: Page) => page.getByLabel('Ask the Planner about software versions')
 const thread = (page: Page) => page.getByRole('list', { name: 'Conversation with the Planner' })
 const polite = (page: Page) => page.locator('[aria-live="polite"]')
 const main = (page: Page) => page.getByRole('main')
@@ -63,7 +63,7 @@ test.describe('with no AI model', () => {
     await modelOff(String(baseURL))
   })
 
-  test('alice’s Home says it can’t read new requests, offers Connect a model, and keeps the lists, Ask the team and Needs you', async ({ browser, backend }, info) => {
+  test('alice’s Home says it can’t read new requests, offers Connect a model, and keeps the lists and Needs you', async ({ browser, backend }, info) => {
     await backend.waitingRun('alice')
     const repair = await jiraDown(backend)
     const context = await devContext(browser, 'alice')
@@ -74,19 +74,13 @@ test.describe('with no AI model', () => {
     await expect(box(page), 'there is no box to type in').toHaveCount(0)
     await expect(main(page).getByRole('link', { name: 'Connect a model' })).toHaveAttribute('href', '/settings?tab=model')
     await expect(main(page).getByRole('heading', { name: 'I can', exact: true })).toBeVisible()
-    await expect(main(page).getByRole('button', { name: 'Ask the team for something new' })).toBeVisible()
+    await expect(main(page).getByRole('button', { name: 'Ask the team for something new' }), 'Home offers no request for the team').toHaveCount(0)
     await expect(page.getByRole('list', { name: 'Needs you' })).toBeVisible()
     await expect(page.locator('li[data-home-item="connection:model"]'), 'the hero already offers Connect a model').toHaveCount(0)
     await settled(page)
     await expectAccessible(page, path.join(OUT, 'axe'), 'planner-home-offline')
     await shot(page, info, 'n10-08-offline')
 
-    await main(page).getByRole('button', { name: 'Ask the team for something new' }).click()
-    await page.getByLabel('What should the team know?').fill('Please let the Planner post in Slack')
-    await page.getByRole('button', { name: 'Save the request' }).click()
-    await expect(main(page)).toContainText('Saved as a request for the team.')
-    await main(page).getByRole('link', { name: 'Open it under Following up' }).click()
-    await expect(page).toHaveURL(/\/workflows\?request=/)
     assertClean(watch)
     await repair()
     await context.close()
@@ -410,7 +404,7 @@ test.describe('with the AI model on', () => {
     await expect(box(page)).toBeVisible()
     const walk = await walkTabs(page)
     const labels = walk.stops.map((stop) => stop.label)
-    for (const name of ['Describe a task for the Planner', 'Send to the Planner', 'Which software has a newer version?']) {
+    for (const name of ['Ask the Planner about software versions', 'Send to the Planner', 'Which software has a newer version?']) {
       expect(labels.some((label) => label.includes(name)), `Tab reaches ${name}; stops: ${labels.join(', ')}`).toBe(true)
     }
     expect(walk.unreached, 'controls Tab never reached').toEqual([])
@@ -480,7 +474,7 @@ test.describe('with the AI model on', () => {
     for (const old of ['/new', '/new/done/uc_1']) {
       await page.goto(old)
       await expect(page).toHaveURL(/\/$/)
-      await expect(page.getByLabel('Describe a task for the Planner')).toBeVisible()
+      await expect(page.getByLabel('Ask the Planner about software versions')).toBeVisible()
     }
     await context.close()
   })
@@ -536,7 +530,7 @@ test('bob’s Home has no box, no suggestions and no creation action', async ({ 
   await page.goto('/')
   await expect(page.getByRole('list', { name: 'Needs you' })).toBeVisible()
   await expect(main(page)).toContainText('You’re an Approver, so you decide on requests. Operators set up workflows.')
-  await expect(page.getByLabel('Describe a task for the Planner')).toHaveCount(0)
+  await expect(page.getByLabel('Ask the Planner about software versions')).toHaveCount(0)
   await expect(page.getByRole('group', { name: 'Suggestions' })).toHaveCount(0)
   await context.close()
 })

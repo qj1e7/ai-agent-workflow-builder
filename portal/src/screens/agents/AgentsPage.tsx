@@ -16,9 +16,9 @@ export const NOT_FOUND_WORDS = 'That agent is not in the library.'
 type Tab = 'can' | 'agents' | 'tools'
 
 const LEADS: Record<Tab, string> = {
-  can: 'What the platform can do today, and what it can’t yet. An agent can use only what is listed under I can.',
-  agents: 'The agents your team can use. For each workflow, the Planner picks the ones it needs. Anything that changes data waits for a yes.',
-  tools: 'Tools are how agents reach other systems. A tool that changes data waits for a yes, every time.',
+  can: 'What the platform can do for software versioning. An agent can use only what is listed under I can.',
+  agents: 'The agents behind software version checks. Anything that changes data waits for a yes.',
+  tools: 'Tools are how agents reach GitHub and Jira. A tool that changes data waits for a yes, every time.',
 }
 
 /** An agent's own address opens on the Agents tab, which is where its tile is. */

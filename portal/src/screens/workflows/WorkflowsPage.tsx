@@ -124,7 +124,7 @@ function Empty({ operator }: { operator: boolean }) {
   return (
     <p className={styles['quiet']}>
       <b>Nothing here yet</b>
-      {operator ? 'Ask the Planner on Home, and your first workflow shows up here.' : 'Operators set up workflows, and you approve their changes.'}
+      {operator ? 'Watch software on the Software page, or ask the Planner on Home. Its checks show up here.' : 'Operators set up workflows, and you approve their changes.'}
     </p>
   )
 }

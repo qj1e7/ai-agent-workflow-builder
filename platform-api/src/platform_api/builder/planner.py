@@ -288,6 +288,7 @@ class CapabilityView(WireModel):
     last_ok_at: datetime | None = Field(description="When its connection last worked.")
     needs_model: bool
     platform: bool = Field(description="A duty of the platform itself, with no tool.")
+    focus: bool = Field(description="True for what software versioning uses.")
     tools: list[str]
     agents: list[str] = Field(description="The ids of the agent cards that use its tools.")
 
@@ -595,6 +596,7 @@ def _capability(
         last_ok_at=own.last_ok_at if own else None,
         needs_model=spec.needs_model,
         platform=spec.platform,
+        focus=spec.focus,
         tools=list(spec.tools),
         agents=agents,
     )

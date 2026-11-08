@@ -537,6 +537,10 @@ class CapabilitySpec(WireModel):
     platform: bool = Field(
         description="True for what the platform does by itself, which Home leaves out of its lists."
     )
+    focus: bool = Field(
+        description="True for what software versioning uses: checking releases, asking for a yes, "
+        "creating the upgrade ticket. Home's lists show only these."
+    )
     tools: list[ToolId] = Field(description="The tools that do it. Empty unless it is ready.")
 
 
