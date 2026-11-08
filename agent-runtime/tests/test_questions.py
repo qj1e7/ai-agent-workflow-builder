@@ -49,7 +49,7 @@ def ask(
 
 
 def test_a_question_about_the_persons_data_is_answered_from_the_facts_in_the_models_words():
-    reply = QuestionReply(text="Three: LangGraph, Redis and n8n.", used=["watchlist"])
+    reply = QuestionReply(text="Three: LangGraph, Redis and n8n.")
     result, chat = ask(reply)
     assert result == Answered(
         answer=QuestionAnswer(text="Three: LangGraph, Redis and n8n.", looked_at=["watchlist"])
@@ -61,9 +61,8 @@ def test_a_question_about_the_persons_data_is_answered_from_the_facts_in_the_mod
     assert user.endswith(f"The question:\n{QUESTION}")
 
 
-def test_only_the_sections_that_were_sent_are_kept_as_looked_at():
-    reply = QuestionReply(text="Three.", used=["workflows", "watchlist", "needs_you"])
-    result, _ = ask(reply)
+def test_looked_at_is_the_sections_that_were_sent_whatever_the_model_says():
+    result, _ = ask(QuestionReply(text="Three."))
     assert result.answer.looked_at == ["watchlist"]
 
 
@@ -75,9 +74,9 @@ def test_sections_are_listed_in_the_order_the_facts_hold_them():
             approvals=1, confirmations=0, stopped=0, connections=0, addresses=0, replies=0, total=1
         ),
     )
-    reply = QuestionReply(text="One thing needs you.", used=["needs_you", "watchlist"])
+    reply = QuestionReply(text="One thing needs you.")
     result, _ = ask(reply, facts)
-    assert result.answer.looked_at == ["watchlist", "needs_you"]
+    assert result.answer.looked_at == ["watchlist", "workflows", "needs_you"]
 
 
 def test_no_facts_gives_the_fixed_text_and_the_model_is_not_asked_again():
@@ -101,12 +100,12 @@ def test_no_facts_gives_the_fixed_text_and_the_model_is_not_asked_again():
     ],
 )
 def test_a_reply_that_offers_to_act_or_runs_long_gets_the_fixed_text(text: str):
-    result, _ = ask(QuestionReply(text=text, used=["watchlist"]))
+    result, _ = ask(QuestionReply(text=text))
     assert result.answer == QuestionAnswer(text=COULD_NOT_ANSWER, looked_at=[])
 
 
 def test_a_plain_cant_is_not_an_offer():
-    reply = QuestionReply(text="I can't see Postgres on the watchlist.", used=["watchlist"])
+    reply = QuestionReply(text="I can't see Postgres on the watchlist.")
     result, _ = ask(reply)
     assert result.answer.text == "I can't see Postgres on the watchlist."
 
@@ -151,7 +150,7 @@ def test_the_prompt_forbids_offers_and_guessing():
 )
 def test_a_question_about_unwatched_software_keeps_the_offer_to_watch_it(task: str, software: str):
     first = reading().model_copy(update={"software": software})
-    reply = QuestionReply(text="Three.", used=["watchlist"])
+    reply = QuestionReply(text="Three.")
     out, chat = ask(reply, task=task, first=first)
     assert isinstance(out.answer, WatchlistAnswer) and out.answer.software == software
     assert len(chat.calls) == 1
@@ -168,3 +167,26 @@ def test_a_question_about_unwatched_software_keeps_the_offer_to_watch_it(task: s
     )
     out, _ = ask(reply, facts=held, task=task, first=first)
     assert out.answer == QuestionAnswer(text="Three.", looked_at=["watchlist"])
+
+
+@pytest.mark.parametrize(
+    "offer",
+    [
+        "I'd be glad to add it.",
+        "I could add FastAPI.",
+        "Shall I add FastAPI?",
+        "Would you like me to add FastAPI?",
+        "We can add FastAPI.",
+        "We could add FastAPI.",
+        "It can be added to your watchlist.",
+        "The Planner can watch it.",
+        "I am going to add it.",
+    ],
+)
+def test_more_offer_phrasings_fall_back_to_the_fixed_text(offer: str):
+    result, _ = ask(QuestionReply(text=f"Three. {offer}"))
+    assert result.answer == QuestionAnswer(text=COULD_NOT_ANSWER, looked_at=[])
+
+
+def test_the_prompt_keeps_the_facts_out_of_the_answer():
+    assert 'Never say "the facts"' in QUESTION_SYSTEM
