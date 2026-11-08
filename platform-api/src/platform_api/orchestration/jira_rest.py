@@ -414,15 +414,22 @@ class JiraRestAdapter:
         wanted = list(dict.fromkeys(keys))
         done: dict[str, datetime] = {}
         for start in range(0, len(wanted), KEYS_PER_SEARCH):
-            chunk = wanted[start : start + KEYS_PER_SEARCH]
-            jql = f"key in ({_listed(chunk)}) AND statusCategory = Done"
-            try:
-                issues = (await self._jql(jql, len(chunk))).issues
-            except JiraRefused:
-                issues = [i for key in chunk if (i := await self.get_issue(key)) is not None]
-            for issue in issues:
-                if issue.status == "Done" and issue.done_at is not None:
-                    done[issue.key] = issue.done_at
+            left = wanted[start : start + KEYS_PER_SEARCH]
+            cut_off = True
+            while left and cut_off:
+                jql = f"key in ({_listed(left)}) AND statusCategory = Done"
+                try:
+                    page = await self._jql(jql, len(left))
+                except JiraRefused:
+                    page = SearchResult(
+                        [i for key in left if (i := await self.get_issue(key)) is not None]
+                    )
+                found = {i.key for i in page.issues} & set(left)
+                for issue in page.issues:
+                    if issue.status == "Done" and issue.done_at is not None:
+                        done[issue.key] = issue.done_at
+                left = [key for key in left if key not in found]
+                cut_off = page.cut_off and bool(found)
         return done
 
     async def move_to_done(self, key: str) -> None:
