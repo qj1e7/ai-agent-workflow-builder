@@ -12,6 +12,11 @@ Our sponsor is CODESparks, a team in NCS. Their support staff are not technical 
 
 Use the names in `GLOSSARY.md`. Never use the old themed names (Flint, Forge, Striker, Spark Map, Scout, Analyst, Messenger, Clerk, Fixer, Kindling, Firebreak, Ember). They confused the sponsor.
 
+## Current focus
+
+As of 8 Nov 2026, phase 1, before the presentation, is software versioning only. Home is its front door.
+The general workflow builder is frozen. It keeps working but gets no new general abilities, agent library features, team requests or set-up card changes until the access review starts.
+
 ## Architecture
 
 Four bounded contexts. Code in one context does not reach into another context's internals.

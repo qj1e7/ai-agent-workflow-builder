@@ -130,6 +130,12 @@ describe('the I can and Not yet lists', () => {
     expect(groups.can.length + groups.setup.length + groups.notYet.length).toBe(CAPS.capabilities.length)
   })
 
+  it('leads the I can list with software versioning and drops nothing', () => {
+    const groups = capabilityGroups(CAPS)
+    expect(groups.can[0]?.id).toBe('github.releases')
+    expect(groups.can.map((entry) => entry.id).sort()).toEqual(CAPS.capabilities.filter((entry) => entry.state === 'ready').map((entry) => entry.id).sort())
+  })
+
   it('puts an entry with a connection that needs setup or is down in its own group, with the platform’s fix', () => {
     const trouble = capabilitiesTrouble as CapabilitiesView
     const groups = capabilityGroups(trouble)
@@ -139,7 +145,7 @@ describe('the I can and Not yet lists', () => {
   })
 
   it('offers only examples that set something up, which the platform vouches for', () => {
-    expect(startingPoints(CAPS)).toEqual(['Every Friday, sum up the tickets we closed this week', 'Keep track of the React version'])
+    expect(startingPoints(CAPS)).toEqual(['Keep track of the LangGraph version'])
   })
 })
 

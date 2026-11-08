@@ -299,11 +299,8 @@ def _lower_first(text: str) -> str:
 
 EXAMPLES: Final = (
     ExampleSpec(
-        text="Every Friday, sum up the tickets we closed this week",
-        kind="automate",
-        needs=["jira.read", "summarise", "jira.create"],
+        text="Keep track of the LangGraph version", kind="monitor", needs=["github.releases"]
     ),
-    ExampleSpec(text="Keep track of the React version", kind="monitor", needs=["github.releases"]),
     ExampleSpec(text="What can you do?", kind="learn", needs=[]),
 )
 CAPABILITY_LIST: Final = CapabilityList(capabilities=list(CAPABILITIES), examples=list(EXAMPLES))

@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router'
 import { useHome } from '../../api/homeQueries'
 import { isOperator } from '../../api/me'
 import { useCapabilities, useDrafts, usePlannerAnswer } from '../../api/plannerQueries'
-import { useMe, useModelSettings } from '../../api/queries'
+import { useMe, useModelSettings, useWatchlist } from '../../api/queries'
 import type { HomeOut, PlannerAnswerIn } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
 import { Button, ButtonLink } from '../../ui/Button'
@@ -163,7 +163,9 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
   const busy = isThinking(thread)
   const needs = useMemo(() => needsHere(home, offline), [home, offline])
   const arrival = useArrival(needs.shown.map((need) => need.key))
-  const suggestions = useMemo(() => suggestionsOf(home, capabilities.data), [home, capabilities.data])
+  const watching = useWatchlist().data?.software.length
+  const watched = watching !== undefined && watching > 0
+  const suggestions = useMemo(() => suggestionsOf(watching, capabilities.data), [watching, capabilities.data])
 
   // Resume on Workflows lands here with the draft's id in the address, and the draft opens as the card it was.
   useEffect(() => {
@@ -285,7 +287,7 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
         onSend={sendText}
       />
       {empty ? (
-        <div className={styles['chips']} role="group" aria-label={dayOne ? 'Starting points' : 'Suggestions'}>
+        <div className={styles['chips']} role="group" aria-label={watched ? 'Suggestions' : 'Starting points'}>
           {suggestions.map((suggestion) => (
             <button
               key={suggestion.label}

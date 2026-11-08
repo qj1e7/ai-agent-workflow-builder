@@ -2544,23 +2544,20 @@ details > .m-close { animation: fold 140ms ease-in both; }
 
   /* Home for an Operator (spec 5): a greeting with the state in one line, the Planner's box, three suggestions from that
      state, and Needs you while something needs her. Day one has three starting points and the capability lists instead. */
-  const DAY_ONE = ['Every Friday, sum up the tickets we closed this week', 'Keep track of the React version', 'What can you do?'];
+  const DAY_ONE = ['Keep track of the LangGraph version', 'What can you do?'];
+  const WATCHED = ['What’s behind on our watchlist?', 'How many software are we watching?', 'Keep track of another software'];
   const stoppedIds = () => routineIds().filter((id) => !S.paused[id] && status(id).tone === 'bad');
   /* The rows Home shows under the box. Offline, the hero already carries Connect a model, so its row is left out. */
   const homeNeeds = () => needs().filter((t) => curModel() || t.id !== 'model');
+  /* Software versioning is the front door (8 Nov). With software on the watchlist the chips are about it; with none, the
+     day-one pair. The general workflow builder is frozen, so no chip sets up a general workflow. */
   function suggestions() {
-    if (!routineIds().length) return DAY_ONE;
-    const first = homeNeeds()[0];
-    /* A stop that is already the first Needs you row gets no second chip (rule 1). */
-    const stopped = stoppedIds().find((id) => !(S.report > 0 && S.report < 4 && id === 'nudge') && !(first && first.wf === id));
-    return ['Check my workflows', stopped ? `Why did ${R(stopped).name} stop?` : 'What can I ask for?', 'Set up another workflow'];
+    return onWatchlist() ? WATCHED : DAY_ONE;
   }
+  const onWatchlist = () => (S.firstDay ? [] : TRACKED).length + S.added.length > 0;
   /* Starting points for "Set up another workflow": the first three she doesn't already have. */
   const STARTS = [
-    ['Every Friday, sum up the tickets we closed this week', /closed/i],
-    ['Every weekday at 8:00, sum up the new tickets', /new.ticket/i],
-    ['Every Monday, compare last week’s new tickets with the week before', /comparison/i],
-    ['Every Monday at 9:00, list the open tickets', /open.ticket/i],
+    ['Keep track of the LangGraph version', () => onList('LangGraph')],
     ['Keep track of the React version', () => onList('React')],
   ];
   const starts = () => STARTS.filter(([, had]) => !(typeof had === 'function' ? had() : routineIds().some((id) => had.test(R(id).name)))).map(([t]) => t).slice(0, 3);
@@ -2596,10 +2593,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
       <div class="welcome${empty ? '' : ' compact'}">${face('lead', empty ? 128 : 52, c.hero, { live: empty && c.hero === 'idle', id: 'hero' })}<div class="hello-text">${hello}</div></div>
       ${empty ? '' : threadHTML()}
       ${composer(c, empty)}
-      ${empty ? `<div class="chips examples" role="group" aria-label="${dayOne ? 'Starting points' : 'Suggestions'}"${dayOne ? '' : ' data-unbuilt="Suggestions from your state"'}>${suggestions().map((e, i) => `<button class="chip" data-act="example" data-arg="${i}">${e}</button>`).join('')}</div>` : '<div class="btns"><button class="linkbtn" data-act="newChat">New chat</button></div>'}
+      ${empty ? `<div class="chips examples" role="group" aria-label="${onWatchlist() ? 'Suggestions' : 'Starting points'}">${suggestions().map((e, i) => `<button class="chip" data-act="example" data-arg="${i}">${e}</button>`).join('')}</div>` : '<div class="btns"><button class="linkbtn" data-act="newChat">New chat</button></div>'}
       ${empty && items.length ? needsStrip(items) : ''}
       ${empty && (dayOne || c.abil) ? abilitiesHTML(dayOne) : ''}
-      ${empty && !dayOne && !suggestions().includes('What can I ask for?') ? `<p class="small muted" style="text-align:center"><button class="linkbtn" data-act="abil" data-unbuilt="What can I ask for">${c.abil ? 'Hide what I can do' : 'What can I ask for?'}</button></p>` : ''}
+      ${empty && !dayOne ? `<p class="small muted" style="text-align:center"><button class="linkbtn" data-act="abil" data-unbuilt="What can I ask for">${c.abil ? 'Hide what I can do' : 'What can I ask for?'}</button></p>` : ''}
     </div>`;
   }
   /* Home with no AI model (spec 5.4), in the built app's words: agent workflows can't run and new ones can't be planned

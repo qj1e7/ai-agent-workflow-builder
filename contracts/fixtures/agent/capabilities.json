@@ -220,16 +220,7 @@
   ],
   "examples": [
     {
-      "text": "Every Friday, sum up the tickets we closed this week",
-      "kind": "automate",
-      "needs": [
-        "jira.read",
-        "summarise",
-        "jira.create"
-      ]
-    },
-    {
-      "text": "Keep track of the React version",
+      "text": "Keep track of the LangGraph version",
       "kind": "monitor",
       "needs": [
         "github.releases"

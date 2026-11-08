@@ -111,19 +111,17 @@ def test_component_and_priority_are_named_as_something_the_agents_cannot_see():
     assert entry.cant == "see a ticket's component or priority"
 
 
-def test_the_friday_example_needs_what_an_agent_workflow_needs_to_run():
-    friday = next(e for e in EXAMPLES if e.kind == "automate")
-    assert friday.needs == ["jira.read", "summarise", "jira.create"]
-
-
 def test_every_example_needs_only_ready_capabilities():
     for example in EXAMPLES:
         for needed in example.needs:
             assert BY_ID[needed].state == "ready", (example.text, needed)
 
 
-def test_the_day_one_examples_are_one_of_each_kind():
-    assert sorted(e.kind for e in EXAMPLES) == ["automate", "learn", "monitor"]
+def test_the_day_one_examples_are_about_software_versioning():
+    assert [(e.text, e.kind) for e in EXAMPLES] == [
+        ("Keep track of the LangGraph version", "monitor"),
+        ("What can you do?", "learn"),
+    ]
 
 
 def test_the_vulnerability_pre_check_stays_while_its_capability_is_not_ready():
