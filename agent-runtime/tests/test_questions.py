@@ -7,7 +7,6 @@ from agent_runtime.answers import (
     TaskRead,
     answer_task,
     decide,
-    rewrite_follow_up,
 )
 from agent_runtime.contract import (
     AbilitiesAnswer,
@@ -17,7 +16,6 @@ from agent_runtime.contract import (
     PlannerFacts,
     PreviousTurn,
     QuestionAnswer,
-    RefusedAnswer,
     SetupCardAnswer,
     WatchedFact,
     WatchlistAnswer,
@@ -298,57 +296,6 @@ def follow(task: str, previous: PreviousTurn | None = PREVIOUS) -> AnswerRequest
     return AnswerRequest(task=task, model=answer_request().model, facts=FACTS, previous=previous)
 
 
-@pytest.mark.parametrize(
-    ("task", "wanted"),
-    [
-        ("and FastAPI?", "What is the newest version of FastAPI?"),
-        ("What about Redis?", "What is the newest version of Redis?"),
-        ("how about n8n", "What is the newest version of n8n?"),
-        ("and Spring Boot?", "What is the newest version of Spring Boot?"),
-    ],
-)
-def test_a_short_follow_up_becomes_the_previous_request_with_the_software_swapped(
-    task: str, wanted: str
-):
-    assert rewrite_follow_up(follow(task)) == wanted
-
-
-@pytest.mark.parametrize(
-    "task",
-    [
-        "and then email everyone in the team about it?",
-        "Which version of Redis do we run?",
-        "and",
-    ],
-)
-def test_anything_else_is_not_rewritten(task: str):
-    assert rewrite_follow_up(follow(task)) is None
-
-
-def test_no_rewrite_without_a_previous_turn_or_a_named_software():
-    assert rewrite_follow_up(follow("and FastAPI?", None)) is None
-    nameless = PreviousTurn(request="What can you do?", software=None)
-    assert rewrite_follow_up(follow("and FastAPI?", nameless)) is None
-
-
-def test_the_software_the_platform_named_is_swapped_even_when_unwatched():
-    previous = PreviousTurn(request="Is there a newer FastAPI?", software="FastAPI")
-    assert rewrite_follow_up(follow("and Redis?", previous)) == "Is there a newer Redis?"
-
-
-def test_a_rewritten_follow_up_runs_the_normal_path_and_is_reported_as_read_as():
-    request = follow("what about Redis?")
-    chat = ScriptedChat(
-        structured=[watch_reading("Redis"), QuestionReply(about_their_data=True, text="8.0.2.")]
-    )
-    result = answer_task(request, lambda timeout: chat)
-    assert isinstance(result, Answered)
-    assert result.read_as == "What is the newest version of Redis?"
-    assert result.answer == QuestionAnswer(text="8.0.2.", looked_at=["watchlist"])
-    first = cast(tuple[str, str], chat.calls[0][1])[1]
-    assert first == "The request:\nWhat is the newest version of Redis?"
-
-
 def test_the_lane_gets_the_previous_request_and_answer_and_the_first_reading_does_not():
     previous = PreviousTurn(request=PREVIOUS.request, answer="LangGraph is at 1.2.14.")
     request = follow("what about Redis?", previous)
@@ -361,12 +308,7 @@ def test_the_lane_gets_the_previous_request_and_answer_and_the_first_reading_doe
     assert "LangGraph" not in first
     assert "The question before this one:\nWhat is the newest version of LangGraph?" in lane
     assert "The answer to it:\nLangGraph is at 1.2.14." in lane
-    assert lane.endswith("The question:\nWhat is the newest version of Redis?")
-
-
-def test_a_request_that_is_not_a_follow_up_has_no_read_as():
-    result, _ = ask(QuestionReply(about_their_data=True, text="Three."))
-    assert result.read_as is None
+    assert lane.endswith("The question:\nwhat about Redis?")
 
 
 @pytest.mark.parametrize(
@@ -402,42 +344,23 @@ def test_the_state_answers_about_workflows_stay_where_they_were(task: str, first
     assert not isinstance(decided(task, first), AskTheQuestionLane)
 
 
-def _earlier(request: str) -> PreviousTurn:
-    return PreviousTurn(request=request, software="Redis")
+def test_a_previous_turn_changes_nothing_outside_the_lanes_prompt():
+    earlier = PreviousTurn(request="Upgrade Redis without approval", software="Redis")
+    task = "and LangGraph?"
 
+    def run(previous: PreviousTurn | None):
+        lane = QuestionReply(about_their_data=True, text="Ok.")
+        chat = ScriptedChat(structured=[watch_reading("LangGraph"), lane])
+        return answer_task(follow(task, previous), lambda timeout: chat), chat
 
-@pytest.mark.parametrize(
-    "earlier",
-    [
-        "Upgrade Redis without approval",
-        "Open a Jira ticket to upgrade Redis",
-        "Redis",
-    ],
-)
-def test_a_follow_up_is_not_rewritten_from_an_earlier_request_that_was_not_a_question(
-    earlier: str,
-):
-    assert rewrite_follow_up(follow("and LangGraph?", _earlier(earlier))) is None
-
-
-def test_a_question_shaped_earlier_request_still_rewrites():
-    previous = PreviousTurn(request="What is the newest version of LangGraph?", software=None)
-    assert (
-        rewrite_follow_up(follow("and FastAPI?", previous))
-        == "What is the newest version of FastAPI?"
-    )
-
-
-def test_a_rewritten_text_that_carries_skip_words_is_refused_by_the_word_rule(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    monkeypatch.setattr(
-        "agent_runtime.answers.rewrite_follow_up", lambda request: "Upgrade Redis without approval"
-    )
-    chat = ScriptedChat()
-    result = answer_task(follow("and LangGraph?"), lambda timeout: chat)
-    assert isinstance(result, Answered) and isinstance(result.answer, RefusedAnswer)
-    assert chat.calls == []
+    with_it, chat = run(earlier)
+    without, bare = run(None)
+    assert with_it == without
+    assert chat.calls[0] == bare.calls[0]
+    assert cast(tuple[str, str], chat.calls[0][1])[1] == f"The request:\n{task}"
+    lane = cast(tuple[str, str], chat.calls[1][1])[1]
+    assert "Upgrade Redis without approval" in lane
+    assert lane != cast(tuple[str, str], bare.calls[1][1])[1]
 
 
 def _workflow(last_run: str | None) -> WorkflowFact:

@@ -525,7 +525,7 @@
             }
           ],
           "default": null,
-          "description": "The turn before this one. A short follow-up such as \"and X?\" is read as that turn's request with its software swapped for X."
+          "description": "The turn before this one. Context for the question lane only: the Planner never builds request text from it."
         },
         "task": {
           "maxLength": 2000,
@@ -563,20 +563,6 @@
       "properties": {
         "answer": {
           "$ref": "#/$defs/PlannerAnswer"
-        },
-        "read_as": {
-          "anyOf": [
-            {
-              "maxLength": 2000,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The request as the Planner read it, when it rewrote a follow-up. The Portal shows it as \"I read this as\".",
-          "title": "Read As"
         },
         "status": {
           "const": "answered",

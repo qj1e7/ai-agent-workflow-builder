@@ -24,7 +24,6 @@ function ReplyBody({ message, now, page, say }: { message: Extract<Message, { ki
   useSaidOnce(sentence, say)
   return (
     <div className={styles['reply']}>
-      {reply.read_as != null ? <p className={styles['readAs']}>I read this as: {reply.read_as}</p> : null}
       {sentence !== null ? <p>{sentence}</p> : null}
       {reply.answer === 'check_workflows' ? <CheckWorkflowsAnswer useCaseId={reply.use_case_id} now={now} say={say} /> : null}
       {reply.answer === 'why_stopped' ? <WhyStoppedAnswer useCaseId={reply.use_case_id} say={say} /> : null}

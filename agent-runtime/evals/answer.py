@@ -10,7 +10,6 @@ from agent_runtime.answers import (
     AskTheQuestionLane,
     TaskRead,
     decide,
-    rewrite_follow_up,
     word_rule_refusal,
 )
 from agent_runtime.contract import (
@@ -77,14 +76,11 @@ class AnswerCase(Case):
 def _request(case: AnswerCase) -> AnswerRequest:
     """The request the decision reads. The eval never calls the model again."""
     access = ModelAccess(style="openai", base_url="http://eval.invalid", model="eval", api_key="-")
-    request = AnswerRequest(task=case.task, model=access, facts=case.facts, previous=case.previous)
-    rewritten = rewrite_follow_up(request)
-    return request if rewritten is None else request.model_copy(update={"task": rewritten})
+    return AnswerRequest(task=case.task, model=access, facts=case.facts, previous=case.previous)
 
 
 def prompt(case: AnswerCase) -> str:
-    """What the model reads: the request, or its follow-up rewrite, as the product sends it."""
-    return f"{ANSWER_SYSTEM}\n\nThe request:\n{_request(case).task}"
+    return f"{ANSWER_SYSTEM}\n\nThe request:\n{case.task}"
 
 
 def schema() -> type[BaseModel]:

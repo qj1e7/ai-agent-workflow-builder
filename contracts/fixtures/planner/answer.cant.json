@@ -1,5 +1,4 @@
 {
-  "read_as": null,
   "answer": "cant",
   "cant": [
     {
@@ -11,7 +10,6 @@
     }
   ],
   "alternative": {
-    "read_as": null,
     "answer": "setup_card",
     "name": "Weekly summary of closed tickets",
     "rows": [

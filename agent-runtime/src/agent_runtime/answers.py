@@ -543,49 +543,11 @@ QUESTION_SHAPE: Final = re.compile(
     r"^\s*(?:which|what|how|is|are|do|does|did|when)\b|\?\s*$", re.IGNORECASE
 )
 WATCHLIST_WORDS: Final = re.compile(r"\b(?:watchlist|watching|watched)\b", re.IGNORECASE)
-FOLLOW_UP: Final = re.compile(
-    r"^\s*(?:and|what\s+about|how\s+about)\s+"
-    r"(?P<name>\w[\w.+#/-]*(?:\s+\w[\w.+#/-]*){0,2})\s*[?.!]*\s*$",
-    re.IGNORECASE,
-)
 
 
 def _watched_names(request: AnswerRequest) -> list[str]:
     held = request.facts.watchlist if request.facts is not None else None
     return [name for w in held or [] if (name := w.name.strip())]
-
-
-def _in(text: str, name: str) -> bool:
-    return re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text, re.IGNORECASE) is not None
-
-
-def rewrite_follow_up(request: AnswerRequest) -> str | None:
-    """A short follow-up ("and X?", "what about X?", "how about X?") after a turn that named one
-    software, as that turn's request with its software swapped for X. None when the request is
-    not such a follow-up, so the first reading is never touched."""
-    earlier = request.previous
-    follow = FOLLOW_UP.match(visible_words(request.task))
-    if earlier is None or follow is None:
-        return None
-    previous = visible_words(earlier.request)
-    if not QUESTION_SHAPE.search(previous) or _refusal(previous) is not None:
-        return None
-    named = (earlier.software or "").strip() or _named_in(previous, request)
-    if not named:
-        return None
-    swapped, count = re.subn(
-        rf"(?<!\w){re.escape(named)}(?!\w)",
-        lambda _: follow.group("name").strip(),
-        previous,
-        flags=re.IGNORECASE,
-    )
-    return plain(swapped, 2000) if count == 1 else None
-
-
-def _named_in(text: str, request: AnswerRequest) -> str | None:
-    """The one watched software the text names, when the platform did not say which."""
-    found = {name for name in _watched_names(request) if _in(text, name)}
-    return next(iter(found)) if len(found) == 1 else None
 
 
 def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQuestionLane:
@@ -636,12 +598,6 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     refused = word_rule_refusal(request.task)
     if refused is not None:
         return Answered(answer=refused)
-    rewritten = rewrite_follow_up(request)
-    if rewritten is not None:
-        refused = word_rule_refusal(rewritten)
-        if refused is not None:
-            return Answered(answer=refused)
-        request = request.model_copy(update={"task": rewritten})
     read = ask_model(
         chat_for,
         ANSWER_SYSTEM,
@@ -653,14 +609,14 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
         return read
     decided = decide(read, request)
     if not isinstance(decided, AskTheQuestionLane):
-        return Answered(answer=decided, read_as=rewritten)
+        return Answered(answer=decided)
     asked = answer_question(request, chat_for)
     # The lane may improve an answer, never make it worse: when its call fails, the first stands.
     if asked is None or isinstance(asked, ModelProblem):
-        return Answered(answer=decided.otherwise, read_as=rewritten)
+        return Answered(answer=decided.otherwise)
     if decided.first_on_reject and is_fallback(asked):
-        return Answered(answer=decided.otherwise, read_as=rewritten)
-    return Answered(answer=asked, read_as=rewritten)
+        return Answered(answer=decided.otherwise)
+    return Answered(answer=asked)
 
 
 APPROVAL_WORDS: Final = re.compile(

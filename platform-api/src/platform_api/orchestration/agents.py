@@ -583,7 +583,6 @@ type PlannerAnswer = Annotated[
 class Answered(WireModel):
     status: Literal["answered"] = "answered"
     answer: PlannerAnswer
-    read_as: str | None = Field(default=None, max_length=2000)
 
 
 type AnswerResult = Annotated[Answered | ModelProblem, Field(discriminator="status")]

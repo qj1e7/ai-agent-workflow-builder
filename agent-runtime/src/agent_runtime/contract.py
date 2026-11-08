@@ -818,8 +818,8 @@ class AnswerRequest(WireModel):
     model: ModelAccess
     previous: PreviousTurn | None = Field(
         default=None,
-        description='The turn before this one. A short follow-up such as "and X?" is read as '
-        "that turn's request with its software swapped for X.",
+        description="The turn before this one. Context for the question lane only: the Planner "
+        "never builds request text from it.",
     )
     facts: PlannerFacts | None = Field(
         default=None,
@@ -989,12 +989,6 @@ type PlannerAnswer = Annotated[
 class Answered(WireModel):
     status: Literal["answered"] = "answered"
     answer: PlannerAnswer
-    read_as: str | None = Field(
-        default=None,
-        max_length=2000,
-        description="The request as the Planner read it, when it rewrote a follow-up. The Portal "
-        'shows it as "I read this as".',
-    )
 
 
 type AnswerResult = Annotated[Answered | ModelProblem, Field(discriminator="status")]

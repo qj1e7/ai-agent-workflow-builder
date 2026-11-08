@@ -99,8 +99,8 @@ class AnswerIn(WireIn):
     )
     previous: PreviousIn | None = Field(
         default=None,
-        description='With text: the turn before it. A short follow-up such as "and Redis?" is '
-        "read as that turn's request with its software swapped.",
+        description="With text: the turn before it. Context for the question lane only: the "
+        "Planner never builds request text from it.",
     )
 
     @model_validator(mode="after")
@@ -138,16 +138,7 @@ class ListedSoftware(WireModel):
     name: str
 
 
-class ReplyBase(WireModel):
-    read_as: str | None = Field(
-        default=None,
-        description='Set when the Planner read a short follow-up, such as "and Redis?", as an '
-        "earlier request with its software swapped. The request as it was read, for the Portal "
-        'to show as "I read this as".',
-    )
-
-
-class SetupCardReply(ReplyBase):
+class SetupCardReply(WireModel):
     answer: Literal["setup_card"] = "setup_card"
     name: str
     rows: list[UnderstoodRowView]
@@ -156,7 +147,7 @@ class SetupCardReply(ReplyBase):
     )
 
 
-class PartReply(ReplyBase):
+class PartReply(WireModel):
     answer: Literal["part"] = "part"
     name: str
     rows: list[UnderstoodRowView]
@@ -164,7 +155,7 @@ class PartReply(ReplyBase):
     similar: SimilarWorkflow | None
 
 
-class WatchlistReply(ReplyBase):
+class WatchlistReply(WireModel):
     answer: Literal["watchlist"] = "watchlist"
     word: str
     software: str | None
@@ -177,49 +168,49 @@ class WatchlistReply(ReplyBase):
     )
 
 
-class CantReply(ReplyBase):
+class CantReply(WireModel):
     answer: Literal["cant"] = "cant"
     cant: list[CantRowView]
     alternative: Annotated[SetupCardReply | WatchlistReply, Field(discriminator="answer")] | None
 
 
-class WhichSoftwareReply(ReplyBase):
+class WhichSoftwareReply(WireModel):
     answer: Literal["which_software"] = "which_software"
     word: str
 
 
-class RefusedReply(ReplyBase):
+class RefusedReply(WireModel):
     answer: Literal["refused"] = "refused"
     reason: Literal["skip_approval"]
     said: str
     rest: str
 
 
-class AbilitiesReply(ReplyBase):
+class AbilitiesReply(WireModel):
     answer: Literal["abilities"] = "abilities"
 
 
-class IdeasReply(ReplyBase):
+class IdeasReply(WireModel):
     answer: Literal["ideas"] = "ideas"
 
 
-class CheckWorkflowsReply(ReplyBase):
+class CheckWorkflowsReply(WireModel):
     answer: Literal["check_workflows"] = "check_workflows"
     use_case_id: str | None = Field(
         description="The workflow the request names, when one name matches. Null for all."
     )
 
 
-class WhyStoppedReply(ReplyBase):
+class WhyStoppedReply(WireModel):
     answer: Literal["why_stopped"] = "why_stopped"
     use_case_id: str | None
 
 
-class NeedsMeReply(ReplyBase):
+class NeedsMeReply(WireModel):
     answer: Literal["needs_me"] = "needs_me"
 
 
-class QuestionReply(ReplyBase):
+class QuestionReply(WireModel):
     answer: Literal["question"] = "question"
     text: str = Field(
         description="The Planner's answer to a question about the person's own data, in its own "
@@ -231,7 +222,7 @@ class QuestionReply(ReplyBase):
     )
 
 
-class OfflineReply(ReplyBase):
+class OfflineReply(WireModel):
     answer: Literal["offline"] = "offline"
     why: FallbackWhy = Field(
         description="no_model: none is connected. too_slow: it took too long. trouble: it "
@@ -432,9 +423,8 @@ class PlannerFront:
             case ModelProblem(reason=reason):
                 log.warning("The Planner's answer fell back to the starters: %s", reason)
                 return offline("too_slow" if reason == "too_slow" else "trouble")
-            case Answered(answer=answer, read_as=read_as):
-                reply = await self._finish(answer)
-                return reply if read_as is None else reply.model_copy(update={"read_as": read_as})
+            case Answered(answer=answer):
+                return await self._finish(answer)
 
     async def _finish(self, answer: PlannerAnswer) -> PlannerReply:
         match answer:

@@ -24,16 +24,6 @@ function draw(reply: PlannerReply, pending = false): string {
 }
 
 describe('the thread', () => {
-  it('shows how a follow-up was read, above the answer', () => {
-    const html = draw({ ...(question as PlannerReply), read_as: 'What is the newest version of Redis?' })
-    expect(html).toContain('I read this as: What is the newest version of Redis?')
-    expect(html.indexOf('I read this as')).toBeLessThan(html.indexOf((question as { text: string }).text))
-  })
-
-  it('shows no such line when the request was not rewritten', () => {
-    expect(draw({ ...(question as PlannerReply), read_as: null })).not.toContain('I read this as')
-  })
-
   it('shows a status region while the answer is pending, and claims no step', () => {
     const html = draw(question as PlannerReply, true)
     expect(html).toContain('role="status"')

@@ -1,11 +1,9 @@
 {
-  "read_as": null,
   "answer": "watchlist",
   "word": "releases",
   "software": "Kubernetes",
   "already_listed": null,
   "also": {
-    "read_as": null,
     "answer": "setup_card",
     "name": "Weekly summary of closed tickets",
     "rows": [
