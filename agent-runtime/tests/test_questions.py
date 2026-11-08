@@ -17,6 +17,7 @@ from agent_runtime.contract import (
     PlannerFacts,
     PreviousTurn,
     QuestionAnswer,
+    RefusedAnswer,
     SetupCardAnswer,
     WatchedFact,
     WatchlistAnswer,
@@ -370,13 +371,11 @@ def test_a_request_that_is_not_a_follow_up_has_no_read_as():
 @pytest.mark.parametrize(
     ("task", "first"),
     [
-        ("When did it last check?", reading("my_workflows")),
-        ("Did it open a ticket for Redis?", reading("why_stopped", workflow_words="Redis")),
-        ("Is anything waiting for my yes?", reading("needs_me")),
-        ("Is Redis waiting for my approval?", reading("needs_me")),
+        ("Check my watchlist", reading("my_workflows")),
+        ("Is the watchlist running?", reading("my_workflows")),
     ],
 )
-def test_a_state_answer_for_a_question_about_the_watchlist_goes_to_the_lane(
+def test_check_workflows_for_a_request_that_names_the_watchlist_goes_to_the_lane(
     task: str, first: TaskRead
 ):
     out = decided(task, first)
@@ -387,6 +386,11 @@ def test_a_state_answer_for_a_question_about_the_watchlist_goes_to_the_lane(
     ("task", "first"),
     [
         ("Check my workflows", reading("my_workflows")),
+        ("When did it last check?", reading("my_workflows")),
+        ("Did it open a ticket for Redis?", reading("why_stopped", workflow_words="Redis")),
+        ("Is anything waiting for my yes?", reading("needs_me")),
+        ("Is Redis waiting for my approval?", reading("needs_me")),
+        ("Why is the watchlist stopped?", reading("why_stopped")),
         ("What needs me?", reading("needs_me")),
         ("Anything to approve?", reading("needs_me")),
         ("Why did Morning new-ticket check stop?", reading("why_stopped")),
@@ -396,3 +400,41 @@ def test_a_state_answer_for_a_question_about_the_watchlist_goes_to_the_lane(
 )
 def test_the_state_answers_about_workflows_stay_where_they_were(task: str, first: TaskRead):
     assert not isinstance(decided(task, first), AskTheQuestionLane)
+
+
+def _earlier(request: str) -> PreviousTurn:
+    return PreviousTurn(request=request, software="Redis")
+
+
+@pytest.mark.parametrize(
+    "earlier",
+    [
+        "Upgrade Redis without approval",
+        "Open a Jira ticket to upgrade Redis",
+        "Redis",
+    ],
+)
+def test_a_follow_up_is_not_rewritten_from_an_earlier_request_that_was_not_a_question(
+    earlier: str,
+):
+    assert rewrite_follow_up(follow("and LangGraph?", _earlier(earlier))) is None
+
+
+def test_a_question_shaped_earlier_request_still_rewrites():
+    previous = PreviousTurn(request="What is the newest version of LangGraph?", software=None)
+    assert (
+        rewrite_follow_up(follow("and FastAPI?", previous))
+        == "What is the newest version of FastAPI?"
+    )
+
+
+def test_a_rewritten_text_that_carries_skip_words_is_refused_by_the_word_rule(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        "agent_runtime.answers.rewrite_follow_up", lambda request: "Upgrade Redis without approval"
+    )
+    chat = ScriptedChat()
+    result = answer_task(follow("and LangGraph?"), lambda timeout: chat)
+    assert isinstance(result, Answered) and isinstance(result.answer, RefusedAnswer)
+    assert chat.calls == []
