@@ -25,6 +25,7 @@ class Answer:
     value: object | None
     text: str
     raw: BaseMessage | None
+    extra: object | None = None
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,7 @@ class Job[C: Case]:
     score: Callable[[C, Answer], list[Check]]
     judged: bool
     time_limit_s: float | None = None
+    follow_up: Callable[[BaseChatModel, C, Answer, str], Answer] | None = None
 
     def cases(self) -> list[C]:
         rows = json.loads((CASES / f"{self.name}.json").read_text())
@@ -50,7 +52,8 @@ class Job[C: Case]:
             return Answer(text, text, raw)
         structured = model.with_structured_output(self.schema(), include_raw=True)
         reply: dict[str, Any] = structured.invoke(prompt)  # type: ignore[assignment]
-        return _structured_answer(reply)
+        answer = _structured_answer(reply)
+        return self.follow_up(model, case, answer, marker) if self.follow_up else answer
 
 
 def marked(prompt: str, marker: str) -> str:

@@ -59,7 +59,9 @@ from agent_runtime.contract import (
     ModelAccess,
     ModelProblem,
     ModelTestPassed,
+    PlannerFacts,
     ProposedIntent,
+    QuestionAnswer,
     RoomAddressee,
     SoftwareMatch,
     SoftwareToCheck,
@@ -68,6 +70,7 @@ from agent_runtime.contract import (
     TaskFinished,
     TaskOutput,
     TaskRequest,
+    WatchedFact,
     WatchlistInputs,
     WireModel,
     agent_event_adapter,
@@ -869,6 +872,27 @@ def answered_refused() -> Answered:
     return _answered(TaskRead(skips_the_yes=NO_SKIP), SKIP_TASK)
 
 
+def question_request() -> AnswerRequest:
+    watched = [
+        WatchedFact(name=n, repo=r, our_version=o, newest_version=v, state=t)
+        for n, r, o, v, t in (
+            ("LangGraph", "langchain-ai/langgraph", "1.2.14", "1.2.16", "New version"),
+            ("Redis", "redis/redis", "8.0.2", "8.0.2", "Up to date"),
+            ("n8n", "n8n-io/n8n", None, "2.42.6", "Not checked yet"),
+        )
+    ]
+    return AnswerRequest(
+        task="how many software are on our watchlist",
+        model=draft_request().model,
+        facts=PlannerFacts(watchlist=watched),
+    )
+
+
+def answered_question() -> Answered:
+    text = "Three: LangGraph, Redis and n8n."
+    return Answered(answer=QuestionAnswer(text=text, looked_at=["watchlist"]))
+
+
 def fixtures() -> dict[str, WireModel]:
     finished = finished_task()
     return {
@@ -915,6 +939,8 @@ def fixtures() -> dict[str, WireModel]:
         "planner-answered-cant.json": answered_cant(),
         "planner-answered-watchlist.json": answered_watchlist(),
         "planner-answered-refused.json": answered_refused(),
+        "planner-question-request.json": question_request(),
+        "planner-answered-question.json": answered_question(),
         "planner-check-part-request.json": CheckPartRequest(kind="do", text="Email the list"),
         "planner-check-part-cant.json": check_one_part(
             CheckPartRequest(kind="do", text="Email the list")

@@ -26,6 +26,7 @@ from platform_api.builder.planner import (
     PartCheckFits,
     PartReply,
     PlannerFront,
+    QuestionReply,
     RefusedReply,
     SetupCardReply,
     SimilarWorkflow,
@@ -41,8 +42,10 @@ from platform_api.orchestration import (
     ConnectionId,
     ConnectionState,
     NoModel,
+    PlannerFacts,
     RuntimeDown,
 )
+from platform_api.shared import Principal
 from platform_api.wire import WireModel
 
 CHECKED = datetime(2026, 11, 9, 1, 0, tzinfo=UTC)
@@ -95,7 +98,7 @@ def check(
 
 
 class _Answers:
-    async def answer(self, task: str) -> NoModel:
+    async def answer(self, task: str, facts: PlannerFacts | None = None) -> NoModel:
         return NoModel()
 
     async def check_part(self, kind: str, text: str) -> CheckPartResult | RuntimeDown:
@@ -129,6 +132,11 @@ class _Workflows:
         return CardList(cards=sorted_for_library([VERSION_CHECKER], []))
 
 
+class _Facts:
+    async def read(self, viewer: Principal) -> PlannerFacts:
+        return PlannerFacts()
+
+
 class _Watchlist:
     async def view(self) -> None:
         return None
@@ -139,7 +147,12 @@ def _capabilities(root: Path, *checks: ConnectionCheck) -> WireModel:
         (root / "fixtures" / "agent" / "capabilities.json").read_text()
     )
     front = PlannerFront(
-        _Answers(), _Workflows(), _Watchlist(), _Registry(listed), _Connections(*checks)
+        _Answers(),
+        _Workflows(),
+        _Watchlist(),
+        _Registry(listed),
+        _Connections(*checks),
+        _Facts(),
     )
     view = asyncio.run(front.capabilities())
     assert isinstance(view, WireModel)
@@ -177,6 +190,9 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
         "planner/answer.check_workflows.json": CheckWorkflowsReply(use_case_id=None),
         "planner/answer.why_stopped.json": WhyStoppedReply(use_case_id="uc_01JB8"),
         "planner/answer.needs_me.json": NeedsMeReply(),
+        "planner/answer.question.json": QuestionReply(
+            text="Three: LangGraph, Redis and n8n.", looked_at=["watchlist"]
+        ),
         "planner/answer.offline.json": offline("no_model"),
         "planner/answer.offline.too_slow.json": offline("too_slow"),
         "planner/check-part.in.json": CheckPartIn(kind="do", text="Email the list to the team"),

@@ -19,6 +19,7 @@ from platform_api.orchestration.agents import (
     Drafted,
     DraftResult,
     ExampleSpec,
+    FactSection,
     FindSoftwareResult,
     FoundSoftware,
     InputKind,
@@ -26,10 +27,13 @@ from platform_api.orchestration.agents import (
     LibraryInput,
     ModelProblem,
     NeedsMeAnswer,
+    NeedsYouFact,
     PartAnswer,
     PartCantDo,
     PartFits,
     PlannerAnswer,
+    PlannerFacts,
+    QuestionAnswer,
     RefusedAnswer,
     RowKind,
     RowState,
@@ -39,9 +43,11 @@ from platform_api.orchestration.agents import (
     ToolId,
     ToolKind,
     UnderstoodRow,
+    WatchedFact,
     WatchlistAnswer,
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
+    WorkflowFact,
 )
 from platform_api.orchestration.approvals import AnyApprover, ApprovalPolicy, ApprovalStep
 from platform_api.orchestration.cards import (
@@ -83,6 +89,7 @@ from platform_api.orchestration.planning import (
     ProjectFinding,
     RuntimeDown,
 )
+from platform_api.orchestration.runs import state_name
 from platform_api.orchestration.schedule import AT_PATTERN, Day, Schedule, parse_at
 from platform_api.orchestration.schedule_store import (
     CheckSpecs,
@@ -92,6 +99,7 @@ from platform_api.orchestration.schedule_store import (
     ScheduleHold,
     ScheduleTicker,
 )
+from platform_api.orchestration.service import RunDetail
 from platform_api.orchestration.spec import (
     CardRun,
     CardsTask,
@@ -150,6 +158,12 @@ __all__ = [
     "PartFits",
     "PlannerAnswers",
     "PlannerAnswer",
+    "PlannerFacts",
+    "QuestionAnswer",
+    "WatchedFact",
+    "WorkflowFact",
+    "NeedsYouFact",
+    "FactSection",
     "RefusedAnswer",
     "SetupCardAnswer",
     "WatchlistAnswer",
@@ -231,7 +245,9 @@ __all__ = [
     "LastCheck",
     "OpenTicket",
     "PendingTicket",
+    "RunDetail",
     "RunSpec",
+    "state_name",
     "RunStarted",
     "RunStarter",
     "SavedSchedule",

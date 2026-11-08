@@ -66,6 +66,7 @@ from agent_runtime.planner import (
     visible_words,
     whole_word_of,
 )
+from agent_runtime.questions import answer_question, question_messages
 from agent_runtime.reading import (
     SAID_LIMIT,
     SkipRead,
@@ -521,6 +522,32 @@ def answer_of(read: TaskRead, request: str) -> PlannerAnswer:
     return _from_task(read, task, text)
 
 
+@dataclass(frozen=True)
+class AskTheQuestionLane:
+    """The reading ended in a fixed answer that might be a question about the person's data. The
+    question lane decides: if it is not, `otherwise` stands."""
+
+    otherwise: PlannerAnswer
+
+
+def _watched(answer: WatchlistAnswer, request: AnswerRequest) -> bool:
+    held = request.facts.watchlist if request.facts is not None else None
+    name = (answer.software or "").strip().casefold()
+    return bool(name) and any(w.name.strip().casefold() == name for w in held or [])
+
+
+def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQuestionLane:
+    """The fixed answer for a reading, or the question lane when that answer is the catch-all or
+    a watchlist offer for software the watchlist already holds. Every other answer stands."""
+    answer = answer_of(read, request.task)
+    asks = isinstance(answer, AbilitiesAnswer) or (
+        isinstance(answer, WatchlistAnswer) and _watched(answer, request)
+    )
+    if not asks or question_messages(request) is None:
+        return answer
+    return AskTheQuestionLane(otherwise=answer)
+
+
 def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     refused = word_rule_refusal(request.task)
     if refused is not None:
@@ -534,7 +561,13 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     )
     if isinstance(read, ModelProblem):
         return read
-    return Answered(answer=answer_of(read, request.task))
+    decided = decide(read, request)
+    if not isinstance(decided, AskTheQuestionLane):
+        return Answered(answer=decided)
+    asked = answer_question(request, chat_for)
+    if isinstance(asked, ModelProblem):
+        return asked
+    return Answered(answer=decided.otherwise if asked is None else asked)
 
 
 APPROVAL_WORDS: Final = re.compile(

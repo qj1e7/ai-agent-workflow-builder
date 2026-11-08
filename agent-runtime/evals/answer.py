@@ -1,26 +1,33 @@
 import re
 from typing import cast
 
+from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel
 
 from agent_runtime.answers import (
     ANSWER_SYSTEM,
     ANSWER_TIMEOUT_SECONDS,
+    AskTheQuestionLane,
     TaskRead,
-    answer_of,
+    decide,
     word_rule_refusal,
 )
 from agent_runtime.contract import (
+    AnswerRequest,
     CantAnswer,
     CantRow,
+    ModelAccess,
     PartAnswer,
     PlannerAnswer,
+    PlannerFacts,
+    QuestionAnswer,
     RowState,
     SetupCardAnswer,
     UnderstoodRow,
     WatchlistAnswer,
 )
 from agent_runtime.planner import said_in
+from agent_runtime.questions import QuestionReply, answer_of_reply, question_messages
 from evals.checks import (
     Check,
     check,
@@ -30,7 +37,7 @@ from evals.checks import (
     no_themed_names,
     ticket_keys,
 )
-from evals.jobs import Answer, Case, Job
+from evals.jobs import Answer, Case, Job, marked
 
 ACCEPTED = ("understood", "changed")
 _PROJECT_KEY = re.compile(r"\b(?:[Pp]roject|[Ii]n)\s+([A-Z][A-Z0-9]{1,9})\b")
@@ -61,6 +68,13 @@ class AnswerCase(Case):
     also: str | None = None
     understood: list[str] = []
     schedule: list[RowState] = []
+    facts: PlannerFacts | None = None
+
+
+def _request(case: AnswerCase) -> AnswerRequest:
+    """The request the decision reads. The eval never calls the model again."""
+    access = ModelAccess(style="openai", base_url="http://eval.invalid", model="eval", api_key="-")
+    return AnswerRequest(task=case.task, model=access, facts=case.facts)
 
 
 def prompt(case: AnswerCase) -> str:
@@ -122,10 +136,10 @@ def _texts(shown: PlannerAnswer) -> list[str]:
     return strings(shown.model_dump(mode="json"))
 
 
-def _kind_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
-    wrong = case.kind and shown.kind not in case.kind
-    forbidden = shown.kind in case.not_kind
-    return [check("right_kind", [shown.kind] if wrong or forbidden else [])]
+def _kind_checks(case: AnswerCase, kind: str) -> list[Check]:
+    wrong = case.kind and kind not in case.kind
+    forbidden = kind in case.not_kind
+    return [check("right_kind", [kind] if wrong or forbidden else [])]
 
 
 def _field_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
@@ -216,6 +230,24 @@ def _card_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
     return found
 
 
+def follow_up(model: BaseChatModel, case: AnswerCase, first: Answer, marker: str) -> Answer:
+    """The question lane's own call, for a request the decision sends there. The marker is on its
+    own line so the gateway cannot answer it from its store."""
+    if not isinstance(first.value, TaskRead):
+        return first
+    decided = decide(first.value, _request(case))
+    messages = question_messages(_request(case))
+    if not isinstance(decided, AskTheQuestionLane) or messages is None:
+        return first
+    system, user = messages
+    structured = model.with_structured_output(QuestionReply, include_raw=True)
+    reply: dict[str, object] = structured.invoke(marked(f"{system}\n\n{user}", marker))  # type: ignore[assignment]
+    parsed = reply.get("parsed")
+    return Answer(
+        first.value, first.text, first.raw, parsed if isinstance(parsed, QuestionReply) else "none"
+    )
+
+
 def score(case: AnswerCase, answer: Answer) -> list[Check]:
     value = answer.value
     refused = word_rule_refusal(case.task)
@@ -224,13 +256,25 @@ def score(case: AnswerCase, answer: Answer) -> list[Check]:
     elif not isinstance(value, TaskRead):
         return [check("answered", ["no structured answer"])]
     else:
-        shown = answer_of(value, case.task)
+        decided = decide(value, _request(case))
+        if isinstance(decided, AskTheQuestionLane):
+            if not isinstance(answer.extra, QuestionReply):
+                return [check("answered", ["the question lane gave no structured answer"])]
+            facts = case.facts
+            asked = answer_of_reply(answer.extra, facts) if facts is not None else None
+            shown = decided.otherwise if asked is None else asked
+        else:
+            shown = decided
     if shown is None:
         return [check("answered", []), check("right_kind", ["the reading does not hold together"])]
     text = " ".join(_texts(shown))
+    if isinstance(shown, QuestionAnswer):
+        # Its words quote the person's own software names, such as n8n, so the jargon check
+        # does not apply. The model's text is still held to the themed-name rule.
+        return [check("answered", []), *_kind_checks(case, shown.kind), no_themed_names(text)]
     return [
         check("answered", []),
-        *_kind_checks(case, shown),
+        *_kind_checks(case, shown.kind),
         *_field_checks(case, shown),
         *_cant_checks(case, shown),
         *_card_checks(case, shown),
@@ -248,4 +292,5 @@ ANSWER = Job(
     score=score,
     judged=False,
     time_limit_s=ANSWER_TIMEOUT_SECONDS,
+    follow_up=follow_up,
 )

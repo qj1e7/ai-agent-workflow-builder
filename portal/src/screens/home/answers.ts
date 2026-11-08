@@ -106,6 +106,8 @@ export function sayOf(reply: PlannerReply): string | null {
       return SAY.ideas
     case 'offline':
       return reply.message
+    case 'question':
+      return reply.text
     case 'check_workflows':
     case 'why_stopped':
     case 'needs_me':

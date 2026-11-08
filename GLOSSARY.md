@@ -42,8 +42,11 @@ The Planner's reply on Home when it can do a request: the whole workflow filled 
 _Avoid_: Wizard, form, New workflow (the old 4-step page)
 
 **Planner answer**:
-What the Planner replies to one request typed on Home: a set-up card, a watchlist row, a question about which software, the part it can do, a can't with the nearest alternative, a refusal to skip a yes, an answer about the person's workflows (check my workflows, why it stopped, what needs me), the list of what it can do, or offline. Code decides which one from the model's reading, and the reply sentences are fixed text (ADR 0037).
+What the Planner replies to one request typed on Home: a set-up card, a watchlist row, a question about which software, the part it can do, a can't with the nearest alternative, a refusal to skip a yes, an answer about the person's workflows (check my workflows, why it stopped, what needs me), a question answer, the list of what it can do, or offline. Code decides which one from the model's reading, and the reply sentences are fixed text (ADR 0037), except for the question answer (ADR 0042).
 _Avoid_: Reply, response, intent (in the app)
+
+**Question answer**:
+The Planner's reply to a question about the person's own data, such as how many software are on the watchlist. The model writes it in its own words from a facts snapshot read when the question arrives, and only from those facts. It names the sections it used, and it never offers to act. It is the one answer whose text is not fixed (ADR 0042).
 
 **Capability**:
 Something the platform can do for a workflow, such as reading Jira tickets. It is in exactly one state: Ready, Needs setup, Not answering, Planned or Unsupported. Every screen and the Planner read the same state.

@@ -1,0 +1,36 @@
+{
+  "task": "how many software are on our watchlist",
+  "model": {
+    "style": "anthropic",
+    "base_url": "https://llm-gateway.example",
+    "model": "claude-sonnet-5-5",
+    "api_key": "example-key-not-a-secret"
+  },
+  "facts": {
+    "watchlist": [
+      {
+        "name": "LangGraph",
+        "repo": "langchain-ai/langgraph",
+        "our_version": "1.2.14",
+        "newest_version": "1.2.16",
+        "state": "New version"
+      },
+      {
+        "name": "Redis",
+        "repo": "redis/redis",
+        "our_version": "8.0.2",
+        "newest_version": "8.0.2",
+        "state": "Up to date"
+      },
+      {
+        "name": "n8n",
+        "repo": "n8n-io/n8n",
+        "our_version": null,
+        "newest_version": "2.42.6",
+        "state": "Not checked yet"
+      }
+    ],
+    "workflows": null,
+    "needs_you": null
+  }
+}

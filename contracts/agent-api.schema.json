@@ -500,6 +500,18 @@
     "AnswerRequest": {
       "additionalProperties": false,
       "properties": {
+        "facts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlannerFacts"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Read by the platform when the request arrives. Only a question about the person's own data uses it. Without it, such a question gets the fixed fallback."
+        },
         "model": {
           "$ref": "#/$defs/ModelAccess"
         },
@@ -1532,6 +1544,14 @@
       "title": "ExampleSpec",
       "type": "object"
     },
+    "FactSection": {
+      "enum": [
+        "watchlist",
+        "workflows",
+        "needs_you"
+      ],
+      "type": "string"
+    },
     "FindSoftwareRequest": {
       "additionalProperties": false,
       "properties": {
@@ -2013,6 +2033,58 @@
       "title": "NeedsMeAnswer",
       "type": "object"
     },
+    "NeedsYouFact": {
+      "additionalProperties": false,
+      "properties": {
+        "addresses": {
+          "minimum": 0,
+          "title": "Addresses",
+          "type": "integer"
+        },
+        "approvals": {
+          "minimum": 0,
+          "title": "Approvals",
+          "type": "integer"
+        },
+        "confirmations": {
+          "minimum": 0,
+          "title": "Confirmations",
+          "type": "integer"
+        },
+        "connections": {
+          "minimum": 0,
+          "title": "Connections",
+          "type": "integer"
+        },
+        "replies": {
+          "minimum": 0,
+          "title": "Replies",
+          "type": "integer"
+        },
+        "stopped": {
+          "minimum": 0,
+          "title": "Stopped",
+          "type": "integer"
+        },
+        "total": {
+          "description": "The count Home shows under Needs you.",
+          "minimum": 0,
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "approvals",
+        "confirmations",
+        "stopped",
+        "connections",
+        "addresses",
+        "replies",
+        "total"
+      ],
+      "title": "NeedsYouFact",
+      "type": "object"
+    },
     "PartAnswer": {
       "additionalProperties": false,
       "properties": {
@@ -2116,6 +2188,7 @@
           "check_workflows": "#/$defs/CheckWorkflowsAnswer",
           "needs_me": "#/$defs/NeedsMeAnswer",
           "part": "#/$defs/PartAnswer",
+          "question": "#/$defs/QuestionAnswer",
           "refused": "#/$defs/RefusedAnswer",
           "setup_card": "#/$defs/SetupCardAnswer",
           "watchlist": "#/$defs/WatchlistAnswer",
@@ -2154,8 +2227,62 @@
         },
         {
           "$ref": "#/$defs/AbilitiesAnswer"
+        },
+        {
+          "$ref": "#/$defs/QuestionAnswer"
         }
       ]
+    },
+    "PlannerFacts": {
+      "additionalProperties": false,
+      "description": "What the platform holds for the signed-in person at the moment of the question. A section\nthat is None was not sent, and the answer may not claim to have looked at it.",
+      "properties": {
+        "needs_you": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NeedsYouFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "watchlist": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/WatchedFact"
+              },
+              "maxItems": 100,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Watchlist"
+        },
+        "workflows": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/WorkflowFact"
+              },
+              "maxItems": 50,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workflows"
+        }
+      },
+      "title": "PlannerFacts",
+      "type": "object"
     },
     "ProblemReason": {
       "enum": [
@@ -2207,6 +2334,39 @@
         "reason"
       ],
       "title": "ProposedIntent",
+      "type": "object"
+    },
+    "QuestionAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "question",
+          "default": "question",
+          "title": "Kind",
+          "type": "string"
+        },
+        "looked_at": {
+          "description": "The sections of the facts the answer used, kept only when they were sent.",
+          "items": {
+            "$ref": "#/$defs/FactSection"
+          },
+          "maxItems": 3,
+          "title": "Looked At",
+          "type": "array"
+        },
+        "text": {
+          "description": "The model's own words, from the facts sent and nothing else (ADR 0042).",
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "looked_at"
+      ],
+      "title": "QuestionAnswer",
       "type": "object"
     },
     "RefusedAnswer": {
@@ -2808,6 +2968,62 @@
       "title": "UnderstoodRow",
       "type": "object"
     },
+    "WatchedFact": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 80,
+          "title": "Name",
+          "type": "string"
+        },
+        "newest_version": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The newest release read from the source. None when unread.",
+          "title": "Newest Version"
+        },
+        "our_version": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The version the team runs. None means Not known.",
+          "title": "Our Version"
+        },
+        "repo": {
+          "maxLength": 140,
+          "title": "Repo",
+          "type": "string"
+        },
+        "state": {
+          "description": "The state in the words the Software page shows.",
+          "maxLength": 40,
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "repo",
+        "our_version",
+        "newest_version",
+        "state"
+      ],
+      "title": "WatchedFact",
+      "type": "object"
+    },
     "WatchlistAnswer": {
       "additionalProperties": false,
       "properties": {
@@ -2951,6 +3167,57 @@
         }
       },
       "title": "WhyStoppedAnswer",
+      "type": "object"
+    },
+    "WorkflowFact": {
+      "additionalProperties": false,
+      "properties": {
+        "last_run": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The state of the newest run, in the words the Portal uses.",
+          "title": "Last Run"
+        },
+        "last_run_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Run At"
+        },
+        "name": {
+          "maxLength": 80,
+          "title": "Name",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "on",
+            "paused"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "state",
+        "last_run",
+        "last_run_at"
+      ],
+      "title": "WorkflowFact",
       "type": "object"
     }
   },

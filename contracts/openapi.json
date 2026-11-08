@@ -3983,6 +3983,14 @@
         "title": "ExampleView",
         "type": "object"
       },
+      "FactSection": {
+        "enum": [
+          "watchlist",
+          "workflows",
+          "needs_you"
+        ],
+        "type": "string"
+      },
       "FailedView": {
         "additionalProperties": false,
         "properties": {
@@ -5623,6 +5631,7 @@
             "needs_me": "#/components/schemas/NeedsMeReply",
             "offline": "#/components/schemas/OfflineReply",
             "part": "#/components/schemas/PartReply",
+            "question": "#/components/schemas/QuestionReply",
             "refused": "#/components/schemas/RefusedReply",
             "setup_card": "#/components/schemas/SetupCardReply",
             "watchlist": "#/components/schemas/WatchlistReply",
@@ -5664,6 +5673,9 @@
           },
           {
             "$ref": "#/components/schemas/NeedsMeReply"
+          },
+          {
+            "$ref": "#/components/schemas/QuestionReply"
           },
           {
             "$ref": "#/components/schemas/OfflineReply"
@@ -6008,6 +6020,36 @@
           "proposal"
         ],
         "title": "ProposedView",
+        "type": "object"
+      },
+      "QuestionReply": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "const": "question",
+            "default": "question",
+            "title": "Answer",
+            "type": "string"
+          },
+          "looked_at": {
+            "description": "The sections the answer used: watchlist (the Software page), workflows (the Workflows page) and needs_you (Home). Empty for the fixed fallback.",
+            "items": {
+              "$ref": "#/components/schemas/FactSection"
+            },
+            "title": "Looked At",
+            "type": "array"
+          },
+          "text": {
+            "description": "The Planner's answer to a question about the person's own data, in its own words, from the facts read when the question arrived (ADR 0042).",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "looked_at"
+        ],
+        "title": "QuestionReply",
         "type": "object"
       },
       "Readiness": {

@@ -37,12 +37,15 @@ from platform_api.orchestration import (
     ConnectionCheck,
     ConnectionId,
     ExampleSpec,
+    FactSection,
     ModelProblem,
     NeedsMeAnswer,
     NoModel,
     PartAnswer,
     PartCantDo,
     PlannerAnswer,
+    PlannerFacts,
+    QuestionAnswer,
     RefusedAnswer,
     RowKind,
     RuntimeDown,
@@ -52,13 +55,15 @@ from platform_api.orchestration import (
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
+from platform_api.shared import Principal
 from platform_api.wire import WireIn, WireModel
 
 log = logging.getLogger(__name__)
 
-ANSWER_LIMIT_SECONDS: Final = 10.0
-"""The model gets 8 seconds in the runtime. This is the platform's own limit around the whole
-call, so a runtime that hangs still gives the person an answer."""
+ANSWER_LIMIT_SECONDS: Final = 20.0
+"""The model gets 8 seconds for each of its two calls in the runtime: the reading, and the
+answer to a question about the person's data (ADR 0042). This is the platform's own limit around
+the whole call, so a runtime that hangs still gives the person an answer."""
 
 type CapabilityState = Literal["ready", "needs_setup", "down", "planned", "unsupported"]
 type Intent = Literal["check_workflows", "needs_me", "abilities", "setup_ideas", "why_stopped"]
@@ -187,6 +192,18 @@ class NeedsMeReply(WireModel):
     answer: Literal["needs_me"] = "needs_me"
 
 
+class QuestionReply(WireModel):
+    answer: Literal["question"] = "question"
+    text: str = Field(
+        description="The Planner's answer to a question about the person's own data, in its own "
+        "words, from the facts read when the question arrived (ADR 0042)."
+    )
+    looked_at: list[FactSection] = Field(
+        description="The sections the answer used: watchlist (the Software page), workflows "
+        "(the Workflows page) and needs_you (Home). Empty for the fixed fallback."
+    )
+
+
 class OfflineReply(WireModel):
     answer: Literal["offline"] = "offline"
     why: FallbackWhy = Field(
@@ -211,6 +228,7 @@ type PlannerReply = Annotated[
     | CheckWorkflowsReply
     | WhyStoppedReply
     | NeedsMeReply
+    | QuestionReply
     | OfflineReply,
     Field(discriminator="answer"),
 ]
@@ -268,9 +286,15 @@ class CapabilitiesView(WireModel):
 
 
 class Answering(Protocol):
-    async def answer(self, task: str) -> AnswerResult | NoModel | RuntimeDown: ...
+    async def answer(
+        self, task: str, facts: PlannerFacts | None = None
+    ) -> AnswerResult | NoModel | RuntimeDown: ...
 
     async def check_part(self, kind: RowKind, text: str) -> CheckPartResult | RuntimeDown: ...
+
+
+class FactsReading(Protocol):
+    async def read(self, viewer: Principal) -> PlannerFacts: ...
 
 
 class Registry(Protocol):
@@ -327,16 +351,18 @@ class PlannerFront:
         watchlist: Listed,
         registry: Registry,
         connections: ConnectionStates,
+        facts: FactsReading,
     ) -> None:
+        self._facts = facts
         self._answers = answers
         self._workflows = workflows
         self._watchlist = watchlist
         self._registry = registry
         self._connections = connections
 
-    async def answer(self, body: AnswerIn) -> PlannerReply | NoSuchWorkflow:
+    async def answer(self, body: AnswerIn, viewer: Principal) -> PlannerReply | NoSuchWorkflow:
         if body.text is not None:
-            return await self._typed(body.text)
+            return await self._typed(body.text, viewer)
         assert body.intent is not None
         return await self._intent(body.intent, body.use_case_id)
 
@@ -360,10 +386,10 @@ class PlannerFront:
                     return NoSuchWorkflow()
                 return WhyStoppedReply(use_case_id=use_case_id)
 
-    async def _typed(self, text: str) -> PlannerReply:
+    async def _typed(self, text: str, viewer: Principal) -> PlannerReply:
         try:
             async with asyncio.timeout(ANSWER_LIMIT_SECONDS):
-                result = await self._answers.answer(text)
+                result = await self._answers.answer(text, await self._facts.read(viewer))
         except TimeoutError:
             log.warning("The Planner's answer took longer than %g seconds", ANSWER_LIMIT_SECONDS)
             return offline("too_slow")
@@ -411,6 +437,8 @@ class PlannerFront:
                 return NeedsMeReply()
             case AbilitiesAnswer():
                 return AbilitiesReply()
+            case QuestionAnswer(text=text, looked_at=looked_at):
+                return QuestionReply(text=text, looked_at=looked_at)
 
     async def _alternative(
         self, alternative: SetupCardAnswer | WatchlistAnswer | None
