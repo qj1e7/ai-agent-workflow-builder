@@ -734,9 +734,57 @@ type FindSoftwareResult = Annotated[
 ]
 
 
+type FactSection = Literal["watchlist", "workflows", "needs_you"]
+
+
+class WatchedFact(WireModel):
+    name: str = Field(max_length=80)
+    repo: str = Field(max_length=140)
+    our_version: str | None = Field(
+        max_length=40, description="The version the team runs. None means Not known."
+    )
+    newest_version: str | None = Field(
+        max_length=40, description="The newest release read from the source. None when unread."
+    )
+    state: str = Field(max_length=40, description="The state in the words the Software page shows.")
+
+
+class WorkflowFact(WireModel):
+    name: str = Field(max_length=80)
+    state: Literal["on", "paused"]
+    last_run: str | None = Field(
+        max_length=40, description="The state of the newest run, in the words the Portal uses."
+    )
+    last_run_at: datetime | None
+
+
+class NeedsYouFact(WireModel):
+    approvals: int = Field(ge=0)
+    confirmations: int = Field(ge=0)
+    stopped: int = Field(ge=0)
+    connections: int = Field(ge=0)
+    addresses: int = Field(ge=0)
+    replies: int = Field(ge=0)
+    total: int = Field(ge=0, description="The count Home shows under Needs you.")
+
+
+class PlannerFacts(WireModel):
+    """What the platform holds for the signed-in person at the moment of the question. A section
+    that is None was not sent, and the answer may not claim to have looked at it."""
+
+    watchlist: list[WatchedFact] | None = Field(default=None, max_length=100)
+    workflows: list[WorkflowFact] | None = Field(default=None, max_length=50)
+    needs_you: NeedsYouFact | None = None
+
+
 class AnswerRequest(WireModel):
     task: str = Field(min_length=1, max_length=2000)
     model: ModelAccess
+    facts: PlannerFacts | None = Field(
+        default=None,
+        description="Read by the platform when the request arrives. Only a question about the "
+        "person's own data uses it. Without it, such a question gets the fixed fallback.",
+    )
 
 
 type CantNeed = Literal["new_tool", "new_system"]
@@ -868,6 +916,19 @@ class AbilitiesAnswer(WireModel):
     kind: Literal["abilities"] = "abilities"
 
 
+class QuestionAnswer(WireModel):
+    kind: Literal["question"] = "question"
+    text: str = Field(
+        min_length=1,
+        max_length=600,
+        description="The model's own words, from the facts sent and nothing else (ADR 0042).",
+    )
+    looked_at: list[FactSection] = Field(
+        max_length=3,
+        description="The sections of the facts the answer used, kept only when they were sent.",
+    )
+
+
 type PlannerAnswer = Annotated[
     SetupCardAnswer
     | PartAnswer
@@ -878,7 +939,8 @@ type PlannerAnswer = Annotated[
     | CheckWorkflowsAnswer
     | WhyStoppedAnswer
     | NeedsMeAnswer
-    | AbilitiesAnswer,
+    | AbilitiesAnswer
+    | QuestionAnswer,
     Field(discriminator="kind"),
 ]
 

@@ -42,7 +42,7 @@ CurrentFront = Annotated[PlannerFront, Depends(current_front)]
     responses={**OPERATORS_ONLY, 404: error_response("No such workflow")},
 )
 async def answer(body: AnswerIn, principal: Operator, front: CurrentFront) -> PlannerReply:
-    match await front.answer(body):
+    match await front.answer(body, principal):
         case NoSuchWorkflow():
             raise HTTPException(404, "No such workflow")
         case reply:

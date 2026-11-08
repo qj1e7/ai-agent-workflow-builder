@@ -414,9 +414,44 @@ type FindSoftwareResult = Annotated[
 find_software_result_adapter: TypeAdapter[FindSoftwareResult] = TypeAdapter(FindSoftwareResult)
 
 
+type FactSection = Literal["watchlist", "workflows", "needs_you"]
+
+
+class WatchedFact(WireModel):
+    name: str = Field(max_length=80)
+    repo: str = Field(max_length=140)
+    our_version: str | None = Field(max_length=40)
+    newest_version: str | None = Field(max_length=40)
+    state: str = Field(max_length=40)
+
+
+class WorkflowFact(WireModel):
+    name: str = Field(max_length=80)
+    state: Literal["on", "paused"]
+    last_run: str | None = Field(max_length=40)
+    last_run_at: datetime | None
+
+
+class NeedsYouFact(WireModel):
+    approvals: int = Field(ge=0)
+    confirmations: int = Field(ge=0)
+    stopped: int = Field(ge=0)
+    connections: int = Field(ge=0)
+    addresses: int = Field(ge=0)
+    replies: int = Field(ge=0)
+    total: int = Field(ge=0)
+
+
+class PlannerFacts(WireModel):
+    watchlist: list[WatchedFact] | None = Field(default=None, max_length=100)
+    workflows: list[WorkflowFact] | None = Field(default=None, max_length=50)
+    needs_you: NeedsYouFact | None = None
+
+
 class AnswerRequest(WireModel):
     task: str
     model: ModelAccess
+    facts: PlannerFacts | None = None
 
 
 type CantNeed = Literal["new_tool", "new_system"]
@@ -494,6 +529,12 @@ class AbilitiesAnswer(WireModel):
     kind: Literal["abilities"] = "abilities"
 
 
+class QuestionAnswer(WireModel):
+    kind: Literal["question"] = "question"
+    text: str = Field(min_length=1, max_length=600)
+    looked_at: list[FactSection] = Field(max_length=3)
+
+
 type PlannerAnswer = Annotated[
     SetupCardAnswer
     | PartAnswer
@@ -504,7 +545,8 @@ type PlannerAnswer = Annotated[
     | CheckWorkflowsAnswer
     | WhyStoppedAnswer
     | NeedsMeAnswer
-    | AbilitiesAnswer,
+    | AbilitiesAnswer
+    | QuestionAnswer,
     Field(discriminator="kind"),
 ]
 

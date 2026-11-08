@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
 from platform_api.builder import Builder, Home, PlannerFront, TeamRequests, Watchlist
+from platform_api.builder.planner_facts import PlannerFactsReader
 from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
 from platform_api.orchestration.agents import HttpAgentRuntime
@@ -287,6 +288,7 @@ async def build(settings: Settings) -> Services:
     team_requests = TeamRequests(
         db, request_channel, orchestrator, activity, settings.public_base_url
     )
+    home = Home(builder, orchestrator, people, team_requests, connections, watchlist)
     return Services(
         settings=settings,
         db=db,
@@ -299,8 +301,9 @@ async def build(settings: Settings) -> Services:
             watchlist,
             CapabilityRegistry(agents),
             connections,
+            PlannerFactsReader(watchlist, builder, orchestrator, home),
         ),
-        home=Home(builder, orchestrator, people, team_requests, connections, watchlist),
+        home=home,
         watchlist=watchlist,
         team_requests=team_requests,
         request_channel=request_channel,

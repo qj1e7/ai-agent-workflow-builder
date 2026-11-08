@@ -51,6 +51,8 @@ class AnswerCase(Case):
     task: str
     kind: list[str] = []
     not_kind: list[str] = []
+    asks_about: str | None = None
+    not_asks_about: str | None = None
     software: str | None = None
     word: list[str] = []
     workflow_words: str | None = None
@@ -126,6 +128,23 @@ def _kind_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
     wrong = case.kind and shown.kind not in case.kind
     forbidden = shown.kind in case.not_kind
     return [check("right_kind", [shown.kind] if wrong or forbidden else [])]
+
+
+def _reading_checks(case: AnswerCase, value: object) -> list[Check]:
+    found: list[Check] = []
+    if not isinstance(value, TaskRead):
+        return found
+    if case.asks_about is not None:
+        found.append(
+            check("reads_as", [] if value.asks_about == case.asks_about else [value.asks_about])
+        )
+    if case.not_asks_about is not None:
+        found.append(
+            check(
+                "not_read_as", [value.asks_about] if value.asks_about == case.not_asks_about else []
+            )
+        )
+    return found
 
 
 def _field_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
@@ -231,6 +250,7 @@ def score(case: AnswerCase, answer: Answer) -> list[Check]:
     return [
         check("answered", []),
         *_kind_checks(case, shown),
+        *_reading_checks(case, value),
         *_field_checks(case, shown),
         *_cant_checks(case, shown),
         *_card_checks(case, shown),

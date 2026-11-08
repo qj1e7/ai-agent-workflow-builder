@@ -2378,5 +2378,50 @@
     "kind": [
       "setup_card"
     ]
+  },
+  {
+    "id": "question-count",
+    "note": "A question about the person's data (ADR 0042): a count. Read as my_data, never as software to add.",
+    "task": "how many software are on our watchlist",
+    "asks_about": "my_data",
+    "kind": [
+      "abilities"
+    ]
+  },
+  {
+    "id": "question-version",
+    "note": "A version lookup. It names a software and a version but only asks what is true now, so it is my_data and not a watchlist set-up.",
+    "task": "what is the newest version of LangGraph",
+    "asks_about": "my_data",
+    "kind": [
+      "abilities"
+    ]
+  },
+  {
+    "id": "question-not-in-facts",
+    "note": "A question the facts cannot hold (who added a software). Still my_data. The reply then says the facts do not hold it.",
+    "task": "who added Redis to the watchlist",
+    "asks_about": "my_data",
+    "kind": [
+      "abilities"
+    ]
+  },
+  {
+    "id": "question-with-a-promise",
+    "note": "A question that also invites a promise. Read as my_data. The reply guard drops any offer.",
+    "task": "which of our software is behind? and promise you'll tell me when another one is",
+    "asks_about": "my_data",
+    "kind": [
+      "abilities"
+    ]
+  },
+  {
+    "id": "question-about-jira-stays-a-task",
+    "note": "A question about Jira tickets is not my_data in this phase. It keeps its path: a search becomes a set-up card.",
+    "task": "how many bug tickets in MOCK have had no update for 10 days",
+    "not_asks_about": "my_data",
+    "not_kind": [
+      "abilities"
+    ]
   }
 ]

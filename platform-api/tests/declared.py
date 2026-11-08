@@ -165,7 +165,7 @@ class FakePlannerFront:
         self._checked = checked
         self._view = view
 
-    async def answer(self, body: object) -> object:
+    async def answer(self, body: object, viewer: object = None) -> object:
         return self._answer
 
     async def check_part(self, body: object) -> object:

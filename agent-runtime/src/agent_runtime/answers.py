@@ -66,6 +66,7 @@ from agent_runtime.planner import (
     visible_words,
     whole_word_of,
 )
+from agent_runtime.questions import answer_question
 from agent_runtime.reading import (
     SAID_LIMIT,
     SkipRead,
@@ -131,16 +132,24 @@ ANSWER_SYSTEM: Final = (
     'new-ticket check stop?".\n'
     '- needs_me: they ask what is waiting for them, such as "What needs me?" or "Anything to '
     'approve?".\n'
+    "- my_data: they ask a question about what the platform holds for them now, answered by "
+    'reading it, such as "How many software are on our watchlist?", "What version of Redis do '
+    'we run?", "Which software is behind?" or "When did my last workflow run?". This is a '
+    "question to answer, not software to add or a task to set up, so set belongs_on_watchlist "
+    "to false and fill in no parts. It stays my_data when it names a software, a version or a "
+    'release, as in "What is the newest version of LangGraph?". A question about Jira tickets '
+    "is not my_data: read it as a task.\n"
     "- abilities: they ask what you can do, or the request is not a task for the team at all, "
     "such as a question about the weather.\n"
     "For my_workflows and why_stopped, copy the words that name one workflow into "
     "workflow_words, exactly as written, or leave it null when they ask about all of them.\n\n"
-    "A request about software versions, releases, upgrades or patches belongs on the Software "
-    "watchlist, where the team keeps all its software. Then set belongs_on_watchlist to true, "
-    "copy the word from the request that made you think so, and name the software if the "
-    "request names one. When the request also asks for something else, such as a weekly ticket "
-    "list, read that other part into its parts as fully as you would a task of its own, and "
-    "leave only the software part out. Otherwise fill in no parts.\n"
+    "A request to watch, track or check software versions, releases, upgrades or patches, or to "
+    "be told about them, belongs on the Software watchlist, where the team keeps all its "
+    "software. A question that only asks what is true now is my_data, not this. Then set "
+    "belongs_on_watchlist to true, copy the word from the request that made you think so, and "
+    "name the software if the request names one. When the request also asks for something "
+    "else, such as a weekly ticket list, read that other part into its parts as fully as you "
+    "would a task of its own, and leave only the software part out. Otherwise fill in no parts.\n"
     "A request for known vulnerabilities, CVEs, security advisories or security patches does "
     "not belong on the Software watchlist, even if it names software or releases, because no "
     "tool checks for them yet. Set belongs_on_watchlist to false and fill in no search for it.\n"
@@ -483,6 +492,14 @@ def _about(read: TaskRead, request: str) -> PlannerAnswer:
             return AbilitiesAnswer()
 
 
+def _shaped_as_a_task(read: TaskRead, text: str) -> bool:
+    """A question about the person's data is not a task because it says "run" or "update" as
+    an ordinary word: it needs a filled structure, or a clause that starts with a change."""
+    if read.asks_about != "my_data":
+        return task_shaped(read, text)
+    return any((read.search, read.ticket, read.place, read.schedule)) or commands_a_change(text)
+
+
 def answer_of(read: TaskRead, request: str) -> PlannerAnswer:
     """The answer code decides from the model's reading: refused, by the word rule, by the
     model's answer to the skip question, or by words naming a yes that nothing explains in a
@@ -498,7 +515,7 @@ def answer_of(read: TaskRead, request: str) -> PlannerAnswer:
     if skip.refused is not None:
         return skip.refused
     task = None
-    if read.asks_about == "none" or task_shaped(read, text):
+    if read.asks_about == "none" or _shaped_as_a_task(read, text):
         covered = [skip.covered] if skip.covered is not None else []
         if read.belongs_on_watchlist:
             covered += _watch_clauses(read, text)
@@ -514,11 +531,19 @@ def answer_of(read: TaskRead, request: str) -> PlannerAnswer:
         answer = _watchlist(read, task, text)
         if answer is not None:
             return answer
-    if read.asks_about != "none" and not (read.asks_about == "abilities" and task is not None):
+    yields_to_task = read.asks_about in ("abilities", "my_data")
+    if read.asks_about != "none" and not (yields_to_task and task is not None):
         return _about(read, text)
     if task is None:
         return AbilitiesAnswer()
     return _from_task(read, task, text)
+
+
+def _is_question(read: TaskRead, answer: PlannerAnswer) -> bool:
+    """A my_data reading that no task, refusal or other answer took over reaches _about's
+    catch-all, an abilities answer. That is the one case the question lane answers instead. A
+    my_data reading that also asks for a change stays a task, so no part of it is dropped."""
+    return read.asks_about == "my_data" and isinstance(answer, AbilitiesAnswer)
 
 
 def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
@@ -534,7 +559,11 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     )
     if isinstance(read, ModelProblem):
         return read
-    return Answered(answer=answer_of(read, request.task))
+    answer = answer_of(read, request.task)
+    if _is_question(read, answer):
+        asked = answer_question(request, chat_for)
+        return asked if isinstance(asked, ModelProblem) else Answered(answer=asked)
+    return Answered(answer=answer)
 
 
 APPROVAL_WORDS: Final = re.compile(

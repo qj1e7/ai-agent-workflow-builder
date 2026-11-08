@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import cast
 
 import httpx
@@ -10,7 +11,9 @@ import pytest
 from platform_api.app import create_app
 from platform_api.builder import Builder, PlannerFront, Watchlist
 from platform_api.builder import planner as planner_module
+from platform_api.builder.home import HomeOut
 from platform_api.builder.models import AddSoftware, CreateAgentUseCase
+from platform_api.builder.planner_facts import STATUS_WORDS, PlannerFactsReader
 from platform_api.db import Database
 from platform_api.orchestration import (
     AbilitiesAnswer,
@@ -31,6 +34,8 @@ from platform_api.orchestration import (
     PartAnswer,
     PartCantDo,
     PartFits,
+    PlannerFacts,
+    QuestionAnswer,
     RefusedAnswer,
     RowKind,
     RunSpec,
@@ -46,6 +51,7 @@ from platform_api.orchestration import (
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
+from platform_api.orchestration.service import RunDetail
 from platform_api.shared import Principal, Role, RunId, SoftwareId, UseCaseId, UserId
 from tests.support import LOCAL_ENV
 
@@ -205,16 +211,42 @@ class FakeAnswers:
     part: CheckPartResult | RuntimeDown = field(default_factory=lambda: RuntimeDown("down"))
     wait: float = 0.0
     asked: list[str] = field(default_factory=list[str])
+    facts: list[PlannerFacts | None] = field(default_factory=list[PlannerFacts | None])
     checked: list[tuple[str, str]] = field(default_factory=list[tuple[str, str]])
 
-    async def answer(self, task: str) -> AnswerResult | NoModel | RuntimeDown:
+    async def answer(
+        self, task: str, facts: PlannerFacts | None = None
+    ) -> AnswerResult | NoModel | RuntimeDown:
         self.asked.append(task)
+        self.facts.append(facts)
         await asyncio.sleep(self.wait)
         return self.result
 
     async def check_part(self, kind: RowKind, text: str) -> CheckPartResult | RuntimeDown:
         self.checked.append((kind, text))
         return self.part
+
+
+class NoRuns:
+    async def list_runs(self) -> list[RunDetail]:
+        return []
+
+
+class FakeHome:
+    def __init__(self) -> None:
+        self.viewers: list[Principal] = []
+
+    async def for_person(self, viewer: Principal) -> HomeOut:
+        self.viewers.append(viewer)
+        counts = SimpleNamespace(
+            approvals_total=2,
+            confirmations=[1],
+            stopped_total=0,
+            connections=[],
+            addresses=[],
+            replied=[1],
+        )
+        return cast(HomeOut, counts)
 
 
 class FakeRegistry:
@@ -308,6 +340,7 @@ class Front:
     registry: FakeRegistry
     builder: Builder
     watchlist: Watchlist
+    home: FakeHome
 
 
 @pytest.fixture
@@ -320,10 +353,12 @@ async def front(db: Database) -> AsyncIterator[Front]:
     registry = FakeRegistry(REGISTRY)
     app.state.builder = builder
     app.state.watchlist = watchlist
-    app.state.planner_front = PlannerFront(answers, builder, watchlist, registry, states)
+    home = FakeHome()
+    facts = PlannerFactsReader(watchlist, builder, NoRuns(), home)
+    app.state.planner_front = PlannerFront(answers, builder, watchlist, registry, states, facts)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
-        yield Front(c, answers, states, registry, builder, watchlist)
+        yield Front(c, answers, states, registry, builder, watchlist, home)
 
 
 async def say(front: Front, text: str = FRIDAY) -> dict[str, object]:
@@ -406,6 +441,52 @@ async def test_a_watchlist_row_says_when_the_software_is_already_listed(front: F
     assert listed["name"] == "LangGraph"
     front.answers.result = answered(WatchlistAnswer(word="releases", software="Kubernetes"))
     assert (await say(front, "Watch Kubernetes"))["already_listed"] is None
+
+
+async def test_a_question_answer_comes_back_with_the_sections_it_looked_at(front: Front):
+    front.answers.result = answered(
+        QuestionAnswer(text="Nothing is on the watchlist yet.", looked_at=["watchlist"])
+    )
+    assert await say(front, "how many software are on our watchlist") == {
+        "answer": "question",
+        "text": "Nothing is on the watchlist yet.",
+        "looked_at": ["watchlist"],
+    }
+
+
+async def test_the_runtime_gets_the_facts_the_screens_show_for_the_signed_in_person(front: Front):
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
+    await front.watchlist.add(alice, AddSoftware.model_validate(LANGGRAPH))
+    front.answers.result = answered(AbilitiesAnswer())
+    await say(front, "how many software are on our watchlist")
+    (facts,) = front.answers.facts
+    assert facts is not None and facts.watchlist is not None
+    page = (await front.client.get("/api/v1/watchlist", headers=ALICE)).json()["watchlist"]
+    (row,) = page["software"]
+    (fact,) = facts.watchlist
+    assert (fact.name, fact.repo, fact.our_version, fact.newest_version) == (
+        row["name"],
+        row["source"]["ref"],
+        row["our_version"],
+        row["newest_version"],
+    )
+    assert fact.state == STATUS_WORDS[row["status"]]
+    assert facts.needs_you is not None and facts.needs_you.total == 4
+    assert [u.name for u in (await front.builder.list_use_cases()).use_cases] == [
+        w.name for w in facts.workflows or []
+    ]
+    assert [v.user_id for v in front.home.viewers] == ["alice"]
+
+
+async def test_a_section_that_cannot_be_read_is_left_out_not_guessed(front: Front):
+    async def broken(viewer: Principal) -> HomeOut:
+        raise RuntimeError("down")
+
+    front.home.for_person = broken  # type: ignore[method-assign]
+    front.answers.result = answered(AbilitiesAnswer())
+    await say(front)
+    (facts,) = front.answers.facts
+    assert facts is not None and facts.needs_you is None and facts.workflows is not None
 
 
 async def test_a_watchlist_row_carries_the_rest_of_a_mixed_request(front: Front):
