@@ -56,6 +56,10 @@ done
 run n8n-editor-gate tool --volume "$infra:/infra:ro" --entrypoint /bin/sh "$TERRAFORM_IMAGE" \
   /infra/scripts/check-n8n-editor-gate.sh
 
+# The deploy's job runner, against a fake az, so a failed status check is retried.
+run run-job tool --volume "$infra:/infra:ro" --entrypoint /bin/sh "$TERRAFORM_IMAGE" \
+  /infra/scripts/check-run-job.sh
+
 run tflint tool \
   --volume "$infra:/infra" --volume "$cache/tflint:/plugins" --env TFLINT_PLUGIN_DIR=/plugins \
   ${GITHUB_TOKEN:+--env GITHUB_TOKEN} --workdir /infra --entrypoint /bin/sh "$TFLINT_IMAGE" -c \
