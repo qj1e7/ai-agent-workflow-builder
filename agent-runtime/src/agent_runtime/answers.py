@@ -543,11 +543,6 @@ QUESTION_SHAPE: Final = re.compile(
     r"^\s*(?:which|what|how|is|are|do|does|did|when)\b|\?\s*$", re.IGNORECASE
 )
 WATCHLIST_WORDS: Final = re.compile(r"\b(?:watchlist|watching|watched)\b", re.IGNORECASE)
-LAST_CHECK: Final = re.compile(r"\blast\s+check(?:ed)?\b", re.IGNORECASE)
-WAITING_FOR_YES: Final = re.compile(
-    r"\b(?:waiting|awaiting)\s+(?:for\s+)?(?:my|a|the|your)?\s*(?:yes|approval)\b", re.IGNORECASE
-)
-STARTS_WITH_WHY: Final = re.compile(r"^\s*why\b", re.IGNORECASE)
 FOLLOW_UP: Final = re.compile(
     r"^\s*(?:and|what\s+about|how\s+about)\s+"
     r"(?P<name>\w[\w.+#/-]*(?:\s+\w[\w.+#/-]*){0,2})\s*[?.!]*\s*$",
@@ -573,6 +568,8 @@ def rewrite_follow_up(request: AnswerRequest) -> str | None:
     if earlier is None or follow is None:
         return None
     previous = visible_words(earlier.request)
+    if not QUESTION_SHAPE.search(previous) or _refusal(previous) is not None:
+        return None
     named = (earlier.software or "").strip() or _named_in(previous, request)
     if not named:
         return None
@@ -617,32 +614,13 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     return answer
 
 
-def _names_watched(text: str, request: AnswerRequest) -> bool:
-    return any(_in(text, name) for name in _watched_names(request))
-
-
 def _state_answer_about_the_watchlist(
     answer: PlannerAnswer, text: str, request: AnswerRequest
 ) -> bool:
-    """The reading took a question about the watchlist for a question about the person's
-    workflows ("When did it last check?"), their stopped runs ("Did it open a ticket for
-    Redis?") or what needs them ("Is anything waiting for my yes?"). Code sends it to the lane
-    when the words tie it to the watchlist: the word, a software it holds, the last check, or a
-    yes that waits. The first answer stands if the lane says no."""
-    if isinstance(answer, CheckWorkflowsAnswer) and WATCHLIST_WORDS.search(text):
-        return True
-    if not QUESTION_SHAPE.search(text):
-        return False
-    watched = bool(WATCHLIST_WORDS.search(text)) or _names_watched(text, request)
-    match answer:
-        case CheckWorkflowsAnswer():
-            return watched or bool(LAST_CHECK.search(text))
-        case WhyStoppedAnswer():
-            return watched and not STARTS_WITH_WHY.search(text)
-        case NeedsMeAnswer():
-            return watched or bool(WAITING_FOR_YES.search(text))
-        case _:
-            return False
+    """Check my workflows for a request that names the watchlist goes to the lane, whatever its
+    shape. The other state answers keep their fixed answers: the Needs you list with its buttons,
+    and the AI troubleshooter link. The first answer stands if the lane says no."""
+    return isinstance(answer, CheckWorkflowsAnswer) and bool(WATCHLIST_WORDS.search(text))
 
 
 def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
@@ -651,6 +629,9 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
         return Answered(answer=refused)
     rewritten = rewrite_follow_up(request)
     if rewritten is not None:
+        refused = word_rule_refusal(rewritten)
+        if refused is not None:
+            return Answered(answer=refused)
         request = request.model_copy(update={"task": rewritten})
     read = ask_model(
         chat_for,
