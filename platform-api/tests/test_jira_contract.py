@@ -4,8 +4,10 @@ CI always runs it against the practice Jira, in both flavors, over HTTP. With JI
 set, the same tests run against a real sandbox too:
 
     JIRA_CONTRACT_URL      the sandbox, such as https://example.atlassian.net
-    JIRA_CONTRACT_FLAVOR   datacenter or cloud (default datacenter)
-    JIRA_CONTRACT_TOKEN    the token (a personal access token, or an API token for Cloud)
+                            (also accepts JIRA_CONTRACT_BASE_URL from deploy/.env)
+    JIRA_CONTRACT_FLAVOR   datacenter or cloud (default datacenter; also accepts
+                            JIRA_CONTRACT_API_FLAVOR from deploy/.env)
+    JIRA_CONTRACT_TOKEN    the token (also accepts JIRA_CONTRACT_API_TOKEN from deploy/.env)
     JIRA_CONTRACT_EMAIL    the account's email, for Cloud
     JIRA_CONTRACT_PROJECT  a project the account may write to
 
@@ -53,7 +55,9 @@ SIGNING_KEY = "test-callback-key"
 PRACTICE_BASE = "http://platform-api:8000/practice-jira"
 PORTAL = "http://localhost:8080"
 MARKUP = "*bold* _it_ -gone- {code}x{code} [a link|https://evil.test] !img.png! h1. top"
-SANDBOX = os.environ.get("JIRA_CONTRACT_URL", "").strip()
+SANDBOX = (
+    os.environ.get("JIRA_CONTRACT_URL") or os.environ.get("JIRA_CONTRACT_BASE_URL", "")
+).strip()
 TIME_LIMIT = 10.0
 """Seconds a test that waits on a deadline or on two tries at once may take."""
 
@@ -100,10 +104,33 @@ async def target(request: pytest.FixtureRequest, db: Database) -> AsyncIterator[
     if name == "sandbox":
         if not SANDBOX:
             pytest.skip("JIRA_CONTRACT_URL is not set")
-        flavor: JiraFlavor = (
-            "cloud" if os.environ.get("JIRA_CONTRACT_FLAVOR") == "cloud" else "datacenter"
+        token = os.environ.get("JIRA_CONTRACT_TOKEN") or os.environ.get(
+            "JIRA_CONTRACT_API_TOKEN"
         )
-        token = os.environ["JIRA_CONTRACT_TOKEN"]
+        project = os.environ.get("JIRA_CONTRACT_PROJECT")
+        flavor_name = os.environ.get("JIRA_CONTRACT_FLAVOR") or os.environ.get(
+            "JIRA_CONTRACT_API_FLAVOR", "datacenter"
+        )
+        flavor_name = flavor_name.lower()
+        missing = []
+        if not token:
+            missing.append("JIRA_CONTRACT_TOKEN (or JIRA_CONTRACT_API_TOKEN)")
+        if not project:
+            missing.append("JIRA_CONTRACT_PROJECT")
+        if flavor_name == "cloud" and not os.environ.get("JIRA_CONTRACT_EMAIL"):
+            missing.append("JIRA_CONTRACT_EMAIL (required for Cloud)")
+        if flavor_name not in {"cloud", "datacenter"}:
+            pytest.fail("JIRA_CONTRACT_FLAVOR must be 'cloud' or 'datacenter'.")
+        if missing:
+            pytest.fail(
+                "Sandbox Jira tests need these settings: " + "; ".join(missing) + ". "
+                "Load deploy/.env with `uv run --env-file ../deploy/.env ...` or set them "
+                "in the current terminal."
+            )
+        flavor: JiraFlavor = (
+            "cloud" if flavor_name == "cloud" else "datacenter"
+        )
+        assert token is not None and project is not None
         auth = (
             JiraAuth.basic(os.environ["JIRA_CONTRACT_EMAIL"], token)
             if flavor == "cloud"
@@ -112,7 +139,7 @@ async def target(request: pytest.FixtureRequest, db: Database) -> AsyncIterator[
         async with httpx.AsyncClient(timeout=20) as client:
             jira = JiraRestAdapter(SANDBOX, flavor, auth, client, sleep=waits)
             yield Target(
-                name, flavor, os.environ["JIRA_CONTRACT_PROJECT"], jira, waits, client, SANDBOX
+                name, flavor, project, jira, waits, client, SANDBOX
             )
         return
     flavor = "cloud" if name == "practice-cloud" else "datacenter"
