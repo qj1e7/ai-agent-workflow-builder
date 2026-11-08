@@ -32,7 +32,8 @@ case "$*" in
     ;;
 esac
 FAKE
-printf '#!/bin/sh\nexit 0\n' >"$work/bin/sleep"
+# FAKE_SLEEP_REAL=1 makes each sleep last 5 real seconds, for the deadline case.
+printf '#!/bin/sh\n[ -z "${FAKE_SLEEP_REAL:-}" ] || exec /bin/sleep 5\nexit 0\n' >"$work/bin/sleep"
 chmod +x "$work/bin/az" "$work/bin/sleep"
 
 failures=0
@@ -42,10 +43,12 @@ expect() {
   label=$1
   want=$2
   shift 2
+  timeout=60
+  case ${1:-} in TIMEOUT=*) timeout=${1#TIMEOUT=}; shift ;; esac
   : >"$work/log"
   status=0
   env PATH="$work/bin:$PATH" FAKE_LOG="$work/log" "$@" \
-    sh "$runner" rg-wab-dev migrate 60 >"$work/out" 2>"$work/err" || status=$?
+    sh "$runner" rg-wab-dev migrate "$timeout" >"$work/out" 2>"$work/err" || status=$?
   if [ "$status" = "$want" ]; then
     echo "ok    $label: exit $status"
   else
@@ -65,6 +68,14 @@ if ! grep -q "migrate: could not read the status of execution exec-1" "$work/err
 fi
 if [ "$(grep -c "job start" "$work/log")" != 1 ]; then
   echo "FAIL  five failed polls in a row: the job was started more than once"
+  failures=$((failures + 1))
+fi
+
+# Every status check fails and each sleep takes 5 s. The 15 s deadline must end the run before
+# the fifth failed check (at 20 s).
+expect "failed polls past the deadline" 1 TIMEOUT=15 FAKE_POLL_FAILS=99 FAKE_SLEEP_REAL=1
+if ! grep -q "migrate: still unknown after 15s" "$work/err"; then
+  echo "FAIL  failed polls past the deadline: the run did not stop at the deadline"
   failures=$((failures + 1))
 fi
 

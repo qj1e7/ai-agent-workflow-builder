@@ -15,10 +15,16 @@ deadline=$(($(date +%s) + timeout))
 # 5 failed checks in a row. Starting the job is not retried, because a retry could start a second
 # execution.
 poll_failures=0
+status=unknown
 while :; do
-  if status=$(az containerapp job execution show --resource-group "$group" --name "$job" \
+  if [ "$(date +%s)" -ge "$deadline" ]; then
+    echo "$job: still $status after ${timeout}s" >&2
+    exit 1
+  fi
+  if out=$(az containerapp job execution show --resource-group "$group" --name "$job" \
     --job-execution-name "$execution" --query properties.status --output tsv); then
     poll_failures=0
+    status=$out
   else
     poll_failures=$((poll_failures + 1))
     if [ "$poll_failures" -ge 5 ]; then
@@ -39,9 +45,5 @@ while :; do
       exit 1
       ;;
   esac
-  if [ "$(date +%s)" -ge "$deadline" ]; then
-    echo "$job: still $status after ${timeout}s" >&2
-    exit 1
-  fi
   sleep 10
 done
