@@ -159,6 +159,11 @@ jobs:
           ../../scripts/guarded-apply.sh db-init -target='module.job["db-init"]' -target=module.postgres
           ../../scripts/run-job.sh "$(terraform output -raw resource_group_name)" db-init 600
 
+      - name: Migrate the database before the apps change
+        run: |
+          ../../scripts/guarded-apply.sh migrate -target='module.job["migrate"]'
+          ../../scripts/run-job.sh "$(terraform output -raw resource_group_name)" migrate 600
+
       # Until n8n has an owner, its setup page lets the first visitor become the owner, and only the
       # bootstrap job after this apply creates one. So n8n opens only once a bootstrap has succeeded
       # here. The targeted applies above leave n8n alone, so they need no value.
