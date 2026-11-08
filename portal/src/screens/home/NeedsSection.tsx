@@ -60,14 +60,16 @@ interface NeedsSectionProps {
   readonly whenNone: ReactNode
   /** No main button: another answer on the page has it. */
   readonly quiet?: boolean
+  /** The id a link to this section points at. */
+  readonly anchor?: string
 }
 
 /** Needs you, drawn the same on Home and on Workflows. `whenNone` is what shows with nothing in it, or null to show nothing. */
-export function NeedsSection({ needs, now, arrival, more, whenNone, quiet = false }: NeedsSectionProps) {
+export function NeedsSection({ needs, now, arrival, more, whenNone, quiet = false, anchor }: NeedsSectionProps) {
   const headingId = useId()
   if (needs.shown.length === 0 && whenNone === null) return null
   return (
-    <section className={cx(styles['section'], arrival.page && styles['arrive'])} aria-labelledby={headingId}>
+    <section id={anchor} className={cx(styles['section'], arrival.page && styles['arrive'])} aria-labelledby={headingId}>
       <h2 id={headingId}>
         Needs you <Count value={needs.total} />
       </h2>
