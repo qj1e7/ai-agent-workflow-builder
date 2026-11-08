@@ -1,5 +1,6 @@
 import { useId, useState, type ReactNode } from 'react'
-import type { CantReply, OfflineReply, PartReply, PlannerReply, SetupCardReply, WatchlistReply } from '../../api/types'
+import { Link } from 'react-router'
+import type { CantReply, OfflineReply, PartReply, PlannerReply, QuestionReply, SetupCardReply, WatchlistReply } from '../../api/types'
 import { useCapabilities } from '../../api/plannerQueries'
 import { Button, ButtonLink } from '../../ui/Button'
 import { AskTheTeam } from './AskTheTeam'
@@ -234,6 +235,31 @@ export function OfflineAnswer({ reply }: { reply: OfflineReply }) {
   )
 }
 
+/** Where each section of a question answer lives. */
+const LOOKED_AT = {
+  watchlist: { label: 'Software', to: '/software' },
+  workflows: { label: 'Workflows', to: '/workflows' },
+  // The Workflows page leads with Needs you, the same place the Home tab count leads.
+  needs_you: { label: 'Needs you', to: '/workflows' },
+} as const
+
+export const NEEDS_YOU_ANCHOR = 'needs-you'
+
+/** The sections a question answer used, each a link to the screen it was read from. */
+export function LookedAt({ sections }: { sections: QuestionReply['looked_at'] }) {
+  if (sections.length === 0) return null
+  return (
+    <p className={styles['lookedAt']}>
+      <span>Looked at</span>
+      {sections.map((section) => (
+        <Link key={section} to={LOOKED_AT[section].to}>
+          {LOOKED_AT[section].label}
+        </Link>
+      ))}
+    </p>
+  )
+}
+
 function Dismissable({ children }: { children: (never: () => void) => ReactNode }) {
   const [gone, setGone] = useState(false)
   return gone ? <p className="muted">All right, never mind.</p> : children(() => setGone(true))
@@ -265,6 +291,8 @@ export function Answer({ reply, typed, page }: AnswerProps) {
       return <IdeasAnswer page={page} />
     case 'offline':
       return <OfflineAnswer reply={reply} />
+    case 'question':
+      return <LookedAt sections={reply.looked_at} />
     case 'check_workflows':
     case 'why_stopped':
     case 'needs_me':

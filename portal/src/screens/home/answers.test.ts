@@ -3,6 +3,7 @@ import cant from '../../../../contracts/fixtures/planner/answer.cant.json'
 import capabilities from '../../../../contracts/fixtures/planner/capabilities.json'
 import capabilitiesTrouble from '../../../../contracts/fixtures/planner/capabilities.trouble.json'
 import part from '../../../../contracts/fixtures/planner/answer.part.json'
+import question from '../../../../contracts/fixtures/planner/answer.question.json'
 import refused from '../../../../contracts/fixtures/planner/answer.refused.json'
 import setupCard from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import watchlist from '../../../../contracts/fixtures/planner/answer.watchlist.json'
@@ -81,6 +82,10 @@ describe('the sentence for each answer', () => {
     expect(sayOf(answers['cant']!)).toBe('I can’t do all of that, but I can set up something close.')
     expect(sayOf({ ...CANT, alternative: null })).toBe('I can’t do that yet.')
     expect(sayOf(answers['refused']!)).toBe('I can’t set that up. Anything that changes data waits for a yes, every time.')
+  })
+
+  it('says a question answer in the Planner’s own words, not in fixed text', () => {
+    expect(sayOf(question as PlannerReply)).toBe('Three: LangGraph, Redis and n8n.')
   })
 
   it('leaves the three state answers to the pages’ own functions', () => {

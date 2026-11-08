@@ -5,11 +5,12 @@ import { describe, expect, it } from 'vitest'
 import cant from '../../../../contracts/fixtures/planner/answer.cant.json'
 import offline from '../../../../contracts/fixtures/planner/answer.offline.json'
 import part from '../../../../contracts/fixtures/planner/answer.part.json'
+import question from '../../../../contracts/fixtures/planner/answer.question.json'
 import refused from '../../../../contracts/fixtures/planner/answer.refused.json'
 import setupCard from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { CantReply, OfflineReply, PartReply, PlannerReply, SetupCardReply } from '../../api/types'
+import type { CantReply, OfflineReply, PartReply, PlannerReply, QuestionReply, SetupCardReply } from '../../api/types'
 import { Answer, type Page } from './AnswerCards'
 
 const PAGE: Page = { ask: () => undefined, edit: () => undefined }
@@ -101,5 +102,37 @@ describe('a refusal', () => {
 describe('the offline answer', () => {
   it('offers Connect a model and the watchlist, and nothing else to click', () => {
     expect(buttons(draw(offline as OfflineReply))).toEqual(['Open the Software watchlist', 'Connect a model'])
+  })
+})
+
+describe('the answer to a question about the person’s own data', () => {
+  const links = (html: string) => [...html.matchAll(/<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g)].map((m) => [m[1], text(m[2] ?? '')])
+
+  it('shows the sections it looked at as links, and nothing else to click', () => {
+    const html = draw(question as QuestionReply)
+    expect(text(html)).toBe('Looked at Software')
+    expect(links(html)).toEqual([['/software', 'Software']])
+    expect(buttons(html)).toEqual(['Software'])
+  })
+
+  it('links each section to the screen it was read from, Needs you to the Workflows page, where Needs you leads', () => {
+    const html = draw({ ...(question as QuestionReply), looked_at: ['watchlist', 'workflows', 'needs_you'] })
+    expect(text(html)).toBe('Looked at Software Workflows Needs you')
+    expect(links(html)).toEqual([
+      ['/software', 'Software'],
+      ['/workflows', 'Workflows'],
+      ['/workflows', 'Needs you'],
+    ])
+  })
+
+  it('has no Looked at line for the fixed fallback, which looked at nothing', () => {
+    expect(draw({ ...(question as QuestionReply), looked_at: [] })).toBe('')
+  })
+
+  it('draws plain links, so the keyboard reaches each one, with no tab stop removed and no motion', () => {
+    const html = draw({ ...(question as QuestionReply), looked_at: ['watchlist', 'workflows', 'needs_you'] })
+    expect(html).not.toContain('tabindex')
+    expect(html).not.toContain('aria-hidden')
+    expect(html).not.toContain('animation')
   })
 })

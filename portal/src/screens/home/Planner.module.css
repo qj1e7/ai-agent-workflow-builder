@@ -476,3 +476,19 @@
 .altHeading {
   font-size: 1.05rem;
 }
+
+.lookedAt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.lookedAt a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+}

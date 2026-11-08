@@ -3295,6 +3295,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     [/^(what needs me|what do i need to do|what('s| is) (waiting|for me|waiting for me|my to-?do)|(is )?(there )?anything (to approve|waiting|for me|i need to do)( for me)?|my (to-?do|approvals?)|what needs my (attention|yes))\s*[?.!]*$/i, () => ({ kind: 'mine' })],
     [/^(set up )?another workflow\b|^(a )?new workflow\b|^what else( can i (do|ask( for)?))?\s*\??$|^(any )?starting points?\s*\??$|^(any )?ideas?\s*\??$/i, () => ({ kind: 'starts' })],
     [/^(check|how are|what('s| is) the (status|state) of|show( me)?|see) (my |the |our |all )?workflows?\b|^(is|are) .*\b(running|working|on|stopped|paused)\s*\?*$/i, () => ({ kind: 'check' })],
+    [/^(help me )?(check )?(how many|which|what)\b.*\b(software|tools?|watchlist)\b/i, () => ({ kind: 'data', looked: ['watchlist'] })],
   ];
   const aboutWorkflows = (t) => { const hit = ABOUT.find(([re]) => re.test(t)); return hit ? hit[1](t) : null; };
   /* A workflow's state in the spec's words (15.9), as a pill tone and a word. */
@@ -3355,6 +3356,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
     </div>`;
   }
   const mineSay = () => { const n = needs().length; return n ? `${n === 1 ? '1 thing needs' : `${n} things need`} you.` : 'Nothing needs you right now.'; };
+  /* A question about her own data (ADR 0042). In the built app the model writes the sentence from a facts snapshot, and
+     the platform names the sections it used. Here the sentence is fixed and the count is read from the same list the
+     Software page shows. The Looked at line links each section to its screen. */
+  const dataSay = () => { const n = watchRows().concat(S.added.map((a, i) => ({ key: `add${i}` }))).filter((r) => !S.removed.includes(r.key)).length; return n ? `There ${n === 1 ? 'is 1 software' : `are ${n} software`} on the Software watchlist.` : 'Nothing is on the Software watchlist yet.'; };
+  const LOOKED = { watchlist: ['Software', 'software'], workflows: ['Workflows', 'workflows'], needs_you: ['Needs you', 'workflows'] };
+  const dataCard = (m) => `<p class="looked small muted">Looked at: ${m.card.looked.map((k) => `<button class="linkbtn" data-act="go" data-arg="${LOOKED[k][1]}">${LOOKED[k][0]}</button>`).join(', ')}</p>`;
   const mineCard = () => (needs().length ? needsStrip(needs(), 99, 'Planner answers about your workflows') : '');
   const startsCard = () => `<div class="chips starts" role="group" aria-label="Starting points" data-unbuilt="Planner answers about your workflows">${starts().map((t) => `<button class="chip" data-act="say" data-arg="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
 
@@ -3376,10 +3383,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
     why: { say: whySay, card: (m) => whyCard(m), mood: (a) => (stoppedNow(a.id) ? 'sorry' : 'idle') },
     mine: { say: mineSay, card: () => mineCard() },
     starts: { say: () => 'Here are three places to start. Pick one, or tell me something else.', card: () => startsCard() },
+    data: { say: dataSay, card: (m) => dataCard(m) },
   };
   const cardHTML = (m) => (ANSWERS[m.card.kind].card ? ANSWERS[m.card.kind].card(m) : '');
   /* The answers read from platform state, whose sentence is re-read on every redraw. */
-  const LIVE_KINDS = new Set(['check', 'why', 'mine']);
+  const LIVE_KINDS = new Set(['check', 'why', 'mine', 'data']);
 
   /* ---------- Drafts ----------
      The chat is not the record. The set-up card still being filled in edits the one live draft in S.wiz. A new request

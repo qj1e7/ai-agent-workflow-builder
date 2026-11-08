@@ -11,7 +11,7 @@ import { IconClock } from '../../ui/icons'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
 import { AskTheTeam } from './AskTheTeam'
 import { restoreDraft } from './card'
-import type { Page } from './AnswerCards'
+import { NEEDS_YOU_ANCHOR, type Page } from './AnswerCards'
 import { CapabilityLists } from './CapabilityLists'
 import { approverLine, comingUpOf, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, stateLine, suggestionsOf, type Needs, type Next } from './home'
 import { NeedsSection, useArrival } from './NeedsSection'
@@ -340,6 +340,7 @@ function NeedsHere({ needs, now, arrival, quiet = false }: { needs: Needs; now: 
       now={now}
       arrival={arrival}
       quiet={quiet}
+      anchor={NEEDS_YOU_ANCHOR}
       more={
         left > 0 ? (
           <p className={homeStyles['more']}>
