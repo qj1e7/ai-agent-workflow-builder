@@ -1,5 +1,6 @@
 {
   "text": null,
   "intent": "why_stopped",
-  "use_case_id": "uc_01JB8"
+  "use_case_id": "uc_01JB8",
+  "previous": null
 }

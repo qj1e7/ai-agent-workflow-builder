@@ -25,6 +25,7 @@ from platform_api.orchestration.agents import (
     HttpAgentRuntime,
     LibraryCard,
     PlannerFacts,
+    PreviousTurn,
     RowKind,
 )
 from platform_api.orchestration.service import ActiveModel
@@ -86,13 +87,15 @@ class PlannerAnswers:
         self._agents = agents
 
     async def answer(
-        self, task: str, facts: PlannerFacts | None = None
+        self, task: str, facts: PlannerFacts | None = None, previous: PreviousTurn | None = None
     ) -> AnswerResult | NoModel | RuntimeDown:
         async with self._db.transaction("orchestration") as uow:
             model = await self._models.access(uow)
         if model is None:
             return NoModel()
-        reply = await self._agents.answer(AnswerRequest(task=task, model=model, facts=facts))
+        reply = await self._agents.answer(
+            AnswerRequest(task=task, model=model, facts=facts, previous=previous)
+        )
         if isinstance(reply, AgentUnavailable | AgentRejected):
             return RuntimeDown(reply.detail)
         return reply

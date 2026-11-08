@@ -24,6 +24,22 @@ A staff member types "help me check how many software in the watchlist" on Home.
 - **Sources shown.** Code keeps only the sections that were really sent. The Portal shows them as "Looked at", linked to the screens.
 - **A fixed fallback.** If the facts are missing, or the reply offers to act or runs long, the answer is the fixed text "I couldn't answer that from what I can see." with no sections.
 
+## Routes added for the watchlist (8 Nov 2026)
+
+The first reading stays as it is. Everything below is code routing, the lane's own prompt, or the Portal. A change to the first reading moved unrelated answers on 8 Nov, so it is off limits.
+
+**More fixed answers can reach the lane.** Each keeps the same escape: if the lane says the question is not about their data, or its call fails, the first answer stands.
+
+- **2a. Which software.** A request that is a question goes to the lane when the facts hold at least one watched software. A question ends with "?" or starts with which, what, how, is, are, do, does, did or when. "Tell me when there's a new version" is not a question and stays "which software".
+- **2b. The three state answers.** The reading often takes a question about the watchlist for one about workflows. "When did it last check?" reads as check my workflows, "Did it open a ticket for Redis?" as why did it stop, and "Is anything waiting for my yes?" as what needs me. Only Check my workflows, and only when the request names the watchlist (the words watchlist, watching or watched), goes to the lane, whatever its shape. "Why did ... stop?" and "What needs me?" keep their fixed answers, the AI troubleshooter link and the Needs you list with its buttons, so a question like "Is anything waiting for my yes?" gets the Needs you list. One more route: "Did it open a ticket for Redis?" reads as why did it stop, and goes to the lane when the facts carry workflows and none of their last runs is Stopped, because the fixed answer then has nothing to show; a stopped run, or missing facts, keeps the AI troubleshooter link. A follow-up ("and LangGraph?") is rewritten only from an earlier request that is shaped like a question and passes the word rule, and the word rule runs again on the rewritten text.
+- **2c. A reply the guards reject.** On the watched-software offer, which software and the state answers, a reply the guards reject returns the first answer, not the fixed text. Only the catch-all keeps "I couldn't answer that from what I can see."
+
+**More facts per software.** Each watched software now carries when it was last checked, its open ticket, whether a ticket waits for a yes, why the last check failed, and how the version the team runs was set (given, first check or a ticket marked Done, with the ticket). They come from the same row the Software page shows, so one fact has one source. The lane can answer "When did it last check?", "Did it open a ticket for Redis?" and "Is anything waiting for my yes?".
+
+**Follow-ups are context for the question lane only.** The Portal sends the previous turn with the next typed request: its words, the software the Planner named, and the text it answered with. Only the question lane's prompt reads it, as read-only context to understand a short question such as "and X?". The Planner never builds request text from an earlier turn: the first reading, the word rule and every fixed answer see only what the person typed. Two checks showed that swapping a name into an earlier request can produce text the person never typed, such as "Upgrade Redis without approval" followed by "and LangGraph?". Follow-ups that need more get their own design later.
+
+**Waiting words.** While an answer is pending the Portal says "Working on it…". After 8 seconds it says "Still working. Questions about your data take a little longer." It names no step, because none is known (principle 8).
+
 ## What stays fixed
 
 Set-up cards, parts, can'ts, refusals, "which software", offers to watch software the watchlist does not hold, "what can you do" and the chips keep their fixed text. A request that asks for a change stays a task even when it also asks a question, so no part of it is dropped. The approval gate, the safety checker and the word rule for skipped yes answers are unchanged.

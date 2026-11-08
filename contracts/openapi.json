@@ -1247,6 +1247,17 @@
             ],
             "description": "A chip the person tapped. It never asks the model. Send this or text."
           },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreviousIn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With text: the turn before it. Context for the question lane only: the Planner never builds request text from it."
+          },
           "text": {
             "anyOf": [
               {
@@ -5847,6 +5858,47 @@
           "tickets"
         ],
         "title": "PracticeTickets",
+        "type": "object"
+      },
+      "PreviousIn": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "anyOf": [
+              {
+                "maxLength": 600,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The text of the Planner's answer to it, when it had one.",
+            "title": "Answer"
+          },
+          "request": {
+            "maxLength": 2000,
+            "title": "Request",
+            "type": "string"
+          },
+          "software": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The software the Planner named in its answer to it.",
+            "title": "Software"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "title": "PreviousIn",
         "type": "object"
       },
       "ProblemReason": {

@@ -66,7 +66,7 @@ from agent_runtime.planner import (
     visible_words,
     whole_word_of,
 )
-from agent_runtime.questions import answer_question, question_messages
+from agent_runtime.questions import answer_question, is_fallback, question_messages
 from agent_runtime.reading import (
     SAID_LIMIT,
     SkipRead,
@@ -528,6 +528,9 @@ class AskTheQuestionLane:
     question lane decides: if it is not, `otherwise` stands."""
 
     otherwise: PlannerAnswer
+    first_on_reject: bool = False
+    """True for a route whose first answer is a better stand-in than the fixed text when the
+    guards reject the reply: the watchlist, which software, and check workflows routes."""
 
 
 def _watched(answer: WatchlistAnswer, request: AnswerRequest) -> bool:
@@ -536,16 +539,59 @@ def _watched(answer: WatchlistAnswer, request: AnswerRequest) -> bool:
     return bool(name) and any(w.name.strip().casefold() == name for w in held or [])
 
 
+QUESTION_SHAPE: Final = re.compile(
+    r"^\s*(?:which|what|how|is|are|do|does|did|when)\b|\?\s*$", re.IGNORECASE
+)
+WATCHLIST_WORDS: Final = re.compile(r"\b(?:watchlist|watching|watched)\b", re.IGNORECASE)
+
+
+def _watched_names(request: AnswerRequest) -> list[str]:
+    held = request.facts.watchlist if request.facts is not None else None
+    return [name for w in held or [] if (name := w.name.strip())]
+
+
 def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQuestionLane:
-    """The fixed answer for a reading, or the question lane when that answer is the catch-all or
-    a watchlist offer for software the watchlist already holds. Every other answer stands."""
+    """The fixed answer for a reading, or the question lane when that answer is the catch-all, a
+    watchlist offer for software the watchlist already holds, which software for a question
+    while the watchlist holds some, or check workflows for a request that names the watchlist.
+    Every other answer stands. Only code routes: the reading itself is never changed."""
     answer = answer_of(read, request.task)
-    asks = isinstance(answer, AbilitiesAnswer) or (
-        isinstance(answer, WatchlistAnswer) and _watched(answer, request)
-    )
-    if not asks or question_messages(request) is None:
+    if question_messages(request) is None:
         return answer
-    return AskTheQuestionLane(otherwise=answer)
+    text = visible_words(request.task)
+    if isinstance(answer, AbilitiesAnswer) or (
+        isinstance(answer, WatchlistAnswer) and _watched(answer, request)
+    ):
+        return AskTheQuestionLane(
+            otherwise=answer, first_on_reject=not isinstance(answer, AbilitiesAnswer)
+        )
+    if (
+        isinstance(answer, WhichSoftwareAnswer)
+        and QUESTION_SHAPE.search(text)
+        and bool(_watched_names(request))
+    ):
+        return AskTheQuestionLane(otherwise=answer, first_on_reject=True)
+    if _state_answer_about_the_watchlist(answer, text, request):
+        return AskTheQuestionLane(otherwise=answer, first_on_reject=True)
+    if isinstance(answer, WhyStoppedAnswer) and _nothing_stopped(request):
+        return AskTheQuestionLane(otherwise=answer, first_on_reject=True)
+    return answer
+
+
+def _nothing_stopped(request: AnswerRequest) -> bool:
+    """The workflows section is there and no workflow's last run is Stopped, so the fixed answer
+    has nothing to show. Missing facts keep it."""
+    workflows = None if request.facts is None else request.facts.workflows
+    return workflows is not None and all(w.last_run != "Stopped" for w in workflows)
+
+
+def _state_answer_about_the_watchlist(
+    answer: PlannerAnswer, text: str, request: AnswerRequest
+) -> bool:
+    """Check my workflows for a request that names the watchlist goes to the lane, whatever its
+    shape. The other state answers keep their fixed answers: the Needs you list with its buttons,
+    and the AI troubleshooter link. The first answer stands if the lane says no."""
+    return isinstance(answer, CheckWorkflowsAnswer) and bool(WATCHLIST_WORDS.search(text))
 
 
 def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
@@ -567,6 +613,8 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     asked = answer_question(request, chat_for)
     # The lane may improve an answer, never make it worse: when its call fails, the first stands.
     if asked is None or isinstance(asked, ModelProblem):
+        return Answered(answer=decided.otherwise)
+    if decided.first_on_reject and is_fallback(asked):
         return Answered(answer=decided.otherwise)
     return Answered(answer=asked)
 

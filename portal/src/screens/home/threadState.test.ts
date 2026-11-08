@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PlannerReply } from '../../api/types'
-import { EMPTY, isThinking, threadReducer } from './threadState'
+import { EMPTY, isThinking, previousOf, threadReducer } from './threadState'
 
 const REPLY: PlannerReply = { answer: 'abilities' }
 
@@ -29,5 +29,19 @@ describe('the thread', () => {
     const two = threadReducer(threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'a' }), { type: 'answered', reply: REPLY, typed: 'a' }), { type: 'sent', text: 'b' })
     expect(new Set(two.messages.map((m) => m.id)).size).toBe(4)
     expect(threadReducer(two, { type: 'new_chat' })).toEqual(EMPTY)
+  })
+
+  it('hands the next typed request the turn before it: the words, the software it named, and the text it answered with', () => {
+    const ask = (reply: PlannerReply, typed: string) => threadReducer(threadReducer(EMPTY, { type: 'sent', text: typed }), { type: 'answered', reply, typed })
+    expect(previousOf(EMPTY)).toBeNull()
+    const watch = ask({ answer: 'watchlist', word: 'version', software: 'FastAPI', already_listed: null, also: null }, 'Is there a newer FastAPI?')
+    expect(previousOf(watch)).toEqual({ request: 'Is there a newer FastAPI?', software: 'FastAPI', answer: null })
+    const said = ask({ answer: 'question', text: 'LangGraph is at 1.2.14.', looked_at: ['watchlist'] }, 'What is the newest version of LangGraph?')
+    expect(previousOf(said)).toEqual({ request: 'What is the newest version of LangGraph?', software: null, answer: 'LangGraph is at 1.2.14.' })
+    expect(previousOf(ask({ answer: 'offline', why: 'trouble', message: 'x', starters: [] }, 'x'))).toBeNull()
+  })
+
+  it('does not hand over a request that has no answer yet', () => {
+    expect(previousOf(threadReducer(EMPTY, { type: 'sent', text: 'a' }))).toBeNull()
   })
 })

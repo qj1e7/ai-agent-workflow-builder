@@ -43,6 +43,7 @@ from platform_api.orchestration import (
     ConnectionState,
     NoModel,
     PlannerFacts,
+    PreviousTurn,
     RuntimeDown,
 )
 from platform_api.shared import Principal
@@ -98,7 +99,12 @@ def check(
 
 
 class _Answers:
-    async def answer(self, task: str, facts: PlannerFacts | None = None) -> NoModel:
+    async def answer(
+        self,
+        task: str,
+        facts: PlannerFacts | None = None,
+        previous: PreviousTurn | None = None,
+    ) -> NoModel:
         return NoModel()
 
     async def check_part(self, kind: str, text: str) -> CheckPartResult | RuntimeDown:

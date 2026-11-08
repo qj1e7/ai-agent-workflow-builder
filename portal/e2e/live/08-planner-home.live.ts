@@ -355,7 +355,7 @@ test.describe('with the AI model on', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(GREETING)
     const chips = page.getByRole('group', { name: 'Suggestions' }).getByRole('button')
     await expect(chips).toHaveCount(3)
-    await expect(chips).toHaveText(['How many software are we watching?', 'Watch another software for new versions', 'What can you do?'])
+    await expect(chips).toHaveText(['Which software has a newer version?', 'Watch another software for new versions', 'What can you do?'])
     const total = Number((await main(page).getByRole('heading', { level: 2, name: /^Needs you/ }).innerText()).replace(/\D/g, ''))
     await expect(page.getByRole('navigation', { name: 'Main' }).filter({ visible: true }).getByRole('link', { name: new RegExp(`^Workflows, ${total} need you$`) })).toBeVisible()
 
@@ -390,13 +390,13 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
-  test('the chip How many software are we watching? is answered from the watchlist, with its Looked at line', async ({ browser, backend }) => {
+  test('the chip Which software has a newer version? is answered from the watchlist, with its Looked at line', async ({ browser, backend }) => {
     await backend.freshWatchlist('alice', [REDIS])
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     await page.goto('/')
-    await page.getByRole('group', { name: 'Suggestions' }).getByRole('button', { name: 'How many software are we watching?' }).click()
-    await expect(thread(page)).toContainText('Your watchlist holds 1 software.')
+    await page.getByRole('group', { name: 'Suggestions' }).getByRole('button', { name: 'Which software has a newer version?' }).click()
+    await expect(thread(page)).toContainText('Nothing on your watchlist has a newer version.')
     await expect(thread(page).getByText('Looked at')).toBeVisible()
     await expect(thread(page).getByRole('link', { name: 'Software', exact: true })).toBeVisible()
     await context.close()
@@ -410,7 +410,7 @@ test.describe('with the AI model on', () => {
     await expect(box(page)).toBeVisible()
     const walk = await walkTabs(page)
     const labels = walk.stops.map((stop) => stop.label)
-    for (const name of ['Describe a task for the Planner', 'Send to the Planner', 'How many software are we watching?']) {
+    for (const name of ['Describe a task for the Planner', 'Send to the Planner', 'Which software has a newer version?']) {
       expect(labels.some((label) => label.includes(name)), `Tab reaches ${name}; stops: ${labels.join(', ')}`).toBe(true)
     }
     expect(walk.unreached, 'controls Tab never reached').toEqual([])

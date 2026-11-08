@@ -45,6 +45,7 @@ from platform_api.orchestration import (
     PartCantDo,
     PlannerAnswer,
     PlannerFacts,
+    PreviousTurn,
     QuestionAnswer,
     RefusedAnswer,
     RowKind,
@@ -69,6 +70,16 @@ type CapabilityState = Literal["ready", "needs_setup", "down", "planned", "unsup
 type Intent = Literal["check_workflows", "needs_me", "abilities", "setup_ideas", "why_stopped"]
 
 
+class PreviousIn(WireIn):
+    request: Annotated[str, StringConstraints(max_length=2000)]
+    software: Annotated[str, StringConstraints(max_length=80)] | None = Field(
+        default=None, description="The software the Planner named in its answer to it."
+    )
+    answer: Annotated[str, StringConstraints(max_length=600)] | None = Field(
+        default=None, description="The text of the Planner's answer to it, when it had one."
+    )
+
+
 class AnswerIn(WireIn):
     text: (
         Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
@@ -86,11 +97,18 @@ class AnswerIn(WireIn):
         max_length=100,
         description="With the why_stopped intent, the workflow the person asks about.",
     )
+    previous: PreviousIn | None = Field(
+        default=None,
+        description="With text: the turn before it. Context for the question lane only: the "
+        "Planner never builds request text from it.",
+    )
 
     @model_validator(mode="after")
     def _one_of_text_or_intent(self) -> Self:
         if (self.text is None) == (self.intent is None):
             raise ValueError("Send the text the person typed, or the intent they tapped, not both")
+        if self.previous is not None and self.text is None:
+            raise ValueError("The previous turn goes with typed text only")
         return self
 
 
@@ -287,7 +305,7 @@ class CapabilitiesView(WireModel):
 
 class Answering(Protocol):
     async def answer(
-        self, task: str, facts: PlannerFacts | None = None
+        self, task: str, facts: PlannerFacts | None = None, previous: PreviousTurn | None = None
     ) -> AnswerResult | NoModel | RuntimeDown: ...
 
     async def check_part(self, kind: RowKind, text: str) -> CheckPartResult | RuntimeDown: ...
@@ -362,7 +380,7 @@ class PlannerFront:
 
     async def answer(self, body: AnswerIn, viewer: Principal) -> PlannerReply | NoSuchWorkflow:
         if body.text is not None:
-            return await self._typed(body.text, viewer)
+            return await self._typed(body.text, viewer, body.previous)
         assert body.intent is not None
         return await self._intent(body.intent, body.use_case_id)
 
@@ -386,10 +404,13 @@ class PlannerFront:
                     return NoSuchWorkflow()
                 return WhyStoppedReply(use_case_id=use_case_id)
 
-    async def _typed(self, text: str, viewer: Principal) -> PlannerReply:
+    async def _typed(
+        self, text: str, viewer: Principal, previous: PreviousIn | None = None
+    ) -> PlannerReply:
+        earlier = None if previous is None else PreviousTurn(**previous.model_dump())
         try:
             async with asyncio.timeout(ANSWER_LIMIT_SECONDS):
-                result = await self._answers.answer(text, await self._facts.read(viewer))
+                result = await self._answers.answer(text, await self._facts.read(viewer), earlier)
         except TimeoutError:
             log.warning("The Planner's answer took longer than %g seconds", ANSWER_LIMIT_SECONDS)
             return offline("too_slow")

@@ -426,6 +426,18 @@ class WatchedFact(WireModel):
     our_version: str | None = Field(max_length=40)
     newest_version: str | None = Field(max_length=NEWEST_VERSION_LIMIT)
     state: str = Field(max_length=40)
+    checked_at: datetime | None = None
+    open_ticket: str | None = Field(default=None, max_length=40)
+    awaiting_approval: bool = False
+    problem: str | None = Field(default=None, max_length=200)
+    our_version_source: Literal["given", "first_check", "ticket_done"] | None = None
+    our_version_ticket: str | None = Field(default=None, max_length=40)
+
+    @field_validator("problem", mode="before")
+    @classmethod
+    def _cut_a_long_problem(cls, value: object) -> object:
+        """A GitHub error can run long. It is cut, so one odd message does not drop the section."""
+        return value[:200] if isinstance(value, str) else value
 
     @field_validator("newest_version", mode="before")
     @classmethod
@@ -458,10 +470,17 @@ class PlannerFacts(WireModel):
     needs_you: NeedsYouFact | None = None
 
 
+class PreviousTurn(WireModel):
+    request: str = Field(max_length=2000)
+    software: str | None = Field(default=None, max_length=80)
+    answer: str | None = Field(default=None, max_length=600)
+
+
 class AnswerRequest(WireModel):
     task: str
     model: ModelAccess
     facts: PlannerFacts | None = None
+    previous: PreviousTurn | None = None
 
 
 type CantNeed = Literal["new_tool", "new_system"]

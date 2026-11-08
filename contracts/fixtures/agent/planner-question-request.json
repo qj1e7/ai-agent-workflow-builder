@@ -6,6 +6,11 @@
     "model": "claude-sonnet-5-5",
     "api_key": "example-key-not-a-secret"
   },
+  "previous": {
+    "request": "What is the newest version of LangGraph?",
+    "software": null,
+    "answer": null
+  },
   "facts": {
     "watchlist": [
       {
@@ -13,21 +18,39 @@
         "repo": "langchain-ai/langgraph",
         "our_version": "1.2.14",
         "newest_version": "1.2.16",
-        "state": "New version"
+        "state": "New version",
+        "checked_at": null,
+        "open_ticket": null,
+        "awaiting_approval": false,
+        "problem": null,
+        "our_version_source": null,
+        "our_version_ticket": null
       },
       {
         "name": "Redis",
         "repo": "redis/redis",
         "our_version": "8.0.2",
         "newest_version": "8.0.2",
-        "state": "Up to date"
+        "state": "Ticket open",
+        "checked_at": "2026-11-08T02:00:00Z",
+        "open_ticket": "MOCK-142",
+        "awaiting_approval": false,
+        "problem": null,
+        "our_version_source": "ticket_done",
+        "our_version_ticket": "MOCK-98"
       },
       {
         "name": "n8n",
         "repo": "n8n-io/n8n",
         "our_version": null,
         "newest_version": "2.42.6",
-        "state": "Not checked yet"
+        "state": "Not checked yet",
+        "checked_at": null,
+        "open_ticket": null,
+        "awaiting_approval": false,
+        "problem": null,
+        "our_version_source": null,
+        "our_version_ticket": null
       }
     ],
     "workflows": null,

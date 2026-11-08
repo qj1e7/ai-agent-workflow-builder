@@ -35,6 +35,7 @@ from platform_api.orchestration import (
     PartCantDo,
     PartFits,
     PlannerFacts,
+    PreviousTurn,
     QuestionAnswer,
     RefusedAnswer,
     RowKind,
@@ -213,13 +214,15 @@ class FakeAnswers:
     wait: float = 0.0
     asked: list[str] = field(default_factory=list[str])
     facts: list[PlannerFacts | None] = field(default_factory=list[PlannerFacts | None])
+    previous: list[PreviousTurn | None] = field(default_factory=list[PreviousTurn | None])
     checked: list[tuple[str, str]] = field(default_factory=list[tuple[str, str]])
 
     async def answer(
-        self, task: str, facts: PlannerFacts | None = None
+        self, task: str, facts: PlannerFacts | None = None, previous: PreviousTurn | None = None
     ) -> AnswerResult | NoModel | RuntimeDown:
         self.asked.append(task)
         self.facts.append(facts)
+        self.previous.append(previous)
         await asyncio.sleep(self.wait)
         return self.result
 
@@ -472,11 +475,41 @@ async def test_the_runtime_gets_the_facts_the_screens_show_for_the_signed_in_per
         row["newest_version"],
     )
     assert fact.state == STATUS_WORDS[row["status"]]
+    assert fact.checked_at == (
+        None if row["checked_at"] is None else datetime.fromisoformat(row["checked_at"])
+    )
+    assert (fact.open_ticket, fact.problem) == (row["open_ticket"], row["problem"])
+    assert fact.awaiting_approval is (row["approval_id"] is not None)
+    source = row["our_version_source"]
+    assert fact.our_version_source == (None if source is None else source["kind"])
+    assert fact.our_version_ticket == (None if source is None else source["ticket"])
     assert facts.needs_you is not None and facts.needs_you.total == 4
     assert [u.name for u in (await front.builder.list_use_cases()).use_cases] == [
         w.name for w in facts.workflows or []
     ]
     assert [v.user_id for v in front.home.viewers] == ["alice"]
+
+
+async def test_a_follow_up_passes_the_previous_turn_on_and_changes_nothing_else(front: Front):
+    front.answers.result = answered(WhichSoftwareAnswer(word="version"))
+    previous = {
+        "request": "What is the newest version of LangGraph?",
+        "software": "LangGraph",
+        "answer": "1.2.16.",
+    }
+    r = await front.client.post(
+        ANSWER, json={"text": "and Redis?", "previous": previous}, headers=ALICE
+    )
+    assert r.status_code == 200, r.text
+    assert r.json() == {"answer": "which_software", "word": "version"}
+    (sent,) = front.answers.previous
+    assert sent is not None and sent.model_dump() == previous
+
+
+async def test_the_previous_turn_goes_with_typed_text_only(front: Front):
+    body = {"intent": "abilities", "previous": {"request": "x"}}
+    r = await front.client.post(ANSWER, json=body, headers=ALICE)
+    assert r.status_code == 422
 
 
 async def test_a_section_that_cannot_be_read_is_left_out_not_guessed(front: Front):

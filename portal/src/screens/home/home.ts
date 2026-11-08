@@ -78,9 +78,9 @@ export interface Suggestion {
   readonly ask: PlannerAnswerIn
 }
 
-/** What Home offers once software is on the watchlist. The question lane answers the first and third, and “Watch another software ...” gets the watchlist answer. */
+/** What Home offers once software is on the watchlist. The question lane answers the first, and “Watch another software ...” gets the watchlist answer. */
 const WATCHED_CHIPS: readonly Suggestion[] = [
-  { label: 'How many software are we watching?', ask: { text: 'How many software are we watching?' } },
+  { label: 'Which software has a newer version?', ask: { text: 'Which software has a newer version?' } },
   { label: 'Watch another software for new versions', ask: { text: 'Watch another software for new versions' } },
   { label: 'What can you do?', ask: { text: 'What can you do?' } },
 ]

@@ -549,20 +549,32 @@ def reading(task: str) -> dict[str, Any]:
 
 
 COUNT_QUESTION = re.compile(r"\bhow many\b.*\b(software|watch\w*)\b", re.I)
+NEWER_QUESTION = re.compile(r"\bwhich software\b.*\bnewer version\b", re.I)
 
 
 def question_reply(text: str) -> dict[str, Any]:
-    """The question lane's reply: only a question that asks how many software are watched is about
-    their data, and the sentence counts the watchlist entries in the facts it was sent."""
+    """The question lane's reply: only a question that asks how many software are watched, or which
+    has a newer version, is about their data. The sentence is built from the facts it was sent."""
     facts_text, _, question = text.partition("\n\nThe question:\n")
-    if not COUNT_QUESTION.search(question):
+    counting, newer = COUNT_QUESTION.search(question), NEWER_QUESTION.search(question)
+    if not counting and not newer:
         return {"about_their_data": False, "text": ""}
     try:
         facts = cast(dict[str, Any], json.loads(facts_text[facts_text.find("{") :]))
         watchlist = cast(list[Any], facts.get("watchlist", []))
     except ValueError:
         watchlist = []
-    return {"about_their_data": True, "text": f"Your watchlist holds {len(watchlist)} software."}
+    if counting:
+        return {
+            "about_their_data": True,
+            "text": f"Your watchlist holds {len(watchlist)} software.",
+        }
+    behind = [w["name"] for w in watchlist if w.get("state") == "New version"]
+    said = f"{', '.join(behind)}: a newer version is out." if behind else None
+    return {
+        "about_their_data": True,
+        "text": said or "Nothing on your watchlist has a newer version.",
+    }
 
 
 def forced(body: dict[str, Any], name: str) -> dict[str, Any]:

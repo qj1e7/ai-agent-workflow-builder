@@ -20,6 +20,7 @@ from agent_runtime.contract import (
     PartAnswer,
     PlannerAnswer,
     PlannerFacts,
+    PreviousTurn,
     QuestionAnswer,
     RowState,
     SetupCardAnswer,
@@ -69,12 +70,13 @@ class AnswerCase(Case):
     understood: list[str] = []
     schedule: list[RowState] = []
     facts: PlannerFacts | None = None
+    previous: PreviousTurn | None = None
 
 
 def _request(case: AnswerCase) -> AnswerRequest:
     """The request the decision reads. The eval never calls the model again."""
     access = ModelAccess(style="openai", base_url="http://eval.invalid", model="eval", api_key="-")
-    return AnswerRequest(task=case.task, model=access, facts=case.facts)
+    return AnswerRequest(task=case.task, model=access, facts=case.facts, previous=case.previous)
 
 
 def prompt(case: AnswerCase) -> str:
