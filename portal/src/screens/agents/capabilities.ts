@@ -1,27 +1,22 @@
 import type { CapabilityState, CapabilityView, CardView, ConnectionOut, ToolView } from '../../api/types'
 import { runWhen } from '../workflows/times'
 
-export type Group = 'ready' | 'needs_setup' | 'down' | 'not_yet'
+export type Group = 'ready' | 'needs_setup' | 'down'
 
 export const GROUPS: readonly { readonly id: Group; readonly title: string }[] = [
   { id: 'ready', title: 'I can' },
   { id: 'needs_setup', title: 'Needs setup' },
   { id: 'down', title: 'Not working right now' },
-  { id: 'not_yet', title: 'Not yet' },
 ]
 
-export const NOT_YET_QUESTION = 'What can’t I do yet?'
-
+/** The tab lists only lines software versioning uses, and those are never planned or unsupported. A stray one reads as ready. */
 export function groupOf(state: CapabilityState): Group {
-  return state === 'planned' || state === 'unsupported' ? 'not_yet' : state
+  return state === 'planned' || state === 'unsupported' ? 'ready' : state
 }
 
 export const CAPABILITIES_UNAVAILABLE_WORDS = 'What the platform can do is not available right now.'
 export const PLATFORM_DOES_WORDS = 'The platform does this for every workflow.'
-export const CAPABILITIES_FOOT = 'Anything that changes data waits for an Approver’s yes. Need something that isn’t here? Ask the team. The team decides on new tools.'
-
-/** What a ticket carries to the agents (agent-runtime jira.py). Stated once, for the line that reads tickets. */
-export const JIRA_READ_FIELDS = ['key', 'project', 'title', 'status', 'created date', 'done date', 'last updated date', 'type', 'assignee', 'body'] as const
+export const CAPABILITIES_FOOT = 'Anything that changes data waits for an Approver’s yes.'
 
 const when = (iso: string, now: Date) => runWhen(iso, now).replace(/^Today/, 'today')
 const dot = (words: string) => (/[.!?]$/.test(words) ? words : `${words}.`)
@@ -57,10 +52,6 @@ export function capabilityNote(capability: CapabilityView, cards: readonly CardV
   return parts.join(' ')
 }
 
-export function fieldsNote(capability: CapabilityView): string | null {
-  return capability.id === 'jira.read' ? `A ticket reaches the agents with these fields only: ${JIRA_READ_FIELDS.join(', ')}.` : null
-}
-
 const BROKEN: readonly ConnectionOut['state'][] = ['needs_attention', 'not_answering', 'not_set_up']
 
 /**
@@ -93,6 +84,3 @@ export function toolHealth(tool: Pick<ToolView, 'id'>, capabilities: readonly Ca
   if (worst.state === 'needs_setup') return { ok: false, label: 'Needs setup', text: worst.fix ? dot(worst.fix) : '' }
   return { ok: true, label: 'Ready', text: worst.last_ok_at ? `Last seen working ${when(worst.last_ok_at, now)}.` : '' }
 }
-
-/** The Planner says the same on Home (inconsistency I3). */
-export const NEW_TOOL_WORDS = 'I can’t add that yet. The team decides on new tools.'

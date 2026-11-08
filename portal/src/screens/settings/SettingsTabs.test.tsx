@@ -232,8 +232,7 @@ describe('the AI model tab', () => {
     expect(main).toContain('Not connected')
     expect(main).toContain(NO_MODEL_WORDS)
     // An agent workflow run gets 409 "Connect an AI model in Settings to run agents." Only the watchlist summary has a template.
-    expect(main).toContain('Until you connect one, agent workflows can’t run and new workflows can’t be planned.')
-    expect(main).toContain('Only the Software watchlist’s summary uses a simple template instead.')
+    expect(main).toContain('Without an AI model, the Planner can’t answer questions. The Software watchlist keeps checking for new releases.')
     expect(main).not.toMatch(/simple text from templates|keep using simple templates/)
     expect(main).toContain('Connect a model')
     expect(main).not.toContain('Leave it empty')

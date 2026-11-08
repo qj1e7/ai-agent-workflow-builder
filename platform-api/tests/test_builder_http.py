@@ -297,6 +297,7 @@ def spec(id: str, **changes: object) -> CapabilitySpec:
         connection="jira",
         needs_model=False,
         platform=False,
+        focus=False,
         tools=["jira.search"],
     )
     return CapabilitySpec(**{**base.model_dump(), **changes})

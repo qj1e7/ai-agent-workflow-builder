@@ -122,18 +122,27 @@ describe('the chat sentence for a set-up card (inconsistency I8)', () => {
   })
 })
 
-describe('the I can and Not yet lists', () => {
+describe('the lists Home shows without being asked', () => {
   it('split by the state the platform gave each entry', () => {
     const groups = capabilityGroups(CAPS)
     expect(groups.can.every((entry) => entry.state === 'ready')).toBe(true)
-    expect(groups.notYet.map((entry) => entry.id)).toContain('jira.find_older')
-    expect(groups.can.length + groups.setup.length + groups.notYet.length).toBe(CAPS.capabilities.length)
+    expect(groups).not.toHaveProperty('notYet')
   })
 
-  it('leads the I can list with software versioning and drops nothing', () => {
+  it('hold only what software versioning uses, and every one of those', () => {
     const groups = capabilityGroups(CAPS)
-    expect(groups.can[0]?.id).toBe('github.releases')
-    expect(groups.can.map((entry) => entry.id).sort()).toEqual(CAPS.capabilities.filter((entry) => entry.state === 'ready').map((entry) => entry.id).sort())
+    const focus = CAPS.capabilities.filter((entry) => entry.focus)
+    expect(focus.map((entry) => entry.id).sort()).toEqual(['github.releases', 'jira.create', 'teams.ask'])
+    expect(groups.can.map((entry) => entry.id).sort()).toEqual(focus.map((entry) => entry.id).sort())
+  })
+
+  it('leave out every other capability, in the lists and in the trouble view', () => {
+    for (const view of [CAPS, capabilitiesTrouble as CapabilitiesView]) {
+      const groups = capabilityGroups(view)
+      const shown = [...groups.can, ...groups.setup].map((entry) => entry.id)
+      expect(shown.length).toBeGreaterThan(0)
+      for (const entry of view.capabilities.filter((item) => !item.focus)) expect(shown).not.toContain(entry.id)
+    }
   })
 
   it('puts an entry with a connection that needs setup or is down in its own group, with the platform’s fix', () => {

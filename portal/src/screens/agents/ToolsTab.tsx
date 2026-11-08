@@ -1,7 +1,6 @@
 import type { CapabilityView, CardView, ToolView } from '../../api/types'
-import { AskTheTeam } from '../home/AskTheTeam'
 import { approvalWords, kindLabel, systemOf } from './agents'
-import { NEW_TOOL_WORDS, toolHealth } from './capabilities'
+import { toolHealth } from './capabilities'
 import styles from './AgentsPage.module.css'
 
 function usedBy(tool: ToolView, cards: readonly CardView[]): string {
@@ -56,13 +55,19 @@ function Group({ title, sub, tools, ...shared }: { title: string; sub: string; t
   )
 }
 
-export function ToolsTab({ tools, ...shared }: { tools: readonly ToolView[] } & Shared) {
+/** Only the tools behind a focus capability. Without the registry there is nothing to go by, so every tool shows. */
+export function focusTools(tools: readonly ToolView[], capabilities: readonly CapabilityView[] | undefined): readonly ToolView[] {
+  if (!capabilities) return tools
+  const ids = new Set(capabilities.filter((capability) => capability.focus).flatMap((capability) => capability.tools))
+  return tools.filter((tool) => ids.has(tool.id))
+}
+
+export function ToolsTab({ tools: all, ...shared }: { tools: readonly ToolView[] } & Shared) {
+  const tools = focusTools(all, shared.capabilities)
   return (
     <>
       <Group title="Tools that change data" sub="Each one waits for a yes, every time." tools={tools.filter((tool) => tool.kind === 'write')} {...shared} />
       <Group title="Tools that only read" sub="They never change anything, so they do not need a yes." tools={tools.filter((tool) => tool.kind === 'read')} {...shared} />
-      <p className={styles['small'] + ' muted'}>{NEW_TOOL_WORDS}</p>
-      <AskTheTeam capability="a new tool" starter="I would like a tool that: " />
     </>
   )
 }

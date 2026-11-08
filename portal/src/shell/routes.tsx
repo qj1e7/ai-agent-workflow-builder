@@ -49,7 +49,7 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
     tabLabel: 'Workflows',
     icon: GridIcon,
     heading: 'Workflows',
-    lead: 'Your team’s repeated tasks. Each one runs by itself and asks before it changes anything.',
+    lead: 'The jobs that run by themselves, such as the Software watchlist, and what needs you.',
     inMenu: true,
   },
   software: {
@@ -67,7 +67,7 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
     tabLabel: 'Agents',
     icon: BotIcon,
     heading: 'Agent library',
-    lead: 'The agents your team can use. For each workflow, the Planner picks the ones it needs. An agent can use only the tools on its card, and anything that changes data waits for a yes.',
+    lead: 'The agents and tools behind software version checks.',
     inMenu: true,
     operatorOnly: true,
   },

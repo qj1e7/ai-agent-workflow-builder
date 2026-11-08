@@ -16,7 +16,7 @@ interface PlannerBoxProps {
 function placeholderOf(busy: boolean, empty: boolean, phone: boolean): string {
   if (busy) return 'The Planner is answering'
   if (!empty) return 'Ask for something else'
-  return phone ? 'Automate, check or fix something' : 'What would you like to automate, check or fix?'
+  return phone ? 'Ask about your software versions' : 'Ask about your software versions, or name software to watch'
 }
 
 /** The Planner's box. Enter sends, Shift+Enter starts a new line, and the box grows with the text. */
@@ -44,7 +44,7 @@ export function PlannerBox({ text, busy, empty, phone, problem, boxRef, onChange
     >
       <div className={styles['composer']}>
         <label className="visually-hidden" htmlFor="planner-box">
-          Describe a task for the Planner
+          Ask the Planner about software versions
         </label>
         <textarea
           id="planner-box"

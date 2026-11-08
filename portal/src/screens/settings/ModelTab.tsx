@@ -50,7 +50,7 @@ const FOCUS_FOR: Record<ModelField, string> = {
 
 // Without a model, an agent workflow run gets 409 "Connect an AI model in Settings to run agents." and planning gets 409 too.
 // Only the watchlist check's summary falls back to a template.
-export const NO_MODEL_WORDS = 'Until you connect one, agent workflows can’t run and new workflows can’t be planned. Only the Software watchlist’s summary uses a simple template instead.'
+export const NO_MODEL_WORDS = 'Without an AI model, the Planner can’t answer questions. The Software watchlist keeps checking for new releases.'
 const WITHOUT_A_MODEL = 'agent workflows can’t run, and only the Software watchlist’s summary uses a simple template'
 
 /** What runs do until a new address is confirmed, after "Until then, ". */

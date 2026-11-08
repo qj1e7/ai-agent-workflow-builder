@@ -2339,6 +2339,11 @@
             "description": "What to do about a connection that needs setup or is down.",
             "title": "Fix"
           },
+          "focus": {
+            "description": "True for what software versioning uses.",
+            "title": "Focus",
+            "type": "boolean"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -2427,6 +2432,7 @@
           "last_ok_at",
           "needs_model",
           "platform",
+          "focus",
           "tools",
           "agents"
         ],

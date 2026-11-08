@@ -181,9 +181,6 @@ function AbilitiesAnswer() {
           {capabilities.isError ? 'I couldn’t load what I can do just now.' : 'Loading what I can do'}
         </p>
       )}
-      <div className={styles['buttons']}>
-        <AskTheTeam capability="something new" starter="I would like the Planner to be able to: " />
-      </div>
     </>
   )
 }

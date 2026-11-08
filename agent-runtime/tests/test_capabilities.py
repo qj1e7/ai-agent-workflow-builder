@@ -124,6 +124,23 @@ def test_the_day_one_examples_are_about_software_versioning():
     ]
 
 
+def test_only_the_software_versioning_capabilities_are_marked_focus():
+    assert {c.id for c in CAPABILITIES if c.focus} == {
+        "github.releases",
+        "jira.create",
+        "teams.ask",
+    }
+    assert all(c.state == "ready" for c in CAPABILITIES if c.focus)
+
+
+def test_a_request_for_email_is_still_refused_in_words_though_it_is_not_a_focus_capability():
+    assert not BY_ID["email.send"].focus
+    refusal = why_not("do", "Send email to the team")
+    assert refusal is not None
+    assert refusal.startswith("I can't send email to the team.")
+    assert "yet" not in refusal.split(".")[0]
+
+
 def test_the_vulnerability_pre_check_stays_while_its_capability_is_not_ready():
     entry = BY_ID["registries.check"]
     assert entry.state == "planned"

@@ -154,19 +154,19 @@ describe('Home for the Operator who started that run', () => {
 describe('Home on day one', () => {
   const html = mainOf(render(ERIN, DAY_ONE))
 
-  it('asks what the team does again and again, with the box and the platform’s two starting points', () => {
-    expect(headingsOf(html)).toEqual(['What does your team do again and again?'])
-    expect(text(html)).toContain('Tell me a task in plain English.')
+  it('asks which software to keep up to date, with the box and the platform’s two starting points', () => {
+    expect(headingsOf(html)).toEqual(['Which software should we keep up to date?'])
+    expect(text(html)).toContain('Ask about your watchlist, or tell me what software to watch.')
     expect(html).toContain('<textarea')
     expect(buttonsIn(html)).toEqual(expect.arrayContaining(CAPABILITIES.examples.map((example) => example.text)))
     expect(text(html)).not.toContain('Start your first workflow')
     expect(sectionOf(html, 'Needs you')).toBe('')
   })
 
-  it('shows the I can list from the registry, with the not yet list folded under one question', () => {
-    expect(text(html)).toContain('I can Check software for new releases on GitHub Read Jira tickets')
-    expect(html).toMatch(/<details[^>]*>\s*<summary[^>]*>What can’t I do yet\?<\/summary>/)
-    expect(text(html)).toContain('Find tickets by their component or priority')
+  it('shows the I can list from the registry for software versioning only, with no Not yet list', () => {
+    expect(text(html)).toContain('I can Check software for new releases on GitHub Create a Jira ticket after a yes')
+    expect(html).not.toContain('<details')
+    expect(text(html)).not.toMatch(/Not yet|can’t I do yet|Read Jira tickets|Find tickets|Confluence|Slack/)
   })
 
   it('names no connection warning and no count, so a fresh account is not scared', () => {
@@ -209,8 +209,8 @@ describe('Home for an Operator in a normal week', () => {
 
   it('names the send button for a screen reader, and labels the box', () => {
     expect(html).toContain('aria-label="Send to the Planner"')
-    expect(html).toMatch(/<label[^>]*for="planner-box"[^>]*>Describe a task for the Planner<\/label>/)
-    expect(html).toContain('placeholder="What would you like to automate, check or fix?"')
+    expect(html).toMatch(/<label[^>]*for="planner-box"[^>]*>Ask the Planner about software versions<\/label>/)
+    expect(html).toContain('placeholder="Ask about your software versions, or name software to watch"')
   })
 })
 
@@ -220,12 +220,12 @@ describe('Home with no working AI model', () => {
   it('says it can’t read new requests and offers Connect a model, and no box', () => {
     expect(headingsOf(html)).toEqual(['I can’t read new requests until an AI model is connected'])
     expect(linksIn(html)).toContainEqual(['Connect a model', '/settings?tab=model'])
-    expect(html).not.toContain('placeholder="What would you like')
+    expect(html).not.toContain('placeholder="Ask about')
   })
 
-  it('still shows the lists, Ask the team and Needs you, without the model’s own row', () => {
-    expect(text(html)).toContain('I can Check software for new releases on GitHub Read Jira tickets')
-    expect(buttonsIn(html)).toContain('Ask the team for something new')
+  it('still shows the lists and Needs you, without the model’s own row and without Ask the team', () => {
+    expect(text(html)).toContain('I can Check software for new releases on GitHub Create a Jira ticket after a yes')
+    expect(buttonsIn(html)).not.toContain('Ask the team for something new')
     expect(html).toContain('data-home-item="stopped:run_01JB9"')
     expect(html).not.toContain('data-home-item="connection:model"')
   })

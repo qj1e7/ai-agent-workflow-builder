@@ -13,7 +13,7 @@ export interface PlatformAgent {
 export const PLATFORM_AGENTS: readonly PlatformAgent[] = [
   {
     id: 'planner',
-    what: 'Reads each task, says what it understood, and picks the agents for each workflow. When none of them fits, it drafts a new agent card for you to check.',
+    what: 'Answers questions about your watchlist and sets up software to watch.',
     reach: 'It only plans.',
     steps: [
       'Read the task and say what it understood',

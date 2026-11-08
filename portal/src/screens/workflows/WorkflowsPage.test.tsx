@@ -156,7 +156,7 @@ describe('the Workflows list', () => {
   })
 
   it('says when there is nothing yet, in words for the person reading', () => {
-    expect(text(mainOf(render({ useCases: [] })))).toContain('Nothing here yet Ask the Planner on Home, and your first workflow shows up here.')
+    expect(text(mainOf(render({ useCases: [] })))).toContain('Nothing here yet Watch software on the Software page, or ask the Planner on Home. Its checks show up here.')
     expect(text(mainOf(render({ useCases: [], me: BOB })))).toContain('Operators set up workflows, and you approve their changes.')
     expect(mainOf(render({ useCases: [] }))).not.toContain('aria-controls="findbar-workflows"')
   })

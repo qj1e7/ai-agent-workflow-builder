@@ -4,18 +4,14 @@ import { expect, test } from './support/test'
 import { signedInAs } from './support/settings'
 import { OUT, shot } from './support/ui'
 
-test('the Agent library opens on what it can do, from the registry, with the Not yet lines behind a question', async ({ page }, info) => {
+test('the Agent library opens on what it can do for software versioning, with no Not yet group', async ({ page }, info) => {
   await page.goto('/agents')
   await expect(page.getByRole('button', { name: 'What it can do' })).toHaveAttribute('aria-pressed', 'true')
   const main = page.getByRole('main')
   await expect(main.getByRole('heading', { level: 2, name: /^I can/ })).toBeVisible()
-  await expect(main).toContainText('Read Jira tickets')
-  await expect(main).toContainText('A ticket reaches the agents with these fields only')
-  await expect(main.getByText('Post messages in Teams')).toBeHidden()
-  const fold = main.locator('details').filter({ hasText: 'What can’t I do yet?' })
-  await fold.locator('summary').focus()
-  await page.keyboard.press('Enter')
-  await expect(main.getByText('Post messages in Teams')).toBeVisible()
+  await expect(main).toContainText('Check software for new releases on GitHub')
+  await expect(main).not.toContainText(/Read Jira tickets|Post messages in Teams|Not yet|can’t I do yet/)
+  await expect(main.locator('details')).toHaveCount(0)
   await expect(main).not.toContainText(/\bPlanned\b/)
   await shot(page, info, 'n19-02-what-it-can-do')
 })

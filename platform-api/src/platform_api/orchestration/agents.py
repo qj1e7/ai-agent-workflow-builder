@@ -256,6 +256,7 @@ class CapabilitySpec(WireModel):
     connection: Literal["jira", "github", "teams"] | None
     needs_model: bool
     platform: bool
+    focus: bool
     tools: list[ToolId]
 
 

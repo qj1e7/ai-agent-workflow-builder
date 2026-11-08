@@ -9,7 +9,6 @@ import { PageHead } from '../../shell/PageHead'
 import { Button, ButtonLink } from '../../ui/Button'
 import { IconClock } from '../../ui/icons'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
-import { AskTheTeam } from './AskTheTeam'
 import { restoreDraft } from './card'
 import { NEEDS_YOU_ANCHOR, type Page } from './AnswerCards'
 import { CapabilityLists } from './CapabilityLists'
@@ -128,12 +127,11 @@ function usePhone(): boolean {
 
 const SEND_FAILED = 'That didn’t send. Try again.'
 const DRAFT_GONE = 'That draft is gone. Ask for it again below.'
-const DAY_ONE_HEADING = 'What does your team do again and again?'
-const DAY_ONE_LEAD =
-  'Tell me a task in plain English. I’ll set it up to run by itself. Anything that changes data waits for a yes from an Approver in Teams.'
+const DAY_ONE_HEADING = 'Which software should we keep up to date?'
+const DAY_ONE_LEAD = 'Ask about your watchlist, or tell me what software to watch.'
 const OFFLINE_HEADING = 'I can’t read new requests until an AI model is connected'
 const OFFLINE_LEAD =
-  'Until then, agent workflows can’t run and new ones can’t be planned. Only the Software watchlist keeps going, with a simple summary instead of a written one. Approvers can still decide.'
+  'Without an AI model, the Planner can’t answer questions. The Software watchlist keeps checking for new releases.'
 
 /** Needs you on Home, without the “no AI model” row while the page already offers Connect a model. The count stays the platform’s. */
 function needsHere(home: HomeOut, withoutModel: boolean): Needs {
@@ -245,9 +243,6 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
         </div>
         {needs.shown.length > 0 ? <NeedsHere needs={needs} now={now} arrival={arrival} quiet /> : null}
         {capabilities.data ? <CapabilityLists view={capabilities.data} /> : null}
-        <div className={styles['centred']}>
-          <AskTheTeam capability="something new" starter="" label="Ask the team for something new" />
-        </div>
       </div>
     )
   }
@@ -330,7 +325,7 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
           </button>
         </div>
       ) : null}
-      {empty && (dayOne || lists) && capabilities.data ? <CapabilityLists view={capabilities.data} folded={dayOne} /> : null}
+      {empty && (dayOne || lists) && capabilities.data ? <CapabilityLists view={capabilities.data} /> : null}
     </div>
   )
 }

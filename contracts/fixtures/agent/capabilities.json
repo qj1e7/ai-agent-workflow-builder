@@ -11,6 +11,7 @@
       "connection": "jira",
       "needs_model": true,
       "platform": false,
+      "focus": false,
       "tools": [
         "jira.search",
         "jira.read_ticket"
@@ -27,6 +28,7 @@
       "connection": "jira",
       "needs_model": true,
       "platform": false,
+      "focus": false,
       "tools": [
         "jira.search"
       ]
@@ -42,6 +44,7 @@
       "connection": "jira",
       "needs_model": false,
       "platform": false,
+      "focus": false,
       "tools": []
     },
     {
@@ -55,6 +58,7 @@
       "connection": "jira",
       "needs_model": false,
       "platform": false,
+      "focus": false,
       "tools": []
     },
     {
@@ -68,6 +72,7 @@
       "connection": null,
       "needs_model": true,
       "platform": false,
+      "focus": false,
       "tools": []
     },
     {
@@ -81,6 +86,7 @@
       "connection": "github",
       "needs_model": false,
       "platform": false,
+      "focus": true,
       "tools": [
         "github.read_releases"
       ]
@@ -96,6 +102,7 @@
       "connection": "jira",
       "needs_model": true,
       "platform": false,
+      "focus": true,
       "tools": [
         "jira.create_ticket"
       ]
@@ -111,6 +118,7 @@
       "connection": "teams",
       "needs_model": false,
       "platform": true,
+      "focus": true,
       "tools": []
     },
     {
@@ -124,6 +132,7 @@
       "connection": "teams",
       "needs_model": false,
       "platform": false,
+      "focus": false,
       "tools": []
     },
     {
@@ -137,6 +146,7 @@
       "connection": null,
       "needs_model": false,
       "platform": false,
+      "focus": false,
       "tools": []
     },
     {
@@ -150,6 +160,7 @@
       "connection": "github",
       "needs_model": false,
       "platform": false,
+      "focus": false,
       "tools": []
     },
     {
@@ -163,6 +174,7 @@
       "connection": null,
       "needs_model": false,
       "platform": false,
+      "focus": false,
       "tools": []
     },
     {
@@ -176,6 +188,7 @@
       "connection": null,
       "needs_model": false,
       "platform": false,
+      "focus": false,
       "tools": []
     },
     {
@@ -189,6 +202,7 @@
       "connection": "jira",
       "needs_model": false,
       "platform": false,
+      "focus": false,
       "tools": []
     },
     {
@@ -202,6 +216,7 @@
       "connection": null,
       "needs_model": false,
       "platform": false,
+      "focus": false,
       "tools": []
     },
     {
@@ -215,6 +230,7 @@
       "connection": "jira",
       "needs_model": false,
       "platform": false,
+      "focus": false,
       "tools": []
     }
   ],

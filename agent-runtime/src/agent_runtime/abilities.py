@@ -110,6 +110,7 @@ def _ready(
     tools: list[ToolId],
     needs_model: bool = False,
     platform: bool = False,
+    focus: bool = False,
 ) -> CapabilitySpec:
     return CapabilitySpec(
         id=id,
@@ -122,6 +123,7 @@ def _ready(
         connection=connection,
         needs_model=needs_model,
         platform=platform,
+        focus=focus,
         tools=tools,
     )
 
@@ -147,6 +149,7 @@ def _not_yet(
         connection=connection,
         needs_model=False,
         platform=False,
+        focus=False,
         tools=[],
     )
 
@@ -196,6 +199,7 @@ CAPABILITIES: Final = (
         "GitHub",
         "github",
         ["github.read_releases"],
+        focus=True,
     ),
     _ready(
         "jira.create",
@@ -205,6 +209,7 @@ CAPABILITIES: Final = (
         "jira",
         ["jira.create_ticket"],
         needs_model=True,
+        focus=True,
     ),
     _ready(
         "teams.ask",
@@ -214,6 +219,7 @@ CAPABILITIES: Final = (
         "teams",
         [],
         platform=True,
+        focus=True,
     ),
     _not_yet(
         "teams.post",

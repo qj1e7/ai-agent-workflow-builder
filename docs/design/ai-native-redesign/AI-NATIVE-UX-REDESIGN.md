@@ -112,6 +112,8 @@ Taken from `agent-runtime/src/agent_runtime/tools.py` and `abilities.py` on 6 No
 
 From 8 Nov 2026 Home is the front door for software versioning, and the general workflow builder is frozen. The chips are about the watchlist, and none of them sets up a general workflow. With nothing watched they are "Keep track of the LangGraph version" and "What can you do?". With software watched they are "Which software has a newer version?", "Watch another software for new versions" and "What can you do?", and "What can I ask for?" stays one press away. The list below is the earlier design and no longer matches the chips.
 
+Everything Home, Workflows and the Agent library say without being asked is about software versioning only: watching software for new GitHub releases, asking Approvers for a yes in Teams, creating the upgrade Jira ticket after that yes, and the Software watchlist. The capability registry marks those lines as `focus`, the lists hold only them, and there is no Not yet list. When a person asks for something else, such as email, the Planner still says plainly that it can't, so no part of a request is dropped silently (principle 4).
+
 Home keeps version 3's look in every state: the Visor bot centred at the top (128 px, 96 px on a phone), a large centred heading, then the box and the suggestions. The user chose this on 7 Nov over an earlier version 4 layout that put the bot beside a smaller heading. Needs you sits under the suggestions in the same column. On a phone, the first Needs you row and its action still fit on the first screen.
 
 From top to bottom:
@@ -285,7 +287,7 @@ From top to bottom, each section shown only when it has something:
    
    No agent faces and no step details in the list. A search button in the section header opens a search box and the All, Stopped and Paused filters. They stay hidden until then.
 
-Empty: "Nothing here yet. Ask the Planner on Home, and your first workflow shows up here." Approver only: "Operators set up workflows, and you approve their changes."
+Empty: "Nothing here yet. Watch software on the Software page, or ask the Planner on Home. Its checks show up here." Approver only: "Operators set up workflows, and you approve their changes."
 
 ## 9. Workflow page
 
@@ -402,12 +404,12 @@ From top to bottom:
 
 An advanced area.
 
-- **What it can do.** The opening tab. The registry in plain words, grouped as I can, Needs setup and Not working right now. The Not yet lines sit behind "What can't I do yet?", the same question day-one Home asks. Each line names the agents that use it.
+- **What it can do.** The opening tab. The registry in plain words, grouped as I can, Needs setup and Not working right now. Only the software versioning lines are listed, and there is no Not yet group. Each line names the agents that use it.
 - **Agents.** The agent cards, each with a plain one-line job. Steps, tools and permissions are inside Details.
   - Changing an agent in plain English shows the exact difference before saving.
   - It is marked as not built in the Portal under the test control.
 - **Tools.** Each tool with its plain name, what it reads or writes, and its health from the registry.
-  - Asking for a new tool gets the same answer as on Home: the team decides, with Ask the team (I3).
+  - The tab offers no request for a new tool. Asking an agent for one in its dialog gets the same answer as on Home: the team decides, with Ask the team (I3).
   - Drafting a tool from a published API appears only with Planned features shown.
 
 ## 13. Settings
