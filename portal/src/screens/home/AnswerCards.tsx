@@ -235,11 +235,12 @@ export function OfflineAnswer({ reply }: { reply: OfflineReply }) {
   )
 }
 
-/** Where each section of a question answer lives. Needs you is the section on Home itself. */
+/** Where each section of a question answer lives. */
 const LOOKED_AT = {
-  watchlist: { label: 'Software' },
-  workflows: { label: 'Workflows' },
-  needs_you: { label: 'Needs you' },
+  watchlist: { label: 'Software', to: '/software' },
+  workflows: { label: 'Workflows', to: '/workflows' },
+  // The Workflows page leads with Needs you, the same place the Home tab count leads.
+  needs_you: { label: 'Needs you', to: '/workflows' },
 } as const
 
 export const NEEDS_YOU_ANCHOR = 'needs-you'
@@ -250,17 +251,11 @@ export function LookedAt({ sections }: { sections: QuestionReply['looked_at'] })
   return (
     <p className={styles['lookedAt']}>
       <span>Looked at</span>
-      {sections.map((section) =>
-        section === 'needs_you' ? (
-          <a key={section} href={`#${NEEDS_YOU_ANCHOR}`}>
-            {LOOKED_AT[section].label}
-          </a>
-        ) : (
-          <Link key={section} to={section === 'watchlist' ? '/software' : '/workflows'}>
-            {LOOKED_AT[section].label}
-          </Link>
-        ),
-      )}
+      {sections.map((section) => (
+        <Link key={section} to={LOOKED_AT[section].to}>
+          {LOOKED_AT[section].label}
+        </Link>
+      ))}
     </p>
   )
 }

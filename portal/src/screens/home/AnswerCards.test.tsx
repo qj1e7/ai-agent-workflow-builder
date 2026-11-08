@@ -115,13 +115,13 @@ describe('the answer to a question about the person’s own data', () => {
     expect(buttons(html)).toEqual(['Software'])
   })
 
-  it('links each section to the screen it was read from, Needs you to its place on Home', () => {
+  it('links each section to the screen it was read from, Needs you to the Workflows page, where Needs you leads', () => {
     const html = draw({ ...(question as QuestionReply), looked_at: ['watchlist', 'workflows', 'needs_you'] })
     expect(text(html)).toBe('Looked at Software Workflows Needs you')
     expect(links(html)).toEqual([
       ['/software', 'Software'],
       ['/workflows', 'Workflows'],
-      ['#needs-you', 'Needs you'],
+      ['/workflows', 'Needs you'],
     ])
   })
 

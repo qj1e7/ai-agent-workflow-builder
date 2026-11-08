@@ -3360,7 +3360,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
      the platform names the sections it used. Here the sentence is fixed and the count is read from the same list the
      Software page shows. The Looked at line links each section to its screen. */
   const dataSay = () => { const n = watchRows().concat(S.added.map((a, i) => ({ key: `add${i}` }))).filter((r) => !S.removed.includes(r.key)).length; return n ? `There ${n === 1 ? 'is 1 software' : `are ${n} software`} on the Software watchlist.` : 'Nothing is on the Software watchlist yet.'; };
-  const LOOKED = { watchlist: ['Software', 'software'], workflows: ['Workflows', 'workflows'], needs_you: ['Needs you', 'home'] };
+  const LOOKED = { watchlist: ['Software', 'software'], workflows: ['Workflows', 'workflows'], needs_you: ['Needs you', 'workflows'] };
   const dataCard = (m) => `<p class="looked small muted">Looked at: ${m.card.looked.map((k) => `<button class="linkbtn" data-act="go" data-arg="${LOOKED[k][1]}">${LOOKED[k][0]}</button>`).join(', ')}</p>`;
   const mineCard = () => (needs().length ? needsStrip(needs(), 99, 'Planner answers about your workflows') : '');
   const startsCard = () => `<div class="chips starts" role="group" aria-label="Starting points" data-unbuilt="Planner answers about your workflows">${starts().map((t) => `<button class="chip" data-act="say" data-arg="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
