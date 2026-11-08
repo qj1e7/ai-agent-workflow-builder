@@ -6,7 +6,7 @@ import { tabTo, walkTabs, withoutVisibleFocus } from '../support/keyboard'
 import { assertClean, watchPage } from '../support/test'
 import { connectMockModel } from './support/settings'
 import { SettingsApi } from './support/settings'
-import type { Backend } from './support/stack'
+import { REDIS, type Backend } from './support/stack'
 import { expect, test } from './support/test'
 import { devContext, OUT, shot } from './support/ui'
 
@@ -345,6 +345,7 @@ test.describe('with the AI model on', () => {
   })
 
   test('the three suggestions are about the watchlist, and Check my workflows, typed, draws the Workflows list’s own rows', async ({ browser, backend }, info) => {
+    await backend.freshWatchlist('alice', [REDIS])
     await backend.waitingRun('alice')
     const repair = await jiraDown(backend)
     const context = await devContext(browser, 'alice')
@@ -389,7 +390,8 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
-  test('by keyboard alone: Tab reaches the box, the suggestions and each answer’s buttons, with a visible focus ring', async ({ browser }) => {
+  test('by keyboard alone: Tab reaches the box, the suggestions and each answer’s buttons, with a visible focus ring', async ({ browser, backend }) => {
+    await backend.freshWatchlist('alice', [REDIS])
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     await page.goto('/')
