@@ -546,6 +546,20 @@ def _is_question(read: TaskRead, answer: PlannerAnswer) -> bool:
     return read.asks_about == "my_data" and isinstance(answer, AbilitiesAnswer)
 
 
+def _unwatched(read: TaskRead, request: AnswerRequest) -> WatchlistAnswer | None:
+    """A question about software the watchlist does not hold keeps today's offer to watch it."""
+    if read.asks_about != "my_data":
+        return None
+    software = _software_of(read, request.task)
+    if software is None:
+        return None
+    held = request.facts.watchlist if request.facts is not None else None
+    if held and any(w.name.strip().casefold() == software.strip().casefold() for w in held):
+        return None
+    word = task_form_of(request.task, read.watchlist_word) or release_word_in(request.task)
+    return None if word is None else WatchlistAnswer(word=word, software=software)
+
+
 def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     refused = word_rule_refusal(request.task)
     if refused is not None:
@@ -561,6 +575,9 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
         return read
     answer = answer_of(read, request.task)
     if _is_question(read, answer):
+        unwatched = _unwatched(read, request)
+        if unwatched is not None:
+            return Answered(answer=unwatched)
         asked = answer_question(request, chat_for)
         return asked if isinstance(asked, ModelProblem) else Answered(answer=asked)
     return Answered(answer=answer)

@@ -13,6 +13,7 @@ from agent_runtime.contract import (
     QuestionAnswer,
     SetupCardAnswer,
     WatchedFact,
+    WatchlistAnswer,
     WorkflowFact,
 )
 from agent_runtime.contracts import answer_request
@@ -138,3 +139,32 @@ def test_the_prompt_forbids_offers_and_guessing():
         "never guess",
     ):
         assert rule in lowered
+
+
+@pytest.mark.parametrize(
+    ("task", "software"),
+    [
+        ("Is there a newer version of FastAPI?", "FastAPI"),
+        ("What is the newest version of FastAPI?", "FastAPI"),
+        ("Which version of Grafana do we run?", "Grafana"),
+    ],
+)
+def test_a_question_about_unwatched_software_keeps_the_offer_to_watch_it(task: str, software: str):
+    first = reading().model_copy(update={"software": software})
+    reply = QuestionReply(text="Three.", used=["watchlist"])
+    out, chat = ask(reply, task=task, first=first)
+    assert isinstance(out.answer, WatchlistAnswer) and out.answer.software == software
+    assert len(chat.calls) == 1
+    held = PlannerFacts(
+        watchlist=[
+            WatchedFact(
+                name=f" {software.lower()} ",
+                repo="x/y",
+                our_version="1",
+                newest_version="2",
+                state="New version",
+            )
+        ]
+    )
+    out, _ = ask(reply, facts=held, task=task, first=first)
+    assert out.answer == QuestionAnswer(text="Three.", looked_at=["watchlist"])
