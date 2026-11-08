@@ -747,7 +747,8 @@ class WatchedFact(WireModel):
         max_length=40, description="The version the team runs. None means Not known."
     )
     newest_version: str | None = Field(
-        max_length=NEWEST_VERSION_LIMIT, description="The newest release read from the source. None when unread."
+        max_length=NEWEST_VERSION_LIMIT,
+        description="The newest release read from the source. None when unread.",
     )
     state: str = Field(max_length=40, description="The state in the words the Software page shows.")
 
