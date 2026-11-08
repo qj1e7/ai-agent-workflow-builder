@@ -7,7 +7,6 @@ from agent_runtime.contract import (
     AbilitiesAnswer,
     Answered,
     AnswerRequest,
-    ModelProblem,
     NeedsYouFact,
     PlannerFacts,
     QuestionAnswer,
@@ -116,10 +115,10 @@ def test_a_plain_cant_is_not_an_offer():
     assert result.answer.text == "I can't see Postgres on the watchlist."
 
 
-def test_a_problem_with_the_second_call_passes_through():
+def test_a_second_call_that_fails_gives_the_first_answer():
     slow = type("ReadTimeout", (Exception,), {})("took too long")
     result, _ = ask(slow)
-    assert isinstance(result, ModelProblem) and result.reason == "too_slow"
+    assert isinstance(result, Answered) and result.answer == AbilitiesAnswer()
 
 
 def test_the_catch_all_is_sent_to_the_lane_and_a_no_keeps_the_abilities_answer():
