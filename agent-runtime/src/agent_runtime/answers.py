@@ -565,9 +565,10 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     if not isinstance(decided, AskTheQuestionLane):
         return Answered(answer=decided)
     asked = answer_question(request, chat_for)
-    if isinstance(asked, ModelProblem):
-        return asked
-    return Answered(answer=decided.otherwise if asked is None else asked)
+    # The lane may improve an answer, never make it worse: when its call fails, the first stands.
+    if asked is None or isinstance(asked, ModelProblem):
+        return Answered(answer=decided.otherwise)
+    return Answered(answer=asked)
 
 
 APPROVAL_WORDS: Final = re.compile(

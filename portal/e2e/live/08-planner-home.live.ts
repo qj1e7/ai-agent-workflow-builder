@@ -390,6 +390,18 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
+  test('the chip How many software are we watching? is answered from the watchlist, with its Looked at line', async ({ browser, backend }) => {
+    await backend.freshWatchlist('alice', [REDIS])
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+    await page.getByRole('group', { name: 'Suggestions' }).getByRole('button', { name: 'How many software are we watching?' }).click()
+    await expect(thread(page)).toContainText('Your watchlist holds 1 software.')
+    await expect(thread(page).getByText('Looked at')).toBeVisible()
+    await expect(thread(page).getByRole('link', { name: 'Software', exact: true })).toBeVisible()
+    await context.close()
+  })
+
   test('by keyboard alone: Tab reaches the box, the suggestions and each answer’s buttons, with a visible focus ring', async ({ browser, backend }) => {
     await backend.freshWatchlist('alice', [REDIS])
     const context = await devContext(browser, 'alice')

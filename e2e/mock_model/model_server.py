@@ -120,7 +120,10 @@ ABOUT = (
         "my_workflows",
     ),
     (
-        re.compile(r"^what can you do|^what do you do|^help\b|\bweather\b|\bjoke\b", re.IGNORECASE),
+        re.compile(
+            r"^what can you do|^what do you do|^help\b|\bweather\b|\bjoke\b|^how many software\b",
+            re.IGNORECASE,
+        ),
         "abilities",
     ),
 )
@@ -545,6 +548,22 @@ def reading(task: str) -> dict[str, Any]:
     return read
 
 
+COUNT_QUESTION = re.compile(r"\bhow many\b.*\b(software|watch\w*)\b", re.I)
+
+
+def question_reply(text: str) -> dict[str, Any]:
+    """The question lane's reply: only a question that asks how many software are watched is about
+    their data, and the sentence counts the watchlist entries in the facts it was sent."""
+    facts_text, _, question = text.partition("\n\nThe question:\n")
+    if not COUNT_QUESTION.search(question):
+        return {"about_their_data": False, "text": ""}
+    try:
+        watchlist = json.loads(facts_text[facts_text.find("{") :]).get("watchlist", [])
+    except ValueError:
+        watchlist = []
+    return {"about_their_data": True, "text": f"Your watchlist holds {len(watchlist)} software."}
+
+
 def forced(body: dict[str, Any], name: str) -> dict[str, Any]:
     lowered = name.lower()
     if mode == "broken":
@@ -557,6 +576,8 @@ def forced(body: dict[str, Any], name: str) -> dict[str, Any]:
         )
     if "choice" in lowered:
         return call(name, choice(task_text(body)), 0)
+    if "questionreply" in lowered:
+        return call(name, question_reply(user_text(body)), 0)
     if "taskread" in lowered:
         return call(name, reading(task_text(body)), 0)
     return say(SENTENCE)

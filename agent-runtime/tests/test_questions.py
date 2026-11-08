@@ -7,7 +7,6 @@ from agent_runtime.contract import (
     AbilitiesAnswer,
     Answered,
     AnswerRequest,
-    ModelProblem,
     NeedsYouFact,
     PlannerFacts,
     QuestionAnswer,
