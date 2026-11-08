@@ -38,6 +38,7 @@ from platform_api.orchestration import (
     QuestionAnswer,
     RefusedAnswer,
     RowKind,
+    RunDetail,
     RunSpec,
     RunStarted,
     RuntimeDown,
@@ -51,7 +52,6 @@ from platform_api.orchestration import (
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
-from platform_api.orchestration.service import RunDetail
 from platform_api.shared import Principal, Role, RunId, SoftwareId, UseCaseId, UserId
 from tests.support import LOCAL_ENV
 

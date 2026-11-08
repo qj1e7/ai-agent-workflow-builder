@@ -89,6 +89,7 @@ from platform_api.orchestration.planning import (
     ProjectFinding,
     RuntimeDown,
 )
+from platform_api.orchestration.runs import state_name
 from platform_api.orchestration.schedule import AT_PATTERN, Day, Schedule, parse_at
 from platform_api.orchestration.schedule_store import (
     CheckSpecs,
@@ -98,6 +99,7 @@ from platform_api.orchestration.schedule_store import (
     ScheduleHold,
     ScheduleTicker,
 )
+from platform_api.orchestration.service import RunDetail
 from platform_api.orchestration.spec import (
     CardRun,
     CardsTask,
@@ -243,7 +245,9 @@ __all__ = [
     "LastCheck",
     "OpenTicket",
     "PendingTicket",
+    "RunDetail",
     "RunSpec",
+    "state_name",
     "RunStarted",
     "RunStarter",
     "SavedSchedule",

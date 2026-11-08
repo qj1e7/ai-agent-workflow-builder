@@ -14,12 +14,12 @@ from platform_api.builder.models import UseCaseList, WatchedSoftwareView, Watchl
 from platform_api.orchestration import (
     NeedsYouFact,
     PlannerFacts,
+    RunDetail,
     Status,
     WatchedFact,
     WorkflowFact,
+    state_name,
 )
-from platform_api.orchestration.runs import state_name
-from platform_api.orchestration.service import RunDetail
 from platform_api.shared import Principal
 from platform_api.wire import RunState
 
