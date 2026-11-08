@@ -71,7 +71,10 @@ READ_FIRST = (
     "Read the releases first, and wait for what comes back. A ticket can only name releases "
     "you have read."
 )
-JIRA_OFF = "Jira is not connected."
+JIRA_OFF: Final = TaskError(
+    type="JiraNotConnected", message="Jira is not connected.", retryable=False
+)
+NO_SUCH_TICKET = "Jira has no such ticket."
 CUT_OFF_NOTE = (
     "More tickets matched than came back, so older ones are missing. Do not say this list is "
     "complete. Say it was cut at the limit."
@@ -435,11 +438,14 @@ class _AgentRun:
             runner.releases, args.repo, runner.retry, runner.sleep, write, self._ref
         )
         if isinstance(found, TaskError):
-            what = f"could not read the releases of {args.repo}."
-            write(self._finished(tool, what, {"problem": found.message}))
-            error = found.model_copy(update={"message": could_not_check(args.repo, found.message)})
-            write(self._failed(error, f"{args.repo} could not be checked.", tool.model_name))
-            return error
+            return self._read_failed(
+                tool,
+                f"could not read the releases of {args.repo}.",
+                found,
+                could_not_check(args.repo, found.message),
+                f"{args.repo} could not be checked.",
+                write,
+            )
         self._read = True
         shown = [r for r in found if not r.draft][:RELEASES_SHOWN]
         tags = [r.tag for r in shown]
@@ -464,7 +470,7 @@ class _AgentRun:
             ]
         )
 
-    def _jira_search(self, tool: Tool, args: JiraSearchArguments, write: Emit) -> str:
+    def _jira_search(self, tool: Tool, args: JiraSearchArguments, write: Emit) -> str | TaskError:
         jira = self._task.jira
         if not self._projects:
             return _error(NO_PROJECT)
@@ -476,10 +482,9 @@ class _AgentRun:
         if refused is not None:
             return _error(refused)
         write(self._started(tool, _searching(args, self._task.today, self._task.last_run)))
-        if jira is None:
-            return self._jira_failed(tool, "could not search Jira.", JIRA_OFF, write)
-        try:
-            found = jira.search(
+        found = _from_jira(
+            jira,
+            lambda reader: reader.search(
                 args.project,
                 args.text,
                 args.status,
@@ -487,9 +492,18 @@ class _AgentRun:
                 args.updated_before,
                 args.issue_type,
                 args.created_since,
+            ),
+        )
+        if isinstance(found, TaskError):
+            subject = f"Jira project {args.project}"
+            return self._read_failed(
+                tool,
+                "could not search Jira.",
+                found,
+                f"Could not search {subject}: {found.message}",
+                f"{subject} could not be searched.",
+                write,
             )
-        except JiraUnavailable as unavailable:
-            return self._jira_failed(tool, "could not search Jira.", str(unavailable), write)
         tickets = found.tickets
         count = len(tickets)
         what = "found no tickets" if count == 0 else f"found {_tickets(count)}"
@@ -518,21 +532,27 @@ class _AgentRun:
             cut_off=found.cut_off,
         )
 
-    def _jira_read(self, tool: Tool, args: JiraReadArguments, write: Emit) -> str:
+    def _jira_read(self, tool: Tool, args: JiraReadArguments, write: Emit) -> str | TaskError:
         jira = self._task.jira
         if not self._projects:
             return _error(NO_PROJECT)
         if args.key.rsplit("-", 1)[0] not in self._projects:
             return _error(_only_projects(self._projects))
         write(self._started(tool, f"reads ticket {args.key}."))
-        if jira is None:
-            return self._jira_failed(tool, f"could not read ticket {args.key}.", JIRA_OFF, write)
-        try:
-            ticket = jira.read(args.key)
-        except JiraUnavailable as unavailable:
-            return self._jira_failed(
-                tool, f"could not read ticket {args.key}.", str(unavailable), write
+        ticket = _from_jira(jira, lambda reader: reader.read(args.key))
+        if isinstance(ticket, TaskError):
+            subject = f"ticket {args.key}"
+            return self._read_failed(
+                tool,
+                f"could not read {subject}.",
+                ticket,
+                f"Could not read {subject}: {ticket.message}",
+                f"{subject} could not be read.",
+                write,
             )
+        if ticket is None:
+            write(self._finished(tool, f"found no ticket {args.key}.", {"tickets": []}))
+            return _error(NO_SUCH_TICKET)
         write(self._finished(tool, f"read ticket {ticket.key}.", {"tickets": [_headline(ticket)]}))
         return _result(
             {
@@ -580,9 +600,13 @@ class _AgentRun:
         )
         return _result("Proposed. Nothing is written until an Approver approves it.")
 
-    def _jira_failed(self, tool: Tool, what: str, problem: str, write: Emit) -> str:
-        write(self._finished(tool, what, {"problem": problem}))
-        return _error(problem)
+    def _read_failed(
+        self, tool: Tool, what: str, failure: TaskError, message: str, reason: str, write: Emit
+    ) -> TaskError:
+        write(self._finished(tool, what, {"problem": failure.message}))
+        error = failure.model_copy(update={"message": message})
+        write(self._failed(error, reason, tool.model_name))
+        return error
 
     def _started(self, tool: Tool, what: str) -> Draft:
         return Draft(
@@ -627,6 +651,15 @@ def _after_think(state: AgentState) -> str:
 
 def _after_act(state: AgentState) -> str:
     return END if state.error is not None else "think"
+
+
+def _from_jira[T](jira: JiraReader | None, ask: Callable[[JiraReader], T]) -> T | TaskError:
+    if jira is None:
+        return JIRA_OFF
+    try:
+        return ask(jira)
+    except JiraUnavailable as unavailable:
+        return TaskError(type="UpstreamUnavailable", message=str(unavailable), retryable=True)
 
 
 def _wants_tools(reply: AIMessage) -> bool:

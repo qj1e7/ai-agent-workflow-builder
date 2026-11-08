@@ -16,6 +16,7 @@ TIMEOUT_SECONDS: Final = 10.0
 MAX_TICKETS: Final = 50
 MAX_ANSWER_BYTES: Final = 1_000_000
 TOKEN_HEADER: Final = "X-Callback-Token"
+NO_ANSWER: Final = "Jira could not answer."
 
 
 class JiraTicket(BaseModel):
@@ -65,7 +66,7 @@ class JiraReader(Protocol):
         created_since: str | None = None,
     ) -> JiraFound: ...
 
-    def read(self, key: str) -> JiraTicket: ...
+    def read(self, key: str) -> JiraTicket | None: ...
 
 
 # One reader for one task, or None when no Jira is set up.
@@ -109,20 +110,24 @@ class PlatformJira:
             "created_since": created_since or "",
         }
         answer = self._get("/tickets", params)
+        if answer is None:
+            raise JiraUnavailable(NO_ANSWER)
         try:
             found = _TicketList.model_validate_json(answer)
             return JiraFound(found.tickets, found.cut_off)
         except ValidationError as error:
             raise JiraUnavailable("Jira gave an answer that could not be read.") from error
 
-    def read(self, key: str) -> JiraTicket:
+    def read(self, key: str) -> JiraTicket | None:
         answer = self._get(f"/tickets/{quote(key, safe='')}", {"task": self._task_id})
+        if answer is None:
+            return None
         try:
             return JiraTicket.model_validate_json(answer)
         except ValidationError as error:
             raise JiraUnavailable("Jira gave an answer that could not be read.") from error
 
-    def _get(self, path: str, params: dict[str, str]) -> bytes:
+    def _get(self, path: str, params: dict[str, str]) -> bytes | None:
         try:
             response = self._client.get(
                 f"{self._base}{path}",
@@ -134,9 +139,9 @@ class PlatformJira:
         except httpx.HTTPError as error:
             raise JiraUnavailable("Jira could not be reached.") from error
         if response.status_code == 404:
-            raise JiraUnavailable("Jira has no such ticket.")
+            return None
         if response.status_code != 200 or len(response.content) > MAX_ANSWER_BYTES:
-            raise JiraUnavailable("Jira could not answer.")
+            raise JiraUnavailable(NO_ANSWER)
         return response.content
 
 
