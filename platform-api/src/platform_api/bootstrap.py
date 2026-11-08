@@ -58,14 +58,8 @@ def main(env: Mapping[str, str] | None = None) -> int:
     except ConfigError as error:
         say(str(error))
         return 1
-    unreadable = unreadable_data(settings.owner_database_url)
-    if unreadable:
-        for line in unreadable:
-            say(line)
-        say(RESET_HINT)
+    if not migrate_to_head(settings.owner_database_url, say):
         return _finish(settings, say, [], [], "the database holds old release-check data")
-    upgrade_all(settings.owner_database_url)
-    say("database migrations are at head")
     definitions = load_all()
     findings = lint(definitions)
     if findings:
@@ -82,6 +76,18 @@ def main(env: Mapping[str, str] | None = None) -> int:
     if findings:
         return _finish(settings, say, loaded, findings, "the live workflows fail the lint")
     return _finish(settings, say, loaded, [], "all workflows loaded, active and linted")
+
+
+def migrate_to_head(owner_url: str, say: Say) -> bool:
+    unreadable = unreadable_data(owner_url)
+    if unreadable:
+        for line in unreadable:
+            say(line)
+        say(RESET_HINT)
+        return False
+    upgrade_all(owner_url)
+    say("database migrations are at head")
+    return True
 
 
 def _detail_without_message(what: str, error: Exception) -> str:
