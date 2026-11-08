@@ -197,6 +197,50 @@ async def test_a_search_says_it_was_cut_off_when_jira_sends_a_short_page_and_has
     assert len(whole.issues) == 40 and not whole.cut_off
 
 
+def jira_done_in_pages(
+    flavor: JiraFlavor, done: list[str], page: int, seen: list[httpx.Request], stall: bool = False
+) -> JiraRestAdapter:
+    tickets = issues_listing(len(done), flavor)["issues"]
+    for ticket, key in zip(tickets, done, strict=True):
+        ticket["key"] = key
+        ticket["fields"]["status"]["statusCategory"]["key"] = "done"
+        ticket["fields"]["resolutiondate"] = "2026-11-05T16:12:00.000+0800"
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        asked = request.url.params["jql"]
+        matching = [t for t in tickets if f'"{t["key"]}"' in asked]
+        issues = [] if stall and len(seen) > 1 else matching[:page]
+        if flavor == "cloud":
+            more = len(matching) > len(issues)
+            token = {"nextPageToken": "next"} if more else {}
+            return httpx.Response(200, json={"issues": issues, "isLast": not more, **token})
+        body = {"startAt": 0, "maxResults": page, "total": len(matching), "issues": issues}
+        return httpx.Response(200, json=body)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(answer))
+    auth = JiraAuth.of(flavor, "token-1", "bot@example.com")
+    return JiraRestAdapter(BASES[flavor], flavor, auth, client)
+
+
+@pytest.mark.parametrize("flavor", ["datacenter", "cloud"])
+async def test_done_tickets_asks_again_when_jira_sends_a_short_page(flavor: JiraFlavor):
+    keys = [f"OPS-{n}" for n in range(1, 51)]
+    done = keys[::2]
+    seen: list[httpx.Request] = []
+    found = await jira_done_in_pages(flavor, done, page=10, seen=seen).done_tickets(keys)
+    assert sorted(found) == sorted(done)
+
+
+@pytest.mark.parametrize("flavor", ["datacenter", "cloud"])
+async def test_done_tickets_stops_when_jira_says_more_but_sends_nothing_new(flavor: JiraFlavor):
+    keys = [f"OPS-{n}" for n in range(1, 51)]
+    seen: list[httpx.Request] = []
+    jira = jira_done_in_pages(flavor, keys, page=10, seen=seen, stall=True)
+    found = await jira.done_tickets(keys)
+    assert len(found) == 10 and len(seen) == 2
+
+
 def practice_without_zone(kit: PracticeKit) -> JiraRestAdapter:
     """The practice Jira, read by an adapter that finds no time zone on the account."""
 
