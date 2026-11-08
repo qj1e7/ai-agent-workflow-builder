@@ -2,6 +2,7 @@ import json
 from datetime import date
 from typing import Any
 
+import httpx
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
@@ -34,6 +35,7 @@ from agent_runtime.contracts import (
     version_checker_card,
 )
 from agent_runtime.events import EventLog
+from agent_runtime.github import GitHubReleaseSource
 from agent_runtime.jira import JiraReader, JiraTicket
 from agent_runtime.planner import FixedPlanner, run_cards
 from agent_runtime.release_source import MovableSource, Release
@@ -389,6 +391,22 @@ def test_releases_github_refuses_stop_the_agent_and_the_stop_cannot_be_retried()
         retryable=False,
     )
     assert source.calls == [REPO]
+
+
+def test_github_limiting_how_often_we_ask_stops_the_agent_and_the_stop_can_be_retried():
+    limited = httpx.Response(429, json={}, headers={"retry-after": "60"})
+    github = httpx.Client(transport=httpx.MockTransport(lambda request: limited))
+    chat = ScriptedChat(script=[asks(call(READ, {"repo": REPO}, "t1")), AIMessage("Done.")])
+    room = Room(chat, source=GitHubReleaseSource("https://github.test", client=github))
+    result = room.run()
+    assert isinstance(result, TaskFailed)
+    assert result.error == TaskError(
+        type="UpstreamUnavailable",
+        message=f"Could not check {REPO}: GitHub is limiting how often we can ask it. "
+        "Try again later",
+        retryable=True,
+    )
+    assert room.clock.slept == []
 
 
 def test_a_ticket_asked_for_in_the_same_turn_as_a_failed_read_is_never_proposed():

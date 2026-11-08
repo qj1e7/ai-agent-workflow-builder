@@ -164,6 +164,16 @@ def test_a_refusal_says_whether_github_limited_how_often_we_ask(
         assert (raised.value.status, raised.value.limited) == (403, limited)
 
 
+@pytest.mark.parametrize("headers", [{"x-ratelimit-remaining": "0"}, {"retry-after": "60"}])
+def test_a_429_that_says_github_is_limiting_us_is_rejected_as_limited_not_retried(
+    headers: dict[str, str],
+):
+    transport = httpx.MockTransport(lambda r: httpx.Response(429, json={}, headers=headers))
+    with pytest.raises(SourceRejected) as raised:
+        source(transport).fetch("o/r")
+    assert (raised.value.status, raised.value.limited) == (429, True)
+
+
 def test_a_releases_read_says_whether_github_sent_it_to_another_address():
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.startswith("/repos/"):

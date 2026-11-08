@@ -17,6 +17,7 @@ from agent_runtime.events import Draft
 
 CHECKER = AgentRef(id="version_checker", display="Version checker")
 SOURCE_NAME = "GitHub"
+LIMITED = f"{SOURCE_NAME} is limiting how often we can ask it. Try again later"
 NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
 
 
@@ -83,6 +84,8 @@ def read_releases(
         try:
             return source.fetch(repo)
         except SourceRejected as refused:
+            if refused.limited:
+                return TaskError(type="UpstreamUnavailable", message=LIMITED, retryable=True)
             return TaskError(
                 type="UpstreamRejected",
                 message=f"{SOURCE_NAME} answered {phrase(refused.status)}",

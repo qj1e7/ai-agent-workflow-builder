@@ -137,10 +137,11 @@ class GitHubReleaseSource:
         except httpx.TransportError as error:
             raise SourceUnavailable(None) from error
         status = response.status_code
-        if status >= 500 or status in RETRY_STATUSES:
+        limited = status >= 300 and _rate_limited(response)
+        if status >= 500 or (status in RETRY_STATUSES and not limited):
             raise SourceUnavailable(status)
         if status >= 300:
-            raise SourceRejected(status, limited=_rate_limited(response))
+            raise SourceRejected(status, limited=limited)
         try:
             return shape.validate_json(response.content), bool(response.history)
         except ValidationError as error:
