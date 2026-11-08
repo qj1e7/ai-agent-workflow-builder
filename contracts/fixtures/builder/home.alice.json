@@ -13,7 +13,7 @@
       "retryable": true,
       "advice": {
         "explanation": "An agent could not finish its work.",
-        "likely_cause": "A service the agent reads from, such as GitHub, was unavailable or answered with an error.",
+        "likely_cause": "A service the agent reads from was unavailable or answered with an error.",
         "suggested_action": "retry",
         "suggestion": "Retry the run. If it fails again, check whether that service is up."
       }

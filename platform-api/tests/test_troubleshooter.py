@@ -302,3 +302,37 @@ def test_a_retry_at_the_write_step_carries_on_without_a_new_yes(reason: FailureR
     assert (got.retry.possible, got.retry.asks_again) == (True, False)
     assert got.next == "retry"
     assert "nobody has to approve again" in got.can_fix
+
+
+def test_jira_not_connected_is_told_to_connect_it_in_settings():
+    advice = explain_failure(
+        failure("AgentError", False, message="JiraNotConnected: Jira is not connected.")
+    )
+    assert advice != explain_failure(failure("AgentError", False))
+    assert "connect Jira in Settings" in advice.suggestion
+
+
+def test_a_refused_jira_is_told_to_check_the_connection_and_not_to_retry():
+    advice = explain_failure(
+        failure("AgentError", False, message="JiraRefused: Jira refused the request.")
+    )
+    assert advice != explain_failure(failure("AgentError", False))
+    assert "check the Jira connection in Settings" in advice.suggestion
+
+
+def test_the_generic_agent_error_names_no_service():
+    said = explain("AgentError").likely_cause
+    assert "GitHub" not in said and "Jira" not in said
+
+
+def test_a_rate_limited_stop_is_told_to_wait_before_retrying():
+    message = (
+        "UpstreamUnavailable: Could not check LangGraph: GitHub is limiting how often we "
+        "can ask it. Try again later"
+    )
+    advice = explain_failure(failure("AgentError", True, message=message))
+    assert advice.suggested_action == "retry"
+    assert advice.suggestion.startswith("Wait")
+    assert "GitHub" not in advice.likely_cause
+    other = explain_failure(failure("AgentError", True, message="UpstreamUnavailable: down"))
+    assert other == explain("AgentError")
