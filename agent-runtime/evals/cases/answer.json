@@ -4663,10 +4663,14 @@
   },
   {
     "id": "sw-write-edit",
-    "note": "Software versioning set, 8 Nov.",
     "task": "Change the version of Redis to 9.0.0 on the Software page",
-    "not_kind": [
+    "note": "A change request keeps its first answer and never goes to the question lane (9 Nov).",
+    "kind": [
       "watchlist",
+      "cant",
+      "refused"
+    ],
+    "not_kind": [
       "question"
     ],
     "facts": {

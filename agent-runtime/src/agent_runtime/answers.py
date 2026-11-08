@@ -56,7 +56,7 @@ from agent_runtime.contract import (
     WhyStoppedAnswer,
 )
 from agent_runtime.drafting import ask_model
-from agent_runtime.follow_ups import follow_up_of, watch_offer
+from agent_runtime.follow_ups import follow_up_of, watch_offer_of
 from agent_runtime.planner import (
     CANT_YET,
     NOTE_LIMIT,
@@ -543,6 +543,11 @@ def _watched(answer: WatchlistAnswer, request: AnswerRequest) -> bool:
 QUESTION_SHAPE: Final = re.compile(
     r"^\s*(?:which|what|how|is|are|do|does|did|when)\b|\?\s*$", re.IGNORECASE
 )
+OPENS_A_QUESTION: Final = re.compile(
+    r"^\s*(?:which|what|how|is|are|do|does|did|when)\b", re.IGNORECASE
+)
+"""A change word inside a question, such as "Is the watchlist running?", is still a question. A
+request that does not open as one and carries a change word keeps its first answer."""
 WATCHLIST_WORDS: Final = re.compile(r"\b(?:watchlist|watching|watched)\b", re.IGNORECASE)
 
 
@@ -560,11 +565,16 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     if question_messages(request) is None:
         return answer
     text = visible_words(request.task)
+    if (change_verbs_in(text) or commands_a_change(text)) and not OPENS_A_QUESTION.match(text):
+        return answer
     followed = follow_up_of(request)
-    if followed is not None and followed.watched is not None and _follows(answer):
-        return AskTheQuestionLane(
-            otherwise=answer, first_on_reject=not isinstance(answer, AbilitiesAnswer)
-        )
+    if followed is not None:
+        if followed.watched is None:
+            return watch_offer_of(followed, read.software, answer) or answer
+        if _follows(answer):
+            return AskTheQuestionLane(
+                otherwise=answer, first_on_reject=not isinstance(answer, AbilitiesAnswer)
+            )
     if isinstance(answer, AbilitiesAnswer) or (
         isinstance(answer, WatchlistAnswer) and _watched(answer, request)
     ):
@@ -618,9 +628,6 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     refused = word_rule_refusal(request.task)
     if refused is not None:
         return Answered(answer=refused)
-    offer = watch_offer(request)
-    if offer is not None:
-        return Answered(answer=offer)
     read = ask_model(
         chat_for,
         ANSWER_SYSTEM,

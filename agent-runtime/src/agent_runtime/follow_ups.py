@@ -1,16 +1,17 @@
 """Safe follow-ups (ADR 0042): "and Redis?" after an answer about the watchlist.
 
 The follow-up reads only what the person typed now. The previous turn is client input, so it
-decides whether a follow-up applies and nothing more: it never supplies request text. A name on the
-watchlist sends the typed words to the read-only question lane. Any other plausible name becomes the
-offer to watch it, which the person must tap. Everything else takes the normal path."""
+decides whether a follow-up applies and nothing more: it never supplies request text. The first
+reading always runs first. A name on the watchlist sends the typed words to the read-only question
+lane. Any other plausible name becomes the offer to watch it, which the person must tap, only when
+the first reading names it as software. Everything else keeps the first answer."""
 
 import re
 from dataclasses import dataclass
 from typing import Final
 
 from agent_runtime.abilities import change_verbs_in, commands_a_change
-from agent_runtime.contract import AnswerRequest, WatchlistAnswer
+from agent_runtime.contract import AnswerRequest, PlannerAnswer, WatchlistAnswer
 from agent_runtime.planner import visible_words
 
 FOLLOWS: Final = frozenset({"question", "watchlist"})
@@ -73,10 +74,14 @@ def follow_up_of(request: AnswerRequest) -> FollowUp | None:
     return FollowUp(name=name, watched=held.get(name.casefold()))
 
 
-def watch_offer(request: AnswerRequest) -> WatchlistAnswer | None:
-    """The offer to watch X, for a follow-up about software the watchlist does not hold. The word
-    rule runs before this, so a request it refuses never gets here."""
-    found = follow_up_of(request)
-    if found is None or found.watched is not None:
+def watch_offer_of(
+    found: FollowUp, read_software: str | None, answer: PlannerAnswer
+) -> WatchlistAnswer | None:
+    """The offer to watch X, for a follow-up about software the watchlist does not hold. It needs
+    the first reading to name X as software, or the first answer to be a watchlist answer for X."""
+    wanted = found.name.strip().casefold()
+    said = (read_software or "").strip().casefold()
+    asked = answer.software if isinstance(answer, WatchlistAnswer) else None
+    if wanted not in (said, (asked or "").strip().casefold()):
         return None
     return WatchlistAnswer(word=VERSION, software=found.name)
