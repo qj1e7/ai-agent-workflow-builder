@@ -1507,7 +1507,8 @@ SKIPS_A_YES: Final = re.compile(
       | \b(?:treat|consider|take)\s+{_IT}\s+as\s+approved\b
       | \b(?:i|we)(?:'ve|\s+have)?\s+already\s+approved(?:\s+{_IT})?\b
       | \bsign\s+{_IT}\s+off\s+(?:yourself|yourselves|itself)\b
-      | \bskip(?:s|ped|ping)?\s+(?:the\s+|an?\s+|any\s+|all\s+|my\s+)?(?:{_A_YES}|teams)\b
+      | \bskip(?:s|ped|ping)?\s+(?:asking\s+(?:for\s+)?)?
+            (?:the\s+|an?\s+|any\s+|all\s+|my\s+)?(?:{_A_YES}|teams)\b
       | \bbypass(?:es|ed|ing)?\s+(?:the\s+|an?\s+)?(?:{_A_YES}|gate|check|teams|{_SOMEONE_ELSE})\b
       | \b(?:don'?t|do\s+not|never)\s+(?:ask(?:ing)?|wait(?:ing)?|bother(?:ing)?)\s+
             (?:getting\s+|to\s+get\s+|with\s+)?(?:for\s+)?

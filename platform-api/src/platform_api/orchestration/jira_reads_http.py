@@ -107,10 +107,13 @@ JIRA_REFUSED = error_response("Jira refused the request")
 # A refusal is not an outage: asking again is refused the same way until the Jira connection is
 # fixed. 424 keeps it apart from 503, which an agent may retry.
 JIRA_REFUSED_STATUS = 424
+# A 401 or 403 from Jira is a refused sign-in or permission, so it is a refusal too, however the
+# REST adapter classes it (it keeps a 401 retryable for the write connector).
+JIRA_SIGN_IN_STATUSES = frozenset({401, 403})
 
 
 def _jira_failed(error: JiraError) -> HTTPException:
-    if isinstance(error, JiraRefused):
+    if isinstance(error, JiraRefused) or error.status in JIRA_SIGN_IN_STATUSES:
         return HTTPException(status_code=JIRA_REFUSED_STATUS, detail="Jira refused the request")
     return HTTPException(status_code=503, detail="Jira could not answer")
 

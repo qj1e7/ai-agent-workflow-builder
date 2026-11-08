@@ -485,26 +485,27 @@ def _asks_for_a_change(clause: str) -> bool:
     return bool(verbs) or commands_a_change(clause)
 
 
-def _change_clause(text: str) -> str | None:
-    """The request's own words for its change part: the first clause with a change verb, less
-    the polite lead-in."""
-    for clause in re.split(r"[,;!?]+|\.(?=\s|$)", text):
-        if _asks_for_a_change(clause):
-            lead = r"^\s*(?:(?:can|could|would|will)\s+you\s+|please\s+|and\s+|then\s+|also\s+)+"
-            return re.sub(lead, "", clause, flags=re.IGNORECASE).strip() or None
-    return None
+def _change_clauses(text: str) -> list[str]:
+    """The request's own words for each change part: every clause with a change verb, less the
+    polite lead-in."""
+    lead = r"^\s*(?:(?:can|could|would|will)\s+you\s+|please\s+|and\s+|then\s+|also\s+)+"
+    found = (
+        re.sub(lead, "", clause, flags=re.IGNORECASE).strip()
+        for clause in re.split(r"[,;!?]+|\.(?=\s|$)", text)
+        if _asks_for_a_change(clause)
+    )
+    return [clause for clause in found if clause]
 
 
 def _with_the_change_cant(answer: WatchlistAnswer, request: str) -> PlannerAnswer:
     """The watchlist answer shows the newest versions, so a request that also asks for a change
-    gets a can't row for that part, in its own words. No part of a request is dropped."""
-    clause = _change_clause(request)
-    if clause is None:
-        return answer
-    text = plain(clause, TEXT_LIMIT)
-    note = why_not("do", text) or CANT_YET
-    row = CantRow(kind="do", text=text, note=plain(note, NOTE_LIMIT), needs="new_tool")
-    return CantAnswer(cant=[row], alternative=answer)
+    gets a can't row for each such part, in its own words. No part of a request is dropped."""
+    rows: list[CantRow] = []
+    for clause in _change_clauses(request):
+        text = plain(clause, TEXT_LIMIT)
+        note = why_not("do", text) or CANT_YET
+        rows.append(CantRow(kind="do", text=text, note=plain(note, NOTE_LIMIT), needs="new_tool"))
+    return CantAnswer(cant=rows, alternative=answer) if rows else answer
 
 
 def _about(read: TaskRead, request: str) -> PlannerAnswer:
