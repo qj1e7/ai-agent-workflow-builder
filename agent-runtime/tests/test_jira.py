@@ -62,7 +62,7 @@ def test_a_read_asks_for_one_ticket_and_returns_its_body():
 
     jira, request = reader(httpx.MockTransport(handler))
     ticket = jira.read("MOCK-7")
-    assert ticket.body == "Soon."
+    assert ticket is not None and ticket.body == "Soon."
     assert seen[0].url.path == "/internal/v1/runs/run_01JD1/jira/tickets/MOCK-7"
     assert seen[0].url.params["task"] == request.task_id
 
@@ -80,12 +80,21 @@ def test_a_redirect_is_not_followed_so_the_token_never_leaves():
     assert [r.url.host for r in seen] == ["platform-api"]
 
 
-@pytest.mark.parametrize("status", [401, 404, 500])
+@pytest.mark.parametrize("status", [401, 403, 500, 503])
 def test_a_refusal_is_plain_words_and_not_the_platforms_text(status: int):
     handler = httpx.MockTransport(lambda r: httpx.Response(status, text="secret detail"))
     jira, _ = reader(handler)
     with pytest.raises(JiraUnavailable) as raised:
         jira.read("MOCK-7")
+    assert "secret detail" not in str(raised.value)
+
+
+def test_no_such_ticket_is_an_answer_but_a_search_answered_404_is_not():
+    handler = httpx.MockTransport(lambda r: httpx.Response(404, text="secret detail"))
+    jira, _ = reader(handler)
+    assert jira.read("MOCK-7") is None
+    with pytest.raises(JiraUnavailable) as raised:
+        jira.search("MOCK", None, None, None)
     assert "secret detail" not in str(raised.value)
 
 
