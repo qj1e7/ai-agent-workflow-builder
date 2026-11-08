@@ -29,8 +29,8 @@ from agent_runtime.jira import JiraTicket
 from agent_runtime.planner import why_no_tool
 
 CAN = (
-    "I can only read Jira tickets, sum up what I find, check software for new releases, create "
-    "a Jira ticket after a yes, and ask Approvers for a yes in Teams."
+    "I can only check software for new releases on GitHub, create a Jira ticket after a yes, "
+    "and ask Approvers for a yes in Teams."
 )
 WONT = ("close", "delete", "edit", "move", "update", "change", "reassign", "assign")
 
@@ -918,3 +918,8 @@ def test_a_jira_change_that_uses_a_release_word_still_asks_for_a_change():
     assert commands_a_change("upgrade the priority of MOCK-3")
     assert commands_a_change("close the Redis upgrade ticket")
     assert commands_a_change("update the status of MOCK-12")
+
+
+def test_the_reactive_can_lists_only_the_focus_abilities():
+    assert "read Jira tickets" not in CAN
+    assert why_not("do", "Delete them") == f"I can't delete them. {CAN}"

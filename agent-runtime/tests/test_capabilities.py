@@ -172,12 +172,12 @@ def test_a_search_older_than_some_days_is_a_filter_and_past_the_newest_is_not():
     )
 
 
-def test_a_refusal_ends_with_what_every_ready_entry_with_an_ability_line_or_a_duty_says():
+def test_a_refusal_ends_with_what_every_ready_focus_entry_says():
     refused = why_not("do", "Delete them") or ""
-    for line in {a.plain for a in ABILITIES}:
-        assert line in refused
-    for duty in (c for c in READY if c.platform):
-        assert duty.plain[0].lower() + duty.plain[1:] in refused
+    for entry in (c for c in READY if c.focus):
+        assert entry.plain[0].lower() + entry.plain[1:] in refused
+    for entry in (c for c in READY if not c.focus):
+        assert entry.plain[0].lower() + entry.plain[1:] not in refused
 
 
 def test_a_refusal_says_yet_for_what_is_planned_and_not_for_what_the_registry_will_not_do():

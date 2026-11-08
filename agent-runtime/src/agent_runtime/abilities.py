@@ -555,11 +555,10 @@ class _Reader:
         return self.verb(word) is not None and not word.proper
 
     def can(self) -> str:
-        plain = list(dict.fromkeys(ability.plain for ability in self.abilities))
         if self.abilities is ABILITIES:
-            plain += [
-                _lower_first(c.plain) for c in CAPABILITIES if c.state == "ready" and c.platform
-            ]
+            plain = [_lower_first(c.plain) for c in CAPABILITIES if c.state == "ready" and c.focus]
+        else:
+            plain = list(dict.fromkeys(ability.plain for ability in self.abilities))
         listed = plain[0] if len(plain) == 1 else f"{', '.join(plain[:-1])}, and {plain[-1]}"
         return f"I can only {listed}."
 
@@ -1701,6 +1700,45 @@ def software_name(said: str | None) -> str | None:
 
 def release_word_in(text: str) -> str | None:
     return next((w for w in re.findall(r"\w+", text) if w.casefold() in RELEASE_ROOTS), None)
+
+
+RELEASE_SOURCES: Final = {
+    "maven central": "Maven Central",
+    "maven": "Maven",
+    "npm": "npm",
+    "pypi": "PyPI",
+    "docker hub": "Docker Hub",
+    "dockerhub": "Docker Hub",
+    "nuget": "NuGet",
+    "rubygems": "RubyGems",
+    "crates.io": "crates.io",
+    "helm": "Helm",
+}
+"""Places a person may name for a software's releases. The platform reads GitHub only."""
+
+_PREPOSITION: Final = r"(?:from|on|in|via|at|using|through|of)"
+_ALSO_A_NAME: Final = frozenset({"maven", "helm"})
+"""Sources that are also the names of software, so a "watch Helm" is not a source."""
+_RELEASE_SOURCE: Final = re.compile(
+    rf"(?<![\w.])(?:({_PREPOSITION})\s+)?("
+    + "|".join(re.escape(k) for k in RELEASE_SOURCES)
+    + r")(?!\w)",
+    re.IGNORECASE,
+)
+
+
+def other_release_source(text: str) -> str | None:
+    """The first release source in the text other than GitHub, as the person wrote it. A source
+    that is also a software name counts only after "from", "on" and the like."""
+    for found in _RELEASE_SOURCE.finditer(text):
+        if found.group(1) is not None or found.group(2).casefold() not in _ALSO_A_NAME:
+            return found.group(2)
+    return None
+
+
+def release_source_note(source: str) -> str:
+    name = RELEASE_SOURCES.get(source.casefold(), source)
+    return f"I only read releases on GitHub. {name} isn't a source I read yet."
 
 
 def other_systems(text: str) -> list[str]:

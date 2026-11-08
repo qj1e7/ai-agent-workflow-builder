@@ -4872,5 +4872,174 @@
         }
       ]
     }
+  },
+  {
+    "id": "wv-add-nodejs",
+    "note": "Watch verbs, 9 Nov.",
+    "task": "add nodejs for me",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "nodejs",
+    "word": [
+      "add"
+    ]
+  },
+  {
+    "id": "wv-check-nodejs",
+    "note": "Watch verbs, 9 Nov.",
+    "task": "check nodejs",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "nodejs",
+    "word": [
+      "check"
+    ]
+  },
+  {
+    "id": "wv-watch-grafana",
+    "note": "Watch verbs, 9 Nov.",
+    "task": "watch Grafana",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "Grafana",
+    "word": [
+      "watch"
+    ]
+  },
+  {
+    "id": "wv-keep-eye-redis",
+    "note": "Watch verbs, 9 Nov.",
+    "task": "keep an eye on Redis",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "Redis",
+    "word": [
+      "keep an eye on"
+    ]
+  },
+  {
+    "id": "wv-monitor-fastapi",
+    "note": "Watch verbs, 9 Nov.",
+    "task": "monitor fastapi",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "fastapi",
+    "word": [
+      "monitor"
+    ]
+  },
+  {
+    "id": "wv-track-grafana-releases",
+    "note": "Watch verbs, 9 Nov.",
+    "task": "track the Grafana releases",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "Grafana",
+    "word": [
+      "release*"
+    ]
+  },
+  {
+    "id": "wv-add-a-software",
+    "note": "Watch verbs, 9 Nov.",
+    "task": "add a software for me",
+    "kind": [
+      "which_software"
+    ]
+  },
+  {
+    "id": "wv-maven",
+    "note": "Only GitHub releases are read. The can't names the source in the person's words.",
+    "task": "add a software from maven instead",
+    "kind": [
+      "cant"
+    ],
+    "cant": [
+      "maven"
+    ],
+    "needs": "new_system",
+    "system": "maven",
+    "not_kind": [
+      "watchlist",
+      "which_software"
+    ]
+  },
+  {
+    "id": "wv-no-check-workflows",
+    "note": "Not a watch request: a ticket, project, person or workflow.",
+    "task": "check my workflows",
+    "not_kind": [
+      "watchlist",
+      "which_software"
+    ]
+  },
+  {
+    "id": "wv-no-jira-ticket-redis",
+    "note": "Not a watch request: a ticket, project, person or workflow.",
+    "task": "add a Jira ticket for Redis",
+    "not_kind": [
+      "watchlist",
+      "which_software"
+    ]
+  },
+  {
+    "id": "wv-no-add-approver",
+    "note": "Not a watch request: a ticket, project, person or workflow.",
+    "task": "add Bob as an approver",
+    "not_kind": [
+      "watchlist",
+      "which_software"
+    ]
+  },
+  {
+    "id": "wv-no-monitor-project",
+    "note": "Not a watch request: a ticket, project, person or workflow.",
+    "task": "monitor the MOCK project",
+    "not_kind": [
+      "watchlist",
+      "which_software"
+    ]
+  },
+  {
+    "id": "wv-no-watch-board",
+    "note": "Not a watch request: a ticket, project, person or workflow.",
+    "task": "watch the Jira board",
+    "not_kind": [
+      "watchlist",
+      "which_software"
+    ]
+  },
+  {
+    "id": "wv-no-check-ticket",
+    "note": "Not a watch request: a ticket, project, person or workflow.",
+    "task": "check MOCK-12",
+    "not_kind": [
+      "watchlist",
+      "which_software"
+    ]
+  },
+  {
+    "id": "wv-no-track-approvals",
+    "note": "Not a watch request: a ticket, project, person or workflow.",
+    "task": "track my approvals",
+    "not_kind": [
+      "watchlist",
+      "which_software"
+    ]
+  },
+  {
+    "id": "wv-no-add-comment",
+    "note": "Not a watch request: a ticket, project, person or workflow.",
+    "task": "add a comment to MOCK-3",
+    "not_kind": [
+      "watchlist",
+      "which_software"
+    ]
   }
 ]
