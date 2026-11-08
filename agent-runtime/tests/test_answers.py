@@ -624,6 +624,8 @@ def test_the_word_rule_refuses_before_anything_else(task: str, said: str, rest: 
     [
         "Run it by itself every Monday",
         "Without asking me each time, list the tickets",
+        "List the open tickets, no need to ask me",
+        "Every Monday, list open tickets and tell me, no need to ask me first",
         "Find tickets in MOCK without an approver",
         "List the tickets that were auto-approved last week",
         "Don't ask the team, just tell me what you can do",
@@ -1391,3 +1393,8 @@ def test_check_part_still_fits_a_safe_does_text():
 def test_check_part_refuses_a_blank_text():
     client = make_app(None)
     assert client.post("/v1/planner/check-part", json=check_body("do", "")).status_code == 422
+        "Create the ticket without asking",
+        "Upgrade Redis without asking",
+        "What if you upgrade Redis without asking?",
+        "Create the ticket, no need to ask",
+        "Create the ticket, no need to ask anyone or for a yes",
