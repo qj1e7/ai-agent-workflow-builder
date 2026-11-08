@@ -301,26 +301,21 @@ describe('the line under the Operator’s greeting', () => {
 describe('the three suggestions under the box', () => {
   const CAPS = capabilities as CapabilitiesView
 
-  it('on day one are the platform’s own examples, where the question is an intent and the tasks are typed words', () => {
-    const chips = suggestionsOf(DAY_ONE, CAPS)
+  it('with nothing watched are the platform’s own examples, where the question is an intent and the task is typed words', () => {
+    const chips = suggestionsOf(0, CAPS)
     expect(chips.map((chip) => chip.label)).toEqual(CAPS.examples.map((example) => example.text))
     expect(chips.at(-1)?.ask).toEqual({ intent: 'abilities' })
     expect(chips[0]?.ask).toEqual({ text: CAPS.examples[0]?.text })
-    expect(suggestionsOf(DAY_ONE, undefined)).toEqual([])
+    expect(suggestionsOf(0, undefined)).toEqual([])
   })
 
-  it('in a normal week are intents, which never ask the model', () => {
-    const chips = suggestionsOf({ ...ALICE, stopped: [], stopped_total: 0 }, CAPS)
-    expect(chips.map((chip) => chip.label)).toEqual(['Check my workflows', 'What can I ask for?', 'Set up another workflow'])
-    expect(chips.every((chip) => chip.ask.text === undefined && chip.ask.intent !== undefined)).toBe(true)
+  it('with software watched are three typed words the question lane and the watchlist answer already read', () => {
+    const chips = suggestionsOf(3, CAPS)
+    expect(chips.map((chip) => chip.label)).toEqual(['How many software are we watching?', 'Watch another software for new versions', 'What can you do?'])
+    expect(chips.every((chip) => chip.ask.text === chip.label)).toBe(true)
   })
 
-  it('asks why a workflow stopped only when that stop is not already the first Needs you row', () => {
-    const second = stop('run_second', '2026-11-03T00:00:00Z')
-    const other: StoppedItem = { ...second, use_case_id: 'uc_other', use_case_name: 'Morning check' }
-    const home: HomeOut = { ...ALICE, stopped: [STOP, other], stopped_total: 2 }
-    expect(needsOf(home, 1).shown[0]?.key).toBe(`stopped:${STOP.run_id}`)
-    const chips = suggestionsOf(home, CAPS)
-    expect(chips[1]).toEqual({ label: 'Why did Morning check stop?', ask: { intent: 'why_stopped', use_case_id: 'uc_other' } })
+  it('shows none until the watchlist has loaded, so the set never flips', () => {
+    expect(suggestionsOf(undefined, CAPS)).toEqual([])
   })
 })

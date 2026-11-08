@@ -150,9 +150,12 @@ export interface CapabilityGroups {
   readonly notYet: readonly CapabilityView[]
 }
 
+/** The team’s focus is software versioning, so these lines lead each list. The sort is stable, so every other line keeps its order. */
+const SOFTWARE_VERSIONING: ReadonlySet<string> = new Set(['github.releases'])
+
 /** The “I can” and “Not yet” lists, split by the state the platform gave each entry. */
 export function capabilityGroups(view: CapabilitiesView): CapabilityGroups {
-  const all = view.capabilities
+  const all = [...view.capabilities].sort((a, b) => Number(SOFTWARE_VERSIONING.has(b.id)) - Number(SOFTWARE_VERSIONING.has(a.id)))
   return {
     can: all.filter((entry) => entry.state === 'ready'),
     setup: all.filter((entry) => entry.state === 'needs_setup' || entry.state === 'down'),

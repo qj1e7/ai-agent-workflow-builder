@@ -78,26 +78,25 @@ export interface Suggestion {
   readonly ask: PlannerAnswerIn
 }
 
+/** What Home offers once software is on the watchlist. The question lane answers the first and third, and “Watch another software ...” gets the watchlist answer. */
+const WATCHED_CHIPS: readonly Suggestion[] = [
+  { label: 'How many software are we watching?', ask: { text: 'How many software are we watching?' } },
+  { label: 'Watch another software for new versions', ask: { text: 'Watch another software for new versions' } },
+  { label: 'What can you do?', ask: { text: 'What can you do?' } },
+]
+
 /**
- * The three chips under the box, chosen from what is going on now. A chip sends an intent, which never asks the model.
- * Day one offers the platform’s own examples instead, and a typed example does ask the model.
+ * The chips under the box. The team’s focus is software versioning (8 Nov 2026), so they are about the watchlist.
+ * With software watched they are three questions and requests, typed words the model reads. With none, they are the platform’s
+ * own examples, where “What can you do?” is an intent. Until the watchlist has loaded there are none, so the set never flips.
  */
-export function suggestionsOf(home: HomeOut, capabilities: CapabilitiesView | undefined): readonly Suggestion[] {
-  if (home.workflows === 0) {
-    return (capabilities?.examples ?? []).map((example) => ({
-      label: example.text,
-      ask: example.kind === 'learn' ? { intent: 'abilities' } : { text: example.text },
-    }))
-  }
-  const first = needsOf(home, 1).shown[0]
-  const stopped = home.stopped.find((item) => first?.key !== `stopped:${item.run_id}`)
-  return [
-    { label: 'Check my workflows', ask: { intent: 'check_workflows' } },
-    stopped
-      ? { label: `Why did ${stopped.use_case_name} stop?`, ask: { intent: 'why_stopped', use_case_id: stopped.use_case_id } }
-      : { label: 'What can I ask for?', ask: { intent: 'abilities' } },
-    { label: 'Set up another workflow', ask: { intent: 'setup_ideas' } },
-  ]
+export function suggestionsOf(watched: number | undefined, capabilities: CapabilitiesView | undefined): readonly Suggestion[] {
+  if (watched === undefined) return []
+  if (watched > 0) return WATCHED_CHIPS
+  return (capabilities?.examples ?? []).map((example) => ({
+    label: example.text,
+    ask: example.kind === 'learn' ? { intent: 'abilities' } : { text: example.text },
+  }))
 }
 
 export const SEE_ALL_WORDS = 'See all on Workflows'

@@ -6,7 +6,7 @@ import { tabTo, walkTabs, withoutVisibleFocus } from '../support/keyboard'
 import { assertClean, watchPage } from '../support/test'
 import { connectMockModel } from './support/settings'
 import { SettingsApi } from './support/settings'
-import type { Backend } from './support/stack'
+import { REDIS, type Backend } from './support/stack'
 import { expect, test } from './support/test'
 import { devContext, OUT, shot } from './support/ui'
 
@@ -344,7 +344,8 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
-  test('the three suggestions answer from the platform, and Check my workflows draws the Workflows list’s own rows', async ({ browser, backend }, info) => {
+  test('the three suggestions are about the watchlist, and Check my workflows, typed, draws the Workflows list’s own rows', async ({ browser, backend }, info) => {
+    await backend.freshWatchlist('alice', [REDIS])
     await backend.waitingRun('alice')
     const repair = await jiraDown(backend)
     const context = await devContext(browser, 'alice')
@@ -354,11 +355,11 @@ test.describe('with the AI model on', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(GREETING)
     const chips = page.getByRole('group', { name: 'Suggestions' }).getByRole('button')
     await expect(chips).toHaveCount(3)
-    await expect(chips.first()).toHaveText('Check my workflows')
+    await expect(chips).toHaveText(['How many software are we watching?', 'Watch another software for new versions', 'What can you do?'])
     const total = Number((await main(page).getByRole('heading', { level: 2, name: /^Needs you/ }).innerText()).replace(/\D/g, ''))
     await expect(page.getByRole('navigation', { name: 'Main' }).filter({ visible: true }).getByRole('link', { name: new RegExp(`^Workflows, ${total} need you$`) })).toBeVisible()
 
-    await chips.first().click()
+    await ask(page, 'Check my workflows')
     await expect(thread(page).getByRole('list', { name: 'Your workflows' })).toBeVisible()
     await expect(thread(page)).toContainText(/You have \d+ workflows?\./)
     await expect(main(page).getByRole('heading', { level: 2, name: /^Needs you/ }), 'Needs you is hidden while the thread shows').toHaveCount(0)
@@ -389,22 +390,23 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
-  test('by keyboard alone: Tab reaches the box, the suggestions and each answer’s buttons, with a visible focus ring', async ({ browser }) => {
+  test('by keyboard alone: Tab reaches the box, the suggestions and each answer’s buttons, with a visible focus ring', async ({ browser, backend }) => {
+    await backend.freshWatchlist('alice', [REDIS])
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     await page.goto('/')
     await expect(box(page)).toBeVisible()
     const walk = await walkTabs(page)
     const labels = walk.stops.map((stop) => stop.label)
-    for (const name of ['Describe a task for the Planner', 'Send to the Planner', 'Check my workflows']) {
+    for (const name of ['Describe a task for the Planner', 'Send to the Planner', 'How many software are we watching?']) {
       expect(labels.some((label) => label.includes(name)), `Tab reaches ${name}; stops: ${labels.join(', ')}`).toBe(true)
     }
     expect(walk.unreached, 'controls Tab never reached').toEqual([])
     expect(withoutVisibleFocus(walk.stops), 'stops whose focus ring is missing').toEqual([])
 
-    await tabTo(page, page.getByRole('button', { name: 'Check my workflows' }))
+    await tabTo(page, page.getByRole('button', { name: 'Watch another software for new versions' }))
     await page.keyboard.press('Enter')
-    await expect(thread(page).getByRole('list', { name: 'Your workflows' })).toBeVisible()
+    await expect(thread(page)).toContainText(/software/i)
     await ask(page, 'Every Friday, email me the list of tickets we closed this week')
     await tabTo(page, thread(page).getByRole('button', { name: 'Ask the team' }))
     await page.keyboard.press('Enter')

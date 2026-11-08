@@ -28,6 +28,8 @@ const MODEL = { ...NO_MODEL, active: { provider: 'mock', model: 'mock-model' } }
 
 interface Seed {
   readonly model?: 'none' | 'connected'
+  /** How many software the watchlist holds. Left out, the watchlist is empty. */
+  readonly watching?: number
 }
 
 function render(me: Me, home: HomeOut | Error | 'loading' | { readonly stale: HomeOut }, seed: Seed = {}): string {
@@ -37,6 +39,7 @@ function render(me: Me, home: HomeOut | Error | 'loading' | { readonly stale: Ho
   queryClient.setQueryData(['me', scope], me)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB])
   queryClient.setQueryData(['capabilities', scope], CAPABILITIES)
+  queryClient.setQueryData(['watchlist', scope], { software: Array.from({ length: seed.watching ?? 0 }, () => ({})) })
   if (seed.model) queryClient.setQueryData(['model-settings', scope], seed.model === 'none' ? NO_MODEL : MODEL)
   const homeQuery = () => queryClient.getQueryCache().build(queryClient, { queryKey: ['home', scope] })
   if (home instanceof Error) homeQuery().setState({ status: 'error', error: home, fetchStatus: 'idle' })
@@ -151,7 +154,7 @@ describe('Home for the Operator who started that run', () => {
 describe('Home on day one', () => {
   const html = mainOf(render(ERIN, DAY_ONE))
 
-  it('asks what the team does again and again, with the box and the platform’s three starting points', () => {
+  it('asks what the team does again and again, with the box and the platform’s two starting points', () => {
     expect(headingsOf(html)).toEqual(['What does your team do again and again?'])
     expect(text(html)).toContain('Tell me a task in plain English.')
     expect(html).toContain('<textarea')
@@ -161,7 +164,7 @@ describe('Home on day one', () => {
   })
 
   it('shows the I can list from the registry, with the not yet list folded under one question', () => {
-    expect(text(html)).toContain('I can Read Jira tickets')
+    expect(text(html)).toContain('I can Check software for new releases on GitHub Read Jira tickets')
     expect(html).toMatch(/<details[^>]*>\s*<summary[^>]*>What can’t I do yet\?<\/summary>/)
     expect(text(html)).toContain('Find tickets by their component or priority')
   })
@@ -178,7 +181,7 @@ describe('Home on day one', () => {
 })
 
 describe('Home for an Operator in a normal week', () => {
-  const html = mainOf(render(ALICE, ALICE_HOME))
+  const html = mainOf(render(ALICE, ALICE_HOME, { watching: 2 }))
 
   it('puts the box and three suggestions above Needs you, with the heading and the one-line state', () => {
     expect(headingsOf(html)).toEqual(['Good afternoon! Alice'])
@@ -186,13 +189,18 @@ describe('Home for an Operator in a normal week', () => {
     expect(html).toContain('<textarea')
     expect(html.indexOf('<textarea')).toBeLessThan(html.indexOf('Needs you'))
     const chips = [...html.matchAll(/<button[^>]*class="[^"]*_chip_[^"]*"[^>]*>([^<]*)<\/button>/g)].map((m) => m[1])
-    expect(chips).toEqual(['Check my workflows', 'What can I ask for?', 'Set up another workflow'])
+    expect(chips).toEqual(['How many software are we watching?', 'Watch another software for new versions', 'What can you do?'])
   })
 
-  it('offers “Why did X stop” instead when a stop is not already the first Needs you row', () => {
-    const quiet = mainOf(render(ALICE, { ...ALICE_HOME, approvals: [], approvals_total: 0, confirmations: [], connections: [], addresses: [], replied: [], stopped_total: 1 }))
-    expect(quiet).toContain('Check my workflows')
-    expect(quiet).not.toContain('Why did Software watchlist stop?')
+  it('sets up no general workflow from a chip, and keeps What can I ask for? one press away', () => {
+    expect(html).not.toMatch(/Set up another workflow|Every Friday|Check my workflows/)
+    expect(buttonsIn(html)).toContain('What can I ask for?')
+  })
+
+  it('shows the day-one pair while nothing is watched', () => {
+    const empty = mainOf(render(ALICE, ALICE_HOME))
+    expect(empty).toContain('aria-label="Starting points"')
+    expect(buttonsIn(empty)).toEqual(expect.arrayContaining(['Keep track of the LangGraph version', 'What can you do?']))
   })
 
   it('has one primary button, the first Needs you row’s action', () => {
@@ -216,7 +224,7 @@ describe('Home with no working AI model', () => {
   })
 
   it('still shows the lists, Ask the team and Needs you, without the model’s own row', () => {
-    expect(text(html)).toContain('I can Read Jira tickets')
+    expect(text(html)).toContain('I can Check software for new releases on GitHub Read Jira tickets')
     expect(buttonsIn(html)).toContain('Ask the team for something new')
     expect(html).toContain('data-home-item="stopped:run_01JB9"')
     expect(html).not.toContain('data-home-item="connection:model"')

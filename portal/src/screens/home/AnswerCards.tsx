@@ -296,7 +296,6 @@ export function Answer({ reply, typed, page }: AnswerProps) {
     case 'check_workflows':
     case 'why_stopped':
     case 'needs_me':
-    case 'question':
       return null
   }
 }
