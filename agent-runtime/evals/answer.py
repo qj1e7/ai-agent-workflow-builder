@@ -6,15 +6,19 @@ from pydantic import BaseModel
 from agent_runtime.answers import (
     ANSWER_SYSTEM,
     ANSWER_TIMEOUT_SECONDS,
+    AskTheQuestionLane,
     TaskRead,
-    answer_of,
+    decide,
     word_rule_refusal,
 )
 from agent_runtime.contract import (
+    AnswerRequest,
     CantAnswer,
     CantRow,
+    ModelAccess,
     PartAnswer,
     PlannerAnswer,
+    PlannerFacts,
     RowState,
     SetupCardAnswer,
     UnderstoodRow,
@@ -63,6 +67,13 @@ class AnswerCase(Case):
     also: str | None = None
     understood: list[str] = []
     schedule: list[RowState] = []
+    facts: PlannerFacts | None = None
+
+
+def _request(case: AnswerCase) -> AnswerRequest:
+    """The request the decision reads. The eval never calls the model again."""
+    access = ModelAccess(style="openai", base_url="http://eval.invalid", model="eval", api_key="-")
+    return AnswerRequest(task=case.task, model=access, facts=case.facts)
 
 
 def prompt(case: AnswerCase) -> str:
@@ -124,10 +135,10 @@ def _texts(shown: PlannerAnswer) -> list[str]:
     return strings(shown.model_dump(mode="json"))
 
 
-def _kind_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
-    wrong = case.kind and shown.kind not in case.kind
-    forbidden = shown.kind in case.not_kind
-    return [check("right_kind", [shown.kind] if wrong or forbidden else [])]
+def _kind_checks(case: AnswerCase, kind: str) -> list[Check]:
+    wrong = case.kind and kind not in case.kind
+    forbidden = kind in case.not_kind
+    return [check("right_kind", [kind] if wrong or forbidden else [])]
 
 
 def _reading_checks(case: AnswerCase, value: object) -> list[Check]:
@@ -243,13 +254,20 @@ def score(case: AnswerCase, answer: Answer) -> list[Check]:
     elif not isinstance(value, TaskRead):
         return [check("answered", ["no structured answer"])]
     else:
-        shown = answer_of(value, case.task)
+        decided = decide(value, _request(case))
+        if isinstance(decided, AskTheQuestionLane):
+            return [
+                check("answered", []),
+                *_kind_checks(case, "question"),
+                *_reading_checks(case, value),
+            ]
+        shown = decided
     if shown is None:
         return [check("answered", []), check("right_kind", ["the reading does not hold together"])]
     text = " ".join(_texts(shown))
     return [
         check("answered", []),
-        *_kind_checks(case, shown),
+        *_kind_checks(case, shown.kind),
         *_reading_checks(case, value),
         *_field_checks(case, shown),
         *_cant_checks(case, shown),

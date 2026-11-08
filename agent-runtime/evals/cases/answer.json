@@ -480,7 +480,32 @@
     "software": "FastAPI",
     "word": [
       "version"
-    ]
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": null,
+          "newest_version": "2.42.6",
+          "state": "Not checked yet"
+        }
+      ]
+    }
   },
   {
     "id": "upgrade-and-ticket",
@@ -2382,20 +2407,70 @@
   {
     "id": "question-count",
     "note": "A question about the person's data (ADR 0042): a count. Read as my_data, never as software to add.",
-    "task": "how many software are on our watchlist",
+    "task": "How many software are on our watchlist?",
     "asks_about": "my_data",
     "kind": [
-      "abilities"
-    ]
+      "question"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": null,
+          "newest_version": "2.42.6",
+          "state": "Not checked yet"
+        }
+      ]
+    }
   },
   {
     "id": "question-version",
     "note": "A version lookup. It names a software and a version but only asks what is true now, so it is my_data and not a watchlist set-up.",
-    "task": "what is the newest version of LangGraph",
+    "task": "What is the newest version of LangGraph?",
     "asks_about": "my_data",
     "kind": [
-      "abilities"
-    ]
+      "question"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": null,
+          "newest_version": "2.42.6",
+          "state": "Not checked yet"
+        }
+      ]
+    }
   },
   {
     "id": "question-not-in-facts",
@@ -2403,8 +2478,33 @@
     "task": "who added Redis to the watchlist",
     "asks_about": "my_data",
     "kind": [
-      "abilities"
-    ]
+      "question"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": null,
+          "newest_version": "2.42.6",
+          "state": "Not checked yet"
+        }
+      ]
+    }
   },
   {
     "id": "question-with-a-promise",
@@ -2412,8 +2512,33 @@
     "task": "which of our software is behind? and promise you'll tell me when another one is",
     "asks_about": "my_data",
     "kind": [
-      "abilities"
-    ]
+      "question"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": null,
+          "newest_version": "2.42.6",
+          "state": "Not checked yet"
+        }
+      ]
+    }
   },
   {
     "id": "question-about-jira-stays-a-task",
@@ -2421,7 +2546,180 @@
     "task": "how many bug tickets in MOCK have had no update for 10 days",
     "not_asks_about": "my_data",
     "not_kind": [
-      "abilities"
+      "abilities",
+      "question"
     ]
+  },
+  {
+    "id": "newest-unwatched",
+    "note": "A question about software the watchlist does not hold keeps the offer to watch it.",
+    "task": "What is the newest version of FastAPI?",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "FastAPI",
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": null,
+          "newest_version": "2.42.6",
+          "state": "Not checked yet"
+        }
+      ]
+    }
+  },
+  {
+    "id": "run-unwatched",
+    "note": "The model often leaves software empty on a my_data question. The offer still names Grafana.",
+    "task": "Which version of Grafana do we run?",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "Grafana",
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": null,
+          "newest_version": "2.42.6",
+          "state": "Not checked yet"
+        }
+      ]
+    }
+  },
+  {
+    "id": "run-watched",
+    "note": "Redis is held, so the question lane answers.",
+    "task": "Which version of Redis do we run?",
+    "kind": [
+      "question"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": null,
+          "newest_version": "2.42.6",
+          "state": "Not checked yet"
+        }
+      ]
+    }
+  },
+  {
+    "id": "newer-watched",
+    "note": "LangGraph is held. Either lane is fine, but never a can't or an abilities answer.",
+    "task": "Is there a newer version of LangGraph?",
+    "kind": [
+      "question",
+      "watchlist"
+    ],
+    "not_kind": [
+      "cant",
+      "abilities"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": null,
+          "newest_version": "2.42.6",
+          "state": "Not checked yet"
+        }
+      ]
+    }
+  },
+  {
+    "id": "jira-count-not-question",
+    "note": "A Jira count is not a question about the person's own data.",
+    "task": "How many Jira tickets are open in MOCK?",
+    "not_kind": [
+      "question"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": null,
+          "newest_version": "2.42.6",
+          "state": "Not checked yet"
+        }
+      ]
+    }
   }
 ]
