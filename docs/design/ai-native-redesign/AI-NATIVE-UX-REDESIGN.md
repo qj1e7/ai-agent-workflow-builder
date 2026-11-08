@@ -110,7 +110,7 @@ Taken from `agent-runtime/src/agent_runtime/tools.py` and `abilities.py` on 6 No
 
 ### 5.1 Operator, a normal week
 
-From 8 Nov 2026 Home is the front door for software versioning, and the general workflow builder is frozen. The chips are about the watchlist, and none of them sets up a general workflow. With nothing watched they are "Keep track of the LangGraph version" and "What can you do?". With software watched they are "What's behind on our watchlist?", "How many software are we watching?" and "Keep track of another software", and "What can I ask for?" stays one press away. The list below is the earlier design and no longer matches the chips.
+From 8 Nov 2026 Home is the front door for software versioning, and the general workflow builder is frozen. The chips are about the watchlist, and none of them sets up a general workflow. With nothing watched they are "Keep track of the LangGraph version" and "What can you do?". With software watched they are "How many software are we watching?", "Watch another software for new versions" and "What can you do?", and "What can I ask for?" stays one press away. The list below is the earlier design and no longer matches the chips.
 
 Home keeps version 3's look in every state: the Visor bot centred at the top (128 px, 96 px on a phone), a large centred heading, then the box and the suggestions. The user chose this on 7 Nov over an earlier version 4 layout that put the bot beside a smaller heading. Needs you sits under the suggestions in the same column. On a phone, the first Needs you row and its action still fit on the first screen.
 

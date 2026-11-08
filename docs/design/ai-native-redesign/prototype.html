@@ -2545,7 +2545,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* Home for an Operator (spec 5): a greeting with the state in one line, the Planner's box, three suggestions from that
      state, and Needs you while something needs her. Day one has three starting points and the capability lists instead. */
   const DAY_ONE = ['Keep track of the LangGraph version', 'What can you do?'];
-  const WATCHED = ['What’s behind on our watchlist?', 'How many software are we watching?', 'Keep track of another software'];
+  const WATCHED = ['How many software are we watching?', 'Watch another software for new versions', 'What can you do?'];
   const stoppedIds = () => routineIds().filter((id) => !S.paused[id] && status(id).tone === 'bad');
   /* The rows Home shows under the box. Offline, the hero already carries Connect a model, so its row is left out. */
   const homeNeeds = () => needs().filter((t) => curModel() || t.id !== 'model');

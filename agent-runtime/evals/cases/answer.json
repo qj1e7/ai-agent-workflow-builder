@@ -2725,75 +2725,9 @@
     }
   },
   {
-    "id": "chip-behind",
-    "note": "Home chip. The catch-all goes to the question lane.",
-    "task": "What's behind on our watchlist?",
-    "kind": [
-      "question"
-    ],
-    "facts": {
-      "watchlist": [
-        {
-          "name": "LangGraph",
-          "repo": "x/langgraph",
-          "our_version": "1.2.14",
-          "newest_version": "1.2.16",
-          "state": "New version"
-        },
-        {
-          "name": "Redis",
-          "repo": "x/redis",
-          "our_version": "8.0.2",
-          "newest_version": "8.0.2",
-          "state": "Up to date"
-        },
-        {
-          "name": "n8n",
-          "repo": "x/n8n",
-          "our_version": null,
-          "newest_version": "2.42.6",
-          "state": "Not checked yet"
-        }
-      ]
-    }
-  },
-  {
-    "id": "chip-how-many",
-    "note": "Home chip. The catch-all goes to the question lane.",
-    "task": "How many software are we watching?",
-    "kind": [
-      "question"
-    ],
-    "facts": {
-      "watchlist": [
-        {
-          "name": "LangGraph",
-          "repo": "x/langgraph",
-          "our_version": "1.2.14",
-          "newest_version": "1.2.16",
-          "state": "New version"
-        },
-        {
-          "name": "Redis",
-          "repo": "x/redis",
-          "our_version": "8.0.2",
-          "newest_version": "8.0.2",
-          "state": "Up to date"
-        },
-        {
-          "name": "n8n",
-          "repo": "x/n8n",
-          "our_version": null,
-          "newest_version": "2.42.6",
-          "state": "Not checked yet"
-        }
-      ]
-    }
-  },
-  {
-    "id": "chip-keep-track-another",
+    "id": "chip-watch-another",
     "note": "Home chip. Software with no name stays a question for the person.",
-    "task": "Keep track of another software",
+    "task": "Watch another software for new versions",
     "kind": [
       "which_software",
       "watchlist"

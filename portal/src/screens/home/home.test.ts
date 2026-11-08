@@ -311,7 +311,7 @@ describe('the three suggestions under the box', () => {
 
   it('with software watched are three typed words the question lane and the watchlist answer already read', () => {
     const chips = suggestionsOf(3, CAPS)
-    expect(chips.map((chip) => chip.label)).toEqual(['What’s behind on our watchlist?', 'How many software are we watching?', 'Keep track of another software'])
+    expect(chips.map((chip) => chip.label)).toEqual(['How many software are we watching?', 'Watch another software for new versions', 'What can you do?'])
     expect(chips.every((chip) => chip.ask.text === chip.label)).toBe(true)
   })
 
