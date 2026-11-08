@@ -1175,6 +1175,38 @@ def test_a_search_with_no_quote_stands_on_the_longest_run_of_its_own_words():
     assert cant_of(answer) == ["assign the new ticket to Ahmad too"]
 
 
+@pytest.mark.parametrize(
+    ("task", "said"),
+    [
+        (
+            "Can you change the version of Redis to 9.0.0?",
+            "change the version of Redis to 9.0.0",
+        ),
+        ("Watch Redis releases, and update Redis to 9.0.0", "update Redis to 9.0.0"),
+    ],
+)
+def test_a_change_request_answered_with_the_watchlist_shows_a_cant_for_the_change(
+    task: str, said: str
+):
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word="version", software="Redis"), task
+    )
+    assert isinstance(answer, CantAnswer)
+    [row] = answer.cant
+    assert (row.kind, row.text) == ("do", said)
+    assert row.note.startswith("I can't")
+    assert isinstance(answer.alternative, WatchlistAnswer)
+    assert answer.alternative.software == "Redis"
+
+
+def test_a_watchlist_request_with_no_change_is_still_only_the_watchlist_answer():
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word="version", software="Redis"),
+        "What is the latest version of Redis?",
+    )
+    assert answer == WatchlistAnswer(word="version", software="Redis")
+
+
 def test_a_release_request_goes_to_the_watchlist_and_a_mixed_one_carries_the_rest():
     watch = answer_of(
         read(belongs_on_watchlist=True, watchlist_word="releases", software="Kubernetes"),
@@ -1369,6 +1401,11 @@ def test_check_part_refuses_vulnerabilities_with_the_planned_words():
         "Create the ticket and skip the approval",
         "Create one follow-up ticket that lists them without waiting for approval",
         "Create the ticket without asking anyone",
+        "Create the ticket without asking",
+        "Upgrade Redis without asking",
+        "What if you upgrade Redis without asking?",
+        "Create the ticket, no need to ask",
+        "Create the ticket, no need to ask anyone or for a yes",
         "Create the ticket, no need for a yes",
         "Create the ticket and skip the sign-off",
         "Create the ticket with no review",
@@ -1393,8 +1430,3 @@ def test_check_part_still_fits_a_safe_does_text():
 def test_check_part_refuses_a_blank_text():
     client = make_app(None)
     assert client.post("/v1/planner/check-part", json=check_body("do", "")).status_code == 422
-        "Create the ticket without asking",
-        "Upgrade Redis without asking",
-        "What if you upgrade Redis without asking?",
-        "Create the ticket, no need to ask",
-        "Create the ticket, no need to ask anyone or for a yes",

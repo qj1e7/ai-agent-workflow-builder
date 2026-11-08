@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from agent_runtime.abilities import (
+    NOTIFIES,
     VULNERABILITIES_PLANNED,
     Need,
     change_verbs_in,
@@ -468,7 +469,42 @@ def _watchlist(read: TaskRead, task: _Task | None, request: str) -> PlannerAnswe
         return CantAnswer(cant=[cant], alternative=instead)
     if software is None:
         return WhichSoftwareAnswer(word=word)
-    return WatchlistAnswer(word=word, software=software, also=_also(read, task, request))
+    watching = WatchlistAnswer(word=word, software=software, also=_also(read, task, request))
+    if watching.also is not None:
+        return watching
+    return _with_the_change_cant(watching, request)
+
+
+# Words that are write verbs for a ticket but read plainly beside software: "which version do we
+# run", "log in to". The notify verbs are what a watchlist already does.
+PLAIN_BESIDE_SOFTWARE: Final = frozenset({"run", "log", "make"}) | NOTIFIES
+
+
+def _asks_for_a_change(clause: str) -> bool:
+    verbs = set(change_verbs_in(clause)) - PLAIN_BESIDE_SOFTWARE
+    return bool(verbs) or commands_a_change(clause)
+
+
+def _change_clause(text: str) -> str | None:
+    """The request's own words for its change part: the first clause with a change verb, less
+    the polite lead-in."""
+    for clause in re.split(r"[,;!?]+|\.(?=\s|$)", text):
+        if _asks_for_a_change(clause):
+            lead = r"^\s*(?:(?:can|could|would|will)\s+you\s+|please\s+|and\s+|then\s+|also\s+)+"
+            return re.sub(lead, "", clause, flags=re.IGNORECASE).strip() or None
+    return None
+
+
+def _with_the_change_cant(answer: WatchlistAnswer, request: str) -> PlannerAnswer:
+    """The watchlist answer shows the newest versions, so a request that also asks for a change
+    gets a can't row for that part, in its own words. No part of a request is dropped."""
+    clause = _change_clause(request)
+    if clause is None:
+        return answer
+    text = plain(clause, TEXT_LIMIT)
+    note = why_not("do", text) or CANT_YET
+    row = CantRow(kind="do", text=text, note=plain(note, NOTE_LIMIT), needs="new_tool")
+    return CantAnswer(cant=[row], alternative=answer)
 
 
 def _about(read: TaskRead, request: str) -> PlannerAnswer:
