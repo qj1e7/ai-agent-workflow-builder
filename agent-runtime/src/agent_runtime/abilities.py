@@ -1720,9 +1720,9 @@ _PREPOSITION: Final = r"(?:from|on|in|via|at|using|through|of)"
 _ALSO_A_NAME: Final = frozenset({"maven", "helm"})
 """Sources that are also the names of software, so a "watch Helm" is not a source."""
 _RELEASE_SOURCE: Final = re.compile(
-    rf"(?<![\w.])(?:({_PREPOSITION})\s+)?("
+    rf"(?<![\w.\-])(?:({_PREPOSITION})\s+)?("
     + "|".join(re.escape(k) for k in RELEASE_SOURCES)
-    + r")(?!\w)",
+    + r")(?![\w\-])",
     re.IGNORECASE,
 )
 

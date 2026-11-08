@@ -370,7 +370,18 @@ def _asks_for_vulnerabilities(cant: list[CantRow]) -> bool:
 
 
 def _software_of(read: TaskRead, request: str) -> str | None:
-    return whole_word_of(request, software_name(read.software))
+    """The software as the request wrote it. A reading spelled differently ("node.js" for
+    "nodejs") matches when dots, hyphens, spaces and case are ignored."""
+    said = software_name(read.software)
+    exact = whole_word_of(request, said)
+    if exact is not None:
+        return exact
+    letters = re.sub(r"[\W_]+", "", visible_words(said).casefold())
+    if not letters:
+        return None
+    loose = r"[\s.\-]*".join(re.escape(c) for c in letters)
+    found = re.search(rf"(?<![\w.\-]){loose}(?![\w\-])", request, re.IGNORECASE)
+    return None if found is None else found.group(0)
 
 
 def _watch_instead(cant: list[CantRow], read: TaskRead, request: str) -> WatchlistAnswer | None:
@@ -552,7 +563,9 @@ def _watchlist(read: TaskRead, task: _Task | None, request: str) -> PlannerAnswe
     watching = WatchlistAnswer(word=word, software=software, also=_also(read, task, request))
     if watching.also is not None:
         return watching
-    return _with_the_change_cant(watching, request if verb is None else _without(request, verb))
+    return _with_the_change_cant(
+        watching, request if verb is None else _without(request, f"{verb} {software}")
+    )
 
 
 # Words that are write verbs for a ticket but read plainly beside software: "which version do we
