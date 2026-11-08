@@ -1,0 +1,8 @@
+# Check out every text file with LF line endings, whatever core.autocrlf says.
+# Docker mounts and copies our shell scripts into Linux containers. With CRLF, Linux
+# reads "#!/bin/sh\r", cannot find that program, and the script fails. Postgres then
+# stops at deploy/postgres/init.sh and the rest of scripts/up.sh never starts.
+* text=auto eol=lf
+
+# Rubric evidence stays byte for byte as the tools wrote it. Some reports mix line endings.
+docs/evidence/** -text
