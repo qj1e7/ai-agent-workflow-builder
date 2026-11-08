@@ -92,17 +92,55 @@ def test_without_a_watchlist_in_the_facts_there_is_no_follow_up():
     assert follow_up_of(request("and Redis?", facts=PlannerFacts())) is None
 
 
-def test_unwatched_software_after_a_version_question_gives_the_watch_offer_without_the_model():
-    chat = ScriptedChat(structured=[])
-    out = answer_task(request("and FastAPI?"), lambda timeout: chat)
+def test_unwatched_software_the_reading_names_gives_the_watch_offer():
+    out, chat = run("and FastAPI?", reading("abilities", software="fastapi "))
     assert out == Answered(answer=WatchlistAnswer(word="version", software="FastAPI"))
-    assert chat.calls == []
+    assert chat.asked[0].__name__ == "TaskRead" and len(chat.calls) == 1
 
 
 def test_the_watch_offer_also_follows_a_watch_offer():
-    chat = ScriptedChat(structured=[])
-    out = answer_task(request("what about Grafana?", AFTER_A_WATCH), lambda timeout: chat)
+    out, _ = run("what about Grafana?", reading("abilities", software="Grafana"), AFTER_A_WATCH)
     assert out == Answered(answer=WatchlistAnswer(word="version", software="Grafana"))
+
+
+def test_a_watchlist_answer_for_the_unwatched_name_gives_the_watch_offer():
+    out, _ = run("and FastAPI?", watch_reading("FastAPI"))
+    assert out == Answered(answer=WatchlistAnswer(word="version", software="FastAPI"))
+
+
+@pytest.mark.parametrize("previous", [AFTER_A_QUESTION, AFTER_A_WATCH])
+@pytest.mark.parametrize(
+    "task",
+    [
+        "how about every hour?",
+        "and a Jira ticket?",
+        "and tickets?",
+        "what about GitLab access?",
+        "and the Redis ticket?",
+        "and MOCK-12?",
+    ],
+)
+def test_a_follow_up_never_preempts_the_first_reading(task: str, previous: PreviousTurn):
+    out, chat = run(task, reading("abilities"), previous)
+    assert out == Answered(answer=AbilitiesAnswer())
+    assert [c.__name__ for c in chat.asked] == ["TaskRead"]
+    cant, _ = run(task, reading("none"), previous)
+    assert cant.answer.kind != "watchlist"
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "Change the version of Redis to 9.0.0 on the Software page",
+        "Change the version of Redis to 9.0.0",
+        "Set LangGraph to 1.3",
+        "Remove n8n from the watchlist",
+        "Delete the Redis row",
+    ],
+)
+def test_a_change_request_never_reaches_the_lane(task: str):
+    for first in (reading("abilities"), reading("none", software="Redis"), watch_reading("Redis")):
+        assert not isinstance(decide(first, request(task)), AskTheQuestionLane)
 
 
 def test_watched_software_goes_to_the_question_lane_with_the_typed_words():
