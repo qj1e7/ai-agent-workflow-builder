@@ -3242,6 +3242,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (hit || (t.split(/\s+/).length <= 3 && !/ticket|jira|every|list|sum/i.test(t))) return watchCant(t, hit) || watchFor(hit, t, word);
     }
     /* Questions about her workflows (spec 6.2) are answered from platform state. Word rules stand in for the model. */
+    const follow = followUp(t);
+    if (follow) return follow;
     const about = aboutWorkflows(t);
     if (about) return about;
     if (word || isSecurityAsk(t) || (hit && /keep track|\bwatch\b|\btrack\b|monitor/i.test(t))) {
@@ -3357,9 +3359,48 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* A question about her own data (ADR 0042). In the built app the model writes the sentence from a facts snapshot, and
      the platform names the sections it used. Here the sentence is fixed and the count is read from the same list the
      Software page shows. The Looked at line links each section to its screen. */
-  const dataSay = () => { const n = watchRows().concat(S.added.map((a, i) => ({ key: `add${i}` }))).filter((r) => !S.removed.includes(r.key)).length; return n ? `There ${n === 1 ? 'is 1 software' : `are ${n} software`} on the Software watchlist.` : 'Nothing is on the Software watchlist yet.'; };
+  const liveSoftware = () => watchRows().concat(S.added.map((a, i) => ({ key: `add${i}`, name: a.name, ours: a.ours || 'Not known', newest: '?' }))).filter((r) => !S.removed.includes(r.key));
+  const dataSay = (a) => {
+    const rows = liveSoftware();
+    if (a && a.about) {
+      const r = rows.find((x) => x.key === a.about);
+      if (!r) return 'That software isn’t on the Software watchlist any more.';
+      if (r.newest === '?') return `${esc(r.name)} could not be checked, so there is no newest version to compare.`;
+      return r.ours === r.newest ? `${esc(r.name)} is up to date at ${esc(r.newest)}.` : `${esc(r.name)} is behind. You run ${esc(r.ours)} and the newest is ${esc(r.newest)}.`;
+    }
+    const n = rows.length;
+    return n ? `There ${n === 1 ? 'is 1 software' : `are ${n} software`} on the Software watchlist.` : 'Nothing is on the Software watchlist yet.';
+  };
   const LOOKED = { watchlist: ['Software', 'software'], workflows: ['Workflows', 'workflows'], needs_you: ['Needs you', 'workflows'] };
-  const dataCard = (m) => `<p class="looked small muted">Looked at: ${m.card.looked.map((k) => `<button class="linkbtn" data-act="go" data-arg="${LOOKED[k][1]}">${LOOKED[k][0]}</button>`).join(', ')}</p>`;
+  /* Under an answer about one watched software, an Operator gets the Software page's own actions: open its row, check the
+     whole watchlist (that is all the page's Check now does), and last, Stop watching, which asks first and keeps the
+     page's Undo. An Approver gets none, as on the Software page. */
+  const dataActions = (m) => {
+    const c = m.card;
+    const r = c.about ? liveSoftware().find((x) => x.key === c.about) : null;
+    if (!me().op || !r) return '';
+    const stop = c.stopping
+      ? `<span class="btns" role="group" aria-label="Stop watching ${esc(r.name)}"><span>Stop watching ${esc(r.name)}? It won’t be checked any more.</span><button class="btn sm" data-act="stopKeep" data-mid="${m.id}">Keep it</button><button class="btn sm bad" data-act="stopYes" data-mid="${m.id}">Yes, stop watching<span class="vh"> ${esc(r.name)}</span></button></span>`
+      : `<button class="btn sm" data-act="stopAsk" data-mid="${m.id}">Stop watching<span class="vh"> ${esc(r.name)}</span></button>`;
+    return `<div class="btns sw-acts"><button class="btn sm" data-act="go" data-arg="software">Open<span class="vh"> ${esc(r.name)}</span> on the Software page</button>${stop}</div><div class="btns"><button class="btn sm" data-act="checkNow">Check all software now</button></div>`;
+  };
+  const dataCard = (m) => `<p class="looked small muted">Looked at: ${m.card.looked.map((k) => `<button class="linkbtn" data-act="go" data-arg="${LOOKED[k][1]}">${LOOKED[k][0]}</button>`).join(', ')}</p>${dataActions(m)}`;
+  /* A short follow-up after an answer about the watchlist: "and Redis?". A name on the list is a question about that
+     software. Any other short name is offered for the watchlist, which the person must still tap. A change verb, a
+     pronoun or a long phrase is not a follow-up and takes the normal path (principle 4: no part of a request dropped). */
+  const FOLLOW = /^(?:and|what about|how about)\s+(.+?)\s*\??$/i;
+  const NOT_A_NAME = /^(it|that|this|them|those|these|why|how|when|what|which|who|where|all|everything)$/i;
+  const FOLLOW_CHANGES = /\b(close|delete|remove|stop|upgrade|update|create|file|add|open|approve|skip|without|ignore)\b/i;
+  function followUp(t) {
+    const last = [...S.chat.msgs].reverse().find((x) => x.from === 'planner' && x.card);
+    const m = FOLLOW.exec(t);
+    if (!last || !['data', 'watch', 'listed'].includes(last.card.kind) || !m || UNSAFE.test(t) || FOLLOW_CHANGES.test(m[1])) return null;
+    const name = m[1].replace(/^the\s+/i, '').trim();
+    if (name.split(/\s+/).length > 3 || NOT_A_NAME.test(name)) return null;
+    const row = liveSoftware().find((x) => x.name.toLowerCase() === name.toLowerCase());
+    if (row) return { kind: 'data', looked: ['watchlist'], about: row.key };
+    return watchFor(namedIn(name), name, 'version');
+  }
   const mineCard = () => (needs().length ? needsStrip(needs(), 99, 'Planner answers about your workflows') : '');
   const startsCard = () => `<div class="chips starts" role="group" aria-label="Starting points" data-unbuilt="Planner answers about your workflows">${starts().map((t) => `<button class="chip" data-act="say" data-arg="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
 
@@ -5352,6 +5393,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
       go('home');
       scrollToMsg(liveSetup().id, 'start');
     },
+    stopAsk: (_, m) => { m.card.stopping = true; render(); const b = $app.querySelector(`[data-mid="${m.id}"][data-act="stopKeep"]`); if (b) b.focus(); },
+    stopKeep: (_, m) => { m.card.stopping = false; render(); const b = $app.querySelector(`[data-mid="${m.id}"][data-act="stopAsk"]`); if (b) b.focus(); },
+    stopYes: (_, m) => { const key = m.card.about; m.card.stopping = false; A.removeSw(key); },
     repoOk: (_, m) => { m.card.repoState = 'ok'; m.card.confirmed = true; render(); },
     repoEdit: (_, m) => { m.card.repoState = 'edit'; m.card.repoDraft = m.card.repo; render(); const f = document.getElementById(`repo-${m.id}`); if (f) f.focus(); },
     repoUse: (_, m) => {

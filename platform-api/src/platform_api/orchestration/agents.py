@@ -563,6 +563,9 @@ class QuestionAnswer(WireModel):
     kind: Literal["question"] = "question"
     text: str = Field(min_length=1, max_length=600)
     looked_at: list[FactSection] = Field(max_length=3)
+    about_software: list[Annotated[str, Field(max_length=80)]] = Field(
+        default_factory=list, max_length=3
+    )
 
 
 type PlannerAnswer = Annotated[

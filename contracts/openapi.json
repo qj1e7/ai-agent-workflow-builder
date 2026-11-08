@@ -6083,6 +6083,14 @@
       "QuestionReply": {
         "additionalProperties": false,
         "properties": {
+          "about_software": {
+            "description": "The watched software the answer is about, named as the Software page names them. The Portal offers its Software-page actions for these and no others.",
+            "items": {
+              "type": "string"
+            },
+            "title": "About Software",
+            "type": "array"
+          },
           "answer": {
             "const": "question",
             "default": "question",

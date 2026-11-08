@@ -85,7 +85,7 @@ describe('the sentence for each answer', () => {
   })
 
   it('says a question answer in the Planner’s own words, not in fixed text', () => {
-    expect(sayOf(question as PlannerReply)).toBe('Three: LangGraph, Redis and n8n.')
+    expect(sayOf(question as PlannerReply)).toBe('LangGraph is behind. You run 1.2.14 and the newest is 1.2.16.')
   })
 
   it('leaves the three state answers to the pages’ own functions', () => {

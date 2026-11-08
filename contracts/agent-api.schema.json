@@ -2402,6 +2402,16 @@
     "QuestionAnswer": {
       "additionalProperties": false,
       "properties": {
+        "about_software": {
+          "description": "The watched software the answer is about, named as the watchlist names them. Code keeps only names the facts hold and the text mentions (ADR 0042).",
+          "items": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "maxItems": 3,
+          "title": "About Software",
+          "type": "array"
+        },
         "kind": {
           "const": "question",
           "default": "question",

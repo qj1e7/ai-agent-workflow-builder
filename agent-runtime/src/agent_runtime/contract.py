@@ -972,6 +972,12 @@ class QuestionAnswer(WireModel):
         max_length=3,
         description="The sections of the facts the answer used, kept only when they were sent.",
     )
+    about_software: list[Annotated[str, Field(max_length=80)]] = Field(
+        default_factory=list,
+        max_length=3,
+        description="The watched software the answer is about, named as the watchlist names "
+        "them. Code keeps only names the facts hold and the text mentions (ADR 0042).",
+    )
 
 
 type PlannerAnswer = Annotated[

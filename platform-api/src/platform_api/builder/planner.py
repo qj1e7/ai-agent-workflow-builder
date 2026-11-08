@@ -220,6 +220,11 @@ class QuestionReply(WireModel):
         description="The sections the answer used: watchlist (the Software page), workflows "
         "(the Workflows page) and needs_you (Home). Empty for the fixed fallback."
     )
+    about_software: list[str] = Field(
+        default_factory=list,
+        description="The watched software the answer is about, named as the Software page names "
+        "them. The Portal offers its Software-page actions for these and no others.",
+    )
 
 
 class OfflineReply(WireModel):
@@ -459,8 +464,8 @@ class PlannerFront:
                 return NeedsMeReply()
             case AbilitiesAnswer():
                 return AbilitiesReply()
-            case QuestionAnswer(text=text, looked_at=looked_at):
-                return QuestionReply(text=text, looked_at=looked_at)
+            case QuestionAnswer(text=text, looked_at=looked_at, about_software=software):
+                return QuestionReply(text=text, looked_at=looked_at, about_software=software)
 
     async def _alternative(
         self, alternative: SetupCardAnswer | WatchlistAnswer | None

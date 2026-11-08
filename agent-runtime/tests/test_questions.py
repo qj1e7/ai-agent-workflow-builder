@@ -384,3 +384,38 @@ def test_why_stopped_keeps_the_fixed_answer_when_a_run_has_stopped():
 @pytest.mark.parametrize("facts", [None, FACTS])
 def test_why_stopped_keeps_the_fixed_answer_when_the_workflows_are_missing(facts):
     assert isinstance(_why(facts), WhyStoppedAnswer)
+
+
+def about(names: list[str], text: str = "LangGraph is behind. Redis is up to date."):
+    reply = QuestionReply(about_their_data=True, text=text, about_software=names)
+    result, _ = ask(reply)
+    return result.answer.about_software
+
+
+def test_about_software_keeps_watched_names_spelled_as_the_watchlist_spells_them():
+    assert about([" langgraph ", "REDIS"]) == ["LangGraph", "Redis"]
+
+
+def test_about_software_drops_names_the_watchlist_does_not_hold():
+    assert about(["FastAPI", "LangGraph"], "LangGraph is behind. FastAPI is not watched.") == [
+        "LangGraph"
+    ]
+
+
+def test_about_software_drops_a_name_the_text_does_not_mention():
+    assert about(["Redis"], "LangGraph is behind.") == []
+
+
+def test_about_software_has_no_repeats_and_at_most_three():
+    names = ["LangGraph", "langgraph", "Redis", "n8n", "Redis"]
+    assert about(names, "LangGraph, Redis and n8n.") == ["LangGraph", "Redis", "n8n"]
+    assert about([], "Three.") == []
+
+
+def test_the_fixed_fallback_is_about_no_software():
+    reply = QuestionReply(
+        about_their_data=True, text="LangGraph. I can add it.", about_software=["LangGraph"]
+    )
+    result, _ = ask(reply)
+    assert result.answer == QuestionAnswer(text=COULD_NOT_ANSWER, looked_at=[])
+    assert result.answer.about_software == []
