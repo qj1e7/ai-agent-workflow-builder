@@ -1587,3 +1587,43 @@ def test_a_wrong_reading_of_a_ticket_person_or_system_is_not_a_watch_offer(
     assert not isinstance(answer, WhichSoftwareAnswer)
     if isinstance(answer, CantAnswer):
         assert not isinstance(answer.alternative, WatchlistAnswer) or "Redis" in task
+
+
+@pytest.mark.parametrize(
+    ("task", "verb"),
+    [
+        ("watch Redis and delete the old branches", "watch"),
+        ("check Redis and close the old alerts", "check"),
+    ],
+)
+def test_a_watch_with_a_change_names_only_the_change_in_the_cant(task: str, verb: str):
+    answer = answer_of(read(belongs_on_watchlist=True, watchlist_word=verb, software="Redis"), task)
+    assert isinstance(answer, CantAnswer)
+    [row] = answer.cant
+    change = task.split(" and ", 1)[1]
+    assert row.text == change
+    assert "redis" not in row.note.casefold()
+    assert row.note.startswith(f"I can't {change}")
+    assert answer.alternative == WatchlistAnswer(word=verb, software="Redis")
+
+
+def test_a_hyphen_is_a_word_boundary_for_a_release_source():
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word="watch", software="npm-check-updates"),
+        "watch npm-check-updates",
+    )
+    assert answer == WatchlistAnswer(word="watch", software="npm-check-updates")
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word="watch", software="lodash"),
+        "watch lodash on npm",
+    )
+    assert isinstance(answer, CantAnswer)
+    assert answer.cant[0].system == "npm"
+
+
+@pytest.mark.parametrize("spelled", ["node.js", "Node JS", "nodejs"])
+def test_a_software_spelled_differently_in_the_reading_still_matches_the_text(spelled: str):
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word="add", software=spelled), "add nodejs"
+    )
+    assert answer == WatchlistAnswer(word="add", software="nodejs")
