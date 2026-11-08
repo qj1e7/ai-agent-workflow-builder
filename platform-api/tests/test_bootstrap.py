@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from psycopg import sql
 from pydantic import TypeAdapter
 
-from platform_api import bootstrap
+from platform_api import bootstrap, migrate
 from platform_api.app import create_app
 from platform_api.bootstrap import (
     OLD_RUN_WORKFLOW,
@@ -261,12 +261,9 @@ def test_watchlist_runs_and_card_use_cases_pass_the_check(
     assert engine_status(postgres.owner) == READY
 
 
-def test_a_fresh_database_passes_the_check_and_is_migrated(
-    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
-):
-    serve(monkeypatch, FakeN8n([]))
+@pytest.fixture
+def fresh_url(postgres: PostgresUrls) -> Iterator[str]:
     fresh = f"{PLATFORM_DATABASE}_fresh"
-    fresh_url = postgres.owner.rsplit("/", 1)[0] + f"/{fresh}"
     with psycopg.connect(postgres.superuser, autocommit=True) as conn:
         conn.execute(sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(fresh)))
         conn.execute(
@@ -275,15 +272,57 @@ def test_a_fresh_database_passes_the_check_and_is_migrated(
             )
         )
     try:
-        assert unreadable_data(fresh_url) == []
-        assert main(env_for(fresh_url)) == 0
-        assert migration_heads(fresh_url) == migration_heads(postgres.owner)
-        assert engine_status(fresh_url) == READY
+        yield postgres.owner.rsplit("/", 1)[0] + f"/{fresh}"
     finally:
         with psycopg.connect(postgres.superuser, autocommit=True) as conn:
             conn.execute(
                 sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(fresh))
             )
+
+
+def test_a_fresh_database_passes_the_check_and_is_migrated(
+    postgres: PostgresUrls, fresh_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    serve(monkeypatch, FakeN8n([]))
+    assert unreadable_data(fresh_url) == []
+    assert main(env_for(fresh_url)) == 0
+    assert migration_heads(fresh_url) == migration_heads(postgres.owner)
+    assert engine_status(fresh_url) == READY
+
+
+def columns(owner_url: str) -> list[tuple[str, str, str]]:
+    with psycopg.connect(owner_url) as conn:
+        rows = conn.execute(
+            "SELECT table_schema, table_name, column_name FROM information_schema.columns"
+            " WHERE table_schema = ANY(%s) ORDER BY 1, 2, 3",
+            (list(MIGRATION_ORDER),),
+        ).fetchall()
+    return [(str(s), str(t), str(c)) for s, t, c in rows]
+
+
+def test_migrate_brings_an_empty_database_to_head_and_a_second_run_changes_nothing(
+    postgres: PostgresUrls, fresh_url: str
+):
+    env = {"DATABASE_URL_OWNER": fresh_url}
+
+    assert migrate.main(env) == 0
+    heads, schema = migration_heads(fresh_url), columns(fresh_url)
+    assert heads == migration_heads(postgres.owner)
+    assert migrate.main(env) == 0
+
+    assert (migration_heads(fresh_url), columns(fresh_url)) == (heads, schema)
+    with psycopg.connect(fresh_url) as conn:
+        assert conn.execute("SELECT count(*) FROM orchestration.engine_status").fetchone() == (0,)
+
+
+@pytest.mark.usefixtures("at_trunk_heads")
+def test_old_release_data_stops_migrate_before_any_migration(
+    postgres: PostgresUrls, capsys: pytest.CaptureFixture[str]
+):
+    insert_old_run(postgres.owner)
+    assert migrate.main({"DATABASE_URL_OWNER": postgres.owner}) == 1
+    assert migration_heads(postgres.owner) == TRUNK_HEADS
+    assert RESET_HINT in capsys.readouterr().out
 
 
 def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_else(

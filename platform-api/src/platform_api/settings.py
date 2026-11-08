@@ -309,9 +309,13 @@ class BootstrapSettings:
     platform_internal_url: str
 
 
+def owner_database_url_from_env(env: Mapping[str, str]) -> str:
+    return _required(env, "DATABASE_URL_OWNER")
+
+
 def bootstrap_settings_from_env(env: Mapping[str, str]) -> BootstrapSettings:
     return BootstrapSettings(
-        owner_database_url=_required(env, "DATABASE_URL_OWNER"),
+        owner_database_url=owner_database_url_from_env(env),
         n8n_base_url=_required(env, "N8N_BASE_URL").rstrip("/"),
         n8n_owner_email=_required(env, "N8N_OWNER_EMAIL"),
         n8n_owner_password=_required(env, "N8N_OWNER_PASSWORD"),
