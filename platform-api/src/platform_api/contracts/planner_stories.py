@@ -197,7 +197,9 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
         "planner/answer.why_stopped.json": WhyStoppedReply(use_case_id="uc_01JB8"),
         "planner/answer.needs_me.json": NeedsMeReply(),
         "planner/answer.question.json": QuestionReply(
-            text="Three: LangGraph, Redis and n8n.", looked_at=["watchlist"]
+            text="LangGraph is behind. You run 1.2.14 and the newest is 1.2.16.",
+            looked_at=["watchlist"],
+            about_software=["LangGraph"],
         ),
         "planner/answer.offline.json": offline("no_model"),
         "planner/answer.offline.too_slow.json": offline("too_slow"),

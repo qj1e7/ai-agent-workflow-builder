@@ -456,7 +456,18 @@ async def test_a_question_answer_comes_back_with_the_sections_it_looked_at(front
         "answer": "question",
         "text": "Nothing is on the watchlist yet.",
         "looked_at": ["watchlist"],
+        "about_software": [],
     }
+
+
+async def test_a_question_answer_names_the_watched_software_it_is_about(front: Front):
+    front.answers.result = answered(
+        QuestionAnswer(
+            text="Redis is up to date.", looked_at=["watchlist"], about_software=["Redis"]
+        )
+    )
+    reply = await say(front, "is redis up to date")
+    assert reply["about_software"] == ["Redis"]
 
 
 async def test_the_runtime_gets_the_facts_the_screens_show_for_the_signed_in_person(front: Front):
@@ -497,6 +508,7 @@ async def test_a_follow_up_passes_the_previous_turn_on_and_changes_nothing_else(
         "request": "What is the newest version of LangGraph?",
         "software": "LangGraph",
         "answer": "1.2.16.",
+        "kind": "question",
     }
     r = await front.client.post(
         ANSWER, json={"text": "and Redis?", "previous": previous}, headers=ALICE

@@ -10,6 +10,7 @@ import { SetupCard, type CardStart } from './SetupCard'
 import { CapabilityLists } from './CapabilityLists'
 import { NewestAnswer, useMainButton } from './primary'
 import { AddToWatchlist, WhichSoftware } from './WatchlistCard'
+import { SoftwareActions } from './WatchlistActions'
 import styles from './Planner.module.css'
 
 /** What a card can ask the page to do. Both go through the Planner or the box, so nothing here reaches a set-up on its own. */
@@ -289,7 +290,12 @@ export function Answer({ reply, typed, page }: AnswerProps) {
     case 'offline':
       return <OfflineAnswer reply={reply} />
     case 'question':
-      return <LookedAt sections={reply.looked_at} />
+      return (
+        <>
+          <LookedAt sections={reply.looked_at} />
+          {(reply.about_software ?? []).length > 0 ? <SoftwareActions names={reply.about_software ?? []} /> : null}
+        </>
+      )
     case 'check_workflows':
     case 'why_stopped':
     case 'needs_me':

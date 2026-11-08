@@ -498,3 +498,31 @@
   align-items: center;
   min-height: 32px;
 }
+
+.actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.actions ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.actions li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}

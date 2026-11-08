@@ -15,6 +15,7 @@ from agent_runtime.abilities import (
     commands_a_change,
     names_a_ticket_field,
     need_of,
+    release_word_in,
     skip_of_a_yes,
     software_name,
     starts_with_a_verb,
@@ -894,3 +895,26 @@ def test_the_search_structure_reads_exactly_the_fields_the_table_says_the_agents
     assert read == {"assignee", "issue_type", "status", "created", "updated", "done"}
     structure = set(SearchRead.model_fields) - {"project", "words", "said"}
     assert structure == {"assignee", "issue_types", "status", "created", "updated", "done"}
+
+
+@pytest.mark.parametrize(
+    ("text", "word"),
+    [
+        ("Tell me about new patches for Redis", "patches"),
+        ("Any patch for n8n?", "patch"),
+        ("Is there an upgrade for LangGraph?", "upgrade"),
+        ("Which software has upgrades?", "upgrades"),
+        ("Is there a newer version of Redis?", "version"),
+        ("update the status of MOCK-12", None),
+        ("Keep my software updated", None),
+    ],
+)
+def test_the_release_words_include_patch_and_upgrade_but_not_update(text: str, word: str | None):
+    found = release_word_in(text)
+    assert (found.casefold() if found else None) == word
+
+
+def test_a_jira_change_that_uses_a_release_word_still_asks_for_a_change():
+    assert commands_a_change("upgrade the priority of MOCK-3")
+    assert commands_a_change("close the Redis upgrade ticket")
+    assert commands_a_change("update the status of MOCK-12")

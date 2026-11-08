@@ -2320,6 +2320,20 @@
           "description": "The text of the Planner's answer, when it had one.",
           "title": "Answer"
         },
+        "kind": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The kind of answer the Planner gave, such as question or watchlist. Client input: it only decides whether a follow-up applies.",
+          "title": "Kind"
+        },
         "request": {
           "description": "What the person typed, or the chip's words.",
           "maxLength": 2000,
@@ -2402,6 +2416,16 @@
     "QuestionAnswer": {
       "additionalProperties": false,
       "properties": {
+        "about_software": {
+          "description": "The watched software the answer is about, named as the watchlist names them. Code keeps only names the facts hold and the text mentions (ADR 0042).",
+          "items": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "maxItems": 3,
+          "title": "About Software",
+          "type": "array"
+        },
         "kind": {
           "const": "question",
           "default": "question",

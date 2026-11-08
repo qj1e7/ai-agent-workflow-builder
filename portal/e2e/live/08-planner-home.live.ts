@@ -396,6 +396,66 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
+  for (const phone of [false, true]) {
+    const size = phone ? '390' : '1440'
+    test(`a follow-up about watched software is answered from the watchlist, with the Software page’s own actions behind it at ${size} px`, async ({ browser, backend }, info) => {
+      await backend.freshWatchlist('alice', [REDIS])
+      const context = await devContext(browser, 'alice', { phone })
+      const page = await context.newPage()
+      await page.goto('/')
+      await ask(page, 'How many software are we watching?')
+      await expect(thread(page)).toContainText('Your watchlist holds 1 software.')
+      await ask(page, 'what about Redis?')
+      await expect(thread(page)).toContainText('Redis runs 8.2.0.')
+      await expect(thread(page).getByText('Looked at').last()).toBeVisible()
+      const open = thread(page).getByRole('link', { name: 'Open Redis on the Software page' })
+      await expect(open).toHaveAttribute('href', /^\/software\?row=/)
+      const stop = thread(page).getByRole('button', { name: 'Stop watching Redis' })
+      await expect(stop, 'Stop watching comes after Open').toBeVisible()
+      const check = thread(page).getByRole('button', { name: 'Check all software now' })
+      await expect(check).toBeVisible()
+      expect(await tooSmall(page.locator('main').getByRole('link', { name: 'Open Redis on the Software page' })), 'principle 11: targets of at least 44 px').toEqual([])
+      expect(await tooSmall(stop.or(check)), 'principle 11: targets of at least 44 px').toEqual([])
+      await noSideways(page)
+      await settled(page)
+      await expectAccessible(page, path.join(OUT, 'axe'), `2b-follow-up-${size}`)
+      await shot(page, info, `2b-follow-up-${size}`)
+
+      await stop.click()
+      await expect(thread(page)).toContainText('Stop watching Redis? It won’t be checked any more.')
+      await expect(thread(page).getByRole('button', { name: 'Keep it on the watchlist' }), 'focus lands on the safe choice').toBeFocused()
+      await thread(page).getByRole('button', { name: 'Keep it on the watchlist' }).click()
+      const names = async () => (await backend.get<{ watchlist: { software: { name: string }[] } | null }>('alice', '/api/v1/watchlist')).watchlist?.software.map((entry) => entry.name)
+      expect(await names(), 'asking and keeping removes nothing').toContain('Redis')
+
+      await stop.click()
+      await thread(page).getByRole('button', { name: 'Yes, stop watching Redis' }).click()
+      await expect(thread(page)).toContainText('Removed Redis. It won’t be checked any more.')
+      expect(await names()).not.toContain('Redis')
+      await thread(page).getByRole('button', { name: 'Undo' }).click()
+      await expect(thread(page)).toContainText('Put Redis back on the list.')
+      expect(await names(), 'the page’s Undo puts it back').toContain('Redis')
+
+      await open.click()
+      await expect(page).toHaveURL(/\/software\?row=/)
+      await context.close()
+    })
+  }
+
+  test('an unwatched name after a question is offered for the watchlist, never added on its own', async ({ browser, backend }) => {
+    await backend.freshWatchlist('alice', [REDIS])
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+    await ask(page, 'How many software are we watching?')
+    await expect(thread(page)).toContainText('Your watchlist holds 1 software.')
+    await ask(page, 'and Grafana?')
+    await expect(thread(page)).toContainText('Grafana')
+    const { watchlist } = await backend.get<{ watchlist: { software: { name: string }[] } | null }>('alice', '/api/v1/watchlist')
+    expect(watchlist?.software.map((entry) => entry.name)).toEqual(['Redis'])
+    await context.close()
+  })
+
   test('by keyboard alone: Tab reaches the box, the suggestions and each answer’s buttons, with a visible focus ring', async ({ browser, backend }) => {
     await backend.freshWatchlist('alice', [REDIS])
     const context = await devContext(browser, 'alice')

@@ -56,6 +56,7 @@ from agent_runtime.contract import (
     WhyStoppedAnswer,
 )
 from agent_runtime.drafting import ask_model
+from agent_runtime.follow_ups import follow_up_of, watch_offer_of
 from agent_runtime.planner import (
     CANT_YET,
     NOTE_LIMIT,
@@ -542,6 +543,12 @@ def _watched(answer: WatchlistAnswer, request: AnswerRequest) -> bool:
 QUESTION_SHAPE: Final = re.compile(
     r"^\s*(?:which|what|how|is|are|do|does|did|when)\b|\?\s*$", re.IGNORECASE
 )
+LANE_BLOCKERS: Final = re.compile(
+    r"\b(?:stop\s+watching|unwatch(?:ing)?|stop\s+tracking)\b", re.IGNORECASE
+)
+"""The gate fails closed: any change word, or these phrases that change_verbs_in misses, keeps the
+first answer, whatever the shape of the sentence. They stay here because change_verbs_in feeds
+other answers."""
 WATCHLIST_WORDS: Final = re.compile(r"\b(?:watchlist|watching|watched)\b", re.IGNORECASE)
 
 
@@ -559,6 +566,16 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     if question_messages(request) is None:
         return answer
     text = visible_words(request.task)
+    if change_verbs_in(text) or commands_a_change(text) or LANE_BLOCKERS.search(text):
+        return answer
+    followed = follow_up_of(request)
+    if followed is not None:
+        if followed.watched is None:
+            return watch_offer_of(followed, read.software, answer) or answer
+        if _follows(answer):
+            return AskTheQuestionLane(
+                otherwise=answer, first_on_reject=not isinstance(answer, AbilitiesAnswer)
+            )
     if isinstance(answer, AbilitiesAnswer) or (
         isinstance(answer, WatchlistAnswer) and _watched(answer, request)
     ):
@@ -576,6 +593,20 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     if isinstance(answer, WhyStoppedAnswer) and _nothing_stopped(request):
         return AskTheQuestionLane(otherwise=answer, first_on_reject=True)
     return answer
+
+
+def _follows(answer: PlannerAnswer) -> bool:
+    """Whether a follow-up about watched software may replace this first answer with the lane's. A
+    set-up card, a part or a refusal stays as it is, and so do the two answers that carry buttons.
+    A bare can't may go: a follow-up has no change verb, so the can't is only the words of the
+    follow-up itself, and it stands if the lane says no."""
+    match answer:
+        case AbilitiesAnswer() | WhichSoftwareAnswer() | CheckWorkflowsAnswer():
+            return True
+        case WatchlistAnswer(also=None) | CantAnswer(alternative=None):
+            return True
+        case _:
+            return False
 
 
 def _nothing_stopped(request: AnswerRequest) -> bool:

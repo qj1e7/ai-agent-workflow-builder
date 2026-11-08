@@ -815,6 +815,12 @@ class PreviousTurn(WireModel):
         max_length=600,
         description="The text of the Planner's answer, when it had one.",
     )
+    kind: str | None = Field(
+        default=None,
+        max_length=40,
+        description="The kind of answer the Planner gave, such as question or watchlist. Client "
+        "input: it only decides whether a follow-up applies.",
+    )
 
 
 class AnswerRequest(WireModel):
@@ -971,6 +977,12 @@ class QuestionAnswer(WireModel):
     looked_at: list[FactSection] = Field(
         max_length=3,
         description="The sections of the facts the answer used, kept only when they were sent.",
+    )
+    about_software: list[Annotated[str, Field(max_length=80)]] = Field(
+        default_factory=list,
+        max_length=3,
+        description="The watched software the answer is about, named as the watchlist names "
+        "them. Code keeps only names the facts hold and the text mentions (ADR 0042).",
     )
 
 

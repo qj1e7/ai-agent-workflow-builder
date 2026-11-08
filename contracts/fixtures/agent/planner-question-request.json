@@ -9,7 +9,8 @@
   "previous": {
     "request": "What is the newest version of LangGraph?",
     "software": null,
-    "answer": null
+    "answer": null,
+    "kind": null
   },
   "facts": {
     "watchlist": [

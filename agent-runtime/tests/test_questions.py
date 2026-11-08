@@ -315,7 +315,6 @@ def test_the_lane_gets_the_previous_request_and_answer_and_the_first_reading_doe
     ("task", "first"),
     [
         ("Check my watchlist", reading("my_workflows")),
-        ("Is the watchlist running?", reading("my_workflows")),
     ],
 )
 def test_check_workflows_for_a_request_that_names_the_watchlist_goes_to_the_lane(
@@ -368,7 +367,7 @@ def _workflow(last_run: str | None) -> WorkflowFact:
 
 
 def _why(facts: PlannerFacts | None):
-    return decided("Did it open a ticket for Redis?", reading("why_stopped"), facts)
+    return decided("Has anything gone wrong with Redis?", reading("why_stopped"), facts)
 
 
 def test_why_stopped_goes_to_the_lane_when_no_run_has_stopped():
@@ -384,3 +383,64 @@ def test_why_stopped_keeps_the_fixed_answer_when_a_run_has_stopped():
 @pytest.mark.parametrize("facts", [None, FACTS])
 def test_why_stopped_keeps_the_fixed_answer_when_the_workflows_are_missing(facts):
     assert isinstance(_why(facts), WhyStoppedAnswer)
+
+
+def about(names: list[str], text: str = "LangGraph is behind. Redis is up to date."):
+    reply = QuestionReply(about_their_data=True, text=text, about_software=names)
+    result, _ = ask(reply)
+    return result.answer.about_software
+
+
+def test_about_software_keeps_watched_names_spelled_as_the_watchlist_spells_them():
+    assert about([" langgraph ", "REDIS"]) == ["LangGraph", "Redis"]
+
+
+def test_about_software_drops_names_the_watchlist_does_not_hold():
+    assert about(["FastAPI", "LangGraph"], "LangGraph is behind. FastAPI is not watched.") == [
+        "LangGraph"
+    ]
+
+
+def test_about_software_drops_a_name_the_text_does_not_mention():
+    assert about(["Redis"], "LangGraph is behind.") == []
+
+
+def test_about_software_has_no_repeats_and_at_most_three():
+    names = ["LangGraph", "langgraph", "Redis", "n8n", "Redis"]
+    assert about(names, "LangGraph, Redis and n8n.") == ["LangGraph", "Redis", "n8n"]
+    assert about([], "Three.") == []
+
+
+def test_the_fixed_fallback_is_about_no_software():
+    reply = QuestionReply(
+        about_their_data=True, text="LangGraph. I can add it.", about_software=["LangGraph"]
+    )
+    result, _ = ask(reply)
+    assert result.answer == QuestionAnswer(text=COULD_NOT_ANSWER, looked_at=[])
+    assert result.answer.about_software == []
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "Is it possible to upgrade Redis to 9.0.0 now?",
+        "Are you able to delete the Redis row?",
+        "Do you mind removing Redis?",
+        "When can you upgrade Redis to 9.0.0?",
+        "Can you stop watching Redis?",
+        "Can you unwatch Redis?",
+        "Can you stop tracking Redis?",
+        "Is the watchlist running?",
+        "Did it open a ticket for Redis?",
+    ],
+)
+@pytest.mark.parametrize("first", [watch_reading("Redis"), reading("abilities")])
+def test_any_change_word_keeps_the_first_answer(task: str, first: TaskRead):
+    out = decided(task, first)
+    assert not isinstance(out, AskTheQuestionLane)
+
+
+@pytest.mark.parametrize("task", ["what about Redis?", "How many software are we watching?"])
+def test_plain_questions_still_reach_the_lane(task: str):
+    out = decided(task, reading("abilities"))
+    assert isinstance(out, AskTheQuestionLane)

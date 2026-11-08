@@ -475,6 +475,7 @@ class PreviousTurn(WireModel):
     request: str = Field(max_length=2000)
     software: str | None = Field(default=None, max_length=80)
     answer: str | None = Field(default=None, max_length=600)
+    kind: str | None = Field(default=None, max_length=40)
 
 
 class AnswerRequest(WireModel):
@@ -563,6 +564,9 @@ class QuestionAnswer(WireModel):
     kind: Literal["question"] = "question"
     text: str = Field(min_length=1, max_length=600)
     looked_at: list[FactSection] = Field(max_length=3)
+    about_software: list[Annotated[str, Field(max_length=80)]] = Field(
+        default_factory=list, max_length=3
+    )
 
 
 type PlannerAnswer = Annotated[

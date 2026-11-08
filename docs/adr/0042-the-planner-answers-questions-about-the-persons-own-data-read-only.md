@@ -36,9 +36,25 @@ The first reading stays as it is. Everything below is code routing, the lane's o
 
 **More facts per software.** Each watched software now carries when it was last checked, its open ticket, whether a ticket waits for a yes, why the last check failed, and how the version the team runs was set (given, first check or a ticket marked Done, with the ticket). They come from the same row the Software page shows, so one fact has one source. The lane can answer "When did it last check?", "Did it open a ticket for Redis?" and "Is anything waiting for my yes?".
 
-**Follow-ups are context for the question lane only.** The Portal sends the previous turn with the next typed request: its words, the software the Planner named, and the text it answered with. Only the question lane's prompt reads it, as read-only context to understand a short question such as "and X?". The Planner never builds request text from an earlier turn: the first reading, the word rule and every fixed answer see only what the person typed. Two checks showed that swapping a name into an earlier request can produce text the person never typed, such as "Upgrade Redis without approval" followed by "and LangGraph?". Follow-ups that need more get their own design later.
+**Follow-ups are context for the question lane only.** The Portal sends the previous turn with the next typed request: its words, the software the Planner named, and the text it answered with. Only the question lane's prompt reads it, as read-only context to understand a short question such as "and X?". The Planner never builds request text from an earlier turn: the first reading, the word rule and every fixed answer see only what the person typed. Two checks showed that swapping a name into an earlier request can produce text the person never typed, such as "Upgrade Redis without approval" followed by "and LangGraph?". The safe follow-ups below are the only other use of the previous turn.
 
 **Waiting words.** While an answer is pending the Portal says "Working on it…". After 8 seconds it says "Still working. Questions about your data take a little longer." It names no step, because none is known (principle 8).
+
+## One-tap actions under the answer (8 Nov 2026, step 2b)
+
+The lane's reply names the watched software it is about (`about_software`). Code keeps a name only when the watchlist facts hold it and the answer's text mentions it, spelled as the watchlist spells it, three at most. A count or a list of the whole watchlist names none.
+
+Under such an answer the Portal shows the Software page's own actions to an Operator and to no one else. They are Open (the row on the Software page), Check all software now (the Software page's Check now, which checks the whole watchlist, so the button says so), and last, Stop watching. Stop watching asks first, then runs the Software page's remove, and its Undo is the page's restore (principle 3). The actions use the same Portal calls and the same platform-api routes as the Software page. No route is added, and the approval gate and the safety checker are not touched. An Approver sees none, as on the Software page. Unwatched software keeps the offer card.
+
+## Safe follow-ups (8 Nov 2026, step 2b)
+
+The Portal sends the kind of the previous answer with it (`previous.kind`). It is client input, so it only decides whether a follow-up applies, and it is lane context. A follow-up applies when the previous kind is `question` or `watchlist`, the facts hold a watchlist, and the typed text is "and X?", "what about X?" or "how about X?" with X a plausible name: one to three words, no pronoun or question word, no change verb, nothing the word rule refuses.
+
+- X is on the watchlist: the typed words go to the question lane with the previous request and answer as context. The first reading still runs on the typed words alone. If the lane says no or fails, the first answer stands.
+- X is not on the watchlist: the answer is the offer to watch X, with the word "version". The person must tap it, so nothing is written.
+- Anything else takes the normal path.
+
+Request text is never built from an earlier turn. A forged `previous` such as "Upgrade Redis without approval" changes nothing but the lane's prompt, or the offer card the person must tap.
 
 ## What stays fixed
 

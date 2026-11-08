@@ -78,6 +78,11 @@ class PreviousIn(WireIn):
     answer: Annotated[str, StringConstraints(max_length=600)] | None = Field(
         default=None, description="The text of the Planner's answer to it, when it had one."
     )
+    kind: Annotated[str, StringConstraints(max_length=40)] | None = Field(
+        default=None,
+        description="The kind of answer it was, such as question or watchlist. It only decides "
+        "whether a short follow-up applies.",
+    )
 
 
 class AnswerIn(WireIn):
@@ -219,6 +224,11 @@ class QuestionReply(WireModel):
     looked_at: list[FactSection] = Field(
         description="The sections the answer used: watchlist (the Software page), workflows "
         "(the Workflows page) and needs_you (Home). Empty for the fixed fallback."
+    )
+    about_software: list[str] = Field(
+        default_factory=list,
+        description="The watched software the answer is about, named as the Software page names "
+        "them. The Portal offers its Software-page actions for these and no others.",
     )
 
 
@@ -459,8 +469,8 @@ class PlannerFront:
                 return NeedsMeReply()
             case AbilitiesAnswer():
                 return AbilitiesReply()
-            case QuestionAnswer(text=text, looked_at=looked_at):
-                return QuestionReply(text=text, looked_at=looked_at)
+            case QuestionAnswer(text=text, looked_at=looked_at, about_software=software):
+                return QuestionReply(text=text, looked_at=looked_at, about_software=software)
 
     async def _alternative(
         self, alternative: SetupCardAnswer | WatchlistAnswer | None

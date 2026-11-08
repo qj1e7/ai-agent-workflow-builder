@@ -900,8 +900,9 @@ def question_request() -> AnswerRequest:
 
 
 def answered_question() -> Answered:
-    text = "Three: LangGraph, Redis and n8n."
-    return Answered(answer=QuestionAnswer(text=text, looked_at=["watchlist"]))
+    text = "LangGraph is behind. You run 1.2.14 and the newest is 1.2.16."
+    answer = QuestionAnswer(text=text, looked_at=["watchlist"], about_software=["LangGraph"])
+    return Answered(answer=answer)
 
 
 def fixtures() -> dict[str, WireModel]:
