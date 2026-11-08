@@ -706,3 +706,58 @@ async def test_migration_0015_keeps_what_github_said_about_the_address_and_back(
             assert ("full_name",) not in columns and ("not_found",) not in columns
         finally:
             upgrade("orchestration", postgres.owner)
+
+
+async def test_migration_0016_keeps_each_tickets_jira_site_and_a_row_from_before_has_none(
+    postgres: PostgresUrls, db: Database
+):
+    run_id, proposal_id = RunId("run_site"), ProposalId("prp_site")
+    action = WriteAction("jira", "create_ticket", {"project": "MOCK"}, {"title": "t"})
+    async with db.transaction("orchestration") as uow:
+        pending = Pending(run_id, 1, None, NOW)
+        record = RunRecord(run_id, SPEC, SPEC.owner, NOW, NOW, 1, pending, (), None)
+        await Store().insert_run(uow, record, "key-site")
+        await Store().insert_proposal(
+            uow, Proposal(proposal_id, run_id, (action, action), digest((action, action)))
+        )
+    insert = (
+        "INSERT INTO orchestration.proposed_tickets (proposal_id, action_index, run_id, "
+        "use_case_id, software_id, version, status, ticket_key) "
+        "VALUES (%s, %s, %s, 'uc_1', 'sw_1', '1.0.0', 'written', 'MOCK-1')"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        downgrade("orchestration", postgres.owner, "0015")
+        conn.execute(insert, (proposal_id, 0, run_id))
+        conn.execute(
+            "INSERT INTO orchestration.our_versions (use_case_id, software_id, version, source, "
+            "learned_at, ticket_key) VALUES ('uc_1', 'sw_1', '1.0.0', 'ticket_done', %s, 'MOCK-1')",
+            (NOW,),
+        )
+        upgrade("orchestration", postgres.owner)
+        assert conn.execute(
+            "SELECT ticket_key, site FROM orchestration.our_versions"
+        ).fetchall() == [("MOCK-1", None)]
+        conn.execute(
+            "INSERT INTO orchestration.proposed_tickets (proposal_id, action_index, run_id, "
+            "use_case_id, software_id, version, status, ticket_key, site) "
+            "VALUES (%s, 1, %s, 'uc_1', 'sw_1', '1.0.0', 'written', 'MOCK-2', 'practice')",
+            (proposal_id, run_id),
+        )
+        sites = conn.execute(
+            "SELECT ticket_key, site FROM orchestration.proposed_tickets ORDER BY action_index"
+        ).fetchall()
+        assert sites == [("MOCK-1", None), ("MOCK-2", "practice")], "no row is filled in"
+        downgrade("orchestration", postgres.owner, "0015")
+        try:
+            for table in ("proposed_tickets", "our_versions"):
+                columns = conn.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE "
+                    "table_schema = 'orchestration' AND table_name = %s",
+                    (table,),
+                ).fetchall()
+                assert ("site",) not in columns, table
+            assert conn.execute(
+                "SELECT count(*) FROM orchestration.proposed_tickets"
+            ).fetchone() == (2,)
+        finally:
+            upgrade("orchestration", postgres.owner)

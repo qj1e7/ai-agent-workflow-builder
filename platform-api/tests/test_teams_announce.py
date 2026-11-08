@@ -110,7 +110,7 @@ async def test_the_practice_copy_keeps_the_card_a_real_channel_gets(h: Harness):
         link=f"/approvals/{approval_id}",
         open_url=f"{PUBLIC_BASE_URL}/approvals/{approval_id}",
         summary=SUMMARY,
-        lines=(f"Create Jira ticket in MOCK: {TICKET_TITLE}",),
+        lines=(f"Create Jira ticket in MOCK on the practice Jira: {TICKET_TITLE}",),
         digest=await digest_of(h, approval_id),
         steps=(AskedStep("Team approver"),),
         not_deciding=("Alice",),

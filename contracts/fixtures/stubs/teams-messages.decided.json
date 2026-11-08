@@ -57,7 +57,7 @@
             "inlines": [
               {
                 "type": "TextRun",
-                "text": "\u2022 Create Jira ticket in MOCK: Upgrade LangGraph from 1.2.14 to 1.2.16"
+                "text": "\u2022 Create Jira ticket in MOCK on the practice Jira: Upgrade LangGraph from 1.2.14 to 1.2.16"
               }
             ]
           },

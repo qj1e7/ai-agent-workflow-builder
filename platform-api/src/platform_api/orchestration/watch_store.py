@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Protocol
 
 from platform_api.db import Database, UnitOfWork
+from platform_api.orchestration.dispatch import Identity
 from platform_api.orchestration.jira import JiraError
 from platform_api.orchestration.runs import (
     STATE_NAMES,
@@ -34,6 +35,7 @@ from platform_api.orchestration.watch import (
     Standing,
     standing,
 )
+from platform_api.orchestration.write_actions import Proposal
 from platform_api.shared import ApprovalId, ProposalId, RunId, SoftwareId, UseCaseId
 from platform_api.wire import RunState as RunStateName
 
@@ -47,6 +49,7 @@ class WrittenTicket:
     software_id: SoftwareId
     version: str
     key: str
+    site: Identity
 
 
 @dataclass(frozen=True)
@@ -107,9 +110,10 @@ class WatchStore:
         uow: UnitOfWork,
         record: RunRecord,
         reviewed: Reviewed,
-        proposal_id: ProposalId | None,
+        proposal: Proposal | None,
     ) -> None:
-        """Keeps what one check learned. The same review again changes nothing."""
+        """Keeps what one check learned. The same review again changes nothing. Each ticket keeps
+        the Jira site its action targets, the only site it can be written in (ADR 0041)."""
         use_case_id = record.spec.use_case_id
         for entry in reviewed.learned:
             if isinstance(entry, ReadNewest):
@@ -123,21 +127,23 @@ class WatchStore:
                     "ON CONFLICT (use_case_id, software_id) DO NOTHING",
                     (use_case_id, entry.software_id, entry.newest, uow.now),
                 )
-        if proposal_id is None:
+        if proposal is None:
             return
         for ticket in reviewed.tickets:
+            site = proposal.actions[ticket.action_index].target.get("site")
             await uow.conn.execute(
                 "INSERT INTO orchestration.proposed_tickets (proposal_id, action_index, run_id, "
-                "use_case_id, software_id, version, status) "
-                "VALUES (%s, %s, %s, %s, %s, %s, 'proposed') "
+                "use_case_id, software_id, version, status, site) "
+                "VALUES (%s, %s, %s, %s, %s, %s, 'proposed', %s) "
                 "ON CONFLICT (proposal_id, action_index) DO NOTHING",
                 (
-                    proposal_id,
+                    proposal.id,
                     ticket.action_index,
                     record.run_id,
                     use_case_id,
                     ticket.software_id,
                     ticket.version,
+                    site if isinstance(site, str) else None,
                 ),
             )
 
@@ -166,13 +172,18 @@ class WatchStore:
             case _:
                 pass
 
-    async def written_tickets(self, uow: UnitOfWork, use_case_id: UseCaseId) -> list[WrittenTicket]:
+    async def written_tickets(
+        self, uow: UnitOfWork, use_case_id: UseCaseId, site: Identity
+    ) -> list[WrittenTicket]:
+        """The tickets written in this Jira site and not yet Done: the open tickets, and the ones
+        the Done check asks about. A key names a ticket only within its site, and a ticket from
+        before sites were kept has none, so it is never in the list (ADR 0041)."""
         rows = await (
             await uow.conn.execute(
                 "SELECT proposal_id, action_index, software_id, version, ticket_key "
                 "FROM orchestration.proposed_tickets WHERE use_case_id = %s AND status = 'written' "
-                "ORDER BY proposal_id, action_index",
-                (use_case_id,),
+                "AND site = %s ORDER BY proposal_id, action_index",
+                (use_case_id, site),
             )
         ).fetchall()
         return [
@@ -182,6 +193,7 @@ class WatchStore:
                 SoftwareId(row["software_id"]),
                 str(row["version"]),
                 str(row["ticket_key"]),
+                site,
             )
             for row in rows
         ]
@@ -197,27 +209,29 @@ class WatchStore:
         )
         await uow.conn.execute(
             "INSERT INTO orchestration.our_versions (use_case_id, software_id, version, source, "
-            "learned_at, ticket_key) VALUES (%s, %s, %s, 'ticket_done', %s, %s) "
+            "learned_at, ticket_key, site) VALUES (%s, %s, %s, 'ticket_done', %s, %s, %s) "
             "ON CONFLICT (use_case_id, software_id) DO UPDATE SET version = EXCLUDED.version, "
             "source = EXCLUDED.source, learned_at = EXCLUDED.learned_at, "
-            "ticket_key = EXCLUDED.ticket_key",
-            (use_case_id, ticket.software_id, ticket.version, at, ticket.key),
+            "ticket_key = EXCLUDED.ticket_key, site = EXCLUDED.site",
+            (use_case_id, ticket.software_id, ticket.version, at, ticket.key, ticket.site),
         )
 
-    async def facts(self, uow: UnitOfWork, use_case_id: UseCaseId) -> Facts:
+    async def facts(self, uow: UnitOfWork, use_case_id: UseCaseId, site: Identity) -> Facts:
+        """What the platform knows of each software, seen from the Jira site set up now. A ticket
+        is open here only when written_tickets lists it, so the open check and the Done check
+        read the same tickets. A ticket key from another site is not named (ADR 0041)."""
         learned: dict[SoftwareId, LearnedVersion] = {}
         for row in await (
             await uow.conn.execute(
-                "SELECT software_id, version, source, learned_at, ticket_key "
+                "SELECT software_id, version, source, learned_at, ticket_key, site "
                 "FROM orchestration.our_versions WHERE use_case_id = %s",
                 (use_case_id,),
             )
         ).fetchall():
             software_id = SoftwareId(row["software_id"])
             if row["source"] == "ticket_done":
-                learned[software_id] = FromTicketDone(
-                    str(row["version"]), row["learned_at"], str(row["ticket_key"])
-                )
+                key = str(row["ticket_key"]) if row["site"] == site else None
+                learned[software_id] = FromTicketDone(str(row["version"]), row["learned_at"], key)
             else:
                 learned[software_id] = FromFirstCheck(str(row["version"]), row["learned_at"])
         checks: dict[SoftwareId, LatestCheck] = {}
@@ -249,28 +263,27 @@ class WatchStore:
                     run_id, row["checked_at"], str(row["newest_version"]), row["full_name"]
                 )
         pending: dict[SoftwareId, PendingTicket] = {}
-        open_tickets: dict[SoftwareId, OpenTicket] = {}
         for row in await (
             await uow.conn.execute(
-                "SELECT t.software_id, t.proposal_id, t.action_index, t.version, t.status, "
-                "t.ticket_key, a.approval_id FROM orchestration.proposed_tickets t "
+                "SELECT t.software_id, t.proposal_id, t.action_index, t.version, a.approval_id "
+                "FROM orchestration.proposed_tickets t "
                 "LEFT JOIN orchestration.approval_requests a ON a.proposal_id = t.proposal_id "
-                "WHERE t.use_case_id = %s AND t.status IN ('proposed', 'written') "
+                "WHERE t.use_case_id = %s AND t.status = 'proposed' "
                 "ORDER BY t.proposal_id, t.action_index",
                 (use_case_id,),
             )
         ).fetchall():
-            software_id = SoftwareId(row["software_id"])
-            if row["status"] == "proposed":
-                approval = row["approval_id"]
-                pending[software_id] = PendingTicket(
-                    ProposalId(row["proposal_id"]),
-                    int(row["action_index"]),
-                    str(row["version"]),
-                    None if approval is None else ApprovalId(approval),
-                )
-            else:
-                open_tickets[software_id] = OpenTicket(str(row["ticket_key"]), str(row["version"]))
+            approval = row["approval_id"]
+            pending[SoftwareId(row["software_id"])] = PendingTicket(
+                ProposalId(row["proposal_id"]),
+                int(row["action_index"]),
+                str(row["version"]),
+                None if approval is None else ApprovalId(approval),
+            )
+        open_tickets = {
+            ticket.software_id: OpenTicket(ticket.key, ticket.version)
+            for ticket in await self.written_tickets(uow, use_case_id, site)
+        }
         return Facts(learned, checks, pending, open_tickets)
 
     async def last_check(self, uow: UnitOfWork, use_case_id: UseCaseId) -> LastCheck | None:
@@ -309,9 +322,11 @@ class WatchlistFacts(Protocol):
 
 
 class WatchFacts:
-    def __init__(self, db: Database, tickets: TicketStatusPort) -> None:
+    def __init__(self, db: Database, tickets: TicketStatusPort, site: Identity) -> None:
         self._db = db
         self._tickets = tickets
+        self._site = site
+        """The Jira site the TicketStatusPort reads. Wiring builds both from one Jira address."""
         self._store = WatchStore()
 
     async def standings(
@@ -319,7 +334,7 @@ class WatchFacts:
     ) -> WatchlistStanding:
         await self._refresh(use_case_id)
         async with self._db.transaction("orchestration") as uow:
-            facts = await self._store.facts(uow, use_case_id)
+            facts = await self._store.facts(uow, use_case_id, self._site)
             last_check = await self._store.last_check(uow, use_case_id)
         return WatchlistStanding(
             {
@@ -337,7 +352,7 @@ class WatchFacts:
 
     async def _refresh(self, use_case_id: UseCaseId) -> None:
         async with self._db.transaction("orchestration") as uow:
-            written = await self._store.written_tickets(uow, use_case_id)
+            written = await self._store.written_tickets(uow, use_case_id, self._site)
         if not written:
             return
         try:

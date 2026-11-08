@@ -126,13 +126,17 @@ from platform_api.orchestration.write_actions import (
     UnboundIntent,
     WriteFailed,
     WriteGateway,
+    at_sites,
     bind,
     check,
     describe,
+    describe_at,
     digest,
     intents,
+    site_name,
 )
 from platform_api.shared import (
+    JIRA_SITE_CHANGED,
     TEAM_TIME_ZONE,
     ApprovalId,
     Digest,
@@ -207,6 +211,8 @@ class ApprovalDetail:
     why_not: Refusal | None
     run: RunRecord
     found: str
+    site_names: tuple[str, ...]
+    """Where each action writes, as people read it, in the order of the proposal's actions."""
 
 
 @dataclass(frozen=True)
@@ -316,6 +322,7 @@ DENIED_ON_THE_WIRE: Mapping[DenyReason, DeniedReason] = {
     DenyReason.INVALID_DECISIONS: "invalid_decisions",
     DenyReason.DIGEST_MISMATCH: "digest_mismatch",
     DenyReason.UNREGISTERED_ACTION: "unregistered_action",
+    DenyReason.TARGET_CHANGED: "target_changed",
 }
 
 
@@ -590,6 +597,7 @@ class Orchestrator:
                 moved = working.finish_with_nothing_to_write(summary)
                 reply = StepReply(False, "nothing_to_write", summary)
             case actions:
+                actions = at_sites(actions, self._gateway.sites)
                 proposal = Proposal(
                     ProposalId(new_id("prp")), record.run_id, actions, digest(actions)
                 )
@@ -600,9 +608,7 @@ class Orchestrator:
                 )
                 reply = StepReply(True, "proposed", summary)
         if reviewed is not None:
-            await self._watch.record_review(
-                uow, record, reviewed, None if proposal is None else proposal.id
-            )
+            await self._watch.record_review(uow, record, reviewed, proposal)
         await self._commit(uow, record, moved)
         return reply
 
@@ -699,7 +705,7 @@ class Orchestrator:
                     "actions": list(intents(proposal.actions)),
                     "link": link,
                     "summary": proposed.summary,
-                    "lines": [describe(a).line for a in proposal.actions],
+                    "lines": [describe_at(a, self._gateway.sites).line for a in proposal.actions],
                     "digest": request.digest,
                     "steps": _asked_steps(request, names),
                     "not_deciding": sorted({names[p] for p in request.parties}),
@@ -725,12 +731,20 @@ class Orchestrator:
             request = await self._store.load_approval(uow, acting.approval_id)
             assert proposal is not None and request is not None
             decisions = await self._store.load_decisions(uow, request.id)
-            verdict = check(acting, proposal, request, decisions, self._gateway.registry)
+            verdict = check(
+                acting,
+                proposal,
+                request,
+                decisions,
+                self._gateway.registry,
+                self._gateway.sites,
+            )
             match verdict:
                 case Deny(reason):
                     detail = f"the safety checker denied the write: {reason.value}"
+                    why = JIRA_SITE_CHANGED if reason is DenyReason.TARGET_CHANGED else detail
                     moved2 = acting.fail(
-                        Failure(FailureReason.SAFETY_DENIED, detail, retryable=False)
+                        Failure(FailureReason.SAFETY_DENIED, why, retryable=False)
                     ).preceded_by(
                         _denied(DENIED_ON_THE_WIRE[reason], detail),
                         step_finished(StepName.WRITE_ACTION, execution, 1, "refused", detail),
@@ -815,6 +829,7 @@ class Orchestrator:
             approvals.why_not(request, decisions, principal),
             record,
             found,
+            tuple(site_name(action, self._gateway.sites) for action in proposal.actions),
         )
 
     async def decide(

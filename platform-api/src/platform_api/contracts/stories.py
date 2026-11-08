@@ -58,6 +58,7 @@ from platform_api.monitoring.troubleshooter import answers, explain
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.dispatch import ApprovalNotice, ApprovalOutcome, AskedStep
 from platform_api.orchestration.http import (
+    ApprovalActionView,
     ApprovalRef,
     ApprovalView,
     AwaitingApprovalView,
@@ -77,8 +78,9 @@ from platform_api.orchestration.http import (
     WriteActionView,
     WriteDoneView,
 )
+from platform_api.orchestration.jira import PRACTICE_SITE
 from platform_api.orchestration.teams import approval_card, practice_text, with_outcome
-from platform_api.orchestration.write_actions import WriteAction, digest
+from platform_api.orchestration.write_actions import WriteAction, describe_at, digest
 from platform_api.practice_jira.http import MockJiraTicket, MockJiraTickets
 from platform_api.shared import ApprovalId, ProposalId, RunId, UserId
 from platform_api.wire import ApprovalStepView, Trigger, WireModel
@@ -117,7 +119,7 @@ TICKET_KEY = "MOCK-142"
 JIRA_ACTION = WriteAction(
     connector="jira",
     operation="create_ticket",
-    target={"project": "MOCK"},
+    target={"project": "MOCK", "site": PRACTICE_SITE.identity},
     fields={"title": TICKET_TITLE, "body": TICKET_BODY},
 )
 DIGEST = digest([JIRA_ACTION])
@@ -617,7 +619,7 @@ def approval_view_for(story: Story, viewer: UserId) -> ApprovalView:
         approval_id=story.approval_id,
         run_id=story.run_id,
         digest=DIGEST,
-        actions=[ACTION_VIEW],
+        actions=[ApprovalActionView(**ACTION_VIEW.model_dump(), site_name=PRACTICE_SITE.name)],
         steps=[open_step()],
         you_can_decide=not own_work,
         why_not=Refusal.OWN_WORK if own_work else None,
@@ -698,7 +700,7 @@ APPROVAL_NOTICE = ApprovalNotice(
     link=SUCCESS.approval_link,
     open_url=f"{PORTAL_URL}{SUCCESS.approval_link}",
     summary=SUMMARY,
-    lines=(ACTION_LINE.line,),
+    lines=(describe_at(JIRA_ACTION, {"jira": PRACTICE_SITE}).line,),
     digest=DIGEST,
     steps=(AskedStep("Team approver"),),
     not_deciding=("Alice",),

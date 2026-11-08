@@ -6,7 +6,7 @@ import type { ApprovalView } from '../../api/types'
 import { MemoryRouter } from 'react-router'
 import { ApprovalGate, EXACT_WORDS } from './ApprovalGate'
 import { askedWords, decisionFor, foundOf, partyOf, yourPart, type Decision } from './decision'
-import { lockWords, withCurrentNames, proposalTitle, type Party } from './words'
+import { approvalTitle, lockWords, withCurrentNames, proposalTitle, type Party } from './words'
 
 const BOB = bob as ApprovalView
 const ALICE = alice as ApprovalView
@@ -118,7 +118,7 @@ describe('the approval gate', () => {
   ])('shows %s exactly what will be written', (_who, approval) => {
     const html = draw(approval, OTHER)
     const [action] = approval.actions
-    expect(text(html)).toContain(proposalTitle(approval.actions))
+    expect(text(html)).toContain(approvalTitle(approval.actions))
     expect(text(html)).toContain(String(action?.fields['title']))
     expect(text(html)).toContain(EXACT_WORDS)
   })
@@ -127,6 +127,17 @@ describe('the approval gate', () => {
     expect(proposalTitle(BOB.actions)).toBe('1 ticket will be created in Jira project MOCK')
     const three = [...BOB.actions, ...BOB.actions, ...BOB.actions]
     expect(proposalTitle(three)).toBe('3 tickets will be created in Jira project MOCK')
+  })
+
+  it('names the Jira the tickets go to, before the Approver says yes', () => {
+    expect(approvalTitle(BOB.actions)).toBe('1 ticket will be created in Jira project MOCK on the practice Jira')
+    expect(text(draw(BOB, OTHER))).toContain('1 ticket will be created in Jira project MOCK on the practice Jira')
+    const [action] = BOB.actions
+    if (!action) throw new Error('the fixture has one action')
+    const real = { ...action, site_name: 'jira.example.com' }
+    expect(approvalTitle([real, real])).toBe('2 tickets will be created in Jira project MOCK on jira.example.com')
+    const gone = { ...action, site_name: 'a Jira that is no longer set up' }
+    expect(approvalTitle([gone])).toBe('1 ticket will be created in Jira project MOCK on a Jira that is no longer set up')
   })
 
   it('shows neither buttons nor a lock once the step is decided, while the chat catches up', () => {

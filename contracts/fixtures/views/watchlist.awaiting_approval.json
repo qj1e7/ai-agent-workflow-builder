@@ -12,13 +12,14 @@
   "state": "awaiting_approval",
   "proposal": {
     "proposal_id": "prp_01JBC",
-    "digest": "sha256:c331bd883a0099caaeb7a7c1a29a07ef2f2bbebb162db28b9b7972c5e02d2c72",
+    "digest": "sha256:1332f8fca3b61db74f41c2485c9b5d90b1b584fcac1e3785fb15eea4e5235782",
     "actions": [
       {
         "connector": "jira",
         "operation": "create_ticket",
         "target": {
-          "project": "MOCK"
+          "project": "MOCK",
+          "site": "practice"
         },
         "fields": {
           "title": "Upgrade LangGraph from 1.2.14 to 1.2.16",
@@ -29,7 +30,8 @@
         "connector": "jira",
         "operation": "create_ticket",
         "target": {
-          "project": "MOCK"
+          "project": "MOCK",
+          "site": "practice"
         },
         "fields": {
           "title": "Upgrade Redis from 8.2.0 to 8.2.1",
@@ -40,7 +42,8 @@
         "connector": "jira",
         "operation": "create_ticket",
         "target": {
-          "project": "MOCK"
+          "project": "MOCK",
+          "site": "practice"
         },
         "fields": {
           "title": "Upgrade PostgreSQL from 17.2.0 to 17.3.0",

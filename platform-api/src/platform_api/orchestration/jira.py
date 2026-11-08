@@ -12,10 +12,13 @@ from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal, Protocol
+from urllib.parse import urlsplit
 
 from platform_api.db import Database
+from platform_api.orchestration.dispatch import PRACTICE, identity_of
 from platform_api.orchestration.write_actions import (
     CONNECTOR_TIMEOUT,
+    Site,
     WriteAction,
     WriteKey,
     WriteRefused,
@@ -76,6 +79,21 @@ class SearchResult:
     """True when Jira had more matching tickets than the limit, so older ones are missing. When
     the Jira account has no time zone, the search asks Jira for a day more on each date, so this
     can be true even when every ticket that matches was returned."""
+
+
+PRACTICE_SITE = Site(PRACTICE, "the practice Jira")
+
+
+def jira_site(base_url: str | None) -> Site:
+    """The Jira site tickets go to (ADR 0041). No address is the practice Jira. Otherwise it is a
+    fingerprint of the address, with the scheme and the host in lower case, the port kept, and
+    the path kept with no trailing slash. The token, the email and the flavor are left out,
+    because a new token moves no ticket."""
+    if base_url is None:
+        return PRACTICE_SITE
+    parts = urlsplit(base_url)
+    address = f"{parts.scheme.lower()}://{parts.netloc.lower()}{parts.path.rstrip('/')}"
+    return Site(identity_of("jira", address), parts.hostname or parts.netloc)
 
 
 class JiraError(Exception):
@@ -250,10 +268,12 @@ class JiraWriteConnector:
     operations = frozenset({"create_ticket"})
 
     def __init__(
-        self, jira: JiraPort, db: Database, deadline: timedelta = CONNECTOR_DEADLINE
+        self, jira: JiraPort, db: Database, site: Site, deadline: timedelta = CONNECTOR_DEADLINE
     ) -> None:
         self._jira = jira
         self._deadline = deadline
+        self.site = site
+        """The site the JiraPort writes to. Wiring builds both from one Jira address."""
         self.records = JiraWriteRecords(db)
 
     def link(self, reference: str) -> str:

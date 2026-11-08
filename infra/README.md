@@ -146,6 +146,8 @@ With no `JIRA_BASE_URL`, platform-api serves a practice Jira at `/practice-jira`
 - for Cloud, the secret `JIRA_EMAIL`, the account's email;
 - if needed, `JIRA_ISSUE_TYPE` (default `Task`), `JIRA_BROWSE_URL` (default `JIRA_BASE_URL/browse/{key}`) and `WATCHLIST_JIRA_PROJECT` (default `MOCK`).
 
+Before you deploy, wait until no run is between an Approver's yes and its write, or expect those runs to stop. A write approved for the practice Jira is never made in the real one: the safety checker stops it, and the run says that Jira's settings changed after the yes ([ADR 0041](../docs/adr/0041-an-approved-jira-write-is-made-only-in-the-jira-it-was-approved-for.md)). The same holds for a move to another Jira address. A new token for the same address changes nothing.
+
 The plan updates platform-api and the Portal in place, and adds the `jira-api-token` secret to Key Vault. The practice Jira's routes are then not served. The Portal gets `JIRA_BROWSE_URL` too, so ticket keys with no address of their own link to the real Jira, and the Portal hides its Practice Jira page. `platform-api/tests/test_jira_contract.py` runs against the real Jira first, with `JIRA_CONTRACT_URL` and the settings its docstring names.
 
 ## Cost estimate

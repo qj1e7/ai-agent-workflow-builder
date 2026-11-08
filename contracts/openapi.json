@@ -1315,6 +1315,43 @@
         "title": "Answers",
         "type": "object"
       },
+      "ApprovalActionView": {
+        "additionalProperties": false,
+        "properties": {
+          "connector": {
+            "title": "Connector",
+            "type": "string"
+          },
+          "fields": {
+            "additionalProperties": true,
+            "title": "Fields",
+            "type": "object"
+          },
+          "operation": {
+            "title": "Operation",
+            "type": "string"
+          },
+          "site_name": {
+            "description": "Where this write goes, as the Approver reads it before saying yes: \"the practice Jira\", or the host of the Jira set up now. \"a Jira that is no longer set up\" when the target names another Jira site, or none, so the write would be refused.",
+            "title": "Site Name",
+            "type": "string"
+          },
+          "target": {
+            "additionalProperties": true,
+            "title": "Target",
+            "type": "object"
+          }
+        },
+        "required": [
+          "connector",
+          "operation",
+          "target",
+          "fields",
+          "site_name"
+        ],
+        "title": "ApprovalActionView",
+        "type": "object"
+      },
       "ApprovalAnnounceFailed": {
         "additionalProperties": false,
         "properties": {
@@ -1848,7 +1885,7 @@
         "properties": {
           "actions": {
             "items": {
-              "$ref": "#/components/schemas/WriteActionView"
+              "$ref": "#/components/schemas/ApprovalActionView"
             },
             "title": "Actions",
             "type": "array"
@@ -3661,6 +3698,7 @@
           "invalid_decisions",
           "digest_mismatch",
           "unregistered_action",
+          "target_changed",
           "out_of_order"
         ],
         "type": "string"

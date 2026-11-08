@@ -74,6 +74,7 @@ from platform_api.orchestration.http import (
     RunView,
     WriteActionView,
 )
+from platform_api.orchestration.jira import PRACTICE_SITE
 from platform_api.orchestration.watch import newer
 from platform_api.orchestration.write_actions import WriteAction, describe, digest
 from platform_api.shared import RunId, SoftwareId, UserId
@@ -286,7 +287,7 @@ def _ticket(w: Watched) -> WriteAction:
     return WriteAction(
         connector="jira",
         operation="create_ticket",
-        target={"project": PROJECT},
+        target={"project": PROJECT, "site": PRACTICE_SITE.identity},
         fields={
             "title": f"Upgrade {w.name} from {w.our_version} to {w.newest}",
             "body": f"{w.name} has {_plural(len(w.new_versions), 'new release')} on GitHub "

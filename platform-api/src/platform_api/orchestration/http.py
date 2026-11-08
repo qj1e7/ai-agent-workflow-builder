@@ -78,6 +78,14 @@ class WriteActionView(WireModel):
     fields: dict[str, Any]
 
 
+class ApprovalActionView(WriteActionView):
+    site_name: str = Field(
+        description="Where this write goes, as the Approver reads it before saying yes: "
+        '"the practice Jira", or the host of the Jira set up now. "a Jira that is no longer set '
+        'up" when the target names another Jira site, or none, so the write would be refused.'
+    )
+
+
 class ProposalView(WireModel):
     proposal_id: ProposalId
     digest: Digest
@@ -188,7 +196,7 @@ class ApprovalView(WireModel):
     approval_id: ApprovalId
     run_id: RunId
     digest: Digest
-    actions: list[WriteActionView]
+    actions: list[ApprovalActionView]
     steps: list[ApprovalStepView]
     you_can_decide: bool
     why_not: Refusal | None
@@ -517,7 +525,12 @@ async def get_approval(
         approval_id=detail.request.id,
         run_id=detail.request.run_id,
         digest=detail.request.digest,
-        actions=proposal_view(detail.proposal).actions,
+        actions=[
+            ApprovalActionView(**action.model_dump(), site_name=name)
+            for action, name in zip(
+                proposal_view(detail.proposal).actions, detail.site_names, strict=True
+            )
+        ],
         steps=steps_view(detail.request, detail.decisions),
         you_can_decide=detail.why_not is None,
         why_not=detail.why_not,

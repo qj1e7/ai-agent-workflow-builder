@@ -12,6 +12,7 @@ from platform_api.orchestration.approvals import (
     Decision,
     Verdict,
 )
+from platform_api.orchestration.jira import PRACTICE_SITE
 from platform_api.orchestration.runs import Acting, Pending, WriteDone
 from platform_api.orchestration.store import RunRecord, Store
 from platform_api.orchestration.write_actions import (
@@ -24,6 +25,7 @@ from platform_api.orchestration.write_actions import (
     check,
     digest,
     registry_of,
+    sites_of,
 )
 from platform_api.shared import ApprovalId, ProposalId, RunId, UserId
 from tests.conftest import PostgresUrls
@@ -37,7 +39,10 @@ PRP = ProposalId("prp_1")
 APR = ApprovalId("apr_1")
 BOB = UserId("bob")
 ACTION = WriteAction(
-    "jira", "create_ticket", {"project": "MOCK"}, {"title": "New releases", "body": "..."}
+    "jira",
+    "create_ticket",
+    {"project": "MOCK", "site": "practice"},
+    {"title": "New releases", "body": "..."},
 )
 PROPOSAL = Proposal(PRP, RUN, (ACTION,), digest((ACTION,)))
 REQUEST = ApprovalRequest(
@@ -58,6 +63,7 @@ seconds instead of hanging CI."""
 class BlockingConnector:
     name = "jira"
     operations = frozenset({"create_ticket"})
+    site = PRACTICE_SITE
 
     def __init__(self) -> None:
         self.calls: list[str] = []
@@ -76,7 +82,9 @@ class BlockingConnector:
 
 
 def authorized(connector: BlockingConnector | PracticeKit) -> AuthorizedWrite:
-    verdict = check(ACTING, PROPOSAL, REQUEST, APPROVED, registry_of([connector]))
+    verdict = check(
+        ACTING, PROPOSAL, REQUEST, APPROVED, registry_of([connector]), sites_of([connector])
+    )
     assert isinstance(verdict, AuthorizedWrite)
     return verdict
 
@@ -180,13 +188,15 @@ async def test_a_write_jira_refuses_fails_for_good_and_one_it_cannot_reach_may_b
     await seed_run(db)
     jira = PracticeKit(db)
     gateway = WriteGateway(db, [jira])
-    refused = WriteAction("jira", "create_ticket", {"project": "MOCK"}, {"title": "", "body": ""})
+    refused = WriteAction(
+        "jira", "create_ticket", {"project": "MOCK", "site": "practice"}, {"title": "", "body": ""}
+    )
     proposal = Proposal(PRP, RUN, (refused,), digest((refused,)))
     request = ApprovalRequest(
         APR, RUN, PRP, proposal.digest, REQUEST.policy, frozenset({ALICE.user_id})
     )
     decisions = (Decision(APR, 0, BOB, Verdict.APPROVE, proposal.digest, NOW),)
-    write = check(ACTING, proposal, request, decisions, registry_of([jira]))
+    write = check(ACTING, proposal, request, decisions, registry_of([jira]), sites_of([jira]))
     assert isinstance(write, AuthorizedWrite)
     with pytest.raises(WriteFailed) as failed:
         await gateway.execute(write)

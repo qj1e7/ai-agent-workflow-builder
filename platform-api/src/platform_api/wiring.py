@@ -34,7 +34,7 @@ from platform_api.orchestration.dispatch import (
     N8nWebhooks,
     identity_of,
 )
-from platform_api.orchestration.jira import JiraWriteConnector
+from platform_api.orchestration.jira import JiraWriteConnector, jira_site
 from platform_api.orchestration.jira_rest import JiraAuth, JiraRestAdapter
 from platform_api.orchestration.model_settings import KeyBox, ModelSettings
 from platform_api.orchestration.people_store import People
@@ -230,6 +230,7 @@ async def build(settings: Settings) -> Services:
             await people.seed_first(settings.first_people)
     jira_client = httpx.AsyncClient(timeout=JIRA_TIMEOUT_SECONDS, follow_redirects=False)
     jira, practice_jira = jira_for(settings, db, jira_client)
+    site = jira_site(settings.jira.base_url)
     teams = TeamsStub(db, settings.teams_channel)
     channel, webhook = approval_channel(settings, teams)
 
@@ -258,7 +259,7 @@ async def build(settings: Settings) -> Services:
         N8nWebhooks(settings.n8n_base_url, path_for),
         channel,
         agents,
-        WriteGateway(db, [JiraWriteConnector(jira, db)]),
+        WriteGateway(db, [JiraWriteConnector(jira, db, site)]),
         mint,
         models=model_settings,
         people=people,
@@ -268,7 +269,7 @@ async def build(settings: Settings) -> Services:
     schedules = ScheduleBook(db)
     watchlist = Watchlist(
         db,
-        WatchFacts(db, jira),
+        WatchFacts(db, jira, site.identity),
         schedules,
         settings.watchlist_jira_project,
         ProjectFinding(agents),

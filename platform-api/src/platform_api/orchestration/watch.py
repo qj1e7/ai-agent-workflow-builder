@@ -34,7 +34,8 @@ class FromFirstCheck:
 class FromTicketDone:
     version: str
     at: datetime
-    ticket: str
+    ticket: str | None
+    """The Done ticket's key, or None when it is not in the Jira set up now (ADR 0041)."""
 
 
 type LearnedVersion = FromFirstCheck | FromTicketDone

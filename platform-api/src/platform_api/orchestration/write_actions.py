@@ -2,7 +2,7 @@ import asyncio
 import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence, Set
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Protocol
@@ -18,6 +18,7 @@ from platform_api.orchestration.approvals import (
     Invalid,
     approval_status,
 )
+from platform_api.orchestration.dispatch import Identity
 from platform_api.orchestration.runs import Acting, WriteDone
 from platform_api.shared import ApprovalId, Digest, ProposalId, RunId, UserId
 
@@ -95,12 +96,48 @@ def bind(
 type Registry = Mapping[str, Set[str]]
 
 
+@dataclass(frozen=True)
+class Site:
+    """Where a connector writes now, such as one Jira (ADR 0041). Its identity goes in each
+    action's target, so the Approver's yes covers it, and the safety checker compares it with the
+    connector's at the write. Its name is how people read it, and is never stored."""
+
+    identity: Identity
+    name: str
+
+
+type Sites = Mapping[str, Site]
+
+GONE_SITE = "a Jira that is no longer set up"
+
+
+def at_sites(actions: Iterable[WriteAction], sites: Sites) -> tuple[WriteAction, ...]:
+    """The actions, each with the site its connector writes to now in its target. An action whose
+    connector has no site gets none, and the safety checker denies it."""
+    return tuple(
+        replace(action, target={**action.target, "site": sites[action.connector].identity})
+        if action.connector in sites
+        else action
+        for action in actions
+    )
+
+
+def site_name(action: WriteAction, sites: Sites) -> str:
+    """Where the action writes, as people read it. A target with another site than its
+    connector's now, or with none, names a place the platform no longer writes to."""
+    now = sites.get(action.connector)
+    if now is not None and action.target.get("site") == now.identity:
+        return now.name
+    return GONE_SITE
+
+
 class DenyReason(Enum):
     RUN_MISMATCH = "run_mismatch"
     NOT_APPROVED = "not_approved"
     INVALID_DECISIONS = "invalid_decisions"
     DIGEST_MISMATCH = "digest_mismatch"
     UNREGISTERED_ACTION = "unregistered_action"
+    TARGET_CHANGED = "target_changed"
 
 
 @dataclass(frozen=True)
@@ -134,6 +171,7 @@ def check(
     request: ApprovalRequest,
     decisions: Iterable[Decision],
     registry: Registry,
+    sites: Sites,
 ) -> AuthorizedWrite | Deny:
     same_run = (
         acting.run_id == proposal.run_id == request.run_id
@@ -152,6 +190,9 @@ def check(
     for action in proposal.actions:
         if action.operation not in registry.get(action.connector, frozenset()):
             return Deny(DenyReason.UNREGISTERED_ACTION)
+        now = sites.get(action.connector)
+        if now is None or action.target.get("site") != now.identity:
+            return Deny(DenyReason.TARGET_CHANGED)
     return _issue(proposal, request.id, status.approvers)
 
 
@@ -180,19 +221,28 @@ def _is_ticket(action: WriteAction) -> bool:
     return action.connector == "jira" and action.operation == "create_ticket"
 
 
-def describe(action: WriteAction) -> ActionLine:
+def _line(action: WriteAction, where: str) -> ActionLine:
     if _is_ticket(action):
         project = action.target.get("project", "?")
         return ActionLine(
             connector="jira",
             operation="create_ticket",
-            line=f"Create Jira ticket in {project}: {shown_title(action)}",
+            line=f"Create Jira ticket in {project}{where}: {shown_title(action)}",
         )
     return ActionLine(
         connector=action.connector,
         operation=action.operation,
         line=f"{action.operation} on {action.connector}",
     )
+
+
+def describe(action: WriteAction) -> ActionLine:
+    return _line(action, "")
+
+
+def describe_at(action: WriteAction, sites: Sites) -> ActionLine:
+    """describe()'s line with the Jira named, for the Approver to read before saying yes."""
+    return _line(action, f" on {site_name(action, sites)}")
 
 
 def _ticket_phrase(project: str, title: str) -> str:
@@ -270,6 +320,9 @@ class WriteConnector(Protocol):
     @property
     def operations(self) -> frozenset[str]: ...
 
+    @property
+    def site(self) -> Site: ...
+
     async def execute(self, action: WriteAction, key: WriteKey) -> str: ...
 
     def link(self, reference: str) -> str | None:
@@ -279,6 +332,10 @@ class WriteConnector(Protocol):
 
 def registry_of(connectors: Iterable[WriteConnector]) -> Registry:
     return {connector.name: connector.operations for connector in connectors}
+
+
+def sites_of(connectors: Iterable[WriteConnector]) -> Sites:
+    return {connector.name: connector.site for connector in connectors}
 
 
 CONNECTOR_TIMEOUT = timedelta(seconds=30)
@@ -310,6 +367,10 @@ class WriteGateway:
     @property
     def registry(self) -> Registry:
         return registry_of(self._connectors.values())
+
+    @property
+    def sites(self) -> Sites:
+        return sites_of(self._connectors.values())
 
     async def execute(self, write: AuthorizedWrite) -> tuple[WriteDone, ...]:
         done: list[WriteDone] = []

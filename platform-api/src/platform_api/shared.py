@@ -50,6 +50,12 @@ WRITE_STOP_ADVICE = (
 """What to do after a stop at the write step that retrying cannot fix. A new run does not look
 for this run's ticket, so it can make a duplicate. The run's failure summary, the retry refusal
 and the AI troubleshooter all use this one text (ADR 0035)."""
+JIRA_SITE_CHANGED = (
+    "Jira's settings changed after the Approvers said yes, so the platform did not make the "
+    "ticket in a Jira they did not approve."
+)
+"""Why the safety checker stopped a write approved for another Jira site (ADR 0041). The run's
+failure, the retry refusal and the AI troubleshooter give it, then WRITE_STOP_ADVICE."""
 BEFORE_WRITE_STOP_ADVICE = "Start a new run."
 """What to do after a stop before the write step that retrying cannot fix: nothing was written."""
 

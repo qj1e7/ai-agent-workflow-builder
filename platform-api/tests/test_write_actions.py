@@ -10,6 +10,8 @@ from platform_api.orchestration.approvals import (
     Decision,
     Verdict,
 )
+from platform_api.orchestration.dispatch import identity_of
+from platform_api.orchestration.jira import PRACTICE_SITE
 from platform_api.orchestration.runs import Acting
 from platform_api.orchestration.write_actions import (
     AuthorizedWrite,
@@ -18,15 +20,19 @@ from platform_api.orchestration.write_actions import (
     DenyReason,
     Proposal,
     ProposedIntent,
+    Site,
     UnboundIntent,
     WriteAction,
+    at_sites,
     bind,
     check,
     describe,
+    describe_at,
     digest,
     intent,
     intents,
     listed,
+    site_name,
 )
 from platform_api.shared import ApprovalId, Digest, ProposalId, RunId, UserId
 
@@ -41,11 +47,13 @@ NOW = datetime(2026, 10, 20, 9, 0, tzinfo=UTC)
 TICKET = WriteAction(
     connector="jira",
     operation="create_ticket",
-    target={"project": "MOCK"},
+    target={"project": "MOCK", "site": "practice"},
     fields={"title": "New LangGraph releases: 1.2.16, 1.2.15", "body": "..."},
 )
-TICKET_DIGEST = Digest("sha256:796204036c978912f71f411ea23c16e33df45b425e8d5c883f8889cd8d5cc24c")
+TICKET_DIGEST = Digest("sha256:b7e48da6e0c19d5788ef16b454f0833c399307e94bdc5c4cc96ffba78593e614")
 REGISTRY = {"jira": frozenset({"create_ticket"})}
+SITES = {"jira": PRACTICE_SITE}
+JIRA_B = Site(identity_of("jira", "https://jira-b.example"), "jira-b.example")
 BINDINGS = {"create_ticket": Binding("jira", "create_ticket", {"project": "MOCK"})}
 
 ONE_STEP = ApprovalPolicy((ApprovalStep("Team approver", AnyApprover()),))
@@ -163,7 +171,7 @@ def test_digest_ignores_key_order():
     reordered = WriteAction(
         connector="jira",
         operation="create_ticket",
-        target={"project": "MOCK"},
+        target={"site": "practice", "project": "MOCK"},
         fields={"body": "...", "title": "New LangGraph releases: 1.2.16, 1.2.15"},
     )
     assert digest((reordered,)) == TICKET_DIGEST
@@ -368,7 +376,7 @@ def test_bind(intents, expected):
     ],
 )
 def test_check(acting, proposal_, request_, decisions, registry, expected):
-    result = check(acting, proposal_, request_, decisions, registry)
+    result = check(acting, proposal_, request_, decisions, registry, SITES)
     if expected is AuthorizedWrite:
         assert isinstance(result, AuthorizedWrite)
     else:
@@ -377,12 +385,87 @@ def test_check(acting, proposal_, request_, decisions, registry, expected):
 
 def test_authorized_write_carries_the_proposal_and_who_approved():
     result = check(
-        ACTING, proposal(), request(TWO_STEPS), (approve(0, BOB), approve(1, CAROL)), REGISTRY
+        ACTING,
+        proposal(),
+        request(TWO_STEPS),
+        (approve(0, BOB), approve(1, CAROL)),
+        REGISTRY,
+        SITES,
     )
     assert isinstance(result, AuthorizedWrite)
     assert result.proposal == proposal()
     assert result.approval_id == APPROVAL
     assert result.approvers == (BOB, CAROL)
+
+
+def sited(site: str | None) -> WriteAction:
+    target = {"project": "MOCK"} if site is None else {"project": "MOCK", "site": site}
+    return WriteAction("jira", "create_ticket", target, dict(TICKET.fields))
+
+
+def approved_with(action: WriteAction, sites: dict[str, Site]) -> AuthorizedWrite | Deny:
+    """The action, approved as it stands, then checked against the sites set up now."""
+    signed = digest((action,))
+    return check(
+        ACTING,
+        proposal((action,), signed),
+        request(digest=signed),
+        (approve(0, BOB, signed),),
+        REGISTRY,
+        sites,
+    )
+
+
+@pytest.mark.parametrize(
+    ("action", "sites"),
+    [
+        pytest.param(sited("practice"), {"jira": JIRA_B}, id="approved on the practice Jira"),
+        pytest.param(sited(JIRA_B.identity), SITES, id="approved on Jira B, practice now"),
+        pytest.param(sited(None), SITES, id="no site: a row from before sites were kept"),
+        pytest.param(sited(""), SITES, id="an empty site"),
+        pytest.param(sited("practice"), {}, id="the connector has no site now"),
+    ],
+)
+def test_check_denies_a_write_whose_site_is_not_the_connectors_now(
+    action: WriteAction, sites: dict[str, Site]
+):
+    assert approved_with(action, sites) == Deny(DenyReason.TARGET_CHANGED)
+
+
+def test_check_allows_a_write_on_the_site_it_was_approved_for():
+    assert isinstance(approved_with(sited("practice"), SITES), AuthorizedWrite)
+    assert isinstance(approved_with(sited(JIRA_B.identity), {"jira": JIRA_B}), AuthorizedWrite)
+
+
+def test_a_changed_site_after_the_yes_is_not_a_digest_mismatch():
+    """The digest compares two records saved before the change, so only the site check sees it."""
+    action = sited("practice")
+    assert digest((action,)) == digest((sited("practice"),))
+    assert approved_with(action, {"jira": JIRA_B}) == Deny(DenyReason.TARGET_CHANGED)
+
+
+def test_at_sites_adds_each_connectors_site_now_and_leaves_an_unknown_connector_without():
+    page = WriteAction("confluence", "update_page", {"space": "OPS"}, {})
+    stale = WriteAction("jira", "create_ticket", {"project": "MOCK", "site": "old"}, {})
+    assert at_sites((sited(None), stale, page), {"jira": JIRA_B}) == (
+        sited(JIRA_B.identity),
+        WriteAction("jira", "create_ticket", {"project": "MOCK", "site": JIRA_B.identity}, {}),
+        page,
+    )
+
+
+def test_a_ticket_line_names_its_jira_for_the_approver():
+    assert describe_at(TICKET, SITES).line == (
+        "Create Jira ticket in MOCK on the practice Jira: New LangGraph releases: 1.2.16, 1.2.15"
+    )
+    assert describe_at(sited(JIRA_B.identity), {"jira": JIRA_B}).line.startswith(
+        "Create Jira ticket in MOCK on jira-b.example: "
+    )
+    assert site_name(TICKET, {"jira": JIRA_B}) == "a Jira that is no longer set up"
+    assert site_name(sited(None), SITES) == "a Jira that is no longer set up"
+    assert describe(TICKET).line == (
+        "Create Jira ticket in MOCK: New LangGraph releases: 1.2.16, 1.2.15"
+    ), "the activity log's line keeps no address"
 
 
 def test_authorized_write_cannot_be_built_directly():
