@@ -378,9 +378,22 @@ async def _unavailable(*_: object) -> None:
     raise JiraUnavailable("Jira could not search (500).")
 
 
+async def _signed_out(*_: object) -> None:
+    raise JiraUnavailable("Jira refused the token while it searched (401). secret detail", 401)
+
+
+async def _forbidden(*_: object) -> None:
+    raise JiraUnavailable("Jira could not search (403). secret detail", 403)
+
+
 @pytest.mark.parametrize(
     ("failing", "status", "said"),
-    [(_refused, 424, "Jira refused the request"), (_unavailable, 503, "Jira could not answer")],
+    [
+        (_refused, 424, "Jira refused the request"),
+        (_signed_out, 424, "Jira refused the request"),
+        (_forbidden, 424, "Jira refused the request"),
+        (_unavailable, 503, "Jira could not answer"),
+    ],
 )
 @pytest.mark.parametrize("route", ["search", "read"])
 async def test_a_refusal_is_told_apart_from_an_outage_and_leaks_nothing(
