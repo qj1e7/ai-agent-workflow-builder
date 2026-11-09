@@ -155,10 +155,42 @@ class GithubSource(WireModel):
     ref: RepoName = Field(description="The repository whose releases are read, as owner/name.")
 
 
+MAVEN_COORDINATE_PATTERN = (
+    r"^[A-Za-z0-9_-]{1,60}(?:\.[A-Za-z0-9_-]{1,60}){0,10}:[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$"
+)
+"""groupId:artifactId. The group's dots become folders in the registry's address, so no part
+may be empty, and the artifact never starts with a dot."""
+NPM_PACKAGE_PATTERN = r"^(?:@[a-z0-9~-][a-z0-9._~-]{0,100}/)?[a-z0-9~-][a-z0-9._~-]{0,113}$"
+"""An npm package name, with or without its @scope, as npm allows it today."""
+
+
+class MavenSource(WireModel):
+    kind: Literal["maven"] = "maven"
+    ref: str = Field(
+        pattern=MAVEN_COORDINATE_PATTERN,
+        description="The package on Maven Central as groupId:artifactId, such as "
+        "org.apache.logging.log4j:log4j-core.",
+    )
+
+
+class NpmSource(WireModel):
+    kind: Literal["npm"] = "npm"
+    ref: str = Field(
+        pattern=NPM_PACKAGE_PATTERN,
+        description="The package on the npm registry, such as express or @angular/core.",
+    )
+
+
+type SoftwareSource = Annotated[GithubSource | MavenSource | NpmSource, Field(discriminator="kind")]
+type SourceKind = Literal["github", "maven", "npm"]
+SOURCE_NAMES: dict[str, str] = {"github": "GitHub", "maven": "Maven Central", "npm": "npm"}
+"""How each source is named to people, in messages and tickets (ADR 0025)."""
+
+
 class SoftwareToCheck(WireModel):
     id: str = Field(pattern=SOFTWARE_ID_PATTERN)
     name: str = Field(min_length=1, max_length=80)
-    source: GithubSource
+    source: SoftwareSource
     our_version: str | None = Field(
         description="The version the team runs now. None means the newest release becomes the "
         "starting point."
@@ -348,6 +380,43 @@ type FindingState = Literal[
     "behind", "up_to_date", "starting_point", "already_raised", "cant_check"
 ]
 
+type Severity = Literal["critical", "high", "medium", "low", "unknown"]
+type VulnerabilitySource = Literal["OSV", "NVD"]
+type VulnerabilityCheck = Literal["not_checked", "checked", "could_not_check"]
+
+URGENT_SCORE = 9.0
+"""A known vulnerability scored this high or more makes the upgrade ticket urgent (ADR 0025)."""
+
+
+class Vulnerability(WireModel):
+    """One known vulnerability in the version the team runs, merged across sources by CVE."""
+
+    id: str = Field(
+        min_length=1,
+        max_length=60,
+        description="The CVE number when there is one, such as CVE-2021-44228, otherwise the "
+        "advisory's own id, such as GHSA-jfh8-c2jp-5v3q.",
+    )
+    severity: Severity = Field(
+        description="From NVD's CVSS score when NVD answered, otherwise from the advisory. "
+        "unknown when neither said."
+    )
+    score: float | None = Field(
+        default=None, ge=0, le=10, description="NVD's CVSS base score. None when NVD was not read."
+    )
+    summary: str = Field(default="", max_length=200, description="One line about the flaw.")
+    fixed_in: str | None = Field(
+        default=None, description="The lowest version the advisory says fixes it, when it says."
+    )
+    reported_by: list[VulnerabilitySource] = Field(
+        min_length=1, description="Which sources reported it, so an Approver can check them."
+    )
+    url: str = Field(description="The record an Approver can open: NVD for a CVE, else OSV.")
+
+    @property
+    def urgent(self) -> bool:
+        return self.severity == "critical" or (self.score or 0) >= URGENT_SCORE
+
 
 class Finding(WireModel):
     software_id: str
@@ -371,6 +440,16 @@ class Finding(WireModel):
         default=False,
         description="True when GitHub answered that the saved repository does not exist (404). "
         "Nothing says where it went.",
+    )
+    vulnerability_check: VulnerabilityCheck = Field(
+        default="not_checked",
+        description="Whether known vulnerabilities in our version were looked up. not_checked "
+        "for a GitHub source, which names no package, and when our version is not known. "
+        "could_not_check when OSV did not answer, so an empty list never reads as safe.",
+    )
+    vulnerabilities: list[Vulnerability] = Field(
+        default_factory=list[Vulnerability],
+        description="Known vulnerabilities in our version, worst first. Empty unless checked.",
     )
 
 

@@ -398,13 +398,31 @@
             ],
             "description": "The version the team runs now, such as 1.2.14. Leave it out when nobody knows it: the list then says Not known, and the check tells about releases newer than the newest one it first reads."
           },
+          "package": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PackageIn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The package whose versions are read from its registry. Give this or repo, not both. Known vulnerabilities are looked up only for a package."
+          },
           "repo": {
-            "$ref": "#/components/schemas/RepoName"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RepoName"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The GitHub repository whose releases are read, as owner/name. Give this or package, not both."
           }
         },
         "required": [
-          "name",
-          "repo"
+          "name"
         ],
         "title": "AddSoftware",
         "type": "object"
@@ -5133,6 +5151,34 @@
         "title": "OperatorIn",
         "type": "object"
       },
+      "PackageIn": {
+        "additionalProperties": false,
+        "description": "A package on a registry the team installs from (ADR 0025).",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/PackageKind",
+            "description": "maven for Maven Central, npm for the npm registry."
+          },
+          "ref": {
+            "description": "groupId:artifactId for Maven Central, such as org.apache.logging.log4j:log4j-core, or the package name for npm, such as express or @angular/core.",
+            "title": "Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "ref"
+        ],
+        "title": "PackageIn",
+        "type": "object"
+      },
+      "PackageKind": {
+        "enum": [
+          "maven",
+          "npm"
+        ],
+        "type": "string"
+      },
       "ParamSpec": {
         "additionalProperties": false,
         "properties": {
@@ -7332,19 +7378,27 @@
         "minLength": 1,
         "type": "string"
       },
+      "SourceKind": {
+        "enum": [
+          "github",
+          "maven",
+          "npm"
+        ],
+        "type": "string"
+      },
       "SourceView": {
         "additionalProperties": false,
         "properties": {
           "kind": {
-            "const": "github",
-            "title": "Kind",
-            "type": "string"
+            "$ref": "#/components/schemas/SourceKind",
+            "description": "github for GitHub releases, maven for Maven Central, npm for the npm registry (ADR 0025)."
           },
           "ref": {
             "title": "Ref",
             "type": "string"
           },
           "url": {
+            "description": "The page a person opens to see the versions.",
             "title": "Url",
             "type": "string"
           }

@@ -1,8 +1,16 @@
 import json
+import re
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, Field, JsonValue, StringConstraints, field_validator
+from pydantic import (
+    AwareDatetime,
+    Field,
+    JsonValue,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 from platform_api.builder.templates import VERSION_PATTERN
 from platform_api.orchestration import (
@@ -17,7 +25,15 @@ from platform_api.orchestration import (
     ToolKind,
 )
 from platform_api.shared import ApprovalId, RunId, SoftwareId, UserId
-from platform_api.wire import RepoName, WireIn, WireModel
+from platform_api.wire import (
+    MAVEN_COORDINATE_PATTERN,
+    NPM_PACKAGE_PATTERN,
+    PackageKind,
+    RepoName,
+    SourceKind,
+    WireIn,
+    WireModel,
+)
 from platform_api.wire import RunState as RunStateName
 
 type BlockKind = Literal["agent", "approval", "write_action"]
@@ -154,15 +170,63 @@ type SoftwareName = Annotated[
 type Version = Annotated[str, Field(pattern=VERSION_PATTERN)]
 
 
+class PackageIn(WireIn):
+    """A package on a registry the team installs from (ADR 0025)."""
+
+    kind: PackageKind = Field(description="maven for Maven Central, npm for the npm registry.")
+    ref: str = Field(
+        description="groupId:artifactId for Maven Central, such as "
+        "org.apache.logging.log4j:log4j-core, or the package name for npm, such as express or "
+        "@angular/core."
+    )
+
+    @model_validator(mode="after")
+    def _named_as_its_registry_names_it(self) -> PackageIn:
+        pattern = MAVEN_COORDINATE_PATTERN if self.kind == "maven" else NPM_PACKAGE_PATTERN
+        if not re.fullmatch(pattern, self.ref):
+            raise ValueError(
+                "ref must be groupId:artifactId"
+                if self.kind == "maven"
+                else "ref must be an npm package name, such as express or @angular/core"
+            )
+        return self
+
+
 class AddSoftware(WireIn):
     name: SoftwareName
-    repo: RepoName
+    repo: RepoName | None = Field(
+        default=None,
+        description="The GitHub repository whose releases are read, as owner/name. Give this "
+        "or package, not both.",
+    )
+    package: PackageIn | None = Field(
+        default=None,
+        description="The package whose versions are read from its registry. Give this or "
+        "repo, not both. Known vulnerabilities are looked up only for a package.",
+    )
     our_version: Version | None = Field(
         default=None,
         description="The version the team runs now, such as 1.2.14. Leave it out when nobody "
         "knows it: the list then says Not known, and the check tells about releases newer than "
         "the newest one it first reads.",
     )
+
+    @model_validator(mode="after")
+    def _one_source(self) -> AddSoftware:
+        if (self.repo is None) == (self.package is None):
+            raise ValueError("give repo or package, not both and not neither")
+        return self
+
+    @property
+    def source_kind(self) -> SourceKind:
+        return "github" if self.package is None else self.package.kind
+
+    @property
+    def source_ref(self) -> str:
+        if self.package is not None:
+            return self.package.ref
+        assert self.repo is not None
+        return self.repo
 
 
 class FindIn(WireIn):
@@ -214,9 +278,12 @@ type FindOut = Annotated[
 
 
 class SourceView(WireModel):
-    kind: Literal["github"]
+    kind: SourceKind = Field(
+        description="github for GitHub releases, maven for Maven Central, npm for the npm "
+        "registry (ADR 0025)."
+    )
     ref: str
-    url: str
+    url: str = Field(description="The page a person opens to see the versions.")
 
 
 type VersionSourceKind = Literal["given", "first_check", "ticket_done"]

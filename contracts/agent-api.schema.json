@@ -1664,6 +1664,19 @@
         },
         "state": {
           "$ref": "#/$defs/FindingState"
+        },
+        "vulnerabilities": {
+          "description": "Known vulnerabilities in our version, worst first. Empty unless checked.",
+          "items": {
+            "$ref": "#/$defs/Vulnerability"
+          },
+          "title": "Vulnerabilities",
+          "type": "array"
+        },
+        "vulnerability_check": {
+          "$ref": "#/$defs/VulnerabilityCheck",
+          "default": "not_checked",
+          "description": "Whether known vulnerabilities in our version were looked up. not_checked for a GitHub source, which names no package, and when our version is not known. could_not_check when OSV did not answer, so an empty list never reads as safe."
         }
       },
       "required": [
@@ -1914,6 +1927,28 @@
       "title": "LibraryInput",
       "type": "object"
     },
+    "MavenSource": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "maven",
+          "default": "maven",
+          "title": "Kind",
+          "type": "string"
+        },
+        "ref": {
+          "description": "The package on Maven Central as groupId:artifactId, such as org.apache.logging.log4j:log4j-core.",
+          "pattern": "^[A-Za-z0-9_-]{1,60}(?:\\.[A-Za-z0-9_-]{1,60}){0,10}:[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$",
+          "title": "Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "title": "MavenSource",
+      "type": "object"
+    },
     "MissingTool": {
       "additionalProperties": false,
       "properties": {
@@ -2101,6 +2136,28 @@
         "total"
       ],
       "title": "NeedsYouFact",
+      "type": "object"
+    },
+    "NpmSource": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "npm",
+          "default": "npm",
+          "title": "Kind",
+          "type": "string"
+        },
+        "ref": {
+          "description": "The package on the npm registry, such as express or @angular/core.",
+          "pattern": "^(?:@[a-z0-9~-][a-z0-9._~-]{0,100}/)?[a-z0-9~-][a-z0-9._~-]{0,113}$",
+          "title": "Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "title": "NpmSource",
       "type": "object"
     },
     "PartAnswer": {
@@ -2560,6 +2617,16 @@
       "title": "SetupCardAnswer",
       "type": "object"
     },
+    "Severity": {
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "unknown"
+      ],
+      "type": "string"
+    },
     "SoftwareMatch": {
       "additionalProperties": false,
       "properties": {
@@ -2656,6 +2723,27 @@
       "title": "SoftwareNotKnown",
       "type": "object"
     },
+    "SoftwareSource": {
+      "discriminator": {
+        "mapping": {
+          "github": "#/$defs/GithubSource",
+          "maven": "#/$defs/MavenSource",
+          "npm": "#/$defs/NpmSource"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/GithubSource"
+        },
+        {
+          "$ref": "#/$defs/MavenSource"
+        },
+        {
+          "$ref": "#/$defs/NpmSource"
+        }
+      ]
+    },
     "SoftwareToCheck": {
       "additionalProperties": false,
       "properties": {
@@ -2708,7 +2796,7 @@
           "title": "Our Version"
         },
         "source": {
-          "$ref": "#/$defs/GithubSource"
+          "$ref": "#/$defs/SoftwareSource"
         }
       },
       "required": [
@@ -3054,6 +3142,95 @@
       ],
       "title": "UnderstoodRow",
       "type": "object"
+    },
+    "Vulnerability": {
+      "additionalProperties": false,
+      "description": "One known vulnerability in the version the team runs, merged across sources by CVE.",
+      "properties": {
+        "fixed_in": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The lowest version the advisory says fixes it, when it says.",
+          "title": "Fixed In"
+        },
+        "id": {
+          "description": "The CVE number when there is one, such as CVE-2021-44228, otherwise the advisory's own id, such as GHSA-jfh8-c2jp-5v3q.",
+          "maxLength": 60,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "reported_by": {
+          "description": "Which sources reported it, so an Approver can check them.",
+          "items": {
+            "$ref": "#/$defs/VulnerabilitySource"
+          },
+          "minItems": 1,
+          "title": "Reported By",
+          "type": "array"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "maximum": 10,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "NVD's CVSS base score. None when NVD was not read.",
+          "title": "Score"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity",
+          "description": "From NVD's CVSS score when NVD answered, otherwise from the advisory. unknown when neither said."
+        },
+        "summary": {
+          "default": "",
+          "description": "One line about the flaw.",
+          "maxLength": 200,
+          "title": "Summary",
+          "type": "string"
+        },
+        "url": {
+          "description": "The record an Approver can open: NVD for a CVE, else OSV.",
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "severity",
+        "reported_by",
+        "url"
+      ],
+      "title": "Vulnerability",
+      "type": "object"
+    },
+    "VulnerabilityCheck": {
+      "enum": [
+        "not_checked",
+        "checked",
+        "could_not_check"
+      ],
+      "type": "string"
+    },
+    "VulnerabilitySource": {
+      "enum": [
+        "OSV",
+        "NVD"
+      ],
+      "type": "string"
     },
     "WatchedFact": {
       "additionalProperties": false,

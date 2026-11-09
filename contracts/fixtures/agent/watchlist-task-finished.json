@@ -29,7 +29,9 @@
         ],
         "detail": "2 releases newer than 1.2.14.",
         "full_name": "langchain-ai/langgraph",
-        "not_found": false
+        "not_found": false,
+        "vulnerability_check": "not_checked",
+        "vulnerabilities": []
       },
       {
         "software_id": "sw_01JC2A3B4C5D6E7F8G9H0J1K2N",
@@ -38,7 +40,9 @@
         "new_versions": [],
         "detail": "Nothing is newer than 8.2.1.",
         "full_name": "redis/redis",
-        "not_found": false
+        "not_found": false,
+        "vulnerability_check": "not_checked",
+        "vulnerabilities": []
       },
       {
         "software_id": "sw_01JC2A3B4C5D6E7F8G9H0J1K2P",
@@ -47,7 +51,9 @@
         "new_versions": [],
         "detail": "GitHub answered 404 Not Found.",
         "full_name": null,
-        "not_found": true
+        "not_found": true,
+        "vulnerability_check": "not_checked",
+        "vulnerabilities": []
       }
     ]
   },

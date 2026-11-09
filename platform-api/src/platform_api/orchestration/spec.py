@@ -8,13 +8,16 @@ from platform_api.orchestration.agents import CardSpec
 from platform_api.orchestration.approvals import ApprovalPolicy
 from platform_api.orchestration.write_actions import Binding
 from platform_api.shared import Principal, RunId, SoftwareId, UseCaseId, UserId
-from platform_api.wire import Trigger
+from platform_api.wire import SourceKind, Trigger
 
 
 @dataclass(frozen=True)
 class SoftwareSource:
+    """Where a watched software's versions are read: a GitHub repository as owner/name, a
+    Maven Central package as groupId:artifactId, or an npm package (ADR 0025)."""
+
     ref: str
-    kind: Literal["github"] = "github"
+    kind: SourceKind = "github"
 
 
 @dataclass(frozen=True)
