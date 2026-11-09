@@ -1279,7 +1279,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
 
   const AGENTS = {
     lead: { name: 'Planner', hue: 'var(--lead)', tint: 'var(--lead-tint)' },
-    checker: { name: 'Version checker', get role() { return shows('registries') ? 'Versions, sources and support dates' : 'Newest releases on GitHub'; }, job: 'magnifier', hue: 'var(--checker)', tint: 'var(--checker-tint)' },
+    checker: { name: 'Version checker', get role() { return shows('registries') ? 'Versions, sources and support dates' : 'Newest versions and known vulnerabilities'; }, job: 'magnifier', hue: 'var(--checker)', tint: 'var(--checker-tint)' },
     vuln: { name: 'Vulnerability checker', role: 'Known vulnerabilities, cross-checked', job: 'shield', hue: 'var(--red-ink)', tint: 'var(--red-soft)' },
     trouble: { name: 'AI troubleshooter', job: 'wrench', hue: 'var(--trouble)', tint: 'var(--trouble-tint)' },
     writer: { name: 'Ticket writer', job: 'pen', hue: 'var(--agent-4)', tint: 'var(--agent-4-tint)' },
@@ -1506,7 +1506,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     confluence: { name: 'Change Confluence pages', kind: 'write', base: 'planned', tools: [], cant: 'change Confluence pages', why: 'Confluence isn’t connected to the platform.' },
     ghIssues: { name: 'Read GitHub issues', kind: 'read', base: 'planned', conn: 'github', sys: 'GitHub', tools: ['ghIssues'], cant: 'read GitHub issues', why: 'There’s no tool for that yet.' },
     access: { name: 'Check who has access in Entra ID, the admin tools and GitLab', kind: 'read', base: 'planned', tools: ['access'], cant: 'check who has access', why: 'Those systems aren’t connected to the platform.' },
-    registries: { name: 'Check package registries and security advisories', kind: 'read', base: 'planned', tools: ['registries', 'support', 'suggest', 'vulns', 'kev'], cant: 'check registries or security advisories', why: 'Only GitHub releases are checked today.' },
+    /* ADR 0025, first part: built in the agent runtime and platform-api on 8 Nov 2026 (registries.py, vulnerabilities.py). */
+    packages: { name: 'Check Maven Central and npm packages for new versions and known vulnerabilities', kind: 'read', base: 'ready', sys: 'Maven Central, npm, OSV and NVD', tools: ['packages', 'pkgVulns'] },
+    registries: { name: 'Check PyPI, NuGet and Docker Hub, support end dates, and which vulnerabilities attackers are using', kind: 'read', base: 'planned', tools: ['registries', 'support', 'suggest', 'vulns', 'kev'], cant: 'check PyPI, NuGet or Docker Hub, support end dates, or which vulnerabilities attackers are using', why: 'GitHub, Maven Central and npm are checked today. Known vulnerabilities are looked up for Maven Central and npm packages on the Software watchlist.' },
     jiraComp: { name: 'Set a field such as a component on new Jira tickets', kind: 'write', base: 'planned', conn: 'jira', sys: 'Jira', tools: ['jiraComp'], cant: 'set a component', why: 'That needs a new tool. The team decides on new tools.' },
     email: { name: 'Send email or Slack messages', kind: 'write', base: 'unsupported', tools: [], cant: 'send email or Slack messages', why: 'Email and Slack aren’t on the team’s plan. Ask the team if you need them.' },
     tickets: { name: 'Close, edit, move or delete tickets', kind: 'write', base: 'unsupported', tools: [], cant: 'close, edit, move or delete tickets', why: 'Only people do that here.' },
@@ -1576,7 +1578,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The samples use only what the platform can do today: Jira tickets and GitHub releases. The access review is
      Phase 2, so it shows only with Planned features. */
   const BASE = {
-    sw: { name: 'Keep our software up to date', get what() { return `Checks every tool on the Software watchlist for new versions${shows('registries') ? ' and known vulnerabilities' : ' on GitHub'}, and raises a Jira ticket for each one that needs upgrading.`; }, sched: { freq: 'week', day: 'Monday', time: '09:00' }, next: 'Mon 2 Nov, 9:00', sort: 4, get agents() { return ['lead', 'checker', ...(shows('registries') ? ['vuln'] : []), 'writer']; } },
+    sw: { name: 'Keep our software up to date', get what() { return `Checks every tool on the Software watchlist for new versions${shows('registries') ? ' and known vulnerabilities' : ' on GitHub, Maven Central and npm, and known vulnerabilities in the Maven and npm packages'}, and raises a Jira ticket for each one that needs upgrading.`; }, sched: { freq: 'week', day: 'Monday', time: '09:00' }, next: 'Mon 2 Nov, 9:00', sort: 4, get agents() { return ['lead', 'checker', ...(shows('registries') ? ['vuln'] : []), 'writer']; } },
     issues: { name: 'Morning new-ticket check', what: 'Finds the tickets created in Jira project MOCK in the last day, each weekday morning, and puts a short summary of them in one Jira ticket.', sched: { freq: 'weekday', time: '08:00' }, next: 'Wed 28 Oct, 8:00', sort: 1, agents: ['lead', 'jira', 'summary'] },
     nudge: { name: 'Weekly closed-ticket summary', what: 'Sums up the tickets closed in Jira project MOCK this week, every Friday, and puts the summary in one Jira ticket.', sched: { freq: 'week', day: 'Friday', time: '16:00' }, next: 'Fri 30 Oct, 16:00', sort: 2, agents: ['lead', 'jira', 'summary'] },
     access: { name: 'Quarterly access review', what: 'Lists who can use Entra ID, the admin tools and GitLab, asks managers to confirm, and removes access nobody confirms.', when: 'First Monday of each quarter at 9:00', next: 'Mon 4 Jan 2027, 9:00', sort: 5, agents: ['lead', 'access', 'writer'], fixedSchedule: true, planned: 'access' },
@@ -1657,7 +1659,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return {
       sw: shows('registries')
         ? [['Read the newest version of each tool and its support dates, cross-checking its registry and GitHub', 'read', 'Reads registries, GitHub and endoflife.date'], ['Look up known vulnerabilities in the versions we run, and whether they’re being exploited', 'read', 'Reads OSV, NVD, vendor advisories and CISA'], ['Draft an upgrade ticket for each tool that is behind, marked urgent if it has a critical vulnerability', null, 'No system access'], ['Create the tickets in Jira project MOCK', 'write', 'Changes data, waits for a yes']]
-        : [['Read the newest release of each tool on GitHub', 'read', 'Reads GitHub'], ['Draft an upgrade ticket for each tool that is behind', null, 'No system access'], ['Create the tickets in Jira project MOCK', 'write', 'Changes data, waits for a yes']],
+        : [['Read the newest version of each tool from GitHub, Maven Central or npm', 'read', 'Reads GitHub, Maven Central and npm'], ['Look up known vulnerabilities in the Maven and npm packages we run', 'read', 'Reads OSV and NVD'], ['Draft an upgrade ticket for each tool that is behind, marked urgent if it has a critical vulnerability', null, 'No system access'], ['Create the tickets in Jira project MOCK', 'write', 'Changes data, waits for a yes']],
       issues: [['Find the tickets created in Jira project MOCK in the last day', 'read', READS_JIRA], ['Write a short summary of them', null, 'No system access'], ['Create one ticket in Jira project MOCK with the summary', 'write', 'Changes data, waits for a yes']],
       nudge: [['Find the tickets closed in Jira project MOCK this week', 'read', READS_JIRA], ['Write a short summary, with counts', null, 'No system access'], ['Create one ticket in Jira project MOCK with the summary', 'write', 'Changes data, waits for a yes']],
       access: [['List who can use Entra ID, the admin tools and GitLab', 'read', 'Reads 3 systems'], ['Ask each manager to confirm in Teams', 'write', 'Changes data, waits for a yes'], ['Remove access nobody confirmed', 'write', 'Changes data, 2 Approvers, one after the other']],
@@ -1866,14 +1868,17 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const UNREADABLE = ['Grafana', 'LangServe', 'PostgreSQL', 'Python'];
   const TRACKED = ['LangGraph', 'FastAPI', 'Grafana', 'Log4j core', 'LangServe', 'n8n', 'PostgreSQL', 'Spring Framework', 'Terraform', 'Keycloak', 'Redis', 'Nginx', 'Node.js', 'Python'];
   const UP_TO_DATE = TRACKED.slice(5);
-  /* Where software is published. Each source's state comes from the registry: GitHub releases are read today, the
-     registries are ADR 0025 and show only with Planned features. */
-  const SOURCES = { github: { name: 'GitHub', cap: 'ghReleases' }, maven: { name: 'Maven Central', cap: 'registries' }, npm: { name: 'npm', cap: 'registries' }, pypi: { name: 'PyPI', cap: 'registries' }, nuget: { name: 'NuGet', cap: 'registries' }, docker: { name: 'Docker Hub', cap: 'registries' } };
+  /* Where software is published. Each source's state comes from the registry: GitHub, Maven Central and npm are read
+     today, the other registries are the rest of ADR 0025 and show only with Planned features. */
+  const SOURCES = { github: { name: 'GitHub', cap: 'ghReleases' }, maven: { name: 'Maven Central', cap: 'packages' }, npm: { name: 'npm', cap: 'packages' }, pypi: { name: 'PyPI', cap: 'registries' }, nuget: { name: 'NuGet', cap: 'registries' }, docker: { name: 'Docker Hub', cap: 'registries' } };
   const srcName = (k) => SOURCES[k].name;
   const srcState = (k) => capState(SOURCES[k].cap);
   const sourcesShown = () => Object.keys(SOURCES).filter((k) => !['planned', 'unsupported'].includes(srcState(k)) || shows(SOURCES[k].cap));
-  /* A sample row's source as the watchlist shows it: its registry with Planned features, else its GitHub project. */
-  const rowSrc = (x) => (shows('registries') || !x.kind || x.kind === 'github' || x.kind === 'unknown' ? { kind: x.kind || 'github', repo: x.repo } : { kind: 'github', repo: x.gh });
+  /* A sample row's source as the watchlist shows it: its registry when that registry is read today or Planned features
+     are shown, else its GitHub project. */
+  const rowSrc = (x) => (!x.kind || x.kind === 'unknown' || shows('registries') || srcState(x.kind) === 'ready' ? { kind: x.kind || 'github', repo: x.repo } : { kind: 'github', repo: x.gh });
+  /* A package source, read from its registry, also gets its known vulnerabilities looked up (ADR 0025). */
+  const pkgSource = (k) => k && k !== 'github' && SOURCES[k] && SOURCES[k].cap === 'packages' && srcState(k) === 'ready';
   /* For each source: the field label, an example, help, the shape of a valid reference, and the error. */
   const SRC_FIELD = {
     github: ['GitHub repository', 'owner/name', 'Paste the project’s GitHub link, or type owner/name.', /^[\w.-]+\/[\w.-]+$/, 'That doesn’t look like a GitHub project. Paste its GitHub link, or type owner/name.'],
@@ -1908,14 +1913,18 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const onList = (name) => (S.firstDay ? [] : TRACKED).concat(S.added.map((a) => a.name)).some((n) => n.toLowerCase() === name.toLowerCase());
   const repoOf = (text) => { const m = text.trim().match(/github\.com\/([^/\s]+\/[^/\s#?]+)/i); return (m ? m[1] : text.trim()).replace(/\.git$/, '').replace(/\/$/, ''); };
   const RELEASE_ROWS = [
-    { key: 'MOCK-16', row: 'lj', tool: 'Log4j core', from: '2.14.1', to: '2.25.2', kind: 'maven', repo: 'org.apache.logging.log4j:log4j-core', gh: 'apache/logging-log4j2', date: 'Mon 12 Oct', count: 20, urgent: true, cve: 'CVE-2021-44228', kev: true, advisory: 'https://logging.apache.org/security.html', notes: 'Our version has 4 known vulnerabilities, found in OSV, NVD and Apache’s own advisory. The worst, CVE-2021-44228 (Log4Shell), is rated critical by NVD, 10.0 out of 10, and CISA lists it as actively exploited. Upgrading fixes all 4.', plainNotes: 'Security fixes and bug fixes. The release notes recommend upgrading.' },
+    { key: 'MOCK-16', row: 'lj', tool: 'Log4j core', from: '2.14.1', to: '2.25.2', kind: 'maven', repo: 'org.apache.logging.log4j:log4j-core', gh: 'apache/logging-log4j2', date: 'Mon 12 Oct', count: 20, urgent: true, cve: 'CVE-2021-44228', kev: true, advisory: 'https://logging.apache.org/security.html', notes: 'Our version has 4 known vulnerabilities, found in OSV, NVD and Apache’s own advisory. The worst, CVE-2021-44228 (Log4Shell), is rated critical by NVD, 10.0 out of 10, and CISA lists it as actively exploited. Upgrading fixes all 4.', pkgNotes: 'Our version has 4 known vulnerabilities, found in OSV and scored by NVD. The worst, CVE-2021-44228 (Log4Shell), is critical, 10.0 out of 10, so this ticket is urgent. The lowest version that fixes it is 2.15.0.', plainNotes: 'Security fixes and bug fixes. The release notes recommend upgrading.' },
     { key: 'MOCK-14', row: 'lg', tool: 'LangGraph', from: '1.2.14', to: '1.2.17', repo: 'langchain-ai/langgraph', date: 'Thu 22 Oct', count: 3, notes: 'Bug fixes and one new option. No breaking changes listed.' },
     { key: 'MOCK-15', row: 'fa', tool: 'FastAPI', from: '0.118.0', to: '0.120.1', kind: 'pypi', repo: 'fastapi', gh: 'fastapi/fastapi', date: 'Mon 19 Oct', count: 2, notes: 'Fixes and small improvements. One change is marked as possibly breaking, so check it before upgrading. GitHub already shows 0.120.2, but it isn’t on PyPI yet.', plainNotes: 'Fixes and small improvements. One change is marked as possibly breaking, so check it before upgrading.' },
   ];
-  /* This week's upgrade tickets. Without Planned features the vulnerability findings (ADR 0025) and the registries go,
-     and each ticket reads from the project's GitHub releases. */
-  const releases = () => RELEASE_ROWS.map((x) => (shows('registries') ? x : { ...x, ...rowSrc(x), urgent: false, cve: null, kev: false, advisory: null, notes: x.plainNotes || x.notes }));
-  const urgentNote = (word = ', 1 urgent') => (shows('registries') ? word : '');
+  /* This week's upgrade tickets. Without Planned features, a Maven Central or npm package keeps its known
+     vulnerabilities from OSV and NVD and its urgent mark, but loses CISA's list and the vendor advisory. Any other
+     registry goes, and that ticket reads from the project's GitHub releases. */
+  const releases = () => RELEASE_ROWS.map((x) => (shows('registries') ? x
+    : pkgSource(x.kind) ? { ...x, kev: false, advisory: null, notes: x.pkgNotes || x.notes }
+      : { ...x, ...rowSrc(x), urgent: false, cve: null, kev: false, advisory: null, notes: x.plainNotes || x.notes }));
+  /* One source for the urgent count, so Home, the Software page and the run never disagree. */
+  const urgentNote = (word = ', 1 urgent') => (releases().some((x) => x.urgent) ? word : '');
   const ghLink = (repo, label, path = '') => `<a href="https://github.com/${repo}${path}" target="_blank" rel="noopener noreferrer">${label}${I.ext()}<span class="vh"> (opens GitHub in a new tab)</span></a>`;
   const extLink = (url, label, where) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}${I.ext()}<span class="vh"> (opens ${where} in a new tab)</span></a>`;
   const SRC_URL = {
@@ -2171,9 +2180,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const stations = [
         { label: 'Started', sub: 'Mon 9:00', who: `p:${by}`, msg: { who: 'portal', text: `${nm(by)}’s schedule started the Monday check.` } },
         { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: `14 tools to check. I’m bringing in the Version checker${full ? ', the Vulnerability checker' : ''} and the Ticket writer.${full ? ` ${PLANNED_TAG}` : ''}` } },
-        { label: `Read ${TRACKED.length - UNREADABLE.length} of ${TRACKED.length}`, who: 'checker', msg: { who: 'checker', text: full ? 'I read each tool’s registry (Maven Central, PyPI, Docker Hub) and cross-checked GitHub. Log4j core, LangGraph and FastAPI have newer versions. For FastAPI, GitHub shows 0.120.2, but it isn’t on PyPI yet, so I used 0.120.1. Grafana couldn’t be read: Docker Hub and GitHub didn’t answer. From endoflife.date: PostgreSQL 14 stops getting fixes on 12 Nov, and Node.js 22 on 30 Apr. ' + PLANNED_TAG : 'I read each tool’s releases on GitHub. Log4j core, LangGraph and FastAPI have newer versions. Grafana couldn’t be read: GitHub’s hourly limit was reached.' } },
+        { label: `Read ${TRACKED.length - UNREADABLE.length} of ${TRACKED.length}`, who: 'checker', msg: { who: 'checker', text: full ? 'I read each tool’s registry (Maven Central, PyPI, Docker Hub) and cross-checked GitHub. Log4j core, LangGraph and FastAPI have newer versions. For FastAPI, GitHub shows 0.120.2, but it isn’t on PyPI yet, so I used 0.120.1. Grafana couldn’t be read: Docker Hub and GitHub didn’t answer. From endoflife.date: PostgreSQL 14 stops getting fixes on 12 Nov, and Node.js 22 on 30 Apr. ' + PLANNED_TAG : 'I read Log4j core from Maven Central and the rest from their releases on GitHub. Log4j core, LangGraph and FastAPI have newer versions. Grafana couldn’t be read: GitHub’s hourly limit was reached. I looked up Log4j core 2.14.1 in OSV, and NVD scored what OSV found: 4 known vulnerabilities. The worst, CVE-2021-44228 (Log4Shell), is critical, 10.0.' } },
         ...(full ? [{ label: `Check vulnerabilities ${PLANNED_TAG}`, who: 'vuln', msg: { who: 'vuln', text: 'I matched the versions we run in OSV, read the official records from NVD, checked vendor advisories, and checked CISA’s list of actively exploited vulnerabilities. Log4j core 2.14.1 has 4 known vulnerabilities, found in OSV, NVD and Apache’s own advisory. The worst, CVE-2021-44228 (Log4Shell), is rated critical, 10.0, and CISA lists it as actively exploited. None are listed for the other tools. ' + PLANNED_TAG } }] : []),
-        { label: 'Draft tickets', who: 'writer', msg: { who: 'writer', text: `I drafted 3 upgrade tickets.${full ? ' The Log4j core one is marked urgent.' : ''} Nothing is in Jira yet.${full ? ` ${PLANNED_TAG}` : ''}` } },
+        { label: 'Draft tickets', who: 'writer', msg: { who: 'writer', text: `I drafted 3 upgrade tickets.${urgentNote() ? ' The Log4j core one is marked urgent.' : ''} Nothing is in Jira yet.${full ? ` ${PLANNED_TAG}` : ''}` } },
         { label: 'Approval gate', gate: true, msg: gate },
         { label: 'Create in Jira', who: 'platform', skip: st === 'declined', msg: { who: 'platform', text: 'Created MOCK-14, MOCK-15 and MOCK-16. Only the approved tickets were written.' } },
         { label: 'Done', msg: { who: 'portal', tone: 'ok', text: st === 'declined' ? 'Done. The tickets will be proposed again next Monday.' : `Done. 3 upgrade tickets are in Jira${urgentNote()}.${full ? ` ${PLANNED_TAG}` : ''}` } },
@@ -2446,7 +2455,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const NEED_RANK = { bad: 0, wait: 2, ok: 2, tool: 4 };
   /* What each waiting request asks of the reader, in Needs you. The ask line and the button are added by needs(). */
   const NEED_CARD = {
-    sw: () => ({ rank: urgentNote() ? 1 : 2, title: `3 upgrade tickets are waiting for your yes${urgentNote()}`, meta: 'Keep our software up to date · Software watchlist, Mon 26 Oct, 9:00', body: `<ul class="mini-list"><li>${shows('registries') ? `<b>Log4j core 2.14.1 → 2.25.2, urgent: critical and actively exploited</b> ${PLANNED_TAG}` : 'Log4j core 2.14.1 → 2.25.2'}</li><li>LangGraph 1.2.14 → 1.2.17</li><li>FastAPI 0.118.0 → 0.120.1</li></ul>` }),
+    sw: () => ({ rank: urgentNote() ? 1 : 2, title: `3 upgrade tickets are waiting for your yes${urgentNote()}`, meta: 'Keep our software up to date · Software watchlist, Mon 26 Oct, 9:00', body: `<ul class="mini-list"><li>${shows('registries') ? `<b>Log4j core 2.14.1 → 2.25.2, urgent: critical and actively exploited</b> ${PLANNED_TAG}` : urgentNote() ? '<b>Log4j core 2.14.1 → 2.25.2, urgent: a critical known vulnerability</b>' : 'Log4j core 2.14.1 → 2.25.2'}</li><li>LangGraph 1.2.14 → 1.2.17</li><li>FastAPI 0.118.0 → 0.120.1</li></ul>` }),
     nudge: () => ({ title: '1 summary ticket is waiting for your yes', meta: 'Weekly closed-ticket summary · retried today after the fix' }),
     conf: () => ({ title: confWrite(S.nr).needTitle, meta: `${esc(S.nr.name)} · test run by ${nm(starterOf('conf'))}` }),
     access: () => ({ title: `3 people would lose access. Your yes is ${req('access').step === 0 ? 'the first of two' : 'the second of two'}`, meta: `Quarterly access review · started by ${nm(starterOf('access'))}, ${S.accessRun.sub}`, body: `<ul class="mini-list">${ACCESS_REMOVALS.map((x) => `<li>${x}</li>`).join('')}</ul>${PLANNED_TAG}` }),
@@ -2710,7 +2719,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const found = (v, t) => (S.sw === 'waiting' ? `Found ${v}. Upgrade ticket proposed, waiting for a yes.` : S.sw === 'approved' ? `Found ${v}. ${t} created, approved by ${by}.` : `Found ${v}. Ticket declined by ${by}, so it is proposed again next Monday.`);
     const full = shows('registries');
     return {
-      lj: [['Mon 26 Oct', `${found('2.25.2', 'MOCK-16')}${full ? ' The Vulnerability checker found 4 known vulnerabilities in our version, one of them actively exploited, so the ticket is urgent.' : ''}`], ['Thu 15 Oct', `Added by Carol from ${full ? 'Maven Central' : 'GitHub'}, with our version 2.14.1.`]],
+      lj: [['Mon 26 Oct', `${found('2.25.2', 'MOCK-16')}${full ? ' The Vulnerability checker found 4 known vulnerabilities in our version, one of them actively exploited, so the ticket is urgent.' : ' 4 known vulnerabilities in our version, one of them critical, so the ticket is urgent.'}`], ['Thu 15 Oct', 'Added by Carol from Maven Central, with our version 2.14.1.']],
       lg: [['Mon 26 Oct', found('1.2.17', 'MOCK-14')], ['Thu 8 Oct', 'Our version set to 1.2.14, because MOCK-6 was marked Done.'], ['Mon 5 Oct', 'Found 1.2.14. MOCK-6 created, approved by Bob.'], ['Thu 1 Oct', 'Added by Alice with our version 1.2.11.']],
       fa: [['Mon 26 Oct', found('0.120.1', 'MOCK-15')], ['Thu 22 Oct', 'Our version set to 0.118.0, because MOCK-9 was marked Done.'], ['Mon 19 Oct', 'Found 0.118.0. MOCK-9 created, approved by Alice.'], ['Thu 1 Oct', 'Added by Alice. Our version was left empty, so the first check took 0.117.1.']],
       gr: [['Mon 26 Oct', `Couldn’t check: ${full ? 'Docker Hub didn’t answer, and ' : ''}GitHub’s hourly limit was reached. It tries again next Monday.`], ['Mon 19 Oct', 'Up to date at 12.1.0.'], ['Thu 1 Oct', 'Added by Carol with our version 12.1.0.']],
@@ -2731,7 +2740,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const FIRST_CHECK = ['Redis', 'Nginx', 'Node.js'];
   const UP_NOW = { n8n: ['2.42.6', 'n8n-io/n8n'], PostgreSQL: ['16.4', 'postgres/postgres'], 'Spring Framework': ['6.1.12', 'spring-projects/spring-framework'], Terraform: ['1.9.5', 'hashicorp/terraform'], Keycloak: ['25.0.4', 'keycloak/keycloak'], Redis: ['7.4.0', 'redis/redis'], Nginx: ['1.27.1', 'nginx/nginx'], 'Node.js': ['22.8.0', 'nodejs/node'], Python: ['3.12.6', 'python/cpython'] };
   /* Adding software by name: one name can match more than one project, and a name the Planner knows may be published
-     elsewhere than GitHub. Only GitHub releases are read today, so the guess is always a GitHub project. */
+     elsewhere than GitHub. A Maven Central or npm package is offered as itself, because those registries are read
+     today. Any other registry falls back to the project's GitHub page. */
   const AMBIGUOUS = { kubernetes: [['kubernetes/kubernetes', 'Kubernetes itself'], ['kubernetes-client/python', 'The Python client library for Kubernetes']] };
   const GH_OF = { log4j: 'apache/logging-log4j2', spring: 'spring-projects/spring-framework', jackson: 'FasterXML/jackson-databind', express: 'expressjs/express', django: 'django/django', newtonsoft: 'JamesNK/Newtonsoft.Json' };
   function findProjects(name) {
@@ -2741,8 +2751,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const key = Object.keys(KNOWN).find((k) => low.includes(k));
     if (!key) return [];
     const [, repo, kind, pkg] = KNOWN[key];
+    if (pkgSource(kind)) return [{ repo, kind, what: '', how: `Found by name, in the packages I know. Your team installs it from ${srcName(kind)}.` }];
     const gh = kind && kind !== 'github' ? GH_OF[key] : repo;
-    return gh ? [{ repo: gh, what: '', how: pkg ? `Found by name. Its ${srcName(pkg[0])} page links to this project.` : 'Found by name, in the projects I know.' }] : [];
+    return gh ? [{ repo: gh, kind: 'github', what: '', how: pkg ? `Found by name. Its ${srcName(pkg[0])} page links to this project.` : 'Found by name, in the projects I know.' }] : [];
   }
   /* GitHub projects that publish no releases, only tags. The check reads releases, so it can't watch them (spec 11). */
   const NO_RELEASES = ['python/cpython', 'postgres/postgres'];
@@ -2818,26 +2829,33 @@ details > .m-close { animation: fold 140ms ease-in both; }
     /* Add software: a name, then a guess that says where it came from and was checked. */
     const f = S.swForm;
     const step = f.step || 'name';
-    const ours = `<div class="field"><label for="sw-ours">Version we run <span class="muted">(optional)</span></label><input type="text" id="sw-ours" data-sw="ours" value="${esc(f.ours)}" placeholder="1.2.14"${fieldErr('sw-ours', '', 'Left empty, the first check takes the newest.')}</div>`;
+    /* The kind the form will save: the one chosen by hand, else the finder's pick. */
+    const chosenKind = f.change || !f.matches.length ? f.kind || 'github' : (f.matches[f.pick] || f.matches[0] || {}).kind || 'github';
+    const oursHelp = pkgSource(chosenKind) ? 'Left empty, the first check takes the newest. Give it, and each check also looks up known vulnerabilities in it.' : 'Left empty, the first check takes the newest.';
+    const ours = `<div class="field"><label for="sw-ours">Version we run <span class="muted">(optional)</span></label><input type="text" id="sw-ours" data-sw="ours" value="${esc(f.ours)}" placeholder="1.2.14"${fieldErr('sw-ours', '', oursHelp)}</div>`;
     const repoField = (help) => { const [label, ph, h] = SRC_FIELD[f.kind || 'github']; return `<div class="field"><label for="sw-repo">${label}</label><input type="text" id="sw-repo" data-sw="repo" value="${esc(f.repo)}" placeholder="${ph}"${fieldErr('sw-repo', S.swErr.repo, help || h)}</div>`; };
-    const kindField = full ? `<div class="field"><label for="sw-kind">Published on ${PLANNED_TAG}</label><select id="sw-kind" data-sw="kind">${sourcesShown().map((v) => opt(v, srcName(v), f.kind || 'github')).join('')}</select></div>` : '';
+    /* Where it's published. A source that isn't read yet is listed only with Planned features, and says so. */
+    const kindLabel = (v) => `${srcName(v)}${srcState(v) === 'ready' ? '' : ' (Planned)'}`;
+    const kindField = sourcesShown().length > 1 ? `<div class="field"><label for="sw-kind">Published on</label><select id="sw-kind" data-sw="kind">${sourcesShown().map((v) => opt(v, kindLabel(v), f.kind || 'github')).join('')}</select></div>` : '';
     let add = '';
     if (step === 'name') {
-      add = `<form class="addname" data-submit="swFind" novalidate><div class="field"><label for="sw-name">Software name</label><input type="text" id="sw-name" data-sw="name" value="${esc(f.name)}" placeholder="Kubernetes"${fieldErr('sw-name', S.swErr.name, 'Type the name. I’ll find its GitHub project.')}</div><button type="submit" class="btn">Find it</button></form>`;
+      add = `<form class="addname" data-submit="swFind" novalidate><div class="field"><label for="sw-name">Software name</label><input type="text" id="sw-name" data-sw="name" value="${esc(f.name)}" placeholder="Kubernetes"${fieldErr('sw-name', S.swErr.name, 'Type the name. I’ll find where it’s published: GitHub, Maven Central or npm.')}</div><button type="submit" class="btn">Find it</button></form>`;
     } else {
       const m = f.matches;
       const nameLine = `<h3 id="sw-guess" tabindex="-1">${m.length ? `Adding ${esc(f.name.trim())}` : `I couldn’t find “${esc(f.name.trim())}”`}</h3>`;
       let body;
-      if (!m.length) body = `<p class="small muted">Paste its GitHub link, or type owner/name.</p>${repoField('For example langchain-ai/langgraph.')}`;
+      if (!m.length) body = `<p class="small muted">Choose where your team gets it, then type its name there.</p>${kindField}${repoField((f.kind || 'github') === 'github' ? 'For example langchain-ai/langgraph.' : '')}`;
       else if (f.change) body = `<p class="small muted">You’re choosing the project yourself.</p>${kindField}${repoField()}`;
       else if (m.length === 1) {
         const listed = rowOfRepo(m[0].repo);
-        const verdict = NO_RELEASES.includes(m[0].repo) ? `<li>${I.alert(14)}<span>${esc(m[0].repo)} doesn’t publish releases on GitHub, which is the only place this check reads. It can’t be watched here.</span></li>`
+        const mk = m[0].kind || 'github';
+        const verdict = NO_RELEASES.includes(m[0].repo) ? `<li>${I.alert(14)}<span>${esc(m[0].repo)} doesn’t publish releases on GitHub, and it isn’t a Maven Central or npm package this check knows. It can’t be watched here.</span></li>`
           : listed ? `<li>${I.info(14)}<span>${esc(m[0].repo)} is already on the list as ${esc(listed.name)}. <button type="button" class="linkbtn" data-act="swShowRow" data-arg="${esc(m[0].repo)}">Show it on the list</button></span></li>`
-            : `<li>${I.check(14)}<span>Checked just now. The project is on GitHub and publishes releases.</span></li>`;
-        body = `<p class="guess-line"><b>${srcLink('github', m[0].repo, esc(m[0].repo))}</b></p><ul class="guess-why"><li>${I.info(14)}<span>${m[0].how}</span></li>${verdict}</ul>`;
+            : mk === 'github' ? `<li>${I.check(14)}<span>Checked just now. The project is on GitHub and publishes releases.</span></li>`
+              : `<li>${I.check(14)}<span>Checked just now. The package is on ${srcName(mk)} and has versions to compare.</span></li><li>${I.shield(14)}<span>Each check also looks up known vulnerabilities in the version you run, in OSV and NVD.</span></li>`;
+        body = `<p class="guess-line"><span class="small muted">${srcName(mk)} · </span><b>${srcLink(mk, m[0].repo, esc(m[0].repo))}</b></p><ul class="guess-why"><li>${I.info(14)}<span>${m[0].how}</span></li>${verdict}</ul>`;
       }
-      else body = `<fieldset class="pick"><legend>Which one do you mean?</legend>${m.map((x, i) => `<label class="pickrow"><input type="radio" name="sw-pick" data-sw="pick" value="${i}"${f.pick === i ? ' checked' : ''}><span><b>${esc(x.repo)}</b><span class="small muted">${x.what}. ${x.how}</span></span></label>`).join('')}</fieldset>`;
+      else body = `<fieldset class="pick"><legend>Which one do you mean?</legend>${m.map((x, i) => `<label class="pickrow"><input type="radio" name="sw-pick" data-sw="pick" value="${i}"${f.pick === i ? ' checked' : ''}><span><b>${esc(x.repo)}</b><span class="small muted">${srcName(x.kind || 'github')}. ${x.what}. ${x.how}</span></span></label>`).join('')}</fieldset>`;
       const ready = !m.length || f.change || f.pick >= 0;
       /* A project with no releases, or one already on the list, has nothing to confirm: only Change and Start again. */
       const blocked = m.length === 1 && !f.change && (NO_RELEASES.includes(m[0].repo) || rowOfRepo(m[0].repo));
@@ -2846,7 +2864,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     }
     const watching = `<section class="section" aria-labelledby="sww-h"><h2 id="sww-h" tabindex="-1">Software we watch <span class="count" data-val="sw:n">${rows.length}</span></h2>
       ${day1 ? '' : `<div class="findbar"><span class="findbox">${I.search()}<label class="vh" for="find-software">Find software</label><input type="search" id="find-software" data-find="software" placeholder="Find software" value="${esc(S.find.software)}"></span></div>`}
-      ${rows.length ? `<div class="panel">${table}</div>` : day1 ? `<div class="quiet"><b>No software yet</b>Add the tools your team runs. Each one is checked every Monday for new releases on GitHub.${op ? '<div class="btns quiet-act"><button class="btn sm primary" data-act="focusAdd">Add your first software</button></div>' : ''}</div>`
+      ${rows.length ? `<div class="panel">${table}</div>` : day1 ? `<div class="quiet"><b>No software yet</b>Add the tools your team runs. Each one is checked every Monday for new versions on GitHub, Maven Central or npm.${op ? '<div class="btns quiet-act"><button class="btn sm primary" data-act="focusAdd">Add your first software</button></div>' : ''}</div>`
         : '<div class="quiet"><b>Nothing matches</b>Try another name, or add it below.<div class="btns quiet-act"><button class="btn sm" data-act="clearFind" data-arg="software">Clear the search</button></div></div>'}
       ${op ? `<div class="addsw"><h3>Add software</h3>${add}</div>` : ''}</section>`;
 
@@ -2856,7 +2874,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       ${day1 ? '<p><b>Every Monday at 9:00, Singapore time</b>, once you add software. One approval covers all the upgrade tickets.</p>'
         : `<p><b>${cap(r.when)}, ${TZ}.</b> One approval covers all the upgrade tickets. Next check ${r.next}.</p>
         <p class="small muted">Set by ${owner}. Its checks count as the work of ${whoAnd(partiesOf('sw'))}, who can’t approve them. Who approves: ${r.approves}.${apprOf('sw') ? ` ${PLANNED_TAG}` : ''}</p>`}
-      <ul class="srcs" aria-label="Sources">${srcRow('GitHub releases', 'ghReleases')}${srcRow('Package registries', 'registries')}${srcRow('Security advisories', 'registries')}${srcRow('Support end dates', 'registries')}</ul>
+      <ul class="srcs" aria-label="Sources">${srcRow('GitHub releases', 'ghReleases')}${srcRow('Maven Central and npm', 'packages')}${srcRow('Known vulnerabilities in Maven and npm packages, from OSV and NVD', 'packages')}${srcRow('PyPI, NuGet and Docker Hub', 'registries')}${srcRow('Which vulnerabilities attackers are using, from CISA', 'registries')}${srcRow('Support end dates', 'registries')}</ul>
       ${day1 || !op ? '' : `<div class="btns"><button class="btn sm" data-act="editSched" data-arg="sw">${I.edit()}Change schedule</button>${changeApproversBtn('sw', 'editAppr', 'btn sm')}</div>`}
       ${S.editing === 'sw' ? `<div data-flip="ed:s:sw" data-enter="reveal">${schedEditor('sw')}</div>` : ''}
       ${S.editingAppr === 'sw' ? `<div data-flip="ed:a:sw" data-enter="reveal">${apprEditor('sw')}</div>` : ''}
@@ -3052,10 +3070,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const w = sw ? null : id === 'nudge' ? NUDGE_WRITE : id === 'access' ? ACCESS_WRITE : confWrite(S.nr);
     const m = runModel(id);
     const body = id === 'nudge' ? nudgePreview() : id === 'access' ? accessPreview() : sw
-      ? releases().map((x) => `<div class="ticket${x.urgent ? ' urgent' : ''}"><b>Upgrade ${x.tool} from ${x.from} to ${x.to}</b>${x.urgent ? `<span class="pill bad">${I.alert(12)}Urgent security fix</span> ${PLANNED_TAG}<div class="risk compact">${riskFacts(x.row, true)}</div>` : ''}
+      ? releases().map((x) => { const fullRisk = x.urgent && shows('registries'); return `<div class="ticket${x.urgent ? ' urgent' : ''}"><b>${x.urgent ? 'Urgent: ' : ''}Upgrade ${x.tool} from ${x.from} to ${x.to}</b>${x.urgent ? `<span class="pill bad">${I.alert(12)}Urgent security fix</span>` : ''}${fullRisk ? ` ${PLANNED_TAG}<div class="risk compact">${riskFacts(x.row, true)}</div>` : ''}
           <span>Newest release ${x.date}. ${x.count} releases since our version, on ${srcName(x.kind || 'github')}.</span>
-          ${x.urgent ? '' : `<span>${x.notes}</span>`}
-          <span class="links">${ticketLinks(x)}</span></div>`).join('')
+          ${fullRisk ? '' : `<span>${x.notes}</span>`}
+          <span class="links">${ticketLinks(x)}</span></div>`; }).join('')
       : confPreview(S.nr);
     /* The run waits at the gate at m.end. What the agents found is everything they said before it. */
     const found = m.stations.slice(0, m.end).filter((s) => s.msg && AGENTS[s.msg.who] && s.msg.who !== 'lead').map((s) => `<li>${face(s.msg.who, 24)}<span><b>${AGENTS[s.msg.who].name}:</b> ${s.msg.text}</span></li>`).join('');
@@ -3178,7 +3196,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     nudge: { cap: 'teamsPost', sys: 'Posting in Teams', cant: 'message ticket owners', instead: 'List the same tickets in one Jira ticket, after a yes. Someone can then message them.', next: (t, it) => `${whenAsked(it) || 'Every week'}, list ${(it.tickets ? ticketLabel(it.tickets.kind, it.tickets.period) : 'the open tickets').toLowerCase()}` },
     /* Only people change tickets here, and nothing the registry can do comes close, so there is no alternative to offer. */
     tickets: { cap: 'tickets', sys: 'Changing tickets' },
-    security: { cap: 'registries', sys: 'Checking security advisories' },
+    /* Known vulnerabilities are looked up only for Maven Central and npm packages on the watchlist (CAPS.packages).
+       Anything wider, such as a search of NVD for any software or vendor advisories, is the rest of ADR 0025. */
+    security: { cap: 'registries', sys: 'Checking security advisories', cant: 'look up vulnerabilities except in Maven Central and npm packages on the Software watchlist' },
   };
   const cantOf = (what) => `I can’t ${CANT[what].cant || CAPS[CANT[what].cap].cant}${capState(CANT[what].cap) === 'planned' ? ' yet' : ''}`;
   /* "I can make that list, but I can't send email. Email isn't on the team's plan." The first half names the part the
@@ -3208,8 +3228,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const watchFor = (hit, text, word) => {
     if (hit && onList(hit[0])) return { kind: 'listed', name: hit[0] };
     const name = hit ? hit[0] : cap(text.trim().replace(/[.?!]+$/, '').replace(/^(watch|track|keep track of)\s+/i, '').slice(0, 40));
-    /* A known project on a registry counts as known only when registries are a source; otherwise the person gives its GitHub project. */
-    const known = hit && (shows('registries') || !hit[2] || hit[2] === 'github');
+    /* A known project on a registry counts as known only when that registry is a source; otherwise the person gives its GitHub project. */
+    const known = hit && (shows('registries') || !hit[2] || hit[2] === 'github' || srcState(hit[2]) === 'ready');
     return { kind: 'watch', name, src: known ? hit[2] || 'github' : 'github', repo: known ? hit[1] : '', via: known && shows('registries') ? hit[3] : null, repoState: known ? 'guess' : 'edit', repoDraft: known ? hit[1] : '', version: '', newest: false, word, done: false };
   };
   /* Every other part of a release request is checked before the watchlist route (F-02, F-10): a security check, or a
@@ -3218,7 +3238,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
      named. */
   function watchCant(t, hit) {
     const it = parseIntent(t);
-    const parts = [isSecurityAsk(t) && 'security', it.dest && it.dest !== 'jira' && it.dest].filter(Boolean);
+    /* A security check of a Maven Central or npm package the Planner knows is what the watchlist does, so it is no can't. */
+    const doable = !!hit && pkgSource(hit[2]);
+    const parts = [isSecurityAsk(t) && !doable && 'security', it.dest && it.dest !== 'jira' && it.dest].filter(Boolean);
     if (!parts.length) return null;
     const name = hit ? hit[0] : '';
     const watch = capState('ghReleases') === 'ready' && (name || parts[0] !== 'security') ? { name, listed: !!name && onList(name) } : null;
@@ -3900,7 +3922,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const TOOLS = {
     ghReleases: ['Read GitHub releases', 'read'],
     ghIssues: ['Read GitHub issues', 'read'],
-    registries: ['Read package registries', 'read', 'Maven Central, npm, PyPI, NuGet and Docker Hub'],
+    packages: ['Read Maven Central and npm', 'read', 'The versions each package has on its registry'],
+    pkgVulns: ['Look up known vulnerabilities in packages', 'read', 'OSV finds them, NVD scores them'],
+    registries: ['Read other package registries', 'read', 'PyPI, NuGet and Docker Hub'],
     support: ['Read support dates', 'read', 'From endoflife.date'],
     suggest: ['Suggest a source', 'read', 'Searches a vendor’s official site, and only suggests: a person confirms'],
     vulns: ['Look up known vulnerabilities', 'read', 'OSV, the NVD record, and vendor advisories'],
@@ -3916,7 +3940,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
      The Jira component tool is drafted by the Planner from Jira's published API and needs an Approver's OK once
      (the tool card idea, which still needs an ADR; it is asked for on Tools, never from Home). */
   const TOOL_INFO = {
-    registries: { sys: 'Maven Central, npm, PyPI, NuGet and Docker Hub', does: 'Reads the newest version of each piece of software from the registry your team installs it from.', reach: 'Only the software on the Software watchlist.', cant: ['Can’t change anything. It only reads public registries'], check: 'Maven Central, npm, PyPI, NuGet and Docker Hub all answered.', problem: 'Mon 26 Oct: Docker Hub didn’t answer, so Grafana wasn’t checked. It tries again next Monday.',
+    packages: { sys: 'Maven Central and npm', does: 'Reads every version a package has on Maven Central or npm, so the Version checker can find the newest.', reach: 'Only the Maven and npm packages on the Software watchlist.', cant: ['Can’t change anything. It only reads public registries', 'Can’t read PyPI, NuGet or Docker Hub yet'], check: 'Maven Central and npm both answered.',
+      log: [['Mon 26 Oct, 9:00', 'Read the versions of Log4j core on Maven Central for Keep our software up to date.']] },
+    pkgVulns: { sys: 'OSV and NVD', does: 'Finds known vulnerabilities in the version we run of each Maven or npm package in OSV, then reads each one’s official score from NVD.', reach: 'Only the Maven and npm packages on the Software watchlist, and only a version someone gave.', cant: ['Can’t change anything', 'Can’t say whether attackers are using a vulnerability. CISA’s list is planned', 'Scores 10 vulnerabilities a check from NVD without a key, 50 with one. The rest show the advisory’s own severity'], check: 'OSV and NVD both answered.',
+      log: [['Mon 26 Oct, 9:00', 'Found 4 known vulnerabilities in Log4j core 2.14.1. NVD scored all 4.']] },
+    registries: { sys: 'PyPI, NuGet and Docker Hub', does: 'Reads the newest version of each piece of software from the registry your team installs it from.', reach: 'Only the software on the Software watchlist.', cant: ['Can’t change anything. It only reads public registries'], check: 'PyPI, NuGet and Docker Hub all answered.', problem: 'Mon 26 Oct: Docker Hub didn’t answer, so Grafana wasn’t checked. It tries again next Monday.',
       log: [['Mon 26 Oct, 9:00', 'Read the newest versions for Keep our software up to date. Docker Hub didn’t answer for Grafana.'], ['Mon 19 Oct, 9:00', 'Read the newest versions for Keep our software up to date.']] },
     ghReleases: { sys: 'GitHub', does: 'Reads a project’s releases on GitHub. The Version checker uses it to cross-check the registries, and for projects that publish only on GitHub.', reach: 'Only the GitHub projects on the Software watchlist.', cant: ['Can’t change anything on GitHub'], check: 'GitHub answered, with plenty of this hour’s reads left.', problem: 'Mon 26 Oct: GitHub’s hourly limit was reached while checking Grafana. It tries again next Monday.',
       log: [['Mon 26 Oct, 9:00', 'Cross-checked releases for Keep our software up to date. GitHub’s hourly limit was reached on Grafana.']] },
@@ -3961,9 +3989,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     { id: 'trouble', platform: true, what: 'When a run stops, it explains why in plain words, and says whether you can fix it or support should.', tools: [], none: 'No access to other systems. It reads the run’s own record.',
       plan: ['Read the stopped run’s record', 'Explain what went wrong in plain words', 'Say whether you can fix it, or support should'],
       rules: ['Only explains. It never changes a run'], last: 'Today, 8:00: explained why Morning new-ticket check stopped.' },
-    { id: 'checker', get what() { return shows('registries') ? 'Reads each tool’s newest version from its registry, cross-checks GitHub, reads support dates, and suggests a source when you’re not sure.' : 'Reads each tool’s newest release on GitHub.'; }, get tools() { return shows('registries') ? ['registries', 'ghReleases', 'support', 'suggest'] : ['ghReleases']; },
-      get plan() { return shows('registries') ? ['For each tool on the watchlist, read the newest version from the registry the team installs it from', 'Cross-check GitHub. If the two disagree, the registry wins and the difference is reported', 'Read support dates from endoflife.date, and flag versions whose fixes end within a year', 'When asked, search a vendor’s official site and suggest a source for a person to confirm'] : ['For each tool on the watchlist, read its newest release on GitHub', 'Report each tool whose newest release is newer than the version we run']; },
-      get last() { return shows('registries') ? 'Mon 26 Oct, in Keep our software up to date: read 10 of 14 tools, found 3 newer versions and 1 disagreement. 4 couldn’t be read.' : 'Mon 26 Oct, in Keep our software up to date: read 10 of 14 projects, found 3 newer releases. 4 couldn’t be read.'; } },
+    { id: 'checker', get what() { return shows('registries') ? 'Reads each tool’s newest version from its registry, cross-checks GitHub, reads support dates, and suggests a source when you’re not sure.' : 'Reads each tool’s newest version from GitHub, Maven Central or npm, and looks up known vulnerabilities in the Maven and npm packages we run.'; }, get tools() { return shows('registries') ? ['registries', 'packages', 'ghReleases', 'pkgVulns', 'support', 'suggest'] : ['ghReleases', 'packages', 'pkgVulns']; },
+      get plan() { return shows('registries') ? ['For each tool on the watchlist, read the newest version from the registry the team installs it from', 'Cross-check GitHub. If the two disagree, the registry wins and the difference is reported', 'Read support dates from endoflife.date, and flag versions whose fixes end within a year', 'When asked, search a vendor’s official site and suggest a source for a person to confirm'] : ['For each tool on the watchlist, read its newest version from GitHub, Maven Central or npm', 'For a Maven or npm package, find known vulnerabilities in the version we run in OSV, and read each one’s score from NVD', 'Report each tool whose newest version is newer than the version we run, and mark it urgent when a vulnerability scores 9.0 or more']; },
+      get last() { return shows('registries') ? 'Mon 26 Oct, in Keep our software up to date: read 10 of 14 tools, found 3 newer versions and 1 disagreement. 4 couldn’t be read.' : 'Mon 26 Oct, in Keep our software up to date: read 10 of 14 tools, found 3 newer versions and 4 known vulnerabilities in Log4j core. 4 couldn’t be read.'; } },
     { id: 'vuln', planned: 'registries', what: 'Looks up known vulnerabilities in the versions you run, cross-checked across OSV, NVD, vendor advisories and CISA’s list of actively exploited ones.', tools: ['vulns', 'kev'],
       plan: ['Match the versions we run against OSV', 'Read each match’s official record and severity from NVD, and the vendor’s advisory', 'Check CISA’s list of actively exploited vulnerabilities', 'Mark it urgent if it’s critical (9.0 or higher) or actively exploited'],
       last: 'Mon 26 Oct: found 4 known vulnerabilities in Log4j core 2.14.1, one actively exploited.' },
@@ -4180,8 +4208,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     { ex: 'Find Jira tickets by status', re: /jira|ticket/i, exists: (t) => (/create|raise|open|new|add/i.test(t) ? 'jiraCreate' : 'jiraSearch') },
     { re: /teams|message|post/i, exists: () => 'teamsPost' },
     { re: /github|bug report|issue/i, exists: (t) => (/release|version/i.test(t) ? 'ghReleases' : 'ghIssues') },
-    { re: /version|release|registry|maven|npm|pypi|nuget|docker/i, exists: () => 'registries' },
-    { re: /vulnerab|cve|security/i, exists: () => 'vulns' },
+    { re: /maven|npm/i, exists: () => 'packages' },
+    { re: /version|release|registry|pypi|nuget|docker/i, exists: () => 'registries' },
+    { re: /vulnerab|cve|security/i, exists: () => 'pkgVulns' },
   ];
   const SYS_NAMES = [[/servicenow|service now/i, 'ServiceNow'], [/slack/i, 'Slack'], [/outlook|e-?mail/i, 'Outlook email'], [/sharepoint/i, 'SharePoint'], [/confluence/i, 'Confluence'], [/\bgo\b|golang/i, 'Go modules'], [/\baws\b/i, 'AWS'], [/azure devops/i, 'Azure DevOps'], [/jenkins/i, 'Jenkins'], [/bitbucket/i, 'Bitbucket']];
   function askForTool(text) {
@@ -4989,8 +5018,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     swChange: () => {
       const f = S.swForm;
       f.change = true;
-      f.repo = f.matches.length === 1 && !NO_RELEASES.includes(f.matches[0].repo) && !rowOfRepo(f.matches[0].repo) ? f.matches[0].repo : '';
-      f.kind = 'github';
+      const only = f.matches.length === 1 ? f.matches[0] : null;
+      f.repo = only && !NO_RELEASES.includes(only.repo) && !rowOfRepo(only.repo) ? only.repo : '';
+      f.kind = only ? only.kind || 'github' : 'github';
       render();
       const i = document.getElementById('sw-repo');
       if (i) i.focus();
@@ -5020,6 +5050,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         const m = f.matches[f.pick];
         if (!m) return;
         repo = m.repo;
+        kind = m.kind || 'github';
         how = m.how;
       }
       S.added.push({ name, kind, repo, ours: f.ours.trim(), by: S.user, how });

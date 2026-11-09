@@ -99,7 +99,8 @@ Taken from `agent-runtime/src/agent_runtime/tools.py` and `abilities.py` on 6 No
 | Change Confluence pages | write | Planned | The sponsor asked for approval before Confluence updates. Not built. |
 | Read GitHub issues | read | Planned | No tool |
 | Check who has access in Entra ID, admin tools and GitLab | read | Planned | Phase 2, the quarterly access review |
-| Check package registries and security advisories | read | Planned | ADR 0025 |
+| Check Maven Central and npm packages for new versions and known vulnerabilities | read | Ready | ADR 0025, first part: `registries.py` and `vulnerabilities.py` in the agent runtime. OSV finds the vulnerabilities, NVD scores them. |
+| Check PyPI, NuGet and Docker Hub, support end dates, and which vulnerabilities attackers are using | read | Planned | The rest of ADR 0025 |
 | Set a field such as a component on new Jira tickets | write | Planned | Needs a new tool, which needs an ADR (ADR 0023, ADR 0037) |
 | Send email or Slack messages | write | Unsupported | No plan |
 | Close, edit, move or delete tickets | write | Unsupported | A deliberate rule. Only people do that here. |
@@ -196,7 +197,7 @@ The reply sentence carries 1 and 2. The card carries 3 and 4. Technical words st
 |---|---|---|---|
 | Set-up card | A repeated task the registry can do | "Here's what I understood. I filled in what I could." | The card (7) |
 | Watchlist card | A release check whose every part the platform can do | "Kubernetes is software, so it belongs on the Software watchlist, which checks all your software every Monday." | Add to the watchlist |
-| Can't, release request | A release check with a part the platform can't do, such as a destination other than one Jira ticket, or a security check | "I can watch software for new releases on the Software watchlist, but I can't post messages in Teams yet." A vulnerability, CVE, NVD or advisory check is the Planned "Check package registries and security advisories" (ADR 0025), so its answer is "I can't check registries or security advisories yet." | Watching for new releases (primary), or Open the Software watchlist when it's already there, and Ask the team. A security check offers the watch only when the software is named. |
+| Can't, release request | A release check with a part the platform can't do, such as a destination other than one Jira ticket, or a security check | "I can watch software for new releases on the Software watchlist, but I can't post messages in Teams yet." A vulnerability, CVE, NVD or advisory check of a Maven Central or npm package the Planner knows, such as Log4j, is what the watchlist does, so it goes to the watchlist. Any other is wider than the Ready "Check Maven Central and npm packages" (ADR 0025), so its answer is "I can't look up vulnerabilities except in Maven Central and npm packages on the Software watchlist yet." | Watching for new releases (primary), or Open the Software watchlist when it's already there, and Ask the team. A security check offers the watch only when the software is named. |
 | Which software | A release word with no name | "Which software should I watch?" | Never mind |
 | Already listed | It's on the watchlist | "React is already on the Software watchlist." | Open it |
 | Can't, with an alternative | A Planned or Unsupported capability | "I can make that list, but I can't send email. Email isn't connected to the platform." | Set up the alternative (primary), Ask the team |
@@ -393,10 +394,12 @@ From top to bottom:
    - when nobody gave a version, the status says "Nothing newer yet" instead of "Up to date", because there is nothing to be up to date with. The We run cell says "Not known" and, once the first check has read the newest release, "Telling you about releases newer than 1.2.16, the newest the first check read". The same words appear in the history, in the approval and in the ticket, which then says "newer than 1.2.16, the newest the first check read" and never "our version";
    - the source.
    
-   **Add software** takes plain words ("Kubernetes"). It finds the GitHub project and shows where the guess came from. When more than one project matches, she chooses. She never needs to know what a package registry is. Two matches cannot be added, and the form says why instead of offering them: a project the list already holds ("langchain-ai/langgraph is already on the list as LangGraph", with Show it on the list), and a project that publishes no releases on GitHub, such as python/cpython ("doesn't publish releases on GitHub, which is the only place this check reads. It can't be watched here."). Then only Change and Start again are left.
+   **Add software** takes plain words ("Kubernetes"). It finds where the software is published and shows where the guess came from: a GitHub project, or a Maven Central or npm package for software it knows is installed from there, such as Log4j or Express. A package also says that each check looks up known vulnerabilities in the version the team runs. When the finder has no match, or she presses Change, **Published on** lets her choose GitHub, Maven Central or npm, and the next field asks for that source's name: owner/name, groupId:artifactId, or the npm package name. Other registries appear in that list only with Planned features, marked Planned. When more than one project matches, she chooses. She never needs to know what a package registry is. Two matches cannot be added, and the form says why instead of offering them: a project the list already holds ("langchain-ai/langgraph is already on the list as LangGraph", with Show it on the list), and a project that publishes no releases on GitHub and isn't a package the check knows, such as python/cpython ("doesn't publish releases on GitHub, and it isn't a Maven Central or npm package this check knows. It can't be watched here."). Then only Change and Start again are left.
 3. **How it's checked.** "Every Monday at 9:00, Singapore time. One approval covers all the upgrade tickets." Sources:
-   - GitHub releases, which works now;
-   - package registries, security advisories and support end dates, each shown as "Not yet" by default, and tagged Planned with Planned features on (section 1).
+   - GitHub releases, Maven Central and npm, and known vulnerabilities in Maven and npm packages from OSV and NVD, which work now;
+   - PyPI, NuGet and Docker Hub, which vulnerabilities attackers are using (CISA), and support end dates, each shown as "Not yet" by default, and tagged Planned with Planned features on (section 1).
+
+   A Maven or npm package with a critical known vulnerability (NVD 9.0 or more) makes its upgrade ticket urgent, without Planned features: the ticket title starts "Urgent:", it lists each vulnerability with its NVD or OSV record, and it still waits for a yes. The Security risks panel, CISA's list and vendor advisories stay Planned, because the platform does not keep the findings outside the ticket and the run yet.
    
    With Planned features shown, the version 3 security findings and their severity appear, tagged Planned. Severity is shown only when a real source backs it.
 
@@ -503,7 +506,7 @@ Each was found in version 3 (`03b-PROTOTYPE-UI-INVENTORY.md`, section 8).
 | I6 | The Agent library says the Planner drafts new agents, but no card ever does | The built Planner drafts an agent card when no saved agent fits (`drafting.py`) | "Every Monday, compare last week's new tickets with the week before" drafts a new agent, shown under How this workflow works and saved when it's turned on |
 | I7 | "You can also follow it on Home" and "Check what I understood" point to places that no longer exist | Following up is on Workflows. The card section is What will happen. | Both texts corrected |
 | I8 | "I need 2 more answers" is computed once and goes stale | One count, recomputed on each redraw | The chat sentence drops the count. The card footer is the only count. |
-| I9 | Home lists GitHub releases only, but the watchlist shows ADR 0025's sources and vulnerability checks as working | GitHub releases only | Other sources and vulnerability checks are Planned, shown only with Planned features shown and tagged |
+| I9 | Home lists GitHub releases only, but the watchlist shows ADR 0025's sources and vulnerability checks as working | GitHub releases only. Since 8 Nov 2026, GitHub, Maven Central and npm, with known vulnerabilities for Maven and npm packages | Built sources are Ready everywhere. The other sources, CISA's list, support dates and the Security risks panel are Planned, shown only with Planned features shown and tagged |
 
 ## 18. Changes to recorded decisions
 

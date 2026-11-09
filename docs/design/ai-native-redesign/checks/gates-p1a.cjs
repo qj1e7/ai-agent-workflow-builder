@@ -415,9 +415,9 @@ both('release-request-parts-checked-first', async (t) => {
   const cases = [
     ['Send a message in Teams when a release is published', /^I can watch software for new releases on the Software watchlist, but I can’t post messages in Teams yet\./, true],
     ['Post in our Teams channel when Kubernetes has a new release', /^I can watch Kubernetes for new releases on the Software watchlist, but I can’t post messages in Teams yet\./, true],
-    ['Monitor software vulnerabilities in NVD', /^I can’t check registries or security advisories yet\./, false],
-    ['Check our packages for security advisories', /^I can’t check registries or security advisories yet\./, false],
-    ['Watch Kubernetes for CVEs', /^I can watch Kubernetes for new releases on the Software watchlist, but I can’t check registries or security advisories yet\./, true],
+    ['Monitor software vulnerabilities in NVD', /^I can’t look up vulnerabilities except in Maven Central and npm packages on the Software watchlist yet\./, false],
+    ['Check our packages for security advisories', /^I can’t look up vulnerabilities except in Maven Central and npm packages on the Software watchlist yet\./, false],
+    ['Watch Kubernetes for CVEs', /^I can watch Kubernetes for new releases on the Software watchlist, but I can’t look up vulnerabilities except in Maven Central and npm packages on the Software watchlist yet\./, true],
   ];
   for (const [ask, say, alt] of cases) {
     if (await t.has('[data-act="newChat"]')) await t.newChat();
