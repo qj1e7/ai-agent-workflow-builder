@@ -803,7 +803,7 @@ async function main() {
   await check(B, 'i6-new-agent-drafted', async (b) => session(b, async (k, page) => {
     await k.ask('Every Monday at 9:00, compare last week’s new tickets with the week before in project MOCK');
     await page.$$eval('main details', (ds) => ds.forEach((d) => { d.open = true; }));
-    ok(/New agent, saved to the Agent library when you turn this on/.test(await k.main()), 'the comparison card does not draft a new agent');
+    ok(/New agent, saved under How it works, in Settings, when you turn this on/.test(await k.main()), 'the comparison card does not draft a new agent');
     await k.click('[data-act="turnOn"]');
     await goLib(k); await k.click('[data-act="libTab"][data-arg="agents"]');
     const before = 4;

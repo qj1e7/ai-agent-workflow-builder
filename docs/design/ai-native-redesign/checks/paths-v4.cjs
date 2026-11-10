@@ -2,6 +2,7 @@
    Copied from paths-v3.cjs. The ids are the same, each doing the same user task the version 4 way, with the same
    counting rules and the same decision tags. A scenario whose task changed on purpose carries `changed: 'why'`. */
 
+const CHECK_WORKFLOWS = 'Check my workflows';
 const WEEKLY_SUMMARY = 'every Friday, sum up the tickets we closed this week';
 const EMAIL = 'email me a list of open bugs every Monday';
 
@@ -81,7 +82,7 @@ const add = (id, title, run, viewports = [1280], extra = {}) => viewports.forEac
 /* A. First-time Operator, day one. */
 add('A', 'First-time Operator sets up a weekly Jira summary and turns it on', async (t) => {
   await t.setup((k) => k.setDay('one'));
-  await t.expectText('Day one Home asks what the team does again and again', /again and again/);
+  await t.expectText('Day one Home asks which software to keep up to date', /Which software should we keep up to date\?/);
   await t.ask(WEEKLY_SUMMARY, 'every Friday, sum up the tickets we closed this week');
   const left = await t.page.innerText('main');
   const asks = Number((left.match(/(\d+) choices? left/) || [0, 0])[1]);
@@ -120,15 +121,14 @@ add('C', 'Bob, an Approver only, opens the upgrade request, sees what changes an
 }, [1280, 390], { changed: 'The NVD and CISA evidence came from ADR 0025 sources, which are Planned and hidden by default (I9). The evidence is the GitHub release notes.' });
 
 add('C-self', 'Alice turns on a workflow, does a test run, and cannot approve her own test run', async (t) => {
-  await t.click(S.example(2), 'Tap Set up another workflow', { reply: true });
-  await t.click(S.start(0), 'Tap the first starting point', { reply: true });
+  await t.ask(WEEKLY_SUMMARY, 'every Friday, sum up the tickets we closed this week');
   await t.select(S.project, 'MOCK', 'Choose the Jira project', { decision: true });
   await t.field(S.time, '17:00', 'Choose the time', { decision: true });
   await t.click(S.turnOn, 'Turn it on', { decision: true });
   await t.click(S.testRun, 'Do a test run', { until: /another Approver must decide/ });
   await t.expectText('The page says Alice cannot approve her own run', /You set this up and started this run, so another Approver must decide\. Nobody approves their own work\./);
   await t.expectCount('There is no Approve button for her', '[data-act="approve"][data-arg="conf"]', 0);
-}, [1280], { changed: 'Normal-week Home suggests from state (spec 5.1). Set-up examples sit behind “Set up another workflow”, one tap more.' });
+}, [1280], { changed: 'Home no longer suggests a general workflow (8 Nov, software versioning first), so she types the request, as in scenario A.' });
 
 /* D. Unsupported request. */
 add('D', 'An Operator asks to email a weekly list, and the limit is explained with a next step', async (t) => {
@@ -208,14 +208,7 @@ add('H', 'Pause a workflow, change its schedule, and delete one with its confirm
 /* The fifteen tasks in 03b section 6. */
 const T = (n, title, run, extra) => add(`T${n}`, title, run, [1280], extra);
 
-T(1, 'Set up a workflow from example 1: example, time, Jira project, Turn it on', async (t) => {
-  await t.click(S.example(2), 'Tap Set up another workflow', { reply: true });
-  await t.click(S.start(0), 'Tap the first starting point', { reply: true });
-  await t.select(S.project, 'MOCK', 'Choose the Jira project', { decision: true });
-  await t.field(S.time, '17:00', 'Choose the time', { decision: true });
-  await t.click(S.turnOn, 'Turn it on', { decision: true });
-  await t.expectText('The workflow is on', /Monday new ticket comparison is on/);
-}, { changed: 'Normal-week Home suggests from state. The examples sit behind “Set up another workflow” (spec 5.1).' });
+T(1, 'Set up a workflow from example 1: example, time, Jira project, Turn it on', async () => {}, { notPossible: 'Since 8 Nov the starting points under “Set up another workflow” are software versioning only (Keep track of the React version). None sets up a general Jira workflow, so there is no example to tap. Typing the same request is scenario T2.' });
 
 T(2, 'Set up a typed workflow with every part stated: type, Enter, Turn it on', async (t) => {
   await t.ask('Every Friday at 17:00, sum up the tickets we closed this week in project MOCK', 'a request with every part stated');
@@ -231,13 +224,13 @@ T(3, 'Do a test run after turning one on', async (t) => {
 });
 
 T(4, 'Add software from Home with example 3: example, Looks right, Start from the newest, Add React', async (t) => {
-  await t.click(S.example(2), 'Tap Set up another workflow', { reply: true });
+  await t.ask('Set up another workflow', 'Set up another workflow');
   await t.click(`main .thread [data-act="say"][data-arg="Keep track of the React version"]`, 'Tap Keep track of the React version', { reply: true });
   await t.click('[data-act="repoOk"]', 'Looks right', { decision: true });
   await t.click('[data-act="verNewest"]', 'Not sure? Start from the newest');
   await t.click('[data-act="watchAdd"]', 'Add React', { decision: true });
   await t.expectText('React is on the Software watchlist', /React is on the Software watchlist/);
-}, { changed: 'The React example sits behind “Set up another workflow” on a normal week (spec 5.1).' });
+}, { changed: 'The React example sits behind “Set up another workflow”, which is no longer a suggestion on Home, so she types it (spec 5.1).' });
 
 T(5, 'Add software on the Software watchlist page', async (t) => {
   await t.menu('software', 'Open Watchlist');
@@ -330,8 +323,8 @@ T(14, 'Change an agent in plain English: Settings, How it works, Details and cha
 T(15, 'Ask the team for a new system, after a "can’t" answer', async (t) => {
   await t.setup((k) => k.ask(EMAIL));
   await t.click('[data-act="teamReq"]:has-text("Ask the team")', 'Ask the team', { decision: true });
-  await t.expectText('The request is saved for the team', /Saved as a request for the team\. You can follow it on Tools, in the Agent library\./, S.toast);
-}, { changed: 'Fix round D, F-01: nobody is named yet as the reader of team requests (ADR 0038, proposed), so the confirmation no longer says it was sent to anyone. Was /Sent to the team\. You can follow it on Tools, in the Agent library\./.' });
+  await t.expectText('The request is saved for the team', /Saved as a request for the team\. You can follow it on Tools, under How it works in Settings\./, S.toast);
+}, { changed: 'Fix round D, F-01: nobody is named yet as the reader of team requests (ADR 0038, proposed), so the confirmation no longer says it was sent to anyone. Was /Sent to the team\. You can follow it on Tools, under How it works in Settings\./.' });
 
 add('H2', 'Discard a draft set-up card from Workflows', async (t) => {
   await t.setup(async (k) => { await k.ask(WEEKLY_SUMMARY); await k.page.click('[data-act="newChat"]'); await k.settle(); });
@@ -352,8 +345,8 @@ add('B-home', 'Find and act on the stopped workflow from Home’s Needs you', as
   await t.expect('The stopped row is gone from Home', t.page.innerText('main'), (v) => !/Morning new-ticket check stopped/.test(v));
 }, [1280, 390], { changed: 'Needs you is grouped into Do now and Set up (ADR 0043), so the Do now heading comes before the first row.' });
 
-add('ASK-status', '“Check my workflows” from the suggestions', async (t) => {
-  await t.click(S.example(0), 'Tap Check my workflows', { reply: true });
+add('ASK-status', '“Check my workflows” typed to the Planner', async (t) => {
+  await t.ask(CHECK_WORKFLOWS, 'Check my workflows');
   await t.expectText('The Planner sums up every workflow', /You have 3 workflows\. 2 stopped and 1 is waiting for a yes\./, 'main .thread');
   await t.expectCount('One row per workflow', 'main .thread [data-act="workflow"]', 3);
   await t.expectText('Each row has its status, next run and one action', /Morning new-ticket check\s+Stopped\s+Next run[^\n]*\s+Retry the run[\s\S]*Keep our software up to date\s+Waiting for a yes\s+Next run[^\n]*\s+Review and decide/, 'main .thread');
@@ -405,11 +398,10 @@ add('PREVIEW', 'Planned features shown: each planned item is tagged', async (t) 
 }, [1280]);
 
 /* The shell (ADR 0043, step 1): the pinned line, the side panel, More details with Back to the chat, and the rail returning to the chat. */
-const CHECK = 'Check my workflows';
 const issuesRow = 'main .thread [data-act="workflow"][data-arg="issues"]';
 add('SHELL-pinned', 'The pinned Needs you line shows after the first message, with Open and N more', async (t) => {
   await t.expectCount('No pinned line before the first message', 'main .pinned', 0);
-  await t.ask(CHECK);
+  await t.ask(CHECK_WORKFLOWS);
   await t.expectText('The pinned line names the most urgent item', /Morning new-ticket check stopped/, 'main .pinned');
   await t.expectText('It offers Open and the rest', /Open[\s\S]*4 more/, 'main .pinned');
   await t.click('main .pinned [data-act="go"][data-arg="workflows"]', '4 more');
@@ -417,7 +409,7 @@ add('SHELL-pinned', 'The pinned Needs you line shows after the first message, wi
 }, [1280, 390]);
 
 add('SHELL-panel', 'A card in the chat opens its workflow in a side panel, or full screen on a phone, and Close puts it back', async (t) => {
-  await t.ask(CHECK);
+  await t.ask(CHECK_WORKFLOWS);
   await t.click(issuesRow, 'Open Morning new-ticket check from the card');
   await t.expectCount('The side panel is open', '#sidepanel', 1);
   await t.expectText('It shows the last and next run', /Last run[\s\S]*Next run/, '#sidepanel');
@@ -442,7 +434,7 @@ add('SHELL-more', 'More details gives a full page with Back to the chat, and the
 
 add('SHELL-rail', 'The rail returns to the chat as it was, scroll position included', async (t) => {
   await t.ask('What can you do?');
-  await t.ask(CHECK);
+  await t.ask(CHECK_WORKFLOWS);
   await t.setup((k) => k.page.evaluate(() => { document.querySelector('.chatscroll').scrollTop = 150; }));
   const before = await t.page.evaluate(() => document.querySelector('.chatscroll').scrollTop);
   await t.expect('The chat was scrolled', before, (v) => v > 0);
@@ -510,11 +502,11 @@ const screens = [
   { name: 'library-what-it-can-do', prepare: async (k) => { await k.go('agents'); await open(k, '[data-act="setTab"][data-arg="how"]'); } },
   { name: 'offline-home', prepare: async (k) => { await ctl(k, 'modelOn', 'off'); } },
   { name: 'preview-software', prepare: async (k) => { await ctl(k, 'preview', 'on'); await k.go('software'); } },
-  { name: 'shell-chat-pinned', prepare: async (k) => { await k.ask(CHECK); } },
-  { name: 'shell-side-panel', prepare: async (k) => { await k.ask(CHECK); await open(k, issuesRow); } },
+  { name: 'shell-chat-pinned', prepare: async (k) => { await k.ask(CHECK_WORKFLOWS); } },
+  { name: 'shell-side-panel', prepare: async (k) => { await k.ask(CHECK_WORKFLOWS); await open(k, issuesRow); } },
   { name: 'shell-side-panel-run', prepare: async (k) => { await k.ask('Why did Morning new-ticket check stop?'); await open(k, 'main .thread [data-act="run"][data-arg="issues"]'); } },
-  { name: 'shell-side-panel-approval', prepare: async (k) => { await k.ask(CHECK); await open(k, 'main .thread [data-act="run"][data-arg="sw"]'); } },
-  { name: 'shell-full-page-back', prepare: async (k) => { await k.ask(CHECK); await open(k, issuesRow); await open(k, '#sidepanel [data-act="panelPage"]'); } },
+  { name: 'shell-side-panel-approval', prepare: async (k) => { await k.ask(CHECK_WORKFLOWS); await open(k, 'main .thread [data-act="run"][data-arg="sw"]'); } },
+  { name: 'shell-full-page-back', prepare: async (k) => { await k.ask(CHECK_WORKFLOWS); await open(k, issuesRow); await open(k, '#sidepanel [data-act="panelPage"]'); } },
   { name: 'shell-settings-how-it-works', prepare: async (k) => { await k.go('agents'); await open(k, '[data-act="setTab"][data-arg="how"]'); } },
   { name: 'mark-unbuilt-home', prepare: async (k) => { await ctl(k, 'markUnbuilt', 'on'); } },
 ];
