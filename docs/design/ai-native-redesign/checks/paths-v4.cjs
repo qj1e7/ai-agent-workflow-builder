@@ -585,6 +585,23 @@ add('ANS-live-done', 'A workflow turned on in the chat, then paused on its page,
   await t.expectText('The card and its sentence say it is paused', /Friday closed ticket summary is paused\.[\s\S]*Friday closed ticket summary is paused\./, 'main .thread');
 }, [1280]);
 
+/* The panel opens by itself while the Planner builds (ADR 0043), wider than 860 px only, and a flow shows once. */
+add('ANS-panel', 'While the Planner builds, the panel opens by itself with the steps going in, but never on a phone', async (t) => {
+  await t.ask(WEEKLY_SUMMARY);
+  if (t.kit.width > 860) {
+    await t.expectCount('The side panel opened by itself', '#sidepanel', 1);
+    await t.setup((k) => k.page.waitForFunction(() => document.querySelectorAll('#sidepanel .steps li').length >= 3));
+    await t.expectText('It shows the new workflow’s steps, as a draft', /Draft[\s\S]*Find the tickets closed[\s\S]*Write a short summary[\s\S]*Create one ticket/, '#sidepanel');
+    await t.expect('The chat keeps focus on the card', focused(t.page), (v) => !/^button\[panelClose\]$/.test(v));
+    await t.expectCount('The card hides its own steps while the panel shows them', 'main .thread details.how:not([hidden])', 0);
+    await t.click('#sidepanel [data-act="panelClose"]', 'Close');
+    await t.expectCount('The card’s steps come back', 'main .thread details.how:not([hidden])', 1);
+  } else {
+    await t.expectCount('On a phone the panel doesn’t open by itself', '#sidepanel', 0);
+    await t.expectCount('The card keeps its own steps', 'main .thread details.how:not([hidden])', 1);
+  }
+}, [1280, 390]);
+
 /* Keyboard only: no mouse. Tab, Shift+Tab, Enter, Space, arrows, Escape, typing. */
 add('KEYS-A', 'Scenario A with the keyboard only', async (t) => {
   await t.setup(async (k) => { await k.setDay('one'); await focusTop(k); });
@@ -648,6 +665,13 @@ const screens = [
   { name: 'shell-full-page-back', prepare: async (k) => { await k.ask(CHECK_WORKFLOWS); await open(k, issuesRow); await open(k, '#sidepanel [data-act="panelPage"]'); } },
   { name: 'shell-settings-how-it-works', prepare: async (k) => { await k.go('agents'); await open(k, '[data-act="setTab"][data-arg="how"]'); } },
   { name: 'mark-unbuilt-home', prepare: async (k) => { await ctl(k, 'markUnbuilt', 'on'); } },
+  { name: 'answers-watch-marks', prepare: async (k) => { await k.ask('watch Kubernetes every Monday at 9am and create a Jira ticket'); } },
+  { name: 'answers-cross', prepare: async (k) => { await k.ask(STALE); } },
+  { name: 'answers-edit', prepare: async (k) => { await k.ask('Make the morning new-ticket check run on Mondays only'); } },
+  { name: 'answers-edit-saved', prepare: async (k) => { await k.ask('Make the morning new-ticket check run on Mondays only'); await open(k, '[data-act="editSave"]'); } },
+  { name: 'answers-versions', prepare: async (k) => { await k.ask('Make the morning new-ticket check run on Mondays only'); await open(k, '[data-act="editSave"]'); await k.go('workflows'); await open(k, S.row('issues')); await k.page.evaluate(() => { const h = [...document.querySelectorAll('main h2')].find((x) => x.textContent === 'Versions'); if (h) h.scrollIntoView(); }); } },
+  { name: 'answers-status', prepare: async (k) => { await k.ask('which software is behind?'); } },
+  { name: 'answers-panel-building', prepare: async (k) => { await k.ask(WEEKLY_SUMMARY); await k.wait(1200); } },
 ];
 
 /* The rail replaced the header tabs (ADR 0043). The Agent library is now Settings, How it works. */

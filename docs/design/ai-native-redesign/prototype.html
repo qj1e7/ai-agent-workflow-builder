@@ -450,7 +450,7 @@ html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 .pcard details.how { border-top: 1px solid var(--rule); padding: 0 16px; }
 .pcard details.how > summary { padding: 12px 0; font-size: 0.9375rem; }
 .pcard details.how .more-body { display: grid; gap: 10px; padding: 0 0 14px; }
-.pcard details.how .tag, details.tech .steps .tag { white-space: normal; }
+.pcard details.how .tag, details.tech .steps .tag, .sidepanel .steps .tag { white-space: normal; }
 .agents-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; font-size: 0.9375rem; }
 .agents-line .face { flex: none; }
 .agents-line > span { margin-right: 8px; }
@@ -2724,6 +2724,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const swRow = (key) => watchRows().concat(S.added.map((a, i) => ({ key: `add${i}`, name: a.name, kind: a.kind, repo: a.repo, ours: a.ours || 'Not known', newest: '?' }))).find((r) => r.key === key && !S.removed.includes(key));
   const runTone = { waiting: { tone: 'wait', label: 'Waiting for a yes' }, failed: { tone: 'bad', label: 'Stopped' }, expired: { tone: 'off', label: 'No answer' }, done: { tone: 'ok', label: 'Done' } };
   function panelView(p) {
+    /* The workflow being set up, while the Planner builds it (ADR 0043): its steps go in one by one, as plain steps. */
+    if (p.kind === 'build') {
+      const f = draftNr();
+      const steps = draftSteps(f);
+      const shown = Math.min(p.shown, steps.length);
+      return { title: esc(S.wiz.name.trim() || f.name), body: `<div><span class="pill">Draft</span></div><p${shown < steps.length ? ' class="muted"' : ''}>${shown < steps.length ? 'Adding the steps…' : 'It runs once you turn it on from the card in the chat.'}</p>${stepsList(steps.slice(0, shown), true, 'build')}` };
+    }
     if (p.kind === 'workflow') {
       if (!has(p.id)) return { title: 'Workflow', body: '<p class="muted">That workflow isn’t here any more.</p>' };
       const r = R(p.id);
@@ -2753,6 +2760,31 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const t = m.state === 'failed' && TROUBLE[p.id] ? TROUBLE[p.id]() : null;
     const answers = t ? `<dl class="qa"><dt>What happened</dt><dd>${t.happened}</dd></dl><dl class="qa"><dt>What was affected</dt><dd>${t.affected}</dd></dl><dl class="qa"><dt>Can it be fixed safely</dt><dd>${t.safe}</dd></dl>${t.act && me().op ? `<div class="btns">${troubleBtn(t)}</div>` : t.act ? `<p class="note">${t.deny}</p>` : ''}` : '';
     return { title: esc(r.name), page: `run:${p.id}`, body: `<div>${pill(runTone[m.state] || runTone.done)}</div><p>${m.headline}</p><ol class="sp-steps" aria-label="Steps of this run">${steps}</ol>${answers}` };
+  }
+  /* The build view follows its card: it becomes the workflow once the card turns it on, and closes when the draft is
+     saved or discarded, or when the window becomes as narrow as a phone, where the panel never opens by itself. */
+  let buildTimer = null;
+  function syncBuild() {
+    const p = S.panel;
+    if (!p || p.kind !== 'build') { clearInterval(buildTimer); return; }
+    const m = msgById(p.id);
+    if (m && m.card && m.card.done) S.panel = { kind: 'workflow', id: m.card.done.id };
+    else if (!m || liveSetup() !== m || narrow()) S.panel = null;
+    if (S.panel !== p) clearInterval(buildTimer);
+  }
+  /* Wider than 860 px the panel opens by itself while the Planner builds. With reduced motion the steps are all there at once. */
+  function openBuild(mid) {
+    if (narrow() || !onHome()) return;
+    clearInterval(buildTimer);
+    const n = draftSteps(draftNr()).length;
+    S.panel = { kind: 'build', id: String(mid), shown: motionQuery.matches ? n : 0 };
+    if (motionQuery.matches) return;
+    buildTimer = setInterval(() => {
+      const p = S.panel;
+      if (!p || p.kind !== 'build' || p.shown >= n) { clearInterval(buildTimer); return; }
+      p.shown += 1;
+      render();
+    }, 320);
   }
   function sidePanel() {
     if (!S.panel) return '';
@@ -4072,6 +4104,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         if (mood === 'sorry') setTimeout(() => { wait.mood = 'idle'; if (onHome()) render(); }, 1800);
       };
       Object.assign(wait, { thinking: false, say: '', mood: 'speaking', card: ans.card ? a : null, typing: true });
+      if (a.kind === 'setup' && !a.resumed) openBuild(wait.id);
       if (motionQuery.matches) { done(); scrollToMsg(wait.id, wait.card ? 'start' : 'nearest'); return; }
       if (onHome()) { render(); scrollToMsg(wait.id, wait.card ? 'start' : 'nearest'); }
       const words = say.split(' ');
@@ -4976,6 +5009,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function render() {
     if (pressing) { pendingRender = true; return; }
     syncRoles();
+    syncBuild();
     document.documentElement.classList.toggle('mark-unbuilt', S.markUnbuilt);
     const v = S.view;
     let main = '';
