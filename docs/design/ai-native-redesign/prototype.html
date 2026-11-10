@@ -3494,6 +3494,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const leftoverParts = (text, spans) => unheard(text, spans).map((x, i) => (aboutWorkflows(x.clause) ? { key: `left${i}`, mark: 'no', label: quote(x.clause), body: 'Ask this on its own, and I’ll answer it.' } : { key: `left${i}`, mark: 'no', label: quote(x.quote), body: 'I didn’t follow this part.' }))
     .filter((x, i, all) => all.findIndex((y) => y.label === x.label) === i);
   /* A schedule has one day and one time. A second of either is a cross, never a silent pick of the first. */
+  const clashDays = (text) => [...new Set([...text.replace(/\bmonday to friday\b/gi, ' ').matchAll(new RegExp(`\\b(${DAY_RE})s?\\b`, 'gi'))].map((m) => cap(m[1].toLowerCase())))];
   function clashParts(text) {
     const t = text.replace(/\bmonday to friday\b/gi, ' ');
     const find = (re, norm) => { const ms = [...t.matchAll(re)]; return { ms, n: new Set(ms.map(norm)).size }; };
@@ -3511,7 +3512,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function setupAsk() {
     const s = S.wiz.sched;
     if (!s.freq) return { key: 'when', q: 'How often should it run?', choices: Object.entries(FREQ_WORD).filter(([v]) => v !== 'month' || shows('monthly')).map(([v, l]) => [`freq:${v}`, l]) };
-    if (s.freq === 'week' && !s.day) return { key: 'when', q: 'Which day should it run?', choices: DAYS.map((d) => [`day:${d}`, d]) };
+    if (s.freq === 'week' && !s.day) { const only = S.wiz.dayChoices; return { key: 'when', q: only ? `${orList(only)}?` : 'Which day should it run?', choices: (only || DAYS).map((d) => [`day:${d}`, d]) }; }
     const bare = (S.wiz.intent || {}).bareHour;
     if (!s.time) return { key: 'when', q: bare ? `At ${clock(hourChoices(bare)[0])} or ${clock(hourChoices(bare)[1])}?` : 'What time should it run?', choices: (bare ? hourChoices(bare) : Q_TIMES).map((x) => [`time:${x}`, clock(x)]), more: '<button type="button" class="chip" data-act="whenOpen" aria-expanded="false" aria-controls="whenpick">Another time</button>' };
     const row = intentRows().find((r) => r.state === 'missing');
@@ -3923,7 +3924,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (!to.time) return { to, ask: 'time', hour: it.bareHour };
     return { to, same: schedText(to) === schedText(r.sched) };
   }
-  /* Every clause the card didn't read is a cross. With a cross, Save change waits: the person asks again. */
+  /* Every clause the card didn't read is a cross. Only a cross on the change itself, two days or two times, holds Save
+     change: a question asked alongside, or another clause, keeps its cross and the change can still be saved. */
+  const holdsSave = (no) => no.some((x) => x.key === 'days' || x.key === 'times');
   function editCrosses(c) {
     const ref = nameRef(c.text, { soft: true });
     const verbs = new RegExp(`${SCHED_VERB.source}|${OTHER_VERB.source}`, 'gi');
@@ -3974,14 +3977,14 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const to = p ? p.to : c.to;
     const asks = p && p.ask === 'day' ? [{ key: 'day', mark: 'ask', label: 'When', body: askBody({ q: 'Which day should it run?', choices: DAYS.map((d) => [`day:${d}`, d]), act: 'editSet', mid: id }, `q-${id}`) }]
       : p && p.ask === 'time' ? [{ key: 'time', mark: 'ask', label: 'When', body: askBody({ q: `At ${clock(hourChoices(p.hour)[0])} or ${clock(hourChoices(p.hour)[1])}?`, choices: hourChoices(p.hour).map((x) => [`time:${x}`, clock(x)]), act: 'editSet', mid: id }, `q-${id}`) }] : [];
-    const held = asks.length || no.length;
+    const held = asks.length || holdsSave(no);
     const n = liveSoftware().length;
     const sw = c.id !== 'sw' ? '' : c.state === 'open' ? `<p class="note">This changes when all ${n} software on the watchlist are checked. Saving makes you the owner of this schedule. Its checks then count as your work, so you won’t be able to approve them.</p>`
       : `<p class="note">This changed when all ${n} software on the watchlist are checked, and made you the owner of this schedule. Its checks count as your work now, so you can’t approve them.</p>`;
     const since = c.state === 'saved' ? changedSince(c, c.ver) : c.state === 'undone' ? changedSince(c, c.undoVer) : '';
     const later = S.paused[c.id] ? 'It’s paused, so it won’t run until you resume it.' : `Next run ${r.next}.`;
     const foot = c.state === 'open'
-      ? `<button class="btn primary" data-act="editSave" data-mid="${id}"${held ? ' disabled' : ''}>Save change</button><button class="btn" data-act="editKeep" data-mid="${id}">Never mind</button>${no.length ? '<span class="left">Ask again without the part with a cross.</span>' : ''}`
+      ? `<button class="btn primary" data-act="editSave" data-mid="${id}"${held ? ' disabled' : ''}>Save change</button><button class="btn" data-act="editKeep" data-mid="${id}">Never mind</button>${holdsSave(no) ? '<span class="left">Ask again without the part with a cross.</span>' : ''}`
       : c.state === 'saved' ? `<span class="note">${I.check(14)} Saved as version ${c.ver}. ${since ? `Changed again since, ${since}.` : later}</span>${!since ? `<button class="btn sm" data-act="editUndo" data-mid="${id}">Undo</button>` : ''}`
         : `<span class="note">Undone, as version ${c.undoVer}.${since ? ` Changed again since, ${since}.` : ''}</span>`;
     return `<div class="pcard" data-pres="edit:${id}">
@@ -4061,7 +4064,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const draftRows = () => (liveSetup() ? [{ id: 'live', name: S.wiz.name.trim() || draftNr().name, left: setupLeft().length, need: setupLeft(), crossed: hasCross(setupParts('d')) }] : []).concat(S.drafts.map((d) => ({ id: d.id, name: d.name, left: d.left, need: d.need || [], crossed: d.crossed })));
   function startDraft(text, it) {
     saveLive();
-    S.wiz = { ...newWiz(), text, intent: it, sched: { freq: it.freq || '', day: it.day || '', time: it.time || '', monthDay: '1' } };
+    /* Two days for one schedule: the day is a question between them, never the first one picked (fix pass F5). */
+    const days = clashDays(text);
+    S.wiz = { ...newWiz(), text, intent: it, dayChoices: days.length > 1 ? days : null, sched: { freq: days.length > 1 ? 'week' : it.freq || '', day: days.length > 1 ? '' : it.day || '', time: it.time || '', monthDay: '1' } };
     return { kind: 'setup', crossed: hasCross(setupParts('new')) };
   }
   /* The watchlist's days in the words a sentence uses, such as "every Monday", read from its schedule. */
@@ -4301,7 +4306,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         announce(say);
         if (onHome()) {
           render();
-          const h = ['setup', 'watch'].includes(a.kind) ? $app.querySelector(`[data-mid="${wait.id}"] .pcard-h h3`) : null;
+          const h = ['setup', 'watch', 'edit'].includes(a.kind) ? $app.querySelector(`[data-mid="${wait.id}"] .pcard-h h3`) : null;
           if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); } else focusComposer();
         }
         if (mood === 'sorry') setTimeout(() => { wait.mood = 'idle'; if (onHome()) render(); }, 1800);
@@ -6198,7 +6203,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     editSave: (_, m) => {
       const c = m.card;
       const p = c.state === 'open' && has(c.id) ? editPlan(c) : {};
-      if (!p.to || p.ask || p.same || editCrosses(c).length) return;
+      if (!p.to || p.ask || p.same || holdsSave(editCrosses(c))) return;
       c.from = { ...R(c.id).sched };
       c.to = { ...p.to };
       const pub = publishSched(c.id, p.to, undefined, 'chat');

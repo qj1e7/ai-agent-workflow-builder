@@ -511,8 +511,8 @@ add('ANS-leftover-everywhere', 'A part answer and an edit card mark the clauses 
   await t.expectText('“tag Bob” is marked', /“tag Bob”\s*I didn’t follow this part\./, lastCard);
   await t.ask('is LangGraph up to date? set it to check daily');
   await t.expectText('The edit card keeps the question, to ask on its own', /“is LangGraph up to date”\s*Ask this on its own, and I’ll answer it\.[\s\S]*Before\s+Every Monday at 9:00\s+After\s+Every day at 9:00/, lastCard);
-  await t.expectCount('Save change waits while a part has a cross', `${lastCard} [data-act="editSave"][disabled]`, 1);
-}, [1280]);
+  await t.expectCount('A question asked alongside doesn’t hold Save change', `${lastCard} [data-act="editSave"]:not([disabled])`, 1);
+}, [1280], { changed: 'Second fix pass, decision (a): only a cross on the change itself, two days or two times, holds Save change. A question asked alongside keeps its cross. Was: Save change waits while any part has a cross.' });
 
 /* Second fix pass. */
 const EMAIL_TEAM = 'every Friday, sum up the closed tickets and email the summary to the team';
@@ -538,6 +538,12 @@ add('ANS-ticked-runs', 'In a clause a rule read, a cross quotes only the unread 
   }
 }, [1280]);
 
+add('ANS-clash-day', 'Two days in a set-up request ask which one, and an edit card takes focus at its heading', async (t) => {
+  await t.ask('every Monday and Friday at 9am list open tickets in MOCK');
+  await t.expectText('The day is a question between the two', /Monday or Friday\?/, S.asks);
+  await t.ask('Make the morning new-ticket check run on Mondays only');
+  await t.expect('Focus is on the edit card’s heading', focused(t.page), /^h3#card-h-\d+$/);
+}, [1280]);
 
 
 /* Changing a workflow by asking (ADR 0043): the edit card changes the schedule, as a new version with Undo. */
