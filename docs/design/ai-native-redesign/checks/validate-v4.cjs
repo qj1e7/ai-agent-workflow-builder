@@ -659,6 +659,9 @@ async function main() {
     'Every Friday, sum up the stale tickets in the Platform component',
     'Every Monday, list the tickets created more than 30 days ago',
     'Every Friday, sum up the closed tickets and email me',
+    'every Friday, sum up the closed tickets and email the summary to the team',
+    'every Friday, sum up the closed tickets and post it to Slack',
+    'every Friday, list the closed tickets and update the Confluence page with them',
     'Every Friday, close the tickets that are done',
     `${WEEKLY_SUMMARY}, approve it automatically`,
   ];

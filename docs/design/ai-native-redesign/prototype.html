@@ -1868,7 +1868,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
       /\b(?:gitlab|entra|active directory|servicenow|outlook|sharepoint|excel)\b/gi,
       /\b(?:jira|tickets?|issues?|project)\b/gi,
       /\b(?:find|get|pull|fetch|gather|collect|look (?:at|for)|go through)\b(?=[^.,;]*\b(?:tickets?|issues?)\b)/gi,
-      /\b(?:prepare|make|create|write|produce|build|give|send|show)(?:\s+(?:me|us))?(?=\s+(?:a |an |one |the )?(?:short |quick |weekly |daily )?(?:summary|summaries|list|report|digest|overview|comparison)\b)/gi,
+      /\b(?:prepare|make|create|write|produce|build|give|send|show)(?:\s+(?:me|us))?(?=\s+(?:a |an |one |the )?(?:short |quick |brief |weekly |daily )?(?:summary|summaries|list|report|digest|overview|comparison)\b)/gi,
+      /\b(?:short|quick|brief)\b(?=\s+(?:summary|summaries|list|report|digest|overview)\b)/gi,
+      /\b(?:file|raise|log|put|create|add)\s+(?:it|them|this|that)\s+(?:as|in|into)\s+(?:a|one)\s+(?:new\s+)?(?:jira\s+)?ticket\b/gi,
     ],
     /* What the Jira read can't give, which a part answer names: the last update, the owner, the type, the component, the priority, older tickets. */
     needs: [
@@ -1886,7 +1888,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     ],
     /* The watch card: what to watch, its releases, where it's published, and the upgrade ticket. The name is added per request. */
     watch: [
-      /\b(?:watch|track|monitor|follow|keep (?:track|an eye) (?:of|on)|tell me (?:about|when)|let me know (?:about|when))\b|\bcheck(?:\s+for)?(?=\s+(?:new\s+|newer\s+|the\s+latest\s+)?(?:releases?|versions?)\b)|\bcheck\b(?=\s+[\w.+-]+\s+for\b)/gi,
+      /\b(?:watch|track|monitor|follow|keep (?:track|an eye) (?:of|on)|(?:tell me|let me know) (?:about|when|if)(?:\s+there(?:\s+is|\s+are|['’]s))?)\b|\bcheck(?:\s+for)?(?=\s+(?:new\s+|newer\s+|the\s+latest\s+)?(?:releases?|versions?)\b)|\bcheck\b(?=\s+[\w.+-]+\s+for\b)/gi,
       /\b(?:new |newer |latest )?(?:releases?|versions?|upgrades?|patch(?:es)?)\b|\bout of date\b|\bon github\b/gi,
       /\b(?:create|raise|open|file|make|add)\s+(?:a |an |one )?(?:new )?(?:jira |upgrade )?(?:ticket|issue)s?\b|\b(?:in|into) jira\b/gi,
     ],
@@ -1897,9 +1899,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const STOP = new Set(['a', 'an', 'the', 'and', 'or', 'then', 'also', 'so', 'but', 'plus', 'i', 'me', 'my', 'mine', 'we', 'us', 'our', 'you', 'your', 'it', 'its', 'they', 'them', 'their', 'this', 'that', 'these', 'those', 'what', 'which', 'who', 'to', 'for', 'of', 'in', 'on', 'at', 'by', 'with', 'from', 'into', 'about', 'up', 'out', 'is', 'are', 'be', 'been', 'am', 'was', 'were', 'do', 'does', 'did', 'have', 'has', 'can', 'could', 'would', 'will', 'should', 'all', 'any', 'each', 'every', 'just', 'only', 'one', 'please', 'thanks', 'thank', 'kindly', 'i’d', "i'd", 'it’s', "it's", 'i’m', "i'm"]);
   const POLITE = /^(please|thanks|thank|you|kindly)$/i;
   const spansOf = (text, res) => res.flatMap((re) => [...text.matchAll(new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`))].map((m) => [m.index, m.index + m[0].length]));
-  /* Each clause of the text that no rule fully read, quoted whole. A comma, a full stop, "and", "then" or "but" ends a
-     clause, so one missed condition never hides the rest of the sentence. A clause counts as missed when any word in it
-     is unread, or when no rule read any of it at all and it is more than "please" or "thank you". */
+  /* Each clause of the text that a rule didn't fully read. A comma, a full stop, "and", "then" or "but" ends a clause,
+     so one missed condition never hides the rest of the sentence. A clause no rule read at all is quoted whole, unless
+     it is only "please" or "thank you". In a clause a rule did read, each run of unread words with a real word in it is
+     quoted from the start of its phrase ("with a chart"), and takes the word it describes when that word comes next
+     ("only the major releases"). A quote never runs across another part the card ticked. */
   function unheard(text, spans) {
     const words = [...text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’.:-]*/gu)].map((m) => { const w = m[0].replace(/[.:-]+$/, ''); return { w, a: m.index, b: m.index + w.length }; });
     const read = (x) => spans.some(([a, b]) => x.a < b && x.b > a);
@@ -1907,8 +1911,21 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const out = [];
     let clause = [];
     const close = () => {
-      const missed = clause.some((x) => !read(x) && !plain(x)) || (clause.length && !clause.some(read) && clause.some((x) => !POLITE.test(x.w)));
-      if (missed) out.push(text.slice(clause[0].a, clause[clause.length - 1].b));
+      const whole = clause.length ? text.slice(clause[0].a, clause[clause.length - 1].b) : '';
+      if (clause.length && !clause.some(read)) { if (clause.some((x) => !POLITE.test(x.w))) out.push({ quote: whole, clause: whole }); clause = []; return; }
+      for (let i = 0; i < clause.length;) {
+        if (read(clause[i])) { i += 1; continue; }
+        let j = i;
+        while (j < clause.length && !read(clause[j])) j += 1;
+        const run = clause.slice(i, j);
+        if (run.some((x) => !plain(x))) {
+          let last = run.length - 1;
+          while (plain(run[last])) last -= 1;
+          const end = last === run.length - 1 && j < clause.length ? clause[j] : run[last];
+          out.push({ quote: text.slice(run[0].a, end.b), clause: whole });
+        }
+        i = j;
+      }
       clause = [];
     };
     words.forEach((x, i) => {
@@ -3474,7 +3491,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* A question and its choices. The choices are named by the question for a screen reader. */
   const askBody = (q, id) => `<span class="pq" id="${id}">${q.q}</span><span class="pick" role="group" aria-labelledby="${id}">${q.choices.map(([v, l]) => `<button type="button" class="chip" data-act="${q.act || 'answer'}" data-arg="${esc(v)}"${q.mid ? ` data-mid="${q.mid}"` : ''}>${esc(l)}</button>`).join('')}${q.more || ''}</span>`;
   /* Every clause no rule read, as a cross that quotes it. A question in it is answered when it is asked on its own. */
-  const leftoverParts = (text, spans) => unheard(text, spans).map((w, i) => ({ key: `left${i}`, mark: 'no', label: quote(w), body: aboutWorkflows(w) ? 'Ask this on its own, and I’ll answer it.' : 'I didn’t follow this part.' }));
+  const leftoverParts = (text, spans) => unheard(text, spans).map((x, i) => (aboutWorkflows(x.clause) ? { key: `left${i}`, mark: 'no', label: quote(x.clause), body: 'Ask this on its own, and I’ll answer it.' } : { key: `left${i}`, mark: 'no', label: quote(x.quote), body: 'I didn’t follow this part.' }))
+    .filter((x, i, all) => all.findIndex((y) => y.label === x.label) === i);
   /* A schedule has one day and one time. A second of either is a cross, never a silent pick of the first. */
   function clashParts(text) {
     const t = text.replace(/\bmonday to friday\b/gi, ' ');
@@ -3539,8 +3557,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
      a Jira ticket, the one place it can write today. */
   const INSTEAD = 'The same thing, with the result put in one Jira ticket, after a yes.';
   const CANT = {
-    email: { cap: 'email', sys: 'Outlook email', cant: 'send email', why: 'Email isn’t on the team’s plan. Ask the team if you need it.', instead: INSTEAD, next: (t) => t.replace(/\s*,?\s*\b(?:and|then)\s+e-?mail(?:\s+(?:me|us|it|them))?\b/i, '').replace(/\be-?mail(?:\s+(?:me|us))?\b/i, 'list') },
-    slack: { cap: 'email', sys: 'Slack', cant: 'post in Slack', why: 'Slack isn’t on the team’s plan. Ask the team if you need it.', instead: INSTEAD, next: (t) => t.replace(/\s*\b(in|on|to|into) slack\b/i, '') },
+    email: { cap: 'email', sys: 'Outlook email', cant: 'send email', why: 'Email isn’t on the team’s plan. Ask the team if you need it.', instead: INSTEAD, next: (t) => t.replace(/\s*,?\s*\b(?:and|then)\s+e-?mail\b[^,.;]*/i, '').replace(/\be-?mail(?:\s+(?:me|us))?\b/i, 'list') },
+    slack: { cap: 'email', sys: 'Slack', cant: 'post in Slack', why: 'Slack isn’t on the team’s plan. Ask the team if you need it.', instead: INSTEAD, next: (t) => t.replace(/\s*,?\s*\b(?:and|then)\s+(?:post|send|share)\b[^,.;]*\bslack\b[^,.;]*/i, '').replace(/\s*\b(in|on|to|into) slack\b/i, '') },
     teams: { cap: 'teamsPost', sys: 'Posting in Teams', instead: INSTEAD, next: (t) => t.replace(/\s*\b(in|on|to|into|via) (teams|(the |our )?[\w-]+ channel|(the |our )?team chat|chat)\b/i, '') },
     /* "Update the Confluence page with the closed tickets" becomes "list the closed tickets". */
     confluence: { cap: 'confluence', sys: 'Confluence', instead: INSTEAD, next: (t) => t.replace(/\b(update|edit|fill in|write)\s+(the |a |our )?(confluence |wiki )?(page|wiki)(\s+with)?\b/i, 'list').replace(/\s*\b(in|on|to|into) (confluence|(the |our )?wiki|(a |the )?(confluence |wiki )?page)\b/i, '').replace(/\bput\b/i, 'list') },
@@ -4006,10 +4024,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
      list them among their parts; every other answer lists them above its card. Each kind names what it read. */
   const NAMES = () => [...routineIds().map((id) => R(id).name), ...liveSoftware().map((x) => x.name), ...Object.keys(KNOWN), ...Object.values(KNOWN).map((k) => k[0])];
   const nameSpans = (text) => NAMES().flatMap((n) => { const out = []; const low = text.toLowerCase(); const k = n.toLowerCase(); for (let i = low.indexOf(k); i >= 0; i = low.indexOf(k, i + 1)) out.push([i, i + k.length]); return out; });
+  /* The whole clause around a match: a can't answer has answered the clause that names what it can't do. */
+  const inClause = (re) => new RegExp(`(?:(?!\\b(?:and|then|but|also|plus)\\b)[^,.;!?])*(?:${re.source})(?:(?!\\b(?:and|then|but|also|plus)\\b)[^,.;!?])*`, re.flags.includes('g') ? re.flags : `${re.flags}g`);
   const STATUS_WORDS = [/\b(?:today|now|right now|this morning|at the moment|currently|attention|yes|approvals?|plate|doing|going|running|working|status|state|next|due)\b/gi];
   const READ_BY = {
     part: () => [...HEARD.frame, ...HEARD.when, ...HEARD.setup, ...HEARD.needs],
-    cant: () => [...HEARD.frame, ...HEARD.when, ...HEARD.setup, ...HEARD.needs, ...HEARD.cant, ...HEARD.watch],
+    cant: () => [...HEARD.frame, ...HEARD.when, ...HEARD.setup, ...HEARD.needs, ...HEARD.cant.map(inClause), ...HEARD.watch],
     abilities: (c) => (c.from === 'setup' ? [...HEARD.frame, ...HEARD.when, ...HEARD.setup] : null),
     nocheck: () => [...HEARD.frame, ...HEARD.when, new RegExp(`${SCHED_VERB.source}|${OTHER_VERB.source}`, 'gi'), /\b(?:instead of|rather than)\b[^,.;]*/gi],
     ...Object.fromEntries(['data', 'check', 'mine', 'why', 'one'].map((k) => [k, () => [...HEARD.frame, ...ABOUT.map(([re]) => new RegExp(`(?:${re.source})(?:(?!\\b(?:and|then|but|also)\\b)[^,.;!?])*`, 'gi')), ...STATUS_WORDS, ...HEARD.watch]])),
