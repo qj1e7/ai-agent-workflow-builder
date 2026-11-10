@@ -26,7 +26,7 @@ One thing an agent can do in another system, such as reading GitHub releases or 
 _Avoid_: Plugin, skill, integration
 
 **Agent library**:
-The agent cards a team has saved. The Planner chooses from it.
+The agent cards a team has saved. The Planner chooses from it. It lives under How it works, in Settings (ADR 0043).
 _Avoid_: Agent hub (NCS's agent hub is a separate thing)
 
 **Use case**:
@@ -106,7 +106,7 @@ _Avoid_: Live version, active version
 ### Keeping software up to date
 
 **Watchlist**:
-The list of software a team runs and keeps up to date. It is checked on a schedule, and one approval request covers each check. In the app it is the **Software watchlist**.
+The list of software a team runs and keeps up to date. It is checked on a schedule, and one approval request covers each check. The page is called the **Software watchlist**, and the rail shows it as Watchlist.
 _Avoid_: Inventory, software list
 
 **Use the new address**:

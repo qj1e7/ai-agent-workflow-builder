@@ -18,6 +18,9 @@ const WEEKLY_SUMMARY = 'every Friday, sum up the tickets we closed this week';
 const EMAIL = 'email me a list of open bugs every Monday';
 const LONG_DASH = /[\u2013\u2014]/;
 
+/* The Agent library is Settings, How it works (ADR 0043). */
+const goLib = async (k) => { await k.go('agents'); await k.click('[data-act="setTab"][data-arg="how"]'); };
+
 const results = [];
 const consoleErrors = [];
 const fail = (msg) => { throw new Error(msg); };
@@ -53,7 +56,7 @@ const num = (s) => { const m = String(s || '').match(/\d+/); return m ? +m[0] : 
    the strip leaves out the model row, which the hero already is, so it has one row fewer to show. */
 async function needCounts(k, page, { operator, planner = operator }) {
   const out = {};
-  const badge = async () => num(await page.locator('.hdr .badge[data-val="needs-n"]').first().innerText().catch(() => ''));
+  const badge = async () => num(await page.locator('.rail .badge[data-val="needs-n"]').first().innerText().catch(() => ''));
   if (operator) {
     await k.go('workflows');
     out.workflowsHeader = num(await page.locator('main #needs-h .count').innerText().catch(() => '0'));
@@ -215,16 +218,16 @@ async function main() {
     await session(b, async (k, page) => { await k.ctl('modelOn', 'off'); seen.push(agree('no AI model', await needCounts(k, page, { operator: true, planner: false }), { strip: true, offline: true })); });
     await session(b, async (k, page) => {
       await k.setDay('one');
-      const badge = await page.locator('.hdr .badge[data-val="needs-n"]').count();
+      const badge = await page.locator('.rail .badge[data-val="needs-n"]').count();
       const head = await page.locator('main #needs-h').count();
       ok(!badge && !head, `day one: tab badge ${badge ? 'shown' : 'none'}, Home Needs you ${head ? 'shown' : 'none'}; both should be empty`);
       await k.ctl('Jira stops answering');
       seen.push(agree('day one with Jira down', await needCounts(k, page, { operator: true })));
     });
     await session(b, async (k, page) => {
-      const tab = num(await page.locator('.tabbar .badge').first().innerText().catch(() => ''));
+      const tab = num(await page.locator('.rail .badge').first().innerText().catch(() => ''));
       const head = num(await page.locator('main #needs-h .count').innerText().catch(() => ''));
-      ok(tab === head, `phone tab bar badge ${tab}, Home says ${head}`);
+      ok(tab === head, `phone rail badge ${tab}, Home says ${head}`);
       seen.push(`phone ${tab}`);
     }, { width: 390 });
     console.log(`              ${seen.join('; ')}`);
@@ -316,12 +319,12 @@ async function main() {
         await at('Home');
         await k.go('workflows'); await at('Workflows');
         await k.go('software'); await at('Software watchlist');
-        ok((await page.locator('.hdr [data-act="go"][data-arg="agents"]').count()) === 0, 'Bob has an Agent library link');
+        ok((await page.locator('.rail [data-act="go"][data-arg="agents"]').count()) === 0, 'Bob has an Agent library link');
       });
     }
     await session(b, async (k, page) => {
       await k.setUser('bob');
-      ok((await page.locator('.tabbar [data-act="go"][data-arg="agents"]').count()) === 0, 'Bob has an Agents tab on a phone');
+      ok((await page.locator('.rail [data-act="go"][data-arg="agents"]').count()) === 0, 'Bob has an Agents item in the rail on a phone');
     }, { width: 390 });
   });
 
@@ -436,10 +439,10 @@ async function main() {
       ...['issues', 'nudge'].map((id) => [`run ${id}`, async (k) => { await k.go('workflows'); await k.click(`main [data-act="workflow"][data-arg="${id}"]`); await k.click('main [data-act="watch"]'); await k.click('main [data-act="runDetail"]'); }]),
       ['run sw', async (k) => { await k.go('workflows'); await k.click('main [data-act="run"][data-arg="sw"]'); await k.click('main [data-act="runDetail"]'); }],
       ['software', async (k, page) => { await k.go('software'); for (const key of ['lj', 'fa', 'ls']) { await page.click(`main [data-act="swHist"][data-arg="${key}"]`); await k.settle(150); } }],
-      ['library what it can do', async (k) => k.go('agents')],
-      ['library agents', async (k) => { await k.go('agents'); await k.click('[data-act="libTab"][data-arg="agents"]'); }],
-      ['library tools', async (k) => { await k.go('agents'); await k.click('[data-act="libTab"][data-arg="tools"]'); }],
-      ...['lead', 'trouble', 'checker', 'writer', 'jira', 'summary'].map((id) => [`agent ${id}`, async (k, page) => { await k.go('agents'); await k.click('[data-act="libTab"][data-arg="agents"]'); await k.click(`main [data-act="agent"][data-arg="${id}"]`); await page.$$eval('.dialog details', (ds) => ds.forEach((d) => { d.open = true; })); }]),
+      ['library what it can do', async (k) => goLib(k)],
+      ['library agents', async (k) => { await goLib(k); await k.click('[data-act="libTab"][data-arg="agents"]'); }],
+      ['library tools', async (k) => { await goLib(k); await k.click('[data-act="libTab"][data-arg="tools"]'); }],
+      ...['lead', 'trouble', 'checker', 'writer', 'jira', 'summary'].map((id) => [`agent ${id}`, async (k, page) => { await goLib(k); await k.click('[data-act="libTab"][data-arg="agents"]'); await k.click(`main [data-act="agent"][data-arg="${id}"]`); await page.$$eval('.dialog details', (ds) => ds.forEach((d) => { d.open = true; })); }]),
       ...['connections', 'people', 'model'].map((tab) => [`settings ${tab}`, async (k) => { await k.click('.hdr [data-act="go"][data-arg="settings"]'); await k.click(`[data-act="setTab"][data-arg="${tab}"]`); }]),
       ['support case', async (k) => { await k.go('workflows'); await k.click('main [data-act="report"]'); await k.click('[data-act="sendReport"]'); await k.click('.dialog [data-act="closeModal"]'); await k.click('main [data-act="workflow"][data-arg="nudge"]'); }],
       ['teams', async (k) => k.click('.hdr [data-act="teams"]')],
@@ -478,13 +481,13 @@ async function main() {
       ...['issues', 'access'].map((id) => [`workflow ${id}`, async (k, page) => { await k.go('workflows'); await k.click(`main [data-act="workflow"][data-arg="${id}"]`); await page.$$eval('main details', (ds) => ds.forEach((d) => { d.open = true; })); }]),
       ['run sw', async (k) => { await k.go('workflows'); await k.click('main [data-act="run"][data-arg="sw"]'); await k.click('main [data-act="runDetail"]'); }],
       ['software', async (k) => k.go('software')],
-      ['library agents', async (k) => { await k.go('agents'); await k.click('[data-act="libTab"][data-arg="agents"]'); }],
-      ['library tools', async (k) => { await k.go('agents'); await k.click('[data-act="libTab"][data-arg="tools"]'); }],
+      ['library agents', async (k) => { await goLib(k); await k.click('[data-act="libTab"][data-arg="agents"]'); }],
+      ['library tools', async (k) => { await goLib(k); await k.click('[data-act="libTab"][data-arg="tools"]'); }],
       ['teams', async (k) => k.click('.hdr [data-act="teams"]')],
       ['bob home', async (k) => k.setUser('bob')],
       ['workflow issues menu', async (k) => { await k.go('workflows'); await k.click('main [data-act="workflow"][data-arg="issues"]'); await k.click('main [data-act="menu"]'); }],
       ...['connections', 'usage'].map((tab) => [`settings ${tab}`, async (k) => { await k.click('.hdr [data-act="go"][data-arg="settings"]'); await k.click(`[data-act="setTab"][data-arg="${tab}"]`); }]),
-      ['agent writer', async (k, page) => { await k.go('agents'); await k.click('[data-act="libTab"][data-arg="agents"]'); await k.click('main [data-act="agent"][data-arg="writer"]'); await page.$$eval('.dialog details', (ds) => ds.forEach((d) => { d.open = true; })); }],
+      ['agent writer', async (k, page) => { await goLib(k); await k.click('[data-act="libTab"][data-arg="agents"]'); await k.click('main [data-act="agent"][data-arg="writer"]'); await page.$$eval('.dialog details', (ds) => ds.forEach((d) => { d.open = true; })); }],
       ['support case', async (k) => { await k.go('workflows'); await k.click('main [data-act="report"]'); await k.click('[data-act="sendReport"]'); await k.click('.dialog [data-act="closeModal"]'); await k.click('main [data-act="workflow"][data-arg="nudge"]'); }],
       ['planner card', async (k, page) => { await k.ask(WEEKLY_SUMMARY); await page.$$eval('main details', (ds) => ds.forEach((d) => { d.open = true; })); }],
     ];
@@ -601,9 +604,11 @@ async function main() {
   await check(B, 'offline-honest', async (b) => session(b, async (k, page) => {
     await k.ctl('modelOn', 'off');
     const home = await k.main();
-    ok(/agent workflows can’t run/.test(home), 'the offline Home does not say agent workflows can’t run');
+    /* Since #195 the offline Home is worded for software versioning: it names the watchlist, and the stopped agent workflow says it waits for a model. */
+    ok(/can’t read new requests/.test(home) && /Software watchlist keeps checking/.test(home), 'the offline Home does not say the Planner can’t read requests and only the Software watchlist keeps checking');
+    ok(/Can run again once an AI model is connected/.test(home), 'the offline Home does not say the stopped agent workflow can’t run without a model');
     ok(!/keep running/.test(home), 'the offline Home says workflows keep running');
-    ok(/Needs setup[\s\S]*Sum up what I find/.test(home), 'Sum up what I find is not Needs setup with no model');
+    ok(/Needs setup[\s\S]*Create a Jira ticket after a yes/.test(home), 'Create a Jira ticket after a yes is not Needs setup with no model');
     ok((await page.locator('main [data-act="setGo"][data-arg="model"]').count()) === 1, 'Connect a model shows more than once, or not at all');
     if (await page.$('main [data-act="retryIssues"]')) {
       await k.click('main [data-act="retryIssues"]');
@@ -742,8 +747,9 @@ async function main() {
   /* Day one opens with the "I can" list and folds "What can't I do yet?" (review item 8). */
   await check(B, 'home-day-one', async (b) => session(b, async (k, page) => {
     await k.setDay('one');
-    const folds = await page.$$eval('main details.abil-not', (ds) => ds.map((d) => ({ open: d.open, summary: d.querySelector('summary').textContent.trim() })));
-    ok(folds.length === 1 && !folds[0].open && folds[0].summary === 'What can’t I do yet?', `day one does not fold “What can’t I do yet?”: ${JSON.stringify(folds)}`);
+    /* Since #195 day one lists only what the Planner can do, so nothing unbuilt is offered. */
+    const home = await k.main();
+    ok(/What I can do/.test(home) && /Check software for new releases/.test(home), `day one does not list what the Planner can do: “${home.slice(0, 120)}”`);
     ok((await page.locator('main .abil-not .tag.planned').count()) === 0, 'the Not yet lines carry a Planned tag by default');
   }));
 
@@ -775,7 +781,7 @@ async function main() {
         await k.click('main [data-act="menu"]');
         say('Open in n8n', await page.locator('.menu [data-arg^="n8nAsk"]').count(), await page.locator('.menu [data-arg^="n8nAsk"] .tag.planned').count());
         await page.keyboard.press('Escape'); await k.settle();
-        await k.go('agents'); await k.click('[data-act="libTab"][data-arg="agents"]');
+        await goLib(k); await k.click('[data-act="libTab"][data-arg="agents"]');
         if (!preview && /change (it|them|an agent|agents) in plain English/i.test(await k.main())) bad.push(`by default, the Agents tab says agents can be changed: “${(await k.main()).match(/[^.\n]*change (it|them|an agent|agents) in plain English[^.\n]*/i)[0].trim()}”`);
         await k.click('main [data-act="agent"][data-arg="writer"]');
         say('Changing an agent', await page.locator('.dialog [data-act="agentSuggest"]').count(), await page.locator('.dialog .tag.planned').count());
@@ -800,9 +806,9 @@ async function main() {
   await check(B, 'i6-new-agent-drafted', async (b) => session(b, async (k, page) => {
     await k.ask('Every Monday at 9:00, compare last week’s new tickets with the week before in project MOCK');
     await page.$$eval('main details', (ds) => ds.forEach((d) => { d.open = true; }));
-    ok(/New agent, saved to the Agent library when you turn this on/.test(await k.main()), 'the comparison card does not draft a new agent');
+    ok(/New agent, saved under How it works, in Settings, when you turn this on/.test(await k.main()), 'the comparison card does not draft a new agent');
     await k.click('[data-act="turnOn"]');
-    await k.go('agents'); await k.click('[data-act="libTab"][data-arg="agents"]');
+    await goLib(k); await k.click('[data-act="libTab"][data-arg="agents"]');
     const before = 4;
     const n = num(await page.locator('main h2:has-text("Specialist agents") .count').innerText().catch(() => ''));
     ok(n === before + 1, `the Agent library lists ${n} specialist agents after turning it on, not ${before + 1}`);

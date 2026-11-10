@@ -116,7 +116,7 @@
 * { box-sizing: border-box; }
 /* Keeps focused and scrolled-to things clear of the sticky header, and of the tab bar on a phone. */
 html { scroll-padding-top: 84px; }
-@media (max-width: 900px) { html { scroll-padding-top: 76px; scroll-padding-bottom: 84px; } }
+@media (max-width: 900px) { html { scroll-padding-top: 56px; } }
 body {
   margin: 0; background: var(--frame); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.5;
   font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased;
@@ -142,14 +142,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   padding-left: max(25px, env(safe-area-inset-left, 0px)); padding-right: max(25px, env(safe-area-inset-right, 0px));
 }
 .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.125rem; background: none; border: 0; padding: 6px 0; cursor: pointer; }
-.nav { display: flex; gap: 2px; align-items: center; }
-.nav-a {
-  position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 12px; border: 0; border-radius: var(--r-ctl);
-  background: none; color: var(--muted); font-weight: 600; font-size: 0.95rem; cursor: pointer; white-space: nowrap;
-  transition: background-color var(--dur-press) ease, color var(--dur-press) ease;
-}
-.nav-a[aria-current="page"] { color: var(--ink); }
-.nav-a[aria-current="page"]::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -11px; height: 2px; border-radius: 2px; background: var(--nav-mark); }
 .tools { margin-left: auto; display: flex; gap: 4px; align-items: center; }
 /* Header tools are quiet: no box until you point at them. */
 .iconbtn {
@@ -180,29 +172,32 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @media (min-width: 901px) and (max-width: 1045px), (max-width: 380px) { .brand-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
 @media (max-width: 900px) {
   .hdr-in { padding-block: 8px; gap: 6px 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-  .nav { display: none; }
   .me-text, .iconbtn .lbl { display: none; }
   .brand { font-size: 1rem; }
   .brand-ai { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
-/* Phones and small tablets: the main menu moves to a tab bar at the bottom of the screen. */
-.tabbar { display: none; }
+/* The rail (ADR 0043): a slim column on the left with Chat, Workflows and Watchlist. On a phone it is a bar across the top. */
+.shell { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: start; }
+.rail { position: sticky; top: calc(60px + env(safe-area-inset-top, 0px)); display: grid; gap: 4px; padding: 6px 6px 0 12px; }
+.rail-a {
+  position: relative; display: grid; justify-items: center; align-content: center; gap: 2px; min-height: 62px; padding: 6px 2px; border: 0; border-radius: var(--r-ctl);
+  background: none; color: var(--muted); font-size: 0.8125rem; font-weight: 600; cursor: pointer; transition: background-color var(--dur-press) ease, color var(--dur-press) ease;
+}
+.rail-a[aria-current="page"] { color: var(--ink); background: var(--active); font-weight: 700; }
+.rail-a[aria-current="page"] svg { color: var(--nav-mark); }
+.rail-a .badge { position: absolute; top: 4px; left: calc(50% + 6px); }
 @media (max-width: 900px) {
-  .tabbar {
-    position: fixed; z-index: var(--z-nav); left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(var(--tabs), minmax(0, 1fr));
-    background: var(--surface); border-top: 1px solid var(--hair);
-    padding-bottom: env(safe-area-inset-bottom, 0px); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
-  }
-  .tab { position: relative; display: grid; justify-items: center; align-content: center; gap: 2px; min-height: 58px; padding: 6px 2px; border: 0; background: none; color: var(--muted); font-size: 0.8125rem; font-weight: 600; cursor: pointer; }
-  .tab[aria-current="page"] { color: var(--ink); font-weight: 700; }
-  .tab[aria-current="page"] svg { color: var(--nav-mark); }
-  /* The waiting count sits on the tab's icon, where a thumb can still see it. */
-  .tab .badge { position: absolute; top: 6px; left: calc(50% + 6px); }
+  .hdr { position: static; }
+  .shell { display: block; }
+  .rail { position: sticky; top: env(safe-area-inset-top, 0px); z-index: var(--z-nav); grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; padding: 0; background: var(--surface); border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
+  .rail-a { grid-auto-flow: column; justify-content: center; gap: 8px; min-height: 46px; padding: 0 4px; border-radius: 0; }
+  .rail-a[aria-current="page"] { background: none; box-shadow: inset 0 -3px 0 var(--nav-mark); }
+  .rail-a .badge { position: static; }
 }
 
 /* The sheet: the page sits on white, inset 8px from the frame, with a hairline edge and no shadow. dvh, not vh, so phone toolbars don't cut it. */
 .sheet { margin: 0 8px 8px; min-height: calc(100dvh - 68px); background: var(--bg); border: 1px solid var(--hair); border-radius: var(--r-sheet); }
-@media (max-width: 900px) { .sheet { margin: 0; border-width: 1px 0 0; border-radius: 0; } }
+@media (max-width: 900px) { .sheet { margin: 0; border-width: 0; border-radius: 0; min-height: calc(100dvh - 106px); } }
 
 /* Page */
 .wrap {
@@ -240,7 +235,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* Hover only where there is a real pointer, so a tap on a phone doesn't leave a stuck hover. */
 @media (hover: hover) and (pointer: fine) {
-  .nav-a:hover { color: var(--ink); background: var(--active); }
+  .rail-a:hover { color: var(--ink); background: var(--active); }
   .iconbtn:hover { background: var(--active); }
   .back:hover { color: var(--ink); }
   .btn:hover { border-color: var(--muted); background: var(--sunk); }
@@ -257,7 +252,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 
 @media (pointer: coarse) {
-  .btn, .btn.sm, .chip, .seg button, .nav-a, .linkbtn, .back, .iconbtn { min-height: 44px; }
+  .btn, .btn.sm, .chip, .seg button, .rail-a, .linkbtn, .back, .iconbtn { min-height: 44px; }
 }
 
 /* Pills: a pale tint with dark text of the same hue. "On" is the normal state, so it stays grey. */
@@ -345,11 +340,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .welcome h1 { font-size: 2rem; max-width: 22ch; text-wrap: balance; }
 .welcome .lead { color: var(--muted); font-size: 1.05rem; max-width: 52ch; }
 .welcome .face { width: 128px; height: 128px; }
-/* Once the conversation starts, the welcome folds to one line, so the thread has the page. */
-.welcome.compact { justify-items: start; text-align: left; padding-top: 0; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 12px; }
-.welcome.compact .hello-text { justify-items: start; }
-.welcome.compact h1 { font-size: 1.25rem; max-width: none; }
-.welcome.compact .face { width: 52px; height: 52px; }
 @media (max-width: 600px) { .welcome .face { width: 96px; height: 96px; } .welcome h1 { font-size: 1.5rem; } }
 .composer { display: flex; align-items: flex-end; gap: 8px; padding: 10px 10px 10px 16px; border: 1px solid var(--edge); border-radius: 12px; background: var(--surface); }
 .composer:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
@@ -361,6 +351,49 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .examples { justify-content: center; }
 /* A long placeholder on a phone is cut short, never wrapped out of a one-line box. */
 .composer textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Once the conversation starts, Home is the chat: the box docks at the bottom and the thread fills the page (ADR 0043). */
+.wrap.chatmode { max-width: none; width: 100%; margin: 0; padding: 0; flex: 1; min-height: 0; overflow: hidden; }
+.home.chatlayout { display: flex; gap: 0; height: 100%; max-width: none; margin: 0; }
+.chatcol { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+.chatbar, .chatin, .chatdock { width: 100%; max-width: 820px; margin: 0 auto; padding-inline: 16px; }
+.chatbar { padding-top: 12px; display: grid; gap: 8px; }
+.chatnew { justify-content: flex-end; }
+.chatscroll { flex: 1 1 0; min-height: 0; overflow-y: auto; padding-block: 8px 16px; overscroll-behavior: contain; }
+.chatdock { padding-block: 8px 16px; }
+.pinned { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto auto; gap: 4px 12px; align-items: center; padding: 10px 14px; border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); }
+.pinned .ico { width: 20px; height: 24px; display: grid; place-items: center; }
+.pinned .ico svg { width: 20px; height: 20px; }
+.pinned-text { display: grid; min-width: 0; }
+.pinned-text span { font-size: 0.875rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 600px) { .pinned { grid-template-columns: 20px auto minmax(0, 1fr); } .pinned-text { grid-column: 2 / -1; } .pinned > .btn { grid-column: 2; justify-self: start; } .pinned > .linkbtn { grid-column: 3; justify-self: start; } .pinned-text span { white-space: normal; } }
+/* While chatting, the app is one column exactly as tall as the window, so nothing depends on header heights. */
+html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
+#app.chatting { position: relative; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+.chatting .hdr { flex: none; }
+.chatting .shell { flex: 1; min-height: 0; align-items: stretch; }
+.chatting .rail { align-self: start; }
+.chatting .sheet { min-height: 0; display: flex; flex-direction: column; }
+@media (max-width: 900px) { .chatting .shell { display: flex; flex-direction: column; } .chatting .rail { flex: none; } .chatting .sheet { flex: 1; } }
+/* The test controls sit above the docked box, never over it. */
+.chatting .testctl { bottom: calc(var(--dock, 96px) + 12px + env(safe-area-inset-bottom, 0px)); }
+.chatting .chatscroll { padding-bottom: 64px; }
+[hidden] { display: none !important; }
+.sidepanel { flex: 0 0 min(400px, 40%); min-width: 0; display: flex; flex-direction: column; border-left: 1px solid var(--hair); background: var(--bg); }
+.sp-bar { display: grid; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--hair); }
+.sp-btns { order: -1; display: flex; justify-content: space-between; gap: 8px; }
+.sp-bar h2 { font-size: 1.125rem; overflow-wrap: anywhere; }
+.sp-body { flex: 1; overflow-y: auto; padding: 16px; display: grid; gap: 14px; align-content: start; }
+.sp-problem { display: grid; gap: 10px; }
+.sp-steps { display: grid; gap: 6px; }
+.sp-steps li { position: relative; padding-left: 22px; }
+.sp-steps li::before { content: ""; position: absolute; left: 4px; top: 0.5em; width: 9px; height: 9px; border-radius: 50%; background: var(--green); }
+.sp-steps li.todo::before, .sp-steps li.skip::before { background: var(--rail); }
+.sp-steps li.fail::before { background: var(--red); }
+.sp-steps li.wait::before, .sp-steps li.noans::before { background: var(--amber); }
+@media (max-width: 860px) { .sidepanel { position: fixed; inset: 0; z-index: var(--z-overlay); flex: none; border-left: 0; padding-top: env(safe-area-inset-top, 0px); } }
+.ngroup { display: grid; gap: 8px; }
+.ngroup + .ngroup { margin-top: 12px; }
+.ngroup > h3 { font-size: 0.875rem; color: var(--muted); }
 /* Every answer shares one left edge and one width, however narrow its card, because the thread fills the column. */
 .thread { width: 100%; }
 /* Check my workflows: one row per workflow with its state, next run and one action (spec 6.2). */
@@ -369,7 +402,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .wfcheck .row:last-child { border-bottom: 0; }
 .wfcheck .row-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 4px; }
 /* On a phone the row's action goes under its text, so a long pill never touches the button. */
-@media (max-width: 600px) { .wfcheck .row { grid-template-columns: minmax(0, 1fr); } .wfcheck .row .btn { justify-self: start; } }
+@media (max-width: 600px) { .wfcheck .row { grid-template-columns: minmax(0, 1fr); } .wfcheck .row > [data-flow-of], .wfcheck .row > .btn { justify-self: start; } }
 .pcard.why .pcard-h .face { flex: none; }
 .cmsg.me { grid-template-columns: minmax(0, 1fr); justify-items: end; }
 .cmsg.me .cmsg-bubble { max-width: min(560px, 90%); background: var(--sunk); border-radius: var(--r-card) var(--r-card) 4px var(--r-card); overflow-wrap: anywhere; }
@@ -968,8 +1001,7 @@ select { padding: 9px 12px; width: auto; }
 @media (max-width: 560px) { .mockbar .grp > span, .mockbar .hide-sm { display: none; } }
 
 @media (max-width: 900px) {
-  .wrap { padding-bottom: 210px; }
-  .toast { bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
+  .toast { bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* v2: checking what was understood, schedules, search, support cases, test controls */
@@ -1049,7 +1081,7 @@ button.schip { cursor: pointer; }
 .testctl-sims > span { color: var(--mock-dim); font-weight: 600; }
 .testctl-about summary { cursor: pointer; color: var(--mock-dim); font-weight: 600; }
 .testctl-about ul { margin: 6px 0 0 18px; padding: 0; list-style: disc; display: grid; gap: 4px; }
-@media (max-width: 900px) { .testctl { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); } }
+@media (max-width: 900px) { .testctl { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); } }
 
 /* Named Approvers and escalation */
 .apstep { border: 0; padding: 0; margin: 0 0 14px; min-width: 0; }
@@ -2374,21 +2406,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* ---------- Views ---------- */
   function header() {
     const v = S.view.name;
-    const swRun = v === 'run' && S.view.id === 'sw';
-    const cur = (on) => (on ? ' aria-current="page"' : '');
-    /* What needs you is counted on Workflows. An Approver who can't set up workflows sees it on Home, where their approvals are. */
-    const k = needs().length;
-    const count = (on) => (on && k ? `<span class="badge" data-val="needs-n"><span class="vh">, </span>${k}<span class="vh"> need you</span></span>` : '');
-    const nav = [
-      `<button class="nav-a" data-act="go" data-arg="home"${cur(v === 'home')}>Home${count(!me().op)}</button>`,
-      `<button class="nav-a" data-act="go" data-arg="workflows"${cur(['workflows', 'workflow'].includes(v) || (v === 'run' && !swRun))}>Workflows${count(me().op)}</button>`,
-      `<button class="nav-a" data-act="go" data-arg="software"${cur(v === 'software' || swRun)}>Software watchlist</button>`,
-      me().op ? `<button class="nav-a" data-act="go" data-arg="agents"${cur(v === 'agents')}>Agent library</button>` : '',
-    ].join('');
     const n = teamsCount();
     return `<header class="hdr"><div class="hdr-in">
       <button class="brand" data-act="go" data-arg="home">${I.mark(22)}<span class="brand-text"><span class="brand-ai">AI </span>Workflow Builder</span></button>
-      <nav class="nav" aria-label="Main">${nav}</nav>
       <div class="tools">
         <button class="iconbtn" data-act="teams" aria-label="Teams, practice copy${n ? `, ${approvalsWord(n)} waiting for you` : ''}" title="${n ? `${approvalsWord(n)} waiting for you` : 'Teams, practice copy'}">${I.chat(20)}<span class="lbl">Teams</span>${n ? `<span class="badge" data-val="teams-n">${n}</span>` : ''}</button>
         <button class="iconbtn" data-act="go" data-arg="settings" aria-label="Settings" title="Settings"${v === 'settings' ? ' aria-current="page"' : ''}>${I.gear(20)}</button>
@@ -2398,18 +2418,28 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
   const approvalsWord = (n) => (n === 1 ? '1 approval' : `${n} approvals`);
 
-  /* Phones: the same menu as the header, as a tab bar at the bottom. */
-  function tabbar() {
+  /* The rail (ADR 0043): Chat, Workflows and Watchlist, each with a count. A slim column on the left; on a phone it is a bar across the top.
+     Workflows counts what needs you. The Watchlist counts software that needs action. An Approver who can't set up workflows
+     sees what needs them on Chat, where their approvals are. */
+  /* What the Software page lists under Needs attention. The rail's badge and the page's heading both read it. */
+  function swAttnCount(hit = () => true) {
+    const full = shows('registries');
+    const lj = full && watchRows().some((r) => r.key === 'lj' && !S.removed.includes('lj') && hit(r.name, r.repo));
+    const ending = full && !S.firstDay ? SUPPORT_ENDING.filter((x) => hit(x.name, '')).length : 0;
+    return (has('sw') && S.sw === 'waiting' ? 1 : 0) + (lsProblem() ? 1 : 0) + (lj ? 1 : 0) + ending;
+  }
+  const swLive = () => watchRows().filter((r) => !S.removed.includes(r.key));
+  function rail() {
     const v = S.view.name;
     const swRun = v === 'run' && S.view.id === 'sw';
     const k = needs().length;
-    const count = (on) => (on && k ? `<span class="badge"><span class="vh">, </span>${k}<span class="vh"> need you</span></span>` : '');
-    const tabs = [
-      ['home', 'Home', I.home(22), v === 'home', count(!me().op)],
-      ['workflows', 'Workflows', I.grid(22), ['workflows', 'workflow'].includes(v) || (v === 'run' && !swRun), count(me().op)],
-      ['software', 'Watchlist', I.box(22), v === 'software' || swRun, ''],
-    ].concat(me().op ? [['agents', 'Agents', I.bot(22), v === 'agents', '']] : []);
-    return `<nav class="tabbar" aria-label="Main" style="--tabs:${tabs.length}">${tabs.map(([arg, label, icon, on, n]) => `<button class="tab" data-act="go" data-arg="${arg}"${on ? ' aria-current="page"' : ''}>${icon}<span>${label}</span>${n}</button>`).join('')}</nav>`;
+    const count = (n, what) => (n ? `<span class="badge" data-val="${what}-n"><span class="vh">, </span>${n}<span class="vh"> ${what === 'needs' ? 'need you' : 'need action'}</span></span>` : '');
+    const items = [
+      ['home', 'Chat', I.chat(22), v === 'home', count(me().op ? 0 : k, 'needs')],
+      ['workflows', 'Workflows', I.grid(22), ['workflows', 'workflow'].includes(v) || (v === 'run' && !swRun), count(me().op ? k : 0, 'needs')],
+      ['software', 'Watchlist', I.box(22), v === 'software' || swRun, count(swAttnCount(), 'sw')],
+    ];
+    return `<nav class="rail" aria-label="Main">${items.map(([arg, label, icon, on, n]) => `<button class="rail-a" data-act="go" data-arg="${arg}"${on ? ' aria-current="page"' : ''}>${icon}<span>${label}</span>${n}</button>`).join('')}</nav>`;
   }
 
   /* One main button per screen: only the first card keeps it. */
@@ -2498,11 +2528,23 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
 
   /* What needs the person reading, as one full card and then one-line rows. Shared by Workflows and an Approver's Home. */
+  /* Needs you is grouped (ADR 0043): Do now holds stops and approvals, Set up holds keys and missing sources. needs() stays the one list. */
+  const NEED_GROUPS = [['now', 'Do now'], ['set', 'Set up']];
+  const needGroup = (t) => (t.kind === 'tool' || t.rank === 3 ? 'set' : 'now');
+  const byGroup = (items) => NEED_GROUPS.flatMap(([g]) => items.filter((t) => needGroup(t) === g));
   function needsSection(items) {
     const n = items.length;
+    const sorted = byGroup(items);
+    const body = NEED_GROUPS.map(([g, label]) => {
+      const list = sorted.filter((t) => needGroup(t) === g);
+      if (!list.length) return '';
+      const lead = list[0] === sorted[0];
+      const rest = lead ? list.slice(1) : list;
+      return `<div class="ngroup" role="group" aria-labelledby="ng-${g}"><h3 id="ng-${g}">${label}</h3>${lead ? taskCard(list[0]) : ''}${rest.length ? `<ul class="queue" aria-label="${label}" data-flip-group="queue-${g}">${rest.map((x, i) => queueRow(x, i + 1)).join('')}</ul>` : ''}</div>`;
+    }).join('');
     return `<section class="section" aria-labelledby="needs-h" data-flip-group="needs">
       <h2 id="needs-h">Needs you <span class="count" data-val="needs-count">${n}</span></h2>
-      ${taskCard(items[0])}${n > 1 ? `<ul class="queue" aria-label="Also needs you" data-flip-group="queue">${items.slice(1).map((x, i) => queueRow(x, i + 1)).join('')}</ul>` : ''}
+      ${body}
     </section>`;
   }
   /* The workflows in the order they run next, paused ones last. */
@@ -2521,9 +2563,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function needsStrip(items, max = 3, unbuilt = '', o = {}) {
     const n = items.length;
     const primary = o.primary !== false;
+    const shown = byGroup(items).slice(0, max);
     return `<section class="section needs" aria-labelledby="needs-h" data-flip-group="needs"${unbuilt ? ` data-unbuilt="${unbuilt}"` : ''}>
       <h2 id="needs-h">Needs you <span class="count" data-val="needs-count">${o.total || n}</span></h2>
-      <ul class="queue" data-flip-group="nrows">${items.slice(0, max).map((t, i) => needRow(t, i, primary)).join('')}</ul>
+      ${NEED_GROUPS.map(([g, label]) => { const list = shown.filter((t) => needGroup(t) === g); return list.length ? `<div class="ngroup" role="group" aria-labelledby="ng-${g}"><h3 id="ng-${g}">${label}</h3><ul class="queue" data-flip-group="nrows-${g}">${list.map((t) => needRow(t, shown.indexOf(t), primary)).join('')}</ul></div>` : ''; }).join('')}
       ${n > max ? '<p class="small"><button class="linkbtn" data-act="go" data-arg="workflows">See all on Workflows</button></p>' : ''}
     </section>`;
   }
@@ -2542,6 +2585,80 @@ details > .m-close { animation: fold 140ms ease-in both; }
       ${n ? needsSection(items) : `<div class="quiet"><b>All quiet</b>${firstLive ? `Next up: ${nextUp(firstLive)}.` : 'Nothing is scheduled yet.'}</div>`}
       <p class="note" style="margin-top:28px">You’re an Approver, so you decide on requests. Operators set up workflows.</p>
     </div>`;
+  }
+
+  /* One row at the top of a conversation names the most urgent item (ADR 0043). Open goes to that item, and N more opens the list. */
+  function needOpen(t) {
+    if (t.wf) return { act: S.n8nChg[t.wf] ? 'workflow' : 'run', arg: t.wf };
+    if (/^GitHub can’t find/.test(t.title)) return { act: 'go', arg: 'software' };
+    const m = t.actions.match(/data-act="([^"]+)"(?: data-arg="([^"]*)")?/);
+    return m ? { act: m[1], arg: m[2] } : null;
+  }
+  function pinnedLine() {
+    const items = byGroup(needs());
+    if (!items.length) return '';
+    const t = items[0];
+    const o = needOpen(t);
+    const more = items.length - 1;
+    return `<div class="pinned" role="region" aria-label="Most urgent">
+      <span class="ico ${t.kind}">${t.icon}</span>
+      <div class="pinned-text"><b>${t.title}</b><span>${t.held || (t.why ? firstSentence(t.why) : t.meta)}</span></div>
+      ${o ? `<button class="btn sm" data-act="${o.act}"${o.arg !== undefined ? ` data-arg="${o.arg}"` : ''}>Open<span class="vh">: ${firstSentence(t.title)}</span></button>` : ''}
+      ${more ? `<button class="linkbtn" data-act="go" data-arg="workflows">${more} more<span class="vh"> that need you</span></button>` : ''}
+    </div>`;
+  }
+  const chatMode = () => S.view.name === 'home' && me().op && !!curModel() && S.chat.msgs.length > 0;
+  /* The side panel (ADR 0043) shows one item opened from a card in the chat, as a summary. It keeps no history. */
+  const dockVar = () => { const d = $app.querySelector('.chatdock'); if (d) document.documentElement.style.setProperty('--dock', `${d.offsetHeight}px`); };
+  const narrow = () => window.matchMedia('(max-width: 860px)').matches;
+  window.matchMedia('(max-width: 860px)').addEventListener('change', () => { if (S.panel) render(); });
+  function itemOf(act, arg, el) {
+    if (el && el.dataset.open) { const [kind, id] = el.dataset.open.split(':'); return { kind, id }; }
+    if (act === 'workflow' && arg !== 'sw') return { kind: 'workflow', id: arg };
+    if (act === 'run') return { kind: 'run', id: arg };
+    return null;
+  }
+  const sameItem = (a, b) => !!a && !!b && a.id === b.id && a.kind === b.kind;
+  const swRow = (key) => watchRows().concat(S.added.map((a, i) => ({ key: `add${i}`, name: a.name, kind: a.kind, repo: a.repo, ours: a.ours || 'Not known', newest: '?' }))).find((r) => r.key === key && !S.removed.includes(key));
+  const runTone = { waiting: { tone: 'wait', label: 'Waiting for a yes' }, failed: { tone: 'bad', label: 'Stopped' }, expired: { tone: 'off', label: 'No answer' }, done: { tone: 'ok', label: 'Done' } };
+  function panelView(p) {
+    if (p.kind === 'workflow') {
+      if (!has(p.id)) return { title: 'Workflow', body: '<p class="muted">That workflow isn’t here any more.</p>' };
+      const r = R(p.id);
+      const st = status(p.id);
+      const t = stoppedNow(p.id) ? TROUBLE[p.id]() : null;
+      const problem = t ? `<div class="sp-problem">${says(`${t.happened} ${t.next}`)}${me().op && t.act ? `<div class="btns">${troubleBtn(t)}</div>` : ''}</div>` : '';
+      const flip = !me().op || p.id === 'sw' ? '' : S.paused[p.id] ? `<button class="btn sm" data-act="resume" data-arg="${p.id}">Resume</button>` : `<button class="btn sm" data-act="pause" data-arg="${p.id}">${I.pause(14)}Pause</button>`;
+      return { title: esc(r.name), page: `workflow:${p.id}`, body: `<div>${pills(p.id)}</div><p>${r.what}</p>${problem}
+        <dl class="kv"><dt>Last run</dt><dd>${st.last}</dd><dt>Next run</dt><dd>${S.paused[p.id] ? 'Paused' : r.next}</dd></dl>
+        <div class="btns">${hasRun(p.id) ? `<button class="linkbtn" data-act="panelPage" data-arg="run:${p.id}">Open the run</button>` : ''}${flip}</div>` };
+    }
+    if (p.kind === 'software') {
+      const row = swRow(p.id);
+      if (!row) return { title: 'Software', body: '<p class="muted">That software isn’t on the Software watchlist any more.</p>' };
+      const state = row.newest === '?' ? '<span class="pill bad">Can’t check</span>' : row.ours === row.newest ? '<span class="pill ok">Up to date</span>' : '<span class="pill wait">New version</span>';
+      return { title: esc(row.name), page: 'software', body: `<div>${state}</div>
+        <dl class="kv"><dt>You run</dt><dd>${esc(row.ours)}</dd><dt>Newest</dt><dd>${row.newest === '?' ? 'Not known' : esc(row.newest)}</dd><dt>Checked by</dt><dd>The Version checker, every Monday, on ${srcName(row.kind || 'github')}</dd></dl>` };
+    }
+    const m = runModel(p.id);
+    const r = R(m.workflow);
+    if (m.state === 'waiting' && canApprove(p.id)) return { title: esc(r.name), page: `run:${p.id}`, body: approvePanel(p.id, true) };
+    const steps = m.stations.map((s, i) => {
+      const st = s.skip && i <= m.end ? 'skip' : i < m.end ? 'done' : i === m.end ? ({ failed: 'fail', waiting: 'wait', expired: 'noans' }[m.state] || 'done') : 'todo';
+      const said = { done: 'Done: ', fail: 'Stopped: ', wait: 'Waiting: ', noans: 'No answer: ', skip: 'Not needed: ', todo: 'Not reached yet: ' }[st];
+      return `<li class="${st}"><span class="vh">${said}</span>${s.label}</li>`;
+    }).join('');
+    const t = m.state === 'failed' && TROUBLE[p.id] ? TROUBLE[p.id]() : null;
+    const answers = t ? `<dl class="qa"><dt>What happened</dt><dd>${t.happened}</dd></dl><dl class="qa"><dt>What was affected</dt><dd>${t.affected}</dd></dl><dl class="qa"><dt>Can it be fixed safely</dt><dd>${t.safe}</dd></dl>${t.act && me().op ? `<div class="btns">${troubleBtn(t)}</div>` : t.act ? `<p class="note">${t.deny}</p>` : ''}` : '';
+    return { title: esc(r.name), page: `run:${p.id}`, body: `<div>${pill(runTone[m.state] || runTone.done)}</div><p>${m.headline}</p><ol class="sp-steps" aria-label="Steps of this run">${steps}</ol>${answers}` };
+  }
+  function sidePanel() {
+    if (!S.panel) return '';
+    const v = panelView(S.panel);
+    return `<aside class="sidepanel" id="sidepanel" aria-labelledby="sp-h"${narrow() ? ' role="dialog" aria-modal="true"' : ''}>
+      <div class="sp-bar"><h2 id="sp-h" tabindex="-1">${v.title}</h2><div class="sp-btns">${v.page ? `<button class="btn sm" data-act="panelPage" data-arg="${v.page}">More details</button>` : '<span></span>'}<button class="btn sm" data-act="panelClose">Close</button></div></div>
+      <div class="sp-body">${v.body}</div>
+    </aside>`;
   }
 
   /* Home for an Operator (spec 5): a greeting with the state in one line, the Planner's box, three suggestions from that
@@ -2588,17 +2705,26 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const dayOne = !routineIds().length;
     if (!curModel()) return offlineHome();
     const items = homeNeeds();
-    const hello = !empty ? '<h1 tabindex="-1">Planner</h1>'
-      : dayOne ? '<h1 tabindex="-1">Which software should we keep up to date?</h1><p class="lead">Ask about your watchlist, or tell me what software to watch.</p>'
+    if (!empty) {
+      return `<div class="home planner chatlayout" data-unbuilt="The Planner’s box on Home (ADR 0037)">
+        <div class="chatcol"${S.panel && narrow() ? ' inert' : ''}>
+          <div class="chatbar"><h1 class="vh" tabindex="-1">Planner</h1>${pinnedLine()}<div class="btns chatnew"><button class="linkbtn" data-act="newChat">New chat</button></div></div>
+          <div class="chatscroll"><div class="chatin">${threadHTML()}</div></div>
+          <div class="chatdock">${composer(c, false)}</div>
+        </div>
+        ${sidePanel()}
+      </div>`;
+    }
+    const hello = dayOne
+      ? '<h1 tabindex="-1">Which software should we keep up to date?</h1><p class="lead">Ask about your watchlist, or tell me what software to watch.</p>'
         : `<h1 tabindex="-1">Good morning! ${me().name}</h1><p class="lead">${stateLine(items)}</p>`;
     return `<div class="home planner" data-unbuilt="The Planner’s box on Home (ADR 0037)">
-      <div class="welcome${empty ? '' : ' compact'}">${face('lead', empty ? 128 : 52, c.hero, { live: empty && c.hero === 'idle', id: 'hero' })}<div class="hello-text">${hello}</div></div>
-      ${empty ? '' : threadHTML()}
-      ${composer(c, empty)}
-      ${empty ? `<div class="chips examples" role="group" aria-label="${onWatchlist() ? 'Suggestions' : 'Starting points'}">${suggestions().map((e, i) => `<button class="chip" data-act="example" data-arg="${i}">${e}</button>`).join('')}</div>` : '<div class="btns"><button class="linkbtn" data-act="newChat">New chat</button></div>'}
-      ${empty && items.length ? needsStrip(items) : ''}
-      ${empty && (dayOne || c.abil) ? abilitiesHTML() : ''}
-      ${empty && !dayOne ? `<p class="small muted" style="text-align:center"><button class="linkbtn" data-act="abil" data-unbuilt="What can I ask for">${c.abil ? 'Hide what I can do' : 'What can I ask for?'}</button></p>` : ''}
+      <div class="welcome">${face('lead', 128, c.hero, { live: c.hero === 'idle', id: 'hero' })}<div class="hello-text">${hello}</div></div>
+      ${composer(c, true)}
+      <div class="chips examples" role="group" aria-label="${onWatchlist() ? 'Suggestions' : 'Starting points'}">${suggestions().map((e, i) => `<button class="chip" data-act="example" data-arg="${i}">${e}</button>`).join('')}</div>
+      ${items.length ? needsStrip(items) : ''}
+      ${dayOne || c.abil ? abilitiesHTML() : ''}
+      ${!dayOne ? `<p class="small muted" style="text-align:center"><button class="linkbtn" data-act="abil" data-unbuilt="What can I ask for">${c.abil ? 'Hide what I can do' : 'What can I ask for?'}</button></p>` : ''}
     </div>`;
   }
   /* Home with no AI model (spec 5.4), in the built app's words: agent workflows can't run and new ones can't be planned
@@ -2700,7 +2826,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* A plan's steps. Each step keeps its place by position, so a step that changes is highlighted, and an added or removed one slides the rest. */
   function stepsList(steps, inline, key = 'steps') {
     const who = (w) => (!w ? '' : w === 'platform' ? `<span class="sysav app" style="width:26px;height:26px">${I.mark()}</span>` : face(w, 26));
-    const newTag = '<span class="tag">New agent, saved to the Agent library when you turn this on</span>';
+    const newTag = '<span class="tag">New agent, saved under How it works, in Settings, when you turn this on</span>';
     return `<ol class="steps${inline ? ' inline' : ''}" data-flip-group="${key}">${steps.map(([what, kind, how, w, isNew], i) => `<li data-flip="${key}:${i}"><div>${who(w)}<div class="what" data-val="${key}:${i}">${what}</div><div class="how"><span class="tag ${kind || ''}">${how}</span>${isNew ? newTag : ''}</div></div></li>`).join('')}</ol>`;
   }
 
@@ -2780,6 +2906,14 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return base.concat(ok);
   }
 
+  /* The count line the page opens with: what has a newer version and what can't be checked, from the same rows as the list. */
+  function watchLine() {
+    const live = swLive().concat(S.added.map((a, i) => ({ key: `add${i}`, rank: 2 })).filter((r) => !S.removed.includes(r.key)));
+    const newer = live.filter((r) => r.rank === 0).length;
+    const cant = live.filter((r) => r.rank === 1).length;
+    if (!live.length) return 'Everything your team runs, in one list.';
+    return newer || cant ? [newer ? `${newer} ${newer === 1 ? 'has' : 'have'} a newer version` : '', cant ? `${cant} can’t be checked` : ''].filter(Boolean).join(' · ') : 'Everything is up to date.';
+  }
   function softwareView() {
     const day1 = S.firstDay;
     const q = S.find.software.trim().toLowerCase();
@@ -2795,7 +2929,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const table = `<div class="scroll-x"><table class="sw-table" role="table"><thead role="rowgroup"><tr role="row"><th role="columnheader">Software</th><th role="columnheader">We run</th><th role="columnheader">Newest</th><th role="columnheader">Status</th><th role="columnheader"><span class="vh">Actions</span></th></tr></thead><tbody role="rowgroup" data-flip-group="swt:all">${rows.map((r) => {
       const open = S.swOpen === r.key;
       const hist = r.hist || history(r.key);
-      return `<tr role="row" data-flip="sw:${r.key}"><td role="cell"><b>${esc(r.name)}</b><div class="src">${srcName(r.kind || 'github')} · ${srcLink(r.kind, r.repo, esc(r.repo))}</div></td><td role="cell" data-label="We run" data-val="swv:${r.key}:ours">${esc(r.ours)}<div class="src">${r.from}</div></td><td role="cell" data-label="Newest" data-val="swv:${r.key}:new">${r.newest}${r.cross ? `<div class="src">${r.cross}</div>` : ''}</td><td role="cell" data-val="swv:${r.key}:st">${r.status}</td>
+      return `<tr role="row" data-flip="sw:${r.key}"><td role="cell"><b>${esc(r.name)}</b><div class="src">Checked on ${srcName(r.kind || 'github')} · ${srcLink(r.kind, r.repo, esc(r.repo))}</div></td><td role="cell" data-label="We run" data-val="swv:${r.key}:ours">${esc(r.ours)}<div class="src">${r.from}</div></td><td role="cell" data-label="Newest" data-val="swv:${r.key}:new">${r.newest}${r.cross ? `<div class="src">${r.cross}</div>` : ''}</td><td role="cell" data-val="swv:${r.key}:st">${r.status}</td>
         <td role="cell" class="sw-acts"><button class="linkbtn" data-act="swHist" data-arg="${r.key}" aria-expanded="${open}"${open ? ` aria-controls="hist-${r.key}"` : ''}>${open ? 'Hide history' : 'History'}<span class="vh"> of ${esc(r.name)}</span></button>${op ? ` <button class="linkbtn" data-act="removeSw" data-arg="${r.key}">Remove<span class="vh"> ${esc(r.name)}</span></button>` : ''}</td></tr>
         ${open ? `<tr role="row" class="hist" id="hist-${r.key}" data-flip="swh:${r.key}" data-enter="reveal"><td role="cell" colspan="5"><ol class="timeline">${hist.map(([d, t]) => `<li><b>${d}</b><span>${t}</span></li>`).join('')}</ol></td></tr>` : ''}`;
     }).join('')}</tbody></table></div>`;
@@ -2813,7 +2947,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const findings = full && rows.some((x) => x.key === 'lj') ? `<h3 class="attn-h">Security risks ${PLANNED_TAG}</h3>${riskCard('lj', waiting ? '<span class="pill wait">Ticket waiting for a yes</span>' : S.sw === 'approved' ? ticketBtn('MOCK-16') : '<span class="pill off">Proposed again next Monday</span>')}` : '';
     const ending = full && !day1 ? SUPPORT_ENDING.filter((x) => hit(x.name, '')) : [];
     const endingHtml = ending.length ? `<h3 class="attn-h">Support ending ${PLANNED_TAG}</h3><div class="panel"><p class="note">From endoflife.date, read by the Version checker. After these dates, these versions get no more fixes, including security fixes.</p><div class="rows">${ending.map((x) => `<div class="row"><div><div class="row-name">${x.name}</div><div class="row-sub">Security fixes end ${x.ends}, ${x.left}. ${extLink(`https://endoflife.date/${x.slug}`, 'Dates on endoflife.date', 'endoflife.date')}</div></div><span class="pill wait">${I.clock(12)}Plan an upgrade</span></div>`).join('')}</div></div>` : '';
-    const attnSec = attn.length || findings || endingHtml ? `<section class="section" aria-labelledby="sw-attn-h"><h2 id="sw-attn-h">Needs attention <span class="count">${attn.length + (findings ? 1 : 0) + ending.length}</span></h2>${attn.join('')}${findings}${endingHtml}</section>` : '';
+    const attnSec = attn.length || findings || endingHtml ? `<section class="section" aria-labelledby="sw-attn-h"><h2 id="sw-attn-h">Needs attention <span class="count">${swAttnCount(hit)}</span></h2>${attn.join('')}${findings}${endingHtml}</section>` : '';
 
     /* Add software: a name, then a guess that says where it came from and was checked. */
     const f = S.swForm;
@@ -2861,7 +2995,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       ${S.editing === 'sw' ? `<div data-flip="ed:s:sw" data-enter="reveal">${schedEditor('sw')}</div>` : ''}
       ${S.editingAppr === 'sw' ? `<div data-flip="ed:a:sw" data-enter="reveal">${apprEditor('sw')}</div>` : ''}
     </div></section>`;
-    return `<div class="pagehead"><div><h1 tabindex="-1">Software watchlist</h1><p>Everything your team runs, in one list.</p></div>
+    return `<div class="pagehead"><div><h1 tabindex="-1">Software watchlist</h1><p>${watchLine()}</p></div>
         ${day1 ? '' : '<button class="btn" data-act="checkNow">Check now</button>'}</div>
       ${attnSec}${watching}${how}
       <p class="note" style="margin-top:24px">Ask the Planner on Home for a release check, and it adds the software here.</p>`;
@@ -3045,7 +3179,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
 
   /* The approval panel (spec 10.4): what will change, why, who asked, what happens, and the reader's part. The platform
      checks the decision again on the server. This summary helps the reader; it is not the check. */
-  function approvePanel(id) {
+  function approvePanel(id, short) {
     const ok = canApprove(id);
     const why = partyWhy(id, S.user);
     const sw = id === 'sw';
@@ -3068,8 +3202,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
             : 'Only an Approver can decide.';
     return `<div class="panel approval">
       <dl class="qa"><dt>What will change</dt><dd><b>${sw ? '3 tickets will be created in Jira project MOCK on the practice Jira' : w.panelTitle}</b>${body}<p class="note">This is exactly what will be written, and nothing else.</p></dd></dl>
-      <dl class="qa" data-unbuilt="Why, in the approval panel"><dt>Why</dt><dd>${found ? `<ul class="found">${found}</ul>` : 'See what each agent did, below.'}</dd></dl>
-      <dl class="qa" data-unbuilt="Who asked, in the approval panel"><dt>Who asked</dt><dd>${esc(R(m.workflow).name)}, set up by ${nm(ownerOf(m.workflow))}. ${first.msg ? first.msg.text : ''}${first.sub ? ` (${first.sub})` : ''}</dd></dl>
+      ${short ? '' : `<dl class="qa" data-unbuilt="Why, in the approval panel"><dt>Why</dt><dd>${found ? `<ul class="found">${found}</ul>` : 'See what each agent did, below.'}</dd></dl>
+      <dl class="qa" data-unbuilt="Who asked, in the approval panel"><dt>Who asked</dt><dd>${esc(R(m.workflow).name)}, set up by ${nm(ownerOf(m.workflow))}. ${first.msg ? first.msg.text : ''}${first.sub ? ` (${first.sub})` : ''}</dd></dl>`}
       <dl class="qa"><dt>What happens</dt><dd><span>Nothing is written until you say yes. ${askLine(q, S.user, true)}${namedTag(q)} ${sw ? 'You approve or decline the whole check. If you decline, the tickets are proposed again next Monday.' : 'If you decline, the run stops there.'}</span></dd></dl>
       <dl class="qa" data-unbuilt="Your part, in the approval panel"><dt>Your part</dt><dd>${part}</dd></dl>
       ${ok ? `<div class="btns"><button class="btn good" data-act="approve" data-arg="${id}">${I.check(16)}Approve</button><button class="btn bad" data-act="decline" data-arg="${id}">Decline</button></div>` : ''}
@@ -3316,7 +3450,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const [tone, label] = stateOf(id);
       let act = actionFor(id);
       if (act) { if (mainUsed) act = demote(act); mainUsed = true; }
-      return `<li class="row"><div><button class="linkbtn" data-act="workflow" data-arg="${id}">${esc(r.name)}</button><span class="row-sub">${pill({ tone, label })}${S.paused[id] ? '' : `<span>Next run ${r.next}</span>`}</span></div>${act}</li>`;
+      return `<li class="row"><div><button class="linkbtn" data-act="workflow" data-arg="${id}">${esc(r.name)}</button><span class="row-sub">${pill({ tone, label })}${S.paused[id] ? '' : `<span>Next run ${r.next}</span>`}</span></div>${act ? `<span data-flow-of="workflow:${id}">${act}</span>` : ''}</li>`;
     }).join('')}</ul></div>`;
   }
   /* The AI troubleshooter's four answers for each stop in the sample data (spec 10.3). The Planner's answer, the run page
@@ -3352,7 +3486,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return `<div class="pcard why" data-pres="why:${m.id}" data-unbuilt="Planner answers about your workflows">
       <div class="pcard-h">${face('trouble', 32)}<h3>AI troubleshooter</h3></div>
       <div class="pcard-s"><dl class="qa"><dt>What happened</dt><dd>${t.happened}</dd></dl><dl class="qa"><dt>What was affected</dt><dd>${t.affected}</dd></dl><dl class="qa"><dt>Can it be fixed safely</dt><dd>${t.safe}</dd></dl><dl class="qa"><dt>What to do</dt><dd>${t.next}</dd></dl></div>
-      <div class="pcard-f">${me().op ? troubleBtn(t, true) : ''}<button class="btn sm" data-act="run" data-arg="${id}">See the run</button></div>
+      <div class="pcard-f">${me().op ? `<span data-flow-of="run:${id}">${troubleBtn(t, true)}</span>` : ''}<button class="btn sm" data-act="run" data-arg="${id}">See the run</button></div>
     </div>`;
   }
   const mineSay = () => { const n = needs().length; return n ? `${n === 1 ? '1 thing needs' : `${n} things need`} you.` : 'Nothing needs you right now.'; };
@@ -3382,7 +3516,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const stop = c.stopping
       ? `<span class="btns" role="group" aria-label="Stop watching ${esc(r.name)}"><span>Stop watching ${esc(r.name)}? It won’t be checked any more.</span><button class="btn sm" data-act="stopKeep" data-mid="${m.id}">Keep it</button><button class="btn sm bad" data-act="stopYes" data-mid="${m.id}">Yes, stop watching<span class="vh"> ${esc(r.name)}</span></button></span>`
       : `<button class="btn sm" data-act="stopAsk" data-mid="${m.id}">Stop watching<span class="vh"> ${esc(r.name)}</span></button>`;
-    return `<div class="btns sw-acts"><button class="btn sm" data-act="go" data-arg="software">Open<span class="vh"> ${esc(r.name)}</span> on the Software page</button>${stop}</div><div class="btns"><button class="btn sm" data-act="checkNow">Check all software now</button></div>`;
+    return `<div class="btns sw-acts"><button class="btn sm" data-act="go" data-arg="software" data-open="software:${r.key}">Open<span class="vh"> ${esc(r.name)}</span> on the Software page</button>${stop}</div><div class="btns"><button class="btn sm" data-act="checkNow">Check all software now</button></div>`;
   };
   const dataCard = (m) => `<p class="looked small muted">Looked at: ${m.card.looked.map((k) => `<button class="linkbtn" data-act="go" data-arg="${LOOKED[k][1]}">${LOOKED[k][0]}</button>`).join(', ')}</p>${dataActions(m)}`;
   /* A short follow-up after an answer about the watchlist: "and Redis?". A name on the list is a question about that
@@ -3410,7 +3544,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const ANSWERS = {
     setup: { say: () => 'Here’s what I understood. I filled in what I could.', card: (m) => setupCard(m) },
     watch: { say: (a) => `${a.word ? `You mentioned “${esc(a.word)}”, so this` : `${esc(a.name)} is software, so it`} belongs on the Software watchlist, which checks all your software every Monday.`, card: (m) => watchCard(m) },
-    listed: { say: (a) => `${esc(a.name)} is already on the Software watchlist.`, card: () => '<div class="btns"><button class="btn sm" data-act="go" data-arg="software">Open it</button></div>' },
+    listed: { say: (a) => `${esc(a.name)} is already on the Software watchlist.`, card: (m) => { const r = liveSoftware().find((x) => x.name === m.card.name); return `<div class="btns"><button class="btn sm" data-act="go" data-arg="software"${r ? ` data-open="software:${r.key}"` : ''}>Open it</button></div>`; } },
     which: { say: (a) => `You mentioned “${esc(a.word)}”, so this belongs on the Software watchlist. Which software should I watch?` },
     back: { say: () => 'No problem. Ask for something else whenever you like.' },
     part: { say: (a) => `I can ${a.can}, but ${a.cant}. ${a.cap === 'jiraComp' ? NEW_TOOL : CAPS[a.cap].why}`, card: (m) => partCard(m), mood: 'sorry' },
@@ -3470,7 +3604,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The set-up card (spec 7): what will happen, when, what needs a yes, then how it works, collapsed, and Turn it on. */
   function setupCard(m) {
     const c = m.card;
-    if (c.done) return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(c.done.name)} is on.</b><span>First run ${c.done.next}, Singapore time. Before its ticket is created, any Approver on your team except you is asked for a yes in Teams.${c.done.newAgent ? ` The ${AGENTS[c.done.newAgent].name} is saved in the Agent library.` : ''}</span><span>${PROMISES}</span><span class="btns">${c.done.id === 'conf' ? '<button class="btn primary sm" data-act="testRun">Do a test run</button>' : ''}<button class="linkbtn" data-act="go" data-arg="workflows">See it in Workflows</button>${c.done.id === 'conf' ? '<span class="small muted">A test run does the real work once, so it still waits for a yes.</span>' : ''}</span></div></div>`;
+    if (c.done) return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(c.done.name)} is on.</b><span>First run ${c.done.next}, Singapore time. Before its ticket is created, any Approver on your team except you is asked for a yes in Teams.${c.done.newAgent ? ` The ${AGENTS[c.done.newAgent].name} is saved under How it works, in Settings.` : ''}</span><span>${PROMISES}</span><span class="btns">${c.done.id === 'conf' ? '<button class="btn primary sm" data-act="testRun">Do a test run</button>' : ''}<button class="linkbtn" data-act="go" data-arg="workflows">See it in Workflows</button>${c.done.id === 'conf' ? '<span class="small muted">A test run does the real work once, so it still waits for a yes.</span>' : ''}</span></div></div>`;
     if (c.discarded) return '<p class="small muted">Discarded.</p>';
     if (c.saved) return '<p class="small muted">Saved as a draft. Open it from Workflows to carry on.</p>';
     const w = S.wiz;
@@ -3501,7 +3635,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       <details class="more how" data-unbuilt="How this workflow works"><summary>How this workflow works</summary><div class="more-body">
         ${stepsList(steps, true, 'plan:draft')}
         <p class="note">${readsLimit(f.tickets === 'open' ? '' : f.period)}</p>
-        <p class="agents-line">${face('jira', 26)}<span><b>${AGENTS.jira.name}</b> reads the tickets.</span>${face(writer, 26)}<span><b>${AGENTS[writer].name}</b> ${job}.${isNewAgent(writer) ? ' <span class="tag">New agent, saved to the Agent library when you turn this on</span>' : ''}</span></p>
+        <p class="agents-line">${face('jira', 26)}<span><b>${AGENTS.jira.name}</b> reads the tickets.</span>${face(writer, 26)}<span><b>${AGENTS[writer].name}</b> ${job}.${isNewAgent(writer) ? ' <span class="tag">New agent, saved under How it works, in Settings, when you turn this on</span>' : ''}</span></p>
         <p class="note">Tools: ${TOOLS.jiraSearch[0]} and ${TOOLS.jiraRead[0]} read Jira. ${TOOLS.jiraCreate[0]} writes to Jira, after a yes.</p>
       </div></details>
       <div class="pcard-f"><button class="btn primary" data-act="turnOn"${left.length ? ' disabled' : ''}>Turn it on</button>
@@ -3886,11 +4020,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
 
   /* Usage is a design only, so its tab shows with Planned features. */
-  const SET_TABS = () => [['connections', 'Connections'], ['people', 'People and permissions'], ['model', 'AI model']].concat(shows('usage') ? [['usage', 'Usage']] : []);
+  const SET_TABS = () => [['connections', 'Connections'], ['people', 'People and permissions'], ['model', 'AI model']].concat(shows('usage') ? [['usage', 'Usage']] : [], me().op ? [['how', 'How it works']] : []);
   function settingsView() {
     if (!SET_TABS().some(([k]) => k === S.setTab)) S.setTab = 'connections';
     const attention = { model: !curModel() || !!S.modelPending, connections: expiring().length > 0 || Object.values(S.conns).some((x) => x.down), people: Object.values(S.roles).some((r) => r.pendingAp), usage: usagePct() >= 80 };
-    const panel = { model: modelPanel, connections: connPanel, people: peoplePanel, usage: usagePanel }[S.setTab]();
+    const panel = { model: modelPanel, connections: connPanel, people: peoplePanel, usage: usagePanel, how: libraryView }[S.setTab]();
     return `<div class="narrow"><div class="pagehead"><div><h1 tabindex="-1">Settings</h1><p>For whoever looks after the platform. Every change here is recorded with who made it.</p></div></div>
       <div class="seg set-tabs" role="group" aria-label="Settings sections">${SET_TABS().map(([k, l]) => `<button data-act="setTab" data-arg="${k}" aria-pressed="${S.setTab === k}">${l}${attention[k] ? '<span class="tab-dot" aria-hidden="true"></span><span class="vh"> (needs attention)</span>' : ''}</button>`).join('')}</div>
       <div style="display:grid;gap:20px">${panel}</div></div>`;
@@ -4118,7 +4252,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const specialists = list.filter((a) => !a.platform);
     const tab = S.libTab;
     const lead = { can: 'What the platform can do for software versioning. An agent can use only what is listed under I can.', agents: 'The agents behind software version checks. Anything that changes data waits for a yes.', tools: 'Tools are how agents reach GitHub and Jira. A tool that changes data waits for a yes, every time.' }[tab];
-    const head = `<div class="pagehead"><div><h1 tabindex="-1">Agent library</h1><p>${lead}</p></div></div>
+    const head = `<div class="pagehead"><div><h2 id="how-h">How it works</h2><p>${lead}</p></div></div>
       <div class="seg lib-tabs" role="group" aria-label="Show">${[['can', 'What it can do', 0], ['agents', 'Agents', list.length], ['tools', 'Tools', Object.keys(TOOLS).filter((k) => toolLive(k) && (k === 'jiraComp' || (CAPS[capOfTool(k)] || {}).focus)).length]].map(([k, l, n]) => `<button data-act="libTab" data-arg="${k}" aria-pressed="${tab === k}">${l}${n ? ` <span class="seg-n">${n}</span>` : ''}</button>`).join('')}</div>`;
     if (tab === 'tools') return head + toolsTab();
     if (tab === 'can') return head + capabilitiesTab();
@@ -4132,7 +4266,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const toolWorkflows = (k) => { const ids = toolUsers(k).map((a) => a.id); return routineIds().filter((w) => (R(w).agents || []).some((id) => ids.includes(id))); };
   const sentToTeam = (sys) => S.teamReqs.some((q) => q.sys === sys);
   /* Nobody is named yet as the reader of team requests (ADR 0038, proposed), so the confirmation claims no delivery. */
-  const TEAM_SAVED = 'Saved as a request for the team. You can follow it on Tools, in the Agent library.';
+  const TEAM_SAVED = 'Saved as a request for the team. You can follow it on Tools, under How it works in Settings.';
   function toolLog(k) {
     if (S.firstDay) return [];
     const l = TOOL_INFO[k].log.slice();
@@ -4556,9 +4690,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
       case 'workflow': main = routineView(v.id); break;
       case 'run': main = runView(v.id); break;
       case 'settings': main = settingsView(); break;
-      case 'agents': main = libraryView(); break;
       case 'software': main = softwareView(); break;
       case 'faces': main = facesView(); break;
+    }
+    if (v.fromChat) {
+      const back = `<button class="back" data-act="go" data-arg="home">${I.left(16)}Back to the chat</button>`;
+      main = /<button class="back"/.test(main) ? main.replace(/<button class="back"[\s\S]*?<\/button>/, back) : back + main;
     }
     // The mock redraws the whole page, so it puts keyboard focus back where it was.
     const active = document.activeElement;
@@ -4575,9 +4712,17 @@ details > .m-close { animation: fold 140ms ease-in both; }
     // A redraw keeps what the person opened and where they scrolled.
     const opened = new Set(detailsKeys().filter(([d]) => d.open && !d.dataset.folding && !d.querySelector(':scope > summary[data-act]')).map(([, k]) => k));
     const scrolls = [['.msgs', true], ['.dialog:not(.leave)', sameModal]].map(([sel, keep]) => { const el = keep && $app.querySelector(sel); return el ? [sel, el.scrollTop] : null; }).filter(Boolean);
-    $app.innerHTML = '<button class="skiplink" data-act="skipMain">Skip to main content</button>' + header() + `<main class="sheet" id="main"><div class="wrap" data-flip-group="page">${main}</div></main>` + tabbar() + teamsDrawer() + modal() + toastHtml + testControls();
+    const keepChat = $app.querySelector('.chatscroll');
+    if (keepChat) S.chatScroll = keepChat.scrollTop;
+    $app.innerHTML = '<button class="skiplink" data-act="skipMain">Skip to main content</button>' + header() + `<div class="shell">${rail()}<main class="sheet" id="main"><div class="wrap${chatMode() ? ' chatmode' : ''}" data-flip-group="page">${main}</div></main></div>` + teamsDrawer() + modal() + toastHtml + testControls();
     detailsKeys().forEach(([d, k]) => { if (!d.open && opened.has(k)) d.open = true; });
     scrolls.forEach(([sel, top]) => { const el = $app.querySelector(sel); if (el) el.scrollTop = top; });
+    if (S.panel && chatMode()) $app.querySelectorAll('.thread .btn[data-act], .pinned .btn[data-act], [data-flow-of]').forEach((el) => { if (el.dataset.flowOf ? el.dataset.flowOf.split(':')[1] === S.panel.id && S.panel.kind !== 'software' : sameItem(itemOf(el.dataset.act, el.dataset.arg, el), S.panel)) el.hidden = true; });
+    $app.querySelectorAll('.thread .pcard-f').forEach((f) => { const bs = [...f.querySelectorAll('button')]; if (bs.length && bs.every((b) => b.closest('[hidden]'))) f.hidden = true; });
+    $app.classList.toggle('chatting', chatMode());
+    dockVar();
+    const chatEl = $app.querySelector('.chatscroll');
+    if (chatEl) chatEl.scrollTop = S.chatScroll == null ? chatEl.scrollHeight : S.chatScroll;
     $app.querySelectorAll('#dlg-h:not([tabindex])').forEach((h) => h.setAttribute('tabindex', '-1'));
     const h1 = $app.querySelector('main h1');
     document.title = h1 ? `${h1.textContent.trim()} · AI Workflow Builder` : 'AI Workflow Builder';
@@ -4621,7 +4766,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       focusDecision = false;
       if (d) { d.focus({ preventScroll: true }); d.scrollIntoView({ block: 'start' }); }
       else {
-        const h = $app.querySelector('h1');
+        const h = S.panel && chatMode() ? $app.querySelector('#sp-h') : $app.querySelector('h1');
         if (h) h.focus({ preventScroll: true });
         window.scrollTo(0, 0);
       }
@@ -4633,7 +4778,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const FOCUSABLE = 'button, [href], input, select, textarea, summary, [tabindex]';
   const shown = (el) => (el.checkVisibility ? el.checkVisibility() : el.getClientRects().length > 0);
   const usable = (el) => !el.disabled && el.getAttribute('aria-hidden') !== 'true' && !el.closest('.leave, .m-leaving, [inert]') && shown(el);
-  const REGIONS = 'main, .hdr, .tabbar, .testctl';
+  const REGIONS = 'main, .hdr, .rail, .testctl';
   function inLayer(kind) {
     if (kind === 'dialog' || kind === 'drawer') { const box = $app.querySelector(`.${kind}:not(.leave)`); return box ? [...box.querySelectorAll(FOCUSABLE)] : []; }
     const box = $app.querySelector(kind);
@@ -4707,7 +4852,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* New elements would restart every loop. Pinning running loops to the page clock keeps them smooth across redraws. */
   const keepLoops = () => document.getAnimations().forEach((a) => { if (a.playState === 'running' && a.effect && a.effect.getTiming().iterations === Infinity) a.startTime = 0; });
   const loopWatch = new IntersectionObserver((es) => es.forEach((e) => e.target.classList.toggle('off', !e.isIntersecting)));
-  const viewKey = () => [S.view.name, S.view.id || '', S.user, S.firstDay ? 'one' : 'week', S.view.name === 'agents' ? S.libTab : '', S.view.name === 'settings' ? S.setTab : ''].join('|');
+  const viewKey = () => [S.view.name, S.view.id || '', S.user, S.firstDay ? 'one' : 'week', S.view.name === 'settings' ? `${S.setTab}${S.setTab === 'how' ? S.libTab : ''}` : ''].join('|');
   const glide = (el, dx, dy) => { if (Math.abs(dx) + Math.abs(dy) > 1) el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 220, easing: EASE_OUT }); };
   function motionBefore() {
     const flips = new Map();
@@ -4860,15 +5005,16 @@ details > .m-close { animation: fold 140ms ease-in both; }
 
   /* o.live plays a run from its start, for a run just started or Watch. o.back comes from browser Back or Forward. */
   function go(name, id, o = {}) {
+    if (name === 'agents') { if (!me().op) name = 'home'; else { S.setTab = 'how'; name = 'settings'; } }
     if (name !== 'run') { stopTimer(); P.run = null; }
     if (S.toastAct && !toastNew) { S.toast = null; S.toastAct = null; clearTimeout(toastTimer); }
-    S.view = { name, id };
+    S.view = { name, id, fromChat: !!o.fromChat };
     S.teams = false;
     S.editing = null;
     S.editingAppr = null;
     focusHeading = true;
     if (name === 'run') { P.run = id; openRun(o.live); }
-    if (!o.back) { try { window.history.pushState({ name, id }, '', `#${name}${id ? `/${id}` : ''}`); } catch (e) { /* window.history, because history() here is the watchlist's. Some hosts block it; Back then leaves the mock, as before. */ } }
+    if (!o.back) { try { window.history.pushState({ name, id, fromChat: !!o.fromChat }, '', `#${name}${id ? `/${id}` : ''}`); } catch (e) { /* window.history, because history() here is the watchlist's. Some hosts block it; Back then leaves the mock, as before. */ } }
     render();
   }
   /* Opening a run that needs someone lands on the decision, with the run already drawn. Replay plays it again. */
@@ -4896,14 +5042,17 @@ details > .m-close { animation: fold 140ms ease-in both; }
     S.modal = null;
     S.modalArg = null;
     S.modalBack = [];
-    go(v.name, v.id, { back: true });
+    go(v.name, v.id, { back: true, fromChat: v.fromChat });
   });
   S.view = { name: linkedView() };
+  if (S.view.name === 'agents') { S.view = { name: 'settings' }; S.setTab = 'how'; }
   try { window.history.replaceState({ name: S.view.name }, '', `#${S.view.name}`); } catch (e) { /* As above. */ }
   /* The control that opened a dialog or the Teams drawer gets focus back when it closes. */
   let opener = null;
+  let panelOpener = null;
+  let viaPanel = false;
   /* Several controls can share an action (a card's title and its Details button), so the opener is kept as a selector plus its place among the matches. */
-  const inPage = (sel) => [...$app.querySelectorAll(`:is(.hdr, main, .tabbar) ${sel}`)];
+  const inPage = (sel) => [...$app.querySelectorAll(`:is(.hdr, main, .rail) ${sel}`)];
   function selFor(el) {
     if (!el || el === document.body || !$app.contains(el)) return null;
     const sel = el.id ? `#${CSS.escape(el.id)}` : el.dataset.act ? `[data-act="${el.dataset.act}"]${el.dataset.arg !== undefined ? `[data-arg="${CSS.escape(el.dataset.arg)}"]` : ''}` : null;
@@ -5350,7 +5499,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (runBlocked('issues')) return;
       S.issues = 'fixed';
       retry('issues');
-      go('run', 'issues', { live: true });
+      if (viaPanel) render(); else go('run', 'issues', { live: true });
     },
     report: () => openModal('report', null, '.btn.primary'),
     closeModal: () => closeModal(),
@@ -5365,9 +5514,25 @@ details > .m-close { animation: fold 140ms ease-in both; }
     },
     /* Support moves the case to the next stage the track shows. */
     advance: () => { const next = reportStages().map(([from]) => from).find((from) => from > S.report); if (next) S.report = next; if (S.report === 4) toast(`Dana merged the fix for ${S.supportCase.id}. It’s live.`); render(); },
-    retryNudge: () => { if (runBlocked('nudge')) return; S.nudge = 'waiting'; S.nudgeBy = null; retry('nudge'); go('run', 'nudge', { live: true }); },
+    retryNudge: () => { if (runBlocked('nudge')) return; S.nudge = 'waiting'; S.nudgeBy = null; retry('nudge'); if (viaPanel) render(); else go('run', 'nudge', { live: true }); },
     skipMain: () => { const h = $app.querySelector('main h1'); if (h) { h.focus(); h.scrollIntoView({ block: 'start' }); } },
     askPlanner: () => { go('home'); focusComposer(); },
+    panelOpen: (item, el) => {
+      panelOpener = selFor(el);
+      S.panel = item;
+      render();
+      const h = $app.querySelector('#sp-h');
+      if (h) h.focus({ preventScroll: true });
+    },
+    panelClose: () => {
+      S.panel = null;
+      render();
+      const hits = panelOpener ? inPage(panelOpener.sel) : [];
+      const el = hits[panelOpener ? panelOpener.i : 0] || $app.querySelector('[data-ask]');
+      panelOpener = null;
+      if (el) el.focus({ preventScroll: true });
+    },
+    panelPage: (arg) => { const [kind, id] = arg.split(':'); go(kind === 'software' ? 'software' : kind, id, { fromChat: true }); },
     abil: () => { S.chat.abil = !S.chat.abil; render(); const b = $app.querySelector('[data-act="abil"]'); if (b) b.focus(); },
     ask: () => { const ta = $app.querySelector('[data-ask]'); if (ta) ask(ta.value); },
     example: (i) => ask(suggestions()[+i]),
@@ -5376,6 +5541,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     newChat: () => {
       const kept = saveLive();
       Object.assign(S.chat, { msgs: [], pending: null, hero: 'idle', text: '' });
+      S.chatScroll = null;
+      S.panel = null;
       if (kept) toast('Your draft is saved. Find it on Workflows.');
       render();
       focusComposer();
@@ -5572,7 +5739,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     focusAdd: () => { const i = $app.querySelector('#sw-name'); if (i) { i.scrollIntoView({ block: 'center' }); i.focus({ preventScroll: true }); } },
     testToggle: () => { S.testOpen = !S.testOpen; testNew = S.testOpen; render(); const t = $app.querySelector('.testctl-toggle'); if (t) t.focus(); },
     day: (d) => { S.firstDay = d === 'one'; S.conns = connsFor(S.firstDay); if (['workflow', 'run'].includes(S.view.name)) go('home'); else render(); },
-    user: (u) => { S.user = u; if (!mayOpen(S.view.name)) S.view = { name: 'home' }; render(); },
+    user: (u) => { S.user = u; S.panel = null; if (!mayOpen(S.view.name)) S.view = { name: 'home' }; render(); },
     /* The spec 16 controls. Planned features hidden means nothing planned shows, so a page about one goes back to its list. */
     modelOn: (v) => { S.modelOn = v === 'on'; render(); },
     preview: (v) => { S.preview = v === 'on'; if (!S.preview && ['workflow', 'run'].includes(S.view.name) && !has(S.view.id)) go('workflows'); else render(); },
@@ -5588,11 +5755,18 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (!t) return;
     if (e.detail > 1 && t.classList.contains('scrim')) return;
     if (t.getAttribute('aria-disabled') === 'true') { e.preventDefault(); return; }
+    const fromChat = !!t.closest('.thread, .pinned');
+    const item = fromChat ? itemOf(t.dataset.act, t.dataset.arg, t) : null;
+    if (item) { e.preventDefault(); A.panelOpen(item, t); return; }
+    if (fromChat && t.dataset.act === 'setGo') { e.preventDefault(); S.setTab = t.dataset.arg; go('settings', undefined, { fromChat: true }); return; }
+    if (fromChat && (t.dataset.act === 'workflow' || (t.dataset.act === 'go' && t.dataset.arg !== 'home'))) { e.preventDefault(); go(t.dataset.act === 'workflow' ? 'software' : t.dataset.arg, undefined, { fromChat: true }); return; }
     const fn = A[t.dataset.act];
+    viaPanel = !!t.closest('.sidepanel');
     if (fn) { e.preventDefault(); fn(t.dataset.arg, t.dataset.mid ? msgById(t.dataset.mid) : undefined); }
+    viaPanel = false;
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { if (S.modal) closeModal(); else if (S.teams) A.teams(); else if (S.menu) A.menuClose(); else if (S.toast) hideToast(); else if (S.testOpen) A.testToggle(); return; }
+    if (e.key === 'Escape') { if (S.modal) closeModal(); else if (S.teams) A.teams(); else if (S.menu) A.menuClose(); else if (S.panel && chatMode()) A.panelClose(); else if (S.toast) hideToast(); else if (S.testOpen) A.testToggle(); return; }
     if (S.menu && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key) && e.target.closest('.menu')) {
       e.preventDefault();
       const items = [...$app.querySelectorAll('.menu [role="menuitem"]')];
@@ -5607,8 +5781,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (e.key === 'Enter' && e.target.matches('input[data-input="name"]')) { e.preventDefault(); A.renameDone(); return; }
     if (e.key === 'Enter' && e.target.matches('input[data-card="repoDraft"]')) { e.preventDefault(); const b = $app.querySelector(`[data-act="repoUse"][data-mid="${e.target.dataset.mid}"]`); if (b) b.click(); return; }
     // Keep Tab inside an open dialog.
-    if (e.key === 'Tab' && (S.modal || S.teams)) {
-      const box = $app.querySelector(S.modal ? '.dialog:not(.leave)' : '.drawer:not(.leave)');
+    if (e.key === 'Tab' && (S.modal || S.teams || (S.panel && chatMode() && narrow()))) {
+      const box = $app.querySelector(S.modal ? '.dialog:not(.leave)' : S.teams ? '.drawer:not(.leave)' : '.sidepanel');
       const items = box ? [...box.querySelectorAll('button, [href], input, textarea, select, summary')].filter((x) => !x.disabled && shown(x)) : [];
       if (items.length) {
         const first = items[0];
@@ -5631,6 +5805,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       S.chat.text = ta.value;
       ta.style.height = 'auto';
       ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
+      dockVar();
       ta.closest('form').querySelector('.send').disabled = !ta.value.trim();
       listen(ta);
       return;
