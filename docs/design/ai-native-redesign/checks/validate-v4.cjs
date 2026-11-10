@@ -604,9 +604,11 @@ async function main() {
   await check(B, 'offline-honest', async (b) => session(b, async (k, page) => {
     await k.ctl('modelOn', 'off');
     const home = await k.main();
-    ok(/agent workflows can’t run/.test(home), 'the offline Home does not say agent workflows can’t run');
+    /* Since #195 the offline Home is worded for software versioning: it names the watchlist, and the stopped agent workflow says it waits for a model. */
+    ok(/can’t read new requests/.test(home) && /Software watchlist keeps checking/.test(home), 'the offline Home does not say the Planner can’t read requests and only the Software watchlist keeps checking');
+    ok(/Can run again once an AI model is connected/.test(home), 'the offline Home does not say the stopped agent workflow can’t run without a model');
     ok(!/keep running/.test(home), 'the offline Home says workflows keep running');
-    ok(/Needs setup[\s\S]*Sum up what I find/.test(home), 'Sum up what I find is not Needs setup with no model');
+    ok(/Needs setup[\s\S]*Create a Jira ticket after a yes/.test(home), 'Create a Jira ticket after a yes is not Needs setup with no model');
     ok((await page.locator('main [data-act="setGo"][data-arg="model"]').count()) === 1, 'Connect a model shows more than once, or not at all');
     if (await page.$('main [data-act="retryIssues"]')) {
       await k.click('main [data-act="retryIssues"]');
@@ -745,8 +747,9 @@ async function main() {
   /* Day one opens with the "I can" list and folds "What can't I do yet?" (review item 8). */
   await check(B, 'home-day-one', async (b) => session(b, async (k, page) => {
     await k.setDay('one');
-    const folds = await page.$$eval('main details.abil-not', (ds) => ds.map((d) => ({ open: d.open, summary: d.querySelector('summary').textContent.trim() })));
-    ok(folds.length === 1 && !folds[0].open && folds[0].summary === 'What can’t I do yet?', `day one does not fold “What can’t I do yet?”: ${JSON.stringify(folds)}`);
+    /* Since #195 day one lists only what the Planner can do, so nothing unbuilt is offered. */
+    const home = await k.main();
+    ok(/What I can do/.test(home) && /Check software for new releases/.test(home), `day one does not list what the Planner can do: “${home.slice(0, 120)}”`);
     ok((await page.locator('main .abil-not .tag.planned').count()) === 0, 'the Not yet lines carry a Planned tag by default');
   }));
 

@@ -78,8 +78,8 @@
     },
     {
       "name": "offline-honest",
-      "status": "FAIL",
-      "detail": "the offline Home does not say agent workflows can’t run"
+      "status": "PASS",
+      "detail": ""
     },
     {
       "name": "morning-check-reads",
@@ -108,8 +108,8 @@
     },
     {
       "name": "home-day-one",
-      "status": "FAIL",
-      "detail": "day one does not fold “What can’t I do yet?”: []"
+      "status": "PASS",
+      "detail": ""
     },
     {
       "name": "planned-hidden-by-default",
