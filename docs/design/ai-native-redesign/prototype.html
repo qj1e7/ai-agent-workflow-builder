@@ -2711,7 +2711,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (!row) return { title: 'Software', body: '<p class="muted">That software isn’t on the Software watchlist any more.</p>' };
       const state = row.newest === '?' ? '<span class="pill bad">Can’t check</span>' : row.ours === row.newest ? '<span class="pill ok">Up to date</span>' : '<span class="pill wait">New version</span>';
       return { title: esc(row.name), page: 'software', body: `<div>${state}</div>
-        <dl class="kv"><dt>You run</dt><dd>${esc(row.ours)}</dd><dt>Newest</dt><dd>${row.newest === '?' ? 'Not known' : esc(row.newest)}</dd><dt>Checked by</dt><dd>The Version checker, every Monday, on ${srcName(row.kind || 'github')}</dd></dl>` };
+        <dl class="kv"><dt>You run</dt><dd>${esc(row.ours)}</dd><dt>Newest</dt><dd>${row.newest === '?' ? 'Not known' : esc(row.newest)}</dd><dt>Checked by</dt><dd>The Version checker, ${swDays()}, on ${srcName(row.kind || 'github')}</dd></dl>` };
     }
     const m = runModel(p.id);
     const r = R(m.workflow);
@@ -3652,13 +3652,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
      footer is the only count (I8). */
   const ANSWERS = {
     setup: { say: (a) => (a.done ? doneSay(a.done) : a.resumed ? 'Here’s your draft, where you left it.' : a.crossed ? 'Here’s what I understood. I can’t do every part of it.' : 'Here’s what I understood. I filled in what I could.'), card: (m) => setupCard(m) },
-    watch: { say: (a) => `${a.word ? `You mentioned “${esc(a.word)}”, so this` : `${esc(a.name)} is software, so it`} belongs on the Software watchlist, which checks all your software every Monday.`, card: (m) => watchCard(m) },
-    listed: { say: (a) => `${esc(a.name)} is already on the Software watchlist.`, card: (m) => { const r = liveSoftware().find((x) => x.name === m.card.name); const no = watchCrosses(m.card); return `${no.length ? `<div class="pcard">${partsList(no)}</div>` : ''}<div class="btns"><button class="btn sm" data-act="go" data-arg="software"${r ? ` data-open="software:${r.key}"` : ''}>Open it</button></div>`; } },
+    watch: { say: (a) => (a.done ? watchDoneSay(a) : `${a.word ? `You mentioned “${esc(a.word)}”, so this` : `${esc(a.name)} is software, so it`} belongs on the Software watchlist, which checks all your software ${swDays()}.`), card: (m) => watchCard(m) },
+    listed: { say: (a) => (onList(a.name) ? `${esc(a.name)} is already on the Software watchlist.` : `${esc(a.name)} isn’t on the Software watchlist any more.`), card: (m) => { const r = liveSoftware().find((x) => x.name === m.card.name); const no = watchCrosses(m.card); return `${no.length ? `<div class="pcard">${partsList(no)}</div>` : ''}${r ? `<div class="btns"><button class="btn sm" data-act="go" data-arg="software" data-open="software:${r.key}">Open it</button></div>` : ''}`; } },
     which: { say: (a) => `You mentioned “${esc(a.word)}”, so this belongs on the Software watchlist. Which software should I watch?` },
     back: { say: () => 'No problem. Ask for something else whenever you like.' },
     part: { say: (a) => `I can ${a.can}, but ${a.cant}. ${a.cap === 'jiraComp' ? NEW_TOOL : CAPS[a.cap].why}`, card: (m) => partCard(m), mood: 'sorry' },
     cant: { say: cantSay, card: (m) => cantCard(m), mood: 'sorry' },
-    down: { say: () => 'Jira isn’t answering right now, so I can’t check that. I’ll be able to once it’s back.', card: (m) => downCard(m), mood: 'sorry' },
+    down: { say: (a) => (a.saved || jiraDown() ? 'Jira isn’t answering right now, so I can’t check that. I’ll be able to once it’s back.' : 'Jira is answering again, so I can check that now.'), card: (m) => downCard(m), mood: 'sorry' },
     refuse: { say: () => 'I can’t set that up. Anything that changes data waits for a yes, every time.', card: (m) => refuseCard(m), mood: 'sorry' },
     abilities: { say: (a) => (a.unknown ? 'I can’t help with that here. I check software versions and watch for new releases. Here’s what I can do.' : 'Here’s what I can do for software versions.'), card: () => abilitiesHTML(), mood: (a) => (a.unknown ? 'sorry' : 'idle') },
     check: { say: checkSay, card: () => checkCard() },
@@ -3668,8 +3668,6 @@ details > .m-close { animation: fold 140ms ease-in both; }
     data: { say: dataSay, card: (m) => dataCard(m) },
   };
   const cardHTML = (m) => (ANSWERS[m.card.kind].card ? ANSWERS[m.card.kind].card(m) : '');
-  /* The answers read from platform state, whose sentence is re-read on every redraw. */
-  const LIVE_KINDS = new Set(['check', 'why', 'mine', 'data']);
 
   /* ---------- Drafts ----------
      The chat is not the record. The set-up card still being filled in edits the one live draft in S.wiz. A new request
@@ -3698,6 +3696,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     S.wiz = { ...newWiz(), text, intent: it, sched: { freq: it.freq || '', day: it.day || '', time: it.time || '', monthDay: '1' } };
     return { kind: 'setup', crossed: hasCross(setupParts('new')) };
   }
+  /* The watchlist's days in the words a sentence uses, such as "every Monday", read from its schedule. */
+  const swDays = () => lc(R('sw').when).replace(/ at .*$/, '');
+  const watchDoneSay = (a) => (S.removed.includes(a.done) ? `${a.name} isn’t on the Software watchlist any more.` : `${a.name} is on the Software watchlist. It’s checked at the next check, ${R('sw').next}.`);
   const doneSay = (d) => (!has(d.id) ? `${d.name} isn’t here any more.` : S.paused[d.id] ? `${R(d.id).name} is paused.` : `${R(d.id).name} is on. Its first run is ${R(d.id).next}.`);
   /* What still stops Turn it on: the amber and red parts, by name. */
   function setupLeft() {
@@ -3795,6 +3796,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function watchCard(m) {
     const c = m.card;
     const id = m.id;
+    if (c.done && S.removed.includes(c.done)) return `<p class="small muted">${esc(c.name)} isn’t on the Software watchlist any more.</p>`;
     if (c.done) return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(c.name)} is on the Software watchlist.</b><span>First check ${R('sw').next}, with the rest of your software. ${apprOf('sw') ? apprText(apprOf('sw')).replace(/,.*$/, '') : R('sw').approves} is asked before any ticket is created.</span><span class="btns"><button class="linkbtn" data-act="go" data-arg="software">Open Software watchlist</button></span></div></div>`;
     const parts = watchParts(m);
     const n = watchLeft(c);
@@ -3810,7 +3812,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The watch a release request keeps: the software is already watched, or adding it is the part I can do. */
   function watchAlt(m) {
     const w = m.card.watch;
-    return w.listed ? `<div class="alt"><p>${esc(w.name)} is already on the Software watchlist, which checks it for new releases every Monday.</p><button class="btn primary sm" data-act="go" data-arg="software">Open the Software watchlist</button></div>`
+    return w.listed ? `<div class="alt"><p>${esc(w.name)} is already on the Software watchlist, which checks it for new releases ${swDays()}.</p><button class="btn primary sm" data-act="go" data-arg="software">Open the Software watchlist</button></div>`
       : `<div class="alt"><p>Watch ${w.name ? esc(w.name) : 'your software'} for new releases on the Software watchlist. New releases show there, and each upgrade ticket waits for a yes.</p><button class="btn primary sm" data-act="instead" data-mid="${m.id}">Set that up</button></div>`;
   }
   /* Can't (spec 6.2): the nearest real alternative when there is one, else only Ask the team. */
@@ -3838,6 +3840,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* Jira isn't answering: the request is kept as a draft, so nothing is lost and nothing is claimed. */
   function downCard(m) {
     if (m.card.saved) return '<p class="small muted">Saved as a draft. Find it on Workflows, and open it once Jira is back.</p>';
+    if (!jiraDown()) return `<div class="btns"><button class="btn sm" data-act="say" data-arg="${esc(m.card.text)}">Ask again</button></div>`;
     return `<div class="pcard" data-pres="down:${m.id}">
       <div class="pcard-h"><h3>Keep it for later?</h3><span class="schip cant">Jira isn’t answering</span></div>
       <div class="alt"><p>I can save this as a draft on Workflows. Once Jira is back, open it and I’ll fill in what I can.</p><button class="btn sm" data-act="draftNow" data-mid="${m.id}">Save as a draft</button></div>
@@ -3864,9 +3867,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function msgHTML(m) {
     if (m.from === 'me') return `<li class="cmsg me" data-flip="msg:${m.id}" data-mid="${m.id}"><div class="cmsg-body"><div class="cmsg-bubble"><span class="vh">You: </span>${esc(m.text)}</div></div></li>`;
     const st = m.thinking ? 'thinking' : m.mood || 'idle';
-    /* An answer about her workflows is read from live state on every redraw, so the sentence and the card under it
-       never disagree (I8). While the words are still being typed, the partial text shows. */
-    const say = m.live && !m.typing ? ANSWERS[m.card.kind].say(m.card) : m.say;
+    /* Every answer with a card is read from live state on every redraw, so a change made anywhere shows in older answers
+       too, and the sentence and its card never disagree (I8, ADR 0043). While the words are typed, the partial text shows. */
+    const say = m.card && !m.typing ? ANSWERS[m.card.kind].say(m.card) : m.say;
     const body = m.thinking ? `<div class="cmsg-bubble"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><p class="wait small muted" role="status">${m.slow ? WAIT_LONG : WAIT_SHORT}</p></div>`
       : `${say != null ? `<div class="cmsg-bubble" data-say>${esc(say)}</div>` : ''}${m.card ? `<div data-pres="card:${m.id}">${cardHTML(m)}</div>` : ''}`;
     return `<li class="cmsg" data-flip="msg:${m.id}" data-mid="${m.id}"><span class="cmsg-av">${face('lead', 40, st, { k: `chat:${m.id}` })}</span><div class="cmsg-body"><span class="cmsg-who" style="color:${AGENTS.lead.hue}">Planner</span>${body}</div></li>`;
@@ -3912,7 +3915,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         }
         if (mood === 'sorry') setTimeout(() => { wait.mood = 'idle'; if (onHome()) render(); }, 1800);
       };
-      Object.assign(wait, { thinking: false, say: '', mood: 'speaking', card: ans.card ? a : null, live: LIVE_KINDS.has(a.kind), typing: true });
+      Object.assign(wait, { thinking: false, say: '', mood: 'speaking', card: ans.card ? a : null, typing: true });
       if (motionQuery.matches) { done(); scrollToMsg(wait.id, wait.card ? 'start' : 'nearest'); return; }
       if (onHome()) { render(); scrollToMsg(wait.id, wait.card ? 'start' : 'nearest'); }
       const words = say.split(' ');
@@ -5717,9 +5720,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (watchLeft(c)) return;
       S.added.push({ name: c.name, kind: c.src, repo: c.repo, ours: c.newest ? '' : c.version.trim(), by: S.user, planner: c.confirmed ? 'confirmed' : 'entered' });
       S.swOpen = `add${S.added.length - 1}`;
-      c.done = true;
+      c.done = S.swOpen;
       m.mood = 'success';
-      m.say = `${c.name} is on the Software watchlist. It’s checked at the next check, ${R('sw').next}.`;
       render();
       const b = $app.querySelector(`[data-mid="${m.id}"] .linkbtn`);
       if (b) b.focus();
@@ -5818,7 +5820,6 @@ details > .m-close { animation: fold 140ms ease-in both; }
       S.wiz = newWiz();
       m.card.done = { id: k, name: nr.name, next: R(k).next, newAgent };
       m.mood = 'success';
-      m.say = `${nr.name} is on. Its first run is ${R(k).next}.`;
       S.justOn = k;
       render();
       scrollToMsg(m.id, 'start');

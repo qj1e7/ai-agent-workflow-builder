@@ -495,6 +495,30 @@ add('ANS-watch-parts', 'Watching software marks each part, and a time the watchl
   await t.expectText('Its own time gets a cross with the reason', /“every day at 8am”\s*The Software watchlist checks all your software together, every Monday at 9:00\./, 'main .thread li.cmsg:last-child');
 }, [1280, 390]);
 
+/* Live cards (ADR 0043): every card in the chat reads current state, so a change made anywhere shows in older answers. */
+add('ANS-live', 'An older answer reads current state: a pause in the panel and an approval on another page show in it', async (t) => {
+  await t.ask(CHECK_WORKFLOWS);
+  await t.expectText('The answer starts with two stopped and one waiting', /You have 3 workflows\. 2 stopped and 1 is waiting for a yes\./, 'main .thread');
+  await t.click(issuesRow, 'Open Morning new-ticket check from the card');
+  await t.click('#sidepanel [data-act="pause"]', 'Pause it in the panel', { decision: true });
+  await t.click('#sidepanel [data-act="panelClose"]', 'Close');
+  await t.expectText('The older answer says it is paused', /You have 3 workflows\. 1 stopped, 1 is waiting for a yes and 1 paused\./, 'main .thread');
+  await t.menu('workflows', 'Open Workflows');
+  await t.click(S.review, 'Review and decide');
+  await t.click(S.approve, 'Approve', approvedOpts);
+  await t.menu('home', 'Back to Chat');
+  await t.expectText('The older answer no longer waits for a yes', /You have 3 workflows\. 1 stopped, 1 is on and 1 paused\./, 'main .thread');
+}, [1280]);
+
+add('ANS-live-done', 'A workflow turned on in the chat, then paused on its page, reads as paused back in the chat', async (t) => {
+  await t.setup(turnOnWeekly);
+  await t.menu('workflows', 'Open Workflows');
+  await t.click(S.row('conf'), 'Open Friday closed ticket summary');
+  await t.click('main [data-act="pause"][data-arg="conf"]', 'Pause', { decision: true });
+  await t.menu('home', 'Back to Chat');
+  await t.expectText('The card and its sentence say it is paused', /Friday closed ticket summary is paused\.[\s\S]*Friday closed ticket summary is paused\./, 'main .thread');
+}, [1280]);
+
 /* Keyboard only: no mouse. Tab, Shift+Tab, Enter, Space, arrows, Escape, typing. */
 add('KEYS-A', 'Scenario A with the keyboard only', async (t) => {
   await t.setup(async (k) => { await k.setDay('one'); await focusTop(k); });
