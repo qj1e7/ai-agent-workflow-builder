@@ -402,7 +402,7 @@ html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 .wfcheck .row:last-child { border-bottom: 0; }
 .wfcheck .row-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 4px; }
 /* On a phone the row's action goes under its text, so a long pill never touches the button. */
-@media (max-width: 600px) { .wfcheck .row { grid-template-columns: minmax(0, 1fr); } .wfcheck .row > [data-flow-of], .wfcheck .row > .btn { justify-self: start; } }
+@container answer (max-width: 520px) { .wfcheck .row { grid-template-columns: minmax(0, 1fr); } .wfcheck .row > [data-flow-of], .wfcheck .row > .btn { justify-self: start; } }
 .pcard.why .pcard-h .face { flex: none; }
 .cmsg.me { grid-template-columns: minmax(0, 1fr); justify-items: end; }
 .cmsg.me .cmsg-bubble { max-width: min(560px, 90%); background: var(--sunk); border-radius: var(--r-card) var(--r-card) 4px var(--r-card); overflow-wrap: anywhere; }
@@ -1058,7 +1058,9 @@ button.schip { cursor: pointer; }
 .pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .pnote, .pv > .whenpick { flex-basis: 100%; }
 .pnote { color: var(--muted); font-size: 0.875rem; }
-@media (max-width: 600px) { .part { grid-template-columns: 22px minmax(0, 1fr); } .part .pv { grid-column: 2; } }
+/* A card lays out by its own width, not the window's, so a narrow chat beside the panel gets the two-column rows too. */
+.thread .cmsg:not(.me) .cmsg-body { container: answer / inline-size; }
+@container answer (max-width: 520px) { .part { grid-template-columns: 22px minmax(0, 1fr); } .part .pv { grid-column: 2; } }
 .notice { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; padding: 14px 16px; border-radius: var(--r-card); background: var(--info-bg); color: var(--info-ink); }
 .notice .btns { margin-top: 10px; }
 .checklist { display: grid; gap: 8px; }
@@ -1107,14 +1109,14 @@ button.schip { cursor: pointer; }
 .testctl-about ul { margin: 6px 0 0 18px; padding: 0; list-style: disc; display: grid; gap: 4px; }
 @media (max-width: 900px) { .testctl { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); } }
 /* The test controls never cover the product. Wide, the toggle is a small button in the rail's column. While chatting
-   on a phone it sits in the empty left end of the New chat row. On a phone page it is small, and the page ends clear of it. */
+   on a phone it sits in the empty left end of the New chat row. On a phone page it follows the page's end, in the flow. */
 .testctl-toggle .tlbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .testctl-toggle { padding: 0 10px; gap: 4px; }
 .testctl-panel ~ .testctl-toggle .tlbl, .testctl:has(.testctl-panel) .tlbl { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
 @media (max-width: 900px) {
   .chatting .testctl { top: var(--ctl-top, auto); bottom: auto; }
   .chatting .chatnew { min-height: 40px; align-items: center; }
-  #app:not(.chatting) .sheet { padding-bottom: 64px; }
+  #app:not(.chatting) .testctl { position: static; padding: 8px 16px 16px; max-width: none; }
 }
 
 /* Named Approvers and escalation */
