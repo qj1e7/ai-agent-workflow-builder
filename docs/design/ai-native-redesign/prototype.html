@@ -3871,11 +3871,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
 
   /* Usage is a design only, so its tab shows with Planned features. */
-  const SET_TABS = () => [['connections', 'Connections'], ['people', 'People and permissions'], ['model', 'AI model']].concat(shows('usage') ? [['usage', 'Usage']] : []);
+  const SET_TABS = () => [['connections', 'Connections'], ['people', 'People and permissions'], ['model', 'AI model']].concat(shows('usage') ? [['usage', 'Usage']] : [], me().op ? [['how', 'How it works']] : []);
   function settingsView() {
     if (!SET_TABS().some(([k]) => k === S.setTab)) S.setTab = 'connections';
     const attention = { model: !curModel() || !!S.modelPending, connections: expiring().length > 0 || Object.values(S.conns).some((x) => x.down), people: Object.values(S.roles).some((r) => r.pendingAp), usage: usagePct() >= 80 };
-    const panel = { model: modelPanel, connections: connPanel, people: peoplePanel, usage: usagePanel }[S.setTab]();
+    const panel = { model: modelPanel, connections: connPanel, people: peoplePanel, usage: usagePanel, how: () => libraryView(true) }[S.setTab]();
     return `<div class="narrow"><div class="pagehead"><div><h1 tabindex="-1">Settings</h1><p>For whoever looks after the platform. Every change here is recorded with who made it.</p></div></div>
       <div class="seg set-tabs" role="group" aria-label="Settings sections">${SET_TABS().map(([k, l]) => `<button data-act="setTab" data-arg="${k}" aria-pressed="${S.setTab === k}">${l}${attention[k] ? '<span class="tab-dot" aria-hidden="true"></span><span class="vh"> (needs attention)</span>' : ''}</button>`).join('')}</div>
       <div style="display:grid;gap:20px">${panel}</div></div>`;
@@ -4088,7 +4088,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       <p class="note" style="margin-top:24px">Anything that changes data waits for a yes in Teams.</p></div>`;
   }
   const oneLine = (a) => a.what.split(/(?<=\.)\s/)[0];
-  function libraryView() {
+  function libraryView(inSettings) {
     const list = visibleAgents();
     const card = (a, i) => {
       const tools = agentTools(a);
@@ -4103,7 +4103,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const specialists = list.filter((a) => !a.platform);
     const tab = S.libTab;
     const lead = { can: 'What the platform can do for software versioning. An agent can use only what is listed under I can.', agents: 'The agents behind software version checks. Anything that changes data waits for a yes.', tools: 'Tools are how agents reach GitHub and Jira. A tool that changes data waits for a yes, every time.' }[tab];
-    const head = `<div class="pagehead"><div><h1 tabindex="-1">Agent library</h1><p>${lead}</p></div></div>
+    const head = `<div class="pagehead"><div>${inSettings ? '<h2 id="how-h">How it works</h2>' : '<h1 tabindex="-1">Agent library</h1>'}<p>${lead}</p></div></div>
       <div class="seg lib-tabs" role="group" aria-label="Show">${[['can', 'What it can do', 0], ['agents', 'Agents', list.length], ['tools', 'Tools', Object.keys(TOOLS).filter((k) => toolLive(k) && (k === 'jiraComp' || (CAPS[capOfTool(k)] || {}).focus)).length]].map(([k, l, n]) => `<button data-act="libTab" data-arg="${k}" aria-pressed="${tab === k}">${l}${n ? ` <span class="seg-n">${n}</span>` : ''}</button>`).join('')}</div>`;
     if (tab === 'tools') return head + toolsTab();
     if (tab === 'can') return head + capabilitiesTab();
@@ -4541,7 +4541,6 @@ details > .m-close { animation: fold 140ms ease-in both; }
       case 'workflow': main = routineView(v.id); break;
       case 'run': main = runView(v.id); break;
       case 'settings': main = settingsView(); break;
-      case 'agents': main = libraryView(); break;
       case 'software': main = softwareView(); break;
       case 'faces': main = facesView(); break;
     }
@@ -4700,7 +4699,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* New elements would restart every loop. Pinning running loops to the page clock keeps them smooth across redraws. */
   const keepLoops = () => document.getAnimations().forEach((a) => { if (a.playState === 'running' && a.effect && a.effect.getTiming().iterations === Infinity) a.startTime = 0; });
   const loopWatch = new IntersectionObserver((es) => es.forEach((e) => e.target.classList.toggle('off', !e.isIntersecting)));
-  const viewKey = () => [S.view.name, S.view.id || '', S.user, S.firstDay ? 'one' : 'week', S.view.name === 'agents' ? S.libTab : '', S.view.name === 'settings' ? S.setTab : ''].join('|');
+  const viewKey = () => [S.view.name, S.view.id || '', S.user, S.firstDay ? 'one' : 'week', S.view.name === 'settings' ? `${S.setTab}${S.setTab === 'how' ? S.libTab : ''}` : ''].join('|');
   const glide = (el, dx, dy) => { if (Math.abs(dx) + Math.abs(dy) > 1) el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 220, easing: EASE_OUT }); };
   function motionBefore() {
     const flips = new Map();
@@ -4853,7 +4852,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
 
   /* o.live plays a run from its start, for a run just started or Watch. o.back comes from browser Back or Forward. */
   function go(name, id, o = {}) {
-    if (name === 'agents') { S.setTab = 'how'; name = 'settings'; }
+    if (name === 'agents') { if (!me().op) name = 'home'; else { S.setTab = 'how'; name = 'settings'; } }
     if (name !== 'run') { stopTimer(); P.run = null; }
     if (S.toastAct && !toastNew) { S.toast = null; S.toastAct = null; clearTimeout(toastTimer); }
     S.view = { name, id, fromChat: !!o.fromChat };
