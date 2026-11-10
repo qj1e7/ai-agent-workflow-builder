@@ -81,7 +81,7 @@ def test_an_unknown_name_is_not_guessed_and_nothing_is_asked_of_github():
     result = find(source, "Zorblax")
     assert isinstance(result, SoftwareNotKnown)
     assert "Zorblax" in result.message
-    assert "owner/name" in result.message
+    assert "Choose where it's published" in result.message
     assert source.asked == []
 
 
@@ -107,7 +107,12 @@ def test_a_name_with_two_projects_offers_both_each_saying_what_it_is():
 def test_every_project_on_the_list_can_be_offered():
     for project in KNOWN_PROJECTS:
         match = SoftwareMatch(
-            repo=project.repo, what=project.what, why="", releases="none", newest=None
+            kind=project.kind,
+            repo=project.repo,
+            what=project.what,
+            why="",
+            releases="none",
+            newest=None,
         )
         assert match.what
 
@@ -225,9 +230,9 @@ def test_when_github_finds_none_of_them_the_answer_says_only_that():
     source = FakeProjectSource({}, errors={"redis/redis": SourceRejected(404)})
     result = find(source, "Redis")
     assert isinstance(result, SoftwareNotKnown)
-    assert "GitHub didn't find redis/redis" in result.message
+    assert "I couldn't find redis/redis on GitHub" in result.message
     assert "no longer" not in result.message
-    assert "owner/name" in result.message
+    assert "Choose where it's published" in result.message
 
 
 @pytest.mark.parametrize(
@@ -301,3 +306,84 @@ def test_the_route_answers_with_a_status_and_needs_the_key():
 def test_a_runtime_without_a_finder_says_so():
     ask = {"name": "n8n", "tag_pattern": RELEASE_TAG_PATTERN}
     assert client(None).post("/v1/software/find", json=ask).status_code == 501
+
+
+class FakeRegistry:
+    """A registry with fixed versions per package, or a refusal or an outage for one."""
+
+    def __init__(
+        self,
+        versions: dict[str, list[str]],
+        errors: dict[str, SourceRejected | SourceUnavailable] | None = None,
+    ) -> None:
+        self.versions = versions
+        self.errors = errors or {}
+        self.asked: list[str] = []
+
+    def fetch(self, repo: str) -> list[Release]:
+        self.asked.append(repo)
+        if repo in self.errors:
+            raise self.errors[repo]
+        return [Release(tag=v) for v in self.versions[repo]]
+
+
+LOG4J = "org.apache.logging.log4j:log4j-core"
+
+
+def test_a_known_package_is_offered_as_itself_after_its_registry_is_read():
+    maven = FakeRegistry({LOG4J: ["2.14.1", "2.24.3", "2.25.0-beta1"]})
+    github = FakeProjectSource({})
+    result = found(SoftwareFinder(github, {"maven": maven}).find("Log4j", RELEASE_TAG_PATTERN))
+    [match] = result.matches
+    assert (match.kind, match.repo, match.newest, match.releases) == (
+        "maven",
+        LOG4J,
+        "2.24.3",
+        "published",
+    )
+    assert match.why == (
+        "From our list of known packages. Your team installs it from Maven Central."
+    )
+    assert maven.asked == [LOG4J] and github.asked == []
+
+
+def test_an_npm_package_is_read_from_npm():
+    npm = FakeRegistry({"express": ["4.21.2", "5.0.0-beta.3"]})
+    result = found(
+        SoftwareFinder(FakeProjectSource({}), {"npm": npm}).find("Express", RELEASE_TAG_PATTERN)
+    )
+    assert [(m.kind, m.repo, m.newest) for m in result.matches] == [("npm", "express", "4.21.2")]
+
+
+def test_a_package_whose_registry_is_not_set_up_is_never_offered_unchecked():
+    result = SoftwareFinder(FakeProjectSource({})).find("Log4j", RELEASE_TAG_PATTERN)
+    assert isinstance(result, SoftwareNotKnown)
+    assert result.message.startswith("I don't know software called Log4j.")
+
+
+def test_a_registry_that_does_not_have_the_package_is_named():
+    maven = FakeRegistry({}, errors={LOG4J: SourceRejected(404)})
+    result = SoftwareFinder(FakeProjectSource({}), {"maven": maven}).find(
+        "log4j", RELEASE_TAG_PATTERN
+    )
+    assert isinstance(result, SoftwareNotKnown)
+    assert f"I couldn't find {LOG4J} on Maven Central" in result.message
+
+
+def test_a_registry_outage_says_which_registry():
+    npm = FakeRegistry({}, errors={"lodash": SourceUnavailable(503)})
+    result = SoftwareFinder(FakeProjectSource({}), {"npm": npm}).find("Lodash", RELEASE_TAG_PATTERN)
+    assert isinstance(result, SoftwareNotChecked)
+    assert result.message.startswith(
+        "npm answered 503 Service Unavailable, so I can't check Lodash"
+    )
+
+
+@pytest.mark.parametrize(
+    ("kind", "repo"), [("maven", "owner/name"), ("npm", "Not:Npm"), ("github", "a:b")]
+)
+def test_a_match_must_be_a_name_its_source_could_hold(kind: str, repo: str):
+    with pytest.raises(ValidationError):
+        SoftwareMatch.model_validate(
+            {"kind": kind, "repo": repo, "what": "x", "why": "", "releases": "none", "newest": None}
+        )

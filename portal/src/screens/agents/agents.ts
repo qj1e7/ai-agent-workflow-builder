@@ -77,6 +77,17 @@ export function faceId(card: Pick<CardView, 'card_id'>): string {
   return card.card_id.replace(/^crd_/, '')
 }
 
+/**
+ * The tools the Version checker runs itself on the Software watchlist (ADR 0025). No card can use them,
+ * so they are not on the card. They show beside its card tools, so the Agents and Tools tabs agree.
+ */
+export function watchlistTools(card: Pick<CardView, 'card_id' | 'starter'>, tools: Iterable<ToolView>): readonly ToolView[] {
+  if (!card.starter || faceId(card) !== 'version_checker') return []
+  return [...tools].filter((tool) => !tool.in_cards)
+}
+
+export const WATCHLIST_NOTE = 'On the Software watchlist, it also reads Maven Central and npm, and looks up known vulnerabilities in OSV and NVD.'
+
 export function versionWords(card: Pick<CardView, 'starter' | 'version'>): string {
   return card.starter ? `Version ${card.version}. Ships with the platform` : `Version ${card.version}`
 }

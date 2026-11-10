@@ -46,6 +46,8 @@ export type ParamSpec = Schemas['ParamSpec']
 
 export type ToolView = Schemas['ToolView']
 export type ToolId = Schemas['ToolId']
+/** The tools an agent card can use. The two package tools run only in the Software watchlist check. */
+export type CardToolId = Schemas['CardToolId']
 export type InputKind = Schemas['InputKind']
 export type CardView = Schemas['CardView']
 export type CardInput = Schemas['CardInput']

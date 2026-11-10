@@ -1,6 +1,6 @@
 {
   "state": "cant_do",
-  "note": "I can't email the list. I can only check software for new releases on GitHub, create a Jira ticket after a yes, and ask Approvers for a yes in Teams.",
+  "note": "I can't email the list. I can only check software for new releases on GitHub, check Maven Central and npm packages for new versions and known vulnerabilities, create a Jira ticket after a yes, and ask Approvers for a yes in Teams.",
   "needs": "new_system",
   "system": "email"
 }

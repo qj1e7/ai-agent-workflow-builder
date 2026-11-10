@@ -1539,29 +1539,40 @@ def test_more_words_after_a_software_noun_are_not_the_which_software_ask():
 @pytest.mark.parametrize(
     ("task", "source"),
     [
-        ("add a software from maven instead", "maven"),
-        ("check lodash releases on npm", "npm"),
         ("watch requests on PyPI", "PyPI"),
         ("track nginx on Docker Hub", "Docker Hub"),
+        ("watch serilog on NuGet", "NuGet"),
     ],
 )
-def test_a_release_source_other_than_github_is_a_cant_in_the_persons_words(task: str, source: str):
+def test_a_release_source_i_do_not_read_is_a_cant_in_the_persons_words(task: str, source: str):
     answer = answer_of(read(asks_about="abilities"), task)
     assert isinstance(answer, CantAnswer)
     [row] = answer.cant
     assert (row.kind, row.text, row.system) == ("where", source, source)
-    name = {"maven": "Maven"}.get(source, source)
-    assert row.note == f"I only read releases on GitHub. {name} isn't a source I read yet."
-
-
-def test_a_release_source_with_a_software_name_offers_to_watch_it_on_github():
-    answer = answer_of(
-        read(belongs_on_watchlist=True, watchlist_word="check", software="lodash"),
-        "check lodash on npm",
+    assert row.note == (
+        f"I read releases on GitHub, Maven Central and npm. {source} isn't a source I read yet."
     )
-    assert isinstance(answer, CantAnswer)
-    assert answer.cant[0].system == "npm"
-    assert answer.alternative == WatchlistAnswer(word="check", software="lodash")
+
+
+@pytest.mark.parametrize(
+    ("task", "software", "verb"),
+    [
+        ("check lodash on npm", "lodash", "check"),
+        ("watch lodash on npm", "lodash", "watch"),
+        ("watch log4j from maven central", "log4j", "watch"),
+        ("add jackson-databind from Maven", "jackson-databind", "add"),
+    ],
+)
+def test_a_source_i_read_is_no_cant_and_the_software_is_offered_to_watch(
+    task: str, software: str, verb: str
+):
+    reading = read(belongs_on_watchlist=True, watchlist_word=verb, software=software)
+    assert answer_of(reading, task) == WatchlistAnswer(word=verb, software=software)
+
+
+def test_a_software_from_a_source_i_read_with_no_name_asks_which_software():
+    answer = answer_of(read(asks_about="abilities"), "add a software from maven instead")
+    assert answer == WhichSoftwareAnswer(word="add")
 
 
 @pytest.mark.parametrize(
@@ -1614,11 +1625,11 @@ def test_a_hyphen_is_a_word_boundary_for_a_release_source():
     )
     assert answer == WatchlistAnswer(word="watch", software="npm-check-updates")
     answer = answer_of(
-        read(belongs_on_watchlist=True, watchlist_word="watch", software="lodash"),
-        "watch lodash on npm",
+        read(belongs_on_watchlist=True, watchlist_word="watch", software="requests"),
+        "watch requests on pypi",
     )
     assert isinstance(answer, CantAnswer)
-    assert answer.cant[0].system == "npm"
+    assert answer.cant[0].system == "pypi"
 
 
 @pytest.mark.parametrize("spelled", ["node.js", "Node JS", "nodejs"])

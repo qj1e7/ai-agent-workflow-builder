@@ -6,8 +6,8 @@ import { useLatch } from '../../api/latch'
 import { useAddSoftware, useFindSoftware } from '../../api/queries'
 import { Button } from '../../ui/Button'
 import { IconExternal } from '../../ui/icons'
-import { addReducer, alreadyWords, canAdd, matchesOf, modeOf, readyToAdd, releaseWords, START, verdictOf, type AddAction, type AddState } from './addByName'
-import { addProblems, checkName, REPO_HELP, rowDomId, VERSION_HELP } from './software'
+import { addReducer, alreadyWords, canAdd, chosenKind, kindOf, matchesOf, modeOf, readyToAdd, releaseWords, START, verdictOf, type AddAction, type AddState } from './addByName'
+import { addProblems, checkName, isPackage, PACKAGE_VERSION_HELP, refOf, rowDomId, SOURCE_FIELDS, SOURCE_KINDS, SOURCE_NAMES, sourceUrl, VERSION_HELP, type SourceKind, type Watched } from './software'
 import styles from './Software.module.css'
 
 function Field({ id, label, optional, help, error, children }: { id: string; label: string; optional?: boolean; help: string; error: string | undefined; children: ReactNode }) {
@@ -37,7 +37,7 @@ interface FormProps {
   readonly refs?: { readonly name?: RefObject<HTMLInputElement | null>; readonly repo?: RefObject<HTMLInputElement | null>; readonly version?: RefObject<HTMLInputElement | null> } | undefined
   readonly dispatch?: ((action: AddAction) => void) | undefined
   readonly onSubmit?: ((event: FormEvent<HTMLFormElement>) => void) | undefined
-  readonly rowIdOf?: ((repo: string) => string | undefined) | undefined
+  readonly rowIdOf?: ((kind: SourceKind, repo: string) => string | undefined) | undefined
   readonly onShowRow?: ((id: string) => void) | undefined
 }
 
@@ -45,8 +45,10 @@ const describedBy = (id: string, error: string | undefined) => (error ? `${id}-e
 
 function VersionField({ state, refs, dispatch }: Pick<FormProps, 'state' | 'refs' | 'dispatch'>) {
   const error = state.errors.version
+  // A package's version is also what the check looks up known vulnerabilities in (ADR 0025).
+  const help = isPackage(chosenKind(state)) ? PACKAGE_VERSION_HELP : VERSION_HELP
   return (
-    <Field id="sw-version" label="Version we run" optional help={VERSION_HELP} error={error}>
+    <Field id="sw-version" label="Version we run" optional help={help} error={error}>
       <input
         id="sw-version"
         ref={refs?.version}
@@ -69,7 +71,7 @@ function NameStep({ state, busy, refs, dispatch }: FormProps) {
   return (
     <>
       <h3 id="add-software-heading">Add software</h3>
-      <Field id="sw-name" label="Software name" help="Type the name, such as Kubernetes. I’ll find its GitHub project." error={error}>
+      <Field id="sw-name" label="Software name" help="I know common software, such as Kubernetes. If I don’t know yours, you can choose where it’s published." error={error}>
         <input
           id="sw-name"
           ref={refs?.name}
@@ -97,8 +99,8 @@ function NameStep({ state, busy, refs, dispatch }: FormProps) {
   )
 }
 
-function ShowRow({ repo, rowIdOf, onShowRow }: { repo: string } & Pick<FormProps, 'rowIdOf' | 'onShowRow'>) {
-  const id = rowIdOf?.(repo)
+function ShowRow({ kind, repo, rowIdOf, onShowRow }: { kind: SourceKind; repo: string } & Pick<FormProps, 'rowIdOf' | 'onShowRow'>) {
+  const id = rowIdOf?.(kind, repo)
   if (!id) return null
   return (
     <a
@@ -121,14 +123,16 @@ function Guess({ state, dispatch, rowIdOf, onShowRow }: Pick<FormProps, 'state' 
     const match = matches[0]
     if (!match) return null
     const verdict = verdictOf(match)
+    const kind = kindOf(match)
     return (
       <>
         <p className={styles['guess']}>
+          <span className="muted">{SOURCE_NAMES[kind]} · </span>
           <b>
-            <a href={`https://github.com/${match.repo}`} target="_blank" rel="noopener noreferrer">
+            <a href={sourceUrl(kind, match.repo)} target="_blank" rel="noopener noreferrer">
               {match.repo}
               <IconExternal size={12} />
-              <span className="visually-hidden"> (opens GitHub in a new tab)</span>
+              <span className="visually-hidden"> (opens {SOURCE_NAMES[kind]} in a new tab)</span>
             </a>
           </b>
           <span className="muted"> {match.what}.</span>
@@ -137,7 +141,7 @@ function Guess({ state, dispatch, rowIdOf, onShowRow }: Pick<FormProps, 'state' 
           <li>{match.why}</li>
           {verdict.kind === 'listed' ? (
             <li role="status">
-              {alreadyWords(match.repo, verdict.name)} <ShowRow repo={match.repo} rowIdOf={rowIdOf} onShowRow={onShowRow} />
+              {alreadyWords(match.repo, verdict.name)} <ShowRow kind={kind} repo={match.repo} rowIdOf={rowIdOf} onShowRow={onShowRow} />
             </li>
           ) : (
             <li role={verdict.kind === 'none' ? 'status' : undefined}>{releaseWords(match)}</li>
@@ -152,8 +156,9 @@ function Guess({ state, dispatch, rowIdOf, onShowRow }: Pick<FormProps, 'state' 
         <legend>Which one do you mean?</legend>
         {matches.map((match, index) => {
           const verdict = verdictOf(match)
+          const kind = kindOf(match)
           return (
-            <div key={match.repo} className={styles['pickRow']}>
+            <div key={`${kind}:${match.repo}`} className={styles['pickRow']}>
               <input
                 id={`sw-pick-${index}`}
                 type="radio"
@@ -167,10 +172,10 @@ function Guess({ state, dispatch, rowIdOf, onShowRow }: Pick<FormProps, 'state' 
                 <b>{match.repo}</b>
                 <span className="muted">
                   {' '}
-                  {match.what}. {match.why} {verdict.kind === 'listed' ? alreadyWords(match.repo, verdict.name) : releaseWords(match)}
+                  On {SOURCE_NAMES[kind]}. {match.what}. {match.why} {verdict.kind === 'listed' ? alreadyWords(match.repo, verdict.name) : releaseWords(match)}
                 </span>
               </label>
-              {verdict.kind === 'listed' ? <ShowRow repo={match.repo} rowIdOf={rowIdOf} onShowRow={onShowRow} /> : null}
+              {verdict.kind === 'listed' ? <ShowRow kind={kind} repo={match.repo} rowIdOf={rowIdOf} onShowRow={onShowRow} /> : null}
             </div>
           )
         })}
@@ -179,7 +184,7 @@ function Guess({ state, dispatch, rowIdOf, onShowRow }: Pick<FormProps, 'state' 
   }
   const lead =
     state.change || answer === null
-      ? 'You’re choosing the project yourself.'
+      ? 'You’re choosing where it’s published yourself.'
       : answer.status === 'found'
         ? ''
         : answer.message
@@ -205,13 +210,25 @@ function GuessStep({ state, busy, refs, dispatch, rowIdOf, onShowRow }: FormProp
       </h3>
       <Guess state={state} dispatch={dispatch} rowIdOf={rowIdOf} onShowRow={onShowRow} />
       {mode === 'address' ? (
-        <Field id="sw-repo" label="GitHub repository" help={REPO_HELP} error={repoError}>
+        <div className={styles['field']}>
+          <label htmlFor="sw-kind">Published on</label>
+          <select id="sw-kind" value={state.kind} onChange={(event) => dispatch?.({ type: 'kind', kind: event.target.value as SourceKind })}>
+            {SOURCE_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {SOURCE_NAMES[kind]}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+      {mode === 'address' ? (
+        <Field id="sw-repo" label={SOURCE_FIELDS[state.kind].label} help={SOURCE_FIELDS[state.kind].help} error={repoError}>
           <input
             id="sw-repo"
             ref={refs?.repo}
             type="text"
             value={state.repo}
-            placeholder="owner/name"
+            placeholder={SOURCE_FIELDS[state.kind].placeholder}
             autoComplete="off"
             autoCapitalize="off"
             spellCheck={false}
@@ -265,8 +282,8 @@ interface AddSoftwareProps {
 
 export function AddSoftware({ software, onShowRow, onAdded }: AddSoftwareProps) {
   const names = software.map((row) => row.name)
-  const repos = software.map((row) => row.source.ref)
-  const rowIdOf = (repo: string) => software.find((row) => row.source.ref.toLowerCase() === repo.toLowerCase())?.id
+  const watched: Watched[] = software.map((row) => ({ kind: row.source.kind, ref: row.source.ref }))
+  const rowIdOf = (kind: SourceKind, repo: string) => software.find((row) => row.source.kind === kind && row.source.ref.toLowerCase() === repo.toLowerCase())?.id
   const [state, dispatch] = useReducer(addReducer, START)
   const find = useFindSoftware()
   const add = useAddSoftware()
@@ -300,7 +317,7 @@ export function AddSoftware({ software, onShowRow, onAdded }: AddSoftwareProps) 
       )
       return
     }
-    const ready = readyToAdd(state, names, repos)
+    const ready = readyToAdd(state, names, watched)
     if (!ready.ok) return dispatch({ type: 'refused', errors: ready.errors })
     sending.run((settled) =>
       add.mutate(ready.body, {
@@ -311,7 +328,8 @@ export function AddSoftware({ software, onShowRow, onAdded }: AddSoftwareProps) 
         onError: (error) => {
           const refused = addProblems(error)
           if (error instanceof ApiError && error.status === 409) {
-            dispatch({ type: 'refused', errors: modeOf(state) === 'address' ? { repo: `${ready.body.repo} is already on the list.` } : { form: `${ready.body.repo} is already on the list.` } })
+            const taken = `${refOf(ready.body)} is already on the list.`
+            dispatch({ type: 'refused', errors: modeOf(state) === 'address' ? { repo: taken } : { form: taken } })
           } else dispatch({ type: 'refused', errors: refused ?? { form: words(error) } })
         },
         onSettled: settled,

@@ -304,7 +304,7 @@ both('run-default-and-detail', async (t) => {
   await t.click('[data-act="runDetail"]');
   assert.strictEqual(await btn.getAttribute('aria-expanded'), 'true', 'detail open');
   assert((await t.count('#run-detail .cmsg-bubble')) >= 3, 'the agents’ conversation shows');
-  assert((await t.page.innerText('#run-detail')).includes('I read each tool’s releases on GitHub'), 'tool results in the conversation');
+  assert((await t.page.innerText('#run-detail')).includes('I read Log4j core from Maven Central and the rest from their releases on GitHub'), 'tool results in the conversation');
   assert(await t.has('#run-detail [data-act="replay"]') && (await t.count('#run-detail [data-act="speed"]')) === 3, 'replay controls inside the detail');
   await t.click('[data-act="approve"][data-arg="sw"]'); await t.wait(400);
   assert.strictEqual(await btn.getAttribute('aria-expanded'), 'true', 'stays open after a decision on this visit');
@@ -343,7 +343,10 @@ both('run-approval-panel-parts', async (t) => {
   /* Fix round C: the panel says nothing is written once, not three times. */
   assert.strictEqual((panel.match(/nothing is written/gi) || []).length, 1, `“nothing is written” is said ${(panel.match(/nothing is written/gi) || []).length} times in the panel`);
   assert(!/stops waiting|by \d+:\d\d|before the next run/.test(panel), 'no stop time under today’s rule');
-  assert((await t.count('#decision a[href*="github.com"]')) >= 6, 'links to the evidence');
+  /* Since 9 Nov 2026 Log4j core is read from Maven Central: its ticket links that page, GitHub's release notes and NVD's record. */
+  assert((await t.count('#decision a[href*="github.com"]')) >= 5, 'links to the evidence on GitHub');
+  assert((await t.count('#decision a[href*="central.sonatype.com"]')) >= 1, 'links to the evidence on Maven Central');
+  assert((await t.count('#decision a[href*="nvd.nist.gov"]')) >= 1, 'links to the vulnerability record');
   const btns = await t.page.$$eval('#decision .btns .btn', (els) => els.map((e) => e.textContent.trim()));
   assert.deepStrictEqual(btns, ['Approve', 'Decline'], `buttons: ${btns.join(' | ')}`);
   await t.click('[data-act="decline"][data-arg="sw"]'); await t.wait(400);

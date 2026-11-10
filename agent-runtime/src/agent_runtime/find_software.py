@@ -1,13 +1,16 @@
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import NamedTuple, Protocol
 
 from agent_runtime.contract import (
+    SOURCE_NAMES,
     FindSoftwareResult,
     FoundSoftware,
     SoftwareMatch,
     SoftwareNotChecked,
     SoftwareNotKnown,
+    SourceKind,
 )
 from agent_runtime.release_source import (
     ReleaseSource,
@@ -31,6 +34,8 @@ class KnownProject:
     repo: str
     what: str
     names: tuple[str, ...]
+    kind: SourceKind = "github"
+    """Where it is published. A package is read from its registry, a project from GitHub."""
 
 
 # A name is never turned into a project by a model (ADR 0037).
@@ -90,6 +95,34 @@ KNOWN_PROJECTS = (
         ("vue", "vuejs", "vue js"),
     ),
     KnownProject("angular/angular", "Angular, a framework for building web apps", ("angular",)),
+    # Libraries a team installs from Maven Central or npm (ADR 0025). Reviewed like the projects:
+    # each is the package its own project page names.
+    KnownProject(
+        "org.apache.logging.log4j:log4j-core",
+        "Log4j core, the Java logging library from Apache",
+        ("log4j", "log4j core", "log4j2", "apache log4j"),
+        "maven",
+    ),
+    KnownProject(
+        "org.springframework:spring-core",
+        "Spring Framework's core, for Java applications",
+        ("spring", "spring framework", "spring core"),
+        "maven",
+    ),
+    KnownProject(
+        "com.fasterxml.jackson.core:jackson-databind",
+        "Jackson databind, which reads and writes JSON in Java",
+        ("jackson", "jackson databind"),
+        "maven",
+    ),
+    KnownProject(
+        "com.google.guava:guava", "Guava, Google's core libraries for Java", ("guava",), "maven"
+    ),
+    KnownProject(
+        "express", "Express, a web framework for Node.js", ("express", "expressjs"), "npm"
+    ),
+    KnownProject("lodash", "Lodash, JavaScript utility functions", ("lodash",), "npm"),
+    KnownProject("axios", "Axios, an HTTP client for JavaScript", ("axios",), "npm"),
 )
 
 MAX_MATCHES = 5
@@ -104,6 +137,21 @@ def known_for(name: str) -> list[KnownProject]:
     if not wanted:
         return []
     return [project for project in KNOWN_PROJECTS if wanted in project.names][:MAX_MATCHES]
+
+
+def check_package(
+    registry: ReleaseSource, project: KnownProject, tag_pattern: str
+) -> SoftwareMatch:
+    newest = highest(candidates(registry.fetch(project.repo), tag_pattern))
+    return SoftwareMatch(
+        kind=project.kind,
+        repo=project.repo,
+        what=project.what,
+        why="From our list of known packages. Your team installs it from "
+        f"{SOURCE_NAMES[project.kind]}.",
+        releases="none" if newest is None else "published",
+        newest=newest,
+    )
 
 
 def check_project(source: ProjectSource, project: KnownProject, tag_pattern: str) -> SoftwareMatch:
@@ -122,33 +170,51 @@ def check_project(source: ProjectSource, project: KnownProject, tag_pattern: str
     )
 
 
+TYPE_IT = "Choose where it's published and type its name there."
+
+
 class SoftwareFinder:
-    def __init__(self, source: ProjectSource) -> None:
+    def __init__(
+        self, source: ProjectSource, registries: Mapping[str, ReleaseSource] | None = None
+    ) -> None:
+        """source reads GitHub. registries reads Maven Central and npm by kind. A known package
+        whose registry is not set up here is left out, never offered unchecked."""
         self._source = source
+        self._registries = dict(registries or {})
+
+    def _check(self, guess: KnownProject, tag_pattern: str) -> SoftwareMatch | None:
+        if guess.kind == "github":
+            return check_project(self._source, guess, tag_pattern)
+        registry = self._registries.get(guess.kind)
+        return None if registry is None else check_package(registry, guess, tag_pattern)
 
     def find(self, name: str, tag_pattern: str) -> FindSoftwareResult:
         name = name.strip()
         guesses = known_for(name)
+        unknown = SoftwareNotKnown(message=f"I don't know software called {name}. {TYPE_IT}")
         if not guesses:
-            return SoftwareNotKnown(
-                message=f"I don't know a GitHub project called {name}. "
-                "Type the GitHub address instead, as owner/name."
-            )
+            return unknown
         matches: list[SoftwareMatch] = []
         not_found: list[str] = []
         for guess in guesses:
+            where = SOURCE_NAMES[guess.kind]
             try:
-                matches.append(check_project(self._source, guess, tag_pattern))
+                found = self._check(guess, tag_pattern)
             except SourceRejected as refused:
                 if refused.status not in NOT_FOUND_STATUSES:
-                    return _not_checked(name, refused)
-                not_found.append(guess.repo)
+                    return _not_checked(name, refused, where)
+                not_found.append(f"{guess.repo} on {where}")
+                continue
             except SourceUnavailable as unavailable:
-                return _not_checked(name, unavailable)
+                return _not_checked(name, unavailable, where)
+            if found is not None:
+                matches.append(found)
         if not matches:
+            if not not_found:
+                return unknown
             return SoftwareNotKnown(
-                message=f"GitHub didn't find {tag_list(not_found)}, which our list has for "
-                f"{name}. Type the GitHub address instead, as owner/name."
+                message=f"I couldn't find {tag_list(not_found)}, which our list has for "
+                f"{name}. {TYPE_IT}"
             )
         return FoundSoftware(matches=matches)
 
@@ -158,26 +224,28 @@ class Trouble(NamedTuple):
     next_step: str
 
 
-def _not_checked(name: str, error: SourceRejected | SourceUnavailable) -> SoftwareNotChecked:
-    trouble = _trouble(error)
+def _not_checked(
+    name: str, error: SourceRejected | SourceUnavailable, where: str = "GitHub"
+) -> SoftwareNotChecked:
+    trouble = _trouble(error, where)
     message = f"{trouble.what_happened}, so I can't check {name} yet. {trouble.next_step}"
     return SoftwareNotChecked(message=message.strip())
 
 
-def _trouble(error: SourceRejected | SourceUnavailable) -> Trouble:
+def _trouble(error: SourceRejected | SourceUnavailable, where: str = "GitHub") -> Trouble:
     later = "Try again later."
-    limited = Trouble("GitHub is limiting how often we can ask it", later)
+    limited = Trouble(f"{where} is limiting how often we can ask it", later)
     if isinstance(error, SourceRejected):
-        if error.status == 401:
+        if error.status == 401 and where == "GitHub":
             return Trouble(
                 "GitHub did not accept the key in the GitHub connection",
                 "Ask whoever looks after the platform to check that connection.",
             )
         if error.limited:
             return limited
-        return Trouble(f"GitHub answered {phrase(error.status)}", "")
+        return Trouble(f"{where} answered {phrase(error.status)}", "")
     if error.status == 429:
         return limited
     if error.status is None:
-        return Trouble("I couldn't reach GitHub", later)
-    return Trouble(f"GitHub answered {phrase(error.status)}", later)
+        return Trouble(f"I couldn't reach {where}", later)
+    return Trouble(f"{where} answered {phrase(error.status)}", later)

@@ -117,7 +117,7 @@ The latest release at the source.
 _Avoid_: Latest, current version
 
 **Known vulnerability**:
-A published security flaw, with a CVE number, that affects a version of a watched software.
+A published security flaw that affects a version of a watched software. It is named by its CVE number, or by the advisory's own id when it has no CVE yet. It is critical when NVD scores it 9.0 or more, or the advisory says critical.
 _Avoid_: Bug, issue
 
 **End of life**:
@@ -152,7 +152,7 @@ The text box on Home where an Operator says what to automate, check or fix. The 
 An agent, defined by an agent card, that the Planner brings in to do one part of a run.
 
 **Version checker**:
-The specialist agent that reads each watched software's releases at its source, compares the newest version with our version, and suggests an upgrade ticket for each one that is behind. It ships as a template.
+The specialist agent that reads each watched software's releases at its source, compares the newest version with our version, and suggests an upgrade ticket for each one that is behind. It reads GitHub releases, Maven Central and npm. For a package on Maven Central or npm it also looks up known vulnerabilities in our version, in OSV and NVD, and a critical one makes the ticket urgent (ADR 0025). It ships as a template.
 _Avoid_: Release checker (the old name), scanner
 
 **Leg**:

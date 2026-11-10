@@ -102,8 +102,11 @@ const SWEEP = {
   teamsPost: /\bpost(s|ed|ing)?\b[^.]{0,30}\bTeams\b|\bTeams (message|post)|\bmessages? (in|to) Teams|\bnudge/i,
   confluence: /Confluence/i,
   ghIssues: /GitHub issues?|bug reports?/i,
-  access: /Entra|GitLab|admin tools|who has access|access review/i,
-  registries: /Maven|PyPI|\bnpm\b|NuGet|Docker Hub|package registr|security advisor|vulnerab|\bCVE|NVD|CISA|actively exploited|endoflife|support end/i,
+  /* \bEntra\b, so "Maven Central" is not read as Entra ID. */
+  access: /\bEntra\b|GitLab|admin tools|who has access|access review/i,
+  /* Maven Central, npm, and known vulnerabilities from OSV and NVD are Ready (CAPS.packages, built 8 Nov 2026). What is
+     still Planned of ADR 0025: the other registries, vendor advisories, CISA's list and support dates. */
+  registries: /PyPI|NuGet|Docker Hub|other package registr|security advisor|CISA|actively exploited|attackers are using|endoflife|support end/i,
   jiraComp: /\bcomponents?\b/i,
   email: /\bsends? (an? )?e-?mails?\b|\be-?mail (me|them|it|a|the)\b|\bSlack\b|Outlook/i,
   tickets: /\b(close|edit|move|delete)s? (the |a |these |those )?(Jira )?tickets?\b/i,

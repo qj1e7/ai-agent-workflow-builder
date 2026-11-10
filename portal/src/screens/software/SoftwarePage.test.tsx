@@ -206,6 +206,7 @@ describe('the search box', () => {
 })
 
 const GUESS: ProjectGuess = {
+  kind: 'github',
   repo: 'langchain-ai/langgraph',
   what: 'LangGraph, a Python library for building AI agents',
   why: 'From our list of known projects.',
@@ -262,16 +263,20 @@ describe('the order of the page', () => {
     expect(/<button[^>]*primary[^>]*>\s*Check now/.test(html)).toBe(false)
   })
 
-  it('says how it is checked with the schedule and the one source that works', () => {
+  it('says how it is checked with the schedule and every source that works, from the registry', () => {
     const words = text(render(statuses, ALICE))
     expect(words).toContain('How it’s checked')
-    expect(words).toContain('GitHub is the only place we can check today. We can’t check registries or security advisories yet.')
+    expect(words).toContain(
+      'We can check GitHub, Maven Central and npm today. Known vulnerabilities are looked up for Maven Central and npm packages. We can’t check PyPI, NuGet or Docker Hub, support end dates, or which vulnerabilities attackers are using yet.',
+    )
   })
 
   it('says GitHub is not working when the registry says so, and says nothing about sources without the registry', () => {
     const down = capabilitiesFixture.capabilities.map((c) => (c.id === 'github.releases' ? { ...c, state: 'down' as const } : c))
-    expect(text(render(statuses, ALICE, [], <SoftwareRoute />, { capabilities: down, examples: [] }))).toContain('GitHub is the only place we check, and it is not working right now.')
-    expect(text(render(statuses, ALICE, [], <SoftwareRoute />, null))).not.toContain('only place')
+    expect(text(render(statuses, ALICE, [], <SoftwareRoute />, { capabilities: down, examples: [] }))).toContain('We can check Maven Central and npm today. GitHub is not working right now.')
+    const githubOnly = capabilitiesFixture.capabilities.filter((c) => c.id !== 'packages.versions').map((c) => (c.id === 'github.releases' ? { ...c, state: 'down' as const } : c))
+    expect(text(render(statuses, ALICE, [], <SoftwareRoute />, { capabilities: githubOnly, examples: [] }))).toContain('GitHub is the only place we check, and it is not working right now.')
+    expect(text(render(statuses, ALICE, [], <SoftwareRoute />, null))).not.toContain('can check')
   })
 
   it('puts Add software inside Software we watch for an Operator, and not at all for an Approver', () => {
@@ -341,7 +346,7 @@ describe('add software by name', () => {
     const html = form(run('LangGraph', { type: 'answered', answer: found(GUESS) }, { type: 'change' }))
     expect(html).toContain('id="sw-repo"')
     expect(html).toContain('value="langchain-ai/langgraph"')
-    expect(text(html)).toContain('You’re choosing the project yourself.')
+    expect(text(html)).toContain('You’re choosing where it’s published yourself.')
   })
 
   it('says plainly when the list has no such name, and falls back to the repository field', () => {
@@ -366,10 +371,10 @@ describe('add software by name', () => {
     const none: ProjectGuess = { ...GUESS, repo: 'python/cpython', releases: 'none', newest: null }
     const state = run('Python', { type: 'answered', answer: found(none) })
     const html = form(state)
-    expect(text(html)).toContain('python/cpython doesn’t publish releases on GitHub, which is the only place this check reads. It can’t be watched here.')
+    expect(text(html)).toContain('python/cpython doesn’t publish releases on GitHub, and it isn’t a Maven Central or npm package this check knows. It can’t be watched here.')
     expect(buttons(html)).toEqual(['Change', 'Start again'])
     expect(html).not.toContain('id="sw-version"')
-    expect(readyToAdd(state, [], [])).toEqual({ ok: false, errors: { form: 'python/cpython doesn’t publish releases on GitHub, which is the only place this check reads. It can’t be watched here.' } })
+    expect(readyToAdd(state, [], [])).toEqual({ ok: false, errors: { form: 'python/cpython doesn’t publish releases on GitHub, and it isn’t a Maven Central or npm package this check knows. It can’t be watched here.' } })
   })
 
   it('leaves a match with no releases out of the choice, and says why beside it', () => {
@@ -656,5 +661,62 @@ describe('a repository GitHub moved', () => {
     const html = render({ ...(statuses as WatchlistView), software: [older] }, ALICE)
     expect(text(html)).not.toContain('GitHub now calls')
     expect(text(html)).not.toContain('GitHub can’t find')
+  })
+})
+
+describe('add a Maven Central or npm package (ADR 0025)', () => {
+  const LOG4J: ProjectGuess = {
+    kind: 'maven',
+    repo: 'org.apache.logging.log4j:log4j-core',
+    what: 'Log4j core, the Java logging library from Apache',
+    why: 'From our list of known packages. Your team installs it from Maven Central.',
+    releases: 'published',
+    newest: '2.24.3',
+    already_listed: null,
+  }
+
+  it('shows a known package as itself, links its registry, and says its version is looked up for vulnerabilities', () => {
+    const state = run('Log4j', { type: 'answered', answer: found(LOG4J) })
+    const html = form(state)
+    const words = text(html)
+    expect(words).toContain('Maven Central · org.apache.logging.log4j:log4j-core')
+    expect(html).toContain('href="https://central.sonatype.com/artifact/org.apache.logging.log4j/log4j-core/versions"')
+    expect(words).toContain('(opens Maven Central in a new tab)')
+    expect(words).toContain('Each check also looks up known vulnerabilities in the version you run.')
+    expect(words).toContain('Give it, and each check also looks up known vulnerabilities in it.')
+  })
+
+  it('sends a confirmed package as package, never as repo', () => {
+    const state = run('Log4j', { type: 'answered', answer: found(LOG4J) }, { type: 'typed', field: 'version', value: '2.14.1' })
+    expect(readyToAdd(state, [], [])).toEqual({
+      ok: true,
+      body: { name: 'Log4j', package: { kind: 'maven', ref: 'org.apache.logging.log4j:log4j-core' }, our_version: '2.14.1' },
+    })
+  })
+
+  it('lets the person choose where it is published when nothing was found, and asks for that source’s name', () => {
+    const unknown: FindOut = { status: 'not_known', message: 'I don’t know software called Acme. Choose where it’s published and type its name there.' }
+    const github = run('Acme', { type: 'answered', answer: unknown })
+    expect(text(form(github))).toContain('Published on GitHub Maven Central npm GitHub repository')
+    const npm = addReducer(github, { type: 'kind', kind: 'npm' })
+    const html = form(npm)
+    expect(text(html)).toContain('npm package Type the package name, for example express or @nestjs/core.')
+    expect(html).toContain('placeholder="package-name"')
+  })
+
+  it('checks a typed package the way its registry names it, and refuses one already on the list', () => {
+    const typed = (kind: 'maven' | 'npm', ref: string) => addReducer(addReducer(run('Acme', { type: 'answered', answer: { status: 'not_known', message: '' } }), { type: 'kind', kind }), { type: 'typed', field: 'repo', value: ref })
+    expect(readyToAdd(typed('maven', 'org..evil:x'), [], [])).toEqual({ ok: false, errors: { repo: 'That doesn’t look like Maven coordinates. Type groupId:artifactId, for example org.apache.logging.log4j:log4j-core.' } })
+    expect(readyToAdd(typed('npm', 'Express'), [], [])).toEqual({ ok: false, errors: { repo: 'That doesn’t look like an npm package name. Type it in small letters, for example express or @nestjs/core.' } })
+    expect(readyToAdd(typed('npm', 'express'), [], [{ kind: 'npm', ref: 'express' }])).toEqual({ ok: false, errors: { repo: 'express is already on the list.' } })
+    // The same name on GitHub is another source.
+    expect(readyToAdd(typed('npm', 'express'), [], [{ kind: 'github', ref: 'express' }])).toEqual({ ok: true, body: { name: 'Acme', package: { kind: 'npm', ref: 'express' } } })
+  })
+
+  it('starts the choice from the package when the person changes a package guess', () => {
+    const state = run('Log4j', { type: 'answered', answer: found(LOG4J) }, { type: 'change' })
+    expect(state.repo).toBe('org.apache.logging.log4j:log4j-core')
+    expect(state.kind).toBe('maven')
+    expect(text(form(state))).toContain('Maven coordinates')
   })
 })

@@ -140,7 +140,7 @@ check('i2-samples-use-todays-tools', async (browser) => session(browser, 1280, a
   await t.click('[data-act="libTab"][data-arg="agents"]'); texts.push(await t.text());
   await t.click('[data-act="libTab"][data-arg="tools"]'); texts.push(await t.text());
   /* LangServe is a real GitHub project on the watchlist. Its moved-address item is in Needs you (fix round A, item 12). */
-  const bad = texts.flatMap((x) => x.match(/GitHub issues|bug reports? on|Entra|GitLab|admin tools|Issue reader|Access checker|Message writer|Post in Teams/gi) || []);
+  const bad = texts.flatMap((x) => x.match(/GitHub issues|bug reports? on|\bEntra\b|GitLab|admin tools|Issue reader|Access checker|Message writer|Post in Teams/gi) || []);
   assert.deepStrictEqual(bad, [], `planned systems in default samples: ${bad.join(', ')}`);
   const wf = texts[0];
   for (const name of ['Morning new-ticket check', 'Weekly closed-ticket summary', 'Keep our software up to date']) assert(wf.includes(name), `Workflows lists ${name}`);
@@ -215,12 +215,15 @@ check('i8-one-count', async (browser) => session(browser, 1280, async (t) => {
   assert(/choices? left/.test(footer), footer);
 }));
 
-check('i9-watchlist-github-only', async (browser) => session(browser, 1280, async (t) => {
+/* Since 8 Nov 2026 GitHub, Maven Central and npm are read, and known vulnerabilities are looked up for Maven and npm
+   packages from OSV and NVD (CAPS.packages). The rest of ADR 0025 is still shown only with Planned features. */
+check('i9-watchlist-built-sources-only', async (browser) => session(browser, 1280, async (t) => {
   await t.go('software');
   const text = await t.text();
-  const bad = text.match(/Maven Central|PyPI|NuGet|Docker Hub|vulnerab|OSV|NVD|CISA|endoflife|Security risk|Support ending/gi) || [];
-  assert.deepStrictEqual(bad, [], `ADR 0025 sources shown by default: ${bad.join(', ')}`);
+  const bad = text.match(/PyPI|NuGet|Docker Hub|CISA|endoflife|Security risk|Support ending/gi) || [];
+  assert.deepStrictEqual(bad, [], `planned ADR 0025 sources shown by default: ${bad.join(', ')}`);
   assert(/GitHub releases\s+Ready/.test(text), 'source states from the registry');
+  assert(/Maven Central and npm\s+Ready/.test(text), 'Maven Central and npm are Ready');
   await t.ctl('preview', 'on');
   const on = await t.text();
   assert(on.includes('Security risks'), 'preview shows the security findings');

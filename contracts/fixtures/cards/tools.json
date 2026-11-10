@@ -5,6 +5,28 @@
       "kind": "read",
       "name": "Read GitHub releases",
       "description": "Reads the newest releases of a public GitHub repository.",
+      "system": "GitHub",
+      "in_cards": true,
+      "target_input": null,
+      "min_approvers": null
+    },
+    {
+      "id": "packages.read_versions",
+      "kind": "read",
+      "name": "Read Maven Central and npm",
+      "description": "Reads every version a package has on Maven Central or npm, so the Version checker can find the newest. Only the Maven and npm packages on the Software watchlist.",
+      "system": "Maven Central and npm",
+      "in_cards": false,
+      "target_input": null,
+      "min_approvers": null
+    },
+    {
+      "id": "packages.find_vulnerabilities",
+      "kind": "read",
+      "name": "Look up known vulnerabilities in packages",
+      "description": "Finds known vulnerabilities in the version we run of each Maven or npm package in OSV, then reads each one's official score from NVD. Only the Maven and npm packages on the Software watchlist, and only a version someone gave.",
+      "system": "OSV and NVD",
+      "in_cards": false,
       "target_input": null,
       "min_approvers": null
     },
@@ -13,6 +35,8 @@
       "kind": "read",
       "name": "Search Jira",
       "description": "Finds tickets in a Jira project by words, status, type, the day they were done, the day they were created or the day they were last updated. Each ticket comes with its type and assignee. A long list is cut at 50, and the agent says so.",
+      "system": "Jira",
+      "in_cards": true,
       "target_input": null,
       "min_approvers": null
     },
@@ -21,6 +45,8 @@
       "kind": "read",
       "name": "Read a Jira ticket",
       "description": "Reads one Jira ticket.",
+      "system": "Jira",
+      "in_cards": true,
       "target_input": null,
       "min_approvers": null
     },
@@ -29,6 +55,8 @@
       "kind": "write",
       "name": "Create a Jira ticket",
       "description": "Proposes a ticket. It is created only after an Approver approves it.",
+      "system": "Jira",
+      "in_cards": true,
       "target_input": "jira_project",
       "min_approvers": 1
     }

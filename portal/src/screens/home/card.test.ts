@@ -7,7 +7,7 @@ import setupCardAnswer from '../../../../contracts/fixtures/planner/answer.setup
 import partAnswer from '../../../../contracts/fixtures/planner/answer.part.json'
 import checkCant from '../../../../contracts/fixtures/planner/check-part.cant.json'
 import { ApiError } from '../../api/client'
-import type { CardView, DraftView, PartReply, PlanOut, RowKind, RowState, SetupCardReply, ToolId } from '../../api/types'
+import type { CardToolId, CardView, DraftView, PartReply, PlanOut, RowKind, RowState, SetupCardReply } from '../../api/types'
 import {
   afterPartCheck,
   andList,
@@ -394,7 +394,7 @@ describe('pressing Turn it on', () => {
       purpose: drafted.purpose,
       good_for: drafted.good_for ?? [],
       inputs: (drafted.inputs ?? []).map((input) => ({ ...input, kind: 'jira_project' })),
-      blocks: (drafted.blocks ?? []).map((block) => ({ say: block.say, tool: (block.tool ?? null) as ToolId | null })),
+      blocks: (drafted.blocks ?? []).map((block) => ({ say: block.say, tool: (block.tool ?? null) as CardToolId | null })),
       ...change,
     })
     const other = copy('crd_bob', 'bob')
@@ -416,7 +416,7 @@ describe('pressing Turn it on', () => {
       purpose: drafted.purpose,
       good_for: drafted.good_for ?? [],
       inputs: (drafted.inputs ?? []).map((input) => ({ ...input, kind: 'jira_project' })),
-      blocks: (drafted.blocks ?? []).map((block) => ({ say: block.say, tool: (block.tool ?? null) as ToolId | null })),
+      blocks: (drafted.blocks ?? []).map((block) => ({ say: block.say, tool: (block.tool ?? null) as CardToolId | null })),
     }
     const plan = planView(CLEAN_DRAFT, form().rows)
     expect([...(reusedAgents(plan, [starter, mine], 'alice') ?? [])]).toEqual([0])

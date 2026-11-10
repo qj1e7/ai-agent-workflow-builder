@@ -3,10 +3,10 @@ from datetime import date, datetime
 from typing import Annotated, Any, Final, Literal, Protocol
 
 import httpx
-from pydantic import Field, StringConstraints, TypeAdapter, field_validator
+from pydantic import Field, StringConstraints, TypeAdapter, field_validator, model_validator
 
 from platform_api.monitoring import AgentEvent
-from platform_api.wire import RepoName, WireModel
+from platform_api.wire import MavenCoordinate, NpmPackage, RepoName, SourceKind, WireModel
 
 
 class GithubSource(WireModel):
@@ -14,10 +14,36 @@ class GithubSource(WireModel):
     ref: RepoName
 
 
+class MavenSource(WireModel):
+    kind: Literal["maven"] = "maven"
+    ref: MavenCoordinate
+
+
+class NpmSource(WireModel):
+    kind: Literal["npm"] = "npm"
+    ref: NpmPackage
+
+
+type SoftwareSourceIn = Annotated[
+    GithubSource | MavenSource | NpmSource, Field(discriminator="kind")
+]
+
+
+def source_in(kind: SourceKind, ref: str) -> GithubSource | MavenSource | NpmSource:
+    """The source as the Agent API names it, from the kind and ref the builder saved."""
+    match kind:
+        case "github":
+            return GithubSource(ref=ref)
+        case "maven":
+            return MavenSource(ref=ref)
+        case "npm":
+            return NpmSource(ref=ref)
+
+
 class SoftwareToCheck(WireModel):
     id: str
     name: str
-    source: GithubSource
+    source: SoftwareSourceIn
     our_version: str | None
     open_ticket: str | None = None
     awaiting_approval: bool = False
@@ -30,9 +56,20 @@ class WatchlistInputs(WireModel):
     software: list[SoftwareToCheck]
 
 
-type ToolId = Literal[
+type CardToolId = Literal[
     "github.read_releases", "jira.search", "jira.read_ticket", "jira.create_ticket"
 ]
+"""The tools an agent card can use. The runtime gives each one to the model."""
+type ToolId = Literal[
+    "github.read_releases",
+    "jira.search",
+    "jira.read_ticket",
+    "jira.create_ticket",
+    "packages.read_versions",
+    "packages.find_vulnerabilities",
+]
+"""Every tool, including the two only the Software watchlist check runs (ADR 0025). No card and
+no model can use those two."""
 type ToolKind = Literal["read", "write"]
 type InputKind = Literal["github_repo", "jira_project", "text"]
 
@@ -46,7 +83,7 @@ class CardInput(WireModel):
 
 class CardBlock(WireModel):
     say: str
-    tool: ToolId | None
+    tool: CardToolId | None
 
 
 class CardSpec(WireModel):
@@ -119,6 +156,22 @@ type FindingState = Literal[
 ]
 
 
+type Severity = Literal["critical", "high", "medium", "low", "unknown"]
+type VulnerabilityCheck = Literal["not_checked", "checked", "could_not_check"]
+
+
+class Vulnerability(WireModel):
+    """A known vulnerability in our version, as the Version checker reported it (ADR 0025)."""
+
+    id: str
+    severity: Severity
+    score: float | None = None
+    summary: str = ""
+    fixed_in: str | None = None
+    reported_by: list[Literal["OSV", "NVD"]]
+    url: str
+
+
 class Finding(WireModel):
     software_id: str
     state: FindingState
@@ -127,6 +180,8 @@ class Finding(WireModel):
     detail: str
     full_name: RepoName | None = None
     not_found: bool = False
+    vulnerability_check: VulnerabilityCheck = "not_checked"
+    vulnerabilities: list[Vulnerability] = Field(default_factory=list[Vulnerability])
 
 
 class TaskOutput(WireModel):
@@ -234,7 +289,7 @@ github_check_result_adapter: TypeAdapter[GitHubCheckResult] = TypeAdapter(GitHub
 
 
 class ToolSpec(WireModel):
-    id: ToolId
+    id: CardToolId
     kind: ToolKind
     name: str
     description: str
@@ -333,7 +388,7 @@ class LibraryCard(WireModel):
     purpose: str
     good_for: list[str] = Field(default_factory=list[str])
     inputs: list[LibraryInput] = Field(default_factory=list[LibraryInput])
-    tools: list[ToolId] = Field(default_factory=list[ToolId])
+    tools: list[CardToolId] = Field(default_factory=list[CardToolId])
 
 
 class ChooseRequest(WireModel):
@@ -386,11 +441,18 @@ class FindSoftwareRequest(WireModel):
 
 
 class SoftwareMatch(WireModel):
-    repo: RepoName
+    kind: SourceKind = "github"
+    repo: str
     what: str = Field(min_length=1, max_length=120)
     why: str = Field(max_length=300)
     releases: Literal["published", "none"]
     newest: str | None
+
+    @model_validator(mode="after")
+    def _fits_its_kind(self) -> SoftwareMatch:
+        """The runtime names a package as its registry does, a project as GitHub does."""
+        source_in(self.kind, self.repo)
+        return self
 
 
 class FoundSoftware(WireModel):

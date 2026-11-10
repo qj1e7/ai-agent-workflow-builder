@@ -13,9 +13,11 @@
     {
       "id": "version_checker",
       "display": "Version checker",
-      "description": "Reads the GitHub releases of each watched software, compares them with the version the team runs, and suggests an upgrade ticket for each one that is behind.",
+      "description": "Reads the newest version of each watched software from GitHub releases, Maven Central or npm, compares it with the version the team runs, looks up known vulnerabilities in that version, and suggests an upgrade ticket for each one that is behind.",
       "capabilities": [
         "read GitHub releases",
+        "read Maven Central and npm versions",
+        "look up known vulnerabilities in OSV and NVD",
         "compare with the version the team runs",
         "suggest upgrade tickets"
       ]

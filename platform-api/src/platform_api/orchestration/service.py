@@ -33,7 +33,6 @@ from platform_api.orchestration.agents import (
     CardsInputs,
     CardToRun,
     CarryForward,
-    GithubSource,
     ModelAccess,
     SoftwareToCheck,
     TaskFailed,
@@ -41,6 +40,7 @@ from platform_api.orchestration.agents import (
     TaskOutput,
     TaskRequest,
     WatchlistInputs,
+    source_in,
 )
 from platform_api.orchestration.approvals import (
     AlreadyRecorded,
@@ -647,7 +647,7 @@ class Orchestrator:
                         SoftwareToCheck(
                             id=s.id,
                             name=s.name,
-                            source=GithubSource(ref=s.source.ref),
+                            source=source_in(s.source.kind, s.source.ref),
                             our_version=s.our_version,
                             open_ticket=s.open_ticket,
                             awaiting_approval=s.awaiting_approval,

@@ -2,7 +2,15 @@ from datetime import date, datetime
 from typing import Annotated, Any, Final, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    TypeAdapter,
+    model_validator,
+)
 
 
 class WireModel(BaseModel):
@@ -155,10 +163,42 @@ class GithubSource(WireModel):
     ref: RepoName = Field(description="The repository whose releases are read, as owner/name.")
 
 
+MAVEN_COORDINATE_PATTERN = (
+    r"^[A-Za-z0-9_-]{1,60}(?:\.[A-Za-z0-9_-]{1,60}){0,10}:[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$"
+)
+"""groupId:artifactId. The group's dots become folders in the registry's address, so no part
+may be empty, and the artifact never starts with a dot."""
+NPM_PACKAGE_PATTERN = r"^(?:@[a-z0-9~-][a-z0-9._~-]{0,100}/)?[a-z0-9~-][a-z0-9._~-]{0,113}$"
+"""An npm package name, with or without its @scope, as npm allows it today."""
+
+
+class MavenSource(WireModel):
+    kind: Literal["maven"] = "maven"
+    ref: str = Field(
+        pattern=MAVEN_COORDINATE_PATTERN,
+        description="The package on Maven Central as groupId:artifactId, such as "
+        "org.apache.logging.log4j:log4j-core.",
+    )
+
+
+class NpmSource(WireModel):
+    kind: Literal["npm"] = "npm"
+    ref: str = Field(
+        pattern=NPM_PACKAGE_PATTERN,
+        description="The package on the npm registry, such as express or @angular/core.",
+    )
+
+
+type SoftwareSource = Annotated[GithubSource | MavenSource | NpmSource, Field(discriminator="kind")]
+type SourceKind = Literal["github", "maven", "npm"]
+SOURCE_NAMES: dict[str, str] = {"github": "GitHub", "maven": "Maven Central", "npm": "npm"}
+"""How each source is named to people, in messages and tickets (ADR 0025)."""
+
+
 class SoftwareToCheck(WireModel):
     id: str = Field(pattern=SOFTWARE_ID_PATTERN)
     name: str = Field(min_length=1, max_length=80)
-    source: GithubSource
+    source: SoftwareSource
     our_version: str | None = Field(
         description="The version the team runs now. None means the newest release becomes the "
         "starting point."
@@ -196,9 +236,20 @@ class WatchlistInputs(WireModel):
     ]
 
 
-type ToolId = Literal[
+type CardToolId = Literal[
     "github.read_releases", "jira.search", "jira.read_ticket", "jira.create_ticket"
 ]
+"""The tools an agent card can use. The runtime gives each one to the model."""
+type ToolId = Literal[
+    "github.read_releases",
+    "jira.search",
+    "jira.read_ticket",
+    "jira.create_ticket",
+    "packages.read_versions",
+    "packages.find_vulnerabilities",
+]
+"""Every tool, including the two only the Software watchlist check runs (ADR 0025). No card and
+no model can use those two."""
 type ToolKind = Literal["read", "write"]
 type InputKind = Literal["github_repo", "jira_project", "text"]
 
@@ -217,7 +268,7 @@ class CardInput(WireModel):
 
 class CardBlock(WireModel):
     say: str = Field(min_length=1, max_length=300, description="The step in plain English.")
-    tool: ToolId | None = Field(
+    tool: CardToolId | None = Field(
         description="The one tool this block uses, or None for a block that only thinks."
     )
 
@@ -348,6 +399,43 @@ type FindingState = Literal[
     "behind", "up_to_date", "starting_point", "already_raised", "cant_check"
 ]
 
+type Severity = Literal["critical", "high", "medium", "low", "unknown"]
+type VulnerabilitySource = Literal["OSV", "NVD"]
+type VulnerabilityCheck = Literal["not_checked", "checked", "could_not_check"]
+
+URGENT_SCORE = 9.0
+"""A known vulnerability scored this high or more makes the upgrade ticket urgent (ADR 0025)."""
+
+
+class Vulnerability(WireModel):
+    """One known vulnerability in the version the team runs, merged across sources by CVE."""
+
+    id: str = Field(
+        min_length=1,
+        max_length=60,
+        description="The CVE number when there is one, such as CVE-2021-44228, otherwise the "
+        "advisory's own id, such as GHSA-jfh8-c2jp-5v3q.",
+    )
+    severity: Severity = Field(
+        description="From NVD's CVSS score when NVD answered, otherwise from the advisory. "
+        "unknown when neither said."
+    )
+    score: float | None = Field(
+        default=None, ge=0, le=10, description="NVD's CVSS base score. None when NVD was not read."
+    )
+    summary: str = Field(default="", max_length=200, description="One line about the flaw.")
+    fixed_in: str | None = Field(
+        default=None, description="The lowest version the advisory says fixes it, when it says."
+    )
+    reported_by: list[VulnerabilitySource] = Field(
+        min_length=1, description="Which sources reported it, so an Approver can check them."
+    )
+    url: str = Field(description="The record an Approver can open: NVD for a CVE, else OSV.")
+
+    @property
+    def urgent(self) -> bool:
+        return self.severity == "critical" or (self.score or 0) >= URGENT_SCORE
+
 
 class Finding(WireModel):
     software_id: str
@@ -371,6 +459,16 @@ class Finding(WireModel):
         default=False,
         description="True when GitHub answered that the saved repository does not exist (404). "
         "Nothing says where it went.",
+    )
+    vulnerability_check: VulnerabilityCheck = Field(
+        default="not_checked",
+        description="Whether known vulnerabilities in our version were looked up. not_checked "
+        "for a GitHub source, which names no package, and when our version is not known. "
+        "could_not_check when OSV did not answer, so an empty list never reads as safe.",
+    )
+    vulnerabilities: list[Vulnerability] = Field(
+        default_factory=list[Vulnerability],
+        description="Known vulnerabilities in our version, worst first. Empty unless checked.",
     )
 
 
@@ -496,7 +594,7 @@ type GitHubCheckResult = Annotated[GitHubWorking | GitHubProblem, Field(discrimi
 
 
 class ToolSpec(WireModel):
-    id: ToolId
+    id: CardToolId
     kind: ToolKind
     name: str
     description: str
@@ -618,7 +716,7 @@ class LibraryCard(WireModel):
     purpose: str
     good_for: list[str] = Field(default_factory=list[str])
     inputs: list[LibraryInput] = Field(default_factory=list[LibraryInput])
-    tools: list[ToolId] = Field(default_factory=list[ToolId])
+    tools: list[CardToolId] = Field(default_factory=list[CardToolId])
 
 
 class ChooseRequest(WireModel):
@@ -683,10 +781,30 @@ class FindSoftwareRequest(WireModel):
 
 
 class SoftwareMatch(WireModel):
-    repo: RepoName = Field(
-        description="A GitHub project that exists, as owner/name, at the address GitHub gives it "
-        "now. Checked just now."
+    kind: SourceKind = Field(
+        default="github",
+        description="Where the software is published: github for a GitHub project, maven or npm "
+        "for a package on that registry (ADR 0025).",
     )
+    repo: str = Field(
+        max_length=214,
+        description="The software at its source, checked just now: a GitHub project as "
+        "owner/name at the address GitHub gives it now, a Maven package as groupId:artifactId, "
+        "or an npm package name.",
+    )
+
+    @model_validator(mode="after")
+    def _fits_its_kind(self) -> SoftwareMatch:
+        """The name must be one its source could hold, as the watchlist would save it."""
+        match self.kind:
+            case "github":
+                GithubSource(ref=self.repo)
+            case "maven":
+                MavenSource(ref=self.repo)
+            case "npm":
+                NpmSource(ref=self.repo)
+        return self
+
     what: str = Field(
         min_length=1,
         max_length=120,

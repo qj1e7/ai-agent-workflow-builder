@@ -30,9 +30,9 @@ from platform_api.orchestration import (
     RULES,
     TOOL_RULES,
     CardSpec,
+    CardToolId,
     LibraryCard,
     LibraryInput,
-    ToolId,
     check_value,
     tools_used,
     write_tools_used,
@@ -76,6 +76,8 @@ def tool_list() -> ToolList:
                 kind=rule.kind,
                 name=rule.name,
                 description=rule.description,
+                system=rule.system,
+                in_cards=rule.in_cards,
                 target_input=rule.target_input,
                 min_approvers=rule.min_approvers,
             )
@@ -146,11 +148,23 @@ def check_card(card: CardDefinition) -> CardChecked:
     for index, item in enumerate(card.blocks):
         say = limited(_one_line(item.say), SAY_LIMIT, f"blocks.{index}.say", "A block", 1)
         tool = (item.tool or "").strip() or None
-        if tool is not None and tool not in RULES:
+        rule = None if tool is None else RULES.get(tool)
+        if tool is not None and rule is None:
             problem(f"blocks.{index}.tool", f"{tool} is not a tool the platform has.")
+        elif rule is not None and not rule.in_cards:
+            problem(
+                f"blocks.{index}.tool",
+                f"{rule.name} runs only in the Software watchlist check, so an agent can't use it.",
+            )
         blocks.append(CardBlock(say=say, tool=tool))
 
-    used = tuple(dict.fromkeys(b.tool for b in blocks if b.tool is not None and b.tool in RULES))
+    used = tuple(
+        dict.fromkeys(
+            b.tool
+            for b in blocks
+            if b.tool is not None and b.tool in RULES and RULES[b.tool].in_cards
+        )
+    )
     asked: set[str] = set()
     for tool in used:
         rule = RULES[tool]
@@ -248,7 +262,7 @@ def check_values(
     return clean, errors
 
 
-def tools_of(card: CardView) -> list[ToolId]:
+def tools_of(card: CardView) -> list[CardToolId]:
     return list(tools_used(card_spec(card)))
 
 

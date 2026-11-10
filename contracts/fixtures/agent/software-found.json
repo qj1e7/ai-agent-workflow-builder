@@ -2,6 +2,7 @@
   "status": "found",
   "matches": [
     {
+      "kind": "github",
       "repo": "hashicorp/terraform",
       "what": "Terraform itself, from HashiCorp",
       "why": "From our list of known projects.",
@@ -9,6 +10,7 @@
       "newest": "v1.9.8"
     },
     {
+      "kind": "github",
       "repo": "opentofu/opentofu",
       "what": "OpenTofu, an open-source fork of Terraform",
       "why": "From our list of known projects.",

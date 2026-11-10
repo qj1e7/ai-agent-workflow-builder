@@ -138,3 +138,15 @@ def _not_a_dot_segment(repo: str) -> str:
 
 
 type RepoName = Annotated[str, Field(pattern=REPO_PATTERN), AfterValidator(_not_a_dot_segment)]
+
+
+# The package names the registries of ADR 0025 hold, kept the same as the agent runtime's.
+MAVEN_COORDINATE_PATTERN = (
+    r"^[A-Za-z0-9_-]{1,60}(?:\.[A-Za-z0-9_-]{1,60}){0,10}:[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$"
+)
+NPM_PACKAGE_PATTERN = r"^(?:@[a-z0-9~-][a-z0-9._~-]{0,100}/)?[a-z0-9~-][a-z0-9._~-]{0,113}$"
+
+type MavenCoordinate = Annotated[str, Field(pattern=MAVEN_COORDINATE_PATTERN)]
+type NpmPackage = Annotated[str, Field(pattern=NPM_PACKAGE_PATTERN)]
+type SourceKind = Literal["github", "maven", "npm"]
+type PackageKind = Literal["maven", "npm"]

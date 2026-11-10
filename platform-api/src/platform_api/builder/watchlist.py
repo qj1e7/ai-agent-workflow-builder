@@ -147,15 +147,32 @@ class NeverAtThatAddress:
     ref: str
 
 
+def source_url(source: SoftwareSource) -> str:
+    """The page a person opens to see the versions the check reads."""
+    match source.kind:
+        case "github":
+            return f"https://github.com/{source.ref}/releases"
+        case "maven":
+            group, _, artifact = source.ref.partition(":")
+            return f"https://central.sonatype.com/artifact/{group}/{artifact}/versions"
+        case "npm":
+            return f"https://www.npmjs.com/package/{source.ref}?activeTab=versions"
+
+
 def source_view(source: SoftwareSource) -> SourceView:
-    return SourceView(
-        kind=source.kind, ref=source.ref, url=f"https://github.com/{source.ref}/releases"
-    )
+    return SourceView(kind=source.kind, ref=source.ref, url=source_url(source))
+
+
+def same_source(a: SoftwareSource, b: SoftwareSource) -> bool:
+    """A change of case is the same repository or package."""
+    return a.kind == b.kind and a.ref.casefold() == b.ref.casefold()
 
 
 def moved_to(listed: ListedSoftware, check: LatestCheck | None) -> str | None:
     """The repository GitHub answered for the saved one, when it is another one. A change of
-    case is the same repository."""
+    case is the same repository. Only a GitHub repository can move this way."""
+    if listed.source.kind != "github":
+        return None
     named = None if check is None else check.github_name
     if named is None or named.casefold() == listed.source.ref.casefold():
         return None
@@ -309,7 +326,7 @@ def _listed(row: Mapping[str, Any]) -> ListedSoftware:
     return ListedSoftware(
         SoftwareId(row["software_id"]),
         row["name"],
-        SoftwareSource(row["source_ref"]),
+        SoftwareSource(row["source_ref"], row["source_kind"]),
         row["starting_version"],
         UserId(row["added_by"]),
         row["added_at"],
@@ -357,8 +374,9 @@ def _listed_in(record: WatchlistRecord, software_id: SoftwareId) -> ListedSoftwa
 
 
 def _watched_elsewhere(record: WatchlistRecord, software_id: SoftwareId, ref: str) -> bool:
-    wanted = ref.casefold()
-    return any(s.id != software_id and s.source.ref.casefold() == wanted for s in record.software)
+    """Whether another row watches this GitHub repository. Only GitHub addresses change."""
+    wanted = SoftwareSource(ref)
+    return any(s.id != software_id and same_source(s.source, wanted) for s in record.software)
 
 
 def _with_ref(
@@ -519,17 +537,18 @@ class Watchlist:
                 held = (
                     {}
                     if record is None
-                    else {s.source.ref.casefold(): s.name for s in record.software}
+                    else {(s.source.kind, s.source.ref.casefold()): s.name for s in record.software}
                 )
                 return FoundProjects(
                     matches=[
                         ProjectGuess(
+                            kind=match.kind,
                             repo=match.repo,
                             what=match.what,
                             why=match.why,
                             releases=match.releases,
                             newest=match.newest,
-                            already_listed=held.get(match.repo.casefold()),
+                            already_listed=held.get((match.kind, match.repo.casefold())),
                         )
                         for match in matches
                     ]
@@ -575,15 +594,16 @@ class Watchlist:
             # each make one, so adding takes a lock that exists before the row does.
             await uow.conn.execute("SELECT pg_advisory_xact_lock(hashtext('builder.watchlist'))")
             record = await _current(uow.conn, lock=True)
+            source = SoftwareSource(body.source_ref, body.source_kind)
             if record is not None:
-                if any(s.source.ref.casefold() == body.repo.casefold() for s in record.software):
-                    return RepoAlreadyWatched(body.repo)
+                if any(same_source(s.source, source) for s in record.software):
+                    return RepoAlreadyWatched(source.ref)
                 if len(record.software) >= WATCHLIST_LIMIT:
                     return WatchlistFull(WATCHLIST_LIMIT)
             listed = ListedSoftware(
                 SoftwareId(new_id("sw")),
                 body.name,
-                SoftwareSource(body.repo),
+                source,
                 body.our_version,
                 principal.user_id,
                 uow.now,
@@ -640,8 +660,7 @@ class Watchlist:
                 if uow.now > until:
                     return TooLate(until)
                 removed = removal.listed
-                ref = removed.source.ref.casefold()
-                if any(s.source.ref.casefold() == ref for s in record.software):
+                if any(same_source(s.source, removed.source) for s in record.software):
                     return RepoAddedAgainSinceRemoval(removed.source.ref)
                 if len(record.software) >= WATCHLIST_LIMIT:
                     return WatchlistFull(WATCHLIST_LIMIT)

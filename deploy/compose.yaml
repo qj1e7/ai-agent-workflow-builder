@@ -96,6 +96,8 @@ services:
     environment:
       GITHUB_API_BASE: ${GITHUB_API_BASE:-https://api.github.com}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      # Optional. Lets the Version checker score more CVEs, faster, in NVD (ADR 0025).
+      NVD_API_KEY: ${NVD_API_KEY:-}
       AGENT_API_KEY: ${AGENT_API_KEY:?run deploy/make-env.sh}
       CALLBACK_ALLOWED_ORIGINS: http://platform-api:8000
       # The Jira tools read through platform-api, never from Jira itself (ADR 0035). It must be one of

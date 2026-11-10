@@ -217,6 +217,21 @@ def test_the_tool_list_has_every_rule_in_order_with_its_target_and_minimum():
     assert (write.kind, write.target_input, write.min_approvers) == ("write", "jira_project", 1)
     read = next(t for t in tools if t.id == "jira.search")
     assert (read.kind, read.target_input, read.min_approvers) == ("read", None, None)
+    packages = next(t for t in tools if t.id == "packages.read_versions")
+    assert (packages.system, packages.in_cards) == ("Maven Central and npm", False)
+
+
+@pytest.mark.parametrize("tool", ["packages.read_versions", "packages.find_vulnerabilities"])
+def test_a_card_cannot_use_a_tool_only_the_watchlist_check_runs(tool: str):
+    card = definition(
+        blocks=[
+            CardBlock(say="Read versions.", tool=tool),
+            CardBlock(say="Raise a ticket.", tool="jira.create_ticket"),
+        ]
+    )
+    problems = problems_of(card)
+    assert "runs only in the Software watchlist check" in problems["blocks.0.tool"]
+    assert check_card(card).approvals == [CardApprovalView(tool="jira.create_ticket", approvers=1)]
 
 
 def test_a_card_reads_as_the_runtimes_spec_and_the_librarys_summary():
