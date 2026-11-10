@@ -1035,6 +1035,10 @@ button.schip { cursor: pointer; }
 .snotes svg { margin-top: 3px; }
 .snotes .cant { color: var(--red-ink); }
 .snotes .missing { color: var(--amber-ink); }
+/* The edit card shows only what changes, before and after (ADR 0043). */
+.ba { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: 4px 12px; margin: 0; }
+.ba dt { color: var(--muted); font-weight: 600; font-size: 0.9375rem; }
+.ba dd { margin: 0; }
 /* Each part of a request on a set-up card (ADR 0043): a tick, a cross or a question, never colour alone. */
 .parts { display: grid; }
 .part { display: grid; grid-template-columns: 22px 8.5rem minmax(0, 1fr); gap: 6px 12px; padding: 10px 16px; border-top: 1px solid var(--rule); align-items: start; }
@@ -1525,7 +1529,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     libTab: 'can', toolChecks: {}, toolAsk: { text: '', result: null, err: '' }, teamReqs: [],
     jiraComp: 'none', jiraCompAsker: null, jiraCompBy: null, jiraCompSeen: false,
     added: [], removed: [], swOpen: null, swForm: newSwForm(), swErr: {}, lsFixed: false,
-    drafts: [], draftSeq: 0, discarded: null, made: [], paused: {}, deleted: {}, sched: {}, editing: null, schedForm: null, schedErr: {},
+    drafts: [], draftSeq: 0, discarded: null, made: [], paused: {}, deleted: {}, sched: {}, vers: {}, editing: null, schedForm: null, schedErr: {},
     n8n: {}, n8nChg: {}, n8nLog: {}, editRun: null,
     find: { workflows: '', software: '' }, filter: 'all',
     wiz: newWiz(),
@@ -1713,6 +1717,29 @@ details > .m-close { animation: fold 140ms ease-in both; }
       access: [['List who can use Entra ID, the admin tools and GitLab', 'read', 'Reads 3 systems'], ['Ask each manager to confirm in Teams', 'write', 'Changes data, waits for a yes'], ['Remove access nobody confirmed', 'write', 'Changes data, 2 Approvers, one after the other']],
     }[id];
   }
+  /* ---------- Versions (ADR 0043) ----------
+     A schedule change publishes a new version, from the chat's edit card or the page's schedule editor alike. Undo
+     publishes the version before it again, so the list only grows. Version 1 is the one the workflow was turned on with. */
+  const versionsOf = (id) => [{ v: 1 }].concat(S.vers[id] || []);
+  const verNow = (id) => versionsOf(id).length;
+  /* Work everything out first, then write, so a failure leaves nothing half-saved. Saving the watchlist's schedule
+     makes the saver its owner, and an owner can't be one of its named Approvers, so they come off that list. */
+  function publishSched(id, sched, undid) {
+    const from = { ...R(id).sched };
+    let off = false;
+    const named = id === 'sw' && apprOf('sw') ? copyAppr(apprOf('sw')) : null;
+    if (named) named.steps.forEach((x) => { if (x.first === S.user) { x.first = hasBackup(x) ? x.backup : ''; x.backup = 'none'; off = true; } else if (x.backup === S.user) { x.backup = 'none'; off = true; } });
+    S.sched[id] = { ...sched };
+    if (id === 'conf') S.nr = { ...S.nr, sched: { ...sched } };
+    if (id === 'sw') { S.swOwner = S.user; if (off) S.appr.sw = named; }
+    const v = verNow(id) + 1;
+    (S.vers[id] = S.vers[id] || []).push({ v, from, to: { ...sched }, by: S.user, undid });
+    return { v, off };
+  }
+  const verText = (x) => (x.v === 1 ? 'The version it was turned on with.' : x.undid ? `${nm(x.by)} undid version ${x.undid}, so it runs ${lc(schedText(x.to))} again.` : `${nm(x.by)} changed when it runs from ${lc(schedText(x.from))} to ${lc(schedText(x.to))}.`);
+  /* The version list a workflow's page shows once it has more than one, newest first. */
+  const versionsList = (id) => `<ol class="timeline" aria-label="Versions, newest first">${versionsOf(id).slice().reverse().map((x) => `<li><b>Version ${x.v}</b><span>${x.v > 1 ? 'Today, 9:10. ' : ''}${verText(x)}${x.v === verNow(id) ? ' This is the version running now.' : ''}</span></li>`).join('')}</ol>`;
+  const versionsPanel = (id) => (S.vers[id] ? `<div class="panel" style="margin-top:16px"><h2>Versions</h2>${versionsList(id)}</div>` : '');
   const routineIds = () => (S.firstDay ? [] : ['sw', 'issues', 'nudge', 'access']).concat(S.made.map((_, i) => `made:${i}`), S.conf !== 'none' ? ['conf'] : []).filter((id) => !S.deleted[id] && (!BASE[id] || !BASE[id].planned || shows(BASE[id].planned)));
   const has = (id) => routineIds().includes(id);
 
@@ -3066,6 +3093,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       <ul class="srcs" aria-label="Sources">${srcRow('GitHub releases', 'ghReleases')}${srcRow('Package registries', 'registries')}${srcRow('Security advisories', 'registries')}${srcRow('Support end dates', 'registries')}</ul>
       ${day1 || !op ? '' : `<div class="btns"><button class="btn sm" data-act="editSched" data-arg="sw">${I.edit()}Change schedule</button>${changeApproversBtn('sw', 'editAppr', 'btn sm')}</div>`}
       ${S.editing === 'sw' ? `<div data-flip="ed:s:sw" data-enter="reveal">${schedEditor('sw')}</div>` : ''}
+      ${S.vers.sw ? `<h3>Versions</h3>${versionsList('sw')}` : ''}
       ${S.editingAppr === 'sw' ? `<div data-flip="ed:a:sw" data-enter="reveal">${apprEditor('sw')}</div>` : ''}
     </div></section>`;
     return `<div class="pagehead"><div><h1 tabindex="-1">Software watchlist</h1><p>${watchLine()}</p></div>
@@ -3138,7 +3166,6 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const canSched = me().op && id !== 'sw' && !(BASE[id] && BASE[id].fixedSchedule);
     const tools = (a) => { let keys = []; try { keys = toolKeysOf(a); } catch (e) { keys = []; } return keys.map((k) => TOOLS[k][0]); };
     const history = (S.n8nLog[id] || []).map((e) => `<li><b>${e.when}</b><span>${e.text}</span></li>`);
-    if (S.sched[id]) history.unshift(`<li><b>Today</b><span>Schedule changed to ${r.when}.</span></li>`);
     return `<button class="back" data-act="go" data-arg="workflows">${I.left(16)}Workflows</button>
       <div class="pagehead"><div><div style="margin-bottom:8px">${pills(id)}${BASE[id] && BASE[id].planned ? ` ${PLANNED_TAG}` : ''}</div><h1 tabindex="-1">${esc(r.name)}</h1><p>${r.what}</p></div>${me().op && id !== 'sw' ? `<div class="btns">${S.paused[id] ? '' : `<button class="btn sm" data-act="pause" data-arg="${id}">${I.pause(14)}Pause</button>`}${moreMenu(id)}</div>` : ''}</div>
       <div data-unbuilt="Status banner">${banner(id)}</div>
@@ -3154,6 +3181,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
           ? `<button class="row-btn" data-act="watch" data-arg="${id}"><div><div class="row-name">${when}</div><div class="row-sub">${what}</div></div><span class="btns small" style="font-weight:700">See the run ${I.right(16)}</span></button>`
           : `<div class="row"><div><div class="row-name">${when}</div><div class="row-sub">${what}</div></div></div>`).join('')}</div>` : `<p class="muted">No runs yet. The first one is ${r.next}.</p>`}
         ${!hasRun(id) && (madeOf(id) || id === 'conf') ? '<p class="mocknote" role="note"><b>Test note</b>This prototype doesn’t simulate runs for workflows made on Home, so this page has no Run now and no test run. It isn’t part of the product.</p>' : ''}</div>
+      ${versionsPanel(id)}
       <details class="tech" style="margin-top:16px" data-unbuilt="Technical details"><summary>Technical details</summary><div class="tech-body">
         <section><h3>Steps</h3>${stepsList(planFor(id), false, `plan:${id}`)}${readsNote(id)}</section>
         <section><h3>Agents and tools</h3><ul class="agent-tool-list">${r.agents.map((a) => { const s = agentStates(id)[a]; const t = tools(a); return `<li><button class="agent-chip" data-act="agent" data-arg="${a}">${face(a, 28, s || 'idle', { k: `wfp:${id}:${a}` })}<span>${AGENTS[a].name}${s ? `<span class="vh">, ${STATE_WORD[s]}</span>` : ''}</span></button>${t.length ? `<span class="small muted">${t.join(', ')}</span>` : ''}</li>`; }).join('')}</ul></section>
@@ -3489,6 +3517,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (follow) return follow;
     const about = aboutWorkflows(t);
     if (about) return about;
+    const edit = editAnswer(t);
+    if (edit) return edit;
     if (word || isSecurityAsk(t) || (hit && /keep track|\bwatch\b|\btrack\b|monitor/i.test(t))) {
       const cant = watchCant(t, hit);
       if (cant) return cant;
@@ -3644,6 +3674,102 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (row) return { kind: 'data', looked: ['watchlist'], about: row.key };
     return watchFor(namedIn(name), name, 'version');
   }
+  /* ---------- Changing a workflow by asking (ADR 0043) ----------
+     "Make the React check run on Mondays only" names a workflow and a change. This first version changes when it runs:
+     the card shows only what changes, before and after, with Save change and Never mind. Any other change gets an
+     honest answer and the workflow itself, where its editors stay. */
+  const SCHED_VERB = /\b(make|change|switch|move|set|reschedule|shift|run|put|update|edit)\b/i;
+  const OTHER_VERB = /\b(pause|stop|resume|delete|remove|rename|turn|cancel|disable|enable)\b/i;
+  const NOT_EDIT = /\b(watch|track|monitor|keep (?:track|an eye))\b|\bset up\b/i;
+  const NAME_SKIP = new Set(['the', 'a', 'our', 'my', 'up', 'to', 'date', 'keep', 'check', 'summary', 'workflow', 'ticket', 'tickets', 'new', 'review', 'report', 'list']);
+  const nameWords = (id) => R(id).name.toLowerCase().split(/[\s-]+/).filter((x) => !NAME_SKIP.has(x));
+  /* The workflow the last answer was about, for "make it daily". */
+  const focusOf = () => { const m = [...S.chat.msgs].reverse().find((x) => x.card && (x.card.kind === 'setup' ? x.card.done : ['why', 'edit'].includes(x.card.kind) && x.card.id)); return m ? (m.card.done ? m.card.done.id : m.card.id) : null; };
+  /* Which workflow a change names: its whole name, "the <words> check" matched against each name, software on the
+     watchlist (the watchlist checks it), or "it" for the last answer's workflow. Several matches, or none, ask which. */
+  function editTarget(t) {
+    const low = t.toLowerCase();
+    const ids = routineIds();
+    const full = ids.find((id) => low.includes(R(id).name.toLowerCase()));
+    if (full) return { id: full };
+    const ref = low.match(/\b(?:the|my|our|that|this)\s+((?:[\w.+-]+\s+){0,4}?)(check|summary|workflow|review|watchlist|report|list)\b/);
+    if (ref) {
+      const words = ref[1].trim().split(/[\s-]+/).filter(Boolean);
+      if (ref[2] === 'watchlist' || words.includes('software')) return has('sw') ? { id: 'sw' } : null;
+      const scored = ids.map((id) => [id, words.filter((w) => nameWords(id).includes(w)).length]).filter(([, n]) => n);
+      const best = Math.max(0, ...scored.map(([, n]) => n));
+      const top = scored.filter(([, n]) => n === best).map(([id]) => id);
+      if (top.length) return top.length === 1 ? { id: top[0] } : { pick: top };
+      const soft = namedIn(ref[1]);
+      if (soft) return onList(soft[0]) && has('sw') ? { id: 'sw', via: soft[0] } : { none: soft[0] };
+      return ids.length ? { pick: ids } : null;
+    }
+    if (/\b(it|this one|that one)\b/.test(low)) { const f = focusOf(); return f && has(f) ? { id: f } : ids.length ? { pick: ids } : null; }
+    return null;
+  }
+  const editAnswer = (t) => {
+    if (!me().op || NOT_EDIT.test(t) || !(SCHED_VERB.test(t) || OTHER_VERB.test(t))) return null;
+    const tg = editTarget(t);
+    if (!tg) return null;
+    return tg.none ? { kind: 'nocheck', name: tg.none } : { kind: 'edit', text: t, id: tg.id || null, pick: tg.pick || null, via: tg.via || '', day: '', state: 'open' };
+  };
+  /* What the request changes, worked out from the live schedule each time: the new schedule, a day still to choose, no
+     change, or why the card can't make it. */
+  function editPlan(c) {
+    /* "every day instead of every Monday": the part after "instead of" is the schedule it has now. */
+    const it = parseIntent(c.text.replace(/\b(?:instead of|rather than)\b[^,.;]*/gi, ''));
+    const r = R(c.id);
+    if (BASE[c.id] && BASE[c.id].fixedSchedule) return { no: 'fixed' };
+    if (OTHER_VERB.test(c.text) || (!it.freq && !it.time && !it.monthly)) return { no: 'other' };
+    if (it.monthly) return { no: 'monthly' };
+    const to = { ...r.sched, monthDay: r.sched.monthDay || '1' };
+    if (it.freq) { to.freq = it.freq; to.day = it.freq === 'week' ? it.day || c.day || '' : ''; }
+    if (it.time) to.time = it.time;
+    if (to.freq === 'week' && !to.day) return { to, ask: true };
+    return { to, same: schedText(to) === schedText(r.sched) };
+  }
+  function editSay(c) {
+    if (!c.id) return 'Which workflow should I change?';
+    if (!has(c.id)) return 'That workflow isn’t here any more.';
+    const name = R(c.id).name;
+    const now = lc(R(c.id).when);
+    if (c.state === 'kept') return 'No problem. Nothing changed.';
+    if (c.state === 'saved') return `Saved. ${name} runs ${now} now.`;
+    if (c.state === 'undone') return `Undone, as version ${c.undoVer}. ${name} runs ${now} now.`;
+    const p = editPlan(c);
+    if (p.no === 'fixed') return `${name} runs on a fixed schedule, ${now}. It can’t be changed.`;
+    if (p.no === 'monthly') return 'I can’t run things monthly yet.';
+    if (p.no === 'other') return `From the chat I can only change when ${name} runs.`;
+    if (p.same) return c.via ? `${c.via} is checked with all your software, which already runs ${now}.` : `${name} already runs ${now}.`;
+    return `${c.via ? `${c.via} is checked with all your software. ` : ''}Here’s the change. Nothing changes until you save it.`;
+  }
+  function editCard(m) {
+    const c = m.card;
+    const id = m.id;
+    if (!c.id) return `<div class="pcard" data-pres="edit:${id}">${partsList([{ key: 'which', mark: 'ask', label: 'Workflow', body: askBody({ q: 'Which workflow?', choices: c.pick.filter(has).map((w) => [w, R(w).name]), act: 'editPick', mid: id }, `q-${id}`) }])}</div>`;
+    if (!has(c.id) || c.state === 'kept') return '';
+    const r = R(c.id);
+    const p = c.state === 'open' ? editPlan(c) : null;
+    if (p && p.no) return p.no === 'other' ? `<div class="btns"><button class="btn sm" data-act="workflow" data-arg="${c.id}">Open ${esc(r.name)}</button></div>` : '';
+    if (p && p.same) return '';
+    const from = p ? r.sched : c.from;
+    const to = p ? p.to : c.to;
+    const ask = p && p.ask ? partsList([{ key: 'day', mark: 'ask', label: 'When', body: askBody({ q: 'Which day should it run?', choices: DAYS.map((d) => [d, d]), act: 'editDay', mid: id }, `q-${id}`) }]) : '';
+    const sw = c.id === 'sw' ? `<p class="note">This changes when all ${liveSoftware().length} software on the watchlist are checked. Saving makes you the owner of this schedule. Its checks then count as your work, so you won’t be able to approve them.</p>` : '';
+    const foot = c.state === 'open'
+      ? `<button class="btn primary" data-act="editSave" data-mid="${id}"${ask ? ' disabled' : ''}>Save change</button><button class="btn" data-act="editKeep" data-mid="${id}">Never mind</button>`
+      : c.state === 'saved' ? `<span class="note">${I.check(14)} Saved as version ${c.ver}. Next run ${r.next}.</span>${verNow(c.id) === c.ver ? `<button class="btn sm" data-act="editUndo" data-mid="${id}">Undo</button>` : ''}`
+        : `<span class="note">Undone, as version ${c.undoVer}.</span>`;
+    return `<div class="pcard" data-pres="edit:${id}">
+      <div class="pcard-h"><h3 tabindex="-1">Change ${esc(r.name)}</h3></div>
+      ${ask}
+      <section class="pcard-s"><h4>When it runs</h4><dl class="ba"><dt>Before</dt><dd>${schedText(from)}</dd><dt>After</dt><dd>${p && p.ask ? '<span class="muted">Choose a day</span>' : `<b>${schedText(to)}</b>`}</dd></dl>${sw}</section>
+      <div class="pcard-f">${foot}</div>
+    </div>`;
+  }
+  /* "Make the React check …" when there is no React check: say so, and offer to watch it, which is checked every Monday. */
+  const nocheckSay = (a) => (onList(a.name) ? `${a.name} is on the Software watchlist now, so it’s checked ${swDays()} with the rest of your software.` : `You don’t have a ${a.name} check. ${a.name} isn’t on the Software watchlist, which checks software ${swDays()}.`);
+  const nocheckCard = (m) => (onList(m.card.name) || !me().op ? '' : `<div class="btns"><button class="btn sm" data-act="say" data-arg="Keep track of the ${esc(m.card.name)} version">Watch ${esc(m.card.name)}</button></div>`);
   const mineCard = () => (needs().length ? needsStrip(needs(), 99, 'Planner answers about your workflows') : '');
   const startsCard = () => `<div class="chips starts" role="group" aria-label="Starting points" data-unbuilt="Planner answers about your workflows">${starts().map((t) => `<button class="chip" data-act="say" data-arg="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
 
@@ -3666,6 +3792,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     mine: { say: mineSay, card: () => mineCard() },
     starts: { say: () => 'Here are three places to start. Pick one, or tell me something else.', card: () => startsCard() },
     data: { say: dataSay, card: (m) => dataCard(m) },
+    edit: { say: editSay, card: (m) => editCard(m) },
+    nocheck: { say: nocheckSay, card: (m) => nocheckCard(m) },
   };
   const cardHTML = (m) => (ANSWERS[m.card.kind].card ? ANSWERS[m.card.kind].card(m) : '');
 
@@ -5778,6 +5906,34 @@ details > .m-close { animation: fold 140ms ease-in both; }
     destOpen: () => { S.wiz.destOpen = !S.wiz.destOpen; render(); },
     destDone: () => { S.wiz.destOpen = false; render(); const b = $app.querySelector('[data-act="destOpen"]'); if (b) b.focus(); },
     whenOpen: () => { S.wiz.whenOpen = true; render(); const f = document.getElementById('sched-freq'); if (f) f.focus(); },
+    /* The edit card: pick the workflow, choose a day, save as a new version, undo it, or leave it. */
+    editPick: (id, m) => { m.card.id = id; render(); const h = $app.querySelector(`[data-mid="${m.id}"] .pcard-h h3`); if (h) h.focus(); },
+    editDay: (d, m) => { m.card.day = d; render(); const b = $app.querySelector(`[data-act="editSave"][data-mid="${m.id}"]`); if (b) b.focus(); },
+    editSave: (_, m) => {
+      const c = m.card;
+      const p = c.state === 'open' && has(c.id) ? editPlan(c) : {};
+      if (!p.to || p.ask || p.same) return;
+      c.from = { ...R(c.id).sched };
+      c.to = { ...p.to };
+      c.ver = publishSched(c.id, p.to).v;
+      c.state = 'saved';
+      m.mood = 'success';
+      announce(editSay(c));
+      render();
+      const b = $app.querySelector(`[data-act="editUndo"][data-mid="${m.id}"]`);
+      if (b) b.focus();
+    },
+    editUndo: (_, m) => {
+      const c = m.card;
+      if (c.state !== 'saved' || verNow(c.id) !== c.ver) return;
+      c.undoVer = publishSched(c.id, c.from, c.ver).v;
+      c.state = 'undone';
+      announce(editSay(c));
+      render();
+      const h = $app.querySelector(`[data-mid="${m.id}"] .pcard-h h3`);
+      if (h) h.focus();
+    },
+    editKeep: (_, m) => { m.card.state = 'kept'; announce(editSay(m.card)); render(); focusComposer(); },
     /* A choice on the set-up card's one question. Focus moves to the next question, or to the button once none is left. */
     answer: (arg) => {
       const [k, v] = arg.split(/:(.*)/);
@@ -5833,14 +5989,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       S.schedErr = schedProblems(S.schedForm);
       const keys = Object.keys(S.schedErr);
       if (keys.length) { render(); const first = document.getElementById(`sf-${keys[0]}`); if (first) first.focus(); return; }
-      /* Work everything out first, then write, so a failure leaves nothing half-saved. Saving the watchlist's schedule
-         makes the saver its owner, and an owner can't be one of its named Approvers, so they come off that list. */
-      let off = false;
-      const named = id === 'sw' && apprOf('sw') ? copyAppr(apprOf('sw')) : null;
-      if (named) named.steps.forEach((s) => { if (s.first === S.user) { s.first = hasBackup(s) ? s.backup : ''; s.backup = 'none'; off = true; } else if (s.backup === S.user) { s.backup = 'none'; off = true; } });
-      S.sched[id] = { ...S.schedForm };
-      if (id === 'conf') S.nr = { ...S.nr, sched: { ...S.schedForm } };
-      if (id === 'sw') { S.swOwner = S.user; if (off) S.appr.sw = named; }
+      const { off } = publishSched(id, S.schedForm);
       S.editing = null;
       toast(`Saved. Next run ${R(id).next}.${id === 'sw' ? ` You now own this schedule, so you can’t approve its checks.${off ? ' You’re no longer one of its Approvers, so choose a new backup under Change who approves.' : ''}` : ''}`);
       render();

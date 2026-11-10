@@ -495,6 +495,45 @@ add('ANS-watch-parts', 'Watching software marks each part, and a time the watchl
   await t.expectText('Its own time gets a cross with the reason', /“every day at 8am”\s*The Software watchlist checks all your software together, every Monday at 9:00\./, 'main .thread li.cmsg:last-child');
 }, [1280, 390]);
 
+/* Changing a workflow by asking (ADR 0043): the edit card changes the schedule, as a new version with Undo. */
+const lastCard = 'main .thread li.cmsg:last-child';
+add('ANS-edit-save', 'Change a schedule by asking: Save change publishes version 2, the page lists it, and Undo goes back', async (t) => {
+  await t.ask('Make the morning new-ticket check run on Mondays only');
+  await t.expectText('The card shows only what changes, before and after', /When it runs\s+Before\s+Every weekday at 8:00\s+After\s+Every Monday at 8:00/, lastCard);
+  await t.expectCount('No new set-up card', `${lastCard} [data-act="turnOn"]`, 0);
+  await t.click(`${lastCard} [data-act="editSave"]`, 'Save change', { decision: true });
+  await t.expectText('It is saved as version 2', /Saved as version 2\. Next run Mon 2 Nov, 8:00\./, lastCard);
+  await t.menu('workflows', 'Open Workflows');
+  await t.click(S.row('issues'), 'Open Morning new-ticket check');
+  await t.expectText('The page runs on the new schedule', /Every Monday at 8:00, Singapore time/);
+  await t.expectText('The page lists version 2', /Versions\s+Version 2\s+Today, 9:10\. Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00\. This is the version running now\.\s+Version 1/);
+  await t.menu('home', 'Back to Chat');
+  await t.click(`${lastCard} [data-act="editUndo"]`, 'Undo', { decision: true });
+  await t.expectText('Undo publishes the version before again', /Undone, as version 3\. Morning new-ticket check runs every weekday at 8:00 now\./, lastCard);
+  await t.setup(async (k) => { await k.go('workflows'); await k.page.click(S.row('issues')); await k.settle(); });
+  await t.expectText('The page lists the undo as version 3', /Version 3\s+Today, 9:10\. Alice undid version 2, so it runs every weekday at 8:00 again\./);
+}, [1280, 390]);
+
+add('ANS-edit-never', 'The review’s “every day instead of every Monday” gets an edit card, and Never mind changes nothing', async (t) => {
+  await t.ask('Run the software check every day instead of every Monday');
+  await t.expectText('Before and after, for every software on the watchlist', /Before\s+Every Monday at 9:00\s+After\s+Every day at 9:00[\s\S]*all 14 software on the watchlist/, lastCard);
+  await t.click(`${lastCard} [data-act="editKeep"]`, 'Never mind', { decision: true });
+  await t.expectText('Nothing changed', /No problem\. Nothing changed\./, lastCard);
+  await t.menu('software', 'Open Watchlist');
+  await t.expectText('The watchlist still runs every Monday', /Every Monday at 9:00, Singapore time/);
+  await t.expect('No version was published', t.page.innerText('main'), (v) => !/Version 2/.test(v));
+}, [1280]);
+
+add('ANS-edit-honest', 'A change the card can’t make gets an honest answer, and a check that doesn’t exist is named', async (t) => {
+  await t.ask('Make the React check run on Mondays only');
+  await t.expectText('There is no React check, and React isn’t watched', /You don’t have a React check\. React isn’t on the Software watchlist, which checks software every Monday\./, lastCard);
+  await t.expectCount('No set-up card for it', `${lastCard} [data-act="turnOn"]`, 0);
+  await t.expectCount('It offers to watch React', `${lastCard} [data-act="say"][data-arg="Keep track of the React version"]`, 1);
+  await t.ask('rename the morning check to Daily tickets');
+  await t.expectText('Only the schedule changes from the chat', /From the chat I can only change when Morning new-ticket check runs\./, lastCard);
+  await t.expectCount('It offers the workflow itself, with no edit card', `${lastCard} :is([data-act="workflow"][data-arg="issues"], [data-act="editSave"])`, 1);
+}, [1280]);
+
 /* Live cards (ADR 0043): every card in the chat reads current state, so a change made anywhere shows in older answers. */
 add('ANS-live', 'An older answer reads current state: a pause in the panel and an approval on another page show in it', async (t) => {
   await t.ask(CHECK_WORKFLOWS);
