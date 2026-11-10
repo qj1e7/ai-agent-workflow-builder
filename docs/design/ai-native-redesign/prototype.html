@@ -1035,6 +1035,24 @@ button.schip { cursor: pointer; }
 .snotes svg { margin-top: 3px; }
 .snotes .cant { color: var(--red-ink); }
 .snotes .missing { color: var(--amber-ink); }
+/* Each part of a request on a set-up card (ADR 0043): a tick, a cross or a question, never colour alone. */
+.parts { display: grid; }
+.part { display: grid; grid-template-columns: 22px 8.5rem minmax(0, 1fr); gap: 6px 12px; padding: 10px 16px; border-top: 1px solid var(--rule); align-items: start; }
+.pmark { display: grid; place-items: center; width: 22px; height: 22px; margin-top: 3px; border-radius: 50%; font-size: 0.8125rem; font-weight: 800; line-height: 1; }
+.part[data-mark="ok"] .pmark { color: var(--green-ink); background: var(--green-soft); }
+.part[data-mark="no"] .pmark { color: var(--red-ink); background: var(--red-soft); }
+.part[data-mark="ask"] .pmark { color: var(--amber-ink); background: var(--amber-soft); box-shadow: inset 0 0 0 1px var(--amber); }
+.part[data-mark="ask"] { background: color-mix(in srgb, var(--amber-soft) 45%, var(--surface)); }
+.pk { padding-top: 4px; color: var(--muted); font-weight: 600; font-size: 0.9375rem; overflow-wrap: anywhere; }
+.pv { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; min-height: 30px; }
+.pv .schip { font-size: 0.9375rem; }
+.part.wide .pk { grid-column: 2 / -1; color: var(--ink); }
+.part.wide .pv { grid-column: 2 / -1; min-height: 0; color: var(--muted); font-size: 0.9375rem; }
+.pq { flex-basis: 100%; font-weight: 600; }
+.pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pnote, .pv > .whenpick { flex-basis: 100%; }
+.pnote { color: var(--muted); font-size: 0.875rem; }
+@media (max-width: 600px) { .part { grid-template-columns: 22px minmax(0, 1fr); } .part .pv { grid-column: 2; } }
 .notice { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; padding: 14px 16px; border-radius: var(--r-card); background: var(--info-bg); color: var(--info-ink); }
 .notice .btns { margin-top: 10px; }
 .checklist { display: grid; gap: 8px; }
@@ -1780,6 +1798,60 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
   const whenAsked = (it) => [it.freq ? (it.freq === 'week' && it.day ? `Every ${it.day}` : FREQ_WORD[it.freq]) : '', it.time ? `at ${clock(it.time)}` : ''].filter(Boolean).join(' ');
 
+  /* ---------- Every clause lands in a part (ADR 0043) ----------
+     The word rules stand in for the AI model, and they miss things. So nothing they miss is dropped: the rules below
+     name what each card reads, and unheard() returns every clause with words no rule read. The card shows each one as
+     a cross that quotes it. A pattern belongs here only when the card shows what it read. */
+  const DAY_RE = DAYS.map((d) => d.toLowerCase()).join('|');
+  const HEARD_WHEN = [
+    new RegExp(`\\b(?:every|on|each)\\s+(?:${DAY_RE})s?\\b|\\b(?:${DAY_RE})s\\b`, 'gi'),
+    /\b(?:every|each) week ?day\b|\bweekdays\b|\bmonday to friday\b|\b(?:every|each) (?:day|morning|evening)\b|\bdaily\b|\b(?:every|each) month\b|\bmonthly\b|\b(?:every|each) week\b|\bweekly\b/gi,
+    /\b(?:at\s+)?\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b|\b(?:at\s+)?(?:[01]?\d|2[0-3])[:.][0-5]\d\b|\b(?:at\s+)?(?:noon|midday)\b/gi,
+  ];
+  const HEARD = {
+    when: HEARD_WHEN,
+    /* The set-up card: the ticket set and its period, what it does, the project, where it goes, and a system it can't read. */
+    setup: [
+      /\bthis week\b|\btoday\b|\byesterday\b|\bin the last day\b|\bsince yesterday\b|\blast 24 hours\b/gi,
+      /\b(?:closed|resolved|completed|finished|done|new|created|opened|raised|open|unresolved)\b/gi,
+      /summar\w*|\bsum (?:them |it )?up\b|\breport\b|\bdigest\b|\boverview\b|\blist\b|\bshow me\b|\bcompare\b|\bweek[- ]on[- ]week\b|\b(?:with|to|against) the week before\b|\bversus\b|\bvs\b/gi,
+      /\b(?:project\s+[A-Z][A-Z0-9]{1,9}|[A-Z][A-Z0-9]{1,9}\s+project)\b|\b(?:MOCK|OPS|SUP)\b/g,
+      /\b(?:in|into|as) (?:a|one) (?:new )?(?:jira )?ticket\b|\b(?:post|send|share|publish)\b/gi,
+      /\b(?:gitlab|entra|active directory|servicenow|outlook|sharepoint|excel)\b/gi,
+      /\b(?:jira|tickets?|issues?|project)\b/gi,
+    ],
+    /* The watch card: what to watch, its releases, where it's published, and the upgrade ticket. The name is added per request. */
+    watch: [
+      /\b(?:watch|track|monitor|follow|keep (?:track|an eye) (?:of|on)|tell me (?:about|when)|let me know (?:about|when))\b/gi,
+      /\b(?:new |newer |latest )?(?:releases?|versions?|upgrades?|patch(?:es)?)\b|\bout of date\b|\bon github\b/gi,
+      /\b(?:create|raise|open|file|make|add)\s+(?:a |an |one )?(?:new )?(?:jira |upgrade )?(?:ticket|issue)s?\b|\b(?:in|into) jira\b/gi,
+    ],
+  };
+  /* Words that carry no part of their own: they frame the request. Anything else left over is quoted back. */
+  const STOP = new Set(['a', 'an', 'the', 'and', 'or', 'then', 'also', 'so', 'please', 'can', 'could', 'would', 'will', 'you', 'i', 'id', 'i’d', "i'd", 'we', 'me', 'us', 'my', 'our', 'your', 'it', 'its', 'them', 'they', 'this', 'that', 'these', 'those', 'which', 'what', 'to', 'for', 'of', 'in', 'on', 'at', 'by', 'with', 'from', 'into', 'about', 'up', 'all', 'any', 'each', 'is', 'are', 'be', 'been', 'was', 'were', 'do', 'have', 'has', 'want', 'need', 'like', 'just', 'only', 'one', 'find', 'get', 'give', 'show', 'prepare', 'make', 'create', 'write', 'put', 'check', 'keep', 'let', 'know', 'tell', 'set', 'it’s', "it's"]);
+  const spansOf = (text, res) => res.flatMap((re) => [...text.matchAll(new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`))].map((m) => [m.index, m.index + m[0].length]));
+  /* Each clause of the text with words that no span covers, as the words to quote. A comma, a full stop, "and", "then"
+     or "but" ends a clause, so one missed condition never hides the rest of the sentence. */
+  function unheard(text, spans) {
+    const words = [...text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’.:-]*/gu)].map((m) => { const w = m[0].replace(/[.:-]+$/, ''); return { w, a: m.index, b: m.index + w.length }; });
+    const read = (x) => spans.some(([a, b]) => x.a < b && x.b > a);
+    const out = [];
+    let clause = [];
+    const close = () => {
+      const left = clause.filter((x) => !read(x) && !STOP.has(x.w.toLowerCase()));
+      if (left.length) out.push(text.slice(left[0].a, left[left.length - 1].b));
+      clause = [];
+    };
+    words.forEach((x, i) => {
+      if (i && /[,;!?]|\.(?!\d)/.test(text.slice(words[i - 1].b, x.a))) close();
+      if (/^(and|then|but|also|plus)$/i.test(x.w)) { close(); return; }
+      clause.push(x);
+    });
+    close();
+    return out;
+  }
+  const quote = (s) => `“${esc(s.replace(/^["“”']+|["“”']+$/g, ''))}”`;
+
   /* The workflow being set up: what the request said, with any of the operator's corrections on top. */
   /* The ticket set's period follows the schedule once one is chosen. A period she set, in her words or by picking one
      the schedule didn't give, wins while it fits. When it and the schedule disagree, the chip turns amber and she
@@ -1936,7 +2008,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* A security check is the Planned capability CAPS.registries (ADR 0025), not a release check. A request about Jira
      tickets that mentions one is a ticket search, which the Jira read can do. */
   const isSecurityAsk = (t) => /\bcves?\b|\bnvd\b|vulnerab\w*|\badvisor(y|ies)\b|\bsecurity (fix(es)?|patch(es)?|alerts?|bulletins?)\b/i.test(t) && !/\btickets?\b|\bjira\b/i.test(t);
-  const namedIn = (t) => { const low = t.toLowerCase(); const k = Object.keys(KNOWN).find((key) => low.includes(key)); return k ? KNOWN[k] : null; };
+  const namedKey = (t) => { const low = t.toLowerCase(); return Object.keys(KNOWN).find((key) => low.includes(key)) || ''; };
+  const namedIn = (t) => { const k = namedKey(t); return k ? KNOWN[k] : null; };
   const onList = (name) => (S.firstDay ? [] : TRACKED).concat(S.added.map((a) => a.name)).some((n) => n.toLowerCase() === name.toLowerCase());
   const repoOf = (text) => { const m = text.trim().match(/github\.com\/([^/\s]+\/[^/\s#?]+)/i); return (m ? m[1] : text.trim()).replace(/\.git$/, '').replace(/\/$/, ''); };
   const RELEASE_ROWS = [
@@ -2770,7 +2843,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
           <article class="panel"><div><div class="task-title">Weekly closed-ticket summary: reported to support</div><div class="task-meta">Support has the run and the troubleshooter’s notes. Updates show here.</div></div>${caseBox()}${reportTrack(true)}</article></section>` : '';
     const drafts = me().op ? draftRows() : [];
     const rowList = (items) => `<div class="rows">${items.map(([a, b, act, arg]) => `<button class="row-btn" data-act="${act}" data-arg="${arg}"><div><div class="row-name">${a}</div><div class="row-sub">${b}</div></div>${I.right(16)}</button>`).join('')}</div>`;
-    const needLine = (d) => (d.need.length ? `Needs ${andList(d.need)}` : 'Nothing is unclear. Turn it on when you’re ready.');
+    const needLine = (d) => (d.need.length ? `Needs ${andList(d.need)}` : d.crossed ? 'Ready to set up the part I can.' : 'Nothing is unclear. Turn it on when you’re ready.');
     return `${n ? `<div data-unbuilt="Needs you on Workflows (the built app has it on Home)">${needsSection(items)}</div>` : ''}
       ${drafts.length ? `<section class="section" aria-labelledby="drafts-h" data-unbuilt="Drafts here (the built app lists them on Home)"><h2 id="drafts-h">Drafts <span class="count">${drafts.length}</span></h2>
         <div class="rows">${drafts.map((d) => `<div class="row draft-row" data-flip="draft:${d.id}"><div><div class="row-name">${esc(d.name)}</div><div class="row-sub">${needLine(d)}</div></div><span class="btns"><button class="btn sm" data-act="openDraft" data-arg="${d.id}">Resume<span class="vh"> ${esc(d.name)}</span></button><button class="btn sm" data-act="discardDraft" data-arg="${d.id}" data-unbuilt="Discard a draft">Discard<span class="vh"> ${esc(d.name)}</span></button></span></div>`).join('')}</div></section>` : ''}
@@ -3256,8 +3329,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
 
   /* ---------- The set-up card's parts: the read-back chips and the understood sentence ---------- */
   const lc = (s) => s.charAt(0).toLowerCase() + s.slice(1);
-  /* The schedule picker opens after Change, or by itself when the schedule is the one thing left (spec 7.1). */
-  const whenShown = () => !!S.wiz.sched && (S.wiz.whenOpen || (Object.keys(schedProblems(S.wiz.sched)).length > 0 && setupLeft().length === 1));
+  /* The schedule picker opens after Change or Another time. Otherwise the card asks for the time with choices (ADR 0043). */
+  const whenShown = () => !!S.wiz.sched && !!S.wiz.whenOpen;
   const CHIP_HINT = { ok: 'your words', changed: 'chosen by you', missing: 'please choose', cant: 'can’t do this yet', filled: 'filled in by me' };
   function sentenceChip(r, text) {
     const hint = CHIP_HINT[r.state];
@@ -3277,20 +3350,56 @@ details > .m-close { animation: fold 140ms ease-in both; }
       <div class="btns"><button class="btn sm" data-act="destDone">Done</button>${sentToTeam(DEST_ASK) ? '<span class="pill wait">Asked the team</span>' : `<button class="linkbtn" data-act="teamReq" data-arg="${DEST_ASK}|wiz">Ask the team</button>`}</div>
     </div>`;
   }
-  /* What will happen, as one sentence (spec 7.1). The time is plain words here; the When section holds its control.
-     Notes under it only for a changed part or one the platform can't do. */
-  function understoodSentence(rows) {
-    const k = Object.fromEntries(rows.map((r) => [r.key, r]));
-    const chip = (key, fallback, keepCase) => sentenceChip(k[key], k[key].value ? (keepCase ? esc(k[key].value) : lc(esc(k[key].value))) : fallback);
-    const notes = rows.filter((r) => r.note && r.key !== 'when' && ['changed', 'cant', 'missing'].includes(r.state));
-    const icon = { cant: I.alert(16), changed: I.edit(16), missing: I.info(16) };
-    const glue = (html, mark) => `<span class="glue">${html}${mark}</span>`;
-    const when = k.when.value ? `${esc(k.when.value)}, find` : 'Find';
-    const the = /^(open )?tickets/i.test(k.tickets.value || '') ? 'the ' : '';
-    const project = sentenceChip(k.project, k.project.value ? `Jira project ${esc(k.project.value)}` : 'a Jira project');
-    return `<p class="sentence-line">${when} ${the}${chip('tickets', 'which tickets')} in ${glue(project, ',')} ${glue(chip('action', 'what it does'), ',')} and put the ${thingOf(draftNr())} in ${glue(destChip(k.dest), '.')}</p>
-      ${S.wiz.destOpen ? destEditor() : ''}
-      ${notes.length ? `<ul class="snotes">${notes.map((r) => `<li class="${r.state}">${icon[r.state]}<span><b>${r.label}:</b> ${r.note}${r.key === 'source' ? ` ${sentToTeam(r.value) ? '<span class="pill wait">Asked the team</span>' : `<button class="linkbtn" data-act="teamReq" data-arg="${esc(r.value)}|wiz">Ask the team</button>`}` : ''}</span></li>`).join('')}</ul>` : ''}`;
+  /* ---------- Every part of a request, marked (ADR 0043) ----------
+     A part is { key, mark, label, body }. The mark is ok, a tick with what the Planner will do; no, a cross with the
+     reason; or ask, a question with choice buttons. A card asks one question at a time. */
+  const MARKS = { ok: [() => I.check(13), 'Will do'], no: [() => I.x(13), 'Can’t do'], ask: [() => '?', 'Question'] };
+  const partRow = (p) => `<li class="part${p.mark === 'no' ? ' wide' : ''}" data-mark="${p.mark}" data-part="${p.key}"><span class="pmark" aria-hidden="true">${MARKS[p.mark][0]()}</span><span class="pk"><span class="vh">${MARKS[p.mark][1]}: </span>${p.label}</span><span class="pv">${p.body}</span></li>`;
+  const partsList = (parts) => `<ul class="parts" aria-label="Each part of your request">${parts.map(partRow).join('')}</ul>`;
+  /* A question and its choices. The choices are named by the question for a screen reader. */
+  const askBody = (q, id) => `<span class="pq" id="${id}">${q.q}</span><span class="pick" role="group" aria-labelledby="${id}">${q.choices.map(([v, l]) => `<button type="button" class="chip" data-act="${q.act || 'answer'}" data-arg="${esc(v)}"${q.mid ? ` data-mid="${q.mid}"` : ''}>${esc(l)}</button>`).join('')}${q.more || ''}</span>`;
+  /* Every clause no rule read, as a cross that quotes it. */
+  const leftoverParts = (text, spans) => unheard(text, spans).map((w, i) => ({ key: `left${i}`, mark: 'no', label: quote(w), body: 'I didn’t follow this part.' }));
+  const hasCross = (parts) => parts.filter((p) => p.mark === 'no').length;
+
+  /* The set-up card asks its questions in the footer's order: when it runs (how often, the day, then the time, which is
+     never guessed), then which tickets, the Jira project and what it does. */
+  const Q_TIMES = ['08:00', '09:00', '13:00', '17:00'];
+  const QUESTION = { tickets: 'Which tickets should it find?', project: 'Which Jira project should it use?', action: 'What should it do with them?' };
+  function setupAsk() {
+    const s = S.wiz.sched;
+    if (!s.freq) return { key: 'when', q: 'How often should it run?', choices: Object.entries(FREQ_WORD).filter(([v]) => v !== 'month' || shows('monthly')).map(([v, l]) => [`freq:${v}`, l]) };
+    if (s.freq === 'week' && !s.day) return { key: 'when', q: 'Which day should it run?', choices: DAYS.map((d) => [`day:${d}`, d]) };
+    if (!s.time) return { key: 'when', q: 'What time should it run?', choices: Q_TIMES.map((x) => [`time:${x}`, clock(x)]), more: '<button type="button" class="chip" data-act="whenOpen" aria-controls="whenpick">Another time</button>' };
+    const row = intentRows().find((r) => r.state === 'missing');
+    return row ? { key: row.key, q: row.note || QUESTION[row.key], choices: row.options.map(([v, l]) => [`${row.key}:${v}`, l]) } : null;
+  }
+  /* The set-up card's parts, in the order of the request's sentence, then whatever it can't do. Only the current
+     question shows; the footer counts the rest. */
+  function setupParts(mid) {
+    const w = S.wiz;
+    const it = w.intent || {};
+    const k = Object.fromEntries(intentRows().map((r) => [r.key, r]));
+    const q = setupAsk();
+    const s = w.sched;
+    const timeOk = !Object.keys(schedProblems(s)).length;
+    const picker = whenShown() ? `<div class="whenpick" id="whenpick">${schedFields('sched', s, w.schedErr)}<div class="btns"><button class="btn sm" data-act="whenDone">Done</button></div></div>` : '';
+    const parts = [];
+    if (q && q.key === 'when') parts.push({ key: 'when', mark: 'ask', label: 'When', body: picker || askBody(q, `q-${mid}`) });
+    else if (timeOk) {
+      parts.push({ key: 'when', mark: 'ok', label: 'When', body: `<span data-val="when">${schedText(s)}, Singapore time</span>${picker || '<button class="btn sm" data-act="whenOpen" aria-expanded="false" aria-controls="whenpick">Change</button>'}` });
+    }
+    ['tickets', 'project', 'action'].forEach((key) => {
+      const r = k[key];
+      if (r.state === 'missing') { if (q && q.key === key) parts.push({ key, mark: 'ask', label: r.label, body: askBody(q, `q-${mid}`) }); return; }
+      const text = key === 'project' ? `Jira project ${esc(r.value)}` : esc(r.value);
+      parts.push({ key, mark: 'ok', label: r.label, body: `${sentenceChip(r, text)}${r.state === 'changed' && r.note ? `<span class="pnote">${r.note}</span>` : ''}` });
+    });
+    parts.push({ key: 'dest', mark: 'ok', label: k.dest.label, body: `${destChip(k.dest)}<span>after a yes</span>${w.destOpen ? destEditor() : ''}` });
+    if (k.source) parts.push({ key: 'source', mark: 'no', label: `Reads ${esc(k.source.value)}`, body: `${k.source.note} ${sentToTeam(k.source.value) ? '<span class="pill wait">Asked the team</span>' : `<button class="linkbtn" data-act="teamReq" data-arg="${esc(k.source.value)}|wiz">Ask the team</button>`}` });
+    const monthly = it.monthly && (w.text.match(/\b(?:every|each) month\b|\bmonthly\b/i) || [])[0];
+    if (monthly) parts.push({ key: 'monthly', mark: 'no', label: quote(monthly), body: 'I can’t run things monthly yet.' });
+    return parts.concat(leftoverParts(w.text, spansOf(w.text, [...HEARD.when, ...HEARD.setup])));
   }
 
   /* ---------- Ask the Planner ----------
@@ -3340,11 +3449,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
      priority tickets" out of it. Those are a part answer (parseIntent's needs). */
   const toolAskIn = (t) => WRITE_ASK.test(t) && TOOL_ASKS.find((x) => x.draft && x.re.test(t));
   const watchFor = (hit, text, word) => {
-    if (hit && onList(hit[0])) return { kind: 'listed', name: hit[0] };
+    if (hit && onList(hit[0])) return { kind: 'listed', name: hit[0], text, said: namedKey(text) };
     const name = hit ? hit[0] : cap(text.trim().replace(/[.?!]+$/, '').replace(/^(watch|track|keep track of)\s+/i, '').slice(0, 40));
     /* A known project on a registry counts as known only when registries are a source; otherwise the person gives its GitHub project. */
     const known = hit && (shows('registries') || !hit[2] || hit[2] === 'github');
-    return { kind: 'watch', name, src: known ? hit[2] || 'github' : 'github', repo: known ? hit[1] : '', via: known && shows('registries') ? hit[3] : null, repoState: known ? 'guess' : 'edit', repoDraft: known ? hit[1] : '', version: '', newest: false, word, done: false };
+    return { kind: 'watch', name, text, said: hit ? namedKey(text) : '', src: known ? hit[2] || 'github' : 'github', repo: known ? hit[1] : '', via: known && shows('registries') ? hit[3] : null, repoState: known ? 'guess' : 'edit', repoDraft: known ? hit[1] : '', version: '', newest: false, word, done: false };
   };
   /* Every other part of a release request is checked before the watchlist route (F-02, F-10): a security check, or a
      destination other than Jira, gets the same can't as any other request. Watching for new releases is the
@@ -3542,9 +3651,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
      (6.1): the sentence carries the first two, the card the other two. The set-up reply carries no count: the card's
      footer is the only count (I8). */
   const ANSWERS = {
-    setup: { say: () => 'Here’s what I understood. I filled in what I could.', card: (m) => setupCard(m) },
+    setup: { say: (a) => (a.done ? doneSay(a.done) : a.resumed ? 'Here’s your draft, where you left it.' : a.crossed ? 'Here’s what I understood. I can’t do every part of it.' : 'Here’s what I understood. I filled in what I could.'), card: (m) => setupCard(m) },
     watch: { say: (a) => `${a.word ? `You mentioned “${esc(a.word)}”, so this` : `${esc(a.name)} is software, so it`} belongs on the Software watchlist, which checks all your software every Monday.`, card: (m) => watchCard(m) },
-    listed: { say: (a) => `${esc(a.name)} is already on the Software watchlist.`, card: (m) => { const r = liveSoftware().find((x) => x.name === m.card.name); return `<div class="btns"><button class="btn sm" data-act="go" data-arg="software"${r ? ` data-open="software:${r.key}"` : ''}>Open it</button></div>`; } },
+    listed: { say: (a) => `${esc(a.name)} is already on the Software watchlist.`, card: (m) => { const r = liveSoftware().find((x) => x.name === m.card.name); const no = watchCrosses(m.card); return `${no.length ? `<div class="pcard">${partsList(no)}</div>` : ''}<div class="btns"><button class="btn sm" data-act="go" data-arg="software"${r ? ` data-open="software:${r.key}"` : ''}>Open it</button></div>`; } },
     which: { say: (a) => `You mentioned “${esc(a.word)}”, so this belongs on the Software watchlist. Which software should I watch?` },
     back: { say: () => 'No problem. Ask for something else whenever you like.' },
     part: { say: (a) => `I can ${a.can}, but ${a.cant}. ${a.cap === 'jiraComp' ? NEW_TOOL : CAPS[a.cap].why}`, card: (m) => partCard(m), mood: 'sorry' },
@@ -3571,7 +3680,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const draftRow = (wiz = S.wiz) => {
     const keep = S.wiz;
     S.wiz = wiz;
-    const row = { id: (S.draftSeq += 1), wiz, name: wiz.name.trim() || draftNr().name, left: setupLeft().length, need: setupLeft() };
+    const row = { id: (S.draftSeq += 1), wiz, name: wiz.name.trim() || draftNr().name, left: setupLeft().length, need: setupLeft(), crossed: hasCross(setupParts('d')) };
     S.wiz = keep;
     return row;
   };
@@ -3583,12 +3692,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
     S.wiz = newWiz();
     return true;
   }
-  const draftRows = () => (liveSetup() ? [{ id: 'live', name: S.wiz.name.trim() || draftNr().name, left: setupLeft().length, need: setupLeft() }] : []).concat(S.drafts.map((d) => ({ id: d.id, name: d.name, left: d.left, need: d.need || [] })));
+  const draftRows = () => (liveSetup() ? [{ id: 'live', name: S.wiz.name.trim() || draftNr().name, left: setupLeft().length, need: setupLeft(), crossed: hasCross(setupParts('d')) }] : []).concat(S.drafts.map((d) => ({ id: d.id, name: d.name, left: d.left, need: d.need || [], crossed: d.crossed })));
   function startDraft(text, it) {
     saveLive();
     S.wiz = { ...newWiz(), text, intent: it, sched: { freq: it.freq || '', day: it.day || '', time: it.time || '', monthDay: '1' } };
-    return { kind: 'setup' };
+    return { kind: 'setup', crossed: hasCross(setupParts('new')) };
   }
+  const doneSay = (d) => (!has(d.id) ? `${d.name} isn’t here any more.` : S.paused[d.id] ? `${R(d.id).name} is paused.` : `${R(d.id).name} is on. Its first run is ${R(d.id).next}.`);
   /* What still stops Turn it on: the amber and red parts, by name. */
   function setupLeft() {
     const left = [];
@@ -3601,71 +3711,97 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The promises live in the confirmation, where they matter (spec 7.2). */
   const PROMISES = 'You can pause, change or delete it at any time. If it stops, the AI troubleshooter tells you why.';
 
-  /* The set-up card (spec 7): what will happen, when, what needs a yes, then how it works, collapsed, and Turn it on. */
+  /* The steps of the workflow being set up, each with who does it. The card and the side panel show the same list. */
+  const draftSteps = (f) => planOf(f).map((x, i) => x.concat(i === 0 ? 'jira' : i === 1 ? writerOf(f) : 'platform', i === 1 && isNewAgent(writerOf(f))));
+  /* The set-up card (spec 7, ADR 0043): each part of the request with its mark, what needs a yes, then how it works,
+     collapsed, and one button. While any part has a cross, the button sets up the part I can, and the footer never says
+     "Nothing is unclear". */
   function setupCard(m) {
     const c = m.card;
-    if (c.done) return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(c.done.name)} is on.</b><span>First run ${c.done.next}, Singapore time. Before its ticket is created, any Approver on your team except you is asked for a yes in Teams.${c.done.newAgent ? ` The ${AGENTS[c.done.newAgent].name} is saved under How it works, in Settings.` : ''}</span><span>${PROMISES}</span><span class="btns">${c.done.id === 'conf' ? '<button class="btn primary sm" data-act="testRun">Do a test run</button>' : ''}<button class="linkbtn" data-act="go" data-arg="workflows">See it in Workflows</button>${c.done.id === 'conf' ? '<span class="small muted">A test run does the real work once, so it still waits for a yes.</span>' : ''}</span></div></div>`;
+    if (c.done) return setupDone(c.done);
     if (c.discarded) return '<p class="small muted">Discarded.</p>';
     if (c.saved) return '<p class="small muted">Saved as a draft. Open it from Workflows to carry on.</p>';
     const w = S.wiz;
     const f = draftNr();
-    const rows = intentRows();
+    const parts = setupParts(m.id);
     const left = setupLeft();
+    const crossed = hasCross(parts);
     const similar = f.tickets === 'closed' && f.action === 'summary' && has('nudge');
     const writer = writerOf(f);
-    const steps = planOf(f).map((s, i) => s.concat(i === 0 ? 'jira' : i === 1 ? writer : 'platform', i === 1 && isNewAgent(writer)));
     const title = w.name.trim() || f.name;
-    const timeOk = !Object.keys(schedProblems(w.sched)).length;
-    const picker = whenShown() ? `<div class="whenpick" id="whenpick">${schedFields('sched', w.sched, w.schedErr)}<div class="btns"><button class="btn sm" data-act="whenDone">Done</button></div></div>` : '';
     const job = { list: 'lists them', compare: 'compares them with the week before' }[f.action] || 'sums them up';
     return `<div class="pcard" data-pres="setup:${m.id}" data-unbuilt="The set-up card (ADR 0037)">
       <div class="pcard-h">${w.renaming
         ? `<label class="vh" for="rname">Workflow name</label><input type="text" id="rname" data-input="name" value="${esc(w.name || f.name)}"><button class="btn sm" data-act="renameDone">Done</button>`
         : `<h3 tabindex="-1">${esc(title)}</h3><button class="linkbtn" data-act="rename">Rename</button>`}</div>
-      <section class="pcard-s"><h4>What will happen</h4>
-        ${understoodSentence(rows)}
-        ${similar ? `<p class="similar">${I.info(16)}<span>You already have a similar workflow, <i>Weekly closed-ticket summary</i>. <button class="linkbtn" data-act="workflow" data-arg="nudge">Open it</button></span></p>` : ''}
-      </section>
-      <section class="pcard-s"><h4>When</h4>
-        <p class="when-line">${I.clock(16)}<span data-val="when">${timeOk ? `${schedText(w.sched)}, Singapore time` : '<span class="schip missing" title="Please choose">Choose when it runs</span>'}</span>${picker ? '' : '<button class="btn sm" data-act="whenOpen" aria-expanded="false" aria-controls="whenpick">Change</button>'}</p>
-        ${w.intent && w.intent.monthly && !timeOk ? '<p class="small muted">I can’t run things monthly yet. Choose daily or weekly.</p>' : ''}
-        ${picker}
-      </section>
+      ${partsList(parts)}
+      ${similar ? `<p class="similar pcard-s">${I.info(16)}<span>You already have a similar workflow, <i>Weekly closed-ticket summary</i>. <button class="linkbtn" data-act="workflow" data-arg="nudge">Open it</button></span></p>` : ''}
       <section class="pcard-s"><h4>What needs a yes</h4><p class="apsum">${I.shield(16)}<span>Creating the Jira ticket changes data, so each run waits for a yes in Teams. Any Approver on your team except you can say yes.${shows('namedApprovers') ? ` Named Approvers, with a backup and a stop time, come later. ${PLANNED_TAG}` : ''}</span></p></section>
-      <details class="more how" data-unbuilt="How this workflow works"><summary>How this workflow works</summary><div class="more-body">
-        ${stepsList(steps, true, 'plan:draft')}
+      <details class="more how" data-flow-of="build:${m.id}" data-unbuilt="How this workflow works"><summary>How this workflow works</summary><div class="more-body">
+        ${stepsList(draftSteps(f), true, 'plan:draft')}
         <p class="note">${readsLimit(f.tickets === 'open' ? '' : f.period)}</p>
         <p class="agents-line">${face('jira', 26)}<span><b>${AGENTS.jira.name}</b> reads the tickets.</span>${face(writer, 26)}<span><b>${AGENTS[writer].name}</b> ${job}.${isNewAgent(writer) ? ' <span class="tag">New agent, saved under How it works, in Settings, when you turn this on</span>' : ''}</span></p>
         <p class="note">Tools: ${TOOLS.jiraSearch[0]} and ${TOOLS.jiraRead[0]} read Jira. ${TOOLS.jiraCreate[0]} writes to Jira, after a yes.</p>
       </div></details>
-      <div class="pcard-f"><button class="btn primary" data-act="turnOn"${left.length ? ' disabled' : ''}>Turn it on</button>
-        ${left.length ? `<span class="left">${leftWords(left.length)}: ${andList(left)}.</span>` : '<span class="note">Nothing is unclear. Turn it on when you’re ready.</span>'}</div>
+      <div class="pcard-f"><button class="btn primary" data-act="turnOn"${left.length ? ' disabled' : ''}>${crossed ? 'Set up the part I can' : 'Turn it on'}</button>
+        ${left.length ? `<span class="left">${leftWords(left.length)}: ${andList(left)}.</span>` : `<span class="note">${crossed ? `${crossed === 1 ? 'The part with a cross is' : `The ${crossed} parts with a cross are`} left out.` : 'Nothing is unclear. Turn it on when you’re ready.'}</span>`}</div>
     </div>`;
+  }
+  /* A workflow the card turned on, read from the workflow itself, so a pause, a new schedule or a delete shows here too. */
+  function setupDone(d) {
+    if (!has(d.id)) return `<p class="small muted">${esc(d.name)} isn’t here any more.</p>`;
+    const r = R(d.id);
+    return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(r.name)} ${S.paused[d.id] ? 'is paused.' : 'is on.'}</b><span>${S.paused[d.id] ? 'It won’t run until you resume it.' : `First run ${r.next}, Singapore time.`} Before its ticket is created, any Approver on your team except you is asked for a yes in Teams.${d.newAgent ? ` The ${AGENTS[d.newAgent].name} is saved under How it works, in Settings.` : ''}</span><span>${PROMISES}</span><span class="btns">${d.id === 'conf' ? '<button class="btn primary sm" data-act="testRun">Do a test run</button>' : ''}<button class="linkbtn" data-act="go" data-arg="workflows">See it in Workflows</button>${d.id === 'conf' ? '<span class="small muted">A test run does the real work once, so it still waits for a yes.</span>' : ''}</span></div></div>`;
   }
 
   const watchLeft = (c) => (c.repoState !== 'ok' ? 1 : 0) + (!c.newest && !c.version.trim() ? 1 : 0);
+  /* The parts of a request to watch software (ADR 0043). The watchlist checks every software together, so a time in
+     the request either matches its schedule or gets a cross. One question at a time: the project, then the version. */
+  function watchParts(m) {
+    const c = m.card;
+    const id = m.id;
+    const text = c.text || c.name;
+    const sw = R('sw');
+    const it = parseIntent(text);
+    const src = srcName(c.src);
+    const [label, ph, help] = SRC_FIELD[c.src];
+    const parts = [{ key: 'name', mark: 'ok', label: 'Software', body: `<b>${esc(c.name)}</b><span class="schip ok">From your words</span>` }];
+    if (c.repoState === 'guess') parts.push({ key: 'repo', mark: 'ask', label: 'Published on', body: `<span class="pq" id="q-${id}">Is this the right project?</span><span>${src}</span><b>${esc(c.repo)}</b><span class="pnote">${guessNote(c)}</span><span class="pick" role="group" aria-labelledby="q-${id}"><button type="button" class="chip" data-act="repoOk" data-mid="${id}">Looks right</button><button type="button" class="chip" data-act="repoEdit" data-mid="${id}">Change</button></span>` });
+    else if (c.repoState === 'edit') parts.push({ key: 'repo', mark: 'ask', label: 'Published on', body: `<label class="pq" for="repo-${id}">Which ${lc(label)} is it?</label><input type="text" class="inp" id="repo-${id}" data-card="repoDraft" data-mid="${id}" value="${esc(c.repoDraft)}" placeholder="${ph}"${c.repoErr ? ' aria-invalid="true"' : ''}><button class="btn sm" data-act="repoUse" data-mid="${id}">Use this</button><span class="pnote">${c.repoErr || help}</span>` });
+    else {
+      parts.push({ key: 'repo', mark: 'ok', label: 'Published on', body: `<span>${src}</span><b>${esc(c.repo)}</b><span class="schip changed">Checked by you</span>` });
+      if (c.newest) parts.push({ key: 'version', mark: 'ok', label: 'Version you run', body: `<b>Not known</b><span class="schip changed">Chosen by you</span><button class="linkbtn" data-act="verType" data-mid="${id}">Add it<span class="vh">, the version you run</span></button><span class="pnote">I’ll tell you about releases newer than today’s. Add the version you run to compare against it.</span>` });
+      else parts.push({ key: 'version', mark: c.version.trim() ? 'ok' : 'ask', label: 'Version you run', body: `${c.version.trim() ? '' : `<label class="pq" for="ver-${id}">Which version do you run?</label>`}<input type="text" class="inp" id="ver-${id}" data-card="version" data-mid="${id}" value="${esc(c.version)}" placeholder="For example 1.2.14" inputmode="decimal"${c.version.trim() ? ' aria-label="Version you run"' : ''}><button type="button" class="chip" data-act="verNewest" data-mid="${id}">Not sure? Start from the newest</button>` });
+    }
+    const said = ['freq', 'day', 'time'].filter((k) => it[k]);
+    const fits = said.every((k) => it[k] === sw.sched[k]);
+    parts.push({ key: 'when', mark: 'ok', label: 'Checked', body: `<span>${sw.when}</span><span class="schip ${said.length && fits ? 'ok">From your words' : 'filled">Same for all software'}</span>` });
+    const ticket = spansOf(text, [HEARD.watch[2]]).length > 0;
+    parts.push({ key: 'then', mark: 'ok', label: 'Then', body: `<span>An upgrade ticket in Jira for each newer version</span><span class="schip ${ticket ? 'ok">From your words' : 'filled">Same for all software'}</span>` });
+    parts.push({ key: 'approves', mark: 'ok', label: 'Who says yes', body: `<span>${sw.approves}</span><span class="schip filled">Same for all software</span>${apprOf('sw') ? PLANNED_TAG : ''}` });
+    return parts.concat(watchCrosses(c));
+  }
+  /* What a request to watch software asks that the watchlist can't do: its own time, and any clause no rule read. */
+  function watchCrosses(c) {
+    const text = c.text || c.name;
+    const sw = R('sw');
+    const it = parseIntent(text);
+    const said = ['freq', 'day', 'time'].filter((k) => it[k]);
+    const whenSpans = spansOf(text, HEARD.when);
+    const own = said.length && !said.every((k) => it[k] === sw.sched[k]) ? [{ key: 'own', mark: 'no', label: quote(text.slice(Math.min(...whenSpans.map((x) => x[0])), Math.max(...whenSpans.map((x) => x[1])))), body: `The Software watchlist checks all your software together, ${lc(sw.when)}. I can’t give one software its own time yet.` }] : [];
+    const names = [c.name, c.said].filter(Boolean).flatMap((n) => { const i = text.toLowerCase().indexOf(n.toLowerCase()); return i < 0 ? [] : [[i, i + n.length]]; });
+    return own.concat(leftoverParts(text, [...whenSpans, ...spansOf(text, HEARD.watch), ...names]));
+  }
   function watchCard(m) {
     const c = m.card;
     const id = m.id;
     if (c.done) return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(c.name)} is on the Software watchlist.</b><span>First check ${R('sw').next}, with the rest of your software. ${apprOf('sw') ? apprText(apprOf('sw')).replace(/,.*$/, '') : R('sw').approves} is asked before any ticket is created.</span><span class="btns"><button class="linkbtn" data-act="go" data-arg="software">Open Software watchlist</button></span></div></div>`;
-    const src = srcName(c.src);
-    const [label, ph, help] = SRC_FIELD[c.src];
-    const repo = c.repoState === 'ok' ? `<b>${esc(c.repo)}</b><span class="schip changed">Checked by you</span>`
-      : c.repoState === 'guess' ? `<b>${esc(c.repo)}</b><span class="schip missing">I guessed this</span><span class="fld-note">${guessNote(c)}</span><span class="btns"><button class="btn sm" data-act="repoOk" data-mid="${id}">Looks right</button><button class="linkbtn" data-act="repoEdit" data-mid="${id}">Change</button></span>`
-        : `<label class="vh" for="repo-${id}">${label}</label><input type="text" class="inp" id="repo-${id}" data-card="repoDraft" data-mid="${id}" value="${esc(c.repoDraft)}" placeholder="${ph}"${c.repoErr ? ' aria-invalid="true"' : ''}><button class="btn sm" data-act="repoUse" data-mid="${id}">Use this</button><span class="schip missing">Please tell me</span><span class="fld-note">${c.repoErr || help}</span>`;
-    const ver = c.newest ? `<b>Not known</b><span class="schip changed">Chosen by you</span><button class="linkbtn" data-act="verType" data-mid="${id}">Add it<span class="vh">, the version you run</span></button><span class="fld-note">I’ll tell you about releases newer than today’s. Add the version you run to compare against it.</span>`
-      : `<label class="vh" for="ver-${id}">Version you run</label><input type="text" class="inp" id="ver-${id}" data-card="version" data-mid="${id}" value="${esc(c.version)}" placeholder="For example 1.2.14" inputmode="decimal">${c.version.trim() ? '' : '<span class="schip missing">Please tell me</span>'}<button class="linkbtn" data-act="verNewest" data-mid="${id}">Not sure? Start from the newest</button>`;
+    const parts = watchParts(m);
     const n = watchLeft(c);
     return `<div class="pcard" data-pres="watch:${id}" data-unbuilt="Adding software from the Planner">
       <div class="pcard-h"><h3>Add ${esc(c.name)} to the Software watchlist</h3><span class="kind">${I.box(16)}Software watchlist</span></div>
-      <div class="flds">
-        <div class="fld"><div class="fld-k">Software</div><div class="fld-v"><b>${esc(c.name)}</b><span class="schip ok">From your words</span></div></div>
-        <div class="fld${c.repoState === 'ok' ? '' : ' needs'}"><div class="fld-k">Published on</div><div class="fld-v"><span>${src}</span>${repo}</div></div>
-        <div class="fld${!c.newest && !c.version.trim() ? ' needs' : ''}"><div class="fld-k">Version you run</div><div class="fld-v">${ver}</div></div>
-        <div class="fld"><div class="fld-k">Checked</div><div class="fld-v"><span>${R('sw').when}</span><span class="schip filled">Same for all software</span></div></div>
-        <div class="fld"><div class="fld-k">Who says yes</div><div class="fld-v"><span>${R('sw').approves}</span><span class="schip filled">Same for all software</span>${apprOf('sw') ? PLANNED_TAG : ''}</div></div>
-      </div>
-      <div class="pcard-f"><button class="btn primary" data-act="watchAdd" data-mid="${id}"${n ? ' disabled' : ''}>Add ${esc(c.name)}</button>${n ? `<span class="left">${leftWords(n)}</span>` : ''}<button class="linkbtn push" data-act="watchOwn" data-mid="${id}">No, set it up as a new workflow</button></div>
+      ${partsList(parts)}
+      <div class="pcard-f"><button class="btn primary" data-act="watchAdd" data-mid="${id}"${n ? ' disabled' : ''}>${hasCross(parts) ? 'Set up the part I can' : `Add ${esc(c.name)}`}</button>${n ? `<span class="left">${leftWords(n)}</span>` : ''}<button class="linkbtn push" data-act="watchOwn" data-mid="${id}">No, set it up as a new workflow</button></div>
     </div>`;
   }
 
@@ -5555,7 +5691,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         const d = S.drafts.splice(i, 1)[0];
         S.wiz = d.wiz;
         const c = S.chat;
-        c.msgs.push({ id: (c.seq += 1), from: 'me', text: d.wiz.text }, { id: (c.seq += 1), from: 'planner', say: 'Here’s your draft, where you left it.', card: { kind: 'setup' } });
+        c.msgs.push({ id: (c.seq += 1), from: 'me', text: d.wiz.text }, { id: (c.seq += 1), from: 'planner', say: 'Here’s your draft, where you left it.', card: { kind: 'setup', resumed: true } });
       }
       go('home');
       scrollToMsg(liveSetup().id, 'start');
@@ -5640,6 +5776,18 @@ details > .m-close { animation: fold 140ms ease-in both; }
     destOpen: () => { S.wiz.destOpen = !S.wiz.destOpen; render(); },
     destDone: () => { S.wiz.destOpen = false; render(); const b = $app.querySelector('[data-act="destOpen"]'); if (b) b.focus(); },
     whenOpen: () => { S.wiz.whenOpen = true; render(); const f = document.getElementById('sched-freq'); if (f) f.focus(); },
+    /* A choice on the set-up card's one question. Focus moves to the next question, or to the button once none is left. */
+    answer: (arg) => {
+      const [k, v] = arg.split(/:(.*)/);
+      if (['freq', 'day', 'time'].includes(k)) { S.wiz.sched[k] = v; delete S.wiz.schedErr[k]; }
+      else if (k === 'tickets') pickTickets(v);
+      else S.wiz.edits[k] = v;
+      render();
+      const m = liveSetup();
+      const card = m && $app.querySelector(`[data-mid="${m.id}"]`);
+      const next = card && (card.querySelector('.part[data-mark="ask"] .chip') || card.querySelector('[data-act="turnOn"]:not([disabled])') || card.querySelector('.pcard-h h3'));
+      if (next) next.focus();
+    },
     whenDone: () => {
       S.wiz.schedErr = schedProblems(S.wiz.sched);
       const keys = Object.keys(S.wiz.schedErr);

@@ -13,6 +13,9 @@ const S = {
   start: (i) => `main .thread [data-act="say"] >> nth=${i}`,
   time: '#sched-time',
   project: '#fix-project',
+  /* The set-up card asks one question at a time, with choice buttons (ADR 0043). */
+  answer: (arg) => `main .thread [data-act="answer"][data-arg="${arg}"]`,
+  asks: 'main .thread .part[data-mark="ask"]',
   turnOn: '[data-act="turnOn"]',
   testRun: '[data-act="testRun"]',
   review: 'main [data-act="run"][data-arg="sw"]:has-text("Review and decide")',
@@ -40,16 +43,17 @@ async function ctl(k, act, arg) {
   await k.settle();
 }
 
-/* The same set-up as a user would do it, without counting it. */
+/* The same set-up as a user would do it, without counting it. The card asks the time, then the Jira project. */
 async function turnOnWeekly(k) {
   await k.ask(WEEKLY_SUMMARY);
-  await k.page.selectOption(S.project, 'MOCK');
+  await k.page.click(S.answer('time:17:00'));
   await k.settle();
-  await k.page.fill(S.time, '17:00');
+  await k.page.click(S.answer('project:MOCK'));
   await k.settle();
   await k.page.click(S.turnOn);
   await k.settle(600);
 }
+const ONE_QUESTION = 'one question at a time with choice buttons (ADR 0043)';
 
 const approvedText = /approved, and the platform created the tickets/;
 const approvedOpts = { decision: true, until: approvedText };
@@ -88,12 +92,13 @@ add('A', 'First-time Operator sets up a weekly Jira summary and turns it on', as
   const asks = Number((left.match(/(\d+) choices? left/) || [0, 0])[1]);
   t.metric('plannerQuestions', asks);
   await t.expect('The Planner asks back for when it runs and the Jira project', left, /2 choices left: when it runs and the Jira project/);
-  await t.select(S.project, 'MOCK', 'Choose the Jira project', { decision: true });
-  await t.field(S.time, '17:00', 'Choose the time', { decision: true });
+  await t.expectCount('It asks one of them now', S.asks, 1);
+  await t.click(S.answer('time:17:00'), 'Choose 17:00', { decision: true });
+  await t.click(S.answer('project:MOCK'), 'Choose MOCK', { decision: true });
   await t.expectText('Nothing is unclear before turning on', /Nothing is unclear\. Turn it on when you’re ready\./);
   await t.click(S.turnOn, 'Turn it on', { decision: true });
   await t.expectText('The workflow is on', /Friday closed ticket summary is on/);
-}, [1280, 390]);
+}, [1280, 390], { changed: `The card asks ${ONE_QUESTION}: the time, then the Jira project. Each is one tap, where version 4 had a select and a typed time.` });
 
 /* B. Experienced Operator, a normal week. Through Workflows, as in version 3. B-home does it from Home. */
 add('B', 'Experienced Operator finds what needs attention and fixes the stopped Morning new-ticket check', async (t) => {
@@ -122,13 +127,13 @@ add('C', 'Bob, an Approver only, opens the upgrade request, sees what changes an
 
 add('C-self', 'Alice turns on a workflow, does a test run, and cannot approve her own test run', async (t) => {
   await t.ask(WEEKLY_SUMMARY, 'every Friday, sum up the tickets we closed this week');
-  await t.select(S.project, 'MOCK', 'Choose the Jira project', { decision: true });
-  await t.field(S.time, '17:00', 'Choose the time', { decision: true });
+  await t.click(S.answer('time:17:00'), 'Choose 17:00', { decision: true });
+  await t.click(S.answer('project:MOCK'), 'Choose MOCK', { decision: true });
   await t.click(S.turnOn, 'Turn it on', { decision: true });
   await t.click(S.testRun, 'Do a test run', { until: /another Approver must decide/ });
   await t.expectText('The page says Alice cannot approve her own run', /You set this up and started this run, so another Approver must decide\. Nobody approves their own work\./);
   await t.expectCount('There is no Approve button for her', '[data-act="approve"][data-arg="conf"]', 0);
-}, [1280], { changed: 'Home no longer suggests a general workflow (8 Nov, software versioning first), so she types the request, as in scenario A.' });
+}, [1280], { changed: `Home no longer suggests a general workflow (8 Nov, software versioning first), so she types the request, as in scenario A. The card asks ${ONE_QUESTION}.` });
 
 /* D. Unsupported request. */
 add('D', 'An Operator asks to email a weekly list, and the limit is explained with a next step', async (t) => {
@@ -146,12 +151,12 @@ add('E', 'The user corrects the Planner’s guess of project and schedule on the
   await t.click('[data-act="whenOpen"]', 'Open the schedule');
   await t.select('#sched-day', 'Monday', 'Correct the day', { decision: true });
   await t.click('[data-act="whenDone"]', 'Close the schedule');
-  await t.expect('The card now says OPS', t.page.innerText('.pcard .sentence-line'), /OPS/);
-  await t.expect('The card now says Monday', t.page.innerText('.pcard .sentence-line'), /Every Monday at 17:00/);
+  await t.expect('The card now says OPS', t.page.innerText('.pcard .parts'), /OPS/);
+  await t.expect('The card now says Monday', t.page.innerText('.pcard .parts'), /Every Monday at 17:00/);
   await t.expectCount('Still one set-up card, nothing started again', '.pcard:has([data-act="turnOn"])', 1);
   await t.expect('Still one request in the chat', t.page.innerText('main'), (v) => (v.match(/You:/g) || []).length === 1);
   await t.expectCount('Turn it on is ready', '[data-act="turnOn"]:not([disabled])', 1);
-});
+}, [1280], { changed: 'The same steps. The card’s one sentence became a list of parts (ADR 0043), so the check reads the list.' });
 
 /* F. Failed run. */
 add('F', 'Recover the stop the user can fix, and report the platform bug to support', async (t) => {
@@ -445,6 +450,51 @@ add('SHELL-rail', 'The rail returns to the chat as it was, scroll position inclu
   await t.expect('The scroll position is the same', t.page.evaluate(() => document.querySelector('.chatscroll').scrollTop), before);
 }, [1280, 390]);
 
+/* The Planner's answers (ADR 0043, step 2): every part of a request is marked, one question at a time, and a time is never guessed. */
+const STALE = 'Every Friday at 9 AM, find Jira tickets that haven\'t been updated for 10 days and prepare a summary.';
+add('ANS-cross', 'A clause the Planner can’t read gets a cross that quotes it, and the button sets up the part it can', async (t) => {
+  await t.ask(STALE, 'the review’s scenario A, with “haven’t been updated for 10 days”');
+  await t.expectText('The dropped clause is quoted with a cross', /“haven't been updated for 10 days”\s*I didn’t follow this part\./, 'main .thread .part[data-mark="no"]');
+  await t.expectText('The reply says it can’t do every part', /I can’t do every part of it/, 'main .thread');
+  await t.expectText('The button sets up the part it can', /Set up the part I can/, 'main .thread .pcard-f');
+  await t.click(S.answer('tickets:open'), 'Choose Open tickets', { decision: true });
+  await t.click(S.answer('project:MOCK'), 'Choose MOCK', { decision: true });
+  await t.expect('Nothing is unclear never shows while a part has a cross', t.page.innerText('main .thread'), (v) => !/Nothing is unclear/.test(v));
+  await t.expectText('The footer says the crossed part is left out', /The part with a cross is left out\./, 'main .thread .pcard-f');
+  await t.click(S.turnOn, 'Set up the part I can', { decision: true });
+  await t.expectText('The part it can is on', /is on\./);
+}, [1280, 390]);
+
+add('ANS-one-question', 'With nothing said about when, the card asks how often, then the day, then the time, one at a time', async (t) => {
+  await t.ask('sum up the tickets we closed in project MOCK', 'a request with no schedule');
+  await t.expectCount('One question shows', S.asks, 1);
+  await t.expectText('It asks how often first', /How often should it run\?/, S.asks);
+  await t.click(S.answer('freq:week'), 'Every week', { decision: true });
+  await t.expectCount('Still one question', S.asks, 1);
+  await t.expectText('Then the day', /Which day should it run\?/, S.asks);
+  await t.click(S.answer('day:Friday'), 'Friday', { decision: true });
+  await t.expectText('Then the time', /What time should it run\?/, S.asks);
+  await t.click(S.answer('time:09:00'), 'Choose 9:00', { decision: true });
+  await t.expectCount('No question is left', S.asks, 0);
+  await t.expectText('The card reads back the schedule it was given', /Every Friday at 9:00, Singapore time/, 'main .thread .parts');
+}, [1280, 390]);
+
+add('ANS-no-time', 'A request that names a day but no time is asked for the time, never given one', async (t) => {
+  await t.ask(WEEKLY_SUMMARY);
+  await t.expectText('The card asks what time', /What time should it run\?/, S.asks);
+  await t.expect('No time is filled in', t.page.innerText('main .thread .parts'), (v) => !/\d{1,2}:\d{2}, Singapore time/.test(v));
+  await t.expectCount('Turn it on waits for the time', '[data-act="turnOn"][disabled]', 1);
+}, [1280]);
+
+add('ANS-watch-parts', 'Watching software marks each part, and a time the watchlist doesn’t keep gets a cross', async (t) => {
+  await t.ask('watch Kubernetes every Monday at 9am and create a Jira ticket');
+  await t.expectCount('No part has a cross', 'main .thread li.cmsg:last-child .part[data-mark="no"]', 0);
+  await t.expectText('The schedule and the ticket are her words', /Checked\s+Every Monday at 9:00\s+From your words[\s\S]*Then\s+An upgrade ticket in Jira for each newer version\s+From your words/, 'main .thread li.cmsg:last-child');
+  await t.expectCount('One question at a time: the project first, not the version', 'main .thread li.cmsg:last-child .part[data-mark="ask"]', 1);
+  await t.ask('watch Grafana every day at 8am');
+  await t.expectText('Its own time gets a cross with the reason', /“every day at 8am”\s*The Software watchlist checks all your software together, every Monday at 9:00\./, 'main .thread li.cmsg:last-child');
+}, [1280, 390]);
+
 /* Keyboard only: no mouse. Tab, Shift+Tab, Enter, Space, arrows, Escape, typing. */
 add('KEYS-A', 'Scenario A with the keyboard only', async (t) => {
   await t.setup(async (k) => { await k.setDay('one'); await focusTop(k); });
@@ -453,15 +503,14 @@ add('KEYS-A', 'Scenario A with the keyboard only', async (t) => {
   await tabTo(t, '[data-ask]', 'the Planner box');
   await t.field(':focus', WEEKLY_SUMMARY, 'Type the request');
   await t.press('Enter', 'Send', { reply: true });
-  await tabTo(t, '#fix-project', 'the Jira project choice');
-  await t.press('m', 'Type M to choose MOCK', { decision: true });
-  await t.expect('The project is MOCK', t.page.$eval('#fix-project', (s) => s.value), 'MOCK');
-  await tabTo(t, '#sched-time', 'the time');
-  await t.field(':focus', '17:00', 'Type the time', { decision: true });
-  await tabTo(t, '[data-act="turnOn"]', 'Turn it on');
+  await tabTo(t, '[data-act="answer"][data-arg="time:17:00"]', 'the 17:00 choice');
+  await t.press('Enter', 'Choose 17:00', { decision: true });
+  await t.expect('Focus moves to the next question', focused(t.page), 'button[answer=project:MOCK]');
+  await t.press('Enter', 'Choose MOCK', { decision: true });
+  await t.expect('Focus moves to Turn it on', focused(t.page), 'button[turnOn]');
   await t.press('Enter', 'Turn it on', { decision: true });
   await t.expectText('The workflow is on', /Friday closed ticket summary is on/);
-}, [1280]);
+}, [1280], { changed: `The card asks ${ONE_QUESTION}, and focus moves to the next question after each answer.` });
 
 add('KEYS-C', 'Scenario C with the keyboard only', async (t) => {
   await t.setup(async (k) => { await k.setUser('bob'); await focusTop(k); });

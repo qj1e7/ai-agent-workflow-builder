@@ -18,6 +18,10 @@ const WEEKLY_SUMMARY = 'every Friday, sum up the tickets we closed this week';
 const EMAIL = 'email me a list of open bugs every Monday';
 const LONG_DASH = /[\u2013\u2014]/;
 
+/* The set-up card asks one question at a time, with choice buttons (ADR 0043). fillCard answers the weekly summary's two: the time, then the project. */
+const answer = async (k, arg) => { await k.click(`.thread [data-act="answer"][data-arg="${arg}"]`); };
+const fillCard = async (k) => { await answer(k, 'time:17:00'); await answer(k, 'project:MOCK'); };
+
 /* The Agent library is Settings, How it works (ADR 0043). */
 const goLib = async (k) => { await k.go('agents'); await k.click('[data-act="setTab"][data-arg="how"]'); };
 
@@ -243,8 +247,10 @@ async function main() {
       ok(n !== null, `${label}: footer has no count: ${foot}`);
       ok(disabled === n > 0, `${label}: footer says ${n} left but Turn it on is ${disabled ? 'disabled' : 'enabled'}`);
       if (m) ok(m[2].split(/, | and /).length === n, `${label}: footer count ${n} names ${m[2]}`);
-      const missing = await page.locator('.pcard .schip.missing').count();
-      ok(missing === n, `${label}: footer says ${n} left, the card marks ${missing} parts as please choose`);
+      /* changed (ADR 0043, one question at a time): the card shows one question while any choice is left, and none
+         after. Was: the card marks as many parts please choose as the footer counts. */
+      const asked = await page.locator('.pcard .part[data-mark="ask"]').count();
+      ok(asked === (n > 0 ? 1 : 0), `${label}: footer says ${n} left, the card shows ${asked} questions`);
       const all = await k.main();
       const other = [...all.matchAll(/(\d+) (more )?(choices?|answers?|questions?) (left|to go)|I need (\d+)/g)].map((x) => +(x[1] || x[5]));
       ok(other.every((v) => v === n), `${label}: the page names ${other.join(', ')} while the footer says ${n}`);
@@ -261,8 +267,8 @@ async function main() {
     const log = [await read('start')];
     await pickTickets('created'); log.push(await read('tickets'));
     await page.selectOption('#fix-action', 'list'); await k.settle(); log.push(await read('action'));
-    await page.selectOption('#fix-project', 'MOCK'); await k.settle(); log.push(await read('project'));
-    await page.fill('#sched-time', '17:00'); await k.settle(); log.push(await read('time'));
+    await answer(k, 'time:17:00'); log.push(await read('time'));
+    await answer(k, 'project:MOCK'); log.push(await read('project'));
     ok(/Nothing is unclear\. Turn it on when you’re ready\./.test(await page.locator('.pcard .pcard-f').innerText()), 'with nothing left, the footer does not read “Nothing is unclear. Turn it on when you’re ready.”');
     if (!(await page.$('#sched-freq'))) await k.click('[data-act="whenOpen"]');
     await page.selectOption('#sched-freq', 'day'); await k.settle(); log.push(await read('how often'));
@@ -283,20 +289,21 @@ async function main() {
     });
     await session(b, async (k, page) => {
       await k.ask('every day, sum up the tickets created this week');
-      const amber = await page.locator('.pcard .schip.missing:has(#fix-tickets)').count();
+      /* changed (ADR 0043): the conflict is a question, asked after the time. Was: an amber ticket chip. */
+      await answer(k, 'time:17:00');
+      const amber = await page.locator('.pcard .part[data-mark="ask"][data-part="tickets"]').count();
       const off = await page.locator('.pcard [data-act="turnOn"]').isDisabled();
-      if (!amber || !off) bad.push(`“every day … this week” is not amber with Turn it on held (amber ${amber}, disabled ${off})`);
+      if (!amber || !off) bad.push(`“every day … this week” does not ask which tickets with Turn it on held (asked ${amber}, disabled ${off})`);
     });
     await session(b, async (k, page) => {
       await k.ask(WEEKLY_SUMMARY);
       const v = await page.$$eval('#fix-tickets option', (os) => (os.find((o) => o.value.startsWith('created@')) || {}).value);
       await page.selectOption('#fix-tickets', v); await k.settle();
-      await page.selectOption('#fix-project', 'MOCK'); await k.settle();
-      await page.fill('#sched-time', '17:00'); await k.settle();
+      await fillCard(k);
       if (!(await page.$('#sched-freq'))) await k.click('[data-act="whenOpen"]');
       await page.selectOption('#sched-freq', 'day'); await k.settle();
       const s = await sentence(page);
-      const amber = await page.locator('.pcard .schip.missing:has(#fix-tickets)').count();
+      const amber = await page.locator('.pcard .part[data-mark="ask"][data-part="tickets"]').count();
       const opts = await page.$$eval('#fix-tickets option', (os) => os.map((o) => o.value).filter(Boolean));
       if (!/in the last day/.test(s) && !amber) bad.push(`after choosing “Tickets created this week” on a Friday card, then Every day: the card reads “${s.slice(0, 80)}”, not amber, Turn it on ${(await page.locator('.pcard [data-act="turnOn"]').isDisabled()) ? 'held' : 'ready'}, and the choices offer ${opts.join(', ')}`);
     });
@@ -330,8 +337,7 @@ async function main() {
 
   await check(B, 'roles-alice-not-own-test-run', async (b) => session(b, async (k, page) => {
     await k.ask(WEEKLY_SUMMARY);
-    await page.selectOption('#fix-project', 'MOCK'); await k.settle();
-    await page.fill('#sched-time', '17:00'); await k.settle();
+    await fillCard(k);
     await k.click('[data-act="turnOn"]');
     await k.click('[data-act="testRun"]');
     await k.waitText(/another Approver must decide/);
@@ -420,7 +426,7 @@ async function main() {
     await session(b, async (k, page) => { await k.setUser('bob'); seen.push(await looks(k, page, 'Bob')); });
     await session(b, async (k, page) => { await k.ctl('preview', 'on'); seen.push(await looks(k, page, 'Planned shown')); });
     await session(b, async (k, page) => {
-      await k.ask(WEEKLY_SUMMARY); await page.selectOption('#fix-project', 'MOCK'); await k.settle(); await page.fill('#sched-time', '17:00'); await k.settle();
+      await k.ask(WEEKLY_SUMMARY); await fillCard(k);
       await k.click('[data-act="turnOn"]'); await k.click('[data-act="testRun"]'); await k.waitText(/another Approver must decide/);
       await k.setUser('bob'); seen.push(await looks(k, page, 'Bob with a test run waiting'));
     });
@@ -666,7 +672,7 @@ async function main() {
         await page.locator('main [data-act="instead"]').first().click(); await k.replied();
         const last = '.thread li.cmsg:last-child';
         const card = await page.locator(`${last} [data-act="turnOn"]`).count();
-        const red = await page.locator(`${last} :is(.schip.cant, .snotes li.cant)`).count();
+        const red = await page.locator(`${last} :is(.schip.cant, .snotes li.cant, .part[data-mark="no"])`).count();
         if (card !== 1 || red) bad.push(`“${ask}”: ${label} gave ${card ? `a set-up card with ${red} red parts` : `“${(await page.locator('.thread [data-say]').last().innerText()).slice(0, 80)}”`}`);
       });
     }
@@ -863,7 +869,7 @@ async function main() {
       const r = await tabReach(page, sel, opts);
       rows.push(`${label} ${r.presses === null ? 'NOT REACHED' : `${r.presses}${r.ring ? '' : ' NO RING'}`}`);
     });
-    const card = async (k, page) => { await k.ask(WEEKLY_SUMMARY); await page.selectOption('#fix-project', 'MOCK'); await k.settle(); await page.fill('#sched-time', '17:00'); await k.settle(); };
+    const card = async (k) => { await k.ask(WEEKLY_SUMMARY); await fillCard(k); };
     await reach('A Turn it on', async (k, page) => { await k.setDay('one'); await card(k, page); }, '[data-act="turnOn"]');
     await reach('B Retry the run', async (k) => k.go('workflows'), 'main [data-act="retryIssues"]');
     await reach('B-home Retry the run', async () => {}, 'main [data-act="retryIssues"]');
