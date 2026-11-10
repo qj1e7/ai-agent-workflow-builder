@@ -157,6 +157,11 @@
       "detail": "seeded control: Bob has the Planner box"
     },
     {
+      "name": "stop-words-are-function-words",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
       "name": "no-console-errors",
       "status": "PASS",
       "detail": ""

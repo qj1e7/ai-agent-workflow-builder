@@ -2,7 +2,7 @@
 
 Prototype: `docs/design/ai-native-redesign/prototype.html`. Paths: `docs/design/ai-native-redesign/checks/paths-v4.cjs`.
 
-Real scenarios: 65 passed, 0 failed, 1 not possible. Control (must fail): failed, as it should.
+Real scenarios: 81 passed, 0 failed, 1 not possible. Control (must fail): failed, as it should.
 
 | Id | Width | Task | Passed | Clicks | Fields | Selects | Decisions | Screens | Notes |
 |---|---|---|---|---|---|---|---|---|---|
@@ -54,6 +54,18 @@ Real scenarios: 65 passed, 0 failed, 1 not possible. Control (must fail): failed
 | SHELL-rail | 390 | The rail returns to the chat as it was, scroll position included | yes | 4 | 2 | 0 | 0 | 2 |  |
 | ANS-cross | 1280 | A clause the Planner can’t read gets a cross that quotes it, and the button sets up the part it can | yes | 4 | 1 | 0 | 3 | 1 |  |
 | ANS-cross | 390 | A clause the Planner can’t read gets a cross that quotes it, and the button sets up the part it can | yes | 4 | 1 | 0 | 3 | 1 |  |
+| ANS-left-out | 1280 | After “Set up the part I can”, the card and the workflow’s page still say what was left out | yes | 6 | 1 | 0 | 3 | 3 |  |
+| ANS-verbs | 1280 | A clause of verbs and little words, such as “let me know”, still gets a cross, and never “Nothing is unclear” | yes | 3 | 3 | 0 | 0 | 1 |  |
+| ANS-whole-clause | 1280 | A cross quotes the whole clause, not one word of it | yes | 1 | 1 | 0 | 0 | 1 |  |
+| ANS-stale | 1280 | Every wording of “not updated for a while” gets the honest can’t, never a silent drop | yes | 3 | 3 | 0 | 0 | 1 |  |
+| ANS-none-hers | 1280 | A request with no part in her own words gets no set-up card of guesses | yes | 1 | 1 | 0 | 0 | 1 |  |
+| ANS-leftover-everywhere | 1280 | A part answer and an edit card mark the clauses they didn’t read too | yes | 2 | 2 | 0 | 0 | 1 |  |
+| ANS-edit-days | 1280 | Two days for one schedule get a cross, and Save change waits | yes | 1 | 1 | 0 | 0 | 1 |  |
+| ANS-name-words | 1280 | A schedule word in a workflow’s name is neither a schedule nor a command | yes | 3 | 3 | 0 | 0 | 1 |  |
+| ANS-questions | 1280 | Asking when a workflow runs gets its state and next run, never “I can only change” | yes | 4 | 4 | 0 | 0 | 1 |  |
+| ANS-edit-missing | 1280 | A workflow that doesn’t exist is named, and a change it can’t make keeps the question asked with it | yes | 2 | 2 | 0 | 0 | 1 |  |
+| ANS-edit-after | 1280 | After Save change: the watchlist says who owns it, a paused workflow says so, and a later change elsewhere is named | yes | 4 | 2 | 0 | 2 | 1 |  |
+| ANS-asks | 1280 | A bare hour is asked, “make it daily” after a draft offers the draft, and three more questions are answered from state | yes | 6 | 5 | 0 | 1 | 1 |  |
 | ANS-one-question | 1280 | With nothing said about when, the card asks how often, then the day, then the time, one at a time | yes | 4 | 1 | 0 | 3 | 1 |  |
 | ANS-one-question | 390 | With nothing said about when, the card asks how often, then the day, then the time, one at a time | yes | 4 | 1 | 0 | 3 | 1 |  |
 | ANS-no-time | 1280 | A request that names a day but no time is asked for the time, never given one | yes | 1 | 1 | 0 | 0 | 1 |  |
@@ -69,8 +81,12 @@ Real scenarios: 65 passed, 0 failed, 1 not possible. Control (must fail): failed
 | ANS-live | 1280 | An older answer reads current state: a pause in the panel and an approval on another page show in it | yes | 8 | 1 | 0 | 2 | 3 |  |
 | ANS-live-done | 1280 | A workflow turned on in the chat, then paused on its page, reads as paused back in the chat | yes | 4 | 0 | 0 | 1 | 3 |  |
 | ANS-panel | 1280 | While the Planner builds, the panel opens by itself with the steps going in, but never on a phone | yes | 2 | 1 | 0 | 0 | 1 |  |
+| ANS-panel | 880 | While the Planner builds, the panel opens by itself with the steps going in, but never on a phone | yes | 1 | 1 | 0 | 0 | 1 |  |
 | ANS-panel | 390 | While the Planner builds, the panel opens by itself with the steps going in, but never on a phone | yes | 1 | 1 | 0 | 0 | 1 |  |
-| KEYS-A | 1280 | Scenario A with the keyboard only | yes | 11 | 1 | 0 | 3 | 1 |  |
+| ANS-panel-focus | 1440 | Focus stays on the card’s heading while the panel opens by itself and the steps go in | yes | 1 | 1 | 0 | 0 | 1 |  |
+| ANS-panel-focus | 1280 | Focus stays on the card’s heading while the panel opens by itself and the steps go in | yes | 1 | 1 | 0 | 0 | 1 |  |
+| ANS-scroll-390 | 390 | On a phone, answering the card’s questions and saving a change never scrolls the app out of place | yes | 5 | 2 | 0 | 3 | 1 |  |
+| KEYS-A | 1280 | Scenario A with the keyboard only | yes | 12 | 1 | 0 | 3 | 1 |  |
 | KEYS-C | 1280 | Scenario C with the keyboard only | yes | 12 | 0 | 0 | 1 | 2 |  |
 
 A click includes a key press on a button. Menu steps and page changes are included. A decision is also counted as a click, a select or a field. Test controls are never counted.
