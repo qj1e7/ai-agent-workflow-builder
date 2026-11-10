@@ -340,11 +340,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .welcome h1 { font-size: 2rem; max-width: 22ch; text-wrap: balance; }
 .welcome .lead { color: var(--muted); font-size: 1.05rem; max-width: 52ch; }
 .welcome .face { width: 128px; height: 128px; }
-/* Once the conversation starts, the welcome folds to one line, so the thread has the page. */
-.welcome.compact { justify-items: start; text-align: left; padding-top: 0; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 12px; }
-.welcome.compact .hello-text { justify-items: start; }
-.welcome.compact h1 { font-size: 1.25rem; max-width: none; }
-.welcome.compact .face { width: 52px; height: 52px; }
 @media (max-width: 600px) { .welcome .face { width: 96px; height: 96px; } .welcome h1 { font-size: 1.5rem; } }
 .composer { display: flex; align-items: flex-end; gap: 8px; padding: 10px 10px 10px 16px; border: 1px solid var(--edge); border-radius: 12px; background: var(--surface); }
 .composer:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
@@ -356,6 +351,25 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .examples { justify-content: center; }
 /* A long placeholder on a phone is cut short, never wrapped out of a one-line box. */
 .composer textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Once the conversation starts, Home is the chat: the box docks at the bottom and the thread fills the page (ADR 0043). */
+.wrap.chatmode { max-width: none; padding: 0; height: calc(100dvh - 70px); overflow: hidden; }
+.home.chatlayout { display: flex; gap: 0; height: 100%; max-width: none; margin: 0; }
+.chatcol { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+.chatbar, .chatin, .chatdock { width: 100%; max-width: 820px; margin: 0 auto; padding-inline: 16px; }
+.chatbar { padding-top: 12px; display: grid; gap: 8px; }
+.chatnew { justify-content: flex-end; }
+.chatscroll { flex: 1 1 0; min-height: 0; overflow-y: auto; padding-block: 8px 16px; overscroll-behavior: contain; }
+.chatdock { padding-block: 8px 16px; }
+.pinned { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto auto; gap: 4px 12px; align-items: center; padding: 10px 14px; border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); }
+.pinned .ico { width: 20px; height: 24px; display: grid; place-items: center; }
+.pinned .ico svg { width: 20px; height: 20px; }
+.pinned-text { display: grid; min-width: 0; }
+.pinned-text span { font-size: 0.875rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 600px) { .pinned { grid-template-columns: 20px minmax(0, 1fr); } .pinned > .btn, .pinned > .linkbtn { grid-column: 2; justify-self: start; } .pinned-text span { white-space: normal; } }
+@media (max-width: 900px) { .wrap.chatmode { height: calc(100dvh - 108px); } }
+.ngroup { display: grid; gap: 8px; }
+.ngroup + .ngroup { margin-top: 12px; }
+.ngroup > h3 { font-size: 0.875rem; color: var(--muted); }
 /* Every answer shares one left edge and one width, however narrow its card, because the thread fills the column. */
 .thread { width: 100%; }
 /* Check my workflows: one row per workflow with its state, next run and one action (spec 6.2). */
@@ -2483,11 +2497,23 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
 
   /* What needs the person reading, as one full card and then one-line rows. Shared by Workflows and an Approver's Home. */
+  /* Needs you is grouped (ADR 0043): Do now holds stops and approvals, Set up holds keys and missing sources. needs() stays the one list. */
+  const NEED_GROUPS = [['now', 'Do now'], ['set', 'Set up']];
+  const needGroup = (t) => (t.kind === 'tool' || t.rank === 3 ? 'set' : 'now');
+  const byGroup = (items) => NEED_GROUPS.flatMap(([g]) => items.filter((t) => needGroup(t) === g));
   function needsSection(items) {
     const n = items.length;
+    const sorted = byGroup(items);
+    const body = NEED_GROUPS.map(([g, label]) => {
+      const list = sorted.filter((t) => needGroup(t) === g);
+      if (!list.length) return '';
+      const lead = list[0] === sorted[0];
+      const rest = lead ? list.slice(1) : list;
+      return `<div class="ngroup" role="group" aria-labelledby="ng-${g}"><h3 id="ng-${g}">${label}</h3>${lead ? taskCard(list[0]) : ''}${rest.length ? `<ul class="queue" aria-label="${label}" data-flip-group="queue-${g}">${rest.map((x, i) => queueRow(x, i + 1)).join('')}</ul>` : ''}</div>`;
+    }).join('');
     return `<section class="section" aria-labelledby="needs-h" data-flip-group="needs">
       <h2 id="needs-h">Needs you <span class="count" data-val="needs-count">${n}</span></h2>
-      ${taskCard(items[0])}${n > 1 ? `<ul class="queue" aria-label="Also needs you" data-flip-group="queue">${items.slice(1).map((x, i) => queueRow(x, i + 1)).join('')}</ul>` : ''}
+      ${body}
     </section>`;
   }
   /* The workflows in the order they run next, paused ones last. */
@@ -2506,9 +2532,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function needsStrip(items, max = 3, unbuilt = '', o = {}) {
     const n = items.length;
     const primary = o.primary !== false;
+    const shown = byGroup(items).slice(0, max);
     return `<section class="section needs" aria-labelledby="needs-h" data-flip-group="needs"${unbuilt ? ` data-unbuilt="${unbuilt}"` : ''}>
       <h2 id="needs-h">Needs you <span class="count" data-val="needs-count">${o.total || n}</span></h2>
-      <ul class="queue" data-flip-group="nrows">${items.slice(0, max).map((t, i) => needRow(t, i, primary)).join('')}</ul>
+      ${NEED_GROUPS.map(([g, label]) => { const list = shown.filter((t) => needGroup(t) === g); return list.length ? `<div class="ngroup" role="group" aria-labelledby="ng-${g}"><h3 id="ng-${g}">${label}</h3><ul class="queue" data-flip-group="nrows-${g}">${list.map((t) => needRow(t, shown.indexOf(t), primary)).join('')}</ul></div>` : ''; }).join('')}
       ${n > max ? '<p class="small"><button class="linkbtn" data-act="go" data-arg="workflows">See all on Workflows</button></p>' : ''}
     </section>`;
   }
@@ -2528,6 +2555,29 @@ details > .m-close { animation: fold 140ms ease-in both; }
       <p class="note" style="margin-top:28px">You’re an Approver, so you decide on requests. Operators set up workflows.</p>
     </div>`;
   }
+
+  /* One row at the top of a conversation names the most urgent item (ADR 0043). Open goes to that item, and N more opens the list. */
+  function needOpen(t) {
+    if (t.wf) return { act: S.n8nChg[t.wf] ? 'workflow' : 'run', arg: t.wf };
+    if (/^GitHub can’t find/.test(t.title)) return { act: 'go', arg: 'software' };
+    const m = t.actions.match(/data-act="([^"]+)"(?: data-arg="([^"]*)")?/);
+    return m ? { act: m[1], arg: m[2] } : null;
+  }
+  function pinnedLine() {
+    const items = byGroup(needs());
+    if (!items.length) return '';
+    const t = items[0];
+    const o = needOpen(t);
+    const more = items.length - 1;
+    return `<div class="pinned" role="region" aria-label="Most urgent">
+      <span class="ico ${t.kind}">${t.icon}</span>
+      <div class="pinned-text"><b>${t.title}</b><span>${t.held || (t.why ? firstSentence(t.why) : t.meta)}</span></div>
+      ${o ? `<button class="btn sm" data-act="${o.act}"${o.arg !== undefined ? ` data-arg="${o.arg}"` : ''}>Open<span class="vh">: ${firstSentence(t.title)}</span></button>` : ''}
+      ${more ? `<button class="linkbtn" data-act="go" data-arg="workflows">${more} more<span class="vh"> that need you</span></button>` : ''}
+    </div>`;
+  }
+  const chatMode = () => S.view.name === 'home' && me().op && !!curModel() && S.chat.msgs.length > 0;
+  const sidePanel = () => '';
 
   /* Home for an Operator (spec 5): a greeting with the state in one line, the Planner's box, three suggestions from that
      state, and Needs you while something needs her. Day one has three starting points and the capability lists instead. */
@@ -2573,17 +2623,26 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const dayOne = !routineIds().length;
     if (!curModel()) return offlineHome();
     const items = homeNeeds();
-    const hello = !empty ? '<h1 tabindex="-1">Planner</h1>'
-      : dayOne ? '<h1 tabindex="-1">Which software should we keep up to date?</h1><p class="lead">Ask about your watchlist, or tell me what software to watch.</p>'
+    if (!empty) {
+      return `<div class="home planner chatlayout" data-unbuilt="The Planner’s box on Home (ADR 0037)">
+        <div class="chatcol">
+          <div class="chatbar"><h1 class="vh" tabindex="-1">Planner</h1>${pinnedLine()}<div class="btns chatnew"><button class="linkbtn" data-act="newChat">New chat</button></div></div>
+          <div class="chatscroll"><div class="chatin">${threadHTML()}</div></div>
+          <div class="chatdock">${composer(c, false)}</div>
+        </div>
+        ${sidePanel()}
+      </div>`;
+    }
+    const hello = dayOne
+      ? '<h1 tabindex="-1">Which software should we keep up to date?</h1><p class="lead">Ask about your watchlist, or tell me what software to watch.</p>'
         : `<h1 tabindex="-1">Good morning! ${me().name}</h1><p class="lead">${stateLine(items)}</p>`;
     return `<div class="home planner" data-unbuilt="The Planner’s box on Home (ADR 0037)">
-      <div class="welcome${empty ? '' : ' compact'}">${face('lead', empty ? 128 : 52, c.hero, { live: empty && c.hero === 'idle', id: 'hero' })}<div class="hello-text">${hello}</div></div>
-      ${empty ? '' : threadHTML()}
-      ${composer(c, empty)}
-      ${empty ? `<div class="chips examples" role="group" aria-label="${onWatchlist() ? 'Suggestions' : 'Starting points'}">${suggestions().map((e, i) => `<button class="chip" data-act="example" data-arg="${i}">${e}</button>`).join('')}</div>` : '<div class="btns"><button class="linkbtn" data-act="newChat">New chat</button></div>'}
-      ${empty && items.length ? needsStrip(items) : ''}
-      ${empty && (dayOne || c.abil) ? abilitiesHTML() : ''}
-      ${empty && !dayOne ? `<p class="small muted" style="text-align:center"><button class="linkbtn" data-act="abil" data-unbuilt="What can I ask for">${c.abil ? 'Hide what I can do' : 'What can I ask for?'}</button></p>` : ''}
+      <div class="welcome">${face('lead', 128, c.hero, { live: c.hero === 'idle', id: 'hero' })}<div class="hello-text">${hello}</div></div>
+      ${composer(c, true)}
+      <div class="chips examples" role="group" aria-label="${onWatchlist() ? 'Suggestions' : 'Starting points'}">${suggestions().map((e, i) => `<button class="chip" data-act="example" data-arg="${i}">${e}</button>`).join('')}</div>
+      ${items.length ? needsStrip(items) : ''}
+      ${dayOne || c.abil ? abilitiesHTML() : ''}
+      ${!dayOne ? `<p class="small muted" style="text-align:center"><button class="linkbtn" data-act="abil" data-unbuilt="What can I ask for">${c.abil ? 'Hide what I can do' : 'What can I ask for?'}</button></p>` : ''}
     </div>`;
   }
   /* Home with no AI model (spec 5.4), in the built app's words: agent workflows can't run and new ones can't be planned
@@ -4565,7 +4624,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const scrolls = [['.msgs', true], ['.dialog:not(.leave)', sameModal]].map(([sel, keep]) => { const el = keep && $app.querySelector(sel); return el ? [sel, el.scrollTop] : null; }).filter(Boolean);
     const keepChat = $app.querySelector('.chatscroll');
     if (keepChat) S.chatScroll = keepChat.scrollTop;
-    $app.innerHTML = '<button class="skiplink" data-act="skipMain">Skip to main content</button>' + header() + `<div class="shell">${rail()}<main class="sheet" id="main"><div class="wrap" data-flip-group="page">${main}</div></main></div>` + teamsDrawer() + modal() + toastHtml + testControls();
+    $app.innerHTML = '<button class="skiplink" data-act="skipMain">Skip to main content</button>' + header() + `<div class="shell">${rail()}<main class="sheet" id="main"><div class="wrap${chatMode() ? ' chatmode' : ''}" data-flip-group="page">${main}</div></main></div>` + teamsDrawer() + modal() + toastHtml + testControls();
     detailsKeys().forEach(([d, k]) => { if (!d.open && opened.has(k)) d.open = true; });
     scrolls.forEach(([sel, top]) => { const el = $app.querySelector(sel); if (el) el.scrollTop = top; });
     const chatEl = $app.querySelector('.chatscroll');
@@ -5370,6 +5429,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     newChat: () => {
       const kept = saveLive();
       Object.assign(S.chat, { msgs: [], pending: null, hero: 'idle', text: '' });
+      S.chatScroll = null;
       if (kept) toast('Your draft is saved. Find it on Workflows.');
       render();
       focusComposer();
