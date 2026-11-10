@@ -42,8 +42,24 @@ The Planner's reply on Home when it can do a request: the whole workflow filled 
 _Avoid_: Wizard, form, New workflow (the old 4-step page)
 
 **Planner answer**:
-What the Planner replies to one request typed on Home: a set-up card, a watchlist row, a question about which software, the part it can do, a can't with the nearest alternative, a refusal to skip a yes, an answer about the person's workflows (check my workflows, why it stopped, what needs me), a question answer, the list of what it can do, or offline. Code decides which one from the model's reading, and the reply sentences are fixed text (ADR 0037), except for the question answer (ADR 0042).
+What the Planner replies to one request typed on Home: a set-up card, an edit card, a watchlist row, a question about which software, the part it can do, a can't with the nearest alternative, a refusal to skip a yes, an answer about the person's workflows (check my workflows, why it stopped, what needs me), a question answer, the list of what it can do, or offline. Code decides which one from the model's reading, and the reply sentences are fixed text (ADR 0037), except for the question answer (ADR 0042).
 _Avoid_: Reply, response, intent (in the app)
+
+**Edit card**:
+The Planner's reply when someone asks to change a workflow they already have: only what changes, before and after. Saving it publishes a new version, with Undo (ADR 0043).
+_Avoid_: New draft (for a change to an existing workflow)
+
+**Needs you**:
+The list of what waits on the signed-in person, grouped into Do now (stops, approvals) and Set up (keys, missing sources). One source feeds every place it shows, and it stays pinned at the top of a conversation.
+_Avoid_: Needs attention, inbox
+
+**Rail**:
+The slim column on the left of the app with Chat, Workflows and Watchlist, each with a count. Workflows and Watchlist open as full pages, and the chat shows only on Chat. On a phone it is a bar across the top (ADR 0043).
+_Avoid_: Tabs, menu, sidebar
+
+**Side panel**:
+Where something opened from a card in the chat shows, beside the chat, so the conversation stays in view. It shows one thing at a time, as a summary, with More details for the full page. A link inside it, or anything opened from the rail or a page, opens as a full page instead. On a phone it opens full screen with Close.
+_Avoid_: Drawer, modal
 
 **Question answer**:
 The Planner's reply to a question about the person's own data, such as how many software are on the watchlist. The model writes it in its own words from a facts snapshot read when the question arrives, and only from those facts. It names the sections it used, and it never offers to act. It is the one answer whose text is not fixed (ADR 0042).
@@ -146,7 +162,7 @@ The agent that reads a task, says what it understood, and decides which saved ag
 _Avoid_: Room lead (the old name), orchestrator
 
 **Planner's box**:
-The text box on Home where an Operator says what to automate, check or fix. The Planner answers under it with a Planner answer, and its face, the Visor bot, shows whether it is listening, thinking or sorry. The old four-step New workflow screen is gone. Its old address leads to Home.
+The text box on Home where an Operator says what to automate, check or fix. It starts in the middle of Home and moves to the bottom of the chat after the first message. The Planner answers in the chat with a Planner answer, and its face, the Visor bot, shows whether it is listening, thinking or sorry. The old four-step New workflow screen is gone. Its old address leads to Home.
 
 **Specialist agent**:
 An agent, defined by an agent card, that the Planner brings in to do one part of a run.
