@@ -367,6 +367,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .pinned-text span { font-size: 0.875rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 600px) { .pinned { grid-template-columns: 20px auto minmax(0, 1fr); } .pinned-text { grid-column: 2 / -1; } .pinned > .btn { grid-column: 2; justify-self: start; } .pinned > .linkbtn { grid-column: 3; justify-self: start; } .pinned-text span { white-space: normal; } }
 @media (max-width: 900px) { .wrap.chatmode { height: calc(100dvh - 108px); } }
+[hidden] { display: none !important; }
+.sidepanel { flex: 0 0 min(400px, 40%); min-width: 0; display: flex; flex-direction: column; border-left: 1px solid var(--hair); background: var(--bg); }
+.sp-bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--hair); }
+.sp-bar h2 { flex: 1; min-width: 0; font-size: 1.0625rem; overflow-wrap: anywhere; }
+.sp-body { flex: 1; overflow-y: auto; padding: 16px; display: grid; gap: 14px; align-content: start; }
+.sp-problem { display: grid; gap: 10px; }
+.sp-steps { display: grid; gap: 6px; }
+.sp-steps li { position: relative; padding-left: 22px; }
+.sp-steps li::before { content: ""; position: absolute; left: 4px; top: 0.5em; width: 9px; height: 9px; border-radius: 50%; background: var(--green); }
+.sp-steps li.todo::before, .sp-steps li.skip::before { background: var(--rail); }
+.sp-steps li.fail::before { background: var(--red); }
+.sp-steps li.wait::before, .sp-steps li.noans::before { background: var(--amber); }
+@media (max-width: 860px) { .sidepanel { position: fixed; inset: 0; z-index: var(--z-overlay); flex: none; border-left: 0; padding-top: env(safe-area-inset-top, 0px); } }
 .ngroup { display: grid; gap: 8px; }
 .ngroup + .ngroup { margin-top: 12px; }
 .ngroup > h3 { font-size: 0.875rem; color: var(--muted); }
@@ -2577,7 +2590,56 @@ details > .m-close { animation: fold 140ms ease-in both; }
     </div>`;
   }
   const chatMode = () => S.view.name === 'home' && me().op && !!curModel() && S.chat.msgs.length > 0;
-  const sidePanel = () => '';
+  /* The side panel (ADR 0043) shows one item opened from a card in the chat, as a summary. It keeps no history. */
+  const narrow = () => window.matchMedia('(max-width: 860px)').matches;
+  function itemOf(act, arg, el) {
+    if (el && el.dataset.open) { const [kind, id] = el.dataset.open.split(':'); return { kind, id }; }
+    if (act === 'workflow' && arg !== 'sw') return { kind: 'workflow', id: arg };
+    if (act === 'run') return { kind: 'run', id: arg };
+    return null;
+  }
+  const sameItem = (a, b) => !!a && !!b && a.id === b.id && (a.kind === b.kind || (a.kind !== 'software' && b.kind !== 'software'));
+  const swRow = (key) => watchRows().concat(S.added.map((a, i) => ({ key: `add${i}`, name: a.name, kind: a.kind, repo: a.repo, ours: a.ours || 'Not known', newest: '?' }))).find((r) => r.key === key && !S.removed.includes(key));
+  const runTone = { waiting: { tone: 'wait', label: 'Waiting for a yes' }, failed: { tone: 'bad', label: 'Stopped' }, expired: { tone: 'off', label: 'No answer' }, done: { tone: 'ok', label: 'Done' } };
+  function panelView(p) {
+    if (p.kind === 'workflow') {
+      if (!has(p.id)) return { title: 'Workflow', body: '<p class="muted">That workflow isn’t here any more.</p>' };
+      const r = R(p.id);
+      const st = status(p.id);
+      const t = stoppedNow(p.id) ? TROUBLE[p.id]() : null;
+      const problem = t ? `<div class="sp-problem">${says(`${t.happened} ${t.next}`)}${me().op && t.act ? `<div class="btns">${troubleBtn(t)}</div>` : ''}</div>` : '';
+      const flip = !me().op || p.id === 'sw' ? '' : S.paused[p.id] ? `<button class="btn sm" data-act="resume" data-arg="${p.id}">Resume</button>` : `<button class="btn sm" data-act="pause" data-arg="${p.id}">${I.pause(14)}Pause</button>`;
+      return { title: esc(r.name), page: `workflow:${p.id}`, body: `<div>${pills(p.id)}</div><p>${r.what}</p>${problem}
+        <dl class="kv"><dt>Last run</dt><dd>${st.last}</dd><dt>Next run</dt><dd>${S.paused[p.id] ? 'Paused' : r.next}</dd></dl>
+        <div class="btns">${hasRun(p.id) ? `<button class="linkbtn" data-act="panelPage" data-arg="run:${p.id}">Open the run</button>` : ''}${flip}</div>` };
+    }
+    if (p.kind === 'software') {
+      const row = swRow(p.id);
+      if (!row) return { title: 'Software', body: '<p class="muted">That software isn’t on the Software watchlist any more.</p>' };
+      const state = row.newest === '?' ? '<span class="pill bad">Can’t check</span>' : row.ours === row.newest ? '<span class="pill ok">Up to date</span>' : '<span class="pill wait">New version</span>';
+      return { title: esc(row.name), page: 'software', body: `<div>${state}</div>
+        <dl class="kv"><dt>You run</dt><dd>${esc(row.ours)}</dd><dt>Newest</dt><dd>${row.newest === '?' ? 'Not known' : esc(row.newest)}</dd><dt>Checked by</dt><dd>The Version checker, every Monday, on ${srcName(row.kind || 'github')}</dd></dl>` };
+    }
+    const m = runModel(p.id);
+    const r = R(m.workflow);
+    if (m.state === 'waiting' && canApprove(p.id)) return { title: esc(r.name), page: `run:${p.id}`, body: approvePanel(p.id, true) };
+    const steps = m.stations.map((s, i) => {
+      const st = s.skip && i <= m.end ? 'skip' : i < m.end ? 'done' : i === m.end ? ({ failed: 'fail', waiting: 'wait', expired: 'noans' }[m.state] || 'done') : 'todo';
+      const said = { done: 'Done: ', fail: 'Stopped: ', wait: 'Waiting: ', noans: 'No answer: ', skip: 'Not needed: ', todo: 'Not reached yet: ' }[st];
+      return `<li class="${st}"><span class="vh">${said}</span>${s.label}</li>`;
+    }).join('');
+    const t = m.state === 'failed' && TROUBLE[p.id] ? TROUBLE[p.id]() : null;
+    const answers = t ? `<dl class="qa"><dt>What happened</dt><dd>${t.happened}</dd></dl><dl class="qa"><dt>What was affected</dt><dd>${t.affected}</dd></dl><dl class="qa"><dt>Can it be fixed safely</dt><dd>${t.safe}</dd></dl>${t.act && me().op ? `<div class="btns">${troubleBtn(t)}</div>` : t.act ? `<p class="note">${t.deny}</p>` : ''}` : '';
+    return { title: esc(r.name), page: `run:${p.id}`, body: `<div>${pill(runTone[m.state] || runTone.done)}</div><p>${m.headline}</p><ol class="sp-steps" aria-label="Steps of this run">${steps}</ol>${answers}` };
+  }
+  function sidePanel() {
+    if (!S.panel) return '';
+    const v = panelView(S.panel);
+    return `<aside class="sidepanel" id="sidepanel" aria-labelledby="sp-h"${narrow() ? ' role="dialog" aria-modal="true"' : ''}>
+      <div class="sp-bar"><h2 id="sp-h" tabindex="-1">${v.title}</h2>${v.page ? `<button class="btn sm" data-act="panelPage" data-arg="${v.page}">More details</button>` : ''}<button class="btn sm" data-act="panelClose">Close</button></div>
+      <div class="sp-body">${v.body}</div>
+    </aside>`;
+  }
 
   /* Home for an Operator (spec 5): a greeting with the state in one line, the Planner's box, three suggestions from that
      state, and Needs you while something needs her. Day one has three starting points and the capability lists instead. */
@@ -2625,7 +2687,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const items = homeNeeds();
     if (!empty) {
       return `<div class="home planner chatlayout" data-unbuilt="The Planner’s box on Home (ADR 0037)">
-        <div class="chatcol">
+        <div class="chatcol"${S.panel && narrow() ? ' inert' : ''}>
           <div class="chatbar"><h1 class="vh" tabindex="-1">Planner</h1>${pinnedLine()}<div class="btns chatnew"><button class="linkbtn" data-act="newChat">New chat</button></div></div>
           <div class="chatscroll"><div class="chatin">${threadHTML()}</div></div>
           <div class="chatdock">${composer(c, false)}</div>
@@ -3089,7 +3151,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
 
   /* The approval panel (spec 10.4): what will change, why, who asked, what happens, and the reader's part. The platform
      checks the decision again on the server. This summary helps the reader; it is not the check. */
-  function approvePanel(id) {
+  function approvePanel(id, short) {
     const ok = canApprove(id);
     const why = partyWhy(id, S.user);
     const sw = id === 'sw';
@@ -3112,8 +3174,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
             : 'Only an Approver can decide.';
     return `<div class="panel approval">
       <dl class="qa"><dt>What will change</dt><dd><b>${sw ? '3 tickets will be created in Jira project MOCK on the practice Jira' : w.panelTitle}</b>${body}<p class="note">This is exactly what will be written, and nothing else.</p></dd></dl>
-      <dl class="qa" data-unbuilt="Why, in the approval panel"><dt>Why</dt><dd>${found ? `<ul class="found">${found}</ul>` : 'See what each agent did, below.'}</dd></dl>
-      <dl class="qa" data-unbuilt="Who asked, in the approval panel"><dt>Who asked</dt><dd>${esc(R(m.workflow).name)}, set up by ${nm(ownerOf(m.workflow))}. ${first.msg ? first.msg.text : ''}${first.sub ? ` (${first.sub})` : ''}</dd></dl>
+      ${short ? '' : `<dl class="qa" data-unbuilt="Why, in the approval panel"><dt>Why</dt><dd>${found ? `<ul class="found">${found}</ul>` : 'See what each agent did, below.'}</dd></dl>
+      <dl class="qa" data-unbuilt="Who asked, in the approval panel"><dt>Who asked</dt><dd>${esc(R(m.workflow).name)}, set up by ${nm(ownerOf(m.workflow))}. ${first.msg ? first.msg.text : ''}${first.sub ? ` (${first.sub})` : ''}</dd></dl>`}
       <dl class="qa"><dt>What happens</dt><dd><span>Nothing is written until you say yes. ${askLine(q, S.user, true)}${namedTag(q)} ${sw ? 'You approve or decline the whole check. If you decline, the tickets are proposed again next Monday.' : 'If you decline, the run stops there.'}</span></dd></dl>
       <dl class="qa" data-unbuilt="Your part, in the approval panel"><dt>Your part</dt><dd>${part}</dd></dl>
       ${ok ? `<div class="btns"><button class="btn good" data-act="approve" data-arg="${id}">${I.check(16)}Approve</button><button class="btn bad" data-act="decline" data-arg="${id}">Decline</button></div>` : ''}
@@ -3396,7 +3458,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return `<div class="pcard why" data-pres="why:${m.id}" data-unbuilt="Planner answers about your workflows">
       <div class="pcard-h">${face('trouble', 32)}<h3>AI troubleshooter</h3></div>
       <div class="pcard-s"><dl class="qa"><dt>What happened</dt><dd>${t.happened}</dd></dl><dl class="qa"><dt>What was affected</dt><dd>${t.affected}</dd></dl><dl class="qa"><dt>Can it be fixed safely</dt><dd>${t.safe}</dd></dl><dl class="qa"><dt>What to do</dt><dd>${t.next}</dd></dl></div>
-      <div class="pcard-f">${me().op ? troubleBtn(t, true) : ''}<button class="btn sm" data-act="run" data-arg="${id}">See the run</button></div>
+      <div class="pcard-f">${me().op ? `<span data-flow-of="run:${id}">${troubleBtn(t, true)}</span>` : ''}<button class="btn sm" data-act="run" data-arg="${id}">See the run</button></div>
     </div>`;
   }
   const mineSay = () => { const n = needs().length; return n ? `${n === 1 ? '1 thing needs' : `${n} things need`} you.` : 'Nothing needs you right now.'; };
@@ -3426,7 +3488,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const stop = c.stopping
       ? `<span class="btns" role="group" aria-label="Stop watching ${esc(r.name)}"><span>Stop watching ${esc(r.name)}? It won’t be checked any more.</span><button class="btn sm" data-act="stopKeep" data-mid="${m.id}">Keep it</button><button class="btn sm bad" data-act="stopYes" data-mid="${m.id}">Yes, stop watching<span class="vh"> ${esc(r.name)}</span></button></span>`
       : `<button class="btn sm" data-act="stopAsk" data-mid="${m.id}">Stop watching<span class="vh"> ${esc(r.name)}</span></button>`;
-    return `<div class="btns sw-acts"><button class="btn sm" data-act="go" data-arg="software">Open<span class="vh"> ${esc(r.name)}</span> on the Software page</button>${stop}</div><div class="btns"><button class="btn sm" data-act="checkNow">Check all software now</button></div>`;
+    return `<div class="btns sw-acts"><button class="btn sm" data-act="go" data-arg="software" data-open="software:${r.key}">Open<span class="vh"> ${esc(r.name)}</span> on the Software page</button>${stop}</div><div class="btns"><button class="btn sm" data-act="checkNow">Check all software now</button></div>`;
   };
   const dataCard = (m) => `<p class="looked small muted">Looked at: ${m.card.looked.map((k) => `<button class="linkbtn" data-act="go" data-arg="${LOOKED[k][1]}">${LOOKED[k][0]}</button>`).join(', ')}</p>${dataActions(m)}`;
   /* A short follow-up after an answer about the watchlist: "and Redis?". A name on the list is a question about that
@@ -3454,7 +3516,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const ANSWERS = {
     setup: { say: () => 'Here’s what I understood. I filled in what I could.', card: (m) => setupCard(m) },
     watch: { say: (a) => `${a.word ? `You mentioned “${esc(a.word)}”, so this` : `${esc(a.name)} is software, so it`} belongs on the Software watchlist, which checks all your software every Monday.`, card: (m) => watchCard(m) },
-    listed: { say: (a) => `${esc(a.name)} is already on the Software watchlist.`, card: () => '<div class="btns"><button class="btn sm" data-act="go" data-arg="software">Open it</button></div>' },
+    listed: { say: (a) => `${esc(a.name)} is already on the Software watchlist.`, card: (m) => { const r = liveSoftware().find((x) => x.name === m.card.name); return `<div class="btns"><button class="btn sm" data-act="go" data-arg="software"${r ? ` data-open="software:${r.key}"` : ''}>Open it</button></div>`; } },
     which: { say: (a) => `You mentioned “${esc(a.word)}”, so this belongs on the Software watchlist. Which software should I watch?` },
     back: { say: () => 'No problem. Ask for something else whenever you like.' },
     part: { say: (a) => `I can ${a.can}, but ${a.cant}. ${a.cap === 'jiraComp' ? NEW_TOOL : CAPS[a.cap].why}`, card: (m) => partCard(m), mood: 'sorry' },
@@ -4627,6 +4689,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     $app.innerHTML = '<button class="skiplink" data-act="skipMain">Skip to main content</button>' + header() + `<div class="shell">${rail()}<main class="sheet" id="main"><div class="wrap${chatMode() ? ' chatmode' : ''}" data-flip-group="page">${main}</div></main></div>` + teamsDrawer() + modal() + toastHtml + testControls();
     detailsKeys().forEach(([d, k]) => { if (!d.open && opened.has(k)) d.open = true; });
     scrolls.forEach(([sel, top]) => { const el = $app.querySelector(sel); if (el) el.scrollTop = top; });
+    if (S.panel && chatMode()) $app.querySelectorAll('.thread .btn[data-act], .pinned .btn[data-act], [data-flow-of]').forEach((el) => { if (el.dataset.flowOf ? el.dataset.flowOf === `${S.panel.kind}:${S.panel.id}` : sameItem(itemOf(el.dataset.act, el.dataset.arg, el), S.panel)) el.hidden = true; });
     const chatEl = $app.querySelector('.chatscroll');
     if (chatEl) chatEl.scrollTop = S.chatScroll == null ? chatEl.scrollHeight : S.chatScroll;
     $app.querySelectorAll('#dlg-h:not([tabindex])').forEach((h) => h.setAttribute('tabindex', '-1'));
@@ -4955,6 +5018,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   try { window.history.replaceState({ name: S.view.name }, '', `#${S.view.name}`); } catch (e) { /* As above. */ }
   /* The control that opened a dialog or the Teams drawer gets focus back when it closes. */
   let opener = null;
+  let panelOpener = null;
+  let viaPanel = false;
   /* Several controls can share an action (a card's title and its Details button), so the opener is kept as a selector plus its place among the matches. */
   const inPage = (sel) => [...$app.querySelectorAll(`:is(.hdr, main, .rail) ${sel}`)];
   function selFor(el) {
@@ -5403,7 +5468,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (runBlocked('issues')) return;
       S.issues = 'fixed';
       retry('issues');
-      go('run', 'issues', { live: true });
+      if (viaPanel) render(); else go('run', 'issues', { live: true });
     },
     report: () => openModal('report', null, '.btn.primary'),
     closeModal: () => closeModal(),
@@ -5418,9 +5483,25 @@ details > .m-close { animation: fold 140ms ease-in both; }
     },
     /* Support moves the case to the next stage the track shows. */
     advance: () => { const next = reportStages().map(([from]) => from).find((from) => from > S.report); if (next) S.report = next; if (S.report === 4) toast(`Dana merged the fix for ${S.supportCase.id}. It’s live.`); render(); },
-    retryNudge: () => { if (runBlocked('nudge')) return; S.nudge = 'waiting'; S.nudgeBy = null; retry('nudge'); go('run', 'nudge', { live: true }); },
+    retryNudge: () => { if (runBlocked('nudge')) return; S.nudge = 'waiting'; S.nudgeBy = null; retry('nudge'); if (viaPanel) render(); else go('run', 'nudge', { live: true }); },
     skipMain: () => { const h = $app.querySelector('main h1'); if (h) { h.focus(); h.scrollIntoView({ block: 'start' }); } },
     askPlanner: () => { go('home'); focusComposer(); },
+    panelOpen: (item, el) => {
+      panelOpener = selFor(el);
+      S.panel = item;
+      render();
+      const h = $app.querySelector('#sp-h');
+      if (h) h.focus({ preventScroll: true });
+    },
+    panelClose: () => {
+      S.panel = null;
+      render();
+      const hits = panelOpener ? inPage(panelOpener.sel) : [];
+      const el = hits[panelOpener ? panelOpener.i : 0] || $app.querySelector('[data-ask]');
+      panelOpener = null;
+      if (el) el.focus({ preventScroll: true });
+    },
+    panelPage: (arg) => { const [kind, id] = arg.split(':'); go(kind === 'software' ? 'software' : kind, id, { fromChat: true }); },
     abil: () => { S.chat.abil = !S.chat.abil; render(); const b = $app.querySelector('[data-act="abil"]'); if (b) b.focus(); },
     ask: () => { const ta = $app.querySelector('[data-ask]'); if (ta) ask(ta.value); },
     example: (i) => ask(suggestions()[+i]),
@@ -5642,11 +5723,17 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (!t) return;
     if (e.detail > 1 && t.classList.contains('scrim')) return;
     if (t.getAttribute('aria-disabled') === 'true') { e.preventDefault(); return; }
+    const fromChat = !!t.closest('.thread, .pinned');
+    const item = fromChat ? itemOf(t.dataset.act, t.dataset.arg, t) : null;
+    if (item) { e.preventDefault(); A.panelOpen(item, t); return; }
+    if (fromChat && (t.dataset.act === 'workflow' || (t.dataset.act === 'go' && t.dataset.arg !== 'home'))) { e.preventDefault(); go(t.dataset.act === 'workflow' ? 'software' : t.dataset.arg, undefined, { fromChat: true }); return; }
     const fn = A[t.dataset.act];
+    viaPanel = !!t.closest('.sidepanel');
     if (fn) { e.preventDefault(); fn(t.dataset.arg, t.dataset.mid ? msgById(t.dataset.mid) : undefined); }
+    viaPanel = false;
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { if (S.modal) closeModal(); else if (S.teams) A.teams(); else if (S.menu) A.menuClose(); else if (S.toast) hideToast(); else if (S.testOpen) A.testToggle(); return; }
+    if (e.key === 'Escape') { if (S.modal) closeModal(); else if (S.teams) A.teams(); else if (S.menu) A.menuClose(); else if (S.panel && chatMode()) A.panelClose(); else if (S.toast) hideToast(); else if (S.testOpen) A.testToggle(); return; }
     if (S.menu && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key) && e.target.closest('.menu')) {
       e.preventDefault();
       const items = [...$app.querySelectorAll('.menu [role="menuitem"]')];
@@ -5661,8 +5748,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (e.key === 'Enter' && e.target.matches('input[data-input="name"]')) { e.preventDefault(); A.renameDone(); return; }
     if (e.key === 'Enter' && e.target.matches('input[data-card="repoDraft"]')) { e.preventDefault(); const b = $app.querySelector(`[data-act="repoUse"][data-mid="${e.target.dataset.mid}"]`); if (b) b.click(); return; }
     // Keep Tab inside an open dialog.
-    if (e.key === 'Tab' && (S.modal || S.teams)) {
-      const box = $app.querySelector(S.modal ? '.dialog:not(.leave)' : '.drawer:not(.leave)');
+    if (e.key === 'Tab' && (S.modal || S.teams || (S.panel && chatMode() && narrow()))) {
+      const box = $app.querySelector(S.modal ? '.dialog:not(.leave)' : S.teams ? '.drawer:not(.leave)' : '.sidepanel');
       const items = box ? [...box.querySelectorAll('button, [href], input, textarea, select, summary')].filter((x) => !x.disabled && shown(x)) : [];
       if (items.length) {
         const first = items[0];
