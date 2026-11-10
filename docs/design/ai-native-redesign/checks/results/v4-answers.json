@@ -4,8 +4,8 @@
   "version": "v4",
   "summary": {
     "real": {
-      "total": 81,
-      "passed": 81,
+      "total": 90,
+      "passed": 90,
       "failed": 0,
       "notPossible": 1
     },
@@ -2936,6 +2936,422 @@
         },
         {
           "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-cant-clause",
+      "key": "ANS-cant-clause@1280",
+      "title": "A can’t answer never crosses the clause it answered",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the closed tickets and email the summary to the team",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-cant-alternative",
+      "key": "ANS-cant-alternative@1280",
+      "title": "The alternative to an email request sets up cleanly, with the email clause gone",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 0,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 1,
+        "screens": 1,
+        "interactions": 1
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Set that up",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-ticked-runs",
+      "key": "ANS-ticked-runs@1280",
+      "title": "In a clause a rule read, a cross quotes only the unread words, and the gaps are read",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 4,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 8
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday at 5pm sum up the closed tickets in MOCK with a chart",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: give me a short summary of the closed tickets in MOCK every Monday at 9am",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: every Monday at 9am sum up the closed tickets in MOCK, then file it as a Jira ticket",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "field",
+          "label": "Type: watch Grafana and tell me when there is a new version",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-narrow-cards",
+      "key": "ANS-narrow-cards@901",
+      "title": "Beside the panel, a narrow chat gives the cards two-column rows, and a chip stays on one line",
+      "viewport": 901,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-narrow-cards",
+      "key": "ANS-narrow-cards@1024",
+      "title": "Beside the panel, a narrow chat gives the cards two-column rows, and a chip stays on one line",
+      "viewport": 1024,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-clash-day",
+      "key": "ANS-clash-day@1280",
+      "title": "Two days in a set-up request ask which one, and an edit card takes focus at its heading",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 2,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 4
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Monday and Friday at 9am list open tickets in MOCK",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: Make the morning new-ticket check run on Mondays only",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-testctl",
+      "key": "ANS-testctl@1280",
+      "title": "The test controls never cover the product, scrolled or not, chatting or not",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-testctl",
+      "key": "ANS-testctl@900",
+      "title": "The test controls never cover the product, scrolled or not, chatting or not",
+      "viewport": 900,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-testctl",
+      "key": "ANS-testctl@390",
+      "title": "The test controls never cover the product, scrolled or not, chatting or not",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
           "kind": "click",
           "label": "Press Enter to send",
           "nav": false,

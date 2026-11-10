@@ -2,7 +2,7 @@
 
 Prototype: `docs/design/ai-native-redesign/prototype.html`. Paths: `docs/design/ai-native-redesign/checks/paths-v4.cjs`.
 
-Real scenarios: 81 passed, 0 failed, 1 not possible. Control (must fail): failed, as it should.
+Real scenarios: 90 passed, 0 failed, 1 not possible. Control (must fail): failed, as it should.
 
 | Id | Width | Task | Passed | Clicks | Fields | Selects | Decisions | Screens | Notes |
 |---|---|---|---|---|---|---|---|---|---|
@@ -60,6 +60,15 @@ Real scenarios: 81 passed, 0 failed, 1 not possible. Control (must fail): failed
 | ANS-stale | 1280 | Every wording of “not updated for a while” gets the honest can’t, never a silent drop | yes | 3 | 3 | 0 | 0 | 1 |  |
 | ANS-none-hers | 1280 | A request with no part in her own words gets no set-up card of guesses | yes | 1 | 1 | 0 | 0 | 1 |  |
 | ANS-leftover-everywhere | 1280 | A part answer and an edit card mark the clauses they didn’t read too | yes | 2 | 2 | 0 | 0 | 1 |  |
+| ANS-cant-clause | 1280 | A can’t answer never crosses the clause it answered | yes | 1 | 1 | 0 | 0 | 1 |  |
+| ANS-cant-alternative | 1280 | The alternative to an email request sets up cleanly, with the email clause gone | yes | 1 | 0 | 0 | 1 | 1 |  |
+| ANS-ticked-runs | 1280 | In a clause a rule read, a cross quotes only the unread words, and the gaps are read | yes | 4 | 4 | 0 | 0 | 1 |  |
+| ANS-narrow-cards | 901 | Beside the panel, a narrow chat gives the cards two-column rows, and a chip stays on one line | yes | 1 | 1 | 0 | 0 | 1 |  |
+| ANS-narrow-cards | 1024 | Beside the panel, a narrow chat gives the cards two-column rows, and a chip stays on one line | yes | 1 | 1 | 0 | 0 | 1 |  |
+| ANS-clash-day | 1280 | Two days in a set-up request ask which one, and an edit card takes focus at its heading | yes | 2 | 2 | 0 | 0 | 1 |  |
+| ANS-testctl | 1280 | The test controls never cover the product, scrolled or not, chatting or not | yes | 1 | 1 | 0 | 0 | 1 |  |
+| ANS-testctl | 900 | The test controls never cover the product, scrolled or not, chatting or not | yes | 1 | 1 | 0 | 0 | 1 |  |
+| ANS-testctl | 390 | The test controls never cover the product, scrolled or not, chatting or not | yes | 1 | 1 | 0 | 0 | 1 |  |
 | ANS-edit-days | 1280 | Two days for one schedule get a cross, and Save change waits | yes | 1 | 1 | 0 | 0 | 1 |  |
 | ANS-name-words | 1280 | A schedule word in a workflow’s name is neither a schedule nor a command | yes | 3 | 3 | 0 | 0 | 1 |  |
 | ANS-questions | 1280 | Asking when a workflow runs gets its state and next run, never “I can only change” | yes | 4 | 4 | 0 | 0 | 1 |  |
