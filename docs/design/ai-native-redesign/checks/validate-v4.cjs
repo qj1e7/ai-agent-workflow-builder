@@ -252,6 +252,9 @@ async function main() {
          after. Was: the card marks as many parts please choose as the footer counts. */
       const asked = await page.locator('.pcard .part[data-mark="ask"]').count();
       ok(asked === (n > 0 ? 1 : 0), `${label}: footer says ${n} left, the card shows ${asked} questions`);
+      /* Fix pass N1: the questions still to come show muted, so the card lists as many as the footer counts. */
+      const later = await page.locator('.pcard .part[data-mark="later"]').count();
+      ok(asked + later === n, `${label}: footer says ${n} left, the card lists ${asked} now and ${later} for later`);
       const all = await k.main();
       const other = [...all.matchAll(/(\d+) (more )?(choices?|answers?|questions?) (left|to go)|I need (\d+)/g)].map((x) => +(x[1] || x[5]));
       ok(other.every((v) => v === n), `${label}: the page names ${other.join(', ')} while the footer says ${n}`);
@@ -909,6 +912,16 @@ async function main() {
     await k.setUser('bob');
     ok((await page.locator('main [data-ask]').count()) === 1, 'seeded control: Bob has the Planner box');
   }), { expectedFail: true });
+
+  /* Fix pass M3: the words the leftover check skips are function words only. A verb there would make a whole clause,
+     such as "and let me know", vanish without a cross. The list below is the judge's: a word added to the
+     prototype's STOP list that isn't here fails this check. */
+  const FUNCTION_WORDS = new Set(['a', 'an', 'the', 'and', 'or', 'then', 'also', 'so', 'but', 'plus', 'i', 'me', 'my', 'mine', 'we', 'us', 'our', 'you', 'your', 'it', 'its', 'they', 'them', 'their', 'this', 'that', 'these', 'those', 'what', 'which', 'who', 'to', 'for', 'of', 'in', 'on', 'at', 'by', 'with', 'from', 'into', 'about', 'up', 'out', 'is', 'are', 'be', 'been', 'am', 'was', 'were', 'do', 'does', 'did', 'have', 'has', 'can', 'could', 'would', 'will', 'should', 'all', 'any', 'each', 'every', 'just', 'only', 'one', 'please', 'thanks', 'thank', 'kindly', 'i’d', "i'd", 'it’s', "it's", 'i’m', "i'm"]);
+  await check(B, 'stop-words-are-function-words', async (b) => session(b, async (k, page) => {
+    const stop = await page.evaluate(() => window.mock.STOP);
+    const extra = stop.filter((w) => !FUNCTION_WORDS.has(w));
+    ok(stop.length > 0 && !extra.length, `the leftover check skips words that aren’t function words: ${extra.join(', ')}`);
+  }));
 
   await check(B, 'no-console-errors', async () => {
     const errs = [...new Set(consoleErrors)];

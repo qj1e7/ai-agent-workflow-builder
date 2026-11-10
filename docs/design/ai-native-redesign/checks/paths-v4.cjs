@@ -452,9 +452,10 @@ add('SHELL-rail', 'The rail returns to the chat as it was, scroll position inclu
 
 /* The Planner's answers (ADR 0043, step 2): every part of a request is marked, one question at a time, and a time is never guessed. */
 const STALE = 'Every Friday at 9 AM, find Jira tickets that haven\'t been updated for 10 days and prepare a summary.';
+const CROSS = 'Every Friday at 9 AM, find the Jira tickets and prepare a summary, and colour them by team';
 add('ANS-cross', 'A clause the Planner can’t read gets a cross that quotes it, and the button sets up the part it can', async (t) => {
-  await t.ask(STALE, 'the review’s scenario A, with “haven’t been updated for 10 days”');
-  await t.expectText('The dropped clause is quoted with a cross', /“haven't been updated for 10 days”\s*I didn’t follow this part\./, 'main .thread .part[data-mark="no"]');
+  await t.ask(CROSS, 'a request with “colour them by team”, which no rule reads');
+  await t.expectText('The dropped clause is quoted with a cross', /“colour them by team”\s*I didn’t follow this part\./, 'main .thread .part[data-mark="no"]');
   await t.expectText('The reply says it can’t do every part', /I can’t do every part of it/, 'main .thread');
   await t.expectText('The button sets up the part it can', /Set up the part I can/, 'main .thread .pcard-f');
   await t.click(S.answer('tickets:open'), 'Choose Open tickets', { decision: true });
@@ -463,7 +464,41 @@ add('ANS-cross', 'A clause the Planner can’t read gets a cross that quotes it,
   await t.expectText('The footer says the crossed part is left out', /The part with a cross is left out\./, 'main .thread .pcard-f');
   await t.click(S.turnOn, 'Set up the part I can', { decision: true });
   await t.expectText('The part it can is on', /is on\./);
-}, [1280, 390]);
+}, [1280, 390], { changed: 'Fix pass S3: “haven’t been updated for 10 days” now gets the honest “I can’t see when a ticket was last updated yet” (ANS-stale), so the generic cross is proved with a clause no rule reads.' });
+
+add('ANS-verbs', 'A clause of verbs and little words, such as “let me know”, still gets a cross, and never “Nothing is unclear”', async (t) => {
+  await t.ask('every Friday at 5pm, sum up the tickets we closed this week in MOCK and let me know');
+  await t.expectText('“let me know” is quoted with a cross', /“let me know”\s*I didn’t follow this part\./, `${lastCard} .part[data-mark="no"]`);
+  await t.expect('Nothing is unclear doesn’t show', t.page.innerText(lastCard), (v) => !/Nothing is unclear/.test(v));
+  await t.ask('every Friday at 5pm, sum up the tickets we closed this week in MOCK, and then check it');
+  await t.expectText('“check it” is quoted with a cross', /“check it”\s*I didn’t follow this part\./, `${lastCard} .part[data-mark="no"]`);
+  await t.ask('every Friday at 5pm, sum up the tickets we closed this week in MOCK, and for them');
+  await t.expectText('A clause of little words alone is quoted too', /“for them”\s*I didn’t follow this part\./, `${lastCard} .part[data-mark="no"]`);
+}, [1280]);
+
+add('ANS-whole-clause', 'A cross quotes the whole clause, not one word of it', async (t) => {
+  await t.ask('watch Kubernetes but only the major releases');
+  await t.expectText('The whole clause is quoted', /“only the major releases”\s*I didn’t follow this part\./, `${lastCard} .part[data-mark="no"]`);
+}, [1280]);
+
+add('ANS-stale', 'Every wording of “not updated for a while” gets the honest can’t, never a silent drop', async (t) => {
+  for (const q of ['every Friday, list the tickets that haven\'t been updated for 10 days', 'every Friday, list the tickets that have not been updated for 10 days', 'every Friday, list the tickets with no update since Monday']) {
+    await t.ask(q);
+    await t.expect(`“${q}” says what it can’t see`, lastSay(t), /I can’t see when a ticket was last updated yet/);
+  }
+}, [1280]);
+
+add('ANS-none-hers', 'A request with no part in her own words gets no set-up card of guesses', async (t) => {
+  await t.ask('which software is behind, then raise tickets for them');
+  await t.expectCount('No set-up card', `${lastCard} [data-act="turnOn"]`, 0);
+  await t.expectText('Each clause is marked: the question to ask on its own, the rest not followed', /“which software is behind”\s*Ask this on its own, and I’ll answer it\.[\s\S]*“raise tickets for them”\s*I didn’t follow this part\./, lastCard);
+}, [1280]);
+
+add('ANS-leftover-everywhere', 'A can’t or a part answer marks the clauses it didn’t read too', async (t) => {
+  await t.ask('every Friday at 5pm, sum up the closed tickets in MOCK, excluding bugs, and tag Bob');
+  await t.expect('The part answer says what it can’t see', lastSay(t), /I can’t tell a ticket’s type yet/);
+  await t.expectText('“tag Bob” is marked', /“tag Bob”\s*I didn’t follow this part\./, lastCard);
+}, [1280]);
 
 add('ANS-one-question', 'With nothing said about when, the card asks how often, then the day, then the time, one at a time', async (t) => {
   await t.ask('sum up the tickets we closed in project MOCK', 'a request with no schedule');
@@ -683,7 +718,7 @@ const screens = [
   { name: 'shell-settings-how-it-works', prepare: async (k) => { await k.go('agents'); await open(k, '[data-act="setTab"][data-arg="how"]'); } },
   { name: 'mark-unbuilt-home', prepare: async (k) => { await ctl(k, 'markUnbuilt', 'on'); } },
   { name: 'answers-watch-marks', prepare: async (k) => { await k.ask('watch Kubernetes every Monday at 9am and create a Jira ticket'); } },
-  { name: 'answers-cross', prepare: async (k) => { await k.ask(STALE); } },
+  { name: 'answers-cross', prepare: async (k) => { await k.ask(CROSS); } },
   { name: 'answers-edit', prepare: async (k) => { await k.ask('Make the morning new-ticket check run on Mondays only'); } },
   { name: 'answers-edit-saved', prepare: async (k) => { await k.ask('Make the morning new-ticket check run on Mondays only'); await open(k, '[data-act="editSave"]'); } },
   { name: 'answers-versions', prepare: async (k) => { await k.ask('Make the morning new-ticket check run on Mondays only'); await open(k, '[data-act="editSave"]'); await k.go('workflows'); await open(k, S.row('issues')); await k.page.evaluate(() => { const h = [...document.querySelectorAll('main h2')].find((x) => x.textContent === 'Versions'); if (h) h.scrollIntoView(); }); } },

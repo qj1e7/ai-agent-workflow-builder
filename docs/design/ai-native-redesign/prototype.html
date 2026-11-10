@@ -1047,6 +1047,8 @@ button.schip { cursor: pointer; }
 .part[data-mark="no"] .pmark { color: var(--red-ink); background: var(--red-soft); }
 .part[data-mark="ask"] .pmark { color: var(--amber-ink); background: var(--amber-soft); box-shadow: inset 0 0 0 1px var(--amber); }
 .part[data-mark="ask"] { background: color-mix(in srgb, var(--amber-soft) 45%, var(--surface)); }
+.part[data-mark="later"] .pmark { color: var(--muted); box-shadow: inset 0 0 0 1px var(--hair); }
+.part[data-mark="later"] .pv { color: var(--muted); font-size: 0.9375rem; }
 .pk { padding-top: 4px; color: var(--muted); font-weight: 600; font-size: 0.9375rem; overflow-wrap: anywhere; }
 .pv { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; min-height: 30px; }
 .pv .schip { font-size: 0.9375rem; }
@@ -1801,7 +1803,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (m && +m[1] >= 1 && +m[1] <= 12) { let h = +m[1] % 12; if (m[3] === 'pm') h += 12; it.time = `${String(h).padStart(2, '0')}:${m[2] || '00'}`; }
     else if ((m = t.match(/\b([01]?\d|2[0-3])[:.]([0-5]\d)\b/))) it.time = `${m[1].padStart(2, '0')}:${m[2]}`;
     else if (/\bnoon\b|\bmidday\b/.test(t)) it.time = '12:00';
-    const stale = t.match(/(?:no updates? (?:for|in)|not updated (?:for|in)|untouched for|idle for)\s+(\d+)\s*days?/) || t.match(/(\d+)\s*days? without (?:an )?update/);
+    const stale = t.match(STALE_RE) || t.match(/(\d+)\s*days? without (?:an )?update/);
     const old = t.match(/(?:older than|created more than|open (?:for )?more than|open (?:for )?over|still open after)\s+(\d+)\s*days?/) || t.match(/(\d+)\s*days? old\b/);
     const period = Object.keys(PERIOD_WORDS).find((p) => PERIOD_WORDS[p].test(t)) || '';
     if (/\b(closed|resolved|completed|finished|done)\b/.test(t)) it.tickets = { kind: 'closed', period };
@@ -1845,38 +1847,64 @@ details > .m-close { animation: fold 140ms ease-in both; }
     /\b(?:every|each) week ?day\b|\bweekdays\b|\bmonday to friday\b|\b(?:every|each) (?:day|morning|evening)\b|\bdaily\b|\b(?:every|each) month\b|\bmonthly\b|\b(?:every|each) week\b|\bweekly\b/gi,
     /\b(?:at\s+)?\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b|\b(?:at\s+)?(?:[01]?\d|2[0-3])[:.][0-5]\d\b|\b(?:at\s+)?(?:noon|midday)\b/gi,
   ];
+  /* A ticket nobody has touched for a while: "not updated for 10 days", "haven't been updated for", "no update since". */
+  const STALE_RE = /(?:no updates? (?:for|in|since)|(?:not|n['’]t|never)(?: been)? updated (?:for|in|since)|untouched (?:for|since)|idle (?:for|since))\s+(?:\d+\s*(?:days?|weeks?)|\w+)/i;
   const HEARD = {
     when: HEARD_WHEN,
-    /* The set-up card: the ticket set and its period, what it does, the project, where it goes, and a system it can't read. */
+    /* How a request is framed: "I want", "can you", "please". */
+    frame: [/\b(?:i|we)(?:\s+(?:would|['’]d))?\s+(?:want|need|like)(?:\s+to)?\b|\b(?:can|could|would|will)\s+you\b|\bplease\b|\bhelp me\b/gi],
+    /* The set-up card: the ticket set and its period, what it does, the project, where it goes, and a system it can't
+       read. A verb is read only with the part it asks for, such as "find" before tickets or "prepare" before a summary. */
     setup: [
       /\bthis week\b|\btoday\b|\byesterday\b|\bin the last day\b|\bsince yesterday\b|\blast 24 hours\b/gi,
       /\b(?:closed|resolved|completed|finished|done|new|created|opened|raised|open|unresolved)\b/gi,
       /summar\w*|\bsum (?:them |it )?up\b|\breport\b|\bdigest\b|\boverview\b|\blist\b|\bshow me\b|\bcompare\b|\bweek[- ]on[- ]week\b|\b(?:with|to|against) the week before\b|\bversus\b|\bvs\b/gi,
       /\b(?:project\s+[A-Z][A-Z0-9]{1,9}|[A-Z][A-Z0-9]{1,9}\s+project)\b|\b(?:MOCK|OPS|SUP)\b/g,
-      /\b(?:in|into|as) (?:a|one) (?:new )?(?:jira )?ticket\b|\b(?:post|send|share|publish)\b/gi,
+      /\b(?:in|into|as) (?:a|one) (?:new )?(?:jira )?ticket\b|\b(?:post|send|share|publish)\b|\b(?:create|raise|open|file|add)\s+(?:a|one)\s+(?:new\s+)?(?:jira\s+)?ticket\b|\bput\b(?=[^.,;]*\b(?:in|into)\b)/gi,
       /\b(?:gitlab|entra|active directory|servicenow|outlook|sharepoint|excel)\b/gi,
       /\b(?:jira|tickets?|issues?|project)\b/gi,
+      /\b(?:find|get|pull|fetch|gather|collect|look (?:at|for)|go through)\b(?=[^.,;]*\b(?:tickets?|issues?)\b)/gi,
+      /\b(?:prepare|make|create|write|produce|build|give|send|show)(?:\s+(?:me|us))?(?=\s+(?:a |an |one |the )?(?:short |quick |weekly |daily )?(?:summary|summaries|list|report|digest|overview|comparison)\b)/gi,
+    ],
+    /* What the Jira read can't give, which a part answer names: the last update, the owner, the type, the component, the priority, older tickets. */
+    needs: [
+      STALE_RE, /\b\d+\s*days? without (?:an )?update\b|\bstale\b/gi,
+      /\bowners?\b|\bassignees?\b|\bassigned to\b|\bwho owns\b|\bbugs?\b|\bstories\b|\bepics?\b|\bby type\b|\b(?:the\s+)?[\w-]+\s+components?\b|\bcomponents?\b|\b(?:high|low|medium|top)\s+priorit(?:y|ies)\b|\bpriorit(?:y|ies)\b/gi,
+      /(?:older than|created more than|open (?:for )?more than|open (?:for )?over|still open after)\s+\d+\s*days?|\d+\s*days? old\b/gi,
+      /\b(?:excluding|except|without|but not|apart from|other than|only)\b(?=\s+(?:the\s+)?(?:bugs?|stories|epics?|[\w-]+\s+components?|(?:high|low|top)\s+priority))/gi,
+    ],
+    /* What a can't answer names: a place it can't write to, a ticket change only people make, a security check, chasing owners. */
+    cant: [
+      /\be-?mail(?:\s+(?:me|us))?\b|\bslack\b|\bconfluence\b|\bwiki\b|\bpage\b|\bteams\b|\bchannel\b|\bchat\b|\b(?:update|edit|fill in|write)\b(?=[^.,;]*\b(?:page|wiki|confluence)\b)/gi,
+      /\b(?:close|closes|delete|remove|edit|move|assign|reassign|resolve|archive)\b|\bask (?:their |the |each )?owners?\b|\bremind\b|\bnudge\b|\bchase\b|\bmessage\b/gi,
+      /\bcves?\b|\bnvd\b|vulnerab\w*|\badvisor(?:y|ies)\b|\bsecurity(?:\s+(?:fix(?:es)?|patch(?:es)?|alerts?|bulletins?|issues?))?\b/gi,
+      /\b(?:check|scan|look|identify|flag|find)(?:\s+(?:for|at))?(?=\s+(?:any\s+|known\s+|potentially\s+|relevant\s+)*(?:vulnerab|cves?|security|advisor))/gi,
     ],
     /* The watch card: what to watch, its releases, where it's published, and the upgrade ticket. The name is added per request. */
     watch: [
-      /\b(?:watch|track|monitor|follow|keep (?:track|an eye) (?:of|on)|tell me (?:about|when)|let me know (?:about|when))\b/gi,
+      /\b(?:watch|track|monitor|follow|keep (?:track|an eye) (?:of|on)|tell me (?:about|when)|let me know (?:about|when))\b|\bcheck(?:\s+for)?(?=\s+(?:new\s+|newer\s+|the\s+latest\s+)?(?:releases?|versions?)\b)|\bcheck\b(?=\s+[\w.+-]+\s+for\b)/gi,
       /\b(?:new |newer |latest )?(?:releases?|versions?|upgrades?|patch(?:es)?)\b|\bout of date\b|\bon github\b/gi,
       /\b(?:create|raise|open|file|make|add)\s+(?:a |an |one )?(?:new )?(?:jira |upgrade )?(?:ticket|issue)s?\b|\b(?:in|into) jira\b/gi,
     ],
   };
-  /* Words that carry no part of their own: they frame the request. Anything else left over is quoted back. */
-  const STOP = new Set(['a', 'an', 'the', 'and', 'or', 'then', 'also', 'so', 'please', 'can', 'could', 'would', 'will', 'you', 'i', 'id', 'i’d', "i'd", 'we', 'me', 'us', 'my', 'our', 'your', 'it', 'its', 'them', 'they', 'this', 'that', 'these', 'those', 'which', 'what', 'to', 'for', 'of', 'in', 'on', 'at', 'by', 'with', 'from', 'into', 'about', 'up', 'all', 'any', 'each', 'is', 'are', 'be', 'been', 'was', 'were', 'do', 'have', 'has', 'want', 'need', 'like', 'just', 'only', 'one', 'find', 'get', 'give', 'show', 'prepare', 'make', 'create', 'write', 'put', 'check', 'keep', 'let', 'know', 'tell', 'set', 'it’s', "it's"]);
+  /* Words with no part of their own: articles, pronouns, prepositions, linking words, helping verbs and "please".
+     No other verb is here. A verb counts as read only when a rule above read it, so "and let me know" is quoted back.
+     validate-v4.cjs holds this list to function words, so a verb added here fails the judge's check. */
+  const STOP = new Set(['a', 'an', 'the', 'and', 'or', 'then', 'also', 'so', 'but', 'plus', 'i', 'me', 'my', 'mine', 'we', 'us', 'our', 'you', 'your', 'it', 'its', 'they', 'them', 'their', 'this', 'that', 'these', 'those', 'what', 'which', 'who', 'to', 'for', 'of', 'in', 'on', 'at', 'by', 'with', 'from', 'into', 'about', 'up', 'out', 'is', 'are', 'be', 'been', 'am', 'was', 'were', 'do', 'does', 'did', 'have', 'has', 'can', 'could', 'would', 'will', 'should', 'all', 'any', 'each', 'every', 'just', 'only', 'one', 'please', 'thanks', 'thank', 'kindly', 'i’d', "i'd", 'it’s', "it's", 'i’m', "i'm"]);
+  const POLITE = /^(please|thanks|thank|you|kindly)$/i;
   const spansOf = (text, res) => res.flatMap((re) => [...text.matchAll(new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`))].map((m) => [m.index, m.index + m[0].length]));
-  /* Each clause of the text with words that no span covers, as the words to quote. A comma, a full stop, "and", "then"
-     or "but" ends a clause, so one missed condition never hides the rest of the sentence. */
+  /* Each clause of the text that no rule fully read, quoted whole. A comma, a full stop, "and", "then" or "but" ends a
+     clause, so one missed condition never hides the rest of the sentence. A clause counts as missed when any word in it
+     is unread, or when no rule read any of it at all and it is more than "please" or "thank you". */
   function unheard(text, spans) {
     const words = [...text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’.:-]*/gu)].map((m) => { const w = m[0].replace(/[.:-]+$/, ''); return { w, a: m.index, b: m.index + w.length }; });
     const read = (x) => spans.some(([a, b]) => x.a < b && x.b > a);
+    const plain = (x) => STOP.has(x.w.toLowerCase());
     const out = [];
     let clause = [];
     const close = () => {
-      const left = clause.filter((x) => !read(x) && !STOP.has(x.w.toLowerCase()));
-      if (left.length) out.push(text.slice(left[0].a, left[left.length - 1].b));
+      const missed = clause.some((x) => !read(x) && !plain(x)) || (clause.length && !clause.some(read) && clause.some((x) => !POLITE.test(x.w)));
+      if (missed) out.push(text.slice(clause[0].a, clause[clause.length - 1].b));
       clause = [];
     };
     words.forEach((x, i) => {
@@ -3436,13 +3464,22 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* ---------- Every part of a request, marked (ADR 0043) ----------
      A part is { key, mark, label, body }. The mark is ok, a tick with what the Planner will do; no, a cross with the
      reason; or ask, a question with choice buttons. A card asks one question at a time. */
-  const MARKS = { ok: [() => I.check(13), 'Will do'], no: [() => I.x(13), 'Can’t do'], ask: [() => '?', 'Question'] };
+  const MARKS = { ok: [() => I.check(13), 'Will do'], no: [() => I.x(13), 'Can’t do'], ask: [() => '?', 'Question'], later: [() => '?', 'Question for later'] };
   const partRow = (p) => `<li class="part${p.mark === 'no' ? ' wide' : ''}" data-mark="${p.mark}" data-part="${p.key}"><span class="pmark" aria-hidden="true">${MARKS[p.mark][0]()}</span><span class="pk"><span class="vh">${MARKS[p.mark][1]}: </span>${p.label}</span><span class="pv">${p.body}</span></li>`;
   const partsList = (parts) => `<ul class="parts" aria-label="Each part of your request">${parts.map(partRow).join('')}</ul>`;
   /* A question and its choices. The choices are named by the question for a screen reader. */
   const askBody = (q, id) => `<span class="pq" id="${id}">${q.q}</span><span class="pick" role="group" aria-labelledby="${id}">${q.choices.map(([v, l]) => `<button type="button" class="chip" data-act="${q.act || 'answer'}" data-arg="${esc(v)}"${q.mid ? ` data-mid="${q.mid}"` : ''}>${esc(l)}</button>`).join('')}${q.more || ''}</span>`;
-  /* Every clause no rule read, as a cross that quotes it. */
-  const leftoverParts = (text, spans) => unheard(text, spans).map((w, i) => ({ key: `left${i}`, mark: 'no', label: quote(w), body: 'I didn’t follow this part.' }));
+  /* Every clause no rule read, as a cross that quotes it. A question in it is answered when it is asked on its own. */
+  const leftoverParts = (text, spans) => unheard(text, spans).map((w, i) => ({ key: `left${i}`, mark: 'no', label: quote(w), body: aboutWorkflows(w) ? 'Ask this on its own, and I’ll answer it.' : 'I didn’t follow this part.' }));
+  /* A schedule has one day and one time. A second of either is a cross, never a silent pick of the first. */
+  function clashParts(text) {
+    const t = text.replace(/\bmonday to friday\b/gi, ' ');
+    const find = (re, norm) => { const ms = [...t.matchAll(re)]; return { ms, n: new Set(ms.map(norm)).size }; };
+    const days = find(new RegExp(`\\b(${DAY_RE})s?\\b`, 'gi'), (m) => m[1].toLowerCase());
+    const times = find(/\b\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b|\b(?:[01]?\d|2[0-3])[:.][0-5]\d\b/gi, (m) => m[0].replace(/\s+/g, '').toLowerCase());
+    const cross = (x, key, what) => { const span = [x.ms[0].index, x.ms[x.ms.length - 1].index + x.ms[x.ms.length - 1][0].length]; return { key, mark: 'no', span, label: quote(t.slice(...span)), body: `I can only set one ${what}.` }; };
+    return [...(days.n > 1 ? [cross(days, 'days', 'day')] : []), ...(times.n > 1 ? [cross(times, 'times', 'time')] : [])];
+  }
   const hasCross = (parts) => parts.filter((p) => p.mark === 'no').length;
 
   /* The set-up card asks its questions in the footer's order: when it runs (how often, the day, then the time, which is
@@ -3474,7 +3511,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     }
     ['tickets', 'project', 'action'].forEach((key) => {
       const r = k[key];
-      if (r.state === 'missing') { if (q && q.key === key) parts.push({ key, mark: 'ask', label: r.label, body: askBody(q, `q-${mid}`) }); return; }
+      if (r.state === 'missing') { parts.push(q && q.key === key ? { key, mark: 'ask', label: r.label, body: askBody(q, `q-${mid}`) } : { key, mark: 'later', label: r.label, body: 'Asked next' }); return; }
       const text = key === 'project' ? `Jira project ${esc(r.value)}` : esc(r.value);
       parts.push({ key, mark: 'ok', label: r.label, body: `${sentenceChip(r, text)}${r.state === 'changed' && r.note ? `<span class="pnote">${r.note}</span>` : ''}` });
     });
@@ -3482,7 +3519,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (k.source) parts.push({ key: 'source', mark: 'no', label: `Reads ${esc(k.source.value)}`, body: `${k.source.note} ${sentToTeam(k.source.value) ? '<span class="pill wait">Asked the team</span>' : `<button class="linkbtn" data-act="teamReq" data-arg="${esc(k.source.value)}|wiz">Ask the team</button>`}` });
     const monthly = it.monthly && (w.text.match(/\b(?:every|each) month\b|\bmonthly\b/i) || [])[0];
     if (monthly) parts.push({ key: 'monthly', mark: 'no', label: quote(monthly), body: 'I can’t run things monthly yet.' });
-    return parts.concat(leftoverParts(w.text, spansOf(w.text, [...HEARD.when, ...HEARD.setup])));
+    const clash = clashParts(w.text);
+    return parts.concat(clash, leftoverParts(w.text, [...spansOf(w.text, [...HEARD.frame, ...HEARD.when, ...HEARD.setup]), ...clash.map((x) => x.span)]));
   }
 
   /* ---------- Ask the Planner ----------
@@ -3496,11 +3534,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
      a Jira ticket, the one place it can write today. */
   const INSTEAD = 'The same thing, with the result put in one Jira ticket, after a yes.';
   const CANT = {
-    email: { cap: 'email', sys: 'Outlook email', cant: 'send email', why: 'Email isn’t on the team’s plan. Ask the team if you need it.', instead: INSTEAD, next: (t) => t.replace(/\be-?mail(?:\s+(?:me|us))?\b/i, 'make') },
+    email: { cap: 'email', sys: 'Outlook email', cant: 'send email', why: 'Email isn’t on the team’s plan. Ask the team if you need it.', instead: INSTEAD, next: (t) => t.replace(/\s*,?\s*\b(?:and|then)\s+e-?mail(?:\s+(?:me|us|it|them))?\b/i, '').replace(/\be-?mail(?:\s+(?:me|us))?\b/i, 'list') },
     slack: { cap: 'email', sys: 'Slack', cant: 'post in Slack', why: 'Slack isn’t on the team’s plan. Ask the team if you need it.', instead: INSTEAD, next: (t) => t.replace(/\s*\b(in|on|to|into) slack\b/i, '') },
     teams: { cap: 'teamsPost', sys: 'Posting in Teams', instead: INSTEAD, next: (t) => t.replace(/\s*\b(in|on|to|into|via) (teams|(the |our )?[\w-]+ channel|(the |our )?team chat|chat)\b/i, '') },
     /* "Update the Confluence page with the closed tickets" becomes "list the closed tickets". */
-    confluence: { cap: 'confluence', sys: 'Confluence', instead: INSTEAD, next: (t) => t.replace(/\b(update|edit|fill in|write)\s+(the |a |our )?(confluence |wiki )?(page|wiki)(\s+with)?\b/i, 'list').replace(/\s*\b(in|on|to|into) (confluence|(the |our )?wiki|(a |the )?(confluence |wiki )?page)\b/i, '') },
+    confluence: { cap: 'confluence', sys: 'Confluence', instead: INSTEAD, next: (t) => t.replace(/\b(update|edit|fill in|write)\s+(the |a |our )?(confluence |wiki )?(page|wiki)(\s+with)?\b/i, 'list').replace(/\s*\b(in|on|to|into) (confluence|(the |our )?wiki|(a |the )?(confluence |wiki )?page)\b/i, '').replace(/\bput\b/i, 'list') },
     nudge: { cap: 'teamsPost', sys: 'Posting in Teams', cant: 'message ticket owners', instead: 'List the same tickets in one Jira ticket, after a yes. Someone can then message them.', next: (t, it) => `${whenAsked(it) || 'Every week'}, list ${(it.tickets ? ticketLabel(it.tickets.kind, it.tickets.period) : 'the open tickets').toLowerCase()}` },
     /* Only people change tickets here, and nothing the registry can do comes close, so there is no alternative to offer. */
     tickets: { cap: 'tickets', sys: 'Changing tickets' },
@@ -3583,8 +3621,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
     }
     const it = parseIntent(t);
     const a = taskAnswer(t, it);
+    if (a.kind === 'setup' && !fromHer(it)) return { kind: 'abilities', unknown: true, text: t, from: 'setup' };
     return a.kind === 'setup' ? startDraft(t, it) : 'next' in a ? offer(a) : a;
   }
+  /* A set-up card needs at least one part in her own words. Without one, it would be a form of guesses, so the answer
+     is what I can do, with each part of the request marked (fix pass S4). */
+  const fromHer = (it) => !!(it.freq || it.time || it.monthly || it.tickets || it.project || ACTIONS[it.action] || it.dest === 'jira' || it.badSource);
   /* The verdict for a task request, with no side effects: a set-up card, a can't, a part, Jira down, or the abilities.
      A can't or a part carries the alternative it would offer, unchecked; offer() checks it with these same rules, so
      the Planner never offers what it can't set up. */
@@ -3605,12 +3647,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
       return { kind: 'part', cap: NEEDS_CAP[needs[0]], can: older ? `${verb} open tickets` : 'find tickets by when they were created or closed', cant: cantYet(needs), instead, next: `${when}, ${verb} ${alt}`, text: t, it };
     }
     const ta = toolAskIn(t);
-    if (ta) return { kind: 'part', cap: ta.draft, can: 'find these Jira tickets', cant: `not ${CAPS[ta.draft].cant}`, instead: 'The same tickets, without the component, after a yes.', next: t.replace(/\s*\b(in|into|under|with|to) (the )?[\w-]+ component\b/i, ''), text: t, it };
+    if (ta) return { kind: 'part', cap: ta.draft, can: 'find these Jira tickets', cant: `not ${CAPS[ta.draft].cant}`, instead: 'The same tickets, without the component, after a yes.', next: t.replace(/\s*\b(in|into|under|with|to) (the )?[\w-]+ component\b/i, '').replace(/^(\s*)put\b/i, '$1List'), text: t, it };
     const jiraAsk = it.tickets || it.action || it.freq || it.monthly || it.badSource || /ticket|jira|bug|summar|report|list|stale|closed|open/i.test(t);
     /* Jira is down: the Planner says so and offers to keep the request as a draft, instead of a card it can't check. */
     if (jiraAsk && jiraDown()) return { kind: 'down', text: t, it };
     if (jiraAsk) return { kind: 'setup' };
-    return { kind: 'abilities', unknown: !/what can|what do you|help|can you|abilit/i.test(t) };
+    return { kind: 'abilities', unknown: !/what can|what do you|help|can you|abilit/i.test(t), text: t };
   }
   /* ---------- Answers about her workflows (spec 6.2, the three new kinds) ----------
      Check my workflows, why it stopped and what needs me read the same state as Workflows and Needs you. In the
@@ -3647,7 +3689,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const aboutWorkflows = (t) => {
     const hit = ABOUT.find(([re]) => re.test(t));
     if (!hit || isCommand(hit[2] ? t.replace(hit[2], ' ') : t)) return null;
-    return hit[1](t);
+    const a = hit[1](t);
+    return a && { ...a, text: t };
   };
   /* A workflow's state in the spec's words (15.9), as a pill tone and a word. */
   const stateOf = (id) => (S.paused[id] ? ['off', 'Paused'] : { bad: ['bad', 'Stopped'], wait: ['wait', 'Waiting for a yes'], off: ['off', 'No answer'] }[status(id).tone] || ['ok', 'On']);
@@ -3876,7 +3919,19 @@ details > .m-close { animation: fold 140ms ease-in both; }
     edit: { say: editSay, card: (m) => editCard(m) },
     nocheck: { say: nocheckSay, card: (m) => nocheckCard(m) },
   };
-  const cardHTML = (m) => (ANSWERS[m.card.kind].card ? ANSWERS[m.card.kind].card(m) : '');
+  /* Every answer made from a request marks the clauses it didn't read (ADR 0043). The set-up, watch and edit cards
+     list them among their parts; every other answer lists them above its card. Each kind names what it read. */
+  const NAMES = () => [...routineIds().map((id) => R(id).name), ...liveSoftware().map((x) => x.name), ...Object.keys(KNOWN), ...Object.values(KNOWN).map((k) => k[0])];
+  const nameSpans = (text) => NAMES().flatMap((n) => { const out = []; const low = text.toLowerCase(); const k = n.toLowerCase(); for (let i = low.indexOf(k); i >= 0; i = low.indexOf(k, i + 1)) out.push([i, i + k.length]); return out; });
+  const STATUS_WORDS = [/\b(?:today|now|right now|this morning|at the moment|currently|attention|yes|approvals?|plate|doing|going|running|working|status|state|next|due)\b/gi];
+  const READ_BY = {
+    part: () => [...HEARD.frame, ...HEARD.when, ...HEARD.setup, ...HEARD.needs],
+    cant: () => [...HEARD.frame, ...HEARD.when, ...HEARD.setup, ...HEARD.needs, ...HEARD.cant, ...HEARD.watch],
+    abilities: (c) => (c.from === 'setup' ? [...HEARD.frame, ...HEARD.when, ...HEARD.setup] : null),
+    ...Object.fromEntries(['data', 'check', 'mine', 'why'].map((k) => [k, () => [...HEARD.frame, ...ABOUT.map(([re]) => re), ...STATUS_WORDS, ...HEARD.watch]])),
+  };
+  const extraCrosses = (c) => { const rs = c.text && READ_BY[c.kind] && READ_BY[c.kind](c); return rs ? leftoverParts(c.text, [...spansOf(c.text, rs), ...nameSpans(c.text)]) : []; };
+  const cardHTML = (m) => { const no = extraCrosses(m.card); return `${no.length ? `<div class="pcard">${partsList(no)}</div>` : ''}${ANSWERS[m.card.kind].card ? ANSWERS[m.card.kind].card(m) : ''}`; };
 
   /* ---------- Drafts ----------
      The chat is not the record. The set-up card still being filled in edits the one live draft in S.wiz. A new request
@@ -3978,7 +4033,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const parts = [{ key: 'name', mark: 'ok', label: 'Software', body: `<b>${esc(c.name)}</b><span class="schip ok">From your words</span>` }];
     if (c.repoState === 'guess') parts.push({ key: 'repo', mark: 'ask', label: 'Published on', body: `<span class="pq" id="q-${id}">Is this the right project?</span><span>${src}</span><b>${esc(c.repo)}</b><span class="pnote">${guessNote(c)}</span><span class="pick" role="group" aria-labelledby="q-${id}"><button type="button" class="chip" data-act="repoOk" data-mid="${id}">Looks right</button><button type="button" class="chip" data-act="repoEdit" data-mid="${id}">Change</button></span>` });
     else if (c.repoState === 'edit') parts.push({ key: 'repo', mark: 'ask', label: 'Published on', body: `<label class="pq" for="repo-${id}">Which ${lc(label)} is it?</label><input type="text" class="inp" id="repo-${id}" data-card="repoDraft" data-mid="${id}" value="${esc(c.repoDraft)}" placeholder="${ph}"${c.repoErr ? ' aria-invalid="true"' : ''}><button class="btn sm" data-act="repoUse" data-mid="${id}">Use this</button><span class="pnote">${c.repoErr || help}</span>` });
-    else {
+    if (c.repoState !== 'ok' && !c.newest && !c.version.trim()) parts.push({ key: 'version', mark: 'later', label: 'Version you run', body: 'Asked next' });
+    else if (c.repoState === 'ok') {
       parts.push({ key: 'repo', mark: 'ok', label: 'Published on', body: `<span>${src}</span><b>${esc(c.repo)}</b><span class="schip changed">Checked by you</span>` });
       if (c.newest) parts.push({ key: 'version', mark: 'ok', label: 'Version you run', body: `<b>Not known</b><span class="schip changed">Chosen by you</span><button class="linkbtn" data-act="verType" data-mid="${id}">Add it<span class="vh">, the version you run</span></button><span class="pnote">I’ll tell you about releases newer than today’s. Add the version you run to compare against it.</span>` });
       else parts.push({ key: 'version', mark: c.version.trim() ? 'ok' : 'ask', label: 'Version you run', body: `${c.version.trim() ? '' : `<label class="pq" for="ver-${id}">Which version do you run?</label>`}<input type="text" class="inp" id="ver-${id}" data-card="version" data-mid="${id}" value="${esc(c.version)}" placeholder="For example 1.2.14" inputmode="decimal"${c.version.trim() ? ' aria-label="Version you run"' : ''}><button type="button" class="chip" data-act="verNewest" data-mid="${id}">Not sure? Start from the newest</button>` });
@@ -4000,7 +4056,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const whenSpans = spansOf(text, HEARD.when);
     const own = said.length && !said.every((k) => it[k] === sw.sched[k]) ? [{ key: 'own', mark: 'no', label: quote(text.slice(Math.min(...whenSpans.map((x) => x[0])), Math.max(...whenSpans.map((x) => x[1])))), body: `The Software watchlist checks all your software together, ${lc(sw.when)}. I can’t give one software its own time yet.` }] : [];
     const names = [c.name, c.said].filter(Boolean).flatMap((n) => { const i = text.toLowerCase().indexOf(n.toLowerCase()); return i < 0 ? [] : [[i, i + n.length]]; });
-    return own.concat(leftoverParts(text, [...whenSpans, ...spansOf(text, HEARD.watch), ...names]));
+    const clash = clashParts(text);
+    return own.concat(clash, leftoverParts(text, [...whenSpans, ...spansOf(text, [...HEARD.frame, ...HEARD.watch]), ...names, ...clash.map((x) => x.span)]));
   }
   function watchCard(m) {
     const c = m.card;
@@ -6275,6 +6332,6 @@ details > .m-close { animation: fold 140ms ease-in both; }
 
   render();
   /* For the check script only: the refusal rule and the plan-step renderer, called through page.evaluate. */
-  window.mock = { UNSAFE, stepsList };
+  window.mock = { UNSAFE, stepsList, STOP: [...STOP] };
 })();
 </script>
