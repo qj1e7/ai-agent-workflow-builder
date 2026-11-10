@@ -1736,7 +1736,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const verNow = (id) => versionsOf(id).length;
   /* Work everything out first, then write, so a failure leaves nothing half-saved. Saving the watchlist's schedule
      makes the saver its owner, and an owner can't be one of its named Approvers, so they come off that list. */
-  function publishSched(id, sched, undid) {
+  function publishSched(id, sched, undid, via = 'page') {
     const from = { ...R(id).sched };
     let off = false;
     const named = id === 'sw' && apprOf('sw') ? copyAppr(apprOf('sw')) : null;
@@ -1745,7 +1745,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (id === 'conf') S.nr = { ...S.nr, sched: { ...sched } };
     if (id === 'sw') { S.swOwner = S.user; if (off) S.appr.sw = named; }
     const v = verNow(id) + 1;
-    (S.vers[id] = S.vers[id] || []).push({ v, from, to: { ...sched }, by: S.user, undid });
+    (S.vers[id] = S.vers[id] || []).push({ v, from, to: { ...sched }, by: S.user, undid, via });
     return { v, off };
   }
   const verText = (x) => (x.v === 1 ? 'The version it was turned on with.' : x.undid ? `${nm(x.by)} undid version ${x.undid}, so it runs ${lc(schedText(x.to))} again.` : `${nm(x.by)} changed when it runs from ${lc(schedText(x.from))} to ${lc(schedText(x.to))}.`);
@@ -1803,6 +1803,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (m && +m[1] >= 1 && +m[1] <= 12) { let h = +m[1] % 12; if (m[3] === 'pm') h += 12; it.time = `${String(h).padStart(2, '0')}:${m[2] || '00'}`; }
     else if ((m = t.match(/\b([01]?\d|2[0-3])[:.]([0-5]\d)\b/))) it.time = `${m[1].padStart(2, '0')}:${m[2]}`;
     else if (/\bnoon\b|\bmidday\b/.test(t)) it.time = '12:00';
+    /* "at 9" with no am or pm is a time the person must choose: 9:00 or 21:00. It is never guessed. */
+    if (!it.time && (m = t.match(/\bat\s+(\d{1,2})\b(?![:.]\d)(?!\s*(?:am|pm)\b)/))) { const h = +m[1]; if (h >= 13 && h <= 23) it.time = `${h}:00`; else if (h >= 1 && h <= 12) it.bareHour = h; }
     const stale = t.match(STALE_RE) || t.match(/(\d+)\s*days? without (?:an )?update/);
     const old = t.match(/(?:older than|created more than|open (?:for )?more than|open (?:for )?over|still open after)\s+(\d+)\s*days?/) || t.match(/(\d+)\s*days? old\b/);
     const period = Object.keys(PERIOD_WORDS).find((p) => PERIOD_WORDS[p].test(t)) || '';
@@ -1845,8 +1847,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const HEARD_WHEN = [
     new RegExp(`\\b(?:every|on|each)\\s+(?:${DAY_RE})s?\\b|\\b(?:${DAY_RE})s\\b`, 'gi'),
     /\b(?:every|each) week ?day\b|\bweekdays\b|\bmonday to friday\b|\b(?:every|each) (?:day|morning|evening)\b|\bdaily\b|\b(?:every|each) month\b|\bmonthly\b|\b(?:every|each) week\b|\bweekly\b/gi,
-    /\b(?:at\s+)?\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b|\b(?:at\s+)?(?:[01]?\d|2[0-3])[:.][0-5]\d\b|\b(?:at\s+)?(?:noon|midday)\b/gi,
+    /\b(?:at\s+)?\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b|\b(?:at\s+)?(?:[01]?\d|2[0-3])[:.][0-5]\d\b|\b(?:at\s+)?(?:noon|midday)\b|\bat\s+\d{1,2}\b(?![:.]\d)/gi,
   ];
+  /* "at 9": the two times it could be. */
+  const hourChoices = (h) => [`${String(h % 12).padStart(2, '0')}:00`, `${h % 12 + 12}:00`];
   /* A ticket nobody has touched for a while: "not updated for 10 days", "haven't been updated for", "no update since". */
   const STALE_RE = /(?:no updates? (?:for|in|since)|(?:not|n['’]t|never)(?: been)? updated (?:for|in|since)|untouched (?:for|since)|idle (?:for|since))\s+(?:\d+\s*(?:days?|weeks?)|\w+)/i;
   const HEARD = {
@@ -2598,7 +2602,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (has('nudge') && S.nudge === 'failed' && S.report === 4) out.push({ wf: 'nudge', kind: 'ok', icon: I.check(22), title: 'The fix for Weekly closed-ticket summary is live', meta: `Case ${S.supportCase.id} · fixed by Dana`, held: heldWhy('nudge'), body: heldWhy('nudge') ? '' : '<p class="small muted">Retry the run to catch up on last week.</p>', actions: troubleBtn(TROUBLE.nudge()) });
     }
     /* The approvals this person can decide, from the same request records as the Teams badge. */
-    mayDecide().forEach((id) => { const c = NEED_CARD[id](); out.push({ wf: id, kind: 'wait', icon: I.shield(22), ...c, body: `${c.body || ''}${askLineHtml(req(id), u)}`, actions: `<button class="btn primary" data-act="run" data-arg="${id}">Review and decide</button>` }); });
+    mayDecide().forEach((id) => { const c = NEED_CARD[id](); out.push({ wf: id, yes: true, kind: 'wait', icon: I.shield(22), ...c, body: `${c.body || ''}${askLineHtml(req(id), u)}`, actions: `<button class="btn primary" data-act="run" data-arg="${id}">Review and decide</button>` }); });
     if (op && lsProblem()) out.push({ kind: 'wait', rank: 3, icon: I.alert(22), ...lsProblem() });
     if (has('conf') && S.conf === 'declined' && u === 'alice') out.push({ kind: 'wait', rank: 4, icon: I.x(22), title: `${nm(S.confBy)} declined your test run`, meta: `${esc(S.nr.name)} · nothing was written`, body: '', held: heldWhy('conf'), actions: `<button class="btn primary" data-act="run" data-arg="conf">See the run</button>${testAgain('Do a test run again', 'btn')}` });
     if (has('conf') && S.conf === 'expired' && u === 'alice') out.push({ wf: 'conf', kind: 'wait', rank: 4, icon: I.clock(22), title: 'Nobody answered on your test run', meta: `${esc(S.nr.name)} · stopped ${at(req('conf').expiresAt)}`, held: heldWhy('conf'), body: `<p class="small muted">${whoAnd(askedOf(req('conf')))} didn’t answer in time, so nothing was written.${heldWhy('conf') ? '' : ` Run it again${shows('namedApprovers') ? ', or choose other Approvers' : ''}.`}</p>`, actions: `${testAgain('Do a test run again')}${changeApproversBtn('conf', 'apprFromRun')}` });
@@ -3490,7 +3494,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const s = S.wiz.sched;
     if (!s.freq) return { key: 'when', q: 'How often should it run?', choices: Object.entries(FREQ_WORD).filter(([v]) => v !== 'month' || shows('monthly')).map(([v, l]) => [`freq:${v}`, l]) };
     if (s.freq === 'week' && !s.day) return { key: 'when', q: 'Which day should it run?', choices: DAYS.map((d) => [`day:${d}`, d]) };
-    if (!s.time) return { key: 'when', q: 'What time should it run?', choices: Q_TIMES.map((x) => [`time:${x}`, clock(x)]), more: '<button type="button" class="chip" data-act="whenOpen" aria-expanded="false" aria-controls="whenpick">Another time</button>' };
+    const bare = (S.wiz.intent || {}).bareHour;
+    if (!s.time) return { key: 'when', q: bare ? `At ${clock(hourChoices(bare)[0])} or ${clock(hourChoices(bare)[1])}?` : 'What time should it run?', choices: (bare ? hourChoices(bare) : Q_TIMES).map((x) => [`time:${x}`, clock(x)]), more: '<button type="button" class="chip" data-act="whenOpen" aria-expanded="false" aria-controls="whenpick">Another time</button>' };
     const row = intentRows().find((r) => r.state === 'missing');
     return row ? { key: row.key, q: row.note || QUESTION[row.key], choices: row.options.map(([v, l]) => [`${row.key}:${v}`, l]) } : null;
   }
@@ -3657,7 +3662,6 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* ---------- Answers about her workflows (spec 6.2, the three new kinds) ----------
      Check my workflows, why it stopped and what needs me read the same state as Workflows and Needs you. In the
      prototype, word rules pick them; in the built app, the model picks the kind and code fills it from platform-api. */
-  const workflowNamed = (t) => routineIds().find((id) => t.toLowerCase().includes(R(id).name.toLowerCase()));
   /* A word that asks for a change, or for something to run on a schedule. A text with one is a command: it takes the
      command path and never a read-only answer, however politely or question-like it is put (the lesson of 8 to 9 Nov).
      "The run" is a noun, not a command. */
@@ -3678,7 +3682,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
      so it fails closed: a text with a change word is a command and goes on down the command path. A route's own words,
      such as "stop" in "why did it stop", are not counted as a command. */
   const ABOUT = [
-    [/\bwhy\b.*\b(stop|stopped|fail|failed|broke|broken|went wrong)\b|\bwhat (went wrong|happened)\b/i, (t) => ({ kind: 'why', id: workflowNamed(t) || stoppedIds()[0] || null }), /\bwhy\b[^?.!]*?\b(?:stop|fail|break)\b/i],
+    [/\bwhy\b.*\b(stop|stopped|fail|failed|broke|broken|went wrong)\b|\bwhat (went wrong|happened)\b/i, (t) => ({ kind: 'why', id: (nameRef(t) || {}).id || stoppedIds()[0] || null }), /\bwhy\b[^?.!]*?\b(?:stop|fail|break)\b/i],
+    /* "when does the software check run next?", "is the morning check running?": one workflow's state and next run. */
+    [/\b(?:when|what time|what day)\b[^.?!]*\b(?:runs?|next|due)\b|\bnext run\b|^(?:is|are)\b[^.?!]*\b(?:running|working|on|stopped|paused|ok(?:ay)?)\b/i, (t) => { const r = nameRef(t); return r && r.id ? { kind: 'one', id: r.id } : null; }, /\b(?:runs?|running)\b/gi],
+    [/\b(?:do i have|are there|is there|any)\b[^.?!]*\b(?:approvals?|requests?)\b|\bapprovals?\b[^.?!]*\bwaiting\b/i, () => ({ kind: 'mine', only: 'yes' })],
+    [/\b(?:which|what)\s+version\b|\bversion of\b/i, softAbout, /\b(?:do|does|are)\s+(?:we|you|i)\s+(?:run|use|have|running|using)\b/gi],
     [/^(set up )?another workflow\b|^(a )?new workflow\b|^what else( can i (do|ask( for)?))?\s*\??$|^(any )?starting points?\s*\??$|^(any )?ideas?\s*\??$/i, () => ({ kind: 'starts' }), /^(set up )?another workflow\b|^(a )?new workflow\b/i],
     [/\b(?:what|anything|something)\b[^.?!]*?\b(?:needs? (?:me|my)|waiting (?:on|for) (?:me|my)|for me|to approve|(?:do )?i need to do|on my plate)\b|\bneeds? my (?:attention|yes|approval)\b|\bmy (?:to-?do|approvals?)\b/i, () => ({ kind: 'mine' })],
     [IS_CURRENT, softAbout],
@@ -3686,11 +3694,16 @@ details > .m-close { animation: fold 140ms ease-in both; }
     [/\b(?:how|what)(?:'s|’s| is| are)?\b[^.?!]*\bworkflows?\b|\bworkflows?\b[^.?!]*\b(?:doing|going|running|working|ok(?:ay)?|fine)\b|\b(?:status|state)\b[^.?!]*\bworkflows?\b|^(?:check|show(?: me)?|see)\b[^.?!]*\bworkflows?\b|^(?:is|are)\b.*\b(?:running|working|on|stopped|paused)\s*\?*$/i, () => ({ kind: 'check' })],
     [/^(help me )?(check )?(how many|which|what)\b.*\b(software|tools?|watchlist)\b/i, () => ({ kind: 'data', looked: ['watchlist'] })],
   ];
+  /* The first route that matches and answers. A workflow's name ("the weekly summary") is never read as a command. */
   const aboutWorkflows = (t) => {
-    const hit = ABOUT.find(([re]) => re.test(t));
-    if (!hit || isCommand(hit[2] ? t.replace(hit[2], ' ') : t)) return null;
-    const a = hit[1](t);
-    return a && { ...a, text: t };
+    for (const [re, fn, own] of ABOUT) {
+      if (!re.test(t)) continue;
+      const rest = own ? t.replace(own, ' ') : t;
+      if (isCommand(withoutName(rest, nameRef(rest)))) return null;
+      const a = fn(t);
+      if (a) return { ...a, text: t };
+    }
+    return null;
   };
   /* A workflow's state in the spec's words (15.9), as a pill tone and a word. */
   const stateOf = (id) => (S.paused[id] ? ['off', 'Paused'] : { bad: ['bad', 'Stopped'], wait: ['wait', 'Waiting for a yes'], off: ['off', 'No answer'] }[status(id).tone] || ['ok', 'On']);
@@ -3704,9 +3717,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return `You have ${ids.length} workflow${ids.length === 1 ? '' : 's'}. ${andList(STATE_ORDER.filter((w) => count[w]).map((w) => said(w, count[w])))}.`;
   }
   /* One row per workflow, each with at most one action; only the first action is primary (rule 1). */
-  function checkCard() {
+  function checkCard(only) {
     let mainUsed = false;
-    return `<div class="pcard wfcheck" data-unbuilt="Planner answers about your workflows"><ul class="rows">${comingUp().map(([id, r]) => {
+    return `<div class="pcard wfcheck" data-unbuilt="Planner answers about your workflows"><ul class="rows">${comingUp().filter(([id]) => !only || id === only).map(([id, r]) => {
       const [tone, label] = stateOf(id);
       let act = actionFor(id);
       if (act) { if (mainUsed) act = demote(act); mainUsed = true; }
@@ -3749,7 +3762,19 @@ details > .m-close { animation: fold 140ms ease-in both; }
       <div class="pcard-f">${me().op ? `<span data-flow-of="run:${id}">${troubleBtn(t, true)}</span>` : ''}<button class="btn sm" data-act="run" data-arg="${id}">See the run</button></div>
     </div>`;
   }
-  const mineSay = () => { const n = needs().length; return n ? `${n === 1 ? '1 thing needs' : `${n} things need`} you.` : 'Nothing needs you right now.'; };
+  const mineSay = (a) => {
+    if (a && a.only) { const n = needs().filter((x) => x.yes).length; return n ? `${n === 1 ? '1 approval is' : `${n} approvals are`} waiting for your yes.` : 'No approvals are waiting for your yes.'; }
+    const n = needs().length;
+    return n ? `${n === 1 ? '1 thing needs' : `${n} things need`} you.` : 'Nothing needs you right now.';
+  };
+  /* One workflow's state and next run, in the words Workflows uses. */
+  const oneSay = (a) => {
+    if (!has(a.id)) return 'That workflow isn’t here any more.';
+    const r = R(a.id);
+    const st = stateOf(a.id)[1];
+    if (S.paused[a.id]) return `${r.name} is paused, so it won’t run until you resume it.`;
+    return `${r.name} ${st === 'Stopped' ? 'stopped' : st === 'No answer' ? 'got no answer' : st === 'On' ? 'is on' : `is ${lc(st)}`}. Its next run is ${r.next}.`;
+  };
   /* A question about her own data (ADR 0042). In the built app the model writes the sentence from a facts snapshot, and
      the platform names the sections it used. Here the sentence is fixed and the count is read from the same list the
      Software page shows. The Looked at line links each section to its screen. */
@@ -3801,100 +3826,157 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* ---------- Changing a workflow by asking (ADR 0043) ----------
      "Make the React check run on Mondays only" names a workflow and a change. This first version changes when it runs:
      the card shows only what changes, before and after, with Save change and Never mind. Any other change gets an
-     honest answer and the workflow itself, where its editors stay. */
+     honest answer and the workflow itself, where its editors stay. Every clause of the request is accounted for: one
+     the card can't set is a cross, and holds Save change. */
   const SCHED_VERB = /\b(make|change|switch|move|set|reschedule|shift|run|put|update|edit)\b/i;
   const OTHER_VERB = /\b(pause|stop|resume|delete|remove|rename|turn|cancel|disable|enable)\b/i;
   const NOT_EDIT = /\b(watch|track|monitor|keep (?:track|an eye))\b|\bset up\b/i;
-  const NAME_SKIP = new Set(['the', 'a', 'our', 'my', 'up', 'to', 'date', 'keep', 'check', 'summary', 'workflow', 'ticket', 'tickets', 'new', 'review', 'report', 'list']);
+  const NAME_SKIP = new Set(['the', 'a', 'our', 'my', 'up', 'to', 'date', 'keep', 'check', 'summary', 'workflow', 'ticket', 'tickets', 'new', 'review', 'report', 'list', 'one']);
   const nameWords = (id) => R(id).name.toLowerCase().split(/[\s-]+/).filter((x) => !NAME_SKIP.has(x));
-  /* The workflow the last answer was about, for "make it daily". */
-  const focusOf = () => { const m = [...S.chat.msgs].reverse().find((x) => x.card && (x.card.kind === 'setup' ? x.card.done : ['why', 'edit'].includes(x.card.kind) && x.card.id)); return m ? (m.card.done ? m.card.done.id : m.card.id) : null; };
-  /* Which workflow a change names: its whole name, "the <words> check" matched against each name, software on the
-     watchlist (the watchlist checks it), or "it" for the last answer's workflow. Several matches, or none, ask which. */
-  function editTarget(t) {
+  /* The workflow the last answer was about, for "make it daily". Right after an unfinished set-up card, "it" could be
+     that draft, so there is no focus and the card asks which one, the draft among them. */
+  const focusOf = () => {
+    const last = [...S.chat.msgs].reverse().find((x) => x.from === 'planner' && x.card);
+    if (last && last === liveSetup()) return null;
+    const m = [...S.chat.msgs].reverse().find((x) => x.card && (x.card.kind === 'setup' ? x.card.done : ['why', 'edit', 'one'].includes(x.card.kind) && x.card.id));
+    return m ? (m.card.done ? m.card.done.id : m.card.id) : null;
+  };
+  const REF = /\b(?:the|my|our|that|this)\s+((?:[\w.+-]+\s+){0,4})(check|summary|workflow|review|watchlist|report|list|one)\b/i;
+  /* Which workflow a text names, and where: its whole name, "the <words> check" matched against each name, software on
+     the watchlist (the watchlist checks it), or "it" for the last answer's workflow. Several matches ask which. A
+     reference to nothing says so. The span is what the text used to name it, so its words are never read as a schedule
+     ("the weekly summary") or as a command. */
+  function nameRef(t, { soft = false } = {}) {
     const low = t.toLowerCase();
     const ids = routineIds();
     const full = ids.find((id) => low.includes(R(id).name.toLowerCase()));
-    if (full) return { id: full };
-    const ref = low.match(/\b(?:the|my|our|that|this)\s+((?:[\w.+-]+\s+){0,4}?)(check|summary|workflow|review|watchlist|report|list)\b/);
+    if (full) { const i = low.indexOf(R(full).name.toLowerCase()); return { id: full, span: [i, i + R(full).name.length] }; }
+    const ref = REF.exec(t);
     if (ref) {
-      const words = ref[1].trim().split(/[\s-]+/).filter(Boolean);
-      if (ref[2] === 'watchlist' || words.includes('software')) return has('sw') ? { id: 'sw' } : null;
+      const span = [ref.index, ref.index + ref[0].length];
+      const words = ref[1].toLowerCase().trim().split(/[\s-]+/).filter(Boolean);
+      if (ref[2].toLowerCase() === 'watchlist' || words.includes('software')) return has('sw') ? { id: 'sw', span } : { missing: ref[0], span, pick: ids };
       const scored = ids.map((id) => [id, words.filter((w) => nameWords(id).includes(w)).length]).filter(([, n]) => n);
       const best = Math.max(0, ...scored.map(([, n]) => n));
       const top = scored.filter(([, n]) => n === best).map(([id]) => id);
-      if (top.length) return top.length === 1 ? { id: top[0] } : { pick: top };
-      const soft = namedIn(ref[1]);
-      if (soft) return onList(soft[0]) && has('sw') ? { id: 'sw', via: soft[0] } : { none: soft[0] };
-      return ids.length ? { pick: ids } : null;
+      if (top.length) return top.length === 1 ? { id: top[0], span } : { pick: top, span };
+      const k = namedIn(ref[1]);
+      if (k) return onList(k[0]) && has('sw') ? { id: 'sw', via: k[0], span } : { none: k[0], span };
+      return { missing: ref[0], span, pick: ids };
     }
-    if (/\b(it|this one|that one)\b/.test(low)) { const f = focusOf(); return f && has(f) ? { id: f } : ids.length ? { pick: ids } : null; }
+    if (soft) {
+      const row = liveSoftware().find((x) => low.includes(x.name.toLowerCase()));
+      if (row && has('sw')) { const i = low.indexOf(row.name.toLowerCase()); return { id: 'sw', via: row.name, span: [i, i + row.name.length] }; }
+    }
+    const pro = /\b(?:it|this one|that one)\b/i.exec(t);
+    if (pro) { const f = focusOf(); const span = [pro.index, pro.index + pro[0].length]; return f && has(f) ? { id: f, span } : { pick: ids, span }; }
     return null;
   }
+  /* The text with the workflow's name taken out, for reading a schedule or a command in it. */
+  const withoutName = (t, ref) => (ref && ref.span ? `${t.slice(0, ref.span[0])} ${t.slice(ref.span[1])}` : t);
+  /* "when does the software check run next?" asks, it doesn't change: a question whose only change word is "run" is
+     never an edit. A question with any other change word still is (fail closed). */
+  const QUESTION_SHAPE = /^(?:when|what|which|how|is|are|does|do|did|will|has|have|where|who|why)\b/i;
+  const onlyRun = (t) => !isCommand(t.replace(/\b(?:runs?|running|ran)\b/gi, ' '));
   const editAnswer = (t) => {
     if (!me().op || NOT_EDIT.test(t) || !(SCHED_VERB.test(t) || OTHER_VERB.test(t))) return null;
-    const tg = editTarget(t);
+    if (QUESTION_SHAPE.test(t.trim()) && onlyRun(t)) return null;
+    const tg = nameRef(t, { soft: true });
     if (!tg) return null;
-    return tg.none ? { kind: 'nocheck', name: tg.none } : { kind: 'edit', text: t, id: tg.id || null, pick: tg.pick || null, via: tg.via || '', day: '', state: 'open' };
+    if (tg.none) return { kind: 'nocheck', name: tg.none, text: t };
+    return { kind: 'edit', text: t, id: tg.id || null, pick: tg.pick || null, missing: tg.missing || '', via: tg.via || '', set: {}, state: 'open' };
   };
-  /* What the request changes, worked out from the live schedule each time: the new schedule, a day still to choose, no
-     change, or why the card can't make it. */
+  /* What the request changes, worked out from the live schedule each time: the new schedule, a day or time still to
+     choose, no change, or why the card can't make it. The workflow's own name is never read as a schedule. */
   function editPlan(c) {
+    const ref = nameRef(c.text, { soft: true });
     /* "every day instead of every Monday": the part after "instead of" is the schedule it has now. */
-    const it = parseIntent(c.text.replace(/\b(?:instead of|rather than)\b[^,.;]*/gi, ''));
+    const it = parseIntent(withoutName(c.text, ref).replace(/\b(?:instead of|rather than)\b[^,.;]*/gi, ''));
     const r = R(c.id);
     if (BASE[c.id] && BASE[c.id].fixedSchedule) return { no: 'fixed' };
-    if (OTHER_VERB.test(c.text) || (!it.freq && !it.time && !it.monthly)) return { no: 'other' };
+    if (OTHER_VERB.test(withoutName(c.text, ref)) || (!it.freq && !it.time && !it.monthly && !it.bareHour)) return { no: 'other' };
     if (it.monthly) return { no: 'monthly' };
     const to = { ...r.sched, monthDay: r.sched.monthDay || '1' };
-    if (it.freq) { to.freq = it.freq; to.day = it.freq === 'week' ? it.day || c.day || '' : ''; }
+    /* "weekly" with no day keeps the day it has, when it already runs weekly. */
+    if (it.freq) { to.freq = it.freq; to.day = it.freq === 'week' ? it.day || c.set.day || (r.sched.freq === 'week' ? r.sched.day : '') : ''; }
     if (it.time) to.time = it.time;
-    if (to.freq === 'week' && !to.day) return { to, ask: true };
+    else if (it.bareHour) to.time = c.set.time || '';
+    if (to.freq === 'week' && !to.day) return { to, ask: 'day' };
+    if (!to.time) return { to, ask: 'time', hour: it.bareHour };
     return { to, same: schedText(to) === schedText(r.sched) };
   }
+  /* Every clause the card didn't read is a cross. With a cross, Save change waits: the person asks again. */
+  function editCrosses(c) {
+    const ref = nameRef(c.text, { soft: true });
+    const verbs = new RegExp(`${SCHED_VERB.source}|${OTHER_VERB.source}`, 'gi');
+    const reads = [...spansOf(c.text, [...HEARD.frame, ...HEARD.when, verbs, /\b(?:instead of|rather than)\b[^,.;]*/gi, /\b(?:it|this one|that one)\b|\bchecks?\b|\bchecked\b/gi]), ...(ref && ref.span ? [ref.span] : [])];
+    const clash = clashParts(c.text);
+    return clash.concat(leftoverParts(c.text, [...reads, ...clash.map((x) => x.span)]));
+  }
+  /* A later version, made after this card saved its own, and where it was made. */
+  const changedSince = (c, v) => { const later = (S.vers[c.id] || []).filter((x) => x.v > v); return later.length ? (later[later.length - 1].via === 'chat' ? 'in a later answer' : 'on its page') : ''; };
   function editSay(c) {
-    if (!c.id) return 'Which workflow should I change?';
+    if (c.state === 'draft') return 'Changed on the draft above.';
+    if (!c.id) return c.missing ? `You don’t have a workflow called “${c.missing.replace(/^(?:the|my|our|that|this)\s+/i, '')}”.${c.pick.length ? ' Which one should I change?' : ''}` : 'Which workflow should I change?';
     if (!has(c.id)) return 'That workflow isn’t here any more.';
     const name = R(c.id).name;
     const now = lc(R(c.id).when);
+    const paused = S.paused[c.id] ? `${name} is paused, so it won’t run until you resume it.` : '';
     if (c.state === 'kept') return 'No problem. Nothing changed.';
-    if (c.state === 'saved') return `Saved. ${name} runs ${now} now.`;
-    if (c.state === 'undone') return `Undone, as version ${c.undoVer}. ${name} runs ${now} now.`;
+    if (c.state === 'saved') {
+      const since = changedSince(c, c.ver);
+      if (since) return `Saved as version ${c.ver}. Changed again since, ${since}.`;
+      return c.id === 'sw' ? `Saved. Next run ${R('sw').next}. You now own this schedule, so you can’t approve its checks.${c.off ? ' You’re no longer one of its Approvers, so choose a new backup under Change who approves.' : ''}` : `Saved. ${paused || `${name} runs ${now} now.`}`;
+    }
+    if (c.state === 'undone') { const since = changedSince(c, c.undoVer); return `Undone, as version ${c.undoVer}. ${since ? `Changed again since, ${since}.` : paused || `${name} runs ${now} now.`}`; }
     const p = editPlan(c);
     if (p.no === 'fixed') return `${name} runs on a fixed schedule, ${now}. It can’t be changed.`;
     if (p.no === 'monthly') return 'I can’t run things monthly yet.';
     if (p.no === 'other') return `From the chat I can only change when ${name} runs.`;
-    if (p.same) return c.via ? `${c.via} is checked with all your software, which already runs ${now}.` : `${name} already runs ${now}.`;
-    return `${c.via ? `${c.via} is checked with all your software. ` : ''}Here’s the change. Nothing changes until you save it.`;
+    if (p.same && !editCrosses(c).length) return c.via ? `${c.via} is checked with all your software, which already runs ${now}.` : `${name} already runs ${now}.`;
+    return `${c.via ? `${c.via} is checked with all your software. ` : ''}${editCrosses(c).length ? 'Here’s the change, but I can’t do every part of it.' : 'Here’s the change. Nothing changes until you save it.'}`;
   }
   function editCard(m) {
     const c = m.card;
     const id = m.id;
-    if (!c.id) return `<div class="pcard" data-pres="edit:${id}">${partsList([{ key: 'which', mark: 'ask', label: 'Workflow', body: askBody({ q: 'Which workflow?', choices: c.pick.filter(has).map((w) => [w, R(w).name]), act: 'editPick', mid: id }, `q-${id}`) }])}</div>`;
+    if (c.state === 'draft') return '';
+    if (!c.id) {
+      const draft = liveSetup();
+      const choices = (draft ? [['draft', `${S.wiz.name.trim() || draftNr().name}, the draft above`]] : []).concat(c.pick.filter(has).map((w) => [w, R(w).name]));
+      return choices.length ? `<div class="pcard" data-pres="edit:${id}">${partsList([{ key: 'which', mark: 'ask', label: 'Workflow', body: askBody({ q: 'Which workflow?', choices, act: 'editPick', mid: id }, `q-${id}`) }])}</div>` : '';
+    }
     if (!has(c.id) || c.state === 'kept') return '';
     const r = R(c.id);
     const p = c.state === 'open' ? editPlan(c) : null;
-    if (p && p.no) return p.no === 'other' ? `<div class="btns"><button class="btn sm" data-act="workflow" data-arg="${c.id}">Open ${esc(r.name)}</button></div>` : '';
-    if (p && p.same) return '';
+    /* A change the card can't make keeps only a question asked alongside it, so that part isn't lost. */
+    const no = p && p.no ? editCrosses(c).filter((x) => /on its own/.test(x.body)) : c.state === 'open' ? editCrosses(c) : [];
+    if (p && p.no) return `${no.length ? `<div class="pcard">${partsList(no)}</div>` : ''}${p.no === 'other' ? `<div class="btns"><button class="btn sm" data-act="workflow" data-arg="${c.id}">Open ${esc(r.name)}</button></div>` : ''}`;
+    if (p && p.same && !no.length) return '';
     const from = p ? r.sched : c.from;
     const to = p ? p.to : c.to;
-    const ask = p && p.ask ? partsList([{ key: 'day', mark: 'ask', label: 'When', body: askBody({ q: 'Which day should it run?', choices: DAYS.map((d) => [d, d]), act: 'editDay', mid: id }, `q-${id}`) }]) : '';
-    const sw = c.id === 'sw' ? `<p class="note">This changes when all ${liveSoftware().length} software on the watchlist are checked. Saving makes you the owner of this schedule. Its checks then count as your work, so you won’t be able to approve them.</p>` : '';
+    const asks = p && p.ask === 'day' ? [{ key: 'day', mark: 'ask', label: 'When', body: askBody({ q: 'Which day should it run?', choices: DAYS.map((d) => [`day:${d}`, d]), act: 'editSet', mid: id }, `q-${id}`) }]
+      : p && p.ask === 'time' ? [{ key: 'time', mark: 'ask', label: 'When', body: askBody({ q: `At ${clock(hourChoices(p.hour)[0])} or ${clock(hourChoices(p.hour)[1])}?`, choices: hourChoices(p.hour).map((x) => [`time:${x}`, clock(x)]), act: 'editSet', mid: id }, `q-${id}`) }] : [];
+    const held = asks.length || no.length;
+    const n = liveSoftware().length;
+    const sw = c.id !== 'sw' ? '' : c.state === 'open' ? `<p class="note">This changes when all ${n} software on the watchlist are checked. Saving makes you the owner of this schedule. Its checks then count as your work, so you won’t be able to approve them.</p>`
+      : `<p class="note">This changed when all ${n} software on the watchlist are checked, and made you the owner of this schedule. Its checks count as your work now, so you can’t approve them.</p>`;
+    const since = c.state === 'saved' ? changedSince(c, c.ver) : c.state === 'undone' ? changedSince(c, c.undoVer) : '';
+    const later = S.paused[c.id] ? 'It’s paused, so it won’t run until you resume it.' : `Next run ${r.next}.`;
     const foot = c.state === 'open'
-      ? `<button class="btn primary" data-act="editSave" data-mid="${id}"${ask ? ' disabled' : ''}>Save change</button><button class="btn" data-act="editKeep" data-mid="${id}">Never mind</button>`
-      : c.state === 'saved' ? `<span class="note">${I.check(14)} Saved as version ${c.ver}. Next run ${r.next}.</span>${verNow(c.id) === c.ver ? `<button class="btn sm" data-act="editUndo" data-mid="${id}">Undo</button>` : ''}`
-        : `<span class="note">Undone, as version ${c.undoVer}.</span>`;
+      ? `<button class="btn primary" data-act="editSave" data-mid="${id}"${held ? ' disabled' : ''}>Save change</button><button class="btn" data-act="editKeep" data-mid="${id}">Never mind</button>${no.length ? '<span class="left">Ask again without the part with a cross.</span>' : ''}`
+      : c.state === 'saved' ? `<span class="note">${I.check(14)} Saved as version ${c.ver}. ${since ? `Changed again since, ${since}.` : later}</span>${!since ? `<button class="btn sm" data-act="editUndo" data-mid="${id}">Undo</button>` : ''}`
+        : `<span class="note">Undone, as version ${c.undoVer}.${since ? ` Changed again since, ${since}.` : ''}</span>`;
     return `<div class="pcard" data-pres="edit:${id}">
       <div class="pcard-h"><h3 tabindex="-1" id="card-h-${id}">Change ${esc(r.name)}</h3></div>
-      ${ask}
-      <section class="pcard-s"><h4>When it runs</h4><dl class="ba"><dt>Before</dt><dd>${schedText(from)}</dd><dt>After</dt><dd>${p && p.ask ? '<span class="muted">Choose a day</span>' : `<b>${schedText(to)}</b>`}</dd></dl>${sw}</section>
+      ${asks.length || no.length ? partsList([...asks, ...no]) : ''}
+      <section class="pcard-s"><h4>When it runs</h4><dl class="ba"><dt>Before</dt><dd>${schedText(from)}</dd><dt>After</dt><dd>${p && p.ask ? `<span class="muted">${p.ask === 'day' ? 'Choose a day' : 'Choose a time'}</span>` : `<b>${schedText(to)}</b>`}</dd></dl>${sw}</section>
       <div class="pcard-f">${foot}</div>
     </div>`;
   }
   /* "Make the React check …" when there is no React check: say so, and offer to watch it, which is checked every Monday. */
   const nocheckSay = (a) => (onList(a.name) ? `${a.name} is on the Software watchlist now, so it’s checked ${swDays()} with the rest of your software.` : `You don’t have a ${a.name} check. ${a.name} isn’t on the Software watchlist, which checks software ${swDays()}.`);
   const nocheckCard = (m) => (onList(m.card.name) || !me().op ? '' : `<div class="btns"><button class="btn sm" data-act="say" data-arg="Keep track of the ${esc(m.card.name)} version">Watch ${esc(m.card.name)}</button></div>`);
-  const mineCard = () => (needs().length ? needsStrip(needs(), 99, 'Planner answers about your workflows') : '');
+  const mineCard = (m) => { const items = needs().filter((x) => !m.card.only || x.yes); return items.length ? needsStrip(items, 99, 'Planner answers about your workflows') : ''; };
   const startsCard = () => `<div class="chips starts" role="group" aria-label="Starting points" data-unbuilt="Planner answers about your workflows">${starts().map((t) => `<button class="chip" data-act="say" data-arg="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
 
   /* The answers (spec 6.2). Each covers what I understood, what I can do, what I need from you, and what happens next
@@ -3913,7 +3995,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     abilities: { say: (a) => (a.unknown ? 'I can’t help with that here. I check software versions and watch for new releases. Here’s what I can do.' : 'Here’s what I can do for software versions.'), card: () => abilitiesHTML(), mood: (a) => (a.unknown ? 'sorry' : 'idle') },
     check: { say: checkSay, card: () => checkCard() },
     why: { say: whySay, card: (m) => whyCard(m), mood: (a) => (stoppedNow(a.id) ? 'sorry' : 'idle') },
-    mine: { say: mineSay, card: () => mineCard() },
+    mine: { say: mineSay, card: (m) => mineCard(m) },
+    one: { say: oneSay, card: (m) => (has(m.card.id) ? checkCard(m.card.id) : '') },
     starts: { say: () => 'Here are three places to start. Pick one, or tell me something else.', card: () => startsCard() },
     data: { say: dataSay, card: (m) => dataCard(m) },
     edit: { say: editSay, card: (m) => editCard(m) },
@@ -3928,9 +4011,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
     part: () => [...HEARD.frame, ...HEARD.when, ...HEARD.setup, ...HEARD.needs],
     cant: () => [...HEARD.frame, ...HEARD.when, ...HEARD.setup, ...HEARD.needs, ...HEARD.cant, ...HEARD.watch],
     abilities: (c) => (c.from === 'setup' ? [...HEARD.frame, ...HEARD.when, ...HEARD.setup] : null),
-    ...Object.fromEntries(['data', 'check', 'mine', 'why'].map((k) => [k, () => [...HEARD.frame, ...ABOUT.map(([re]) => re), ...STATUS_WORDS, ...HEARD.watch]])),
+    nocheck: () => [...HEARD.frame, ...HEARD.when, new RegExp(`${SCHED_VERB.source}|${OTHER_VERB.source}`, 'gi'), /\b(?:instead of|rather than)\b[^,.;]*/gi],
+    ...Object.fromEntries(['data', 'check', 'mine', 'why', 'one'].map((k) => [k, () => [...HEARD.frame, ...ABOUT.map(([re]) => new RegExp(`(?:${re.source})(?:(?!\\b(?:and|then|but|also)\\b)[^,.;!?])*`, 'gi')), ...STATUS_WORDS, ...HEARD.watch]])),
   };
-  const extraCrosses = (c) => { const rs = c.text && READ_BY[c.kind] && READ_BY[c.kind](c); return rs ? leftoverParts(c.text, [...spansOf(c.text, rs), ...nameSpans(c.text)]) : []; };
+  const extraCrosses = (c) => { const rs = c.text && READ_BY[c.kind] && READ_BY[c.kind](c); return rs ? leftoverParts(c.text, [...spansOf(c.text, [...rs, REF]), ...nameSpans(c.text)]) : []; };
   const cardHTML = (m) => { const no = extraCrosses(m.card); return `${no.length ? `<div class="pcard">${partsList(no)}</div>` : ''}${ANSWERS[m.card.kind].card ? ANSWERS[m.card.kind].card(m) : ''}`; };
 
   /* ---------- Drafts ----------
@@ -6068,15 +6152,36 @@ details > .m-close { animation: fold 140ms ease-in both; }
     destDone: () => { S.wiz.destOpen = false; render(); focusChat($app.querySelector('[data-act="destOpen"]')); },
     whenOpen: () => { S.wiz.whenOpen = true; render(); focusChat(document.getElementById('sched-freq')); },
     /* The edit card: pick the workflow, choose a day, save as a new version, undo it, or leave it. */
-    editPick: (id, m) => { m.card.id = id; render(); focusChat($app.querySelector(`[data-mid="${m.id}"] .pcard-h h3`)); },
-    editDay: (d, m) => { m.card.day = d; render(); focusChat($app.querySelector(`[data-act="editSave"][data-mid="${m.id}"]`)); },
+    /* The draft above is one of the choices (fix pass N2): its schedule changes on its own card. */
+    editPick: (id, m) => {
+      const c = m.card;
+      if (id === 'draft') {
+        if (!liveSetup()) return;
+        const it = parseIntent(c.text);
+        const sc = S.wiz.sched;
+        if (it.freq) { sc.freq = it.freq; sc.day = it.freq === 'week' ? it.day || sc.day || '' : ''; }
+        if (it.time) sc.time = it.time;
+        S.wiz.schedErr = {};
+        c.state = 'draft';
+        announce(editSay(c));
+        render();
+        focusChat($app.querySelector(`[data-mid="${liveSetup().id}"] .pcard-h h3`));
+        return;
+      }
+      c.id = id;
+      render();
+      focusChat($app.querySelector(`[data-mid="${m.id}"] .pcard-h h3`));
+    },
+    editSet: (arg, m) => { const [k, v] = arg.split(/:(.*)/); m.card.set[k] = v; render(); focusChat($app.querySelector(`[data-act="editSave"][data-mid="${m.id}"]`)); },
     editSave: (_, m) => {
       const c = m.card;
       const p = c.state === 'open' && has(c.id) ? editPlan(c) : {};
-      if (!p.to || p.ask || p.same) return;
+      if (!p.to || p.ask || p.same || editCrosses(c).length) return;
       c.from = { ...R(c.id).sched };
       c.to = { ...p.to };
-      c.ver = publishSched(c.id, p.to).v;
+      const pub = publishSched(c.id, p.to, undefined, 'chat');
+      c.ver = pub.v;
+      c.off = pub.off;
       c.state = 'saved';
       m.mood = 'success';
       announce(editSay(c));
@@ -6085,8 +6190,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     },
     editUndo: (_, m) => {
       const c = m.card;
-      if (c.state !== 'saved' || verNow(c.id) !== c.ver) return;
-      c.undoVer = publishSched(c.id, c.from, c.ver).v;
+      if (c.state !== 'saved' || changedSince(c, c.ver)) return;
+      c.undoVer = publishSched(c.id, c.from, c.ver, 'chat').v;
       c.state = 'undone';
       announce(editSay(c));
       render();
