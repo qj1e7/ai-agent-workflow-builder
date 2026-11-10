@@ -240,7 +240,7 @@ T(4, 'Add software from Home with example 3: example, Looks right, Start from th
 }, { changed: 'The React example sits behind “Set up another workflow” on a normal week (spec 5.1).' });
 
 T(5, 'Add software on the Software watchlist page', async (t) => {
-  await t.menu('software', 'Open Software watchlist');
+  await t.menu('software', 'Open Watchlist');
   await t.field('#sw-name', 'Prometheus', 'Name');
   await t.click('main form[data-submit="swFind"] button[type="submit"]', 'Find it');
   await t.field('#sw-repo', 'prometheus/prometheus', 'GitHub repository');
@@ -314,9 +314,10 @@ T(13, 'Change who approves: Workflows, row, Change who approves, Save', async (t
   await t.expectText('Arun is asked first from the next run', /Saved\. From the next run, Arun is asked first/, S.toast);
 }, { changed: 'Named Approvers are ADR 0024, which is not built. The task exists only with Planned features shown, tagged Planned (I4).' });
 
-T(14, 'Change an agent in plain English: Agent library, Details and changes, chip, Suggest a change, Save', async (t) => {
+T(14, 'Change an agent in plain English: Settings, How it works, Details and changes, chip, Suggest a change, Save', async (t) => {
   await t.setup((k) => ctl(k, 'preview', 'on'));
-  await t.menu('agents', 'Open Agent library');
+  await t.menu('agents', 'Open Settings');
+  await t.click('[data-act="setTab"][data-arg="how"]', 'Open How it works');
   await t.click('[data-act="libTab"][data-arg="agents"]', 'Open the Agents tab');
   await t.click('[data-act="agent"][data-arg="writer"]:has-text("Details and changes")', 'Ticket writer: Details and changes');
   await t.expectCount('Changing an agent is tagged Planned in its dialog', '.dialog .tag.planned', (n) => n >= 1);
@@ -343,13 +344,13 @@ add('H2', 'Discard a draft set-up card from Workflows', async (t) => {
 
 /* New tasks in version 4. */
 add('B-home', 'Find and act on the stopped workflow from Home’s Needs you', async (t) => {
-  await t.expectText('Home lists the stopped workflow first, with its fix', /Needs you\s+5\s+Morning new-ticket check stopped\s+Jira didn’t answer at 8:00\.\s+Retry the run/);
+  await t.expectText('Home lists the stopped workflow first, with its fix', /Needs you\s+5\s+Do now\s+Morning new-ticket check stopped\s+Jira didn’t answer at 8:00\.\s+Retry the run/);
   await t.click(S.retry, 'Retry the run', { decision: true, until: retriedText });
   await t.expectText('The retry finished', retriedText);
   await t.setup((k) => k.go('home'));
   await t.expectText('Home now has four things', /Needs you\s+4\b/);
   await t.expect('The stopped row is gone from Home', t.page.innerText('main'), (v) => !/Morning new-ticket check stopped/.test(v));
-}, [1280, 390]);
+}, [1280, 390], { changed: 'Needs you is grouped into Do now and Set up (ADR 0043), so the Do now heading comes before the first row.' });
 
 add('ASK-status', '“Check my workflows” from the suggestions', async (t) => {
   await t.click(S.example(0), 'Tap Check my workflows', { reply: true });
@@ -399,9 +400,58 @@ add('PREVIEW', 'Planned features shown: each planned item is tagged', async (t) 
   await t.expectText('The access review is listed and tagged Planned', /Quarterly access review[\s\S]{0,300}PLANNED/i);
   await t.click(S.row('access'), 'Open Quarterly access review');
   await t.expectText('Two Approvers in turn, tagged Planned', /First Bob, with Siti as backup\. Then Alice, with Arun as backup\.\s*PLANNED/i);
-  await t.menu('software', 'Open Software watchlist');
+  await t.menu('software', 'Open Watchlist');
   await t.expectText('Planned sources are tagged', /Security advisories\s+Planned/i);
 }, [1280]);
+
+/* The shell (ADR 0043, step 1): the pinned line, the side panel, More details with Back to the chat, and the rail returning to the chat. */
+const CHECK = 'Check my workflows';
+const issuesRow = 'main .thread [data-act="workflow"][data-arg="issues"]';
+add('SHELL-pinned', 'The pinned Needs you line shows after the first message, with Open and N more', async (t) => {
+  await t.expectCount('No pinned line before the first message', 'main .pinned', 0);
+  await t.ask(CHECK);
+  await t.expectText('The pinned line names the most urgent item', /Morning new-ticket check stopped/, 'main .pinned');
+  await t.expectText('It offers Open and the rest', /Open[\s\S]*4 more/, 'main .pinned');
+  await t.click('main .pinned [data-act="go"][data-arg="workflows"]', '4 more');
+  await t.expectText('N more opens the Needs you list on Workflows', /Needs you\s+5[\s\S]*Do now[\s\S]*Set up/);
+}, [1280, 390]);
+
+add('SHELL-panel', 'A card in the chat opens its workflow in a side panel, or full screen on a phone, and Close puts it back', async (t) => {
+  await t.ask(CHECK);
+  await t.click(issuesRow, 'Open Morning new-ticket check from the card');
+  await t.expectCount('The side panel is open', '#sidepanel', 1);
+  await t.expectText('It shows the last and next run', /Last run[\s\S]*Next run/, '#sidepanel');
+  const box = await t.page.evaluate(() => { const r = document.querySelector('#sidepanel').getBoundingClientRect(); return { w: Math.round(r.width), vw: innerWidth, thread: !!document.querySelector('.thread') && document.querySelector('.thread').getBoundingClientRect().width > 0 }; });
+  if (t.kit.width > 860) await t.expect('The chat stays beside the panel', box, (b) => b.thread && b.w < b.vw / 2);
+  else await t.expect('On a phone the panel fills the screen', box, (b) => b.w === b.vw);
+  await t.expect('The card hides its own Open button while the panel shows it', t.page.locator('main .thread .btn[data-act="workflow"][data-arg="issues"]').count(), 0);
+  await t.click('#sidepanel [data-act="panelClose"]', 'Close');
+  await t.expectCount('The panel is gone', '#sidepanel', 0);
+}, [1280, 390]);
+
+add('SHELL-more', 'More details gives a full page with Back to the chat, and the panel is still there on return', async (t) => {
+  await t.ask('Why did Morning new-ticket check stop?');
+  await t.click('main .thread [data-act="run"][data-arg="issues"]', 'See the run from the card');
+  await t.expectText('The panel shows the three answers and Retry', /What happened[\s\S]*What was affected[\s\S]*Can it be fixed safely[\s\S]*Retry the run/, '#sidepanel');
+  await t.click('#sidepanel [data-act="panelPage"]', 'More details');
+  await t.expectText('A full page opens with Back to the chat', /Back to the chat/);
+  await t.expectCount('The chat is not shown on a full page', '.thread', 0);
+  await t.click('main .back', 'Back to the chat');
+  await t.expectCount('The panel is still there', '#sidepanel', 1);
+}, [1280, 390]);
+
+add('SHELL-rail', 'The rail returns to the chat as it was, scroll position included', async (t) => {
+  await t.ask('What can you do?');
+  await t.ask(CHECK);
+  await t.setup((k) => k.page.evaluate(() => { document.querySelector('.chatscroll').scrollTop = 150; }));
+  const before = await t.page.evaluate(() => document.querySelector('.chatscroll').scrollTop);
+  await t.expect('The chat was scrolled', before, (v) => v > 0);
+  await t.menu('workflows', 'Open Workflows');
+  await t.expectCount('Workflows is a full page with no chat', '.thread', 0);
+  await t.menu('home', 'Back to Chat');
+  await t.expectText('The conversation is back', /Check my workflows/, '.thread');
+  await t.expect('The scroll position is the same', t.page.evaluate(() => document.querySelector('.chatscroll').scrollTop), before);
+}, [1280, 390]);
 
 /* Keyboard only: no mouse. Tab, Shift+Tab, Enter, Space, arrows, Escape, typing. */
 add('KEYS-A', 'Scenario A with the keyboard only', async (t) => {
@@ -446,8 +496,8 @@ const screens = [
   { name: 'run-stopped', prepare: async (k) => { await k.go('workflows'); await open(k, S.seeRun); } },
   { name: 'run-approval', prepare: async (k) => { await k.setUser('bob'); await open(k, S.review); } },
   { name: 'software', prepare: async (k) => { await k.go('software'); } },
-  { name: 'agent-library', prepare: async (k) => { await k.go('agents'); await open(k, '[data-act="libTab"][data-arg="agents"]'); } },
-  { name: 'agent-library-tools', prepare: async (k) => { await k.go('agents'); await open(k, '[data-act="libTab"][data-arg="tools"]'); } },
+  { name: 'agent-library', prepare: async (k) => { await k.go('agents'); await open(k, '[data-act="setTab"][data-arg="how"]'); await open(k, '[data-act="libTab"][data-arg="agents"]'); } },
+  { name: 'agent-library-tools', prepare: async (k) => { await k.go('agents'); await open(k, '[data-act="setTab"][data-arg="how"]'); await open(k, '[data-act="libTab"][data-arg="tools"]'); } },
   { name: 'settings-connections', prepare: async (k) => { await open(k, '.hdr [data-act="go"][data-arg="settings"]'); await open(k, '[data-act="setTab"][data-arg="connections"]'); } },
   { name: 'teams-drawer', prepare: async (k) => { await open(k, S.teams); } },
   { name: 'drafts', prepare: async (k) => { await k.ask(WEEKLY_SUMMARY); await open(k, '[data-act="newChat"]'); await k.go('workflows'); } },
@@ -457,14 +507,24 @@ const screens = [
   { name: 'workflow-more-menu', prepare: async (k) => { await k.go('workflows'); await open(k, S.row('issues')); await open(k, S.more); } },
   { name: 'run-detailed-activity', prepare: async (k) => { await k.go('workflows'); await open(k, S.seeRun); await open(k, 'main [data-act="runDetail"]'); } },
   { name: 'software-attention', prepare: async (k) => { await k.go('software'); await k.page.evaluate(() => { const h = document.getElementById('sw-attn-h'); if (h) h.scrollIntoView(); }); } },
-  { name: 'library-what-it-can-do', prepare: async (k) => { await k.go('agents'); } },
+  { name: 'library-what-it-can-do', prepare: async (k) => { await k.go('agents'); await open(k, '[data-act="setTab"][data-arg="how"]'); } },
   { name: 'offline-home', prepare: async (k) => { await ctl(k, 'modelOn', 'off'); } },
   { name: 'preview-software', prepare: async (k) => { await ctl(k, 'preview', 'on'); await k.go('software'); } },
+  { name: 'shell-chat-pinned', prepare: async (k) => { await k.ask(CHECK); } },
+  { name: 'shell-side-panel', prepare: async (k) => { await k.ask(CHECK); await open(k, issuesRow); } },
+  { name: 'shell-side-panel-run', prepare: async (k) => { await k.ask('Why did Morning new-ticket check stop?'); await open(k, 'main .thread [data-act="run"][data-arg="issues"]'); } },
+  { name: 'shell-side-panel-approval', prepare: async (k) => { await k.ask(CHECK); await open(k, 'main .thread [data-act="run"][data-arg="sw"]'); } },
+  { name: 'shell-full-page-back', prepare: async (k) => { await k.ask(CHECK); await open(k, issuesRow); await open(k, '#sidepanel [data-act="panelPage"]'); } },
+  { name: 'shell-settings-how-it-works', prepare: async (k) => { await k.go('agents'); await open(k, '[data-act="setTab"][data-arg="how"]'); } },
   { name: 'mark-unbuilt-home', prepare: async (k) => { await ctl(k, 'markUnbuilt', 'on'); } },
 ];
 
+/* The rail replaced the header tabs (ADR 0043). The Agent library is now Settings, How it works. */
+const menu = (width, name) => (name === 'agents' ? '.hdr [data-act="go"][data-arg="settings"]' : `.rail-a[data-arg="${name}"]`);
+
 module.exports = {
   version: 'v4',
+  menu,
   scenarios,
   screens,
   ctl,

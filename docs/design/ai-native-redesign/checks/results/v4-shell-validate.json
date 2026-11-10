@@ -1,0 +1,166 @@
+{
+  "prototype": "docs/design/ai-native-redesign/prototype.html",
+  "results": [
+    {
+      "name": "counts-agree",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "card-agrees",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "card-ticket-set-follows-schedule",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "roles-bob-creates-nothing",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "roles-alice-not-own-test-run",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "roles-access-review-two-approvers",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "roles-owner-after-schedule-save",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "teams-drawer-never-approves",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "safety-words",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "preview-tags-planned",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "refusals",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "tasks-T1-T15",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "repeat-run-and-compare",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "no-long-dashes",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "down-state-honest",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "offline-honest",
+      "status": "FAIL",
+      "detail": "the offline Home does not say agent workflows can’t run"
+    },
+    {
+      "name": "morning-check-reads",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "alternatives-set-up-cleanly",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "cant-claims-honest",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "no-silent-drop",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "home-one-primary",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "home-day-one",
+      "status": "FAIL",
+      "detail": "day one does not fold “What can’t I do yet?”: []"
+    },
+    {
+      "name": "planned-hidden-by-default",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "i6-new-agent-drafted",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "i7-no-dead-pointers",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "planner-answers-live",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "teams-messages-are-articles",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "one-version-per-fact",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "keyboard-primary-actions",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "menu-keys",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "control-bob-has-a-text-box",
+      "status": "EXPECTED-FAIL",
+      "detail": "seeded control: Bob has the Planner box"
+    },
+    {
+      "name": "no-console-errors",
+      "status": "PASS",
+      "detail": ""
+    }
+  ],
+  "consoleErrors": []
+}
