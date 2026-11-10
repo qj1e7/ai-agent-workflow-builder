@@ -466,6 +466,17 @@ add('ANS-cross', 'A clause the Planner can’t read gets a cross that quotes it,
   await t.expectText('The part it can is on', /is on\./);
 }, [1280, 390], { changed: 'Fix pass S3: “haven’t been updated for 10 days” now gets the honest “I can’t see when a ticket was last updated yet” (ANS-stale), so the generic cross is proved with a clause no rule reads.' });
 
+add('ANS-left-out', 'After “Set up the part I can”, the card and the workflow’s page still say what was left out', async (t) => {
+  await t.ask(CROSS);
+  await t.click(S.answer('tickets:open'), 'Choose Open tickets', { decision: true });
+  await t.click(S.answer('project:MOCK'), 'Choose MOCK', { decision: true });
+  await t.click(S.turnOn, 'Set up the part I can', { decision: true });
+  await t.expectText('The done card says what was left out', /is on\.\s*Left out: “colour them by team”\./, lastCard);
+  await t.menu('workflows', 'Open Workflows');
+  await t.click(S.row('conf'), 'Open the new workflow');
+  await t.expectText('So does its page', /Left out: “colour them by team”\. It was set up without that part\./);
+}, [1280]);
+
 add('ANS-verbs', 'A clause of verbs and little words, such as “let me know”, still gets a cross, and never “Nothing is unclear”', async (t) => {
   await t.ask('every Friday at 5pm, sum up the tickets we closed this week in MOCK and let me know');
   await t.expectText('“let me know” is quoted with a cross', /“let me know”\s*I didn’t follow this part\./, `${lastCard} .part[data-mark="no"]`);

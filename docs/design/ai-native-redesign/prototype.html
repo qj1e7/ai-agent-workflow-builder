@@ -3254,7 +3254,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const tools = (a) => { let keys = []; try { keys = toolKeysOf(a); } catch (e) { keys = []; } return keys.map((k) => TOOLS[k][0]); };
     const history = (S.n8nLog[id] || []).map((e) => `<li><b>${e.when}</b><span>${e.text}</span></li>`);
     return `<button class="back" data-act="go" data-arg="workflows">${I.left(16)}Workflows</button>
-      <div class="pagehead"><div><div style="margin-bottom:8px">${pills(id)}${BASE[id] && BASE[id].planned ? ` ${PLANNED_TAG}` : ''}</div><h1 tabindex="-1">${esc(r.name)}</h1><p>${r.what}</p></div>${me().op && id !== 'sw' ? `<div class="btns">${S.paused[id] ? '' : `<button class="btn sm" data-act="pause" data-arg="${id}">${I.pause(14)}Pause</button>`}${moreMenu(id)}</div>` : ''}</div>
+      <div class="pagehead"><div><div style="margin-bottom:8px">${pills(id)}${BASE[id] && BASE[id].planned ? ` ${PLANNED_TAG}` : ''}</div><h1 tabindex="-1">${esc(r.name)}</h1><p>${r.what}</p>${leftOutOf(id).length ? `<p class="note">${leftOutLine(leftOutOf(id))} It was set up without that part.</p>` : ''}</div>${me().op && id !== 'sw' ? `<div class="btns">${S.paused[id] ? '' : `<button class="btn sm" data-act="pause" data-arg="${id}">${I.pause(14)}Pause</button>`}${moreMenu(id)}</div>` : ''}</div>
       <div data-unbuilt="Status banner">${banner(id)}</div>
       ${n8nWarn(id)}
       ${id === 'nudge' && S.report > 0 && S.nudge === 'failed' ? `<div class="panel" style="margin-top:16px" data-unbuilt="Support cases"><h2>Support case</h2>${caseBox()}${reportTrack(true)}</div>` : ''}
@@ -4096,11 +4096,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
         ${left.length ? `<span class="left">${leftWords(left.length)}: ${andList(left)}.</span>` : `<span class="note">${crossed ? `${crossed === 1 ? 'The part with a cross is' : `The ${crossed} parts with a cross are`} left out.` : 'Nothing is unclear. Turn it on when you’re ready.'}</span>`}</div>
     </div>`;
   }
+  const leftOutOf = (id) => ((id === 'conf' ? S.nr : madeOf(id) ? madeOf(id).nr : null) || {}).leftOut || [];
+  const leftOutLine = (labels) => (labels.length ? `Left out: ${andList(labels)}.` : '');
   /* A workflow the card turned on, read from the workflow itself, so a pause, a new schedule or a delete shows here too. */
   function setupDone(d) {
     if (!has(d.id)) return `<p class="small muted">${esc(d.name)} isn’t here any more.</p>`;
     const r = R(d.id);
-    return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(r.name)} ${S.paused[d.id] ? 'is paused.' : 'is on.'}</b><span>${S.paused[d.id] ? 'It won’t run until you resume it.' : `First run ${r.next}, Singapore time.`} Before its ticket is created, any Approver on your team except you is asked for a yes in Teams.${d.newAgent ? ` The ${AGENTS[d.newAgent].name} is saved under How it works, in Settings.` : ''}</span><span>${PROMISES}</span><span class="btns">${d.id === 'conf' ? '<button class="btn primary sm" data-act="testRun">Do a test run</button>' : ''}<button class="linkbtn" data-act="go" data-arg="workflows">See it in Workflows</button>${d.id === 'conf' ? '<span class="small muted">A test run does the real work once, so it still waits for a yes.</span>' : ''}</span></div></div>`;
+    return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(r.name)} ${S.paused[d.id] ? 'is paused.' : 'is on.'}</b>${leftOutOf(d.id).length ? `<span>${leftOutLine(leftOutOf(d.id))}</span>` : ''}<span>${S.paused[d.id] ? 'It won’t run until you resume it.' : `First run ${r.next}, Singapore time.`} Before its ticket is created, any Approver on your team except you is asked for a yes in Teams.${d.newAgent ? ` The ${AGENTS[d.newAgent].name} is saved under How it works, in Settings.` : ''}</span><span>${PROMISES}</span><span class="btns">${d.id === 'conf' ? '<button class="btn primary sm" data-act="testRun">Do a test run</button>' : ''}<button class="linkbtn" data-act="go" data-arg="workflows">See it in Workflows</button>${d.id === 'conf' ? '<span class="small muted">A test run does the real work once, so it still waits for a yes.</span>' : ''}</span></div></div>`;
   }
 
   const watchLeft = (c) => (c.repoState !== 'ok' ? 1 : 0) + (!c.newest && !c.version.trim() ? 1 : 0);
@@ -6224,7 +6226,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (!m || setupLeft().length) return;
       const f = draftNr();
       const newAgent = isNewAgent(writerOf(f)) ? writerOf(f) : null;
-      const nr = { ...f, sched: { ...S.wiz.sched }, name: S.wiz.name.trim() || f.name };
+      /* What was left out stays with the workflow, so its card and its page keep saying so (fix pass S1). */
+      const nr = { ...f, sched: { ...S.wiz.sched }, name: S.wiz.name.trim() || f.name, leftOut: setupParts(m.id).filter((x) => x.mark === 'no').map((x) => x.label) };
       /* The first workflow made on Home keeps the slot with the sample run and request. Each later one takes a new
          made:N slot, so nothing already on loses its run, its open request or its history. */
       let k = 'conf';
@@ -6238,7 +6241,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         delete S.deleted.conf; delete S.paused.conf; delete S.sched.conf; delete S.appr.conf;
       }
       S.wiz = newWiz();
-      m.card.done = { id: k, name: nr.name, next: R(k).next, newAgent };
+      m.card.done = { id: k, name: nr.name, next: R(k).next, newAgent, leftOut: nr.leftOut };
       m.mood = 'success';
       S.justOn = k;
       render();
