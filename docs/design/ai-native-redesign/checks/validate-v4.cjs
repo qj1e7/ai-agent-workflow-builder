@@ -132,7 +132,8 @@ async function sweep(page, { preview = false } = {}) {
           if (u.tagName === 'SECTION') break;
         }
       }
-      if (el.closest('.cmsg.me, .testctl, .abil-not, .cap-not, [data-pres^="cant:"], [data-pres^="part:"], [data-pres^="refuse:"], [data-pres^="down:"]')) return 'not-yet or can’t';
+      /* changed (ADR 0043): a part marked with a cross on a set-up card is a can't, by its mark and its "Can’t do" label. */
+      if (el.closest('.cmsg.me, .testctl, .abil-not, .cap-not, [data-pres^="cant:"], [data-pres^="part:"], [data-pres^="refuse:"], [data-pres^="down:"], .part[data-mark="no"]')) return 'not-yet or can’t';
       const msg = el.closest('li.cmsg');
       if (msg && msg.querySelector('[data-pres^="cant:"], [data-pres^="part:"], [data-pres^="refuse:"], [data-pres^="down:"]')) return 'can’t answer';
       for (let b = el; b && !roots.includes(b); b = b.parentElement) {

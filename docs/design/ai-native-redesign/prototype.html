@@ -3432,7 +3432,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const s = S.wiz.sched;
     if (!s.freq) return { key: 'when', q: 'How often should it run?', choices: Object.entries(FREQ_WORD).filter(([v]) => v !== 'month' || shows('monthly')).map(([v, l]) => [`freq:${v}`, l]) };
     if (s.freq === 'week' && !s.day) return { key: 'when', q: 'Which day should it run?', choices: DAYS.map((d) => [`day:${d}`, d]) };
-    if (!s.time) return { key: 'when', q: 'What time should it run?', choices: Q_TIMES.map((x) => [`time:${x}`, clock(x)]), more: '<button type="button" class="chip" data-act="whenOpen" aria-controls="whenpick">Another time</button>' };
+    if (!s.time) return { key: 'when', q: 'What time should it run?', choices: Q_TIMES.map((x) => [`time:${x}`, clock(x)]), more: '<button type="button" class="chip" data-act="whenOpen" aria-expanded="false" aria-controls="whenpick">Another time</button>' };
     const row = intentRows().find((r) => r.state === 'missing');
     return row ? { key: row.key, q: row.note || QUESTION[row.key], choices: row.options.map(([v, l]) => [`${row.key}:${v}`, l]) } : null;
   }
