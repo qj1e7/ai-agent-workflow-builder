@@ -191,6 +191,27 @@ function seedControl() {
   document.body.prepend(host);
 }
 
+/* Runs in the page. Resolves once no scroll container has moved for 3 frames in a row, so nothing is measured while a
+   smooth scroll is still under way. A page that keeps scrolling past the cap is reported, so it can't pass quietly. */
+function stillScroll(cap) {
+  return new Promise((resolve) => {
+    const boxes = [document.scrollingElement, ...document.querySelectorAll('*')].filter((el) => el && (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth));
+    const read = () => boxes.map((el) => `${el.scrollTop},${el.scrollLeft}`).join('|');
+    const t0 = performance.now();
+    let last = read();
+    let calm = 0;
+    const tick = () => {
+      const now = read();
+      calm = now === last ? calm + 1 : 0;
+      last = now;
+      if (calm >= 3) { resolve(''); return; }
+      if (performance.now() - t0 > cap) { resolve(`still scrolling after ${cap} ms`); return; }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const flag = (k) => { const a = args.find((x) => x.startsWith(`--${k}=`)); return a ? a.split('=')[1].split(',') : null; };
@@ -222,7 +243,9 @@ async function main() {
         await screen.prepare(kit);
         await kit.replied();
         await kit.settle(900);
+        const moving = await o.page.evaluate(stillScroll, 2000);
         problems = await o.page.evaluate(measure);
+        if (moving) problems.push({ kind: 'not settled', where: 'scroll', text: moving });
       } catch (e) {
         problems = [{ kind: 'could not open', where: screen.name, text: e.message.split('\n')[0] }];
       }
