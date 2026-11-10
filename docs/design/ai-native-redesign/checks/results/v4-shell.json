@@ -4,10 +4,10 @@
   "version": "v4",
   "summary": {
     "real": {
-      "total": 48,
-      "passed": 41,
-      "failed": 7,
-      "notPossible": 0
+      "total": 47,
+      "passed": 47,
+      "failed": 0,
+      "notPossible": 1
     },
     "control": {
       "failed": true
@@ -19,19 +19,9 @@
       "key": "A@1280",
       "title": "First-time Operator sets up a weekly Jira summary and turns it on",
       "viewport": 1280,
-      "passed": false,
-      "failed": {
-        "label": "Day one Home asks what the team does again and again",
-        "expected": "/again and again/",
-        "actual": "Which software should we keep up to date?\n\nAsk about your watchlist, or tell me what software to watch.\n\nAsk the Planner about software versions\nKeep track of the LangGraph version\nWhat can you do?\nWhat I can do\nI can\nCheck software for new releases on GitHub\nCreate a Jira ticket after a yes\nAsk Approvers for a yes in Teams\n\nAnything that changes data waits for a yes in Teams."
-      },
-      "failures": [
-        {
-          "label": "Day one Home asks what the team does again and again",
-          "expected": "/again and again/",
-          "actual": "Which software should we keep up to date?\n\nAsk about your watchlist, or tell me what software to watch.\n\nAsk the Planner about software versions\nKeep track of the LangGraph version\nWhat can you do?\nWhat I can do\nI can\nCheck software for new releases on GitHub\nCreate a Jira ticket after a yes\nAsk Approvers for a yes in Teams\n\nAnything that changes data waits for a yes in Teams."
-        }
-      ],
+      "passed": true,
+      "failed": null,
+      "failures": [],
       "counts": {
         "clicks": 2,
         "fields": 2,
@@ -94,19 +84,9 @@
       "key": "A@390",
       "title": "First-time Operator sets up a weekly Jira summary and turns it on",
       "viewport": 390,
-      "passed": false,
-      "failed": {
-        "label": "Day one Home asks what the team does again and again",
-        "expected": "/again and again/",
-        "actual": "Which software should we keep up to date?\n\nAsk about your watchlist, or tell me what software to watch.\n\nAsk the Planner about software versions\nKeep track of the LangGraph version\nWhat can you do?\nWhat I can do\nI can\nCheck software for new releases on GitHub\nCreate a Jira ticket after a yes\nAsk Approvers for a yes in Teams\n\nAnything that changes data waits for a yes in Teams."
-      },
-      "failures": [
-        {
-          "label": "Day one Home asks what the team does again and again",
-          "expected": "/again and again/",
-          "actual": "Which software should we keep up to date?\n\nAsk about your watchlist, or tell me what software to watch.\n\nAsk the Planner about software versions\nKeep track of the LangGraph version\nWhat can you do?\nWhat I can do\nI can\nCheck software for new releases on GitHub\nCreate a Jira ticket after a yes\nAsk Approvers for a yes in Teams\n\nAnything that changes data waits for a yes in Teams."
-        }
-      ],
+      "passed": true,
+      "failed": null,
+      "failures": [],
       "counts": {
         "clicks": 2,
         "fields": 2,
@@ -335,39 +315,70 @@
       "key": "C-self@1280",
       "title": "Alice turns on a workflow, does a test run, and cannot approve her own test run",
       "viewport": 1280,
-      "passed": false,
-      "failed": {
-        "label": "A step could not run",
-        "expected": "the step to work",
-        "actual": "locator.click: Timeout 8000ms exceeded."
-      },
-      "failures": [
-        {
-          "label": "A step could not run",
-          "expected": "the step to work",
-          "actual": "locator.click: Timeout 8000ms exceeded."
-        }
-      ],
+      "passed": true,
+      "failed": null,
+      "failures": [],
       "counts": {
-        "clicks": 1,
-        "fields": 0,
-        "selects": 0,
-        "navs": 0,
-        "decisions": 0,
-        "screens": 1,
-        "interactions": 1
+        "clicks": 3,
+        "fields": 2,
+        "selects": 1,
+        "navs": 1,
+        "decisions": 3,
+        "screens": 2,
+        "interactions": 6
       },
       "screenList": [
-        "home"
+        "home",
+        "run"
       ],
       "steps": [
         {
           "n": 1,
-          "kind": "click",
-          "label": "Tap Set up another workflow",
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
           "nav": false,
           "decision": false,
           "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "select",
+          "label": "Choose the Jira project",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "field",
+          "label": "Choose the time",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Turn it on",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Do a test run",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
         }
       ],
       "errors": []
@@ -758,40 +769,11 @@
       "title": "Set up a workflow from example 1: example, time, Jira project, Turn it on",
       "viewport": 1280,
       "passed": false,
-      "failed": {
-        "label": "A step could not run",
-        "expected": "the step to work",
-        "actual": "locator.click: Timeout 8000ms exceeded."
-      },
-      "failures": [
-        {
-          "label": "A step could not run",
-          "expected": "the step to work",
-          "actual": "locator.click: Timeout 8000ms exceeded."
-        }
-      ],
-      "counts": {
-        "clicks": 1,
-        "fields": 0,
-        "selects": 0,
-        "navs": 0,
-        "decisions": 0,
-        "screens": 1,
-        "interactions": 1
-      },
-      "screenList": [
-        "home"
-      ],
-      "steps": [
-        {
-          "n": 1,
-          "kind": "click",
-          "label": "Tap Set up another workflow",
-          "nav": false,
-          "decision": false,
-          "screen": "home"
-        }
-      ],
+      "notPossible": true,
+      "reason": "Since 8 Nov the starting points under “Set up another workflow” are software versioning only (Keep track of the React version). None sets up a general Jira workflow, so there is no example to tap. Typing the same request is scenario T2.",
+      "failed": null,
+      "counts": null,
+      "steps": [],
       "errors": []
     },
     {
@@ -880,27 +862,17 @@
       "key": "T4@1280",
       "title": "Add software from Home with example 3: example, Looks right, Start from the newest, Add React",
       "viewport": 1280,
-      "passed": false,
-      "failed": {
-        "label": "A step could not run",
-        "expected": "the step to work",
-        "actual": "locator.click: Timeout 8000ms exceeded."
-      },
-      "failures": [
-        {
-          "label": "A step could not run",
-          "expected": "the step to work",
-          "actual": "locator.click: Timeout 8000ms exceeded."
-        }
-      ],
+      "passed": true,
+      "failed": null,
+      "failures": [],
       "counts": {
-        "clicks": 1,
-        "fields": 0,
+        "clicks": 5,
+        "fields": 1,
         "selects": 0,
         "navs": 0,
-        "decisions": 0,
+        "decisions": 2,
         "screens": 1,
-        "interactions": 1
+        "interactions": 6
       },
       "screenList": [
         "home"
@@ -908,10 +880,50 @@
       "steps": [
         {
           "n": 1,
-          "kind": "click",
-          "label": "Tap Set up another workflow",
+          "kind": "field",
+          "label": "Type: Set up another workflow",
           "nav": false,
           "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Tap Keep track of the React version",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Looks right",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Not sure? Start from the newest",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Add React",
+          "nav": false,
+          "decision": true,
           "screen": "home"
         }
       ],
@@ -1634,39 +1646,19 @@
     {
       "id": "ASK-status",
       "key": "ASK-status@1280",
-      "title": "“Check my workflows” from the suggestions",
+      "title": "“Check my workflows” typed to the Planner",
       "viewport": 1280,
-      "passed": false,
-      "failed": {
-        "label": "The Planner sums up every workflow",
-        "expected": "/You have 3 workflows\\. 2 stopped and 1 is waiting for a yes\\./",
-        "actual": "You:\nWhich software has a newer version?\nPlanner\nThere are 14 software on the Software watchlist.\n\nLooked at: Software"
-      },
-      "failures": [
-        {
-          "label": "The Planner sums up every workflow",
-          "expected": "/You have 3 workflows\\. 2 stopped and 1 is waiting for a yes\\./",
-          "actual": "You:\nWhich software has a newer version?\nPlanner\nThere are 14 software on the Software watchlist.\n\nLooked at: Software"
-        },
-        {
-          "label": "One row per workflow",
-          "expected": "a condition",
-          "actual": "0"
-        },
-        {
-          "label": "Each row has its status, next run and one action",
-          "expected": "/Morning new-ticket check\\s+Stopped\\s+Next run[^\\n]*\\s+Retry the run[\\s\\S]*Keep our software up to date\\s+Waiting for a yes\\s+Next run[^\\n]*\\s+Review and decide/",
-          "actual": "You:\nWhich software has a newer version?\nPlanner\nThere are 14 software on the Software watchlist.\n\nLooked at: Software"
-        }
-      ],
+      "passed": true,
+      "failed": null,
+      "failures": [],
       "counts": {
         "clicks": 1,
-        "fields": 0,
+        "fields": 1,
         "selects": 0,
         "navs": 0,
         "decisions": 0,
         "screens": 1,
-        "interactions": 1
+        "interactions": 2
       },
       "screenList": [
         "home"
@@ -1674,8 +1666,16 @@
       "steps": [
         {
           "n": 1,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
           "kind": "click",
-          "label": "Tap Check my workflows",
+          "label": "Press Enter to send",
           "nav": false,
           "decision": false,
           "screen": "home"
@@ -1686,39 +1686,19 @@
     {
       "id": "ASK-status",
       "key": "ASK-status@390",
-      "title": "“Check my workflows” from the suggestions",
+      "title": "“Check my workflows” typed to the Planner",
       "viewport": 390,
-      "passed": false,
-      "failed": {
-        "label": "The Planner sums up every workflow",
-        "expected": "/You have 3 workflows\\. 2 stopped and 1 is waiting for a yes\\./",
-        "actual": "You:\nWhich software has a newer version?\nPlanner\nThere are 14 software on the Software watchlist.\n\nLooked at: Software"
-      },
-      "failures": [
-        {
-          "label": "The Planner sums up every workflow",
-          "expected": "/You have 3 workflows\\. 2 stopped and 1 is waiting for a yes\\./",
-          "actual": "You:\nWhich software has a newer version?\nPlanner\nThere are 14 software on the Software watchlist.\n\nLooked at: Software"
-        },
-        {
-          "label": "One row per workflow",
-          "expected": "a condition",
-          "actual": "0"
-        },
-        {
-          "label": "Each row has its status, next run and one action",
-          "expected": "/Morning new-ticket check\\s+Stopped\\s+Next run[^\\n]*\\s+Retry the run[\\s\\S]*Keep our software up to date\\s+Waiting for a yes\\s+Next run[^\\n]*\\s+Review and decide/",
-          "actual": "You:\nWhich software has a newer version?\nPlanner\nThere are 14 software on the Software watchlist.\n\nLooked at: Software"
-        }
-      ],
+      "passed": true,
+      "failed": null,
+      "failures": [],
       "counts": {
         "clicks": 1,
-        "fields": 0,
+        "fields": 1,
         "selects": 0,
         "navs": 0,
         "decisions": 0,
         "screens": 1,
-        "interactions": 1
+        "interactions": 2
       },
       "screenList": [
         "home"
@@ -1726,8 +1706,16 @@
       "steps": [
         {
           "n": 1,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
           "kind": "click",
-          "label": "Tap Check my workflows",
+          "label": "Press Enter to send",
           "nav": false,
           "decision": false,
           "screen": "home"

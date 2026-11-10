@@ -2,26 +2,26 @@
 
 Prototype: `docs/design/ai-native-redesign/prototype.html`. Paths: `docs/design/ai-native-redesign/checks/paths-v4.cjs`.
 
-Real scenarios: 41 passed, 7 failed, 0 not possible. Control (must fail): failed, as it should.
+Real scenarios: 47 passed, 0 failed, 1 not possible. Control (must fail): failed, as it should.
 
 | Id | Width | Task | Passed | Clicks | Fields | Selects | Decisions | Screens | Notes |
 |---|---|---|---|---|---|---|---|---|---|
-| A | 1280 | First-time Operator sets up a weekly Jira summary and turns it on | NO | 2 | 2 | 1 | 3 | 1 | plannerQuestions 2 |
-| A | 390 | First-time Operator sets up a weekly Jira summary and turns it on | NO | 2 | 2 | 1 | 3 | 1 | plannerQuestions 2 |
+| A | 1280 | First-time Operator sets up a weekly Jira summary and turns it on | yes | 2 | 2 | 1 | 3 | 1 | plannerQuestions 2 |
+| A | 390 | First-time Operator sets up a weekly Jira summary and turns it on | yes | 2 | 2 | 1 | 3 | 1 | plannerQuestions 2 |
 | B | 1280 | Experienced Operator finds what needs attention and fixes the stopped Morning new-ticket check | yes | 2 | 0 | 0 | 1 | 3 |  |
 | B | 390 | Experienced Operator finds what needs attention and fixes the stopped Morning new-ticket check | yes | 2 | 0 | 0 | 1 | 3 |  |
 | C | 1280 | Bob, an Approver only, opens the upgrade request, sees what changes and the evidence, and approves | yes | 2 | 0 | 0 | 1 | 2 |  |
 | C | 390 | Bob, an Approver only, opens the upgrade request, sees what changes and the evidence, and approves | yes | 2 | 0 | 0 | 1 | 2 |  |
-| C-self | 1280 | Alice turns on a workflow, does a test run, and cannot approve her own test run | NO | 1 | 0 | 0 | 0 | 1 |  |
+| C-self | 1280 | Alice turns on a workflow, does a test run, and cannot approve her own test run | yes | 3 | 2 | 1 | 3 | 2 |  |
 | D | 1280 | An Operator asks to email a weekly list, and the limit is explained with a next step | yes | 1 | 1 | 0 | 0 | 1 |  |
 | E | 1280 | The user corrects the Planner’s guess of project and schedule on the card, without starting again | yes | 3 | 1 | 2 | 2 | 1 |  |
 | F | 1280 | Recover the stop the user can fix, and report the platform bug to support | yes | 6 | 0 | 0 | 2 | 3 |  |
 | G | 1280 | Monitor Kubernetes releases from Home ends with Kubernetes on the Software watchlist | yes | 4 | 1 | 0 | 2 | 1 |  |
 | H | 1280 | Pause a workflow, change its schedule, and delete one with its confirmation | yes | 10 | 1 | 2 | 5 | 3 |  |
-| T1 | 1280 | Set up a workflow from example 1: example, time, Jira project, Turn it on | NO | 1 | 0 | 0 | 0 | 1 |  |
+| T1 | 1280 | Set up a workflow from example 1: example, time, Jira project, Turn it on | not possible | - | - | - | - | - | Since 8 Nov the starting points under “Set up another workflow” are software versioning only (Keep track of the React version). None sets up a general Jira workflow, so there is no example to tap. Typing the same request is scenario T2. |
 | T2 | 1280 | Set up a typed workflow with every part stated: type, Enter, Turn it on | yes | 2 | 1 | 0 | 1 | 1 |  |
 | T3 | 1280 | Do a test run after turning one on | yes | 1 | 0 | 0 | 0 | 2 |  |
-| T4 | 1280 | Add software from Home with example 3: example, Looks right, Start from the newest, Add React | NO | 1 | 0 | 0 | 0 | 1 |  |
+| T4 | 1280 | Add software from Home with example 3: example, Looks right, Start from the newest, Add React | yes | 5 | 1 | 0 | 2 | 1 |  |
 | T5 | 1280 | Add software on the Software watchlist page | yes | 3 | 2 | 0 | 0 | 2 |  |
 | T6 | 1280 | Approve from Workflows: Workflows, Review and decide, Approve 3 tickets | yes | 3 | 0 | 0 | 1 | 3 |  |
 | T7 | 1280 | Approve from Home as an Approver only: Review and decide, Approve | yes | 2 | 0 | 0 | 1 | 2 |  |
@@ -36,8 +36,8 @@ Real scenarios: 41 passed, 7 failed, 0 not possible. Control (must fail): failed
 | H2 | 1280 | Discard a draft set-up card from Workflows | yes | 2 | 0 | 0 | 1 | 2 |  |
 | B-home | 1280 | Find and act on the stopped workflow from Home’s Needs you | yes | 1 | 0 | 0 | 1 | 2 |  |
 | B-home | 390 | Find and act on the stopped workflow from Home’s Needs you | yes | 1 | 0 | 0 | 1 | 2 |  |
-| ASK-status | 1280 | “Check my workflows” from the suggestions | NO | 1 | 0 | 0 | 0 | 1 |  |
-| ASK-status | 390 | “Check my workflows” from the suggestions | NO | 1 | 0 | 0 | 0 | 1 |  |
+| ASK-status | 1280 | “Check my workflows” typed to the Planner | yes | 1 | 1 | 0 | 0 | 1 |  |
+| ASK-status | 390 | “Check my workflows” typed to the Planner | yes | 1 | 1 | 0 | 0 | 1 |  |
 | ASK-why | 1280 | “Why did Morning new-ticket check stop?” ending in a retry from the answer | yes | 2 | 1 | 0 | 1 | 2 |  |
 | ASK-needs | 1280 | “What needs me?” | yes | 1 | 1 | 0 | 0 | 1 |  |
 | OFFLINE | 1280 | No AI model: Home says so and offers Connect a model | yes | 1 | 0 | 0 | 0 | 2 |  |
