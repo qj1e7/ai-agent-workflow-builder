@@ -365,7 +365,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .pinned .ico svg { width: 20px; height: 20px; }
 .pinned-text { display: grid; min-width: 0; }
 .pinned-text span { font-size: 0.875rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@media (max-width: 600px) { .pinned { grid-template-columns: 20px minmax(0, 1fr); } .pinned > .btn, .pinned > .linkbtn { grid-column: 2; justify-self: start; } .pinned-text span { white-space: normal; } }
+@media (max-width: 600px) { .pinned { grid-template-columns: 20px auto minmax(0, 1fr); } .pinned-text { grid-column: 2 / -1; } .pinned > .btn { grid-column: 2; justify-self: start; } .pinned > .linkbtn { grid-column: 3; justify-self: start; } .pinned-text span { white-space: normal; } }
 @media (max-width: 900px) { .wrap.chatmode { height: calc(100dvh - 108px); } }
 .ngroup { display: grid; gap: 8px; }
 .ngroup + .ngroup { margin-top: 12px; }
