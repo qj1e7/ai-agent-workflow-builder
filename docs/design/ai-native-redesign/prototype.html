@@ -352,7 +352,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* A long placeholder on a phone is cut short, never wrapped out of a one-line box. */
 .composer textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Once the conversation starts, Home is the chat: the box docks at the bottom and the thread fills the page (ADR 0043). */
-.wrap.chatmode { max-width: none; padding: 0; height: calc(100dvh - 70px); overflow: hidden; }
+.wrap.chatmode { max-width: none; padding: 0; flex: 1; min-height: 0; overflow: hidden; }
 .home.chatlayout { display: flex; gap: 0; height: 100%; max-width: none; margin: 0; }
 .chatcol { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
 .chatbar, .chatin, .chatdock { width: 100%; max-width: 820px; margin: 0 auto; padding-inline: 16px; }
@@ -366,11 +366,21 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .pinned-text { display: grid; min-width: 0; }
 .pinned-text span { font-size: 0.875rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 600px) { .pinned { grid-template-columns: 20px auto minmax(0, 1fr); } .pinned-text { grid-column: 2 / -1; } .pinned > .btn { grid-column: 2; justify-self: start; } .pinned > .linkbtn { grid-column: 3; justify-self: start; } .pinned-text span { white-space: normal; } }
-@media (max-width: 900px) { .wrap.chatmode { height: calc(100dvh - 108px); } }
+/* While chatting, the app is one column exactly as tall as the window, so nothing depends on header heights. */
+html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
+#app.chatting { position: relative; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+.chatting .hdr { flex: none; }
+.chatting .shell { flex: 1; min-height: 0; align-items: stretch; }
+.chatting .rail { align-self: start; }
+.chatting .sheet { min-height: 0; display: flex; flex-direction: column; }
+@media (max-width: 900px) { .chatting .shell { display: flex; flex-direction: column; } .chatting .rail { flex: none; } .chatting .sheet { flex: 1; } }
+/* The test controls sit above the docked box, never over it. */
+.chatting .testctl { bottom: calc(var(--dock, 96px) + 12px + env(safe-area-inset-bottom, 0px)); }
 [hidden] { display: none !important; }
 .sidepanel { flex: 0 0 min(400px, 40%); min-width: 0; display: flex; flex-direction: column; border-left: 1px solid var(--hair); background: var(--bg); }
-.sp-bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--hair); }
-.sp-bar h2 { flex: 1; min-width: 0; font-size: 1.0625rem; overflow-wrap: anywhere; }
+.sp-bar { display: grid; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--hair); }
+.sp-btns { display: flex; justify-content: space-between; gap: 8px; }
+.sp-bar h2 { font-size: 1.125rem; overflow-wrap: anywhere; }
 .sp-body { flex: 1; overflow-y: auto; padding: 16px; display: grid; gap: 14px; align-content: start; }
 .sp-problem { display: grid; gap: 10px; }
 .sp-steps { display: grid; gap: 6px; }
@@ -391,7 +401,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .wfcheck .row:last-child { border-bottom: 0; }
 .wfcheck .row-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 4px; }
 /* On a phone the row's action goes under its text, so a long pill never touches the button. */
-@media (max-width: 600px) { .wfcheck .row { grid-template-columns: minmax(0, 1fr); } .wfcheck .row .btn { justify-self: start; } }
+@media (max-width: 600px) { .wfcheck .row { grid-template-columns: minmax(0, 1fr); } .wfcheck .row > [data-flow-of], .wfcheck .row > .btn { justify-self: start; } }
 .pcard.why .pcard-h .face { flex: none; }
 .cmsg.me { grid-template-columns: minmax(0, 1fr); justify-items: end; }
 .cmsg.me .cmsg-bubble { max-width: min(560px, 90%); background: var(--sunk); border-radius: var(--r-card) var(--r-card) 4px var(--r-card); overflow-wrap: anywhere; }
@@ -2410,7 +2420,14 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The rail (ADR 0043): Chat, Workflows and Watchlist, each with a count. A slim column on the left; on a phone it is a bar across the top.
      Workflows counts what needs you. The Watchlist counts software that needs action. An Approver who can't set up workflows
      sees what needs them on Chat, where their approvals are. */
-  const swNeed = () => watchRows().filter((r) => !S.removed.includes(r.key) && r.rank <= 1).length;
+  /* What the Software page lists under Needs attention. The rail's badge and the page's heading both read it. */
+  function swAttnCount(hit = () => true) {
+    const full = shows('registries');
+    const lj = full && watchRows().some((r) => r.key === 'lj' && !S.removed.includes('lj') && hit(r.name, r.repo));
+    const ending = full && !S.firstDay ? SUPPORT_ENDING.filter((x) => hit(x.name, '')).length : 0;
+    return (has('sw') && S.sw === 'waiting' ? 1 : 0) + (lsProblem() ? 1 : 0) + (lj ? 1 : 0) + ending;
+  }
+  const swLive = () => watchRows().filter((r) => !S.removed.includes(r.key));
   function rail() {
     const v = S.view.name;
     const swRun = v === 'run' && S.view.id === 'sw';
@@ -2419,7 +2436,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const items = [
       ['home', 'Chat', I.chat(22), v === 'home', count(me().op ? 0 : k, 'needs')],
       ['workflows', 'Workflows', I.grid(22), ['workflows', 'workflow'].includes(v) || (v === 'run' && !swRun), count(me().op ? k : 0, 'needs')],
-      ['software', 'Watchlist', I.box(22), v === 'software' || swRun, count(swNeed(), 'sw')],
+      ['software', 'Watchlist', I.box(22), v === 'software' || swRun, count(swAttnCount(), 'sw')],
     ];
     return `<nav class="rail" aria-label="Main">${items.map(([arg, label, icon, on, n]) => `<button class="rail-a" data-act="go" data-arg="${arg}"${on ? ' aria-current="page"' : ''}>${icon}<span>${label}</span>${n}</button>`).join('')}</nav>`;
   }
@@ -2591,14 +2608,16 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
   const chatMode = () => S.view.name === 'home' && me().op && !!curModel() && S.chat.msgs.length > 0;
   /* The side panel (ADR 0043) shows one item opened from a card in the chat, as a summary. It keeps no history. */
+  const dockVar = () => { const d = $app.querySelector('.chatdock'); if (d) document.documentElement.style.setProperty('--dock', `${d.offsetHeight}px`); };
   const narrow = () => window.matchMedia('(max-width: 860px)').matches;
+  window.matchMedia('(max-width: 860px)').addEventListener('change', () => { if (S.panel) render(); });
   function itemOf(act, arg, el) {
     if (el && el.dataset.open) { const [kind, id] = el.dataset.open.split(':'); return { kind, id }; }
     if (act === 'workflow' && arg !== 'sw') return { kind: 'workflow', id: arg };
     if (act === 'run') return { kind: 'run', id: arg };
     return null;
   }
-  const sameItem = (a, b) => !!a && !!b && a.id === b.id && (a.kind === b.kind || (a.kind !== 'software' && b.kind !== 'software'));
+  const sameItem = (a, b) => !!a && !!b && a.id === b.id && a.kind === b.kind;
   const swRow = (key) => watchRows().concat(S.added.map((a, i) => ({ key: `add${i}`, name: a.name, kind: a.kind, repo: a.repo, ours: a.ours || 'Not known', newest: '?' }))).find((r) => r.key === key && !S.removed.includes(key));
   const runTone = { waiting: { tone: 'wait', label: 'Waiting for a yes' }, failed: { tone: 'bad', label: 'Stopped' }, expired: { tone: 'off', label: 'No answer' }, done: { tone: 'ok', label: 'Done' } };
   function panelView(p) {
@@ -2636,7 +2655,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (!S.panel) return '';
     const v = panelView(S.panel);
     return `<aside class="sidepanel" id="sidepanel" aria-labelledby="sp-h"${narrow() ? ' role="dialog" aria-modal="true"' : ''}>
-      <div class="sp-bar"><h2 id="sp-h" tabindex="-1">${v.title}</h2>${v.page ? `<button class="btn sm" data-act="panelPage" data-arg="${v.page}">More details</button>` : ''}<button class="btn sm" data-act="panelClose">Close</button></div>
+      <div class="sp-bar"><div class="sp-btns">${v.page ? `<button class="btn sm" data-act="panelPage" data-arg="${v.page}">More details</button>` : '<span></span>'}<button class="btn sm" data-act="panelClose">Close</button></div><h2 id="sp-h" tabindex="-1">${v.title}</h2></div>
       <div class="sp-body">${v.body}</div>
     </aside>`;
   }
@@ -2806,7 +2825,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* A plan's steps. Each step keeps its place by position, so a step that changes is highlighted, and an added or removed one slides the rest. */
   function stepsList(steps, inline, key = 'steps') {
     const who = (w) => (!w ? '' : w === 'platform' ? `<span class="sysav app" style="width:26px;height:26px">${I.mark()}</span>` : face(w, 26));
-    const newTag = '<span class="tag">New agent, saved to the Agent library when you turn this on</span>';
+    const newTag = '<span class="tag">New agent, saved under How it works, in Settings, when you turn this on</span>';
     return `<ol class="steps${inline ? ' inline' : ''}" data-flip-group="${key}">${steps.map(([what, kind, how, w, isNew], i) => `<li data-flip="${key}:${i}"><div>${who(w)}<div class="what" data-val="${key}:${i}">${what}</div><div class="how"><span class="tag ${kind || ''}">${how}</span>${isNew ? newTag : ''}</div></div></li>`).join('')}</ol>`;
   }
 
@@ -2886,6 +2905,14 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return base.concat(ok);
   }
 
+  /* The count line the page opens with: what has a newer version and what can't be checked, from the same rows as the list. */
+  function watchLine() {
+    const live = swLive().concat(S.added.map((a, i) => ({ key: `add${i}`, rank: 2 })).filter((r) => !S.removed.includes(r.key)));
+    const newer = live.filter((r) => r.rank === 0).length;
+    const cant = live.filter((r) => r.rank === 1).length;
+    if (!live.length) return 'Everything your team runs, in one list.';
+    return newer || cant ? [newer ? `${newer} ${newer === 1 ? 'has' : 'have'} a newer version` : '', cant ? `${cant} can’t be checked` : ''].filter(Boolean).join(' · ') : 'Everything is up to date.';
+  }
   function softwareView() {
     const day1 = S.firstDay;
     const q = S.find.software.trim().toLowerCase();
@@ -2901,7 +2928,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const table = `<div class="scroll-x"><table class="sw-table" role="table"><thead role="rowgroup"><tr role="row"><th role="columnheader">Software</th><th role="columnheader">We run</th><th role="columnheader">Newest</th><th role="columnheader">Status</th><th role="columnheader"><span class="vh">Actions</span></th></tr></thead><tbody role="rowgroup" data-flip-group="swt:all">${rows.map((r) => {
       const open = S.swOpen === r.key;
       const hist = r.hist || history(r.key);
-      return `<tr role="row" data-flip="sw:${r.key}"><td role="cell"><b>${esc(r.name)}</b><div class="src">${srcName(r.kind || 'github')} · ${srcLink(r.kind, r.repo, esc(r.repo))}</div></td><td role="cell" data-label="We run" data-val="swv:${r.key}:ours">${esc(r.ours)}<div class="src">${r.from}</div></td><td role="cell" data-label="Newest" data-val="swv:${r.key}:new">${r.newest}${r.cross ? `<div class="src">${r.cross}</div>` : ''}</td><td role="cell" data-val="swv:${r.key}:st">${r.status}</td>
+      return `<tr role="row" data-flip="sw:${r.key}"><td role="cell"><b>${esc(r.name)}</b><div class="src">Checked on ${srcName(r.kind || 'github')} · ${srcLink(r.kind, r.repo, esc(r.repo))}</div></td><td role="cell" data-label="We run" data-val="swv:${r.key}:ours">${esc(r.ours)}<div class="src">${r.from}</div></td><td role="cell" data-label="Newest" data-val="swv:${r.key}:new">${r.newest}${r.cross ? `<div class="src">${r.cross}</div>` : ''}</td><td role="cell" data-val="swv:${r.key}:st">${r.status}</td>
         <td role="cell" class="sw-acts"><button class="linkbtn" data-act="swHist" data-arg="${r.key}" aria-expanded="${open}"${open ? ` aria-controls="hist-${r.key}"` : ''}>${open ? 'Hide history' : 'History'}<span class="vh"> of ${esc(r.name)}</span></button>${op ? ` <button class="linkbtn" data-act="removeSw" data-arg="${r.key}">Remove<span class="vh"> ${esc(r.name)}</span></button>` : ''}</td></tr>
         ${open ? `<tr role="row" class="hist" id="hist-${r.key}" data-flip="swh:${r.key}" data-enter="reveal"><td role="cell" colspan="5"><ol class="timeline">${hist.map(([d, t]) => `<li><b>${d}</b><span>${t}</span></li>`).join('')}</ol></td></tr>` : ''}`;
     }).join('')}</tbody></table></div>`;
@@ -2919,7 +2946,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const findings = full && rows.some((x) => x.key === 'lj') ? `<h3 class="attn-h">Security risks ${PLANNED_TAG}</h3>${riskCard('lj', waiting ? '<span class="pill wait">Ticket waiting for a yes</span>' : S.sw === 'approved' ? ticketBtn('MOCK-16') : '<span class="pill off">Proposed again next Monday</span>')}` : '';
     const ending = full && !day1 ? SUPPORT_ENDING.filter((x) => hit(x.name, '')) : [];
     const endingHtml = ending.length ? `<h3 class="attn-h">Support ending ${PLANNED_TAG}</h3><div class="panel"><p class="note">From endoflife.date, read by the Version checker. After these dates, these versions get no more fixes, including security fixes.</p><div class="rows">${ending.map((x) => `<div class="row"><div><div class="row-name">${x.name}</div><div class="row-sub">Security fixes end ${x.ends}, ${x.left}. ${extLink(`https://endoflife.date/${x.slug}`, 'Dates on endoflife.date', 'endoflife.date')}</div></div><span class="pill wait">${I.clock(12)}Plan an upgrade</span></div>`).join('')}</div></div>` : '';
-    const attnSec = attn.length || findings || endingHtml ? `<section class="section" aria-labelledby="sw-attn-h"><h2 id="sw-attn-h">Needs attention <span class="count">${attn.length + (findings ? 1 : 0) + ending.length}</span></h2>${attn.join('')}${findings}${endingHtml}</section>` : '';
+    const attnSec = attn.length || findings || endingHtml ? `<section class="section" aria-labelledby="sw-attn-h"><h2 id="sw-attn-h">Needs attention <span class="count">${swAttnCount(hit)}</span></h2>${attn.join('')}${findings}${endingHtml}</section>` : '';
 
     /* Add software: a name, then a guess that says where it came from and was checked. */
     const f = S.swForm;
@@ -2967,7 +2994,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       ${S.editing === 'sw' ? `<div data-flip="ed:s:sw" data-enter="reveal">${schedEditor('sw')}</div>` : ''}
       ${S.editingAppr === 'sw' ? `<div data-flip="ed:a:sw" data-enter="reveal">${apprEditor('sw')}</div>` : ''}
     </div></section>`;
-    return `<div class="pagehead"><div><h1 tabindex="-1">Software watchlist</h1><p>Everything your team runs, in one list.</p></div>
+    return `<div class="pagehead"><div><h1 tabindex="-1">Software watchlist</h1><p>${watchLine()}</p></div>
         ${day1 ? '' : '<button class="btn" data-act="checkNow">Check now</button>'}</div>
       ${attnSec}${watching}${how}
       <p class="note" style="margin-top:24px">Ask the Planner on Home for a release check, and it adds the software here.</p>`;
@@ -3422,7 +3449,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const [tone, label] = stateOf(id);
       let act = actionFor(id);
       if (act) { if (mainUsed) act = demote(act); mainUsed = true; }
-      return `<li class="row"><div><button class="linkbtn" data-act="workflow" data-arg="${id}">${esc(r.name)}</button><span class="row-sub">${pill({ tone, label })}${S.paused[id] ? '' : `<span>Next run ${r.next}</span>`}</span></div>${act}</li>`;
+      return `<li class="row"><div><button class="linkbtn" data-act="workflow" data-arg="${id}">${esc(r.name)}</button><span class="row-sub">${pill({ tone, label })}${S.paused[id] ? '' : `<span>Next run ${r.next}</span>`}</span></div>${act ? `<span data-flow-of="workflow:${id}">${act}</span>` : ''}</li>`;
     }).join('')}</ul></div>`;
   }
   /* The AI troubleshooter's four answers for each stop in the sample data (spec 10.3). The Planner's answer, the run page
@@ -3576,7 +3603,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The set-up card (spec 7): what will happen, when, what needs a yes, then how it works, collapsed, and Turn it on. */
   function setupCard(m) {
     const c = m.card;
-    if (c.done) return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(c.done.name)} is on.</b><span>First run ${c.done.next}, Singapore time. Before its ticket is created, any Approver on your team except you is asked for a yes in Teams.${c.done.newAgent ? ` The ${AGENTS[c.done.newAgent].name} is saved in the Agent library.` : ''}</span><span>${PROMISES}</span><span class="btns">${c.done.id === 'conf' ? '<button class="btn primary sm" data-act="testRun">Do a test run</button>' : ''}<button class="linkbtn" data-act="go" data-arg="workflows">See it in Workflows</button>${c.done.id === 'conf' ? '<span class="small muted">A test run does the real work once, so it still waits for a yes.</span>' : ''}</span></div></div>`;
+    if (c.done) return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(c.done.name)} is on.</b><span>First run ${c.done.next}, Singapore time. Before its ticket is created, any Approver on your team except you is asked for a yes in Teams.${c.done.newAgent ? ` The ${AGENTS[c.done.newAgent].name} is saved under How it works, in Settings.` : ''}</span><span>${PROMISES}</span><span class="btns">${c.done.id === 'conf' ? '<button class="btn primary sm" data-act="testRun">Do a test run</button>' : ''}<button class="linkbtn" data-act="go" data-arg="workflows">See it in Workflows</button>${c.done.id === 'conf' ? '<span class="small muted">A test run does the real work once, so it still waits for a yes.</span>' : ''}</span></div></div>`;
     if (c.discarded) return '<p class="small muted">Discarded.</p>';
     if (c.saved) return '<p class="small muted">Saved as a draft. Open it from Workflows to carry on.</p>';
     const w = S.wiz;
@@ -3607,7 +3634,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       <details class="more how" data-unbuilt="How this workflow works"><summary>How this workflow works</summary><div class="more-body">
         ${stepsList(steps, true, 'plan:draft')}
         <p class="note">${readsLimit(f.tickets === 'open' ? '' : f.period)}</p>
-        <p class="agents-line">${face('jira', 26)}<span><b>${AGENTS.jira.name}</b> reads the tickets.</span>${face(writer, 26)}<span><b>${AGENTS[writer].name}</b> ${job}.${isNewAgent(writer) ? ' <span class="tag">New agent, saved to the Agent library when you turn this on</span>' : ''}</span></p>
+        <p class="agents-line">${face('jira', 26)}<span><b>${AGENTS.jira.name}</b> reads the tickets.</span>${face(writer, 26)}<span><b>${AGENTS[writer].name}</b> ${job}.${isNewAgent(writer) ? ' <span class="tag">New agent, saved under How it works, in Settings, when you turn this on</span>' : ''}</span></p>
         <p class="note">Tools: ${TOOLS.jiraSearch[0]} and ${TOOLS.jiraRead[0]} read Jira. ${TOOLS.jiraCreate[0]} writes to Jira, after a yes.</p>
       </div></details>
       <div class="pcard-f"><button class="btn primary" data-act="turnOn"${left.length ? ' disabled' : ''}>Turn it on</button>
@@ -3996,7 +4023,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function settingsView() {
     if (!SET_TABS().some(([k]) => k === S.setTab)) S.setTab = 'connections';
     const attention = { model: !curModel() || !!S.modelPending, connections: expiring().length > 0 || Object.values(S.conns).some((x) => x.down), people: Object.values(S.roles).some((r) => r.pendingAp), usage: usagePct() >= 80 };
-    const panel = { model: modelPanel, connections: connPanel, people: peoplePanel, usage: usagePanel, how: () => libraryView(true) }[S.setTab]();
+    const panel = { model: modelPanel, connections: connPanel, people: peoplePanel, usage: usagePanel, how: libraryView }[S.setTab]();
     return `<div class="narrow"><div class="pagehead"><div><h1 tabindex="-1">Settings</h1><p>For whoever looks after the platform. Every change here is recorded with who made it.</p></div></div>
       <div class="seg set-tabs" role="group" aria-label="Settings sections">${SET_TABS().map(([k, l]) => `<button data-act="setTab" data-arg="${k}" aria-pressed="${S.setTab === k}">${l}${attention[k] ? '<span class="tab-dot" aria-hidden="true"></span><span class="vh"> (needs attention)</span>' : ''}</button>`).join('')}</div>
       <div style="display:grid;gap:20px">${panel}</div></div>`;
@@ -4209,7 +4236,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       <p class="note" style="margin-top:24px">Anything that changes data waits for a yes in Teams.</p></div>`;
   }
   const oneLine = (a) => a.what.split(/(?<=\.)\s/)[0];
-  function libraryView(inSettings) {
+  function libraryView() {
     const list = visibleAgents();
     const card = (a, i) => {
       const tools = agentTools(a);
@@ -4224,7 +4251,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const specialists = list.filter((a) => !a.platform);
     const tab = S.libTab;
     const lead = { can: 'What the platform can do for software versioning. An agent can use only what is listed under I can.', agents: 'The agents behind software version checks. Anything that changes data waits for a yes.', tools: 'Tools are how agents reach GitHub and Jira. A tool that changes data waits for a yes, every time.' }[tab];
-    const head = `<div class="pagehead"><div>${inSettings ? '<h2 id="how-h">How it works</h2>' : '<h1 tabindex="-1">Agent library</h1>'}<p>${lead}</p></div></div>
+    const head = `<div class="pagehead"><div><h2 id="how-h">How it works</h2><p>${lead}</p></div></div>
       <div class="seg lib-tabs" role="group" aria-label="Show">${[['can', 'What it can do', 0], ['agents', 'Agents', list.length], ['tools', 'Tools', Object.keys(TOOLS).filter((k) => toolLive(k) && (k === 'jiraComp' || (CAPS[capOfTool(k)] || {}).focus)).length]].map(([k, l, n]) => `<button data-act="libTab" data-arg="${k}" aria-pressed="${tab === k}">${l}${n ? ` <span class="seg-n">${n}</span>` : ''}</button>`).join('')}</div>`;
     if (tab === 'tools') return head + toolsTab();
     if (tab === 'can') return head + capabilitiesTab();
@@ -4238,7 +4265,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const toolWorkflows = (k) => { const ids = toolUsers(k).map((a) => a.id); return routineIds().filter((w) => (R(w).agents || []).some((id) => ids.includes(id))); };
   const sentToTeam = (sys) => S.teamReqs.some((q) => q.sys === sys);
   /* Nobody is named yet as the reader of team requests (ADR 0038, proposed), so the confirmation claims no delivery. */
-  const TEAM_SAVED = 'Saved as a request for the team. You can follow it on Tools, in the Agent library.';
+  const TEAM_SAVED = 'Saved as a request for the team. You can follow it on Tools, under How it works in Settings.';
   function toolLog(k) {
     if (S.firstDay) return [];
     const l = TOOL_INFO[k].log.slice();
@@ -4689,7 +4716,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
     $app.innerHTML = '<button class="skiplink" data-act="skipMain">Skip to main content</button>' + header() + `<div class="shell">${rail()}<main class="sheet" id="main"><div class="wrap${chatMode() ? ' chatmode' : ''}" data-flip-group="page">${main}</div></main></div>` + teamsDrawer() + modal() + toastHtml + testControls();
     detailsKeys().forEach(([d, k]) => { if (!d.open && opened.has(k)) d.open = true; });
     scrolls.forEach(([sel, top]) => { const el = $app.querySelector(sel); if (el) el.scrollTop = top; });
-    if (S.panel && chatMode()) $app.querySelectorAll('.thread .btn[data-act], .pinned .btn[data-act], [data-flow-of]').forEach((el) => { if (el.dataset.flowOf ? el.dataset.flowOf === `${S.panel.kind}:${S.panel.id}` : sameItem(itemOf(el.dataset.act, el.dataset.arg, el), S.panel)) el.hidden = true; });
+    if (S.panel && chatMode()) $app.querySelectorAll('.thread .btn[data-act], .pinned .btn[data-act], [data-flow-of]').forEach((el) => { if (el.dataset.flowOf ? el.dataset.flowOf.split(':')[1] === S.panel.id && S.panel.kind !== 'software' : sameItem(itemOf(el.dataset.act, el.dataset.arg, el), S.panel)) el.hidden = true; });
+    $app.querySelectorAll('.thread .pcard-f').forEach((f) => { const bs = [...f.querySelectorAll('button')]; if (bs.length && bs.every((b) => b.closest('[hidden]'))) f.hidden = true; });
+    $app.classList.toggle('chatting', chatMode());
+    dockVar();
     const chatEl = $app.querySelector('.chatscroll');
     if (chatEl) chatEl.scrollTop = S.chatScroll == null ? chatEl.scrollHeight : S.chatScroll;
     $app.querySelectorAll('#dlg-h:not([tabindex])').forEach((h) => h.setAttribute('tabindex', '-1'));
@@ -4735,7 +4765,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       focusDecision = false;
       if (d) { d.focus({ preventScroll: true }); d.scrollIntoView({ block: 'start' }); }
       else {
-        const h = $app.querySelector('h1');
+        const h = S.panel && chatMode() ? $app.querySelector('#sp-h') : $app.querySelector('h1');
         if (h) h.focus({ preventScroll: true });
         window.scrollTo(0, 0);
       }
@@ -5511,6 +5541,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const kept = saveLive();
       Object.assign(S.chat, { msgs: [], pending: null, hero: 'idle', text: '' });
       S.chatScroll = null;
+      S.panel = null;
       if (kept) toast('Your draft is saved. Find it on Workflows.');
       render();
       focusComposer();
@@ -5707,7 +5738,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     focusAdd: () => { const i = $app.querySelector('#sw-name'); if (i) { i.scrollIntoView({ block: 'center' }); i.focus({ preventScroll: true }); } },
     testToggle: () => { S.testOpen = !S.testOpen; testNew = S.testOpen; render(); const t = $app.querySelector('.testctl-toggle'); if (t) t.focus(); },
     day: (d) => { S.firstDay = d === 'one'; S.conns = connsFor(S.firstDay); if (['workflow', 'run'].includes(S.view.name)) go('home'); else render(); },
-    user: (u) => { S.user = u; if (!mayOpen(S.view.name)) S.view = { name: 'home' }; render(); },
+    user: (u) => { S.user = u; S.panel = null; if (!mayOpen(S.view.name)) S.view = { name: 'home' }; render(); },
     /* The spec 16 controls. Planned features hidden means nothing planned shows, so a page about one goes back to its list. */
     modelOn: (v) => { S.modelOn = v === 'on'; render(); },
     preview: (v) => { S.preview = v === 'on'; if (!S.preview && ['workflow', 'run'].includes(S.view.name) && !has(S.view.id)) go('workflows'); else render(); },
@@ -5726,6 +5757,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const fromChat = !!t.closest('.thread, .pinned');
     const item = fromChat ? itemOf(t.dataset.act, t.dataset.arg, t) : null;
     if (item) { e.preventDefault(); A.panelOpen(item, t); return; }
+    if (fromChat && t.dataset.act === 'setGo') { e.preventDefault(); S.setTab = t.dataset.arg; go('settings', undefined, { fromChat: true }); return; }
     if (fromChat && (t.dataset.act === 'workflow' || (t.dataset.act === 'go' && t.dataset.arg !== 'home'))) { e.preventDefault(); go(t.dataset.act === 'workflow' ? 'software' : t.dataset.arg, undefined, { fromChat: true }); return; }
     const fn = A[t.dataset.act];
     viaPanel = !!t.closest('.sidepanel');
@@ -5772,6 +5804,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       S.chat.text = ta.value;
       ta.style.height = 'auto';
       ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
+      dockVar();
       ta.closest('form').querySelector('.send').disabled = !ta.value.trim();
       listen(ta);
       return;
