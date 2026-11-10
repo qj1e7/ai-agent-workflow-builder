@@ -1,5 +1,5 @@
 {
-  "prototype": "docs/design/ai-native-redesign/prototype.html",
+  "prototype": "docs\\design\\ai-native-redesign\\prototype.html",
   "results": [
     {
       "name": "counts-agree",
@@ -78,8 +78,8 @@
     },
     {
       "name": "offline-honest",
-      "status": "PASS",
-      "detail": ""
+      "status": "FAIL",
+      "detail": "the offline Home does not say agent workflows can’t run"
     },
     {
       "name": "morning-check-reads",
@@ -108,8 +108,8 @@
     },
     {
       "name": "home-day-one",
-      "status": "PASS",
-      "detail": ""
+      "status": "FAIL",
+      "detail": "day one does not fold “What can’t I do yet?”: []"
     },
     {
       "name": "planned-hidden-by-default",

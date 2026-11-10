@@ -132,7 +132,7 @@ describe('the lists Home shows without being asked', () => {
   it('hold only what software versioning uses, and every one of those', () => {
     const groups = capabilityGroups(CAPS)
     const focus = CAPS.capabilities.filter((entry) => entry.focus)
-    expect(focus.map((entry) => entry.id).sort()).toEqual(['github.releases', 'jira.create', 'teams.ask'])
+    expect(focus.map((entry) => entry.id).sort()).toEqual(['github.releases', 'jira.create', 'packages.versions', 'teams.ask'])
     expect(groups.can.map((entry) => entry.id).sort()).toEqual(focus.map((entry) => entry.id).sort())
   })
 

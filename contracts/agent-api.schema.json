@@ -2630,6 +2630,11 @@
     "SoftwareMatch": {
       "additionalProperties": false,
       "properties": {
+        "kind": {
+          "$ref": "#/$defs/SourceKind",
+          "default": "github",
+          "description": "Where the software is published: github for a GitHub project, maven or npm for a package on that registry (ADR 0025)."
+        },
         "newest": {
           "anyOf": [
             {
@@ -2652,8 +2657,10 @@
           "type": "string"
         },
         "repo": {
-          "$ref": "#/$defs/RepoName",
-          "description": "A GitHub project that exists, as owner/name, at the address GitHub gives it now. Checked just now."
+          "description": "The software at its source, checked just now: a GitHub project as owner/name at the address GitHub gives it now, a Maven package as groupId:artifactId, or an npm package name.",
+          "maxLength": 214,
+          "title": "Repo",
+          "type": "string"
         },
         "what": {
           "description": "What the project is, in plain words, so the person can tell matches apart.",
@@ -2807,6 +2814,14 @@
       ],
       "title": "SoftwareToCheck",
       "type": "object"
+    },
+    "SourceKind": {
+      "enum": [
+        "github",
+        "maven",
+        "npm"
+      ],
+      "type": "string"
     },
     "TagPattern": {
       "description": "Which release tags count. Only a pattern from a fixed list is accepted, never one the caller writes. Allowed values: `^(?:[vV]|docker-v|n8n@|langchain==)?\\d+\\.\\d+\\.\\d+$`, `^[vV]?\\d+\\.\\d+\\.\\d+$`, `^\\d+\\.\\d+\\.\\d+$`.",

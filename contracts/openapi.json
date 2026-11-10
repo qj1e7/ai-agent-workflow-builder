@@ -5995,6 +5995,11 @@
             "description": "The name this project already has on the watchlist, or null.",
             "title": "Already Listed"
           },
+          "kind": {
+            "$ref": "#/components/schemas/SourceKind",
+            "default": "github",
+            "description": "Where it is published: github for a GitHub project, maven or npm for a package on that registry (ADR 0025). The add sends a package as package, not repo."
+          },
           "newest": {
             "anyOf": [
               {
@@ -6017,8 +6022,9 @@
             "type": "string"
           },
           "repo": {
-            "$ref": "#/components/schemas/RepoName",
-            "description": "A GitHub project that exists, as owner/name, at the address GitHub gives it now. Checked just now."
+            "description": "The software at its source, checked just now: a GitHub project as owner/name at the address GitHub gives it now, a Maven package as groupId:artifactId, or an npm package name.",
+            "title": "Repo",
+            "type": "string"
           },
           "what": {
             "description": "What the project is, so the person can tell matches apart.",

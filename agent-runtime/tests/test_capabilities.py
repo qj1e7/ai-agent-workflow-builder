@@ -127,6 +127,7 @@ def test_the_day_one_examples_are_about_software_versioning():
 def test_only_the_software_versioning_capabilities_are_marked_focus():
     assert {c.id for c in CAPABILITIES if c.focus} == {
         "github.releases",
+        "packages.versions",
         "jira.create",
         "teams.ask",
     }

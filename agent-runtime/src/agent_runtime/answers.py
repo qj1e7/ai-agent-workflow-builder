@@ -365,8 +365,15 @@ def _only_fields(cant: list[CantRow]) -> bool:
     return all(c.needs == "new_tool" and names_a_ticket_field(f"{c.text} {c.note}") for c in cant)
 
 
+def _vulnerability_words(row: CantRow) -> str:
+    """The words of a row that can say it asks for vulnerabilities: the person's own, and our
+    note only when it is the vulnerability note. Other notes are ours too, and one that lists
+    what I can do names vulnerabilities without the person asking for them."""
+    return f"{row.text} {row.note}" if row.note == VULNERABILITIES_PLANNED else row.text
+
+
 def _asks_for_vulnerabilities(cant: list[CantRow]) -> bool:
-    return any(vulnerability_phrase(f"{c.text} {c.note}") is not None for c in cant)
+    return any(vulnerability_phrase(_vulnerability_words(c)) is not None for c in cant)
 
 
 def _software_of(read: TaskRead, request: str) -> str | None:
@@ -387,7 +394,7 @@ def _software_of(read: TaskRead, request: str) -> str | None:
 def _watch_instead(cant: list[CantRow], read: TaskRead, request: str) -> WatchlistAnswer | None:
     software = _software_of(read, request)
     if _asks_for_vulnerabilities(cant):
-        asked = " ".join(f"{c.text} {c.note}" for c in cant)
+        asked = " ".join(_vulnerability_words(c) for c in cant)
         word = vulnerability_phrase(request) or vulnerability_phrase(asked)
         if software is None or word is None:
             return None
@@ -469,9 +476,12 @@ says it and names the software."""
 _VERB_PATTERN: Final = "|".join(r"\s+".join(v.split()) for v in WATCH_VERBS)
 _WHICH_SOFTWARE: Final = re.compile(
     rf"\s*(?:(?:can|could|would|will)\s+you\s+|please\s+)*({_VERB_PATTERN})\s+"
-    r"(?:a\s+new|another|some|new|a)\s+software(?:\s+(?:for\s+me|please))*\s*[.!?]*\s*",
+    r"(?:a\s+new|another|some|new|a)\s+software"
+    r"(?:\s+(?:for\s+me|please|(?:from|on|in)\s+(?:maven(?:\s+central)?|npm)|instead))*"
+    r"\s*[.!?]*\s*",
     re.IGNORECASE,
 )
+"""Also with a source the Version checker reads, as in "add a software from maven instead"."""
 _TICKET_KEY: Final = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
 _NOT_A_WATCH: Final = re.compile(
     r"\b(?:tickets?|issues?|projects?|boards?|approvers?|approvals?|workflows?|comments?|"

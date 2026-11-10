@@ -234,9 +234,15 @@ class FindIn(WireIn):
 
 
 class ProjectGuess(WireModel):
-    repo: RepoName = Field(
-        description="A GitHub project that exists, as owner/name, at the address GitHub gives it "
-        "now. Checked just now."
+    kind: SourceKind = Field(
+        default="github",
+        description="Where it is published: github for a GitHub project, maven or npm for a "
+        "package on that registry (ADR 0025). The add sends a package as package, not repo.",
+    )
+    repo: str = Field(
+        description="The software at its source, checked just now: a GitHub project as "
+        "owner/name at the address GitHub gives it now, a Maven package as groupId:artifactId, "
+        "or an npm package name."
     )
     what: str = Field(description="What the project is, so the person can tell matches apart.")
     why: str = Field(description="Where the guess came from, in plain words.")

@@ -418,7 +418,7 @@ N2 splits it in two:
 
 - `RELEASE_ROOTS` keeps version, release, upgrade and patch, and stays the release line's topics.
 - A new word set for vulnerabilities joins it only where the watchlist word is checked, so the model's redirect still holds together.
-- `why_not` marks any part about vulnerabilities as can't do, with the note "I can't check for known vulnerabilities yet. It's planned."
+- `why_not` marks any part about vulnerabilities as can't do, with the note "I look up known vulnerabilities only in Maven Central and npm packages on the Software watchlist, at each check. Anything wider is planned." (changed when ADR 0025's first part was built, 9 Nov 2026)
 - In the new answer path, a watchlist redirect whose word is a vulnerability word becomes the can't answer for the Planned "Check package registries and security advisories", with "watch it for new releases" as the alternative.
 
 The old route keeps its redirect until N22 removes it. Between N2 and N10, the old New workflow still sends a vulnerability request to the watchlist. After N10 that route sits behind a flag, so no Operator meets it from Home. The `vulnerabilities` case in `agent-runtime/evals/cases/understand.json` changes its expected answer in the same PR.

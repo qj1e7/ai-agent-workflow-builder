@@ -29,8 +29,9 @@ from agent_runtime.jira import JiraTicket
 from agent_runtime.planner import why_no_tool
 
 CAN = (
-    "I can only check software for new releases on GitHub, create a Jira ticket after a yes, "
-    "and ask Approvers for a yes in Teams."
+    "I can only check software for new releases on GitHub, check Maven Central and npm packages "
+    "for new versions and known vulnerabilities, create a Jira ticket after a yes, and ask "
+    "Approvers for a yes in Teams."
 )
 WONT = ("close", "delete", "edit", "move", "update", "change", "reassign", "assign")
 
@@ -510,8 +511,11 @@ def test_a_read_or_a_new_jira_ticket_stays_as_the_model_said(text: str):
         ("look_for", "New security bulletins for Kubernetes"),
     ],
 )
-def test_a_vulnerability_check_is_cant_do_and_the_note_says_it_is_planned(kind: RowKind, text: str):
-    assert why_no_tool(kind, text) == "I can't check for known vulnerabilities yet. It's planned."
+def test_a_vulnerability_check_is_cant_do_and_the_note_says_where_i_look(kind: RowKind, text: str):
+    assert why_no_tool(kind, text) == (
+        "I look up known vulnerabilities only in Maven Central and npm packages on the Software "
+        "watchlist, at each check. Anything wider is planned."
+    )
 
 
 @pytest.mark.parametrize(

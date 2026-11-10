@@ -537,21 +537,18 @@ class Watchlist:
                 held = (
                     {}
                     if record is None
-                    else {
-                        s.source.ref.casefold(): s.name
-                        for s in record.software
-                        if s.source.kind == "github"
-                    }
+                    else {(s.source.kind, s.source.ref.casefold()): s.name for s in record.software}
                 )
                 return FoundProjects(
                     matches=[
                         ProjectGuess(
+                            kind=match.kind,
                             repo=match.repo,
                             what=match.what,
                             why=match.why,
                             releases=match.releases,
                             newest=match.newest,
-                            already_listed=held.get(match.repo.casefold()),
+                            already_listed=held.get((match.kind, match.repo.casefold())),
                         )
                         for match in matches
                     ]

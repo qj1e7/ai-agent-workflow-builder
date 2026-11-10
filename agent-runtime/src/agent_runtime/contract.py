@@ -2,7 +2,15 @@ from datetime import date, datetime
 from typing import Annotated, Any, Final, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    TypeAdapter,
+    model_validator,
+)
 
 
 class WireModel(BaseModel):
@@ -762,10 +770,30 @@ class FindSoftwareRequest(WireModel):
 
 
 class SoftwareMatch(WireModel):
-    repo: RepoName = Field(
-        description="A GitHub project that exists, as owner/name, at the address GitHub gives it "
-        "now. Checked just now."
+    kind: SourceKind = Field(
+        default="github",
+        description="Where the software is published: github for a GitHub project, maven or npm "
+        "for a package on that registry (ADR 0025).",
     )
+    repo: str = Field(
+        max_length=214,
+        description="The software at its source, checked just now: a GitHub project as "
+        "owner/name at the address GitHub gives it now, a Maven package as groupId:artifactId, "
+        "or an npm package name.",
+    )
+
+    @model_validator(mode="after")
+    def _fits_its_kind(self) -> SoftwareMatch:
+        """The name must be one its source could hold, as the watchlist would save it."""
+        match self.kind:
+            case "github":
+                GithubSource(ref=self.repo)
+            case "maven":
+                MavenSource(ref=self.repo)
+            case "npm":
+                NpmSource(ref=self.repo)
+        return self
+
     what: str = Field(
         min_length=1,
         max_length=120,

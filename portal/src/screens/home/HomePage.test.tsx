@@ -164,7 +164,7 @@ describe('Home on day one', () => {
   })
 
   it('shows the I can list from the registry for software versioning only, with no Not yet list', () => {
-    expect(text(html)).toContain('I can Check software for new releases on GitHub Create a Jira ticket after a yes')
+    expect(text(html)).toContain('I can Check software for new releases on GitHub Check Maven Central and npm packages for new versions and known vulnerabilities Create a Jira ticket after a yes')
     expect(html).not.toContain('<details')
     expect(text(html)).not.toMatch(/Not yet|can’t I do yet|Read Jira tickets|Find tickets|Confluence|Slack/)
   })
@@ -224,7 +224,7 @@ describe('Home with no working AI model', () => {
   })
 
   it('still shows the lists and Needs you, without the model’s own row and without Ask the team', () => {
-    expect(text(html)).toContain('I can Check software for new releases on GitHub Create a Jira ticket after a yes')
+    expect(text(html)).toContain('I can Check software for new releases on GitHub Check Maven Central and npm packages for new versions and known vulnerabilities Create a Jira ticket after a yes')
     expect(buttonsIn(html)).not.toContain('Ask the team for something new')
     expect(html).toContain('data-home-item="stopped:run_01JB9"')
     expect(html).not.toContain('data-home-item="connection:model"')

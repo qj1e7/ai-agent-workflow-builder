@@ -368,7 +368,7 @@ def build_runtime(settings: Settings) -> Runtime:
         cards=CardRunner(source, jira_for, sleep=time.sleep),
         chat_source=chat_source,
         github=GitHubConnection(settings.github_api_base, token=settings.github_token),
-        finder=SoftwareFinder(source),
+        finder=SoftwareFinder(source, registries),
     )
 
 

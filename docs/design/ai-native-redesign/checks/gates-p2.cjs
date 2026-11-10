@@ -159,7 +159,8 @@ both('wl-how-its-checked', async (t) => {
   /* Fix round B, synthesis 4: a planned source is a plain Not yet by default; the Planned tag comes with Planned features. */
   /* ADR 0025, first part, is built: Maven Central, npm and their known vulnerabilities are Ready (8 Nov 2026). */
   for (const s of ['Maven Central and npm', 'Known vulnerabilities in Maven and npm packages, from OSV and NVD']) assert(new RegExp(`${s}\\s+Ready`).test(h), `${s} is Ready`);
-  for (const s of ['PyPI, NuGet and Docker Hub', 'Which vulnerabilities attackers are using, from CISA', 'Support end dates']) assert(new RegExp(`${s}\\s+Not yet`).test(h), `${s} is Not yet`);
+  /* A planned source is a plain, generic Not yet by default (fix round B): no system is named until Planned features are on. */
+  for (const s of ['Other package registries', 'Which vulnerabilities attackers are using', 'Support end dates']) assert(new RegExp(`${s}\\s+Not yet`).test(h), `${s} is Not yet`);
   const all = await t.text();
   assert(!/severity|Critical security risk|Security risks|Support ending/i.test(all), 'no Planned findings or severity by default');
   assert.strictEqual(await t.count('.tag.planned'), 0, 'no Planned tag by default');

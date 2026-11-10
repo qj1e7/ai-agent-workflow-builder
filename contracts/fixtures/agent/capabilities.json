@@ -92,6 +92,20 @@
       ]
     },
     {
+      "id": "packages.versions",
+      "plain": "Check Maven Central and npm packages for new versions and known vulnerabilities",
+      "kind": "read",
+      "system": "Maven Central and npm",
+      "state": "ready",
+      "cant": null,
+      "why": null,
+      "connection": null,
+      "needs_model": false,
+      "platform": false,
+      "focus": true,
+      "tools": []
+    },
+    {
       "id": "jira.create",
       "plain": "Create a Jira ticket after a yes",
       "kind": "write",
@@ -179,12 +193,12 @@
     },
     {
       "id": "registries.check",
-      "plain": "Check package registries and security advisories",
+      "plain": "Check PyPI, NuGet and Docker Hub, support end dates and exploited vulnerabilities",
       "kind": "read",
       "system": null,
       "state": "planned",
-      "cant": "check registries or security advisories",
-      "why": "Only GitHub releases are checked today.",
+      "cant": "check PyPI, NuGet or Docker Hub, support end dates, or which vulnerabilities attackers are using",
+      "why": "GitHub, Maven Central and npm are checked today. Known vulnerabilities are looked up for Maven Central and npm packages on the Software watchlist.",
       "connection": null,
       "needs_model": false,
       "platform": false,

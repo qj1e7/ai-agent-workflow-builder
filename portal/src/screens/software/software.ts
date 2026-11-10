@@ -1,17 +1,29 @@
 import { ApiError } from '../../api/client'
 import { failureReasonLabel } from '../../api/labels'
-import type { CapabilityView, Day, FailureReason, Refusal, ScheduleHold, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView } from '../../api/types'
+import type { AddSoftware, CapabilityView, Day, FailureReason, Refusal, ScheduleHold, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView } from '../../api/types'
 import { dateAndClock, scheduleZoneName, timesZone } from '../workflows/times'
 
 /** Where releases are read from, said from the capability registry so this page never claims more than Agent library does. Null while the registry is not there. */
 export function sourcesNote(capabilities: readonly CapabilityView[] | undefined): string | null {
   if (capabilities === undefined) return null
-  const sources = capabilities.filter((c) => c.id.endsWith('.releases') && c.system !== null)
+  // GitHub releases, and since ADR 0025's first part, Maven Central and npm packages.
+  const sources = capabilities.filter((c) => (c.id.endsWith('.releases') || c.id === 'packages.versions') && c.system !== null)
   const working = sources.filter((c) => c.state === 'ready')
-  const systems = (list: readonly CapabilityView[]) => list.map((c) => c.system).join(' and ')
-  const first = working.length > 0 ? `${systems(working)} is the only place we can check today.` : sources.length > 0 ? `${systems(sources)} is the only place we check, and it is not working right now.` : 'No place can be checked right now.'
+  const names = (list: readonly CapabilityView[]) => list.flatMap((c) => (c.system ?? '').split(' and '))
+  const said = (list: readonly string[]) => (list.length <= 1 ? (list[0] ?? '') : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`)
+  const places = names(working)
+  const down = sources.filter((c) => c.state !== 'ready')
+  const first =
+    places.length > 1
+      ? `We can check ${said(places)} today.${down.length > 0 ? ` ${said(names(down))} ${names(down).length === 1 ? 'is' : 'are'} not working right now.` : ''}`
+      : places.length === 1
+        ? `${places[0]} is the only place we can check today.`
+        : sources.length > 0
+          ? `${said(names(sources))} ${names(sources).length === 1 ? 'is the only place we check, and it is' : 'are the places we check, and they are'} not working right now.`
+          : 'No place can be checked right now.'
+  const vulnerabilities = working.some((c) => c.id === 'packages.versions') ? ' Known vulnerabilities are looked up for Maven Central and npm packages.' : ''
   const notYet = capabilities.find((c) => c.id === 'registries.check' && (c.state === 'planned' || c.state === 'unsupported'))
-  return notYet?.cant ? `${first} We can’t ${notYet.cant} yet.` : first
+  return notYet?.cant ? `${first}${vulnerabilities} We can’t ${notYet.cant} yet.` : `${first}${vulnerabilities}`
 }
 
 interface Checking {
@@ -171,6 +183,68 @@ export const REPO_HELP = 'Paste the project’s GitHub link, or type owner/name.
 const REPO_BAD = 'That doesn’t look like a GitHub project. Paste its GitHub link, or type owner/name.'
 const REPO_EMPTY = `Type its GitHub repository. ${REPO_HELP}`
 
+/** Where a watched software is published (ADR 0025). The Version checker reads each one. */
+export type SourceKind = 'github' | 'maven' | 'npm'
+export const SOURCE_KINDS: readonly SourceKind[] = ['github', 'maven', 'npm']
+export const SOURCE_NAMES: Readonly<Record<SourceKind, string>> = { github: 'GitHub', maven: 'Maven Central', npm: 'npm' }
+
+/** A package's known vulnerabilities are looked up at each check. A GitHub project names no package to look up. */
+export const isPackage = (kind: SourceKind): boolean => kind !== 'github'
+
+/** The field that names the software at its source: its label, an example and the help under it. */
+export const SOURCE_FIELDS: Readonly<Record<SourceKind, { readonly label: string; readonly placeholder: string; readonly help: string }>> = {
+  github: { label: 'GitHub repository', placeholder: 'owner/name', help: REPO_HELP },
+  maven: { label: 'Maven coordinates', placeholder: 'groupId:artifactId', help: 'Type groupId:artifactId, for example org.apache.logging.log4j:log4j-core.' },
+  npm: { label: 'npm package', placeholder: 'package-name', help: 'Type the package name, for example express or @nestjs/core.' },
+}
+
+// The same shapes platform-api and the agent runtime accept (MAVEN_COORDINATE_PATTERN, NPM_PACKAGE_PATTERN).
+const PACKAGE: Readonly<Record<Exclude<SourceKind, 'github'>, RegExp>> = {
+  maven: /^[A-Za-z0-9_-]{1,60}(?:\.[A-Za-z0-9_-]{1,60}){0,10}:[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$/,
+  npm: /^(?:@[a-z0-9~-][a-z0-9._~-]{0,100}\/)?[a-z0-9~-][a-z0-9._~-]{0,113}$/,
+}
+const PACKAGE_BAD: Readonly<Record<Exclude<SourceKind, 'github'>, string>> = {
+  maven: 'That doesn’t look like Maven coordinates. Type groupId:artifactId, for example org.apache.logging.log4j:log4j-core.',
+  npm: 'That doesn’t look like an npm package name. Type it in small letters, for example express or @nestjs/core.',
+}
+
+/** The page that lists the versions the check reads. */
+export function sourceUrl(kind: SourceKind, ref: string): string {
+  if (kind === 'maven') {
+    const [group = '', artifact = ''] = ref.split(':')
+    return `https://central.sonatype.com/artifact/${group}/${artifact}/versions`
+  }
+  if (kind === 'npm') return `https://www.npmjs.com/package/${ref}?activeTab=versions`
+  return `https://github.com/${ref}`
+}
+
+/** One watched source: what the list already holds, to refuse the same one twice. A change of case is the same source. */
+export interface Watched {
+  readonly kind: SourceKind
+  readonly ref: string
+}
+
+const sameSource = (a: Watched, b: Watched) => a.kind === b.kind && a.ref.toLowerCase() === b.ref.toLowerCase()
+
+/** The name of a software at its source, as the platform wants it, or what is wrong. */
+export function checkSource(kind: SourceKind, text: string, watched: readonly Watched[] = []): Checked<string> {
+  if (kind === 'github') return checkRepo(text, watched.filter((w) => w.kind === 'github').map((w) => w.ref))
+  const ref = text.trim()
+  if (ref === '') return { ok: false, words: `Type its ${kind === 'maven' ? 'Maven coordinates' : 'npm package name'}. ${SOURCE_FIELDS[kind].help}` }
+  if (!PACKAGE[kind].test(ref)) return { ok: false, words: PACKAGE_BAD[kind] }
+  if (watched.some((w) => sameSource(w, { kind, ref }))) return { ok: false, words: `${ref} is already on the list.` }
+  return { ok: true, value: ref }
+}
+
+/** The add body: a GitHub project as repo, a package as package with its registry. */
+export function addBody(name: string, kind: SourceKind, ref: string, version: string | null): AddSoftware {
+  const where = kind === 'github' ? { repo: ref } : { package: { kind, ref } }
+  return { name, ...where, ...(version === null ? {} : { our_version: version }) }
+}
+
+/** The ref an add body names, for messages. */
+export const refOf = (body: AddSoftware): string => body.package?.ref ?? body.repo ?? ''
+
 type Checked<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly words: string }
 
 /** A pasted GitHub link or owner/name, as the owner/name the platform wants. */
@@ -197,6 +271,7 @@ export function checkName(text: string, watched: readonly string[] = []): Checke
 }
 
 export const VERSION_HELP = 'Leave it empty if you don’t know. It shows as Not known, and the check tells you about releases newer than the newest one it first reads.'
+export const PACKAGE_VERSION_HELP = `${VERSION_HELP} Give it, and each check also looks up known vulnerabilities in it.`
 
 const VERSION_BAD = 'Type the version as three numbers, such as 1.2.14.'
 
@@ -214,7 +289,7 @@ export interface FormErrors {
   readonly form?: string
 }
 
-const REFUSED_FIELD: Record<string, keyof FormErrors> = { name: 'name', repo: 'repo', our_version: 'version' }
+const REFUSED_FIELD: Record<string, keyof FormErrors> = { name: 'name', repo: 'repo', ref: 'repo', package: 'repo', our_version: 'version' }
 const REFUSED_WORDS: Record<keyof FormErrors, string> = {
   name: `Give the software a name of ${NAME_LIMIT} letters or fewer.`,
   repo: REPO_BAD,

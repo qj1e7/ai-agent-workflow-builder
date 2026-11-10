@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Annotated, Any, Final, Literal, Protocol
 
 import httpx
-from pydantic import Field, StringConstraints, TypeAdapter, field_validator
+from pydantic import Field, StringConstraints, TypeAdapter, field_validator, model_validator
 
 from platform_api.monitoring import AgentEvent
 from platform_api.wire import MavenCoordinate, NpmPackage, RepoName, SourceKind, WireModel
@@ -430,11 +430,18 @@ class FindSoftwareRequest(WireModel):
 
 
 class SoftwareMatch(WireModel):
-    repo: RepoName
+    kind: SourceKind = "github"
+    repo: str
     what: str = Field(min_length=1, max_length=120)
     why: str = Field(max_length=300)
     releases: Literal["published", "none"]
     newest: str | None
+
+    @model_validator(mode="after")
+    def _fits_its_kind(self) -> SoftwareMatch:
+        """The runtime names a package as its registry does, a project as GitHub does."""
+        source_in(self.kind, self.repo)
+        return self
 
 
 class FoundSoftware(WireModel):
