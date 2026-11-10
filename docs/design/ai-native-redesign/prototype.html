@@ -116,7 +116,7 @@
 * { box-sizing: border-box; }
 /* Keeps focused and scrolled-to things clear of the sticky header, and of the tab bar on a phone. */
 html { scroll-padding-top: 84px; }
-@media (max-width: 900px) { html { scroll-padding-top: 76px; scroll-padding-bottom: 84px; } }
+@media (max-width: 900px) { html { scroll-padding-top: 56px; } }
 body {
   margin: 0; background: var(--frame); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.5;
   font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased;
@@ -142,14 +142,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   padding-left: max(25px, env(safe-area-inset-left, 0px)); padding-right: max(25px, env(safe-area-inset-right, 0px));
 }
 .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.125rem; background: none; border: 0; padding: 6px 0; cursor: pointer; }
-.nav { display: flex; gap: 2px; align-items: center; }
-.nav-a {
-  position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 12px; border: 0; border-radius: var(--r-ctl);
-  background: none; color: var(--muted); font-weight: 600; font-size: 0.95rem; cursor: pointer; white-space: nowrap;
-  transition: background-color var(--dur-press) ease, color var(--dur-press) ease;
-}
-.nav-a[aria-current="page"] { color: var(--ink); }
-.nav-a[aria-current="page"]::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -11px; height: 2px; border-radius: 2px; background: var(--nav-mark); }
 .tools { margin-left: auto; display: flex; gap: 4px; align-items: center; }
 /* Header tools are quiet: no box until you point at them. */
 .iconbtn {
@@ -180,29 +172,32 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @media (min-width: 901px) and (max-width: 1045px), (max-width: 380px) { .brand-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
 @media (max-width: 900px) {
   .hdr-in { padding-block: 8px; gap: 6px 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-  .nav { display: none; }
   .me-text, .iconbtn .lbl { display: none; }
   .brand { font-size: 1rem; }
   .brand-ai { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
-/* Phones and small tablets: the main menu moves to a tab bar at the bottom of the screen. */
-.tabbar { display: none; }
+/* The rail (ADR 0043): a slim column on the left with Chat, Workflows and Watchlist. On a phone it is a bar across the top. */
+.shell { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: start; }
+.rail { position: sticky; top: calc(60px + env(safe-area-inset-top, 0px)); display: grid; gap: 4px; padding: 6px 6px 0 12px; }
+.rail-a {
+  position: relative; display: grid; justify-items: center; align-content: center; gap: 2px; min-height: 62px; padding: 6px 2px; border: 0; border-radius: var(--r-ctl);
+  background: none; color: var(--muted); font-size: 0.8125rem; font-weight: 600; cursor: pointer; transition: background-color var(--dur-press) ease, color var(--dur-press) ease;
+}
+.rail-a[aria-current="page"] { color: var(--ink); background: var(--active); font-weight: 700; }
+.rail-a[aria-current="page"] svg { color: var(--nav-mark); }
+.rail-a .badge { position: absolute; top: 4px; left: calc(50% + 6px); }
 @media (max-width: 900px) {
-  .tabbar {
-    position: fixed; z-index: var(--z-nav); left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(var(--tabs), minmax(0, 1fr));
-    background: var(--surface); border-top: 1px solid var(--hair);
-    padding-bottom: env(safe-area-inset-bottom, 0px); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
-  }
-  .tab { position: relative; display: grid; justify-items: center; align-content: center; gap: 2px; min-height: 58px; padding: 6px 2px; border: 0; background: none; color: var(--muted); font-size: 0.8125rem; font-weight: 600; cursor: pointer; }
-  .tab[aria-current="page"] { color: var(--ink); font-weight: 700; }
-  .tab[aria-current="page"] svg { color: var(--nav-mark); }
-  /* The waiting count sits on the tab's icon, where a thumb can still see it. */
-  .tab .badge { position: absolute; top: 6px; left: calc(50% + 6px); }
+  .hdr { position: static; }
+  .shell { display: block; }
+  .rail { position: sticky; top: env(safe-area-inset-top, 0px); z-index: var(--z-nav); grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; padding: 0; background: var(--surface); border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
+  .rail-a { grid-auto-flow: column; justify-content: center; gap: 8px; min-height: 46px; padding: 0 4px; border-radius: 0; }
+  .rail-a[aria-current="page"] { background: none; box-shadow: inset 0 -3px 0 var(--nav-mark); }
+  .rail-a .badge { position: static; }
 }
 
 /* The sheet: the page sits on white, inset 8px from the frame, with a hairline edge and no shadow. dvh, not vh, so phone toolbars don't cut it. */
 .sheet { margin: 0 8px 8px; min-height: calc(100dvh - 68px); background: var(--bg); border: 1px solid var(--hair); border-radius: var(--r-sheet); }
-@media (max-width: 900px) { .sheet { margin: 0; border-width: 1px 0 0; border-radius: 0; } }
+@media (max-width: 900px) { .sheet { margin: 0; border-width: 0; border-radius: 0; min-height: calc(100dvh - 106px); } }
 
 /* Page */
 .wrap {
@@ -240,7 +235,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* Hover only where there is a real pointer, so a tap on a phone doesn't leave a stuck hover. */
 @media (hover: hover) and (pointer: fine) {
-  .nav-a:hover { color: var(--ink); background: var(--active); }
+  .rail-a:hover { color: var(--ink); background: var(--active); }
   .iconbtn:hover { background: var(--active); }
   .back:hover { color: var(--ink); }
   .btn:hover { border-color: var(--muted); background: var(--sunk); }
@@ -257,7 +252,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 
 @media (pointer: coarse) {
-  .btn, .btn.sm, .chip, .seg button, .nav-a, .linkbtn, .back, .iconbtn { min-height: 44px; }
+  .btn, .btn.sm, .chip, .seg button, .rail-a, .linkbtn, .back, .iconbtn { min-height: 44px; }
 }
 
 /* Pills: a pale tint with dark text of the same hue. "On" is the normal state, so it stays grey. */
@@ -968,8 +963,7 @@ select { padding: 9px 12px; width: auto; }
 @media (max-width: 560px) { .mockbar .grp > span, .mockbar .hide-sm { display: none; } }
 
 @media (max-width: 900px) {
-  .wrap { padding-bottom: 210px; }
-  .toast { bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
+  .toast { bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* v2: checking what was understood, schedules, search, support cases, test controls */
@@ -1049,7 +1043,7 @@ button.schip { cursor: pointer; }
 .testctl-sims > span { color: var(--mock-dim); font-weight: 600; }
 .testctl-about summary { cursor: pointer; color: var(--mock-dim); font-weight: 600; }
 .testctl-about ul { margin: 6px 0 0 18px; padding: 0; list-style: disc; display: grid; gap: 4px; }
-@media (max-width: 900px) { .testctl { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); } }
+@media (max-width: 900px) { .testctl { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); } }
 
 /* Named Approvers and escalation */
 .apstep { border: 0; padding: 0; margin: 0 0 14px; min-width: 0; }
@@ -2374,21 +2368,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* ---------- Views ---------- */
   function header() {
     const v = S.view.name;
-    const swRun = v === 'run' && S.view.id === 'sw';
-    const cur = (on) => (on ? ' aria-current="page"' : '');
-    /* What needs you is counted on Workflows. An Approver who can't set up workflows sees it on Home, where their approvals are. */
-    const k = needs().length;
-    const count = (on) => (on && k ? `<span class="badge" data-val="needs-n"><span class="vh">, </span>${k}<span class="vh"> need you</span></span>` : '');
-    const nav = [
-      `<button class="nav-a" data-act="go" data-arg="home"${cur(v === 'home')}>Home${count(!me().op)}</button>`,
-      `<button class="nav-a" data-act="go" data-arg="workflows"${cur(['workflows', 'workflow'].includes(v) || (v === 'run' && !swRun))}>Workflows${count(me().op)}</button>`,
-      `<button class="nav-a" data-act="go" data-arg="software"${cur(v === 'software' || swRun)}>Software watchlist</button>`,
-      me().op ? `<button class="nav-a" data-act="go" data-arg="agents"${cur(v === 'agents')}>Agent library</button>` : '',
-    ].join('');
     const n = teamsCount();
     return `<header class="hdr"><div class="hdr-in">
       <button class="brand" data-act="go" data-arg="home">${I.mark(22)}<span class="brand-text"><span class="brand-ai">AI </span>Workflow Builder</span></button>
-      <nav class="nav" aria-label="Main">${nav}</nav>
       <div class="tools">
         <button class="iconbtn" data-act="teams" aria-label="Teams, practice copy${n ? `, ${approvalsWord(n)} waiting for you` : ''}" title="${n ? `${approvalsWord(n)} waiting for you` : 'Teams, practice copy'}">${I.chat(20)}<span class="lbl">Teams</span>${n ? `<span class="badge" data-val="teams-n">${n}</span>` : ''}</button>
         <button class="iconbtn" data-act="go" data-arg="settings" aria-label="Settings" title="Settings"${v === 'settings' ? ' aria-current="page"' : ''}>${I.gear(20)}</button>
@@ -2398,18 +2380,21 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
   const approvalsWord = (n) => (n === 1 ? '1 approval' : `${n} approvals`);
 
-  /* Phones: the same menu as the header, as a tab bar at the bottom. */
-  function tabbar() {
+  /* The rail (ADR 0043): Chat, Workflows and Watchlist, each with a count. A slim column on the left; on a phone it is a bar across the top.
+     Workflows counts what needs you. The Watchlist counts software that needs action. An Approver who can't set up workflows
+     sees what needs them on Chat, where their approvals are. */
+  const swNeed = () => watchRows().filter((r) => !S.removed.includes(r.key) && r.rank <= 1).length;
+  function rail() {
     const v = S.view.name;
     const swRun = v === 'run' && S.view.id === 'sw';
     const k = needs().length;
-    const count = (on) => (on && k ? `<span class="badge"><span class="vh">, </span>${k}<span class="vh"> need you</span></span>` : '');
-    const tabs = [
-      ['home', 'Home', I.home(22), v === 'home', count(!me().op)],
-      ['workflows', 'Workflows', I.grid(22), ['workflows', 'workflow'].includes(v) || (v === 'run' && !swRun), count(me().op)],
-      ['software', 'Watchlist', I.box(22), v === 'software' || swRun, ''],
-    ].concat(me().op ? [['agents', 'Agents', I.bot(22), v === 'agents', '']] : []);
-    return `<nav class="tabbar" aria-label="Main" style="--tabs:${tabs.length}">${tabs.map(([arg, label, icon, on, n]) => `<button class="tab" data-act="go" data-arg="${arg}"${on ? ' aria-current="page"' : ''}>${icon}<span>${label}</span>${n}</button>`).join('')}</nav>`;
+    const count = (n, what) => (n ? `<span class="badge" data-val="${what}-n"><span class="vh">, </span>${n}<span class="vh"> ${what === 'needs' ? 'need you' : 'need action'}</span></span>` : '');
+    const items = [
+      ['home', 'Chat', I.chat(22), v === 'home', count(me().op ? 0 : k, 'needs')],
+      ['workflows', 'Workflows', I.grid(22), ['workflows', 'workflow'].includes(v) || (v === 'run' && !swRun), count(me().op ? k : 0, 'needs')],
+      ['software', 'Watchlist', I.box(22), v === 'software' || swRun, count(swNeed(), 'sw')],
+    ];
+    return `<nav class="rail" aria-label="Main">${items.map(([arg, label, icon, on, n]) => `<button class="rail-a" data-act="go" data-arg="${arg}"${on ? ' aria-current="page"' : ''}>${icon}<span>${label}</span>${n}</button>`).join('')}</nav>`;
   }
 
   /* One main button per screen: only the first card keeps it. */
@@ -4560,6 +4545,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
       case 'software': main = softwareView(); break;
       case 'faces': main = facesView(); break;
     }
+    if (v.fromChat) {
+      const back = `<button class="back" data-act="go" data-arg="home">${I.left(16)}Back to the chat</button>`;
+      main = /<button class="back"/.test(main) ? main.replace(/<button class="back"[\s\S]*?<\/button>/, back) : back + main;
+    }
     // The mock redraws the whole page, so it puts keyboard focus back where it was.
     const active = document.activeElement;
     const plan = !focusHeading && active && active !== document.body && $app.contains(active) && !active.closest('.leave') ? focusPlan(active) : null;
@@ -4575,9 +4564,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
     // A redraw keeps what the person opened and where they scrolled.
     const opened = new Set(detailsKeys().filter(([d]) => d.open && !d.dataset.folding && !d.querySelector(':scope > summary[data-act]')).map(([, k]) => k));
     const scrolls = [['.msgs', true], ['.dialog:not(.leave)', sameModal]].map(([sel, keep]) => { const el = keep && $app.querySelector(sel); return el ? [sel, el.scrollTop] : null; }).filter(Boolean);
-    $app.innerHTML = '<button class="skiplink" data-act="skipMain">Skip to main content</button>' + header() + `<main class="sheet" id="main"><div class="wrap" data-flip-group="page">${main}</div></main>` + tabbar() + teamsDrawer() + modal() + toastHtml + testControls();
+    const keepChat = $app.querySelector('.chatscroll');
+    if (keepChat) S.chatScroll = keepChat.scrollTop;
+    $app.innerHTML = '<button class="skiplink" data-act="skipMain">Skip to main content</button>' + header() + `<div class="shell">${rail()}<main class="sheet" id="main"><div class="wrap" data-flip-group="page">${main}</div></main></div>` + teamsDrawer() + modal() + toastHtml + testControls();
     detailsKeys().forEach(([d, k]) => { if (!d.open && opened.has(k)) d.open = true; });
     scrolls.forEach(([sel, top]) => { const el = $app.querySelector(sel); if (el) el.scrollTop = top; });
+    const chatEl = $app.querySelector('.chatscroll');
+    if (chatEl) chatEl.scrollTop = S.chatScroll == null ? chatEl.scrollHeight : S.chatScroll;
     $app.querySelectorAll('#dlg-h:not([tabindex])').forEach((h) => h.setAttribute('tabindex', '-1'));
     const h1 = $app.querySelector('main h1');
     document.title = h1 ? `${h1.textContent.trim()} · AI Workflow Builder` : 'AI Workflow Builder';
@@ -4633,7 +4626,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const FOCUSABLE = 'button, [href], input, select, textarea, summary, [tabindex]';
   const shown = (el) => (el.checkVisibility ? el.checkVisibility() : el.getClientRects().length > 0);
   const usable = (el) => !el.disabled && el.getAttribute('aria-hidden') !== 'true' && !el.closest('.leave, .m-leaving, [inert]') && shown(el);
-  const REGIONS = 'main, .hdr, .tabbar, .testctl';
+  const REGIONS = 'main, .hdr, .rail, .testctl';
   function inLayer(kind) {
     if (kind === 'dialog' || kind === 'drawer') { const box = $app.querySelector(`.${kind}:not(.leave)`); return box ? [...box.querySelectorAll(FOCUSABLE)] : []; }
     const box = $app.querySelector(kind);
@@ -4860,15 +4853,16 @@ details > .m-close { animation: fold 140ms ease-in both; }
 
   /* o.live plays a run from its start, for a run just started or Watch. o.back comes from browser Back or Forward. */
   function go(name, id, o = {}) {
+    if (name === 'agents') { S.setTab = 'how'; name = 'settings'; }
     if (name !== 'run') { stopTimer(); P.run = null; }
     if (S.toastAct && !toastNew) { S.toast = null; S.toastAct = null; clearTimeout(toastTimer); }
-    S.view = { name, id };
+    S.view = { name, id, fromChat: !!o.fromChat };
     S.teams = false;
     S.editing = null;
     S.editingAppr = null;
     focusHeading = true;
     if (name === 'run') { P.run = id; openRun(o.live); }
-    if (!o.back) { try { window.history.pushState({ name, id }, '', `#${name}${id ? `/${id}` : ''}`); } catch (e) { /* window.history, because history() here is the watchlist's. Some hosts block it; Back then leaves the mock, as before. */ } }
+    if (!o.back) { try { window.history.pushState({ name, id, fromChat: !!o.fromChat }, '', `#${name}${id ? `/${id}` : ''}`); } catch (e) { /* window.history, because history() here is the watchlist's. Some hosts block it; Back then leaves the mock, as before. */ } }
     render();
   }
   /* Opening a run that needs someone lands on the decision, with the run already drawn. Replay plays it again. */
@@ -4896,14 +4890,15 @@ details > .m-close { animation: fold 140ms ease-in both; }
     S.modal = null;
     S.modalArg = null;
     S.modalBack = [];
-    go(v.name, v.id, { back: true });
+    go(v.name, v.id, { back: true, fromChat: v.fromChat });
   });
   S.view = { name: linkedView() };
+  if (S.view.name === 'agents') { S.view = { name: 'settings' }; S.setTab = 'how'; }
   try { window.history.replaceState({ name: S.view.name }, '', `#${S.view.name}`); } catch (e) { /* As above. */ }
   /* The control that opened a dialog or the Teams drawer gets focus back when it closes. */
   let opener = null;
   /* Several controls can share an action (a card's title and its Details button), so the opener is kept as a selector plus its place among the matches. */
-  const inPage = (sel) => [...$app.querySelectorAll(`:is(.hdr, main, .tabbar) ${sel}`)];
+  const inPage = (sel) => [...$app.querySelectorAll(`:is(.hdr, main, .rail) ${sel}`)];
   function selFor(el) {
     if (!el || el === document.body || !$app.contains(el)) return null;
     const sel = el.id ? `#${CSS.escape(el.id)}` : el.dataset.act ? `[data-act="${el.dataset.act}"]${el.dataset.arg !== undefined ? `[data-arg="${CSS.escape(el.dataset.arg)}"]` : ''}` : null;
