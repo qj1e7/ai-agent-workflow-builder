@@ -373,7 +373,7 @@ html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 .chatting .shell { flex: 1; min-height: 0; align-items: stretch; }
 .chatting .rail { align-self: start; }
 .chatting .sheet { min-height: 0; display: flex; flex-direction: column; }
-@media (max-width: 900px) { .chatting .shell { display: flex; flex-direction: column; } .chatting .rail { flex: none; } .chatting .sheet { flex: 1; } }
+@media (max-width: 900px) { .chatting .shell { display: flex; flex-direction: column; } .chatting .rail { flex: none; align-self: stretch; } .chatting .sheet { flex: 1; } }
 /* The test controls sit above the docked box, never over it. */
 .chatting .testctl { bottom: calc(var(--dock, 96px) + 12px + env(safe-area-inset-bottom, 0px)); }
 .chatting .chatscroll { padding-bottom: 64px; }
@@ -390,7 +390,7 @@ html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 .sp-steps li.todo::before, .sp-steps li.skip::before { background: var(--rail); }
 .sp-steps li.fail::before { background: var(--red); }
 .sp-steps li.wait::before, .sp-steps li.noans::before { background: var(--amber); }
-@media (max-width: 860px) { .sidepanel { position: fixed; inset: 0; z-index: var(--z-overlay); flex: none; border-left: 0; padding-top: env(safe-area-inset-top, 0px); } }
+@media (max-width: 900px) { .sidepanel { position: fixed; inset: 0; z-index: var(--z-overlay); flex: none; border-left: 0; padding-top: env(safe-area-inset-top, 0px); } }
 .ngroup { display: grid; gap: 8px; }
 .ngroup + .ngroup { margin-top: 12px; }
 .ngroup > h3 { font-size: 0.875rem; color: var(--muted); }
@@ -1104,6 +1104,16 @@ button.schip { cursor: pointer; }
 .testctl-about summary { cursor: pointer; color: var(--mock-dim); font-weight: 600; }
 .testctl-about ul { margin: 6px 0 0 18px; padding: 0; list-style: disc; display: grid; gap: 4px; }
 @media (max-width: 900px) { .testctl { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); } }
+/* The test controls never cover the product. Wide, the toggle is a small button in the rail's column. While chatting
+   on a phone it sits in the empty left end of the New chat row. On a phone page it is small, and the page ends clear of it. */
+.testctl-toggle .tlbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.testctl-toggle { padding: 0 10px; gap: 4px; }
+.testctl-panel ~ .testctl-toggle .tlbl, .testctl:has(.testctl-panel) .tlbl { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
+@media (max-width: 900px) {
+  .chatting .testctl { top: var(--ctl-top, auto); bottom: auto; }
+  .chatting .chatnew { min-height: 40px; align-items: center; }
+  #app:not(.chatting) .sheet { padding-bottom: 64px; }
+}
 
 /* Named Approvers and escalation */
 .apstep { border: 0; padding: 0; margin: 0 0 14px; min-width: 0; }
@@ -2711,9 +2721,16 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
   const chatMode = () => S.view.name === 'home' && me().op && !!curModel() && S.chat.msgs.length > 0;
   /* The side panel (ADR 0043) shows one item opened from a card in the chat, as a summary. It keeps no history. */
-  const dockVar = () => { const d = $app.querySelector('.chatdock'); if (d) document.documentElement.style.setProperty('--dock', `${d.offsetHeight}px`); };
-  const narrow = () => window.matchMedia('(max-width: 860px)').matches;
-  window.matchMedia('(max-width: 860px)').addEventListener('change', () => { if (S.panel) render(); });
+  const dockVar = () => {
+    const d = $app.querySelector('.chatdock');
+    if (d) document.documentElement.style.setProperty('--dock', `${d.offsetHeight}px`);
+    const n = $app.querySelector('.chatnew');
+    if (n) { const r = n.getBoundingClientRect(); document.documentElement.style.setProperty('--ctl-top', `${Math.round(r.top + r.height / 2 - 20)}px`); }
+  };
+  window.addEventListener('resize', dockVar);
+  /* One breakpoint, 900 px, for the rail's top bar, the full-screen panel and the panel opening by itself. */
+  const narrow = () => window.matchMedia('(max-width: 900px)').matches;
+  window.matchMedia('(max-width: 900px)').addEventListener('change', () => { if (S.panel) render(); });
   function itemOf(act, arg, el) {
     if (el && el.dataset.open) { const [kind, id] = el.dataset.open.split(':'); return { kind, id }; }
     if (act === 'workflow' && arg !== 'sw') return { kind: 'workflow', id: arg };
@@ -2772,18 +2789,22 @@ details > .m-close { animation: fold 140ms ease-in both; }
     else if (!m || liveSetup() !== m || narrow()) S.panel = null;
     if (S.panel !== p) clearInterval(buildTimer);
   }
-  /* Wider than 860 px the panel opens by itself while the Planner builds. With reduced motion the steps are all there at once. */
+  /* Wider than 900 px the panel opens by itself while the Planner builds. With reduced motion the steps are all there at once. */
   function openBuild(mid) {
     if (narrow() || !onHome()) return;
     clearInterval(buildTimer);
     const n = draftSteps(draftNr()).length;
     S.panel = { kind: 'build', id: String(mid), shown: motionQuery.matches ? n : 0 };
     if (motionQuery.matches) return;
+    /* Each step redraws the panel only, so nothing in the chat, focus included, moves while the steps go in. */
     buildTimer = setInterval(() => {
       const p = S.panel;
-      if (!p || p.kind !== 'build' || p.shown >= n) { clearInterval(buildTimer); return; }
+      const body = $app.querySelector('#sidepanel .sp-body');
+      if (!p || p.kind !== 'build' || p.shown >= n || !body) { clearInterval(buildTimer); return; }
       p.shown += 1;
-      render();
+      body.innerHTML = panelView(p).body;
+      const added = [...body.querySelectorAll('.steps > li')].pop();
+      if (added) added.classList.add('m-appear');
     }, 320);
   }
   function sidePanel() {
@@ -3821,7 +3842,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       : c.state === 'saved' ? `<span class="note">${I.check(14)} Saved as version ${c.ver}. Next run ${r.next}.</span>${verNow(c.id) === c.ver ? `<button class="btn sm" data-act="editUndo" data-mid="${id}">Undo</button>` : ''}`
         : `<span class="note">Undone, as version ${c.undoVer}.</span>`;
     return `<div class="pcard" data-pres="edit:${id}">
-      <div class="pcard-h"><h3 tabindex="-1">Change ${esc(r.name)}</h3></div>
+      <div class="pcard-h"><h3 tabindex="-1" id="card-h-${id}">Change ${esc(r.name)}</h3></div>
       ${ask}
       <section class="pcard-s"><h4>When it runs</h4><dl class="ba"><dt>Before</dt><dd>${schedText(from)}</dd><dt>After</dt><dd>${p && p.ask ? '<span class="muted">Choose a day</span>' : `<b>${schedText(to)}</b>`}</dd></dl>${sw}</section>
       <div class="pcard-f">${foot}</div>
@@ -3922,7 +3943,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return `<div class="pcard" data-pres="setup:${m.id}" data-unbuilt="The set-up card (ADR 0037)">
       <div class="pcard-h">${w.renaming
         ? `<label class="vh" for="rname">Workflow name</label><input type="text" id="rname" data-input="name" value="${esc(w.name || f.name)}"><button class="btn sm" data-act="renameDone">Done</button>`
-        : `<h3 tabindex="-1">${esc(title)}</h3><button class="linkbtn" data-act="rename">Rename</button>`}</div>
+        : `<h3 tabindex="-1" id="card-h-${m.id}">${esc(title)}</h3><button class="linkbtn" data-act="rename">Rename</button>`}</div>
       ${partsList(parts)}
       ${similar ? `<p class="similar pcard-s">${I.info(16)}<span>You already have a similar workflow, <i>Weekly closed-ticket summary</i>. <button class="linkbtn" data-act="workflow" data-arg="nudge">Open it</button></span></p>` : ''}
       <section class="pcard-s"><h4>What needs a yes</h4><p class="apsum">${I.shield(16)}<span>Creating the Jira ticket changes data, so each run waits for a yes in Teams. Any Approver on your team except you can say yes.${shows('namedApprovers') ? ` Named Approvers, with a backup and a stop time, come later. ${PLANNED_TAG}` : ''}</span></p></section>
@@ -3989,7 +4010,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const parts = watchParts(m);
     const n = watchLeft(c);
     return `<div class="pcard" data-pres="watch:${id}" data-unbuilt="Adding software from the Planner">
-      <div class="pcard-h"><h3>Add ${esc(c.name)} to the Software watchlist</h3><span class="kind">${I.box(16)}Software watchlist</span></div>
+      <div class="pcard-h"><h3 tabindex="-1" id="card-h-${id}">Add ${esc(c.name)} to the Software watchlist</h3><span class="kind">${I.box(16)}Software watchlist</span></div>
       ${partsList(parts)}
       <div class="pcard-f"><button class="btn primary" data-act="watchAdd" data-mid="${id}"${n ? ' disabled' : ''}>${hasCross(parts) ? 'Set up the part I can' : `Add ${esc(c.name)}`}</button>${n ? `<span class="left">${leftWords(n)}</span>` : ''}<button class="linkbtn push" data-act="watchOwn" data-mid="${id}">No, set it up as a new workflow</button></div>
     </div>`;
@@ -4064,9 +4085,28 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
   const msgById = (id) => S.chat.msgs.find((m) => m.id === +id);
   const onHome = () => S.view.name === 'home' && me().op;
+  /* The chat column scrolls itself. scrollIntoView and a plain focus() also scroll #app, which moved the whole app up
+     on a phone, header and box included, so neither is used in the chat. */
   function scrollToMsg(id, block = 'nearest') {
     const el = $app.querySelector(`[data-mid="${id}"]`);
-    if (el) el.scrollIntoView({ block, behavior: motionQuery.matches ? 'auto' : 'smooth' });
+    const sc = $app.querySelector('.chatscroll');
+    if (!el || !sc) return;
+    const r = el.getBoundingClientRect();
+    const v = sc.getBoundingClientRect();
+    let top = sc.scrollTop;
+    if (block === 'start' || r.top < v.top) top += r.top - v.top - 8;
+    else if (r.bottom > v.bottom) top += Math.min(r.bottom - v.bottom + 8, r.top - v.top - 8);
+    sc.scrollTo({ top, behavior: motionQuery.matches ? 'auto' : 'smooth' });
+  }
+  function focusChat(el) {
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    const sc = el.closest('.chatscroll');
+    if (!sc) return;
+    const r = el.getBoundingClientRect();
+    const v = sc.getBoundingClientRect();
+    if (r.top < v.top + 8) sc.scrollTop -= v.top + 8 - r.top;
+    else if (r.bottom > v.bottom - 8) sc.scrollTop += r.bottom - v.bottom + 8;
   }
   /* A request goes in, the Planner thinks for a moment, then its answer shows at once: the card, and the sentence
      written word by word with the speaking face. Nothing waits for the words. Reduced motion shows it all at once.
@@ -4975,7 +5015,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
           <li>Reloading the page starts over.</li></ul></details>
         <div><button class="mreset" data-act="reset">Start over</button></div>
       </div>` : ''}
-      <button class="testctl-toggle" data-act="testToggle" aria-expanded="${S.testOpen}"${S.testOpen ? ' aria-controls="testctl-panel"' : ''}>${I.gear(16)}${S.testOpen ? 'Hide test controls' : 'Test controls'}${sims.length && !S.testOpen ? `<span class="testctl-dot">${sims.length}<span class="vh"> things you can simulate</span></span>` : ''}</button>
+      <button class="testctl-toggle" data-act="testToggle" aria-expanded="${S.testOpen}"${S.testOpen ? ' aria-controls="testctl-panel"' : ''} title="${S.testOpen ? 'Hide test controls' : 'Test controls'}">${I.gear(16)}<span class="tlbl">${S.testOpen ? 'Hide test controls' : 'Test controls'}</span>${sims.length && !S.testOpen ? `<span class="testctl-dot">${sims.length}<span class="vh"> things you can simulate</span></span>` : ''}</button>
     </div>`;
   }
 
@@ -5049,6 +5089,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (S.panel && chatMode()) $app.querySelectorAll('.thread .btn[data-act], .pinned .btn[data-act], [data-flow-of]').forEach((el) => { if (el.dataset.flowOf ? el.dataset.flowOf.split(':')[1] === S.panel.id && S.panel.kind !== 'software' : sameItem(itemOf(el.dataset.act, el.dataset.arg, el), S.panel)) el.hidden = true; });
     $app.querySelectorAll('.thread .pcard-f').forEach((f) => { const bs = [...f.querySelectorAll('button')]; if (bs.length && bs.every((b) => b.closest('[hidden]'))) f.hidden = true; });
     $app.classList.toggle('chatting', chatMode());
+    if (chatMode()) { $app.scrollTop = 0; if (window.scrollY) window.scrollTo(0, 0); }
     dockVar();
     const chatEl = $app.querySelector('.chatscroll');
     if (chatEl) chatEl.scrollTop = S.chatScroll == null ? chatEl.scrollHeight : S.chatScroll;
@@ -5376,6 +5417,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   S.view = { name: linkedView() };
   if (S.view.name === 'agents') { S.view = { name: 'settings' }; S.setTab = 'how'; }
   try { window.history.replaceState({ name: S.view.name }, '', `#${S.view.name}`); } catch (e) { /* As above. */ }
+  /* While chatting, #app is exactly the window's height and never scrolls, so the header and the box stay put. */
+  $app.addEventListener('scroll', () => { if ($app.classList.contains('chatting') && $app.scrollTop) $app.scrollTop = 0; });
   /* The control that opened a dialog or the Teams drawer gets focus back when it closes. */
   let opener = null;
   let panelOpener = null;
@@ -5889,21 +5932,21 @@ details > .m-close { animation: fold 140ms ease-in both; }
       go('home');
       scrollToMsg(liveSetup().id, 'start');
     },
-    stopAsk: (_, m) => { m.card.stopping = true; render(); const b = $app.querySelector(`[data-mid="${m.id}"][data-act="stopKeep"]`); if (b) b.focus(); },
-    stopKeep: (_, m) => { m.card.stopping = false; render(); const b = $app.querySelector(`[data-mid="${m.id}"][data-act="stopAsk"]`); if (b) b.focus(); },
+    stopAsk: (_, m) => { m.card.stopping = true; render(); focusChat($app.querySelector(`[data-mid="${m.id}"][data-act="stopKeep"]`)); },
+    stopKeep: (_, m) => { m.card.stopping = false; render(); focusChat($app.querySelector(`[data-mid="${m.id}"][data-act="stopAsk"]`)); },
     stopYes: (_, m) => { const key = m.card.about; m.card.stopping = false; A.removeSw(key); },
     repoOk: (_, m) => { m.card.repoState = 'ok'; m.card.confirmed = true; render(); },
-    repoEdit: (_, m) => { m.card.repoState = 'edit'; m.card.repoDraft = m.card.repo; render(); const f = document.getElementById(`repo-${m.id}`); if (f) f.focus(); },
+    repoEdit: (_, m) => { m.card.repoState = 'edit'; m.card.repoDraft = m.card.repo; render(); focusChat(document.getElementById(`repo-${m.id}`)); },
     repoUse: (_, m) => {
       const c = m.card;
       const [label, , , shape, bad] = SRC_FIELD[c.src];
       const v = c.src === 'github' ? repoOf(c.repoDraft) : c.repoDraft.trim();
       c.repoErr = !v ? `Type its ${lc(label)}.` : !shape.test(v) ? bad : '';
-      if (c.repoErr) { render(); document.getElementById(`repo-${m.id}`).focus(); return; }
+      if (c.repoErr) { render(); focusChat(document.getElementById(`repo-${m.id}`)); return; }
       c.repo = v; c.repoState = 'ok'; c.confirmed = false; render();
     },
     verNewest: (_, m) => { m.card.newest = true; render(); },
-    verType: (_, m) => { m.card.newest = false; render(); const f = document.getElementById(`ver-${m.id}`); if (f) f.focus(); },
+    verType: (_, m) => { m.card.newest = false; render(); focusChat(document.getElementById(`ver-${m.id}`)); },
     /* Adding from the card is the same as adding on the Software watchlist page. */
     watchAdd: (_, m) => {
       const c = m.card;
@@ -5913,8 +5956,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       c.done = S.swOpen;
       m.mood = 'success';
       render();
-      const b = $app.querySelector(`[data-mid="${m.id}"] .linkbtn`);
-      if (b) b.focus();
+      focusChat($app.querySelector(`[data-mid="${m.id}"] .linkbtn`));
     },
     watchOwn: (_, m) => ask(S.chat.msgs.find((x) => x.id === m.id - 1).text, 'setup'),
     instead: (_, m) => ask(m.card.next),
@@ -5966,11 +6008,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
       render();
     },
     destOpen: () => { S.wiz.destOpen = !S.wiz.destOpen; render(); },
-    destDone: () => { S.wiz.destOpen = false; render(); const b = $app.querySelector('[data-act="destOpen"]'); if (b) b.focus(); },
-    whenOpen: () => { S.wiz.whenOpen = true; render(); const f = document.getElementById('sched-freq'); if (f) f.focus(); },
+    destDone: () => { S.wiz.destOpen = false; render(); focusChat($app.querySelector('[data-act="destOpen"]')); },
+    whenOpen: () => { S.wiz.whenOpen = true; render(); focusChat(document.getElementById('sched-freq')); },
     /* The edit card: pick the workflow, choose a day, save as a new version, undo it, or leave it. */
-    editPick: (id, m) => { m.card.id = id; render(); const h = $app.querySelector(`[data-mid="${m.id}"] .pcard-h h3`); if (h) h.focus(); },
-    editDay: (d, m) => { m.card.day = d; render(); const b = $app.querySelector(`[data-act="editSave"][data-mid="${m.id}"]`); if (b) b.focus(); },
+    editPick: (id, m) => { m.card.id = id; render(); focusChat($app.querySelector(`[data-mid="${m.id}"] .pcard-h h3`)); },
+    editDay: (d, m) => { m.card.day = d; render(); focusChat($app.querySelector(`[data-act="editSave"][data-mid="${m.id}"]`)); },
     editSave: (_, m) => {
       const c = m.card;
       const p = c.state === 'open' && has(c.id) ? editPlan(c) : {};
@@ -5982,8 +6024,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       m.mood = 'success';
       announce(editSay(c));
       render();
-      const b = $app.querySelector(`[data-act="editUndo"][data-mid="${m.id}"]`);
-      if (b) b.focus();
+      focusChat($app.querySelector(`[data-act="editUndo"][data-mid="${m.id}"]`));
     },
     editUndo: (_, m) => {
       const c = m.card;
@@ -5992,8 +6033,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       c.state = 'undone';
       announce(editSay(c));
       render();
-      const h = $app.querySelector(`[data-mid="${m.id}"] .pcard-h h3`);
-      if (h) h.focus();
+      focusChat($app.querySelector(`[data-mid="${m.id}"] .pcard-h h3`));
     },
     editKeep: (_, m) => { m.card.state = 'kept'; announce(editSay(m.card)); render(); focusComposer(); },
     /* A choice on the set-up card's one question. Focus moves to the next question, or to the button once none is left. */
@@ -6006,16 +6046,16 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const m = liveSetup();
       const card = m && $app.querySelector(`[data-mid="${m.id}"]`);
       const next = card && (card.querySelector('.part[data-mark="ask"] .chip') || card.querySelector('[data-act="turnOn"]:not([disabled])') || card.querySelector('.pcard-h h3'));
-      if (next) next.focus();
+      focusChat(next);
     },
     whenDone: () => {
       S.wiz.schedErr = schedProblems(S.wiz.sched);
       const keys = Object.keys(S.wiz.schedErr);
-      if (keys.length) { render(); const first = document.getElementById(`sched-${keys[0]}`); if (first) first.focus(); return; }
-      S.wiz.whenOpen = false; render(); const b = $app.querySelector('[data-act="whenOpen"]'); if (b) b.focus();
+      if (keys.length) { render(); focusChat(document.getElementById(`sched-${keys[0]}`)); return; }
+      S.wiz.whenOpen = false; render(); focusChat($app.querySelector('[data-act="whenOpen"]'));
     },
-    rename: () => { S.wiz.renaming = true; render(); const i = document.getElementById('rname'); if (i) { i.focus(); i.select(); } },
-    renameDone: () => { S.wiz.renaming = false; render(); const b = $app.querySelector('[data-act="rename"]'); if (b) b.focus(); },
+    rename: () => { S.wiz.renaming = true; render(); const i = document.getElementById('rname'); if (i) { focusChat(i); i.select(); } },
+    renameDone: () => { S.wiz.renaming = false; render(); focusChat($app.querySelector('[data-act="rename"]')); },
     /* One yes turns the workflow on. The card becomes its done box, the Planner is pleased, and the row glides into Workflows. */
     turnOn: () => {
       const m = liveSetup();
@@ -6041,8 +6081,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       S.justOn = k;
       render();
       scrollToMsg(m.id, 'start');
-      const b = $app.querySelector(`[data-mid="${m.id}"] .linkbtn`);
-      if (b) b.focus();
+      focusChat($app.querySelector(`[data-mid="${m.id}"] .linkbtn`));
     },
     testRun: () => { if (runBlocked('conf')) return; S.conf = 'waiting'; S.confYes = []; S.confAsk = 0; S.confStarter = S.user; S.confReq = apprOf('conf') ? copyAppr(apprOf('conf')) : null; go('run', 'conf', { live: true }); },
     editSched: (id) => { S.editing = id; S.editingAppr = null; S.schedForm = { monthDay: '1', ...R(id).sched }; S.schedErr = {}; render(); const f = document.getElementById('sf-freq'); if (f) f.focus(); },

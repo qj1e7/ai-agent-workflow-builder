@@ -419,7 +419,7 @@ add('SHELL-panel', 'A card in the chat opens its workflow in a side panel, or fu
   await t.expectCount('The side panel is open', '#sidepanel', 1);
   await t.expectText('It shows the last and next run', /Last run[\s\S]*Next run/, '#sidepanel');
   const box = await t.page.evaluate(() => { const r = document.querySelector('#sidepanel').getBoundingClientRect(); return { w: Math.round(r.width), vw: innerWidth, thread: !!document.querySelector('.thread') && document.querySelector('.thread').getBoundingClientRect().width > 0 }; });
-  if (t.kit.width > 860) await t.expect('The chat stays beside the panel', box, (b) => b.thread && b.w < b.vw / 2);
+  if (t.kit.width > 900) await t.expect('The chat stays beside the panel', box, (b) => b.thread && b.w < b.vw / 2);
   else await t.expect('On a phone the panel fills the screen', box, (b) => b.w === b.vw);
   await t.expect('The card hides its own Open button while the panel shows it', t.page.locator('main .thread .btn[data-act="workflow"][data-arg="issues"]').count(), 0);
   await t.click('#sidepanel [data-act="panelClose"]', 'Close');
@@ -585,10 +585,10 @@ add('ANS-live-done', 'A workflow turned on in the chat, then paused on its page,
   await t.expectText('The card and its sentence say it is paused', /Friday closed ticket summary is paused\.[\s\S]*Friday closed ticket summary is paused\./, 'main .thread');
 }, [1280]);
 
-/* The panel opens by itself while the Planner builds (ADR 0043), wider than 860 px only, and a flow shows once. */
+/* The panel opens by itself while the Planner builds (ADR 0043), wider than 900 px only, and a flow shows once. */
 add('ANS-panel', 'While the Planner builds, the panel opens by itself with the steps going in, but never on a phone', async (t) => {
   await t.ask(WEEKLY_SUMMARY);
-  if (t.kit.width > 860) {
+  if (t.kit.width > 900) {
     await t.expectCount('The side panel opened by itself', '#sidepanel', 1);
     await t.setup((k) => k.page.waitForFunction(() => document.querySelectorAll('#sidepanel .steps li').length >= 3));
     await t.expectText('It shows the new workflow’s steps, as a draft', /Draft[\s\S]*Find the tickets closed[\s\S]*Write a short summary[\s\S]*Create one ticket/, '#sidepanel');
@@ -597,10 +597,27 @@ add('ANS-panel', 'While the Planner builds, the panel opens by itself with the s
     await t.click('#sidepanel [data-act="panelClose"]', 'Close');
     await t.expectCount('The card’s steps come back', 'main .thread details.how:not([hidden])', 1);
   } else {
-    await t.expectCount('On a phone the panel doesn’t open by itself', '#sidepanel', 0);
+    await t.expectCount('At 900 px or less the panel doesn’t open by itself', '#sidepanel', 0);
     await t.expectCount('The card keeps its own steps', 'main .thread details.how:not([hidden])', 1);
   }
-}, [1280, 390]);
+}, [1280, 880, 390], { changed: 'The panel opens by itself only wider than 900 px, the same breakpoint as the rail’s top bar (fix pass S9), so 880 is checked too.' });
+
+add('ANS-panel-focus', 'Focus stays on the card’s heading while the panel opens by itself and the steps go in', async (t) => {
+  await t.ask(WEEKLY_SUMMARY);
+  await t.setup((k) => k.page.waitForFunction(() => document.querySelectorAll('#sidepanel .steps li').length >= 3));
+  await t.expect('Focus is on the card heading, not on Rename', focused(t.page), /^h3#card-h-\d+$/);
+}, [1440, 1280]);
+
+add('ANS-scroll-390', 'On a phone, answering the card’s questions and saving a change never scrolls the app out of place', async (t) => {
+  const appTop = () => t.page.evaluate(() => [document.getElementById('app').scrollTop, window.scrollY, Math.round(document.querySelector('.hdr').getBoundingClientRect().top)]);
+  await t.ask(WEEKLY_SUMMARY);
+  await t.click(S.answer('time:17:00'), 'Choose 17:00', { decision: true });
+  await t.click(S.answer('project:MOCK'), 'Choose MOCK', { decision: true });
+  await t.expect('The app has not scrolled, and the header is in place', appTop(), (v) => v.every((x) => x === 0));
+  await t.ask('Make the morning new-ticket check run on Mondays only');
+  await t.click(`${lastCard} [data-act="editSave"]`, 'Save change', { decision: true });
+  await t.expect('Still in place after saving a change', appTop(), (v) => v.every((x) => x === 0));
+}, [390]);
 
 /* Keyboard only: no mouse. Tab, Shift+Tab, Enter, Space, arrows, Escape, typing. */
 add('KEYS-A', 'Scenario A with the keyboard only', async (t) => {
