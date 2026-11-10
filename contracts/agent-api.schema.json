@@ -850,7 +850,7 @@
         "tool": {
           "anyOf": [
             {
-              "$ref": "#/$defs/ToolId"
+              "$ref": "#/$defs/CardToolId"
             },
             {
               "type": "null"
@@ -1053,6 +1053,15 @@
       ],
       "title": "CardToRun",
       "type": "object"
+    },
+    "CardToolId": {
+      "enum": [
+        "github.read_releases",
+        "jira.search",
+        "jira.read_ticket",
+        "jira.create_ticket"
+      ],
+      "type": "string"
     },
     "CardsInputs": {
       "additionalProperties": false,
@@ -1895,7 +1904,7 @@
         },
         "tools": {
           "items": {
-            "$ref": "#/$defs/ToolId"
+            "$ref": "#/$defs/CardToolId"
           },
           "title": "Tools",
           "type": "array"
@@ -3058,7 +3067,9 @@
         "github.read_releases",
         "jira.search",
         "jira.read_ticket",
-        "jira.create_ticket"
+        "jira.create_ticket",
+        "packages.read_versions",
+        "packages.find_vulnerabilities"
       ],
       "type": "string"
     },
@@ -3094,7 +3105,7 @@
           "type": "string"
         },
         "id": {
-          "$ref": "#/$defs/ToolId"
+          "$ref": "#/$defs/CardToolId"
         },
         "input_schema": {
           "additionalProperties": true,

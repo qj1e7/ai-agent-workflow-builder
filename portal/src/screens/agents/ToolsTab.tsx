@@ -1,10 +1,12 @@
 import type { CapabilityView, CardView, ToolView } from '../../api/types'
-import { approvalWords, kindLabel, systemOf } from './agents'
+import { approvalWords, kindLabel } from './agents'
 import { toolHealth } from './capabilities'
 import styles from './AgentsPage.module.css'
 
 function usedBy(tool: ToolView, cards: readonly CardView[]): string {
-  const names = cards.filter((card) => card.tools.includes(tool.id)).map((card) => card.name)
+  // ADR 0025: the Version checker runs these itself on the Software watchlist, and no agent card can.
+  if (!tool.in_cards) return 'Used by the Version checker, on the Software watchlist'
+  const names = cards.filter((card) => card.tools.some((id) => id === tool.id)).map((card) => card.name)
   return names.length > 0 ? `Used by ${names.join(', ')}` : 'No agent uses it yet'
 }
 
@@ -15,7 +17,7 @@ function ToolRow({ tool, cards, capabilities, now }: { tool: ToolView; cards: re
     <li className={styles['toolRow']} data-tool-id={tool.id}>
       <div>
         <b>{tool.name}</b>
-        <span className={styles['small'] + ' muted'}>{systemOf(tool.id)}</span>
+        <span className={styles['small'] + ' muted'}>{tool.system}</span>
       </div>
       <p className={styles['small']}>{tool.description}</p>
       <p className={styles['small']}>

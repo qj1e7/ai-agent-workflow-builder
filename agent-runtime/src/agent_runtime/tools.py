@@ -9,6 +9,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstra
 
 from agent_runtime.contract import (
     REPO_PATTERN,
+    CardToolId,
     InputKind,
     RepoName,
     ToolId,
@@ -127,7 +128,7 @@ def _plain(schema: dict[str, Any]) -> dict[str, Any]:
 class Tool:
     def __init__(
         self,
-        id: ToolId,
+        id: CardToolId,
         kind: ToolKind,
         name: str,
         description: str,
@@ -192,10 +193,15 @@ TOOLS: Final = (
         target_kind="jira_project",
     ),
 )
-# The tools that run with no AI model. The Software watchlist reads releases itself
+# The Version checker runs these two itself on the Software watchlist (ADR 0025). They are
+# listed for people to see. No card and no model can use them, so they are not in TOOLS.
+WATCHLIST_TOOLS: Final[frozenset[ToolId]] = frozenset(
+    {"packages.read_versions", "packages.find_vulnerabilities"}
+)
+# The tools that run with no AI model. The Software watchlist reads releases and packages itself
 # (watchlist.py). Only the card runner, which is a model, calls the others.
-MODEL_FREE_TOOLS: Final = frozenset({"github.read_releases"})
-TOOL_IDS: Final = frozenset(get_args(ToolId.__value__))
+MODEL_FREE_TOOLS: Final = frozenset({"github.read_releases"}) | WATCHLIST_TOOLS
+TOOL_IDS: Final = frozenset(get_args(CardToolId.__value__))
 BY_ID: Final = {tool.id: tool for tool in TOOLS}
 BY_MODEL_NAME: Final = {tool.model_name: tool for tool in TOOLS}
 

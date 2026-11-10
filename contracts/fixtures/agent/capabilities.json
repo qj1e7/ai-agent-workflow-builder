@@ -103,7 +103,10 @@
       "needs_model": false,
       "platform": false,
       "focus": true,
-      "tools": []
+      "tools": [
+        "packages.read_versions",
+        "packages.find_vulnerabilities"
+      ]
     },
     {
       "id": "jira.create",

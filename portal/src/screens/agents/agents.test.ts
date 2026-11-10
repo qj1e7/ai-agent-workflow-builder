@@ -3,8 +3,8 @@ import type { ToolView } from '../../api/types'
 import { accessLabel, approvalWords, cardAccess, faceId, kindLabel, PLATFORM_AGENT_MARK, PLATFORM_AGENTS, systemOf, toolCountWords, toolsUnavailableWords, versionWords } from './agents'
 
 const TOOLS: ToolView[] = [
-  { id: 'jira.search', kind: 'read', name: 'Search Jira', description: '', target_input: null, min_approvers: null },
-  { id: 'jira.create_ticket', kind: 'write', name: 'Create a Jira ticket', description: '', target_input: 'jira_project', min_approvers: 1 },
+  { id: 'jira.search', kind: 'read', name: 'Search Jira', description: '', system: 'Jira', in_cards: true, target_input: null, min_approvers: null },
+  { id: 'jira.create_ticket', kind: 'write', name: 'Create a Jira ticket', description: '', system: 'Jira', in_cards: true, target_input: 'jira_project', min_approvers: 1 },
 ]
 
 describe('read and write labels', () => {

@@ -17,6 +17,8 @@ import {
   PLATFORM_AGENT_MARK,
   toolCountWords,
   versionWords,
+  watchlistTools,
+  WATCHLIST_NOTE,
   cardAccess,
   faceId,
   type Access,
@@ -45,13 +47,14 @@ interface TileProps {
   id: string
   name: string
   what: string
+  note?: string | undefined
   access: Access
   toolCount: number
   platform: boolean
   to: string
 }
 
-function Tile({ id, name, what, access, toolCount, platform, to }: TileProps) {
+function Tile({ id, name, what, note, access, toolCount, platform, to }: TileProps) {
   return (
     <article className={styles['tile']}>
       <div className={styles['tileTop']}>
@@ -66,6 +69,7 @@ function Tile({ id, name, what, access, toolCount, platform, to }: TileProps) {
         </div>
       </div>
       <p>{what}</p>
+      {note ? <p className={styles['small']}>{note}</p> : null}
       <p className={styles['small']}>
         <AccessTag access={access} />
         {toolCount > 0 ? <span className="muted"> {toolCountWords(toolCount)}</span> : null}
@@ -90,13 +94,15 @@ export function PlatformTile({ agent, search }: { agent: PlatformAgent; search: 
 
 export function CardTile({ card, tools, search }: { card: CardView; tools: ToolIndex; search: string }) {
   const kinds = new Map([...tools].map(([id, tool]) => [id, tool.kind]))
+  const extra = watchlistTools(card, tools.values())
   return (
     <Tile
       id={faceId(card)}
       name={card.name}
       what={card.purpose}
+      note={extra.length > 0 ? WATCHLIST_NOTE : undefined}
       access={cardAccess(card, kinds)}
-      toolCount={card.tools.length}
+      toolCount={card.tools.length + extra.length}
       platform={false}
       to={`/agents/${card.card_id}${search}`}
     />
@@ -240,13 +246,15 @@ export function PlatformDialog({ agent, onClose }: { agent: PlatformAgent; onClo
 
 export function CardDialog({ card, tools, onClose }: { card: CardView; tools: ToolIndex; onClose: () => void }) {
   const nameOf = (id: ToolId) => tools.get(id)?.name ?? id
+  const extra = watchlistTools(card, tools.values())
   return (
     <Modal face={faceId(card)} title={card.name} under={<span className="muted">{versionWords(card)}</span>} onClose={onClose}>
       <p>{card.purpose}</p>
+      {extra.length > 0 ? <p>{WATCHLIST_NOTE}</p> : null}
       <Steps steps={card.blocks.map((block) => block.say)} />
       <section>
         <h3>Tools it may use</h3>
-        {card.tools.length === 0 ? (
+        {card.tools.length + extra.length === 0 ? (
           <p className="muted">{accessLabel('none')}.</p>
         ) : (
           <ul className={styles['toolList']}>
@@ -261,6 +269,13 @@ export function CardDialog({ card, tools, onClose }: { card: CardView; tools: To
                 </li>
               )
             })}
+            {extra.map((tool) => (
+              <li key={tool.id} data-tool-id={tool.id}>
+                <span className={styles['tag']}>{kindLabel(tool.kind)}</span>
+                <span>{tool.name}</span>
+                <span className="muted">On the Software watchlist</span>
+              </li>
+            ))}
           </ul>
         )}
       </section>

@@ -71,7 +71,7 @@ function NameStep({ state, busy, refs, dispatch }: FormProps) {
   return (
     <>
       <h3 id="add-software-heading">Add software</h3>
-      <Field id="sw-name" label="Software name" help="Type the name, such as Kubernetes. I’ll find where it’s published: GitHub, Maven Central or npm." error={error}>
+      <Field id="sw-name" label="Software name" help="I know common software, such as Kubernetes. If I don’t know yours, you can choose where it’s published." error={error}>
         <input
           id="sw-name"
           ref={refs?.name}

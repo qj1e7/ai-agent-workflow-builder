@@ -14,7 +14,7 @@ import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import type { CapabilitiesView, CardView, Me, ToolView } from '../../api/types'
 import { CARDS_UNAVAILABLE_WORDS, NOT_FOUND_WORDS } from './AgentsPage'
-import { CHANGE_LATER_NOTE, PLATFORM_NOTE, toolsUnavailableWords } from './agents'
+import { CHANGE_LATER_NOTE, PLATFORM_NOTE, toolsUnavailableWords, WATCHLIST_NOTE } from './agents'
 import { CAPABILITIES_UNAVAILABLE_WORDS } from './capabilities'
 
 const CARDS = cardsFixture.cards as unknown as CardView[]
@@ -113,7 +113,7 @@ describe('the Agent library list', () => {
     expect(main).toContain('Platform agents')
     expect(main).toContain('Specialist agents')
     expect(main.match(/Platform agent\b/g)?.length).toBe(2)
-    expect(main).toContain('Changes data after a yes 3 tools')
+    expect(main).toContain('Changes data after a yes 5 tools')
     expect(main).toContain('Reads only 1 tool')
     expect(main).toContain('No access to other systems')
   })
@@ -141,6 +141,17 @@ describe('a card', () => {
     expect(dialog).toContain('Changes data Create a Jira ticket Waits for a yes from 1 Approver')
     expect(dialog).toContain(CHANGE_LATER_NOTE)
     expect(dialog).toContain('Close')
+  })
+
+  it('says what the Version checker also reads on the Software watchlist, and lists those tools, as the Tools tab does', () => {
+    const dialog = text(dialogOf(render({ path: '/agents/crd_version_checker' })))
+    expect(dialog).toContain(WATCHLIST_NOTE)
+    expect(dialog).toContain('Reads only Read Maven Central and npm On the Software watchlist')
+    expect(dialog).toContain('Reads only Look up known vulnerabilities in packages On the Software watchlist')
+    expect(mainOf(render())).toContain(WATCHLIST_NOTE)
+    const weekly = text(dialogOf(render({ path: '/agents/crd_01JD0WEEKLYSUMMARY000001' })))
+    expect(weekly).toContain('Weekly summary')
+    expect(weekly).not.toContain('On the Software watchlist')
   })
 
   it('numbers its How it works steps with muted markers, as the prototype’s plan does', () => {
@@ -208,9 +219,9 @@ describe('the Tools tab', () => {
   it('lists the focus tools by name and system, marks Create a Jira ticket as a write that waits for a yes, and names who uses each', () => {
     const html = render({ path: '/agents?tab=tools' })
     const main = mainOf(html)
-    expect((html.match(/<li class="[^"]*" data-tool-id=/g) ?? []).length).toBe(2)
+    expect((html.match(/<li class="[^"]*" data-tool-id=/g) ?? []).length).toBe(4)
     expect(main).toContain('Tools that change data 1')
-    expect(main).toContain('Tools that only read 1')
+    expect(main).toContain('Tools that only read 3')
     expect(main).toContain('Create a Jira ticket Jira')
     expect(main).toContain('Read GitHub releases GitHub')
     expect(main).not.toContain('jira.create_ticket')
@@ -225,6 +236,14 @@ describe('the Tools tab', () => {
     expect(html).not.toContain('data-tool-id="jira.read_ticket"')
     expect(html).toContain('data-tool-id="github.read_releases"')
     expect(html).toContain('data-tool-id="jira.create_ticket"')
+  })
+
+  it('lists the Maven Central, npm and vulnerability reads the Version checker does on the Software watchlist', () => {
+    const main = mainOf(render({ path: '/agents?tab=tools' }))
+    expect(main).toContain('Tools are how agents reach GitHub, Maven Central, npm, OSV, NVD and Jira.')
+    expect(main).toContain('Read Maven Central and npm Maven Central and npm')
+    expect(main).toContain('Look up known vulnerabilities in packages OSV and NVD')
+    expect(main).toContain('Used by the Version checker, on the Software watchlist')
   })
 
   it('gives each tool its health from the registry, and says what is down', () => {

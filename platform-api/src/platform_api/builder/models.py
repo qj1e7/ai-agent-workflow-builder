@@ -15,6 +15,7 @@ from pydantic import (
 from platform_api.builder.templates import VERSION_PATTERN
 from platform_api.orchestration import (
     AT_PATTERN,
+    CardToolId,
     Day,
     InputKind,
     RowKind,
@@ -421,6 +422,11 @@ class ToolView(WireModel):
     kind: ToolKind
     name: str
     description: str
+    system: str = Field(description='What it reaches, in words, such as "Maven Central and npm".')
+    in_cards: bool = Field(
+        description="Whether an agent card can use it. False for a tool only the Software "
+        "watchlist check runs."
+    )
     target_input: InputKind | None = Field(
         description="For a write, the kind of the agent's one input that says where it writes."
     )
@@ -489,7 +495,7 @@ class CardInputView(WireModel):
 
 class CardBlockView(WireModel):
     say: str
-    tool: ToolId | None
+    tool: CardToolId | None
 
 
 class CardView(WireModel):
@@ -504,7 +510,7 @@ class CardView(WireModel):
     inputs: list[CardInputView]
     blocks: list[CardBlockView]
     approvals: list[CardApprovalView]
-    tools: list[ToolId] = Field(description="The tools the blocks use, each once, in order.")
+    tools: list[CardToolId] = Field(description="The tools the blocks use, each once, in order.")
 
 
 class CardList(WireModel):

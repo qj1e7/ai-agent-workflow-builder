@@ -64,7 +64,15 @@ def test_the_rules_match_the_runtimes_published_tool_list():
     if not published.exists():
         pytest.skip("the runtime's tools.json arrives with the runtime's branch")
     tools = json.loads(published.read_text())["tools"]
-    assert [(t["id"], t["kind"]) for t in tools] == [(r.id, r.kind) for r in TOOL_RULES]
+    card_rules = [(r.id, r.kind) for r in TOOL_RULES if r.in_cards]
+    assert [(t["id"], t["kind"]) for t in tools] == card_rules
+
+
+def test_only_the_watchlist_tools_are_kept_out_of_cards():
+    kept_out = [r.id for r in TOOL_RULES if not r.in_cards]
+    assert kept_out == ["packages.read_versions", "packages.find_vulnerabilities"]
+    assert all(RULES[t].kind == "read" for t in kept_out)
+    assert all(r.system for r in TOOL_RULES)
 
 
 def test_every_write_tool_has_a_target_a_minimum_and_a_connector():

@@ -2512,7 +2512,7 @@
           "tool": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ToolId"
+                "$ref": "#/components/schemas/CardToolId"
               },
               {
                 "type": "null"
@@ -2743,6 +2743,15 @@
         "title": "CardRefused",
         "type": "object"
       },
+      "CardToolId": {
+        "enum": [
+          "github.read_releases",
+          "jira.search",
+          "jira.read_ticket",
+          "jira.create_ticket"
+        ],
+        "type": "string"
+      },
       "CardView": {
         "additionalProperties": false,
         "properties": {
@@ -2802,7 +2811,7 @@
           "tools": {
             "description": "The tools the blocks use, each once, in order.",
             "items": {
-              "$ref": "#/components/schemas/ToolId"
+              "$ref": "#/components/schemas/CardToolId"
             },
             "title": "Tools",
             "type": "array"
@@ -8329,7 +8338,9 @@
           "github.read_releases",
           "jira.search",
           "jira.read_ticket",
-          "jira.create_ticket"
+          "jira.create_ticket",
+          "packages.read_versions",
+          "packages.find_vulnerabilities"
         ],
         "type": "string"
       },
@@ -8367,6 +8378,11 @@
           "id": {
             "$ref": "#/components/schemas/ToolId"
           },
+          "in_cards": {
+            "description": "Whether an agent card can use it. False for a tool only the Software watchlist check runs.",
+            "title": "In Cards",
+            "type": "boolean"
+          },
           "kind": {
             "$ref": "#/components/schemas/ToolKind"
           },
@@ -8386,6 +8402,11 @@
             "title": "Name",
             "type": "string"
           },
+          "system": {
+            "description": "What it reaches, in words, such as \"Maven Central and npm\".",
+            "title": "System",
+            "type": "string"
+          },
           "target_input": {
             "anyOf": [
               {
@@ -8403,6 +8424,8 @@
           "kind",
           "name",
           "description",
+          "system",
+          "in_cards",
           "target_input",
           "min_approvers"
         ],

@@ -209,14 +209,14 @@ CAPABILITIES: Final = (
         focus=True,
     ),
     # ADR 0025, first part. The Version checker reads these on the watchlist only, so no agent
-    # card tool goes with it.
+    # card or model can use its two tools.
     _ready(
         "packages.versions",
         "Check Maven Central and npm packages for new versions and known vulnerabilities",
         "read",
         "Maven Central and npm",
         None,
-        [],
+        ["packages.read_versions", "packages.find_vulnerabilities"],
         focus=True,
     ),
     _ready(

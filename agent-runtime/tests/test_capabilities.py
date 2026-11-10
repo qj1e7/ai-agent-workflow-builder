@@ -16,7 +16,7 @@ from agent_runtime.abilities import (
 )
 from agent_runtime.api import Settings, create_app
 from agent_runtime.contract import CapabilityList
-from agent_runtime.tools import MODEL_FREE_TOOLS, TOOLS
+from agent_runtime.tools import MODEL_FREE_TOOLS, TOOLS, WATCHLIST_TOOLS
 
 READY = [c for c in CAPABILITIES if c.state == "ready"]
 NOT_READY = [c for c in CAPABILITIES if c.state != "ready"]
@@ -39,9 +39,17 @@ def test_a_ready_capability_with_tools_is_backed_by_an_ability_and_by_each_tool(
     tool_ids = {t.id for t in TOOLS}
     line_names = {a.plain for a in ABILITIES}
     for entry in READY:
-        if entry.tools:
+        card_tools = set(entry.tools) - WATCHLIST_TOOLS
+        if card_tools:
             assert ABILITY_OF.get(entry.id) in line_names, entry.id
-        assert set(entry.tools) <= tool_ids, entry.id
+        assert card_tools <= tool_ids, entry.id
+
+
+def test_the_watchlist_tools_are_listed_but_no_card_or_model_gets_them():
+    offered = {tool for c in READY for tool in c.tools}
+    assert offered >= WATCHLIST_TOOLS
+    assert {t.id for t in TOOLS} & WATCHLIST_TOOLS == set()
+    assert BY_ID["packages.versions"].tools == sorted(WATCHLIST_TOOLS, reverse=True)
 
 
 def test_every_ability_line_has_a_ready_capability():
@@ -80,8 +88,13 @@ def test_a_ready_entry_needs_the_model_when_a_tool_only_the_card_runner_calls_is
 def test_the_tools_that_need_no_model_are_the_ones_the_watchlist_reads_by_itself():
     source = inspect.getsource(watchlist)
     assert "read_releases" in source
+    assert "AdvisoryReader" in source
     assert "jira" not in source.lower()
-    assert sorted(MODEL_FREE_TOOLS) == ["github.read_releases"]
+    assert sorted(MODEL_FREE_TOOLS) == [
+        "github.read_releases",
+        "packages.find_vulnerabilities",
+        "packages.read_versions",
+    ]
 
 
 def test_the_model_does_the_summary_and_nothing_else_without_tools_does():

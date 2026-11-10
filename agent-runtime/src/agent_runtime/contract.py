@@ -236,9 +236,20 @@ class WatchlistInputs(WireModel):
     ]
 
 
-type ToolId = Literal[
+type CardToolId = Literal[
     "github.read_releases", "jira.search", "jira.read_ticket", "jira.create_ticket"
 ]
+"""The tools an agent card can use. The runtime gives each one to the model."""
+type ToolId = Literal[
+    "github.read_releases",
+    "jira.search",
+    "jira.read_ticket",
+    "jira.create_ticket",
+    "packages.read_versions",
+    "packages.find_vulnerabilities",
+]
+"""Every tool, including the two only the Software watchlist check runs (ADR 0025). No card and
+no model can use those two."""
 type ToolKind = Literal["read", "write"]
 type InputKind = Literal["github_repo", "jira_project", "text"]
 
@@ -257,7 +268,7 @@ class CardInput(WireModel):
 
 class CardBlock(WireModel):
     say: str = Field(min_length=1, max_length=300, description="The step in plain English.")
-    tool: ToolId | None = Field(
+    tool: CardToolId | None = Field(
         description="The one tool this block uses, or None for a block that only thinks."
     )
 
@@ -583,7 +594,7 @@ type GitHubCheckResult = Annotated[GitHubWorking | GitHubProblem, Field(discrimi
 
 
 class ToolSpec(WireModel):
-    id: ToolId
+    id: CardToolId
     kind: ToolKind
     name: str
     description: str
@@ -705,7 +716,7 @@ class LibraryCard(WireModel):
     purpose: str
     good_for: list[str] = Field(default_factory=list[str])
     inputs: list[LibraryInput] = Field(default_factory=list[LibraryInput])
-    tools: list[ToolId] = Field(default_factory=list[ToolId])
+    tools: list[CardToolId] = Field(default_factory=list[CardToolId])
 
 
 class ChooseRequest(WireModel):

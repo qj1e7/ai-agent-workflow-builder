@@ -16,6 +16,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from platform_api.orchestration.agents import (
     CardSpec,
+    CardToolId,
     InputKind,
     ProposedIntentIn,
     ToolId,
@@ -60,6 +61,10 @@ class ToolRule:
     """How the run line words the write, such as "Create Jira tickets"."""
     scope_input: InputKind | None = None
     """For a read: the kind of the card's one input that limits what the tool may read."""
+    system: str = ""
+    """What it reaches, in words, such as "Maven Central and npm"."""
+    in_cards: bool = True
+    """Whether an agent card can use it. False for a tool only the Software watchlist check runs."""
 
 
 TOOL_RULES: tuple[ToolRule, ...] = (
@@ -68,6 +73,28 @@ TOOL_RULES: tuple[ToolRule, ...] = (
         "read",
         "Read GitHub releases",
         "Reads the newest releases of a public GitHub repository.",
+        system="GitHub",
+    ),
+    # ADR 0025. The Version checker runs these two itself on the Software watchlist, so they are
+    # listed for people to see, and no agent card can use them.
+    ToolRule(
+        "packages.read_versions",
+        "read",
+        "Read Maven Central and npm",
+        "Reads every version a package has on Maven Central or npm, so the Version checker can "
+        "find the newest. Only the Maven and npm packages on the Software watchlist.",
+        system="Maven Central and npm",
+        in_cards=False,
+    ),
+    ToolRule(
+        "packages.find_vulnerabilities",
+        "read",
+        "Look up known vulnerabilities in packages",
+        "Finds known vulnerabilities in the version we run of each Maven or npm package in OSV, "
+        "then reads each one's official score from NVD. Only the Maven and npm packages on the "
+        "Software watchlist, and only a version someone gave.",
+        system="OSV and NVD",
+        in_cards=False,
     ),
     ToolRule(
         "jira.search",
@@ -80,6 +107,7 @@ TOOL_RULES: tuple[ToolRule, ...] = (
             "A long list is cut at 50, and the agent says so."
         ),
         scope_input="jira_project",
+        system="Jira",
     ),
     ToolRule(
         "jira.read_ticket",
@@ -87,6 +115,7 @@ TOOL_RULES: tuple[ToolRule, ...] = (
         "Read a Jira ticket",
         "Reads one Jira ticket.",
         scope_input="jira_project",
+        system="Jira",
     ),
     ToolRule(
         "jira.create_ticket",
@@ -99,6 +128,7 @@ TOOL_RULES: tuple[ToolRule, ...] = (
         operation="create_ticket",
         target_key="project",
         action_name="Create Jira tickets",
+        system="Jira",
     ),
 )
 RULES: Mapping[str, ToolRule] = {rule.id: rule for rule in TOOL_RULES}
@@ -134,7 +164,7 @@ def check_value(kind: str, value: str) -> str | None:
     return None
 
 
-def tools_used(card: CardSpec) -> tuple[ToolId, ...]:
+def tools_used(card: CardSpec) -> tuple[CardToolId, ...]:
     """The card's tools, each once, in block order."""
     return tuple(dict.fromkeys(block.tool for block in card.blocks if block.tool is not None))
 

@@ -2839,7 +2839,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const kindField = sourcesShown().length > 1 ? `<div class="field"><label for="sw-kind">Published on</label><select id="sw-kind" data-sw="kind">${sourcesShown().map((v) => opt(v, kindLabel(v), f.kind || 'github')).join('')}</select></div>` : '';
     let add = '';
     if (step === 'name') {
-      add = `<form class="addname" data-submit="swFind" novalidate><div class="field"><label for="sw-name">Software name</label><input type="text" id="sw-name" data-sw="name" value="${esc(f.name)}" placeholder="Kubernetes"${fieldErr('sw-name', S.swErr.name, 'Type the name. I’ll find where it’s published: GitHub, Maven Central or npm.')}</div><button type="submit" class="btn">Find it</button></form>`;
+      add = `<form class="addname" data-submit="swFind" novalidate><div class="field"><label for="sw-name">Software name</label><input type="text" id="sw-name" data-sw="name" value="${esc(f.name)}" placeholder="Kubernetes"${fieldErr('sw-name', S.swErr.name, 'I know common software, such as Kubernetes. If I don’t know yours, you can choose where it’s published.')}</div><button type="submit" class="btn">Find it</button></form>`;
     } else {
       const m = f.matches;
       const nameLine = `<h3 id="sw-guess" tabindex="-1">${m.length ? `Adding ${esc(f.name.trim())}` : `I couldn’t find “${esc(f.name.trim())}”`}</h3>`;
@@ -4145,7 +4145,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     };
     const specialists = list.filter((a) => !a.platform);
     const tab = S.libTab;
-    const lead = { can: 'What the platform can do for software versioning. An agent can use only what is listed under I can.', agents: 'The agents behind software version checks. Anything that changes data waits for a yes.', tools: 'Tools are how agents reach GitHub and Jira. A tool that changes data waits for a yes, every time.' }[tab];
+    const lead = { can: 'What the platform can do for software versioning. An agent can use only what is listed under I can.', agents: 'The agents behind software version checks. Anything that changes data waits for a yes.', tools: 'Tools are how agents reach GitHub, Maven Central, npm, OSV, NVD and Jira. A tool that changes data waits for a yes, every time.' }[tab];
     const head = `<div class="pagehead"><div><h1 tabindex="-1">Agent library</h1><p>${lead}</p></div></div>
       <div class="seg lib-tabs" role="group" aria-label="Show">${[['can', 'What it can do', 0], ['agents', 'Agents', list.length], ['tools', 'Tools', Object.keys(TOOLS).filter((k) => toolLive(k) && (k === 'jiraComp' || (CAPS[capOfTool(k)] || {}).focus)).length]].map(([k, l, n]) => `<button data-act="libTab" data-arg="${k}" aria-pressed="${tab === k}">${l}${n ? ` <span class="seg-n">${n}</span>` : ''}</button>`).join('')}</div>`;
     if (tab === 'tools') return head + toolsTab();
