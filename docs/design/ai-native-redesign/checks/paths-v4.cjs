@@ -534,6 +534,33 @@ add('ANS-edit-honest', 'A change the card can’t make gets an honest answer, an
   await t.expectCount('It offers the workflow itself, with no edit card', `${lastCard} :is([data-act="workflow"][data-arg="issues"], [data-act="editSave"])`, 1);
 }, [1280]);
 
+/* Status questions in any wording (ADR 0043), failing closed: a text with a change word gets the command path. */
+const lastSay = (t) => t.page.locator('main .thread [data-say]').last().innerText();
+add('ANS-status', 'Questions in other words get answers from platform state', async (t) => {
+  for (const q of ['what needs my attention today?', 'anything for me?', 'what’s waiting on me']) {
+    await t.ask(q);
+    await t.expect(`“${q}” gets what needs her`, lastSay(t), /^5 things need you\.$/);
+  }
+  await t.ask('is LangGraph up to date?');
+  await t.expect('“is LangGraph up to date?” gets its versions', lastSay(t), /^LangGraph is behind\. You run 1\.2\.14 and the newest is 1\.2\.17\.$/);
+  await t.ask('which software is behind?');
+  await t.expect('“which software is behind?” names them, with the watchlist’s own count', lastSay(t), /^3 have a newer version: Log4j core, LangGraph and FastAPI\.$/);
+  await t.ask('how are my workflows doing');
+  await t.expect('“how are my workflows doing” sums them up', lastSay(t), /^You have 3 workflows\. 2 stopped and 1 is waiting for a yes\.$/);
+}, [1280, 390]);
+
+add('ANS-status-commands', 'A question with a change word in it is a command, never a status answer', async (t) => {
+  const STATUS = /things need you|Nothing needs you|You have \d+ workflows|is behind|is up to date|have a newer version/;
+  await t.ask('can you make the React check daily?');
+  await t.expect('“can you make the React check daily?” goes to the command path', lastSay(t), (v) => !STATUS.test(v) && /You don’t have a React check/.test(v));
+  await t.ask('what needs my attention? pause the morning check');
+  await t.expect('A status question with a pause in it goes to the command path', lastSay(t), (v) => !STATUS.test(v) && /From the chat I can only change when Morning new-ticket check runs/.test(v));
+  await t.ask('is LangGraph up to date? if not, watch it every day');
+  await t.expect('A software question with a watch in it goes to the command path', lastSay(t), (v) => !STATUS.test(v));
+  await t.ask('how are my workflows doing? make the morning check run at 10am');
+  await t.expectText('A workflows question with a change in it gets the edit card', /Before\s+Every weekday at 8:00\s+After\s+Every weekday at 10:00/, lastCard);
+}, [1280]);
+
 /* Live cards (ADR 0043): every card in the chat reads current state, so a change made anywhere shows in older answers. */
 add('ANS-live', 'An older answer reads current state: a pause in the panel and an approval on another page show in it', async (t) => {
   await t.ask(CHECK_WORKFLOWS);

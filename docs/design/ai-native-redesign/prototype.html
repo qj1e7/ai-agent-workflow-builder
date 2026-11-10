@@ -2529,6 +2529,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return (has('sw') && S.sw === 'waiting' ? 1 : 0) + (lsProblem() ? 1 : 0) + (lj ? 1 : 0) + ending;
   }
   const swLive = () => watchRows().filter((r) => !S.removed.includes(r.key));
+  /* What has a newer version: the watchlist's count line and the Planner's answer both read it. */
+  const behindRows = () => swLive().filter((r) => r.rank === 0);
   function rail() {
     const v = S.view.name;
     const swRun = v === 'run' && S.view.id === 'sw';
@@ -3009,7 +3011,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The count line the page opens with: what has a newer version and what can't be checked, from the same rows as the list. */
   function watchLine() {
     const live = swLive().concat(S.added.map((a, i) => ({ key: `add${i}`, rank: 2 })).filter((r) => !S.removed.includes(r.key)));
-    const newer = live.filter((r) => r.rank === 0).length;
+    const newer = behindRows().length;
     const cant = live.filter((r) => r.rank === 1).length;
     if (!live.length) return 'Everything your team runs, in one list.';
     return newer || cant ? [newer ? `${newer} ${newer === 1 ? 'has' : 'have'} a newer version` : '', cant ? `${cant} can’t be checked` : ''].filter(Boolean).join(' · ') : 'Everything is up to date.';
@@ -3561,16 +3563,39 @@ details > .m-close { animation: fold 140ms ease-in both; }
      Check my workflows, why it stopped and what needs me read the same state as Workflows and Needs you. In the
      prototype, word rules pick them; in the built app, the model picks the kind and code fills it from platform-api. */
   const workflowNamed = (t) => routineIds().find((id) => t.toLowerCase().includes(R(id).name.toLowerCase()));
-  /* Each pattern matches a whole short question about her workflows, so words like "ideas" or "to approve" inside a
-     real task request never take it over. */
+  /* A word that asks for a change, or for something to run on a schedule. A text with one is a command: it takes the
+     command path and never a read-only answer, however politely or question-like it is put (the lesson of 8 to 9 Nov).
+     "The run" is a noun, not a command. */
+  const COMMAND = /\b(make|set|change|turn|pause|stop|delete|remove|create|add|watch|track|monitor|run|move|rename|switch|schedule|reschedule|resume|start|cancel|edit|update|upgrade|put|enable|disable|close|approve|decline|retry|report|send|post|e-?mail|raise|file|assign|every|daily|weekly|monthly)\b/i;
+  const isCommand = (t) => COMMAND.test(t.replace(/\b(?:the|a|this|that|last|next|each|its|my) runs?\b/gi, ' '));
+  /* "Is LangGraph up to date?": a software on the watchlist, one that isn't on it, or all of them. */
+  const IS_CURRENT = /\b(?:is|are)\s+(.+?)\s+(?:up to date|current|behind|out of date|outdated|on the (?:latest|newest)(?: version)?|the (?:latest|newest)(?: version)?)\b/i;
+  function softAbout(t) {
+    const words = (t.match(IS_CURRENT) || [])[1] || t;
+    const row = liveSoftware().find((x) => words.toLowerCase().includes(x.name.toLowerCase()));
+    if (row) return { kind: 'data', looked: ['watchlist'], about: row.key };
+    if (/\b(?:we|our software|software|tools?|everything|all|anything)\b/i.test(words)) return { kind: 'data', looked: ['watchlist'], behind: true };
+    const k = namedIn(words);
+    const name = k ? k[0] : cap(words.replace(/^(?:the|our|my)\s+/i, '').trim());
+    return name.split(/\s+/).length <= 3 ? { kind: 'data', looked: ['watchlist'], notOn: name } : null;
+  }
+  /* Questions about her workflows and software, in any wording (spec 6.2, ADR 0043). Each route reads platform state,
+     so it fails closed: a text with a change word is a command and goes on down the command path. A route's own words,
+     such as "stop" in "why did it stop", are not counted as a command. */
   const ABOUT = [
-    [/\bwhy\b.*\b(stop|stopped|fail|failed|broke|broken|went wrong)\b|^what (went wrong|happened)\b/i, (t) => ({ kind: 'why', id: workflowNamed(t) || stoppedIds()[0] || null })],
-    [/^(what needs me|what do i need to do|what('s| is) (waiting|for me|waiting for me|my to-?do)|(is )?(there )?anything (to approve|waiting|for me|i need to do)( for me)?|my (to-?do|approvals?)|what needs my (attention|yes))\s*[?.!]*$/i, () => ({ kind: 'mine' })],
-    [/^(set up )?another workflow\b|^(a )?new workflow\b|^what else( can i (do|ask( for)?))?\s*\??$|^(any )?starting points?\s*\??$|^(any )?ideas?\s*\??$/i, () => ({ kind: 'starts' })],
-    [/^(check|how are|what('s| is) the (status|state) of|show( me)?|see) (my |the |our |all )?workflows?\b|^(is|are) .*\b(running|working|on|stopped|paused)\s*\?*$/i, () => ({ kind: 'check' })],
+    [/\bwhy\b.*\b(stop|stopped|fail|failed|broke|broken|went wrong)\b|\bwhat (went wrong|happened)\b/i, (t) => ({ kind: 'why', id: workflowNamed(t) || stoppedIds()[0] || null }), /\bwhy\b[^?.!]*?\b(?:stop|fail|break)\b/i],
+    [/^(set up )?another workflow\b|^(a )?new workflow\b|^what else( can i (do|ask( for)?))?\s*\??$|^(any )?starting points?\s*\??$|^(any )?ideas?\s*\??$/i, () => ({ kind: 'starts' }), /^(set up )?another workflow\b|^(a )?new workflow\b/i],
+    [/\b(?:what|anything|something)\b[^.?!]*?\b(?:needs? (?:me|my)|waiting (?:on|for) (?:me|my)|for me|to approve|(?:do )?i need to do|on my plate)\b|\bneeds? my (?:attention|yes|approval)\b|\bmy (?:to-?do|approvals?)\b/i, () => ({ kind: 'mine' })],
+    [IS_CURRENT, softAbout],
+    [/\b(?:which|what|any(?:thing)?)\b[^.?!]*\b(?:behind|out of date|outdated|newer versions?|new versions?)\b/i, () => ({ kind: 'data', looked: ['watchlist'], behind: true })],
+    [/\b(?:how|what)(?:'s|’s| is| are)?\b[^.?!]*\bworkflows?\b|\bworkflows?\b[^.?!]*\b(?:doing|going|running|working|ok(?:ay)?|fine)\b|\b(?:status|state)\b[^.?!]*\bworkflows?\b|^(?:check|show(?: me)?|see)\b[^.?!]*\bworkflows?\b|^(?:is|are)\b.*\b(?:running|working|on|stopped|paused)\s*\?*$/i, () => ({ kind: 'check' })],
     [/^(help me )?(check )?(how many|which|what)\b.*\b(software|tools?|watchlist)\b/i, () => ({ kind: 'data', looked: ['watchlist'] })],
   ];
-  const aboutWorkflows = (t) => { const hit = ABOUT.find(([re]) => re.test(t)); return hit ? hit[1](t) : null; };
+  const aboutWorkflows = (t) => {
+    const hit = ABOUT.find(([re]) => re.test(t));
+    if (!hit || isCommand(hit[2] ? t.replace(hit[2], ' ') : t)) return null;
+    return hit[1](t);
+  };
   /* A workflow's state in the spec's words (15.9), as a pill tone and a word. */
   const stateOf = (id) => (S.paused[id] ? ['off', 'Paused'] : { bad: ['bad', 'Stopped'], wait: ['wait', 'Waiting for a yes'], off: ['off', 'No answer'] }[status(id).tone] || ['ok', 'On']);
   const STATE_ORDER = ['Stopped', 'Waiting for a yes', 'On', 'Paused', 'No answer'];
@@ -3635,6 +3660,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const liveSoftware = () => watchRows().concat(S.added.map((a, i) => ({ key: `add${i}`, name: a.name, ours: a.ours || 'Not known', newest: '?' }))).filter((r) => !S.removed.includes(r.key));
   const dataSay = (a) => {
     const rows = liveSoftware();
+    if (a && a.notOn) return onList(a.notOn) ? `${esc(a.notOn)} is on the Software watchlist now. It’s checked at the next check, ${R('sw').next}.` : `${esc(a.notOn)} isn’t on the Software watchlist, so I don’t know which version you run.`;
+    if (a && a.behind) { const b = behindRows(); return b.length ? `${b.length} ${b.length === 1 ? 'has' : 'have'} a newer version: ${andList(b.map((r) => esc(r.name)))}.` : 'Nothing on the Software watchlist has a newer version.'; }
     if (a && a.about) {
       const r = rows.find((x) => x.key === a.about);
       if (!r) return 'That software isn’t on the Software watchlist any more.';
@@ -3651,6 +3678,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const dataActions = (m) => {
     const c = m.card;
     const r = c.about ? liveSoftware().find((x) => x.key === c.about) : null;
+    if (me().op && c.notOn && !onList(c.notOn)) return `<div class="btns"><button class="btn sm" data-act="say" data-arg="Keep track of the ${esc(c.notOn)} version">Watch ${esc(c.notOn)}</button></div>`;
     if (!me().op || !r) return '';
     const stop = c.stopping
       ? `<span class="btns" role="group" aria-label="Stop watching ${esc(r.name)}"><span>Stop watching ${esc(r.name)}? It won’t be checked any more.</span><button class="btn sm" data-act="stopKeep" data-mid="${m.id}">Keep it</button><button class="btn sm bad" data-act="stopYes" data-mid="${m.id}">Yes, stop watching<span class="vh"> ${esc(r.name)}</span></button></span>`
@@ -3667,7 +3695,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function followUp(t) {
     const last = [...S.chat.msgs].reverse().find((x) => x.from === 'planner' && x.card);
     const m = FOLLOW.exec(t);
-    if (!last || !['data', 'watch', 'listed'].includes(last.card.kind) || !m || UNSAFE.test(t) || FOLLOW_CHANGES.test(m[1])) return null;
+    if (!last || !['data', 'watch', 'listed'].includes(last.card.kind) || !m || UNSAFE.test(t) || FOLLOW_CHANGES.test(m[1]) || isCommand(m[1])) return null;
     const name = m[1].replace(/^the\s+/i, '').trim();
     if (name.split(/\s+/).length > 3 || NOT_A_NAME.test(name)) return null;
     const row = liveSoftware().find((x) => x.name.toLowerCase() === name.toLowerCase());
