@@ -144,7 +144,7 @@
 .row {
   position: relative;
   display: grid;
-  grid-template-columns: 196px minmax(0, 1fr) 196px 172px;
+  grid-template-columns: 196px minmax(0, 1fr) 172px 172px;
   gap: 16px;
   align-items: center;
   padding: 16px 20px;
@@ -200,6 +200,10 @@
   white-space: nowrap;
 }
 
+.act:empty {
+  display: none;
+}
+
 .act {
   position: relative;
   z-index: var(--z-raised);
@@ -249,6 +253,13 @@
 
   .next {
     white-space: normal;
+  }
+}
+
+/* When no row has an action, the list gives that column to the descriptions, as the prototype's no-act does. */
+@container (min-width: 861px) {
+  .noAct .row {
+    grid-template-columns: 196px minmax(0, 1fr) 172px;
   }
 }
 

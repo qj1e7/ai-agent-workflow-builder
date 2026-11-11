@@ -66,6 +66,10 @@ interface RowProps {
   readonly nameOf: (id: string) => string
 }
 
+/** The list's class: it gives the action column to the descriptions when no row has an action. */
+export const listClass = (rows: readonly Row[], extra = ''): string =>
+  [styles['list'], rows.some((row) => row.action !== null) ? null : styles['noAct'], extra].filter(Boolean).join(' ')
+
 export function WorkflowRow({ row, index, primary, arrive, now, nameOf }: RowProps) {
   const { useCase, action } = row
   const last = lastRunLine(useCase, now, nameOf)
@@ -300,7 +304,7 @@ function Loaded({ handedOver, now, me, useCases }: LoadedProps) {
           </div>
         ) : null}
         {rows.length > 0 ? (
-          <ul className={styles['list']} aria-label="Workflows">
+          <ul className={listClass(rows)} aria-label="Workflows">
             {rows.map((row, index) => (
               <WorkflowRow key={row.useCase.use_case_id} row={row} index={index} primary={index === firstAction} arrive={!back} now={now} nameOf={nameOf} />
             ))}

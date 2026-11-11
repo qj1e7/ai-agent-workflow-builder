@@ -5,9 +5,8 @@ import { useDisplayName } from '../../api/people'
 import { isOperator } from '../../api/me'
 import { useMe, useModelOff, useTroubleshoot, useUseCases } from '../../api/queries'
 import { ButtonLink } from '../../ui/Button'
-import { WorkflowRow } from '../workflows/WorkflowsPage'
+import { listClass, WorkflowRow } from '../workflows/WorkflowsPage'
 import { REFRESH_MS, rowsOf, viewerOf } from '../workflows/workflow'
-import wfStyles from '../workflows/Workflows.module.css'
 import { needsSay, workflowsSay } from './answers'
 import { Troubleshooting } from '../run/Outcome'
 import { HOME_NEEDS_SHOWN, needsOf, needsTotal, SEE_ALL_WORDS } from './home'
@@ -49,7 +48,7 @@ export function CheckWorkflowsAnswer({ useCaseId, now, say }: { useCaseId: strin
     <>
       <p>{sentence}</p>
       {rows.length > 0 ? (
-        <ul className={`${wfStyles['list'] ?? ''} ${styles['wfcheck'] ?? ''}`} aria-label="Your workflows">
+        <ul className={listClass(rows, styles['wfcheck'])} aria-label="Your workflows">
           {rows.map((row, index) => (
             <WorkflowRow key={row.useCase.use_case_id} row={row} index={index} primary={false} arrive={false} now={now} nameOf={nameOf} />
           ))}
