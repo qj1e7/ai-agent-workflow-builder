@@ -17,6 +17,7 @@ from platform_api.orchestration import (
     ToolKind,
 )
 from platform_api.shared import ApprovalId, RunId, SoftwareId, UserId
+from platform_api.wire import FailureReason as FailureReasonName
 from platform_api.wire import RepoName, WireIn, WireModel
 from platform_api.wire import RunState as RunStateName
 
@@ -87,6 +88,36 @@ class UseCaseSchedule(WireModel):
     )
 
 
+class LastRunView(WireModel):
+    run_id: RunId
+    state: RunStateName
+    at: AwareDatetime = Field(description="When the run started.")
+    test: bool = Field(
+        description="True when a person started it with Do a test run. False for Run now, a "
+        "check of the watchlist and a run its schedule started."
+    )
+    declined_by: UserId | None = Field(
+        description="Who declined it. Null unless the run was declined."
+    )
+    proposed: int = Field(
+        description="How many writes the run asked a yes for. Counted only while the run waits "
+        "for a yes or after it was declined. 0 for a run that finished or stopped."
+    )
+    written: int = Field(description="How many writes the run made. 0 if none.")
+    tickets: bool = Field(
+        description="True when each of those writes is a ticket, so the Portal can say tickets "
+        "rather than changes."
+    )
+    you_can_decide: bool = Field(
+        description="True when the person asking may decide the yes this run waits for. False "
+        "for any other run, and in an answer that is not for a person."
+    )
+    retryable: bool = Field(description="True when the run stopped and a retry may start it again.")
+    reason: FailureReasonName | None = Field(
+        description="Why a stopped run stopped. Null for any other run."
+    )
+
+
 class UseCaseView(WireModel):
     use_case_id: str
     version: int
@@ -118,6 +149,10 @@ class UseCaseView(WireModel):
         description="The agents of an agent use case, with the values they run with. "
         "Empty for a template use case."
     )
+    last_run: LastRunView | None = Field(
+        description="The newest run of this workflow, whatever its state. Null when it has "
+        "never run."
+    )
 
 
 class UseCaseList(WireModel):
@@ -130,6 +165,14 @@ class UseCaseDeleted(WireModel):
     restore_until: datetime = Field(
         description="Until then, POST /api/v1/use-cases/{use_case_id}/restore puts the workflow "
         "back as it was. Its past runs stay readable either way."
+    )
+
+
+class StartRunIn(WireIn):
+    test: bool = Field(
+        default=False,
+        description="True for Do a test run, which tries a workflow once. Run now and a check "
+        "of the watchlist send nothing.",
     )
 
 

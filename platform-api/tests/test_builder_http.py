@@ -1,7 +1,7 @@
 import asyncio
-from collections.abc import AsyncIterator, Mapping
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from collections.abc import AsyncIterator, Mapping, Sequence
+from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import cast
 
@@ -23,6 +23,7 @@ from platform_api.orchestration import (
     CantRow,
     CapabilityList,
     CapabilitySpec,
+    CardsTask,
     CheckPartResult,
     CheckWorkflowsAnswer,
     ConnectionCheck,
@@ -40,6 +41,7 @@ from platform_api.orchestration import (
     RefusedAnswer,
     RowKind,
     RunDetail,
+    RunGist,
     RunSpec,
     RunStarted,
     RuntimeDown,
@@ -54,8 +56,39 @@ from platform_api.orchestration import (
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
-from platform_api.shared import Principal, Role, RunId, SoftwareId, UseCaseId, UserId
-from tests.support import LOCAL_ENV
+from platform_api.orchestration.run_gist import gist_of
+from platform_api.orchestration.runs import (
+    AwaitingApproval,
+    Failed,
+    Failure,
+    Outcome,
+    Pending,
+    Rejected,
+    ResumeWork,
+    Stage,
+    Succeeded,
+    WriteDone,
+)
+from platform_api.orchestration.runs import (
+    FailureReason as RunFailure,
+)
+from platform_api.orchestration.runs import RunState as RunPhase
+from platform_api.orchestration.spec import Task
+from platform_api.orchestration.store import RunRecord
+from platform_api.orchestration.write_actions import Proposal, WriteAction
+from platform_api.shared import (
+    ApprovalId,
+    Digest,
+    Principal,
+    ProposalId,
+    Role,
+    RunId,
+    SoftwareId,
+    UseCaseId,
+    UserId,
+)
+from platform_api.wire import Trigger
+from tests.support import LOCAL_ENV, SPEC
 
 pytestmark = pytest.mark.anyio
 
@@ -72,9 +105,11 @@ GOOD = {
 class SecondCallRepeats:
     def __init__(self) -> None:
         self.calls = 0
+        self.specs: list[RunSpec] = []
 
     async def start_run(self, spec: RunSpec, principal: Principal, idempotency_key: str):
         self.calls += 1
+        self.specs.append(spec)
         return RunStarted(RunId("run_1"), created=self.calls == 1)
 
 
@@ -231,9 +266,60 @@ class FakeAnswers:
         return self.part
 
 
-class NoRuns:
-    async def list_runs(self) -> list[RunDetail]:
-        return []
+TICKET = WriteAction("jira", "create_ticket", {"project": "MOCK"}, {"title": "Upgrade LangGraph"})
+
+
+class RunBook:
+    """The runs the platform has, which Builder reads for each workflow's last run."""
+
+    def __init__(self) -> None:
+        self.runs: list[RunDetail] = []
+        self.asked: list[list[UseCaseId]] = []
+        self.viewers: list[Principal | None] = []
+
+    async def newest_runs(
+        self, use_case_ids: Sequence[UseCaseId], viewer: Principal | None = None
+    ) -> dict[UseCaseId, RunGist]:
+        self.asked.append(list(use_case_ids))
+        self.viewers.append(viewer)
+        newest: dict[UseCaseId, RunDetail] = {}
+        for run in self.runs:
+            key = run.record.spec.use_case_id
+            if key in use_case_ids and (
+                key not in newest
+                or (run.record.started_at, run.record.run_id)
+                > (newest[key].record.started_at, newest[key].record.run_id)
+            ):
+                newest[key] = run
+        return {key: gist_of(run, viewer) for key, run in newest.items()}
+
+    def add(
+        self,
+        use_case_id: str,
+        state: RunPhase,
+        at: datetime,
+        trigger: Trigger = "schedule",
+        proposed: int = 0,
+        task: Task = SPEC.task,
+        test: bool = False,
+    ) -> RunId:
+        run_id = RunId(f"run_{len(self.runs) + 1}")
+        record = RunRecord(
+            run_id,
+            replace(
+                SPEC, use_case_id=UseCaseId(use_case_id), trigger=trigger, task=task, test=test
+            ),
+            UserId("alice"),
+            at,
+            at,
+            1,
+            state,
+            (),
+            None,
+        )
+        proposal = Proposal(ProposalId("prp_1"), run_id, (TICKET,) * proposed, Digest("d"))
+        self.runs.append(RunDetail(record, 0, proposal if proposed else None, None, ()))
+        return run_id
 
 
 class FakeHome:
@@ -346,24 +432,28 @@ class Front:
     builder: Builder
     watchlist: Watchlist
     home: FakeHome
+    book: RunBook
+    starter: SecondCallRepeats
 
 
 @pytest.fixture
 async def front(db: Database) -> AsyncIterator[Front]:
     app = create_app(LOCAL_ENV)
     watchlist = Watchlist(db, NothingLearned(), ScheduleBook(db))
-    builder = Builder(db, SecondCallRepeats(), watchlist, "http://localhost:8000")
+    book = RunBook()
+    starter = SecondCallRepeats()
+    builder = Builder(db, starter, watchlist, "http://localhost:8000", history=book)
     answers = FakeAnswers()
     states = FakeStates(a_check("jira"), a_check("github"), a_check("teams"), a_check("model"))
     registry = FakeRegistry(REGISTRY)
     app.state.builder = builder
     app.state.watchlist = watchlist
     home = FakeHome()
-    facts = PlannerFactsReader(watchlist, builder, NoRuns(), home)
+    facts = PlannerFactsReader(watchlist, builder, home)
     app.state.planner_front = PlannerFront(answers, builder, watchlist, registry, states, facts)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
-        yield Front(c, answers, states, registry, builder, watchlist, home)
+        yield Front(c, answers, states, registry, builder, watchlist, home, book, starter)
 
 
 async def say(front: Front, text: str = FRIDAY) -> dict[str, object]:
@@ -780,3 +870,200 @@ def test_a_real_long_tag_is_kept_whole():
     tag = "@langchain/langgraph-checkpoint-postgres@1.0.0"
     fact = WatchedFact(name="x", repo="a/b", our_version=None, newest_version=tag, state="s")
     assert fact.newest_version == tag
+
+
+LONG_AGO = datetime(2026, 10, 26, 1, 41, tzinfo=UTC)
+USE_CASES = "/api/v1/use-cases"
+
+
+async def last_run_of(front: Front, name: str) -> dict[str, object] | None:
+    r = await front.client.get(USE_CASES, headers=ALICE)
+    assert r.status_code == 200, r.text
+    (row,) = [u for u in r.json()["use_cases"] if u["name"] == name]
+    return cast(dict[str, object] | None, row["last_run"])
+
+
+async def test_a_workflow_that_never_ran_has_no_last_run(front: Front):
+    await make_workflow(front, "Never ran")
+    assert await last_run_of(front, "Never ran") is None
+
+
+async def test_a_declined_run_names_who_declined_and_writes_nothing(front: Front):
+    use_case_id = await make_workflow(front, "Declined")
+    run_id = front.book.add(
+        use_case_id,
+        Rejected(RunId("run_1"), ProposalId("prp_1"), ApprovalId("apr_1"), UserId("bob"), 0),
+        LONG_AGO,
+        proposed=3,
+    )
+    assert await last_run_of(front, "Declined") == {
+        "run_id": run_id,
+        "state": "rejected",
+        "at": "2026-10-26T01:41:00Z",
+        "test": False,
+        "declined_by": "bob",
+        "proposed": 3,
+        "written": 0,
+        "tickets": True,
+        "you_can_decide": False,
+        "retryable": False,
+        "reason": None,
+    }
+
+
+async def test_a_stopped_run_is_the_last_run_with_no_one_declining(front: Front):
+    use_case_id = await make_workflow(front, "Stopped")
+    failure = Failure(RunFailure.AGENT_ERROR, "Jira did not answer", retryable=True)
+    front.book.add(
+        use_case_id,
+        Failed(RunId("run_1"), Stage.WORKING, failure, ResumeWork(2)),
+        LONG_AGO,
+    )
+    last = await last_run_of(front, "Stopped")
+    assert last is not None
+    assert (last["state"], last["declined_by"], last["proposed"], last["tickets"]) == (
+        "failed",
+        None,
+        0,
+        False,
+    )
+    assert (last["retryable"], last["reason"]) == (True, "AgentError")
+
+
+async def test_a_test_run_is_the_run_the_platform_recorded_as_one(front: Front):
+    use_case_id = await make_workflow(front, "Tried")
+    front.book.add(
+        use_case_id,
+        Pending(RunId("run_1"), 1, None, LONG_AGO),
+        LONG_AGO,
+        trigger="person",
+        test=True,
+    )
+    last = await last_run_of(front, "Tried")
+    assert last is not None and last["test"] is True and last["state"] == "pending"
+
+
+async def test_a_run_by_hand_that_was_not_a_test_is_not_one(front: Front):
+    use_case_id = await make_workflow(front, "Run now")
+    front.book.add(
+        use_case_id,
+        Pending(RunId("run_1"), 1, None, LONG_AGO),
+        LONG_AGO,
+        trigger="person",
+        task=CardsTask(agents=()),
+    )
+    last = await last_run_of(front, "Run now")
+    assert last is not None and last["test"] is False
+
+
+async def test_a_run_a_schedule_started_is_not_a_test_run(front: Front):
+    use_case_id = await make_workflow(front, "Scheduled")
+    front.book.add(
+        use_case_id,
+        Pending(RunId("run_1"), 1, None, LONG_AGO),
+        LONG_AGO,
+        trigger="schedule",
+        task=CardsTask(agents=()),
+    )
+    last = await last_run_of(front, "Scheduled")
+    assert last is not None and last["test"] is False
+
+
+async def test_the_newest_run_is_the_last_run_whatever_its_state(front: Front):
+    use_case_id = await make_workflow(front, "Newest")
+    done = Succeeded(
+        RunId("run_1"),
+        Outcome.WRITTEN,
+        (WriteDone("jira", "create_ticket", "MOCK-1", (UserId("bob"),)),),
+    )
+    front.book.add(use_case_id, done, LONG_AGO + timedelta(days=7))
+    front.book.add(
+        use_case_id,
+        AwaitingApproval(RunId("run_2"), ProposalId("prp_1"), ApprovalId("apr_2")),
+        LONG_AGO,
+        proposed=2,
+    )
+    last = await last_run_of(front, "Newest")
+    assert last is not None
+    assert (last["state"], last["written"], last["tickets"]) == ("succeeded", 1, True)
+
+
+async def test_one_workflows_runs_are_not_another_workflows_last_run(front: Front):
+    await make_workflow(front, "Quiet")
+    other = await make_workflow(front, "Busy")
+    front.book.add(other, Pending(RunId("run_1"), 1, None, LONG_AGO), LONG_AGO)
+    assert await last_run_of(front, "Quiet") is None
+    assert await last_run_of(front, "Busy") is not None
+
+
+async def test_the_planner_reads_the_same_last_run_the_rows_show(front: Front):
+    use_case_id = await make_workflow(front, "Same")
+    front.book.add(
+        use_case_id,
+        Rejected(RunId("run_1"), ProposalId("prp_1"), ApprovalId("apr_1"), UserId("bob"), 0),
+        LONG_AGO,
+        proposed=1,
+    )
+    front.answers.result = answered(AbilitiesAnswer())
+    await say(front)
+    (facts,) = front.answers.facts
+    assert facts is not None and facts.workflows is not None
+    (fact,) = [w for w in facts.workflows if w.name == "Same"]
+    last = await last_run_of(front, "Same")
+    assert last is not None
+    assert (fact.last_run, fact.last_run_at) == ("Declined", LONG_AGO)
+    assert last["at"] == "2026-10-26T01:41:00Z"
+
+
+async def test_builder_asks_only_for_the_workflows_it_shows(front: Front):
+    first = await make_workflow(front, "One")
+    await make_workflow(front, "Two")
+    front.book.asked.clear()
+    r = await front.client.get(f"{USE_CASES}/{first}", headers=ALICE)
+    assert r.status_code == 200
+    assert front.book.asked == [[first]]
+
+
+async def start_over_http(
+    front: Front, use_case_id: str, key: str, body: dict[str, bool] | None = None
+) -> None:
+    headers = {**ALICE, "Idempotency-Key": key}
+    url = f"{USE_CASES}/{use_case_id}/runs"
+    r = await (
+        front.client.post(url, headers=headers)
+        if body is None
+        else front.client.post(url, headers=headers, json=body)
+    )
+    assert r.status_code in (200, 201), r.text
+
+
+async def test_only_a_request_for_a_test_run_marks_the_run_a_test(front: Front):
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
+    added = await front.watchlist.add(alice, AddSoftware.model_validate(LANGGRAPH))
+    assert hasattr(added, "use_case_id")
+    use_case_id = str(added.use_case_id)  # type: ignore[union-attr]
+    await start_over_http(front, use_case_id, "k1")
+    await start_over_http(front, use_case_id, "k2", {"test": False})
+    await start_over_http(front, use_case_id, "k3", {"test": True})
+    assert [spec.test for spec in front.starter.specs] == [False, False, True]
+
+
+async def test_every_change_answers_for_the_person_who_made_it(front: Front):
+    use_case_id = await make_workflow(front, "Changed")
+    base = f"{USE_CASES}/{use_case_id}"
+    changes = {
+        "pause": lambda: front.client.post(f"{base}/pause", headers=ALICE),
+        "resume": lambda: front.client.post(f"{base}/resume", headers=ALICE),
+        "save the schedule": lambda: front.client.put(
+            f"{base}/schedule", headers=ALICE, json={"day": "friday", "at": "17:30"}
+        ),
+        "delete": lambda: front.client.delete(base, headers=ALICE),
+        "restore": lambda: front.client.post(f"{base}/restore", headers=ALICE),
+    }
+    for name, change in changes.items():
+        front.book.viewers.clear()
+        answer = await change()
+        assert answer.status_code == 200, f"{name}: {answer.text}"
+        if name != "delete":
+            assert {v.user_id for v in front.book.viewers if v} == {"alice"}, name
+            assert None not in front.book.viewers, name

@@ -91,16 +91,17 @@ export function useRun(runId: string, options?: QueryOptions) {
   })
 }
 
-export function useUseCases() {
+export function useUseCases(options?: QueryOptions) {
   const client = useApiClient()
   const user = useCacheScope()
   return useQuery({
     queryKey: keys.useCases(user),
     queryFn: async () => unwrap(await client.GET('/api/v1/use-cases')).use_cases,
+    refetchInterval: pollEvery(options),
   })
 }
 
-export function useUseCase(useCaseId: string, enabled = true) {
+export function useUseCase(useCaseId: string, enabled = true, options?: Pick<QueryOptions, 'poll'>) {
   const client = useApiClient()
   const user = useCacheScope()
   return useQuery({
@@ -108,6 +109,7 @@ export function useUseCase(useCaseId: string, enabled = true) {
     queryFn: async () =>
       unwrap(await client.GET('/api/v1/use-cases/{use_case_id}', { params: { path: { use_case_id: useCaseId } } })),
     enabled: enabled && useCaseId !== '',
+    refetchInterval: pollEvery(options),
   })
 }
 
@@ -197,16 +199,19 @@ export function useCreateUseCase() {
 interface StartRunInput {
   useCaseId: string
   idempotencyKey: string
+  /** Only Do a test run sends it. */
+  test?: boolean
 }
 
 export function useStartRun() {
   const client = useApiClient()
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ useCaseId, idempotencyKey }: StartRunInput) =>
+    mutationFn: async ({ useCaseId, idempotencyKey, test }: StartRunInput) =>
       unwrap(
         await client.POST('/api/v1/use-cases/{use_case_id}/runs', {
           params: { path: { use_case_id: useCaseId }, header: { 'Idempotency-Key': idempotencyKey } },
+          ...(test ? { body: { test } } : {}),
         }),
       ),
     onSuccess: () => Promise.all(['runs', 'watchlist'].map((key) => queryClient.invalidateQueries({ queryKey: [key] }))),

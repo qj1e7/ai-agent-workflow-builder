@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { Page } from '@playwright/test'
 import { CONTROL_KINDS, coverProblems, describeProblems, fitProblems, measure, seedControl, toggleProblems } from './support/fit'
 import { connectMockModel } from './support/settings'
@@ -17,7 +18,10 @@ test.beforeAll(async ({ baseURL }) => {
 /** One run waiting for a yes, started by the first test and visited by all. */
 let runId: string | undefined
 
-const WIDTHS = [1920, 1440, 1280, 1024, 901, 900, 768, 390] as const
+const WIDTHS = [1920, 1440, 1280, 1050, 1024, 901, 900, 768, 390] as const
+
+/** A workflow that never ran, so a search for it leaves a Workflows list with no action in any row. */
+let quiet: string | undefined
 
 interface Screen {
   readonly name: string
@@ -61,6 +65,10 @@ for (const user of USERS) {
   for (const width of WIDTHS) {
     test(`nothing spills, is cut off or overlaps, and the page does not scroll sideways, as ${user.role} at ${String(width)} px`, async ({ browser, backend }) => {
       runId ??= (await backend.waitingRun('alice')).runId
+      if (quiet === undefined) {
+        quiet = `Fit lane ${randomUUID().slice(0, 6)}`
+        await backend.post('alice', '/api/v1/agent-use-cases', { name: quiet, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents: [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }] }, undefined, [201])
+      }
       const context = await devContext(browser, user.id, { reducedMotion: true })
       const page = await context.newPage()
       await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
@@ -72,6 +80,13 @@ for (const user of USERS) {
         const problems = await fitProblems(page)
         if (problems.length) found.push(`${screen.name} (${screen.path}) at ${String(width)} px as ${user.role}:\n${describeProblems(problems).replace(/^/gm, '    ')}`)
       }
+      await page.goto('/workflows')
+      await settled(page, { name: 'Workflows', path: '/workflows', heading: 'Workflows' })
+      await page.getByRole('button', { name: 'Search workflows' }).click()
+      await page.getByRole('searchbox', { name: 'Find a workflow' }).fill(quiet)
+      await expect(page.getByRole('list', { name: 'Workflows' }).locator('li[data-workflow-id]')).toHaveCount(1)
+      const noAction = await fitProblems(page)
+      if (noAction.length) found.push(`Workflows with no action in any row at ${String(width)} px as ${user.role}:\n${describeProblems(noAction).replace(/^/gm, '    ')}`)
       await context.close()
       expect(found, found.join('\n')).toEqual([])
     })

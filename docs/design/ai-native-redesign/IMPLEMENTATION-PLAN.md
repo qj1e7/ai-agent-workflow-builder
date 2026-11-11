@@ -94,7 +94,7 @@ Each screen lists the files to change, what to reuse, what is new, and how state
 ### 2.6 Workflows (spec 8)
 
 - **Change.** `portal/src/screens/workflows/WorkflowsPage.tsx`. Needs you is grouped with `groupOf` (2.2). A last row, "Ask the Planner for a new one", goes to the chat, for Operators.
-- **Change.** `portal/src/screens/workflows/workflow.ts`. `lastRunLine(useCase)` **(new)** gives one line, such as "Last run Mon 26 Oct · Declined by Bob" or "No runs yet". It reads the use case's `last_run` (4.5). Until R9 lands it reads `latestRuns` from `GET /api/v1/runs`, as the row's pill does now. `WorkflowRow` and the chat's check card (`StateAnswers.tsx`) both call it.
+- **Change.** `portal/src/screens/workflows/workflow.ts`. `lastRunLine(useCase)` **(new)** gives one line, such as "Last run Mon 26 Oct · Declined by Bob" or "No runs yet". It reads the use case's `last_run` (4.5). `WorkflowRow` and the chat's check card (`StateAnswers.tsx`) both call it.
 - **Change.** The row pill set becomes On, Waiting for a yes, Stopped and Paused, with Test run.
 - **Must match.** `WF-last-run`, `B`, `H2`, `T6`, `T9`, `T10`, `T11`.
 
@@ -200,14 +200,23 @@ ADR 0043 opens this route to an Approver who can't set up workflows, for questio
 
 **`POST /api/v1/agent-use-cases` (changed).** Owner builder. Takes `left_out`, the crossed parts in her words, and keeps them with the workflow. `GET /api/v1/use-cases/{use_case_id}` returns them.
 
-**`GET /api/v1/use-cases` (changed).** Owner builder. Each workflow gains `last_run`:
+**`GET /api/v1/use-cases` (changed).** Owner builder. Each workflow gains `last_run`, `null` when it has never run:
 
 ```json
-{"last_run": {"run_id": "run_07", "state": "rejected", "at": "2026-10-26T01:41:00Z", "test": true,
- "by": "bob", "reason": "Wrong version", "written": 0}}
+{"last_run": {"run_id": "run_07", "state": "rejected", "at": "2026-10-26T01:41:00Z", "test": false,
+ "declined_by": "bob", "proposed": 1, "written": 0, "tickets": true,
+ "you_can_decide": false, "retryable": false, "reason": null}}
 ```
 
-`null` when it has never run.
+- `run_id`, `state` and `at` (when it started) name the newest run, whatever its state.
+- `test` is true only when the run was started with Do a test run. Run now, a check of the watchlist and a scheduled run are never tests.
+- `declined_by` is who declined it, and null for any other run. The decline reason is not in this shape. R12 adds it.
+- `proposed` and `written` count the writes the run asked a yes for and the writes it made. `tickets` is true when each of them is a ticket, so the Portal can say tickets rather than changes.
+- `you_can_decide`, `retryable` and `reason` let a row show its one action and the banner say why a run stopped without reading `GET /api/v1/runs`. `you_can_decide` is for the person who asked, so `GET /api/v1/use-cases/{use_case_id}` and every change route answer for their caller too.
+
+One indexed query per call serves it: the newest run of each workflow asked for.
+
+**`POST /api/v1/use-cases/{use_case_id}/runs` (changed).** Owner builder. Takes an optional body `{"test": true}`, which only Do a test run sends. With no body the run is not a test. The run keeps the flag, and a retry keeps it too.
 
 **`PUT /api/v1/use-cases/{use_case_id}/schedule` (changed).** Owner builder. Saving publishes a new version of the workflow (4.4) and answers with it. The Portal's schedule editor and the edit card both call it.
 

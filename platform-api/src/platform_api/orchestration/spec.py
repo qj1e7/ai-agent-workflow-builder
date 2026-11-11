@@ -70,6 +70,8 @@ class RunSpec:
     bindings: Mapping[str, Binding]
     approval_policy: ApprovalPolicy
     trigger: Trigger = "person"
+    test: bool = False
+    """A person started it with Do a test run. A row stored without it reads False."""
 
 
 @dataclass(frozen=True)

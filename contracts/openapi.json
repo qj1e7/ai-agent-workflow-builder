@@ -4499,6 +4499,92 @@
         "title": "LastCheckView",
         "type": "object"
       },
+      "LastRunView": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "When the run started.",
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "declined_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who declined it. Null unless the run was declined.",
+            "title": "Declined By"
+          },
+          "proposed": {
+            "description": "How many writes the run asked a yes for. Counted only while the run waits for a yes or after it was declined. 0 for a run that finished or stopped.",
+            "title": "Proposed",
+            "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailureReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why a stopped run stopped. Null for any other run."
+          },
+          "retryable": {
+            "description": "True when the run stopped and a retry may start it again.",
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/RunState"
+          },
+          "test": {
+            "description": "True when a person started it with Do a test run. False for Run now, a check of the watchlist and a run its schedule started.",
+            "title": "Test",
+            "type": "boolean"
+          },
+          "tickets": {
+            "description": "True when each of those writes is a ticket, so the Portal can say tickets rather than changes.",
+            "title": "Tickets",
+            "type": "boolean"
+          },
+          "written": {
+            "description": "How many writes the run made. 0 if none.",
+            "title": "Written",
+            "type": "integer"
+          },
+          "you_can_decide": {
+            "description": "True when the person asking may decide the yes this run waits for. False for any other run, and in an answer that is not for a person.",
+            "title": "You Can Decide",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "run_id",
+          "state",
+          "at",
+          "test",
+          "declined_by",
+          "proposed",
+          "written",
+          "tickets",
+          "you_can_decide",
+          "retryable",
+          "reason"
+        ],
+        "title": "LastRunView",
+        "type": "object"
+      },
       "Leg": {
         "enum": [
           "work",
@@ -7357,6 +7443,19 @@
         "title": "SourceView",
         "type": "object"
       },
+      "StartRunIn": {
+        "additionalProperties": false,
+        "properties": {
+          "test": {
+            "default": false,
+            "description": "True for Do a test run, which tries a workflow once. Run now and a check of the watchlist send nothing.",
+            "title": "Test",
+            "type": "boolean"
+          }
+        },
+        "title": "StartRunIn",
+        "type": "object"
+      },
       "StarterView": {
         "additionalProperties": false,
         "properties": {
@@ -8581,6 +8680,17 @@
             "title": "Instruction",
             "type": "string"
           },
+          "last_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LastRunView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newest run of this workflow, whatever its state. Null when it has never run."
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -8658,7 +8768,8 @@
           "next_run_at",
           "schedule",
           "plan",
-          "agents"
+          "agents",
+          "last_run"
         ],
         "title": "UseCaseView",
         "type": "object"
@@ -14368,6 +14479,18 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartRunIn",
+                "default": {
+                  "test": false
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {

@@ -220,10 +220,11 @@ test.describe('with the AI model on', () => {
       const draftsAfter = (await backend.get<{ drafts: { draft_id: string }[] }>('alice', '/api/v1/drafts')).drafts.map((draft) => draft.draft_id)
       expect(draftsAfter, 'turning it on leaves no new draft behind').toEqual(draftsBefore)
 
-      await thread(page).getByRole('link', { name: 'See it on Workflows' }).click()
-      await expect(page).toHaveURL(/\/workflows\/[^/]+$/)
-      const after = (await backend.get<{ use_cases: { name: string }[] }>('alice', '/api/v1/use-cases')).use_cases
+      await thread(page).getByRole('button', { name: 'Do a test run' }).click()
+      await expect(page).toHaveURL(/\/runs\/run_/, { timeout: 30_000 })
+      const after = (await backend.get<{ use_cases: { name: string; last_run: { test: boolean } | null }[] }>('alice', '/api/v1/use-cases')).use_cases
       expect(after.length, 'one workflow was set up').toBe(before + 1)
+      expect(after[0]?.last_run?.test, 'Do a test run records a test run').toBe(true)
       assertClean(watch)
       await context.close()
     })

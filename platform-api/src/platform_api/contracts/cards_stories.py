@@ -199,6 +199,7 @@ USE_CASE = UseCaseView(
             values=VALUES,
         )
     ],
+    last_run=None,
 )
 
 

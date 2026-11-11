@@ -6,8 +6,8 @@ import { useLatch } from '../../api/latch'
 import { useHome } from '../../api/homeQueries'
 import { useDeleteDraft, useDrafts, useSaveDraft } from '../../api/plannerQueries'
 import { useDisplayName } from '../../api/people'
-import { useMe, useRuns, useUseCases } from '../../api/queries'
-import type { DraftView, HomeOut, Me, RunView, UseCaseView } from '../../api/types'
+import { useMe, useUseCases } from '../../api/queries'
+import type { DraftView, HomeOut, Me, UseCaseView } from '../../api/types'
 import { useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
 import { PageHead } from '../../shell/PageHead'
 import { Button, ButtonLink } from '../../ui/Button'
@@ -23,7 +23,7 @@ import { StatusPills } from './Status'
 import { RequestView } from './RequestView'
 import { REQUEST_PARAM } from './requests'
 import { DiscardDialog, DraftsSection, draftItem, FollowingSection, WaitingSection } from './Sections'
-import { changeProblem, changeWords, FILTERS, meansOutOfDate, nextRunWords, pressChange, REFRESH_MS, rowsOf, runFact, viewerOf, workflowPath, type Filter, type Row } from './workflow'
+import { changeProblem, changeWords, FILTERS, lastRunLine, meansOutOfDate, nextRunWords, pillOf, pressChange, REFRESH_MS, rowsOf, viewerOf, workflowPath, type Filter, type Row } from './workflow'
 import styles from './Workflows.module.css'
 
 export const rowLinkId = (useCaseId: string) => `workflow-${useCaseId}`
@@ -66,9 +66,13 @@ interface RowProps {
   readonly nameOf: (id: string) => string
 }
 
+/** The list's class: it gives the action column to the descriptions when no row has an action. */
+export const listClass = (rows: readonly Row[], extra = ''): string =>
+  [styles['list'], rows.some((row) => row.action !== null) ? null : styles['noAct'], extra].filter(Boolean).join(' ')
+
 export function WorkflowRow({ row, index, primary, arrive, now, nameOf }: RowProps) {
-  const { useCase, latest, action } = row
-  const fact = latest ? runFact(latest, nameOf) : null
+  const { useCase, action } = row
+  const last = lastRunLine(useCase, now, nameOf)
   return (
     <li
       className={arrive ? `${styles['row']} ${styles['arrive']}` : styles['row']}
@@ -76,7 +80,7 @@ export function WorkflowRow({ row, index, primary, arrive, now, nameOf }: RowPro
       data-workflow-id={useCase.use_case_id}
       data-paused={useCase.state === 'paused' || undefined}
     >
-      <StatusPills state={useCase.state} fact={fact} />
+      <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} test={useCase.last_run?.test === true} />
       <div className={styles['main']}>
         <h3>
           <Link id={rowLinkId(useCase.use_case_id)} to={workflowPath(useCase)} state={FROM_LIST} className={styles['rowLink']}>
@@ -84,6 +88,9 @@ export function WorkflowRow({ row, index, primary, arrive, now, nameOf }: RowPro
           </Link>
         </h3>
         <p>{purposeOf(useCase)}</p>
+        <p className={styles['last']} title={last}>
+          {last}
+        </p>
       </div>
       <div className={styles['foot']}>
         <span className={styles['next']}>{nextLine(useCase, now)}</span>
@@ -144,11 +151,9 @@ interface LoadedProps {
   readonly now: Date
   readonly me: Me
   readonly useCases: readonly UseCaseView[]
-  readonly runs: readonly RunView[]
-  readonly runsFailed: boolean
 }
 
-function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps) {
+function Loaded({ handedOver, now, me, useCases }: LoadedProps) {
   const back = useNavigationType() === NavigationType.Pop
   const [note, setNote] = useState<Note | null>(() => (handedOver ? { kind: 'deleted', id: 0, row: handedOver } : null))
   const [problem, setProblem] = useState<string | null>(null)
@@ -196,7 +201,7 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
 
   const inNeeds = useMemo(() => (home ? runsInNeeds(home) : undefined), [home])
   const needsCard = home !== undefined && needsTotal(home) > 0
-  const rows = rowsOf(useCases, runs, viewer, filter, query, inNeeds)
+  const rows = rowsOf(useCases, viewer, filter, query, inNeeds)
   const firstAction = needsCard ? -1 : rows.findIndex((row) => row.action !== null)
 
   function undo(row: Deleted) {
@@ -267,7 +272,6 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
           {problem}
         </p>
       ) : null}
-      {runsFailed ? <p className={styles['problem']}>The latest runs could not be loaded, so each workflow shows none. They load again in a moment.</p> : null}
       {viewer.operator && drafts ? <DraftsSection drafts={drafts} now={now} onDiscard={(draft) => { setDiscardProblem(null); setDiscarding(draft) }} /> : null}
       {home ? <WaitingSection items={home.waiting_on_others} total={home.waiting_on_others_total} now={now} /> : null}
       {home ? <FollowingSection items={home.following_up} total={home.following_up_total} now={now} meId={me.id} /> : null}
@@ -300,7 +304,7 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
           </div>
         ) : null}
         {rows.length > 0 ? (
-          <ul className={styles['list']} aria-label="Workflows">
+          <ul className={listClass(rows)} aria-label="Workflows">
             {rows.map((row, index) => (
               <WorkflowRow key={row.useCase.use_case_id} row={row} index={index} primary={index === firstAction} arrive={!back} now={now} nameOf={nameOf} />
             ))}
@@ -364,8 +368,7 @@ export function WorkflowsPage({ heading, lead, now }: { heading: string; lead: s
 
 function WorkflowsBody({ handedOver, now }: { handedOver: Deleted | null; now: Date }) {
   const me = useMe()
-  const useCases = useUseCases()
-  const runs = useRuns({ poll: REFRESH_MS })
+  const useCases = useUseCases({ poll: REFRESH_MS })
   if ((useCases.isError && !useCases.data) || me.isError) {
     return (
       <>
@@ -374,12 +377,12 @@ function WorkflowsBody({ handedOver, now }: { handedOver: Deleted | null; now: D
       </>
     )
   }
-  if (!useCases.data || !me.data || (runs.isPending && !runs.isError)) {
+  if (!useCases.data || !me.data) {
     return (
       <p className="muted" role="status">
         Loading the workflows
       </p>
     )
   }
-  return <Loaded handedOver={handedOver} now={now} me={me.data} useCases={useCases.data} runs={runs.data ?? []} runsFailed={runs.isError && !runs.data} />
+  return <Loaded handedOver={handedOver} now={now} me={me.data} useCases={useCases.data} />
 }

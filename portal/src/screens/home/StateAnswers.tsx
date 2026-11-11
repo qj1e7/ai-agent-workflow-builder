@@ -3,11 +3,10 @@ import { Link } from 'react-router'
 import { useHome } from '../../api/homeQueries'
 import { useDisplayName } from '../../api/people'
 import { isOperator } from '../../api/me'
-import { useMe, useModelOff, useRuns, useTroubleshoot, useUseCases } from '../../api/queries'
+import { useMe, useModelOff, useTroubleshoot, useUseCases } from '../../api/queries'
 import { ButtonLink } from '../../ui/Button'
-import { WorkflowRow } from '../workflows/WorkflowsPage'
+import { listClass, WorkflowRow } from '../workflows/WorkflowsPage'
 import { REFRESH_MS, rowsOf, viewerOf } from '../workflows/workflow'
-import wfStyles from '../workflows/Workflows.module.css'
 import { needsSay, workflowsSay } from './answers'
 import { Troubleshooting } from '../run/Outcome'
 import { HOME_NEEDS_SHOWN, needsOf, needsTotal, SEE_ALL_WORDS } from './home'
@@ -29,20 +28,19 @@ export function useSaidOnce(text: string | null, say: Say) {
 /** Check my workflows: the rows of the Workflows list, from the same functions, for one workflow or all of them. */
 export function CheckWorkflowsAnswer({ useCaseId, now, say }: { useCaseId: string | null; now: Date; say: Say }) {
   const me = useMe()
-  const useCases = useUseCases()
-  const runs = useRuns({ poll: REFRESH_MS })
+  const useCases = useUseCases({ poll: REFRESH_MS })
   const nameOf = useDisplayName()
   const rows = useMemo(() => {
-    if (!me.data || !useCases.data || !runs.data) return null
-    const all = rowsOf(useCases.data, runs.data, viewerOf(me.data), 'all', '', NOTHING)
+    if (!me.data || !useCases.data) return null
+    const all = rowsOf(useCases.data, viewerOf(me.data), 'all', '', NOTHING)
     return useCaseId === null ? all : all.filter((row) => row.useCase.use_case_id === useCaseId)
-  }, [me.data, useCases.data, runs.data, useCaseId])
+  }, [me.data, useCases.data, useCaseId])
   const sentence = rows ? workflowsSay(rows) : null
   useSaidOnce(sentence, say)
   if (!rows) {
     return (
       <p className="muted" role="status">
-        {useCases.isError || runs.isError ? 'I couldn’t read your workflows just now.' : 'Checking your workflows'}
+        {useCases.isError ? 'I couldn’t read your workflows just now.' : 'Checking your workflows'}
       </p>
     )
   }
@@ -50,7 +48,7 @@ export function CheckWorkflowsAnswer({ useCaseId, now, say }: { useCaseId: strin
     <>
       <p>{sentence}</p>
       {rows.length > 0 ? (
-        <ul className={`${wfStyles['list'] ?? ''} ${styles['wfcheck'] ?? ''}`} aria-label="Your workflows">
+        <ul className={listClass(rows, styles['wfcheck'])} aria-label="Your workflows">
           {rows.map((row, index) => (
             <WorkflowRow key={row.useCase.use_case_id} row={row} index={index} primary={false} arrive={false} now={now} nameOf={nameOf} />
           ))}

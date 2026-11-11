@@ -1,5 +1,5 @@
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
 
@@ -13,6 +13,7 @@ from platform_api.builder.cards import (
     tool_list,
 )
 from platform_api.builder.drafts import Drafts, TooManyDrafts
+from platform_api.builder.last_run import RunHistory, last_run_view
 from platform_api.builder.lifecycle import (
     AlreadyDeleted,
     Deleted,
@@ -39,6 +40,7 @@ from platform_api.builder.models import (
     DraftIn,
     DraftList,
     DraftView,
+    LastRunView,
     PlanOut,
     ScheduleIn,
     SuggestOut,
@@ -105,6 +107,7 @@ def _view(
     row: Mapping[str, Any],
     agents: Sequence[PinnedAgent],
     schedule: SavedSchedule | None,
+    last_run: LastRunView | None,
     now: datetime,
 ) -> UseCaseView:
     template = TEMPLATES[row["template"]]
@@ -136,6 +139,7 @@ def _view(
             )
             for a in agents
         ],
+        last_run=last_run,
     )
 
 
@@ -189,6 +193,7 @@ class Builder:
         public_base_url: str,
         planner: CardPlanner | None = None,
         schedules: ScheduleBook | None = None,
+        history: RunHistory | None = None,
     ) -> None:
         self._db = db
         self._runs = runs
@@ -197,9 +202,10 @@ class Builder:
         self._schedules = schedules or ScheduleBook(db)
         self._drafts = Drafts(db)
         self._planner = planner or NoPlanner()
+        self._history = history
         self.public_base_url = public_base_url
 
-    async def list_use_cases(self) -> UseCaseList:
+    async def list_use_cases(self, viewer: Principal | None = None) -> UseCaseList:
         """Team-wide by design: one team, two roles, and Approvers need the context.
         Per-team scoping comes with Entra ID, if more teams join."""
         async with self._db.connection("builder") as conn:
@@ -209,9 +215,11 @@ class Builder:
             )
             rows = await cursor.fetchall()
         schedules = {saved.use_case_id: saved for saved in await self._schedules.all()}
-        return UseCaseList(use_cases=await self._views(rows, schedules))
+        return UseCaseList(use_cases=await self._views(rows, schedules, viewer))
 
-    async def get_use_case(self, use_case_id: str) -> UseCaseView | None:
+    async def get_use_case(
+        self, use_case_id: str, viewer: Principal | None = None
+    ) -> UseCaseView | None:
         """None for a deleted use case too: it has left the list until it is restored."""
         async with self._db.connection("builder") as conn:
             cursor = await conn.execute(
@@ -223,10 +231,13 @@ class Builder:
             return None
         saved = await self._schedules.get(UseCaseId(use_case_id))
         schedules = {} if saved is None else {saved.use_case_id: saved}
-        return (await self._views([row], schedules))[0]
+        return (await self._views([row], schedules, viewer))[0]
 
     async def _views(
-        self, rows: Sequence[Mapping[str, Any]], schedules: Mapping[UseCaseId, SavedSchedule]
+        self,
+        rows: Sequence[Mapping[str, Any]],
+        schedules: Mapping[UseCaseId, SavedSchedule],
+        viewer: Principal | None,
     ) -> list[UseCaseView]:
         agent_cases = [
             (row["use_case_id"], row["version"])
@@ -234,12 +245,20 @@ class Builder:
             if row["template"] == AGENT_CARDS.key
         ]
         agents = await self._cards.agents_of(agent_cases)
+        newest = (
+            {}
+            if self._history is None
+            else await self._history.newest_runs(
+                [UseCaseId(row["use_case_id"]) for row in rows], viewer
+            )
+        )
         now = self._db.clock()
         return [
             _view(
                 row,
                 agents.get((row["use_case_id"], row["version"]), []),
                 schedules.get(row["use_case_id"]),
+                last_run_view(gist) if (gist := newest.get(row["use_case_id"])) else None,
                 now,
             )
             for row in rows
@@ -251,13 +270,13 @@ class Builder:
         )
         if moved is None or isinstance(moved, AlreadyDeleted):
             return None
-        return await self.get_use_case(use_case_id)
+        return await self.get_use_case(use_case_id, principal)
 
-    async def resume_use_case(self, use_case_id: str) -> UseCaseView | None:
+    async def resume_use_case(self, use_case_id: str, principal: Principal) -> UseCaseView | None:
         moved = await self._move(use_case_id, lambda state, _template, _now: resume(state))
         if moved is None or isinstance(moved, AlreadyDeleted):
             return None
-        return await self.get_use_case(use_case_id)
+        return await self.get_use_case(use_case_id, principal)
 
     async def delete_use_case(
         self, use_case_id: str, principal: Principal
@@ -279,14 +298,16 @@ class Builder:
             case _:
                 return None
 
-    async def restore_use_case(self, use_case_id: str) -> UseCaseView | TooLate | None:
+    async def restore_use_case(
+        self, use_case_id: str, principal: Principal
+    ) -> UseCaseView | TooLate | None:
         match await self._move(use_case_id, lambda state, _, now: restore(state, now)):
             case TooLate() as late:
                 return late
             case None:
                 return None
             case _:
-                return await self.get_use_case(use_case_id)
+                return await self.get_use_case(use_case_id, principal)
 
     async def save_schedule(
         self, use_case_id: str, principal: Principal, body: ScheduleIn
@@ -294,7 +315,7 @@ class Builder:
         """The same save as the watchlist's: the caller becomes the owner, which lifts a hold.
         Saving is not a write to Jira or Confluence, so it needs no approval."""
         # Read the workflow before the lock, so the lock holds one connection and no more.
-        view = await self.get_use_case(use_case_id)
+        view = await self.get_use_case(use_case_id, principal)
         if view is None:
             return None
         if view.template == SOFTWARE_WATCHLIST.key:
@@ -308,7 +329,7 @@ class Builder:
             await self._schedules.save(
                 UseCaseId(use_case_id), Schedule(body.day, body.at), principal
             )
-        return await self.get_use_case(use_case_id)
+        return await self.get_use_case(use_case_id, principal)
 
     async def _move(self, use_case_id: str, move: Move) -> Moved | None:
         async with self._db.transaction("builder") as uow:
@@ -505,7 +526,11 @@ class Builder:
                 return None if isinstance(spec, NothingToCheck) else spec
 
     async def start_run(
-        self, use_case_id: UseCaseId, principal: Principal, idempotency_key: str
+        self,
+        use_case_id: UseCaseId,
+        principal: Principal,
+        idempotency_key: str,
+        test: bool = False,
     ) -> RunStarted | None | NothingToCheck | NoModelToRun | UseCasePaused:
         view = await self.get_use_case(use_case_id)
         if view is None:
@@ -515,6 +540,7 @@ class Builder:
         spec = await self._spec_of(view)
         if isinstance(spec, NothingToCheck):
             return spec
+        spec = replace(spec, test=test)
         if isinstance(spec.task, CardsTask) and not await self._planner.has_model():
             return NoModelToRun()
         async with self._db.transaction("builder") as uow:

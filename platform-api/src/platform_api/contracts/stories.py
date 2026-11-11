@@ -664,6 +664,7 @@ USE_CASE = UseCaseView(
     schedule=USE_CASE_SCHEDULE,
     plan=template_view(SOFTWARE_WATCHLIST).blocks,
     agents=[],
+    last_run=None,
 )
 
 SUGGESTION = Builder.suggest(INSTRUCTION)

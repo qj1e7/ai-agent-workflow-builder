@@ -130,11 +130,11 @@ export const SAY_ANOTHER_WAY = 'If you only meant that you don’t need to look 
 /** Check my workflows: one sentence from the same rows the Workflows list draws. */
 export function workflowsSay(rows: readonly Row[]): string {
   if (rows.length === 0) return 'You have no workflows yet.'
-  const stopped = rows.filter((row) => row.latest?.state === 'failed').length
-  const waiting = rows.filter((row) => row.latest?.state === 'awaiting_approval').length
+  const stopped = rows.filter((row) => row.useCase.last_run?.state === 'failed').length
+  const waiting = rows.filter((row) => row.useCase.last_run?.state === 'awaiting_approval').length
   const paused = rows.filter((row) => row.useCase.state === 'paused').length
   // Counted from the same fact the row's Running pill reads, so the sentence never says more than the rows show.
-  const running = rows.filter((row) => isRunning(row.latest)).length
+  const running = rows.filter((row) => isRunning(row.useCase.last_run)).length
   const parts = [
     stopped > 0 ? `${stopped} stopped` : null,
     waiting > 0 ? `${waiting} ${waiting === 1 ? 'is' : 'are'} waiting for a yes` : null,

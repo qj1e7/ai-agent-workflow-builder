@@ -14,11 +14,9 @@ from platform_api.builder.models import UseCaseList, WatchedSoftwareView, Watchl
 from platform_api.orchestration import (
     NeedsYouFact,
     PlannerFacts,
-    RunDetail,
     Status,
     WatchedFact,
     WorkflowFact,
-    state_name,
 )
 from platform_api.shared import Principal
 from platform_api.wire import RunState
@@ -43,12 +41,13 @@ RUN_WORDS: Final[dict[RunState, str]] = {
     "working": "Running",
     "proposed": "Running",
     "acting": "Running",
-    "awaiting_approval": "Needs a yes",
+    "awaiting_approval": "Waiting for a yes",
     "succeeded": "Done",
     "rejected": "Declined",
     "failed": "Stopped",
 }
-"""The Workflows page's words for a run (`runFact` in the Portal)."""
+"""A run's state in the Workflows page's words: its pill while it needs someone or is going, and
+its last-run line once it is over (`pillOf` and `lastRunLine` in the Portal)."""
 
 
 class WatchlistSource(Protocol):
@@ -57,10 +56,6 @@ class WatchlistSource(Protocol):
 
 class WorkflowSource(Protocol):
     async def list_use_cases(self) -> UseCaseList: ...
-
-
-class RunSource(Protocol):
-    async def list_runs(self) -> list[RunDetail]: ...
 
 
 class HomeSource(Protocol):
@@ -119,12 +114,10 @@ class PlannerFactsReader:
         self,
         watchlist: WatchlistSource,
         workflows: WorkflowSource,
-        runs: RunSource,
         home: HomeSource,
     ) -> None:
         self._watchlist = watchlist
         self._workflows = workflows
-        self._runs = runs
         self._home = home
 
     async def read(self, viewer: Principal) -> PlannerFacts:
@@ -153,23 +146,15 @@ class PlannerFactsReader:
         use_cases = (await self._workflows.list_use_cases()).use_cases
         if len(use_cases) > WORKFLOW_CAP:
             return None
-        newest: dict[str, RunDetail] = {}
-        for run in await self._runs.list_runs():
-            seen = newest.get(run.record.spec.use_case_id)
-            if seen is None or run.record.started_at > seen.record.started_at:
-                newest[run.record.spec.use_case_id] = run
-        facts: list[WorkflowFact] = []
-        for u in use_cases:
-            run = newest.get(u.use_case_id)
-            facts.append(
-                WorkflowFact(
-                    name=u.name,
-                    state=u.state,
-                    last_run=None if run is None else RUN_WORDS[state_name(run.record.state)],
-                    last_run_at=None if run is None else run.record.started_at,
-                )
+        return [
+            WorkflowFact(
+                name=u.name,
+                state=u.state,
+                last_run=None if u.last_run is None else RUN_WORDS[u.last_run.state],
+                last_run_at=None if u.last_run is None else u.last_run.at,
             )
-        return facts
+            for u in use_cases
+        ]
 
     async def _read_needs_you(self, viewer: Principal) -> NeedsYouFact:
         return needs_you_fact(await self._home.for_person(viewer))

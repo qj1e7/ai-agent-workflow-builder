@@ -159,9 +159,9 @@ describe('the lists Home shows without being asked', () => {
 })
 
 describe('Check my workflows counts what its rows show', () => {
-  const caseOf = (id: string, state: 'on' | 'paused' = 'on') => ({ use_case_id: id, state }) as unknown as Row['useCase']
-  const row = (id: string, latest: string | null, state: 'on' | 'paused' = 'on'): Row =>
-    ({ useCase: caseOf(id, state), latest: latest === null ? null : ({ state: latest, reason: 'agent_error' } as unknown as Row['latest']), action: null })
+  const caseOf = (id: string, state: 'on' | 'paused', last: string | null) =>
+    ({ use_case_id: id, state, last_run: last === null ? null : { state: last } }) as unknown as Row['useCase']
+  const row = (id: string, last: string | null, state: 'on' | 'paused' = 'on'): Row => ({ useCase: caseOf(id, state, last), action: null })
 
   it('says running only for a run in progress, never for a workflow that is simply idle', () => {
     const rows = [row('a', 'failed'), row('b', 'awaiting_approval'), row('c', null), row('d', 'succeeded'), row('e', 'working')]

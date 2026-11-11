@@ -12,6 +12,7 @@ import { ApiError } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import type { Me, RunView, TroubleshootingOut, UseCaseView } from '../../api/types'
+import type { LastRun } from './workflow'
 import { formatterFactory } from './workflow'
 import { ScheduleChangePanel, WHO_APPROVES } from './WorkflowPage'
 
@@ -22,7 +23,11 @@ const AGENTS = agentUseCase as UseCaseView
 const WATCHLIST = watchlistUseCase as UseCaseView
 const NOW = new Date('2026-11-04T15:00:00+08:00')
 
+const STOPPED: LastRun = { run_id: 'run_01JB9', state: 'failed', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: 'AgentError' }
+
 interface Setup {
+  /** The workflow's last run as the platform answers it, changed from a stopped run. */
+  readonly last?: Partial<LastRun>
   readonly me?: Me
   readonly useCase?: UseCaseView | Error
   readonly runs?: RunView[]
@@ -30,7 +35,8 @@ interface Setup {
   readonly advice?: TroubleshootingOut
 }
 
-function render({ me = ALICE, useCase = AGENTS, runs = [], id, advice }: Setup = {}): string {
+function render({ me = ALICE, useCase: given = AGENTS, runs = [], id, advice, last }: Setup = {}): string {
+  const useCase = last && !(given instanceof Error) ? { ...given, last_run: { ...STOPPED, ...last } } : given
   const session = createDevSession(null)
   const scope = session.cacheScope()
   const useCaseId = id ?? (useCase instanceof Error ? 'uc_gone' : useCase.use_case_id)
@@ -241,25 +247,24 @@ describe('a workflow page', () => {
     expect(mainOf(html)).toMatch(/data-life="paused"[^>]*>.*Paused<\/span>/)
   })
 
-  it('shows a stopped latest run, linking to it', () => {
-    const html = render({ runs: [{ ...(failed as RunView), use_case_id: 'uc_01JD0' }, { ...(done as RunView), use_case_id: 'uc_01JD0' }] })
+  it('shows a stopped last run, linking to it', () => {
+    const html = render({ last: {}, runs: [{ ...(failed as RunView), use_case_id: 'uc_01JD0' }, { ...(done as RunView), use_case_id: 'uc_01JD0' }] })
     expect(mainOf(html)).toMatch(/data-tone="bad"[^>]*>.*Stopped<\/span>/)
     const first = /<li[^>]*data-run-id="([^"]+)"[^>]*data-state="([^"]+)"/.exec(html)
     expect([first?.[1], first?.[2]]).toEqual(['run_01JB9', 'failed'])
   })
 
   const bannerOfHtml = (html: string) => /<div[^>]*data-tone="bad"[\s\S]*?<\/(?:a|button)><\/div>/.exec(mainOf(html))?.[0] ?? ''
-  const stoppedRun = (change: object) => [{ ...(failed as RunView), ...change, use_case_id: 'uc_01JD0' }]
 
   it('for a retryable stop, the banner’s one action is Retry the run', () => {
-    const banner = bannerOfHtml(render({ runs: stoppedRun({ retryable: true }) }))
+    const banner = bannerOfHtml(render({ last: { retryable: true } }))
     expect(text(banner)).toBe('Stopped today at 10:14. An agent could not finish its work. Retry the run')
     expect(banner).toMatch(/<button[^>]*>Retry the run<\/button>/)
-    expect(text(mainOf(render({ runs: stoppedRun({ retryable: true }) })))).not.toContain('See why it stopped')
+    expect(text(mainOf(render({ last: { retryable: true } })))).not.toContain('See why it stopped')
   })
 
   it('for a stop that cannot be retried, the banner’s one action is See why it stopped', () => {
-    const html = render({ runs: stoppedRun({ retryable: false }) })
+    const html = render({ last: { retryable: false } })
     expect(text(bannerOfHtml(html))).toBe('Stopped today at 10:14. An agent could not finish its work. See why it stopped')
     expect(mainOf(html)).toMatch(/<a[^>]*href="\/runs\/run_01JB9"[^>]*>See why it stopped<\/a>/)
     expect(text(mainOf(html))).not.toContain('Retry the run')
@@ -267,14 +272,14 @@ describe('a workflow page', () => {
 
   it('says the same words as the Workflows list, whatever the AI troubleshooter says', () => {
     const advice = { ...(troubleshooting as TroubleshootingOut), answers: { ...(troubleshooting as TroubleshootingOut).answers, what_happened: 'GitHub did not answer three times.' } }
-    const html = render({ runs: stoppedRun({ reason: 'TimedOut' }), advice })
+    const html = render({ last: { reason: 'TimedOut' }, runs: [{ ...(failed as RunView), use_case_id: 'uc_01JD0' }], advice })
     expect(text(bannerOfHtml(html))).toContain('A step took too long.')
     expect(text(mainOf(html))).not.toContain('GitHub did not answer')
     expect(text(mainOf(html))).not.toMatch(/write key/i)
   })
 
   it('gives an Approver the stop in words, with no action', () => {
-    const html = render({ me: BOB, runs: [{ ...(failed as RunView), use_case_id: 'uc_01JD0' }] })
+    const html = render({ me: BOB, last: {}, runs: [{ ...(failed as RunView), use_case_id: 'uc_01JD0' }] })
     expect(mainOf(html)).toMatch(/data-tone="bad"/)
     expect(text(mainOf(html))).not.toMatch(/See why it stopped|Retry the run/)
   })
