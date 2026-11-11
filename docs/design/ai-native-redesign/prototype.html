@@ -2411,7 +2411,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const st = S.sw;
       const gate = st === 'waiting' ? { tone: 'wait', who: 'gate', text: gateText(req('sw'), partiesLine('sw')) }
         : st === 'approved' ? { tone: 'ok', who: 'gate', text: `${nm(S.swBy)} approved 3 tickets.` }
-          : { tone: 'bad', who: 'gate', text: declinedWords('sw') };
+          : { who: 'gate', text: declinedWords('sw') };
       const full = shows('registries');
       const by = starterOf('sw');
       const stations = [
@@ -2460,7 +2460,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
           { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: 'I’m bringing in the Jira reader and the Summary writer.' } },
           { label: 'Read closed tickets', who: 'jira', msg: ok ? { who: 'jira', text: '11 tickets were closed in MOCK last week. MOCK-31’s description was read this time.' } : { who: 'jira', tone: 'bad', text: 'I stopped while reading MOCK-31. Its description is in a form the platform couldn’t read.' } },
           { label: 'Write summary', who: 'summary', msg: { who: 'summary', text: 'I wrote a short summary of the 11 tickets, with counts. Nothing is created yet.' } },
-          { label: 'Approval gate', gate: true, no: S.nudge === 'declined', msg: S.nudge === 'waiting' ? { who: 'gate', tone: 'wait', text: ok ? gateText(req('nudge'), partiesLine('nudge')) : '' } : S.nudge === 'approved' ? { who: 'gate', tone: 'ok', text: `${nm(S.nudgeBy)} approved the ticket.` } : S.nudge === 'declined' ? { who: 'gate', tone: 'bad', text: declinedWords('nudge') } : null },
+          { label: 'Approval gate', gate: true, no: S.nudge === 'declined', msg: S.nudge === 'waiting' ? { who: 'gate', tone: 'wait', text: ok ? gateText(req('nudge'), partiesLine('nudge')) : '' } : S.nudge === 'approved' ? { who: 'gate', tone: 'ok', text: `${nm(S.nudgeBy)} approved the ticket.` } : S.nudge === 'declined' ? { who: 'gate', text: declinedWords('nudge') } : null },
           { label: 'Create in Jira', who: 'platform', skip: S.nudge === 'declined', msg: { who: 'platform', text: 'Created MOCK-34 with the approved summary.' } },
           { label: S.nudge === 'declined' ? 'Ended' : 'Done', msg: S.nudge === 'declined' ? { who: 'portal', text: `The run ended. ${DECLINED_NEXT.nudge}` } : { who: 'portal', tone: 'ok', text: 'Done. The summary is in MOCK-34.' } },
         ],
@@ -2474,7 +2474,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const writer = writerOf(f);
       const gateMsg = st === 'waiting' ? { who: 'gate', tone: 'wait', text: gateText(q, partiesLine('conf')) }
         : st === 'expired' ? { who: 'gate', text: `Nobody answered by ${at(q.expiresAt)}, so the request stopped. Nothing was written.` }
-          : st === 'declined' ? { who: 'gate', tone: 'bad', text: declinedWords('conf') }
+          : st === 'declined' ? { who: 'gate', text: declinedWords('conf') }
             : { who: 'gate', tone: 'ok', text: `${yesWho('conf')} approved it.` };
       const by = starterOf('conf');
       return {
@@ -2498,7 +2498,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const by = starterOf('access');
       const gate = st === 'waiting' ? { who: 'gate', tone: 'wait', text: gateText(req('access'), partiesLine('access')) }
         : st === 'approved' ? { who: 'gate', tone: 'ok', text: `${yesWho('access')} approved the removals.` }
-          : { who: 'gate', tone: 'bad', text: declinedWords('access') };
+          : { who: 'gate', text: declinedWords('access') };
       const stations = [
         { label: 'Started', sub: S.accessRun.sub, who: `p:${by}`, msg: { who: 'portal', text: `${nm(by)} started the review by hand.` } },
         { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: '48 people to review. I’m bringing in the Access checker and the Ticket writer.' } },
@@ -6216,7 +6216,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (runBlocked('issues')) return;
       S.issues = 'fixed';
       retry('issues');
-      if (viaPanel) render(); else go('run', 'issues', { live: true });
+      if (viaPanel) render(); else go('run', 'issues', { live: true, fromChat: S.view.fromChat });
     },
     report: () => openModal('report', null, '.btn.primary'),
     closeModal: () => closeModal(),
@@ -6231,7 +6231,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     },
     /* Support moves the case to the next stage the track shows. */
     advance: () => { const next = reportStages().map(([from]) => from).find((from) => from > S.report); if (next) S.report = next; if (S.report === 4) toast(`Dana merged the fix for ${S.supportCase.id}. It’s live.`); render(); },
-    retryNudge: () => { if (runBlocked('nudge')) return; newRequest('nudge'); S.nudge = 'waiting'; S.nudgeBy = null; retry('nudge'); if (viaPanel) render(); else go('run', 'nudge', { live: true }); },
+    retryNudge: () => { if (runBlocked('nudge')) return; newRequest('nudge'); S.nudge = 'waiting'; S.nudgeBy = null; retry('nudge'); if (viaPanel) render(); else go('run', 'nudge', { live: true, fromChat: S.view.fromChat }); },
     skipMain: () => { const h = $app.querySelector('main h1'); if (h) { h.focus(); h.scrollIntoView({ block: 'start' }); } },
     askPlanner: () => { go('home'); focusComposer(); },
     panelOpen: (item, el) => {

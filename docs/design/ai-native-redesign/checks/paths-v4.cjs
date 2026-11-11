@@ -926,6 +926,18 @@ add('RUN-line', 'The FLOW run line: red into the stop, amber and slow into a wai
   await t.expect('Done: solid into done steps, faint into the skipped ones', lineOf(t), 'done>solid done>solid done>dead skip>dead skip>dead skip>solid done');
 }, [1280, 861, 390]);
 
+add('RUN-retry-from-chat', 'A retry on a run page opened from the chat keeps Back to the chat, and the chat card follows', async (t) => {
+  await t.ask('Why did Morning new-ticket check stop?');
+  await t.click(`${lastCard} [data-act="run"][data-arg="issues"]`, 'See the run');
+  await t.click('#sidepanel [data-act="panelPage"]', 'More details');
+  await t.click('main #decision [data-act="retryIssues"]', 'Retry the run', { decision: true, until: retriedText });
+  await t.expectText('Back still goes to the chat', /Back to the chat/, 'main .back');
+  await t.click('main .back', 'Back to the chat');
+  await t.expectText('The card says it hasn’t stopped', /Morning new-ticket check hasn’t stopped\./, lastCard);
+  await t.expectCount('The card offers no retry', `${lastCard} [data-act="retryIssues"]`, 0);
+  await t.expectText('The panel shows the retry done', /Done[\s\S]*Done, nothing new today/, '#sidepanel');
+}, [1280, 390]);
+
 add('RUN-line-panel', 'The side panel’s run line is the same line, small, with the same links', async (t) => {
   await t.ask('Why did Weekly closed-ticket summary stop?');
   await t.click(`${lastCard} [data-act="run"][data-arg="nudge"]`, 'See the run');
