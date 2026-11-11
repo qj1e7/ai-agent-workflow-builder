@@ -15,7 +15,7 @@
   "answers": {
     "what_happened": "An agent could not finish its work.",
     "what_affected": "Nothing was written.",
-    "can_fix": "Yes. A retry runs the work again, and any write still waits for a yes.",
+    "safe_to_retry": "Yes. A retry runs the work again, and any write still waits for a yes.",
     "retry": {
       "possible": true,
       "asks_again": true

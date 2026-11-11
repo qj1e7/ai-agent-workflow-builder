@@ -185,7 +185,7 @@ class RetryAnswer(WireModel):
 class Answers(WireModel):
     what_happened: str
     what_affected: str
-    can_fix: str
+    safe_to_retry: str
     retry: RetryAnswer
     next: Literal["retry", "report"]
 
@@ -196,16 +196,26 @@ NOTHING_WRITTEN = "Nothing was written."
 MAYBE_WRITTEN = "The approved write may or may not have reached Jira."
 
 
-def _can_fix(retry: RetryAnswer) -> str:
+def _wait_first(advice: Advice) -> str:
+    if advice is RATE_LIMITED:
+        return "Wait a few minutes first. Retrying at once is likely to hit the same limit. "
+    if advice.suggested_action == "check_workflow_engine":
+        return "Check that the workflow engine is running first. "
+    return ""
+
+
+def _safe_to_retry(failure: RunFailedData, retry: RetryAnswer) -> str:
+    """The answer to "Safe to retry?". It starts with Yes or No, then says why."""
     if not retry.possible:
-        return "This kind of stop can't be retried."
-    if retry.asks_again:
-        return "Yes. A retry runs the work again, and any write still waits for a yes."
-    return (
-        "Yes. A retry carries on from the write that was already approved, so nobody has to "
-        "approve again. It checks the approval before it writes, and it finds a ticket an "
-        "earlier try made instead of making a second one."
-    )
+        return f"No. This kind of stop can't be retried. {explain_failure(failure).suggestion}"
+    if not retry.asks_again:
+        return (
+            "Yes. A retry carries on from the write that was already approved, so nobody has to "
+            "approve again. It checks the approval before it writes, and it finds a ticket an "
+            "earlier try made instead of making a second one."
+        )
+    wait = _wait_first(explain_failure(failure))
+    return f"Yes. {wait}A retry runs the work again, and any write still waits for a yes."
 
 
 def answers(failure: RunFailedData) -> Answers:
@@ -216,7 +226,7 @@ def answers(failure: RunFailedData) -> Answers:
     return Answers(
         what_happened=explain_failure(failure).explanation,
         what_affected=MAYBE_WRITTEN if at_the_write else NOTHING_WRITTEN,
-        can_fix=_can_fix(retry),
+        safe_to_retry=_safe_to_retry(failure, retry),
         retry=retry,
         next="retry" if retry.possible else "report",
     )
