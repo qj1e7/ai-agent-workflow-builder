@@ -324,8 +324,8 @@ for (const phone of [false, true]) {
 
 const LAST_RUN = /^Last run (Today \d{1,2}:\d{2}|[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}(?: \d{4})?)(, test)? · (.+)$/
 
-/** Every last-run line sits on one line (its height is its line height) and is whole: none is cut with an ellipsis. */
-async function lineFits(lines: Locator): Promise<{ rows: number; broken: string[] }> {
+/** Every last-run line is whole: none is cut with an ellipsis. It also sits on one line (its height is its line height), unless it may wrap. */
+async function lineFits(lines: Locator, { mayWrap = false } = {}): Promise<{ rows: number; broken: string[] }> {
   const found = await lines.evaluateAll((els) =>
     els.map((el) => ({
       text: el.textContent ?? '',
@@ -333,7 +333,7 @@ async function lineFits(lines: Locator): Promise<{ rows: number; broken: string[
       cut: el.scrollWidth > el.clientWidth,
     })),
   )
-  return { rows: found.length, broken: found.filter((line) => line.count !== 1 || line.cut).map((line) => line.text) }
+  return { rows: found.length, broken: found.filter((line) => (!mayWrap && line.count !== 1) || line.cut).map((line) => line.text) }
 }
 
 for (const user of ['alice', 'bob']) {
@@ -369,9 +369,9 @@ for (const user of ['alice', 'bob']) {
         const card = page.getByRole('main').getByRole('list', { name: 'Your workflows' })
         await expect(card).toBeVisible()
         await expect(lastLine(card.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })), 'the check card says what the row says').toHaveText(before)
-        const fit = await lineFits(lastLine(card.locator('li[data-workflow-id]')))
+        const fit = await lineFits(lastLine(card.locator('li[data-workflow-id]')), { mayWrap: width < 900 })
         expect(fit.rows, 'the card has a line for each workflow').toBeGreaterThan(0)
-        expect(fit.broken, `each last-run line in the check card is whole and on one line at ${width} px`).toEqual([])
+        expect(fit.broken, `each last-run line in the check card is whole at ${width} px, and on one line from 900 px`).toEqual([])
         await shot(page, info, `r9-check-card-alice-${width}`)
       }
     }

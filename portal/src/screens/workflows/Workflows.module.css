@@ -263,6 +263,15 @@
   }
 }
 
+/* In a card too narrow for the line, it wraps rather than being cut. */
+@container (max-width: 520px) {
+  .main .last {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+}
+
 /* A list inside a narrow card, such as the chat's check card, stacks its rows too, whatever the window. */
 @container (max-width: 960px) {
   .row {
