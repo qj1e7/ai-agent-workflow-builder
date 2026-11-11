@@ -1149,8 +1149,15 @@ const screens = [
   { name: 'runs-card-stopped', prepare: async (k) => { await k.ask('Why did Weekly closed-ticket summary stop?'); } },
   { name: 'runs-panel-stopped', prepare: async (k) => { await k.ask('Why did Weekly closed-ticket summary stop?'); await open(k, `${lastCard} [data-act="run"][data-arg="nudge"]`); } },
   { name: 'runs-line-waiting', prepare: async (k) => { await k.go('workflows'); await open(k, S.review); await k.page.evaluate(() => window.scrollTo(0, 0)); } },
-  /* Held mid-run, with the agents' chat folded, because its typing dots never stop while the run is held. */
-  { name: 'runs-line-mid', prepare: async (k) => { await k.go('workflows'); await k.page.click(S.retry); await k.page.waitForFunction(() => [...document.querySelectorAll('main .line > .st')].findIndex((x) => x.classList.contains('now')) >= 2); await k.page.evaluate(() => window.mock.hold()); await open(k, 'main [data-act="runDetail"]'); } },
+  /* Held mid-run, with the agents' chat folded, because its typing dots never stop while the run is held. With reduced
+     motion a run opens at its end, so Replay the run plays it again step by step. */
+  { name: 'runs-line-mid', prepare: async (k) => {
+    await k.go('workflows'); await k.page.click(S.retry); await k.settle();
+    if (!(await k.page.$('main .line > .st.now'))) { await open(k, 'main [data-act="runDetail"]'); await open(k, 'main [data-act="replay"]'); }
+    await k.page.waitForFunction(() => [...document.querySelectorAll('main .line > .st')].findIndex((x) => x.classList.contains('now')) >= 2);
+    await k.page.evaluate(() => window.mock.hold());
+    if (await k.page.$('main #run-detail')) await open(k, 'main [data-act="runDetail"]');
+  } },
   { name: 'runs-approval-panel', prepare: async (k) => { await k.ask(CHECK_WORKFLOWS); await open(k, 'main .thread [data-act="run"][data-arg="sw"]'); await inPanel(k, '#sidepanel dl.unchecked'); } },
   { name: 'runs-ask-open', prepare: async (k) => { await k.setUser('bob'); await open(k, S.review); await open(k, 'main [data-act="askOpen"][data-arg="sw"]'); } },
   { name: 'runs-ask-panel', prepare: async (k) => { await k.ask(CHECK_WORKFLOWS); await open(k, 'main .thread [data-act="run"][data-arg="sw"]'); await open(k, '#sidepanel [data-act="askOpen"][data-arg="sw"]'); await inPanel(k, '#sidepanel .askbox'); } },
