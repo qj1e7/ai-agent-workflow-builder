@@ -118,7 +118,7 @@ export function Troubleshooting({ runId, failure, advice, loading, me, reports, 
         <>
           <Qa name="What was affected">{advice.answers.what_affected}</Qa>
           <Qa name="Safe to retry" id={safeId}>
-            {waitsForModel ? NOT_YET_NO_MODEL : advice.answers.safe_to_retry}
+            {waitsForModel ? NOT_YET_NO_MODEL : withCurrentNames(advice.answers.safe_to_retry)}
           </Qa>
         </>
       ) : (

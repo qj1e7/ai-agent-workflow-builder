@@ -108,4 +108,11 @@ describe('the next step', () => {
     const html = text(draw(failed({ stage: 'working', retryable: false }), withAnswers({ safe_to_retry: said }, { possible: false, asks_again: false })))
     expect(html).toContain(said)
   })
+
+  it('says workflow, not template, in Safe to retry', () => {
+    const said = 'No. This kind of stop can’t be retried. Ask a maintainer to add the binding to the template, then start a new run.'
+    const html = text(draw(failed({ retryable: false }), withAnswers({ safe_to_retry: said }, { possible: false, asks_again: false })))
+    expect(html).toContain('add the binding to the workflow, then start a new run.')
+    expect(html).not.toContain('template')
+  })
 })
