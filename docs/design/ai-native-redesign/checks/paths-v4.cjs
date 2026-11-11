@@ -522,6 +522,16 @@ add('ANS-cant-clause', 'A can’t answer never crosses the clause it answered', 
   await t.expectCount('No cross for the email clause it answered', `${lastCard} .part[data-mark="no"]`, 0);
 }, [1280]);
 
+const crosses = (t) => t.page.$$eval(`${lastCard} .part[data-mark="no"]`, (xs) => xs.map((x) => x.innerText.replace(/^Can’t do:\s*/, '').replace(/\s+/g, ' ')).join(' | '));
+add('ANS-cant-runs', 'A can’t answer reads only its can’t phrase, so the rest of that clause is still marked', async (t) => {
+  await t.ask('every Friday, sum up the closed tickets and email the summary in French to the team');
+  await t.expect('“in French” is marked', crosses(t), /^“in French” I didn’t follow this part\.$/);
+  await t.ask('every Friday sum up the closed tickets in MOCK and email it to Bob with a chart');
+  await t.expect('“with a chart” is marked', crosses(t), /^“with a chart” I didn’t follow this part\.$/);
+  await t.ask('watch Grafana every day at 8am on Slack too');
+  await t.expect('The time the watchlist doesn’t keep is marked', crosses(t), /^“every day at 8am” The Software watchlist checks all your software together, every Monday at 9:00\./);
+}, [1280]);
+
 add('ANS-cant-alternative', 'The alternative to an email request sets up cleanly, with the email clause gone', async (t) => {
   await t.setup((k) => k.ask(EMAIL_TEAM));
   await t.click(`${lastCard} [data-act="instead"]`, 'Set that up', { reply: true, decision: true });

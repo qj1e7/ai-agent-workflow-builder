@@ -1866,7 +1866,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       /\b(?:closed|resolved|completed|finished|done|new|created|opened|raised|open|unresolved)\b/gi,
       /summar\w*|\bsum (?:them |it )?up\b|\breport\b|\bdigest\b|\boverview\b|\blist\b|\bshow me\b|\bcompare\b|\bweek[- ]on[- ]week\b|\b(?:with|to|against) the week before\b|\bversus\b|\bvs\b/gi,
       /\b(?:project\s+[A-Z][A-Z0-9]{1,9}|[A-Z][A-Z0-9]{1,9}\s+project)\b|\b(?:MOCK|OPS|SUP)\b/g,
-      /\b(?:in|into|as) (?:a|one) (?:new )?(?:jira )?ticket\b|\b(?:post|send|share|publish)\b|\b(?:create|raise|open|file|add)\s+(?:a|one)\s+(?:new\s+)?(?:jira\s+)?ticket\b|\bput\b(?=[^.,;]*\b(?:in|into)\b)/gi,
+      /\b(?:in|into|as) (?:a|one) (?:new )?(?:jira )?ticket\b|\b(?:post|send|share|publish)\b|\b(?:create|raise|open|file|add)\s+(?:a|one)\s+(?:new\s+)?(?:jira\s+)?ticket\b|\bput\b(?=[^.,;]*\b(?:in|into|on|onto)\b)/gi,
       /\b(?:gitlab|entra|active directory|servicenow|outlook|sharepoint|excel)\b/gi,
       /\b(?:jira|tickets?|issues?|project)\b/gi,
       /\b(?:find|get|pull|fetch|gather|collect|look (?:at|for)|go through)\b(?=[^.,;]*\b(?:tickets?|issues?)\b)/gi,
@@ -1882,8 +1882,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
       /\b(?:excluding|except|without|but not|apart from|other than|only)\b(?=\s+(?:the\s+)?(?:bugs?|stories|epics?|[\w-]+\s+components?|(?:high|low|top)\s+priority))/gi,
     ],
     /* What a can't answer names: a place it can't write to, a ticket change only people make, a security check, chasing owners. */
+    /* Each reads the can't phrase itself, such as "email the summary" and "to the team", and nothing else in its
+       clause: "in French" or "with a chart" beside it is still marked. */
     cant: [
-      /\be-?mail(?:\s+(?:me|us))?\b|\bslack\b|\bconfluence\b|\bwiki\b|\bpage\b|\bteams\b|\bchannel\b|\bchat\b|\b(?:update|edit|fill in|write)\b(?=[^.,;]*\b(?:page|wiki|confluence)\b)/gi,
+      /\be-?mail(?:\s+(?:me|us|it|them|(?:the|a|this|that)\s+[\w-]+))?\b|(?<=\be-?mail\b[^,.;]*)\s+to\s+(?:the\s+|my\s+|our\s+)?[\w-]+/gi,
+      /\b(?:in|on|to|into|via)\s+slack(?:\s+(?:too|as well))?\b|\bslack\b/gi,
+      /\b(?:in|on|to|into|via)\s+(?:teams|(?:the\s+|our\s+)?[\w-]+\s+channel|(?:the\s+|our\s+)?team chat)(?:\s+(?:too|as well))?\b|\bteams\b|\bchannel\b|\bchat\b/gi,
+      /\b(?:update|edit|fill in|write)\s+(?:the\s+|a\s+|our\s+)?(?:confluence\s+|wiki\s+)?(?:page|wiki)(?:\s+with\s+(?:them|it|the\s+[\w-]+))?|\b(?:in|on|to|into)\s+(?:confluence|(?:the\s+|our\s+)?wiki|(?:a\s+|the\s+)?(?:confluence\s+|wiki\s+)?page)\b|\bconfluence\b|\bwiki\b/gi,
       /\b(?:close|closes|delete|remove|edit|move|assign|reassign|resolve|archive)\b|\bask (?:their |the |each )?owners?\b|\bremind\b|\bnudge\b|\bchase\b|\bmessage\b/gi,
       /\bcves?\b|\bnvd\b|vulnerab\w*|\badvisor(?:y|ies)\b|\bsecurity(?:\s+(?:fix(?:es)?|patch(?:es)?|alerts?|bulletins?|issues?))?\b/gi,
       /\b(?:check|scan|look|identify|flag|find)(?:\s+(?:for|at))?(?=\s+(?:any\s+|known\s+|potentially\s+|relevant\s+)*(?:vulnerab|cves?|security|advisor))/gi,
@@ -1923,7 +1928,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         if (run.some((x) => !plain(x))) {
           let last = run.length - 1;
           while (plain(run[last])) last -= 1;
-          const end = last === run.length - 1 && j < clause.length ? clause[j] : run[last];
+          const end = last === run.length - 1 && j < clause.length && !plain(clause[j]) ? clause[j] : run[last];
           out.push({ quote: text.slice(run[0].a, end.b), clause: whole });
         }
         i = j;
@@ -4029,17 +4034,21 @@ details > .m-close { animation: fold 140ms ease-in both; }
      list them among their parts; every other answer lists them above its card. Each kind names what it read. */
   const NAMES = () => [...routineIds().map((id) => R(id).name), ...liveSoftware().map((x) => x.name), ...Object.keys(KNOWN), ...Object.values(KNOWN).map((k) => k[0])];
   const nameSpans = (text) => NAMES().flatMap((n) => { const out = []; const low = text.toLowerCase(); const k = n.toLowerCase(); for (let i = low.indexOf(k); i >= 0; i = low.indexOf(k, i + 1)) out.push([i, i + k.length]); return out; });
-  /* The whole clause around a match: a can't answer has answered the clause that names what it can't do. */
-  const inClause = (re) => new RegExp(`(?:(?!\\b(?:and|then|but|also|plus)\\b)[^,.;!?])*(?:${re.source})(?:(?!\\b(?:and|then|but|also|plus)\\b)[^,.;!?])*`, re.flags.includes('g') ? re.flags : `${re.flags}g`);
   const STATUS_WORDS = [/\b(?:today|now|right now|this morning|at the moment|currently|attention|yes|approvals?|plate|doing|going|running|working|status|state|next|due)\b/gi];
   const READ_BY = {
     part: () => [...HEARD.frame, ...HEARD.when, ...HEARD.setup, ...HEARD.needs],
-    cant: () => [...HEARD.frame, ...HEARD.when, ...HEARD.setup, ...HEARD.needs, ...HEARD.cant.map(inClause), ...HEARD.watch],
+    cant: () => [...HEARD.frame, ...HEARD.when, ...HEARD.setup, ...HEARD.needs, ...HEARD.cant, ...HEARD.watch],
     abilities: (c) => (c.from === 'setup' ? [...HEARD.frame, ...HEARD.when, ...HEARD.setup] : null),
     nocheck: () => [...HEARD.frame, ...HEARD.when, new RegExp(`${SCHED_VERB.source}|${OTHER_VERB.source}`, 'gi'), /\b(?:instead of|rather than)\b[^,.;]*/gi],
     ...Object.fromEntries(['data', 'check', 'mine', 'why', 'one'].map((k) => [k, () => [...HEARD.frame, ...ABOUT.map(([re]) => new RegExp(`(?:${re.source})(?:(?!\\b(?:and|then|but|also)\\b)[^,.;!?])*`, 'gi')), ...STATUS_WORDS, ...HEARD.watch]])),
   };
-  const extraCrosses = (c) => { const rs = c.text && READ_BY[c.kind] && READ_BY[c.kind](c); return rs ? leftoverParts(c.text, [...spansOf(c.text, [...rs, REF]), ...nameSpans(c.text)]) : []; };
+  const extraCrosses = (c) => {
+    const rs = c.text && READ_BY[c.kind] && READ_BY[c.kind](c);
+    if (!rs) return [];
+    /* A can't answer that keeps the watch: a time the watchlist doesn't keep is a cross too (fix pass G1). */
+    const own = c.kind === 'cant' && c.watch ? watchCrosses({ text: c.text, name: c.watch.name, said: namedKey(c.text) }).filter((x) => ['own', 'days', 'times'].includes(x.key)) : [];
+    return own.concat(leftoverParts(c.text, [...spansOf(c.text, [...rs, REF]), ...nameSpans(c.text)]));
+  };
   const cardHTML = (m) => { const no = extraCrosses(m.card); return `${no.length ? `<div class="pcard">${partsList(no)}</div>` : ''}${ANSWERS[m.card.kind].card ? ANSWERS[m.card.kind].card(m) : ''}`; };
 
   /* ---------- Drafts ----------
