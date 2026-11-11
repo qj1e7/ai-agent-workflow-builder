@@ -10,6 +10,7 @@ import type { Me, UseCaseView } from '../../api/types'
 import { useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow, useSaveWorkflowSchedule } from '../../api/workflowQueries'
 import { stoppedActions } from '../home/home'
 import { RetryButton } from '../home/HomeItem'
+import { OperatorsNote } from '../../shell/OperatorsNote'
 import { PageHead } from '../../shell/PageHead'
 import { AgentFace } from '../../ui/AgentFace'
 import { ActionMenu, type MenuItem } from '../../ui/ActionMenu'
@@ -428,6 +429,11 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} test={useCase.last_run?.test === true} />
           <h1 tabIndex={-1}>{useCase.name}</h1>
           <p>{useCase.instruction}</p>
+          {viewer.operator ? null : (
+            <p className={styles['opsNote']}>
+              <OperatorsNote what="this workflow" />
+            </p>
+          )}
         </div>
         {mayPause || items.length > 0 ? (
           <div className={styles['btns']}>

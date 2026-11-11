@@ -5,6 +5,7 @@ import paused from '@contracts/fixtures/watchlist/paused.json'
 import moved from '@contracts/fixtures/watchlist/moved.json'
 import held from '@contracts/fixtures/watchlist/schedule.held.json'
 import statuses from '@contracts/fixtures/watchlist/statuses.json'
+import peopleList from '@contracts/fixtures/people/list.json'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -13,7 +14,8 @@ import { describe, expect, it } from 'vitest'
 import { ApiProvider } from '../../api/context'
 import { TicketLinksProvider } from '../../api/ticketLinks'
 import { createDevSession } from '../../api/session'
-import type { FindOut, Me, ProjectGuess, ScheduleHold, WatchedSoftwareView, WatchlistView } from '../../api/types'
+import type { FindOut, Me, PersonOut, ProjectGuess, ScheduleHold, WatchedSoftwareView, WatchlistView } from '../../api/types'
+import { AppRoutes } from '../../shell/routes'
 import { AddSoftwareForm } from './AddSoftware'
 import { addReducer, readyToAdd, START, type AddAction, type AddState } from './addByName'
 import { FindSoftware } from './FindSoftware'
@@ -24,6 +26,7 @@ import { ScheduleEditor, ScheduleNote } from './Schedule'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
+const TEAM = (peopleList.people as PersonOut[]).filter((person) => ['alice', 'bob', 'carol'].includes(person.id))
 
 function render(view: unknown, me: Me, runs: readonly { run_id: string }[] = [], page: ReactNode = <SoftwareRoute />, capabilities: unknown = capabilitiesFixture): string {
   const session = createDevSession(null)
@@ -32,11 +35,12 @@ function render(view: unknown, me: Me, runs: readonly { run_id: string }[] = [],
   queryClient.setQueryData(['watchlist', session.cacheScope()], view)
   for (const run of runs) queryClient.setQueryData(['run', session.cacheScope(), run.run_id], run)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB])
+  queryClient.setQueryData(['people', session.cacheScope()], TEAM)
   if (capabilities !== null) queryClient.setQueryData(['capabilities', session.cacheScope()], capabilities)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
-        <MemoryRouter>{page}</MemoryRouter>
+        <MemoryRouter initialEntries={['/software']}>{page}</MemoryRouter>
       </ApiProvider>
     </QueryClientProvider>,
   )
@@ -159,6 +163,16 @@ describe('the Software watchlist page', () => {
     expect(labels.some((label) => /^(Check now|Remove|Change schedule|Set a schedule|Turn off schedule|Add)/.test(label))).toBe(false)
     expect(html).not.toContain('Add software')
     expect(labels.some((label) => label.startsWith('History'))).toBe(true)
+  })
+
+  it('is read only for an Approver: one note under the heading names the Operators, and nothing is dead', () => {
+    const page = (me: Me) => render(statuses, me, [], <AppRoutes context={{ name: me.display, now: new Date(), operator: me.roles.includes('operator') }} />)
+    const head = text(page(BOB))
+    expect(head.match(/Only Operators change/g)).toHaveLength(1)
+    expect(head).toContain('Software watchlist')
+    expect(head).toContain('Only Operators change the watchlist. Ask Alice or Carol.')
+    expect(text(page(ALICE))).not.toContain('Only Operators change')
+    for (const view of [statuses, paused, moved, held, null]) expect(render(view, BOB)).not.toMatch(/disabled=""|aria-disabled="true"/)
   })
 
   it('keeps an empty status line on the page, so a screen reader hears each change to the list', () => {

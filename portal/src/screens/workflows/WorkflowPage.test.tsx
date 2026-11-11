@@ -7,17 +7,19 @@ import watchlistUseCase from '../../../../contracts/fixtures/builder/use-case.js
 import troubleshooting from '../../../../contracts/fixtures/troubleshooting/failure.json'
 import failed from '../../../../contracts/fixtures/views/failure.final.json'
 import done from '../../../../contracts/fixtures/views/success.final.json'
+import peopleList from '../../../../contracts/fixtures/people/list.json'
 import { App } from '../../App'
 import { ApiError } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { Me, RunView, TroubleshootingOut, UseCaseView } from '../../api/types'
+import type { Me, PersonOut, RunView, TroubleshootingOut, UseCaseView } from '../../api/types'
 import type { LastRun } from './workflow'
 import { formatterFactory } from './workflow'
 import { ScheduleChangePanel, WHO_APPROVES } from './WorkflowPage'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
+const TEAM = (peopleList.people as PersonOut[]).filter((person) => ['alice', 'bob', 'carol'].includes(person.id))
 
 const AGENTS = agentUseCase as UseCaseView
 const WATCHLIST = watchlistUseCase as UseCaseView
@@ -43,6 +45,7 @@ function render({ me = ALICE, useCase: given = AGENTS, runs = [], id, advice, la
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', scope], me)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB])
+  queryClient.setQueryData(['people', scope], TEAM)
   queryClient.setQueryData(['runs', scope], runs)
   const stopped = runs.find((run) => run.use_case_id === useCaseId && run.state === 'failed')
   if (advice && stopped?.state === 'failed') queryClient.setQueryData(['troubleshoot', scope, stopped.run_id, stopped.last_seq], advice)
@@ -236,6 +239,18 @@ describe('a workflow page', () => {
     expect(text(mainOf(html))).toContain('Recent activity')
     expect(mainOf(html)).toContain('href="/runs/run_01JB8"')
     expect(buttons(html).filter((label) => /Run now|Pause|Resume|Delete|More actions/.test(label))).toEqual([])
+  })
+
+  it('is read only for an Approver, paused or not: one note names the Operators, and nothing is dead', () => {
+    for (const state of ['on', 'paused'] as const) {
+      const html = render({ me: BOB, useCase: { ...AGENTS, state }, last: {} })
+      const main = text(mainOf(html))
+      expect(main.match(/Only Operators change/g)).toHaveLength(1)
+      expect(main).toContain('Only Operators change this workflow. Ask Alice or Carol.')
+      expect(mainOf(html)).not.toMatch(/disabled=""|aria-disabled="true"/)
+      expect(buttons(html).filter((label) => /Run now|Pause|Resume|Delete|More actions|Change|Set schedule|Turn/.test(label))).toEqual([])
+    }
+    expect(text(mainOf(render()))).not.toContain('Only Operators change')
   })
 
   it('while paused, offers Resume instead of Pause and Run now, and its next run reads Paused', () => {

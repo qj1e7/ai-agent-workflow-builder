@@ -190,6 +190,7 @@ describe('the Connections tab', () => {
   it('is read-only for an Approver who is not an Operator, and says only Operators change settings', () => {
     const forBob = render({ me: BOB, tab: 'connections', connections: { ...ALL, you_can_check: false } })
     expect(buttonsIn(forBob).filter((b) => b.startsWith('Check now'))).toEqual([])
+    expect(forBob).not.toMatch(/disabled=""|aria-disabled="true"/)
     expect(text(forBob)).toContain(ONLY_OPERATORS_WORDS)
   })
 
@@ -284,6 +285,7 @@ describe('the AI model tab', () => {
     expect(html).not.toContain('<form')
     expect(html).not.toContain('<select')
     expect(html).not.toContain('<input')
+    expect(html).not.toMatch(/disabled=""|aria-disabled="true"/)
   })
 
   it('says when the platform has the settings switched off', () => {
@@ -363,12 +365,15 @@ describe('the People and permissions tab', () => {
     expect(buttonsIn(html)).toContain('Add')
   })
 
-  it('is read-only for an Approver who is not an Operator, and says only Operators change settings', () => {
+  it('is read-only for an Approver who is not an Operator: each person’s roles in words, and no control he can’t use', () => {
     const html = render({ me: BOB, tab: 'people', people: CONFIRMED })
     expect(text(html)).toContain(ONLY_OPERATORS_WORDS)
-    const boxes = checkboxes(html)
-    expect(boxes.length).toBe(PEOPLE.length * 2)
-    expect(boxes.every((box) => box.includes('disabled=""'))).toBe(true)
+    expect(checkboxes(html)).toEqual([])
+    expect(html).not.toMatch(/disabled=""|aria-disabled="true"/)
+    expect(text(rowOf(html, 'Alice'))).toContain('Operator and Approver')
+    expect(text(rowOf(html, 'Bob'))).toMatch(/You .*Approver$/)
+    expect(text(rowOf(html, 'Carol'))).toMatch(/Operator$/)
+    expect(text(rowOf(html, 'Dave'))).toMatch(/Operator and Approver$/)
     expect(html).not.toContain('<form')
     expect(buttonsIn(html).filter((name) => !['Connections', 'AI model', 'People and permissions'].includes(name))).toEqual([])
   })

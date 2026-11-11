@@ -838,3 +838,8 @@
   gap: 8px;
   min-height: 32px;
 }
+
+.head p.opsNote {
+  margin-top: 8px;
+  font-size: var(--text-14);
+}

@@ -118,6 +118,11 @@ export function settingsErrorWords(error: unknown, signIn: SessionKind, missing:
   return error.status >= 500 ? errorWords(error, signIn) : NOT_ACCEPTED_WORDS
 }
 
+/** Each person's roles in words, for someone who reads People and permissions but can't change it. */
+export function rolesWords(person: Pick<PersonOut, 'operator' | 'approver'>): string {
+  return [person.operator ? 'Operator' : null, person.approver ? 'Approver' : null].filter((role) => role !== null).join(' and ')
+}
+
 export function canChangeSettings(me: Me | undefined): boolean {
   return me?.roles.includes('operator') ?? false
 }
