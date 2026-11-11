@@ -201,7 +201,7 @@ test('scenario C: a bob who pressed Show what each agent did before deciding sti
   await context.close()
 })
 
-test('scenario B: a stopped run opens on the four answers, an Operator retries it on the page, and an Approver is told who can', async ({ browser, backend }, info) => {
+test('scenario B: a stopped run opens on the three answers, an Operator retries it on the page, and an Approver is told who can', async ({ browser, backend }, info) => {
   let runId = ''
   try {
     await setMockGithubMode('unavailable')
@@ -218,7 +218,9 @@ test('scenario B: a stopped run opens on the four answers, an Operator retries i
   await bob.goto(`/runs/${runId}`)
   await expect(heading(bob)).toContainText('Stopped at')
   await expect(bob.getByRole('button', { name: 'Retry the run' }), 'an Approver has no Retry').toHaveCount(0)
-  await expect(answer(bob, 'What should you do')).toContainText('An Operator can retry this run.')
+  for (const name of ['What happened', 'What was affected', 'Safe to retry']) await expect(answer(bob, name), `Bob sees ${name}`).toBeVisible()
+  await expect(answer(bob, 'Safe to retry')).toContainText('Yes.')
+  await expect(bob.locator('#decision')).toContainText('An Operator can retry the run.')
   await bobContext.close()
 
   const context = await devContext(browser, 'alice')
@@ -227,7 +229,9 @@ test('scenario B: a stopped run opens on the four answers, an Operator retries i
   await page.goto(`/runs/${runId}`)
   await expect(heading(page)).toContainText('Stopped at')
   await expect(page.locator('#decision')).toBeFocused()
-  for (const name of ['What happened', 'What was affected', 'Can it be fixed safely', 'What should you do']) await expect(answer(page, name), name).toBeVisible()
+  for (const name of ['What happened', 'What was affected', 'Safe to retry']) await expect(answer(page, name), name).toBeVisible()
+  await expect(page.locator('#decision dt'), 'three answers, no fourth').toHaveText(['What happened', 'What was affected', 'Safe to retry'])
+  await expect(answer(page, 'Safe to retry')).toContainText('Yes. A retry runs the work again, and any write still waits for a yes.')
   await expect(answer(page, 'What was affected')).toContainText('Nothing was written.')
   await expect(answer(page, 'What happened')).toContainText('The failure text:')
   await expect(page.getByRole('main')).not.toContainText(/write key/i)
@@ -263,7 +267,9 @@ for (const phone of [false, true]) {
     const watch = watchPage(page)
     await page.goto(`/runs/${runId}`)
     await expect(heading(page)).toContainText('Stopped at')
-    await expect(answer(page, 'What should you do')).toContainText('Report it. Support gets the run and this explanation')
+    await expect(page.locator('#decision dt'), 'three answers, no fourth').toHaveText(['What happened', 'What was affected', 'Safe to retry'])
+    await expect(answer(page, 'Safe to retry')).toContainText(/No\. This kind of stop can't be retried\./)
+    await expect(page.locator('#decision')).toContainText('Report it. Support gets the run and this explanation')
     await expect(page.getByRole('button', { name: 'Retry the run' }), 'no Retry for a stop that cannot be retried').toHaveCount(0)
     await expect(page.getByRole('main')).not.toContainText(/write key/i)
     await expect(answer(page, 'What happened')).toContainText('The failure text: Could not check LangGraph')

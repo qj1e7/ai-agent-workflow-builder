@@ -265,9 +265,14 @@ def test_at_the_write_step_a_write_may_have_reached_jira_and_no_answer_says_star
             continue
         got = answers(stopped(row))
         assert got.what_affected == "The approved write may or may not have reached Jira."
-        said = " ".join([got.what_happened, got.what_affected, got.can_fix]).lower()
+        said = " ".join([got.what_happened, got.what_affected]).lower()
         assert "nothing was written" not in said
         assert "new run" not in said
+        if got.retry.possible:
+            assert "nothing was written" not in got.safe_to_retry.lower()
+            assert "new run" not in got.safe_to_retry.lower()
+        else:
+            assert WRITE_STOP_ADVICE in got.safe_to_retry
 
 
 def test_the_two_refused_cases_cannot_be_retried_and_go_to_support():
@@ -275,7 +280,33 @@ def test_the_two_refused_cases_cannot_be_retried_and_go_to_support():
         got = answers(stop)
         assert got.retry.possible is False and got.retry.asks_again is False
         assert got.next == "report"
-        assert got.can_fix == "This kind of stop can't be retried."
+        assert got.safe_to_retry.startswith("No. This kind of stop can't be retried. ")
+        assert explain_failure(stop).suggestion in got.safe_to_retry
+
+
+def test_safe_to_retry_answers_the_question_with_yes_or_no_first():
+    for row in STOPS:
+        got = answers(stopped(row))
+        assert got.safe_to_retry.startswith("Yes. " if row[2] else "No. ")
+
+
+def test_a_stop_that_cannot_be_retried_says_what_to_do_instead():
+    for row in STOPS:
+        if not row[2]:
+            assert explain_failure(stopped(row)).suggestion in answers(stopped(row)).safe_to_retry
+
+
+def test_a_retry_says_to_wait_or_check_first_when_retrying_at_once_would_fail_again():
+    limited = failure(
+        "AgentError",
+        True,
+        message="UpstreamUnavailable: GitHub is limiting how often we can ask.",
+    )
+    assert "Wait a few minutes first." in answers(limited).safe_to_retry
+    down = answers(failure("DispatchFailed", True))
+    assert "Check that the workflow engine is running first" in down.safe_to_retry
+    plain = answers(failure("AgentError", True)).safe_to_retry
+    assert "first" not in plain
 
 
 def test_a_retry_is_possible_exactly_when_the_failure_is_retryable():
@@ -291,7 +322,7 @@ def test_a_retry_before_the_write_runs_the_work_again_and_waits_for_a_yes():
             continue
         got = answers(stopped(row))
         assert got.retry.asks_again is True
-        assert "still waits for a yes" in got.can_fix
+        assert "still waits for a yes" in got.safe_to_retry
 
 
 @pytest.mark.parametrize(
@@ -301,7 +332,7 @@ def test_a_retry_at_the_write_step_carries_on_without_a_new_yes(reason: FailureR
     got = answers(failure(reason, True, "acting"))
     assert (got.retry.possible, got.retry.asks_again) == (True, False)
     assert got.next == "retry"
-    assert "nobody has to approve again" in got.can_fix
+    assert "nobody has to approve again" in got.safe_to_retry
 
 
 def test_jira_not_connected_is_told_to_connect_it_in_settings():

@@ -2,7 +2,7 @@ import troubleshooting from '@contracts/fixtures/troubleshooting/failure.json'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { TroubleshootingOut } from '../../api/types'
-import { OPERATORS_RETRY, Troubleshooting } from './Outcome'
+import { NOT_YET_NO_MODEL, OPERATORS_REPORT, OPERATORS_RETRY, Troubleshooting } from './Outcome'
 import type { Phase } from './runModel'
 
 vi.mock('../home/HomeItem', () => ({ RetryButton: ({ label }: { label: string }) => <button type="button">{label}</button> }))
@@ -35,14 +35,22 @@ const withAnswers = (over: Partial<TroubleshootingOut['answers']>, retry: Troubl
   answers: { ...ADVICE.answers, ...over, retry, next: retry.possible ? 'retry' : 'report' },
 })
 
-describe('the four answers', () => {
-  it('names them in order and ends with what to do', () => {
+describe('the three answers', () => {
+  it('names them in order, answers Safe to retry, and has no fourth answer', () => {
     const html = text(draw(failed(), ADVICE))
-    const at = ['What happened', 'What was affected', 'Can it be fixed safely', 'What should you do'].map((name) => html.indexOf(name))
+    const at = ['What happened', 'What was affected', 'Safe to retry'].map((name) => html.indexOf(name))
     expect(at.every((index) => index >= 0)).toBe(true)
     expect(at).toEqual([...at].sort((a, b) => a - b))
     expect(html).toContain(ADVICE.answers.what_affected)
-    expect(html).toContain(ADVICE.answers.can_fix)
+    expect(html).toContain(ADVICE.answers.safe_to_retry)
+    expect(html).not.toContain('What should you do')
+    expect(html).not.toContain('Can it be fixed safely')
+    expect((draw(failed(), ADVICE).match(/<dt/g) ?? []).length).toBe(3)
+  })
+
+  it('puts the next step under the answers', () => {
+    const html = text(draw(failed(), ADVICE))
+    expect(html.indexOf('Retry the run')).toBeGreaterThan(html.indexOf(ADVICE.answers.safe_to_retry))
   })
 
   it('shows the failure text in plain words, without the error type, and every sentence the platform wrote', () => {
@@ -52,7 +60,7 @@ describe('the four answers', () => {
   })
 })
 
-describe('what to do', () => {
+describe('the next step', () => {
   it('offers Retry the run to an Operator when the platform says the run can run again', () => {
     const html = draw(failed(), withAnswers({}, { possible: true, asks_again: true }))
     expect(html).toContain('Retry the run')
@@ -63,6 +71,24 @@ describe('what to do', () => {
     const html = draw(failed(), withAnswers({}, { possible: true, asks_again: true }), APPROVER)
     expect(html).not.toContain('<button')
     expect(text(html)).toContain(OPERATORS_RETRY)
+    expect(text(html)).toContain(ADVICE.answers.safe_to_retry)
+  })
+
+  it('shows an Approver the answers and a note, with no Report to support form, when the stop can’t be retried', () => {
+    const html = draw(failed({ retryable: false }), withAnswers({ safe_to_retry: 'No. This kind of stop can’t be retried.' }, { possible: false, asks_again: false }), APPROVER)
+    expect(html).not.toContain('data-report')
+    expect(html).not.toContain('<button')
+    expect(text(html)).toContain(OPERATORS_REPORT)
+    expect(text(html)).toContain('No. This kind of stop can’t be retried.')
+  })
+
+  it('says Not yet, and holds Retry back, while no AI model is connected', () => {
+    const html = renderToStaticMarkup(
+      <Troubleshooting runId="run_1" failure={failed()} advice={ADVICE} loading={false} me={OPERATOR} reports={[]} nameOf={nameOf} modelOff />,
+    )
+    expect(text(html)).toContain(NOT_YET_NO_MODEL)
+    expect(text(html)).not.toContain(ADVICE.answers.safe_to_retry)
+    expect(html).not.toContain('<button')
   })
 
   it('offers Report to support, and no Retry, when the stop can’t be retried', () => {
@@ -77,12 +103,16 @@ describe('what to do', () => {
     expect(text(draw(failed(), undefined, OPERATOR, true))).toContain('The AI troubleshooter is looking at what happened.')
   })
 
-  it('shows the troubleshooter’s advice whole, including a new run before the write step', () => {
-    const advice: TroubleshootingOut = {
-      ...ADVICE,
-      advice: { ...ADVICE.advice, suggestion: 'Ask a maintainer to fix it, then start a new run. Check Jira first.' },
-    }
-    const html = text(draw(failed({ stage: 'working', retryable: false }), advice))
-    expect(html).toContain('Ask a maintainer to fix it, then start a new run. Check Jira first.')
+  it('shows the platform’s Safe to retry whole, including what to do instead of a retry', () => {
+    const said = 'No. This kind of stop can’t be retried. Ask a maintainer to fix it, then start a new run. Check Jira first.'
+    const html = text(draw(failed({ stage: 'working', retryable: false }), withAnswers({ safe_to_retry: said }, { possible: false, asks_again: false })))
+    expect(html).toContain(said)
+  })
+
+  it('says workflow, not template, in Safe to retry', () => {
+    const said = 'No. This kind of stop can’t be retried. Ask a maintainer to add the binding to the template, then start a new run.'
+    const html = text(draw(failed({ retryable: false }), withAnswers({ safe_to_retry: said }, { possible: false, asks_again: false })))
+    expect(html).toContain('add the binding to the workflow, then start a new run.')
+    expect(html).not.toContain('template')
   })
 })

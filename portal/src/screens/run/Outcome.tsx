@@ -4,11 +4,11 @@ import type { TroubleshootingOut } from '../../api/types'
 import { ButtonLink } from '../../ui/Button'
 import { IconCheck } from '../../ui/icons'
 import { RetryButton } from '../home/HomeItem'
-import { CAN_RUN_AGAIN, stoppedActions } from '../home/home'
+import { stoppedActions } from '../home/home'
 import { TicketLink } from '../jira/TicketKeys'
 import { ReportToSupport } from './Report'
 import type { Phase, RunModel } from './runModel'
-import { failureText, suggestionFor } from './support'
+import { failureText } from './support'
 import { andList, withCurrentNames, type NameOf } from './words'
 import styles from './panels.module.css'
 
@@ -64,7 +64,11 @@ export function Outcome({ model, nameOf }: { model: RunModel; nameOf: NameOf }) 
 
 type Failed = Extract<Phase, { state: 'failed' }>
 
-export const OPERATORS_RETRY = 'An Operator can retry this run.'
+export const OPERATORS_RETRY = 'An Operator can retry the run.'
+export const OPERATORS_REPORT = 'An Operator can report this to support.'
+
+/** Safe to retry while no AI model is connected: a retry would fail again, so the platform's Yes is not yet true (spec 5.4). */
+export const NOT_YET_NO_MODEL = 'Not yet. A retry would stop in the same place until an AI model is connected.'
 
 interface TroubleshootingProps {
   readonly runId: string
@@ -83,18 +87,19 @@ interface TroubleshootingProps {
 function Qa({ name, id, children }: { name: string; id?: string; children: ReactNode }) {
   return (
     <dl className={styles['qa']}>
-      <dt id={id}>{name}</dt>
-      <dd>{children}</dd>
+      <dt>{name}</dt>
+      <dd id={id}>{children}</dd>
     </dl>
   )
 }
 
 /**
- * The AI troubleshooter's four answers. The last one is the action: Retry when the platform says the run can run again,
- * or Report to support when it can't. Both ask stoppedActions, the same rule Home uses.
+ * The AI troubleshooter's three answers: What happened, What was affected and Safe to retry. Under them sits the one
+ * next step, Retry when the platform says the run can run again, or Report to support when it can't. Both ask
+ * stoppedActions, the same rule Home uses. Someone who isn't an Operator reads the answers and a note, and gets no buttons.
  */
 export function Troubleshooting({ runId, failure, advice, loading, me, reports, nameOf, modelOff = false, quiet = false }: TroubleshootingProps) {
-  const doId = useId()
+  const safeId = useId()
   const note = failureText(failure.message)
   const happened = advice
     ? withCurrentNames(`${advice.answers.what_happened} ${advice.advice.likely_cause}`)
@@ -102,7 +107,6 @@ export function Troubleshooting({ runId, failure, advice, loading, me, reports, 
   const [first] = stoppedActions(runId, failure.retryable, modelOff)
   const retry = first?.kind === 'retry'
   const waitsForModel = failure.retryable && modelOff
-  const suggestion = advice ? suggestionFor(advice.advice.suggestion) : ''
   const found = [happened, note].filter((part) => part !== '').join(' ')
   return (
     <div className={styles['panel']}>
@@ -113,29 +117,28 @@ export function Troubleshooting({ runId, failure, advice, loading, me, reports, 
       {advice ? (
         <>
           <Qa name="What was affected">{advice.answers.what_affected}</Qa>
-          <Qa name="Can it be fixed safely">{advice.answers.can_fix}</Qa>
+          <Qa name="Safe to retry" id={safeId}>
+            {waitsForModel ? NOT_YET_NO_MODEL : withCurrentNames(advice.answers.safe_to_retry)}
+          </Qa>
         </>
       ) : (
         <p className={styles['note']} role="status">
           {loading ? 'The AI troubleshooter is looking at what happened.' : 'The AI troubleshooter could not explain this one.'}
         </p>
       )}
-      <Qa name="What should you do" id={doId}>
-        {suggestion ? <span>{suggestion}</span> : null}
-        {waitsForModel ? (
-          <span className={styles['note']}>{CAN_RUN_AGAIN}</span>
-        ) : retry ? (
-          me?.operator ? (
-            <span className={styles['buttons']}>
-              <RetryButton runId={runId} label="Retry the run" primary={!quiet} describedBy={doId} />
-            </span>
-          ) : (
-            <span className={styles['note']}>{OPERATORS_RETRY}</span>
-          )
+      {waitsForModel ? null : retry ? (
+        me?.operator ? (
+          <div className={styles['buttons']}>
+            <RetryButton runId={runId} label="Retry the run" primary={!quiet} describedBy={safeId} />
+          </div>
         ) : (
-          <ReportToSupport runId={runId} found={found} me={me?.id} meName={me?.name ?? 'A teammate'} reports={reports} nameOf={nameOf} quiet={quiet} />
-        )}
-      </Qa>
+          <p className={styles['note']}>{OPERATORS_RETRY}</p>
+        )
+      ) : me?.operator || reports.length > 0 ? (
+        <ReportToSupport runId={runId} found={found} me={me?.id} meName={me?.name ?? 'A teammate'} reports={reports} nameOf={nameOf} quiet={quiet} />
+      ) : (
+        <p className={styles['note']}>{OPERATORS_REPORT}</p>
+      )}
     </div>
   )
 }

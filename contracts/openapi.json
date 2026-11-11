@@ -1292,10 +1292,6 @@
       "Answers": {
         "additionalProperties": false,
         "properties": {
-          "can_fix": {
-            "title": "Can Fix",
-            "type": "string"
-          },
           "next": {
             "enum": [
               "retry",
@@ -1306,6 +1302,10 @@
           },
           "retry": {
             "$ref": "#/components/schemas/RetryAnswer"
+          },
+          "safe_to_retry": {
+            "title": "Safe To Retry",
+            "type": "string"
           },
           "what_affected": {
             "title": "What Affected",
@@ -1319,7 +1319,7 @@
         "required": [
           "what_happened",
           "what_affected",
-          "can_fix",
+          "safe_to_retry",
           "retry",
           "next"
         ],

@@ -103,7 +103,7 @@ export function NeedsMeAnswer({ now, say }: { now: Date; say: Say }) {
 
 /**
  * Why it stopped: the stopped list Needs you is made from, so the answer and the row can't disagree, then the AI
- * troubleshooter's four answers and its last one, Retry or Report to support, from the run page's own pieces.
+ * troubleshooter's three answers and the next step under them, Retry or Report to support, from the run page's own pieces.
  */
 export function WhyStoppedAnswer({ useCaseId, say }: { useCaseId: string | null; say: Say }) {
   const home = useHome()
