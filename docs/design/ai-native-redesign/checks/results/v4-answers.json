@@ -4,8 +4,8 @@
   "version": "v4",
   "summary": {
     "real": {
-      "total": 90,
-      "passed": 90,
+      "total": 93,
+      "passed": 93,
       "failed": 0,
       "notPossible": 1
     },
@@ -2986,6 +2986,150 @@
       "errors": []
     },
     {
+      "id": "ANS-cant-runs",
+      "key": "ANS-cant-runs@1280",
+      "title": "A can’t answer reads only its can’t phrase, so the rest of that clause is still marked",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 3,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 6
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the closed tickets and email the summary in French to the team",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: every Friday sum up the closed tickets in MOCK and email it to Bob with a chart",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: watch Grafana every day at 8am on Slack too",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-phrase-runs",
+      "key": "ANS-phrase-runs@1280",
+      "title": "A summary’s describing words are read, and a quote keeps its object and the phrase it names",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 3,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 6
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday prepare a detailed summary of the closed tickets in MOCK",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: every Friday at 9am, list the closed tickets in MOCK, group them by assignee and highlight blockers",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: watch Kubernetes and ping Bob when a new version is out",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
       "id": "ANS-cant-alternative",
       "key": "ANS-cant-alternative@1280",
       "title": "The alternative to an email request sets up cleanly, with the email clause gone",
@@ -3236,6 +3380,54 @@
           "label": "Press Enter to send",
           "nav": false,
           "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-clash-time",
+      "key": "ANS-clash-time@1280",
+      "title": "Two times in a set-up request ask which one, never the first picked",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 1,
+        "screens": 1,
+        "interactions": 3
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday at 9am and 5pm list open tickets in MOCK",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Choose 17:00",
+          "nav": false,
+          "decision": true,
           "screen": "home"
         }
       ],

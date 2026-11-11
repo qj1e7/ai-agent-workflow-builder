@@ -2,7 +2,7 @@
 
 Prototype: `docs/design/ai-native-redesign/prototype.html`. Paths: `docs/design/ai-native-redesign/checks/paths-v4.cjs`.
 
-Real scenarios: 90 passed, 0 failed, 1 not possible. Control (must fail): failed, as it should.
+Real scenarios: 93 passed, 0 failed, 1 not possible. Control (must fail): failed, as it should.
 
 | Id | Width | Task | Passed | Clicks | Fields | Selects | Decisions | Screens | Notes |
 |---|---|---|---|---|---|---|---|---|---|
@@ -61,11 +61,14 @@ Real scenarios: 90 passed, 0 failed, 1 not possible. Control (must fail): failed
 | ANS-none-hers | 1280 | A request with no part in her own words gets no set-up card of guesses | yes | 1 | 1 | 0 | 0 | 1 |  |
 | ANS-leftover-everywhere | 1280 | A part answer and an edit card mark the clauses they didn’t read too | yes | 2 | 2 | 0 | 0 | 1 |  |
 | ANS-cant-clause | 1280 | A can’t answer never crosses the clause it answered | yes | 1 | 1 | 0 | 0 | 1 |  |
+| ANS-cant-runs | 1280 | A can’t answer reads only its can’t phrase, so the rest of that clause is still marked | yes | 3 | 3 | 0 | 0 | 1 |  |
+| ANS-phrase-runs | 1280 | A summary’s describing words are read, and a quote keeps its object and the phrase it names | yes | 3 | 3 | 0 | 0 | 1 |  |
 | ANS-cant-alternative | 1280 | The alternative to an email request sets up cleanly, with the email clause gone | yes | 1 | 0 | 0 | 1 | 1 |  |
 | ANS-ticked-runs | 1280 | In a clause a rule read, a cross quotes only the unread words, and the gaps are read | yes | 4 | 4 | 0 | 0 | 1 |  |
 | ANS-narrow-cards | 901 | Beside the panel, a narrow chat gives the cards two-column rows, and a chip stays on one line | yes | 1 | 1 | 0 | 0 | 1 |  |
 | ANS-narrow-cards | 1024 | Beside the panel, a narrow chat gives the cards two-column rows, and a chip stays on one line | yes | 1 | 1 | 0 | 0 | 1 |  |
 | ANS-clash-day | 1280 | Two days in a set-up request ask which one, and an edit card takes focus at its heading | yes | 2 | 2 | 0 | 0 | 1 |  |
+| ANS-clash-time | 1280 | Two times in a set-up request ask which one, never the first picked | yes | 2 | 1 | 0 | 1 | 1 |  |
 | ANS-testctl | 1280 | The test controls never cover the product, scrolled or not, chatting or not | yes | 1 | 1 | 0 | 0 | 1 |  |
 | ANS-testctl | 900 | The test controls never cover the product, scrolled or not, chatting or not | yes | 1 | 1 | 0 | 0 | 1 |  |
 | ANS-testctl | 390 | The test controls never cover the product, scrolled or not, chatting or not | yes | 1 | 1 | 0 | 0 | 1 |  |
