@@ -3898,9 +3898,24 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const clauses = t.split(/\b(?:and|then|also|but)\b|[,;]/i).map((x) => x.trim()).filter(Boolean);
     return clauses.some((x) => DECIDE_WORDS.test(x)) && !clauses.some((x) => !DECIDE_WORDS.test(x) && isCommand(withoutName(x, nameRef(x)))) ? { kind: 'decide', text: t } : null;
   };
+  /* A question and a change in one sentence, clause by clause: a clause no question route reads that is a command is a
+     change. An approve or decline asked with a change isn't split, so it is still refused whole and opens nothing. */
+  const splitChanges = (t) => {
+    if (DECIDE_WORDS.test(t)) return null;
+    const clauses = t.split(/\b(?:and|then|also|but)\b|[,;]/i).map((x) => x.trim()).filter(Boolean);
+    const change = (x) => !aboutWorkflows(x) && isCommand(withoutName(x, nameRef(x)));
+    const changes = clauses.filter(change);
+    return changes.length && changes.length < clauses.length ? { ask: clauses.filter((x) => !change(x)).join(', '), changes } : null;
+  };
   function approverAnswer(t) {
     if (UNSAFE.test(t)) return { kind: 'refuse', text: t, next: '' };
     if (N8N_ASK.test(t)) return n8nAnswer(t);
+    /* The question is answered as it would be alone, and each change is a cross that says who makes changes. */
+    const split = splitChanges(t);
+    if (split) {
+      const a = approverAnswer(split.ask);
+      if (a.kind !== 'operators' && !(a.kind === 'abilities' && a.unknown)) return { ...a, refused: split.changes };
+    }
     const follow = followUp(t);
     if (follow) return follow.kind === 'data' ? follow : { kind: 'data', looked: ['watchlist'], notOn: follow.name, text: t };
     const about = aboutWorkflows(t);
@@ -4395,11 +4410,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
     ...Object.fromEntries(['data', 'check', 'mine', 'why', 'one', 'decided'].map((k) => [k, () => [...HEARD.frame, ...ABOUT.map(([re]) => new RegExp(`(?:${re.source})(?:(?!\\b(?:and|then|but|also)\\b)[^,.;!?])*`, 'gi')), ...STATUS_WORDS, ...HEARD.watch]])),
   };
   const extraCrosses = (c) => {
+    /* A change an Approver asked alongside a question: its own cross, saying who makes changes. */
+    const ops = (c.refused || []).map((x, i) => ({ key: `ops${i}`, mark: 'no', label: quote(x), body: opsSay() }));
     const rs = c.text && READ_BY[c.kind] && READ_BY[c.kind](c);
-    if (!rs) return [];
+    if (!rs) return ops;
     /* A can't answer that keeps the watch: a time the watchlist doesn't keep is a cross too (fix pass G1). */
     const own = c.kind === 'cant' && c.watch ? watchCrosses({ text: c.text, name: c.watch.name, said: namedKey(c.text) }).filter((x) => ['own', 'days', 'times'].includes(x.key)) : [];
-    return own.concat(leftoverParts(c.text, [...spansOf(c.text, [...rs, REF]), ...nameSpans(c.text)]));
+    return ops.concat(own, leftoverParts(c.text, [...spansOf(c.text, [...rs, REF]), ...nameSpans(c.text)]));
   };
   const cardHTML = (m) => { const no = extraCrosses(m.card); return `${no.length ? `<div class="pcard">${partsList(no)}</div>` : ''}${ANSWERS[m.card.kind].card ? ANSWERS[m.card.kind].card(m) : ''}`; };
 
@@ -5176,8 +5193,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const toolUsers = (k) => visibleAgents().filter((a) => toolKeysOf(a.id).includes(k));
   const toolWorkflows = (k) => { const ids = toolUsers(k).map((a) => a.id); return routineIds().filter((w) => (R(w).agents || []).some((id) => ids.includes(id))); };
   const sentToTeam = (sys) => S.teamReqs.some((q) => q.sys === sys);
-  /* Nobody is named yet as the reader of team requests (ADR 0038, proposed), so the confirmation claims no delivery. */
-  const TEAM_SAVED = 'Saved as a request for the team. You can follow it on Tools, under How it works in Settings.';
+  /* Nobody is named yet as the reader of team requests (ADR 0038), so the confirmation claims no delivery. It points to
+     Tools only for someone who has How it works, which is an Operator's. */
+  const teamSaved = () => `Saved as a request for the team.${me().op ? ' You can follow it on Tools, under How it works in Settings.' : ''}`;
   function toolLog(k) {
     if (S.firstDay) return [];
     const l = TOOL_INFO[k].log.slice();
@@ -6391,7 +6409,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const [sys, src] = arg.split('|');
       const text = (src === 'ask' ? S.toolAsk.text : src === 'wiz' ? S.wiz.text : src.startsWith('chat:') ? msgById(src.slice(5)).card.text : S.agentDraft.text).trim();
       S.teamReqs.push({ sys, text, by: me().name, for: AGENTS[src] ? src : '' });
-      toast(TEAM_SAVED);
+      toast(teamSaved());
       render();
     },
     toolAskChip: (t) => { S.toolAsk = { text: t, result: null, err: '' }; render(); const f = document.getElementById('tool-ask'); if (f) f.focus(); },
@@ -6591,7 +6609,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (!text) return;
       S.teamReqs.push({ sys: 'A request made while no AI model was connected', text, by: me().name, for: '' });
       S.teamAskText = '';
-      toast(TEAM_SAVED);
+      toast(teamSaved());
       render();
     },
     destOpen: () => { S.wiz.destOpen = !S.wiz.destOpen; render(); },
@@ -6765,14 +6783,15 @@ details > .m-close { animation: fold 140ms ease-in both; }
     toast: (t) => { toast(t); render(); },
   };
   /* Who may do what (ADR 0043), checked when an action runs, so a control that isn't drawn can't be reached any other
-     way. Every action is a change that needs an Operator unless it is listed here: reading and moving around, an
-     Approver's decision, opening n8n with n8n access, and the test controls, which aren't a person. A new action is
-     therefore an Operator's until someone opens it up. */
+     way. Every action is a change that needs an Operator unless it is listed here: reading and moving around, asking
+     the team (ADR 0038: the platform keeps the request in our own database, which isn't an agent write, and Approvers
+     take part), an Approver's decision, opening n8n with n8n access, and the test controls, which aren't a person. A
+     new action is therefore an Operator's until someone opens it up. */
   const OPEN_TO = {
     anyone: ['go', 'workflow', 'run', 'watch', 'replay', 'runDetail', 'swHist', 'swShowRow', 'ticket', 'watchFromTicket', 'teams', 'speed', 'agent', 'agentWorkflow', 'modalBack',
       'toRisk', 'libTab', 'libTools', 'toolOpen', 'toolCheck', 'connTest', 'connShow', 'modelTest', 'modelShowKey', 'setTab', 'setGo', 'panelOpen', 'panelClose', 'panelPage',
       'abil', 'ask', 'example', 'say', 'newChat', 'filter', 'findOpen', 'clearFind', 'closeModal', 'skipMain', 'menuPick', 'menuClose', 'cancelSched', 'cancelAppr',
-      'connCancel', 'modelCancel', 'editKeep', 'stopKeep', 'watchKeep', 'moreAppr', 'decideBack', 'askAnswer', 'toast'],
+      'connCancel', 'modelCancel', 'editKeep', 'stopKeep', 'watchKeep', 'moreAppr', 'decideBack', 'askAnswer', 'toast', 'teamReq', 'askTeamOffline'],
     ap: ['approve', 'decline', 'declinePick', 'declineYes', 'askOpen', 'askSend', 'roleConfirm', 'roleNotNow', 'modelConfirm', 'modelNotNow', 'toolOk'],
     n8n: ['n8nAsk', 'n8nOpen', 'n8nGiveBack', 'n8nNew', 'n8nNewOpen'],
     test: ['testToggle', 'day', 'user', 'modelOn', 'preview', 'markUnbuilt', 'jiraDown', 'jiraUp', 'reset', 'yesAs', 'answerAs', 'escalate', 'expire', 'advance', 'n8nChange', 'n8nRun', 'okJiraComp', 'simBadKey'],

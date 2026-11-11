@@ -1455,9 +1455,9 @@ const toastAfter = async (k, act, arg) => {
 };
 const OPS_TOAST = /^Operators set up workflows\. Ask Alice or Carol\./;
 
-add('FIX-deny-default', 'An Approver is refused every change, including Settings, agents and asking the team: the actions deny anything not opened to him', async (t) => {
+add('FIX-deny-default', 'An Approver is refused every change, including Settings and agents: the actions deny anything not opened to him', async (t) => {
   await t.setup((k) => k.setUser('bob'));
-  for (const [act, arg] of [['limitSave'], ['agentRestore', 'jira:1'], ['agentDiscard'], ['connReplace', 'jira'], ['connSave'], ['modelConnect'], ['modelSave'], ['teamReq', 'Slack|ask'], ['askTeamOffline'], ['toolAskGo'], ['askPlanner']]) {
+  for (const [act, arg] of [['limitSave'], ['agentRestore', 'jira:1'], ['agentDiscard'], ['connReplace', 'jira'], ['connSave'], ['modelConnect'], ['modelSave'], ['toolAskGo'], ['askPlanner']]) {
     await t.expect(`${act} is refused`, toastAfter(t.kit, act, arg), OPS_TOAST);
   }
   await t.setup(async (k) => { await k.go('workflows'); await forge(k, 'filter', 'stopped'); await k.settle(); });
@@ -1663,6 +1663,83 @@ add('FIX-decision-time', 'A decision is logged at the time the decisions list gi
   await t.expect('The test run’s gate gives the decline at the decisions list’s time', (conf.find((x) => x.gate) || {}).at, at);
   await t.expect('…and its log runs in order', conf.map((x) => mins(x.at)), (v) => v.length > 3 && v.every((x, i) => !i || x >= v[i - 1]));
   await t.expect('The software check’s gate gives the decline today, at the same time', (sw.find((x) => x.gate) || {}).at, `Tue 27 Oct, ${at}`);
+}, [1280]);
+
+/* Step 4 follow-up. Each failed on f9e7c2fa before the fix. */
+add('FOLLOW-bob-mixed', 'Bob’s question asked with a change is answered as if asked alone, and the change gets a cross saying who makes changes; nothing changes', async (t) => {
+  const opsCross = (said) => new RegExp(`“${said}”\\s*Operators set up workflows\\. Ask Alice or Carol\\.`);
+  await t.setup((k) => k.setUser('bob'));
+  for (const [ask, change] of [['how is the morning check doing', 'pause it'], ['what’s waiting for my yes', 'delete the weekly summary']]) {
+    await t.ask(ask);
+    const alone = await lastSay(t);
+    await t.ask(`${ask} and ${change}`);
+    await t.expect(`“${ask}” is answered as it is alone`, lastSay(t), alone);
+    await t.expectText(`“${change}” has its cross, saying who makes changes`, opsCross(change), lastCard);
+  }
+  await t.ask('pause the morning check');
+  await t.expect('A change on its own is still refused whole', lastSay(t), /^Operators set up workflows\. Ask Alice or Carol\.$/);
+  await t.ask('approve the upgrade and pause the morning check');
+  await t.expect('An approve with a change is still refused whole', lastSay(t), /^Operators set up workflows\. Ask Alice or Carol\.$/);
+  await t.expectCount('…and opens nothing', '#sidepanel [data-act="approve"]', 0);
+  await t.menu('workflows', 'Open Workflows');
+  const rows = await t.page.$$eval('main .wf-row', (rs) => rs.map((r) => r.innerText.replace(/\s+/g, ' ')));
+  await t.expect('Nothing changed: the morning check is stopped, not paused', rows.find((r) => r.startsWith('Morning new-ticket check')) || '(gone)', (r) => /Stopped/.test(r) && !/Paused/.test(r));
+  await t.expect('…and the weekly summary is still there', rows.some((r) => r.startsWith('Weekly closed-ticket summary')), true);
+}, [1280]);
+
+add('FOLLOW-team-open', 'Ask the team is open to Approvers (ADR 0038): Bob’s request is kept, and the Operators see it on Tools', async (t) => {
+  await t.setup((k) => k.setUser('bob'));
+  await t.expect('Asking the team is saved, not refused, and points to no page he can’t open', toastAfter(t.kit, 'teamReq', 'Slack|ask'), 'Saved as a request for the team.');
+  await t.setup(async (k) => { await k.page.keyboard.press('Escape'); await k.settle(450); await k.setUser('alice'); });
+  await t.click('.hdr [data-act="go"][data-arg="settings"]', 'Settings');
+  await t.click('[data-act="setTab"][data-arg="how"]', 'How it works');
+  await t.click('[data-act="libTab"][data-arg="tools"]', 'Tools');
+  await t.expectText('Bob’s request is kept', /Asked the team\s*1[\s\S]*Slack[\s\S]*Asked by Bob today/, 'main');
+}, [1280]);
+
+add('FOLLOW-bob-buttons', 'Every button on every screen Bob can reach works for him: none is an Operator’s change he’d be refused, and none is dead', async (t) => {
+  const html = await t.page.content();
+  const table = html.slice(html.indexOf('const OPEN_TO = {'), html.indexOf('const NEED = '));
+  const open = [...table.matchAll(/\b(anyone|ap):\s*\[([^\]]*)\]/g)].flatMap((m) => [...m[2].matchAll(/'(\w+)'/g)].map((x) => x[1]));
+  const bad = [];
+  const places = [];
+  /* Agents, tools and tickets open over any page, from wherever Bob finds them, including inside each other. */
+  const OPENS = ['agent', 'toolOpen', 'ticket'];
+  const opened = new Set();
+  const toOpen = [];
+  /* The send arrow waits for words in the box, so it isn't dead. */
+  const look = async (where) => {
+    const found = await t.page.$$eval('[data-act], button, input, textarea, select', (els, ok) => els.filter((e) => e.id !== 'forged' && !e.matches('.send') && !e.closest('.testctl') && e.getClientRects().length
+      && ((e.dataset.act && !ok.includes(e.dataset.act)) || e.disabled || e.getAttribute('aria-disabled') === 'true')).map((e) => `${e.dataset.act || e.tagName.toLowerCase()} “${(e.textContent || e.value || '').trim().slice(0, 30)}”`), open);
+    places.push(where);
+    for (const [act, arg] of await t.page.$$eval(OPENS.map((a) => `[data-act="${a}"][data-arg]`).join(','), (els) => els.filter((e) => e.getClientRects().length).map((e) => [e.dataset.act, e.dataset.arg]))) if (!opened.has(`${act}|${arg}`)) { opened.add(`${act}|${arg}`); toOpen.push([act, arg]); }
+    found.forEach((f) => { if (!bad.includes(`${where}: ${f}`)) bad.push(`${where}: ${f}`); });
+  };
+  const visit = async (where, act, arg) => { await t.setup(async (k) => { await k.page.keyboard.press('Escape'); await forge(k, act, arg); await k.settle(); }); await look(where); };
+  const args = (sel) => t.page.$$eval(sel, (bs) => [...new Set(bs.map((b) => b.dataset.arg))]);
+  await t.setup((k) => k.setUser('bob'));
+  await look('Home');
+  for (const q of [CHECK_WORKFLOWS, 'What needs me?', 'What did I decide before?', 'Which software is behind?', 'what can you do?', 'how is the morning check doing and pause it']) await t.ask(q);
+  await look('Chat');
+  /* Every page, workflow, run, Settings tab, agent and tool, as the app is and with Planned features shown. */
+  for (const tag of ['', ' (Planned features)']) {
+    if (tag) await t.setup((k) => ctl(k, 'preview', 'on'));
+    await visit(`Workflows${tag}`, 'go', 'workflows');
+    for (const id of await args('main [data-act="workflow"]')) { await visit(`Workflow ${id}${tag}`, 'workflow', id); await visit(`Run ${id}${tag}`, 'run', id); }
+    await visit(`Watchlist${tag}`, 'go', 'software');
+    await visit(`Teams${tag}`, 'teams');
+    await visit(`Settings${tag}`, 'go', 'settings');
+    for (const tab of await args('[data-act="setTab"]')) {
+      await visit(`Settings ${tab}${tag}`, 'setTab', tab);
+      if (tab === 'how') for (const lib of await args('[data-act="libTab"]')) await visit(`How it works ${lib}${tag}`, 'libTab', lib);
+    }
+    while (toOpen.length) { const [act, arg] = toOpen.shift(); await visit(`${act} ${arg}${tag}`, act, arg); }
+    opened.clear();
+  }
+  await t.setup((k) => ctl(k, 'modelOn', 'off'));
+  await visit('Home with no AI model', 'go', 'home');
+  await t.expect('Every screen was reached', places.length, (n) => n >= 25);
+  await t.expect('No refused or dead control on any of them', bad, (v) => v.length === 0);
 }, [1280]);
 
 /* Screens shot by shots.cjs and measured by quality.cjs. prepare(k) sets the screen up like a user would reach it. */
