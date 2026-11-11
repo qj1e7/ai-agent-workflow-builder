@@ -77,7 +77,7 @@ Every new or changed screen, component or flow follows `docs/design/ai-native-pr
 8. **Show what the AI is doing.** Plain step names, and the live activity view while a run is going.
 9. **The person stays in control.** They can review, correct, pause, retry, discard and delete, and no button is shown dead.
 10. **Not chat-only.** Chips, menus and buttons wherever they are faster than typing.
-11. **Calm, plain and accessible.** A calm Home, plain words, the keyboard, phones at 390 px, and reduced motion.
+11. **Calm, plain and accessible.** A calm Home, plain words, the keyboard, a responsive web view from a narrow window to a wide screen, and reduced motion. No phone-only design.
 12. **Evidence, not looks.** Measure the tasks, and test with real users.
 
 - Design a new screen or component in the prototype first, then build it in the Portal.

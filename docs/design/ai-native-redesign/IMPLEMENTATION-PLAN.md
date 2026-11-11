@@ -10,7 +10,7 @@ The plan keeps three layers apart, as the spec does:
 - **Prototype** means the clickable design in `prototype.html`. It is scripted and connected to nothing. Its scenario ids (`SHELL-pinned`, `APPR-ask` and so on) are in `checks/paths-v4.cjs`, and `checks/results/v4-runs.md` lists them all.
 - **Planned** means a proposed ADR or a "Later" item. Nothing implements it.
 
-Steps 1 to 3 of the redraw are merged. Step 4 (the Approver's question-only box, n8n views only for people with n8n access, read-only rail pages for Approvers) is still being built, so its parts here are marked. The team lead dropped the phone layout from step 4 on 11 Nov, because approvals on a phone happen in Teams. This plan adds no phone work.
+Steps 1 to 3 of the redraw are merged. Step 4 (the Approver's question-only box, n8n views only for people with n8n access, read-only rail pages for Approvers) is still being built, so its parts here are marked. On 11 Nov the team lead dropped the phone layout from step 4. The Portal is a responsive web view, from a narrow browser window to a wide screen, and an Approver on a phone decides in Teams. This plan adds no phone-only work.
 
 ## 1. Starting point
 
@@ -510,7 +510,7 @@ These use tools already in the repo:
   - the edit card takes focus on its heading;
   - Ask, the decline reasons and Decline each show focus (`KEYS-APPR`).
 - **Screen reader announcements.** The polite live region reads each Planner reply once. The pinned line is a labelled region. The rail's counts are in each item's accessible name.
-- **Phone width.** `devContext(browser, user, { phone: true })` in `portal/e2e/live/support/ui.ts`. Every page passes the "does not scroll sideways at 390 px" check that `01-first-screen.live.ts` and `06-home.live.ts` already run.
+- **Window widths.** Every page passes the "does not scroll sideways" check in a narrow 390 px window, which `01-first-screen.live.ts` and `06-home.live.ts` already run through `devContext` in `portal/e2e/live/support/ui.ts`, and at 1920 px. `design-rules.spec.ts` gains a check, like the prototype's `checks/fit.cjs`, that fails when text spills out of its box at 390, 900, 1280 or 1920 px.
 - **Reduced motion.** `devContext(browser, user, { reducedMotion: true })`. No running infinite animation on the chat, the run line or the side panel.
 - **Not colour alone.** Unit tests assert that each part mark, pill and chip carries words ("Will do", "Can't do", "Question", "Filled in by me", "Declined").
 - **People.** Automated checks do not replace assistive technology (handover L24). One person does a VoiceOver pass on the chat, the side panel and the approval page, and saves the notes in `docs/evidence/`.

@@ -67,11 +67,13 @@ Nothing here changes the approval gate or the safety checker. Every write still 
   - "Changes happen where the thing lives" now allows asking for a schedule change in the chat.
   - The Approver-only Home gains the box, for questions only.
   - The menu becomes the rail.
-- **The prototype is redrawn before the Portal changes.** Version 4, `docs/design/ai-native-redesign/prototype.html`, is redrawn in four steps, each checked like version 4 was (axe, keyboard, 390 px, reduced motion):
+- **The prototype is redrawn before the Portal changes.** Version 4, `docs/design/ai-native-redesign/prototype.html`, is redrawn in four steps, each checked like version 4 was (axe, keyboard, a narrow window, reduced motion):
   1. **The shell.** The rail with full pages for Workflows and the Watchlist, Home as a chat, the pinned Needs you line, and the side panel for items opened from the chat. The Agent library moves to Settings.
   2. **The Planner's answers.** Part marks on the set-up card, one question at a time, the edit card, status questions in any wording, and live cards.
   3. **Runs and approvals.** The three answers on a stopped run, the approval page's three additions, and the declined record.
-  4. **Roles and phones.** The Approver's box, n8n views for people with n8n access, and the phone layout.
+  4. **Roles.** The Approver's box and n8n views for people with n8n access.
+
+  On 11 Nov the team lead dropped the phone layout. The Portal is a responsive web view, from a narrow browser window to a wide screen, and approvals on a phone happen in Teams.
 
   Then the spec (`AI-NATIVE-UX-REDESIGN.md`, sections 3, 5 to 12 and 18) and `IMPLEMENTATION-PLAN.md` follow the redrawn prototype.
 - **The agent runtime's answer grows.** The set-up card's parts must account for every clause of the request. The Planner gains an edit answer for an existing workflow. The evals' golden set adds paraphrases that must keep or flag each part, such as "haven't been updated for 10 days", so a lost part fails CI.

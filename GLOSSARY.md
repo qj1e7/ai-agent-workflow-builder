@@ -62,11 +62,11 @@ The one line at the top of a conversation that names the most urgent item in Nee
 _Avoid_: Banner, alert
 
 **Rail**:
-The slim column on the left of the app with Chat, Workflows and Watchlist, each with a count. Workflows and Watchlist open as full pages, and the chat shows only on Chat. On a phone it is a bar across the top (ADR 0043).
+The slim column on the left of the app with Chat, Workflows and Watchlist, each with a count. Workflows and Watchlist open as full pages, and the chat shows only on Chat. In a narrow window it is a bar across the top (ADR 0043).
 _Avoid_: Tabs, menu, sidebar
 
 **Side panel**:
-Where something opened from a card in the chat shows, beside the chat, so the conversation stays in view. It shows one thing at a time, as a summary, with More details for the full page. A link inside it, or anything opened from the rail or a page, opens as a full page instead. On a phone it opens full screen with Close.
+Where something opened from a card in the chat shows, beside the chat, so the conversation stays in view. It shows one thing at a time, as a summary, with More details for the full page. A link inside it, or anything opened from the rail or a page, opens as a full page instead. In a narrow window it covers the window, with Close.
 _Avoid_: Drawer, modal
 
 **Question answer**:

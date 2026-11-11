@@ -91,12 +91,16 @@ A list opened from the chat, such as "N more" on the pinned line or a link to Se
 
 ### 3.4 One breakpoint, 900 px
 
-The layout changes once, at a window 900 px wide or narrower:
+The Portal is a responsive web view. It adapts to any browser window, from a narrow window to a wide screen. It has no phone-only layout, because an Approver on a phone decides in Teams.
+
+The main layout changes at one width, a window 900 px wide or narrower:
 
 - the rail becomes a bar across the top, with the three items side by side;
 - the side panel opens over the whole window with Close, only when the person presses Open, and the chat behind it can't be reached until it closes;
 - the side panel never opens by itself;
 - the header stops sticking to the top, and the page loses its frame.
+
+Smaller steps at other widths only reflow one part, such as a row's button moving under its text.
 
 ### 3.5 Needs you, pinned and grouped
 
@@ -176,7 +180,7 @@ From 8 Nov 2026 Home is the front door for software versioning, and the general 
 
 **Before the first message,** Home is calm and keeps version 3's look. The user chose this on 7 Nov. From top to bottom:
 
-1. **The Visor bot, then the greeting and a one-line state,** centred. The bot is 128 px (96 px on a phone).
+1. **The Visor bot, then the greeting and a one-line state,** centred. The bot is 128 px, and 96 px in a narrow window.
    - "Good morning! Alice", the greeting the built app uses since commit 8a2a549.
    - The line under it is computed from `needs()` and the workflows. It never repeats the count the Needs you heading shows, for example "Some things need you. Your other workflows are on." When nothing needs her, it says what is next: "Nothing needs you. Next up: ...".
 2. **The box.** One large text box.
@@ -629,7 +633,7 @@ It has no Approve or Decline. After a decision, the drawer shows the request's s
    - Status is never shown by colour alone.
    - The Planner's replies are announced politely.
    - Menus and collapsed sections use the right roles and expanded states.
-   - Nothing scrolls sideways at 390 px, and touch targets are at least 44 px.
+   - The layout adapts to any browser window, from a narrow window to a wide screen of 1920 px and more. Nothing scrolls sideways and no text spills at any width. There is no phone-only design, because an Approver on a phone decides in Teams.
    - Reduced motion stops every loop.
 9. **Honest states.** The same words everywhere:
 
