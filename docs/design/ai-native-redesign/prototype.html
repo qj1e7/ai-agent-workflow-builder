@@ -1870,8 +1870,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
       /\b(?:gitlab|entra|active directory|servicenow|outlook|sharepoint|excel)\b/gi,
       /\b(?:jira|tickets?|issues?|project)\b/gi,
       /\b(?:find|get|pull|fetch|gather|collect|look (?:at|for)|go through)\b(?=[^.,;]*\b(?:tickets?|issues?)\b)/gi,
-      /\b(?:prepare|make|create|write|produce|build|give|send|show)(?:\s+(?:me|us))?(?=\s+(?:a |an |one |the )?(?:short |quick |brief |weekly |daily )?(?:summary|summaries|list|report|digest|overview|comparison)\b)/gi,
-      /\b(?:short|quick|brief)\b(?=\s+(?:summary|summaries|list|report|digest|overview)\b)/gi,
+      /\b(?:prepare|make|create|write|produce|build|give|send|show)(?:\s+(?:me|us))?(?=\s+(?:a |an |one |the )?(?:[\w-]+\s+){0,2}(?:summary|summaries|list|report|digest|overview|comparison)\b)/gi,
+      /(?<=\b(?:prepare|make|create|write|produce|build|give|send|show)(?:\s+(?:me|us))?\s+(?:a\s+|an\s+|one\s+|the\s+)?)(?:[\w-]+\s+){1,2}(?=(?:summary|summaries|list|report|digest|overview|comparison)\b)|\b(?:short|quick|brief)\b(?=\s+(?:summary|summaries|list|report|digest|overview)\b)/gi,
       /\b(?:file|raise|log|put|create|add)\s+(?:it|them|this|that)\s+(?:as|in|into)\s+(?:a|one)\s+(?:new\s+)?(?:jira\s+)?ticket\b/gi,
     ],
     /* What the Jira read can't give, which a part answer names: the last update, the owner, the type, the component, the priority, older tickets. */
@@ -1927,9 +1927,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
         const run = clause.slice(i, j);
         if (run.some((x) => !plain(x))) {
           let last = run.length - 1;
-          while (plain(run[last])) last -= 1;
-          const end = last === run.length - 1 && j < clause.length && !plain(clause[j]) ? clause[j] : run[last];
-          out.push({ quote: text.slice(run[0].a, end.b), clause: whole });
+          while (plain(run[last]) && !(/^(it|them|me|us)$/i.test(run[last].w) && !plain(run[last - 1]))) last -= 1;
+          /* "ping Bob when a new version": a run that ends on "a" or "the" carries on into the words it names. */
+          const through = j < clause.length && !plain(clause[j]) && run.slice(last + 1).every((x) => /^(a|an|the)$/i.test(x.w));
+          let k = j;
+          while (through && k + 1 < clause.length && read(clause[k + 1]) && !plain(clause[k + 1])) k += 1;
+          out.push({ quote: text.slice(run[0].a, (through ? clause[k] : run[last]).b), clause: whole });
         }
         i = j;
       }

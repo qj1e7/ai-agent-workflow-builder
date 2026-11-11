@@ -532,6 +532,15 @@ add('ANS-cant-runs', 'A can’t answer reads only its can’t phrase, so the res
   await t.expect('The time the watchlist doesn’t keep is marked', crosses(t), /^“every day at 8am” The Software watchlist checks all your software together, every Monday at 9:00\./);
 }, [1280]);
 
+add('ANS-phrase-runs', 'A summary’s describing words are read, and a quote keeps its object and the phrase it names', async (t) => {
+  await t.ask('every Friday prepare a detailed summary of the closed tickets in MOCK');
+  await t.expectCount('“a detailed summary” is read, so nothing is crossed', `${lastCard} .part[data-mark="no"]`, 0);
+  await t.ask('every Friday at 9am, list the closed tickets in MOCK, group them by assignee and highlight blockers');
+  await t.expect('“group them” keeps its object', crosses(t), /“group them” I didn’t follow this part\./);
+  await t.ask('watch Kubernetes and ping Bob when a new version is out');
+  await t.expect('“ping Bob when a new version” runs through “a”', crosses(t), /“ping Bob when a new version” I didn’t follow this part\./);
+}, [1280]);
+
 add('ANS-cant-alternative', 'The alternative to an email request sets up cleanly, with the email clause gone', async (t) => {
   await t.setup((k) => k.ask(EMAIL_TEAM));
   await t.click(`${lastCard} [data-act="instead"]`, 'Set that up', { reply: true, decision: true });
