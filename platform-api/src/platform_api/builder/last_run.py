@@ -20,7 +20,7 @@ def last_run_view(gist: RunGist) -> LastRunView:
         run_id=gist.run_id,
         state=gist.state,
         at=gist.started_at,
-        test=gist.by_hand,
+        test=gist.test,
         declined_by=gist.declined_by,
         proposed=gist.proposed,
         written=gist.written,

@@ -4533,7 +4533,7 @@
             "$ref": "#/components/schemas/RunState"
           },
           "test": {
-            "description": "True when a person started it by hand to try the workflow, which is a test run. False when its schedule started it.",
+            "description": "True when a person started it by hand to try the workflow, which is a test run. False when its schedule started it, and for every check of the software watchlist.",
             "title": "Test",
             "type": "boolean"
           },

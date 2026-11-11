@@ -23,6 +23,7 @@ from platform_api.orchestration import (
     CantRow,
     CapabilityList,
     CapabilitySpec,
+    CardsTask,
     CheckPartResult,
     CheckWorkflowsAnswer,
     ConnectionCheck,
@@ -70,6 +71,7 @@ from platform_api.orchestration.runs import (
     FailureReason as RunFailure,
 )
 from platform_api.orchestration.runs import RunState as RunPhase
+from platform_api.orchestration.spec import Task
 from platform_api.orchestration.store import RunRecord
 from platform_api.orchestration.write_actions import Proposal, WriteAction
 from platform_api.shared import (
@@ -279,11 +281,12 @@ class RunBook:
         at: datetime,
         trigger: Trigger = "schedule",
         proposed: int = 0,
+        task: Task = SPEC.task,
     ) -> RunId:
         run_id = RunId(f"run_{len(self.runs) + 1}")
         record = RunRecord(
             run_id,
-            replace(SPEC, use_case_id=UseCaseId(use_case_id), trigger=trigger),
+            replace(SPEC, use_case_id=UseCaseId(use_case_id), trigger=trigger, task=task),
             UserId("alice"),
             at,
             at,
@@ -899,13 +902,39 @@ async def test_a_stopped_run_is_the_last_run_with_no_one_declining(front: Front)
     )
 
 
-async def test_a_run_started_by_hand_is_a_test_run(front: Front):
+async def test_a_run_started_by_hand_on_a_workflow_is_a_test_run(front: Front):
     use_case_id = await make_workflow(front, "Tried")
     front.book.add(
-        use_case_id, Pending(RunId("run_1"), 1, None, LONG_AGO), LONG_AGO, trigger="person"
+        use_case_id,
+        Pending(RunId("run_1"), 1, None, LONG_AGO),
+        LONG_AGO,
+        trigger="person",
+        task=CardsTask(agents=()),
     )
     last = await last_run_of(front, "Tried")
     assert last is not None and last["test"] is True and last["state"] == "pending"
+
+
+async def test_a_check_of_the_watchlist_started_by_hand_is_never_a_test_run(front: Front):
+    use_case_id = await make_workflow(front, "Watched")
+    front.book.add(
+        use_case_id, Pending(RunId("run_1"), 1, None, LONG_AGO), LONG_AGO, trigger="person"
+    )
+    last = await last_run_of(front, "Watched")
+    assert last is not None and last["test"] is False and last["state"] == "pending"
+
+
+async def test_a_run_a_schedule_started_is_not_a_test_run(front: Front):
+    use_case_id = await make_workflow(front, "Scheduled")
+    front.book.add(
+        use_case_id,
+        Pending(RunId("run_1"), 1, None, LONG_AGO),
+        LONG_AGO,
+        trigger="schedule",
+        task=CardsTask(agents=()),
+    )
+    last = await last_run_of(front, "Scheduled")
+    assert last is not None and last["test"] is False
 
 
 async def test_the_newest_run_is_the_last_run_whatever_its_state(front: Front):

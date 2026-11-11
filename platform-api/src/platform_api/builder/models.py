@@ -93,7 +93,7 @@ class LastRunView(WireModel):
     at: AwareDatetime = Field(description="When the run started.")
     test: bool = Field(
         description="True when a person started it by hand to try the workflow, which is a test "
-        "run. False when its schedule started it."
+        "run. False when its schedule started it, and for every check of the software watchlist."
     )
     declined_by: UserId | None = Field(
         description="Who declined it. Null unless the run was declined."
