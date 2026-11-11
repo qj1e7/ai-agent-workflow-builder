@@ -274,6 +274,15 @@ describe('Needs you at the top of Workflows', () => {
     expect(html.indexOf('aria-label="Needs you"')).toBeLessThan(html.indexOf('aria-label="Workflows"'))
   })
 
+  it('groups the list into Do now and Set up, as Home does, with the same rows in each', () => {
+    const html = mainOf(render({ home: HOME }))
+    const names = [...html.matchAll(/<h3 id="[^"]*">(Do now|Set up)<\/h3>/g)].map((m) => m[1])
+    expect(names).toEqual(['Do now', 'Set up'])
+    const keys = [...html.matchAll(/data-home-item="([^"]+)"/g)].map((m) => m[1])
+    expect(keys.indexOf('stopped:run_01JB9')).toBeLessThan(keys.indexOf('address:' + (HOME.addresses[0] as { software_id: string }).software_id))
+    expect(keys).toHaveLength(needsTotal(HOME))
+  })
+
   it('shows no section when nothing needs the person', () => {
     const quiet: HomeOut = { ...HOME, approvals: [], approvals_total: 0, confirmations: [], stopped: [], stopped_total: 0, replied: [], connections: [], addresses: [] }
     expect(render({ home: quiet })).not.toContain('aria-label="Needs you"')

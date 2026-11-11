@@ -33,7 +33,36 @@ export interface Needs {
 
 const KIND_ORDER: Record<Need['kind'], number> = { stopped: 0, approval: 1, connection: 2, address: 3, confirmation: 4, reply: 5 }
 
-const urgentFirst = (a: Need, b: Need) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || b.at.localeCompare(a.at) || a.key.localeCompare(b.key)
+/** Needs you is grouped wherever it is listed in full (spec 3.5): what to do now, then what to set up. */
+export type NeedGroup = 'now' | 'set'
+
+export const NEED_GROUPS: readonly (readonly [NeedGroup, string])[] = [
+  ['now', 'Do now'],
+  ['set', 'Set up'],
+]
+
+/**
+ * Stops, approvals and replies are Do now, and so is a connection that doesn't work, because it stops every run (no AI model,
+ * Jira not answering). A key that still works but runs out soon, software whose address moved, and confirmations are Set up.
+ */
+export function groupOf(need: Need): NeedGroup {
+  switch (need.kind) {
+    case 'stopped':
+    case 'approval':
+    case 'reply':
+      return 'now'
+    case 'connection':
+      return need.item.state === 'working' ? 'set' : 'now'
+    case 'address':
+    case 'confirmation':
+      return 'set'
+  }
+}
+
+const GROUP_ORDER: Record<NeedGroup, number> = { now: 0, set: 1 }
+
+const urgentFirst = (a: Need, b: Need) =>
+  GROUP_ORDER[groupOf(a)] - GROUP_ORDER[groupOf(b)] || KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || b.at.localeCompare(a.at) || a.key.localeCompare(b.key)
 
 export const needsTotal = (home: HomeOut) => home.approvals_total + home.confirmations.length + home.stopped_total + home.connections.length + home.addresses.length + home.replied.length
 
@@ -41,6 +70,7 @@ export const needsTotal = (home: HomeOut) => home.approvals_total + home.confirm
 export const runsInNeeds = (home: HomeOut): ReadonlySet<string> =>
   new Set(needsOf(home).shown.flatMap((need) => (need.kind === 'approval' || need.kind === 'stopped' ? [need.item.run_id] : [])))
 
+/** The list Needs you is made from: Do now before Set up, and inside each group the most urgent first. */
 export function needsOf(home: HomeOut, limit = Infinity): Needs {
   const all: Need[] = [
     ...home.approvals.map((item): Need => ({ kind: 'approval', key: `approval:${item.approval_id}`, at: item.started_at, item })),
@@ -247,6 +277,38 @@ export function actionsOf(need: Need, modelOff = false): readonly Action[] {
       return [{ kind: 'open', label: 'Read the reply', to: requestPath(need.item.request_id) }]
   }
 }
+
+/** Where Open on the pinned line goes: the item's own page, which is the first thing its row offers that opens a page. */
+export function openPathOf(need: Need): string {
+  const open = actionsOf(need).find((action) => action.kind === 'open')
+  return open?.to ?? (need.kind === 'stopped' ? `/runs/${need.item.run_id}` : '/workflows')
+}
+
+export interface Pinned {
+  readonly need: Need
+  /** The rest of Needs you, so `more + 1` is the one number every place shows. */
+  readonly more: number
+}
+
+/** The most urgent of the grouped needs, or null when nothing needs the person. */
+export function pinnedOf(home: HomeOut): Pinned | null {
+  const [need] = needsOf(home).shown
+  return need === undefined ? null : { need, more: Math.max(0, needsTotal(home) - 1) }
+}
+
+/** The first sentence of a line, for the one line the pinned line has room for. */
+export const firstSentence = (words: string): string => words.split(/(?<=\.)\s/)[0] ?? words
+
+/** What the pinned line says under the title: why it stopped, else where the item came from. */
+export function pinnedWhy(need: Need, now: Date, modelOff = false): string {
+  const words = wordsOf(need, now, modelOff)
+  return words.why !== null ? firstSentence(words.why) : words.meta
+}
+
+/** On Home with no AI model the hero already offers Connect a model, so the model's row points to it instead of offering a second button. */
+export const CONNECT_ABOVE = 'Connect one with the button above.'
+export const NO_MODEL_TITLE = 'No AI model connected'
+export const isModelNeed = (need: Need): boolean => need.kind === 'connection' && need.item.id === 'model'
 
 export const CAN_RUN_AGAIN = 'Can run again once an AI model is connected.'
 

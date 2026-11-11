@@ -72,7 +72,6 @@ export const SAY = {
   which_software: 'Which software should I watch?',
   refused: 'I can’t set that up. Anything that changes data waits for a yes, every time.',
   abilities: 'Here is what I can do, and what I can’t do yet.',
-  ideas: 'Here are some places to start. Pick one and I’ll fill in what I can.',
   nothingNeeds: 'Nothing needs you right now.',
 } as const
 
@@ -82,6 +81,10 @@ export const watchlistSay = (software: string | null, listed: boolean): string =
     ? `${software} is already on the Software watchlist.`
     : `${software} is software, so it belongs on the Software watchlist, which checks the software on it for new releases.`
 }
+
+/** “Set up another workflow”: the sentence counts the places to start it shows, so the words and the chips never disagree. */
+export const ideasSay = (places: number): string =>
+  places === 0 ? 'I have no places to start to suggest right now. Tell me what you would like.' : places === 1 ? 'Here is a place to start. Pick it, or tell me something else.' : `Here are ${places} places to start. Pick one, or tell me something else.`
 
 export const needsSay = (total: number): string => (total === 0 ? SAY.nothingNeeds : `${count(total, 'thing')} ${total === 1 ? 'needs' : 'need'} you.`)
 
@@ -103,7 +106,7 @@ export function sayOf(reply: PlannerReply): string | null {
     case 'abilities':
       return SAY.abilities
     case 'ideas':
-      return SAY.ideas
+      return null
     case 'offline':
       return reply.message
     case 'question':

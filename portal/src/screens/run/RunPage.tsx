@@ -10,6 +10,7 @@ import { PageHead } from '../../shell/PageHead'
 import { PRODUCT } from '../../shell/product'
 import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
+import { useFromChat } from '../../ui/fromChat'
 import { motionAllowed } from '../../ui/motion'
 import { ApprovalGate } from './ApprovalGate'
 import { Chat, DECISION_ID, LastWord, NeedsYou, Typing } from './Chat'
@@ -191,6 +192,7 @@ function detailOpen(choice: boolean | null, model: RunModel): boolean {
 function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const { shown, head, loadedUpTo } = live
   const me = useMe().data
+  const fromChat = useFromChat()
   const nameOf = useNameOf(head)
   const [lands] = useState(() => fromApproval || LANDS_ON_DECISION.has(shown.phase.state))
   const chatList = useRef<HTMLOListElement>(null)
@@ -247,10 +249,12 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
 
   return (
     <div className={styles['page']}>
-      <Link to={backTo(useCase)} className={styles['back']}>
-        <span aria-hidden="true">‹</span>
-        {run.use_case_name}
-      </Link>
+      {fromChat ? null : (
+        <Link to={backTo(useCase)} className={styles['back']}>
+          <span aria-hidden="true">‹</span>
+          {run.use_case_name}
+        </Link>
+      )}
       <div className={styles['head']}>
         <h1 tabIndex={-1} data-page-moves-focus={lands || undefined}>
           {headline.text}

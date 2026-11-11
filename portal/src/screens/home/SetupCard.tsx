@@ -49,6 +49,7 @@ import {
   type Form,
 } from './card'
 import { DiscardDialog } from '../workflows/Sections'
+import { CardMemoryContext } from './cardMemory'
 import { CardLive, useMainButton } from './primary'
 import styles from './SetupCard.module.css'
 
@@ -395,7 +396,7 @@ function firstRun(useCase: UseCaseView, now: Date): string {
   return `First run ${at.startsWith('Today, ') ? `today at ${at.slice('Today, '.length)}` : `on ${at}`}, ${timesZone(zone)}.`
 }
 
-type Phase = { readonly kind: 'open' } | { readonly kind: 'done'; readonly useCaseId: string; readonly draftKept: boolean; readonly newAgents: readonly string[] } | { readonly kind: 'never_mind' }
+export type Phase = { readonly kind: 'open' } | { readonly kind: 'done'; readonly useCaseId: string; readonly draftKept: boolean; readonly newAgents: readonly string[] } | { readonly kind: 'never_mind' }
 
 /**
  * The set-up card (spec 7). One state, the form, drives the sentence, the footer line and the reason Turn it on waits. Every
@@ -404,9 +405,10 @@ type Phase = { readonly kind: 'open' } | { readonly kind: 'done'; readonly useCa
 export function SetupCard({ start }: { start: CardStart }) {
   const main = useMainButton()
   const live = useContext(CardLive)
-  const [form, setForm] = useState(start.form)
-  const [draft, setDraft] = useState(start.draftId)
-  const [phase, setPhase] = useState<Phase>({ kind: 'open' })
+  const memory = useContext(CardMemoryContext)
+  const [form, setForm] = useState(() => (memory.kept?.form ?? start.form))
+  const [draft, setDraft] = useState(() => (memory.kept ? memory.kept.draft : start.draftId))
+  const [phase, setPhase] = useState<Phase>(() => (memory.kept ? memory.kept.phase : { kind: 'open' }))
   const [editing, setEditing] = useState<number | 'dest' | 'when' | 'name' | null>(null)
   const [shown, setShown] = useState(false)
   const [refused, setRefused] = useState<readonly string[]>([])
@@ -456,12 +458,17 @@ export function SetupCard({ start }: { start: CardStart }) {
     const now = latest.current
     if (now.phase.kind !== 'open' || turningOn.current) return
     const saved = now.draft ?? newIdempotencyKey()
+    latest.current = { ...now, draft: saved }
     setDraft(saved)
     saveDraft.mutate(
       { draftId: saved, draft: { content: draftContent(now.form, now.plan) } },
       { onSuccess: () => onDone?.(saved), onError: (error) => setSaveProblem(words(error)) },
     )
   }
+
+  useEffect(() => {
+    memory.keep({ form, draft, phase }, () => persist())
+  })
 
   const watching = useRef(false)
   useEffect(() => {

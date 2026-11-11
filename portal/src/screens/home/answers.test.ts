@@ -14,6 +14,7 @@ import {
   workflowsSay,
   cantLine,
   cardLines,
+  ideasSay,
   lineText,
   needsSay,
   refusalNext,
@@ -167,5 +168,25 @@ describe('Check my workflows counts what its rows show', () => {
     const rows = [row('a', 'failed'), row('b', 'awaiting_approval'), row('c', null), row('d', 'succeeded'), row('e', 'working')]
     expect(workflowsSay(rows)).toBe('You have 5 workflows. 1 stopped, 1 is waiting for a yes, 1 is running.')
     expect(workflowsSay([row('c', null), row('d', 'succeeded')])).toBe('You have 2 workflows. None needs you.')
+  })
+})
+
+describe('Set up another workflow counts its places to start (FIX-starts-count)', () => {
+  const CAPS = capabilities as CapabilitiesView
+
+  it('says as many places as the chips under it show', () => {
+    const places = startingPoints(CAPS).length
+    expect(places).toBeGreaterThan(0)
+    expect(ideasSay(places)).toBe(places === 1 ? 'Here is a place to start. Pick it, or tell me something else.' : `Here are ${String(places)} places to start. Pick one, or tell me something else.`)
+  })
+
+  it('reads right for one place, two places and none', () => {
+    expect(ideasSay(1)).toBe('Here is a place to start. Pick it, or tell me something else.')
+    expect(ideasSay(2)).toBe('Here are 2 places to start. Pick one, or tell me something else.')
+    expect(ideasSay(0)).toContain('no places to start')
+  })
+
+  it('is said by the list under it, so the reply itself carries no fixed count', () => {
+    expect(sayOf({ answer: 'ideas' })).toBeNull()
   })
 })

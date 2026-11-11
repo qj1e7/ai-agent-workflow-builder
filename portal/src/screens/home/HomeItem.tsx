@@ -9,10 +9,10 @@ import { Button, ButtonLink } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { IconAlert, IconChevronRight, IconInfo, IconShield, type Icon } from '../../ui/icons'
 import { draftPath } from './card'
-import { actionsOf, draftWords, retryProblem, waitingWords, wordsOf, type Action, type Need, type Tone } from './home'
+import { actionsOf, CONNECT_ABOVE, draftWords, isModelNeed, NO_MODEL_TITLE, retryProblem, waitingWords, wordsOf, type Action, type Need, type Tone } from './home'
 import styles from './Home.module.css'
 
-const TONE_ICON: Record<Tone, Icon> = { wait: IconShield, tool: IconShield, bad: IconAlert, info: IconInfo }
+export const TONE_ICON: Record<Tone, Icon> = { wait: IconShield, tool: IconShield, bad: IconAlert, info: IconInfo }
 
 export interface Motion {
   readonly glide: string
@@ -67,15 +67,18 @@ interface NeedProps {
   readonly card: boolean
   /** Its action is not the page's main button. */
   readonly quiet?: boolean
+  /** Connect a model is already on the page, above the list. */
+  readonly connectAbove?: boolean
   readonly now: Date
   readonly motion: Motion
 }
 
-export function NeedItem({ need, card, quiet = false, now, motion }: NeedProps) {
+export function NeedItem({ need, card, quiet = false, connectAbove = false, now, motion }: NeedProps) {
   const titleId = useId()
   const modelOff = useModelOff()
-  const words = wordsOf(need, now, modelOff)
-  const actions = actionsOf(need, modelOff)
+  const pointsUp = connectAbove && modelOff && isModelNeed(need)
+  const words = pointsUp ? { ...wordsOf(need, now, modelOff), title: NO_MODEL_TITLE, note: CONNECT_ABOVE } : wordsOf(need, now, modelOff)
+  const actions = pointsUp ? [] : actionsOf(need, modelOff)
   const Icon = TONE_ICON[words.tone]
   const { className, ...moving } = motionProps(motion)
   const icon = (
@@ -91,7 +94,7 @@ export function NeedItem({ need, card, quiet = false, now, motion }: NeedProps) 
         <div className={styles['rowText']}>
           <b id={titleId}>{words.title}</b>
           <span className={styles['rowMeta']}>{words.meta}</span>
-          {need.kind === 'stopped' && words.note ? <span className={styles['rowMeta']}>{words.note}</span> : null}
+          {(need.kind === 'stopped' || pointsUp) && words.note ? <span className={styles['rowMeta']}>{words.note}</span> : null}
           {words.why ? (
             <span className={styles['rowWhy']}>
               <b>AI troubleshooter:</b> {words.why}
@@ -106,9 +109,9 @@ export function NeedItem({ need, card, quiet = false, now, motion }: NeedProps) 
     <li className={cx(styles['card'], className)} data-home-item={need.key} data-kind={need.kind} {...moving}>
       {icon}
       <div className={styles['cardBody']}>
-        <h3 id={titleId} className={styles['cardTitle']}>
+        <h4 id={titleId} className={styles['cardTitle']}>
           {words.title}
-        </h3>
+        </h4>
         <p className={styles['cardMeta']}>{words.meta}</p>
         {words.lines.length > 0 ? (
           <ul className={styles['lines']} aria-label="What it would change">

@@ -50,3 +50,56 @@
     border-radius: 0;
   }
 }
+
+/* While chatting, the page is exactly as tall as the window and only the conversation scrolls, so the box stays docked at the
+   bottom and nothing depends on the header's height. */
+:global(#root):has([data-chat]) {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+:global(#root):has([data-chat]) .shell {
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+
+:global(#root):has([data-chat]) .shell > nav {
+  align-self: start;
+}
+
+:global(#root):has([data-chat]) .sheet {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+:global(#root):has([data-chat]) .wrap {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+@media (max-width: 900px) {
+  :global(#root):has([data-chat]) .shell {
+    display: flex;
+    flex-direction: column;
+  }
+
+  :global(#root):has([data-chat]) .shell > nav {
+    flex: none;
+    align-self: stretch;
+  }
+
+  :global(#root):has([data-chat]) .sheet {
+    flex: 1;
+  }
+}

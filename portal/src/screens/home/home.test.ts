@@ -6,7 +6,7 @@ import type { AddressItem, ApprovalItem, ConnectionItem, FollowingUpItem, HomeOu
 import { ApiError } from '../../api/client'
 import capabilities from '../../../../contracts/fixtures/planner/capabilities.json'
 import type { CapabilitiesView } from '../../api/types'
-import { actionsOf, approverLine, comingUpOf, draftWords, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, retryProblem, stateLine, suggestionsOf, waitingWords, wordsOf, type Need } from './home'
+import { actionsOf, approverLine, comingUpOf, draftWords, firstSentence, groupOf, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, openPathOf, pinnedOf, pinnedWhy, retryProblem, stateLine, suggestionsOf, waitingWords, wordsOf, type Need } from './home'
 
 const BOB = bobHome as HomeOut
 const ALICE = aliceHome as HomeOut
@@ -37,7 +37,7 @@ describe('the order of what needs you', () => {
     const connection = (ALICE.connections as [ConnectionItem])[0]
     const home: HomeOut = { ...BOB, connections: [connection], stopped: [STOP], stopped_total: 1, replied: [(ALICE.replied as [FollowingUpItem])[0]] }
     const needs = needsOf(home)
-    expect(needs.shown.map((need) => need.kind)).toEqual(['stopped', 'approval', 'connection', 'confirmation', 'confirmation', 'reply'])
+    expect(needs.shown.map((need) => need.kind)).toEqual(['stopped', 'approval', 'connection', 'reply', 'confirmation', 'confirmation'])
     expect(needs.total).toBe(needsTotal(home))
     const need = needs.shown.find((item) => item.kind === 'connection') as Need
     expect(actionsOf(need)).toEqual([{ kind: 'open', label: 'See it in Settings', to: '/settings?tab=connections' }])
@@ -56,10 +56,10 @@ describe('the order of what needs you', () => {
     expect(wordsOf(second, NOW).title).toBe('GitHub can’t find langchain-ai/langserve, the address saved for LangServe.')
   })
 
-  it('puts a reply from the team last, after confirmations, and counts it', () => {
+  it('puts a reply from the team last of Do now, before the Set up group, and counts it', () => {
     const reply = (ALICE.replied as [FollowingUpItem])[0]
     const home: HomeOut = { ...BOB, replied: [reply], stopped: [STOP], stopped_total: 1 }
-    expect(needsOf(home).shown.map((need) => need.kind)).toEqual(['stopped', 'approval', 'confirmation', 'confirmation', 'reply'])
+    expect(needsOf(home).shown.map((need) => need.kind)).toEqual(['stopped', 'approval', 'reply', 'confirmation', 'confirmation'])
     expect(needsTotal(home)).toBe(1 + BOB.approvals_total + BOB.confirmations.length + 1)
   })
 
@@ -317,5 +317,87 @@ describe('the three suggestions under the box', () => {
 
   it('shows none until the watchlist has loaded, so the set never flips', () => {
     expect(suggestionsOf(undefined, CAPS)).toEqual([])
+  })
+})
+
+describe('Needs you in two groups', () => {
+  const [jira, github] = ALICE.connections as [ConnectionItem, ConnectionItem]
+  const [moved, lost] = ALICE.addresses as [AddressItem, AddressItem]
+  const reply = (ALICE.replied as [FollowingUpItem])[0]
+  const everything: HomeOut = { ...BOB, connections: [github, jira], addresses: [moved, lost], stopped: [STOP], stopped_total: 1, replied: [reply] }
+  const groups = (home: HomeOut) => needsOf(home).shown.map((need) => `${groupOf(need)}:${need.kind}`)
+
+  it('puts stops, approvals and replies in Do now, and confirmations and moved addresses in Set up', () => {
+    const home = needsOf(everything).shown
+    const of = (kind: Need['kind']) => home.filter((need) => need.kind === kind).map(groupOf)
+    expect(of('stopped')).toEqual(['now'])
+    expect(of('approval')).toEqual(['now'])
+    expect(of('reply')).toEqual(['now'])
+    expect(of('address')).toEqual(['set', 'set'])
+    expect(of('confirmation')).toEqual(['set', 'set'])
+  })
+
+  it('puts a connection that does not work in Do now, because it stops every run, and a key that works but runs out in Set up', () => {
+    expect(jira.state).toBe('not_answering')
+    expect(github.state).toBe('working')
+    const kinds = needsOf(everything).shown.filter((need) => need.kind === 'connection')
+    expect(kinds.map((need) => [need.key, groupOf(need)])).toEqual([
+      ['connection:jira', 'now'],
+      ['connection:github', 'set'],
+    ])
+  })
+
+  it('lists Do now before Set up, and keeps the order of urgency inside each group', () => {
+    expect(groups(everything)).toEqual([
+      'now:stopped',
+      'now:approval',
+      'now:connection',
+      'now:reply',
+      'set:connection',
+      'set:address',
+      'set:address',
+      'set:confirmation',
+      'set:confirmation',
+    ])
+  })
+
+  it('cuts Home’s three from the grouped list, so a Set up item never takes a place from a Do now item', () => {
+    const home: HomeOut = { ...everything, approvals: [ask('run_a', '2026-11-03T01:00:00Z'), ask('run_b', '2026-11-03T02:00:00Z')], approvals_total: 2 }
+    expect(keys(needsOf(home, HOME_NEEDS_SHOWN).shown)).toEqual(['stopped:run_01JB9', 'approval:apr_run_b', 'approval:apr_run_a'])
+  })
+})
+
+describe('the pinned line', () => {
+  it('names the first of the grouped needs, and N more is the rest of the same count', () => {
+    const pinned = pinnedOf(ALICE)
+    expect(pinned?.need.key).toBe('stopped:run_01JB9')
+    expect((pinned?.more ?? 0) + 1).toBe(needsTotal(ALICE))
+    expect((pinnedOf(BOB)?.more ?? 0) + 1).toBe(needsTotal(BOB))
+  })
+
+  it('counts what the platform left out of the lists, so the number is the rail’s', () => {
+    const approvals = Array.from({ length: 10 }, (_, n) => ask(`run_${n}`, `2026-11-03T01:0${n}:00Z`))
+    const home: HomeOut = { ...BOB, approvals, approvals_total: 50 }
+    expect((pinnedOf(home)?.more ?? 0) + 1).toBe(needsTotal(home))
+  })
+
+  it('is absent when nothing needs the person', () => {
+    expect(pinnedOf(DAY_ONE)).toBeNull()
+  })
+
+  it('opens the item’s own page: the run for a stop or a request, Settings for a key, the row for software', () => {
+    const open = (home: HomeOut, key: string) => openPathOf(needsOf(home).shown.find((need) => need.key === key) as Need)
+    expect(open(ALICE, 'stopped:run_01JB9')).toBe('/runs/run_01JB9')
+    expect(open(BOB, 'approval:apr_01JB8')).toBe('/runs/run_01JB8')
+    expect(open(ALICE, 'connection:jira')).toBe('/settings?tab=connections')
+    expect(open(ALICE, `address:${(ALICE.addresses[0] as AddressItem).software_id}`)).toContain('/software?row=')
+  })
+
+  it('says why in one sentence, and where it came from when there is no why', () => {
+    const stopped = pinnedOf(ALICE)?.need as Need
+    expect(pinnedWhy(stopped, NOW)).toBe(firstSentence(wordsOf(stopped, NOW).why ?? ''))
+    expect(pinnedWhy(stopped, NOW)).not.toContain('Retry the run.')
+    const approval = pinnedOf(BOB)?.need as Need
+    expect(pinnedWhy(approval, NOW)).toBe('Software watchlist · Started by Alice, Today, 10:14')
   })
 })

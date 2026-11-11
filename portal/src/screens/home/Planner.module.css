@@ -32,19 +32,6 @@
   justify-content: center;
 }
 
-.compact {
-  grid-template-columns: auto minmax(0, 1fr);
-  justify-items: start;
-  column-gap: 12px;
-  padding-top: 0;
-  text-align: left;
-}
-
-.compact h1 {
-  max-width: none;
-  font-size: 1.25rem;
-}
-
 @media (max-width: 600px) {
   .welcome h1 {
     font-size: 1.5rem;
@@ -532,4 +519,47 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
+}
+
+/* Once the conversation starts, Home is the chat: the pinned line on top, the conversation scrolling, the box docked at the bottom. */
+.chat {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+}
+
+.chatBar,
+.chatIn,
+.chatDock {
+  width: 100%;
+  max-width: 820px;
+  margin: 0 auto;
+  padding-inline: 16px;
+}
+
+.chatBar {
+  display: grid;
+  flex: none;
+  gap: 4px;
+  padding-top: 12px;
+}
+
+.chatNew {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.chatScroll {
+  flex: 1 1 0;
+  min-height: 0;
+  padding-block: 8px 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.chatDock {
+  flex: none;
+  padding-block: 8px 16px;
 }

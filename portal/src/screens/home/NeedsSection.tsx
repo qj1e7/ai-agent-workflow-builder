@@ -2,7 +2,7 @@ import { useId, useRef, useState, type ReactNode } from 'react'
 import { NavigationType, useNavigationType } from 'react-router'
 import { cx } from '../../ui/cx'
 import { useGlide, usePresence } from '../../ui/presence'
-import type { Need, Needs } from './home'
+import { groupOf, NEED_GROUPS, type Need, type Needs } from './home'
 import { NeedItem } from './HomeItem'
 import styles from './Home.module.css'
 
@@ -32,22 +32,50 @@ function Count({ value }: { value: number }) {
   )
 }
 
-function NeedsList({ needs, now, arrival, quiet }: { needs: readonly Need[]; now: Date; arrival: Arrival; quiet: boolean }) {
+type Drawn = ReturnType<typeof usePresence<Need>>[number]
+
+interface GroupProps {
+  readonly label: string
+  readonly items: readonly { readonly drawn: Drawn; readonly first: boolean }[]
+  readonly now: Date
+  readonly arrival: Arrival
+  readonly quiet: boolean
+  readonly connectAbove: boolean
+}
+
+/** One group of Needs you. Each group glides its own rows when one leaves, so a row never crosses a heading. */
+function NeedsGroup({ label, items, now, arrival, quiet, connectAbove }: GroupProps) {
   const list = useRef<HTMLUListElement>(null)
-  const shown = usePresence(needs, (need) => need.key)
+  const headingId = useId()
   useGlide(list)
   return (
-    <ul ref={list} className={styles['needs']} aria-label="Needs you">
-      {shown.map(({ key, item, leaving, onAnimationEnd }, index) => (
-        <NeedItem
-          key={key}
-          need={item}
-          card={index === 0}
-          quiet={quiet}
-          now={now}
-          motion={{ glide: key, arrive: arrival.arrive(key), stagger: arrival.stagger(key) + 1, leaving, onAnimationEnd }}
-        />
-      ))}
+    <li className={styles['group']}>
+      <h3 id={headingId}>{label}</h3>
+      <ul ref={list} className={styles['needs']} aria-labelledby={headingId}>
+        {items.map(({ drawn: { key, item, leaving, onAnimationEnd }, first }) => (
+          <NeedItem
+            key={key}
+            need={item}
+            card={first}
+            quiet={quiet}
+            connectAbove={connectAbove}
+            now={now}
+            motion={{ glide: key, arrive: arrival.arrive(key), stagger: arrival.stagger(key) + 1, leaving, onAnimationEnd }}
+          />
+        ))}
+      </ul>
+    </li>
+  )
+}
+
+function NeedsList({ needs, now, arrival, quiet, connectAbove }: { needs: readonly Need[]; now: Date; arrival: Arrival; quiet: boolean; connectAbove: boolean }) {
+  const shown = usePresence(needs, (need) => need.key)
+  return (
+    <ul className={styles['groups']} aria-label="Needs you">
+      {NEED_GROUPS.map(([group, label]) => {
+        const items = shown.flatMap((drawn, index) => (groupOf(drawn.item) === group ? [{ drawn, first: index === 0 }] : []))
+        return items.length > 0 ? <NeedsGroup key={group} label={label} items={items} now={now} arrival={arrival} quiet={quiet} connectAbove={connectAbove} /> : null
+      })}
     </ul>
   )
 }
@@ -62,10 +90,12 @@ interface NeedsSectionProps {
   readonly quiet?: boolean
   /** The id a link to this section points at. */
   readonly anchor?: string
+  /** The page has Connect a model above the list, so the model's row points to it instead of offering a second one. */
+  readonly connectAbove?: boolean
 }
 
 /** Needs you, drawn the same on Home and on Workflows. `whenNone` is what shows with nothing in it, or null to show nothing. */
-export function NeedsSection({ needs, now, arrival, more, whenNone, quiet = false, anchor }: NeedsSectionProps) {
+export function NeedsSection({ needs, now, arrival, more, whenNone, quiet = false, anchor, connectAbove = false }: NeedsSectionProps) {
   const headingId = useId()
   if (needs.shown.length === 0 && whenNone === null) return null
   return (
@@ -73,7 +103,7 @@ export function NeedsSection({ needs, now, arrival, more, whenNone, quiet = fals
       <h2 id={headingId}>
         Needs you <Count value={needs.total} />
       </h2>
-      {needs.shown.length > 0 ? <NeedsList needs={needs.shown} now={now} arrival={arrival} quiet={quiet} /> : whenNone}
+      {needs.shown.length > 0 ? <NeedsList needs={needs.shown} now={now} arrival={arrival} quiet={quiet} connectAbove={connectAbove} /> : whenNone}
       {more}
     </section>
   )

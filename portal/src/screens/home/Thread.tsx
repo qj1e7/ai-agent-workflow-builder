@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import { InChat } from '../../ui/fromChat'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
 import { Answer, type Page } from './AnswerCards'
+import { CardMemoryContext, NO_MEMORY, type CardMemory } from './cardMemory'
 import { CardLive, NewestAnswer } from './primary'
 import { SetupCard } from './SetupCard'
 import { sayOf } from './answers'
-import { CheckWorkflowsAnswer, NeedsMeAnswer, useSaidOnce, WhyStoppedAnswer, type Say } from './StateAnswers'
+import { CheckWorkflowsAnswer, IdeasSentence, NeedsMeAnswer, useSaidOnce, WhyStoppedAnswer, type Say } from './StateAnswers'
 import type { Message, Thread as ThreadState } from './threadState'
 import { Waiting } from './Waiting'
 import styles from './Planner.module.css'
@@ -16,6 +18,8 @@ interface ThreadProps {
   readonly thread: ThreadState
   readonly now: Date
   readonly page: Page
+  /** What each message's card remembers when the page is left. Without it a card starts afresh whenever it is drawn. */
+  readonly memory?: (messageId: number) => CardMemory
 }
 
 function ReplyBody({ message, now, page, say }: { message: Extract<Message, { kind: 'reply' }>; now: Date; page: Page; say: Say }) {
@@ -27,6 +31,7 @@ function ReplyBody({ message, now, page, say }: { message: Extract<Message, { ki
       {sentence !== null ? <p>{sentence}</p> : null}
       {reply.answer === 'check_workflows' ? <CheckWorkflowsAnswer useCaseId={reply.use_case_id} now={now} say={say} /> : null}
       {reply.answer === 'why_stopped' ? <WhyStoppedAnswer useCaseId={reply.use_case_id} say={say} /> : null}
+      {reply.answer === 'ideas' ? <IdeasSentence say={say} /> : null}
       {reply.answer === 'needs_me' ? <NeedsMeAnswer now={now} say={say} /> : null}
       <Answer reply={reply} typed={message.typed} page={page} />
     </div>
@@ -37,7 +42,7 @@ function ReplyBody({ message, now, page, say }: { message: Extract<Message, { ki
  * The person's messages and the Planner's answers, newest last. One polite region reads each answer's sentence once, and a
  * newer answer replaces the older one there. The thread lives on the page and is never saved.
  */
-export function Thread({ thread, now, page }: ThreadProps) {
+export function Thread({ thread, now, page, memory }: ThreadProps) {
   const [said, setSaid] = useState<{ id: number; text: string } | null>(null)
   const newest = thread.messages.at(-1)?.id ?? 0
   const sayFor = (id: number): Say => (text) => setSaid((now) => (now?.id === id ? now : { id, text }))
@@ -46,52 +51,56 @@ export function Thread({ thread, now, page }: ThreadProps) {
       <h2 className="visually-hidden" id="thread-h">
         Conversation with the Planner
       </h2>
-      <ol className={styles['thread']} aria-labelledby="thread-h">
-        {thread.messages.map((message) => {
-          if (message.kind === 'me') {
-            return (
-              <li key={message.id} className={styles['me']}>
-                <div className={styles['bubble']}>
-                  <span className="visually-hidden">You: </span>
-                  {message.text}
-                </div>
-              </li>
-            )
-          }
-          const state: BotState = message.kind === 'thinking' ? 'thinking' : message.kind === 'reply' && SORRY.has(message.reply.answer) ? 'sorry' : 'idle'
-          return (
-            <li key={message.id} className={styles['said']} tabIndex={-1} data-answer={message.kind === 'reply' || undefined}>
-              <PlannerBot state={state} size={40} />
-              <div className={styles['reply']}>
-                <span className={styles['who']}>Planner</span>
-                {message.kind === 'card' ? (
-                  <CardLive.Provider value={message.id === newest}>
-                    <>
-                      <p>{RESUMED}</p>
-                      <SetupCard start={message.start} />
-                    </>
-                  </CardLive.Provider>
-                ) : message.kind === 'thinking' ? (
-                  <>
-                    <span className={styles['dots']} aria-hidden="true">
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                    <Waiting />
-                  </>
-                ) : (
-                  <NewestAnswer.Provider value={message.id === newest}>
-                    <CardLive.Provider value={message.id === newest}>
-                      <ReplyBody message={message} now={now} page={page} say={message.id === newest ? sayFor(message.id) : () => undefined} />
-                    </CardLive.Provider>
-                  </NewestAnswer.Provider>
-                )}
-              </div>
-            </li>
-          )
-        })}
-      </ol>
+      <InChat.Provider value>
+          <ol className={styles['thread']} aria-labelledby="thread-h">
+            {thread.messages.map((message) => {
+              if (message.kind === 'me') {
+                return (
+                  <li key={message.id} className={styles['me']}>
+                    <div className={styles['bubble']}>
+                      <span className="visually-hidden">You: </span>
+                      {message.text}
+                    </div>
+                  </li>
+                )
+              }
+              const state: BotState = message.kind === 'thinking' ? 'thinking' : message.kind === 'reply' && SORRY.has(message.reply.answer) ? 'sorry' : 'idle'
+              return (
+                <li key={message.id} className={styles['said']} tabIndex={-1} data-answer={message.kind === 'reply' || undefined}>
+                  <PlannerBot state={state} size={40} />
+                  <CardMemoryContext.Provider value={memory?.(message.id) ?? NO_MEMORY}>
+                    <div className={styles['reply']}>
+                      <span className={styles['who']}>Planner</span>
+                      {message.kind === 'card' ? (
+                        <CardLive.Provider value={message.id === newest}>
+                          <>
+                            <p>{RESUMED}</p>
+                            <SetupCard start={message.start} />
+                          </>
+                        </CardLive.Provider>
+                      ) : message.kind === 'thinking' ? (
+                        <>
+                          <span className={styles['dots']} aria-hidden="true">
+                            <i />
+                            <i />
+                            <i />
+                          </span>
+                          <Waiting />
+                        </>
+                      ) : (
+                        <NewestAnswer.Provider value={message.id === newest}>
+                          <CardLive.Provider value={message.id === newest}>
+                            <ReplyBody message={message} now={now} page={page} say={message.id === newest ? sayFor(message.id) : () => undefined} />
+                          </CardLive.Provider>
+                        </NewestAnswer.Provider>
+                      )}
+                    </div>
+                  </CardMemoryContext.Provider>
+                </li>
+              )
+            })}
+          </ol>
+      </InChat.Provider>
       <div className="visually-hidden" role="status" aria-live="polite">
         {thread.messages.at(-1)?.kind === 'thinking' ? '' : said?.text ?? ''}
       </div>

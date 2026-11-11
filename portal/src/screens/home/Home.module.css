@@ -3,6 +3,16 @@
   margin: 0 auto;
 }
 
+/* The chat and, later, its side panel share the page's column. */
+.home:has([data-chat]) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  max-width: 1180px;
+}
+
 .section {
   display: grid;
   gap: 12px;
@@ -408,4 +418,21 @@
   .card {
     padding: 16px;
   }
+}
+
+.groups {
+  display: grid;
+  gap: 20px;
+  list-style: none;
+}
+
+.group {
+  display: grid;
+  gap: 8px;
+}
+
+.group > h3 {
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 700;
 }
