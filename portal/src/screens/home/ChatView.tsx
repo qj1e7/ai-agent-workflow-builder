@@ -59,7 +59,9 @@ export function ChatView({ home, now, page, box, onNewChat }: ChatViewProps) {
           </button>
         </div>
       </div>
-      <div ref={scroller} className={styles['chatScroll']} onScroll={(event) => restored.current && scroll.set(event.currentTarget.scrollTop)}>
+      {/* A scrolling region takes a Tab stop, so the keyboard can scroll it (axe: scrollable-region-focusable). */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+      <div ref={scroller} className={styles['chatScroll']} role="region" aria-label="Conversation" tabIndex={0} onScroll={(event) => restored.current && scroll.set(event.currentTarget.scrollTop)}>
         <div className={styles['chatIn']}>
           <Thread thread={chat.thread} now={now} page={page} memory={chat.cardMemory} />
         </div>

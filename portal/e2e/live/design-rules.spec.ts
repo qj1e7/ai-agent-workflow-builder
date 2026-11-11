@@ -127,6 +127,10 @@ test('the Needs you count is one number on Home, the rail and the Planner’s an
   await expect(tab, 'Principle 7 (one source per fact): the rail count').toHaveAccessibleName(`Workflows, ${String(onHome)} need you`)
   await ask(page, 'What needs me?')
   await expect(main(page), 'Principle 7: the Planner’s answer').toContainText(`${String(onHome)} ${onHome === 1 ? 'thing needs' : 'things need'} you.`)
+  const pinned = main(page).getByRole('region', { name: 'Most urgent' })
+  await expect(pinned, 'Principle 7: the pinned line is there while something needs her').toBeVisible()
+  const more = (await pinned.getByRole('link', { name: /more that need you/ }).count()) === 0 ? 0 : Number((await pinned.getByRole('link', { name: /more that need you/ }).innerText()).replace(/\D/g, ''))
+  expect(more + 1, 'Principle 7: the pinned line’s N more plus the one it names is the count everywhere').toBe(onHome)
 
   await rail(page).getByRole('link', { name: /^Watchlist/ }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Software watchlist' })).toBeVisible()

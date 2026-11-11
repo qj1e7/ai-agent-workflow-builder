@@ -70,6 +70,8 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
     [act, askPlanner, user],
   )
 
+  const scroll = useMemo(() => ({ get: () => scrolls.current.get(user) ?? 0, set: (top: number) => void scrolls.current.set(user, top) }), [user])
+
   const value = useMemo<Chat>(() => {
     const here = act(user)
     const memoryKey = (messageId: number) => `${user}:${String(messageId)}`
@@ -99,13 +101,13 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
         if (open.length > 0) here({ type: 'note', text: DRAFT_SAVED })
       },
       readNote: () => here({ type: 'note_read' }),
-      scroll: { get: () => scrolls.current.get(user) ?? 0, set: (top) => void scrolls.current.set(user, top) },
+      scroll,
       cardMemory: (messageId) => ({
         kept: cards.current.get(memoryKey(messageId))?.kept,
         keep: (kept, save) => void cards.current.set(memoryKey(messageId), { kept, save }),
       }),
     }
-  }, [act, busy, desk.note, desk.problem, desk.text, send, thread, user])
+  }, [act, busy, desk.note, desk.problem, desk.text, scroll, send, thread, user])
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>
 }

@@ -248,6 +248,7 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
           onNewChat={() => {
             chat.newChat()
             if (wanted !== null) setParams({}, { replace: true })
+            setTimeout(() => boxRef.current?.focus(), 0)
           }}
         />
         {toast}

@@ -459,6 +459,7 @@ export function SetupCard({ start }: { start: CardStart }) {
     if (now.phase.kind !== 'open' || turningOn.current) return
     const saved = now.draft ?? newIdempotencyKey()
     latest.current = { ...now, draft: saved }
+    memory.keep({ form: now.form, draft: saved, phase: now.phase }, () => persist())
     setDraft(saved)
     saveDraft.mutate(
       { draftId: saved, draft: { content: draftContent(now.form, now.plan) } },

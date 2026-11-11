@@ -532,6 +532,11 @@
 
 .chatBar,
 .chatIn,
+.chatScroll:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+
 .chatDock {
   width: 100%;
   max-width: 820px;

@@ -93,6 +93,35 @@ for (const user of USERS) {
   }
 }
 
+for (const width of WIDTHS) {
+  test(`the chat with the docked box and the pinned line fits, and the box stays on screen, as an Operator at ${String(width)} px`, async ({ browser, backend }) => {
+    const answering = (on: boolean) => backend.post('alice', '/api/v1/dev/practice-jira/answering', { answering: on })
+    await answering(false)
+    await backend.post('alice', '/api/v1/settings/connections/jira/check')
+    const context = await devContext(browser, 'alice', { reducedMotion: true })
+    const page = await context.newPage()
+    const height = width > 900 ? 1000 : 844
+    await page.setViewportSize({ width, height })
+    try {
+      await page.goto('/')
+      const box = page.getByLabel('Ask the Planner about software versions')
+      await box.fill('Check my workflows')
+      await box.press('Enter')
+      await expect(page.getByRole('region', { name: 'Most urgent' })).toBeVisible()
+      await expect(page.getByRole('list', { name: 'Your workflows' }).first()).toBeVisible()
+      await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined)
+      const problems = await fitProblems(page)
+      expect(problems.length ? describeProblems(problems) : '', `the chat at ${String(width)} px`).toBe('')
+      const docked = await box.boundingBox()
+      expect(docked && docked.y + docked.height <= height, 'the box is docked inside the window').toBe(true)
+    } finally {
+      await answering(true)
+      await backend.post('alice', '/api/v1/settings/connections/jira/check')
+      await context.close()
+    }
+  })
+}
+
 test('the check can fail: a seeded overflow, a clipped label, an overlap, two unequal buttons, a part-covered button and a toggle on the product are all caught', async ({ browser }) => {
   const context = await devContext(browser, 'alice', { reducedMotion: true })
   const page = await context.newPage()
