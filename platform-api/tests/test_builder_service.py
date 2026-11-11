@@ -13,6 +13,7 @@ from platform_api.builder.models import (
 from platform_api.db import Database
 from platform_api.orchestration import (
     Given,
+    NotOn,
     RunSpec,
     RunStarted,
     ScheduleBook,
@@ -163,3 +164,16 @@ async def test_start_run_hands_the_spec_principal_and_key_to_the_starter(
 async def test_start_run_on_a_missing_use_case_starts_nothing(builder: Builder, runs: FakeRuns):
     assert await builder.start_run(UseCaseId("uc_nope"), ALICE, "k") is None
     assert runs.started == []
+
+
+async def test_only_do_a_test_run_marks_the_run_a_test(
+    builder: Builder, watchlist: Watchlist, runs: FakeRuns
+):
+    added = await watch_langgraph(watchlist)
+    use_case_id = UseCaseId(added.use_case_id)
+    await builder.start_run(use_case_id, ALICE, "check-now")
+    await builder.start_run(use_case_id, ALICE, "try-it", test=True)
+    spec = await builder.check_spec(use_case_id)
+    assert not isinstance(spec, NotOn) and spec is not None
+    assert [s.test for s, _, _ in runs.started] == [False, True]
+    assert spec.test is False

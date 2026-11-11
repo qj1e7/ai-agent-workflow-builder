@@ -346,7 +346,7 @@ function Done({ useCaseId, writes, draftKept, newAgents }: { useCaseId: string; 
   const testRun = () =>
     latch.run((settled) =>
       start.mutate(
-        { useCaseId, idempotencyKey: key },
+        { useCaseId, idempotencyKey: key, test: true },
         { onSuccess: (started) => void navigate(`/runs/${started.run_id}`), onError: (error) => setProblem(words(error)), onSettled: settled },
       ),
     )

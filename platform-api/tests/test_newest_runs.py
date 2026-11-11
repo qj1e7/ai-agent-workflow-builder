@@ -60,3 +60,34 @@ async def test_no_workflows_asked_reads_no_runs(db: Database):
     await start(db, BUSY, "run_a", 0)
     async with db.transaction("orchestration") as uow:
         assert await Store().newest_runs(uow, []) == []
+
+
+async def test_a_run_stored_without_the_test_flag_reads_as_not_a_test(db: Database):
+    await start(db, BUSY, "run_old", 0)
+    async with db.transaction("orchestration") as uow:
+        await uow.conn.execute(
+            "UPDATE orchestration.runs SET spec = spec - 'test' WHERE run_id = 'run_old'"
+        )
+    async with db.transaction("orchestration") as uow:
+        (loaded,) = await Store().newest_runs(uow, [BUSY])
+    assert loaded.spec.test is False
+
+
+async def test_a_test_flag_is_kept_with_the_run(db: Database):
+    at = NOW
+    async with db.transaction("orchestration") as uow:
+        record = RunRecord(
+            RunId("run_try"),
+            replace(SPEC, use_case_id=BUSY, test=True),
+            SPEC.owner,
+            at,
+            at,
+            1,
+            Pending(RunId("run_try"), 1, None, at),
+            (),
+            None,
+        )
+        await Store().insert_run(uow, record, "key-try")
+    async with db.transaction("orchestration") as uow:
+        loaded = await Store().load_run(uow, RunId("run_try"))
+    assert loaded is not None and loaded.spec.test is True

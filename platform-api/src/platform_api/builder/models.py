@@ -93,8 +93,8 @@ class LastRunView(WireModel):
     state: RunStateName
     at: AwareDatetime = Field(description="When the run started.")
     test: bool = Field(
-        description="True when a person started it by hand to try the workflow, which is a test "
-        "run. False when its schedule started it, and for every check of the software watchlist."
+        description="True when a person started it with Do a test run. False for Run now, a "
+        "check of the watchlist and a run its schedule started."
     )
     declined_by: UserId | None = Field(
         description="Who declined it. Null unless the run was declined."
@@ -165,6 +165,14 @@ class UseCaseDeleted(WireModel):
     restore_until: datetime = Field(
         description="Until then, POST /api/v1/use-cases/{use_case_id}/restore puts the workflow "
         "back as it was. Its past runs stay readable either way."
+    )
+
+
+class StartRunIn(WireIn):
+    test: bool = Field(
+        default=False,
+        description="True for Do a test run, which tries a workflow once. Run now and a check "
+        "of the watchlist send nothing.",
     )
 
 

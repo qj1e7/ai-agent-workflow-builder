@@ -1,5 +1,5 @@
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
 
@@ -270,13 +270,13 @@ class Builder:
         )
         if moved is None or isinstance(moved, AlreadyDeleted):
             return None
-        return await self.get_use_case(use_case_id)
+        return await self.get_use_case(use_case_id, principal)
 
-    async def resume_use_case(self, use_case_id: str) -> UseCaseView | None:
+    async def resume_use_case(self, use_case_id: str, principal: Principal) -> UseCaseView | None:
         moved = await self._move(use_case_id, lambda state, _template, _now: resume(state))
         if moved is None or isinstance(moved, AlreadyDeleted):
             return None
-        return await self.get_use_case(use_case_id)
+        return await self.get_use_case(use_case_id, principal)
 
     async def delete_use_case(
         self, use_case_id: str, principal: Principal
@@ -298,14 +298,16 @@ class Builder:
             case _:
                 return None
 
-    async def restore_use_case(self, use_case_id: str) -> UseCaseView | TooLate | None:
+    async def restore_use_case(
+        self, use_case_id: str, principal: Principal
+    ) -> UseCaseView | TooLate | None:
         match await self._move(use_case_id, lambda state, _, now: restore(state, now)):
             case TooLate() as late:
                 return late
             case None:
                 return None
             case _:
-                return await self.get_use_case(use_case_id)
+                return await self.get_use_case(use_case_id, principal)
 
     async def save_schedule(
         self, use_case_id: str, principal: Principal, body: ScheduleIn
@@ -313,7 +315,7 @@ class Builder:
         """The same save as the watchlist's: the caller becomes the owner, which lifts a hold.
         Saving is not a write to Jira or Confluence, so it needs no approval."""
         # Read the workflow before the lock, so the lock holds one connection and no more.
-        view = await self.get_use_case(use_case_id)
+        view = await self.get_use_case(use_case_id, principal)
         if view is None:
             return None
         if view.template == SOFTWARE_WATCHLIST.key:
@@ -327,7 +329,7 @@ class Builder:
             await self._schedules.save(
                 UseCaseId(use_case_id), Schedule(body.day, body.at), principal
             )
-        return await self.get_use_case(use_case_id)
+        return await self.get_use_case(use_case_id, principal)
 
     async def _move(self, use_case_id: str, move: Move) -> Moved | None:
         async with self._db.transaction("builder") as uow:
@@ -524,7 +526,11 @@ class Builder:
                 return None if isinstance(spec, NothingToCheck) else spec
 
     async def start_run(
-        self, use_case_id: UseCaseId, principal: Principal, idempotency_key: str
+        self,
+        use_case_id: UseCaseId,
+        principal: Principal,
+        idempotency_key: str,
+        test: bool = False,
     ) -> RunStarted | None | NothingToCheck | NoModelToRun | UseCasePaused:
         view = await self.get_use_case(use_case_id)
         if view is None:
@@ -534,6 +540,7 @@ class Builder:
         spec = await self._spec_of(view)
         if isinstance(spec, NothingToCheck):
             return spec
+        spec = replace(spec, test=test)
         if isinstance(spec.task, CardsTask) and not await self._planner.has_model():
             return NoModelToRun()
         async with self._db.transaction("builder") as uow:

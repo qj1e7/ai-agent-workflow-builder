@@ -38,7 +38,7 @@ async def pause_use_case(
 async def resume_use_case(
     use_case_id: str, principal: WorkflowOperator, builder: CurrentBuilder
 ) -> UseCaseView:
-    view = await builder.resume_use_case(use_case_id)
+    view = await builder.resume_use_case(use_case_id, principal)
     if view is None:
         raise HTTPException(404, NO_SUCH)
     return view
@@ -80,7 +80,7 @@ async def delete_use_case(
 async def restore_use_case(
     use_case_id: str, principal: WorkflowOperator, builder: CurrentBuilder
 ) -> UseCaseView:
-    match await builder.restore_use_case(use_case_id):
+    match await builder.restore_use_case(use_case_id, principal):
         case TooLate():
             raise HTTPException(
                 410, "This workflow was deleted more than a day ago, so it can't be put back."

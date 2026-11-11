@@ -4549,7 +4549,7 @@
             "$ref": "#/components/schemas/RunState"
           },
           "test": {
-            "description": "True when a person started it by hand to try the workflow, which is a test run. False when its schedule started it, and for every check of the software watchlist.",
+            "description": "True when a person started it with Do a test run. False for Run now, a check of the watchlist and a run its schedule started.",
             "title": "Test",
             "type": "boolean"
           },
@@ -7441,6 +7441,19 @@
           "url"
         ],
         "title": "SourceView",
+        "type": "object"
+      },
+      "StartRunIn": {
+        "additionalProperties": false,
+        "properties": {
+          "test": {
+            "default": false,
+            "description": "True for Do a test run, which tries a workflow once. Run now and a check of the watchlist send nothing.",
+            "title": "Test",
+            "type": "boolean"
+          }
+        },
+        "title": "StartRunIn",
         "type": "object"
       },
       "StarterView": {
@@ -14466,6 +14479,18 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartRunIn",
+                "default": {
+                  "test": false
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {

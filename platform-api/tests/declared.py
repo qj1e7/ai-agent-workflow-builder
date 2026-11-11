@@ -53,7 +53,7 @@ class FakeBuilder:
     async def get_use_case(self, use_case_id: str, viewer: object = None) -> None:
         return None
 
-    async def start_run(self, *args: object) -> object:
+    async def start_run(self, *args: object, **kwargs: object) -> object:
         return self._started
 
     async def pause_use_case(self, *args: object) -> None:

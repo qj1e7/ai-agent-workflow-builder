@@ -224,38 +224,6 @@
   display: contents;
 }
 
-@media (max-width: 1100px) {
-  .row {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      'pills'
-      'main'
-      'foot';
-    gap: 8px 12px;
-  }
-
-  .row > .pills {
-    grid-area: pills;
-  }
-
-  .main {
-    grid-area: main;
-  }
-
-  .foot {
-    display: flex;
-    flex-wrap: wrap;
-    grid-area: foot;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px 12px;
-  }
-
-  .next {
-    white-space: normal;
-  }
-}
-
 /* When no row has an action, the list gives that column to the descriptions, as the prototype's no-act does. */
 @container (min-width: 961px) {
   .noAct .row {

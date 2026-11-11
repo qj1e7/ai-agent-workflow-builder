@@ -10,7 +10,6 @@ from platform_api.orchestration.runs import (
     Succeeded,
     state_name,
 )
-from platform_api.orchestration.spec import WatchlistTask
 from platform_api.shared import Principal, RunId, UseCaseId, UserId
 from platform_api.wire import FailureReason, RunState
 
@@ -30,7 +29,7 @@ class RunGist:
     state: RunState
     started_at: datetime
     test: bool
-    """A person started it by hand to try the workflow. A check of the watchlist is never a test."""
+    """A person started it with Do a test run."""
     declined_by: UserId | None
     written: int
     proposed: int
@@ -62,7 +61,7 @@ def gist_of(detail: RunDetail, viewer: Principal | None) -> RunGist:
         use_case_id=record.spec.use_case_id,
         state=state_name(state),
         started_at=record.started_at,
-        test=record.spec.trigger == "person" and not isinstance(record.spec.task, WatchlistTask),
+        test=record.spec.test,
         declined_by=state.by if isinstance(state, Rejected) else None,
         written=len(written),
         proposed=len(proposed),

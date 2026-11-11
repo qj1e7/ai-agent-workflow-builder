@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
@@ -20,6 +20,7 @@ from platform_api.builder.models import (
     PlanIn,
     PlanOut,
     RunStarted,
+    StartRunIn,
     SuggestIn,
     SuggestOut,
     TemplateList,
@@ -145,6 +146,10 @@ async def create_use_case(
     )
 
 
+NO_BODY = StartRunIn()
+"""What a start with no body means: Run now or a check, not a test."""
+
+
 @router.get("/use-cases", responses=SIGNED_IN)
 async def list_use_cases(principal: CurrentPrincipal, builder: CurrentBuilder) -> UseCaseList:
     return await builder.list_use_cases(principal)
@@ -186,8 +191,11 @@ async def start_run(
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
     builder: CurrentBuilder,
     response: Response,
+    body: Annotated[StartRunIn, Body()] = NO_BODY,
 ) -> RunStarted:
-    started = await builder.start_run(UseCaseId(use_case_id), principal, idempotency_key)
+    started = await builder.start_run(
+        UseCaseId(use_case_id), principal, idempotency_key, test=body.test
+    )
     if started is None:
         raise HTTPException(404, NO_SUCH)
     if isinstance(started, NothingToCheck):

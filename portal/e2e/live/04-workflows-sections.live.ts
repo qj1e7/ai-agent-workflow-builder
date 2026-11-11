@@ -344,7 +344,7 @@ for (const user of ['alice', 'bob']) {
     const rows = page.getByRole('list', { name: 'Workflows' }).locator('li[data-workflow-id]')
     const watchlist = rows.filter({ hasText: 'Software watchlist' })
     const lastLine = (row: Locator) => row.locator('p[class*="last"]')
-    for (const width of [1920, 1280, 900, 390]) {
+    for (const width of [1920, 1280, 1050, 900, 390]) {
       await page.setViewportSize({ width, height: 900 })
       await page.goto('/workflows')
       await expect(watchlist).toBeVisible()
@@ -356,12 +356,21 @@ for (const user of ['alice', 'bob']) {
       expect(fit.broken, `each last-run line is whole and on one line at ${width} px`).toEqual([])
       for (const text of await lastLine(rows).allInnerTexts()) expect(text === 'No runs yet' || LAST_RUN.test(text), `"${text}" is a last-run line`).toBe(true)
       await expectAccessible(page, path.join(OUT, 'axe'), `workflows-last-run-${user}-${width}`)
+      await page.getByRole('button', { name: 'Search workflows' }).click()
+      await page.getByRole('searchbox', { name: 'Find a workflow' }).fill('Find bug tickets')
+      const quiet = rows.filter({ hasNotText: /Review and decide|See why it stopped/ })
+      await expect(quiet.first(), 'with no action in any row, the list gives its width to the descriptions').toBeVisible()
+      expect(await rows.count(), 'only rows with no action are left').toBe(await quiet.count())
+      const wide = await quiet.first().locator('div[class*="main"]').evaluate((el) => el.getBoundingClientRect().width)
+      if (width >= 900) expect(wide, `a row with no action keeps its description wide at ${width} px`).toBeGreaterThan(300)
+      const noAction = await lineFits(lastLine(rows))
+      expect(noAction.broken, `each last-run line is whole and on one line at ${width} px with no action in any row`).toEqual([])
       await shot(page, info, `r9-workflows-${user}-${width}`)
     }
 
     if (user === 'alice') {
       const before = await lastLine(watchlist).innerText()
-      for (const width of [1920, 1280, 900, 390]) {
+      for (const width of [1920, 1280, 1050, 900, 390]) {
         await page.setViewportSize({ width, height: 900 })
         await page.goto('/')
         await page.getByRole('textbox').fill('Check my workflows')

@@ -20,14 +20,8 @@ function post(client: ApiClient, move: Move, useCaseId: string) {
 
 const platformOrder = (a: UseCaseView, b: UseCaseView) => b.created_at.localeCompare(a.created_at) || b.use_case_id.localeCompare(a.use_case_id)
 
-/** A change answers for no person, so its view says nobody may decide a waiting run. The list's own last run knows, and a change never touches a run. */
-function keepingLastRun(view: UseCaseView, before: UseCaseView | undefined): UseCaseView {
-  return before && before.last_run?.run_id === view.last_run?.run_id ? { ...view, last_run: before.last_run } : view
-}
-
 export function withView(list: readonly UseCaseView[], view: UseCaseView): UseCaseView[] {
-  const kept = keepingLastRun(view, list.find((item) => item.use_case_id === view.use_case_id))
-  return [...list.filter((item) => item.use_case_id !== view.use_case_id), kept].sort(platformOrder)
+  return [...list.filter((item) => item.use_case_id !== view.use_case_id), view].sort(platformOrder)
 }
 
 function changeList(queryClient: QueryClient, user: string, change: (list: UseCaseView[]) => UseCaseView[]): void {
