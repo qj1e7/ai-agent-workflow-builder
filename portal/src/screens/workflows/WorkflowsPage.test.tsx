@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import agentUseCase from '../../../../contracts/fixtures/cards/use-case.json'
 import watchlistUseCase from '../../../../contracts/fixtures/builder/use-case.json'
 import failed from '../../../../contracts/fixtures/views/failure.final.json'
+import declined from '../../../../contracts/fixtures/views/rejected.final.json'
 import waiting from '../../../../contracts/fixtures/views/success.awaiting_approval.json'
 import done from '../../../../contracts/fixtures/views/success.final.json'
 import { App } from '../../App'
@@ -17,6 +18,7 @@ import setupCardFixture from '../../../../contracts/fixtures/planner/answer.setu
 import { cardFrom, draftContent } from '../home/card'
 import draftsFixture from '../../../../contracts/fixtures/builder/drafts.json'
 import type { DraftView, HomeOut, Me, ReplyView, RunView, TeamRequestView, UnderstoodRowView, UseCaseView } from '../../api/types'
+import type { LastRun } from './workflow'
 import { needsTotal } from '../home/home'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
@@ -44,6 +46,25 @@ interface Setup {
   readonly request?: { readonly id: string; readonly data?: TeamRequestView | Error }
 }
 
+/** What the platform says a workflow's newest run was, made from the runs the test gives it. */
+function lastRunFrom(runs: readonly RunView[], useCaseId: string): LastRun | null {
+  const newest = runs.filter((run) => run.use_case_id === useCaseId).sort((a, b) => b.started_at.localeCompare(a.started_at))[0]
+  if (!newest) return null
+  const actions = 'proposal' in newest ? newest.proposal.actions : []
+  const written = newest.state === 'succeeded' ? newest.written : []
+  const counted = written.length > 0 ? written : actions
+  return {
+    run_id: newest.run_id,
+    state: newest.state,
+    at: newest.started_at,
+    test: newest.trigger === 'person',
+    declined_by: newest.state === 'rejected' ? newest.rejected_by : null,
+    proposed: actions.length,
+    written: written.length,
+    tickets: counted.length > 0 && counted.every((action) => action.operation === 'create_ticket'),
+  }
+}
+
 /** The platform answers for the person asking. In these tests only Bob may decide the waiting run. */
 const asSeenBy = (me: Me, runs: RunView[]): RunView[] =>
   runs.map((run) => (run.state === 'awaiting_approval' ? { ...run, you_can_decide: me.id === 'bob' } : run))
@@ -60,7 +81,7 @@ function render({ me = ALICE, useCases = [BUGS, WATCHLIST, LANGGRAPH], runs = RU
   if (request?.data instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: ['team-request', scope, request.id] }).setState({ status: 'error', error: request.data, fetchStatus: 'idle' })
   else if (request?.data) queryClient.setQueryData(['team-request', scope, request.id], request.data)
   if (useCases instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: ['use-cases', scope] }).setState({ status: 'error', error: useCases, fetchStatus: 'idle' })
-  else if (useCases !== 'loading') queryClient.setQueryData(['use-cases', scope], useCases)
+  else if (useCases !== 'loading') queryClient.setQueryData(['use-cases', scope], useCases.map((useCase) => ({ ...useCase, last_run: lastRunFrom(runs, useCase.use_case_id) })))
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
@@ -79,19 +100,61 @@ function rowOf(html: string, id: string): string {
 }
 
 describe('the Workflows list', () => {
-  it('shows each workflow, whether it is on or paused, and its latest run, as separate facts', () => {
+  it('shows each workflow as one status: Stopped, Waiting for a yes, On or Paused', () => {
     const html = render()
     const bugs = rowOf(html, 'uc_bugs')
-    expect(bugs).toMatch(/data-life="on"[^>]*>.*On<\/span>/)
-    expect(bugs).toMatch(/data-tone="bad"[^>]*>.*Stopped<\/span>/)
+    expect(bugs).toMatch(/data-life="on"[^>]*data-tone="bad"[^>]*>.*Stopped<\/span>/)
+    expect(bugs).not.toMatch(/>On<\/span>/)
     expect(text(bugs)).toContain('Morning bug report check')
     expect(text(bugs)).toContain('Raise a ticket for each new bug report.')
     const watchlist = rowOf(html, 'uc_01JB7')
-    expect(watchlist).toMatch(/data-tone="wait"[^>]*>.*Needs a yes<\/span>/)
+    expect(watchlist).toMatch(/data-tone="wait"[^>]*>.*Waiting for a yes<\/span>/)
     expect(text(watchlist)).toContain('Check the team\'s watched software for new releases')
     const paused = rowOf(html, 'uc_lang')
     expect(paused).toMatch(/data-life="paused"[^>]*>.*Paused<\/span>/)
     expect(text(paused)).toContain('Check langchain-ai/langgraph for a new release')
+  })
+
+  describe('gives each workflow its last run on one line', () => {
+    const lastOf = (html: string, id: string) => text(/<p[^>]*class="[^"]*last[^"]*"[^>]*>[\s\S]*?<\/p>/.exec(rowOf(html, id))?.[0] ?? '')
+
+    it('says No runs yet for a workflow that never ran, and no pill but On or Paused', () => {
+      const html = render({ useCases: [BUGS, LANGGRAPH], runs: [] })
+      expect(lastOf(html, 'uc_bugs')).toBe('No runs yet')
+      expect(rowOf(html, 'uc_bugs')).toMatch(/data-life="on"[^>]*>.*On<\/span>/)
+      expect(lastOf(html, 'uc_lang')).toBe('No runs yet')
+    })
+
+    it('says a stopped run stopped, on the day and time it started', () => {
+      const stopped = { ...(failed as RunView), use_case_id: 'uc_bugs', started_at: '2026-11-04T00:00:00Z', trigger: 'schedule' } as RunView
+      expect(lastOf(render({ runs: [stopped] }), 'uc_bugs')).toBe('Last run Today 8:00 · Stopped')
+    })
+
+    it('names who declined, gives no pill for it, and marks a test run', () => {
+      const html = render({ useCases: [WATCHLIST], runs: [declined as RunView] })
+      expect(lastOf(html, 'uc_01JB7')).toBe('Last run Thu 5 Nov, test · Declined by Bob')
+      expect(rowOf(html, 'uc_01JB7')).toMatch(/data-life="on"[^>]*>.*On<\/span>/)
+      expect(text(rowOf(html, 'uc_01JB7'))).toContain('Test run')
+    })
+
+    it('does not mark a run its schedule started as a test run', () => {
+      const scheduled = { ...(declined as RunView), trigger: 'schedule' } as RunView
+      const html = render({ useCases: [WATCHLIST], runs: [scheduled] })
+      expect(lastOf(html, 'uc_01JB7')).toBe('Last run Thu 5 Nov · Declined by Bob')
+      expect(text(rowOf(html, 'uc_01JB7'))).not.toContain('Test run')
+    })
+
+    it('shows Paused alone for a paused workflow, whatever its last run, and keeps that run’s line', () => {
+      const html = render({ useCases: [{ ...BUGS, state: 'paused' }], runs: [{ ...(failed as RunView), use_case_id: 'uc_bugs' }] })
+      expect(rowOf(html, 'uc_bugs')).toMatch(/data-life="paused"[^>]*>.*Paused<\/span>/)
+      expect(rowOf(html, 'uc_bugs')).not.toContain('Stopped</span>')
+      expect(lastOf(html, 'uc_bugs')).toMatch(/^Last run .* · Stopped$/)
+    })
+
+    it('reads the same for an Approver as for an Operator', () => {
+      const runs = [declined as RunView]
+      expect(lastOf(render({ me: BOB, useCases: [WATCHLIST], runs }), 'uc_01JB7')).toBe(lastOf(render({ me: ALICE, useCases: [WATCHLIST], runs }), 'uc_01JB7'))
+    })
   })
 
   it('shows the next run beside it: a date, Paused, or Not scheduled', () => {

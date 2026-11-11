@@ -91,12 +91,13 @@ export function useRun(runId: string, options?: QueryOptions) {
   })
 }
 
-export function useUseCases() {
+export function useUseCases(options?: QueryOptions) {
   const client = useApiClient()
   const user = useCacheScope()
   return useQuery({
     queryKey: keys.useCases(user),
     queryFn: async () => unwrap(await client.GET('/api/v1/use-cases')).use_cases,
+    refetchInterval: pollEvery(options),
   })
 }
 

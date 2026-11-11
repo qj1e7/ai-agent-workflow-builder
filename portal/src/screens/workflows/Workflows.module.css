@@ -164,6 +164,14 @@
   font-size: 0.9rem;
 }
 
+.main .last {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .rowLink {
   color: inherit;
   text-decoration: none;

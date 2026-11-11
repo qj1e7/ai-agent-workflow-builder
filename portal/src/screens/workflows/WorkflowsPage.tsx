@@ -23,7 +23,7 @@ import { StatusPills } from './Status'
 import { RequestView } from './RequestView'
 import { REQUEST_PARAM } from './requests'
 import { DiscardDialog, DraftsSection, draftItem, FollowingSection, WaitingSection } from './Sections'
-import { changeProblem, changeWords, FILTERS, meansOutOfDate, nextRunWords, pressChange, REFRESH_MS, rowsOf, runFact, viewerOf, workflowPath, type Filter, type Row } from './workflow'
+import { changeProblem, changeWords, FILTERS, lastRunLine, meansOutOfDate, nextRunWords, pillOf, pressChange, REFRESH_MS, rowsOf, viewerOf, workflowPath, type Filter, type Row } from './workflow'
 import styles from './Workflows.module.css'
 
 export const rowLinkId = (useCaseId: string) => `workflow-${useCaseId}`
@@ -67,8 +67,8 @@ interface RowProps {
 }
 
 export function WorkflowRow({ row, index, primary, arrive, now, nameOf }: RowProps) {
-  const { useCase, latest, action } = row
-  const fact = latest ? runFact(latest, nameOf) : null
+  const { useCase, action } = row
+  const last = lastRunLine(useCase, now, nameOf)
   return (
     <li
       className={arrive ? `${styles['row']} ${styles['arrive']}` : styles['row']}
@@ -76,7 +76,7 @@ export function WorkflowRow({ row, index, primary, arrive, now, nameOf }: RowPro
       data-workflow-id={useCase.use_case_id}
       data-paused={useCase.state === 'paused' || undefined}
     >
-      <StatusPills state={useCase.state} fact={fact} />
+      <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} test={useCase.last_run?.test === true} />
       <div className={styles['main']}>
         <h3>
           <Link id={rowLinkId(useCase.use_case_id)} to={workflowPath(useCase)} state={FROM_LIST} className={styles['rowLink']}>
@@ -84,6 +84,9 @@ export function WorkflowRow({ row, index, primary, arrive, now, nameOf }: RowPro
           </Link>
         </h3>
         <p>{purposeOf(useCase)}</p>
+        <p className={styles['last']} title={last}>
+          {last}
+        </p>
       </div>
       <div className={styles['foot']}>
         <span className={styles['next']}>{nextLine(useCase, now)}</span>
@@ -364,7 +367,7 @@ export function WorkflowsPage({ heading, lead, now }: { heading: string; lead: s
 
 function WorkflowsBody({ handedOver, now }: { handedOver: Deleted | null; now: Date }) {
   const me = useMe()
-  const useCases = useUseCases()
+  const useCases = useUseCases({ poll: REFRESH_MS })
   const runs = useRuns({ poll: REFRESH_MS })
   if ((useCases.isError && !useCases.data) || me.isError) {
     return (

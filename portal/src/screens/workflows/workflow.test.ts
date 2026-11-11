@@ -28,6 +28,7 @@ import {
   heldNote,
   latestRuns,
   lifeWords,
+  lastRunLine,
   lineWhen,
   meansOutOfDate,
   menuActionsOf,
@@ -35,6 +36,7 @@ import {
   nextRunWords,
   placeOf,
   PLACES_IN_PAGE_ORDER,
+  pillOf,
   pressChange,
   pressRunNow,
   rereadWhenOutOfDate,
@@ -51,6 +53,7 @@ import {
   whenWords,
   workflowPath,
   type ChangeOutcome,
+  type LastRun,
   type RunNowOutcome,
   type Viewer,
 } from './workflow'
@@ -70,6 +73,9 @@ const CAROL: Viewer = { id: 'carol', operator: true, approver: false }
 
 const NOW = new Date('2026-11-04T15:00:00+08:00')
 
+const LAST: LastRun = { run_id: 'run_07', state: 'rejected', at: '2026-10-26T01:41:00Z', test: false, declined_by: 'bob', proposed: 3, written: 0, tickets: true }
+const lastOf = (change: Partial<LastRun>): Pick<UseCaseView, 'last_run'> => ({ last_run: { ...LAST, ...change } })
+
 describe('the status words', () => {
   it('say whether a workflow is on or paused', () => {
     expect(lifeWords('on')).toBe('On')
@@ -77,7 +83,7 @@ describe('the status words', () => {
   })
 
   it('say a run that waits needs a yes, and how many changes wait', () => {
-    expect(runFact(run(waiting), nameOf)).toEqual({ tone: 'wait', pill: 'Needs a yes', words: '1 ticket is waiting for a yes.' })
+    expect(runFact(run(waiting), nameOf)).toEqual({ tone: 'wait', pill: 'Waiting for a yes', words: '1 ticket is waiting for a yes.' })
     expect(runFact(run(threeWaiting), nameOf).words).toBe('3 tickets are waiting for a yes.')
   })
 
@@ -96,6 +102,48 @@ describe('the status words', () => {
 
   it('say a run that is still going is running', () => {
     for (const view of [working, scheduled]) expect(runFact(run(view), nameOf)).toEqual({ tone: 'new', pill: 'Running', words: 'Running now.' })
+  })
+})
+
+describe('the last run line', () => {
+  const line = (change: Partial<LastRun>) => lastRunLine(lastOf(change), NOW, nameOf)
+
+  it('says no runs yet for a workflow that never ran', () => {
+    expect(lastRunLine({ last_run: null }, NOW, nameOf)).toBe('No runs yet')
+  })
+
+  it('names who declined, on the day it started', () => {
+    expect(line({})).toBe('Last run Mon 26 Oct · Declined by Bob')
+    expect(line({ declined_by: null })).toBe('Last run Mon 26 Oct · Declined')
+  })
+
+  it('says Today with the time for a run that started today', () => {
+    expect(line({ state: 'failed', declined_by: null, at: '2026-11-04T00:00:00Z' })).toBe('Last run Today 8:00 · Stopped')
+  })
+
+  it('counts what a waiting run proposed and what a finished run wrote, as tickets or changes', () => {
+    expect(line({ state: 'awaiting_approval', declined_by: null })).toBe('Last run Mon 26 Oct · 3 tickets proposed')
+    expect(line({ state: 'awaiting_approval', declined_by: null, proposed: 1, tickets: false })).toBe('Last run Mon 26 Oct · 1 change proposed')
+    expect(line({ state: 'awaiting_approval', declined_by: null, proposed: 0 })).toBe('Last run Mon 26 Oct · Waiting for a yes')
+    expect(line({ state: 'succeeded', declined_by: null, proposed: 3, written: 3 })).toBe('Last run Mon 26 Oct · 3 tickets created')
+    expect(line({ state: 'succeeded', declined_by: null, proposed: 2, written: 2, tickets: false })).toBe('Last run Mon 26 Oct · 2 changes written')
+    expect(line({ state: 'succeeded', declined_by: null, proposed: 0, tickets: false })).toBe('Last run Mon 26 Oct · Nothing to write')
+  })
+
+  it('says a run in progress is running now', () => {
+    for (const state of ['pending', 'working', 'proposed', 'acting'] as const) expect(line({ state, declined_by: null })).toBe('Last run Mon 26 Oct · Running now')
+  })
+
+  it('says so when the run was a test run', () => {
+    expect(line({ test: true })).toBe('Last run Mon 26 Oct, test · Declined by Bob')
+  })
+
+  it('gives a pill only to a run that needs a yes, has stopped or is running', () => {
+    expect(pillOf({ state: 'awaiting_approval' })).toEqual({ tone: 'wait', pill: 'Waiting for a yes' })
+    expect(pillOf({ state: 'failed' })).toEqual({ tone: 'bad', pill: 'Stopped' })
+    expect(pillOf({ state: 'working' })).toEqual({ tone: 'new', pill: 'Running' })
+    expect(pillOf({ state: 'rejected' }).pill).toBeNull()
+    expect(pillOf({ state: 'succeeded' }).pill).toBeNull()
   })
 })
 
@@ -351,7 +399,8 @@ describe('the manage controls of a workflow page', () => {
 describe('the rows of the list', () => {
   const nudge: UseCaseView = { ...AGENTS, use_case_id: 'uc_nudge', name: 'Stale ticket nudge', instruction: 'Ask owners about old tickets.', state: 'paused' }
   const bugs: UseCaseView = { ...AGENTS, use_case_id: 'uc_bugs', name: 'Morning bug report check', instruction: 'Raise a ticket for each new bug report.' }
-  const useCases = [nudge, WATCHLIST, bugs]
+  const stoppedLast = { ...LAST, state: 'failed' } as LastRun
+  const useCases = [nudge, WATCHLIST, { ...bugs, last_run: stoppedLast }]
   const runsFor = (viewer: Viewer) => [run(failed, { use_case_id: 'uc_bugs', run_id: 'run_bugs' }), run(waiting, { you_can_decide: viewer === BOB })]
   const runs = runsFor(ALICE)
   const ids = (rows: { useCase: UseCaseView }[]) => rows.map((row) => row.useCase.use_case_id)

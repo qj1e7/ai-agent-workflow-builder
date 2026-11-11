@@ -321,3 +321,61 @@ for (const phone of [false, true]) {
     await context.close()
   })
 }
+
+const LAST_RUN = /^Last run (Today \d{1,2}:\d{2}|[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}(?: \d{4})?)(, test)? · (.+)$/
+
+/** Every last-run line the page draws sits on one line: its height is its line height. */
+async function lineCounts(lines: Locator): Promise<number[]> {
+  return lines.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight))))
+}
+
+for (const user of ['alice', 'bob']) {
+  test(`${user} sees each workflow's last run on one line, in its row and in the chat's check card, at every width`, async ({ browser, backend }, info) => {
+    const { approvalId } = await backend.waitingRun('alice')
+    const context = await devContext(browser, user)
+    const page = await context.newPage()
+    const rows = page.getByRole('list', { name: 'Workflows' }).locator('li[data-workflow-id]')
+    const watchlist = rows.filter({ hasText: 'Software watchlist' })
+    const lastLine = (row: Locator) => row.locator('p[class*="last"]')
+    for (const width of [1920, 1280, 900, 390]) {
+      await page.setViewportSize({ width, height: 900 })
+      await page.goto('/workflows')
+      await expect(watchlist).toBeVisible()
+      await expect(lastLine(watchlist), 'a waiting run says what it proposed, as a test run').toHaveText(/^Last run .+, test · 1 ticket proposed$/)
+      await expect(watchlist.getByText('Waiting for a yes', { exact: true })).toBeVisible()
+      await expect(watchlist.getByText('Test run', { exact: true })).toBeVisible()
+      const counts = await lineCounts(lastLine(rows))
+      expect(counts.length, 'every row has a last-run line').toBe(await rows.count())
+      expect(counts.every((n) => n === 1), `each last-run line is one line at ${width} px: ${counts.join(',')}`).toBe(true)
+      for (const text of await lastLine(rows).allInnerTexts()) expect(text === 'No runs yet' || LAST_RUN.test(text), `"${text}" is a last-run line`).toBe(true)
+      await expectAccessible(page, path.join(OUT, 'axe'), `workflows-last-run-${user}-${width}`)
+      await shot(page, info, `r9-workflows-${user}-${width}`)
+    }
+
+    const before = await lastLine(watchlist).innerText()
+    await page.goto('/')
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.getByRole('textbox').fill('Check my workflows')
+    await page.keyboard.press('Enter')
+    const card = page.getByRole('main').getByRole('list', { name: 'Your workflows' })
+    await expect(card).toBeVisible()
+    await expect(lastLine(card.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })), 'the check card says what the row says').toHaveText(before)
+    if (user === 'alice') {
+      await shot(page, info, 'r9-check-card-alice')
+    }
+    await context.close()
+    if (user === 'alice') {
+      const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
+      await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest })
+      const again = await devContext(browser, 'alice')
+      const declined = await again.newPage()
+      await declined.goto('/workflows')
+      const row = declined.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })
+      await expect(lastLine(row), 'a declined run names who declined').toHaveText(/^Last run .+, test · Declined by Bob$/)
+      await expect(row.getByText('On', { exact: true }), 'a declined run has no pill, so the workflow reads On').toBeVisible()
+      expect(await lineCounts(lastLine(row))).toEqual([1])
+      await shot(declined, info, 'r9-workflows-declined')
+      await again.close()
+    }
+  })
+}

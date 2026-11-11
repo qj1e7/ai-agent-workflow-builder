@@ -6,7 +6,7 @@ import { agentIdentity } from '../../ui/agents'
 import { andList, count, type NameOf } from '../run/words'
 import { faceId, howItWorksPath } from '../agents/agents'
 import { heldWords, repeatWords, TAKE_OVER_WORDS } from '../software/software'
-import { nextRunAt, runWhen, zoneWords } from './times'
+import { lineWhen, nextRunAt, runWhen, zoneWords } from './times'
 
 export type Tone = 'ok' | 'wait' | 'bad' | 'new'
 
@@ -44,25 +44,76 @@ function doneWords(run: Extract<RunView, { state: 'succeeded' }>, nameOf: NameOf
 
 const IN_PROGRESS: ReadonlySet<RunView['state']> = new Set(['pending', 'working', 'proposed', 'acting'])
 
+type RunState = RunView['state']
+
+/** A workflow's newest run, as `GET /api/v1/use-cases` gives it. */
+export type LastRun = NonNullable<UseCaseView['last_run']>
+
 /** The runs a row calls Running. Anything counting running workflows asks this, so a count never outruns the rows. */
-export const isRunning = (run: RunView | null): boolean => run !== null && IN_PROGRESS.has(run.state)
+export const isRunning = (run: { readonly state: RunState } | null): boolean => run !== null && IN_PROGRESS.has(run.state)
+
+export type Pill = Pick<RunFact, 'tone' | 'pill'>
+
+/** The row's one run pill. A succeeded or declined run has none: its last-run line says how it went. */
+const PILLS: Record<RunState, Pill> = {
+  awaiting_approval: { tone: 'wait', pill: 'Waiting for a yes' },
+  failed: { tone: 'bad', pill: 'Stopped' },
+  succeeded: { tone: 'ok', pill: null },
+  rejected: { tone: 'ok', pill: null },
+  pending: { tone: 'new', pill: 'Running' },
+  working: { tone: 'new', pill: 'Running' },
+  proposed: { tone: 'new', pill: 'Running' },
+  acting: { tone: 'new', pill: 'Running' },
+}
+
+export const pillOf = (run: { readonly state: RunState }): Pill => PILLS[run.state]
 
 export function runFact(run: RunView, nameOf: NameOf): RunFact {
   switch (run.state) {
     case 'awaiting_approval':
-      return { tone: 'wait', pill: 'Needs a yes', words: changesWaiting(run) }
+      return { ...PILLS[run.state], words: changesWaiting(run) }
     case 'failed':
-      return { tone: 'bad', pill: 'Stopped', words: `Stopped. ${failureReasonLabel[run.reason]}.` }
+      return { ...PILLS[run.state], words: `Stopped. ${failureReasonLabel[run.reason]}.` }
     case 'succeeded':
-      return { tone: 'ok', pill: null, words: doneWords(run, nameOf) }
+      return { ...PILLS[run.state], words: doneWords(run, nameOf) }
     case 'rejected':
-      return { tone: 'ok', pill: null, words: `Declined by ${nameOf(run.rejected_by)}. Nothing was written.` }
+      return { ...PILLS[run.state], words: `Declined by ${nameOf(run.rejected_by)}. Nothing was written.` }
     case 'pending':
     case 'working':
     case 'proposed':
     case 'acting':
-      return { tone: 'new', pill: 'Running', words: 'Running now.' }
+      return { ...PILLS[run.state], words: 'Running now.' }
   }
+}
+
+function lastRunWhat(last: LastRun, nameOf: NameOf): string {
+  const noun = last.tickets ? 'ticket' : 'change'
+  switch (last.state) {
+    case 'awaiting_approval':
+      return last.proposed > 0 ? `${count(last.proposed, noun)} proposed` : 'Waiting for a yes'
+    case 'succeeded':
+      return last.written > 0 ? `${count(last.written, noun)} ${last.tickets ? 'created' : 'written'}` : 'Nothing to write'
+    case 'rejected':
+      return last.declined_by ? `Declined by ${nameOf(last.declined_by)}` : 'Declined'
+    case 'failed':
+      return 'Stopped'
+    case 'pending':
+    case 'working':
+    case 'proposed':
+    case 'acting':
+      return 'Running now'
+  }
+}
+
+/**
+ * A workflow's last run in one line, such as "Last run Mon 26 Oct · Declined by Bob" or "No runs yet". The Workflows rows and the
+ * chat's check card both read it, so they cannot disagree. A test run says so after the day.
+ */
+export function lastRunLine(useCase: Pick<UseCaseView, 'last_run'>, now: Date, nameOf: NameOf): string {
+  const last = useCase.last_run
+  if (!last) return 'No runs yet'
+  const when = lineWhen(last.at, now)
+  return `Last run ${last.test ? `${when}, test` : when} · ${lastRunWhat(last, nameOf)}`
 }
 
 export { formatterFactory, lineWhen, nextRunAt, runWhen, timesZone } from './times'
@@ -232,6 +283,7 @@ export const FILTERS: readonly (readonly [Filter, string])[] = [
 
 export interface Row {
   readonly useCase: UseCaseView
+  /** The workflow's newest run in full, which only the row's action reads. Its state, count and line come from the use case's last run. */
   readonly latest: RunView | null
   readonly action: RowAction | null
 }
@@ -242,7 +294,7 @@ function kept(row: Row, filter: Filter, words: string): boolean {
     case 'all':
       return true
     case 'stopped':
-      return row.latest?.state === 'failed'
+      return row.useCase.last_run?.state === 'failed'
     case 'paused':
       return row.useCase.state === 'paused'
   }

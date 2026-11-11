@@ -29,7 +29,7 @@ export function useSaidOnce(text: string | null, say: Say) {
 /** Check my workflows: the rows of the Workflows list, from the same functions, for one workflow or all of them. */
 export function CheckWorkflowsAnswer({ useCaseId, now, say }: { useCaseId: string | null; now: Date; say: Say }) {
   const me = useMe()
-  const useCases = useUseCases()
+  const useCases = useUseCases({ poll: REFRESH_MS })
   const runs = useRuns({ poll: REFRESH_MS })
   const nameOf = useDisplayName()
   const rows = useMemo(() => {
