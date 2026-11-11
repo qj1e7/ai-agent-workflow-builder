@@ -7,10 +7,10 @@ The reader is a developer on the team. Every path below was checked against `mai
 The plan keeps three layers apart, as the spec does:
 
 - **Built** means code in `portal/`, `platform-api/` or `agent-runtime/` today.
-- **Prototype** means the clickable design in `prototype.html`. It is scripted and connected to nothing. Its scenario ids (`SHELL-pinned`, `APPR-ask` and so on) are in `checks/paths-v4.cjs`, and `checks/results/v4-roles.md` lists all 168.
+- **Prototype** means the clickable design in `prototype.html`. It is scripted and connected to nothing. Its scenario ids (`SHELL-pinned`, `APPR-ask` and so on) are in `checks/paths-v4.cjs`, and `checks/results/v4-roles.md` lists all 171.
 - **Planned** means a proposed ADR or a "Later" item. Nothing implements it.
 
-All four steps of the redraw are merged, the last on 12 Nov (#207, roles: the Approver's question-only box, read-only pages for Approvers, deny by default, and n8n views only for people with n8n access). On 11 Nov the team lead dropped the phone layout from step 4. The Portal is a responsive web view, from a narrow browser window to a wide screen, and an Approver on a phone decides in Teams. This plan adds no phone-only work.
+All four steps of the redraw are merged, the last on 12 Nov, with its follow-up (#207 and #FOLLOWUP, roles: the Approver's question-only box, read-only pages for Approvers, deny by default, and n8n views only for people with n8n access). On 11 Nov the team lead dropped the phone layout from step 4. The Portal is a responsive web view, from a narrow browser window to a wide screen, and an Approver on a phone decides in Teams. This plan adds no phone-only work.
 
 ## 1. Starting point
 
@@ -427,7 +427,7 @@ The table names each PR's own tests and the prototype scenarios its screen must 
 
 `MARK-approval`, `MARK-roles` and `FIX-mark-more` check the prototype's Mark what isn't built control, which the Portal doesn't have, so no PR matches them.
 
-That is 18 PRs. The team sizes them after R4, because R4 and R7 depend on how well the demo model reads clauses and negations. R1 to R3 and R11 need no backend change. R9 and R10 change a route's answer but add no route. None of the six waits for another PR, so all can start now. This plan does not trim the design to fit a date.
+That is 18 PRs. The team sizes them after R4, because R4 and R7 depend on how well the demo model reads clauses and negations. R1 to R3 and R11 need no backend change. R9 and R10 change a route's answer but add no route. None of the six waits for R0 or for a backend change. R1, R9 and R10 can start now, and R2, R3 and R11 follow R1 in turn. This plan does not trim the design to fit a date.
 
 ## 7. Regression tests
 
