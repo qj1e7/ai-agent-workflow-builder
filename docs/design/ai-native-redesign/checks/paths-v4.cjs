@@ -1045,6 +1045,7 @@ add('DECLINED-sw', 'A declined upgrade check says Declined, shows no write and g
   await t.setup((k) => bobDeclines(k, 'sw', 'Wrong version'));
   await t.expect('The line: the gate declined, the write faint, the run ended', lineOf(t), (v) => /done>solid no>dead skip>solid done$/.test(v));
   await t.expectText('Its steps say so in words', /Approval gate\s+Declined[\s\S]*Create in Jira\s+Nothing written[\s\S]*Ended/, 'main .line');
+  await t.expectCount('Ended is a plain dot, not a tick', 'main .line > .st:last-child .st-dot svg', 0);
   await t.click('main [data-act="runDetail"]', 'Show what each agent did');
   await t.expectText('The agents’ chat gives the record', /Declined by Bob\. Nothing was written\. Reason: Wrong version\./, 'main .run-detail');
   await t.expect('and never says it created anything', t.page.innerText('main .run-detail'), (v) => !/Created MOCK|Done\./.test(v));
@@ -1053,7 +1054,8 @@ add('DECLINED-sw', 'A declined upgrade check says Declined, shows no write and g
   await t.setup(async (k) => { await k.page.keyboard.press('Escape'); await k.settle(); await k.setUser('alice'); });
   await t.menu('software', 'Open Watchlist');
   await t.click('main [data-act="swHist"][data-arg="lg"]', 'Open LangGraph’s history');
-  await t.expectText('LangGraph’s history gives the record', /Found 1\.2\.17\. Declined by Bob\. Nothing was written\. Reason: Wrong version\. It’s proposed again next Monday\./);
+  await t.expectText('LangGraph’s history gives the record', /Found 1\.2\.17\. Declined by Bob\. Nothing was written\. Reason: Wrong version\. The tickets will be proposed again next Monday\./);
+  await t.expectText('Each row’s note gives the same record', /New version\s+Declined by Bob\. Nothing was written\. Reason: Wrong version\. The tickets will be proposed again next Monday\./);
   await t.expectCount('No ticket link on the watchlist', 'main [data-act="ticket"]', 0);
 });
 
@@ -1061,7 +1063,7 @@ add('DECLINED-test-run', 'A declined test run reads the same in Needs you, on it
   await t.setup(async (k) => { await testRunWaiting(k); await bobDeclines(k, 'conf', 'Something in it is wrong'); await k.setUser('alice'); });
   const record = 'Declined by Bob\\. Nothing was written\\. Reason: Something in it is wrong\\.';
   await t.menu('workflows', 'Open Workflows');
-  await t.expectText('Needs you says Bob declined it, with the reason', /Bob declined your test run[\s\S]{0,120}nothing was written[\s\S]{0,60}Reason: Something in it is wrong\./, 'main section[aria-labelledby="needs-h"]');
+  await t.expectText('Needs you says Bob declined it, in the record’s words', /Bob declined your test run[\s\S]{0,80}Nothing was written\. Reason: Something in it is wrong\./, 'main section[aria-labelledby="needs-h"]');
   await t.click(S.row('conf'), 'Open the workflow');
   await t.expectText('Its recent run gives the record', new RegExp(record));
   await t.menu('home', 'Back to Chat');
@@ -1072,6 +1074,10 @@ add('DECLINED-test-run', 'A declined test run reads the same in Needs you, on it
   await t.expect('The panel shows no write', t.page.innerText('#sidepanel'), (v) => !/MOCK-33|created/i.test(v));
   await t.click(S.teams, 'Open Teams');
   await t.expectText('Teams gives the same record', /Declined by Bob at 9:10 today\s+Nothing was written\. Reason: Something in it is wrong\./, '.drawer');
+  await t.setup(async (k) => { await k.page.keyboard.press('Escape'); await k.settle(); });
+  await t.click('#sidepanel [data-act="panelPage"]', 'More details', { until: /Declined, nothing was written/ });
+  await t.click('main [data-act="runDetail"]', 'Show what each agent did');
+  await t.expectText('The run ends with what happens next, like the others', /The run ended\. Change what it does, or run the test again\./, 'main .run-detail');
 });
 
 add('KEYS-APPR', 'Ask, the decline reasons and Decline with the keyboard only, each with a visible focus', async (t) => {
@@ -1100,6 +1106,100 @@ add('KEYS-APPR', 'Ask, the decline reasons and Decline with the keyboard only, e
   await t.press('Enter', 'Decline', { decision: true, until: /Declined, nothing was written/ });
   await t.expectText('Declined with the reason', /Declined by Bob\. Nothing was written\. Reason: Wrong version\./, 'main #decision');
 });
+
+
+/* Step 3 fix pass. */
+add('MARK-approval', 'With Mark what isn’t built on, Not checked, Ask, the question box, the questions and the decline reasons each carry a label', async (t) => {
+  await t.setup(async (k) => { await ctl(k, 'markUnbuilt', 'on'); await k.setUser('bob'); });
+  await t.click(S.review, 'Review and decide');
+  const label = (sel) => t.page.$eval(sel, (el) => el.getAttribute('data-unbuilt')).catch(() => 'not marked');
+  await t.expect('Not checked is marked', label('main #decision dl.unchecked'), /Not checked/);
+  await t.expect('Ask is marked', label('main #decision p:has(> [data-act="askOpen"])'), /Ask the requester/);
+  await t.click('main [data-act="askOpen"][data-arg="sw"]', 'Ask Carol a question');
+  await t.expect('The question box is marked', label('main #decision form.askbox'), /Ask the requester/);
+  await t.field('#ask-sw', 'Is this urgent?', 'Type the question');
+  await t.click('main form[data-submit="askSend"] button[type="submit"]', 'Send question');
+  await t.expect('The questions are marked', label('main #decision .asks'), /Questions on a request/);
+  await t.click('main [data-act="decline"][data-arg="sw"]', 'Decline');
+  await t.expect('The decline reasons are marked', label('main #decision .decide'), /Reasons for a decline/);
+});
+
+add('RUN-retry-panel', 'A retry in the side panel puts focus on the panel’s heading, and #app stays put', async (t) => {
+  await t.ask('Why did Morning new-ticket check stop?');
+  await t.click(`${lastCard} [data-act="run"][data-arg="issues"]`, 'See the run');
+  await t.click('#sidepanel [data-act="retryIssues"]', 'Retry the run', { decision: true });
+  await t.expect('Focus is on the panel’s heading', focused(t.page), 'h2#sp-h');
+  await t.expectText('The panel shows the retry done', /Done, nothing new today/, '#sidepanel');
+  await t.expect('#app has not scrolled', appScroll(t), 0);
+}, [1280, 390]);
+
+add('APPR-decide-nav', 'A half-picked decline reason doesn’t survive leaving the page', async (t) => {
+  await t.setup((k) => k.setUser('bob'));
+  await t.click(S.review, 'Review and decide');
+  await t.click('main [data-act="decline"][data-arg="sw"]', 'Decline');
+  await t.click('main [data-act="declinePick"][data-arg="Wrong version"]', 'Wrong version');
+  await t.menu('workflows', 'Open Workflows');
+  await t.click(S.review, 'Review and decide again');
+  await t.expectCount('The reasons are closed', 'main .decide [data-act="declinePick"]', 0);
+  await t.expectCount('Approve and Decline are back', 'main :is([data-act="approve"], [data-act="decline"])[data-arg="sw"]', 2);
+});
+
+add('APPR-thread-kept', 'Once a request is decided its questions stay on the record, read only, for the Approver and the requester', async (t) => {
+  await t.setup((k) => k.setUser('bob'));
+  await t.click(S.review, 'Review and decide');
+  await t.click('main [data-act="askOpen"][data-arg="sw"]', 'Ask Carol a question');
+  await t.field('#ask-sw', 'Is this urgent?', 'Type the question');
+  await t.click('main form[data-submit="askSend"] button[type="submit"]', 'Send question');
+  await t.click('main [data-act="decline"][data-arg="sw"]', 'Decline');
+  await t.click('main [data-act="declineYes"][data-arg="sw"]', 'Decline', { decision: true, until: /Declined, nothing was written/ });
+  await t.expectText('The question is on the record', /You asked Carol: Is this urgent\?\s+Not answered before the request was decided\./, 'main #decision');
+  await t.expectCount('No question or answer box', 'main :is([data-act="askOpen"], form.askbox)', 0);
+  await t.setup(async (k) => {
+    await k.setUser('alice'); await k.go('home');
+    await testRunWaiting(k);
+    await k.setUser('bob'); await k.go('home');
+    await k.page.click('main [data-act="run"][data-arg="conf"]'); await k.settle();
+    await k.page.click('main [data-act="askOpen"][data-arg="conf"]'); await k.settle();
+    await k.page.fill('#ask-conf', 'Should MOCK-31 be in this summary?');
+    await k.page.click('main form[data-submit="askSend"] button[type="submit"]'); await k.settle();
+    await k.setUser('alice');
+    await ctl(k, 'yesAs', 'siti');
+    await k.waitText(/Siti approved, and the platform/);
+    await k.settle();
+  });
+  await t.expectText('Alice sees Bob’s question on the approved run', /Bob asked you: Should MOCK-31 be in this summary\?\s+Not answered before the request was decided\./, 'main #decision');
+  await t.expectCount('Alice has no answer box once it is decided', 'main form.askbox', 0);
+});
+
+add('DECLINED-access', 'When the second Approver declines after the first said yes, the record says both, in the run and in Teams', async (t) => {
+  await t.setup(async (k) => {
+    await ctl(k, 'preview', 'on');
+    await k.setUser('bob'); await k.go('home');
+    await k.page.click('main [data-act="run"][data-arg="access"]'); await k.settle();
+    await k.page.click('main [data-act="approve"][data-arg="access"]'); await k.settle();
+    await k.setUser('alice'); await k.go('workflows');
+  });
+  await t.click('main [data-act="run"][data-arg="access"]:has-text("Review and decide")', 'Review and decide');
+  await t.click('main [data-act="decline"][data-arg="access"]', 'Decline');
+  await t.click('main [data-act="declinePick"][data-arg="Someone still needs access"]', 'Someone still needs access', { decision: true });
+  await t.click('main [data-act="declineYes"][data-arg="access"]', 'Decline', { decision: true, until: /Declined, nothing was removed/ });
+  await t.expectText('The run’s record says both', /Approved by Bob, then declined by Alice\. Nothing was removed\. Reason: Someone still needs access\./, 'main #decision');
+  await t.click(S.teams, 'Open Teams');
+  await t.expectText('Teams says both', /Approved by Bob at 9:10 today, then declined by Alice at 9:10 today\s+Nothing was removed\. Reason: Someone still needs access\./, '.drawer');
+});
+
+add('WF-last-run', 'Workflows rows and the chat’s check card give each workflow’s last run from one source, a declined run included, each on one line', async (t) => {
+  await t.setup(async (k) => { await bobDeclines(k, 'sw', 'Wrong version'); await k.setUser('alice'); });
+  await t.menu('workflows', 'Open Workflows');
+  await t.expectText('The row says the last run was declined', /Keep our software up to date[\s\S]{0,400}Last run Mon 26 Oct · Declined by Bob/, 'main .wf-list');
+  await t.expectText('The stopped one says it stopped', /Morning new-ticket check[\s\S]{0,400}Last run Today 8:00 · Stopped/, 'main .wf-list');
+  const lines = (sel) => t.page.$$eval(sel, (els) => els.map((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight))));
+  await t.expect('Each row’s last run is one line', lines('main .wf-last'), (v) => v.length >= 3 && v.every((n) => n === 1));
+  await t.menu('home', 'Back to Chat');
+  await t.ask(CHECK_WORKFLOWS);
+  await t.expectText('The check card agrees', /Keep our software up to date\s+On\s+Next run[^\n]*\s+Last run Mon 26 Oct · Declined by Bob/, lastCard);
+  await t.expect('Each card line is one line', lines(`${lastCard} .row-last`), (v) => v.length >= 3 && v.every((n) => n === 1));
+}, [1280, 390]);
 
 /* Screens shot by shots.cjs and measured by quality.cjs. prepare(k) sets the screen up like a user would reach it. */
 const open = async (k, sel) => { await k.page.click(sel); await k.settle(); };
@@ -1172,6 +1272,12 @@ const screens = [
   { name: 'runs-declined-needs', prepare: async (k) => { await testRunWaiting(k); await bobDeclines(k, 'conf', 'Something in it is wrong'); await k.setUser('alice'); await k.go('workflows'); } },
   { name: 'runs-declined-teams', prepare: async (k) => { await bobDeclines(k, 'sw', 'Wrong version'); await open(k, S.teams); } },
   { name: 'runs-declined-watchlist', prepare: async (k) => { await bobDeclines(k, 'sw', 'Wrong version'); await k.setUser('alice'); await k.go('software'); await open(k, 'main [data-act="swHist"][data-arg="lg"]'); } },
+  /* Step 3 fix pass: each workflow's last run, a question kept on a decided request, both Approvers on a declined access review, and the unbuilt marks. */
+  { name: 'runs-workflows-last-run', prepare: async (k) => { await bobDeclines(k, 'sw', 'Wrong version'); await k.setUser('alice'); await k.go('workflows'); await k.page.evaluate(() => document.getElementById('all-h').scrollIntoView()); } },
+  { name: 'runs-check-card-declined', prepare: async (k) => { await bobDeclines(k, 'sw', 'Wrong version'); await k.setUser('alice'); await k.go('home'); await k.ask(CHECK_WORKFLOWS); } },
+  { name: 'runs-thread-kept', prepare: async (k) => { await k.setUser('bob'); await open(k, S.review); await open(k, 'main [data-act="askOpen"][data-arg="sw"]'); await k.page.fill('#ask-sw', 'Is this urgent?'); await open(k, 'main form[data-submit="askSend"] button[type="submit"]'); await open(k, 'main [data-act="decline"][data-arg="sw"]'); await k.page.click('main [data-act="declineYes"][data-arg="sw"]'); await k.waitText(/Declined, nothing was written/); await k.settle(); } },
+  { name: 'runs-declined-access', prepare: async (k) => { await ctl(k, 'preview', 'on'); await k.setUser('bob'); await k.go('home'); await open(k, 'main [data-act="run"][data-arg="access"]'); await open(k, 'main [data-act="approve"][data-arg="access"]'); await k.setUser('alice'); await k.go('workflows'); await open(k, 'main [data-act="run"][data-arg="access"]:has-text("Review and decide")'); await open(k, 'main [data-act="decline"][data-arg="access"]'); await open(k, 'main [data-act="declinePick"][data-arg="Someone still needs access"]'); await k.page.click('main [data-act="declineYes"][data-arg="access"]'); await k.waitText(/Declined, nothing was removed/); await k.settle(); } },
+  { name: 'runs-mark-approval', prepare: async (k) => { await ctl(k, 'markUnbuilt', 'on'); await k.setUser('bob'); await open(k, S.review); await open(k, 'main [data-act="decline"][data-arg="sw"]'); } },
 ];
 
 /* The rail replaced the header tabs (ADR 0043). The Agent library is now Settings, How it works. */
