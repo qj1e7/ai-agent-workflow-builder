@@ -294,7 +294,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .task-meta { font-size: 0.875rem; color: var(--muted); }
 .task .btns { margin-top: 6px; }
 .says { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px 14px 12px 10px; border-radius: var(--r-well); background: var(--sunk); font-size: 0.95rem; }
-.says b { display: block; font-size: 0.8125rem; font-weight: 700; color: var(--muted); }
+.says > div > b:first-child { display: block; font-size: 0.8125rem; font-weight: 700; color: var(--muted); }
+.says .qa3 { margin-top: 6px; }
+/* The AI troubleshooter's three answers: each question over its answer, so they read the same in a card, a panel or a page. */
+.qa3 { display: grid; gap: 10px; }
+.qa3 > div { display: grid; gap: 2px; min-width: 0; }
+.qa3 dt { font-size: 0.875rem; font-weight: 700; color: var(--muted); }
+.qa3 dd { overflow-wrap: anywhere; }
+.qa3 dd b { white-space: nowrap; }
 .mini-list { display: grid; gap: 4px; font-size: 0.95rem; }
 .mini-list li { display: flex; gap: 8px; align-items: baseline; }
 .mini-list li::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--muted); flex: none; transform: translateY(-3px); }
@@ -384,12 +391,6 @@ html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 .sp-bar h2 { font-size: 1.125rem; overflow-wrap: anywhere; }
 .sp-body { flex: 1; overflow-y: auto; padding: 16px; display: grid; gap: 14px; align-content: start; }
 .sp-problem { display: grid; gap: 10px; }
-.sp-steps { display: grid; gap: 6px; }
-.sp-steps li { position: relative; padding-left: 22px; }
-.sp-steps li::before { content: ""; position: absolute; left: 4px; top: 0.5em; width: 9px; height: 9px; border-radius: 50%; background: var(--green); }
-.sp-steps li.todo::before, .sp-steps li.skip::before { background: var(--rail); }
-.sp-steps li.fail::before { background: var(--red); }
-.sp-steps li.wait::before, .sp-steps li.noans::before { background: var(--amber); }
 @media (max-width: 900px) { .sidepanel { position: fixed; inset: 0; z-index: var(--z-overlay); flex: none; border-left: 0; padding-top: env(safe-area-inset-top, 0px); } }
 .ngroup { display: grid; gap: 8px; }
 .ngroup + .ngroup { margin-top: 12px; }
@@ -401,8 +402,10 @@ html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 .wfcheck .row { padding: 12px 16px; }
 .wfcheck .row:last-child { border-bottom: 0; }
 .wfcheck .row-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 4px; }
+.wfcheck .row { row-gap: 4px; }
+.wfcheck .row-last { grid-column: 1; font-size: 0.875rem; color: var(--muted); }
 /* On a phone the row's action goes under its text, so a long pill never touches the button. */
-@container answer (max-width: 520px) { .wfcheck .row { grid-template-columns: minmax(0, 1fr); } .wfcheck .row > [data-flow-of], .wfcheck .row > .btn { justify-self: start; } }
+@container answer (max-width: 520px) { .wfcheck .row { grid-template-columns: minmax(0, 1fr); } .wfcheck .row > [data-flow-of], .wfcheck .row > .btn { justify-self: start; grid-row: 3; margin-top: 8px; } .wfcheck .row-last { grid-row: 2; } }
 .pcard.why .pcard-h .face { flex: none; }
 .cmsg.me { grid-template-columns: minmax(0, 1fr); justify-items: end; }
 .cmsg.me .cmsg-bubble { max-width: min(560px, 90%); background: var(--sunk); border-radius: var(--r-card) var(--r-card) 4px var(--r-card); overflow-wrap: anywhere; }
@@ -490,7 +493,9 @@ html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 /* Workflows is one list. Fixed columns, so status, name, agents, next run and the action line up row to row. */
 .wf-list { border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); }
 .wf-list > li:not(:first-child) { border-top: 1px solid var(--rule); }
-.wf-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto 172px 172px; gap: 16px; align-items: center; padding: 16px 20px; transition: background-color var(--dur-press) ease; }
+.wf-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto 172px 172px; gap: 4px 16px; align-items: center; padding: 16px 20px; transition: background-color var(--dur-press) ease; }
+/* A workflow's last run, one short line under its description. */
+.wf-row > .wf-last { grid-column: 1; grid-row: 2; font-size: 0.875rem; color: var(--muted); }
 .wf-row.paused { background: var(--sunk); }
 .wf-main h2 { font-size: 1.05rem; }
 .wf-main p { margin-top: 2px; font-size: 0.9rem; color: var(--muted); }
@@ -504,7 +509,8 @@ html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 .wf-add:active { transform: scale(0.99); }
 @media (max-width: 600px) { .wf-add > span { display: none; } }
 @media (max-width: 960px) {
-  .wf-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "main main" "pills next" "act act"; gap: 8px 12px; }
+  .wf-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "main main" "last last" "pills next" "act act"; gap: 8px 12px; }
+  .wf-row > .wf-last { grid-area: last; margin-top: -4px; }
   .wf-pills { grid-area: pills; } .wf-main { grid-area: main; } .wf-next { grid-area: next; justify-self: end; white-space: normal; text-align: right; } .wf-act { grid-area: act; justify-self: start; }
 }
 .rcard-link { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
@@ -590,14 +596,35 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 #decision:focus, .gate-said:focus { outline: none; }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink), 0 1px 2px rgba(18, 20, 23, 0.06); }
 .stage { padding: 24px 20px 20px; background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-card); margin: 20px 0 24px; }
-.line { --ty: 91px; position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); padding-top: 8px; }
-.line-track, .line-fill { position: absolute; top: var(--ty); height: 3px; border-radius: 3px; left: calc(100% / var(--n) / 2); }
-.line-track { right: calc(100% / var(--n) / 2); background: var(--hair); }
-.line-fill { width: calc(100% - 100% / var(--n)); background: var(--ink); transform-origin: left center; transform: scaleX(var(--f)); transition: transform var(--move) var(--ease-move); }
-.line-fill.broken { background: var(--ink); }
+.line { --dir: 90deg; --bs: 14px 100%; --march: march-x; position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); padding-top: 8px; }
 .st { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; min-width: 0; }
 .st-who { height: 56px; display: flex; align-items: flex-end; justify-content: center; }
 .st-dotwrap { height: 38px; display: grid; place-items: center; }
+.st-who, .st-dotwrap, .st-label { position: relative; z-index: 1; }
+/* The FLOW run line: one link from each step's dot to the next one's, coloured by the step it leads into. A dot covers
+   each end. On the run page the dot's centre is 85px down a step (56 for the agent, 10 of gap, half of 38). */
+.st > .lk { position: absolute; z-index: 0; top: 83.5px; left: 50%; width: 100%; height: 3px; border-radius: 2px; background: var(--hair); transform-origin: left center; }
+.lk.solid { background: var(--ink); }
+.lk.flow { background: repeating-linear-gradient(var(--dir), var(--accent) 0 8px, transparent 8px 14px) 0 0 / var(--bs); animation: var(--march) 0.6s linear infinite; }
+.lk.flow.wait { background-image: repeating-linear-gradient(var(--dir), var(--amber) 0 8px, transparent 8px 14px); animation-duration: 1.6s; }
+.lk.stop { background: repeating-linear-gradient(var(--dir), var(--red) 0 6px, transparent 6px 10px); }
+.lk.stop.off { background-image: repeating-linear-gradient(var(--dir), var(--muted) 0 6px, transparent 6px 10px); }
+.lk.dead { background: repeating-linear-gradient(var(--dir), var(--rail) 0 4px, transparent 4px 9px); }
+.lk.solid.grow { animation: grow-x var(--move) var(--ease-move) both; }
+@keyframes march-x { to { background-position: 14px 0; } }
+@keyframes march-y { to { background-position: 0 14px; } }
+@keyframes grow-x { from { transform: scaleX(0); } }
+@keyframes grow-y { from { transform: scaleY(0); } }
+.stage.offscreen .lk, .tab-hidden .lk { animation-play-state: paused; }
+/* The side panel's run line: the same steps and links, small and always down the page, with no agents. A link runs
+   from its dot's centre (11px down) to the next dot's centre, past the 14px gap, however tall the step's text is. */
+.line.mini { --dir: 180deg; --bs: 100% 14px; --march: march-y; grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 0; }
+.line.mini .st { flex-direction: row; align-items: flex-start; text-align: left; gap: 10px; height: auto; }
+.line.mini .st > .lk { top: 11px; bottom: -25px; left: 9.5px; width: 3px; height: auto; transform-origin: center top; }
+.line.mini .st-dotwrap { width: 22px; height: 22px; flex: none; }
+.line.mini .st .st-dot, .line.mini .st.gate .st-dot { width: 22px; height: 22px; outline-offset: 2px; }
+.line.mini .st-label { padding: 0; font-size: 0.9375rem; line-height: 22px; }
+.line.mini .st-label small { margin-top: 0; line-height: 1.35; }
 .st-dot { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); border: 2px dashed var(--edge); color: var(--muted); }
 .st-label { font-weight: 600; font-size: 0.95rem; line-height: 1.25; padding: 0 4px; }
 /* Cause, then effect: the line travels for --move, then the step it reaches lands and its message arrives. */
@@ -622,12 +649,14 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .st.gate.skip .st-dot, .st.gate.todo .st-dot { border-style: dashed; border-color: var(--edge); color: var(--muted); }
 .st.fail .st-dot { background: var(--red); border: 2px solid var(--red); color: var(--on-status); outline: 2px solid var(--red); outline-offset: 3px; }
 .st.fail .st-label { color: var(--red-ink); }
+.st.no .st-dot { background: var(--sunk); border: 2px dashed var(--muted); color: var(--muted); }
+.end-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.st.skip .st-dot { opacity: 0.6; }
 @keyframes bob { from { transform: translateY(0); } to { transform: translateY(-4px); } }
 @media (max-width: 760px) {
-  .line { grid-template-columns: minmax(0, 1fr); padding-top: 0; }
-  .line-track, .line-fill { top: 32px; left: 17px; width: 3px; height: auto; right: auto; }
-  .line-track { bottom: 32px; }
-  .line-fill { height: calc(100% - 64px); width: 3px; transform-origin: center top; transform: scaleY(var(--f)); }
+  .line { --dir: 180deg; --bs: 100% 14px; --march: march-y; grid-template-columns: minmax(0, 1fr); padding-top: 0; }
+  .st > .lk { top: 32px; left: 17.5px; width: 3px; height: 64px; transform-origin: center top; }
+  .lk.solid.grow { animation-name: grow-y; }
   .st { flex-direction: row; text-align: left; height: 64px; gap: 12px; }
   .st-dotwrap { width: 38px; flex: none; order: 1; }
   .st-who { order: 2; height: auto; width: 40px; flex: none; }
@@ -931,6 +960,19 @@ select { padding: 9px 12px; width: auto; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { border: 1px solid var(--rail); background: var(--surface); border-radius: 999px; padding: 6px 14px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: border-color var(--dur-press) ease, transform var(--dur-press) var(--ease-out); }
 .chip:active { transform: scale(0.97); }
+.chip[aria-pressed="true"] { display: inline-flex; align-items: center; gap: 6px; border-color: var(--ink); background: var(--active); }
+/* The approval's decision: Approve and Decline, then a quieter Ask; the optional decline reasons; a question box. */
+.decide { display: grid; gap: 12px; padding-top: 14px; border-top: 1px solid var(--rule); }
+.decide > p { margin: 0; }
+.decide .muted { font-size: 0.875rem; }
+.askbox { display: grid; gap: 12px; }
+.askbox textarea { min-height: 80px; }
+.asks { display: grid; gap: 8px; padding: 12px 14px; border-radius: var(--r-well); background: var(--sunk); }
+.asks h2 { font-size: 0.875rem; color: var(--muted); }
+.asks ul { display: grid; gap: 12px; }
+.asks li { display: grid; gap: 6px; overflow-wrap: anywhere; }
+.asks li + li { padding-top: 12px; border-top: 1px solid var(--hair); }
+.asks .askbox { margin-top: 4px; }
 .bubble { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 12px; align-items: start; }
 .bubble p { padding: 12px 16px; background: var(--lead-tint); color: #1b2a6b; border-radius: 4px 14px 14px 14px; font-size: 1rem; }
 .kv { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 8px 16px; font-size: 0.95rem; }
@@ -1283,9 +1325,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
   .face.react.fs-waiting .f-badge, .face.react.fs-error .f-badge { animation: fade 120ms ease-out both !important; }
   .sent-mark.m-reveal, .m-reveal .ok-mark { animation: fade 160ms ease-out both !important; }
   .sent-bar span { animation: none !important; }
-  .line-fill, .btn, .iconbtn, .seg button, .chip, .agent-chip, .wf-add, .testctl-toggle, .risk .risk-more summary::before { transition-property: background-color, border-color, color, opacity !important; }
+  .btn, .iconbtn, .seg button, .chip, .agent-chip, .wf-add, .testctl-toggle, .risk .risk-more summary::before { transition-property: background-color, border-color, color, opacity !important; }
   .btn:active:not([disabled]), .iconbtn:active, .seg button:active, .chip:active, .agent-chip:active, .wf-add:active, .testctl-toggle:active { transform: none; }
-  .line-fill { transition: none !important; }
+  .lk { animation: none !important; }
 }
 </style>
 
@@ -1531,6 +1573,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     /* Who retried each workflow's run, in order. A retrier is a party to the run, so they can't approve it. */
     retried: {}, menu: null,
     appr: {}, editingAppr: null, apprForm: null, apprErr: {}, apprMore: false,
+    /* Each request's questions and answers, and the reason given when it was declined, by request id (ADR 0043).
+       decide is the Approver's open choice on one request: the decline reasons or the question box. */
+    asks: {}, declineWhy: {}, decide: null, answerText: {}, answerErr: '',
     agentEdits: {}, agentDraft: null, modalBack: [],
     model: { provider: 'aisg', model: 'claude-sonnet-5-5', keyEnd: '7f', checked: 'today, 9:00', secs: '1.8', address: '' },
     modelForm: { provider: 'aisg', address: '', key: '', show: false, step: 'key', model: '', err: {}, busy: '' },
@@ -2181,34 +2226,37 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function status(id) {
     switch (id) {
       case 'sw':
-        if (S.sw === 'waiting') return { tone: 'wait', label: 'Waiting for a yes', last: `Mon 26 Oct: 3 upgrade tickets are waiting for a yes${urgentNote()}.` };
-        if (S.sw === 'approved') return { tone: 'ok', last: `Mon 26 Oct: 3 tickets created, approved by ${nm(S.swBy)}.` };
-        return { tone: 'ok', last: `Mon 26 Oct: declined by ${nm(S.swBy)}. Nothing was written.` };
+        if (S.sw === 'waiting') return { tone: 'wait', label: 'Waiting for a yes', last: `Mon 26 Oct: 3 upgrade tickets are waiting for a yes${urgentNote()}.`, brief: 'Mon 26 Oct · 3 tickets proposed' };
+        if (S.sw === 'approved') return { tone: 'ok', last: `Mon 26 Oct: 3 tickets created, approved by ${nm(S.swBy)}.`, brief: 'Mon 26 Oct · 3 tickets created' };
+        return { tone: 'ok', last: `Mon 26 Oct: ${lc(declinedWords('sw'))}`, brief: `Mon 26 Oct · ${declinedBy('sw')}` };
       case 'issues':
-        return S.issues === 'failed' ? { tone: 'bad', label: 'Stopped', last: 'Today 8:00: stopped. Jira didn’t answer.' } : { tone: 'ok', last: 'Today: retried. No new tickets since yesterday, so nothing to write.' };
+        return S.issues === 'failed' ? { tone: 'bad', label: 'Stopped', last: 'Today 8:00: stopped. Jira didn’t answer.', brief: 'Today 8:00 · Stopped' } : { tone: 'ok', last: 'Today: retried. No new tickets since yesterday, so nothing to write.', brief: 'Today · Nothing new to write' };
       case 'nudge':
-        if (S.nudge === 'waiting') return { tone: 'wait', label: 'Waiting for a yes', last: 'Today, retried after the fix: 1 summary ticket is waiting for a yes.' };
-        if (S.nudge === 'approved') return { tone: 'ok', last: `Today, retried after the fix: MOCK-34 created, approved by ${nm(S.nudgeBy)}.` };
-        if (S.nudge === 'declined') return { tone: 'ok', last: `Today, retried after the fix: declined by ${nm(S.nudgeBy)}. Nothing was written.` };
-        if (S.report > 0) return { tone: 'bad', label: 'Stopped', last: `Fri 23 Oct: stopped. Reported to support as ${S.supportCase.id}.` };
-        return { tone: 'bad', label: 'Stopped', last: 'Fri 23 Oct: stopped on a ticket the platform couldn’t read.' };
+        if (S.nudge === 'waiting') return { tone: 'wait', label: 'Waiting for a yes', last: 'Today, retried after the fix: 1 summary ticket is waiting for a yes.', brief: 'Today · 1 ticket proposed' };
+        if (S.nudge === 'approved') return { tone: 'ok', last: `Today, retried after the fix: MOCK-34 created, approved by ${nm(S.nudgeBy)}.`, brief: 'Today · MOCK-34 created' };
+        if (S.nudge === 'declined') return { tone: 'ok', last: `Today, retried after the fix: ${lc(declinedWords('nudge'))}`, brief: `Today · ${declinedBy('nudge')}` };
+        if (S.report > 0) return { tone: 'bad', label: 'Stopped', last: `Fri 23 Oct: stopped. Reported to support as ${S.supportCase.id}.`, brief: 'Fri 23 Oct · Stopped' };
+        return { tone: 'bad', label: 'Stopped', last: 'Fri 23 Oct: stopped on a ticket the platform couldn’t read.', brief: 'Fri 23 Oct · Stopped' };
       case 'conf': {
-        if (S.conf === 'waiting') return { tone: 'wait', label: 'Waiting for a yes', last: `Test run today: waiting for ${whoOr(req('conf').may)}.` };
-        if (S.conf === 'expired') return { tone: 'off', label: 'No answer', last: 'Test run today: nobody answered in time, so nothing was written.' };
-        if (S.conf === 'approved') return { tone: 'ok', last: `Test run today: ${confWrite(S.nr).shortDone}, approved by ${yesText('conf')}.` };
-        if (S.conf === 'declined') return { tone: 'ok', last: `Test run today: declined by ${nm(S.confBy)}. Nothing was written.` };
-        return { tone: 'ok', last: `Turned on today. First run ${R('conf').next}.` };
+        if (S.conf === 'waiting') return { tone: 'wait', label: 'Waiting for a yes', last: `Test run today: waiting for ${whoOr(req('conf').may)}.`, brief: 'Today, test · 1 ticket proposed' };
+        if (S.conf === 'expired') return { tone: 'off', label: 'No answer', last: 'Test run today: nobody answered in time, so nothing was written.', brief: 'Today, test · No answer' };
+        if (S.conf === 'approved') return { tone: 'ok', last: `Test run today: ${confWrite(S.nr).shortDone}, approved by ${yesText('conf')}.`, brief: `Today, test · ${cap(confWrite(S.nr).shortDone)}` };
+        if (S.conf === 'declined') return { tone: 'ok', last: `Test run today: ${lc(declinedWords('conf'))}`, brief: `Today, test · ${declinedBy('conf')}` };
+        return { tone: 'ok', last: `Turned on today. First run ${R('conf').next}.`, brief: '' };
       }
       case 'access': {
         const when = S.accessRun.sub.replace(/, .*$/, '');
-        if (S.access === 'waiting') return { tone: 'wait', label: 'Waiting for a yes', last: `${when}: 3 people would lose access. Waiting for a yes.` };
-        if (S.access === 'approved') return { tone: 'ok', last: `${when}: 3 people lost access, approved by ${yesText('access')}.` };
-        return { tone: 'ok', last: `${when}: declined by ${nm(S.accessBy)}. Nothing was removed.` };
+        if (S.access === 'waiting') return { tone: 'wait', label: 'Waiting for a yes', last: `${when}: 3 people would lose access. Waiting for a yes.`, brief: `${when} · 3 removals proposed` };
+        if (S.access === 'approved') return { tone: 'ok', last: `${when}: 3 people lost access, approved by ${yesText('access')}.`, brief: `${when} · 3 people lost access` };
+        return { tone: 'ok', last: `${when}: ${lc(declinedWords('access'))}`, brief: `${when} · ${declinedBy('access')}` };
       }
       default:
-        return { tone: 'ok', last: madeOf(id).last };
+        return { tone: 'ok', last: madeOf(id).last, brief: '' };
     }
   }
+  /* A workflow's last run in one short line, for the Workflows list and the chat's check card. The full record is on the
+     workflow's page and its run. */
+  const lastRunLine = (id) => { const b = status(id).brief; return b ? `Last run ${b}` : 'No runs yet'; };
   /* Which agents on a workflow need a different face, from its real state. Everyone else stays calm. */
   function agentStates(id) {
     const out = {};
@@ -2222,7 +2270,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (tone === 'wait') { const w = m.end > 0 ? m.stations[m.end - 1].who : null; if (AGENTS[w]) out[w] = 'waiting'; }
     return out;
   }
-  const pill = (st) => `<span class="pill ${st.tone}">${st.tone === 'ok' ? I.check(12) : st.tone === 'bad' ? I.x(12) : st.tone === 'off' ? I.clock(12) : I.lock(12)}${st.label}</span>`;
+  /* A declined run (tone no) is grey with a cross: nothing went wrong, and nothing was written. */
+  const pill = (st) => `<span class="pill ${st.tone === 'no' ? 'off' : st.tone}">${st.tone === 'ok' ? I.check(12) : st.tone === 'bad' || st.tone === 'no' ? I.x(12) : st.tone === 'off' ? I.clock(12) : I.lock(12)}${st.label}</span>`;
   /* One status in the spec's words (rule 9): Paused, else what the latest run needs, else On. Running is for a run in progress, and the sample has none. A test run is marked. */
   const pills = (id) => {
     const st = status(id);
@@ -2264,6 +2313,16 @@ details > .m-close { animation: fold 140ms ease-in both; }
       default: return null;
     }
   }
+  /* What happens after a decline, said on the run's last step and under its record. */
+  const DECLINED_NEXT = { sw: 'The tickets will be proposed again next Monday.', nudge: 'The next summary runs on Friday.', conf: 'Change what it does, or run the test again.', access: 'The 3 people keep their access until the next review.' };
+  /* A declined request in the same words everywhere (principle 7), built from three parts: who declined (the short form
+     a list row has room for), who decided, with any yes before the no, and what wasn't done with the reason when one
+     was given. who formats a name, such as "Bob at 9:10 today" in Teams. A declined record never shows a result, a
+     ticket link or "created". */
+  const declinedBy = (id, who = nm) => `Declined by ${who(reqRecord(id).by)}`;
+  const declinedHead = (id, who = nm) => { const yes = reqRecord(id).yes; return yes.length ? `Approved by ${yes.map(who).join(', then ')}, then declined by ${who(reqRecord(id).by)}` : declinedBy(id, who); };
+  const declineTail = (id) => `Nothing was ${id === 'access' ? 'removed' : 'written'}.${S.declineWhy[id] ? ` Reason: ${S.declineWhy[id]}.` : ''}`;
+  const declinedWords = (id) => `${declinedHead(id)}. ${declineTail(id)}`;
   /* The named Approvers a request was sent with. A test run keeps its copy, so a later change doesn't move it. */
   const reqAppr = (id) => (id === 'conf' ? S.confReq : apprOf(id));
   const yesText = (id) => yesOf(id).map(nm).join(', then ');
@@ -2366,7 +2425,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const st = S.sw;
       const gate = st === 'waiting' ? { tone: 'wait', who: 'gate', text: gateText(req('sw'), partiesLine('sw')) }
         : st === 'approved' ? { tone: 'ok', who: 'gate', text: `${nm(S.swBy)} approved 3 tickets.` }
-          : { tone: 'bad', who: 'gate', text: `${nm(S.swBy)} declined. Nothing was written.` };
+          : { who: 'gate', text: declinedWords('sw') };
       const full = shows('registries');
       const by = starterOf('sw');
       const stations = [
@@ -2375,13 +2434,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
         { label: `Read ${TRACKED.length - UNREADABLE.length} of ${TRACKED.length}`, who: 'checker', msg: { who: 'checker', text: full ? 'I read each tool’s registry (Maven Central, PyPI, Docker Hub) and cross-checked GitHub. Log4j core, LangGraph and FastAPI have newer versions. For FastAPI, GitHub shows 0.120.2, but it isn’t on PyPI yet, so I used 0.120.1. Grafana couldn’t be read: Docker Hub and GitHub didn’t answer. From endoflife.date: PostgreSQL 14 stops getting fixes on 12 Nov, and Node.js 22 on 30 Apr. ' + PLANNED_TAG : 'I read each tool’s releases on GitHub. Log4j core, LangGraph and FastAPI have newer versions. Grafana couldn’t be read: GitHub’s hourly limit was reached.' } },
         ...(full ? [{ label: `Check vulnerabilities ${PLANNED_TAG}`, who: 'vuln', msg: { who: 'vuln', text: 'I matched the versions we run in OSV, read the official records from NVD, checked vendor advisories, and checked CISA’s list of actively exploited vulnerabilities. Log4j core 2.14.1 has 4 known vulnerabilities, found in OSV, NVD and Apache’s own advisory. The worst, CVE-2021-44228 (Log4Shell), is rated critical, 10.0, and CISA lists it as actively exploited. None are listed for the other tools. ' + PLANNED_TAG } }] : []),
         { label: 'Draft tickets', who: 'writer', msg: { who: 'writer', text: `I drafted 3 upgrade tickets.${full ? ' The Log4j core one is marked urgent.' : ''} Nothing is in Jira yet.${full ? ` ${PLANNED_TAG}` : ''}` } },
-        { label: 'Approval gate', gate: true, msg: gate },
+        { label: 'Approval gate', gate: true, no: st === 'declined', msg: gate },
         { label: 'Create in Jira', who: 'platform', skip: st === 'declined', msg: { who: 'platform', text: 'Created MOCK-14, MOCK-15 and MOCK-16. Only the approved tickets were written.' } },
-        { label: 'Done', msg: { who: 'portal', tone: 'ok', text: st === 'declined' ? 'Done. The tickets will be proposed again next Monday.' : `Done. 3 upgrade tickets are in Jira${urgentNote()}.${full ? ` ${PLANNED_TAG}` : ''}` } },
+        { label: st === 'declined' ? 'Ended' : 'Done', ended: st === 'declined', msg: st === 'declined' ? { who: 'portal', text: `The run ended. ${DECLINED_NEXT.sw}` } : { who: 'portal', tone: 'ok', text: `Done. 3 upgrade tickets are in Jira${urgentNote()}.${full ? ` ${PLANNED_TAG}` : ''}` } },
       ];
       const gi = stations.findIndex((s) => s.gate);
       return {
-        workflow: 'sw', end: st === 'waiting' ? gi : stations.length - 1, state: st === 'waiting' ? 'waiting' : 'done',
+        workflow: 'sw', end: st === 'waiting' ? gi : stations.length - 1, state: st === 'waiting' ? 'waiting' : st === 'declined' ? 'declined' : 'done',
         headline: st === 'waiting' ? '3 tickets are waiting for a yes' : st === 'approved' ? '3 tickets created in Jira' : 'Declined, nothing was written',
         stations,
       };
@@ -2408,16 +2467,16 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const ok = S.nudge !== 'failed';
       const by = ok ? retriersOf('nudge').slice(-1)[0] : starterOf('nudge');
       return {
-        workflow: 'nudge', end: !ok ? 2 : S.nudge === 'waiting' ? 4 : 6, fail: ok ? null : 2, state: !ok ? 'failed' : S.nudge === 'waiting' ? 'waiting' : 'done',
+        workflow: 'nudge', end: !ok ? 2 : S.nudge === 'waiting' ? 4 : 6, fail: ok ? null : 2, state: !ok ? 'failed' : S.nudge === 'waiting' ? 'waiting' : S.nudge === 'declined' ? 'declined' : 'done',
         headline: !ok ? 'Stopped at Read closed tickets' : S.nudge === 'waiting' ? '1 ticket is waiting for a yes' : S.nudge === 'approved' ? 'Summary ticket created in Jira' : 'Declined, nothing was written',
         stations: [
           { label: 'Started', sub: ok ? 'Today, retry' : 'Fri 16:00', who: `p:${by}`, msg: { who: 'portal', text: ok ? `${nm(by)} retried the run after the fix went live.` : `${nm(by)}’s schedule started the Friday summary.` } },
           { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: 'I’m bringing in the Jira reader and the Summary writer.' } },
           { label: 'Read closed tickets', who: 'jira', msg: ok ? { who: 'jira', text: '11 tickets were closed in MOCK last week. MOCK-31’s description was read this time.' } : { who: 'jira', tone: 'bad', text: 'I stopped while reading MOCK-31. Its description is in a form the platform couldn’t read.' } },
           { label: 'Write summary', who: 'summary', msg: { who: 'summary', text: 'I wrote a short summary of the 11 tickets, with counts. Nothing is created yet.' } },
-          { label: 'Approval gate', gate: true, msg: S.nudge === 'waiting' ? { who: 'gate', tone: 'wait', text: ok ? gateText(req('nudge'), partiesLine('nudge')) : '' } : S.nudge === 'approved' ? { who: 'gate', tone: 'ok', text: `${nm(S.nudgeBy)} approved the ticket.` } : { who: 'gate', tone: 'bad', text: `${nm(S.nudgeBy)} declined. Nothing was written.` } },
+          { label: 'Approval gate', gate: true, no: S.nudge === 'declined', msg: S.nudge === 'waiting' ? { who: 'gate', tone: 'wait', text: ok ? gateText(req('nudge'), partiesLine('nudge')) : '' } : S.nudge === 'approved' ? { who: 'gate', tone: 'ok', text: `${nm(S.nudgeBy)} approved the ticket.` } : S.nudge === 'declined' ? { who: 'gate', text: declinedWords('nudge') } : null },
           { label: 'Create in Jira', who: 'platform', skip: S.nudge === 'declined', msg: { who: 'platform', text: 'Created MOCK-34 with the approved summary.' } },
-          { label: 'Done', msg: { who: 'portal', tone: 'ok', text: S.nudge === 'declined' ? 'Done. Nothing was written, because it was declined.' : 'Done. The summary is in MOCK-34.' } },
+          { label: S.nudge === 'declined' ? 'Ended' : 'Done', ended: S.nudge === 'declined', msg: S.nudge === 'declined' ? { who: 'portal', text: `The run ended. ${DECLINED_NEXT.nudge}` } : { who: 'portal', tone: 'ok', text: 'Done. The summary is in MOCK-34.' } },
         ],
       };
     }
@@ -2429,20 +2488,20 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const writer = writerOf(f);
       const gateMsg = st === 'waiting' ? { who: 'gate', tone: 'wait', text: gateText(q, partiesLine('conf')) }
         : st === 'expired' ? { who: 'gate', text: `Nobody answered by ${at(q.expiresAt)}, so the request stopped. Nothing was written.` }
-          : st === 'declined' ? { who: 'gate', tone: 'bad', text: `${nm(S.confBy)} declined. Nothing was written.` }
+          : st === 'declined' ? { who: 'gate', text: declinedWords('conf') }
             : { who: 'gate', tone: 'ok', text: `${yesWho('conf')} approved it.` };
       const by = starterOf('conf');
       return {
-        workflow: 'conf', end: st === 'waiting' ? 4 : 6, state: st === 'waiting' ? 'waiting' : st === 'expired' ? 'expired' : 'done',
+        workflow: 'conf', end: st === 'waiting' ? 4 : 6, state: st === 'waiting' ? 'waiting' : st === 'expired' ? 'expired' : st === 'declined' ? 'declined' : 'done',
         headline: st === 'waiting' ? w.waitHead : st === 'expired' ? 'No answer, nothing was written' : st === 'declined' ? 'Declined, nothing was written' : w.doneHead,
         stations: [
           { label: 'Started', sub: 'Today, test', who: `p:${by}`, msg: { who: 'portal', text: `${nm(by)} started a test run.` } },
           { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: `I’m bringing in the Jira reader and the ${AGENTS[writer].name}.` } },
           { label: { closed: 'Find closed tickets', created: 'Find new tickets', open: 'Find open tickets' }[f.tickets], who: 'jira', msg: { who: 'jira', text: { closed: `${f.period === 'day' ? 3 : 14} tickets were closed in ${f.project} ${PERIOD[f.period]}.`, created: `${f.period === 'day' ? 2 : 9} tickets were created in ${f.project} ${PERIOD[f.period]}${f.action === 'compare' ? ', and 12 the week before' : ''}.`, open: `18 tickets are open in ${f.project}.` }[f.tickets] } },
           { label: `Write ${thingOf(f)}`, who: writer, msg: { who: writer, text: `I wrote a short ${thingOf(f)}. Nothing is created yet.` } },
-          { label: 'Approval gate', gate: true, msg: gateMsg },
+          { label: 'Approval gate', gate: true, no: st === 'declined', msg: gateMsg },
           { label: w.stationWrite, who: 'platform', skip: st === 'expired' || st === 'declined', msg: st === 'expired' || st === 'declined' ? null : { who: 'platform', text: w.did } },
-          { label: 'Done', msg: { who: 'portal', tone: 'ok', text: st === 'expired' ? 'Done. Nothing was written, because nobody said yes.' : st === 'declined' ? 'Done. Nothing was written, because it was declined.' : 'Done.' } },
+          { label: st === 'declined' ? 'Ended' : 'Done', ended: st === 'declined', msg: st === 'declined' ? { who: 'portal', text: `The run ended. ${DECLINED_NEXT.conf}` } : { who: 'portal', tone: 'ok', text: st === 'expired' ? 'Done. Nothing was written, because nobody said yes.' : 'Done.' } },
         ],
       };
     }
@@ -2453,7 +2512,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const by = starterOf('access');
       const gate = st === 'waiting' ? { who: 'gate', tone: 'wait', text: gateText(req('access'), partiesLine('access')) }
         : st === 'approved' ? { who: 'gate', tone: 'ok', text: `${yesWho('access')} approved the removals.` }
-          : { who: 'gate', tone: 'bad', text: `${nm(S.accessBy)} declined. Nothing was removed.` };
+          : { who: 'gate', text: declinedWords('access') };
       const stations = [
         { label: 'Started', sub: S.accessRun.sub, who: `p:${by}`, msg: { who: 'portal', text: `${nm(by)} started the review by hand.` } },
         { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: '48 people to review. I’m bringing in the Access checker and the Ticket writer.' } },
@@ -2462,12 +2521,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
         { label: 'Approval gate', gate: true, msg: { who: 'gate', tone: 'ok', text: 'Bob, then Alice, approved sending the questions.' } },
         { label: 'Ask the managers', who: 'platform', msg: { who: 'platform', text: 'Asked 6 managers in Teams. By Fri 23 Oct, 45 people were confirmed. 3 weren’t confirmed by anyone.' } },
         { label: 'Draft the removals', who: 'writer', msg: { who: 'writer', text: 'I drafted the removal of access for the 3 people nobody confirmed. Nothing is removed yet.' } },
-        { label: 'Approval gate', gate: true, msg: gate },
+        { label: 'Approval gate', gate: true, no: st === 'declined', msg: gate },
         { label: 'Remove access', who: 'platform', skip: st === 'declined', msg: { who: 'platform', text: 'Removed access for 3 people. Only the approved removals were made.' } },
-        { label: 'Done', msg: { who: 'portal', tone: 'ok', text: st === 'declined' ? 'Done. Nothing was removed, because it was declined.' : 'Done. 3 people lost access, and their managers were told in Teams.' } },
+        { label: st === 'declined' ? 'Ended' : 'Done', ended: st === 'declined', msg: st === 'declined' ? { who: 'portal', text: `The run ended. ${DECLINED_NEXT.access}` } : { who: 'portal', tone: 'ok', text: 'Done. 3 people lost access, and their managers were told in Teams.' } },
       ];
       return {
-        workflow: 'access', end: st === 'waiting' ? 7 : stations.length - 1, state: st === 'waiting' ? 'waiting' : 'done',
+        workflow: 'access', end: st === 'waiting' ? 7 : stations.length - 1, state: st === 'waiting' ? 'waiting' : st === 'declined' ? 'declined' : 'done',
         headline: st === 'waiting' ? '3 removals are waiting for a yes' : st === 'approved' ? '3 people lost access' : 'Declined, nothing was removed',
         stations,
       };
@@ -2624,14 +2683,19 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (op) {
       if (!curModel()) out.push({ id: 'model', kind: 'bad', icon: I.alert(22), title: 'No AI model connected', meta: 'Settings, AI model', body: '<p class="small muted">Until a model is connected, the Planner can’t read new requests and agent workflows can’t run. Only the Software watchlist keeps going, with a simple summary.</p>', actions: '<button class="btn primary" data-act="setGo" data-arg="model">Connect a model</button>' });
       if (jiraDown()) out.push({ kind: 'bad', icon: I.alert(22), title: 'Jira isn’t answering', meta: `Last seen working ${lastOk('jiraRead')}`, body: '<p class="small muted">Workflows that read or write Jira wait until it’s back. Nothing is lost.</p>', actions: '<button class="btn primary" data-act="setGo" data-arg="connections">See Connections</button>' });
-      if (has('issues') && S.issues === 'failed') out.push({ wf: 'issues', kind: 'bad', icon: I.alert(22), title: 'Morning new-ticket check stopped', meta: 'Today, 8:00', body: '', why: `${TROUBLE.issues().happened} ${TROUBLE.issues().safe}`, held: heldWhy('issues'), actions: `${troubleBtn(TROUBLE.issues())}<button class="btn" data-act="run" data-arg="issues">See the run</button>` });
-      if (has('nudge') && S.nudge === 'failed' && S.report === 0) out.push({ wf: 'nudge', kind: 'bad', icon: I.alert(22), title: 'Weekly closed-ticket summary stopped', meta: 'Fri 23 Oct, 16:00', body: '', why: 'This is a problem in the platform, not in your workflow. You can’t fix it from here. Report it and support gets everything they need.', actions: `<button class="btn primary" data-act="report" data-unbuilt="Report to support">Report to support</button><button class="btn" data-act="run" data-arg="nudge">See the run</button>` });
+      /* A stop carries the troubleshooter's three answers for the full card. A row has room for one line: what happened
+         first, then the reason under the answer to Safe to retry. */
+      const stop = (id, title, meta, held = '') => { const t = TROUBLE[id](); return { wf: id, kind: 'bad', icon: I.alert(22), title, meta, body: '', trouble: t, why: `${firstSentence(t.happened)} ${t.safe.replace(/^(Yes|No|Not yet)\. /, '')}`, held, actions: `${troubleBtn(t)}<button class="btn" data-act="run" data-arg="${id}">See the run</button>` }; };
+      if (has('issues') && S.issues === 'failed') out.push(stop('issues', 'Morning new-ticket check stopped', 'Today, 8:00', heldWhy('issues')));
+      if (has('nudge') && S.nudge === 'failed' && S.report === 0) out.push(stop('nudge', 'Weekly closed-ticket summary stopped', 'Fri 23 Oct, 16:00'));
       if (has('nudge') && S.nudge === 'failed' && S.report === 4) out.push({ wf: 'nudge', kind: 'ok', icon: I.check(22), title: 'The fix for Weekly closed-ticket summary is live', meta: `Case ${S.supportCase.id} · fixed by Dana`, held: heldWhy('nudge'), body: heldWhy('nudge') ? '' : '<p class="small muted">Retry the run to catch up on last week.</p>', actions: troubleBtn(TROUBLE.nudge()) });
     }
+    /* A question an Approver asked about this person's request. Answering it decides nothing; the request still waits. */
+    REQ_IDS.filter((id) => waitingReq(id)).forEach((id) => { const x = (S.asks[id] || []).find((a) => a.to === u && !a.answer); if (x) out.push({ wf: id, kind: 'wait', icon: I.chat(22), title: `${nm(x.by)} asked you about ${esc(R(id).name)}`, meta: 'The request is still waiting for a yes', unbuilt: 'Questions on a request (ADR 0043)', body: '', held: `“${esc(x.text)}”`, actions: `<button class="btn primary" data-act="run" data-arg="${id}">Answer ${nm(x.by)}</button>` }); });
     /* The approvals this person can decide, from the same request records as the Teams badge. */
     mayDecide().forEach((id) => { const c = NEED_CARD[id](); out.push({ wf: id, yes: true, kind: 'wait', icon: I.shield(22), ...c, body: `${c.body || ''}${askLineHtml(req(id), u)}`, actions: `<button class="btn primary" data-act="run" data-arg="${id}">Review and decide</button>` }); });
     if (op && lsProblem()) out.push({ kind: 'wait', rank: 3, icon: I.alert(22), ...lsProblem() });
-    if (has('conf') && S.conf === 'declined' && u === 'alice') out.push({ kind: 'wait', rank: 4, icon: I.x(22), title: `${nm(S.confBy)} declined your test run`, meta: `${esc(S.nr.name)} · nothing was written`, body: '', held: heldWhy('conf'), actions: `<button class="btn primary" data-act="run" data-arg="conf">See the run</button>${testAgain('Do a test run again', 'btn')}` });
+    if (has('conf') && S.conf === 'declined' && u === 'alice') out.push({ kind: 'wait', rank: 4, icon: I.x(22), title: `${nm(S.confBy)} declined your test run`, meta: esc(S.nr.name), body: '', held: [declineTail('conf'), heldWhy('conf')].filter(Boolean).join(' '), actions: `<button class="btn primary" data-act="run" data-arg="conf">See the run</button>${testAgain('Do a test run again', 'btn')}` });
     if (has('conf') && S.conf === 'expired' && u === 'alice') out.push({ wf: 'conf', kind: 'wait', rank: 4, icon: I.clock(22), title: 'Nobody answered on your test run', meta: `${esc(S.nr.name)} · stopped ${at(req('conf').expiresAt)}`, held: heldWhy('conf'), body: `<p class="small muted">${whoAnd(askedOf(req('conf')))} didn’t answer in time, so nothing was written.${heldWhy('conf') ? '' : ` Run it again${shows('namedApprovers') ? ', or choose other Approvers' : ''}.`}</p>`, actions: `${testAgain('Do a test run again')}${changeApproversBtn('conf', 'apprFromRun')}` });
     Object.entries(S.roles).filter(([w, r]) => r.pendingAp && PEOPLE[u].ap && u !== r.pendingBy && u !== w).forEach(([w]) => out.push({ kind: 'tool', icon: I.shield(22), title: `Confirm ${nm(w)} as an Approver`, meta: `Asked by ${nm(S.roles[w].pendingBy)}`, body: '<p class="small muted">Approvers say yes or no to the changes a workflow wants to make.</p>', actions: '<button class="btn primary" data-act="setGo" data-arg="people">Review in Settings</button>' }));
     if (op) expiring().forEach((k) => out.push({ kind: 'wait', rank: 3, icon: I.clock(22), title: `The ${CONNS[k].name} key expires in ${S.conns[k].days} days`, meta: `Expires ${S.conns[k].expires}`, body: `<p class="small muted">Ask whoever looks after the platform to replace it before then, or everything that uses ${CONNS[k].name} stops.</p>`, actions: '<button class="btn primary" data-act="setGo" data-arg="connections">See it in Settings</button>' }));
@@ -2661,12 +2725,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const changeApproversBtn = (id, act = 'editAppr', cls = 'btn') => (shows('namedApprovers') ? `<button class="${cls}" data-act="${act}" data-arg="${id}" data-unbuilt="Named Approvers (ADR 0024)">${cls.includes('sm') ? I.edit() : ''}Change who approves ${PLANNED_TAG}</button>` : '');
   function says(text) { return `<div class="says">${face('trouble', 32)}<div><b>AI troubleshooter</b>${text}</div></div>`; }
   function taskCard(t, i = 0) {
-    return `<article class="task" data-flip="h:${keyOf(t.title)}" data-stagger style="--i:${i}"><span class="ico ${t.kind}">${t.icon}</span><div class="task-body"><h3 class="task-title">${t.title}</h3><div class="task-meta">${t.meta}</div>${t.body}${t.why ? says(t.why) : t.held ? `<p class="small muted">${t.held}</p>` : ''}${t.actions ? `<div class="btns">${t.actions}</div>` : ''}</div></article>`;
+    return `<article class="task" data-flip="h:${keyOf(t.title)}" data-stagger style="--i:${i}"${t.unbuilt ? ` data-unbuilt="${t.unbuilt}"` : ''}><span class="ico ${t.kind}">${t.icon}</span><div class="task-body"><h3 class="task-title">${t.title}</h3><div class="task-meta">${t.meta}</div>${t.body}${t.trouble ? says(answersDL(t.trouble)) : t.why ? says(t.why) : t.held ? `<p class="small muted">${t.held}</p>` : ''}${t.actions ? `<div class="btns">${t.actions}</div>` : ''}</div></article>`;
   }
   /* A compact row keeps only its item's first button, as a small secondary one. */
   const firstButton = (html) => ((html.match(/<button[\s\S]*?<\/button>/) || [''])[0]).replace(/class="btn[^"]*"/, 'class="btn sm"');
   function queueRow(t, i = 1) {
-    return `<li class="qrow" data-flip="h:${keyOf(t.title)}" data-stagger style="--i:${i}"><span class="ico ${t.kind}">${t.icon}</span><div class="qrow-text"><b>${t.title}</b><span class="qrow-meta">${t.meta}</span>${t.why ? `<span class="qrow-why"><b>AI troubleshooter:</b> ${t.why}</span>` : t.held ? `<span class="qrow-why">${t.held}</span>` : ''}</div>${firstButton(t.actions)}</li>`;
+    return `<li class="qrow" data-flip="h:${keyOf(t.title)}" data-stagger style="--i:${i}"${t.unbuilt ? ` data-unbuilt="${t.unbuilt}"` : ''}><span class="ico ${t.kind}">${t.icon}</span><div class="qrow-text"><b>${t.title}</b><span class="qrow-meta">${t.meta}</span>${t.why ? `<span class="qrow-why"><b>AI troubleshooter:</b> ${t.why}</span>` : t.held ? `<span class="qrow-why">${t.held}</span>` : ''}</div>${firstButton(t.actions)}</li>`;
   }
 
   /* A support case moves through S.report 1 to 4. The coding-agent stages (2 and 3) are a design that needs NCS's
@@ -2728,7 +2792,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const firstSentence = (s) => s.replace(/<[^>]+>/g, '').split(/(?<=\.)\s/)[0];
   const oneAction = (html) => firstButton(html).replace('class="btn sm"', 'class="btn primary sm"');
   function needRow(t, i, primary) {
-    return `<li class="nrow" data-flip="n:${keyOf(t.title)}" data-stagger style="--i:${i}"><span class="ico ${t.kind}">${t.icon}</span><div class="nrow-text"><b>${t.title}</b><span class="nrow-why">${t.held || (t.why ? firstSentence(t.why) : t.meta)}</span></div>${i === 0 && primary ? oneAction(t.actions) : firstButton(t.actions)}</li>`;
+    return `<li class="nrow" data-flip="n:${keyOf(t.title)}" data-stagger style="--i:${i}"${t.unbuilt ? ` data-unbuilt="${t.unbuilt}"` : ''}><span class="ico ${t.kind}">${t.icon}</span><div class="nrow-text"><b>${t.title}</b><span class="nrow-why">${t.held || (t.why ? firstSentence(t.why) : t.meta)}</span></div>${i === 0 && primary ? oneAction(t.actions) : firstButton(t.actions)}</li>`;
   }
   /* o.total: the count shown when the strip leaves an item out. o.primary: false when the screen's one primary action sits elsewhere. */
   function needsStrip(items, max = 3, unbuilt = '', o = {}) {
@@ -2798,7 +2862,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
   const sameItem = (a, b) => !!a && !!b && a.id === b.id && a.kind === b.kind;
   const swRow = (key) => watchRows().concat(S.added.map((a, i) => ({ key: `add${i}`, name: a.name, kind: a.kind, repo: a.repo, ours: a.ours || 'Not known', newest: '?' }))).find((r) => r.key === key && !S.removed.includes(key));
-  const runTone = { waiting: { tone: 'wait', label: 'Waiting for a yes' }, failed: { tone: 'bad', label: 'Stopped' }, expired: { tone: 'off', label: 'No answer' }, done: { tone: 'ok', label: 'Done' } };
+  const runTone = { waiting: { tone: 'wait', label: 'Waiting for a yes' }, failed: { tone: 'bad', label: 'Stopped' }, expired: { tone: 'off', label: 'No answer' }, declined: { tone: 'no', label: 'Declined' }, done: { tone: 'ok', label: 'Done' } };
   function panelView(p) {
     /* The workflow being set up, while the Planner builds it (ADR 0043): its steps go in one by one, as plain steps. */
     if (p.kind === 'build') {
@@ -2812,7 +2876,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const r = R(p.id);
       const st = status(p.id);
       const t = stoppedNow(p.id) ? TROUBLE[p.id]() : null;
-      const problem = t ? `<div class="sp-problem">${says(`${t.happened} ${t.next}`)}${me().op && t.act ? `<div class="btns">${troubleBtn(t)}</div>` : ''}</div>` : '';
+      const problem = t ? `<div class="sp-problem">${says(answersDL(t))}${troubleActs(t)}</div>` : '';
       const flip = !me().op || p.id === 'sw' ? '' : S.paused[p.id] ? `<button class="btn sm" data-act="resume" data-arg="${p.id}">Resume</button>` : `<button class="btn sm" data-act="pause" data-arg="${p.id}">${I.pause(14)}Pause</button>`;
       return { title: esc(r.name), page: `workflow:${p.id}`, body: `<div>${pills(p.id)}</div><p>${r.what}</p>${problem}
         <dl class="kv"><dt>Last run</dt><dd>${st.last}</dd><dt>Next run</dt><dd>${S.paused[p.id] ? 'Paused' : r.next}</dd></dl>
@@ -2828,14 +2892,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const m = runModel(p.id);
     const r = R(m.workflow);
     if (m.state === 'waiting' && canApprove(p.id)) return { title: esc(r.name), page: `run:${p.id}`, body: approvePanel(p.id, true) };
-    const steps = m.stations.map((s, i) => {
-      const st = s.skip && i <= m.end ? 'skip' : i < m.end ? 'done' : i === m.end ? ({ failed: 'fail', waiting: 'wait', expired: 'noans' }[m.state] || 'done') : 'todo';
-      const said = { done: 'Done: ', fail: 'Stopped: ', wait: 'Waiting: ', noans: 'No answer: ', skip: 'Not needed: ', todo: 'Not reached yet: ' }[st];
-      return `<li class="${st}"><span class="vh">${said}</span>${s.label}</li>`;
-    }).join('');
     const t = m.state === 'failed' && TROUBLE[p.id] ? TROUBLE[p.id]() : null;
-    const answers = t ? `<dl class="qa"><dt>What happened</dt><dd>${t.happened}</dd></dl><dl class="qa"><dt>What was affected</dt><dd>${t.affected}</dd></dl><dl class="qa"><dt>Can it be fixed safely</dt><dd>${t.safe}</dd></dl>${t.act && me().op ? `<div class="btns">${troubleBtn(t)}</div>` : t.act ? `<p class="note">${t.deny}</p>` : ''}` : '';
-    return { title: esc(r.name), page: `run:${p.id}`, body: `<div>${pill(runTone[m.state] || runTone.done)}</div><p>${m.headline}</p><ol class="sp-steps" aria-label="Steps of this run">${steps}</ol>${answers}` };
+    const answers = t ? `${answersDL(t)}${troubleActs(t)}` : askThread(p.id);
+    return { title: esc(r.name), page: `run:${p.id}`, body: `<div>${pill(runTone[m.state])}</div><p>${m.state === 'declined' ? declinedWords(p.id) : m.headline}</p>${runLine(m, stepStates(m))}${answers}` };
   }
   /* The build view follows its card: it becomes the workflow once the card turns it on, and closes when the draft is
      saved or discarded, or when the window becomes as narrow as a phone, where the panel never opens by itself. */
@@ -3019,6 +3078,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         <span class="wf-pills">${pills(id)}${BASE[id] && BASE[id].planned ? PLANNED_TAG : ''}</span>
         <span class="wf-next">${S.paused[id] ? '' : `Next run ${r.next}`}</span>
         <span class="wf-act">${act}</span>
+        <p class="wf-last" data-val="last:${id}">${lastRunLine(id)}</p>
       </li>`;
     }).join('');
     const canAdd = me().op && !q && S.filter === 'all';
@@ -3047,7 +3107,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* What happened to one tool over time. The backend already records where each "ours" came from. */
   function history(key) {
     const by = nm(S.swBy);
-    const found = (v, t) => (S.sw === 'waiting' ? `Found ${v}. Upgrade ticket proposed, waiting for a yes.` : S.sw === 'approved' ? `Found ${v}. ${t} created, approved by ${by}.` : `Found ${v}. Ticket declined by ${by}, so it is proposed again next Monday.`);
+    const found = (v, t) => (S.sw === 'waiting' ? `Found ${v}. Upgrade ticket proposed, waiting for a yes.` : S.sw === 'approved' ? `Found ${v}. ${t} created, approved by ${by}.` : `Found ${v}. ${declinedWords('sw')} ${DECLINED_NEXT.sw}`);
     const full = shows('registries');
     return {
       lj: [['Mon 26 Oct', `${found('2.25.2', 'MOCK-16')}${full ? ' The Vulnerability checker found 4 known vulnerabilities in our version, one of them actively exploited, so the ticket is urgent.' : ''}`], ['Thu 15 Oct', `Added by Carol from ${full ? 'Maven Central' : 'GitHub'}, with our version 2.14.1.`]],
@@ -3089,7 +3149,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The row a GitHub project already has on the list, by the repository it reads. */
   const rowOfRepo = (repo) => watchRows().concat(S.added.map((a, i) => ({ key: `add${i}`, name: a.name, repo: a.repo }))).filter((r) => !S.removed.includes(r.key)).find((r) => r.repo.toLowerCase() === repo.toLowerCase());
   function newSwForm() { return { name: '', repo: '', ours: '', kind: 'github', step: 'name', matches: [], pick: -1, change: false }; }
-  const ticketNote = (st) => ({ waiting: 'Ticket waiting for a yes', approved: null, declined: 'Proposed again next Monday' }[st]);
+  const ticketNote = (st) => ({ waiting: 'Ticket waiting for a yes', approved: null, declined: `${declinedWords('sw')} ${DECLINED_NEXT.sw}` }[st]);
 
   /* Every software on the list, in the order the table shows it: a new version, can't check, not checked yet, up to date. */
   function watchRows() {
@@ -3308,24 +3368,51 @@ details > .m-close { animation: fold 140ms ease-in both; }
      or is done, so the decision, the AI troubleshooter or the outcome comes first. Show what each agent did opens or
      folds it, and that choice holds for the rest of the visit. */
   const runDetailOpen = () => (S.runDetail && S.runDetail.view === S.view ? S.runDetail.open : !!P.run && P.at < runModel(P.run).end);
+  /* Each step's state at replay position `at`. The side panel shows the run as it stands, at its end. */
+  function stepStates(m, at = m.end) {
+    const finished = at >= m.end;
+    return m.stations.map((s, i) => {
+      if (i === m.fail && at >= i) return 'fail';
+      if (s.skip && (at >= i || finished)) return 'skip';
+      if (s.no && at >= i) return 'no';
+      if (s.gate && i === m.end && m.state === 'waiting' && at >= i) return 'wait';
+      if (s.gate && m.state === 'expired' && at >= i) return 'noans';
+      if (i < at || (finished && i <= m.end)) return 'done';
+      if (i === at) return 'now';
+      return 'todo';
+    });
+  }
+  /* The FLOW run line (ADR 0043, chosen 11 Nov). Each link takes the state of the step it leads into: dashes march into
+     the step that is working, slowly and in amber into a yes that waits, red where the run stopped, faint into a step
+     that wasn't needed, and the link turns solid once the step after it is done. With reduced motion nothing marches,
+     and the colours and the solid or dashed links still tell it. */
+  const LINK = { done: 'solid', no: 'solid', now: 'flow', wait: 'flow wait', fail: 'stop', noans: 'stop off', skip: 'dead', todo: '' };
+  const STEP_SUB = { skip: 'Not needed', fail: 'Stopped here', wait: 'Waiting for a yes', noans: 'No answer', no: 'Declined' };
+  const stepSub = (m, s, st) => (st === 'skip' && m.state === 'declined' ? `Nothing ${m.workflow === 'access' ? 'removed' : 'written'}` : STEP_SUB[st] || s.sub || '');
+  /* o.who(s, i, st) draws the agent over each step on the run page; the side panel's line has none. o.grow is the range
+     of steps whose links just turned solid, so they fill in. o.arrive is the step the replay just reached. */
+  function runLine(m, states, o = {}) {
+    const mini = !o.who;
+    const k = mini ? 12 : 1;
+    return `<ol class="line${mini ? ' mini' : ''}" style="--n:${m.stations.length}" aria-label="Steps of this run">${m.stations.map((s, i) => {
+      const st = states[i];
+      const ic = (fn, big, small) => fn(mini ? small : big);
+      /* A declined run's last step, Ended, is a plain dot, so it never reads as Done. */
+      const dot = s.gate ? ic(st === 'wait' ? I.lock : st === 'noans' ? I.clock : st === 'no' ? I.x : I.shield, 18, 12) : s.ended && st === 'done' ? '<i class="end-dot"></i>' : st === 'done' ? ic(I.check, 14, 11) : st === 'fail' || st === 'no' ? ic(I.x, 14, 11) : '';
+      const sub = stepSub(m, s, st);
+      const said = { done: 'Done: ', now: 'Now: ', todo: 'Not reached yet: ' }[st];
+      const next = states[i + 1];
+      const link = next ? `<span class="lk ${LINK[next]}${o.grow && i + 1 >= o.grow[0] && i + 1 <= o.grow[1] && LINK[next] === 'solid' ? ' grow' : ''}" aria-hidden="true"></span>` : '';
+      return `<li class="st ${st}${s.gate ? ' gate' : ''}${o.arrive === i ? ' arrive' : ''}"${st === 'now' ? ' aria-current="step"' : ''}>${link}${mini ? '' : `<div class="st-who">${s.gate ? '' : o.who(s, i, st)}</div>`}<div class="st-dotwrap"><span class="st-dot">${dot}</span></div><div class="st-label">${said ? `<span class="vh">${said}</span>` : ''}${s.label}${sub ? `<small>${sub}</small>` : ''}</div></li>`;
+    }).join('')}</ol>`;
+  }
   function runView(id) {
     const m = runModel(id);
     const r = R(m.workflow);
-    const n = m.stations.length;
     const finished = P.at >= m.end;
-    const stateOf = (s, i) => {
-      if (i === m.fail && P.at >= i) return 'fail';
-      if (s.skip && (P.at >= i || finished)) return 'skip';
-      if (s.gate && i === m.end && m.state === 'waiting' && P.at >= i) return 'wait';
-      if (s.gate && m.state === 'expired' && P.at >= i) return 'noans';
-      if (i < P.at || (finished && i <= m.end)) return 'done';
-      if (i === P.at) return 'now';
-      return 'todo';
-    };
+    const states = stepStates(m, P.at);
     /* Each face says what that agent is doing in this run. Only the step running now moves. */
     const gi = m.stations.findIndex((s) => s.gate);
-    const rec = reqRecord(m.workflow);
-    const declined = !!rec && rec.state === 'declined';
     let lastAgent = -1;
     m.stations.forEach((s, i) => { if (i <= m.end && AGENTS[s.who] && !s.skip) lastAgent = i; });
     const faceOf = (s, i, st) => {
@@ -3334,23 +3421,21 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (st === 'skip') return 'stopped';
       if (finished && i === gi - 1 && m.state === 'waiting') return 'waiting';
       if (finished && i === gi - 1 && m.state === 'expired') return 'stopped';
-      if (finished && m.state === 'done' && !declined && i === lastAgent) return 'success';
+      if (finished && m.state === 'done' && i === lastAgent) return 'success';
       return 'idle';
     };
-    const line = m.stations.map((s, i) => {
-      const st = stateOf(s, i);
-      const dot = s.gate ? (st === 'wait' ? I.lock(18) : st === 'noans' ? I.clock(18) : I.shield(18)) : st === 'done' ? I.check(14) : st === 'fail' ? I.x(14) : '';
-      const sub = st === 'skip' ? 'Not needed' : st === 'fail' ? 'Stopped here' : st === 'wait' ? 'Waiting for a yes' : st === 'noans' ? 'No answer' : s.sub || '';
-      const said = { done: 'Done: ', now: 'Now: ', todo: 'Not reached yet: ' }[st];
-      return `<li class="st ${st}${s.gate ? ' gate' : ''}${i === P.at && P.shown < P.at ? ' arrive' : ''}"${st === 'now' ? ' aria-current="step"' : ''}><div class="st-who">${s.gate ? '' : whoAvatar(s.who, 44, faceOf(s, i, st), `st:${id}:${i}`)}</div><div class="st-dotwrap"><span class="st-dot">${dot}</span></div><div class="st-label">${said ? `<span class="vh">${said}</span>` : ''}${s.label}${sub ? `<small>${sub}</small>` : ''}</div></li>`;
-    }).join('');
-    const msgs = m.stations.slice(0, Math.min(P.at, m.end) + 1).map((s) => s.msg).filter(Boolean);
+    /* The replay just moved on: the step it reached lands, and the link into the step before it fills in. The last
+       step is never Now, so its link fills in too as the replay finishes. */
+    const moved = P.shown < P.at;
+    const line = runLine(m, states, { who: (s, i, st) => whoAvatar(s.who, 44, faceOf(s, i, st), `st:${id}:${i}`), arrive: moved ? P.at : -1, grow: moved ? [P.shown, finished ? P.at : P.at - 1] : null });
+    /* A step that was skipped never speaks, so a declined run never says it created anything. */
+    const msgs = m.stations.slice(0, Math.min(P.at, m.end) + 1).filter((s) => !s.skip).map((s) => s.msg).filter(Boolean);
     P.feedNext = msgs.length;
     P.latest = msgs.length ? `${feedName(msgs[msgs.length - 1].who)}: ${msgs[msgs.length - 1].text}` : '';
     const open = runDetailOpen();
     const chat = open ? msgs.map((g, i) => chatItem(g, i >= P.feedSeen, m)).join('') + (finished ? '' : chatTyping(m)) : '';
     /* While a finished run replays, the heading describes the replay, so it never claims "Done" before the line gets there. */
-    const pillTone = !finished ? { tone: 'ok', label: 'Replaying' } : m.state === 'waiting' ? { tone: 'wait', label: 'Waiting for a yes' } : m.state === 'failed' ? { tone: 'bad', label: 'Stopped' } : m.state === 'expired' ? { tone: 'off', label: 'No answer' } : { tone: 'ok', label: 'Done' };
+    const pillTone = runTone[m.state];
     const headline = finished ? m.headline : 'Replaying the run';
     const test = m.workflow === 'conf' ? '<span class="tag">Test run</span>' : BASE[m.workflow] && BASE[m.workflow].planned ? PLANNED_TAG : '';
     return `<button class="back" data-act="workflow" data-arg="${m.workflow}">${I.left(16)}${m.workflow === 'sw' ? 'Software watchlist' : esc(r.name)}</button>
@@ -3358,7 +3443,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         <div class="runhead-top"><div class="runtitle"><h1 tabindex="-1">${headline}</h1>${finished ? pill(pillTone) : `<span class="tag">${I.play(12)}Replaying</span>`}${test}</div></div>
         <p class="muted">${esc(r.name)}</p>
       </div>
-      <div class="stage"><ol class="line" style="--n:${n}" aria-label="Steps of this run"><li class="line-track" aria-hidden="true"></li><li class="line-fill" aria-hidden="true" style="--f:${P.shown / (n - 1)}"></li>${line}</ol></div>
+      <div class="stage">${line}</div>
       ${finished ? `<ol class="chat" aria-label="What needs you">${chatAct(id, m)}</ol>` : ''}
       <div class="run-detail"><button class="btn sm" data-act="runDetail" aria-expanded="${open}" aria-controls="run-detail" data-unbuilt="Show what each agent did (the built run page always shows the chat)">${open ? 'Hide what each agent did' : 'Show what each agent did'}</button>
         ${open ? `<div id="run-detail" class="run-detail-body" data-pres="detail:${id}">
@@ -3387,7 +3472,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
   /* While a run replays, the next speaker shows as working. */
   function chatTyping(m) {
-    const next = m.stations.slice(P.at + 1, m.end + 1).find((s) => s.msg);
+    const next = m.stations.slice(P.at + 1, m.end + 1).find((s) => s.msg && !s.skip);
     if (!next) return '';
     return `<li class="cmsg typing" aria-hidden="true"><span class="cmsg-av">${chatAvatar(next.msg.who, next.msg.who === 'lead' ? 'thinking' : 'working')}</span><div class="cmsg-body"><span class="cmsg-who">${feedName(next.msg.who)} is working</span><div class="cmsg-bubble"><span class="dots"><i></i><i></i><i></i></span></div></div></li>`;
   }
@@ -3415,34 +3500,72 @@ details > .m-close { animation: fold 140ms ease-in both; }
         : ok ? 'You can decide because you didn’t set this up.'
           : me().ap ? `Only ${whoOr(q.may)} can decide this one.${apprOf(id) ? ` ${nm(ownerOf(id))} chose who approves this workflow.` : ''}`
             : 'Only an Approver can decide.';
+    const unchecked = notChecked(id);
+    /* The side panel shows everything that will be written, what wasn't checked and the decision. Only the agents'
+       findings, when it was sent and why it came to this Approver wait for the full page (ADR 0043). */
     return `<div class="panel approval">
       <dl class="qa"><dt>What will change</dt><dd><b>${sw ? '3 tickets will be created in Jira project MOCK on the practice Jira' : w.panelTitle}</b>${body}<p class="note">This is exactly what will be written, and nothing else.</p></dd></dl>
+      ${unchecked.length ? `<dl class="qa unchecked" data-unbuilt="Not checked, in the approval panel (ADR 0043)"><dt>Not checked</dt><dd><ul class="mini-list">${unchecked.map((x) => `<li>${x}</li>`).join('')}</ul></dd></dl>` : ''}
       ${short ? '' : `<dl class="qa" data-unbuilt="Why, in the approval panel"><dt>Why</dt><dd>${found ? `<ul class="found">${found}</ul>` : 'See what each agent did, below.'}</dd></dl>
       <dl class="qa" data-unbuilt="Who asked, in the approval panel"><dt>Who asked</dt><dd>${esc(R(m.workflow).name)}, set up by ${nm(ownerOf(m.workflow))}. ${first.msg ? first.msg.text : ''}${first.sub ? ` (${first.sub})` : ''}</dd></dl>`}
-      <dl class="qa"><dt>What happens</dt><dd><span>Nothing is written until you say yes. ${askLine(q, S.user, true)}${namedTag(q)} ${sw ? 'You approve or decline the whole check. If you decline, the tickets are proposed again next Monday.' : 'If you decline, the run stops there.'}</span></dd></dl>
-      <dl class="qa" data-unbuilt="Your part, in the approval panel"><dt>Your part</dt><dd>${part}</dd></dl>
-      ${ok ? `<div class="btns"><button class="btn good" data-act="approve" data-arg="${id}">${I.check(16)}Approve</button><button class="btn bad" data-act="decline" data-arg="${id}">Decline</button></div>` : ''}
+      <dl class="qa"><dt>What happens</dt><dd><span>Nothing is written until you say yes.${short ? '' : ` ${askLine(q, S.user, true)}${namedTag(q)}`} ${sw ? 'You approve or decline the whole check. If you decline, the tickets are proposed again next Monday.' : 'If you decline, the run stops there.'}</span></dd></dl>
+      ${short ? '' : `<dl class="qa" data-unbuilt="Your part, in the approval panel"><dt>Your part</dt><dd>${part}</dd></dl>`}
+      ${askThread(id)}
+      ${ok ? decideArea(id) : ''}
     </div>`;
+  }
+  /* What the run didn't look at (ADR 0043): software it couldn't read, from the run, and what the platform can't read
+     yet, from the capability registry. A planned capability shown with Planned features is drawn as working, with its
+     tag, so it isn't listed. There is no free text here, so nothing can claim a check that ran. */
+  const UNCHECKED = { sw: ['registries'], nudge: ['updated'], conf: ['updated'] };
+  const notChecked = (id) => [
+    ...(id === 'sw' ? [`${andList(UNREADABLE)} couldn’t be read, so no ticket is proposed for them.`] : []),
+    ...(UNCHECKED[id] || []).filter((c) => capState(c) !== 'ready' && !shows(c)).map((c) => `The platform can’t yet ${CAPS[c].cant}.`),
+  ];
+  /* Who an Approver's question goes to: whoever started the run, else the workflow's owner. */
+  const requesterOf = (id) => starterOf(id) || ownerOf(id);
+  /* Questions on a request (ADR 0043). An Approver asks; the requester answers. A question never approves, declines or
+     changes the request, which stays open, waiting for a yes. Once it's decided the questions stay on its record, read
+     only, until the next run starts clean. */
+  function askThread(id) {
+    const list = S.asks[id] || [];
+    if (!list.length) return '';
+    const open = !!waitingReq(id);
+    const who = (u, cap1) => (u === S.user ? (cap1 ? 'You' : 'you') : nm(u));
+    return `<section class="asks" aria-labelledby="asks-h-${id}" data-unbuilt="Questions on a request (ADR 0043)"><h2 id="asks-h-${id}" tabindex="-1">Questions</h2><ul>${list.map((x, i) => `<li>
+        <p><b>${who(x.by, true)} asked ${who(x.to)}:</b> ${esc(x.text)}</p>
+        ${x.answer ? `<p><b>${who(x.to, true)} answered:</b> ${esc(x.answer)}</p>` : open && x.to === S.user ? `<form class="askbox" data-submit="askAnswer" data-arg="${id}:${i}" novalidate><div class="field"><label for="ans-${id}-${i}">Your answer for ${nm(x.by)}</label><textarea id="ans-${id}-${i}" data-askans="${id}:${i}" rows="2"${fieldAttrs(`ans-${id}-${i}`, S.answerErr === `${id}:${i}` ? 'Type your answer.' : '', 'It shows on this request. It doesn’t decide anything.')}>${esc(S.answerText[`${id}:${i}`] || '')}</textarea>${fieldNotes(`ans-${id}-${i}`, S.answerErr === `${id}:${i}` ? 'Type your answer.' : '', 'It shows on this request. It doesn’t decide anything.')}</div><div class="btns"><button type="submit" class="btn primary sm">Send answer</button></div></form>` : `<p class="small muted">${open ? 'No answer yet. The request is still waiting for a yes.' : 'Not answered before the request was decided.'}</p>`}
+      </li>`).join('')}</ul></section>`;
+  }
+  /* A few quick reasons for a decline. None is needed. */
+  const DECLINE_PICKS = { sw: ['Not this week', 'Wrong version', 'Needs testing first'], access: ['Someone still needs access', 'Needs a manager to check'], other: ['Not needed this time', 'Something in it is wrong'] };
+  /* The Approver's part: Approve, Decline or a question. Decline opens the optional reasons; Ask opens a box. */
+  function decideArea(id) {
+    const d = S.decide && S.decide.id === id ? S.decide : null;
+    const who = nm(requesterOf(id));
+    if (d && d.mode === 'decline') {
+      return `<div class="decide" role="group" aria-labelledby="why-h-${id}" data-unbuilt="Reasons for a decline (ADR 0043)">
+        <p id="why-h-${id}"><b>Why are you declining?</b> <span class="muted">Optional. ${who} sees it with the record.</span></p>
+        <div class="pick">${(DECLINE_PICKS[id] || DECLINE_PICKS.other).map((r) => `<button class="chip" data-act="declinePick" data-arg="${esc(r)}" aria-pressed="${d.why === r}">${d.why === r ? I.check(12) : ''}${r}</button>`).join('')}</div>
+        <div class="btns"><button class="btn bad" data-act="declineYes" data-arg="${id}">Decline</button><button class="btn" data-act="decideBack" data-arg="decline:${id}">Back</button></div>
+      </div>`;
+    }
+    if (d && d.mode === 'ask') {
+      const err = d.err ? 'Type your question.' : '';
+      const help = `${who} sees it on this request and can answer. It stays open, waiting for a yes.`;
+      return `<form class="decide askbox" data-submit="askSend" data-arg="${id}" novalidate data-unbuilt="Ask the requester a question (ADR 0043)">
+        <div class="field"><label for="ask-${id}">Your question for ${who}</label><textarea id="ask-${id}" data-askq rows="2"${fieldAttrs(`ask-${id}`, err, help)}>${esc(d.text)}</textarea>${fieldNotes(`ask-${id}`, err, help)}</div>
+        <div class="btns"><button type="submit" class="btn primary">Send question</button><button type="button" class="btn" data-act="decideBack" data-arg="ask:${id}">Cancel</button></div>
+      </form>`;
+    }
+    return `<div class="decide"><div class="btns"><button class="btn good" data-act="approve" data-arg="${id}">${I.check(16)}Approve</button><button class="btn bad" data-act="decline" data-arg="${id}">Decline</button></div>
+      <p class="small" data-unbuilt="Ask the requester a question (ADR 0043)">Not sure yet? <button class="linkbtn" data-act="askOpen" data-arg="${id}">Ask ${who} a question</button></p></div>`;
   }
   function actPanel(id, m) {
     if (m.state === 'waiting') return approvePanel(id);
-    if (id === 'edit') {
-      const wf = S.editRun.wf;
-      const live = S.n8nChg[wf];
-      return `<div class="panel">
-        <dl class="qa"><dt>What happened</dt><dd>Carol’s change in n8n at 9:12 removed <b>Ask for a yes</b>. This run reached the step that makes changes without a yes, so it stopped there. Nothing was written.</dd></dl>
-        <dl class="qa"><dt>What to do</dt><dd>${live ? 'Undo Carol’s change, or put the step back yourself in n8n.' : 'Carol’s change has been undone. The next run asks for a yes again.'}</dd></dl>
-        ${live ? (me().op ? `<div class="btns"><button class="btn primary" data-act="n8nUndo" data-arg="${wf}">Undo Carol’s change</button><button class="btn" data-act="n8nAsk" data-arg="${wf}">Fix it in n8n${I.ext(14)}</button></div>` : '<p class="note">An Operator can undo the change.</p>') : ''}
-      </div>`;
-    }
-    if ((id === 'issues' && S.issues === 'failed') || (id === 'nudge' && S.nudge === 'failed')) {
+    if (m.state === 'failed' && TROUBLE[id]) {
       const t = TROUBLE[id]();
-      return `<div class="panel">
-        <dl class="qa"><dt>What happened</dt><dd>${t.happened}</dd></dl>
-        <dl class="qa"><dt>What was affected</dt><dd>${t.affected}</dd></dl>
-        <dl class="qa"><dt>Can it be fixed safely</dt><dd>${t.safe}</dd></dl>
-        <dl class="qa"><dt>What to do</dt><dd>${t.next}</dd></dl>
-        ${t.act ? `<div class="btns">${me().op ? troubleBtn(t) : `<p class="note">${t.deny}</p>`}</div>` : ''}
+      return `<div class="panel">${answersDL(t)}${troubleActs(t)}
         ${id === 'nudge' && S.report > 0 ? `<div data-pres="case:${S.supportCase.id}" data-unbuilt="Support cases"><h3>Reported to support</h3>${caseBox()}${reportTrack(false)}</div>` : ''}
       </div>`;
     }
@@ -3452,21 +3575,17 @@ details > .m-close { animation: fold 140ms ease-in both; }
         <p>${whoAnd(askedOf(q))} didn’t answer by ${at(q.expiresAt)}, so the request stopped. Nothing was written. A request never says yes by itself.</p>
         ${me().op ? `<div class="btns">${testAgain('Do a test run again')}${changeApproversBtn('conf', 'apprFromRun')}</div>${heldWhy('conf') ? `<p class="note">${heldWhy('conf')}</p>` : ''}` : ''}</div>`;
     }
-    const done = {
-      sw: S.sw === 'approved'
-        ? `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>${nm(S.swBy)} approved, and the platform created the tickets.</p><div class="result-chips">${ticketBtn('MOCK-16', 'Log4j core')}${ticketBtn('MOCK-14', 'LangGraph')}${ticketBtn('MOCK-15', 'FastAPI')}</div>`
-        : `<h2>Declined</h2><p>${nm(S.swBy)} declined, so nothing was written. The tickets will be proposed again next Monday.</p>`,
-      issues: `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>The retry read Jira. No tickets were created in the last day, so there was nothing to write.</p>`,
-      nudge: S.nudge === 'approved'
-        ? `<h2><span class="ok-mark">${I.check(18)}</span>Back to normal</h2><p>The fix from support is live, MOCK-31 was read without stopping the run, and ${nm(S.nudgeBy)} approved the summary.</p><div class="result-chips"><span class="pill ok">${I.check(12)}MOCK-34 created</span></div>`
-        : `<h2>Declined</h2><p>${nm(S.nudgeBy)} declined, so nothing was written. The next summary runs on Friday.</p>`,
-      conf: S.conf === 'declined' ? `<h2>Declined</h2><p>${nm(S.confBy)} declined, so nothing was written. Change what it does, or run the test again.</p>${me().op ? (heldWhy('conf') ? `<p class="note">${heldWhy('conf')}</p>` : `<div class="btns">${testAgain('Do a test run again')}</div>`) : ''}`
-        : S.nr ? `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>${yesWho('conf')} approved, and the platform ${confWrite(S.nr).doneText}.</p><div class="result-chips"><span class="pill ok">${I.check(12)}${confWrite(S.nr).result}</span></div>` : '',
-      access: S.access === 'approved'
-        ? `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>${yesWho('access')} approved, and the platform removed access for 3 people. Their managers were told in Teams.</p>`
-        : `<h2>Declined</h2><p>${nm(S.accessBy)} declined, so nothing was removed. The 3 people keep their access until the next review.</p>`,
-    }[id];
-    return `<div class="panel">${done}<div class="btns"><button class="btn" data-act="go" data-arg="home">Back to Home</button></div></div>`;
+    /* A declined run shows its record and what happens next. It has no result, ticket or "created". */
+    const done = m.state === 'declined'
+      ? `<h2>Declined</h2><p>${declinedWords(id)} ${DECLINED_NEXT[id]}</p>${id === 'conf' && me().op ? (heldWhy('conf') ? `<p class="note">${heldWhy('conf')}</p>` : `<div class="btns">${testAgain('Do a test run again')}</div>`) : ''}`
+      : {
+        sw: () => `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>${nm(S.swBy)} approved, and the platform created the tickets.</p><div class="result-chips">${ticketBtn('MOCK-16', 'Log4j core')}${ticketBtn('MOCK-14', 'LangGraph')}${ticketBtn('MOCK-15', 'FastAPI')}</div>`,
+        issues: () => `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>The retry read Jira. No tickets were created in the last day, so there was nothing to write.</p>`,
+        nudge: () => `<h2><span class="ok-mark">${I.check(18)}</span>Back to normal</h2><p>The fix from support is live, MOCK-31 was read without stopping the run, and ${nm(S.nudgeBy)} approved the summary.</p><div class="result-chips"><span class="pill ok">${I.check(12)}MOCK-34 created</span></div>`,
+        conf: () => (S.nr ? `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>${yesWho('conf')} approved, and the platform ${confWrite(S.nr).doneText}.</p><div class="result-chips"><span class="pill ok">${I.check(12)}${confWrite(S.nr).result}</span></div>` : ''),
+        access: () => `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>${yesWho('access')} approved, and the platform removed access for 3 people. Their managers were told in Teams.</p>`,
+      }[id]();
+    return `<div class="panel">${done}${askThread(id)}<div class="btns"><button class="btn" data-act="go" data-arg="home">Back to Home</button></div></div>`;
   }
 
   /* ---------- The set-up card's parts: the read-back chips and the understood sentence ---------- */
@@ -3755,26 +3874,44 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const [tone, label] = stateOf(id);
       let act = actionFor(id);
       if (act) { if (mainUsed) act = demote(act); mainUsed = true; }
-      return `<li class="row"><div><button class="linkbtn" data-act="workflow" data-arg="${id}">${esc(r.name)}</button><span class="row-sub">${pill({ tone, label })}${S.paused[id] ? '' : `<span>Next run ${r.next}</span>`}</span></div>${act ? `<span data-flow-of="workflow:${id}">${act}</span>` : ''}</li>`;
+      return `<li class="row"><div><button class="linkbtn" data-act="workflow" data-arg="${id}">${esc(r.name)}</button><span class="row-sub">${pill({ tone, label })}${S.paused[id] ? '' : `<span>Next run ${r.next}</span>`}</span></div>${act ? `<span data-flow-of="workflow:${id}">${act}</span>` : ''}<span class="row-last">${lastRunLine(id)}</span></li>`;
     }).join('')}</ul></div>`;
   }
-  /* The AI troubleshooter's four answers for each stop in the sample data (spec 10.3). The Planner's answer, the run page
-     and the row actions all read this table. act is the one primary action for the state, or null. */
+  /* The AI troubleshooter's three answers for each stop in the sample data (ADR 0043, spec 10.3): what happened, what
+     was affected, and whether a retry is safe. What to do is the button under them, or the third answer when no
+     button can help. Every place that shows a stop reads this table. act is the one primary action for the state, or
+     null; also is a quieter second one. */
   const TROUBLE = {
     /* The run knows only that Jira didn't answer. Whether it answers now comes from the connection, not from a guess. */
     issues: () => (jiraDown()
-      ? { happened: 'Jira didn’t answer at 8:00, and it still isn’t answering.', affected: 'Today’s check didn’t run. Nothing was written.', safe: 'Not yet. A retry would stop in the same place until Jira is back.', next: 'Wait for Jira. Once it answers, retry the run.', act: { do: 'retryIssues', label: 'Retry the run' }, deny: 'An Operator can retry the run once Jira is back.' }
+      ? { happened: 'Jira didn’t answer at 8:00, and it still isn’t answering.', affected: 'Today’s check didn’t run. Nothing was written.', safe: 'Not yet. A retry would stop in the same place until Jira answers again.', act: { do: 'retryIssues', label: 'Retry the run' }, deny: 'An Operator can retry the run once Jira is back.' }
       : cantRunWhy('issues')
-        ? { happened: `Jira didn’t answer at 8:00. It’s answering again, last seen working ${lastOk('jiraRead')}.`, affected: 'Today’s check didn’t run. Nothing was written.', safe: `Not yet. ${cantRunWhy('issues')}`, next: heldWhy('issues'), act: null }
-        : { happened: `Jira didn’t answer at 8:00. It’s answering again, last seen working ${lastOk('jiraRead')}.`, affected: 'Today’s check didn’t run. Nothing was written.', safe: 'Yes. A retry reads the tickets again, and its ticket still waits for a yes.', next: 'Retry the run.', act: { do: 'retryIssues', label: 'Retry the run' }, deny: 'An Operator can retry the run.' }),
-    nudge: () => ({
-      happened: 'The step that reads tickets stopped on <b>MOCK-31</b>. Its description is in a form the platform couldn’t read. The platform should skip a ticket like this, but it crashed.', affected: 'Last Friday’s summary wasn’t made. Nothing was written.', safe: 'Not from here. This is a problem in the platform, not in your workflow, so a retry would stop in the same place.',
-      next: S.report === 0 ? 'Report it. Support gets the run and this explanation, and you can follow the case under Following up on Workflows.' : S.report === 4 ? `The fix is live. ${heldWhy('nudge') || cantRunWhy('nudge') || 'Retry the run.'}` : `Support has it as case ${S.supportCase.id}. Follow it under Following up on Workflows.`,
-      act: S.report === 0 ? { do: 'report', label: 'Report to support', unbuilt: 'Report to support' } : S.report === 4 && !heldWhy('nudge') ? { do: 'retryNudge', label: 'Retry the run' } : null,
-      deny: 'An Operator can report this to support.',
-    }),
+        ? { happened: `Jira didn’t answer at 8:00. It’s answering again, last seen working ${lastOk('jiraRead')}.`, affected: 'Today’s check didn’t run. Nothing was written.', safe: `Not yet. ${cantRunWhy('issues')}`, act: null }
+        : { happened: `Jira didn’t answer at 8:00. It’s answering again, last seen working ${lastOk('jiraRead')}.`, affected: 'Today’s check didn’t run. Nothing was written.', safe: 'Yes. A retry reads the tickets again, and its ticket still waits for a yes.', act: { do: 'retryIssues', label: 'Retry the run' }, deny: 'An Operator can retry the run.' }),
+    nudge: () => {
+      const happened = 'The step that reads tickets stopped on <b>MOCK-31</b>. Its description is in a form the platform couldn’t read. The platform should skip a ticket like this, but it crashed.';
+      const affected = 'Last Friday’s summary wasn’t made. Nothing was written.';
+      if (S.report === 0) return { happened, affected, safe: 'No. This is a problem in the platform, not in your workflow, so a retry would stop in the same place. Report it, and support gets the run and this explanation.', act: { do: 'report', label: 'Report to support', unbuilt: 'Report to support' }, deny: 'An Operator can report this to support.' };
+      if (S.report < 4) return { happened, affected, safe: `Not yet. Support has it as case ${S.supportCase.id}, and a retry would stop in the same place until it’s fixed. Follow the case under Following up on Workflows.`, act: null };
+      const held = heldWhy('nudge') || cantRunWhy('nudge');
+      return { happened, affected, safe: held ? `Not yet. The fix from support is live. ${held}` : 'Yes. The fix from support is live. A retry makes last week’s summary, and its ticket still waits for a yes.', act: held ? null : { do: 'retryNudge', label: 'Retry the run' }, deny: 'An Operator can retry the run.' };
+    },
+    /* A run of a version published in n8n without Ask for a yes. Undoing the change is the fix the person can make. */
+    edit: () => {
+      const wf = S.editRun.wf;
+      const live = !!S.n8nChg[wf];
+      return {
+        happened: 'Carol’s change in n8n at 9:12 removed <b>Ask for a yes</b>. This run reached the step that makes changes without a yes, so it stopped there.', affected: 'Nothing was written.',
+        safe: live ? 'Not yet. A retry would stop in the same place until Ask for a yes is back. Undo Carol’s change, or put the step back yourself in n8n.' : 'Yes. Carol’s change has been undone, so the next run asks for a yes again.',
+        act: live ? { do: 'n8nUndo', arg: wf, label: 'Undo Carol’s change' } : null, also: live ? { do: 'n8nAsk', arg: wf, label: `Fix it in n8n${I.ext(14)}` } : null, deny: 'An Operator can undo the change.',
+      };
+    },
   };
-  const troubleBtn = (t, sm) => (t.act ? `<button class="btn primary${sm ? ' sm' : ''}" data-act="${t.act.do}"${t.act.unbuilt ? ` data-unbuilt="${t.act.unbuilt}"` : ''}>${t.act.label}</button>` : '');
+  const troubleBtn = (t, sm) => [t.act && ['btn primary', t.act], t.also && ['btn', t.also]].filter(Boolean).map(([cls, a]) => `<button class="${cls}${sm ? ' sm' : ''}" data-act="${a.do}"${a.arg ? ` data-arg="${a.arg}"` : ''}${a.unbuilt ? ` data-unbuilt="${a.unbuilt}"` : ''}>${a.label}</button>`).join('');
+  const THREE = [['happened', 'What happened'], ['affected', 'What was affected'], ['safe', 'Safe to retry']];
+  const answersDL = (t) => `<dl class="qa3">${THREE.map(([k, label]) => `<div><dt>${label}</dt><dd>${t[k]}</dd></div>`).join('')}</dl>`;
+  /* Under the answers: the button for an Operator, and for anyone else the reason it isn't theirs. */
+  const troubleActs = (t, sm) => (!t.act ? '' : me().op ? `<div class="btns">${troubleBtn(t, sm)}</div>` : `<p class="note">${t.deny}</p>`);
   const stoppedNow = (id) => !!id && !!TROUBLE[id] && stoppedIds().includes(id);
   /* Read live on every redraw (I8): the sentence follows the workflow's state, including one that is gone. */
   function whySay(a) {
@@ -3790,8 +3927,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const t = TROUBLE[id]();
     return `<div class="pcard why" data-pres="why:${m.id}" data-unbuilt="Planner answers about your workflows">
       <div class="pcard-h">${face('trouble', 32)}<h3>AI troubleshooter</h3></div>
-      <div class="pcard-s"><dl class="qa"><dt>What happened</dt><dd>${t.happened}</dd></dl><dl class="qa"><dt>What was affected</dt><dd>${t.affected}</dd></dl><dl class="qa"><dt>Can it be fixed safely</dt><dd>${t.safe}</dd></dl><dl class="qa"><dt>What to do</dt><dd>${t.next}</dd></dl></div>
-      <div class="pcard-f">${me().op ? `<span data-flow-of="run:${id}">${troubleBtn(t, true)}</span>` : ''}<button class="btn sm" data-act="run" data-arg="${id}">See the run</button></div>
+      <div class="pcard-s">${answersDL(t)}${!me().op && t.act ? `<p class="note">${t.deny}</p>` : ''}</div>
+      <div class="pcard-f">${me().op && t.act ? `<span data-flow-of="run:${id}">${troubleBtn(t, true)}</span>` : ''}<button class="btn sm" data-act="run" data-arg="${id}">See the run</button></div>
     </div>`;
   }
   const mineSay = (a) => {
@@ -4284,11 +4421,14 @@ details > .m-close { animation: fold 140ms ease-in both; }
     else if (r.bottom > v.bottom) top += Math.min(r.bottom - v.bottom + 8, r.top - v.top - 8);
     sc.scrollTo({ top, behavior: motionQuery.matches ? 'auto' : 'smooth' });
   }
+  /* After a decision in the side panel it shows the run from its top, with focus on its heading. */
+  const panelTop = () => { const b = $app.querySelector('#sidepanel .sp-body'); if (b) b.scrollTop = 0; focusChat($app.querySelector('#sp-h')); };
+  /* Focus never scrolls #app: inside the chat or the side panel, only that column scrolls; on a full page, the page. */
   function focusChat(el) {
     if (!el) return;
     el.focus({ preventScroll: true });
-    const sc = el.closest('.chatscroll');
-    if (!sc) return;
+    const sc = el.closest('.chatscroll, .sp-body');
+    if (!sc) { if (!chatMode()) el.scrollIntoView({ block: 'nearest' }); return; }
     const r = el.getBoundingClientRect();
     const v = sc.getBoundingClientRect();
     if (r.top < v.top + 8) sc.scrollTop -= v.top + 8 - r.top;
@@ -5038,10 +5178,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
   const decidedAt = (by) => `${nm(by)} at ${hm(NOW)} today`;
   /* The request's outcome, read from the platform, as the card shows it after a decision. */
-  const decidedLine = (rec) => (rec.state === 'approved' ? `Approved by ${rec.yes.map(decidedAt).join(', then ')}` : rec.state === 'declined' ? `Declined by ${decidedAt(rec.by)}` : rec.state === 'expired' ? 'No answer' : null);
+  const decidedLine = (id, rec) => (rec.state === 'approved' ? `Approved by ${rec.yes.map(decidedAt).join(', then ')}` : rec.state === 'declined' ? declinedHead(id, decidedAt) : rec.state === 'expired' ? 'No answer' : null);
   function teamsItems() {
     const list = [];
-    const card = (id) => { const rec = reqRecord(id); return { time: TEAMS_CARD[id]().time, id, html: teamsCard(id), decided: decidedLine(rec), decidedTone: rec.state === 'expired' ? 'off' : rec.state === 'declined' ? 'bad' : 'ok' }; };
+    const card = (id) => { const rec = reqRecord(id); return { time: TEAMS_CARD[id]().time, id, html: teamsCard(id), decided: decidedLine(id, rec), note: rec.state === 'declined' ? declineTail(id) : '', decidedTone: rec.state === 'expired' ? 'off' : rec.state === 'declined' ? 'no' : 'ok' }; };
     if (reqRecord('sw')) {
       const q = req('sw');
       list.push(card('sw'));
@@ -5064,7 +5204,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (!S.teams) return '';
     const msgs = teamsItems().map((m) => {
       let actions = '';
-      if (m.decided) actions = m.decidedTone === 'off' ? `<span class="pill off">${I.clock(12)}${m.decided}</span>` : m.decidedTone === 'bad' ? `<span class="pill bad">${I.x(12)}${m.decided}</span>` : `<span class="pill ok">${I.check(12)}${m.decided}</span>`;
+      if (m.decided) actions = `${pill({ tone: m.decidedTone, label: m.decided })}${m.note ? `<p class="small muted">${m.note}</p>` : ''}`;
       else if (m.jtool) actions = '<div class="btns"><button class="btn sm" data-act="toolOpen" data-arg="jiraComp">Open in AI Workflow Builder</button></div>';
       else if (m.id) actions = `<div class="btns"><button class="btn primary sm" data-act="run" data-arg="${m.id}">Open in AI Workflow Builder</button></div>`;
       return `<article class="msg"><span class="sysav app">${I.mark()}</span><div><div class="msg-meta"><b>AI Workflow Builder</b> · ${m.time}</div><div class="msg-card"><div>${m.html}</div><div data-val="tm:${keyOf(m.time + m.html.slice(0, 60))}">${actions}</div></div></div></article>`;
@@ -5172,6 +5312,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     }
     const toggle = (act, on, labels) => `<span class="mseg"><button data-act="${act}" data-arg="on" aria-pressed="${on}">${labels[0]}</button><button data-act="${act}" data-arg="off" aria-pressed="${!on}">${labels[1]}</button></span>`;
     if (S.report > 0 && S.report < 4) sims.push(['advance', '', `Support moves case ${S.supportCase.id} on`]);
+    /* A requester you can't act as, such as Carol, answers a question here. */
+    REQ_IDS.filter((id) => waitingReq(id)).forEach((id) => (S.asks[id] || []).forEach((x, i) => { if (!x.answer && !['alice', 'bob'].includes(x.to)) sims.push(['answerAs', `${id}:${i}`, `${nm(x.to)} answers ${nm(x.by)}’s question`]); }));
     const n8nId = shows('n8n') && S.view.name === 'workflow' && S.view.id !== 'sw' ? S.view.id : null;
     if (n8nId && me().op && !S.n8nChg[n8nId]) sims.push(['n8nChange', n8nId, 'Carol changes it in n8n and publishes']);
     if (n8nId && S.n8nChg[n8nId] && !S.editRun) sims.push(['n8nRun', n8nId, 'The next run starts with Carol’s change']);
@@ -5196,7 +5338,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
           <li>Mark what isn’t built outlines each screen part the built Portal doesn’t have yet.</li>
           <li>Run now and See the run show only where this prototype has a sample run: the sample workflows and the first one you make on Home. The built app runs every workflow.</li>
           <li>Time stands still at Tuesday 27 October, 9:10. Use “Make something happen” to let time pass while a test run waits for a yes.</li>
-          <li>Siti and Arun are Approvers you can’t act as. Their answers are under “Make something happen”.</li>
+          <li>Siti and Arun are Approvers you can’t act as. Their answers are under “Make something happen”, and so are Carol’s answers to an Approver’s question.</li>
           <li>GitHub links open the real project pages. The versions shown here are samples.</li>
           <li>Reloading the page starts over.</li></ul></details>
         <div><button class="mreset" data-act="reset">Start over</button></div>
@@ -5221,6 +5363,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   let dlgIn = false;
   let dlgSwap = false;
   let shownModal = null;
+  let shownPanel = null;
 
   /* PEOPLE carries the roles the rest of the prototype reads. Settings changes S.roles, and this copies them across. */
   function syncRoles() {
@@ -5266,7 +5409,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const motion = motionBefore();
     // A redraw keeps what the person opened and where they scrolled.
     const opened = new Set(detailsKeys().filter(([d]) => d.open && !d.dataset.folding && !d.querySelector(':scope > summary[data-act]')).map(([, k]) => k));
-    const scrolls = [['.msgs', true], ['.dialog:not(.leave)', sameModal]].map(([sel, keep]) => { const el = keep && $app.querySelector(sel); return el ? [sel, el.scrollTop] : null; }).filter(Boolean);
+    const panelKey = S.panel ? `${S.panel.kind}:${S.panel.id}` : null;
+    const samePanel = !!panelKey && panelKey === shownPanel;
+    shownPanel = panelKey;
+    const scrolls = [['.msgs', true], ['.dialog:not(.leave)', sameModal], ['#sidepanel .sp-body', samePanel]].map(([sel, keep]) => { const el = keep && $app.querySelector(sel); return el ? [sel, el.scrollTop] : null; }).filter(Boolean);
     const keepChat = $app.querySelector('.chatscroll');
     if (keepChat) S.chatScroll = keepChat.scrollTop;
     $app.innerHTML = '<button class="skiplink" data-act="skipMain">Skip to main content</button>' + header() + `<div class="shell">${rail()}<main class="sheet" id="main"><div class="wrap${chatMode() ? ' chatmode' : ''}" data-flip-group="page">${main}</div></main></div>` + teamsDrawer() + modal() + toastHtml + testControls();
@@ -5302,14 +5448,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (grew && P.latest) announce(P.latest);
       P.feedSeen = P.feedNext;
     }
-    const fill = $app.querySelector('.line-fill');
-    if (fill && P.run) {
-      const n = runModel(P.run).stations.length;
-      const target = Math.min(P.at, runModel(P.run).end) / (n - 1);
-      void fill.offsetWidth;
-      requestAnimationFrame(() => { fill.style.setProperty('--f', target); });
-      P.shown = Math.min(P.at, runModel(P.run).end);
-    }
+    if (P.run && S.view.name === 'run') P.shown = Math.min(P.at, runModel(P.run).end);
     stageWatch.disconnect();
     const stage = $app.querySelector('.stage');
     if (stage) stageWatch.observe(stage);
@@ -5568,6 +5707,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     S.teams = false;
     S.editing = null;
     S.editingAppr = null;
+    S.decide = null;
     focusHeading = true;
     if (name === 'run') { P.run = id; openRun(o.live); }
     if (!o.back) { try { window.history.pushState({ name, id, fromChat: !!o.fromChat }, '', `#${name}${id ? `/${id}` : ''}`); } catch (e) { /* window.history, because history() here is the watchlist's. Some hosts block it; Back then leaves the mock, as before. */ } }
@@ -5639,6 +5779,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     restoreFocus('h1');
   }
 
+  /* A new run's request starts with no questions and no decline reason. */
+  const newRequest = (id) => { delete S.asks[id]; delete S.declineWhy[id]; if (S.decide && S.decide.id === id) S.decide = null; };
   /* One yes, from the person reading or from someone the test controls act for. */
   function approveAs(id, user) {
     if (!canApprove(id, user)) return;
@@ -5763,16 +5905,50 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (!S.teams) restoreFocus('.hdr [data-act="teams"]');
     },
     speed: (sp) => { P.speed = sp; if (sp === 'instant') { stopTimer(); P.at = runModel(P.run).end; P.shown = P.at; } else if (P.at < runModel(P.run).end) playTo(P.at); render(); },
-    approve: (id) => approveAs(id, S.user),
-    decline: (id) => {
+    approve: (id) => { S.decide = null; const panel = viaPanel; approveAs(id, S.user); if (panel) panelTop(); },
+    /* Decline first asks why, with a few quick reasons and none needed. Decline again records it. */
+    decline: (id) => { if (!canApprove(id)) return; S.decide = { id, mode: 'decline', why: '' }; render(); focusChat($app.querySelector('.decide [data-act="declinePick"]')); },
+    declinePick: (r) => { if (S.decide) S.decide.why = S.decide.why === r ? '' : r; render(); },
+    declineYes: (id) => {
       if (!canApprove(id)) return;
+      const panel = viaPanel;
+      S.declineWhy[id] = S.decide && S.decide.id === id ? S.decide.why : '';
+      S.decide = null;
       if (id === 'sw') { S.sw = 'declined'; S.swBy = S.user; } else if (id === 'nudge') { S.nudge = 'declined'; S.nudgeBy = S.user; } else if (id === 'access') { S.access = 'declined'; S.accessBy = S.user; } else { S.conf = 'declined'; S.confBy = S.user; }
-      toast('Declined. Nothing was written.');
+      toast(`Declined. ${declineTail(id)}`);
       if (S.view.name === 'run' && S.view.id === id) continueRun();
       render();
-      focusGate();
+      if (panel) panelTop(); else focusGate();
+    },
+    decideBack: (arg) => { const [mode, id] = arg.split(':'); S.decide = null; render(); focusChat($app.querySelector(`[data-act="${mode === 'ask' ? 'askOpen' : 'decline'}"][data-arg="${id}"]`)); },
+    askOpen: (id) => { if (!canApprove(id)) return; S.decide = { id, mode: 'ask', text: '', err: false }; render(); focusChat($app.querySelector(`#ask-${id}`)); },
+    /* A question goes on the request for the requester. The request stays open, waiting for a yes. */
+    askSend: (id) => {
+      const d = S.decide;
+      if (!d || d.id !== id || !canApprove(id)) return;
+      if (!d.text.trim()) { d.err = true; render(); focusChat($app.querySelector(`#ask-${id}`)); return; }
+      const to = requesterOf(id);
+      S.asks[id] = [...(S.asks[id] || []), { by: S.user, to, text: d.text.trim(), answer: '' }];
+      S.decide = null;
+      toast(`Sent to ${nm(to)}. The request is still waiting for a yes.`);
+      render();
+      focusChat($app.querySelector(`#asks-h-${id}`));
+    },
+    askAnswer: (arg) => {
+      const [id, i] = arg.split(':');
+      const x = (S.asks[id] || [])[+i];
+      if (!x || x.to !== S.user || x.answer) return;
+      const text = (S.answerText[arg] || '').trim();
+      if (!text) { S.answerErr = arg; render(); focusChat($app.querySelector(`#ans-${id}-${i}`)); return; }
+      x.answer = text;
+      delete S.answerText[arg];
+      S.answerErr = '';
+      toast(`Sent to ${nm(x.by)}. The request is still waiting for a yes.`);
+      render();
+      focusChat($app.querySelector(`#asks-h-${id}`));
     },
     yesAs: (u) => approveAs('conf', u),
+    answerAs: (arg) => { const [id, i] = arg.split(':'); const x = S.asks[id][+i]; x.answer = 'Yes. I checked it with the team on Friday.'; toast(`${nm(x.to)} answered. The request is still waiting for a yes.`); render(); },
     escalate: () => {
       const q = req('conf');
       S.confAsk = 1;
@@ -6057,7 +6233,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (runBlocked('issues')) return;
       S.issues = 'fixed';
       retry('issues');
-      if (viaPanel) render(); else go('run', 'issues', { live: true });
+      if (viaPanel) { render(); panelTop(); } else go('run', 'issues', { live: true, fromChat: S.view.fromChat });
     },
     report: () => openModal('report', null, '.btn.primary'),
     closeModal: () => closeModal(),
@@ -6072,7 +6248,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     },
     /* Support moves the case to the next stage the track shows. */
     advance: () => { const next = reportStages().map(([from]) => from).find((from) => from > S.report); if (next) S.report = next; if (S.report === 4) toast(`Dana merged the fix for ${S.supportCase.id}. It’s live.`); render(); },
-    retryNudge: () => { if (runBlocked('nudge')) return; S.nudge = 'waiting'; S.nudgeBy = null; retry('nudge'); if (viaPanel) render(); else go('run', 'nudge', { live: true }); },
+    retryNudge: () => { if (runBlocked('nudge')) return; newRequest('nudge'); S.nudge = 'waiting'; S.nudgeBy = null; retry('nudge'); if (viaPanel) { render(); panelTop(); } else go('run', 'nudge', { live: true, fromChat: S.view.fromChat }); },
     skipMain: () => { const h = $app.querySelector('main h1'); if (h) { h.focus(); h.scrollIntoView({ block: 'start' }); } },
     askPlanner: () => { go('home'); focusComposer(); },
     panelOpen: (item, el) => {
@@ -6291,7 +6467,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       scrollToMsg(m.id, 'start');
       focusChat($app.querySelector(`[data-mid="${m.id}"] .linkbtn`));
     },
-    testRun: () => { if (runBlocked('conf')) return; S.conf = 'waiting'; S.confYes = []; S.confAsk = 0; S.confStarter = S.user; S.confReq = apprOf('conf') ? copyAppr(apprOf('conf')) : null; go('run', 'conf', { live: true }); },
+    testRun: () => { if (runBlocked('conf')) return; newRequest('conf'); S.conf = 'waiting'; S.confYes = []; S.confAsk = 0; S.confStarter = S.user; S.confReq = apprOf('conf') ? copyAppr(apprOf('conf')) : null; go('run', 'conf', { live: true }); },
     editSched: (id) => { S.editing = id; S.editingAppr = null; S.schedForm = { monthDay: '1', ...R(id).sched }; S.schedErr = {}; render(); const f = document.getElementById('sf-freq'); if (f) f.focus(); },
     cancelSched: () => { const id = S.editing; S.editing = null; render(); const b = $app.querySelector(`main [data-act="editSched"][data-arg="${id}"]`); if (b) b.focus(); },
     saveSched: (id) => {
@@ -6325,7 +6501,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (id === 'nudge' && S.nudge === 'failed') { if (S.report === 4) A.retryNudge(); else { toast('It would stop in the same place until support fixes the platform. Report it first.'); render(); } return; }
       if (id === 'conf') { A.testRun(); return; }
       /* Starting the access review by hand makes the starter a party to it, so they can't approve its removals. */
-      if (id === 'access') { S.access = 'waiting'; S.accessYes = []; S.accessBy = null; S.accessRun = { by: S.user, sub: 'Today, 9:10' }; }
+      if (id === 'access') { newRequest('access'); S.access = 'waiting'; S.accessYes = []; S.accessBy = null; S.accessRun = { by: S.user, sub: 'Today, 9:10' }; }
       toast(`Started. ${esc(R(id).name)} asks for a yes before it writes anything.`);
       go('run', id, { live: true });
     },
@@ -6346,10 +6522,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
     focusAdd: () => { const i = $app.querySelector('#sw-name'); if (i) { i.scrollIntoView({ block: 'center' }); i.focus({ preventScroll: true }); } },
     testToggle: () => { S.testOpen = !S.testOpen; testNew = S.testOpen; render(); const t = $app.querySelector('.testctl-toggle'); if (t) t.focus(); },
     day: (d) => { S.firstDay = d === 'one'; S.conns = connsFor(S.firstDay); if (['workflow', 'run'].includes(S.view.name)) go('home'); else render(); },
-    user: (u) => { S.user = u; S.panel = null; if (!mayOpen(S.view.name)) S.view = { name: 'home' }; render(); },
+    user: (u) => { S.user = u; S.panel = null; S.decide = null; if (!mayOpen(S.view.name)) S.view = { name: 'home' }; render(); },
     /* The spec 16 controls. Planned features hidden means nothing planned shows, so a page about one goes back to its list. */
     modelOn: (v) => { S.modelOn = v === 'on'; render(); },
-    preview: (v) => { S.preview = v === 'on'; if (!S.preview && ['workflow', 'run'].includes(S.view.name) && !has(S.view.id)) go('workflows'); else render(); },
+    /* Planned features change a run's steps, so a run page lands on its decision again. */
+    preview: (v) => { S.preview = v === 'on'; if (!S.preview && ['workflow', 'run'].includes(S.view.name) && !has(S.view.id)) go('workflows'); else { if (S.view.name === 'run') openRun(); render(); } },
     markUnbuilt: (v) => { S.markUnbuilt = v === 'on'; render(); },
     jiraDown: () => { S.conns.jira.down = true; toast('Jira stopped answering. Everything that reads or writes Jira waits until it’s back.'); render(); },
     jiraUp: () => { S.conns.jira.down = false; toast('Jira is answering again.'); render(); },
@@ -6427,6 +6604,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     }
     if (d.askteam !== undefined) { S.teamAskText = e.target.value; return; }
     if (d.note !== undefined) { S.reportNote = e.target.value; return; }
+    if (d.askq !== undefined && S.decide) { S.decide.text = e.target.value; return; }
+    if (d.askans) { S.answerText[d.askans] = e.target.value; return; }
     if (d.sw) { S.swForm[d.sw] = e.target.value; return; }
     if (d.agent) { S.agentDraft.text = e.target.value; return; }
     if (d.toolask) { S.toolAsk.text = e.target.value; return; }
@@ -6454,7 +6633,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     e.preventDefault();
     if (e.submitter && e.submitter.getAttribute('aria-disabled') === 'true') return;
     const a = e.target.dataset.submit;
-    if (a && A[a]) A[a]();
+    viaPanel = !!e.target.closest('.sidepanel');
+    if (a && A[a]) A[a](e.target.dataset.arg);
+    viaPanel = false;
   });
   document.addEventListener('change', (e) => {
     const d = e.target.dataset;
@@ -6482,7 +6663,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   });
 
   render();
-  /* For the check script only: the refusal rule and the plan-step renderer, called through page.evaluate. */
-  window.mock = { UNSAFE, stepsList, STOP: [...STOP] };
+  /* For the check script only: the refusal rule and the plan-step renderer, called through page.evaluate, and hold,
+     which stops a replay where it is, so a check can measure the run line mid-run. */
+  window.mock = { UNSAFE, stepsList, STOP: [...STOP], hold: () => stopTimer() };
 })();
 </script>
