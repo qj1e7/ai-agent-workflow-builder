@@ -4,8 +4,8 @@
   "version": "v4",
   "summary": {
     "real": {
-      "total": 167,
-      "passed": 167,
+      "total": 170,
+      "passed": 170,
       "failed": 0,
       "notPossible": 1
     },
@@ -8112,7 +8112,7 @@
     {
       "id": "ROLE-refuse",
       "key": "ROLE-refuse@1280",
-      "title": "Bob’s requests to set up, change a schedule, pause or watch get “Operators set up workflows.” and the Operators’ names, never a card that changes anything",
+      "title": "Bob’s requests to set up, change a schedule, pause or watch get “Operators set up workflows.” and the Operators’ names, never a card that changes anything; a question asked with one is answered, with the change marked",
       "viewport": 1280,
       "passed": true,
       "failed": null,
@@ -9634,7 +9634,7 @@
     {
       "id": "FIX-deny-default",
       "key": "FIX-deny-default@1280",
-      "title": "An Approver is refused every change, including Settings, agents and asking the team: the actions deny anything not opened to him",
+      "title": "An Approver is refused every change, including Settings and agents: the actions deny anything not opened to him",
       "viewport": 1280,
       "passed": true,
       "failed": null,
@@ -10874,6 +10874,304 @@
         },
         {
           "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FOLLOW-bob-mixed",
+      "key": "FOLLOW-bob-mixed@1280",
+      "title": "Bob’s question asked with a change is answered as if asked alone, and the change gets a cross saying who makes changes; nothing changes",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 7,
+        "fields": 6,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 13
+      },
+      "screenList": [
+        "home",
+        "workflows"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: how is the morning check doing",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: how is the morning check doing and pause it",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: what’s waiting for my yes",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "field",
+          "label": "Type: what’s waiting for my yes and delete the weekly summary",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 9,
+          "kind": "field",
+          "label": "Type: pause the morning check",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 10,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 11,
+          "kind": "field",
+          "label": "Type: approve the upgrade and pause the morning check",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 12,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 13,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FOLLOW-team-open",
+      "key": "FOLLOW-team-open@1280",
+      "title": "Ask the team is open to Approvers (ADR 0038): Bob’s request is kept, and the Operators see it on Tools",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 3
+      },
+      "screenList": [
+        "home",
+        "settings"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Settings",
+          "nav": true,
+          "decision": false,
+          "screen": "settings"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "How it works",
+          "nav": false,
+          "decision": false,
+          "screen": "settings"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Tools",
+          "nav": false,
+          "decision": false,
+          "screen": "settings"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FOLLOW-bob-buttons",
+      "key": "FOLLOW-bob-buttons@1280",
+      "title": "Every button on every screen Bob can reach works for him: none is an Operator’s change he’d be refused, and none is dead",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 6,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 12
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: What needs me?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: What did I decide before?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "field",
+          "label": "Type: Which software is behind?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 9,
+          "kind": "field",
+          "label": "Type: what can you do?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 10,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 11,
+          "kind": "field",
+          "label": "Type: how is the morning check doing and pause it",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 12,
           "kind": "click",
           "label": "Press Enter to send",
           "nav": false,

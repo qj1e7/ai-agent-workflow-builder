@@ -2,7 +2,7 @@
 
 Prototype: `docs/design/ai-native-redesign/prototype.html`. Paths: `docs/design/ai-native-redesign/checks/paths-v4.cjs`.
 
-Real scenarios: 167 passed, 0 failed, 1 not possible. Control (must fail): failed, as it should.
+Real scenarios: 170 passed, 0 failed, 1 not possible. Control (must fail): failed, as it should.
 
 | Id | Width | Task | Passed | Clicks | Fields | Selects | Decisions | Screens | Notes |
 |---|---|---|---|---|---|---|---|---|---|
@@ -137,7 +137,7 @@ Real scenarios: 167 passed, 0 failed, 1 not possible. Control (must fail): faile
 | ROLE-home | 1280 | Bob’s Home starts calm, with the Planner’s box for questions, three suggestions for an Approver and Needs you under them | yes | 0 | 0 | 0 | 0 | 1 |  |
 | ROLE-home | 768 | Bob’s Home starts calm, with the Planner’s box for questions, three suggestions for an Approver and Needs you under them | yes | 0 | 0 | 0 | 0 | 1 |  |
 | ROLE-asks | 1280 | Bob asks what waits for his yes, what he decided and how things are doing, and each answer comes from platform state with no control that changes anything | yes | 6 | 5 | 0 | 0 | 1 |  |
-| ROLE-refuse | 1280 | Bob’s requests to set up, change a schedule, pause or watch get “Operators set up workflows.” and the Operators’ names, never a card that changes anything | yes | 11 | 11 | 0 | 0 | 1 |  |
+| ROLE-refuse | 1280 | Bob’s requests to set up, change a schedule, pause or watch get “Operators set up workflows.” and the Operators’ names, never a card that changes anything; a question asked with one is answered, with the change marked | yes | 11 | 11 | 0 | 0 | 1 |  |
 | ROLE-read-only | 1280 | Bob’s Workflows, a workflow’s page and the Watchlist are read only, with no dead button, and one note on each says who makes changes | yes | 6 | 0 | 0 | 0 | 4 |  |
 | ROLE-read-only | 768 | Bob’s Workflows, a workflow’s page and the Watchlist are read only, with no dead button, and one note on each says who makes changes | yes | 6 | 0 | 0 | 0 | 4 |  |
 | ROLE-offline | 1280 | With no AI model, Bob’s Home says the Planner can’t answer and who can connect one, and keeps his request first | yes | 0 | 0 | 0 | 0 | 1 |  |
@@ -152,7 +152,7 @@ Real scenarios: 167 passed, 0 failed, 1 not possible. Control (must fail): faile
 | N8N-settings | 1280 | n8n access is set in Settings, People and permissions, for Operators only, and giving it to Alice shows her the n8n views | yes | 7 | 0 | 0 | 2 | 4 |  |
 | MARK-roles | 1280 | With Mark what isn’t built on, Bob’s box, his decisions card, the read-only note, the n8n blocks and the n8n access box each carry a label | yes | 5 | 2 | 0 | 0 | 3 |  |
 | KEYS-ROLE | 1280 | With the keyboard only, Bob reaches his box, asks, and reaches Review and decide in the answer, each stop with a visible focus | yes | 22 | 0 | 0 | 0 | 1 |  |
-| FIX-deny-default | 1280 | An Approver is refused every change, including Settings, agents and asking the team: the actions deny anything not opened to him | yes | 0 | 0 | 0 | 0 | 1 |  |
+| FIX-deny-default | 1280 | An Approver is refused every change, including Settings and agents: the actions deny anything not opened to him | yes | 0 | 0 | 0 | 0 | 1 |  |
 | FIX-name-not-command | 1280 | A question about a workflow whose name holds a schedule word, such as “weekly”, gets its state, for Bob and for Alice | yes | 2 | 2 | 0 | 0 | 1 |  |
 | FIX-decided-whole | 1280 | Asking to see past decisions reads the whole question, with no part marked as not followed | yes | 1 | 1 | 0 | 0 | 1 |  |
 | FIX-approve-any-object | 1280 | An Approver’s approve or decline goes to the request whatever it names, and a second change in the same request is still refused | yes | 4 | 4 | 0 | 0 | 1 |  |
@@ -174,5 +174,8 @@ Real scenarios: 167 passed, 0 failed, 1 not possible. Control (must fail): faile
 | FIX-decide-question | 1280 | A question asked with an approve keeps its cross, for Alice and for Bob | yes | 2 | 2 | 0 | 0 | 1 |  |
 | FIX-name-status | 1280 | A question about a workflow by its full name gets its state, even when the name sounds like a software question, for Alice and for Bob | yes | 3 | 3 | 0 | 0 | 1 |  |
 | FIX-decision-time | 1280 | A decision is logged at the time the decisions list gives, and a run made today leads up to it, for a test run and for the software check | yes | 1 | 1 | 0 | 0 | 1 |  |
+| FOLLOW-bob-mixed | 1280 | Bob’s question asked with a change is answered as if asked alone, and the change gets a cross saying who makes changes; nothing changes | yes | 7 | 6 | 0 | 0 | 2 |  |
+| FOLLOW-team-open | 1280 | Ask the team is open to Approvers (ADR 0038): Bob’s request is kept, and the Operators see it on Tools | yes | 3 | 0 | 0 | 0 | 2 |  |
+| FOLLOW-bob-buttons | 1280 | Every button on every screen Bob can reach works for him: none is an Operator’s change he’d be refused, and none is dead | yes | 6 | 6 | 0 | 0 | 1 |  |
 
 A click includes a key press on a button. Menu steps and page changes are included. A decision is also counted as a click, a select or a field. Test controls are never counted.
