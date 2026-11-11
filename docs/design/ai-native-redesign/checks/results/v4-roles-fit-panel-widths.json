@@ -1,0 +1,1348 @@
+{
+  "prototype": "docs/design/ai-native-redesign/prototype.html",
+  "paths": "docs/design/ai-native-redesign/checks/paths-v4.cjs",
+  "widths": [
+    901,
+    950,
+    1000
+  ],
+  "controlCaught": true,
+  "total": 0,
+  "rows": [
+    {
+      "screen": "day-one-home",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "day-one-home",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "day-one-home",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "home",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "home",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "home",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "approver-home",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "approver-home",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "approver-home",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "planner-setup-card",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "planner-setup-card",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "planner-setup-card",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "planner-cant-email",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "planner-cant-email",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "planner-cant-email",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "planner-watch-kubernetes",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "planner-watch-kubernetes",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "planner-watch-kubernetes",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "workflows",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "workflows",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "workflows",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "workflow-page",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "workflow-page",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "workflow-page",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "run-stopped",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "run-stopped",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "run-stopped",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "run-approval",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "run-approval",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "run-approval",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "software",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "software",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "software",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "agent-library",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "agent-library",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "agent-library",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "agent-library-tools",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "agent-library-tools",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "agent-library-tools",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "settings-connections",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "settings-connections",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "settings-connections",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "teams-drawer",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "teams-drawer",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "teams-drawer",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "drafts",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "drafts",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "drafts",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "home-needs-you",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "home-needs-you",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "home-needs-you",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "planner-check-workflows",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "planner-check-workflows",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "planner-check-workflows",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "planner-why-stopped",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "planner-why-stopped",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "planner-why-stopped",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "workflow-more-menu",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "workflow-more-menu",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "workflow-more-menu",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "run-detailed-activity",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "run-detailed-activity",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "run-detailed-activity",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "software-attention",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "software-attention",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "software-attention",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "library-what-it-can-do",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "library-what-it-can-do",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "library-what-it-can-do",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "offline-home",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "offline-home",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "offline-home",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "preview-software",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "preview-software",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "preview-software",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "shell-chat-pinned",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "shell-chat-pinned",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "shell-chat-pinned",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "shell-side-panel",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "shell-side-panel",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "shell-side-panel",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "shell-side-panel-run",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "shell-side-panel-run",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "shell-side-panel-run",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "shell-side-panel-approval",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "shell-side-panel-approval",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "shell-side-panel-approval",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "shell-full-page-back",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "shell-full-page-back",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "shell-full-page-back",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "shell-settings-how-it-works",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "shell-settings-how-it-works",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "shell-settings-how-it-works",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "mark-unbuilt-home",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "mark-unbuilt-home",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "mark-unbuilt-home",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "answers-watch-marks",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "answers-watch-marks",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "answers-watch-marks",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "answers-cross",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "answers-cross",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "answers-cross",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "answers-edit",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "answers-edit",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "answers-edit",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "answers-edit-saved",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "answers-edit-saved",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "answers-edit-saved",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "answers-versions",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "answers-versions",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "answers-versions",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "answers-status",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "answers-status",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "answers-status",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "answers-panel-building",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "answers-panel-building",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "answers-panel-building",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-card-stopped",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-card-stopped",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-card-stopped",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-panel-stopped",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-panel-stopped",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-panel-stopped",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-line-waiting",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-line-waiting",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-line-waiting",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-line-mid",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-line-mid",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-line-mid",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-approval-panel",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-approval-panel",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-approval-panel",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-ask-open",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-ask-open",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-ask-open",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-ask-panel",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-ask-panel",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-ask-panel",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-asked",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-asked",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-asked",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-answer",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-answer",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-answer",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-needs-question",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-needs-question",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-needs-question",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-decline-reasons",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-decline-reasons",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-decline-reasons",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-panel-decline-reasons",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-panel-decline-reasons",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-panel-decline-reasons",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-run",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-run",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-run",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-detail",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-detail",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-detail",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-panel",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-panel",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-panel",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-needs",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-needs",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-needs",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-teams",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-teams",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-teams",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-watchlist",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-watchlist",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-watchlist",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-workflows-last-run",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-workflows-last-run",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-workflows-last-run",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-check-card-declined",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-check-card-declined",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-check-card-declined",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-thread-kept",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-thread-kept",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-thread-kept",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-access",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-access",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-access",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "runs-mark-approval",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "runs-mark-approval",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "runs-mark-approval",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-asked-needs",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-asked-needs",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-asked-needs",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-decided",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-decided",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-decided",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-refused",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-refused",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-refused",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-decide",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-decide",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-decide",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-abilities",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-abilities",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-abilities",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-panel",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-panel",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-panel",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-workflows",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-workflows",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-workflows",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-workflow-page",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-workflow-page",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-workflow-page",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-watchlist",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-watchlist",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-watchlist",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-offline",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-offline",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-offline",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-alice-n8n-refused",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-alice-n8n-refused",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-alice-n8n-refused",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-alice-build-planned",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-alice-build-planned",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-alice-build-planned",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-alice-n8n-change",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-alice-n8n-change",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-alice-n8n-change",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-home",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-home",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-home",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-build-n8n",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-build-n8n",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-build-n8n",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-workflow-n8n",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-workflow-n8n",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-workflow-n8n",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-menu-n8n",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-menu-n8n",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-menu-n8n",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-n8n-ask",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-n8n-ask",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-n8n-ask",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-n8n-dialog",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-n8n-dialog",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-n8n-dialog",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "roles-settings-people",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "roles-settings-people",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "roles-settings-people",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-people",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-people",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-people",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-declines",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-declines",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-declines",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "fix-edit-tickets",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "fix-edit-tickets",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "fix-edit-tickets",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "fix-gitlab",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "fix-gitlab",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "fix-gitlab",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "fix-day-choice",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "fix-day-choice",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "fix-day-choice",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "fix-open-software",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "fix-open-software",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "fix-open-software",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "fix-run-log",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "fix-run-log",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "fix-run-log",
+      "width": 1000,
+      "problems": []
+    }
+  ]
+}

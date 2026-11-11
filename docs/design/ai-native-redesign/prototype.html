@@ -176,6 +176,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .brand { font-size: 1rem; }
   .brand-ai { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
+/* Wider than a phone, the header lines up with the page under it: past the rail, in the same column as the content. */
+@media (min-width: 901px) {
+  .hdr { display: grid; grid-template-columns: 96px minmax(0, 1fr) 8px; }
+  .hdr-in { grid-column: 2; width: 100%; max-width: 1180px; padding-left: 16px; padding-right: 16px; }
+}
 /* The rail (ADR 0043): a slim column on the left with Chat, Workflows and Watchlist. On a phone it is a bar across the top. */
 .shell { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: start; }
 .rail { position: sticky; top: calc(60px + env(safe-area-inset-top, 0px)); display: grid; gap: 4px; padding: 6px 6px 0 12px; }
@@ -360,7 +365,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .composer textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Once the conversation starts, Home is the chat: the box docks at the bottom and the thread fills the page (ADR 0043). */
 .wrap.chatmode { max-width: none; width: 100%; margin: 0; padding: 0; flex: 1; min-height: 0; overflow: hidden; }
-.home.chatlayout { display: flex; gap: 0; height: 100%; max-width: none; margin: 0; }
+/* The chat and its side panel share the page's column, so on a wide screen they sit together under the header. */
+.home.chatlayout { display: flex; gap: 0; height: 100%; width: 100%; max-width: 1180px; margin: 0 auto; }
 .chatcol { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
 .chatbar, .chatin, .chatdock { width: 100%; max-width: 820px; margin: 0 auto; padding-inline: 16px; }
 .chatbar { padding-top: 12px; display: grid; gap: 8px; }
@@ -371,8 +377,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .pinned .ico { width: 20px; height: 24px; display: grid; place-items: center; }
 .pinned .ico svg { width: 20px; height: 20px; }
 .pinned-text { display: grid; min-width: 0; }
-.pinned-text span { font-size: 0.875rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@media (max-width: 600px) { .pinned { grid-template-columns: 20px auto minmax(0, 1fr); } .pinned-text { grid-column: 2 / -1; } .pinned > .btn { grid-column: 2; justify-self: start; } .pinned > .linkbtn { grid-column: 3; justify-self: start; } .pinned-text span { white-space: normal; } }
+/* The why wraps rather than being cut, so a long one, such as an Approver's request beside the side panel, is read whole. */
+.pinned-text span { font-size: 0.875rem; color: var(--muted); }
+@media (max-width: 600px) { .pinned { grid-template-columns: 20px auto minmax(0, 1fr); } .pinned-text { grid-column: 2 / -1; } .pinned > .btn { grid-column: 2; justify-self: start; } .pinned > .linkbtn { grid-column: 3; justify-self: start; } }
 /* While chatting, the app is one column exactly as tall as the window, so nothing depends on header heights. */
 html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 #app.chatting { position: relative; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
@@ -391,6 +398,9 @@ html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 .sp-bar h2 { font-size: 1.125rem; overflow-wrap: anywhere; }
 .sp-body { flex: 1; overflow-y: auto; padding: 16px; display: grid; gap: 14px; align-content: start; }
 .sp-problem { display: grid; gap: 10px; }
+/* The panel widens only while the Planner builds, to show the n8n blocks going in (ADR 0043). */
+.sidepanel.wide { flex-basis: min(560px, 50%); }
+.sidepanel .n8n-canvas { margin: 0; }
 @media (max-width: 900px) { .sidepanel { position: fixed; inset: 0; z-index: var(--z-overlay); flex: none; border-left: 0; padding-top: env(safe-area-inset-top, 0px); } }
 .ngroup { display: grid; gap: 8px; }
 .ngroup + .ngroup { margin-top: 12px; }
@@ -408,6 +418,9 @@ html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 @container answer (max-width: 520px) { .wfcheck .row { grid-template-columns: minmax(0, 1fr); } .wfcheck .row > [data-flow-of], .wfcheck .row > .btn { justify-self: start; grid-row: 3; margin-top: 8px; } .wfcheck .row-last { grid-row: 2; } }
 .pcard.why .pcard-h .face { flex: none; }
 .cmsg.me { grid-template-columns: minmax(0, 1fr); justify-items: end; }
+/* The body spans the column, so the bubble's 90% is of the column, not of its own text: it wraps only when it must, and
+   its right edge lines up with the answers under it. */
+.cmsg.me .cmsg-body { justify-self: stretch; justify-items: end; }
 .cmsg.me .cmsg-bubble { max-width: min(560px, 90%); background: var(--sunk); border-radius: var(--r-card) var(--r-card) 4px var(--r-card); overflow-wrap: anywhere; }
 /* What I can do, and what I can't do yet. Built from the tool list, the same rule the Planner is held to. */
 .abil { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--hair); border-radius: var(--r-card); overflow: hidden; }
@@ -432,6 +445,10 @@ html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 .composer.team-ask { margin-top: 16px; }
 .draft-row .btns { gap: 6px; }
 .tcard { margin-top: 8px; }
+.abil.one { grid-template-columns: minmax(0, 1fr); }
+/* Said once on each page an Approver can only read (ADR 0043). */
+.pagehead p.ops-note { font-size: 0.875rem; margin-top: 8px; }
+.home-note { margin: 28px auto 0; text-align: center; }
 .abil-foot { grid-column: 1 / -1; padding: 10px 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 0.875rem; }
 @media (max-width: 600px) { .abil { grid-template-columns: minmax(0, 1fr); } .abil > div + div { border-left: 0; border-top: 1px solid var(--rule); } }
 /* The Planner's cards: what it filled in, for one yes. */
@@ -503,6 +520,8 @@ html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 .wf-next { font-size: 0.875rem; color: var(--muted); white-space: nowrap; }
 .wf-act { justify-self: end; position: relative; z-index: var(--z-raised); }
 .wf-act:empty { display: none; }
+/* When no row has an action, the list gives that column to the descriptions. */
+@media (min-width: 961px) { .wf-list.no-act .wf-row { grid-template-columns: minmax(0, 1fr) auto 172px; } }
 .section > h2 .sec-tool { margin-left: auto; }
 .wf-add { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 16px 20px; border: 0; border-radius: 0 0 var(--r-card) var(--r-card); background: none; color: var(--muted); cursor: pointer; transition: background-color var(--dur-press) ease, transform var(--dur-press) var(--ease-out); }
 .wf-add b { color: var(--ink); }
@@ -543,6 +562,8 @@ html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 .menuwrap { position: relative; flex: none; }
 .menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: var(--z-raised); min-width: 200px; display: grid; padding: 6px; background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-card); box-shadow: 0 8px 24px rgba(18, 20, 23, 0.12); }
 .menu [role="menuitem"] { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 0 12px; border: 0; border-radius: var(--r-ctl); background: none; color: var(--ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+/* The menu is as wide as its longest item, such as Open in n8n with its Planned tag, so no item wraps around its icon. */
+.menu { width: max-content; max-width: calc(100vw - 32px); }
 .menu [role="menuitem"]:hover, .menu [role="menuitem"]:focus-visible { background: var(--sunk); }
 .menu [role="menuitem"].danger { color: var(--red-ink); }
 .menu hr { margin: 6px 0; border: 0; border-top: 1px solid var(--rule); }
@@ -562,8 +583,9 @@ details.tech h3 { font-size: 0.875rem; font-weight: 600; color: var(--muted); ma
 .steps .what { font-weight: 600; }
 .steps .how { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 4px; font-size: 0.875rem; color: var(--muted); }
 .steps.inline li { padding: 6px 0; border-top: 0; }
-.steps.inline li > div { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
-.steps.inline .how { margin-top: 0; }
+/* The face keeps its own column, so a step that wraps lines up under its first line, not under the face. */
+.steps.inline li > div { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 4px 10px; }
+.steps.inline .how { margin-top: 0; grid-column: 2; }
 .sw-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
 .sw-table th { text-align: left; font-size: 0.875rem; color: var(--muted); font-weight: 600; padding: 0 12px 8px 0; }
 .sw-table td { padding: 12px 12px 12px 0; border-top: 1px solid var(--rule); vertical-align: top; }
@@ -689,6 +711,9 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .chat-marker { display: flex; align-items: center; gap: 12px; font-size: 0.875rem; font-weight: 600; color: var(--muted); text-align: center; }
 .chat-marker::before, .chat-marker::after { content: ""; flex: 1 1 24px; height: 1px; background: var(--rule); }
 .chat-marker > span { max-width: 560px; }
+/* The run page's log gives each entry its time (ADR 0043). */
+.log-at { font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 8px; }
+.cmsg-who .log-at { margin: 0 0 0 8px; }
 .chat-marker > span > svg { vertical-align: -2px; margin-right: 6px; }
 .chat-marker .faces { vertical-align: -5px; margin-right: 8px; }
 .chat-marker.wait { color: var(--amber-ink); }
@@ -821,6 +846,9 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .person-name { display: grid; gap: 2px; min-width: 0; }
 .roles { display: flex; flex-wrap: wrap; gap: 4px 18px; }
 .roles .checkrow { margin: 0; }
+/* n8n access isn't a role, so it sits under the roles, and the two roles line up down the list. */
+.person .person-n8n { grid-column: 3; margin: 0; }
+.roles-text { font-weight: 600; text-align: right; }
 .person-note { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 0; }
 .role-rules { margin: 4px 0 18px; }
 /* Usage figures: one container split by hairlines, label over value. No tile per figure. */
@@ -1145,6 +1173,7 @@ button.schip { cursor: pointer; }
 .mocknote b { font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.72rem; color: var(--mock-dim); }
 .testctl-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .testctl-row > span:first-child { min-width: 52px; color: var(--mock-dim); font-weight: 600; }
+.testctl-who { flex-basis: 100%; padding-left: 60px; color: var(--mock-dim); font-size: 0.82rem; }
 .testctl-sims { display: grid; gap: 6px; justify-items: start; }
 .testctl-sims > span { color: var(--mock-dim); font-weight: 600; }
 .testctl-about summary { cursor: pointer; color: var(--mock-dim); font-weight: 600; }
@@ -1375,7 +1404,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const PEOPLE = {
     alice: { name: 'Alice', role: 'Operator and Approver', tone: 1, op: true, ap: true },
     bob: { name: 'Bob', role: 'Approver', tone: 2, op: false, ap: true },
-    carol: { name: 'Carol', role: 'Operator', tone: 4, op: true, ap: false },
+    carol: { name: 'Carol', role: 'Operator', tone: 4, op: true, ap: false, n8n: true },
     siti: { name: 'Siti', role: 'Approver', tone: 3, op: false, ap: true },
     arun: { name: 'Arun', role: 'Approver', tone: 4, op: false, ap: true },
     dana: { name: 'Dana', role: 'Support developer', tone: 3 },
@@ -1557,11 +1586,14 @@ details > .m-close { animation: fold 140ms ease-in both; }
     jira: { keyEnd: '3d', expires: 'Mon 1 Feb 2027', days: 97, tested: 'today, 9:00', down: false },
     teams: { keyEnd: 'Wq', expires: 'Sat 17 Apr 2027', days: 172, tested: 'today, 9:00', down: false },
   });
+  /* Each person has their own conversation with the Planner, and their own set-up card in it. desks keeps the ones of
+     the people not signed in now, so switching person in the test controls never shows one person another's chat. */
+  const newChat = () => ({ msgs: [], seq: 0, busy: false, pending: null, hero: 'idle', abil: false, text: '' });
   const fresh = () => ({
-    firstDay: false, user: 'alice', view: { name: 'home' },
+    firstDay: false, user: 'alice', view: { name: 'home' }, desks: {},
     /* Test controls (spec 16): planned features hidden, nothing outlined, a model connected. */
     preview: false, markUnbuilt: false, modelOn: true, teamAskText: '',
-    chat: { msgs: [], seq: 0, busy: false, pending: null, hero: 'idle', abil: false, text: '' }, justOn: null,
+    chat: newChat(), justOn: null,
     teams: false, modal: null, modalArg: null, toast: null, toastAct: null, testOpen: false,
     sw: 'waiting', swBy: null, swOwner: 'carol',
     issues: 'failed',
@@ -1581,7 +1613,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     modelForm: { provider: 'aisg', address: '', key: '', show: false, step: 'key', model: '', err: {}, busy: '' },
     modelLog: [['Mon 19 Oct, 14:02', 'Alice connected AI Singapore gateway with claude-sonnet-5-5. Key ending 7f.']], modelPending: null, modelTest: '', simBadKey: false,
     setTab: 'connections', setLog: [], roleErr: {}, newPerson: { name: '', email: '', op: true, ap: false, err: {} },
-    roles: { alice: { op: true, ap: true }, bob: { op: false, ap: true }, carol: { op: true, ap: false }, siti: { op: false, ap: true }, arun: { op: false, ap: true } },
+    /* n8n access (ADR 0043) is for Operators only, because a change in n8n changes a workflow. Carol has it. */
+    roles: { alice: { op: true, ap: true }, bob: { op: false, ap: true }, carol: { op: true, ap: false, n8n: true }, siti: { op: false, ap: true }, arun: { op: false, ap: true } },
     conns: connsFor(false),
     connForm: null, connTest: {},
     usageLimit: 50, limitForm: { value: '50', err: '' },
@@ -1681,6 +1714,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
      a planned capability in CAPS, or one of these designs that isn't a capability. */
   const PLANNED_FEATURES = { namedApprovers: 'ADR 0024', toolDraft: 'ADR 0037', n8n: 'ADR 0026, 0027', codingAgents: 'design note, needs NCS’s agreement', replaceKey: 'ADR 0039, not written', monthly: 'no backend shape for it', agentChange: 'handover L04', usage: 'design only' };
   const shows = (f) => S.preview && (f in PLANNED_FEATURES || (f in CAPS && CAPS[f].base === 'planned'));
+  /* n8n views show only to people with n8n access (ADR 0043), and only with Planned features shown, because the Portal
+     doesn't open n8n yet (ADR 0026, 0027). Everyone else sees the plain steps, with no n8n words. */
+  const n8nOK = () => shows('n8n') && !!me().n8n;
   const PLANNED_TAG = '<span class="tag planned" title="On the team’s plan. Not built.">Planned</span>';
   /* The one answer for a tool that doesn't exist yet, on Home, on Tools and in an agent's dialog (I3). */
   const NEW_TOOL = 'I can’t add that yet. The team decides on new tools.';
@@ -1694,9 +1730,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     nudge: { name: 'Weekly closed-ticket summary', what: 'Sums up the tickets closed in Jira project MOCK this week, every Friday, and puts the summary in one Jira ticket.', sched: { freq: 'week', day: 'Friday', time: '16:00' }, next: 'Fri 30 Oct, 16:00', sort: 2, agents: ['lead', 'jira', 'summary'] },
     access: { name: 'Quarterly access review', what: 'Lists who can use Entra ID, the admin tools and GitLab, asks managers to confirm, and removes access nobody confirms.', when: 'First Monday of each quarter at 9:00', next: 'Mon 4 Jan 2027, 9:00', sort: 5, agents: ['lead', 'access', 'writer'], fixedSchedule: true, planned: 'access' },
   };
-  const OWNER = { sw: () => S.swOwner, issues: () => 'alice', nudge: () => 'alice', access: () => 'carol', conf: () => 'alice' };
-  /* Workflows made on Home (conf, and the made list) belong to Alice. */
-  const ownerOf = (id) => (OWNER[id] ? OWNER[id]() : 'alice');
+  const OWNER = { sw: () => S.swOwner, issues: () => 'alice', nudge: () => 'alice', access: () => 'carol', conf: () => S.nr && S.nr.by };
+  /* A workflow made on Home (conf, and the made list) belongs to whoever turned it on. */
+  const ownerOf = (id) => (OWNER[id] ? OWNER[id]() : madeOf(id).nr.by);
   const madeOf = (id) => (id.startsWith('made:') ? S.made[+id.slice(5)] : null);
 
   /* ---------- Named Approvers (ADR 0024, planned) ----------
@@ -1780,6 +1816,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
      A schedule change publishes a new version, from the chat's edit card or the page's schedule editor alike. Undo
      publishes the version before it again, so the list only grows. Version 1 is the one the workflow was turned on with. */
   const versionsOf = (id) => [{ v: 1 }].concat(S.vers[id] || []);
+  /* A workflow made on Home reads the tickets of its schedule's period, as its set-up card does when the two disagree:
+     run every day, it reads the day's tickets. Open tickets have no period. */
+  const nrOf = (id) => (id === 'conf' ? S.nr : madeOf(id) ? madeOf(id).nr : null);
+  const periodFor = (nr, sched) => (nr.tickets && nr.tickets !== 'open' && SCHED_PERIOD[sched.freq]) || nr.period;
   const verNow = (id) => versionsOf(id).length;
   /* Work everything out first, then write, so a failure leaves nothing half-saved. Saving the watchlist's schedule
      makes the saver its owner, and an owner can't be one of its named Approvers, so they come off that list. */
@@ -1789,7 +1829,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const named = id === 'sw' && apprOf('sw') ? copyAppr(apprOf('sw')) : null;
     if (named) named.steps.forEach((x) => { if (x.first === S.user) { x.first = hasBackup(x) ? x.backup : ''; x.backup = 'none'; off = true; } else if (x.backup === S.user) { x.backup = 'none'; off = true; } });
     S.sched[id] = { ...sched };
-    if (id === 'conf') S.nr = { ...S.nr, sched: { ...sched } };
+    const nr = nrOf(id);
+    if (nr) { const next = { ...nr, sched: { ...sched }, period: periodFor(nr, sched) }; if (id === 'conf') S.nr = next; else madeOf(id).nr = next; }
     if (id === 'sw') { S.swOwner = S.user; if (off) S.appr.sw = named; }
     const v = verNow(id) + 1;
     (S.vers[id] = S.vers[id] || []).push({ v, from, to: { ...sched }, by: S.user, undid, via });
@@ -1797,7 +1838,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
   const verText = (x) => (x.v === 1 ? 'The version it was turned on with.' : x.undid ? `${nm(x.by)} undid version ${x.undid}, so it runs ${lc(schedText(x.to))} again.` : `${nm(x.by)} changed when it runs from ${lc(schedText(x.from))} to ${lc(schedText(x.to))}.`);
   /* The version list a workflow's page shows once it has more than one, newest first. */
-  const versionsList = (id) => `<ol class="timeline" aria-label="Versions, newest first">${versionsOf(id).slice().reverse().map((x) => `<li><b>Version ${x.v}</b><span>${x.v > 1 ? 'Today, 9:10. ' : ''}${verText(x)}${x.v === verNow(id) ? ' This is the version running now.' : ''}</span></li>`).join('')}</ol>`;
+  const versionsList = (id) => `<ol class="timeline" aria-label="Versions, newest first" data-unbuilt="Versions (ADR 0043)">${versionsOf(id).slice().reverse().map((x) => `<li><b>Version ${x.v}</b><span>${x.v > 1 ? 'Today, 9:10. ' : ''}${verText(x)}${x.v === verNow(id) ? ' This is the version running now.' : ''}</span></li>`).join('')}</ol>`;
   const versionsPanel = (id) => (S.vers[id] ? `<div class="panel" style="margin-top:16px"><h2>Versions</h2>${versionsList(id)}</div>` : '');
   const routineIds = () => (S.firstDay ? [] : ['sw', 'issues', 'nudge', 'access']).concat(S.made.map((_, i) => `made:${i}`), S.conf !== 'none' ? ['conf'] : []).filter((id) => !S.deleted[id] && (!BASE[id] || !BASE[id].planned || shows(BASE[id].planned)));
   const has = (id) => routineIds().includes(id);
@@ -2044,7 +2085,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const e = S.wiz.edits;
     const f = draftNr();
     const rows = [];
-    if (it.badSource) rows.push({ key: 'source', label: 'Reads', value: it.badSource, state: 'cant', note: `I can only read ${andList(canRead())} so far. Go back and describe a task about Jira tickets, or ask the team to add ${it.badSource}.`, block: 'the task uses a system I can read' });
+    if (it.badSource) rows.push({ key: 'source', label: 'Reads', value: it.badSource, state: 'cant', note: `I can only read ${andList(canRead())} so far, so the part I can do reads Jira tickets instead.`, block: 'the task uses a system I can read' });
     /* The sentence says the schedule in words; the When section holds its control and its missing state. */
     const s = S.wiz.sched || { freq: it.freq || '', day: it.day || '', time: it.time || '' };
     rows.push({ key: 'when', label: 'When', value: Object.keys(schedProblems(s)).length ? whenAsked(it) : schedText(s), state: 'ok', note: '' });
@@ -2332,13 +2373,18 @@ details > .m-close { animation: fold 140ms ease-in both; }
      The access review's removals were asked on Monday at 9:30. */
   const SW_ASKED = new Date(2026, 9, 26, 9, 41);
   const ACCESS_ASKED = new Date(2026, 9, 26, 9, 30);
+  /* When each request was sent. A run made today asks now. Every decision in the sample is made now, and the decisions
+     list, the request's card, Teams and the run's log all read DECIDED_AT, so they give one time. */
+  const ASKED_AT = { sw: SW_ASKED, access: ACCESS_ASKED };
+  const DECIDED_AT = NOW;
   /* A waiting approval request. It keeps the people and waits it was sent with, even if the workflow changes later. */
   function req(id) {
     const rec = reqRecord(id);
     if (!rec || !['waiting', 'expired'].includes(rec.state)) return null;
     const a = reqAppr(id);
     const step = a ? Math.min(rec.yes.length, a.steps.length - 1) : 0;
-    const asked = id === 'sw' ? SW_ASKED : id === 'access' && !rec.yes.length ? ACCESS_ASKED : NOW;
+    /* The access review's second step was asked when the first was decided. */
+    const asked = id === 'access' && rec.yes.length ? DECIDED_AT : ASKED_AT[id] || NOW;
     const escalated = id === 'sw' || (id === 'access' && !rec.yes.length) || (id === 'conf' && S.confAsk > 0);
     const expired = rec.state === 'expired';
     const parties = partiesOf(id);
@@ -2413,7 +2459,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         workflow: wf, end: helpers.length + 2, fail: helpers.length + 2, state: 'failed',
         headline: 'Stopped before changing anything',
         stations: [
-          { label: 'Started', sub: 'Today 9:15', who: 'p:carol', msg: { who: 'portal', text: 'The run started at 9:15 with the version Carol published in n8n at 9:12.' } },
+          { label: 'Started', sub: 'Today 9:15', who: 'p:carol', msg: { who: 'portal', text: `The run started at 9:15 with the version Carol published${inN8n()} at 9:12.` } },
           { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: `I’m bringing in ${andList(names)}.` } },
           ...helpers.map((a, i) => ({ label: AGENTS[a].name, who: a, msg: { who: a, text: i === helpers.length - 1 ? 'I drafted the changes. Nothing is written yet.' : 'I gathered what the next step needs.' } })),
           { label: 'Make the changes', who: 'platform', msg: { who: 'platform', tone: 'bad', text: 'The step Make the approved changes didn’t run, because nobody said yes to this run. Nothing was written.' } },
@@ -2647,8 +2693,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const approvalsWord = (n) => (n === 1 ? '1 approval' : `${n} approvals`);
 
   /* The rail (ADR 0043): Chat, Workflows and Watchlist, each with a count. A slim column on the left; on a phone it is a bar across the top.
-     Workflows counts what needs you. The Watchlist counts software that needs action. An Approver who can't set up workflows
-     sees what needs them on Chat, where their approvals are. */
+     Workflows counts what needs you. The Watchlist counts software that needs action, for an Operator, who can act on it. An
+     Approver who can't set up workflows sees what needs them on Chat, where their approvals are. */
   /* What the Software page lists under Needs attention. The rail's badge and the page's heading both read it. */
   function swAttnCount(hit = () => true) {
     const full = shows('registries');
@@ -2667,7 +2713,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const items = [
       ['home', 'Chat', I.chat(22), v === 'home', count(me().op ? 0 : k, 'needs')],
       ['workflows', 'Workflows', I.grid(22), ['workflows', 'workflow'].includes(v) || (v === 'run' && !swRun), count(me().op ? k : 0, 'needs')],
-      ['software', 'Watchlist', I.box(22), v === 'software' || swRun, count(swAttnCount(), 'sw')],
+      ['software', 'Watchlist', I.box(22), v === 'software' || swRun, count(me().op ? swAttnCount() : 0, 'sw')],
     ];
     return `<nav class="rail" aria-label="Main">${items.map(([arg, label, icon, on, n]) => `<button class="rail-a" data-act="go" data-arg="${arg}"${on ? ' aria-current="page"' : ''}>${icon}<span>${label}</span>${n}</button>`).join('')}</nav>`;
   }
@@ -2695,15 +2741,15 @@ details > .m-close { animation: fold 140ms ease-in both; }
     /* The approvals this person can decide, from the same request records as the Teams badge. */
     mayDecide().forEach((id) => { const c = NEED_CARD[id](); out.push({ wf: id, yes: true, kind: 'wait', icon: I.shield(22), ...c, body: `${c.body || ''}${askLineHtml(req(id), u)}`, actions: `<button class="btn primary" data-act="run" data-arg="${id}">Review and decide</button>` }); });
     if (op && lsProblem()) out.push({ kind: 'wait', rank: 3, icon: I.alert(22), ...lsProblem() });
-    if (has('conf') && S.conf === 'declined' && u === 'alice') out.push({ kind: 'wait', rank: 4, icon: I.x(22), title: `${nm(S.confBy)} declined your test run`, meta: esc(S.nr.name), body: '', held: [declineTail('conf'), heldWhy('conf')].filter(Boolean).join(' '), actions: `<button class="btn primary" data-act="run" data-arg="conf">See the run</button>${testAgain('Do a test run again', 'btn')}` });
-    if (has('conf') && S.conf === 'expired' && u === 'alice') out.push({ wf: 'conf', kind: 'wait', rank: 4, icon: I.clock(22), title: 'Nobody answered on your test run', meta: `${esc(S.nr.name)} · stopped ${at(req('conf').expiresAt)}`, held: heldWhy('conf'), body: `<p class="small muted">${whoAnd(askedOf(req('conf')))} didn’t answer in time, so nothing was written.${heldWhy('conf') ? '' : ` Run it again${shows('namedApprovers') ? ', or choose other Approvers' : ''}.`}</p>`, actions: `${testAgain('Do a test run again')}${changeApproversBtn('conf', 'apprFromRun')}` });
+    if (has('conf') && S.conf === 'declined' && u === ownerOf('conf')) out.push({ kind: 'wait', rank: 4, icon: I.x(22), title: `${nm(S.confBy)} declined your test run`, meta: esc(S.nr.name), body: '', held: [declineTail('conf'), heldWhy('conf')].filter(Boolean).join(' '), actions: `<button class="btn primary" data-act="run" data-arg="conf">See the run</button>${testAgain('Do a test run again', 'btn')}` });
+    if (has('conf') && S.conf === 'expired' && u === ownerOf('conf')) out.push({ wf: 'conf', kind: 'wait', rank: 4, icon: I.clock(22), title: 'Nobody answered on your test run', meta: `${esc(S.nr.name)} · stopped ${at(req('conf').expiresAt)}`, held: heldWhy('conf'), body: `<p class="small muted">${whoAnd(askedOf(req('conf')))} didn’t answer in time, so nothing was written.${heldWhy('conf') ? '' : ` Run it again${shows('namedApprovers') ? ', or choose other Approvers' : ''}.`}</p>`, actions: `${testAgain('Do a test run again')}${changeApproversBtn('conf', 'apprFromRun')}` });
     Object.entries(S.roles).filter(([w, r]) => r.pendingAp && PEOPLE[u].ap && u !== r.pendingBy && u !== w).forEach(([w]) => out.push({ kind: 'tool', icon: I.shield(22), title: `Confirm ${nm(w)} as an Approver`, meta: `Asked by ${nm(S.roles[w].pendingBy)}`, body: '<p class="small muted">Approvers say yes or no to the changes a workflow wants to make.</p>', actions: '<button class="btn primary" data-act="setGo" data-arg="people">Review in Settings</button>' }));
     if (op) expiring().forEach((k) => out.push({ kind: 'wait', rank: 3, icon: I.clock(22), title: `The ${CONNS[k].name} key expires in ${S.conns[k].days} days`, meta: `Expires ${S.conns[k].expires}`, body: `<p class="small muted">Ask whoever looks after the platform to replace it before then, or everything that uses ${CONNS[k].name} stops.</p>`, actions: '<button class="btn primary" data-act="setGo" data-arg="connections">See it in Settings</button>' }));
     if (op && shows('usage') && usagePct() >= 80) out.push({ kind: 'wait', rank: 3, icon: I.alert(22), title: usagePct() >= 100 ? 'The AI usage limit is reached' : `AI usage is at ${usagePct()}% of this month’s limit`, meta: `US$${usage().cost.toFixed(2)} of US$${S.usageLimit}`, body: `<p class="small muted">${usagePct() >= 100 ? 'Agents have stopped asking the AI model until the 1st of next month, or until someone raises the limit.' : 'At 100%, agents stop asking the AI model until the 1st of next month.'}</p>`, actions: '<button class="btn primary" data-act="setGo" data-arg="usage">See usage in Settings</button>' });
     if (S.modelPending && PEOPLE[u].ap && u !== S.modelPending.byId) out.push({ kind: 'tool', icon: I.shield(22), title: 'Confirm a new AI model address', meta: `${esc(S.modelPending.address)} · entered by ${nm(S.modelPending.byId)}`, body: '<p class="small muted">Agents would send their prompts to this address. Until you confirm it, runs keep using the current model.</p>', actions: '<button class="btn primary" data-act="go" data-arg="settings">Review in Settings</button>' });
-    if (shows('toolDraft') && S.jiraComp === 'asked' && canOkTool() && u !== S.jiraCompAsker) out.push({ kind: 'tool', icon: I.tool(22), title: `OK a new tool: ${TOOLS.jiraComp[0]}`, meta: `Asked by ${nm(S.jiraCompAsker)} for the Ticket writer`, body: `<p class="small muted">It changes data, so an Approver must OK it once before any agent can use it.</p>${PLANNED_TAG}`, actions: '<button class="btn primary" data-act="toolOpen" data-arg="jiraComp">Review the tool</button>' });
-    if (shows('toolDraft') && S.jiraComp === 'ok' && u === S.jiraCompAsker && !S.jiraCompSeen) out.push({ kind: 'ok', icon: I.check(22), title: `${nm(S.jiraCompBy)} OK’d the new tool. You can give it to the Ticket writer.`, meta: TOOLS.jiraComp[0], body: PLANNED_TAG, actions: '<button class="btn primary" data-act="toolAddTo" data-arg="writer">Give it to the Ticket writer</button>' });
-    if (op) Object.entries(S.n8nChg).forEach(([id, c]) => out.push({ wf: id, kind: 'wait', icon: I.alert(22), title: `${nm(c.by)}’s change in n8n removed Ask for a yes`, meta: `${esc(R(id).name)} · published ${c.when}`, body: `<p class="small muted">The next run will stop before it changes anything. Undo the change, or put the step back in n8n.</p>${PLANNED_TAG}`, actions: `<button class="btn primary" data-act="n8nUndo" data-arg="${id}">Undo ${nm(c.by)}’s change</button><button class="btn" data-act="workflow" data-arg="${id}">See the workflow</button>` }));
+    if (shows('toolDraft') && S.jiraComp === 'asked' && canOkTool() && u !== S.jiraCompAsker) out.push({ kind: 'tool', planned: true, icon: I.tool(22), title: `OK a new tool: ${TOOLS.jiraComp[0]}`, meta: `Asked by ${nm(S.jiraCompAsker)} for the Ticket writer`, body: `<p class="small muted">It changes data, so an Approver must OK it once before any agent can use it.</p>${PLANNED_TAG}`, actions: '<button class="btn primary" data-act="toolOpen" data-arg="jiraComp">Review the tool</button>' });
+    if (shows('toolDraft') && S.jiraComp === 'ok' && u === S.jiraCompAsker && !S.jiraCompSeen) out.push({ kind: 'ok', planned: true, icon: I.check(22), title: `${nm(S.jiraCompBy)} OK’d the new tool. You can give it to the Ticket writer.`, meta: TOOLS.jiraComp[0], body: PLANNED_TAG, actions: '<button class="btn primary" data-act="toolAddTo" data-arg="writer">Give it to the Ticket writer</button>' });
+    if (op) Object.entries(S.n8nChg).forEach(([id, c]) => out.push({ wf: id, kind: 'wait', planned: true, icon: I.alert(22), title: n8nChgTitle(c), meta: `${esc(R(id).name)} · published ${c.when}`, body: `<p class="small muted">The next run will stop before it changes anything. Undo the change${n8nOK() ? ', or put the step back in n8n' : ''}.</p>${PLANNED_TAG}`, actions: `<button class="btn primary" data-act="n8nUndo" data-arg="${id}">Undo ${nm(c.by)}’s change</button><button class="btn" data-act="workflow" data-arg="${id}">See the workflow</button>` }));
     /* A paused workflow asks nothing of anyone until it's resumed. Most urgent first (spec 5.1): stopped runs, then
        approvals (urgent ones first), then keys and usage, then confirmations. */
     return out.filter((x) => !x.wf || !S.paused[x.wf]).sort((a, b) => (a.rank ?? NEED_RANK[a.kind]) - (b.rank ?? NEED_RANK[b.kind]));
@@ -2714,7 +2760,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     sw: () => ({ rank: urgentNote() ? 1 : 2, title: `3 upgrade tickets are waiting for your yes${urgentNote()}`, meta: 'Keep our software up to date · Software watchlist, Mon 26 Oct, 9:00', body: `<ul class="mini-list"><li>${shows('registries') ? `<b>Log4j core 2.14.1 → 2.25.2, urgent: critical and actively exploited</b> ${PLANNED_TAG}` : 'Log4j core 2.14.1 → 2.25.2'}</li><li>LangGraph 1.2.14 → 1.2.17</li><li>FastAPI 0.118.0 → 0.120.1</li></ul>` }),
     nudge: () => ({ title: '1 summary ticket is waiting for your yes', meta: 'Weekly closed-ticket summary · retried today after the fix' }),
     conf: () => ({ title: confWrite(S.nr).needTitle, meta: `${esc(S.nr.name)} · test run by ${nm(starterOf('conf'))}` }),
-    access: () => ({ title: `3 people would lose access. Your yes is ${req('access').step === 0 ? 'the first of two' : 'the second of two'}`, meta: `Quarterly access review · started by ${nm(starterOf('access'))}, ${S.accessRun.sub}`, body: `<ul class="mini-list">${ACCESS_REMOVALS.map((x) => `<li>${x}</li>`).join('')}</ul>${PLANNED_TAG}` }),
+    access: () => ({ planned: true, title: `3 people would lose access. Your yes is ${req('access').step === 0 ? 'the first of two' : 'the second of two'}`, meta: `Quarterly access review · started by ${nm(starterOf('access'))}, ${S.accessRun.sub}`, body: `<ul class="mini-list">${ACCESS_REMOVALS.map((x) => `<li>${x}</li>`).join('')}</ul>${PLANNED_TAG}` }),
   };
   /* The watchlist's moved project, as one item for Needs you and the watchlist's Needs attention. */
   function lsProblem() {
@@ -2722,7 +2768,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return { title: `GitHub can’t find ${LS_OLD}. It moved to ${LS_NEW}.`, meta: 'Software watchlist · LangServe', body: '<p class="small muted">LangServe is skipped until this is fixed. The AI troubleshooter suggests reading it from the new address.</p>', actions: `<button class="btn primary" data-act="useNewAddress" data-unbuilt="Use the new address (only a GitHub rename is built; a 404 names no new home, so the platform refuses it)">Use the new address<span class="vh"> for LangServe</span></button><button class="btn" data-act="go" data-arg="software">See the watchlist</button>` };
   }
   /* Change who approves exists only with named Approvers (ADR 0024), so it is tagged Planned wherever it shows. */
-  const changeApproversBtn = (id, act = 'editAppr', cls = 'btn') => (shows('namedApprovers') ? `<button class="${cls}" data-act="${act}" data-arg="${id}" data-unbuilt="Named Approvers (ADR 0024)">${cls.includes('sm') ? I.edit() : ''}Change who approves ${PLANNED_TAG}</button>` : '');
+  const changeApproversBtn = (id, act = 'editAppr', cls = 'btn') => (shows('namedApprovers') && me().op ? `<button class="${cls}" data-act="${act}" data-arg="${id}" data-unbuilt="Named Approvers (ADR 0024)">${cls.includes('sm') ? I.edit() : ''}Change who approves ${PLANNED_TAG}</button>` : '');
   function says(text) { return `<div class="says">${face('trouble', 32)}<div><b>AI troubleshooter</b>${text}</div></div>`; }
   function taskCard(t, i = 0) {
     return `<article class="task" data-flip="h:${keyOf(t.title)}" data-stagger style="--i:${i}"${t.unbuilt ? ` data-unbuilt="${t.unbuilt}"` : ''}><span class="ico ${t.kind}">${t.icon}</span><div class="task-body"><h3 class="task-title">${t.title}</h3><div class="task-meta">${t.meta}</div>${t.body}${t.trouble ? says(answersDL(t.trouble)) : t.why ? says(t.why) : t.held ? `<p class="small muted">${t.held}</p>` : ''}${t.actions ? `<div class="btns">${t.actions}</div>` : ''}</div></article>`;
@@ -2791,35 +2837,34 @@ details > .m-close { animation: fold 140ms ease-in both; }
      from. Also the Planner's "what needs me". The built Home has Needs you, so the strip carries no mark of its own. */
   const firstSentence = (s) => s.replace(/<[^>]+>/g, '').split(/(?<=\.)\s/)[0];
   const oneAction = (html) => firstButton(html).replace('class="btn sm"', 'class="btn primary sm"');
+  /* A row has no room for the card's body, so a planned item carries its Planned tag on its title. */
   function needRow(t, i, primary) {
-    return `<li class="nrow" data-flip="n:${keyOf(t.title)}" data-stagger style="--i:${i}"${t.unbuilt ? ` data-unbuilt="${t.unbuilt}"` : ''}><span class="ico ${t.kind}">${t.icon}</span><div class="nrow-text"><b>${t.title}</b><span class="nrow-why">${t.held || (t.why ? firstSentence(t.why) : t.meta)}</span></div>${i === 0 && primary ? oneAction(t.actions) : firstButton(t.actions)}</li>`;
+    return `<li class="nrow" data-flip="n:${keyOf(t.title)}" data-stagger style="--i:${i}"${t.unbuilt ? ` data-unbuilt="${t.unbuilt}"` : ''}><span class="ico ${t.kind}">${t.icon}</span><div class="nrow-text"><b>${t.title}${t.planned ? ` ${PLANNED_TAG}` : ''}</b><span class="nrow-why">${t.held || (t.why ? firstSentence(t.why) : t.meta)}</span></div>${i === 0 && primary ? oneAction(t.actions) : firstButton(t.actions)}</li>`;
   }
-  /* o.total: the count shown when the strip leaves an item out. o.primary: false when the screen's one primary action sits elsewhere. */
+  /* o.primary: false when the screen's one primary action sits elsewhere. */
   function needsStrip(items, max = 3, unbuilt = '', o = {}) {
     const n = items.length;
     const primary = o.primary !== false;
     const shown = byGroup(items).slice(0, max);
     return `<section class="section needs" aria-labelledby="needs-h" data-flip-group="needs"${unbuilt ? ` data-unbuilt="${unbuilt}"` : ''}>
-      <h2 id="needs-h">Needs you <span class="count" data-val="needs-count">${o.total || n}</span></h2>
+      <h2 id="needs-h">Needs you <span class="count" data-val="needs-count">${n}</span></h2>
       ${NEED_GROUPS.map(([g, label]) => { const list = shown.filter((t) => needGroup(t) === g); return list.length ? `<div class="ngroup" role="group" aria-labelledby="ng-${g}"><h3 id="ng-${g}">${label}</h3><ul class="queue" data-flip-group="nrows-${g}">${list.map((t) => needRow(t, shown.indexOf(t), primary)).join('')}</ul></div>` : ''; }).join('')}
       ${n > max ? '<p class="small"><button class="linkbtn" data-act="go" data-arg="workflows">See all on Workflows</button></p>' : ''}
     </section>`;
   }
 
-  /* Home for an Approver who can't set up workflows (spec 5.3): what waits for their yes, with no box. */
-  function approverHome() {
-    const items = needs();
+  /* How much needs this person, in one sentence. An Approver's Home and the Planner's "what needs me" both say it, and
+     to an Approver whose items are all requests it names them as requests (spec 5.3). */
+  const needsWords = (items) => {
     const n = items.length;
-    const waits = items.filter((t) => t.kind === 'wait').length;
-    const coming = comingUp();
-    const firstLive = coming.find(([id]) => !S.paused[id]);
-    const line = !coming.length ? 'Nothing needs you yet. When a workflow wants to change something, it shows up here and in Teams.'
-      : n === 0 ? 'Nothing needs you right now.' : n === waits ? `${n === 1 ? '1 request is' : `${n} requests are`} waiting for your yes.` : `${n === 1 ? '1 thing needs' : `${n} things need`} you.`;
-    return `<div class="home">
-      <div class="hello"><h1 tabindex="-1">Good morning! ${me().name}</h1><p>${line}</p></div>
-      ${n ? needsSection(items) : `<div class="quiet"><b>All quiet</b>${firstLive ? `Next up: ${nextUp(firstLive)}.` : 'Nothing is scheduled yet.'}</div>`}
-      <p class="note" style="margin-top:28px">You’re an Approver, so you decide on requests. Operators set up workflows.</p>
-    </div>`;
+    if (!n) return 'Nothing needs you right now.';
+    return !me().op && items.every((t) => t.kind === 'wait') ? `${n === 1 ? '1 request is' : `${n} requests are`} waiting for your yes.` : `${n === 1 ? '1 thing needs' : `${n} things need`} you.`;
+  };
+  /* The line under an Approver's greeting: what waits for their yes, or the next run when nothing does. */
+  function approverLine(items) {
+    const first = comingUp().find(([id]) => !S.paused[id]);
+    if (!comingUp().length) return 'Nothing needs you yet. When a workflow wants to change something, it shows up here and in Teams.';
+    return `${needsWords(items)}${!items.length && first ? ` Next up: ${nextUp(first)}.` : ''}`;
   }
 
   /* One row at the top of a conversation names the most urgent item (ADR 0043). Open goes to that item, and N more opens the list. */
@@ -2837,12 +2882,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const more = items.length - 1;
     return `<div class="pinned" role="region" aria-label="Most urgent">
       <span class="ico ${t.kind}">${t.icon}</span>
-      <div class="pinned-text"><b>${t.title}</b><span>${t.held || (t.why ? firstSentence(t.why) : t.meta)}</span></div>
+      <div class="pinned-text"><b>${t.title}${t.planned ? ` ${PLANNED_TAG}` : ''}</b><span>${t.held || (t.why ? firstSentence(t.why) : t.meta)}</span></div>
       ${o ? `<button class="btn sm" data-act="${o.act}"${o.arg !== undefined ? ` data-arg="${o.arg}"` : ''}>Open<span class="vh">: ${firstSentence(t.title)}</span></button>` : ''}
       ${more ? `<button class="linkbtn" data-act="go" data-arg="workflows">${more} more<span class="vh"> that need you</span></button>` : ''}
     </div>`;
   }
-  const chatMode = () => S.view.name === 'home' && me().op && !!curModel() && S.chat.msgs.length > 0;
+  const chatMode = () => S.view.name === 'home' && !!curModel() && S.chat.msgs.length > 0;
   /* The side panel (ADR 0043) shows one item opened from a card in the chat, as a summary. It keeps no history. */
   const dockVar = () => {
     const d = $app.querySelector('.chatdock');
@@ -2855,7 +2900,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const narrow = () => window.matchMedia('(max-width: 900px)').matches;
   window.matchMedia('(max-width: 900px)').addEventListener('change', () => { if (S.panel) render(); });
   function itemOf(act, arg, el) {
-    if (el && el.dataset.open) { const [kind, id] = el.dataset.open.split(':'); return { kind, id }; }
+    /* A software's key can hold a colon ("ok:Redis"), so only the first one splits. */
+    if (el && el.dataset.open) { const at = el.dataset.open.indexOf(':'); return { kind: el.dataset.open.slice(0, at), id: el.dataset.open.slice(at + 1) }; }
     if (act === 'workflow' && arg !== 'sw') return { kind: 'workflow', id: arg };
     if (act === 'run') return { kind: 'run', id: arg };
     return null;
@@ -2867,9 +2913,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
     /* The workflow being set up, while the Planner builds it (ADR 0043): its steps go in one by one, as plain steps. */
     if (p.kind === 'build') {
       const f = draftNr();
-      const steps = draftSteps(f);
-      const shown = Math.min(p.shown, steps.length);
-      return { title: esc(S.wiz.name.trim() || f.name), body: `<div><span class="pill">Draft</span></div><p${shown < steps.length ? ' class="muted"' : ''}>${shown < steps.length ? 'Adding the steps…' : 'It runs once you turn it on from the card in the chat.'}</p>${stepsList(steps.slice(0, shown), true, 'build')}` };
+      const items = buildItems(f);
+      const n = items.length;
+      const shown = Math.min(p.shown, n);
+      const n8n = n8nOK();
+      const list = n8n ? `<div data-unbuilt="The n8n blocks while the Planner builds (ADR 0026, 0027, 0043)">${n8nCanvas(items.slice(0, shown), 'Blocks in n8n')}</div>` : stepsList(items.slice(0, shown), true, 'build');
+      return { title: esc(S.wiz.name.trim() || f.name), wide: n8n, body: `<div><span class="pill">Draft</span>${n8n ? ` ${PLANNED_TAG}` : ''}</div><p${shown < n ? ' class="muted"' : ''}>${shown < n ? (n8n ? 'Adding the blocks in n8n…' : 'Adding the steps…') : 'It runs once you turn it on from the card in the chat.'}</p>${list}` };
     }
     if (p.kind === 'workflow') {
       if (!has(p.id)) return { title: 'Workflow', body: '<p class="muted">That workflow isn’t here any more.</p>' };
@@ -2894,11 +2943,17 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (m.state === 'waiting' && canApprove(p.id)) return { title: esc(r.name), page: `run:${p.id}`, body: approvePanel(p.id, true) };
     const t = m.state === 'failed' && TROUBLE[p.id] ? TROUBLE[p.id]() : null;
     const answers = t ? `${answersDL(t)}${troubleActs(t)}` : askThread(p.id);
-    return { title: esc(r.name), page: `run:${p.id}`, body: `<div>${pill(runTone[m.state])}</div><p>${m.state === 'declined' ? declinedWords(p.id) : m.headline}</p>${runLine(m, stepStates(m))}${answers}` };
+    return { title: esc(r.name), page: `run:${p.id}`, body: `<div>${pill(runTone[m.state])}</div><p${m.state === 'declined' ? ' data-unbuilt="The declined record (ADR 0043)"' : ''}>${m.state === 'declined' ? declinedWords(p.id) : m.headline}</p>${runLine(m, stepStates(m))}${answers}` };
   }
   /* The build view follows its card: it becomes the workflow once the card turns it on, and closes when the draft is
      saved or discarded, or when the window becomes as narrow as a phone, where the panel never opens by itself. */
   let buildTimer = null;
+  /* What goes into the panel while the Planner builds: n8n's blocks for someone with n8n access, else the plain steps. */
+  const buildItems = (f) => {
+    if (!n8nOK()) return draftSteps(f);
+    const s = f.sched;
+    return n8nBlocks(Object.keys(schedProblems(s)).length ? 'Schedule, still to choose' : schedText(s), ['jira', writerOf(f)], planOf(f).filter(([, k]) => k === 'write').map(([t]) => t));
+  };
   function syncBuild() {
     const p = S.panel;
     if (!p || p.kind !== 'build') { clearInterval(buildTimer); return; }
@@ -2911,7 +2966,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function openBuild(mid) {
     if (narrow() || !onHome()) return;
     clearInterval(buildTimer);
-    const n = draftSteps(draftNr()).length;
+    const n = buildItems(draftNr()).length;
     S.panel = { kind: 'build', id: String(mid), shown: motionQuery.matches ? n : 0 };
     if (motionQuery.matches) return;
     /* Each step redraws the panel only, so nothing in the chat, focus included, moves while the steps go in. */
@@ -2921,30 +2976,34 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (!p || p.kind !== 'build' || p.shown >= n || !body) { clearInterval(buildTimer); return; }
       p.shown += 1;
       body.innerHTML = panelView(p).body;
-      const added = [...body.querySelectorAll('.steps > li')].pop();
+      const added = [...body.querySelectorAll('.steps > li, .n8n-canvas > li')].pop();
       if (added) added.classList.add('m-appear');
     }, 320);
   }
   function sidePanel() {
     if (!S.panel) return '';
     const v = panelView(S.panel);
-    return `<aside class="sidepanel" id="sidepanel" aria-labelledby="sp-h"${narrow() ? ' role="dialog" aria-modal="true"' : ''}>
+    /* A plain element, so it can be a dialog on a phone and a complementary region beside the chat: an aside may not be a dialog. */
+    return `<div class="sidepanel${v.wide ? ' wide' : ''}" id="sidepanel" aria-labelledby="sp-h"${narrow() ? ' role="dialog" aria-modal="true"' : ' role="complementary"'}>
       <div class="sp-bar"><h2 id="sp-h" tabindex="-1">${v.title}</h2><div class="sp-btns">${v.page ? `<button class="btn sm" data-act="panelPage" data-arg="${v.page}">More details</button>` : '<span></span>'}<button class="btn sm" data-act="panelClose">Close</button></div></div>
       <div class="sp-body">${v.body}</div>
-    </aside>`;
+    </div>`;
   }
 
   /* Home for an Operator (spec 5): a greeting with the state in one line, the Planner's box, three suggestions from that
      state, and Needs you while something needs her. Day one has three starting points and the capability lists instead. */
   const DAY_ONE = ['Keep track of the LangGraph version', 'What can you do?'];
   const WATCHED = ['Which software has a newer version?', 'Watch another software for new versions', 'What can you do?'];
+  /* An Approver who can't set up workflows asks questions only (ADR 0043), so each suggestion is one. */
+  const APPROVER_ASKS = ['What is waiting for my yes?', 'What did I decide before?', 'How are the workflows doing?'];
   const stoppedIds = () => routineIds().filter((id) => !S.paused[id] && status(id).tone === 'bad');
-  /* The rows Home shows under the box. Offline, the hero already carries Connect a model, so its row is left out. */
-  const homeNeeds = () => needs().filter((t) => curModel() || t.id !== 'model');
+  /* The rows Home shows under the box: every item it counts. Offline, the hero carries Connect a model, so the model
+     row keeps its place in the list but points up to it instead of offering the button twice. */
+  const homeNeeds = () => needs().map((t) => (t.id === 'model' ? { ...t, actions: '', held: 'Connect one with the button above.' } : t));
   /* Software versioning is the front door (8 Nov). With software on the watchlist the chips are about it; with none, the
      day-one pair. The general workflow builder is frozen, so no chip sets up a general workflow. */
   function suggestions() {
-    return onWatchlist() ? WATCHED : DAY_ONE;
+    return !me().op ? APPROVER_ASKS : onWatchlist() ? WATCHED : DAY_ONE;
   }
   const onWatchlist = () => (S.firstDay ? [] : TRACKED).length + S.added.length > 0;
   /* Starting points for "Set up another workflow": the first three she doesn't already have. */
@@ -2964,10 +3023,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The box, disabled and labelled while the Planner answers (spec 5.5). */
   function composer(c, empty) {
     const busy = c.busy;
-    const label = busy ? 'The Planner is answering' : 'Ask the Planner about software versions';
+    const op = me().op;
+    const label = busy ? 'The Planner is answering' : op ? 'Ask the Planner about software versions' : 'Ask the Planner about your approvals and the workflows';
     /* The phone box is too narrow for the full question, so it asks a shorter one that fits. */
     const phone = window.matchMedia('(max-width: 600px)').matches;
-    const ph = busy ? 'The Planner is answering' : empty ? (phone ? 'Ask about your software versions' : 'Ask about your software versions, or name software to watch') : 'Ask for something else';
+    const first = op ? (phone ? 'Ask about your software versions' : 'Ask about your software versions, or name software to watch') : (phone ? 'Ask about your approvals' : 'Ask about your approvals, or how the workflows are doing');
+    const ph = busy ? 'The Planner is answering' : empty ? first : op ? 'Ask for something else' : 'Ask something else';
     return `<form class="composer" data-submit="ask"><label class="vh" for="ask">${label}</label><textarea id="ask" data-ask rows="1" placeholder="${ph}" enterkeyhint="send"${busy ? ' disabled aria-disabled="true"' : ''}>${esc(c.text)}</textarea><button class="send" type="submit" aria-label="Send to the Planner"${c.text.trim() && !busy ? '' : ' disabled'}>${I.send(20)}</button></form>`;
   }
   /* Day one starts with nothing in Needs you because its keys are fresh and nothing has run. Anything real that comes
@@ -2975,11 +3036,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function plannerHome() {
     const c = S.chat;
     const empty = !c.msgs.length;
+    const op = me().op;
     const dayOne = !routineIds().length;
     if (!curModel()) return offlineHome();
     const items = homeNeeds();
+    const unbuilt = op ? 'The Planner’s box on Home (ADR 0037)' : 'The Approver’s box on Home, for questions only (ADR 0043)';
     if (!empty) {
-      return `<div class="home planner chatlayout" data-unbuilt="The Planner’s box on Home (ADR 0037)">
+      return `<div class="home planner chatlayout" data-unbuilt="${unbuilt}">
         <div class="chatcol"${S.panel && narrow() ? ' inert' : ''}>
           <div class="chatbar"><h1 class="vh" tabindex="-1">Planner</h1>${pinnedLine()}<div class="btns chatnew"><button class="linkbtn" data-act="newChat">New chat</button></div></div>
           <div class="chatscroll"><div class="chatin">${threadHTML()}</div></div>
@@ -2988,16 +3051,18 @@ details > .m-close { animation: fold 140ms ease-in both; }
         ${sidePanel()}
       </div>`;
     }
-    const hello = dayOne
-      ? '<h1 tabindex="-1">Which software should we keep up to date?</h1><p class="lead">Ask about your watchlist, or tell me what software to watch.</p>'
+    const hello = !op ? `<h1 tabindex="-1">Good morning! ${me().name}</h1><p class="lead">${approverLine(items)}</p>`
+      : dayOne ? '<h1 tabindex="-1">Which software should we keep up to date?</h1><p class="lead">Ask about your watchlist, or tell me what software to watch.</p>'
         : `<h1 tabindex="-1">Good morning! ${me().name}</h1><p class="lead">${stateLine(items)}</p>`;
-    return `<div class="home planner" data-unbuilt="The Planner’s box on Home (ADR 0037)">
+    /* An Approver sees every request that waits for them, as spec 5.3 has it, so their strip leaves nothing out. */
+    return `<div class="home planner" data-unbuilt="${unbuilt}">
       <div class="welcome">${face('lead', 128, c.hero, { live: c.hero === 'idle', id: 'hero' })}<div class="hello-text">${hello}</div></div>
       ${composer(c, true)}
-      <div class="chips examples" role="group" aria-label="${onWatchlist() ? 'Suggestions' : 'Starting points'}">${suggestions().map((e, i) => `<button class="chip" data-act="example" data-arg="${i}">${e}</button>`).join('')}</div>
-      ${items.length ? needsStrip(items) : ''}
-      ${dayOne || c.abil ? abilitiesHTML() : ''}
-      ${!dayOne ? `<p class="small muted" style="text-align:center"><button class="linkbtn" data-act="abil" data-unbuilt="What can I ask for">${c.abil ? 'Hide what I can do' : 'What can I ask for?'}</button></p>` : ''}
+      <div class="chips examples" role="group" aria-label="${!op || onWatchlist() ? 'Suggestions' : 'Starting points'}">${suggestions().map((e, i) => `<button class="chip" data-act="example" data-arg="${i}">${e}</button>`).join('')}</div>
+      ${items.length ? needsStrip(items, op ? 3 : items.length) : ''}
+      ${op && (dayOne || c.abil) ? abilitiesHTML() : c.abil ? approverCan() : ''}
+      ${!op || !dayOne ? `<p class="small muted" style="text-align:center"><button class="linkbtn" data-act="abil" data-unbuilt="What can I ask for">${c.abil ? 'Hide what I can do' : 'What can I ask for?'}</button></p>` : ''}
+      ${op || c.abil ? '' : '<p class="note home-note">You’re an Approver, so you decide on requests. Operators set up workflows.</p>'}
     </div>`;
   }
   /* Home with no AI model (spec 5.4), in the built app's words: agent workflows can't run and new ones can't be planned
@@ -3006,10 +3071,17 @@ details > .m-close { animation: fold 140ms ease-in both; }
      platform, without the model row, which the hero already is. */
   function offlineHome() {
     const items = homeNeeds();
+    /* An Approver can't change Settings, so their Home names who can connect a model and keeps their requests first. */
+    if (!me().op) {
+      return `<div class="home planner" data-unbuilt="The offline Home (ADR 0037)">
+      <div class="welcome offline">${face('lead', 128, 'sorry', { id: 'hero' })}<div class="hello-text"><h1 tabindex="-1">I can’t answer questions until an AI model is connected</h1><p class="lead">An Operator can connect one in Settings. ${approverLine(items)}</p></div></div>
+      ${items.length ? needsStrip(items, items.length) : ''}
+    </div>`;
+    }
     return `<div class="home planner" data-unbuilt="The offline Home (ADR 0037)">
       <div class="welcome offline">${face('lead', 128, 'sorry', { id: 'hero' })}<div class="hello-text"><h1 tabindex="-1">I can’t read new requests until an AI model is connected</h1><p class="lead">Without an AI model, the Planner can’t answer questions. The Software watchlist keeps checking for new releases.</p>
         <div class="btns"><button class="btn primary" data-act="setGo" data-arg="model">Connect a model</button></div></div></div>
-      ${items.length ? needsStrip(items, 3, '', { total: needs().length, primary: false }) : ''}
+      ${items.length ? needsStrip(items, 3, '', { primary: false }) : ''}
       ${abilitiesHTML()}
     </div>`;
   }
@@ -3030,16 +3102,14 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const items = needs();
     const n = items.length;
     const waitingOn = [];
-    if (S.user === 'alice') {
-      if (shows('toolDraft') && S.jiraComp === 'asked' && S.jiraCompAsker === 'alice') waitingOn.push(['An Approver to OK the new tool', `${TOOLS.jiraComp[0]} · for the Ticket writer`, 'toolOpen', 'jiraComp']);
-      if (S.conf === 'waiting' && has('conf')) {
-        const q = req('conf');
-        const who = q.team ? 'A yes from any Approver' : q.escalated && q.backup ? `A yes from ${whoOr(askedOf(q))}` : `${nm(q.first)}’s yes`;
-        const next = q.team ? 'waits until an Approver decides' : q.escalated || !q.backup || !q.backupInTime ? `stops waiting ${at(q.expiresAt)}` : `${nm(q.backup)} is asked ${on(q.backupAt)} if there’s no answer`;
-        waitingOn.push([`${who} on your test run`, `${esc(S.nr.name)} · ${next}`, 'run', 'conf']);
-      }
+    if (shows('toolDraft') && S.jiraComp === 'asked' && S.jiraCompAsker === S.user) waitingOn.push(['An Approver to OK the new tool', `${TOOLS.jiraComp[0]} · for the Ticket writer`, 'toolOpen', 'jiraComp']);
+    if (S.conf === 'waiting' && has('conf') && S.confStarter === S.user) {
+      const q = req('conf');
+      const who = q.team ? 'A yes from any Approver' : q.escalated && q.backup ? `A yes from ${whoOr(askedOf(q))}` : `${nm(q.first)}’s yes`;
+      const next = q.team ? 'waits until an Approver decides' : q.escalated || !q.backup || !q.backupInTime ? `stops waiting ${at(q.expiresAt)}` : `${nm(q.backup)} is asked ${on(q.backupAt)} if there’s no answer`;
+      waitingOn.push([`${who} on your test run`, `${esc(S.nr.name)} · ${next}`, 'run', 'conf']);
     }
-    const following = has('nudge') && S.report > 0 && S.report < 4 && S.user === 'alice' ? `<section class="section" aria-labelledby="fu-h" data-pres="follow" data-stagger style="--i:3" data-unbuilt="Support cases"><h2 id="fu-h">Following up</h2>
+    const following = has('nudge') && S.report > 0 && S.report < 4 && S.user === S.reportBy ? `<section class="section" aria-labelledby="fu-h" data-pres="follow" data-stagger style="--i:3" data-unbuilt="Support cases"><h2 id="fu-h">Following up</h2>
           <article class="panel"><div><div class="task-title">Weekly closed-ticket summary: reported to support</div><div class="task-meta">Support has the run and the troubleshooter’s notes. Updates show here.</div></div>${caseBox()}${reportTrack(true)}</article></section>` : '';
     const drafts = me().op ? draftRows() : [];
     const rowList = (items) => `<div class="rows">${items.map(([a, b, act, arg]) => `<button class="row-btn" data-act="${act}" data-arg="${arg}"><div><div class="row-name">${a}</div><div class="row-sub">${b}</div></div>${I.right(16)}</button>`).join('')}</div>`;
@@ -3069,6 +3139,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const justOn = S.justOn;
     S.justOn = null;
     let mainUsed = false;
+    const anyAct = order.some((id) => !inNeeds.has(id) && actionFor(id));
     const rows = order.map((id, i) => {
       const r = R(id);
       let act = inNeeds.has(id) ? '' : actionFor(id);
@@ -3078,14 +3149,14 @@ details > .m-close { animation: fold 140ms ease-in both; }
         <span class="wf-pills">${pills(id)}${BASE[id] && BASE[id].planned ? PLANNED_TAG : ''}</span>
         <span class="wf-next">${S.paused[id] ? '' : `Next run ${r.next}`}</span>
         <span class="wf-act">${act}</span>
-        <p class="wf-last" data-val="last:${id}">${lastRunLine(id)}</p>
+        <p class="wf-last" data-val="last:${id}" data-unbuilt="Last run line (ADR 0043)">${lastRunLine(id)}</p>
       </li>`;
     }).join('');
     const canAdd = me().op && !q && S.filter === 'all';
     const add = canAdd ? `<li data-flip="wf:add"><button class="wf-add" data-act="askPlanner">${I.plus(18)}<b>Ask the Planner for a new one</b><span>Describe it in plain English, on Home</span></button></li>` : '';
     const finding = S.findOpen || !!q || S.filter !== 'all';
     const empty = !ids.length ? `<div class="quiet"><b>Nothing here yet</b>${me().op ? 'Watch software on the Software page, or ask the Planner on Home. Its checks show up here.' : 'Operators set up workflows, and you approve their changes.'}</div>` : '';
-    return `<div class="pagehead"><div><h1 tabindex="-1">Workflows</h1><p>The jobs that run by themselves, such as the Software watchlist, and what needs you.</p></div></div>
+    return `<div class="pagehead"><div><h1 tabindex="-1">Workflows</h1><p>The jobs that run by themselves, such as the Software watchlist, and what needs you.</p>${me().op || !ids.length ? '' : opsNote('workflows')}</div></div>
       ${attention()}
       <section class="section" aria-labelledby="all-h"><h2 id="all-h">All workflows <span class="count">${ids.length}</span>
         ${ids.length ? `<button class="iconbtn sec-tool" data-act="findOpen" aria-expanded="${finding}" aria-controls="findbar-workflows" aria-label="${finding ? 'Hide search' : 'Search workflows'}" title="${finding ? 'Hide search' : 'Search'}">${I.search()}</button>` : ''}</h2>
@@ -3093,8 +3164,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
         <div class="filters btns" role="group" aria-label="Show">${FILTERS.map(([k, l]) => `<button data-act="filter" data-arg="${k}" aria-pressed="${S.filter === k}">${l}</button>`).join('')}</div></div>` : ''}
       ${empty}
       ${ids.length && !order.length ? '<div class="quiet"><b>No workflows match</b>Try other words, or see them all.<div class="btns quiet-act"><button class="btn sm" data-act="clearFind" data-arg="workflows">Show all workflows</button></div></div>' : ''}
-      ${rows || add ? `<ul class="wf-list" aria-label="Workflows" data-flip-group="wf-list">${rows}${add}</ul>` : ''}
-      ${canAdd && shows('n8n') ? `<p class="small muted n8n-start" data-unbuilt="Start in n8n (ADR 0026, 0027)">Prefer to build it yourself? <button class="linkbtn" data-act="n8nNew">Start in n8n</button> ${PLANNED_TAG}</p>` : ''}
+      ${rows || add ? `<ul class="wf-list${anyAct ? '' : ' no-act'}" aria-label="Workflows" data-flip-group="wf-list">${rows}${add}</ul>` : ''}
+      ${canAdd && n8nOK() ? `<p class="small muted n8n-start" data-unbuilt="Start in n8n (ADR 0026, 0027)">Prefer to build it yourself? <button class="linkbtn" data-act="n8nNew">Start in n8n</button> ${PLANNED_TAG}</p>` : ''}
       </section>`;
   }
   /* A plan's steps. Each step keeps its place by position, so a step that changes is highlighted, and an added or removed one slides the rest. */
@@ -3217,7 +3288,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     /* One primary per state (rule 1): the decision comes first, so the address fix is primary only when there is none. */
     const deciding = waiting && canApprove('sw');
     if (waiting) attn.push(`<div class="apprbar">${I.shield(20)}<div><b>This week’s check wants to raise 3 upgrade tickets${urgentNote(', 1 of them urgent')}.</b><span>Started by ${nm(starterOf('sw'))}’s schedule, Mon 26 Oct, 9:00. ${askLine(req('sw'), S.user)}${namedTag(req('sw'))}</span></div>${canApprove('sw') ? '<button class="btn primary sm" data-act="run" data-arg="sw">Review and decide</button>' : `<span class="note">Waiting for ${whoOr(req('sw').may)}</span>`}</div>`);
-    if (moved) attn.push(`<div class="attn" id="attn-ls">${face('trouble', 40)}<div><b>${moved.title}</b><span>${moved.body.replace(/<[^>]+>/g, '')}</span></div>${op ? (deciding ? firstButton(moved.actions) : firstButton(moved.actions).replace('class="btn sm"', 'class="btn primary sm"')) : '<span class="note">An Operator can fix this.</span>'}</div>`);
+    if (moved) attn.push(`<div class="attn" id="attn-ls">${face('trouble', 40)}<div><b>${moved.title}</b><span>${moved.body.replace(/<[^>]+>/g, '')}</span></div>${op ? (deciding ? firstButton(moved.actions) : firstButton(moved.actions).replace('class="btn sm"', 'class="btn primary sm"')) : ''}</div>`);
     const findings = full && rows.some((x) => x.key === 'lj') ? `<h3 class="attn-h">Security risks ${PLANNED_TAG}</h3>${riskCard('lj', waiting ? '<span class="pill wait">Ticket waiting for a yes</span>' : S.sw === 'approved' ? ticketBtn('MOCK-16') : '<span class="pill off">Proposed again next Monday</span>')}` : '';
     const ending = full && !day1 ? SUPPORT_ENDING.filter((x) => hit(x.name, '')) : [];
     const endingHtml = ending.length ? `<h3 class="attn-h">Support ending ${PLANNED_TAG}</h3><div class="panel"><p class="note">From endoflife.date, read by the Version checker. After these dates, these versions get no more fixes, including security fixes.</p><div class="rows">${ending.map((x) => `<div class="row"><div><div class="row-name">${x.name}</div><div class="row-sub">Security fixes end ${x.ends}, ${x.left}. ${extLink(`https://endoflife.date/${x.slug}`, 'Dates on endoflife.date', 'endoflife.date')}</div></div><span class="pill wait">${I.clock(12)}Plan an upgrade</span></div>`).join('')}</div></div>` : '';
@@ -3270,16 +3341,20 @@ details > .m-close { animation: fold 140ms ease-in both; }
       ${S.vers.sw ? `<h3>Versions</h3>${versionsList('sw')}` : ''}
       ${S.editingAppr === 'sw' ? `<div data-flip="ed:a:sw" data-enter="reveal">${apprEditor('sw')}</div>` : ''}
     </div></section>`;
-    return `<div class="pagehead"><div><h1 tabindex="-1">Software watchlist</h1><p>${watchLine()}</p></div>
-        ${day1 ? '' : '<button class="btn" data-act="checkNow">Check now</button>'}</div>
+    return `<div class="pagehead"><div><h1 tabindex="-1">Software watchlist</h1><p data-unbuilt="The count line (ADR 0043)">${watchLine()}</p>${op ? '' : opsNote('the watchlist')}</div>
+        ${day1 || !op ? '' : '<button class="btn" data-act="checkNow">Check now</button>'}</div>
       ${attnSec}${watching}${how}
-      <p class="note" style="margin-top:24px">Ask the Planner on Home for a release check, and it adds the software here.</p>`;
+      ${op ? '<p class="note" style="margin-top:24px">Ask the Planner on Home for a release check, and it adds the software here.</p>' : ''}`;
   }
 
+  /* A change published in n8n, in one sentence for Needs you and the workflow's page. Only someone who can see n8n is
+     told where the change was made (ADR 0043). */
+  const inN8n = () => (n8nOK() ? ' in n8n' : '');
+  const n8nChgTitle = (c) => `${nm(c.by)}’s change${inN8n()} removed Ask for a yes`;
   /* What happened to a workflow in n8n: the warning when a change removed the yes step, and every published change. */
   function n8nWarn(id) {
     const chg = S.n8nChg[id];
-    return chg ? `<article class="task" style="margin-top:16px" data-flip="n8nchg:${id}" data-enter="reveal"><span class="ico wait">${I.alert(22)}</span><div class="task-body"><h2 class="task-title">${nm(chg.by)}’s change in n8n removed Ask for a yes</h2><div class="task-meta">Published ${chg.when}</div><p>The next run will stop before it changes anything, because nothing is written without a yes.</p><div class="btns">${me().op ? `<button class="btn${actionFor(id) ? '' : ' primary'}" data-act="n8nUndo" data-arg="${id}">Undo ${nm(chg.by)}’s change</button>` : ''}</div></div></article>` : '';
+    return chg ? `<article class="task" style="margin-top:16px" data-flip="n8nchg:${id}" data-enter="reveal"><span class="ico wait">${I.alert(22)}</span><div class="task-body"><h2 class="task-title">${n8nChgTitle(chg)}</h2><div class="task-meta">Published ${chg.when}</div><p>The next run will stop before it changes anything, because nothing is written without a yes.</p><div class="btns">${me().op ? `<button class="btn${actionFor(id) ? '' : ' primary'}" data-act="n8nUndo" data-arg="${id}">Undo ${nm(chg.by)}’s change</button>` : ''}</div></div></article>` : '';
   }
 
   /* The status banner (spec 9): one sentence on the workflow's state and its one primary action, from the same facts as
@@ -3307,7 +3382,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       ${open ? `<div class="menu" id="menu-${id}" role="menu" aria-label="More actions">
         ${hasRun(id) ? item('runNow', 'Run now') : ''}
         ${BASE[id] && BASE[id].fixedSchedule ? '' : item('editSched', 'Change schedule')}
-        ${shows('n8n') ? item('n8nAsk', `Open in n8n${I.ext(14)} ${PLANNED_TAG}`, ' data-unbuilt="Open in n8n (ADR 0026, 0027)"') : ''}
+        ${n8nOK() ? item('n8nAsk', `Open in n8n${I.ext(14)} ${PLANNED_TAG}`, ' data-unbuilt="Open in n8n (ADR 0026, 0027)"') : ''}
         <hr role="separator">
         ${item('askDelete', `${I.trash()}Delete`, ' class="danger"')}
       </div>` : ''}</div>`;
@@ -3323,13 +3398,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const caseId = S.supportCase ? S.supportCase.id : '';
     const st = status(id);
     const recent = {
-      sw: [['Mon 26 Oct, 9:00', cap(st.last.replace(/^Mon 26 Oct: /, '')), true], ['Mon 19 Oct, 9:00', '1 ticket created (MOCK-9)'], ['Mon 12 Oct, 9:00', 'Nothing to write']],
+      sw: [['Mon 26 Oct, 9:00', cap(st.last.replace(/^Mon 26 Oct: /, '')), true], ['Mon 19 Oct, 9:00', earlierLine('sw', 'Mon 19 Oct, 9:00')], ['Mon 12 Oct, 9:00', 'Nothing to write']],
       issues: S.issues === 'fixed'
-        ? [['Today, retry', 'No new tickets. Nothing to write.', true], ['Today, 8:00', 'Stopped: Jira didn’t answer.'], ['Mon 26 Oct, 8:00', '1 ticket created (MOCK-12), approved by Bob']]
-        : [['Today, 8:00', 'Stopped: Jira didn’t answer.', true], ['Mon 26 Oct, 8:00', '1 ticket created (MOCK-12), approved by Bob'], ['Fri 23 Oct, 8:00', 'Nothing to write']],
+        ? [['Today, retry', 'No new tickets. Nothing to write.', true], ['Today, 8:00', 'Stopped: Jira didn’t answer.'], ['Mon 26 Oct, 8:00', earlierLine('issues', 'Mon 26 Oct, 8:00')]]
+        : [['Today, 8:00', 'Stopped: Jira didn’t answer.', true], ['Mon 26 Oct, 8:00', earlierLine('issues', 'Mon 26 Oct, 8:00')], ['Fri 23 Oct, 8:00', 'Nothing to write']],
       nudge: S.nudge !== 'failed'
-        ? [['Today, retry', cap(st.last.replace(/^Today, retried after the fix: /, '')), true], ['Fri 23 Oct, 16:00', `Stopped on a ticket the platform couldn’t read. Reported as ${caseId}.`], ['Fri 16 Oct, 16:00', '1 ticket created (MOCK-11), approved by Bob']]
-        : [['Fri 23 Oct, 16:00', S.report ? `Stopped on a ticket the platform couldn’t read. Reported as ${caseId}.` : 'Stopped on a ticket the platform couldn’t read.', true], ['Fri 16 Oct, 16:00', '1 ticket created (MOCK-11), approved by Bob']],
+        ? [['Today, retry', cap(st.last.replace(/^Today, retried after the fix: /, '')), true], ['Fri 23 Oct, 16:00', `Stopped on a ticket the platform couldn’t read. Reported as ${caseId}.`], ['Fri 16 Oct, 16:00', earlierLine('nudge', 'Fri 16 Oct, 16:00')]]
+        : [['Fri 23 Oct, 16:00', S.report ? `Stopped on a ticket the platform couldn’t read. Reported as ${caseId}.` : 'Stopped on a ticket the platform couldn’t read.', true], ['Fri 16 Oct, 16:00', earlierLine('nudge', 'Fri 16 Oct, 16:00')]],
       access: [[`${S.accessRun.sub}, by hand`, cap(st.last.replace(/^[^:]+: /, '')), true], ['Mon 6 Jul, 9:00', '2 people lost access, approved by Bob, then Alice']],
       conf: S.conf === 'on' ? [] : [['Today, test run', cap(st.last.replace(/^Test run today: /, '')), true]],
     }[id] || [];
@@ -3341,7 +3416,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const tools = (a) => { let keys = []; try { keys = toolKeysOf(a); } catch (e) { keys = []; } return keys.map((k) => TOOLS[k][0]); };
     const history = (S.n8nLog[id] || []).map((e) => `<li><b>${e.when}</b><span>${e.text}</span></li>`);
     return `<button class="back" data-act="go" data-arg="workflows">${I.left(16)}Workflows</button>
-      <div class="pagehead"><div><div style="margin-bottom:8px">${pills(id)}${BASE[id] && BASE[id].planned ? ` ${PLANNED_TAG}` : ''}</div><h1 tabindex="-1">${esc(r.name)}</h1><p>${r.what}</p>${leftOutOf(id).length ? `<p class="note">${leftOutLine(leftOutOf(id))} It was set up without that part.</p>` : ''}</div>${me().op && id !== 'sw' ? `<div class="btns">${S.paused[id] ? '' : `<button class="btn sm" data-act="pause" data-arg="${id}">${I.pause(14)}Pause</button>`}${moreMenu(id)}</div>` : ''}</div>
+      <div class="pagehead"><div><div style="margin-bottom:8px">${pills(id)}${BASE[id] && BASE[id].planned ? ` ${PLANNED_TAG}` : ''}</div><h1 tabindex="-1">${esc(r.name)}</h1><p>${r.what}</p>${leftOutOf(id).length ? `<p class="note">${leftOutLine(leftOutOf(id))} It was set up without that part.</p>` : ''}${me().op ? '' : opsNote('this workflow')}</div>${me().op && id !== 'sw' ? `<div class="btns">${S.paused[id] ? '' : `<button class="btn sm" data-act="pause" data-arg="${id}">${I.pause(14)}Pause</button>`}${moreMenu(id)}</div>` : ''}</div>
       <div data-unbuilt="Status banner">${banner(id)}</div>
       ${n8nWarn(id)}
       ${id === 'nudge' && S.report > 0 && S.nudge === 'failed' ? `<div class="panel" style="margin-top:16px" data-unbuilt="Support cases"><h2>Support case</h2>${caseBox()}${reportTrack(true)}</div>` : ''}
@@ -3359,7 +3434,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       <details class="tech" style="margin-top:16px" data-unbuilt="Technical details"><summary>Technical details</summary><div class="tech-body">
         <section><h3>Steps</h3>${stepsList(planFor(id), false, `plan:${id}`)}${readsNote(id)}</section>
         <section><h3>Agents and tools</h3><ul class="agent-tool-list">${r.agents.map((a) => { const s = agentStates(id)[a]; const t = tools(a); return `<li><button class="agent-chip" data-act="agent" data-arg="${a}">${face(a, 28, s || 'idle', { k: `wfp:${id}:${a}` })}<span>${AGENTS[a].name}${s ? `<span class="vh">, ${STATE_WORD[s]}</span>` : ''}</span></button>${t.length ? `<span class="small muted">${t.join(', ')}</span>` : ''}</li>`; }).join('')}</ul></section>
-        ${shows('n8n') ? `<section data-unbuilt="n8n changes in the Portal (ADR 0026, 0027)"><h3>In n8n ${PLANNED_TAG}</h3><p>${held ? `${held.by === S.user ? 'You have' : `${nm(held.by)} has`} it open in n8n since ${held.since}.` : 'Nobody has it open in n8n.'}</p>${held && held.by === S.user ? `<div class="btns"><button class="btn sm" data-act="n8nGiveBack" data-arg="${id}">Give it back</button></div>` : ''}</section>
+        ${n8nOK() ? `<section data-unbuilt="n8n changes in the Portal (ADR 0026, 0027)"><h3>In n8n ${PLANNED_TAG}</h3>${n8nCanvas(wfBlocks(id))}<p>${held ? `${held.by === S.user ? 'You have' : `${nm(held.by)} has`} it open in n8n since ${held.since}.` : 'Nobody has it open in n8n.'}</p>${held && held.by === S.user ? `<div class="btns"><button class="btn sm" data-act="n8nGiveBack" data-arg="${id}">Give it back</button></div>` : ''}</section>
         <section data-unbuilt="Change history (ADR 0027)"><h3>Change history ${PLANNED_TAG}</h3>${history.length ? `<ol class="timeline">${history.join('')}</ol><p class="note">The Portal keeps every version published in n8n, with who published it.</p>` : '<p class="muted">No changes since it was turned on.</p>'}</section>` : ''}
       </div></details>`;
   }
@@ -3394,7 +3469,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function runLine(m, states, o = {}) {
     const mini = !o.who;
     const k = mini ? 12 : 1;
-    return `<ol class="line${mini ? ' mini' : ''}" style="--n:${m.stations.length}" aria-label="Steps of this run">${m.stations.map((s, i) => {
+    return `<ol class="line${mini ? ' mini' : ''}" style="--n:${m.stations.length}" aria-label="Steps of this run" data-unbuilt="The run line’s links between steps (ADR 0043). The built run page has the steps">${m.stations.map((s, i) => {
       const st = states[i];
       const ic = (fn, big, small) => fn(mini ? small : big);
       /* A declined run's last step, Ended, is a plain dot, so it never reads as Done. */
@@ -3429,7 +3504,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const moved = P.shown < P.at;
     const line = runLine(m, states, { who: (s, i, st) => whoAvatar(s.who, 44, faceOf(s, i, st), `st:${id}:${i}`), arrive: moved ? P.at : -1, grow: moved ? [P.shown, finished ? P.at : P.at - 1] : null });
     /* A step that was skipped never speaks, so a declined run never says it created anything. */
-    const msgs = m.stations.slice(0, Math.min(P.at, m.end) + 1).filter((s) => !s.skip).map((s) => s.msg).filter(Boolean);
+    const times = stepTimes(id, m);
+    const msgs = m.stations.slice(0, Math.min(P.at, m.end) + 1).map((s, i) => (!s.skip && s.msg ? { ...s.msg, at: logAt(times, i) } : null)).filter(Boolean);
     P.feedNext = msgs.length;
     P.latest = msgs.length ? `${feedName(msgs[msgs.length - 1].who)}: ${msgs[msgs.length - 1].text}` : '';
     const open = runDetailOpen();
@@ -3458,12 +3534,30 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const chatAvatar = (w, state = 'idle') => (w === 'portal' || w === 'platform' ? `<span class="sysav app">${I.mark()}</span>` : w === 'gate' ? `<span class="sysav gate">${I.shield(20)}</span>` : face(w, 40, state));
   /* The run as a group chat. Events from the platform and the approval gate are quiet markers; agents speak in bubbles.
      When the Planner speaks, the agents it brings in join the chat. */
+  /* When each step of a run happened, for the run page's timed log (ADR 0043). A run starts at its own time. One made
+     today starts now, or, when it asks for a yes, early enough to ask now, as its request and Teams say. The gate gives
+     the time the request was sent, or once it is decided, DECIDED_AT. The sample's steps are a minute apart. */
+  const RUN_START = { sw: () => new Date(2026, 9, 26, 9, 0), issues: () => (S.issues === 'failed' ? new Date(2026, 9, 27, 8, 0) : null), nudge: () => (S.nudge === 'failed' ? new Date(2026, 9, 23, 16, 0) : null), access: () => new Date(2026, 9, 19, 9, 0), edit: () => new Date(2026, 9, 27, 9, 15) };
+  function stepTimes(id, m) {
+    const plus = (d, k) => new Date(d.getTime() + k * 60000);
+    /* The request waits at the last gate the run reaches. An earlier gate was decided on the way. */
+    const gi = m.stations.map((s) => !!s.gate && !s.skip).lastIndexOf(true);
+    const q = req(id);
+    const rec = reqRecord(id);
+    const asked = q ? q.asked : ASKED_AT[id] || NOW;
+    const gateAt = rec && ['approved', 'declined'].includes(rec.state) ? DECIDED_AT : asked;
+    const start = (RUN_START[id] && RUN_START[id]()) || (gi < 0 ? NOW : plus(asked, -gi));
+    return m.stations.map((s, i) => (gi < 0 || i < gi ? plus(start, i) : plus(gateAt, i - gi)));
+  }
+  /* The first entry says the day; later ones say only the time unless the day changed. */
+  const logAt = (times, i) => { const d = times[i]; return i && d.toDateString() === times[0].toDateString() ? hm(d) : `${DAY_SHORT[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}, ${hm(d)}`; };
   function chatItem(g, isNew, m) {
     const cls = `${g.tone || ''}${isNew ? ' in' : ''}`;
-    if (g.who === 'portal' || g.who === 'platform') return `<li class="chat-marker ${cls}"><span>${g.text}</span></li>`;
-    if (g.who === 'gate') return `<li class="chat-marker gate-said ${cls}" data-gate="1" tabindex="-1"><span>${I.shield(14)}${g.text}</span></li>`;
+    const when = g.at ? `<time class="log-at">${g.at}</time>` : '';
+    if (g.who === 'portal' || g.who === 'platform') return `<li class="chat-marker ${cls}"><span>${when}${g.text}</span></li>`;
+    if (g.who === 'gate') return `<li class="chat-marker gate-said ${cls}" data-gate="1" tabindex="-1"><span>${when}${I.shield(14)}${g.text}</span></li>`;
     const joined = g.who === 'lead' ? R(m.workflow).agents.filter((a) => a !== 'lead') : [];
-    return `<li class="cmsg ${cls}"><span class="cmsg-av">${face(g.who, 40, g.tone === 'bad' ? 'error' : 'idle', { k: `chat:${keyOf(g.text)}` })}</span><div class="cmsg-body"><span class="cmsg-who" style="color:${feedHue(g.who)}">${feedName(g.who)}</span><div class="cmsg-bubble">${g.text}</div></div></li>${joined.length ? `<li class="chat-marker${isNew ? ' in' : ''}"><span>${faces(joined, 22)}${andList(joined.map((a) => AGENTS[a].name))} joined${joined.includes('vuln') ? ` ${PLANNED_TAG}` : ''}</span></li>` : ''}`;
+    return `<li class="cmsg ${cls}"><span class="cmsg-av">${face(g.who, 40, g.tone === 'bad' ? 'error' : 'idle', { k: `chat:${keyOf(g.text)}` })}</span><div class="cmsg-body"><span class="cmsg-who" style="color:${feedHue(g.who)}">${feedName(g.who)}${when}</span><div class="cmsg-bubble">${g.text}</div></div></li>${joined.length ? `<li class="chat-marker${isNew ? ' in' : ''}"><span>${faces(joined, 22)}${andList(joined.map((a) => AGENTS[a].name))} joined${joined.includes('vuln') ? ` ${PLANNED_TAG}` : ''}</span></li>` : ''}`;
   }
   /* The last word goes to whoever needs the person: the approval gate with the buttons, the AI troubleshooter with the fix, or Workflow Builder when it's done. */
   function chatAct(id, m) {
@@ -3577,7 +3671,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     }
     /* A declined run shows its record and what happens next. It has no result, ticket or "created". */
     const done = m.state === 'declined'
-      ? `<h2>Declined</h2><p>${declinedWords(id)} ${DECLINED_NEXT[id]}</p>${id === 'conf' && me().op ? (heldWhy('conf') ? `<p class="note">${heldWhy('conf')}</p>` : `<div class="btns">${testAgain('Do a test run again')}</div>`) : ''}`
+      ? `<h2>Declined</h2><p data-unbuilt="The declined record (ADR 0043)">${declinedWords(id)} ${DECLINED_NEXT[id]}</p>${id === 'conf' && me().op ? (heldWhy('conf') ? `<p class="note">${heldWhy('conf')}</p>` : `<div class="btns">${testAgain('Do a test run again')}</div>`) : ''}`
       : {
         sw: () => `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>${nm(S.swBy)} approved, and the platform created the tickets.</p><div class="result-chips">${ticketBtn('MOCK-16', 'Log4j core')}${ticketBtn('MOCK-14', 'LangGraph')}${ticketBtn('MOCK-15', 'FastAPI')}</div>`,
         issues: () => `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>The retry read Jira. No tickets were created in the last day, so there was nothing to write.</p>`,
@@ -3619,19 +3713,28 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const partsList = (parts) => `<ul class="parts" aria-label="Each part of your request">${parts.map(partRow).join('')}</ul>`;
   /* A question and its choices. The choices are named by the question for a screen reader. */
   const askBody = (q, id) => `<span class="pq" id="${id}">${q.q}</span><span class="pick" role="group" aria-labelledby="${id}">${q.choices.map(([v, l]) => `<button type="button" class="chip" data-act="${q.act || 'answer'}" data-arg="${esc(v)}"${q.mid ? ` data-mid="${q.mid}"` : ''}>${esc(l)}</button>`).join('')}${q.more || ''}</span>`;
-  /* Every clause no rule read, as a cross that quotes it. A question in it is answered when it is asked on its own. */
-  const leftoverParts = (text, spans) => unheard(text, spans).map((x, i) => (aboutWorkflows(x.clause) ? { key: `left${i}`, mark: 'no', label: quote(x.clause), body: 'Ask this on its own, and I’ll answer it.' } : { key: `left${i}`, mark: 'no', label: quote(x.quote), body: 'I didn’t follow this part.' }))
+  /* Every clause no rule read, as a cross that quotes it. A question in it is answered when it is asked on its own; an
+     approve or decline goes to the request. Both are kept by every answer, so neither is lost. */
+  const leftoverParts = (text, spans) => unheard(text, spans).map((x, i) => (aboutWorkflows(x.clause) ? { key: `left${i}`, mark: 'no', label: quote(x.clause), body: 'Ask this on its own, and I’ll answer it.', keep: true }
+    : DECIDE_WORDS.test(x.clause) ? { key: `left${i}`, mark: 'no', label: quote(x.clause), body: decideBody(), keep: true } : { key: `left${i}`, mark: 'no', label: quote(x.quote), body: 'I didn’t follow this part.' }))
     .filter((x, i, all) => all.findIndex((y) => y.label === x.label) === i);
   /* A schedule has one day and one time. A second of either is a cross, never a silent pick of the first. */
   const clashDays = (text) => [...new Set([...text.replace(/\bmonday to friday\b/gi, ' ').matchAll(new RegExp(`\\b(${DAY_RE})s?\\b`, 'gi'))].map((m) => cap(m[1].toLowerCase())))];
   /* The distinct times a text names, as 24-hour times, in the order it names them. */
   const clashTimes = (text) => [...new Set([...text.matchAll(/\b\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b|\b(?:[01]?\d|2[0-3])[:.][0-5]\d\b/gi)].map((m) => parseIntent(m[0]).time).filter(Boolean))];
-  function clashParts(text) {
+  /* chose: the day and time she picked from the two, so the cross names only what was left out, never what runs. */
+  function clashParts(text, chose = {}) {
     const t = text.replace(/\bmonday to friday\b/gi, ' ');
     const find = (re, norm) => { const ms = [...t.matchAll(re)]; return { ms, n: new Set(ms.map(norm)).size }; };
     const days = find(new RegExp(`\\b(${DAY_RE})s?\\b`, 'gi'), (m) => m[1].toLowerCase());
     const times = find(/\b\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b|\b(?:[01]?\d|2[0-3])[:.][0-5]\d\b/gi, (m) => m[0].replace(/\s+/g, '').toLowerCase());
-    const cross = (x, key, what) => { const span = [x.ms[0].index, x.ms[x.ms.length - 1].index + x.ms[x.ms.length - 1][0].length]; return { key, mark: 'no', span, label: quote(t.slice(...span)), body: `I can only set one ${what}.` }; };
+    const cross = (x, key, what) => {
+      const span = [x.ms[0].index, x.ms[x.ms.length - 1].index + x.ms[x.ms.length - 1][0].length];
+      const kept = chose[key];
+      const out = kept ? [...new Set(x.ms.map((m) => m[0]))].filter((w) => (key === 'days' ? cap(w.toLowerCase().replace(/s$/, '')) : parseIntent(w).time) !== kept) : [];
+      return kept && out.length ? { key, mark: 'no', span, label: andList(out.map(quote)), body: `I can only set one ${what}, so it runs ${key === 'days' ? `on ${kept}` : `at ${clock(kept)}`} only.` }
+        : { key, mark: 'no', span, label: quote(t.slice(...span)), body: `I can only set one ${what}.` };
+    };
     return [...(days.n > 1 ? [cross(days, 'days', 'day')] : []), ...(times.n > 1 ? [cross(times, 'times', 'time')] : [])];
   }
   const hasCross = (parts) => parts.filter((p) => p.mark === 'no').length;
@@ -3675,7 +3778,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (k.source) parts.push({ key: 'source', mark: 'no', label: `Reads ${esc(k.source.value)}`, body: `${k.source.note} ${sentToTeam(k.source.value) ? '<span class="pill wait">Asked the team</span>' : `<button class="linkbtn" data-act="teamReq" data-arg="${esc(k.source.value)}|wiz">Ask the team</button>`}` });
     const monthly = it.monthly && (w.text.match(/\b(?:every|each) month\b|\bmonthly\b/i) || [])[0];
     if (monthly) parts.push({ key: 'monthly', mark: 'no', label: quote(monthly), body: 'I can’t run things monthly yet.' });
-    const clash = clashParts(w.text);
+    const clash = clashParts(w.text, { days: w.dayChoices && w.dayChoices.includes(s.day) ? s.day : '', times: w.timeChoices && w.timeChoices.includes(s.time) ? s.time : '' });
     return parts.concat(clash, leftoverParts(w.text, [...spansOf(w.text, [...HEARD.frame, ...HEARD.when, ...HEARD.setup]), ...clash.map((x) => x.span)]));
   }
 
@@ -3751,8 +3854,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function classify(text, force) {
     const t = text.trim();
     const c = S.chat;
+    if (!me().op) return approverAnswer(t);
     if (force === 'setup') return startDraft(t, parseIntent(t));
     if (UNSAFE.test(t)) { const rest = t.replace(UNSAFE, '').replace(/\s{2,}/g, ' ').replace(/[,\s]+(and|but|then|so)?[,\s]*$/i, ''); return offer({ kind: 'refuse', text: t, next: rest }); }
+    if (N8N_ASK.test(t)) return n8nAnswer(t);
     const hit = namedIn(t);
     const word = (t.match(RELEASE_WORDS) || [''])[0];
     if (c.pending === 'software') {
@@ -3766,6 +3871,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (follow) return follow;
     const about = aboutWorkflows(t);
     if (about) return about;
+    const decide = me().ap && decideAsk(t);
+    if (decide) return decide;
     const edit = editAnswer(t);
     if (edit) return edit;
     if (word || isSecurityAsk(t) || (hit && /keep track|\bwatch\b|\btrack\b|monitor/i.test(t))) {
@@ -3780,6 +3887,51 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (a.kind === 'setup' && !fromHer(it)) return { kind: 'abilities', unknown: true, text: t, from: 'setup' };
     return a.kind === 'setup' ? startDraft(t, it) : 'next' in a ? offer(a) : a;
   }
+  /* An Approver who can't set up workflows asks questions only (ADR 0043). Questions about their approvals, their
+     decisions, the workflows and the software are answered from platform state, as they are for an Operator. Anything
+     else that asks for a change, in any words, gets "Operators set up workflows." and never a set-up or edit card: it
+     fails closed. Nobody decides in the chat, so approve and decline get the requests to open instead (principle 6). */
+  const DECIDE_WORDS = /\b(?:approve|decline|reject|accept|sign off|say (?:yes|no) to)\b/i;
+  /* An Approver's approve or decline goes to the request, whatever it names ("approve the upgrade"). Another clause that
+     asks for a change still gets the refusal, so no part of the request is dropped. */
+  const decideAsk = (t) => {
+    const clauses = t.split(/\b(?:and|then|also|but)\b|[,;]/i).map((x) => x.trim()).filter(Boolean);
+    return clauses.some((x) => DECIDE_WORDS.test(x)) && !clauses.some((x) => !DECIDE_WORDS.test(x) && isCommand(withoutName(x, nameRef(x)))) ? { kind: 'decide', text: t } : null;
+  };
+  function approverAnswer(t) {
+    if (UNSAFE.test(t)) return { kind: 'refuse', text: t, next: '' };
+    if (N8N_ASK.test(t)) return n8nAnswer(t);
+    const follow = followUp(t);
+    if (follow) return follow.kind === 'data' ? follow : { kind: 'data', looked: ['watchlist'], notOn: follow.name, text: t };
+    const about = aboutWorkflows(t);
+    if (about && about.kind !== 'starts') return about;
+    const decide = !about && decideAsk(t);
+    if (decide) return decide;
+    const own = withoutName(t, nameRef(t));
+    if (about || isCommand(own) || RELEASE_WORDS.test(own) || isSecurityAsk(t) || taskAnswer(own, parseIntent(own)).kind !== 'abilities') return { kind: 'operators', text: t };
+    return { kind: 'abilities', unknown: !/what can|what do you|help|can you|abilit/i.test(t), text: t };
+  }
+  /* Who sets up and changes workflows, named for anyone who can't: the Planner's refusal and every read-only page say it. */
+  const opsAsk = () => `Ask ${whoOr(Object.keys(S.roles).filter((u) => S.roles[u].op && u !== S.user))}.`;
+  const opsSay = () => `Operators set up workflows. ${opsAsk()}`;
+  const opsNote = (what) => `<p class="note ops-note" data-unbuilt="Read only for an Approver, with who makes changes (ADR 0043)">Only Operators change ${what}. ${opsAsk()}</p>`;
+  /* Opening n8n (ADR 0043): only for people with n8n access, and the Portal can't open it yet unless Planned features
+     are shown (ADR 0026, 0027). "Is n8n up to date?" is about the software n8n, so only "open" and "in n8n" count. */
+  const N8N_ASK = /\b(?:open|show|see|view|edit|change|fix|look at)\b[^.?!]*?\b(?:in|on)\s+n8n\b|\bopen(?:\s+up)?\s+n8n\b|\bn8n\s+(?:editor|canvas)\b/i;
+  const n8nIds = () => routineIds().filter((id) => id !== 'sw');
+  const n8nAnswer = (t) => { const r = nameRef(t); return { kind: 'n8n', text: t, id: r && r.id && n8nIds().includes(r.id) ? r.id : null }; };
+  const n8nSay = (a) => {
+    if (!me().n8n) return `Only people with n8n access can open n8n${!shows('n8n') ? '.' : me().op ? '. You can add it in Settings, under People and permissions.' : ', and only Operators can have it.'}`;
+    if (!shows('n8n')) return 'Opening n8n from here isn’t built yet.';
+    if (a.id && has(a.id)) return `${R(a.id).name} opens in n8n from the button below.`;
+    return 'Which workflow should I open in n8n?';
+  };
+  const n8nCard = (m) => {
+    if (shows('n8n') && me().op && !me().n8n) return '<div class="btns" data-unbuilt="n8n access (ADR 0043)"><button class="btn sm" data-act="setGo" data-arg="people">Open People and permissions</button></div>';
+    if (!n8nOK()) return '';
+    const ids = m.card.id && has(m.card.id) ? [m.card.id] : n8nIds();
+    return `<div class="btns" data-unbuilt="Open in n8n (ADR 0026, 0027)">${ids.map((id) => `<button class="btn sm" data-act="n8nAsk" data-arg="${id}">Open ${ids.length > 1 ? esc(R(id).name) : 'it'} in n8n${I.ext(14)}</button>`).join('')}${PLANNED_TAG}</div>`;
+  };
   /* A set-up card needs at least one part in her own words. Without one, it would be a form of guesses, so the answer
      is what I can do, with each part of the request marked (fix pass S4). */
   const fromHer = (it) => !!(it.freq || it.time || it.monthly || it.tickets || it.project || ACTIONS[it.action] || it.dest === 'jira' || it.badSource);
@@ -3819,6 +3971,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const COMMAND = /\b(make|set|change|turn|pause|stop|delete|remove|create|add|watch|track|monitor|run|move|rename|switch|schedule|reschedule|resume|start|cancel|edit|update|upgrade|put|enable|disable|close|approve|decline|retry|report|send|post|e-?mail|raise|file|assign|every|daily|weekly|monthly)\b/i;
   const isCommand = (t) => COMMAND.test(t.replace(/\b(?:the|a|this|that|last|next|each|its|my) runs?\b/gi, ' '));
   /* "Is LangGraph up to date?": a software on the watchlist, one that isn't on it, or all of them. */
+  const SW_OPEN = /^(?:open|show(?: me)?|find|go to)\s+(.+?)\s+(?:on|in)\s+the\s+(?:software(?:\s+(?:page|watchlist))?|watchlist)\s*[.?!]*$/i;
   const IS_CURRENT = /\b(?:is|are)\s+(.+?)\s+(?:up to date|current|behind|out of date|outdated|on the (?:latest|newest)(?: version)?|the (?:latest|newest)(?: version)?)\b/i;
   function softAbout(t) {
     const words = (t.match(IS_CURRENT) || [])[1] || t;
@@ -3832,15 +3985,22 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* Questions about her workflows and software, in any wording (spec 6.2, ADR 0043). Each route reads platform state,
      so it fails closed: a text with a change word is a command and goes on down the command path. A route's own words,
      such as "stop" in "why did it stop", are not counted as a command. */
+  const DECIDED_ASK = /\b(?:did|have) i\b[^.?!]*\b(?:decid|approv|declin|said (?:yes|no))\w*|\bwhat i (?:decided|approved|declined)\b|\b(?:my )?(?:past|recent|earlier|previous|last) (?:decisions?|approvals?)\b|\bmy decisions?\b/i;
   const ABOUT = [
+    /* "What did I decide before?": this person's decisions, newest first. Its own words, such as "approve", ask here. */
+    [DECIDED_ASK, (t) => ({ kind: 'decided', only: /declin|said no|reject/i.test(t) ? 'declined' : /approv|said yes/i.test(t) && !/decid/i.test(t) ? 'approved' : '' }), /\b(?:decid|approv|declin)\w*|\bsaid (?:yes|no)\b/gi],
     [/\bwhy\b.*\b(stop|stopped|fail|failed|broke|broken|went wrong)\b|\bwhat (went wrong|happened)\b/i, (t) => ({ kind: 'why', id: (nameRef(t) || {}).id || stoppedIds()[0] || null }), /\bwhy\b[^?.!]*?\b(?:stop|fail|break)\b/i],
-    /* "when does the software check run next?", "is the morning check running?": one workflow's state and next run. */
-    [/\b(?:when|what time|what day)\b[^.?!]*\b(?:runs?|next|due)\b|\bnext run\b|^(?:is|are)\b[^.?!]*\b(?:running|working|on|stopped|paused|ok(?:ay)?)\b/i, (t) => { const r = nameRef(t); return r && r.id ? { kind: 'one', id: r.id } : null; }, /\b(?:runs?|running)\b/gi],
+    /* "when does the software check run next?", "is the morning check running?", "how is keep our software up to date
+       doing?": one workflow's state and next run. Its name is taken out before the command test, so "weekly" asks nothing.
+       It comes before the software routes, so a name such as "keep our software up to date" is never read as software. */
+    [/\b(?:when|what time|what day)\b[^.?!]*\b(?:runs?|next|due)\b|\bnext run\b|^(?:is|are)\b[^.?!]*\b(?:running|working|on|stopped|paused|ok(?:ay)?)\b|\bhow(?:'s|’s|\s+is|\s+are)\b[^.?!]*\b(?:doing|going|getting on)\b/i, (t) => { const r = nameRef(t); return r && r.id ? { kind: 'one', id: r.id } : null; }, /\b(?:runs?|running)\b/gi],
     [/\b(?:do i have|are there|is there|any)\b[^.?!]*\b(?:approvals?|requests?)\b|\bapprovals?\b[^.?!]*\bwaiting\b/i, () => ({ kind: 'mine', only: 'yes' })],
     [/\b(?:which|what)\s+version\b|\bversion of\b/i, softAbout, /\b(?:do|does|are)\s+(?:we|you|i)\s+(?:run|use|have|running|using)\b/gi],
     [/^(set up )?another workflow\b|^(a )?new workflow\b|^what else( can i (do|ask( for)?))?\s*\??$|^(any )?starting points?\s*\??$|^(any )?ideas?\s*\??$/i, () => ({ kind: 'starts' }), /^(set up )?another workflow\b|^(a )?new workflow\b/i],
     [/\b(?:what|anything|something)\b[^.?!]*?\b(?:needs? (?:me|my)|waiting (?:on|for) (?:me|my)|for me|to approve|(?:do )?i need to do|on my plate)\b|\bneeds? my (?:attention|yes|approval)\b|\bmy (?:to-?do|approvals?)\b/i, () => ({ kind: 'mine' })],
     [IS_CURRENT, softAbout],
+    /* "Open Redis on the Software page": that software's row, or that it isn't watched. */
+    [SW_OPEN, (t) => { const name = t.match(SW_OPEN)[1].replace(/^(?:the|our|my)\s+/i, ''); const row = liveSoftware().find((x) => x.name.toLowerCase() === name.toLowerCase()); return row ? { kind: 'data', looked: ['watchlist'], about: row.key, open: true } : { kind: 'data', looked: ['watchlist'], notOn: (namedIn(name) || [cap(name)])[0] }; }, /^(?:open|show(?: me)?|find|go to)\b|\b(?:on|in) the (?:software page|software watchlist|software|watchlist)\b/gi],
     [/\b(?:which|what|any(?:thing)?)\b[^.?!]*\b(?:behind|out of date|outdated|newer versions?|new versions?)\b/i, () => ({ kind: 'data', looked: ['watchlist'], behind: true })],
     [/\b(?:how|what)(?:'s|’s| is| are)?\b[^.?!]*\bworkflows?\b|\bworkflows?\b[^.?!]*\b(?:doing|going|running|working|ok(?:ay)?|fine)\b|\b(?:status|state)\b[^.?!]*\bworkflows?\b|^(?:check|show(?: me)?|see)\b[^.?!]*\bworkflows?\b|^(?:is|are)\b.*\b(?:running|working|on|stopped|paused)\s*\?*$/i, () => ({ kind: 'check' })],
     [/^(help me )?(check )?(how many|which|what)\b.*\b(software|tools?|watchlist)\b/i, () => ({ kind: 'data', looked: ['watchlist'] })],
@@ -3861,11 +4021,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const STATE_ORDER = ['Stopped', 'Waiting for a yes', 'On', 'Paused', 'No answer'];
   function checkSay() {
     const ids = routineIds();
-    if (!ids.length) return 'You have no workflows yet. Tell me a task, and I’ll set it up.';
+    if (!ids.length) return me().op ? 'You have no workflows yet. Tell me a task, and I’ll set it up.' : 'There are no workflows yet. Operators set them up.';
     const count = {};
     ids.forEach((id) => { const w = stateOf(id)[1]; count[w] = (count[w] || 0) + 1; });
     const said = (w, k) => (w === 'On' ? `${k} ${k === 1 ? 'is' : 'are'} on` : w === 'Waiting for a yes' ? `${k} ${k === 1 ? 'is' : 'are'} waiting for a yes` : w === 'No answer' ? `${k} got no answer` : `${k} ${w.toLowerCase()}`);
-    return `You have ${ids.length} workflow${ids.length === 1 ? '' : 's'}. ${andList(STATE_ORDER.filter((w) => count[w]).map((w) => said(w, count[w])))}.`;
+    return `${me().op ? 'You have' : 'The team has'} ${ids.length} workflow${ids.length === 1 ? '' : 's'}. ${andList(STATE_ORDER.filter((w) => count[w]).map((w) => said(w, count[w])))}.`;
   }
   /* One row per workflow, each with at most one action; only the first action is primary (rule 1). */
   function checkCard(only) {
@@ -3874,7 +4034,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const [tone, label] = stateOf(id);
       let act = actionFor(id);
       if (act) { if (mainUsed) act = demote(act); mainUsed = true; }
-      return `<li class="row"><div><button class="linkbtn" data-act="workflow" data-arg="${id}">${esc(r.name)}</button><span class="row-sub">${pill({ tone, label })}${S.paused[id] ? '' : `<span>Next run ${r.next}</span>`}</span></div>${act ? `<span data-flow-of="workflow:${id}">${act}</span>` : ''}<span class="row-last">${lastRunLine(id)}</span></li>`;
+      return `<li class="row"><div><button class="linkbtn" data-act="workflow" data-arg="${id}">${esc(r.name)}</button><span class="row-sub">${pill({ tone, label })}${S.paused[id] ? '' : `<span>Next run ${r.next}</span>`}</span></div>${act ? `<span data-flow-of="workflow:${id}">${act}</span>` : ''}<span class="row-last" data-unbuilt="Last run line (ADR 0043)">${lastRunLine(id)}</span></li>`;
     }).join('')}</ul></div>`;
   }
   /* The AI troubleshooter's three answers for each stop in the sample data (ADR 0043, spec 10.3): what happened, what
@@ -3901,15 +4061,15 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const wf = S.editRun.wf;
       const live = !!S.n8nChg[wf];
       return {
-        happened: 'Carol’s change in n8n at 9:12 removed <b>Ask for a yes</b>. This run reached the step that makes changes without a yes, so it stopped there.', affected: 'Nothing was written.',
-        safe: live ? 'Not yet. A retry would stop in the same place until Ask for a yes is back. Undo Carol’s change, or put the step back yourself in n8n.' : 'Yes. Carol’s change has been undone, so the next run asks for a yes again.',
-        act: live ? { do: 'n8nUndo', arg: wf, label: 'Undo Carol’s change' } : null, also: live ? { do: 'n8nAsk', arg: wf, label: `Fix it in n8n${I.ext(14)}` } : null, deny: 'An Operator can undo the change.',
+        happened: `Carol’s change${inN8n()} at 9:12 removed <b>Ask for a yes</b>. This run reached the step that makes changes without a yes, so it stopped there.`, affected: 'Nothing was written.',
+        safe: live ? `Not yet. A retry would stop in the same place until Ask for a yes is back. Undo Carol’s change${n8nOK() ? ', or put the step back yourself in n8n' : ''}.` : 'Yes. Carol’s change has been undone, so the next run asks for a yes again.',
+        act: live ? { do: 'n8nUndo', arg: wf, label: 'Undo Carol’s change' } : null, also: live && n8nOK() ? { do: 'n8nAsk', arg: wf, label: `Fix it in n8n${I.ext(14)}` } : null, deny: 'An Operator can undo the change.',
       };
     },
   };
   const troubleBtn = (t, sm) => [t.act && ['btn primary', t.act], t.also && ['btn', t.also]].filter(Boolean).map(([cls, a]) => `<button class="${cls}${sm ? ' sm' : ''}" data-act="${a.do}"${a.arg ? ` data-arg="${a.arg}"` : ''}${a.unbuilt ? ` data-unbuilt="${a.unbuilt}"` : ''}>${a.label}</button>`).join('');
   const THREE = [['happened', 'What happened'], ['affected', 'What was affected'], ['safe', 'Safe to retry']];
-  const answersDL = (t) => `<dl class="qa3">${THREE.map(([k, label]) => `<div><dt>${label}</dt><dd>${t[k]}</dd></div>`).join('')}</dl>`;
+  const answersDL = (t) => `<dl class="qa3" data-unbuilt="The three answers (ADR 0043). The built run page has What happened and What to do">${THREE.map(([k, label]) => `<div><dt>${label}</dt><dd>${t[k]}</dd></div>`).join('')}</dl>`;
   /* Under the answers: the button for an Operator, and for anyone else the reason it isn't theirs. */
   const troubleActs = (t, sm) => (!t.act ? '' : me().op ? `<div class="btns">${troubleBtn(t, sm)}</div>` : `<p class="note">${t.deny}</p>`);
   const stoppedNow = (id) => !!id && !!TROUBLE[id] && stoppedIds().includes(id);
@@ -3918,7 +4078,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (a.id && !has(a.id)) return 'That workflow isn’t here any more.';
     if (stoppedNow(a.id)) return `${R(a.id).name} stopped. Here’s what the AI troubleshooter found.`;
     if (a.id) return `${R(a.id).name} hasn’t stopped. ${S.paused[a.id] ? 'It’s paused.' : `It’s ${stateOf(a.id)[1].toLowerCase()}, and its next run is ${R(a.id).next}.`}`;
-    return 'Nothing has stopped. Here’s how your workflows are doing.';
+    return `Nothing has stopped. Here’s how ${me().op ? 'your' : 'the'} workflows are doing.`;
   }
   function whyCard(m) {
     const id = m.card.id;
@@ -3933,15 +4093,14 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
   const mineSay = (a) => {
     if (a && a.only) { const n = needs().filter((x) => x.yes).length; return n ? `${n === 1 ? '1 approval is' : `${n} approvals are`} waiting for your yes.` : 'No approvals are waiting for your yes.'; }
-    const n = needs().length;
-    return n ? `${n === 1 ? '1 thing needs' : `${n} things need`} you.` : 'Nothing needs you right now.';
+    return needsWords(needs());
   };
   /* One workflow's state and next run, in the words Workflows uses. */
   const oneSay = (a) => {
     if (!has(a.id)) return 'That workflow isn’t here any more.';
     const r = R(a.id);
     const st = stateOf(a.id)[1];
-    if (S.paused[a.id]) return `${r.name} is paused, so it won’t run until you resume it.`;
+    if (S.paused[a.id]) return `${r.name} is paused, so it won’t run until ${me().op ? 'you resume' : 'an Operator resumes'} it.`;
     return `${r.name} ${st === 'Stopped' ? 'stopped' : st === 'No answer' ? 'got no answer' : st === 'On' ? 'is on' : `is ${lc(st)}`}. Its next run is ${r.next}.`;
   };
   /* A question about her own data (ADR 0042). In the built app the model writes the sentence from a facts snapshot, and
@@ -3955,25 +4114,29 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (a && a.about) {
       const r = rows.find((x) => x.key === a.about);
       if (!r) return 'That software isn’t on the Software watchlist any more.';
+      if (a.open) return `${esc(r.name)} is on the Software watchlist. Open it from here.`;
       if (r.newest === '?') return `${esc(r.name)} could not be checked, so there is no newest version to compare.`;
+      if (r.ours === 'Not known') return `The version of ${esc(r.name)} you run isn’t known, so I can’t say if it’s behind. The newest is ${esc(r.newest)}.`;
       return r.ours === r.newest ? `${esc(r.name)} is up to date at ${esc(r.newest)}.` : `${esc(r.name)} is behind. You run ${esc(r.ours)} and the newest is ${esc(r.newest)}.`;
     }
     const n = rows.length;
     return n ? `There ${n === 1 ? 'is 1 software' : `are ${n} software`} on the Software watchlist.` : 'Nothing is on the Software watchlist yet.';
   };
   const LOOKED = { watchlist: ['Software', 'software'], workflows: ['Workflows', 'workflows'], needs_you: ['Needs you', 'workflows'] };
-  /* Under an answer about one watched software, an Operator gets the Software page's own actions: open its row, check the
-     whole watchlist (that is all the page's Check now does), and last, Stop watching, which asks first and keeps the
-     page's Undo. An Approver gets none, as on the Software page. */
+  /* Under an answer about one watched software, anyone can open its row. An Operator also gets the Software page's own
+     actions: check the whole watchlist (that is all the page's Check now does), and last, Stop watching, which asks first
+     and keeps the page's Undo. */
   const dataActions = (m) => {
     const c = m.card;
     const r = c.about ? liveSoftware().find((x) => x.key === c.about) : null;
     if (me().op && c.notOn && !onList(c.notOn)) return `<div class="btns"><button class="btn sm" data-act="say" data-arg="Keep track of the ${esc(c.notOn)} version">Watch ${esc(c.notOn)}</button></div>`;
-    if (!me().op || !r) return '';
+    if (!r) return '';
+    const open = `<button class="btn sm" data-act="go" data-arg="software" data-open="software:${r.key}">Open<span class="vh"> ${esc(r.name)}</span> on the Software page</button>`;
+    if (!me().op) return `<div class="btns sw-acts">${open}</div>`;
     const stop = c.stopping
       ? `<span class="btns" role="group" aria-label="Stop watching ${esc(r.name)}"><span>Stop watching ${esc(r.name)}? It won’t be checked any more.</span><button class="btn sm" data-act="stopKeep" data-mid="${m.id}">Keep it</button><button class="btn sm bad" data-act="stopYes" data-mid="${m.id}">Yes, stop watching<span class="vh"> ${esc(r.name)}</span></button></span>`
       : `<button class="btn sm" data-act="stopAsk" data-mid="${m.id}">Stop watching<span class="vh"> ${esc(r.name)}</span></button>`;
-    return `<div class="btns sw-acts"><button class="btn sm" data-act="go" data-arg="software" data-open="software:${r.key}">Open<span class="vh"> ${esc(r.name)}</span> on the Software page</button>${stop}</div><div class="btns"><button class="btn sm" data-act="checkNow">Check all software now</button></div>`;
+    return `<div class="btns sw-acts">${open}${stop}</div><div class="btns"><button class="btn sm" data-act="checkNow">Check all software now</button></div>`;
   };
   const dataCard = (m) => `<p class="looked small muted">Looked at: ${m.card.looked.map((k) => `<button class="linkbtn" data-act="go" data-arg="${LOOKED[k][1]}">${LOOKED[k][0]}</button>`).join(', ')}</p>${dataActions(m)}`;
   /* A short follow-up after an answer about the watchlist: "and Redis?". A name on the list is a question about that
@@ -4119,8 +4282,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (!has(c.id) || c.state === 'kept') return '';
     const r = R(c.id);
     const p = c.state === 'open' ? editPlan(c) : null;
-    /* A change the card can't make keeps only a question asked alongside it, so that part isn't lost. */
-    const no = p && p.no ? editCrosses(c).filter((x) => /on its own/.test(x.body)) : c.state === 'open' ? editCrosses(c) : [];
+    /* A change the card can't make keeps only a question or an approve asked alongside it, so that part isn't lost. */
+    const no = p && p.no ? editCrosses(c).filter((x) => x.keep) : c.state === 'open' ? editCrosses(c) : [];
     if (p && p.no) return `${no.length ? `<div class="pcard">${partsList(no)}</div>` : ''}${p.no === 'other' ? `<div class="btns"><button class="btn sm" data-act="workflow" data-arg="${c.id}">Open ${esc(r.name)}</button></div>` : ''}`;
     if (p && p.same && !no.length) return '';
     const from = p ? r.sched : c.from;
@@ -4132,22 +4295,62 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const sw = c.id !== 'sw' ? '' : c.state === 'open' ? `<p class="note">This changes when all ${n} software on the watchlist are checked. Saving makes you the owner of this schedule. Its checks then count as your work, so you won’t be able to approve them.</p>`
       : `<p class="note">This changed when all ${n} software on the watchlist are checked, and made you the owner of this schedule. Its checks count as your work now, so you can’t approve them.</p>`;
     const since = c.state === 'saved' ? changedSince(c, c.ver) : c.state === 'undone' ? changedSince(c, c.undoVer) : '';
+    /* The tickets it reads follow the new schedule, so that change is shown too (principle 4). */
+    const nr = nrOf(c.id);
+    const tFrom = nr && ticketLabel(nr.tickets, periodFor(nr, from));
+    const tTo = nr && !(p && p.ask) && ticketLabel(nr.tickets, periodFor(nr, to));
+    const tickets = tTo && tTo !== tFrom ? `<section class="pcard-s"><h4>Which tickets</h4><dl class="ba"><dt>Before</dt><dd>${tFrom}</dd><dt>After</dt><dd><b>${tTo}</b></dd></dl></section>` : '';
     const later = S.paused[c.id] ? 'It’s paused, so it won’t run until you resume it.' : `Next run ${r.next}.`;
     const foot = c.state === 'open'
       ? `<button class="btn primary" data-act="editSave" data-mid="${id}"${held ? ' disabled' : ''}>Save change</button><button class="btn" data-act="editKeep" data-mid="${id}">Never mind</button>${holdsSave(no) ? '<span class="left">Ask again without the part with a cross.</span>' : ''}`
       : c.state === 'saved' ? `<span class="note">${I.check(14)} Saved as version ${c.ver}. ${since ? `Changed again since, ${since}.` : later}</span>${!since ? `<button class="btn sm" data-act="editUndo" data-mid="${id}">Undo</button>` : ''}`
         : `<span class="note">Undone, as version ${c.undoVer}.${since ? ` Changed again since, ${since}.` : ''}</span>`;
-    return `<div class="pcard" data-pres="edit:${id}">
+    return `<div class="pcard" data-pres="edit:${id}" data-unbuilt="The edit card (ADR 0043)">
       <div class="pcard-h"><h3 tabindex="-1" id="card-h-${id}">Change ${esc(r.name)}</h3></div>
       ${asks.length || no.length ? partsList([...asks, ...no]) : ''}
       <section class="pcard-s"><h4>When it runs</h4><dl class="ba"><dt>Before</dt><dd>${schedText(from)}</dd><dt>After</dt><dd>${p && p.ask ? `<span class="muted">${p.ask === 'day' ? 'Choose a day' : 'Choose a time'}</span>` : `<b>${schedText(to)}</b>`}</dd></dl>${sw}</section>
+      ${tickets}
       <div class="pcard-f">${foot}</div>
     </div>`;
   }
   /* "Make the React check …" when there is no React check: say so, and offer to watch it, which is checked every Monday. */
   const nocheckSay = (a) => (onList(a.name) ? `${a.name} is on the Software watchlist now, so it’s checked ${swDays()} with the rest of your software.` : `You don’t have a ${a.name} check. ${a.name} isn’t on the Software watchlist, which checks software ${swDays()}.`);
   const nocheckCard = (m) => (onList(m.card.name) || !me().op ? '' : `<div class="btns"><button class="btn sm" data-act="say" data-arg="Keep track of the ${esc(m.card.name)} version">Watch ${esc(m.card.name)}</button></div>`);
+  /* One person's decisions, newest first (ADR 0043): the requests decided today, read from the same records and in the
+     same words as Teams and the run page, then the sample's earlier ones, which each workflow's Recent activity lists. */
+  const EARLIER = [
+    { id: 'issues', when: 'Mon 26 Oct, 8:00', by: 'bob', did: '1 ticket created (MOCK-12)' },
+    { id: 'sw', when: 'Mon 19 Oct, 9:00', by: 'alice', did: '1 ticket created (MOCK-9)' },
+    { id: 'nudge', when: 'Fri 16 Oct, 16:00', by: 'bob', did: '1 ticket created (MOCK-11)' },
+  ];
+  const earlierLine = (id, when) => { const e = EARLIER.find((x) => x.id === id && x.when === when); return `${e.did}, approved by ${nm(e.by)}`; };
+  /* What a decided request did, from the run page's own headline, so the two never disagree. */
+  const outcomeOf = (id, r) => (r.state === 'declined' ? declineTail(id) : r.state === 'approved' ? `${runModel(id).headline}.` : 'It waits for the next yes.');
+  function decisionsOf(u, only = '') {
+    const today = REQ_IDS.map((id) => [id, reqRecord(id)]).filter(([, r]) => r && (r.yes.includes(u) || (r.state === 'declined' && r.by === u)))
+      .map(([id, r]) => ({ id, act: 'run', state: r.state === 'declined' && r.by === u ? 'declined' : 'approved', line: `${r.state === 'waiting' ? `Approved by ${r.yes.map(decidedAt).join(', then ')}` : decidedLine(id, r)}. ${outcomeOf(id, r)}` }));
+    const before = EARLIER.filter((e) => e.by === u && has(e.id)).map((e) => ({ id: e.id, act: 'workflow', state: 'approved', line: `Approved by ${nm(e.by)}, ${e.when}. ${cap(e.did)}.` }));
+    return today.concat(before).filter((d) => !only || d.state === only);
+  }
+  const decidedSay = (a) => {
+    if (!me().ap) return 'You don’t decide on requests, because you aren’t an Approver.';
+    const n = decisionsOf(S.user, a.only).length;
+    if (a.only) return n ? `You ${a.only} ${n === 1 ? '1 request' : `${n} requests`}.` : `You haven’t ${a.only} any requests yet.`;
+    return n ? `Here ${n === 1 ? 'is your decision' : `are your ${n} decisions`}.` : 'You haven’t decided on any requests yet.';
+  };
+  const decidedCard = (m) => {
+    const list = me().ap ? decisionsOf(S.user, m.card.only) : [];
+    return list.length ? `<div class="pcard wfcheck decided" data-unbuilt="Planner answers about your decisions (ADR 0043)"><ul class="rows">${list.map((d) => `<li class="row"><div><button class="linkbtn" data-act="${d.act}" data-arg="${d.id}">${esc(R(d.id).name)}</button><span class="row-sub">${pill(d.state === 'declined' ? runTone.declined : { tone: 'ok', label: 'Approved' })}</span></div><p class="row-last">${d.line}</p></li>`).join('')}</ul></div>` : '';
+  };
   const mineCard = (m) => { const items = needs().filter((x) => !m.card.only || x.yes); return items.length ? needsStrip(items, 99, 'Planner answers about your workflows') : ''; };
+  /* An approve or decline asked alongside something else: it goes to the request, where the person sees exactly what it
+     writes (rule 6), with a button to each request waiting for their yes. */
+  const decideBody = () => {
+    if (!me().ap) return 'Only Approvers approve or decline, on the request itself.';
+    const ids = mayDecide();
+    if (!ids.length) return 'Nothing is waiting for your yes, so there’s nothing to decide.';
+    return `<span class="pq">I can’t approve or decline for you. Open the request, and decide there.</span><span class="pick">${ids.map((id) => `<button type="button" class="chip" data-act="run" data-arg="${id}">${ids.length > 1 ? `Review ${esc(R(id).name)}` : 'Review and decide'}</button>`).join('')}</span>`;
+  };
   const startsCard = () => `<div class="chips starts" role="group" aria-label="Starting points" data-unbuilt="Planner answers about your workflows">${starts().map((t) => `<button class="chip" data-act="say" data-arg="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
 
   /* The answers (spec 6.2). Each covers what I understood, what I can do, what I need from you, and what happens next
@@ -4163,12 +4366,16 @@ details > .m-close { animation: fold 140ms ease-in both; }
     cant: { say: cantSay, card: (m) => cantCard(m), mood: 'sorry' },
     down: { say: (a) => (a.saved || jiraDown() ? 'Jira isn’t answering right now, so I can’t check that. I’ll be able to once it’s back.' : 'Jira is answering again, so I can check that now.'), card: (m) => downCard(m), mood: 'sorry' },
     refuse: { say: () => 'I can’t set that up. Anything that changes data waits for a yes, every time.', card: (m) => refuseCard(m), mood: 'sorry' },
-    abilities: { say: (a) => (a.unknown ? 'I can’t help with that here. I check software versions and watch for new releases. Here’s what I can do.' : 'Here’s what I can do for software versions.'), card: () => abilitiesHTML(), mood: (a) => (a.unknown ? 'sorry' : 'idle') },
+    abilities: { say: (a) => (!me().op ? (a.unknown ? 'I can’t help with that here. I answer questions about your approvals and the workflows.' : 'Here’s what you can ask me.') : a.unknown ? 'I can’t help with that here. I check software versions and watch for new releases. Here’s what I can do.' : 'Here’s what I can do for software versions.'), card: () => (me().op ? abilitiesHTML() : approverCan()), mood: (a) => (a.unknown ? 'sorry' : 'idle') },
+    operators: { say: opsSay, mood: 'sorry' },
+    decide: { say: () => (needs().some((x) => x.yes) ? 'I can’t approve or decline for you. Open the request to see exactly what it will write, and decide there.' : 'Nothing is waiting for your yes, so there’s nothing to decide.'), card: () => mineCard({ card: { only: 'yes' } }) },
+    decided: { say: decidedSay, card: (m) => decidedCard(m) },
+    n8n: { say: n8nSay, card: (m) => n8nCard(m), mood: () => (n8nOK() ? 'idle' : 'sorry') },
     check: { say: checkSay, card: () => checkCard() },
     why: { say: whySay, card: (m) => whyCard(m), mood: (a) => (stoppedNow(a.id) ? 'sorry' : 'idle') },
     mine: { say: mineSay, card: (m) => mineCard(m) },
     one: { say: oneSay, card: (m) => (has(m.card.id) ? checkCard(m.card.id) : '') },
-    starts: { say: () => 'Here are three places to start. Pick one, or tell me something else.', card: () => startsCard() },
+    starts: { say: () => { const n = starts().length; return !n ? 'You already watch the software I’d suggest. Tell me what else to watch.' : n === 1 ? 'Here is a place to start. Pick it, or tell me something else.' : `Here are ${n} places to start. Pick one, or tell me something else.`; }, card: () => startsCard() },
     data: { say: dataSay, card: (m) => dataCard(m) },
     edit: { say: editSay, card: (m) => editCard(m) },
     nocheck: { say: nocheckSay, card: (m) => nocheckCard(m) },
@@ -4177,13 +4384,15 @@ details > .m-close { animation: fold 140ms ease-in both; }
      list them among their parts; every other answer lists them above its card. Each kind names what it read. */
   const NAMES = () => [...routineIds().map((id) => R(id).name), ...liveSoftware().map((x) => x.name), ...Object.keys(KNOWN), ...Object.values(KNOWN).map((k) => k[0])];
   const nameSpans = (text) => NAMES().flatMap((n) => { const out = []; const low = text.toLowerCase(); const k = n.toLowerCase(); for (let i = low.indexOf(k); i >= 0; i = low.indexOf(k, i + 1)) out.push([i, i + k.length]); return out; });
-  const STATUS_WORDS = [/\b(?:today|now|right now|this morning|at the moment|currently|attention|yes|approvals?|plate|doing|going|running|working|status|state|next|due)\b/gi];
+  const STATUS_WORDS = [/\b(?:today|now|right now|this morning|at the moment|currently|attention|yes|approvals?|plate|doing|going|running|working|status|state|next|due)\b/gi, /\b(?:show(?: me)?|list|tell me|give me|let me see)\b/gi];
   const READ_BY = {
     part: () => [...HEARD.frame, ...HEARD.when, ...HEARD.setup, ...HEARD.needs],
     cant: () => [...HEARD.frame, ...HEARD.when, ...HEARD.setup, ...HEARD.needs, ...HEARD.cant, ...HEARD.watch],
     abilities: (c) => (c.from === 'setup' ? [...HEARD.frame, ...HEARD.when, ...HEARD.setup] : null),
     nocheck: () => [...HEARD.frame, ...HEARD.when, new RegExp(`${SCHED_VERB.source}|${OTHER_VERB.source}`, 'gi'), /\b(?:instead of|rather than)\b[^,.;]*/gi],
-    ...Object.fromEntries(['data', 'check', 'mine', 'why', 'one'].map((k) => [k, () => [...HEARD.frame, ...ABOUT.map(([re]) => new RegExp(`(?:${re.source})(?:(?!\\b(?:and|then|but|also)\\b)[^,.;!?])*`, 'gi')), ...STATUS_WORDS, ...HEARD.watch]])),
+    /* "approve the upgrade": each approve or decline clause, whatever it names. A question asked with it is marked. */
+    decide: () => [...HEARD.frame, new RegExp(`(?:${DECIDE_WORDS.source})(?:(?!\\b(?:and|then|but|also)\\b)[^,.;!?])*`, 'gi')],
+    ...Object.fromEntries(['data', 'check', 'mine', 'why', 'one', 'decided'].map((k) => [k, () => [...HEARD.frame, ...ABOUT.map(([re]) => new RegExp(`(?:${re.source})(?:(?!\\b(?:and|then|but|also)\\b)[^,.;!?])*`, 'gi')), ...STATUS_WORDS, ...HEARD.watch]])),
   };
   const extraCrosses = (c) => {
     const rs = c.text && READ_BY[c.kind] && READ_BY[c.kind](c);
@@ -4203,7 +4412,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const draftRow = (wiz = S.wiz) => {
     const keep = S.wiz;
     S.wiz = wiz;
-    const row = { id: (S.draftSeq += 1), wiz, name: wiz.name.trim() || draftNr().name, left: setupLeft().length, need: setupLeft(), crossed: hasCross(setupParts('d')) };
+    const row = { id: (S.draftSeq += 1), by: S.user, wiz, name: wiz.name.trim() || draftNr().name, left: setupLeft().length, need: setupLeft(), crossed: hasCross(setupParts('d')) };
     S.wiz = keep;
     return row;
   };
@@ -4215,7 +4424,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     S.wiz = newWiz();
     return true;
   }
-  const draftRows = () => (liveSetup() ? [{ id: 'live', name: S.wiz.name.trim() || draftNr().name, left: setupLeft().length, need: setupLeft(), crossed: hasCross(setupParts('d')) }] : []).concat(S.drafts.map((d) => ({ id: d.id, name: d.name, left: d.left, need: d.need || [], crossed: d.crossed })));
+  const draftRows = () => (liveSetup() ? [{ id: 'live', name: S.wiz.name.trim() || draftNr().name, left: setupLeft().length, need: setupLeft(), crossed: hasCross(setupParts('d')) }] : []).concat(S.drafts.filter((d) => d.by === S.user).map((d) => ({ id: d.id, name: d.name, left: d.left, need: d.need || [], crossed: d.crossed })));
   function startDraft(text, it) {
     saveLive();
     /* Two days, or two times, for one schedule: it is a question between them, never the first one picked. */
@@ -4232,8 +4441,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function setupLeft() {
     const left = [];
     if (Object.keys(schedProblems(S.wiz.sched)).length) left.push('when it runs');
-    const names = { source: 'what it reads', tickets: 'which tickets', project: 'the Jira project', action: 'what it does' };
-    intentRows().filter((r) => r.key !== 'when' && (r.state === 'missing' || r.state === 'cant')).forEach((r) => left.push(names[r.key]));
+    const names = { tickets: 'which tickets', project: 'the Jira project', action: 'what it does' };
+    intentRows().filter((r) => r.key !== 'when' && r.state === 'missing').forEach((r) => left.push(names[r.key]));
     return left;
   }
   const leftWords = (n) => (n === 1 ? '1 choice left' : `${n} choices left`);
@@ -4272,7 +4481,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         <p class="agents-line">${face('jira', 26)}<span><b>${AGENTS.jira.name}</b> reads the tickets.</span>${face(writer, 26)}<span><b>${AGENTS[writer].name}</b> ${job}.${isNewAgent(writer) ? ' <span class="tag">New agent, saved under How it works, in Settings, when you turn this on</span>' : ''}</span></p>
         <p class="note">Tools: ${TOOLS.jiraSearch[0]} and ${TOOLS.jiraRead[0]} read Jira. ${TOOLS.jiraCreate[0]} writes to Jira, after a yes.</p>
       </div></details>
-      <div class="pcard-f"><button class="btn primary" data-act="turnOn"${left.length ? ' disabled' : ''}>${crossed ? 'Set up the part I can' : 'Turn it on'}</button>
+      <div class="pcard-f"><button class="btn primary" data-act="turnOn"${left.length ? ' disabled' : ''}>${crossed ? 'Set up the part I can' : 'Turn it on'}</button><button class="btn" data-act="discardDraft" data-arg="live">Never mind</button>
         ${left.length ? `<span class="left">${leftWords(left.length)}: ${andList(left)}.</span>` : `<span class="note">${crossed ? `${crossed === 1 ? 'The part with a cross is' : `The ${crossed} parts with a cross are`} left out.` : 'Nothing is unclear. Turn it on when you’re ready.'}</span>`}</div>
     </div>`;
   }
@@ -4328,6 +4537,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function watchCard(m) {
     const c = m.card;
     const id = m.id;
+    if (c.kept) return `<p class="small muted">Not added. Nothing changed.</p>`;
     if (c.done && S.removed.includes(c.done)) return `<p class="small muted">${esc(c.name)} isn’t on the Software watchlist any more.</p>`;
     if (c.done) return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(c.name)} is on the Software watchlist.</b><span>First check ${R('sw').next}, with the rest of your software. ${apprOf('sw') ? apprText(apprOf('sw')).replace(/,.*$/, '') : R('sw').approves} is asked before any ticket is created.</span><span class="btns"><button class="linkbtn" data-act="go" data-arg="software">Open Software watchlist</button></span></div></div>`;
     const parts = watchParts(m);
@@ -4335,7 +4545,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return `<div class="pcard" data-pres="watch:${id}" data-unbuilt="Adding software from the Planner">
       <div class="pcard-h"><h3 tabindex="-1" id="card-h-${id}">Add ${esc(c.name)} to the Software watchlist</h3><span class="kind">${I.box(16)}Software watchlist</span></div>
       ${partsList(parts)}
-      <div class="pcard-f"><button class="btn primary" data-act="watchAdd" data-mid="${id}"${n ? ' disabled' : ''}>${hasCross(parts) ? 'Set up the part I can' : `Add ${esc(c.name)}`}</button>${n ? `<span class="left">${leftWords(n)}</span>` : ''}<button class="linkbtn push" data-act="watchOwn" data-mid="${id}">No, set it up as a new workflow</button></div>
+      <div class="pcard-f"><button class="btn primary" data-act="watchAdd" data-mid="${id}"${n ? ' disabled' : ''}>${hasCross(parts) ? 'Set up the part I can' : `Add ${esc(c.name)}`}</button><button class="btn" data-act="watchKeep" data-mid="${id}">Never mind</button>${n ? `<span class="left">${leftWords(n)}</span>` : ''}<button class="linkbtn push" data-act="watchOwn" data-mid="${id}">No, set it up as a new workflow</button></div>
     </div>`;
   }
 
@@ -4407,7 +4617,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return `<li class="cmsg" data-flip="msg:${m.id}" data-mid="${m.id}"><span class="cmsg-av">${face('lead', 40, st, { k: `chat:${m.id}` })}</span><div class="cmsg-body"><span class="cmsg-who" style="color:${AGENTS.lead.hue}">Planner</span>${body}</div></li>`;
   }
   const msgById = (id) => S.chat.msgs.find((m) => m.id === +id);
-  const onHome = () => S.view.name === 'home' && me().op;
+  const onHome = () => S.view.name === 'home';
   /* The chat column scrolls itself. scrollIntoView and a plain focus() also scroll #app, which moved the whole app up
      on a phone, header and box included, so neither is used in the chat. */
   function scrollToMsg(id, block = 'nearest') {
@@ -4451,6 +4661,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (S.view.name !== 'home') go('home'); else render();
     scrollToMsg(wait.id);
     setTimeout(() => {
+      /* The person was switched in the test controls while this waited: the question goes, as if never sent. */
+      if (S.chat !== c) { c.msgs = c.msgs.filter((x) => x.id < wait.id - 1); c.busy = false; c.hero = 'idle'; return; }
       const a = classify(t, force);
       const ans = ANSWERS[a.kind];
       const say = ans.say(a);
@@ -4521,6 +4733,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
       <p class="abil-foot">Anything that changes data waits for a yes in Teams.</p>
     </div>`;
   }
+  /* What an Approver who can't set up workflows can ask (ADR 0043). Each line is a question the Planner answers above. */
+  const APPROVER_CAN = ['What is waiting for your yes, and exactly what each request will write', 'What you decided before, with when, and any reason you gave', 'How the workflows and the software are doing'];
+  const approverCan = () => `<div class="abil one"><h2 class="vh">What I can do</h2><div class="abil-ready"><h3>${groupTitle('ready')}</h3><ul>${APPROVER_CAN.map((x) => `<li>${GROUP_ICON.ready}<span>${x}</span></li>`).join('')}</ul></div><p class="abil-foot">${opsSay()}</p></div>`;
   function focusComposer() {
     const ta = $app.querySelector('[data-ask]');
     if (ta) ta.focus({ preventScroll: true });
@@ -4669,8 +4884,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
       return `<li class="person">
         <span class="pav t${p.tone}" aria-hidden="true">${p.name.charAt(0)}</span>
         <div class="person-name"><b>${esc(p.name)}${u === S.user ? ' <span class="tag">You</span>' : ''}</b><span class="small muted">${r.added ? 'Hasn’t signed in yet' : named.length ? `Named as an Approver on ${named.length === 1 ? '1 workflow' : `${named.length} workflows`} ${PLANNED_TAG}` : r.ap ? (shows('namedApprovers') ? 'Not named on any workflow' : 'Can decide on any workflow except their own') : ''}</span></div>
-        <div class="roles"><label class="checkrow"><input type="checkbox" data-role="${u}:op"${r.op ? ' checked' : ''}${op ? '' : ' disabled'}${err ? ` aria-describedby="role-err-${u}"` : ''}>Operator<span class="vh">, ${esc(p.name)}</span></label>
-          <label class="checkrow"><input type="checkbox" data-role="${u}:ap"${r.ap || r.pendingAp ? ' checked' : ''}${op && !r.pendingAp ? '' : ' disabled'}${err ? ` aria-describedby="role-err-${u}"` : ''}>Approver<span class="vh">, ${esc(p.name)}</span></label></div>
+        ${op ? `<div class="roles"><label class="checkrow"><input type="checkbox" data-role="${u}:op"${r.op ? ' checked' : ''}${err ? ` aria-describedby="role-err-${u}"` : ''}>Operator<span class="vh">, ${esc(p.name)}</span></label>
+          <label class="checkrow"><input type="checkbox" data-role="${u}:ap"${r.ap || r.pendingAp ? ' checked' : ''}${r.pendingAp ? ' disabled' : ''}${err ? ` aria-describedby="role-err-${u}"` : ''}>Approver<span class="vh">, ${esc(p.name)}</span></label></div>
+        ${shows('n8n') && r.op ? `<label class="checkrow person-n8n" data-unbuilt="n8n access (ADR 0043)"><input type="checkbox" data-role="${u}:n8n"${r.n8n ? ' checked' : ''}${err ? ` aria-describedby="role-err-${u}"` : ''}>n8n access<span class="vh">, ${esc(p.name)}</span> ${PLANNED_TAG}</label>` : ''}`
+          : `<p class="roles-text">${[r.op && 'Operator', r.ap && 'Approver'].filter(Boolean).join(' and ')}</p>`}
         ${r.pendingAp ? `<div class="person-note"><span class="pill wait">${I.lock(12)}Approver: waiting for another Approver to confirm</span>${canConfirm ? `<span class="btns"><button class="btn bad sm" data-act="roleNotNow" data-arg="${u}">Not now</button><button class="btn good sm" data-act="roleConfirm" data-arg="${u}">Confirm</button></span>` : `<span class="small muted">Asked by ${nm(r.pendingBy)}${S.user === r.pendingBy ? ', so you can’t confirm it' : ''}.</span>`}</div>` : ''}
         ${err ? `<p class="err person-note" id="role-err-${u}">${I.alert(16)}<span>${err}</span></p>` : ''}
       </li>`;
@@ -4678,7 +4895,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const np = S.newPerson;
     return `<section class="panel"><h2>People and permissions</h2><p class="note">Operators set up workflows and change settings. Approvers say yes or no to changes. People sign in with their NCS account.</p>
       <ul class="people">${Object.keys(S.roles).map(row).join('')}</ul>
-      <ul class="checks role-rules"><li>${I.shield(16)}<span>Making someone an Approver needs another Approver to confirm it.</span></li>${shows('namedApprovers') ? `<li>${I.shield(16)}<span>Someone named on a workflow keeps the Approver role until another person is named there. ${PLANNED_TAG}</span></li>` : ''}<li>${I.shield(16)}<span>At least 2 people are Approvers, so nobody has to approve their own work.</span></li></ul>
+      <ul class="checks role-rules"><li>${I.shield(16)}<span>Making someone an Approver needs another Approver to confirm it.</span></li>${shows('n8n') && op ? `<li data-unbuilt="n8n access (ADR 0043)">${I.shield(16)}<span>Only Operators can have n8n access, because a change made in n8n changes a workflow. ${PLANNED_TAG}</span></li>` : ''}${shows('namedApprovers') ? `<li>${I.shield(16)}<span>Someone named on a workflow keeps the Approver role until another person is named there. ${PLANNED_TAG}</span></li>` : ''}<li>${I.shield(16)}<span>At least 2 people are Approvers, so nobody has to approve their own work.</span></li></ul>
       ${op ? `<form class="model-form" data-submit="personAdd" novalidate><h3>Add a person</h3>
         <div class="field"><label for="np-name">Name</label><input type="text" id="np-name" data-np="name" value="${esc(np.name)}" placeholder="Mei Ling"${fieldErr('np-name', np.err.name, '')}</div>
         <div class="field"><label for="np-email">Work email</label><input type="email" id="np-email" data-np="email" value="${esc(np.email)}" placeholder="name@example.com"${fieldErr('np-email', np.err.email, 'They sign in with the NCS account that uses this email.')}</div>
@@ -5167,7 +5384,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       changes: [`Upgrade Log4j core to 2.25.2${shows('registries') ? ` (urgent: critical and actively exploited) ${PLANNED_TAG}` : ''}`, 'Upgrade LangGraph to 1.2.17', 'Upgrade FastAPI to 0.120.1'],
       found: shows('registries') ? `Newer versions on the registries and GitHub, and 4 known vulnerabilities in Log4j core 2.14.1. ${PLANNED_TAG}` : 'Newer releases on GitHub for 3 of the 14 projects on the Software watchlist.' }),
     nudge: () => ({ time: `Today ${hm(NOW)}`, what: 'Weekly closed-ticket summary wants to create 1 Jira ticket on the practice Jira', changes: ['Create one ticket in MOCK with the summary of the week of 19 Oct'], found: '11 tickets closed in MOCK in the week of 19 Oct.' }),
-    conf: () => ({ time: 'Today 9:10', what: `${esc(S.nr.name)} wants to ${confWrite(S.nr).teamsVerb} on the practice Jira (test run)`, changes: [`Create one ticket in ${S.nr.project} with the ${thingOf(S.nr)}`], found: confPreview(S.nr).replace(/<p class="note">[\s\S]*$/, '').replace(/<\/?div[^>]*>/g, '') }),
+    conf: () => ({ time: `Today ${hm(NOW)}`, what: `${esc(S.nr.name)} wants to ${confWrite(S.nr).teamsVerb} on the practice Jira (test run)`, changes: [`Create one ticket in ${S.nr.project} with the ${thingOf(S.nr)}`], found: confPreview(S.nr).replace(/<p class="note">[\s\S]*$/, '').replace(/<\/?div[^>]*>/g, '') }),
     access: () => ({ time: 'Mon 9:30', what: `Quarterly access review wants to ${ACCESS_WRITE.teamsVerb}`, changes: ACCESS_REMOVALS.map((x) => `Remove ${x.replace(/\. .*$/, '')}`), found: '48 people reviewed. Their managers confirmed 45 in Teams. Nobody confirmed these 3.', planned: true }),
   };
   function teamsCard(id) {
@@ -5176,7 +5393,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const cant = partiesOf(id).map((u) => `${nm(u)}, who ${partyWhy(id, u)}`);
     return `<b>${c.what}</b>${c.planned ? ` ${PLANNED_TAG}` : ''}<dl class="kv tcard"><dt>Workflow</dt><dd>${esc(R(id).name)}, set up by ${nm(ownerOf(id))}</dd><dt>Changes</dt><dd><ul class="mini-list">${c.changes.map((x) => `<li>${x}</li>`).join('')}</ul></dd><dt>Found</dt><dd>${c.found}</dd><dt>Who can decide</dt><dd>${q ? `${whoOr(q.may)}${q.steps > 1 ? `, as the ${q.step === 0 ? 'first' : 'second'} of 2 Approvers` : ''}` : R(id).approves}</dd><dt>Who can’t</dt><dd>${cant.join('; ')}. Nobody approves their own work.</dd></dl>`;
   }
-  const decidedAt = (by) => `${nm(by)} at ${hm(NOW)} today`;
+  const decidedAt = (by) => `${nm(by)} at ${hm(DECIDED_AT)} today`;
   /* The request's outcome, read from the platform, as the card shows it after a decision. */
   const decidedLine = (id, rec) => (rec.state === 'approved' ? `Approved by ${rec.yes.map(decidedAt).join(', then ')}` : rec.state === 'declined' ? declinedHead(id, decidedAt) : rec.state === 'expired' ? 'No answer' : null);
   function teamsItems() {
@@ -5245,25 +5462,25 @@ details > .m-close { animation: fold 140ms ease-in both; }
       <p id="dlg-d">It stops running and leaves Workflows. Its schedule and settings go with it. Its past runs and their records stay. You can undo this from the message that follows.</p>
       <div class="btns" style="justify-content:flex-end"><button class="btn" data-act="closeModal">Cancel</button><button class="btn bad" data-act="confirmDelete" data-arg="${id}">${I.trash()}Delete workflow</button></div>`;
   }
+  /* A workflow as n8n shows it: its schedule, a block for each agent, then Ask for a yes before each write. Each arrow
+     sits inside the block it points to, so a wrapped row never starts or ends on a loose arrow. */
+  function n8nBlocks(when, agents, writes, o = {}) {
+    const pairs = writes.flatMap((t, i) => [
+      [`gate${o.gone && !i ? ' gone' : ''}`, `${I.shield(16)}Ask for a yes${o.two && i === writes.length - 1 ? ', 2 people in order' : ''}`],
+      ['', `${I.check(16)}${writes.length > 1 ? `<span>Make the approved changes<small>${esc(t)}</small></span>` : 'Make the approved changes'}`],
+    ]);
+    return [['', `${I.clock(16)}${when}`], ...agents.map((a) => ['', `${face(a, 24)}${AGENTS[a].name}`]), ...pairs];
+  }
+  const n8nCanvas = (blocks, label = 'Steps in n8n') => `<ol class="n8n-canvas" aria-label="${label}">${blocks.map(([cls, b], i) => `<li>${i ? `<span class="n8n-arrow" aria-hidden="true">${I.right(14)}</span>` : ''}<span class="n8n-node${cls ? ` ${cls}` : ''}">${b}</span></li>`).join('')}</ol>`;
+  const wfBlocks = (id) => n8nBlocks(R(id).when, R(id).agents.filter((a) => a !== 'lead'), planFor(id).filter(([, k]) => k === 'write').map(([t]) => t), { gone: !!S.n8nChg[id], two: !!apprOf(id) && apprOf(id).steps.length > 1 });
   /* Open in n8n: staff can change a workflow's steps in n8n. One person has it at a time, every published change is kept, and the rules still hold. */
   function n8nDialog(id) {
     const r = R(id);
     const held = S.n8n[id];
     const other = held && held.by !== S.user;
-    const gone = !!S.n8nChg[id];
-    const boxes = [`${I.clock(16)}${r.when}`, ...r.agents.filter((a) => a !== 'lead').map((a) => `${face(a, 24)}${AGENTS[a].name}`)];
-    /* Each arrow sits inside the step it points to, so a wrapped row never starts or ends on a loose arrow. */
-    const writes = planFor(id).filter(([, k]) => k === 'write').map(([t]) => t);
-    const two = !!apprOf(id) && apprOf(id).steps.length > 1;
-    const pairs = writes.flatMap((t, i) => [
-      [`gate${gone && !i ? ' gone' : ''}`, `${I.shield(16)}Ask for a yes${two && i === writes.length - 1 ? ', 2 people in order' : ''}`],
-      ['', `${I.check(16)}${writes.length > 1 ? `<span>Make the approved changes<small>${esc(t)}</small></span>` : 'Make the approved changes'}`],
-    ]);
-    const canvas = [...boxes.map((b) => ['', b]), ...pairs]
-      .map(([cls, b], i) => `<li>${i ? `<span class="n8n-arrow" aria-hidden="true">${I.right(14)}</span>` : ''}<span class="n8n-node${cls ? ` ${cls}` : ''}">${b}</span></li>`).join('');
     return `<h2 id="dlg-h" style="font-size:1.4rem">Open “${esc(r.name)}” in n8n</h2>
       <p class="muted">In n8n you can change its schedule, its conditions and the order of its steps, using our blocks. n8n’s own Jira, web and code steps aren’t there. This is how it looks there.</p>
-      <ol class="n8n-canvas" aria-label="Steps in n8n">${canvas}</ol>
+      ${n8nCanvas(wfBlocks(id))}
       <ul class="n8n-promises">
         <li>${I.lock(16)}<span>${other ? `${nm(held.by)} has it now. If you take it, ${nm(held.by)} can’t change it in n8n any more. Changes already published stay.` : 'While you have it, only you can change it in n8n.'}</span></li>
         <li>${I.clock(16)}<span>A change goes live when you publish it in n8n. Every published change is kept here, and you can undo it.</span></li>
@@ -5298,6 +5515,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
 
   /* ---------- Test controls: not part of the product ---------- */
+  /* The people the test controls can act as: an Operator and Approver, an Approver only, and an Operator with n8n access. */
+  const ACT_AS = ['alice', 'bob', 'carol'];
   function testControls() {
     const sims = [];
     sims.push(S.conns.jira.down ? ['jiraUp', '', 'Jira works again'] : ['jiraDown', '', 'Jira stops answering']);
@@ -5313,9 +5532,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const toggle = (act, on, labels) => `<span class="mseg"><button data-act="${act}" data-arg="on" aria-pressed="${on}">${labels[0]}</button><button data-act="${act}" data-arg="off" aria-pressed="${!on}">${labels[1]}</button></span>`;
     if (S.report > 0 && S.report < 4) sims.push(['advance', '', `Support moves case ${S.supportCase.id} on`]);
     /* A requester you can't act as, such as Carol, answers a question here. */
-    REQ_IDS.filter((id) => waitingReq(id)).forEach((id) => (S.asks[id] || []).forEach((x, i) => { if (!x.answer && !['alice', 'bob'].includes(x.to)) sims.push(['answerAs', `${id}:${i}`, `${nm(x.to)} answers ${nm(x.by)}’s question`]); }));
+    REQ_IDS.filter((id) => waitingReq(id)).forEach((id) => (S.asks[id] || []).forEach((x, i) => { if (!x.answer && x.to !== S.user && !['alice', 'bob'].includes(x.to)) sims.push(['answerAs', `${id}:${i}`, `${nm(x.to)} answers ${nm(x.by)}’s question`]); }));
     const n8nId = shows('n8n') && S.view.name === 'workflow' && S.view.id !== 'sw' ? S.view.id : null;
-    if (n8nId && me().op && !S.n8nChg[n8nId]) sims.push(['n8nChange', n8nId, 'Carol changes it in n8n and publishes']);
+    if (n8nId && me().op && S.user !== 'carol' && !S.n8nChg[n8nId]) sims.push(['n8nChange', n8nId, 'Carol changes it in n8n and publishes']);
     if (n8nId && S.n8nChg[n8nId] && !S.editRun) sims.push(['n8nRun', n8nId, 'The next run starts with Carol’s change']);
     return `<div class="testctl">
       ${S.testOpen ? `<div class="testctl-panel${testNew ? ' in' : ''}" id="testctl-panel" role="region" aria-label="Test controls">
@@ -5324,9 +5543,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
         <div class="testctl-row"><span>Show</span><span class="mseg">
           <button data-act="day" data-arg="week" aria-pressed="${!S.firstDay}">A normal week</button>
           <button data-act="day" data-arg="one" aria-pressed="${S.firstDay}">Day one</button></span></div>
-        <div class="testctl-row"><span>Act as</span><span class="mseg">
-          <button data-act="user" data-arg="alice" aria-pressed="${S.user === 'alice'}">Alice</button>
-          <button data-act="user" data-arg="bob" aria-pressed="${S.user === 'bob'}">Bob</button></span></div>
+        <div class="testctl-row"><span>Act as</span><span class="mseg">${ACT_AS.map((u) => `
+          <button data-act="user" data-arg="${u}" aria-pressed="${S.user === u}">${nm(u)}</button>`).join('')}</span>
+          <span class="testctl-who">${me().role}${me().n8n ? ', with n8n access' : ''}</span></div>
         <div class="testctl-row"><span>AI model</span>${toggle('modelOn', S.modelOn, ['Connected', 'Not connected'])}</div>
         <div class="testctl-row"><span>Planned features</span>${toggle('preview', S.preview, ['Shown and tagged', 'Hidden'])}</div>
         <div class="testctl-row"><span>Mark what isn’t built</span>${toggle('markUnbuilt', S.markUnbuilt, ['On', 'Off'])}</div>
@@ -5339,6 +5558,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
           <li>Run now and See the run show only where this prototype has a sample run: the sample workflows and the first one you make on Home. The built app runs every workflow.</li>
           <li>Time stands still at Tuesday 27 October, 9:10. Use “Make something happen” to let time pass while a test run waits for a yes.</li>
           <li>Siti and Arun are Approvers you can’t act as. Their answers are under “Make something happen”, and so are Carol’s answers to an Approver’s question.</li>
+          <li>Carol has n8n access. n8n views are planned, so she sees them only with Planned features shown.</li>
           <li>GitHub links open the real project pages. The versions shown here are samples.</li>
           <li>Reloading the page starts over.</li></ul></details>
         <div><button class="mreset" data-act="reset">Start over</button></div>
@@ -5372,6 +5592,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (!PEOPLE[u]) PEOPLE[u] = { name: r.name, tone: 2, added: true };
       PEOPLE[u].op = r.op;
       PEOPLE[u].ap = r.ap;
+      PEOPLE[u].n8n = !!(r.op && r.n8n);
       PEOPLE[u].role = r.op && r.ap ? 'Operator and Approver' : r.op ? 'Operator' : 'Approver';
     });
   }
@@ -5383,7 +5604,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const v = S.view;
     let main = '';
     switch (v.name) {
-      case 'home': main = me().op ? plannerHome() : approverHome(); break;
+      case 'home': main = plannerHome(); break;
       case 'workflows': main = boardView(); break;
       case 'workflow': main = routineView(v.id); break;
       case 'run': main = runView(v.id); break;
@@ -5880,7 +6101,6 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (i) i.focus();
     },
     useNewAddress: () => {
-      if (!me().op) return;
       S.lsFixed = true;
       toast(`LangServe is now read from ${LS_NEW}. It’s checked at the next check, ${R('sw').next}.`, { label: 'Undo', act: 'undoAddress' });
       render();
@@ -6071,6 +6291,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
         else if (u === S.user) S.roleErr[u] = 'You can’t take away your own Operator role. Ask another Operator.';
         else if (!r.ap) S.roleErr[u] = 'Everyone needs at least one role.';
         else { r.op = false; logSet('people', `${me().name} took away ${name}’s Operator role.`); toast(`${name} is no longer an Operator.`, { label: 'Undo', act: 'roleUndo', arg: `${u}:1` }); }
+      } else if (kind === 'n8n') {
+        if (on && !r.op) S.roleErr[u] = 'Only Operators can have n8n access.';
+        else { r.n8n = on; logSet('people', on ? `${me().name} gave ${name} n8n access.` : `${me().name} took away ${name}’s n8n access.`); toast(on ? `${name} has n8n access now.` : `${name} no longer has n8n access.`); }
       } else if (on) {
         r.pendingAp = true;
         r.pendingBy = S.user;
@@ -6239,6 +6462,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     closeModal: () => closeModal(),
     sendReport: () => {
       S.report = 1;
+      S.reportBy = S.user;
       S.supportCase = { id: 'SUP-1042', sent: 'Tue 27 Oct, 9:12', owner: 'Dana, support developer', target: 'Wed 28 Oct, 9:12 (1 working day)', note: S.reportNote.trim() };
       S.modal = 'reportSent';
       render();
@@ -6295,6 +6519,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       scrollToMsg(liveSetup().id, 'start');
     },
     stopAsk: (_, m) => { m.card.stopping = true; render(); focusChat($app.querySelector(`[data-mid="${m.id}"][data-act="stopKeep"]`)); },
+    watchKeep: (_, m) => { m.card.kept = true; render(); focusComposer(); },
     stopKeep: (_, m) => { m.card.stopping = false; render(); focusChat($app.querySelector(`[data-mid="${m.id}"][data-act="stopAsk"]`)); },
     stopYes: (_, m) => { const key = m.card.about; m.card.stopping = false; A.removeSw(key); },
     repoOk: (_, m) => { m.card.repoState = 'ok'; m.card.confirmed = true; render(); },
@@ -6446,7 +6671,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const f = draftNr();
       const newAgent = isNewAgent(writerOf(f)) ? writerOf(f) : null;
       /* What was left out stays with the workflow, so its card and its page keep saying so (fix pass S1). */
-      const nr = { ...f, sched: { ...S.wiz.sched }, name: S.wiz.name.trim() || f.name, leftOut: setupParts(m.id).filter((x) => x.mark === 'no').map((x) => x.label) };
+      const nr = { ...f, by: S.user, sched: { ...S.wiz.sched }, name: S.wiz.name.trim() || f.name, leftOut: setupParts(m.id).filter((x) => x.mark === 'no').map((x) => x.label) };
       /* The first workflow made on Home keeps the slot with the sample run and request. Each later one takes a new
          made:N slot, so nothing already on loses its run, its open request or its history. */
       let k = 'conf';
@@ -6522,7 +6747,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
     focusAdd: () => { const i = $app.querySelector('#sw-name'); if (i) { i.scrollIntoView({ block: 'center' }); i.focus({ preventScroll: true }); } },
     testToggle: () => { S.testOpen = !S.testOpen; testNew = S.testOpen; render(); const t = $app.querySelector('.testctl-toggle'); if (t) t.focus(); },
     day: (d) => { S.firstDay = d === 'one'; S.conns = connsFor(S.firstDay); if (['workflow', 'run'].includes(S.view.name)) go('home'); else render(); },
-    user: (u) => { S.user = u; S.panel = null; S.decide = null; if (!mayOpen(S.view.name)) S.view = { name: 'home' }; render(); },
+    user: (u) => {
+      S.desks[S.user] = { chat: S.chat, wiz: S.wiz };
+      const d = S.desks[u] || { chat: newChat(), wiz: newWiz() };
+      Object.assign(S, { user: u, chat: d.chat, wiz: d.wiz, chatScroll: null, panel: null, decide: null, modal: null, modalArg: null, menu: null });
+      if (!mayOpen(S.view.name)) S.view = { name: 'home' };
+      render();
+    },
     /* The spec 16 controls. Planned features hidden means nothing planned shows, so a page about one goes back to its list. */
     modelOn: (v) => { S.modelOn = v === 'on'; render(); },
     /* Planned features change a run's steps, so a run page lands on its decision again. */
@@ -6533,6 +6764,29 @@ details > .m-close { animation: fold 140ms ease-in both; }
     reset: () => { stopTimer(); clearTimeout(toastTimer); P.run = null; const keep = { firstDay: S.firstDay, preview: S.preview, markUnbuilt: S.markUnbuilt, modelOn: S.modelOn }; S = fresh(); Object.assign(S, keep); S.conns = connsFor(S.firstDay); S.testOpen = true; focusHeading = true; render(); },
     toast: (t) => { toast(t); render(); },
   };
+  /* Who may do what (ADR 0043), checked when an action runs, so a control that isn't drawn can't be reached any other
+     way. Every action is a change that needs an Operator unless it is listed here: reading and moving around, an
+     Approver's decision, opening n8n with n8n access, and the test controls, which aren't a person. A new action is
+     therefore an Operator's until someone opens it up. */
+  const OPEN_TO = {
+    anyone: ['go', 'workflow', 'run', 'watch', 'replay', 'runDetail', 'swHist', 'swShowRow', 'ticket', 'watchFromTicket', 'teams', 'speed', 'agent', 'agentWorkflow', 'modalBack',
+      'toRisk', 'libTab', 'libTools', 'toolOpen', 'toolCheck', 'connTest', 'connShow', 'modelTest', 'modelShowKey', 'setTab', 'setGo', 'panelOpen', 'panelClose', 'panelPage',
+      'abil', 'ask', 'example', 'say', 'newChat', 'filter', 'findOpen', 'clearFind', 'closeModal', 'skipMain', 'menuPick', 'menuClose', 'cancelSched', 'cancelAppr',
+      'connCancel', 'modelCancel', 'editKeep', 'stopKeep', 'watchKeep', 'moreAppr', 'decideBack', 'askAnswer', 'toast'],
+    ap: ['approve', 'decline', 'declinePick', 'declineYes', 'askOpen', 'askSend', 'roleConfirm', 'roleNotNow', 'modelConfirm', 'modelNotNow', 'toolOk'],
+    n8n: ['n8nAsk', 'n8nOpen', 'n8nGiveBack', 'n8nNew', 'n8nNewOpen'],
+    test: ['testToggle', 'day', 'user', 'modelOn', 'preview', 'markUnbuilt', 'jiraDown', 'jiraUp', 'reset', 'yesAs', 'answerAs', 'escalate', 'expire', 'advance', 'n8nChange', 'n8nRun', 'okJiraComp', 'simBadKey'],
+  };
+  const NEED = Object.fromEntries(Object.entries(OPEN_TO).flatMap(([need, acts]) => acts.map((k) => [k, need])));
+  Object.keys(NEED).forEach((k) => { if (!A[k]) throw new Error(`No action ${k}`); });
+  const MAY = { op: () => me().op, ap: () => me().ap, n8n: n8nOK };
+  const REFUSED = { op: opsSay, ap: () => 'Only Approvers decide on requests.', n8n: () => n8nSay({}) };
+  Object.keys(A).forEach((k) => {
+    const need = NEED[k] || 'op';
+    if (!MAY[need]) return;
+    const fn = A[k];
+    A[k] = (...a) => { if (MAY[need]()) return fn(...a); toast(REFUSED[need]()); render(); return undefined; };
+  });
 
   document.addEventListener('click', (e) => {
     const t = e.target.closest('[data-act]');

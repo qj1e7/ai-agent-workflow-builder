@@ -1201,6 +1201,470 @@ add('WF-last-run', 'Workflows rows and the chat’s check card give each workflo
   await t.expect('Each card line is one line', lines(`${lastCard} .row-last`), (v) => v.length >= 3 && v.every((n) => n === 1));
 }, [1280, 390]);
 
+/* Roles (ADR 0043, step 4): the Approver's box for questions only, read-only pages for him, and n8n views only for
+   people with n8n access. Checked at web widths only: since 11 Nov the Portal is a desktop web app, and approvals on a
+   phone happen in Teams. */
+const CHANGE_CONTROLS = ':is([data-act="turnOn"], [data-act="editSave"], [data-act="watchAdd"], [data-act="instead"], [data-act="pause"], [data-act="resume"], [data-act="retryIssues"], [data-act="retryNudge"], [data-act="report"], [data-act="stopAsk"], [data-act="answer"], [data-act="checkNow"], [data-act="editSched"], [data-act="menu"], [data-act="askDelete"], [data-act="removeSw"], [data-act="useNewAddress"], [data-act="n8nAsk"], [data-act="n8nNew"], [data-act="editAppr"], [data-act="askPlanner"], #sw-name)';
+const OPS = /^Operators set up workflows\. Ask Alice or Carol\.$/;
+const N8N_WORDS = (v) => !/n8n/i.test(v);
+const panelHas = (k, sel, n) => k.page.waitForFunction(([s, c]) => document.querySelectorAll(s).length === c, [sel, n]);
+/* A button that isn't drawn for this person, put into the page by hand: the action itself must refuse it. */
+const forge = (k, act, arg) => k.page.evaluate(([a, g]) => { const b = document.createElement('button'); b.dataset.act = a; if (g) b.dataset.arg = g; b.id = 'forged'; b.textContent = 'forged'; document.querySelector('main').appendChild(b); b.click(); }, [act, arg]);
+const whoLine = async (k) => { await k.page.$eval('.testctl-toggle', (b) => b.click()); const v = await k.page.innerText('.testctl-who'); await k.page.$eval('.testctl-toggle', (b) => b.click()); return v; };
+
+add('ROLE-home', 'Bob’s Home starts calm, with the Planner’s box for questions, three suggestions for an Approver and Needs you under them', async (t) => {
+  await t.setup((k) => k.setUser('bob'));
+  await t.expectCount('Bob has the Planner’s box', 'main [data-ask]', 1);
+  await t.expectText('The greeting says what waits for him', /Good morning! Bob\s+1 request is waiting for your yes\./, 'main .welcome');
+  await t.expect('Three suggestions, each a question', t.page.$$eval('main .examples .chip', (cs) => cs.map((c) => c.textContent).join(' | ')), 'What is waiting for my yes? | What did I decide before? | How are the workflows doing?');
+  const at = await t.page.evaluate(() => {
+    const box = (s) => { const el = document.querySelector(s); return el ? el.getBoundingClientRect() : null; };
+    const main = box('main .home');
+    return { tops: ['main .welcome .face', 'main .welcome h1', 'main form.composer', 'main .examples', 'main #needs-h'].map((s) => (box(s) ? Math.round(box(s).top) : -1)), mid: Math.round(main.left + main.width / 2), centres: ['main .welcome .face', 'main form.composer'].map((s) => Math.round(box(s).left + box(s).width / 2)) };
+  });
+  await t.expect('Bot, heading, box, suggestions, then Needs you, top to bottom', at.tops, (v) => v.every((x, i) => x >= 0 && (i === 0 || x > v[i - 1])));
+  await t.expect('The bot and the box are centred', at, (v) => v.centres.every((c) => Math.abs(c - v.mid) <= 2));
+  await t.expectText('Needs you has his request, with Review and decide', /3 upgrade tickets are waiting for your yes[\s\S]*Review and decide/, 'main section[aria-labelledby="needs-h"]');
+  await t.expectCount('No control that changes anything', `main ${CHANGE_CONTROLS}`, 0);
+  await t.expectCount('No pinned line and no thread before his first message', 'main :is(.pinned, .thread)', 0);
+}, [1280, 768]);
+
+add('ROLE-asks', 'Bob asks what waits for his yes, what he decided and how things are doing, and each answer comes from platform state with no control that changes anything', async (t) => {
+  await t.setup((k) => k.setUser('bob'));
+  await t.click('main .examples [data-act="example"][data-arg="0"]', 'What is waiting for my yes?', { reply: true });
+  await t.expect('The answer is Home’s line', lastSay(t), '1 request is waiting for your yes.');
+  await t.expectText('Its card has the request with Review and decide', /3 upgrade tickets are waiting for your yes[\s\S]*Review and decide/, lastCard);
+  await t.ask('What did I decide before?');
+  await t.expect('He has decided twice before', lastSay(t), 'Here are your 2 decisions.');
+  await t.expectText('Each with its workflow, Approved and when', /Morning new-ticket check\s+Approved\s+Approved by Bob, Mon 26 Oct, 8:00\. 1 ticket created \(MOCK-12\)\.\s+Weekly closed-ticket summary\s+Approved\s+Approved by Bob, Fri 16 Oct, 16:00\. 1 ticket created \(MOCK-11\)\./, lastCard);
+  await t.expect('Alice’s decision is not his', t.page.innerText(lastCard), (v) => !/Alice/.test(v));
+  await t.ask('How are the workflows doing?');
+  await t.expect('The team’s workflows, not his own', lastSay(t), /^The team has 3 workflows\./);
+  await t.ask('Is LangGraph up to date?');
+  await t.expect('A version question', lastSay(t), 'LangGraph is behind. You run 1.2.14 and the newest is 1.2.17.');
+  await t.ask('Why did Morning new-ticket check stop?');
+  await t.expectText('The troubleshooter’s answers, with who can retry and no Retry', /What happened[\s\S]*Safe to retry[\s\S]*An Operator can retry the run\./, lastCard);
+  await t.ask('What can you do?');
+  await t.expectText('What an Approver can ask, and who sets up workflows', /What is waiting for your yes[\s\S]*What you decided before[\s\S]*Operators set up workflows\. Ask Alice or Carol\./, lastCard);
+  await t.expectCount('No control that changes anything, in any answer', `main .thread ${CHANGE_CONTROLS}`, 0);
+  await t.expect('#app has not scrolled', appScroll(t), 0);
+}, [1280]);
+
+add('ROLE-refuse', 'Bob’s requests to set up, change a schedule, pause or watch get “Operators set up workflows.” and the Operators’ names, never a card that changes anything', async (t) => {
+  await t.setup((k) => k.setUser('bob'));
+  const asks = [WEEKLY_SUMMARY, 'Make the morning new-ticket check run on Mondays only', 'Pause the weekly closed-ticket summary', 'Watch Redis releases', 'Keep track of the React version', 'set up another workflow',
+    'Could you make the morning check daily?', 'What is waiting for my yes, and pause the morning new-ticket check', 'How are the workflows doing? Then delete the weekly summary'];
+  for (const q of asks) {
+    await t.ask(q);
+    await t.expect(`“${q}” gets the refusal`, lastSay(t), OPS);
+    await t.expectCount(`“${q}” gets no card`, `${lastCard} [data-pres]`, 0);
+  }
+  await t.ask('approve the upgrade tickets');
+  await t.expect('Approve gets the request to open, never a decision in the chat', lastSay(t), 'I can’t approve or decline for you. Open the request to see exactly what it will write, and decide there.');
+  await t.expectCount('…with Review and decide', `${lastCard} [data-act="run"][data-arg="sw"]`, 1);
+  await t.ask('Approve it automatically');
+  await t.expectText('Approving by itself is refused, with how approvals work and nothing to set up', /How approvals work[\s\S]*Nobody approves their own work/, lastCard);
+  await t.expectCount('No Approve or Decline in the chat', 'main .thread :is([data-act="approve"], [data-act="decline"])', 0);
+  await t.expectCount('No control that changes anything, in any answer', `main .thread ${CHANGE_CONTROLS}`, 0);
+}, [1280]);
+
+add('ROLE-read-only', 'Bob’s Workflows, a workflow’s page and the Watchlist are read only, with no dead button, and one note on each says who makes changes', async (t) => {
+  await t.setup((k) => k.setUser('bob'));
+  const pages = [['Workflows', () => t.menu('workflows', 'Open Workflows')], ['Morning new-ticket check', () => t.click(S.row('issues'), 'Open Morning new-ticket check')], ['the Watchlist', () => t.menu('software', 'Open the Watchlist')]];
+  for (const preview of [false, true]) {
+    if (preview) await t.setup((k) => ctl(k, 'preview', 'on'));
+    for (const [label, open] of pages) {
+      const where = `${label}${preview ? ', Planned shown' : ''}`;
+      await open();
+      await t.expectCount(`${where}: no control that changes anything`, `main ${CHANGE_CONTROLS}`, 0);
+      await t.expectCount(`${where}: no dead button`, 'main :is(button:disabled, [aria-disabled="true"])', 0);
+      await t.expectCount(`${where}: one note says who makes changes`, 'main .ops-note', 1);
+      await t.expectText(`${where}: it names the Operators`, /^Only Operators change [a-z ]+\. Ask Alice or Carol\.$/, 'main .ops-note');
+    }
+  }
+  await t.setup((k) => forge(k, 'checkNow'));
+  await t.expectText('A change control put into the page by hand is refused by the action', /Operators set up workflows\. Ask Alice or Carol\./, '.toast');
+  await t.setup(async (k) => { await k.go('workflows'); await forge(k, 'pause', 'issues'); });
+  await t.expect('…and nothing changed', t.page.innerText('main .wf-list'), (v) => !/Paused/.test(v));
+}, [1280, 768]);
+
+add('ROLE-offline', 'With no AI model, Bob’s Home says the Planner can’t answer and who can connect one, and keeps his request first', async (t) => {
+  await t.setup(async (k) => { await k.setUser('bob'); await ctl(k, 'modelOn', 'off'); });
+  await t.expectText('The Home says why and who can fix it', /I can’t answer questions until an AI model is connected\s+An Operator can connect one in Settings\. 1 request is waiting for your yes\./, 'main .welcome');
+  await t.expectCount('No box while there is no model', 'main [data-ask]', 0);
+  await t.expectCount('No Connect a model button, which only an Operator can use', 'main [data-act="setGo"]', 0);
+  await t.expectCount('His request, with Review and decide', 'main section[aria-labelledby="needs-h"] .btn.primary[data-act="run"][data-arg="sw"]', 1);
+}, [1280]);
+
+add('ROLE-own-chat', 'Each person has their own chat: Bob never sees Alice’s conversation, and hers is there when she comes back', async (t) => {
+  await t.ask(CHECK_WORKFLOWS);
+  await t.setup((k) => k.setUser('bob'));
+  await t.expectCount('Bob’s Home starts calm, with no thread', 'main .thread', 0);
+  await t.expectCount('…and his own box', 'main [data-ask]', 1);
+  await t.ask('What did I decide before?');
+  await t.expect('His chat has only his question', t.page.innerText('main .thread'), (v) => /What did I decide before\?/.test(v) && !/Check my workflows/.test(v));
+  await t.setup((k) => k.setUser('alice'));
+  await t.expect('Alice’s chat is as she left it', t.page.innerText('main .thread'), (v) => /Check my workflows/.test(v) && !/What did I decide before/.test(v));
+}, [1280]);
+
+add('ROLE-decision', 'Bob’s whole decision: from Needs you, a question to the requester, a decline with a reason, another approval, then the Planner lists both with when and the reason', async (t) => {
+  await t.setup(async (k) => { await testRunWaiting(k); await k.setUser('bob'); await k.go('home'); });
+  await t.expectText('Two requests wait for him', /2 requests are waiting for your yes\./, 'main .welcome');
+  await t.click('main section[aria-labelledby="needs-h"] [data-act="run"][data-arg="sw"]', 'Review and decide the upgrade tickets, from Needs you');
+  await t.click('main [data-act="askOpen"][data-arg="sw"]', 'Ask Carol a question');
+  await t.field('#ask-sw', 'Has FastAPI 0.120.1 been tried with our login service?', 'Type the question');
+  await t.click('main form[data-submit="askSend"] button[type="submit"]', 'Send question');
+  await t.click('main [data-act="decline"][data-arg="sw"]', 'Decline');
+  await t.click('main [data-act="declinePick"][data-arg="Wrong version"]', 'Wrong version', { decision: true });
+  await t.click('main [data-act="declineYes"][data-arg="sw"]', 'Decline', { decision: true, until: /Declined, nothing was written/ });
+  await t.menu('home', 'Back to Chat');
+  await t.expectText('One request is left', /1 request is waiting for your yes\./, 'main .welcome');
+  await t.click('main section[aria-labelledby="needs-h"] [data-act="run"][data-arg="conf"]', 'Review and decide the test run');
+  await t.click('main [data-act="approve"][data-arg="conf"]', 'Approve', { decision: true, until: /Bob approved, and the platform created/ });
+  await t.menu('home', 'Back to Chat');
+  await t.expectText('Nothing waits any more', /Nothing needs you right now\./, 'main .welcome');
+  await t.ask('What did I decide before?');
+  const card = t.page.innerText(lastCard);
+  await t.expect('Four decisions', lastSay(t), 'Here are your 4 decisions.');
+  await t.expect('The decline today, with its reason, as Teams says it', card, /Keep our software up to date\s+Declined\s+Declined by Bob at 9:10 today\. Nothing was written\. Reason: Wrong version\./);
+  await t.expect('The approval today', card, /Friday closed ticket summary\s+Approved\s+Approved by Bob at 9:10 today\./);
+  await t.expect('Today’s come before the earlier ones', card, /9:10 today[\s\S]*9:10 today[\s\S]*Mon 26 Oct[\s\S]*Fri 16 Oct/);
+}, [1280, 1024]);
+
+add('ROLE-panel', 'Bob decides in the side panel from his chat: focus goes to the panel’s heading, #app stays put, and his card follows', async (t) => {
+  await t.setup((k) => k.setUser('bob'));
+  await t.ask('What is waiting for my yes?');
+  await t.click(`${lastCard} [data-act="run"][data-arg="sw"]`, 'Review and decide, from the card');
+  await t.expectCount('The request opens in the side panel', '#sidepanel [data-act="approve"][data-arg="sw"]', 1);
+  await t.click('#sidepanel [data-act="approve"][data-arg="sw"]', 'Approve', { decision: true, until: /3 tickets created in Jira/ });
+  await t.expectText('The panel shows the run done', /Done\s+3 tickets created in Jira/, '#sidepanel');
+  await t.expect('Focus is on the panel’s heading', focused(t.page), 'h2#sp-h');
+  await t.expect('#app has not scrolled', appScroll(t), 0);
+  await t.click('#sidepanel [data-act="panelClose"]', 'Close');
+  await t.expectText('His card in the chat follows', /Nothing needs you right now\./, lastCard);
+}, [1280, 901]);
+
+add('N8N-shown', 'Carol has n8n access: with Planned features shown she sees the n8n blocks go in while the Planner builds, the blocks on a workflow’s page, and Open in n8n', async (t) => {
+  await t.setup(async (k) => { await k.setUser('carol'); await ctl(k, 'preview', 'on'); });
+  await t.expect('The person switch says she has n8n access', whoLine(t.kit), 'Operator, with n8n access');
+  await t.ask(WEEKLY_SUMMARY);
+  await t.setup((k) => panelHas(k, '#sidepanel .n8n-canvas > li', 5));
+  await t.expectText('The side panel shows the n8n blocks', /Schedule, still to choose\s+Jira reader\s+Summary writer\s+Ask for a yes\s+Make the approved changes/, '#sidepanel .n8n-canvas');
+  await t.expectCount('…tagged Planned', '#sidepanel .tag.planned', 1);
+  await t.expect('The panel widens while it builds', t.page.evaluate(() => Math.round(document.querySelector('#sidepanel').getBoundingClientRect().width)), (w) => w > 420);
+  await t.menu('workflows', 'Open Workflows');
+  await t.expectText('Workflows offers Start in n8n', /Start in n8n/);
+  await t.click(S.row('issues'), 'Open Morning new-ticket check');
+  await t.click('main details.tech > summary', 'Technical details');
+  await t.expectText('The page shows its blocks in n8n', /In n8n\s+PLANNED\s+Every weekday at 8:00\s+Jira reader\s+Summary writer\s+Ask for a yes\s+Make the approved changes/i, 'main details.tech');
+  await t.click(S.more, 'More actions');
+  await t.click(S.pick('n8nAsk', 'issues'), 'Open in n8n');
+  await t.expectText('The n8n dialog opens', /Open “Morning new-ticket check” in n8n/, '.dialog');
+  await t.press('Escape', 'Close the dialog');
+  await t.menu('home', 'Back to Chat');
+  await t.ask('open the weekly closed-ticket summary in n8n');
+  await t.expectCount('The Planner offers Open it in n8n', `${lastCard} [data-act="n8nAsk"][data-arg="nudge"]`, 1);
+}, [1280, 1024]);
+
+add('N8N-hidden', 'Without n8n access, Alice and Bob see the plain steps and no n8n words, even with Planned features shown, and asking to open n8n is refused', async (t) => {
+  await t.setup((k) => ctl(k, 'preview', 'on'));
+  await t.expect('The person switch shows no n8n access', whoLine(t.kit), 'Operator and Approver');
+  await t.ask(WEEKLY_SUMMARY);
+  await t.setup((k) => panelHas(k, '#sidepanel .steps > li', 3));
+  await t.expect('Alice’s side panel has the plain steps and no n8n words', t.page.innerText('#sidepanel'), N8N_WORDS);
+  await t.ask('open the morning new-ticket check in n8n');
+  await t.expect('Opening n8n is refused, with where to add it', lastSay(t), 'Only people with n8n access can open n8n. You can add it in Settings, under People and permissions.');
+  await t.expectCount('…and no Open in n8n', `${lastCard} [data-act="n8nAsk"]`, 0);
+  await t.expectCount('…but a button to where n8n access is given', `${lastCard} [data-act="setGo"][data-arg="people"]`, 1);
+  await t.menu('workflows', 'Open Workflows');
+  await t.expect('Workflows has no Start in n8n', t.page.innerText('main'), N8N_WORDS);
+  await t.click(S.row('issues'), 'Open Morning new-ticket check');
+  await t.click('main details.tech > summary', 'Technical details');
+  await t.click(S.more, 'More actions');
+  await t.expect('The page and its menu have no n8n', t.page.innerText('main'), N8N_WORDS);
+  await t.press('Escape', 'Close the menu');
+  await t.setup((k) => ctl(k, 'n8nChange', 'issues'));
+  await t.expectText('Carol’s change is named, without where it was made', /Carol’s change removed Ask for a yes/, 'main article.task');
+  await t.expect('…so the page still has no n8n words', t.page.innerText('main'), N8N_WORDS);
+  await t.setup((k) => forge(k, 'n8nAsk', 'issues'));
+  await t.expectCount('A forged Open in n8n is refused by the action', '.dialog', 0);
+  await t.setup(async (k) => { await k.setUser('bob'); await k.go('home'); });
+  await t.ask('open n8n');
+  await t.expect('Bob is refused too', lastSay(t), 'Only people with n8n access can open n8n, and only Operators can have it.');
+}, [1280]);
+
+add('N8N-settings', 'n8n access is set in Settings, People and permissions, for Operators only, and giving it to Alice shows her the n8n views', async (t) => {
+  await t.setup((k) => ctl(k, 'preview', 'on'));
+  await t.click('.hdr [data-act="go"][data-arg="settings"]', 'Settings');
+  await t.click('[data-act="setTab"][data-arg="people"]', 'People and permissions');
+  await t.expect('Only the Operators, Alice and Carol, have an n8n access box, and Carol’s is ticked', t.page.$$eval('main [data-role$=":n8n"]', (bs) => bs.map((b) => `${b.dataset.role}=${b.checked}`).join(' ')), 'alice:n8n=false carol:n8n=true');
+  await t.expectCount('Each box is tagged Planned', 'main label:has([data-role$=":n8n"]) .tag.planned', 2);
+  await t.expectText('The rule is said', /Only Operators can have n8n access/);
+  await t.click('main [data-role="alice:n8n"]', 'Give Alice n8n access', { decision: true });
+  await t.expect('The person switch says so', whoLine(t.kit), 'Operator and Approver, with n8n access');
+  await t.menu('workflows', 'Open Workflows');
+  await t.click(S.row('issues'), 'Open Morning new-ticket check');
+  await t.click(S.more, 'More actions');
+  await t.expectCount('Alice now has Open in n8n', S.pick('n8nAsk', 'issues'), 1);
+  await t.setup(async (k) => { await k.page.keyboard.press('Escape'); await k.page.click('.hdr [data-act="go"][data-arg="settings"]'); await k.settle(); await k.page.click('[data-act="setTab"][data-arg="people"]'); await k.settle(); });
+  await t.click('main [data-role="carol:n8n"]', 'Take away Carol’s n8n access', { decision: true });
+  await t.setup((k) => k.setUser('carol'));
+  await t.expect('Carol has none now', whoLine(t.kit), 'Operator');
+  await t.setup(async (k) => { await k.go('workflows'); await k.page.click(S.row('issues')); await k.settle(); await k.page.click('main details.tech > summary'); await k.settle(); });
+  await t.expect('…so her workflow page has no n8n words', t.page.innerText('main'), N8N_WORDS);
+}, [1280]);
+
+add('MARK-roles', 'With Mark what isn’t built on, Bob’s box, his decisions card, the read-only note, the n8n blocks and the n8n access box each carry a label', async (t) => {
+  await t.setup(async (k) => { await ctl(k, 'markUnbuilt', 'on'); await k.setUser('bob'); });
+  await t.expect('Bob’s Home with the box', t.page.getAttribute('main .home.planner', 'data-unbuilt'), /Approver’s box/);
+  await t.ask('What did I decide before?');
+  await t.expectCount('His decisions card', `${lastCard} .pcard[data-unbuilt*="decisions"]`, 1);
+  await t.menu('workflows', 'Open Workflows');
+  await t.expectCount('The read-only note', 'main .ops-note[data-unbuilt]', 1);
+  await t.setup(async (k) => { await k.setUser('carol'); await ctl(k, 'preview', 'on'); await k.go('home'); });
+  await t.ask(WEEKLY_SUMMARY);
+  await t.setup((k) => panelHas(k, '#sidepanel .n8n-canvas > li', 5));
+  await t.expectCount('The n8n blocks in the side panel', '#sidepanel [data-unbuilt*="n8n blocks"]', 1);
+  await t.click('.hdr [data-act="go"][data-arg="settings"]', 'Settings');
+  await t.click('[data-act="setTab"][data-arg="people"]', 'People and permissions');
+  await t.expectCount('Each n8n access box, and its rule', 'main [data-unbuilt="n8n access (ADR 0043)"]', 3);
+  await t.expect('Every one of them is outlined', t.page.$$eval('main [data-unbuilt], #sidepanel [data-unbuilt]', (els) => els.every((el) => getComputedStyle(el).outlineStyle !== 'none')), true);
+}, [1280]);
+
+add('KEYS-ROLE', 'With the keyboard only, Bob reaches his box, asks, and reaches Review and decide in the answer, each stop with a visible focus', async (t) => {
+  await t.setup(async (k) => { await k.setUser('bob'); await focusTop(k); });
+  await tabTo(t, '[data-ask]', 'the Planner’s box');
+  await t.expect('The box shows its focus', t.page.evaluate(() => getComputedStyle(document.activeElement.closest('form.composer')).outlineStyle !== 'none'), true);
+  await t.setup((k) => k.page.keyboard.type('What is waiting for my yes?'));
+  await t.press('Enter', 'Send', { reply: true });
+  await tabTo(t, `${lastCard} [data-act="run"][data-arg="sw"]`, 'Review and decide in the answer');
+  await t.expect('Review and decide shows its focus', ring(t.page), true);
+  await t.press('Enter', 'Open it');
+  await t.expectCount('The request opens in the side panel', '#sidepanel [data-act="approve"][data-arg="sw"]', 1);
+}, [1280]);
+
+/* Step 4 fix pass: the independent review's findings, and defects from steps 1 to 3 found while the spec was rewritten.
+   Each failed on the prototype before the fix. */
+/* Escape takes the last message away first, so the one read is the action's own. */
+const toastAfter = async (k, act, arg) => {
+  await k.page.keyboard.press('Escape');
+  await k.settle(450);
+  await forge(k, act, arg);
+  await k.settle(200);
+  return k.page.locator('.toast').innerText().catch(() => '(no toast)');
+};
+const OPS_TOAST = /^Operators set up workflows\. Ask Alice or Carol\./;
+
+add('FIX-deny-default', 'An Approver is refused every change, including Settings, agents and asking the team: the actions deny anything not opened to him', async (t) => {
+  await t.setup((k) => k.setUser('bob'));
+  for (const [act, arg] of [['limitSave'], ['agentRestore', 'jira:1'], ['agentDiscard'], ['connReplace', 'jira'], ['connSave'], ['modelConnect'], ['modelSave'], ['teamReq', 'Slack|ask'], ['askTeamOffline'], ['toolAskGo'], ['askPlanner']]) {
+    await t.expect(`${act} is refused`, toastAfter(t.kit, act, arg), OPS_TOAST);
+  }
+  await t.setup(async (k) => { await k.go('workflows'); await forge(k, 'filter', 'stopped'); await k.settle(); });
+  await t.expectCount('Reading still works: the Stopped filter is on', 'main [data-act="filter"][data-arg="stopped"][aria-pressed="true"]', 1);
+}, [1280]);
+
+add('FIX-name-not-command', 'A question about a workflow whose name holds a schedule word, such as “weekly”, gets its state, for Bob and for Alice', async (t) => {
+  const q = 'how is the weekly closed-ticket summary doing?';
+  await t.setup((k) => k.setUser('bob'));
+  await t.ask(q);
+  await t.expect('Bob gets its state', lastSay(t), /^Weekly closed-ticket summary stopped\. Its next run is /);
+  await t.setup((k) => k.setUser('alice'));
+  await t.ask(q);
+  await t.expect('Alice gets its state', lastSay(t), /^Weekly closed-ticket summary stopped\. Its next run is /);
+  await t.expectCount('…and no set-up card', `${lastCard} [data-act="turnOn"]`, 0);
+}, [1280]);
+
+add('FIX-decided-whole', 'Asking to see past decisions reads the whole question, with no part marked as not followed', async (t) => {
+  await t.setup((k) => k.setUser('bob'));
+  await t.ask('show my past decisions');
+  await t.expect('The decisions', lastSay(t), 'Here are your 2 decisions.');
+  await t.expectCount('No cross on any part of the question', `${lastCard} .part[data-mark="no"]`, 0);
+}, [1280]);
+
+add('FIX-approve-any-object', 'An Approver’s approve or decline goes to the request whatever it names, and a second change in the same request is still refused', async (t) => {
+  await t.setup((k) => k.setUser('bob'));
+  for (const q of ['approve the upgrade', 'decline that request', 'approve it']) {
+    await t.ask(q);
+    await t.expect(`“${q}” gets the request to open`, lastSay(t), /^I can’t approve or decline for you\./);
+  }
+  await t.ask('approve the upgrade and pause the morning new-ticket check');
+  await t.expect('A second change is still refused', lastSay(t), /^Operators set up workflows\./);
+}, [1280]);
+
+add('FIX-decisions-detail', 'Today’s decisions carry their outcome from the run page, and asking about declines lists only declines', async (t) => {
+  await t.setup(async (k) => { await k.setUser('bob'); await k.go('home'); await k.page.click('main [data-act="run"][data-arg="sw"]'); await k.settle(); await k.page.click('main [data-act="approve"][data-arg="sw"]'); await k.waitText(approvedText); await k.settle(); await k.go('home'); });
+  await t.ask('did I decline anything?');
+  await t.expect('No declines yet, and no approvals listed', lastSay(t), 'You haven’t declined any requests yet.');
+  await t.expectCount('…no rows', `${lastCard} li.row`, 0);
+  await t.ask('What did I decide before?');
+  await t.expectText('Today’s approval says what it did, as the run page does', /Keep our software up to date\s+Approved\s+Approved by Bob at 9:10 today\. 3 tickets created in Jira\./, lastCard);
+}, [1280]);
+
+add('FIX-bob-settings', 'Bob’s People and permissions is text he can read, with no control he can’t use', async (t) => {
+  await t.setup((k) => k.setUser('bob'));
+  await t.click('.hdr [data-act="go"][data-arg="settings"]', 'Settings');
+  await t.click('[data-act="setTab"][data-arg="people"]', 'People and permissions');
+  await t.expectCount('No dead control', 'main :is(input:disabled, button:disabled, [aria-disabled="true"])', 0);
+  await t.expectText('Each person’s roles in words', /Alice[\s\S]*Operator and Approver[\s\S]*Bob[\s\S]*Approver/, 'main .people');
+}, [1280]);
+
+add('FIX-rail-count', 'The Watchlist count is for whoever can act on it: Alice’s agrees with the page, and Bob has none', async (t) => {
+  const badge = (k) => k.page.locator('.rail .badge[data-val="sw-n"]').innerText().then((x) => x.replace(/\D+/g, '')).catch(() => 'none');
+  await t.menu('software', 'Open the Watchlist');
+  const page = await t.page.locator('main #sw-attn-h .count').innerText();
+  await t.expect('Alice’s count agrees with Needs attention', badge(t.kit), page);
+  await t.setup((k) => k.setUser('bob'));
+  await t.expect('Bob has no Watchlist count', badge(t.kit), 'none');
+}, [1280]);
+
+add('FIX-wide', 'On a wide screen the header lines up with the page, Workflows rows use their width, and the chat sits next to its side panel', async (t) => {
+  const left = (sel) => t.page.evaluate((s) => Math.round(document.querySelector(s).getBoundingClientRect().left), sel);
+  await t.menu('workflows', 'Open Workflows');
+  const brand = await left('.hdr .brand');
+  await t.expect('The brand lines up with the page heading', left('main h1'), (v) => Math.abs(v - brand) <= 2);
+  await t.expect('Each row’s last column ends at the row’s padding', t.page.$$eval('main .wf-row', (rows) => rows.map((r) => { const kids = [...r.children].filter((c) => c.getClientRects().length && !c.classList.contains('wf-last')); return Math.round(r.getBoundingClientRect().right - Math.max(...kids.map((c) => c.getBoundingClientRect().right))); })), (gaps) => gaps.length && gaps.every((g) => g <= 24));
+  await t.menu('home', 'Back to Chat');
+  await t.ask(CHECK_WORKFLOWS);
+  await t.click(issuesRow, 'Open Morning new-ticket check from the card');
+  await t.expect('The chat and the panel sit together', t.page.evaluate(() => Math.round(document.querySelector('#sidepanel').getBoundingClientRect().left - document.querySelector('.chatin').getBoundingClientRect().right)), (g) => g >= 0 && g <= 24);
+}, [1920, 1440]);
+
+add('FIX-starts-count', '“Set up another workflow” says as many places to start as it shows', async (t) => {
+  await t.ask('set up another workflow');
+  const n = await t.page.locator(`${lastCard} .starts .chip`).count();
+  await t.expect('The sentence counts the chips', lastSay(t), n === 1 ? 'Here is a place to start. Pick it, or tell me something else.' : `Here are ${n} places to start. Pick one, or tell me something else.`);
+}, [1280]);
+
+add('FIX-offline-count', 'With no AI model, Needs you lists the model row it counts, pointing to the button above it', async (t) => {
+  await t.setup((k) => ctl(k, 'modelOn', 'off'));
+  await t.expectText('The first row is the model', /No AI model connected\s+Connect one with the button above\./, 'main section[aria-labelledby="needs-h"] li.nrow:first-child');
+  await t.expectCount('…with no second Connect a model', 'main [data-act="setGo"][data-arg="model"]', 1);
+}, [1280]);
+
+add('FIX-gitlab', 'A request that reads a system the Planner can’t is a cross, and Set up the part I can sets it up on Jira', async (t) => {
+  await t.ask('Every Monday at 9am, sum up the closed tickets from GitLab in MOCK');
+  await t.expectText('The cross says what the part I can do reads', /Reads GitLab\s+I can only read [^\n]+, so the part I can do reads Jira tickets instead\./, lastCard);
+  await t.click(`${lastCard} [data-act="turnOn"]`, 'Set up the part I can', { decision: true });
+  await t.expectText('It is on, and says what was left out', /Monday closed ticket summary is on\.[\s\S]*Left out: Reads GitLab\./, lastCard);
+}, [1280]);
+
+add('FIX-day-choice', 'After choosing one of two days, the workflow keeps the chosen day and names only the other as left out', async (t) => {
+  await t.ask('Every Monday and Friday at 9am, sum up the closed tickets in MOCK');
+  await t.click(`${lastCard} [data-act="answer"][data-arg="day:Monday"]`, 'Monday', { decision: true });
+  await t.expectText('The cross names Friday only', /“Friday”\s+I can only set one day, so it runs on Monday only\./, lastCard);
+  await t.click(`${lastCard} [data-act="turnOn"]`, 'Set up the part I can', { decision: true });
+  await t.expectText('Left out is Friday, not Monday', /Left out: “Friday”\./, lastCard);
+}, [1280]);
+
+add('FIX-edit-tickets', 'Changing a workflow made on Home to run every day changes the tickets it reads too, shown on the card and kept on its page', async (t) => {
+  await t.setup((k) => turnOnWeekly(k));
+  await t.ask('Make the friday closed ticket summary run every day');
+  await t.expectText('The card shows the ticket change too', /Which tickets\s+Before\s+Tickets closed this week\s+After\s+Tickets closed in the last day/, lastCard);
+  await t.click(`${lastCard} [data-act="editSave"]`, 'Save change', { decision: true });
+  await t.menu('workflows', 'Open Workflows');
+  await t.click(S.row('conf'), 'Open Friday closed ticket summary');
+  await t.expectText('Its page reads the day’s tickets', /Sums up tickets closed in the last day in MOCK/);
+}, [1280]);
+
+add('FIX-open-software', '“Open Redis on the Software page” opens Redis, for Alice and for Bob', async (t) => {
+  for (const who of ['alice', 'bob']) {
+    await t.setup((k) => k.setUser(who));
+    await t.ask('Open Redis on the Software page');
+    await t.expect(`${who}: Redis is on the watchlist`, lastSay(t), 'Redis is on the Software watchlist. Open it from here.');
+    await t.click(`${lastCard} [data-open="software:ok:Redis"]`, 'Open Redis on the Software page');
+    await t.expectText(`${who}: its row opens`, /Redis/, '#sidepanel');
+    await t.click('#sidepanel [data-act="panelClose"]', 'Close');
+  }
+}, [1280]);
+
+add('FIX-never-mind', 'A set-up card and an add-software card each have Never mind, which changes nothing', async (t) => {
+  await t.ask(WEEKLY_SUMMARY);
+  await t.click(`${lastCard} [data-act="discardDraft"][data-arg="live"]`, 'Never mind');
+  await t.expectText('The draft is discarded, with Undo', /Discarded/, lastCard);
+  await t.expectText('…and Undo', /Undo/, '.toast');
+  await t.ask('Monitor Kubernetes releases');
+  await t.click(`${lastCard} [data-act="watchKeep"]`, 'Never mind');
+  await t.expectText('Nothing was added', /Not added\. Nothing changed\./, lastCard);
+  await t.menu('software', 'Open the Watchlist');
+  await t.expect('Kubernetes is not on the list', t.page.innerText('main .sw-table'), (v) => !/Kubernetes/.test(v));
+}, [1280]);
+
+add('FIX-mark-more', 'Mark what isn’t built outlines the run line, the three answers, the last-run line, the count line, the edit card, versions and the declined record', async (t) => {
+  await t.setup((k) => ctl(k, 'markUnbuilt', 'on'));
+  await t.ask('Make the morning new-ticket check run on Mondays only');
+  await t.expectCount('The edit card', `${lastCard} .pcard[data-unbuilt*="edit card"]`, 1);
+  await t.click(`${lastCard} [data-act="editSave"]`, 'Save change');
+  await t.menu('workflows', 'Open Workflows');
+  await t.expectCount('Each last-run line', 'main .wf-last[data-unbuilt]', 3);
+  await t.click(S.row('issues'), 'Open Morning new-ticket check');
+  await t.expectCount('The versions', 'main ol.timeline[data-unbuilt*="Versions"]', 1);
+  await t.click('main [data-act="watch"][data-arg="issues"]', 'See the run', { until: /Safe to retry/ });
+  await t.expectCount('The run line', 'main ol.line[data-unbuilt]', 1);
+  await t.expectCount('The three answers', 'main dl.qa3[data-unbuilt]', 1);
+  await t.menu('software', 'Open the Watchlist');
+  await t.expectCount('The count line', 'main .pagehead p[data-unbuilt*="count line"]', 1);
+  await t.setup((k) => bobDeclines(k, 'sw', 'Wrong version'));
+  await t.expectCount('The declined record', 'main p[data-unbuilt*="declined record"]', 1);
+}, [1280]);
+
+add('FIX-run-times', 'Each entry in a run page’s log has its time, the first with its day', async (t) => {
+  await t.menu('workflows', 'Open Workflows');
+  await t.click(S.row('issues'), 'Open Morning new-ticket check');
+  await t.click('main [data-act="watch"][data-arg="issues"]', 'See the run', { until: /Safe to retry/ });
+  await t.setup(async (k) => { if (!(await k.page.$('#run-detail'))) { await k.page.click('main [data-act="runDetail"]'); await k.settle(); } });
+  const times = await t.page.$$eval('#run-detail .chat > li:not(.typing)', (ls) => ls.map((l) => (l.querySelector('time.log-at') || {}).textContent || (l.querySelector('.faces') ? 'joined' : '')));
+  await t.expect('Every entry but the “joined” line has a time', times, (v) => v.length >= 3 && v.every((x) => x === 'joined' || /\d:\d\d$/.test(x)));
+  await t.expect('The first says its day', times[0], /^Tue 27 Oct, 8:00$/);
+}, [1280]);
+
+/* Step 4 re-verify: three gaps the check at cd5199a7 found. Each failed on cd5199a7 before the fix. */
+add('FIX-mixed-decide', 'An approve or decline asked with another change is never dropped: Alice gets a cross on it that opens the request, whatever the other change gets', async (t) => {
+  for (const [q, said] of [['approve the upgrade and pause the morning check', 'approve the upgrade'], ['decline it, then delete the weekly summary', 'decline it'], ['say yes to the tickets and make it run daily', 'say yes to the tickets']]) {
+    await t.ask(q);
+    await t.expectText(`“${said}” has its cross, saying where to decide`, new RegExp(`“${said}”\\s*I can’t approve or decline for you\\.`), lastCard);
+  }
+  await t.click(`${lastCard} .part[data-mark="no"] [data-act="run"][data-arg="sw"]`, 'Review and decide, from the cross');
+  await t.expectCount('The request opens in the side panel', '#sidepanel [data-act="approve"][data-arg="sw"]', 1);
+}, [1280]);
+
+add('FIX-decide-question', 'A question asked with an approve keeps its cross, for Alice and for Bob', async (t) => {
+  for (const u of ['alice', 'bob']) {
+    await t.setup((k) => k.setUser(u));
+    await t.ask('approve the upgrade and is LangGraph up to date?');
+    await t.expect(`${u === 'bob' ? 'Bob' : 'Alice'} is sent to the request`, lastSay(t), /^I can’t approve or decline for you\./);
+    await t.expectText('…and the question is marked, to ask on its own', /“is LangGraph up to date”\s*Ask this on its own, and I’ll answer it\./, lastCard);
+  }
+}, [1280]);
+
+add('FIX-name-status', 'A question about a workflow by its full name gets its state, even when the name sounds like a software question, for Alice and for Bob', async (t) => {
+  const q = 'How is keep our software up to date doing?';
+  for (const u of ['alice', 'bob']) {
+    await t.setup((k) => k.setUser(u));
+    await t.ask(q);
+    await t.expect(`${u === 'bob' ? 'Bob' : 'Alice'} gets its state`, lastSay(t), /^Keep our software up to date is waiting for a yes\. Its next run is /);
+    await t.expectCount('…with no part marked as not followed', `${lastCard} .part[data-mark="no"]`, 0);
+  }
+  await t.ask('how are the workflows doing?');
+  await t.expect('Asking about all of them still gives the count', lastSay(t), /^The team has \d+ workflows\./);
+}, [1280]);
+
+add('FIX-decision-time', 'A decision is logged at the time the decisions list gives, and a run made today leads up to it, for a test run and for the software check', async (t) => {
+  const openLog = async (k) => { if (!(await k.page.$('#run-detail'))) { await k.page.click('main [data-act="runDetail"]'); await k.settle(); } };
+  const log = () => t.page.$$eval('#run-detail .chat > li:not(.typing)', (ls) => ls.map((l) => ({ at: (l.querySelector('time.log-at') || {}).textContent || '', gate: !!l.dataset.gate })).filter((x) => x.at));
+  const mins = (s) => { const [h, m] = s.replace(/^.*, /, '').split(':').map(Number); return h * 60 + m; };
+  await t.setup(async (k) => { await testRunWaiting(k); await bobDeclines(k, 'conf'); await openLog(k); });
+  const conf = await log();
+  await t.setup(async (k) => { await bobDeclines(k, 'sw', 'Wrong version'); await openLog(k); });
+  const sw = await log();
+  await t.setup((k) => k.go('home'));
+  await t.ask('What did I decide before?');
+  const at = ((await t.page.locator(lastCard).innerText()).match(/Declined by Bob at (\d+:\d\d) today/) || [])[1] || '(none)';
+  await t.expect('The test run’s gate gives the decline at the decisions list’s time', (conf.find((x) => x.gate) || {}).at, at);
+  await t.expect('…and its log runs in order', conf.map((x) => mins(x.at)), (v) => v.length > 3 && v.every((x, i) => !i || x >= v[i - 1]));
+  await t.expect('The software check’s gate gives the decline today, at the same time', (sw.find((x) => x.gate) || {}).at, `Tue 27 Oct, ${at}`);
+}, [1280]);
+
 /* Screens shot by shots.cjs and measured by quality.cjs. prepare(k) sets the screen up like a user would reach it. */
 const open = async (k, sel) => { await k.page.click(sel); await k.settle(); };
 /* While chatting, only the side panel's body scrolls: bring a part of it to the top of the panel. */
@@ -1278,6 +1742,35 @@ const screens = [
   { name: 'runs-thread-kept', prepare: async (k) => { await k.setUser('bob'); await open(k, S.review); await open(k, 'main [data-act="askOpen"][data-arg="sw"]'); await k.page.fill('#ask-sw', 'Is this urgent?'); await open(k, 'main form[data-submit="askSend"] button[type="submit"]'); await open(k, 'main [data-act="decline"][data-arg="sw"]'); await k.page.click('main [data-act="declineYes"][data-arg="sw"]'); await k.waitText(/Declined, nothing was written/); await k.settle(); } },
   { name: 'runs-declined-access', prepare: async (k) => { await ctl(k, 'preview', 'on'); await k.setUser('bob'); await k.go('home'); await open(k, 'main [data-act="run"][data-arg="access"]'); await open(k, 'main [data-act="approve"][data-arg="access"]'); await k.setUser('alice'); await k.go('workflows'); await open(k, 'main [data-act="run"][data-arg="access"]:has-text("Review and decide")'); await open(k, 'main [data-act="decline"][data-arg="access"]'); await open(k, 'main [data-act="declinePick"][data-arg="Someone still needs access"]'); await k.page.click('main [data-act="declineYes"][data-arg="access"]'); await k.waitText(/Declined, nothing was removed/); await k.settle(); } },
   { name: 'runs-mark-approval', prepare: async (k) => { await ctl(k, 'markUnbuilt', 'on'); await k.setUser('bob'); await open(k, S.review); await open(k, 'main [data-act="decline"][data-arg="sw"]'); } },
+  /* Roles (ADR 0043, step 4), as Bob, as Alice (an Operator without n8n access) and as Carol (an Operator with it). */
+  { name: 'roles-bob-asked-needs', prepare: async (k) => { await k.setUser('bob'); await k.ask('What is waiting for my yes?'); } },
+  { name: 'roles-bob-decided', prepare: async (k) => { await bobDeclines(k, 'sw', 'Wrong version'); await k.go('home'); await k.ask('What did I decide before?'); } },
+  { name: 'roles-bob-refused', prepare: async (k) => { await k.setUser('bob'); await k.ask('Make the morning new-ticket check run on Mondays only'); } },
+  { name: 'roles-bob-decide', prepare: async (k) => { await k.setUser('bob'); await k.ask('approve the upgrade tickets'); } },
+  { name: 'roles-bob-abilities', prepare: async (k) => { await k.setUser('bob'); await open(k, 'main [data-act="abil"]'); } },
+  { name: 'roles-bob-panel', prepare: async (k) => { await k.setUser('bob'); await k.ask('What is waiting for my yes?'); await open(k, `${lastCard} [data-act="run"][data-arg="sw"]`); } },
+  { name: 'roles-bob-workflows', prepare: async (k) => { await k.setUser('bob'); await k.go('workflows'); } },
+  { name: 'roles-bob-workflow-page', prepare: async (k) => { await k.setUser('bob'); await k.go('workflows'); await open(k, S.row('issues')); } },
+  { name: 'roles-bob-watchlist', prepare: async (k) => { await k.setUser('bob'); await k.go('software'); } },
+  { name: 'roles-bob-offline', prepare: async (k) => { await k.setUser('bob'); await ctl(k, 'modelOn', 'off'); } },
+  { name: 'roles-alice-n8n-refused', prepare: async (k) => { await ctl(k, 'preview', 'on'); await k.ask('open the morning new-ticket check in n8n'); } },
+  { name: 'roles-alice-build-planned', prepare: async (k) => { await ctl(k, 'preview', 'on'); await k.ask(WEEKLY_SUMMARY); await k.wait(1800); } },
+  { name: 'roles-alice-n8n-change', prepare: async (k) => { await ctl(k, 'preview', 'on'); await k.go('workflows'); await open(k, S.row('issues')); await ctl(k, 'n8nChange', 'issues'); } },
+  { name: 'roles-carol-home', prepare: async (k) => { await k.setUser('carol'); } },
+  { name: 'roles-carol-build-n8n', prepare: async (k) => { await k.setUser('carol'); await ctl(k, 'preview', 'on'); await k.ask(WEEKLY_SUMMARY); await k.wait(1800); } },
+  { name: 'roles-carol-workflow-n8n', prepare: async (k) => { await k.setUser('carol'); await ctl(k, 'preview', 'on'); await k.go('workflows'); await open(k, S.row('issues')); await open(k, 'main details.tech > summary'); await k.page.evaluate(() => { const h = [...document.querySelectorAll('main h3')].find((x) => /In n8n/.test(x.textContent)); if (h) h.scrollIntoView(); }); } },
+  { name: 'roles-carol-menu-n8n', prepare: async (k) => { await k.setUser('carol'); await ctl(k, 'preview', 'on'); await k.go('workflows'); await open(k, S.row('issues')); await open(k, S.more); } },
+  { name: 'roles-carol-n8n-ask', prepare: async (k) => { await k.setUser('carol'); await ctl(k, 'preview', 'on'); await k.ask('open n8n'); } },
+  { name: 'roles-carol-n8n-dialog', prepare: async (k) => { await k.setUser('carol'); await ctl(k, 'preview', 'on'); await k.ask('open the morning new-ticket check in n8n'); await open(k, `${lastCard} [data-act="n8nAsk"]`); } },
+  { name: 'roles-settings-people', prepare: async (k) => { await ctl(k, 'preview', 'on'); await open(k, '.hdr [data-act="go"][data-arg="settings"]'); await open(k, '[data-act="setTab"][data-arg="people"]'); } },
+  /* Step 4 fix pass. */
+  { name: 'fix-bob-people', prepare: async (k) => { await k.setUser('bob'); await open(k, '.hdr [data-act="go"][data-arg="settings"]'); await open(k, '[data-act="setTab"][data-arg="people"]'); } },
+  { name: 'fix-bob-declines', prepare: async (k) => { await k.setUser('bob'); await k.ask('did I decline anything?'); } },
+  { name: 'fix-edit-tickets', prepare: async (k) => { await turnOnWeekly(k); await k.ask('Make the friday closed ticket summary run every day'); } },
+  { name: 'fix-gitlab', prepare: async (k) => { await k.ask('Every Monday at 9am, sum up the closed tickets from GitLab in MOCK'); } },
+  { name: 'fix-day-choice', prepare: async (k) => { await k.ask('Every Monday and Friday at 9am, sum up the closed tickets in MOCK'); await open(k, `${lastCard} [data-act="answer"][data-arg="day:Monday"]`); } },
+  { name: 'fix-open-software', prepare: async (k) => { await k.ask('Open Redis on the Software page'); } },
+  { name: 'fix-run-log', prepare: async (k) => { await k.go('workflows'); await open(k, S.row('issues')); await open(k, 'main [data-act="watch"][data-arg="issues"]'); await k.waitText(/Safe to retry/); if (!(await k.page.$('#run-detail'))) await open(k, 'main [data-act="runDetail"]'); } },
 ];
 
 /* The rail replaced the header tabs (ADR 0043). The Agent library is now Settings, How it works. */
