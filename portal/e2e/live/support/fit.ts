@@ -302,11 +302,13 @@ export function stillPage(cap: number): Promise<string> {
 /**
  * Runs in the page. A control a fixed or floating element sits on can't be pressed. Each visible control is scrolled to the
  * bottom edge of the window, where a floating button lives, and its centre is tested for what is drawn there. The scroll
- * position is put back.
+ * position is put back. While a modal dialog is open nothing behind it can be pressed by design, so only its own controls count.
  */
 export function coverProblems(): Problem[] {
   const name = (el: Element): string => `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}${typeof el.className === 'string' && el.className.trim() ? `.${el.className.trim().split(/\s+/).slice(0, 2).join('.')}` : ''}`
+  const modal = document.querySelector('dialog:modal')
   const controls = [...document.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, [role="button"], summary')].filter((el) => {
+    if (modal && !modal.contains(el)) return false
     if (el.closest('svg, [data-fit-skip]')) return false
     const r = el.getBoundingClientRect()
     const cs = getComputedStyle(el)
