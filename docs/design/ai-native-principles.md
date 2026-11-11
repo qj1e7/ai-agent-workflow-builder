@@ -78,7 +78,7 @@ The same words mean the same state everywhere: AI suggestion, Draft, Waiting for
 
 Agents appear with their faces and plain step names, not their internals.
 - While a run is going, the live activity view shows the agents at work.
-- When a run stops, the AI troubleshooter gives four answers: what happened, what was affected, whether it is safe to fix, and what to do.
+- When a run stops, the AI troubleshooter gives three answers: what happened, what was affected, and whether a retry is safe. The next step, such as Retry or Report to support, sits under them.
 - Waiting for a yes, the decision comes first.
 
 - **Check:** at every point in a run, can the person say what the AI is doing now and why?
