@@ -6,11 +6,12 @@ import type { Page } from '@playwright/test'
  *
  * `measure` is ported from the prototype's docs/design/ai-native-redesign/checks/fit.cjs and keeps its rules. Two changes:
  * it is typed, and it skips what carries data-fit-skip in place of the prototype's .testctl, because the Portal's class
- * names are hashed. Only SVG, the practice stack's test controls and decorative marks carry data-fit-skip.
+ * names are hashed. Only SVG and decorative marks carry data-fit-skip. The Portal's floating Test controls are measured
+ * like the rest of the page. `coverProblems` is new: it fails when a fixed or floating element covers a control.
  */
 
 export interface Problem {
-  readonly kind: 'cut off' | 'spills' | 'overlaps' | 'uneven' | 'sideways' | 'not settled'
+  readonly kind: 'cut off' | 'spills' | 'overlaps' | 'uneven' | 'covered' | 'sideways' | 'not settled'
   readonly where: string
   readonly text: string
 }
@@ -220,15 +221,33 @@ export function measure(): Problem[] {
   return problems
 }
 
-/** Runs in the page. Adds a card with a word too long for it, a clipped label, two labels drawn on top of each other and two unequal buttons. */
+/**
+ * Runs in the page. Adds a card with a word too long for it, a clipped label, two labels drawn on top of each other and two
+ * unequal buttons. The Portal's content security policy refuses inline style attributes, so the styles are set through the
+ * style object, which it allows.
+ */
 export function seedControl(): void {
+  const put = <K extends keyof HTMLElementTagNameMap>(parent: HTMLElement, tag: K, text: string, style: Partial<CSSStyleDeclaration>): HTMLElementTagNameMap[K] => {
+    const el = document.createElement(tag)
+    el.textContent = text
+    Object.assign(el.style, style)
+    parent.append(el)
+    return el
+  }
   const host = document.createElement('div')
-  host.innerHTML =
-    '<div style="width:120px;padding:8px;border:1px solid #888;margin:8px">Supercalifragilisticexpialidocious</div>' +
-    '<div style="width:80px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">A label that is cut off</div>' +
-    '<div style="position:relative;height:20px"><span style="position:absolute;left:0">First label</span><span style="position:absolute;left:4px">Second label</span></div>' +
-    '<div style="display:flex;align-items:flex-start;gap:8px"><button style="height:40px">Tall</button><button style="height:28px">Short</button></div>'
+  put(host, 'div', 'Supercalifragilisticexpialidocious', { width: '120px', padding: '8px', border: '1px solid #888', margin: '8px' })
+  put(host, 'div', 'A label that is cut off', { width: '80px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' })
+  const stack = put(host, 'div', '', { position: 'relative', height: '20px' })
+  put(stack, 'span', 'First label', { position: 'absolute', left: '0' })
+  put(stack, 'span', 'Second label', { position: 'absolute', left: '4px' })
+  const row = put(host, 'div', '', { display: 'flex', alignItems: 'flex-start', gap: '8px' })
+  put(row, 'button', 'Tall', { height: '40px' })
+  put(row, 'button', 'Short', { height: '28px' })
+  const target = put(host, 'button', 'Covered', { display: 'block' })
   document.body.prepend(host)
+  const at = target.getBoundingClientRect()
+  const cover = put(host, 'div', 'Floating', { position: 'fixed', zIndex: '99999', background: '#333', color: '#fff' })
+  Object.assign(cover.style, { left: `${String(at.left)}px`, top: `${String(at.top)}px`, width: `${String(at.width)}px`, height: `${String(at.height)}px` })
 }
 
 /**
@@ -280,15 +299,48 @@ export function stillPage(cap: number): Promise<string> {
   })
 }
 
+/**
+ * Runs in the page. A control a fixed or floating element sits on can't be pressed. Each visible control is scrolled to the
+ * bottom edge of the window, where a floating button lives, and its centre is tested for what is drawn there. The scroll
+ * position is put back.
+ */
+export function coverProblems(): Problem[] {
+  const name = (el: Element): string => `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}${typeof el.className === 'string' && el.className.trim() ? `.${el.className.trim().split(/\s+/).slice(0, 2).join('.')}` : ''}`
+  const controls = [...document.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, [role="button"], summary')].filter((el) => {
+    if (el.closest('svg, [data-fit-skip]')) return false
+    const r = el.getBoundingClientRect()
+    const cs = getComputedStyle(el)
+    return r.width > 1 && r.height > 1 && cs.visibility !== 'hidden' && cs.display !== 'none' && !el.closest('details:not([open]) > :not(summary)')
+  })
+  const x = window.scrollX
+  const y = window.scrollY
+  const problems: Problem[] = []
+  const seen = new Set<string>()
+  for (const el of controls) {
+    el.scrollIntoView({ block: 'end', inline: 'nearest', behavior: 'instant' })
+    const r = el.getBoundingClientRect()
+    if (r.bottom > window.innerHeight + 1 || r.top < 0 || r.right > window.innerWidth + 1 || r.left < 0) continue
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+    if (hit && !el.contains(hit) && !hit.contains(el)) {
+      const key = `${name(el)}|${name(hit)}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      problems.push({ kind: 'covered', where: name(el), text: `"${(el.textContent ?? el.getAttribute('aria-label') ?? '').replace(/\s+/g, ' ').trim().slice(0, 40)}" is covered by ${name(hit)}` })
+    }
+  }
+  window.scrollTo(x, y)
+  return problems
+}
+
 /** Waits for the page to stop moving, then measures it. A page that never settles is a problem of its own. */
 export async function fitProblems(page: Page): Promise<Problem[]> {
   const moving = await page.evaluate(stillPage, 2000)
-  const problems = await page.evaluate(measure)
+  const problems = [...(await page.evaluate(measure)), ...(await page.evaluate(coverProblems))]
   if (moving) problems.push({ kind: 'not settled', where: 'scroll', text: moving })
   return problems
 }
 
-export const CONTROL_KINDS: readonly Problem['kind'][] = ['spills', 'cut off', 'overlaps', 'uneven']
+export const CONTROL_KINDS: readonly Problem['kind'][] = ['spills', 'cut off', 'overlaps', 'uneven', 'covered']
 
 export function describeProblems(problems: readonly Problem[]): string {
   return problems.map((p) => `${p.kind}: ${p.where}  ${p.text}`).join('\n')

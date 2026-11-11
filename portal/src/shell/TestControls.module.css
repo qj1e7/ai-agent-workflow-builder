@@ -9,12 +9,6 @@
   max-width: calc(100% - 32px);
 }
 
-@media (max-width: 900px) {
-  .root {
-    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
-  }
-}
-
 .toggle {
   display: inline-flex;
   align-items: center;

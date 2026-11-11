@@ -18,7 +18,7 @@ function Panel({ choose }: { choose: (id: string) => void }) {
   const users = useDevUsers().data
   const panelId = useId()
   return (
-    <div className={styles['root']} data-fit-skip>
+    <div className={styles['root']}>
       {open ? (
         <div id={panelId} className={styles['panel']} role="region" aria-label="Test controls">
           <p className={styles['title']}>Test controls</p>

@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test'
-import { CONTROL_KINDS, describeProblems, fitProblems, measure, seedControl } from './support/fit'
+import { CONTROL_KINDS, coverProblems, describeProblems, fitProblems, measure, seedControl } from './support/fit'
+import { connectMockModel } from './support/settings'
 import { expect, test } from './support/test'
 import { devContext } from './support/ui'
 
@@ -8,6 +9,13 @@ import { devContext } from './support/ui'
  * buttons side by side line up, and no page scrolls sideways, from a narrow window to 1920 px.
  * Ported from the prototype's checks/fit.cjs (see support/fit.ts).
  */
+
+test.beforeAll(async ({ baseURL }) => {
+  await connectMockModel(String(baseURL))
+})
+
+/** One run waiting for a yes, started by the first test and visited by all. */
+let runId: string | undefined
 
 const WIDTHS = [1920, 1440, 1280, 1024, 901, 900, 768, 390] as const
 
@@ -51,12 +59,14 @@ async function settled(page: Page, screen: Screen): Promise<void> {
 
 for (const user of USERS) {
   for (const width of WIDTHS) {
-    test(`nothing spills, is cut off or overlaps, and the page does not scroll sideways, as ${user.role} at ${String(width)} px`, async ({ browser }) => {
+    test(`nothing spills, is cut off or overlaps, and the page does not scroll sideways, as ${user.role} at ${String(width)} px`, async ({ browser, backend }) => {
+      runId ??= (await backend.waitingRun('alice')).runId
       const context = await devContext(browser, user.id, { reducedMotion: true })
       const page = await context.newPage()
       await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
       const found: string[] = []
-      for (const screen of SCREENS.filter((s) => user.id === 'alice' || s.operatorOnly !== true)) {
+      const runPage: Screen = { name: 'A run waiting for a yes', path: `/runs/${runId}`, heading: ANY_HEADING }
+      for (const screen of [...SCREENS, runPage].filter((s) => user.id === 'alice' || s.operatorOnly !== true)) {
         await page.goto(screen.path)
         await settled(page, screen)
         const problems = await fitProblems(page)
@@ -68,13 +78,13 @@ for (const user of USERS) {
   }
 }
 
-test('the check can fail: a seeded overflow, a clipped label, an overlap and two unequal buttons are all caught', async ({ browser }) => {
+test('the check can fail: a seeded overflow, a clipped label, an overlap, two unequal buttons and a covered button are all caught', async ({ browser }) => {
   const context = await devContext(browser, 'alice', { reducedMotion: true })
   const page = await context.newPage()
   await page.goto('/workflows')
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   await page.evaluate(seedControl)
-  const kinds = new Set((await page.evaluate(measure)).map((p) => p.kind))
+  const kinds = new Set([...(await page.evaluate(measure)), ...(await page.evaluate(coverProblems))].map((p) => p.kind))
   expect([...kinds].sort(), 'the check names each seeded problem').toEqual(expect.arrayContaining([...CONTROL_KINDS].sort()))
   await context.close()
 })
