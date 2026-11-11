@@ -49,9 +49,17 @@ _Avoid_: Reply, response, intent (in the app)
 The Planner's reply when someone asks to change a workflow they already have: only what changes, before and after. Saving it publishes a new version, with Undo (ADR 0043).
 _Avoid_: New draft (for a change to an existing workflow)
 
+**Part marks**:
+The mark beside each part of a request on the Planner's card: a tick for a part it will do, a cross with its reason for a part it can't do or didn't follow, or a question for something it needs to know. Every clause of the request gets one, so no part is dropped silently. A part with a cross is left out, and the workflow keeps a Left out line that says so.
+_Avoid_: Chips (a chip is a value she can change), flags
+
 **Needs you**:
 The list of what waits on the signed-in person, grouped into Do now (stops, approvals) and Set up (keys, missing sources). One source feeds every place it shows, and it stays pinned at the top of a conversation.
 _Avoid_: Needs attention, inbox
+
+**Pinned line**:
+The one line at the top of a conversation that names the most urgent item in Needs you, with Open and "N more". It stays while the conversation grows, so urgent items never scroll away.
+_Avoid_: Banner, alert
 
 **Rail**:
 The slim column on the left of the app with Chat, Workflows and Watchlist, each with a count. Workflows and Watchlist open as full pages, and the chat shows only on Chat. On a phone it is a bar across the top (ADR 0043).
@@ -192,6 +200,22 @@ The step that pauses a run before a write action until an Approver approves it i
 The Adaptive Card the platform posts in Teams for each approval request: what would be written, what the agents found, and who can decide. Its one button, Open in AI Workflow Builder, opens the approval page, where the Approver decides. Once decided, it shows who approved or declined. The practice copy shows the same card.
 _Avoid_: Teams message, notification
 
+**Not checked**:
+The line on an approval that names what the run could not check, such as software it couldn't read or security advisories the platform can't read yet. It tells the Approver what their yes does not cover.
+_Avoid_: Warnings, caveats
+
+**Question on a request**:
+A question an Approver asks the person who started a run, on its approval request, before deciding. The request stays waiting for a yes while they answer, and the questions stay on the record. A question decides nothing.
+_Avoid_: Comment, chat
+
+**Decline reason**:
+The reason an Approver may give when declining, such as "Wrong version". It is optional, and it shows with the declined record.
+_Avoid_: Rejection note
+
+**Declined**:
+An approval request an Approver said no to. Nothing is written. Every place that shows the run says who declined, that nothing was written, and the decline reason if there is one, in the same words.
+_Avoid_: Rejected (in the app), cancelled
+
 **Outcome card**:
 The short card the platform posts in Teams once an approval request is decided, saying who approved or declined. A Workflows webhook cannot edit the approval card, so it posts this second card instead. It goes only to the channel that had the approval card. If the channel set up now does not match it, nothing is posted, and the run's activity says so.
 
@@ -215,12 +239,16 @@ The check that every agent action passes before it runs. It denies write actions
 **Live activity view**:
 The animated view of a run that shows agents talking, hand-offs, and where something failed.
 
+**Run line**:
+The row of a run's steps, in plain words, that shows where the run is without reading: moving dashes into the step at work, slow amber dashes into a step waiting for a yes, red where it stopped, and a solid link once a step is done.
+_Avoid_: Progress bar, station strip
+
 **Activity event**:
 One recorded thing that happened in a run, such as an agent step, an approval decision or a failure. The live activity view and the AI troubleshooter both read activity events.
 _Avoid_: Log line, n8n event
 
 **AI troubleshooter**:
-The agent that explains why a run failed and helps the Operator fix it.
+The agent that explains why a run failed and helps the Operator fix it. It answers three questions: what happened, what was affected, and whether a retry is safe.
 
 **Copier**:
 The part of run monitoring that copies each new activity event from PostgreSQL to Cosmos DB. It copies a run's events in order, and only one copier works on a run at a time. PostgreSQL keeps every event, so a copy that stops halfway goes on from the copied mark.

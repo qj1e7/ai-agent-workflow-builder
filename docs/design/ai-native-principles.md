@@ -70,7 +70,7 @@ These are the product's safety rules, and no design may weaken them (AGENTS.md):
 
 ### 7. Honest states, one source per fact
 
-The same words mean the same state everywhere: AI suggestion, Draft, Waiting for a yes, On, Running, Done, Stopped and Test run (spec section 15). A count or status comes from one function, so Home, Workflows, the tab badge and the Planner never disagree.
+The same words mean the same state everywhere: AI suggestion, Draft, Waiting for a yes, On, Paused, Running, Done, Declined, Stopped and Test run (spec section 15). A count or status comes from one function, so Home, Workflows, the tab badge and the Planner never disagree.
 
 - **Check:** change the state once. Does every place that shows it change together?
 
