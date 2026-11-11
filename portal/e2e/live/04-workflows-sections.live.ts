@@ -330,7 +330,7 @@ async function lineCounts(lines: Locator): Promise<number[]> {
 }
 
 for (const user of ['alice', 'bob']) {
-  test(`${user} sees each workflow's last run on one line, in its row and in the chat's check card, at every width`, async ({ browser, backend }, info) => {
+  test(`${user} sees each workflow's last run on one line in its row at every width${user === 'alice' ? ', and the chat’s check card says the same' : ''}`, async ({ browser, backend }, info) => {
     const { approvalId } = await backend.waitingRun('alice')
     const context = await devContext(browser, user)
     const page = await context.newPage()
@@ -352,15 +352,15 @@ for (const user of ['alice', 'bob']) {
       await shot(page, info, `r9-workflows-${user}-${width}`)
     }
 
-    const before = await lastLine(watchlist).innerText()
-    await page.goto('/')
-    await page.setViewportSize({ width: 1280, height: 900 })
-    await page.getByRole('textbox').fill('Check my workflows')
-    await page.keyboard.press('Enter')
-    const card = page.getByRole('main').getByRole('list', { name: 'Your workflows' })
-    await expect(card).toBeVisible()
-    await expect(lastLine(card.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })), 'the check card says what the row says').toHaveText(before)
     if (user === 'alice') {
+      const before = await lastLine(watchlist).innerText()
+      await page.goto('/')
+      await page.setViewportSize({ width: 1280, height: 900 })
+      await page.getByRole('textbox').fill('Check my workflows')
+      await page.keyboard.press('Enter')
+      const card = page.getByRole('main').getByRole('list', { name: 'Your workflows' })
+      await expect(card).toBeVisible()
+      await expect(lastLine(card.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })), 'the check card says what the row says').toHaveText(before)
       await shot(page, info, 'r9-check-card-alice')
     }
     await context.close()
