@@ -2978,10 +2978,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function sidePanel() {
     if (!S.panel) return '';
     const v = panelView(S.panel);
-    return `<aside class="sidepanel${v.wide ? ' wide' : ''}" id="sidepanel" aria-labelledby="sp-h"${narrow() ? ' role="dialog" aria-modal="true"' : ''}>
+    /* A plain element, so it can be a dialog on a phone and a complementary region beside the chat: an aside may not be a dialog. */
+    return `<div class="sidepanel${v.wide ? ' wide' : ''}" id="sidepanel" aria-labelledby="sp-h"${narrow() ? ' role="dialog" aria-modal="true"' : ' role="complementary"'}>
       <div class="sp-bar"><h2 id="sp-h" tabindex="-1">${v.title}</h2><div class="sp-btns">${v.page ? `<button class="btn sm" data-act="panelPage" data-arg="${v.page}">More details</button>` : '<span></span>'}<button class="btn sm" data-act="panelClose">Close</button></div></div>
       <div class="sp-body">${v.body}</div>
-    </aside>`;
+    </div>`;
   }
 
   /* Home for an Operator (spec 5): a greeting with the state in one line, the Planner's box, three suggestions from that
