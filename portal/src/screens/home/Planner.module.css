@@ -469,6 +469,13 @@
   list-style: none;
 }
 
+/* A workflow's name in the check card is a line of text 22 px high, under WCAG 2.5.8's 24 px, so it gets a full target. */
+.wfcheck h3 a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
 .more {
   color: var(--muted);
   font-size: 0.9rem;
