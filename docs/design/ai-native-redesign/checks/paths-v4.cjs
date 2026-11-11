@@ -1443,6 +1443,181 @@ add('KEYS-ROLE', 'With the keyboard only, Bob reaches his box, asks, and reaches
   await t.expectCount('The request opens in the side panel', '#sidepanel [data-act="approve"][data-arg="sw"]', 1);
 }, [1280]);
 
+/* Step 4 fix pass: the independent review's findings, and defects from steps 1 to 3 found while the spec was rewritten.
+   Each failed on the prototype before the fix. */
+/* Escape takes the last message away first, so the one read is the action's own. */
+const toastAfter = async (k, act, arg) => {
+  await k.page.keyboard.press('Escape');
+  await k.settle(450);
+  await forge(k, act, arg);
+  await k.settle(200);
+  return k.page.locator('.toast').innerText().catch(() => '(no toast)');
+};
+const OPS_TOAST = /^Operators set up workflows\. Ask Alice or Carol\./;
+
+add('FIX-deny-default', 'An Approver is refused every change, including Settings, agents and asking the team: the actions deny anything not opened to him', async (t) => {
+  await t.setup((k) => k.setUser('bob'));
+  for (const [act, arg] of [['limitSave'], ['agentRestore', 'jira:1'], ['agentDiscard'], ['connReplace', 'jira'], ['connSave'], ['modelConnect'], ['modelSave'], ['teamReq', 'Slack|ask'], ['askTeamOffline'], ['toolAskGo'], ['askPlanner']]) {
+    await t.expect(`${act} is refused`, toastAfter(t.kit, act, arg), OPS_TOAST);
+  }
+  await t.setup(async (k) => { await k.go('workflows'); await forge(k, 'filter', 'stopped'); await k.settle(); });
+  await t.expectCount('Reading still works: the Stopped filter is on', 'main [data-act="filter"][data-arg="stopped"][aria-pressed="true"]', 1);
+}, [1280]);
+
+add('FIX-name-not-command', 'A question about a workflow whose name holds a schedule word, such as “weekly”, gets its state, for Bob and for Alice', async (t) => {
+  const q = 'how is the weekly closed-ticket summary doing?';
+  await t.setup((k) => k.setUser('bob'));
+  await t.ask(q);
+  await t.expect('Bob gets its state', lastSay(t), /^Weekly closed-ticket summary stopped\. Its next run is /);
+  await t.setup((k) => k.setUser('alice'));
+  await t.ask(q);
+  await t.expect('Alice gets its state', lastSay(t), /^Weekly closed-ticket summary stopped\. Its next run is /);
+  await t.expectCount('…and no set-up card', `${lastCard} [data-act="turnOn"]`, 0);
+}, [1280]);
+
+add('FIX-decided-whole', 'Asking to see past decisions reads the whole question, with no part marked as not followed', async (t) => {
+  await t.setup((k) => k.setUser('bob'));
+  await t.ask('show my past decisions');
+  await t.expect('The decisions', lastSay(t), 'Here are your 2 decisions.');
+  await t.expectCount('No cross on any part of the question', `${lastCard} .part[data-mark="no"]`, 0);
+}, [1280]);
+
+add('FIX-approve-any-object', 'An Approver’s approve or decline goes to the request whatever it names, and a second change in the same request is still refused', async (t) => {
+  await t.setup((k) => k.setUser('bob'));
+  for (const q of ['approve the upgrade', 'decline that request', 'approve it']) {
+    await t.ask(q);
+    await t.expect(`“${q}” gets the request to open`, lastSay(t), /^I can’t approve or decline for you\./);
+  }
+  await t.ask('approve the upgrade and pause the morning new-ticket check');
+  await t.expect('A second change is still refused', lastSay(t), /^Operators set up workflows\./);
+}, [1280]);
+
+add('FIX-decisions-detail', 'Today’s decisions carry their outcome from the run page, and asking about declines lists only declines', async (t) => {
+  await t.setup(async (k) => { await k.setUser('bob'); await k.go('home'); await k.page.click('main [data-act="run"][data-arg="sw"]'); await k.settle(); await k.page.click('main [data-act="approve"][data-arg="sw"]'); await k.waitText(approvedText); await k.settle(); await k.go('home'); });
+  await t.ask('did I decline anything?');
+  await t.expect('No declines yet, and no approvals listed', lastSay(t), 'You haven’t declined any requests yet.');
+  await t.expectCount('…no rows', `${lastCard} li.row`, 0);
+  await t.ask('What did I decide before?');
+  await t.expectText('Today’s approval says what it did, as the run page does', /Keep our software up to date\s+Approved\s+Approved by Bob at 9:10 today\. 3 tickets created in Jira\./, lastCard);
+}, [1280]);
+
+add('FIX-bob-settings', 'Bob’s People and permissions is text he can read, with no control he can’t use', async (t) => {
+  await t.setup((k) => k.setUser('bob'));
+  await t.click('.hdr [data-act="go"][data-arg="settings"]', 'Settings');
+  await t.click('[data-act="setTab"][data-arg="people"]', 'People and permissions');
+  await t.expectCount('No dead control', 'main :is(input:disabled, button:disabled, [aria-disabled="true"])', 0);
+  await t.expectText('Each person’s roles in words', /Alice[\s\S]*Operator and Approver[\s\S]*Bob[\s\S]*Approver/, 'main .people');
+}, [1280]);
+
+add('FIX-rail-count', 'The Watchlist count is for whoever can act on it: Alice’s agrees with the page, and Bob has none', async (t) => {
+  const badge = (k) => k.page.locator('.rail .badge[data-val="sw-n"]').innerText().then((x) => x.replace(/\D+/g, '')).catch(() => 'none');
+  await t.menu('software', 'Open the Watchlist');
+  const page = await t.page.locator('main #sw-attn-h .count').innerText();
+  await t.expect('Alice’s count agrees with Needs attention', badge(t.kit), page);
+  await t.setup((k) => k.setUser('bob'));
+  await t.expect('Bob has no Watchlist count', badge(t.kit), 'none');
+}, [1280]);
+
+add('FIX-wide', 'On a wide screen the header lines up with the page, Workflows rows use their width, and the chat sits next to its side panel', async (t) => {
+  const left = (sel) => t.page.evaluate((s) => Math.round(document.querySelector(s).getBoundingClientRect().left), sel);
+  await t.menu('workflows', 'Open Workflows');
+  const brand = await left('.hdr .brand');
+  await t.expect('The brand lines up with the page heading', left('main h1'), (v) => Math.abs(v - brand) <= 2);
+  await t.expect('Each row’s last column ends at the row’s padding', t.page.$$eval('main .wf-row', (rows) => rows.map((r) => { const kids = [...r.children].filter((c) => c.getClientRects().length && !c.classList.contains('wf-last')); return Math.round(r.getBoundingClientRect().right - Math.max(...kids.map((c) => c.getBoundingClientRect().right))); })), (gaps) => gaps.length && gaps.every((g) => g <= 24));
+  await t.menu('home', 'Back to Chat');
+  await t.ask(CHECK_WORKFLOWS);
+  await t.click(issuesRow, 'Open Morning new-ticket check from the card');
+  await t.expect('The chat and the panel sit together', t.page.evaluate(() => Math.round(document.querySelector('#sidepanel').getBoundingClientRect().left - document.querySelector('.chatin').getBoundingClientRect().right)), (g) => g >= 0 && g <= 24);
+}, [1920, 1440]);
+
+add('FIX-starts-count', '“Set up another workflow” says as many places to start as it shows', async (t) => {
+  await t.ask('set up another workflow');
+  const n = await t.page.locator(`${lastCard} .starts .chip`).count();
+  await t.expect('The sentence counts the chips', lastSay(t), n === 1 ? 'Here is a place to start. Pick it, or tell me something else.' : `Here are ${n} places to start. Pick one, or tell me something else.`);
+}, [1280]);
+
+add('FIX-offline-count', 'With no AI model, Needs you lists the model row it counts, pointing to the button above it', async (t) => {
+  await t.setup((k) => ctl(k, 'modelOn', 'off'));
+  await t.expectText('The first row is the model', /No AI model connected\s+Connect one with the button above\./, 'main section[aria-labelledby="needs-h"] li.nrow:first-child');
+  await t.expectCount('…with no second Connect a model', 'main [data-act="setGo"][data-arg="model"]', 1);
+}, [1280]);
+
+add('FIX-gitlab', 'A request that reads a system the Planner can’t is a cross, and Set up the part I can sets it up on Jira', async (t) => {
+  await t.ask('Every Monday at 9am, sum up the closed tickets from GitLab in MOCK');
+  await t.expectText('The cross says what the part I can do reads', /Reads GitLab\s+I can only read [^\n]+, so the part I can do reads Jira tickets instead\./, lastCard);
+  await t.click(`${lastCard} [data-act="turnOn"]`, 'Set up the part I can', { decision: true });
+  await t.expectText('It is on, and says what was left out', /Monday closed ticket summary is on\.[\s\S]*Left out: Reads GitLab\./, lastCard);
+}, [1280]);
+
+add('FIX-day-choice', 'After choosing one of two days, the workflow keeps the chosen day and names only the other as left out', async (t) => {
+  await t.ask('Every Monday and Friday at 9am, sum up the closed tickets in MOCK');
+  await t.click(`${lastCard} [data-act="answer"][data-arg="day:Monday"]`, 'Monday', { decision: true });
+  await t.expectText('The cross names Friday only', /“Friday”\s+I can only set one day, so it runs on Monday only\./, lastCard);
+  await t.click(`${lastCard} [data-act="turnOn"]`, 'Set up the part I can', { decision: true });
+  await t.expectText('Left out is Friday, not Monday', /Left out: “Friday”\./, lastCard);
+}, [1280]);
+
+add('FIX-edit-tickets', 'Changing a workflow made on Home to run every day changes the tickets it reads too, shown on the card and kept on its page', async (t) => {
+  await t.setup((k) => turnOnWeekly(k));
+  await t.ask('Make the friday closed ticket summary run every day');
+  await t.expectText('The card shows the ticket change too', /Which tickets\s+Before\s+Tickets closed this week\s+After\s+Tickets closed in the last day/, lastCard);
+  await t.click(`${lastCard} [data-act="editSave"]`, 'Save change', { decision: true });
+  await t.menu('workflows', 'Open Workflows');
+  await t.click(S.row('conf'), 'Open Friday closed ticket summary');
+  await t.expectText('Its page reads the day’s tickets', /Sums up tickets closed in the last day in MOCK/);
+}, [1280]);
+
+add('FIX-open-software', '“Open Redis on the Software page” opens Redis, for Alice and for Bob', async (t) => {
+  for (const who of ['alice', 'bob']) {
+    await t.setup((k) => k.setUser(who));
+    await t.ask('Open Redis on the Software page');
+    await t.expect(`${who}: Redis is on the watchlist`, lastSay(t), 'Redis is on the Software watchlist. Open it from here.');
+    await t.click(`${lastCard} [data-open="software:ok:Redis"]`, 'Open Redis on the Software page');
+    await t.expectText(`${who}: its row opens`, /Redis/, '#sidepanel');
+    await t.click('#sidepanel [data-act="panelClose"]', 'Close');
+  }
+}, [1280]);
+
+add('FIX-never-mind', 'A set-up card and an add-software card each have Never mind, which changes nothing', async (t) => {
+  await t.ask(WEEKLY_SUMMARY);
+  await t.click(`${lastCard} [data-act="discardDraft"][data-arg="live"]`, 'Never mind');
+  await t.expectText('The draft is discarded, with Undo', /Discarded/, lastCard);
+  await t.expectText('…and Undo', /Undo/, '.toast');
+  await t.ask('Monitor Kubernetes releases');
+  await t.click(`${lastCard} [data-act="watchKeep"]`, 'Never mind');
+  await t.expectText('Nothing was added', /Not added\. Nothing changed\./, lastCard);
+  await t.menu('software', 'Open the Watchlist');
+  await t.expect('Kubernetes is not on the list', t.page.innerText('main .sw-table'), (v) => !/Kubernetes/.test(v));
+}, [1280]);
+
+add('FIX-mark-more', 'Mark what isn’t built outlines the run line, the three answers, the last-run line, the count line, the edit card, versions and the declined record', async (t) => {
+  await t.setup((k) => ctl(k, 'markUnbuilt', 'on'));
+  await t.ask('Make the morning new-ticket check run on Mondays only');
+  await t.expectCount('The edit card', `${lastCard} .pcard[data-unbuilt*="edit card"]`, 1);
+  await t.click(`${lastCard} [data-act="editSave"]`, 'Save change');
+  await t.menu('workflows', 'Open Workflows');
+  await t.expectCount('Each last-run line', 'main .wf-last[data-unbuilt]', 3);
+  await t.click(S.row('issues'), 'Open Morning new-ticket check');
+  await t.expectCount('The versions', 'main ol.timeline[data-unbuilt*="Versions"]', 1);
+  await t.click('main [data-act="watch"][data-arg="issues"]', 'See the run', { until: /Safe to retry/ });
+  await t.expectCount('The run line', 'main ol.line[data-unbuilt]', 1);
+  await t.expectCount('The three answers', 'main dl.qa3[data-unbuilt]', 1);
+  await t.menu('software', 'Open the Watchlist');
+  await t.expectCount('The count line', 'main .pagehead p[data-unbuilt*="count line"]', 1);
+  await t.setup((k) => bobDeclines(k, 'sw', 'Wrong version'));
+  await t.expectCount('The declined record', 'main p[data-unbuilt*="declined record"]', 1);
+}, [1280]);
+
+add('FIX-run-times', 'Each entry in a run page’s log has its time, the first with its day', async (t) => {
+  await t.menu('workflows', 'Open Workflows');
+  await t.click(S.row('issues'), 'Open Morning new-ticket check');
+  await t.click('main [data-act="watch"][data-arg="issues"]', 'See the run', { until: /Safe to retry/ });
+  await t.setup(async (k) => { if (!(await k.page.$('#run-detail'))) { await k.page.click('main [data-act="runDetail"]'); await k.settle(); } });
+  const times = await t.page.$$eval('#run-detail .chat > li:not(.typing)', (ls) => ls.map((l) => (l.querySelector('time.log-at') || {}).textContent || (l.querySelector('.faces') ? 'joined' : '')));
+  await t.expect('Every entry but the “joined” line has a time', times, (v) => v.length >= 3 && v.every((x) => x === 'joined' || /\d:\d\d$/.test(x)));
+  await t.expect('The first says its day', times[0], /^Tue 27 Oct, 8:00$/);
+}, [1280]);
+
 /* Screens shot by shots.cjs and measured by quality.cjs. prepare(k) sets the screen up like a user would reach it. */
 const open = async (k, sel) => { await k.page.click(sel); await k.settle(); };
 /* While chatting, only the side panel's body scrolls: bring a part of it to the top of the panel. */
@@ -1541,6 +1716,14 @@ const screens = [
   { name: 'roles-carol-n8n-ask', prepare: async (k) => { await k.setUser('carol'); await ctl(k, 'preview', 'on'); await k.ask('open n8n'); } },
   { name: 'roles-carol-n8n-dialog', prepare: async (k) => { await k.setUser('carol'); await ctl(k, 'preview', 'on'); await k.ask('open the morning new-ticket check in n8n'); await open(k, `${lastCard} [data-act="n8nAsk"]`); } },
   { name: 'roles-settings-people', prepare: async (k) => { await ctl(k, 'preview', 'on'); await open(k, '.hdr [data-act="go"][data-arg="settings"]'); await open(k, '[data-act="setTab"][data-arg="people"]'); } },
+  /* Step 4 fix pass. */
+  { name: 'fix-bob-people', prepare: async (k) => { await k.setUser('bob'); await open(k, '.hdr [data-act="go"][data-arg="settings"]'); await open(k, '[data-act="setTab"][data-arg="people"]'); } },
+  { name: 'fix-bob-declines', prepare: async (k) => { await k.setUser('bob'); await k.ask('did I decline anything?'); } },
+  { name: 'fix-edit-tickets', prepare: async (k) => { await turnOnWeekly(k); await k.ask('Make the friday closed ticket summary run every day'); } },
+  { name: 'fix-gitlab', prepare: async (k) => { await k.ask('Every Monday at 9am, sum up the closed tickets from GitLab in MOCK'); } },
+  { name: 'fix-day-choice', prepare: async (k) => { await k.ask('Every Monday and Friday at 9am, sum up the closed tickets in MOCK'); await open(k, `${lastCard} [data-act="answer"][data-arg="day:Monday"]`); } },
+  { name: 'fix-open-software', prepare: async (k) => { await k.ask('Open Redis on the Software page'); } },
+  { name: 'fix-run-log', prepare: async (k) => { await k.go('workflows'); await open(k, S.row('issues')); await open(k, 'main [data-act="watch"][data-arg="issues"]'); await k.waitText(/Safe to retry/); if (!(await k.page.$('#run-detail'))) await open(k, 'main [data-act="runDetail"]'); } },
 ];
 
 /* The rail replaced the header tabs (ADR 0043). The Agent library is now Settings, How it works. */
