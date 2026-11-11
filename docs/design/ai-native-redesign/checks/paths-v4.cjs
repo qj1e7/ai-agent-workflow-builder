@@ -13,6 +13,9 @@ const S = {
   start: (i) => `main .thread [data-act="say"] >> nth=${i}`,
   time: '#sched-time',
   project: '#fix-project',
+  /* The set-up card asks one question at a time, with choice buttons (ADR 0043). */
+  answer: (arg) => `main .thread [data-act="answer"][data-arg="${arg}"]`,
+  asks: 'main .thread .part[data-mark="ask"]',
   turnOn: '[data-act="turnOn"]',
   testRun: '[data-act="testRun"]',
   review: 'main [data-act="run"][data-arg="sw"]:has-text("Review and decide")',
@@ -40,16 +43,17 @@ async function ctl(k, act, arg) {
   await k.settle();
 }
 
-/* The same set-up as a user would do it, without counting it. */
+/* The same set-up as a user would do it, without counting it. The card asks the time, then the Jira project. */
 async function turnOnWeekly(k) {
   await k.ask(WEEKLY_SUMMARY);
-  await k.page.selectOption(S.project, 'MOCK');
+  await k.page.click(S.answer('time:17:00'));
   await k.settle();
-  await k.page.fill(S.time, '17:00');
+  await k.page.click(S.answer('project:MOCK'));
   await k.settle();
   await k.page.click(S.turnOn);
   await k.settle(600);
 }
+const ONE_QUESTION = 'one question at a time with choice buttons (ADR 0043)';
 
 const approvedText = /approved, and the platform created the tickets/;
 const approvedOpts = { decision: true, until: approvedText };
@@ -88,12 +92,13 @@ add('A', 'First-time Operator sets up a weekly Jira summary and turns it on', as
   const asks = Number((left.match(/(\d+) choices? left/) || [0, 0])[1]);
   t.metric('plannerQuestions', asks);
   await t.expect('The Planner asks back for when it runs and the Jira project', left, /2 choices left: when it runs and the Jira project/);
-  await t.select(S.project, 'MOCK', 'Choose the Jira project', { decision: true });
-  await t.field(S.time, '17:00', 'Choose the time', { decision: true });
+  await t.expectCount('It asks one of them now', S.asks, 1);
+  await t.click(S.answer('time:17:00'), 'Choose 17:00', { decision: true });
+  await t.click(S.answer('project:MOCK'), 'Choose MOCK', { decision: true });
   await t.expectText('Nothing is unclear before turning on', /Nothing is unclear\. Turn it on when you’re ready\./);
   await t.click(S.turnOn, 'Turn it on', { decision: true });
   await t.expectText('The workflow is on', /Friday closed ticket summary is on/);
-}, [1280, 390]);
+}, [1280, 390], { changed: `The card asks ${ONE_QUESTION}: the time, then the Jira project. Each is one tap, where version 4 had a select and a typed time.` });
 
 /* B. Experienced Operator, a normal week. Through Workflows, as in version 3. B-home does it from Home. */
 add('B', 'Experienced Operator finds what needs attention and fixes the stopped Morning new-ticket check', async (t) => {
@@ -122,13 +127,13 @@ add('C', 'Bob, an Approver only, opens the upgrade request, sees what changes an
 
 add('C-self', 'Alice turns on a workflow, does a test run, and cannot approve her own test run', async (t) => {
   await t.ask(WEEKLY_SUMMARY, 'every Friday, sum up the tickets we closed this week');
-  await t.select(S.project, 'MOCK', 'Choose the Jira project', { decision: true });
-  await t.field(S.time, '17:00', 'Choose the time', { decision: true });
+  await t.click(S.answer('time:17:00'), 'Choose 17:00', { decision: true });
+  await t.click(S.answer('project:MOCK'), 'Choose MOCK', { decision: true });
   await t.click(S.turnOn, 'Turn it on', { decision: true });
   await t.click(S.testRun, 'Do a test run', { until: /another Approver must decide/ });
   await t.expectText('The page says Alice cannot approve her own run', /You set this up and started this run, so another Approver must decide\. Nobody approves their own work\./);
   await t.expectCount('There is no Approve button for her', '[data-act="approve"][data-arg="conf"]', 0);
-}, [1280], { changed: 'Home no longer suggests a general workflow (8 Nov, software versioning first), so she types the request, as in scenario A.' });
+}, [1280], { changed: `Home no longer suggests a general workflow (8 Nov, software versioning first), so she types the request, as in scenario A. The card asks ${ONE_QUESTION}.` });
 
 /* D. Unsupported request. */
 add('D', 'An Operator asks to email a weekly list, and the limit is explained with a next step', async (t) => {
@@ -146,12 +151,12 @@ add('E', 'The user corrects the Planner’s guess of project and schedule on the
   await t.click('[data-act="whenOpen"]', 'Open the schedule');
   await t.select('#sched-day', 'Monday', 'Correct the day', { decision: true });
   await t.click('[data-act="whenDone"]', 'Close the schedule');
-  await t.expect('The card now says OPS', t.page.innerText('.pcard .sentence-line'), /OPS/);
-  await t.expect('The card now says Monday', t.page.innerText('.pcard .sentence-line'), /Every Monday at 17:00/);
+  await t.expect('The card now says OPS', t.page.innerText('.pcard .parts'), /OPS/);
+  await t.expect('The card now says Monday', t.page.innerText('.pcard .parts'), /Every Monday at 17:00/);
   await t.expectCount('Still one set-up card, nothing started again', '.pcard:has([data-act="turnOn"])', 1);
   await t.expect('Still one request in the chat', t.page.innerText('main'), (v) => (v.match(/You:/g) || []).length === 1);
   await t.expectCount('Turn it on is ready', '[data-act="turnOn"]:not([disabled])', 1);
-});
+}, [1280], { changed: 'The same steps. The card’s one sentence became a list of parts (ADR 0043), so the check reads the list.' });
 
 /* F. Failed run. */
 add('F', 'Recover the stop the user can fix, and report the platform bug to support', async (t) => {
@@ -414,7 +419,7 @@ add('SHELL-panel', 'A card in the chat opens its workflow in a side panel, or fu
   await t.expectCount('The side panel is open', '#sidepanel', 1);
   await t.expectText('It shows the last and next run', /Last run[\s\S]*Next run/, '#sidepanel');
   const box = await t.page.evaluate(() => { const r = document.querySelector('#sidepanel').getBoundingClientRect(); return { w: Math.round(r.width), vw: innerWidth, thread: !!document.querySelector('.thread') && document.querySelector('.thread').getBoundingClientRect().width > 0 }; });
-  if (t.kit.width > 860) await t.expect('The chat stays beside the panel', box, (b) => b.thread && b.w < b.vw / 2);
+  if (t.kit.width > 900) await t.expect('The chat stays beside the panel', box, (b) => b.thread && b.w < b.vw / 2);
   else await t.expect('On a phone the panel fills the screen', box, (b) => b.w === b.vw);
   await t.expect('The card hides its own Open button while the panel shows it', t.page.locator('main .thread .btn[data-act="workflow"][data-arg="issues"]').count(), 0);
   await t.click('#sidepanel [data-act="panelClose"]', 'Close');
@@ -445,6 +450,375 @@ add('SHELL-rail', 'The rail returns to the chat as it was, scroll position inclu
   await t.expect('The scroll position is the same', t.page.evaluate(() => document.querySelector('.chatscroll').scrollTop), before);
 }, [1280, 390]);
 
+/* The Planner's answers (ADR 0043, step 2): every part of a request is marked, one question at a time, and a time is never guessed. */
+const STALE = 'Every Friday at 9 AM, find Jira tickets that haven\'t been updated for 10 days and prepare a summary.';
+const CROSS = 'Every Friday at 9 AM, find the Jira tickets and prepare a summary, and colour them by team';
+add('ANS-cross', 'A clause the Planner can’t read gets a cross that quotes it, and the button sets up the part it can', async (t) => {
+  await t.ask(CROSS, 'a request with “colour them by team”, which no rule reads');
+  await t.expectText('The dropped clause is quoted with a cross', /“colour them by team”\s*I didn’t follow this part\./, 'main .thread .part[data-mark="no"]');
+  await t.expectText('The reply says it can’t do every part', /I can’t do every part of it/, 'main .thread');
+  await t.expectText('The button sets up the part it can', /Set up the part I can/, 'main .thread .pcard-f');
+  await t.click(S.answer('tickets:open'), 'Choose Open tickets', { decision: true });
+  await t.click(S.answer('project:MOCK'), 'Choose MOCK', { decision: true });
+  await t.expect('Nothing is unclear never shows while a part has a cross', t.page.innerText('main .thread'), (v) => !/Nothing is unclear/.test(v));
+  await t.expectText('The footer says the crossed part is left out', /The part with a cross is left out\./, 'main .thread .pcard-f');
+  await t.click(S.turnOn, 'Set up the part I can', { decision: true });
+  await t.expectText('The part it can is on', /is on\./);
+}, [1280, 390], { changed: 'Fix pass S3: “haven’t been updated for 10 days” now gets the honest “I can’t see when a ticket was last updated yet” (ANS-stale), so the generic cross is proved with a clause no rule reads.' });
+
+add('ANS-left-out', 'After “Set up the part I can”, the card and the workflow’s page still say what was left out', async (t) => {
+  await t.ask(CROSS);
+  await t.click(S.answer('tickets:open'), 'Choose Open tickets', { decision: true });
+  await t.click(S.answer('project:MOCK'), 'Choose MOCK', { decision: true });
+  await t.click(S.turnOn, 'Set up the part I can', { decision: true });
+  await t.expectText('The done card says what was left out', /is on\.\s*Left out: “colour them by team”\./, lastCard);
+  await t.menu('workflows', 'Open Workflows');
+  await t.click(S.row('conf'), 'Open the new workflow');
+  await t.expectText('So does its page', /Left out: “colour them by team”\. It was set up without that part\./);
+}, [1280]);
+
+add('ANS-verbs', 'A clause of verbs and little words, such as “let me know”, still gets a cross, and never “Nothing is unclear”', async (t) => {
+  await t.ask('every Friday at 5pm, sum up the tickets we closed this week in MOCK and let me know');
+  await t.expectText('“let me know” is quoted with a cross', /“let me know”\s*I didn’t follow this part\./, `${lastCard} .part[data-mark="no"]`);
+  await t.expect('Nothing is unclear doesn’t show', t.page.innerText(lastCard), (v) => !/Nothing is unclear/.test(v));
+  await t.ask('every Friday at 5pm, sum up the tickets we closed this week in MOCK, and then check it');
+  await t.expectText('“check it” is quoted with a cross', /“check it”\s*I didn’t follow this part\./, `${lastCard} .part[data-mark="no"]`);
+  await t.ask('every Friday at 5pm, sum up the tickets we closed this week in MOCK, and for them');
+  await t.expectText('A clause of little words alone is quoted too', /“for them”\s*I didn’t follow this part\./, `${lastCard} .part[data-mark="no"]`);
+}, [1280]);
+
+add('ANS-whole-clause', 'A cross quotes the whole clause, not one word of it', async (t) => {
+  await t.ask('watch Kubernetes but only the major releases');
+  await t.expectText('The whole clause is quoted', /“only the major releases”\s*I didn’t follow this part\./, `${lastCard} .part[data-mark="no"]`);
+}, [1280]);
+
+add('ANS-stale', 'Every wording of “not updated for a while” gets the honest can’t, never a silent drop', async (t) => {
+  for (const q of ['every Friday, list the tickets that haven\'t been updated for 10 days', 'every Friday, list the tickets that have not been updated for 10 days', 'every Friday, list the tickets with no update since Monday']) {
+    await t.ask(q);
+    await t.expect(`“${q}” says what it can’t see`, lastSay(t), /I can’t see when a ticket was last updated yet/);
+  }
+}, [1280]);
+
+add('ANS-none-hers', 'A request with no part in her own words gets no set-up card of guesses', async (t) => {
+  await t.ask('which software is behind, then raise tickets for them');
+  await t.expectCount('No set-up card', `${lastCard} [data-act="turnOn"]`, 0);
+  await t.expectText('Each clause is marked: the question to ask on its own, the rest not followed', /“which software is behind”\s*Ask this on its own, and I’ll answer it\.[\s\S]*“raise tickets”\s*I didn’t follow this part\./, lastCard);
+}, [1280], { changed: 'Second fix pass F3: in a clause a rule read (“tickets”), the cross quotes only the unread run, so “raise tickets” instead of “raise tickets for them”.' });
+
+add('ANS-leftover-everywhere', 'A part answer and an edit card mark the clauses they didn’t read too', async (t) => {
+  await t.ask('every Friday at 5pm, sum up the closed tickets in MOCK, excluding bugs, and tag Bob');
+  await t.expect('The part answer says what it can’t see', lastSay(t), /I can’t tell a ticket’s type yet/);
+  await t.expectText('“tag Bob” is marked', /“tag Bob”\s*I didn’t follow this part\./, lastCard);
+  await t.ask('is LangGraph up to date? set it to check daily');
+  await t.expectText('The edit card keeps the question, to ask on its own', /“is LangGraph up to date”\s*Ask this on its own, and I’ll answer it\.[\s\S]*Before\s+Every Monday at 9:00\s+After\s+Every day at 9:00/, lastCard);
+  await t.expectCount('A question asked alongside doesn’t hold Save change', `${lastCard} [data-act="editSave"]:not([disabled])`, 1);
+}, [1280], { changed: 'Second fix pass, decision (a): only a cross on the change itself, two days or two times, holds Save change. A question asked alongside keeps its cross. Was: Save change waits while any part has a cross.' });
+
+/* Second fix pass. */
+const EMAIL_TEAM = 'every Friday, sum up the closed tickets and email the summary to the team';
+add('ANS-cant-clause', 'A can’t answer never crosses the clause it answered', async (t) => {
+  await t.ask(EMAIL_TEAM);
+  await t.expect('It says it can’t send email', lastSay(t), /I can’t send email/);
+  await t.expectCount('No cross for the email clause it answered', `${lastCard} .part[data-mark="no"]`, 0);
+}, [1280]);
+
+const crosses = (t) => t.page.$$eval(`${lastCard} .part[data-mark="no"]`, (xs) => xs.map((x) => x.innerText.replace(/^Can’t do:\s*/, '').replace(/\s+/g, ' ')).join(' | '));
+add('ANS-cant-runs', 'A can’t answer reads only its can’t phrase, so the rest of that clause is still marked', async (t) => {
+  await t.ask('every Friday, sum up the closed tickets and email the summary in French to the team');
+  await t.expect('“in French” is marked', crosses(t), /^“in French” I didn’t follow this part\.$/);
+  await t.ask('every Friday sum up the closed tickets in MOCK and email it to Bob with a chart');
+  await t.expect('“with a chart” is marked', crosses(t), /^“with a chart” I didn’t follow this part\.$/);
+  await t.ask('watch Grafana every day at 8am on Slack too');
+  await t.expect('The time the watchlist doesn’t keep is marked', crosses(t), /^“every day at 8am” The Software watchlist checks all your software together, every Monday at 9:00\./);
+}, [1280]);
+
+add('ANS-phrase-runs', 'A summary’s describing words are read, and a quote keeps its object and the phrase it names', async (t) => {
+  await t.ask('every Friday prepare a detailed summary of the closed tickets in MOCK');
+  await t.expectCount('“a detailed summary” is read, so nothing is crossed', `${lastCard} .part[data-mark="no"]`, 0);
+  await t.ask('every Friday at 9am, list the closed tickets in MOCK, group them by assignee and highlight blockers');
+  await t.expect('“group them” keeps its object', crosses(t), /“group them” I didn’t follow this part\./);
+  await t.ask('watch Kubernetes and ping Bob when a new version is out');
+  await t.expect('“ping Bob when a new version” runs through “a”', crosses(t), /“ping Bob when a new version” I didn’t follow this part\./);
+}, [1280]);
+
+add('ANS-cant-alternative', 'The alternative to an email request sets up cleanly, with the email clause gone', async (t) => {
+  await t.setup((k) => k.ask(EMAIL_TEAM));
+  await t.click(`${lastCard} [data-act="instead"]`, 'Set that up', { reply: true, decision: true });
+  await t.expectCount('A set-up card', `${lastCard} [data-act="turnOn"]`, 1);
+  await t.expectCount('With no cross', `${lastCard} .part[data-mark="no"]`, 0);
+}, [1280]);
+
+add('ANS-ticked-runs', 'In a clause a rule read, a cross quotes only the unread words, and the gaps are read', async (t) => {
+  await t.ask('every Friday at 5pm sum up the closed tickets in MOCK with a chart');
+  await t.expect('Only “with a chart” is crossed', t.page.$$eval(`${lastCard} .part[data-mark="no"] .pk`, (xs) => xs.map((x) => x.innerText.replace(/^Can’t do:\s*/, '')).join(' | ')), '“with a chart”');
+  for (const q of ['give me a short summary of the closed tickets in MOCK every Monday at 9am', 'every Monday at 9am sum up the closed tickets in MOCK, then file it as a Jira ticket', 'watch Grafana and tell me when there is a new version']) {
+    await t.ask(q);
+    await t.expectCount(`“${q}” has no cross`, `${lastCard} .part[data-mark="no"]`, 0);
+  }
+}, [1280]);
+
+add('ANS-narrow-cards', 'Beside the panel, a narrow chat gives the cards two-column rows, and a chip stays on one line', async (t) => {
+  await t.ask(WEEKLY_SUMMARY);
+  await t.expectCount('The panel is open', '#sidepanel', 1);
+  const cols = () => t.page.$$eval(`${lastCard} .part`, (ps) => ps.map((p) => getComputedStyle(p).gridTemplateColumns.split(' ').length));
+  await t.expect('Every part row has two columns', cols(), (v) => v.length > 0 && v.every((n) => n === 2));
+  await t.expect('“Tickets closed this week” is one line', t.page.$eval(`${lastCard} [data-part="tickets"] .schip`, (c) => c.getBoundingClientRect().height), (h) => h < 40);
+}, [901, 1024]);
+
+add('ANS-clash-day', 'Two days in a set-up request ask which one, and an edit card takes focus at its heading', async (t) => {
+  await t.ask('every Monday and Friday at 9am list open tickets in MOCK');
+  await t.expectText('The day is a question between the two', /Monday or Friday\?/, S.asks);
+  await t.ask('Make the morning new-ticket check run on Mondays only');
+  await t.expect('Focus is on the edit card’s heading', focused(t.page), /^h3#card-h-\d+$/);
+}, [1280]);
+
+add('ANS-clash-time', 'Two times in a set-up request ask which one, never the first picked', async (t) => {
+  await t.ask('every Friday at 9am and 5pm list open tickets in MOCK');
+  await t.expectText('The time is a question between the two', /9:00 or 17:00\?/, S.asks);
+  await t.expect('No time is ticked', t.page.innerText(`${lastCard} .parts`), (v) => !/Every Friday at \d{1,2}:\d{2}, Singapore time/.test(v));
+  await t.click(S.answer('time:17:00'), 'Choose 17:00', { decision: true });
+  await t.expectText('Then it runs at the time chosen', /Every Friday at 17:00, Singapore time/, `${lastCard} .parts`);
+}, [1280]);
+
+add('ANS-testctl', 'The test controls never cover the product, scrolled or not, chatting or not', async (t) => {
+  const covered = () => t.page.evaluate(() => {
+    const b = document.querySelector('.testctl-toggle').getBoundingClientRect();
+    /* Text scrolled out of the chat column is clipped by it, so only its visible part counts. */
+    const seen = (el) => { const r = el.getBoundingClientRect(); const sc = el.closest('.chatscroll'); if (!sc) return r; const c = sc.getBoundingClientRect(); return { left: r.left, right: r.right, top: Math.max(r.top, c.top), bottom: Math.min(r.bottom, c.bottom) }; };
+    return [...document.querySelectorAll('main *')].filter((el) => !el.children.length && el.textContent.trim() && el.getClientRects().length).some((el) => { const r = seen(el); return r.top < r.bottom && r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top; });
+  });
+  for (const y of [0, 500, 99999]) {
+    await t.setup((k) => k.page.evaluate((v) => window.scrollTo(0, v), y));
+    await t.expect(`Home, scrolled to ${y}: nothing under the toggle`, covered(), false);
+  }
+  await t.ask(WEEKLY_SUMMARY);
+  for (const y of [0, 300, 99999]) {
+    await t.setup((k) => k.page.evaluate((v) => { const sc = document.querySelector('.chatscroll'); if (sc) sc.scrollTop = v; }, y));
+    await t.expect(`Chatting, scrolled to ${y}: nothing under the toggle`, covered(), false);
+  }
+}, [1280, 900, 390]);
+
+/* The edit card's fix pass: every clause accounted for, a name never read as a schedule, questions never taken as changes. */
+add('ANS-edit-days', 'Two days for one schedule get a cross, and Save change waits', async (t) => {
+  await t.ask('make the morning new-ticket check run on Mondays and Thursdays');
+  await t.expectText('The days are quoted with the reason', /“Mondays and Thursdays”\s*I can only set one day\./, lastCard);
+  await t.expectCount('Save change waits', `${lastCard} [data-act="editSave"][disabled]`, 1);
+}, [1280]);
+
+add('ANS-name-words', 'A schedule word in a workflow’s name is neither a schedule nor a command', async (t) => {
+  await t.ask('make the weekly summary run at 10am');
+  await t.expectText('Only the time changes, and the day stays', /Before\s+Every Friday at 16:00\s+After\s+Every Friday at 10:00/, lastCard);
+  await t.ask('what went wrong with the weekly summary?');
+  await t.expect('A question about the weekly summary gets the troubleshooter', lastSay(t), /^Weekly closed-ticket summary stopped\. Here’s what the AI troubleshooter found\.$/);
+  await t.expectCount('No set-up card', `${lastCard} [data-act="turnOn"]`, 0);
+  await t.ask('what went wrong with the weekly summary? pause it');
+  await t.expect('A real change word outside the name still takes the command path', lastSay(t), /From the chat I can only change when Weekly closed-ticket summary runs\./);
+}, [1280]);
+
+add('ANS-questions', 'Asking when a workflow runs gets its state and next run, never “I can only change”', async (t) => {
+  await t.ask('when does the software check run next?');
+  await t.expect('The software check’s next run', lastSay(t), /^Keep our software up to date is waiting for a yes\. Its next run is Mon 2 Nov, 9:00\.$/);
+  await t.ask('when is the next run of the morning check');
+  await t.expect('The morning check’s next run', lastSay(t), /^Morning new-ticket check stopped\. Its next run is Wed 28 Oct, 8:00\.$/);
+  await t.ask('is the morning check running?');
+  await t.expect('Is it running: its state', lastSay(t), /^Morning new-ticket check stopped\./);
+  await t.ask('when does the morning check run? make it run daily');
+  await t.expectText('A question with a change in it gets the edit card', /Before\s+Every weekday at 8:00\s+After\s+Every day at 8:00/, lastCard);
+}, [1280]);
+
+add('ANS-edit-missing', 'A workflow that doesn’t exist is named, and a change it can’t make keeps the question asked with it', async (t) => {
+  await t.setup((k) => k.setDay('one'));
+  await t.ask('make the morning check run on Mondays only');
+  await t.expect('Day one: no such workflow', lastSay(t), /^You don’t have a workflow called “morning check”\.$/);
+  await t.expectCount('No set-up card', `${lastCard} [data-act="turnOn"]`, 0);
+  await t.setup((k) => k.setDay('week'));
+  await t.ask('how are my workflows? turn the weekly one off');
+  await t.expect('Turning it off is on its page', lastSay(t), /From the chat I can only change when Weekly closed-ticket summary runs\./);
+  await t.expectText('The question is kept, to ask on its own', /“how are my workflows”\s*Ask this on its own, and I’ll answer it\./, lastCard);
+}, [1280]);
+
+add('ANS-edit-after', 'After Save change: the watchlist says who owns it, a paused workflow says so, and a later change elsewhere is named', async (t) => {
+  await t.ask('Make the software watchlist check run every day at 7am');
+  await t.click(`${lastCard} [data-act="editSave"]`, 'Save change', { decision: true });
+  await t.expect('Saving the watchlist says what the page says', lastSay(t), /^Saved\. Next run Wed 28 Oct, 7:00\. You now own this schedule, so you can’t approve its checks\.$/);
+  await t.expectText('The note is in the past tense now', /This changed when all \d+ software on the watchlist are checked, and made you the owner of this schedule\./, lastCard);
+  await t.setup(async (k) => { await k.go('workflows'); await k.page.click(S.row('issues')); await k.settle(); await k.page.click('main [data-act="pause"][data-arg="issues"]'); await k.settle(); await k.go('home'); });
+  await t.ask('Make the morning new-ticket check run on Mondays only');
+  await t.click(`${lastCard} [data-act="editSave"]`, 'Save change', { decision: true });
+  await t.expect('A paused workflow says it is paused', lastSay(t), /^Saved\. Morning new-ticket check is paused, so it won’t run until you resume it\.$/);
+  await t.setup(async (k) => { await k.go('workflows'); await k.page.click(S.row('issues')); await k.settle(); await k.page.click('main [data-act="editSched"][data-arg="issues"]'); await k.settle(); await k.page.fill('#sf-time', '10:30'); await k.page.click('[data-act="saveSched"]'); await k.settle(); await k.go('home'); });
+  await t.expect('A later change on its page is named, not mixed in', lastSay(t), /^Saved as version 2\. Changed again since, on its page\.$/);
+  await t.expectCount('Undo is gone', `${lastCard} [data-act="editUndo"]`, 0);
+}, [1280]);
+
+add('ANS-asks', 'A bare hour is asked, “make it daily” after a draft offers the draft, and three more questions are answered from state', async (t) => {
+  await t.ask('make the morning check run at 9');
+  await t.expectText('“at 9” is asked as morning or evening', /At 9:00 or 21:00\?/, lastCard);
+  await t.click(`${lastCard} [data-act="editSet"][data-arg="time:09:00"]`, 'Choose 9:00', { decision: true });
+  await t.expectText('Then the change is ready', /After\s+Every weekday at 9:00/, lastCard);
+  await t.ask(WEEKLY_SUMMARY);
+  await t.ask('make it daily');
+  await t.expectText('The draft above is one of the choices', /Friday closed ticket summary, the draft above/, lastCard);
+  await t.ask('do I have approvals waiting');
+  await t.expect('Approvals waiting', lastSay(t), /^1 approval is waiting for your yes\.$/);
+  await t.ask('which version of FastAPI do we run?');
+  await t.expect('The version we run', lastSay(t), /^FastAPI is behind\. You run 0\.118\.0 and the newest is 0\.120\.1\.$/);
+}, [1280]);
+
+add('ANS-one-question', 'With nothing said about when, the card asks how often, then the day, then the time, one at a time', async (t) => {
+  await t.ask('sum up the tickets we closed in project MOCK', 'a request with no schedule');
+  await t.expectCount('One question shows', S.asks, 1);
+  await t.expectText('It asks how often first', /How often should it run\?/, S.asks);
+  await t.click(S.answer('freq:week'), 'Every week', { decision: true });
+  await t.expectCount('Still one question', S.asks, 1);
+  await t.expectText('Then the day', /Which day should it run\?/, S.asks);
+  await t.click(S.answer('day:Friday'), 'Friday', { decision: true });
+  await t.expectText('Then the time', /What time should it run\?/, S.asks);
+  await t.click(S.answer('time:09:00'), 'Choose 9:00', { decision: true });
+  await t.expectCount('No question is left', S.asks, 0);
+  await t.expectText('The card reads back the schedule it was given', /Every Friday at 9:00, Singapore time/, 'main .thread .parts');
+}, [1280, 390]);
+
+add('ANS-no-time', 'A request that names a day but no time is asked for the time, never given one', async (t) => {
+  await t.ask(WEEKLY_SUMMARY);
+  await t.expectText('The card asks what time', /What time should it run\?/, S.asks);
+  await t.expect('No time is filled in', t.page.innerText('main .thread .parts'), (v) => !/\d{1,2}:\d{2}, Singapore time/.test(v));
+  await t.expectCount('Turn it on waits for the time', '[data-act="turnOn"][disabled]', 1);
+}, [1280]);
+
+add('ANS-watch-parts', 'Watching software marks each part, and a time the watchlist doesn’t keep gets a cross', async (t) => {
+  await t.ask('watch Kubernetes every Monday at 9am and create a Jira ticket');
+  await t.expectCount('No part has a cross', 'main .thread li.cmsg:last-child .part[data-mark="no"]', 0);
+  await t.expectText('The schedule and the ticket are her words', /Checked\s+Every Monday at 9:00\s+From your words[\s\S]*Then\s+An upgrade ticket in Jira for each newer version\s+From your words/, 'main .thread li.cmsg:last-child');
+  await t.expectCount('One question at a time: the project first, not the version', 'main .thread li.cmsg:last-child .part[data-mark="ask"]', 1);
+  await t.ask('watch Grafana every day at 8am');
+  await t.expectText('Its own time gets a cross with the reason', /“every day at 8am”\s*The Software watchlist checks all your software together, every Monday at 9:00\./, 'main .thread li.cmsg:last-child');
+}, [1280, 390]);
+
+/* Changing a workflow by asking (ADR 0043): the edit card changes the schedule, as a new version with Undo. */
+const lastCard = 'main .thread li.cmsg:last-child';
+add('ANS-edit-save', 'Change a schedule by asking: Save change publishes version 2, the page lists it, and Undo goes back', async (t) => {
+  await t.ask('Make the morning new-ticket check run on Mondays only');
+  await t.expectText('The card shows only what changes, before and after', /When it runs\s+Before\s+Every weekday at 8:00\s+After\s+Every Monday at 8:00/, lastCard);
+  await t.expectCount('No new set-up card', `${lastCard} [data-act="turnOn"]`, 0);
+  await t.click(`${lastCard} [data-act="editSave"]`, 'Save change', { decision: true });
+  await t.expectText('It is saved as version 2', /Saved as version 2\. Next run Mon 2 Nov, 8:00\./, lastCard);
+  await t.menu('workflows', 'Open Workflows');
+  await t.click(S.row('issues'), 'Open Morning new-ticket check');
+  await t.expectText('The page runs on the new schedule', /Every Monday at 8:00, Singapore time/);
+  await t.expectText('The page lists version 2', /Versions\s+Version 2\s+Today, 9:10\. Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00\. This is the version running now\.\s+Version 1/);
+  await t.menu('home', 'Back to Chat');
+  await t.click(`${lastCard} [data-act="editUndo"]`, 'Undo', { decision: true });
+  await t.expectText('Undo publishes the version before again', /Undone, as version 3\. Morning new-ticket check runs every weekday at 8:00 now\./, lastCard);
+  await t.setup(async (k) => { await k.go('workflows'); await k.page.click(S.row('issues')); await k.settle(); });
+  await t.expectText('The page lists the undo as version 3', /Version 3\s+Today, 9:10\. Alice undid version 2, so it runs every weekday at 8:00 again\./);
+}, [1280, 390]);
+
+add('ANS-edit-never', 'The review’s “every day instead of every Monday” gets an edit card, and Never mind changes nothing', async (t) => {
+  await t.ask('Run the software check every day instead of every Monday');
+  await t.expectText('Before and after, for every software on the watchlist', /Before\s+Every Monday at 9:00\s+After\s+Every day at 9:00[\s\S]*all 14 software on the watchlist/, lastCard);
+  await t.click(`${lastCard} [data-act="editKeep"]`, 'Never mind', { decision: true });
+  await t.expectText('Nothing changed', /No problem\. Nothing changed\./, lastCard);
+  await t.menu('software', 'Open Watchlist');
+  await t.expectText('The watchlist still runs every Monday', /Every Monday at 9:00, Singapore time/);
+  await t.expect('No version was published', t.page.innerText('main'), (v) => !/Version 2/.test(v));
+}, [1280]);
+
+add('ANS-edit-honest', 'A change the card can’t make gets an honest answer, and a check that doesn’t exist is named', async (t) => {
+  await t.ask('Make the React check run on Mondays only');
+  await t.expectText('There is no React check, and React isn’t watched', /You don’t have a React check\. React isn’t on the Software watchlist, which checks software every Monday\./, lastCard);
+  await t.expectCount('No set-up card for it', `${lastCard} [data-act="turnOn"]`, 0);
+  await t.expectCount('It offers to watch React', `${lastCard} [data-act="say"][data-arg="Keep track of the React version"]`, 1);
+  await t.ask('rename the morning check to Daily tickets');
+  await t.expectText('Only the schedule changes from the chat', /From the chat I can only change when Morning new-ticket check runs\./, lastCard);
+  await t.expectCount('It offers the workflow itself, with no edit card', `${lastCard} :is([data-act="workflow"][data-arg="issues"], [data-act="editSave"])`, 1);
+}, [1280]);
+
+/* Status questions in any wording (ADR 0043), failing closed: a text with a change word gets the command path. */
+const lastSay = (t) => t.page.locator('main .thread [data-say]').last().innerText();
+add('ANS-status', 'Questions in other words get answers from platform state', async (t) => {
+  for (const q of ['what needs my attention today?', 'anything for me?', 'what’s waiting on me']) {
+    await t.ask(q);
+    await t.expect(`“${q}” gets what needs her`, lastSay(t), /^5 things need you\.$/);
+  }
+  await t.ask('is LangGraph up to date?');
+  await t.expect('“is LangGraph up to date?” gets its versions', lastSay(t), /^LangGraph is behind\. You run 1\.2\.14 and the newest is 1\.2\.17\.$/);
+  await t.ask('which software is behind?');
+  await t.expect('“which software is behind?” names them, with the watchlist’s own count', lastSay(t), /^3 have a newer version: Log4j core, LangGraph and FastAPI\.$/);
+  await t.ask('how are my workflows doing');
+  await t.expect('“how are my workflows doing” sums them up', lastSay(t), /^You have 3 workflows\. 2 stopped and 1 is waiting for a yes\.$/);
+}, [1280, 390]);
+
+add('ANS-status-commands', 'A question with a change word in it is a command, never a status answer', async (t) => {
+  const STATUS = /things need you|Nothing needs you|You have \d+ workflows|is behind|is up to date|have a newer version/;
+  await t.ask('can you make the React check daily?');
+  await t.expect('“can you make the React check daily?” goes to the command path', lastSay(t), (v) => !STATUS.test(v) && /You don’t have a React check/.test(v));
+  await t.ask('what needs my attention? pause the morning check');
+  await t.expect('A status question with a pause in it goes to the command path', lastSay(t), (v) => !STATUS.test(v) && /From the chat I can only change when Morning new-ticket check runs/.test(v));
+  await t.ask('is LangGraph up to date? if not, watch it every day');
+  await t.expect('A software question with a watch in it goes to the command path', lastSay(t), (v) => !STATUS.test(v));
+  await t.ask('how are my workflows doing? make the morning check run at 10am');
+  await t.expectText('A workflows question with a change in it gets the edit card', /Before\s+Every weekday at 8:00\s+After\s+Every weekday at 10:00/, lastCard);
+}, [1280]);
+
+/* Live cards (ADR 0043): every card in the chat reads current state, so a change made anywhere shows in older answers. */
+add('ANS-live', 'An older answer reads current state: a pause in the panel and an approval on another page show in it', async (t) => {
+  await t.ask(CHECK_WORKFLOWS);
+  await t.expectText('The answer starts with two stopped and one waiting', /You have 3 workflows\. 2 stopped and 1 is waiting for a yes\./, 'main .thread');
+  await t.click(issuesRow, 'Open Morning new-ticket check from the card');
+  await t.click('#sidepanel [data-act="pause"]', 'Pause it in the panel', { decision: true });
+  await t.click('#sidepanel [data-act="panelClose"]', 'Close');
+  await t.expectText('The older answer says it is paused', /You have 3 workflows\. 1 stopped, 1 is waiting for a yes and 1 paused\./, 'main .thread');
+  await t.menu('workflows', 'Open Workflows');
+  await t.click(S.review, 'Review and decide');
+  await t.click(S.approve, 'Approve', approvedOpts);
+  await t.menu('home', 'Back to Chat');
+  await t.expectText('The older answer no longer waits for a yes', /You have 3 workflows\. 1 stopped, 1 is on and 1 paused\./, 'main .thread');
+}, [1280]);
+
+add('ANS-live-done', 'A workflow turned on in the chat, then paused on its page, reads as paused back in the chat', async (t) => {
+  await t.setup(turnOnWeekly);
+  await t.menu('workflows', 'Open Workflows');
+  await t.click(S.row('conf'), 'Open Friday closed ticket summary');
+  await t.click('main [data-act="pause"][data-arg="conf"]', 'Pause', { decision: true });
+  await t.menu('home', 'Back to Chat');
+  await t.expectText('The card and its sentence say it is paused', /Friday closed ticket summary is paused\.[\s\S]*Friday closed ticket summary is paused\./, 'main .thread');
+}, [1280]);
+
+/* The panel opens by itself while the Planner builds (ADR 0043), wider than 900 px only, and a flow shows once. */
+add('ANS-panel', 'While the Planner builds, the panel opens by itself with the steps going in, but never on a phone', async (t) => {
+  await t.ask(WEEKLY_SUMMARY);
+  if (t.kit.width > 900) {
+    await t.expectCount('The side panel opened by itself', '#sidepanel', 1);
+    await t.setup((k) => k.page.waitForFunction(() => document.querySelectorAll('#sidepanel .steps li').length >= 3));
+    await t.expectText('It shows the new workflow’s steps, as a draft', /Draft[\s\S]*Find the tickets closed[\s\S]*Write a short summary[\s\S]*Create one ticket/, '#sidepanel');
+    await t.expect('The chat keeps focus on the card', focused(t.page), (v) => !/^button\[panelClose\]$/.test(v));
+    await t.expectCount('The card hides its own steps while the panel shows them', 'main .thread details.how:not([hidden])', 0);
+    await t.click('#sidepanel [data-act="panelClose"]', 'Close');
+    await t.expectCount('The card’s steps come back', 'main .thread details.how:not([hidden])', 1);
+  } else {
+    await t.expectCount('At 900 px or less the panel doesn’t open by itself', '#sidepanel', 0);
+    await t.expectCount('The card keeps its own steps', 'main .thread details.how:not([hidden])', 1);
+  }
+}, [1280, 880, 390], { changed: 'The panel opens by itself only wider than 900 px, the same breakpoint as the rail’s top bar (fix pass S9), so 880 is checked too.' });
+
+add('ANS-panel-focus', 'Focus stays on the card’s heading while the panel opens by itself and the steps go in', async (t) => {
+  await t.ask(WEEKLY_SUMMARY);
+  await t.setup((k) => k.page.waitForFunction(() => document.querySelectorAll('#sidepanel .steps li').length >= 3));
+  await t.expect('Focus is on the card heading, not on Rename', focused(t.page), /^h3#card-h-\d+$/);
+}, [1440, 1280]);
+
+add('ANS-scroll-390', 'On a phone, answering the card’s questions and saving a change never scrolls the app out of place', async (t) => {
+  const appTop = () => t.page.evaluate(() => [document.getElementById('app').scrollTop, window.scrollY, Math.round(document.querySelector('.hdr').getBoundingClientRect().top)]);
+  await t.ask(WEEKLY_SUMMARY);
+  await t.click(S.answer('time:17:00'), 'Choose 17:00', { decision: true });
+  await t.click(S.answer('project:MOCK'), 'Choose MOCK', { decision: true });
+  await t.expect('The app has not scrolled, and the header is in place', appTop(), (v) => v.every((x) => x === 0));
+  await t.ask('Make the morning new-ticket check run on Mondays only');
+  await t.click(`${lastCard} [data-act="editSave"]`, 'Save change', { decision: true });
+  await t.expect('Still in place after saving a change', appTop(), (v) => v.every((x) => x === 0));
+}, [390]);
+
 /* Keyboard only: no mouse. Tab, Shift+Tab, Enter, Space, arrows, Escape, typing. */
 add('KEYS-A', 'Scenario A with the keyboard only', async (t) => {
   await t.setup(async (k) => { await k.setDay('one'); await focusTop(k); });
@@ -453,15 +827,14 @@ add('KEYS-A', 'Scenario A with the keyboard only', async (t) => {
   await tabTo(t, '[data-ask]', 'the Planner box');
   await t.field(':focus', WEEKLY_SUMMARY, 'Type the request');
   await t.press('Enter', 'Send', { reply: true });
-  await tabTo(t, '#fix-project', 'the Jira project choice');
-  await t.press('m', 'Type M to choose MOCK', { decision: true });
-  await t.expect('The project is MOCK', t.page.$eval('#fix-project', (s) => s.value), 'MOCK');
-  await tabTo(t, '#sched-time', 'the time');
-  await t.field(':focus', '17:00', 'Type the time', { decision: true });
-  await tabTo(t, '[data-act="turnOn"]', 'Turn it on');
+  await tabTo(t, '[data-act="answer"][data-arg="time:17:00"]', 'the 17:00 choice');
+  await t.press('Enter', 'Choose 17:00', { decision: true });
+  await t.expect('Focus moves to the next question', focused(t.page), 'button[answer=project:MOCK]');
+  await t.press('Enter', 'Choose MOCK', { decision: true });
+  await t.expect('Focus moves to Turn it on', focused(t.page), 'button[turnOn]');
   await t.press('Enter', 'Turn it on', { decision: true });
   await t.expectText('The workflow is on', /Friday closed ticket summary is on/);
-}, [1280]);
+}, [1280], { changed: `The card asks ${ONE_QUESTION}, and focus moves to the next question after each answer.` });
 
 add('KEYS-C', 'Scenario C with the keyboard only', async (t) => {
   await t.setup(async (k) => { await k.setUser('bob'); await focusTop(k); });
@@ -509,6 +882,13 @@ const screens = [
   { name: 'shell-full-page-back', prepare: async (k) => { await k.ask(CHECK_WORKFLOWS); await open(k, issuesRow); await open(k, '#sidepanel [data-act="panelPage"]'); } },
   { name: 'shell-settings-how-it-works', prepare: async (k) => { await k.go('agents'); await open(k, '[data-act="setTab"][data-arg="how"]'); } },
   { name: 'mark-unbuilt-home', prepare: async (k) => { await ctl(k, 'markUnbuilt', 'on'); } },
+  { name: 'answers-watch-marks', prepare: async (k) => { await k.ask('watch Kubernetes every Monday at 9am and create a Jira ticket'); } },
+  { name: 'answers-cross', prepare: async (k) => { await k.ask(CROSS); } },
+  { name: 'answers-edit', prepare: async (k) => { await k.ask('Make the morning new-ticket check run on Mondays only'); } },
+  { name: 'answers-edit-saved', prepare: async (k) => { await k.ask('Make the morning new-ticket check run on Mondays only'); await open(k, '[data-act="editSave"]'); } },
+  { name: 'answers-versions', prepare: async (k) => { await k.ask('Make the morning new-ticket check run on Mondays only'); await open(k, '[data-act="editSave"]'); await k.go('workflows'); await open(k, S.row('issues')); await k.page.evaluate(() => { const h = [...document.querySelectorAll('main h2')].find((x) => x.textContent === 'Versions'); if (h) h.scrollIntoView(); }); } },
+  { name: 'answers-status', prepare: async (k) => { await k.ask('which software is behind?'); } },
+  { name: 'answers-panel-building', prepare: async (k) => { await k.ask(WEEKLY_SUMMARY); await k.wait(1200); } },
 ];
 
 /* The rail replaced the header tabs (ADR 0043). The Agent library is now Settings, How it works. */

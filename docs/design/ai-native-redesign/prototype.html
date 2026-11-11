@@ -373,7 +373,7 @@ html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 .chatting .shell { flex: 1; min-height: 0; align-items: stretch; }
 .chatting .rail { align-self: start; }
 .chatting .sheet { min-height: 0; display: flex; flex-direction: column; }
-@media (max-width: 900px) { .chatting .shell { display: flex; flex-direction: column; } .chatting .rail { flex: none; } .chatting .sheet { flex: 1; } }
+@media (max-width: 900px) { .chatting .shell { display: flex; flex-direction: column; } .chatting .rail { flex: none; align-self: stretch; } .chatting .sheet { flex: 1; } }
 /* The test controls sit above the docked box, never over it. */
 .chatting .testctl { bottom: calc(var(--dock, 96px) + 12px + env(safe-area-inset-bottom, 0px)); }
 .chatting .chatscroll { padding-bottom: 64px; }
@@ -390,7 +390,7 @@ html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 .sp-steps li.todo::before, .sp-steps li.skip::before { background: var(--rail); }
 .sp-steps li.fail::before { background: var(--red); }
 .sp-steps li.wait::before, .sp-steps li.noans::before { background: var(--amber); }
-@media (max-width: 860px) { .sidepanel { position: fixed; inset: 0; z-index: var(--z-overlay); flex: none; border-left: 0; padding-top: env(safe-area-inset-top, 0px); } }
+@media (max-width: 900px) { .sidepanel { position: fixed; inset: 0; z-index: var(--z-overlay); flex: none; border-left: 0; padding-top: env(safe-area-inset-top, 0px); } }
 .ngroup { display: grid; gap: 8px; }
 .ngroup + .ngroup { margin-top: 12px; }
 .ngroup > h3 { font-size: 0.875rem; color: var(--muted); }
@@ -402,7 +402,7 @@ html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 .wfcheck .row:last-child { border-bottom: 0; }
 .wfcheck .row-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 4px; }
 /* On a phone the row's action goes under its text, so a long pill never touches the button. */
-@media (max-width: 600px) { .wfcheck .row { grid-template-columns: minmax(0, 1fr); } .wfcheck .row > [data-flow-of], .wfcheck .row > .btn { justify-self: start; } }
+@container answer (max-width: 520px) { .wfcheck .row { grid-template-columns: minmax(0, 1fr); } .wfcheck .row > [data-flow-of], .wfcheck .row > .btn { justify-self: start; } }
 .pcard.why .pcard-h .face { flex: none; }
 .cmsg.me { grid-template-columns: minmax(0, 1fr); justify-items: end; }
 .cmsg.me .cmsg-bubble { max-width: min(560px, 90%); background: var(--sunk); border-radius: var(--r-card) var(--r-card) 4px var(--r-card); overflow-wrap: anywhere; }
@@ -450,7 +450,7 @@ html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 .pcard details.how { border-top: 1px solid var(--rule); padding: 0 16px; }
 .pcard details.how > summary { padding: 12px 0; font-size: 0.9375rem; }
 .pcard details.how .more-body { display: grid; gap: 10px; padding: 0 0 14px; }
-.pcard details.how .tag, details.tech .steps .tag { white-space: normal; }
+.pcard details.how .tag, details.tech .steps .tag, .sidepanel .steps .tag { white-space: normal; }
 .agents-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; font-size: 0.9375rem; }
 .agents-line .face { flex: none; }
 .agents-line > span { margin-right: 8px; }
@@ -1035,6 +1035,32 @@ button.schip { cursor: pointer; }
 .snotes svg { margin-top: 3px; }
 .snotes .cant { color: var(--red-ink); }
 .snotes .missing { color: var(--amber-ink); }
+/* The edit card shows only what changes, before and after (ADR 0043). */
+.ba { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: 4px 12px; margin: 0; }
+.ba dt { color: var(--muted); font-weight: 600; font-size: 0.9375rem; }
+.ba dd { margin: 0; }
+/* Each part of a request on a set-up card (ADR 0043): a tick, a cross or a question, never colour alone. */
+.parts { display: grid; }
+.part { display: grid; grid-template-columns: 22px 8.5rem minmax(0, 1fr); gap: 6px 12px; padding: 10px 16px; border-top: 1px solid var(--rule); align-items: start; }
+.pmark { display: grid; place-items: center; width: 22px; height: 22px; margin-top: 3px; border-radius: 50%; font-size: 0.8125rem; font-weight: 800; line-height: 1; }
+.part[data-mark="ok"] .pmark { color: var(--green-ink); background: var(--green-soft); }
+.part[data-mark="no"] .pmark { color: var(--red-ink); background: var(--red-soft); }
+.part[data-mark="ask"] .pmark { color: var(--amber-ink); background: var(--amber-soft); box-shadow: inset 0 0 0 1px var(--amber); }
+.part[data-mark="ask"] { background: color-mix(in srgb, var(--amber-soft) 45%, var(--surface)); }
+.part[data-mark="later"] .pmark { color: var(--muted); box-shadow: inset 0 0 0 1px var(--hair); }
+.part[data-mark="later"] .pv { color: var(--muted); font-size: 0.9375rem; }
+.pk { padding-top: 4px; color: var(--muted); font-weight: 600; font-size: 0.9375rem; overflow-wrap: anywhere; }
+.pv { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; min-height: 30px; }
+.pv .schip { font-size: 0.9375rem; }
+.part.wide .pk { grid-column: 2 / -1; color: var(--ink); }
+.part.wide .pv { grid-column: 2 / -1; min-height: 0; color: var(--muted); font-size: 0.9375rem; }
+.pq { flex-basis: 100%; font-weight: 600; }
+.pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pnote, .pv > .whenpick { flex-basis: 100%; }
+.pnote { color: var(--muted); font-size: 0.875rem; }
+/* A card lays out by its own width, not the window's, so a narrow chat beside the panel gets the two-column rows too. */
+.thread .cmsg:not(.me) .cmsg-body { container: answer / inline-size; }
+@container answer (max-width: 520px) { .part { grid-template-columns: 22px minmax(0, 1fr); } .part .pv { grid-column: 2; } }
 .notice { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; padding: 14px 16px; border-radius: var(--r-card); background: var(--info-bg); color: var(--info-ink); }
 .notice .btns { margin-top: 10px; }
 .checklist { display: grid; gap: 8px; }
@@ -1082,6 +1108,16 @@ button.schip { cursor: pointer; }
 .testctl-about summary { cursor: pointer; color: var(--mock-dim); font-weight: 600; }
 .testctl-about ul { margin: 6px 0 0 18px; padding: 0; list-style: disc; display: grid; gap: 4px; }
 @media (max-width: 900px) { .testctl { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); } }
+/* The test controls never cover the product. Wide, the toggle is a small button in the rail's column. While chatting
+   on a phone it sits in the empty left end of the New chat row. On a phone page it follows the page's end, in the flow. */
+.testctl-toggle .tlbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.testctl-toggle { padding: 0 10px; gap: 4px; }
+.testctl-panel ~ .testctl-toggle .tlbl, .testctl:has(.testctl-panel) .tlbl { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
+@media (max-width: 900px) {
+  .chatting .testctl { top: var(--ctl-top, auto); bottom: auto; }
+  .chatting .chatnew { min-height: 40px; align-items: center; }
+  #app:not(.chatting) .testctl { position: static; padding: 8px 16px 16px; max-width: none; }
+}
 
 /* Named Approvers and escalation */
 .apstep { border: 0; padding: 0; margin: 0 0 14px; min-width: 0; }
@@ -1507,7 +1543,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     libTab: 'can', toolChecks: {}, toolAsk: { text: '', result: null, err: '' }, teamReqs: [],
     jiraComp: 'none', jiraCompAsker: null, jiraCompBy: null, jiraCompSeen: false,
     added: [], removed: [], swOpen: null, swForm: newSwForm(), swErr: {}, lsFixed: false,
-    drafts: [], draftSeq: 0, discarded: null, made: [], paused: {}, deleted: {}, sched: {}, editing: null, schedForm: null, schedErr: {},
+    drafts: [], draftSeq: 0, discarded: null, made: [], paused: {}, deleted: {}, sched: {}, vers: {}, editing: null, schedForm: null, schedErr: {},
     n8n: {}, n8nChg: {}, n8nLog: {}, editRun: null,
     find: { workflows: '', software: '' }, filter: 'all',
     wiz: newWiz(),
@@ -1695,6 +1731,29 @@ details > .m-close { animation: fold 140ms ease-in both; }
       access: [['List who can use Entra ID, the admin tools and GitLab', 'read', 'Reads 3 systems'], ['Ask each manager to confirm in Teams', 'write', 'Changes data, waits for a yes'], ['Remove access nobody confirmed', 'write', 'Changes data, 2 Approvers, one after the other']],
     }[id];
   }
+  /* ---------- Versions (ADR 0043) ----------
+     A schedule change publishes a new version, from the chat's edit card or the page's schedule editor alike. Undo
+     publishes the version before it again, so the list only grows. Version 1 is the one the workflow was turned on with. */
+  const versionsOf = (id) => [{ v: 1 }].concat(S.vers[id] || []);
+  const verNow = (id) => versionsOf(id).length;
+  /* Work everything out first, then write, so a failure leaves nothing half-saved. Saving the watchlist's schedule
+     makes the saver its owner, and an owner can't be one of its named Approvers, so they come off that list. */
+  function publishSched(id, sched, undid, via = 'page') {
+    const from = { ...R(id).sched };
+    let off = false;
+    const named = id === 'sw' && apprOf('sw') ? copyAppr(apprOf('sw')) : null;
+    if (named) named.steps.forEach((x) => { if (x.first === S.user) { x.first = hasBackup(x) ? x.backup : ''; x.backup = 'none'; off = true; } else if (x.backup === S.user) { x.backup = 'none'; off = true; } });
+    S.sched[id] = { ...sched };
+    if (id === 'conf') S.nr = { ...S.nr, sched: { ...sched } };
+    if (id === 'sw') { S.swOwner = S.user; if (off) S.appr.sw = named; }
+    const v = verNow(id) + 1;
+    (S.vers[id] = S.vers[id] || []).push({ v, from, to: { ...sched }, by: S.user, undid, via });
+    return { v, off };
+  }
+  const verText = (x) => (x.v === 1 ? 'The version it was turned on with.' : x.undid ? `${nm(x.by)} undid version ${x.undid}, so it runs ${lc(schedText(x.to))} again.` : `${nm(x.by)} changed when it runs from ${lc(schedText(x.from))} to ${lc(schedText(x.to))}.`);
+  /* The version list a workflow's page shows once it has more than one, newest first. */
+  const versionsList = (id) => `<ol class="timeline" aria-label="Versions, newest first">${versionsOf(id).slice().reverse().map((x) => `<li><b>Version ${x.v}</b><span>${x.v > 1 ? 'Today, 9:10. ' : ''}${verText(x)}${x.v === verNow(id) ? ' This is the version running now.' : ''}</span></li>`).join('')}</ol>`;
+  const versionsPanel = (id) => (S.vers[id] ? `<div class="panel" style="margin-top:16px"><h2>Versions</h2>${versionsList(id)}</div>` : '');
   const routineIds = () => (S.firstDay ? [] : ['sw', 'issues', 'nudge', 'access']).concat(S.made.map((_, i) => `made:${i}`), S.conf !== 'none' ? ['conf'] : []).filter((id) => !S.deleted[id] && (!BASE[id] || !BASE[id].planned || shows(BASE[id].planned)));
   const has = (id) => routineIds().includes(id);
 
@@ -1746,7 +1805,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (m && +m[1] >= 1 && +m[1] <= 12) { let h = +m[1] % 12; if (m[3] === 'pm') h += 12; it.time = `${String(h).padStart(2, '0')}:${m[2] || '00'}`; }
     else if ((m = t.match(/\b([01]?\d|2[0-3])[:.]([0-5]\d)\b/))) it.time = `${m[1].padStart(2, '0')}:${m[2]}`;
     else if (/\bnoon\b|\bmidday\b/.test(t)) it.time = '12:00';
-    const stale = t.match(/(?:no updates? (?:for|in)|not updated (?:for|in)|untouched for|idle for)\s+(\d+)\s*days?/) || t.match(/(\d+)\s*days? without (?:an )?update/);
+    /* "at 9" with no am or pm is a time the person must choose: 9:00 or 21:00. It is never guessed. */
+    if (!it.time && (m = t.match(/\bat\s+(\d{1,2})\b(?![:.]\d)(?!\s*(?:am|pm)\b)/))) { const h = +m[1]; if (h >= 13 && h <= 23) it.time = `${h}:00`; else if (h >= 1 && h <= 12) it.bareHour = h; }
+    const stale = t.match(STALE_RE) || t.match(/(\d+)\s*days? without (?:an )?update/);
     const old = t.match(/(?:older than|created more than|open (?:for )?more than|open (?:for )?over|still open after)\s+(\d+)\s*days?/) || t.match(/(\d+)\s*days? old\b/);
     const period = Object.keys(PERIOD_WORDS).find((p) => PERIOD_WORDS[p].test(t)) || '';
     if (/\b(closed|resolved|completed|finished|done)\b/.test(t)) it.tickets = { kind: 'closed', period };
@@ -1779,6 +1840,113 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return it;
   }
   const whenAsked = (it) => [it.freq ? (it.freq === 'week' && it.day ? `Every ${it.day}` : FREQ_WORD[it.freq]) : '', it.time ? `at ${clock(it.time)}` : ''].filter(Boolean).join(' ');
+
+  /* ---------- Every clause lands in a part (ADR 0043) ----------
+     The word rules stand in for the AI model, and they miss things. So nothing they miss is dropped: the rules below
+     name what each card reads, and unheard() returns every clause with words no rule read. The card shows each one as
+     a cross that quotes it. A pattern belongs here only when the card shows what it read. */
+  const DAY_RE = DAYS.map((d) => d.toLowerCase()).join('|');
+  const HEARD_WHEN = [
+    new RegExp(`\\b(?:every|on|each)\\s+(?:${DAY_RE})s?\\b|\\b(?:${DAY_RE})s\\b`, 'gi'),
+    /\b(?:every|each) week ?day\b|\bweekdays\b|\bmonday to friday\b|\b(?:every|each) (?:day|morning|evening)\b|\bdaily\b|\b(?:every|each) month\b|\bmonthly\b|\b(?:every|each) week\b|\bweekly\b/gi,
+    /\b(?:at\s+)?\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b|\b(?:at\s+)?(?:[01]?\d|2[0-3])[:.][0-5]\d\b|\b(?:at\s+)?(?:noon|midday)\b|\bat\s+\d{1,2}\b(?![:.]\d)/gi,
+  ];
+  /* "at 9": the two times it could be. */
+  const hourChoices = (h) => [`${String(h % 12).padStart(2, '0')}:00`, `${h % 12 + 12}:00`];
+  /* A ticket nobody has touched for a while: "not updated for 10 days", "haven't been updated for", "no update since". */
+  const STALE_RE = /(?:no updates? (?:for|in|since)|(?:not|n['’]t|never)(?: been)? updated (?:for|in|since)|untouched (?:for|since)|idle (?:for|since))\s+(?:\d+\s*(?:days?|weeks?)|\w+)/i;
+  const HEARD = {
+    when: HEARD_WHEN,
+    /* How a request is framed: "I want", "can you", "please". */
+    frame: [/\b(?:i|we)(?:\s+(?:would|['’]d))?\s+(?:want|need|like)(?:\s+to)?\b|\b(?:can|could|would|will)\s+you\b|\bplease\b|\bhelp me\b/gi],
+    /* The set-up card: the ticket set and its period, what it does, the project, where it goes, and a system it can't
+       read. A verb is read only with the part it asks for, such as "find" before tickets or "prepare" before a summary. */
+    setup: [
+      /\bthis week\b|\btoday\b|\byesterday\b|\bin the last day\b|\bsince yesterday\b|\blast 24 hours\b/gi,
+      /\b(?:closed|resolved|completed|finished|done|new|created|opened|raised|open|unresolved)\b/gi,
+      /summar\w*|\bsum (?:them |it )?up\b|\breport\b|\bdigest\b|\boverview\b|\blist\b|\bshow me\b|\bcompare\b|\bweek[- ]on[- ]week\b|\b(?:with|to|against) the week before\b|\bversus\b|\bvs\b/gi,
+      /\b(?:project\s+[A-Z][A-Z0-9]{1,9}|[A-Z][A-Z0-9]{1,9}\s+project)\b|\b(?:MOCK|OPS|SUP)\b/g,
+      /\b(?:in|into|as) (?:a|one) (?:new )?(?:jira )?ticket\b|\b(?:post|send|share|publish)\b|\b(?:create|raise|open|file|add)\s+(?:a|one)\s+(?:new\s+)?(?:jira\s+)?ticket\b|\bput\b(?=[^.,;]*\b(?:in|into|on|onto)\b)/gi,
+      /\b(?:gitlab|entra|active directory|servicenow|outlook|sharepoint|excel)\b/gi,
+      /\b(?:jira|tickets?|issues?|project)\b/gi,
+      /\b(?:find|get|pull|fetch|gather|collect|look (?:at|for)|go through)\b(?=[^.,;]*\b(?:tickets?|issues?)\b)/gi,
+      /\b(?:prepare|make|create|write|produce|build|give|send|show)(?:\s+(?:me|us))?(?=\s+(?:a |an |one |the )?(?:[\w-]+\s+){0,2}(?:summary|summaries|list|report|digest|overview|comparison)\b)/gi,
+      /(?<=\b(?:prepare|make|create|write|produce|build|give|send|show)(?:\s+(?:me|us))?\s+(?:a\s+|an\s+|one\s+|the\s+)?)(?:[\w-]+\s+){1,2}(?=(?:summary|summaries|list|report|digest|overview|comparison)\b)|\b(?:short|quick|brief)\b(?=\s+(?:summary|summaries|list|report|digest|overview)\b)/gi,
+      /\b(?:file|raise|log|put|create|add)\s+(?:it|them|this|that)\s+(?:as|in|into)\s+(?:a|one)\s+(?:new\s+)?(?:jira\s+)?ticket\b/gi,
+    ],
+    /* What the Jira read can't give, which a part answer names: the last update, the owner, the type, the component, the priority, older tickets. */
+    needs: [
+      STALE_RE, /\b\d+\s*days? without (?:an )?update\b|\bstale\b/gi,
+      /\bowners?\b|\bassignees?\b|\bassigned to\b|\bwho owns\b|\bbugs?\b|\bstories\b|\bepics?\b|\bby type\b|\b(?:the\s+)?[\w-]+\s+components?\b|\bcomponents?\b|\b(?:high|low|medium|top)\s+priorit(?:y|ies)\b|\bpriorit(?:y|ies)\b/gi,
+      /(?:older than|created more than|open (?:for )?more than|open (?:for )?over|still open after)\s+\d+\s*days?|\d+\s*days? old\b/gi,
+      /\b(?:excluding|except|without|but not|apart from|other than|only)\b(?=\s+(?:the\s+)?(?:bugs?|stories|epics?|[\w-]+\s+components?|(?:high|low|top)\s+priority))/gi,
+    ],
+    /* What a can't answer names: a place it can't write to, a ticket change only people make, a security check, chasing owners. */
+    /* Each reads the can't phrase itself, such as "email the summary" and "to the team", and nothing else in its
+       clause: "in French" or "with a chart" beside it is still marked. */
+    cant: [
+      /\be-?mail(?:\s+(?:me|us|it|them|(?:the|a|this|that)\s+[\w-]+))?\b|(?<=\be-?mail\b[^,.;]*)\s+to\s+(?:the\s+|my\s+|our\s+)?[\w-]+/gi,
+      /\b(?:in|on|to|into|via)\s+slack(?:\s+(?:too|as well))?\b|\bslack\b/gi,
+      /\b(?:in|on|to|into|via)\s+(?:teams|(?:the\s+|our\s+)?[\w-]+\s+channel|(?:the\s+|our\s+)?team chat)(?:\s+(?:too|as well))?\b|\bteams\b|\bchannel\b|\bchat\b/gi,
+      /\b(?:update|edit|fill in|write)\s+(?:the\s+|a\s+|our\s+)?(?:confluence\s+|wiki\s+)?(?:page|wiki)(?:\s+with\s+(?:them|it|the\s+[\w-]+))?|\b(?:in|on|to|into)\s+(?:confluence|(?:the\s+|our\s+)?wiki|(?:a\s+|the\s+)?(?:confluence\s+|wiki\s+)?page)\b|\bconfluence\b|\bwiki\b/gi,
+      /\b(?:close|closes|delete|remove|edit|move|assign|reassign|resolve|archive)\b|\bask (?:their |the |each )?owners?\b|\bremind\b|\bnudge\b|\bchase\b|\bmessage\b/gi,
+      /\bcves?\b|\bnvd\b|vulnerab\w*|\badvisor(?:y|ies)\b|\bsecurity(?:\s+(?:fix(?:es)?|patch(?:es)?|alerts?|bulletins?|issues?))?\b/gi,
+      /\b(?:check|scan|look|identify|flag|find)(?:\s+(?:for|at))?(?=\s+(?:any\s+|known\s+|potentially\s+|relevant\s+)*(?:vulnerab|cves?|security|advisor))/gi,
+    ],
+    /* The watch card: what to watch, its releases, where it's published, and the upgrade ticket. The name is added per request. */
+    watch: [
+      /\b(?:watch|track|monitor|follow|keep (?:track|an eye) (?:of|on)|(?:tell me|let me know) (?:about|when|if)(?:\s+there(?:\s+is|\s+are|['’]s))?)\b|\bcheck(?:\s+for)?(?=\s+(?:new\s+|newer\s+|the\s+latest\s+)?(?:releases?|versions?)\b)|\bcheck\b(?=\s+[\w.+-]+\s+for\b)/gi,
+      /\b(?:new |newer |latest )?(?:releases?|versions?|upgrades?|patch(?:es)?)\b|\bout of date\b|\bon github\b/gi,
+      /\b(?:create|raise|open|file|make|add)\s+(?:a |an |one )?(?:new )?(?:jira |upgrade )?(?:ticket|issue)s?\b|\b(?:in|into) jira\b/gi,
+    ],
+  };
+  /* Words with no part of their own: articles, pronouns, prepositions, linking words, helping verbs and "please".
+     No other verb is here. A verb counts as read only when a rule above read it, so "and let me know" is quoted back.
+     validate-v4.cjs holds this list to function words, so a verb added here fails the judge's check. */
+  const STOP = new Set(['a', 'an', 'the', 'and', 'or', 'then', 'also', 'so', 'but', 'plus', 'i', 'me', 'my', 'mine', 'we', 'us', 'our', 'you', 'your', 'it', 'its', 'they', 'them', 'their', 'this', 'that', 'these', 'those', 'what', 'which', 'who', 'to', 'for', 'of', 'in', 'on', 'at', 'by', 'with', 'from', 'into', 'about', 'up', 'out', 'is', 'are', 'be', 'been', 'am', 'was', 'were', 'do', 'does', 'did', 'have', 'has', 'can', 'could', 'would', 'will', 'should', 'all', 'any', 'each', 'every', 'just', 'only', 'one', 'please', 'thanks', 'thank', 'kindly', 'i’d', "i'd", 'it’s', "it's", 'i’m', "i'm"]);
+  const POLITE = /^(please|thanks|thank|you|kindly)$/i;
+  const spansOf = (text, res) => res.flatMap((re) => [...text.matchAll(new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`))].map((m) => [m.index, m.index + m[0].length]));
+  /* Each clause of the text that a rule didn't fully read. A comma, a full stop, "and", "then" or "but" ends a clause,
+     so one missed condition never hides the rest of the sentence. A clause no rule read at all is quoted whole, unless
+     it is only "please" or "thank you". In a clause a rule did read, each run of unread words with a real word in it is
+     quoted from the start of its phrase ("with a chart"), and takes the word it describes when that word comes next
+     ("only the major releases"). A quote never runs across another part the card ticked. */
+  function unheard(text, spans) {
+    const words = [...text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’.:-]*/gu)].map((m) => { const w = m[0].replace(/[.:-]+$/, ''); return { w, a: m.index, b: m.index + w.length }; });
+    const read = (x) => spans.some(([a, b]) => x.a < b && x.b > a);
+    const plain = (x) => STOP.has(x.w.toLowerCase());
+    const out = [];
+    let clause = [];
+    const close = () => {
+      const whole = clause.length ? text.slice(clause[0].a, clause[clause.length - 1].b) : '';
+      if (clause.length && !clause.some(read)) { if (clause.some((x) => !POLITE.test(x.w))) out.push({ quote: whole, clause: whole }); clause = []; return; }
+      for (let i = 0; i < clause.length;) {
+        if (read(clause[i])) { i += 1; continue; }
+        let j = i;
+        while (j < clause.length && !read(clause[j])) j += 1;
+        const run = clause.slice(i, j);
+        if (run.some((x) => !plain(x))) {
+          let last = run.length - 1;
+          while (plain(run[last]) && !(/^(it|them|me|us)$/i.test(run[last].w) && !plain(run[last - 1]))) last -= 1;
+          /* "ping Bob when a new version": a run that ends on "a" or "the" carries on into the words it names. */
+          const through = j < clause.length && !plain(clause[j]) && run.slice(last + 1).every((x) => /^(a|an|the)$/i.test(x.w));
+          let k = j;
+          while (through && k + 1 < clause.length && read(clause[k + 1]) && !plain(clause[k + 1])) k += 1;
+          out.push({ quote: text.slice(run[0].a, (through ? clause[k] : run[last]).b), clause: whole });
+        }
+        i = j;
+      }
+      clause = [];
+    };
+    words.forEach((x, i) => {
+      if (i && /[,;!?]|\.(?!\d)/.test(text.slice(words[i - 1].b, x.a))) close();
+      if (/^(and|then|but|also|plus)$/i.test(x.w)) { close(); return; }
+      clause.push(x);
+    });
+    close();
+    return out;
+  }
+  const quote = (s) => `“${esc(s.replace(/^["“”']+|["“”']+$/g, ''))}”`;
 
   /* The workflow being set up: what the request said, with any of the operator's corrections on top. */
   /* The ticket set's period follows the schedule once one is chosen. A period she set, in her words or by picking one
@@ -1936,7 +2104,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* A security check is the Planned capability CAPS.registries (ADR 0025), not a release check. A request about Jira
      tickets that mentions one is a ticket search, which the Jira read can do. */
   const isSecurityAsk = (t) => /\bcves?\b|\bnvd\b|vulnerab\w*|\badvisor(y|ies)\b|\bsecurity (fix(es)?|patch(es)?|alerts?|bulletins?)\b/i.test(t) && !/\btickets?\b|\bjira\b/i.test(t);
-  const namedIn = (t) => { const low = t.toLowerCase(); const k = Object.keys(KNOWN).find((key) => low.includes(key)); return k ? KNOWN[k] : null; };
+  const namedKey = (t) => { const low = t.toLowerCase(); return Object.keys(KNOWN).find((key) => low.includes(key)) || ''; };
+  const namedIn = (t) => { const k = namedKey(t); return k ? KNOWN[k] : null; };
   const onList = (name) => (S.firstDay ? [] : TRACKED).concat(S.added.map((a) => a.name)).some((n) => n.toLowerCase() === name.toLowerCase());
   const repoOf = (text) => { const m = text.trim().match(/github\.com\/([^/\s]+\/[^/\s#?]+)/i); return (m ? m[1] : text.trim()).replace(/\.git$/, '').replace(/\/$/, ''); };
   const RELEASE_ROWS = [
@@ -2429,6 +2598,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return (has('sw') && S.sw === 'waiting' ? 1 : 0) + (lsProblem() ? 1 : 0) + (lj ? 1 : 0) + ending;
   }
   const swLive = () => watchRows().filter((r) => !S.removed.includes(r.key));
+  /* What has a newer version: the watchlist's count line and the Planner's answer both read it. */
+  const behindRows = () => swLive().filter((r) => r.rank === 0);
   function rail() {
     const v = S.view.name;
     const swRun = v === 'run' && S.view.id === 'sw';
@@ -2458,7 +2629,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (has('nudge') && S.nudge === 'failed' && S.report === 4) out.push({ wf: 'nudge', kind: 'ok', icon: I.check(22), title: 'The fix for Weekly closed-ticket summary is live', meta: `Case ${S.supportCase.id} · fixed by Dana`, held: heldWhy('nudge'), body: heldWhy('nudge') ? '' : '<p class="small muted">Retry the run to catch up on last week.</p>', actions: troubleBtn(TROUBLE.nudge()) });
     }
     /* The approvals this person can decide, from the same request records as the Teams badge. */
-    mayDecide().forEach((id) => { const c = NEED_CARD[id](); out.push({ wf: id, kind: 'wait', icon: I.shield(22), ...c, body: `${c.body || ''}${askLineHtml(req(id), u)}`, actions: `<button class="btn primary" data-act="run" data-arg="${id}">Review and decide</button>` }); });
+    mayDecide().forEach((id) => { const c = NEED_CARD[id](); out.push({ wf: id, yes: true, kind: 'wait', icon: I.shield(22), ...c, body: `${c.body || ''}${askLineHtml(req(id), u)}`, actions: `<button class="btn primary" data-act="run" data-arg="${id}">Review and decide</button>` }); });
     if (op && lsProblem()) out.push({ kind: 'wait', rank: 3, icon: I.alert(22), ...lsProblem() });
     if (has('conf') && S.conf === 'declined' && u === 'alice') out.push({ kind: 'wait', rank: 4, icon: I.x(22), title: `${nm(S.confBy)} declined your test run`, meta: `${esc(S.nr.name)} · nothing was written`, body: '', held: heldWhy('conf'), actions: `<button class="btn primary" data-act="run" data-arg="conf">See the run</button>${testAgain('Do a test run again', 'btn')}` });
     if (has('conf') && S.conf === 'expired' && u === 'alice') out.push({ wf: 'conf', kind: 'wait', rank: 4, icon: I.clock(22), title: 'Nobody answered on your test run', meta: `${esc(S.nr.name)} · stopped ${at(req('conf').expiresAt)}`, held: heldWhy('conf'), body: `<p class="small muted">${whoAnd(askedOf(req('conf')))} didn’t answer in time, so nothing was written.${heldWhy('conf') ? '' : ` Run it again${shows('namedApprovers') ? ', or choose other Approvers' : ''}.`}</p>`, actions: `${testAgain('Do a test run again')}${changeApproversBtn('conf', 'apprFromRun')}` });
@@ -2609,9 +2780,16 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
   const chatMode = () => S.view.name === 'home' && me().op && !!curModel() && S.chat.msgs.length > 0;
   /* The side panel (ADR 0043) shows one item opened from a card in the chat, as a summary. It keeps no history. */
-  const dockVar = () => { const d = $app.querySelector('.chatdock'); if (d) document.documentElement.style.setProperty('--dock', `${d.offsetHeight}px`); };
-  const narrow = () => window.matchMedia('(max-width: 860px)').matches;
-  window.matchMedia('(max-width: 860px)').addEventListener('change', () => { if (S.panel) render(); });
+  const dockVar = () => {
+    const d = $app.querySelector('.chatdock');
+    if (d) document.documentElement.style.setProperty('--dock', `${d.offsetHeight}px`);
+    const n = $app.querySelector('.chatnew');
+    if (n) { const r = n.getBoundingClientRect(); document.documentElement.style.setProperty('--ctl-top', `${Math.round(r.top + r.height / 2 - 20)}px`); }
+  };
+  window.addEventListener('resize', dockVar);
+  /* One breakpoint, 900 px, for the rail's top bar, the full-screen panel and the panel opening by itself. */
+  const narrow = () => window.matchMedia('(max-width: 900px)').matches;
+  window.matchMedia('(max-width: 900px)').addEventListener('change', () => { if (S.panel) render(); });
   function itemOf(act, arg, el) {
     if (el && el.dataset.open) { const [kind, id] = el.dataset.open.split(':'); return { kind, id }; }
     if (act === 'workflow' && arg !== 'sw') return { kind: 'workflow', id: arg };
@@ -2622,6 +2800,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const swRow = (key) => watchRows().concat(S.added.map((a, i) => ({ key: `add${i}`, name: a.name, kind: a.kind, repo: a.repo, ours: a.ours || 'Not known', newest: '?' }))).find((r) => r.key === key && !S.removed.includes(key));
   const runTone = { waiting: { tone: 'wait', label: 'Waiting for a yes' }, failed: { tone: 'bad', label: 'Stopped' }, expired: { tone: 'off', label: 'No answer' }, done: { tone: 'ok', label: 'Done' } };
   function panelView(p) {
+    /* The workflow being set up, while the Planner builds it (ADR 0043): its steps go in one by one, as plain steps. */
+    if (p.kind === 'build') {
+      const f = draftNr();
+      const steps = draftSteps(f);
+      const shown = Math.min(p.shown, steps.length);
+      return { title: esc(S.wiz.name.trim() || f.name), body: `<div><span class="pill">Draft</span></div><p${shown < steps.length ? ' class="muted"' : ''}>${shown < steps.length ? 'Adding the steps…' : 'It runs once you turn it on from the card in the chat.'}</p>${stepsList(steps.slice(0, shown), true, 'build')}` };
+    }
     if (p.kind === 'workflow') {
       if (!has(p.id)) return { title: 'Workflow', body: '<p class="muted">That workflow isn’t here any more.</p>' };
       const r = R(p.id);
@@ -2638,7 +2823,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (!row) return { title: 'Software', body: '<p class="muted">That software isn’t on the Software watchlist any more.</p>' };
       const state = row.newest === '?' ? '<span class="pill bad">Can’t check</span>' : row.ours === row.newest ? '<span class="pill ok">Up to date</span>' : '<span class="pill wait">New version</span>';
       return { title: esc(row.name), page: 'software', body: `<div>${state}</div>
-        <dl class="kv"><dt>You run</dt><dd>${esc(row.ours)}</dd><dt>Newest</dt><dd>${row.newest === '?' ? 'Not known' : esc(row.newest)}</dd><dt>Checked by</dt><dd>The Version checker, every Monday, on ${srcName(row.kind || 'github')}</dd></dl>` };
+        <dl class="kv"><dt>You run</dt><dd>${esc(row.ours)}</dd><dt>Newest</dt><dd>${row.newest === '?' ? 'Not known' : esc(row.newest)}</dd><dt>Checked by</dt><dd>The Version checker, ${swDays()}, on ${srcName(row.kind || 'github')}</dd></dl>` };
     }
     const m = runModel(p.id);
     const r = R(m.workflow);
@@ -2651,6 +2836,35 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const t = m.state === 'failed' && TROUBLE[p.id] ? TROUBLE[p.id]() : null;
     const answers = t ? `<dl class="qa"><dt>What happened</dt><dd>${t.happened}</dd></dl><dl class="qa"><dt>What was affected</dt><dd>${t.affected}</dd></dl><dl class="qa"><dt>Can it be fixed safely</dt><dd>${t.safe}</dd></dl>${t.act && me().op ? `<div class="btns">${troubleBtn(t)}</div>` : t.act ? `<p class="note">${t.deny}</p>` : ''}` : '';
     return { title: esc(r.name), page: `run:${p.id}`, body: `<div>${pill(runTone[m.state] || runTone.done)}</div><p>${m.headline}</p><ol class="sp-steps" aria-label="Steps of this run">${steps}</ol>${answers}` };
+  }
+  /* The build view follows its card: it becomes the workflow once the card turns it on, and closes when the draft is
+     saved or discarded, or when the window becomes as narrow as a phone, where the panel never opens by itself. */
+  let buildTimer = null;
+  function syncBuild() {
+    const p = S.panel;
+    if (!p || p.kind !== 'build') { clearInterval(buildTimer); return; }
+    const m = msgById(p.id);
+    if (m && m.card && m.card.done) S.panel = { kind: 'workflow', id: m.card.done.id };
+    else if (!m || liveSetup() !== m || narrow()) S.panel = null;
+    if (S.panel !== p) clearInterval(buildTimer);
+  }
+  /* Wider than 900 px the panel opens by itself while the Planner builds. With reduced motion the steps are all there at once. */
+  function openBuild(mid) {
+    if (narrow() || !onHome()) return;
+    clearInterval(buildTimer);
+    const n = draftSteps(draftNr()).length;
+    S.panel = { kind: 'build', id: String(mid), shown: motionQuery.matches ? n : 0 };
+    if (motionQuery.matches) return;
+    /* Each step redraws the panel only, so nothing in the chat, focus included, moves while the steps go in. */
+    buildTimer = setInterval(() => {
+      const p = S.panel;
+      const body = $app.querySelector('#sidepanel .sp-body');
+      if (!p || p.kind !== 'build' || p.shown >= n || !body) { clearInterval(buildTimer); return; }
+      p.shown += 1;
+      body.innerHTML = panelView(p).body;
+      const added = [...body.querySelectorAll('.steps > li')].pop();
+      if (added) added.classList.add('m-appear');
+    }, 320);
   }
   function sidePanel() {
     if (!S.panel) return '';
@@ -2770,7 +2984,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
           <article class="panel"><div><div class="task-title">Weekly closed-ticket summary: reported to support</div><div class="task-meta">Support has the run and the troubleshooter’s notes. Updates show here.</div></div>${caseBox()}${reportTrack(true)}</article></section>` : '';
     const drafts = me().op ? draftRows() : [];
     const rowList = (items) => `<div class="rows">${items.map(([a, b, act, arg]) => `<button class="row-btn" data-act="${act}" data-arg="${arg}"><div><div class="row-name">${a}</div><div class="row-sub">${b}</div></div>${I.right(16)}</button>`).join('')}</div>`;
-    const needLine = (d) => (d.need.length ? `Needs ${andList(d.need)}` : 'Nothing is unclear. Turn it on when you’re ready.');
+    const needLine = (d) => (d.need.length ? `Needs ${andList(d.need)}` : d.crossed ? 'Ready to set up the part I can.' : 'Nothing is unclear. Turn it on when you’re ready.');
     return `${n ? `<div data-unbuilt="Needs you on Workflows (the built app has it on Home)">${needsSection(items)}</div>` : ''}
       ${drafts.length ? `<section class="section" aria-labelledby="drafts-h" data-unbuilt="Drafts here (the built app lists them on Home)"><h2 id="drafts-h">Drafts <span class="count">${drafts.length}</span></h2>
         <div class="rows">${drafts.map((d) => `<div class="row draft-row" data-flip="draft:${d.id}"><div><div class="row-name">${esc(d.name)}</div><div class="row-sub">${needLine(d)}</div></div><span class="btns"><button class="btn sm" data-act="openDraft" data-arg="${d.id}">Resume<span class="vh"> ${esc(d.name)}</span></button><button class="btn sm" data-act="discardDraft" data-arg="${d.id}" data-unbuilt="Discard a draft">Discard<span class="vh"> ${esc(d.name)}</span></button></span></div>`).join('')}</div></section>` : ''}
@@ -2909,7 +3123,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The count line the page opens with: what has a newer version and what can't be checked, from the same rows as the list. */
   function watchLine() {
     const live = swLive().concat(S.added.map((a, i) => ({ key: `add${i}`, rank: 2 })).filter((r) => !S.removed.includes(r.key)));
-    const newer = live.filter((r) => r.rank === 0).length;
+    const newer = behindRows().length;
     const cant = live.filter((r) => r.rank === 1).length;
     if (!live.length) return 'Everything your team runs, in one list.';
     return newer || cant ? [newer ? `${newer} ${newer === 1 ? 'has' : 'have'} a newer version` : '', cant ? `${cant} can’t be checked` : ''].filter(Boolean).join(' · ') : 'Everything is up to date.';
@@ -2993,6 +3207,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       <ul class="srcs" aria-label="Sources">${srcRow('GitHub releases', 'ghReleases')}${srcRow('Package registries', 'registries')}${srcRow('Security advisories', 'registries')}${srcRow('Support end dates', 'registries')}</ul>
       ${day1 || !op ? '' : `<div class="btns"><button class="btn sm" data-act="editSched" data-arg="sw">${I.edit()}Change schedule</button>${changeApproversBtn('sw', 'editAppr', 'btn sm')}</div>`}
       ${S.editing === 'sw' ? `<div data-flip="ed:s:sw" data-enter="reveal">${schedEditor('sw')}</div>` : ''}
+      ${S.vers.sw ? `<h3>Versions</h3>${versionsList('sw')}` : ''}
       ${S.editingAppr === 'sw' ? `<div data-flip="ed:a:sw" data-enter="reveal">${apprEditor('sw')}</div>` : ''}
     </div></section>`;
     return `<div class="pagehead"><div><h1 tabindex="-1">Software watchlist</h1><p>${watchLine()}</p></div>
@@ -3065,9 +3280,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const canSched = me().op && id !== 'sw' && !(BASE[id] && BASE[id].fixedSchedule);
     const tools = (a) => { let keys = []; try { keys = toolKeysOf(a); } catch (e) { keys = []; } return keys.map((k) => TOOLS[k][0]); };
     const history = (S.n8nLog[id] || []).map((e) => `<li><b>${e.when}</b><span>${e.text}</span></li>`);
-    if (S.sched[id]) history.unshift(`<li><b>Today</b><span>Schedule changed to ${r.when}.</span></li>`);
     return `<button class="back" data-act="go" data-arg="workflows">${I.left(16)}Workflows</button>
-      <div class="pagehead"><div><div style="margin-bottom:8px">${pills(id)}${BASE[id] && BASE[id].planned ? ` ${PLANNED_TAG}` : ''}</div><h1 tabindex="-1">${esc(r.name)}</h1><p>${r.what}</p></div>${me().op && id !== 'sw' ? `<div class="btns">${S.paused[id] ? '' : `<button class="btn sm" data-act="pause" data-arg="${id}">${I.pause(14)}Pause</button>`}${moreMenu(id)}</div>` : ''}</div>
+      <div class="pagehead"><div><div style="margin-bottom:8px">${pills(id)}${BASE[id] && BASE[id].planned ? ` ${PLANNED_TAG}` : ''}</div><h1 tabindex="-1">${esc(r.name)}</h1><p>${r.what}</p>${leftOutOf(id).length ? `<p class="note">${leftOutLine(leftOutOf(id))} It was set up without that part.</p>` : ''}</div>${me().op && id !== 'sw' ? `<div class="btns">${S.paused[id] ? '' : `<button class="btn sm" data-act="pause" data-arg="${id}">${I.pause(14)}Pause</button>`}${moreMenu(id)}</div>` : ''}</div>
       <div data-unbuilt="Status banner">${banner(id)}</div>
       ${n8nWarn(id)}
       ${id === 'nudge' && S.report > 0 && S.nudge === 'failed' ? `<div class="panel" style="margin-top:16px" data-unbuilt="Support cases"><h2>Support case</h2>${caseBox()}${reportTrack(true)}</div>` : ''}
@@ -3081,6 +3295,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
           ? `<button class="row-btn" data-act="watch" data-arg="${id}"><div><div class="row-name">${when}</div><div class="row-sub">${what}</div></div><span class="btns small" style="font-weight:700">See the run ${I.right(16)}</span></button>`
           : `<div class="row"><div><div class="row-name">${when}</div><div class="row-sub">${what}</div></div></div>`).join('')}</div>` : `<p class="muted">No runs yet. The first one is ${r.next}.</p>`}
         ${!hasRun(id) && (madeOf(id) || id === 'conf') ? '<p class="mocknote" role="note"><b>Test note</b>This prototype doesn’t simulate runs for workflows made on Home, so this page has no Run now and no test run. It isn’t part of the product.</p>' : ''}</div>
+      ${versionsPanel(id)}
       <details class="tech" style="margin-top:16px" data-unbuilt="Technical details"><summary>Technical details</summary><div class="tech-body">
         <section><h3>Steps</h3>${stepsList(planFor(id), false, `plan:${id}`)}${readsNote(id)}</section>
         <section><h3>Agents and tools</h3><ul class="agent-tool-list">${r.agents.map((a) => { const s = agentStates(id)[a]; const t = tools(a); return `<li><button class="agent-chip" data-act="agent" data-arg="${a}">${face(a, 28, s || 'idle', { k: `wfp:${id}:${a}` })}<span>${AGENTS[a].name}${s ? `<span class="vh">, ${STATE_WORD[s]}</span>` : ''}</span></button>${t.length ? `<span class="small muted">${t.join(', ')}</span>` : ''}</li>`; }).join('')}</ul></section>
@@ -3256,8 +3471,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
 
   /* ---------- The set-up card's parts: the read-back chips and the understood sentence ---------- */
   const lc = (s) => s.charAt(0).toLowerCase() + s.slice(1);
-  /* The schedule picker opens after Change, or by itself when the schedule is the one thing left (spec 7.1). */
-  const whenShown = () => !!S.wiz.sched && (S.wiz.whenOpen || (Object.keys(schedProblems(S.wiz.sched)).length > 0 && setupLeft().length === 1));
+  /* The schedule picker opens after Change or Another time. Otherwise the card asks for the time with choices (ADR 0043). */
+  const whenShown = () => !!S.wiz.sched && !!S.wiz.whenOpen;
   const CHIP_HINT = { ok: 'your words', changed: 'chosen by you', missing: 'please choose', cant: 'can’t do this yet', filled: 'filled in by me' };
   function sentenceChip(r, text) {
     const hint = CHIP_HINT[r.state];
@@ -3277,20 +3492,72 @@ details > .m-close { animation: fold 140ms ease-in both; }
       <div class="btns"><button class="btn sm" data-act="destDone">Done</button>${sentToTeam(DEST_ASK) ? '<span class="pill wait">Asked the team</span>' : `<button class="linkbtn" data-act="teamReq" data-arg="${DEST_ASK}|wiz">Ask the team</button>`}</div>
     </div>`;
   }
-  /* What will happen, as one sentence (spec 7.1). The time is plain words here; the When section holds its control.
-     Notes under it only for a changed part or one the platform can't do. */
-  function understoodSentence(rows) {
-    const k = Object.fromEntries(rows.map((r) => [r.key, r]));
-    const chip = (key, fallback, keepCase) => sentenceChip(k[key], k[key].value ? (keepCase ? esc(k[key].value) : lc(esc(k[key].value))) : fallback);
-    const notes = rows.filter((r) => r.note && r.key !== 'when' && ['changed', 'cant', 'missing'].includes(r.state));
-    const icon = { cant: I.alert(16), changed: I.edit(16), missing: I.info(16) };
-    const glue = (html, mark) => `<span class="glue">${html}${mark}</span>`;
-    const when = k.when.value ? `${esc(k.when.value)}, find` : 'Find';
-    const the = /^(open )?tickets/i.test(k.tickets.value || '') ? 'the ' : '';
-    const project = sentenceChip(k.project, k.project.value ? `Jira project ${esc(k.project.value)}` : 'a Jira project');
-    return `<p class="sentence-line">${when} ${the}${chip('tickets', 'which tickets')} in ${glue(project, ',')} ${glue(chip('action', 'what it does'), ',')} and put the ${thingOf(draftNr())} in ${glue(destChip(k.dest), '.')}</p>
-      ${S.wiz.destOpen ? destEditor() : ''}
-      ${notes.length ? `<ul class="snotes">${notes.map((r) => `<li class="${r.state}">${icon[r.state]}<span><b>${r.label}:</b> ${r.note}${r.key === 'source' ? ` ${sentToTeam(r.value) ? '<span class="pill wait">Asked the team</span>' : `<button class="linkbtn" data-act="teamReq" data-arg="${esc(r.value)}|wiz">Ask the team</button>`}` : ''}</span></li>`).join('')}</ul>` : ''}`;
+  /* ---------- Every part of a request, marked (ADR 0043) ----------
+     A part is { key, mark, label, body }. The mark is ok, a tick with what the Planner will do; no, a cross with the
+     reason; or ask, a question with choice buttons. A card asks one question at a time. */
+  const MARKS = { ok: [() => I.check(13), 'Will do'], no: [() => I.x(13), 'Can’t do'], ask: [() => '?', 'Question'], later: [() => '?', 'Question for later'] };
+  const partRow = (p) => `<li class="part${p.mark === 'no' ? ' wide' : ''}" data-mark="${p.mark}" data-part="${p.key}"><span class="pmark" aria-hidden="true">${MARKS[p.mark][0]()}</span><span class="pk"><span class="vh">${MARKS[p.mark][1]}: </span>${p.label}</span><span class="pv">${p.body}</span></li>`;
+  const partsList = (parts) => `<ul class="parts" aria-label="Each part of your request">${parts.map(partRow).join('')}</ul>`;
+  /* A question and its choices. The choices are named by the question for a screen reader. */
+  const askBody = (q, id) => `<span class="pq" id="${id}">${q.q}</span><span class="pick" role="group" aria-labelledby="${id}">${q.choices.map(([v, l]) => `<button type="button" class="chip" data-act="${q.act || 'answer'}" data-arg="${esc(v)}"${q.mid ? ` data-mid="${q.mid}"` : ''}>${esc(l)}</button>`).join('')}${q.more || ''}</span>`;
+  /* Every clause no rule read, as a cross that quotes it. A question in it is answered when it is asked on its own. */
+  const leftoverParts = (text, spans) => unheard(text, spans).map((x, i) => (aboutWorkflows(x.clause) ? { key: `left${i}`, mark: 'no', label: quote(x.clause), body: 'Ask this on its own, and I’ll answer it.' } : { key: `left${i}`, mark: 'no', label: quote(x.quote), body: 'I didn’t follow this part.' }))
+    .filter((x, i, all) => all.findIndex((y) => y.label === x.label) === i);
+  /* A schedule has one day and one time. A second of either is a cross, never a silent pick of the first. */
+  const clashDays = (text) => [...new Set([...text.replace(/\bmonday to friday\b/gi, ' ').matchAll(new RegExp(`\\b(${DAY_RE})s?\\b`, 'gi'))].map((m) => cap(m[1].toLowerCase())))];
+  /* The distinct times a text names, as 24-hour times, in the order it names them. */
+  const clashTimes = (text) => [...new Set([...text.matchAll(/\b\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b|\b(?:[01]?\d|2[0-3])[:.][0-5]\d\b/gi)].map((m) => parseIntent(m[0]).time).filter(Boolean))];
+  function clashParts(text) {
+    const t = text.replace(/\bmonday to friday\b/gi, ' ');
+    const find = (re, norm) => { const ms = [...t.matchAll(re)]; return { ms, n: new Set(ms.map(norm)).size }; };
+    const days = find(new RegExp(`\\b(${DAY_RE})s?\\b`, 'gi'), (m) => m[1].toLowerCase());
+    const times = find(/\b\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b|\b(?:[01]?\d|2[0-3])[:.][0-5]\d\b/gi, (m) => m[0].replace(/\s+/g, '').toLowerCase());
+    const cross = (x, key, what) => { const span = [x.ms[0].index, x.ms[x.ms.length - 1].index + x.ms[x.ms.length - 1][0].length]; return { key, mark: 'no', span, label: quote(t.slice(...span)), body: `I can only set one ${what}.` }; };
+    return [...(days.n > 1 ? [cross(days, 'days', 'day')] : []), ...(times.n > 1 ? [cross(times, 'times', 'time')] : [])];
+  }
+  const hasCross = (parts) => parts.filter((p) => p.mark === 'no').length;
+
+  /* The set-up card asks its questions in the footer's order: when it runs (how often, the day, then the time, which is
+     never guessed), then which tickets, the Jira project and what it does. */
+  const Q_TIMES = ['08:00', '09:00', '13:00', '17:00'];
+  const QUESTION = { tickets: 'Which tickets should it find?', project: 'Which Jira project should it use?', action: 'What should it do with them?' };
+  function setupAsk() {
+    const s = S.wiz.sched;
+    if (!s.freq) return { key: 'when', q: 'How often should it run?', choices: Object.entries(FREQ_WORD).filter(([v]) => v !== 'month' || shows('monthly')).map(([v, l]) => [`freq:${v}`, l]) };
+    if (s.freq === 'week' && !s.day) { const only = S.wiz.dayChoices; return { key: 'when', q: only ? `${orList(only)}?` : 'Which day should it run?', choices: (only || DAYS).map((d) => [`day:${d}`, d]) }; }
+    const bare = (S.wiz.intent || {}).bareHour;
+    if (!s.time && S.wiz.timeChoices) return { key: 'when', q: `${orList(S.wiz.timeChoices.map(clock))}?`, choices: S.wiz.timeChoices.map((x) => [`time:${x}`, clock(x)]) };
+    if (!s.time) return { key: 'when', q: bare ? `At ${clock(hourChoices(bare)[0])} or ${clock(hourChoices(bare)[1])}?` : 'What time should it run?', choices: (bare ? hourChoices(bare) : Q_TIMES).map((x) => [`time:${x}`, clock(x)]), more: '<button type="button" class="chip" data-act="whenOpen" aria-expanded="false" aria-controls="whenpick">Another time</button>' };
+    const row = intentRows().find((r) => r.state === 'missing');
+    return row ? { key: row.key, q: row.note || QUESTION[row.key], choices: row.options.map(([v, l]) => [`${row.key}:${v}`, l]) } : null;
+  }
+  /* The set-up card's parts, in the order of the request's sentence, then whatever it can't do. Only the current
+     question shows; the footer counts the rest. */
+  function setupParts(mid) {
+    const w = S.wiz;
+    const it = w.intent || {};
+    const k = Object.fromEntries(intentRows().map((r) => [r.key, r]));
+    const q = setupAsk();
+    const s = w.sched;
+    const timeOk = !Object.keys(schedProblems(s)).length;
+    const picker = whenShown() ? `<div class="whenpick" id="whenpick">${schedFields('sched', s, w.schedErr)}<div class="btns"><button class="btn sm" data-act="whenDone">Done</button></div></div>` : '';
+    const parts = [];
+    if (q && q.key === 'when') parts.push({ key: 'when', mark: 'ask', label: 'When', body: picker || askBody(q, `q-${mid}`) });
+    else if (timeOk) {
+      parts.push({ key: 'when', mark: 'ok', label: 'When', body: `<span data-val="when">${schedText(s)}, Singapore time</span>${picker || '<button class="btn sm" data-act="whenOpen" aria-expanded="false" aria-controls="whenpick">Change</button>'}` });
+    }
+    ['tickets', 'project', 'action'].forEach((key) => {
+      const r = k[key];
+      if (r.state === 'missing') { parts.push(q && q.key === key ? { key, mark: 'ask', label: r.label, body: askBody(q, `q-${mid}`) } : { key, mark: 'later', label: r.label, body: 'Asked next' }); return; }
+      const text = key === 'project' ? `Jira project ${esc(r.value)}` : esc(r.value);
+      parts.push({ key, mark: 'ok', label: r.label, body: `${sentenceChip(r, text)}${r.state === 'changed' && r.note ? `<span class="pnote">${r.note}</span>` : ''}` });
+    });
+    parts.push({ key: 'dest', mark: 'ok', label: k.dest.label, body: `${destChip(k.dest)}<span>after a yes</span>${w.destOpen ? destEditor() : ''}` });
+    if (k.source) parts.push({ key: 'source', mark: 'no', label: `Reads ${esc(k.source.value)}`, body: `${k.source.note} ${sentToTeam(k.source.value) ? '<span class="pill wait">Asked the team</span>' : `<button class="linkbtn" data-act="teamReq" data-arg="${esc(k.source.value)}|wiz">Ask the team</button>`}` });
+    const monthly = it.monthly && (w.text.match(/\b(?:every|each) month\b|\bmonthly\b/i) || [])[0];
+    if (monthly) parts.push({ key: 'monthly', mark: 'no', label: quote(monthly), body: 'I can’t run things monthly yet.' });
+    const clash = clashParts(w.text);
+    return parts.concat(clash, leftoverParts(w.text, [...spansOf(w.text, [...HEARD.frame, ...HEARD.when, ...HEARD.setup]), ...clash.map((x) => x.span)]));
   }
 
   /* ---------- Ask the Planner ----------
@@ -3304,11 +3571,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
      a Jira ticket, the one place it can write today. */
   const INSTEAD = 'The same thing, with the result put in one Jira ticket, after a yes.';
   const CANT = {
-    email: { cap: 'email', sys: 'Outlook email', cant: 'send email', why: 'Email isn’t on the team’s plan. Ask the team if you need it.', instead: INSTEAD, next: (t) => t.replace(/\be-?mail(?:\s+(?:me|us))?\b/i, 'make') },
-    slack: { cap: 'email', sys: 'Slack', cant: 'post in Slack', why: 'Slack isn’t on the team’s plan. Ask the team if you need it.', instead: INSTEAD, next: (t) => t.replace(/\s*\b(in|on|to|into) slack\b/i, '') },
+    email: { cap: 'email', sys: 'Outlook email', cant: 'send email', why: 'Email isn’t on the team’s plan. Ask the team if you need it.', instead: INSTEAD, next: (t) => t.replace(/\s*,?\s*\b(?:and|then)\s+e-?mail\b[^,.;]*/i, '').replace(/\be-?mail(?:\s+(?:me|us))?\b/i, 'list') },
+    slack: { cap: 'email', sys: 'Slack', cant: 'post in Slack', why: 'Slack isn’t on the team’s plan. Ask the team if you need it.', instead: INSTEAD, next: (t) => t.replace(/\s*,?\s*\b(?:and|then)\s+(?:post|send|share)\b[^,.;]*\bslack\b[^,.;]*/i, '').replace(/\s*\b(in|on|to|into) slack\b/i, '') },
     teams: { cap: 'teamsPost', sys: 'Posting in Teams', instead: INSTEAD, next: (t) => t.replace(/\s*\b(in|on|to|into|via) (teams|(the |our )?[\w-]+ channel|(the |our )?team chat|chat)\b/i, '') },
     /* "Update the Confluence page with the closed tickets" becomes "list the closed tickets". */
-    confluence: { cap: 'confluence', sys: 'Confluence', instead: INSTEAD, next: (t) => t.replace(/\b(update|edit|fill in|write)\s+(the |a |our )?(confluence |wiki )?(page|wiki)(\s+with)?\b/i, 'list').replace(/\s*\b(in|on|to|into) (confluence|(the |our )?wiki|(a |the )?(confluence |wiki )?page)\b/i, '') },
+    confluence: { cap: 'confluence', sys: 'Confluence', instead: INSTEAD, next: (t) => t.replace(/\b(update|edit|fill in|write)\s+(the |a |our )?(confluence |wiki )?(page|wiki)(\s+with)?\b/i, 'list').replace(/\s*\b(in|on|to|into) (confluence|(the |our )?wiki|(a |the )?(confluence |wiki )?page)\b/i, '').replace(/\bput\b/i, 'list') },
     nudge: { cap: 'teamsPost', sys: 'Posting in Teams', cant: 'message ticket owners', instead: 'List the same tickets in one Jira ticket, after a yes. Someone can then message them.', next: (t, it) => `${whenAsked(it) || 'Every week'}, list ${(it.tickets ? ticketLabel(it.tickets.kind, it.tickets.period) : 'the open tickets').toLowerCase()}` },
     /* Only people change tickets here, and nothing the registry can do comes close, so there is no alternative to offer. */
     tickets: { cap: 'tickets', sys: 'Changing tickets' },
@@ -3340,11 +3607,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
      priority tickets" out of it. Those are a part answer (parseIntent's needs). */
   const toolAskIn = (t) => WRITE_ASK.test(t) && TOOL_ASKS.find((x) => x.draft && x.re.test(t));
   const watchFor = (hit, text, word) => {
-    if (hit && onList(hit[0])) return { kind: 'listed', name: hit[0] };
+    if (hit && onList(hit[0])) return { kind: 'listed', name: hit[0], text, said: namedKey(text) };
     const name = hit ? hit[0] : cap(text.trim().replace(/[.?!]+$/, '').replace(/^(watch|track|keep track of)\s+/i, '').slice(0, 40));
     /* A known project on a registry counts as known only when registries are a source; otherwise the person gives its GitHub project. */
     const known = hit && (shows('registries') || !hit[2] || hit[2] === 'github');
-    return { kind: 'watch', name, src: known ? hit[2] || 'github' : 'github', repo: known ? hit[1] : '', via: known && shows('registries') ? hit[3] : null, repoState: known ? 'guess' : 'edit', repoDraft: known ? hit[1] : '', version: '', newest: false, word, done: false };
+    return { kind: 'watch', name, text, said: hit ? namedKey(text) : '', src: known ? hit[2] || 'github' : 'github', repo: known ? hit[1] : '', via: known && shows('registries') ? hit[3] : null, repoState: known ? 'guess' : 'edit', repoDraft: known ? hit[1] : '', version: '', newest: false, word, done: false };
   };
   /* Every other part of a release request is checked before the watchlist route (F-02, F-10): a security check, or a
      destination other than Jira, gets the same can't as any other request. Watching for new releases is the
@@ -3380,6 +3647,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (follow) return follow;
     const about = aboutWorkflows(t);
     if (about) return about;
+    const edit = editAnswer(t);
+    if (edit) return edit;
     if (word || isSecurityAsk(t) || (hit && /keep track|\bwatch\b|\btrack\b|monitor/i.test(t))) {
       const cant = watchCant(t, hit);
       if (cant) return cant;
@@ -3389,8 +3658,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
     }
     const it = parseIntent(t);
     const a = taskAnswer(t, it);
+    if (a.kind === 'setup' && !fromHer(it)) return { kind: 'abilities', unknown: true, text: t, from: 'setup' };
     return a.kind === 'setup' ? startDraft(t, it) : 'next' in a ? offer(a) : a;
   }
+  /* A set-up card needs at least one part in her own words. Without one, it would be a form of guesses, so the answer
+     is what I can do, with each part of the request marked (fix pass S4). */
+  const fromHer = (it) => !!(it.freq || it.time || it.monthly || it.tickets || it.project || ACTIONS[it.action] || it.dest === 'jira' || it.badSource);
   /* The verdict for a task request, with no side effects: a set-up card, a can't, a part, Jira down, or the abilities.
      A can't or a part carries the alternative it would offer, unchecked; offer() checks it with these same rules, so
      the Planner never offers what it can't set up. */
@@ -3411,27 +3684,59 @@ details > .m-close { animation: fold 140ms ease-in both; }
       return { kind: 'part', cap: NEEDS_CAP[needs[0]], can: older ? `${verb} open tickets` : 'find tickets by when they were created or closed', cant: cantYet(needs), instead, next: `${when}, ${verb} ${alt}`, text: t, it };
     }
     const ta = toolAskIn(t);
-    if (ta) return { kind: 'part', cap: ta.draft, can: 'find these Jira tickets', cant: `not ${CAPS[ta.draft].cant}`, instead: 'The same tickets, without the component, after a yes.', next: t.replace(/\s*\b(in|into|under|with|to) (the )?[\w-]+ component\b/i, ''), text: t, it };
+    if (ta) return { kind: 'part', cap: ta.draft, can: 'find these Jira tickets', cant: `not ${CAPS[ta.draft].cant}`, instead: 'The same tickets, without the component, after a yes.', next: t.replace(/\s*\b(in|into|under|with|to) (the )?[\w-]+ component\b/i, '').replace(/^(\s*)put\b/i, '$1List'), text: t, it };
     const jiraAsk = it.tickets || it.action || it.freq || it.monthly || it.badSource || /ticket|jira|bug|summar|report|list|stale|closed|open/i.test(t);
     /* Jira is down: the Planner says so and offers to keep the request as a draft, instead of a card it can't check. */
     if (jiraAsk && jiraDown()) return { kind: 'down', text: t, it };
     if (jiraAsk) return { kind: 'setup' };
-    return { kind: 'abilities', unknown: !/what can|what do you|help|can you|abilit/i.test(t) };
+    return { kind: 'abilities', unknown: !/what can|what do you|help|can you|abilit/i.test(t), text: t };
   }
   /* ---------- Answers about her workflows (spec 6.2, the three new kinds) ----------
      Check my workflows, why it stopped and what needs me read the same state as Workflows and Needs you. In the
      prototype, word rules pick them; in the built app, the model picks the kind and code fills it from platform-api. */
-  const workflowNamed = (t) => routineIds().find((id) => t.toLowerCase().includes(R(id).name.toLowerCase()));
-  /* Each pattern matches a whole short question about her workflows, so words like "ideas" or "to approve" inside a
-     real task request never take it over. */
+  /* A word that asks for a change, or for something to run on a schedule. A text with one is a command: it takes the
+     command path and never a read-only answer, however politely or question-like it is put (the lesson of 8 to 9 Nov).
+     "The run" is a noun, not a command. */
+  const COMMAND = /\b(make|set|change|turn|pause|stop|delete|remove|create|add|watch|track|monitor|run|move|rename|switch|schedule|reschedule|resume|start|cancel|edit|update|upgrade|put|enable|disable|close|approve|decline|retry|report|send|post|e-?mail|raise|file|assign|every|daily|weekly|monthly)\b/i;
+  const isCommand = (t) => COMMAND.test(t.replace(/\b(?:the|a|this|that|last|next|each|its|my) runs?\b/gi, ' '));
+  /* "Is LangGraph up to date?": a software on the watchlist, one that isn't on it, or all of them. */
+  const IS_CURRENT = /\b(?:is|are)\s+(.+?)\s+(?:up to date|current|behind|out of date|outdated|on the (?:latest|newest)(?: version)?|the (?:latest|newest)(?: version)?)\b/i;
+  function softAbout(t) {
+    const words = (t.match(IS_CURRENT) || [])[1] || t;
+    const row = liveSoftware().find((x) => words.toLowerCase().includes(x.name.toLowerCase()));
+    if (row) return { kind: 'data', looked: ['watchlist'], about: row.key };
+    if (/\b(?:we|our software|software|tools?|everything|all|anything)\b/i.test(words)) return { kind: 'data', looked: ['watchlist'], behind: true };
+    const k = namedIn(words);
+    const name = k ? k[0] : cap(words.replace(/^(?:the|our|my)\s+/i, '').trim());
+    return name.split(/\s+/).length <= 3 ? { kind: 'data', looked: ['watchlist'], notOn: name } : null;
+  }
+  /* Questions about her workflows and software, in any wording (spec 6.2, ADR 0043). Each route reads platform state,
+     so it fails closed: a text with a change word is a command and goes on down the command path. A route's own words,
+     such as "stop" in "why did it stop", are not counted as a command. */
   const ABOUT = [
-    [/\bwhy\b.*\b(stop|stopped|fail|failed|broke|broken|went wrong)\b|^what (went wrong|happened)\b/i, (t) => ({ kind: 'why', id: workflowNamed(t) || stoppedIds()[0] || null })],
-    [/^(what needs me|what do i need to do|what('s| is) (waiting|for me|waiting for me|my to-?do)|(is )?(there )?anything (to approve|waiting|for me|i need to do)( for me)?|my (to-?do|approvals?)|what needs my (attention|yes))\s*[?.!]*$/i, () => ({ kind: 'mine' })],
-    [/^(set up )?another workflow\b|^(a )?new workflow\b|^what else( can i (do|ask( for)?))?\s*\??$|^(any )?starting points?\s*\??$|^(any )?ideas?\s*\??$/i, () => ({ kind: 'starts' })],
-    [/^(check|how are|what('s| is) the (status|state) of|show( me)?|see) (my |the |our |all )?workflows?\b|^(is|are) .*\b(running|working|on|stopped|paused)\s*\?*$/i, () => ({ kind: 'check' })],
+    [/\bwhy\b.*\b(stop|stopped|fail|failed|broke|broken|went wrong)\b|\bwhat (went wrong|happened)\b/i, (t) => ({ kind: 'why', id: (nameRef(t) || {}).id || stoppedIds()[0] || null }), /\bwhy\b[^?.!]*?\b(?:stop|fail|break)\b/i],
+    /* "when does the software check run next?", "is the morning check running?": one workflow's state and next run. */
+    [/\b(?:when|what time|what day)\b[^.?!]*\b(?:runs?|next|due)\b|\bnext run\b|^(?:is|are)\b[^.?!]*\b(?:running|working|on|stopped|paused|ok(?:ay)?)\b/i, (t) => { const r = nameRef(t); return r && r.id ? { kind: 'one', id: r.id } : null; }, /\b(?:runs?|running)\b/gi],
+    [/\b(?:do i have|are there|is there|any)\b[^.?!]*\b(?:approvals?|requests?)\b|\bapprovals?\b[^.?!]*\bwaiting\b/i, () => ({ kind: 'mine', only: 'yes' })],
+    [/\b(?:which|what)\s+version\b|\bversion of\b/i, softAbout, /\b(?:do|does|are)\s+(?:we|you|i)\s+(?:run|use|have|running|using)\b/gi],
+    [/^(set up )?another workflow\b|^(a )?new workflow\b|^what else( can i (do|ask( for)?))?\s*\??$|^(any )?starting points?\s*\??$|^(any )?ideas?\s*\??$/i, () => ({ kind: 'starts' }), /^(set up )?another workflow\b|^(a )?new workflow\b/i],
+    [/\b(?:what|anything|something)\b[^.?!]*?\b(?:needs? (?:me|my)|waiting (?:on|for) (?:me|my)|for me|to approve|(?:do )?i need to do|on my plate)\b|\bneeds? my (?:attention|yes|approval)\b|\bmy (?:to-?do|approvals?)\b/i, () => ({ kind: 'mine' })],
+    [IS_CURRENT, softAbout],
+    [/\b(?:which|what|any(?:thing)?)\b[^.?!]*\b(?:behind|out of date|outdated|newer versions?|new versions?)\b/i, () => ({ kind: 'data', looked: ['watchlist'], behind: true })],
+    [/\b(?:how|what)(?:'s|’s| is| are)?\b[^.?!]*\bworkflows?\b|\bworkflows?\b[^.?!]*\b(?:doing|going|running|working|ok(?:ay)?|fine)\b|\b(?:status|state)\b[^.?!]*\bworkflows?\b|^(?:check|show(?: me)?|see)\b[^.?!]*\bworkflows?\b|^(?:is|are)\b.*\b(?:running|working|on|stopped|paused)\s*\?*$/i, () => ({ kind: 'check' })],
     [/^(help me )?(check )?(how many|which|what)\b.*\b(software|tools?|watchlist)\b/i, () => ({ kind: 'data', looked: ['watchlist'] })],
   ];
-  const aboutWorkflows = (t) => { const hit = ABOUT.find(([re]) => re.test(t)); return hit ? hit[1](t) : null; };
+  /* The first route that matches and answers. A workflow's name ("the weekly summary") is never read as a command. */
+  const aboutWorkflows = (t) => {
+    for (const [re, fn, own] of ABOUT) {
+      if (!re.test(t)) continue;
+      const rest = own ? t.replace(own, ' ') : t;
+      if (isCommand(withoutName(rest, nameRef(rest)))) return null;
+      const a = fn(t);
+      if (a) return { ...a, text: t };
+    }
+    return null;
+  };
   /* A workflow's state in the spec's words (15.9), as a pill tone and a word. */
   const stateOf = (id) => (S.paused[id] ? ['off', 'Paused'] : { bad: ['bad', 'Stopped'], wait: ['wait', 'Waiting for a yes'], off: ['off', 'No answer'] }[status(id).tone] || ['ok', 'On']);
   const STATE_ORDER = ['Stopped', 'Waiting for a yes', 'On', 'Paused', 'No answer'];
@@ -3444,9 +3749,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return `You have ${ids.length} workflow${ids.length === 1 ? '' : 's'}. ${andList(STATE_ORDER.filter((w) => count[w]).map((w) => said(w, count[w])))}.`;
   }
   /* One row per workflow, each with at most one action; only the first action is primary (rule 1). */
-  function checkCard() {
+  function checkCard(only) {
     let mainUsed = false;
-    return `<div class="pcard wfcheck" data-unbuilt="Planner answers about your workflows"><ul class="rows">${comingUp().map(([id, r]) => {
+    return `<div class="pcard wfcheck" data-unbuilt="Planner answers about your workflows"><ul class="rows">${comingUp().filter(([id]) => !only || id === only).map(([id, r]) => {
       const [tone, label] = stateOf(id);
       let act = actionFor(id);
       if (act) { if (mainUsed) act = demote(act); mainUsed = true; }
@@ -3489,13 +3794,27 @@ details > .m-close { animation: fold 140ms ease-in both; }
       <div class="pcard-f">${me().op ? `<span data-flow-of="run:${id}">${troubleBtn(t, true)}</span>` : ''}<button class="btn sm" data-act="run" data-arg="${id}">See the run</button></div>
     </div>`;
   }
-  const mineSay = () => { const n = needs().length; return n ? `${n === 1 ? '1 thing needs' : `${n} things need`} you.` : 'Nothing needs you right now.'; };
+  const mineSay = (a) => {
+    if (a && a.only) { const n = needs().filter((x) => x.yes).length; return n ? `${n === 1 ? '1 approval is' : `${n} approvals are`} waiting for your yes.` : 'No approvals are waiting for your yes.'; }
+    const n = needs().length;
+    return n ? `${n === 1 ? '1 thing needs' : `${n} things need`} you.` : 'Nothing needs you right now.';
+  };
+  /* One workflow's state and next run, in the words Workflows uses. */
+  const oneSay = (a) => {
+    if (!has(a.id)) return 'That workflow isn’t here any more.';
+    const r = R(a.id);
+    const st = stateOf(a.id)[1];
+    if (S.paused[a.id]) return `${r.name} is paused, so it won’t run until you resume it.`;
+    return `${r.name} ${st === 'Stopped' ? 'stopped' : st === 'No answer' ? 'got no answer' : st === 'On' ? 'is on' : `is ${lc(st)}`}. Its next run is ${r.next}.`;
+  };
   /* A question about her own data (ADR 0042). In the built app the model writes the sentence from a facts snapshot, and
      the platform names the sections it used. Here the sentence is fixed and the count is read from the same list the
      Software page shows. The Looked at line links each section to its screen. */
   const liveSoftware = () => watchRows().concat(S.added.map((a, i) => ({ key: `add${i}`, name: a.name, ours: a.ours || 'Not known', newest: '?' }))).filter((r) => !S.removed.includes(r.key));
   const dataSay = (a) => {
     const rows = liveSoftware();
+    if (a && a.notOn) return onList(a.notOn) ? `${esc(a.notOn)} is on the Software watchlist now. It’s checked at the next check, ${R('sw').next}.` : `${esc(a.notOn)} isn’t on the Software watchlist, so I don’t know which version you run.`;
+    if (a && a.behind) { const b = behindRows(); return b.length ? `${b.length} ${b.length === 1 ? 'has' : 'have'} a newer version: ${andList(b.map((r) => esc(r.name)))}.` : 'Nothing on the Software watchlist has a newer version.'; }
     if (a && a.about) {
       const r = rows.find((x) => x.key === a.about);
       if (!r) return 'That software isn’t on the Software watchlist any more.';
@@ -3512,6 +3831,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const dataActions = (m) => {
     const c = m.card;
     const r = c.about ? liveSoftware().find((x) => x.key === c.about) : null;
+    if (me().op && c.notOn && !onList(c.notOn)) return `<div class="btns"><button class="btn sm" data-act="say" data-arg="Keep track of the ${esc(c.notOn)} version">Watch ${esc(c.notOn)}</button></div>`;
     if (!me().op || !r) return '';
     const stop = c.stopping
       ? `<span class="btns" role="group" aria-label="Stop watching ${esc(r.name)}"><span>Stop watching ${esc(r.name)}? It won’t be checked any more.</span><button class="btn sm" data-act="stopKeep" data-mid="${m.id}">Keep it</button><button class="btn sm bad" data-act="stopYes" data-mid="${m.id}">Yes, stop watching<span class="vh"> ${esc(r.name)}</span></button></span>`
@@ -3528,39 +3848,214 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function followUp(t) {
     const last = [...S.chat.msgs].reverse().find((x) => x.from === 'planner' && x.card);
     const m = FOLLOW.exec(t);
-    if (!last || !['data', 'watch', 'listed'].includes(last.card.kind) || !m || UNSAFE.test(t) || FOLLOW_CHANGES.test(m[1])) return null;
+    if (!last || !['data', 'watch', 'listed'].includes(last.card.kind) || !m || UNSAFE.test(t) || FOLLOW_CHANGES.test(m[1]) || isCommand(m[1])) return null;
     const name = m[1].replace(/^the\s+/i, '').trim();
     if (name.split(/\s+/).length > 3 || NOT_A_NAME.test(name)) return null;
     const row = liveSoftware().find((x) => x.name.toLowerCase() === name.toLowerCase());
     if (row) return { kind: 'data', looked: ['watchlist'], about: row.key };
     return watchFor(namedIn(name), name, 'version');
   }
-  const mineCard = () => (needs().length ? needsStrip(needs(), 99, 'Planner answers about your workflows') : '');
+  /* ---------- Changing a workflow by asking (ADR 0043) ----------
+     "Make the React check run on Mondays only" names a workflow and a change. This first version changes when it runs:
+     the card shows only what changes, before and after, with Save change and Never mind. Any other change gets an
+     honest answer and the workflow itself, where its editors stay. Every clause of the request is accounted for: one
+     the card can't set is a cross, and holds Save change. */
+  const SCHED_VERB = /\b(make|change|switch|move|set|reschedule|shift|run|put|update|edit)\b/i;
+  const OTHER_VERB = /\b(pause|stop|resume|delete|remove|rename|turn|cancel|disable|enable)\b/i;
+  const NOT_EDIT = /\b(watch|track|monitor|keep (?:track|an eye))\b|\bset up\b/i;
+  const NAME_SKIP = new Set(['the', 'a', 'our', 'my', 'up', 'to', 'date', 'keep', 'check', 'summary', 'workflow', 'ticket', 'tickets', 'new', 'review', 'report', 'list', 'one']);
+  const nameWords = (id) => R(id).name.toLowerCase().split(/[\s-]+/).filter((x) => !NAME_SKIP.has(x));
+  /* The workflow the last answer was about, for "make it daily". Right after an unfinished set-up card, "it" could be
+     that draft, so there is no focus and the card asks which one, the draft among them. */
+  const focusOf = () => {
+    const last = [...S.chat.msgs].reverse().find((x) => x.from === 'planner' && x.card);
+    if (last && last === liveSetup()) return null;
+    const m = [...S.chat.msgs].reverse().find((x) => x.card && (x.card.kind === 'setup' ? x.card.done : ['why', 'edit', 'one'].includes(x.card.kind) && x.card.id));
+    return m ? (m.card.done ? m.card.done.id : m.card.id) : null;
+  };
+  const REF = /\b(?:the|my|our|that|this)\s+((?:[\w.+-]+\s+){0,4})(check|summary|workflow|review|watchlist|report|list|one)\b/i;
+  /* Which workflow a text names, and where: its whole name, "the <words> check" matched against each name, software on
+     the watchlist (the watchlist checks it), or "it" for the last answer's workflow. Several matches ask which. A
+     reference to nothing says so. The span is what the text used to name it, so its words are never read as a schedule
+     ("the weekly summary") or as a command. */
+  function nameRef(t, { soft = false } = {}) {
+    const low = t.toLowerCase();
+    const ids = routineIds();
+    const full = ids.find((id) => low.includes(R(id).name.toLowerCase()));
+    if (full) { const i = low.indexOf(R(full).name.toLowerCase()); return { id: full, span: [i, i + R(full).name.length] }; }
+    const ref = REF.exec(t);
+    if (ref) {
+      const span = [ref.index, ref.index + ref[0].length];
+      const words = ref[1].toLowerCase().trim().split(/[\s-]+/).filter(Boolean);
+      if (ref[2].toLowerCase() === 'watchlist' || words.includes('software')) return has('sw') ? { id: 'sw', span } : { missing: ref[0], span, pick: ids };
+      const scored = ids.map((id) => [id, words.filter((w) => nameWords(id).includes(w)).length]).filter(([, n]) => n);
+      const best = Math.max(0, ...scored.map(([, n]) => n));
+      const top = scored.filter(([, n]) => n === best).map(([id]) => id);
+      if (top.length) return top.length === 1 ? { id: top[0], span } : { pick: top, span };
+      const k = namedIn(ref[1]);
+      if (k) return onList(k[0]) && has('sw') ? { id: 'sw', via: k[0], span } : { none: k[0], span };
+      return { missing: ref[0], span, pick: ids };
+    }
+    if (soft) {
+      const row = liveSoftware().find((x) => low.includes(x.name.toLowerCase()));
+      if (row && has('sw')) { const i = low.indexOf(row.name.toLowerCase()); return { id: 'sw', via: row.name, span: [i, i + row.name.length] }; }
+    }
+    const pro = /\b(?:it|this one|that one)\b/i.exec(t);
+    if (pro) { const f = focusOf(); const span = [pro.index, pro.index + pro[0].length]; return f && has(f) ? { id: f, span } : { pick: ids, span }; }
+    return null;
+  }
+  /* The text with the workflow's name taken out, for reading a schedule or a command in it. */
+  const withoutName = (t, ref) => (ref && ref.span ? `${t.slice(0, ref.span[0])} ${t.slice(ref.span[1])}` : t);
+  /* "when does the software check run next?" asks, it doesn't change: a question whose only change word is "run" is
+     never an edit. A question with any other change word still is (fail closed). */
+  const QUESTION_SHAPE = /^(?:when|what|which|how|is|are|does|do|did|will|has|have|where|who|why)\b/i;
+  const onlyRun = (t) => !isCommand(t.replace(/\b(?:runs?|running|ran)\b/gi, ' '));
+  const editAnswer = (t) => {
+    if (!me().op || NOT_EDIT.test(t) || !(SCHED_VERB.test(t) || OTHER_VERB.test(t))) return null;
+    if (QUESTION_SHAPE.test(t.trim()) && onlyRun(t)) return null;
+    const tg = nameRef(t, { soft: true });
+    if (!tg) return null;
+    if (tg.none) return { kind: 'nocheck', name: tg.none, text: t };
+    return { kind: 'edit', text: t, id: tg.id || null, pick: tg.pick || null, missing: tg.missing || '', via: tg.via || '', set: {}, state: 'open' };
+  };
+  /* What the request changes, worked out from the live schedule each time: the new schedule, a day or time still to
+     choose, no change, or why the card can't make it. The workflow's own name is never read as a schedule. */
+  function editPlan(c) {
+    const ref = nameRef(c.text, { soft: true });
+    /* "every day instead of every Monday": the part after "instead of" is the schedule it has now. */
+    const it = parseIntent(withoutName(c.text, ref).replace(/\b(?:instead of|rather than)\b[^,.;]*/gi, ''));
+    const r = R(c.id);
+    if (BASE[c.id] && BASE[c.id].fixedSchedule) return { no: 'fixed' };
+    if (OTHER_VERB.test(withoutName(c.text, ref)) || (!it.freq && !it.time && !it.monthly && !it.bareHour)) return { no: 'other' };
+    if (it.monthly) return { no: 'monthly' };
+    const to = { ...r.sched, monthDay: r.sched.monthDay || '1' };
+    /* "weekly" with no day keeps the day it has, when it already runs weekly. */
+    if (it.freq) { to.freq = it.freq; to.day = it.freq === 'week' ? it.day || c.set.day || (r.sched.freq === 'week' ? r.sched.day : '') : ''; }
+    if (it.time) to.time = it.time;
+    else if (it.bareHour) to.time = c.set.time || '';
+    if (to.freq === 'week' && !to.day) return { to, ask: 'day' };
+    if (!to.time) return { to, ask: 'time', hour: it.bareHour };
+    return { to, same: schedText(to) === schedText(r.sched) };
+  }
+  /* Every clause the card didn't read is a cross. Only a cross on the change itself, two days or two times, holds Save
+     change: a question asked alongside, or another clause, keeps its cross and the change can still be saved. */
+  const holdsSave = (no) => no.some((x) => x.key === 'days' || x.key === 'times');
+  function editCrosses(c) {
+    const ref = nameRef(c.text, { soft: true });
+    const verbs = new RegExp(`${SCHED_VERB.source}|${OTHER_VERB.source}`, 'gi');
+    const reads = [...spansOf(c.text, [...HEARD.frame, ...HEARD.when, verbs, /\b(?:instead of|rather than)\b[^,.;]*/gi, /\b(?:it|this one|that one)\b|\bchecks?\b|\bchecked\b/gi]), ...(ref && ref.span ? [ref.span] : [])];
+    const clash = clashParts(c.text);
+    return clash.concat(leftoverParts(c.text, [...reads, ...clash.map((x) => x.span)]));
+  }
+  /* A later version, made after this card saved its own, and where it was made. */
+  const changedSince = (c, v) => { const later = (S.vers[c.id] || []).filter((x) => x.v > v); return later.length ? (later[later.length - 1].via === 'chat' ? 'in a later answer' : 'on its page') : ''; };
+  function editSay(c) {
+    if (c.state === 'draft') return 'Changed on the draft above.';
+    if (!c.id) return c.missing ? `You don’t have a workflow called “${c.missing.replace(/^(?:the|my|our|that|this)\s+/i, '')}”.${c.pick.length ? ' Which one should I change?' : ''}` : 'Which workflow should I change?';
+    if (!has(c.id)) return 'That workflow isn’t here any more.';
+    const name = R(c.id).name;
+    const now = lc(R(c.id).when);
+    const paused = S.paused[c.id] ? `${name} is paused, so it won’t run until you resume it.` : '';
+    if (c.state === 'kept') return 'No problem. Nothing changed.';
+    if (c.state === 'saved') {
+      const since = changedSince(c, c.ver);
+      if (since) return `Saved as version ${c.ver}. Changed again since, ${since}.`;
+      return c.id === 'sw' ? `Saved. Next run ${R('sw').next}. You now own this schedule, so you can’t approve its checks.${c.off ? ' You’re no longer one of its Approvers, so choose a new backup under Change who approves.' : ''}` : `Saved. ${paused || `${name} runs ${now} now.`}`;
+    }
+    if (c.state === 'undone') { const since = changedSince(c, c.undoVer); return `Undone, as version ${c.undoVer}. ${since ? `Changed again since, ${since}.` : paused || `${name} runs ${now} now.`}`; }
+    const p = editPlan(c);
+    if (p.no === 'fixed') return `${name} runs on a fixed schedule, ${now}. It can’t be changed.`;
+    if (p.no === 'monthly') return 'I can’t run things monthly yet.';
+    if (p.no === 'other') return `From the chat I can only change when ${name} runs.`;
+    if (p.same && !editCrosses(c).length) return c.via ? `${c.via} is checked with all your software, which already runs ${now}.` : `${name} already runs ${now}.`;
+    return `${c.via ? `${c.via} is checked with all your software. ` : ''}${editCrosses(c).length ? 'Here’s the change, but I can’t do every part of it.' : 'Here’s the change. Nothing changes until you save it.'}`;
+  }
+  function editCard(m) {
+    const c = m.card;
+    const id = m.id;
+    if (c.state === 'draft') return '';
+    if (!c.id) {
+      const draft = liveSetup();
+      const choices = (draft ? [['draft', `${S.wiz.name.trim() || draftNr().name}, the draft above`]] : []).concat(c.pick.filter(has).map((w) => [w, R(w).name]));
+      return choices.length ? `<div class="pcard" data-pres="edit:${id}">${partsList([{ key: 'which', mark: 'ask', label: 'Workflow', body: askBody({ q: 'Which workflow?', choices, act: 'editPick', mid: id }, `q-${id}`) }])}</div>` : '';
+    }
+    if (!has(c.id) || c.state === 'kept') return '';
+    const r = R(c.id);
+    const p = c.state === 'open' ? editPlan(c) : null;
+    /* A change the card can't make keeps only a question asked alongside it, so that part isn't lost. */
+    const no = p && p.no ? editCrosses(c).filter((x) => /on its own/.test(x.body)) : c.state === 'open' ? editCrosses(c) : [];
+    if (p && p.no) return `${no.length ? `<div class="pcard">${partsList(no)}</div>` : ''}${p.no === 'other' ? `<div class="btns"><button class="btn sm" data-act="workflow" data-arg="${c.id}">Open ${esc(r.name)}</button></div>` : ''}`;
+    if (p && p.same && !no.length) return '';
+    const from = p ? r.sched : c.from;
+    const to = p ? p.to : c.to;
+    const asks = p && p.ask === 'day' ? [{ key: 'day', mark: 'ask', label: 'When', body: askBody({ q: 'Which day should it run?', choices: DAYS.map((d) => [`day:${d}`, d]), act: 'editSet', mid: id }, `q-${id}`) }]
+      : p && p.ask === 'time' ? [{ key: 'time', mark: 'ask', label: 'When', body: askBody({ q: `At ${clock(hourChoices(p.hour)[0])} or ${clock(hourChoices(p.hour)[1])}?`, choices: hourChoices(p.hour).map((x) => [`time:${x}`, clock(x)]), act: 'editSet', mid: id }, `q-${id}`) }] : [];
+    const held = asks.length || holdsSave(no);
+    const n = liveSoftware().length;
+    const sw = c.id !== 'sw' ? '' : c.state === 'open' ? `<p class="note">This changes when all ${n} software on the watchlist are checked. Saving makes you the owner of this schedule. Its checks then count as your work, so you won’t be able to approve them.</p>`
+      : `<p class="note">This changed when all ${n} software on the watchlist are checked, and made you the owner of this schedule. Its checks count as your work now, so you can’t approve them.</p>`;
+    const since = c.state === 'saved' ? changedSince(c, c.ver) : c.state === 'undone' ? changedSince(c, c.undoVer) : '';
+    const later = S.paused[c.id] ? 'It’s paused, so it won’t run until you resume it.' : `Next run ${r.next}.`;
+    const foot = c.state === 'open'
+      ? `<button class="btn primary" data-act="editSave" data-mid="${id}"${held ? ' disabled' : ''}>Save change</button><button class="btn" data-act="editKeep" data-mid="${id}">Never mind</button>${holdsSave(no) ? '<span class="left">Ask again without the part with a cross.</span>' : ''}`
+      : c.state === 'saved' ? `<span class="note">${I.check(14)} Saved as version ${c.ver}. ${since ? `Changed again since, ${since}.` : later}</span>${!since ? `<button class="btn sm" data-act="editUndo" data-mid="${id}">Undo</button>` : ''}`
+        : `<span class="note">Undone, as version ${c.undoVer}.${since ? ` Changed again since, ${since}.` : ''}</span>`;
+    return `<div class="pcard" data-pres="edit:${id}">
+      <div class="pcard-h"><h3 tabindex="-1" id="card-h-${id}">Change ${esc(r.name)}</h3></div>
+      ${asks.length || no.length ? partsList([...asks, ...no]) : ''}
+      <section class="pcard-s"><h4>When it runs</h4><dl class="ba"><dt>Before</dt><dd>${schedText(from)}</dd><dt>After</dt><dd>${p && p.ask ? `<span class="muted">${p.ask === 'day' ? 'Choose a day' : 'Choose a time'}</span>` : `<b>${schedText(to)}</b>`}</dd></dl>${sw}</section>
+      <div class="pcard-f">${foot}</div>
+    </div>`;
+  }
+  /* "Make the React check …" when there is no React check: say so, and offer to watch it, which is checked every Monday. */
+  const nocheckSay = (a) => (onList(a.name) ? `${a.name} is on the Software watchlist now, so it’s checked ${swDays()} with the rest of your software.` : `You don’t have a ${a.name} check. ${a.name} isn’t on the Software watchlist, which checks software ${swDays()}.`);
+  const nocheckCard = (m) => (onList(m.card.name) || !me().op ? '' : `<div class="btns"><button class="btn sm" data-act="say" data-arg="Keep track of the ${esc(m.card.name)} version">Watch ${esc(m.card.name)}</button></div>`);
+  const mineCard = (m) => { const items = needs().filter((x) => !m.card.only || x.yes); return items.length ? needsStrip(items, 99, 'Planner answers about your workflows') : ''; };
   const startsCard = () => `<div class="chips starts" role="group" aria-label="Starting points" data-unbuilt="Planner answers about your workflows">${starts().map((t) => `<button class="chip" data-act="say" data-arg="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
 
   /* The answers (spec 6.2). Each covers what I understood, what I can do, what I need from you, and what happens next
      (6.1): the sentence carries the first two, the card the other two. The set-up reply carries no count: the card's
      footer is the only count (I8). */
   const ANSWERS = {
-    setup: { say: () => 'Here’s what I understood. I filled in what I could.', card: (m) => setupCard(m) },
-    watch: { say: (a) => `${a.word ? `You mentioned “${esc(a.word)}”, so this` : `${esc(a.name)} is software, so it`} belongs on the Software watchlist, which checks all your software every Monday.`, card: (m) => watchCard(m) },
-    listed: { say: (a) => `${esc(a.name)} is already on the Software watchlist.`, card: (m) => { const r = liveSoftware().find((x) => x.name === m.card.name); return `<div class="btns"><button class="btn sm" data-act="go" data-arg="software"${r ? ` data-open="software:${r.key}"` : ''}>Open it</button></div>`; } },
+    setup: { say: (a) => (a.done ? doneSay(a.done) : a.resumed ? 'Here’s your draft, where you left it.' : a.crossed ? 'Here’s what I understood. I can’t do every part of it.' : 'Here’s what I understood. I filled in what I could.'), card: (m) => setupCard(m) },
+    watch: { say: (a) => (a.done ? watchDoneSay(a) : `${a.word ? `You mentioned “${esc(a.word)}”, so this` : `${esc(a.name)} is software, so it`} belongs on the Software watchlist, which checks all your software ${swDays()}.`), card: (m) => watchCard(m) },
+    listed: { say: (a) => (onList(a.name) ? `${esc(a.name)} is already on the Software watchlist.` : `${esc(a.name)} isn’t on the Software watchlist any more.`), card: (m) => { const r = liveSoftware().find((x) => x.name === m.card.name); const no = watchCrosses(m.card); return `${no.length ? `<div class="pcard">${partsList(no)}</div>` : ''}${r ? `<div class="btns"><button class="btn sm" data-act="go" data-arg="software" data-open="software:${r.key}">Open it</button></div>` : ''}`; } },
     which: { say: (a) => `You mentioned “${esc(a.word)}”, so this belongs on the Software watchlist. Which software should I watch?` },
     back: { say: () => 'No problem. Ask for something else whenever you like.' },
     part: { say: (a) => `I can ${a.can}, but ${a.cant}. ${a.cap === 'jiraComp' ? NEW_TOOL : CAPS[a.cap].why}`, card: (m) => partCard(m), mood: 'sorry' },
     cant: { say: cantSay, card: (m) => cantCard(m), mood: 'sorry' },
-    down: { say: () => 'Jira isn’t answering right now, so I can’t check that. I’ll be able to once it’s back.', card: (m) => downCard(m), mood: 'sorry' },
+    down: { say: (a) => (a.saved || jiraDown() ? 'Jira isn’t answering right now, so I can’t check that. I’ll be able to once it’s back.' : 'Jira is answering again, so I can check that now.'), card: (m) => downCard(m), mood: 'sorry' },
     refuse: { say: () => 'I can’t set that up. Anything that changes data waits for a yes, every time.', card: (m) => refuseCard(m), mood: 'sorry' },
     abilities: { say: (a) => (a.unknown ? 'I can’t help with that here. I check software versions and watch for new releases. Here’s what I can do.' : 'Here’s what I can do for software versions.'), card: () => abilitiesHTML(), mood: (a) => (a.unknown ? 'sorry' : 'idle') },
     check: { say: checkSay, card: () => checkCard() },
     why: { say: whySay, card: (m) => whyCard(m), mood: (a) => (stoppedNow(a.id) ? 'sorry' : 'idle') },
-    mine: { say: mineSay, card: () => mineCard() },
+    mine: { say: mineSay, card: (m) => mineCard(m) },
+    one: { say: oneSay, card: (m) => (has(m.card.id) ? checkCard(m.card.id) : '') },
     starts: { say: () => 'Here are three places to start. Pick one, or tell me something else.', card: () => startsCard() },
     data: { say: dataSay, card: (m) => dataCard(m) },
+    edit: { say: editSay, card: (m) => editCard(m) },
+    nocheck: { say: nocheckSay, card: (m) => nocheckCard(m) },
   };
-  const cardHTML = (m) => (ANSWERS[m.card.kind].card ? ANSWERS[m.card.kind].card(m) : '');
-  /* The answers read from platform state, whose sentence is re-read on every redraw. */
-  const LIVE_KINDS = new Set(['check', 'why', 'mine', 'data']);
+  /* Every answer made from a request marks the clauses it didn't read (ADR 0043). The set-up, watch and edit cards
+     list them among their parts; every other answer lists them above its card. Each kind names what it read. */
+  const NAMES = () => [...routineIds().map((id) => R(id).name), ...liveSoftware().map((x) => x.name), ...Object.keys(KNOWN), ...Object.values(KNOWN).map((k) => k[0])];
+  const nameSpans = (text) => NAMES().flatMap((n) => { const out = []; const low = text.toLowerCase(); const k = n.toLowerCase(); for (let i = low.indexOf(k); i >= 0; i = low.indexOf(k, i + 1)) out.push([i, i + k.length]); return out; });
+  const STATUS_WORDS = [/\b(?:today|now|right now|this morning|at the moment|currently|attention|yes|approvals?|plate|doing|going|running|working|status|state|next|due)\b/gi];
+  const READ_BY = {
+    part: () => [...HEARD.frame, ...HEARD.when, ...HEARD.setup, ...HEARD.needs],
+    cant: () => [...HEARD.frame, ...HEARD.when, ...HEARD.setup, ...HEARD.needs, ...HEARD.cant, ...HEARD.watch],
+    abilities: (c) => (c.from === 'setup' ? [...HEARD.frame, ...HEARD.when, ...HEARD.setup] : null),
+    nocheck: () => [...HEARD.frame, ...HEARD.when, new RegExp(`${SCHED_VERB.source}|${OTHER_VERB.source}`, 'gi'), /\b(?:instead of|rather than)\b[^,.;]*/gi],
+    ...Object.fromEntries(['data', 'check', 'mine', 'why', 'one'].map((k) => [k, () => [...HEARD.frame, ...ABOUT.map(([re]) => new RegExp(`(?:${re.source})(?:(?!\\b(?:and|then|but|also)\\b)[^,.;!?])*`, 'gi')), ...STATUS_WORDS, ...HEARD.watch]])),
+  };
+  const extraCrosses = (c) => {
+    const rs = c.text && READ_BY[c.kind] && READ_BY[c.kind](c);
+    if (!rs) return [];
+    /* A can't answer that keeps the watch: a time the watchlist doesn't keep is a cross too (fix pass G1). */
+    const own = c.kind === 'cant' && c.watch ? watchCrosses({ text: c.text, name: c.watch.name, said: namedKey(c.text) }).filter((x) => ['own', 'days', 'times'].includes(x.key)) : [];
+    return own.concat(leftoverParts(c.text, [...spansOf(c.text, [...rs, REF]), ...nameSpans(c.text)]));
+  };
+  const cardHTML = (m) => { const no = extraCrosses(m.card); return `${no.length ? `<div class="pcard">${partsList(no)}</div>` : ''}${ANSWERS[m.card.kind].card ? ANSWERS[m.card.kind].card(m) : ''}`; };
 
   /* ---------- Drafts ----------
      The chat is not the record. The set-up card still being filled in edits the one live draft in S.wiz. A new request
@@ -3571,7 +4066,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const draftRow = (wiz = S.wiz) => {
     const keep = S.wiz;
     S.wiz = wiz;
-    const row = { id: (S.draftSeq += 1), wiz, name: wiz.name.trim() || draftNr().name, left: setupLeft().length, need: setupLeft() };
+    const row = { id: (S.draftSeq += 1), wiz, name: wiz.name.trim() || draftNr().name, left: setupLeft().length, need: setupLeft(), crossed: hasCross(setupParts('d')) };
     S.wiz = keep;
     return row;
   };
@@ -3583,12 +4078,19 @@ details > .m-close { animation: fold 140ms ease-in both; }
     S.wiz = newWiz();
     return true;
   }
-  const draftRows = () => (liveSetup() ? [{ id: 'live', name: S.wiz.name.trim() || draftNr().name, left: setupLeft().length, need: setupLeft() }] : []).concat(S.drafts.map((d) => ({ id: d.id, name: d.name, left: d.left, need: d.need || [] })));
+  const draftRows = () => (liveSetup() ? [{ id: 'live', name: S.wiz.name.trim() || draftNr().name, left: setupLeft().length, need: setupLeft(), crossed: hasCross(setupParts('d')) }] : []).concat(S.drafts.map((d) => ({ id: d.id, name: d.name, left: d.left, need: d.need || [], crossed: d.crossed })));
   function startDraft(text, it) {
     saveLive();
-    S.wiz = { ...newWiz(), text, intent: it, sched: { freq: it.freq || '', day: it.day || '', time: it.time || '', monthDay: '1' } };
-    return { kind: 'setup' };
+    /* Two days, or two times, for one schedule: it is a question between them, never the first one picked. */
+    const days = clashDays(text);
+    const times = clashTimes(text);
+    S.wiz = { ...newWiz(), text, intent: it, dayChoices: days.length > 1 ? days : null, timeChoices: times.length > 1 ? times : null, sched: { freq: days.length > 1 ? 'week' : it.freq || '', day: days.length > 1 ? '' : it.day || '', time: times.length > 1 ? '' : it.time || '', monthDay: '1' } };
+    return { kind: 'setup', crossed: hasCross(setupParts('new')) };
   }
+  /* The watchlist's days in the words a sentence uses, such as "every Monday", read from its schedule. */
+  const swDays = () => lc(R('sw').when).replace(/ at .*$/, '');
+  const watchDoneSay = (a) => (S.removed.includes(a.done) ? `${a.name} isn’t on the Software watchlist any more.` : `${a.name} is on the Software watchlist. It’s checked at the next check, ${R('sw').next}.`);
+  const doneSay = (d) => (!has(d.id) ? `${d.name} isn’t here any more.` : S.paused[d.id] ? `${R(d.id).name} is paused.` : `${R(d.id).name} is on. Its first run is ${R(d.id).next}.`);
   /* What still stops Turn it on: the amber and red parts, by name. */
   function setupLeft() {
     const left = [];
@@ -3601,71 +4103,102 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The promises live in the confirmation, where they matter (spec 7.2). */
   const PROMISES = 'You can pause, change or delete it at any time. If it stops, the AI troubleshooter tells you why.';
 
-  /* The set-up card (spec 7): what will happen, when, what needs a yes, then how it works, collapsed, and Turn it on. */
+  /* The steps of the workflow being set up, each with who does it. The card and the side panel show the same list. */
+  const draftSteps = (f) => planOf(f).map((x, i) => x.concat(i === 0 ? 'jira' : i === 1 ? writerOf(f) : 'platform', i === 1 && isNewAgent(writerOf(f))));
+  /* The set-up card (spec 7, ADR 0043): each part of the request with its mark, what needs a yes, then how it works,
+     collapsed, and one button. While any part has a cross, the button sets up the part I can, and the footer never says
+     "Nothing is unclear". */
   function setupCard(m) {
     const c = m.card;
-    if (c.done) return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(c.done.name)} is on.</b><span>First run ${c.done.next}, Singapore time. Before its ticket is created, any Approver on your team except you is asked for a yes in Teams.${c.done.newAgent ? ` The ${AGENTS[c.done.newAgent].name} is saved under How it works, in Settings.` : ''}</span><span>${PROMISES}</span><span class="btns">${c.done.id === 'conf' ? '<button class="btn primary sm" data-act="testRun">Do a test run</button>' : ''}<button class="linkbtn" data-act="go" data-arg="workflows">See it in Workflows</button>${c.done.id === 'conf' ? '<span class="small muted">A test run does the real work once, so it still waits for a yes.</span>' : ''}</span></div></div>`;
+    if (c.done) return setupDone(c.done);
     if (c.discarded) return '<p class="small muted">Discarded.</p>';
     if (c.saved) return '<p class="small muted">Saved as a draft. Open it from Workflows to carry on.</p>';
     const w = S.wiz;
     const f = draftNr();
-    const rows = intentRows();
+    const parts = setupParts(m.id);
     const left = setupLeft();
+    const crossed = hasCross(parts);
     const similar = f.tickets === 'closed' && f.action === 'summary' && has('nudge');
     const writer = writerOf(f);
-    const steps = planOf(f).map((s, i) => s.concat(i === 0 ? 'jira' : i === 1 ? writer : 'platform', i === 1 && isNewAgent(writer)));
     const title = w.name.trim() || f.name;
-    const timeOk = !Object.keys(schedProblems(w.sched)).length;
-    const picker = whenShown() ? `<div class="whenpick" id="whenpick">${schedFields('sched', w.sched, w.schedErr)}<div class="btns"><button class="btn sm" data-act="whenDone">Done</button></div></div>` : '';
     const job = { list: 'lists them', compare: 'compares them with the week before' }[f.action] || 'sums them up';
     return `<div class="pcard" data-pres="setup:${m.id}" data-unbuilt="The set-up card (ADR 0037)">
       <div class="pcard-h">${w.renaming
         ? `<label class="vh" for="rname">Workflow name</label><input type="text" id="rname" data-input="name" value="${esc(w.name || f.name)}"><button class="btn sm" data-act="renameDone">Done</button>`
-        : `<h3 tabindex="-1">${esc(title)}</h3><button class="linkbtn" data-act="rename">Rename</button>`}</div>
-      <section class="pcard-s"><h4>What will happen</h4>
-        ${understoodSentence(rows)}
-        ${similar ? `<p class="similar">${I.info(16)}<span>You already have a similar workflow, <i>Weekly closed-ticket summary</i>. <button class="linkbtn" data-act="workflow" data-arg="nudge">Open it</button></span></p>` : ''}
-      </section>
-      <section class="pcard-s"><h4>When</h4>
-        <p class="when-line">${I.clock(16)}<span data-val="when">${timeOk ? `${schedText(w.sched)}, Singapore time` : '<span class="schip missing" title="Please choose">Choose when it runs</span>'}</span>${picker ? '' : '<button class="btn sm" data-act="whenOpen" aria-expanded="false" aria-controls="whenpick">Change</button>'}</p>
-        ${w.intent && w.intent.monthly && !timeOk ? '<p class="small muted">I can’t run things monthly yet. Choose daily or weekly.</p>' : ''}
-        ${picker}
-      </section>
+        : `<h3 tabindex="-1" id="card-h-${m.id}">${esc(title)}</h3><button class="linkbtn" data-act="rename">Rename</button>`}</div>
+      ${partsList(parts)}
+      ${similar ? `<p class="similar pcard-s">${I.info(16)}<span>You already have a similar workflow, <i>Weekly closed-ticket summary</i>. <button class="linkbtn" data-act="workflow" data-arg="nudge">Open it</button></span></p>` : ''}
       <section class="pcard-s"><h4>What needs a yes</h4><p class="apsum">${I.shield(16)}<span>Creating the Jira ticket changes data, so each run waits for a yes in Teams. Any Approver on your team except you can say yes.${shows('namedApprovers') ? ` Named Approvers, with a backup and a stop time, come later. ${PLANNED_TAG}` : ''}</span></p></section>
-      <details class="more how" data-unbuilt="How this workflow works"><summary>How this workflow works</summary><div class="more-body">
-        ${stepsList(steps, true, 'plan:draft')}
+      <details class="more how" data-flow-of="build:${m.id}" data-unbuilt="How this workflow works"><summary>How this workflow works</summary><div class="more-body">
+        ${stepsList(draftSteps(f), true, 'plan:draft')}
         <p class="note">${readsLimit(f.tickets === 'open' ? '' : f.period)}</p>
         <p class="agents-line">${face('jira', 26)}<span><b>${AGENTS.jira.name}</b> reads the tickets.</span>${face(writer, 26)}<span><b>${AGENTS[writer].name}</b> ${job}.${isNewAgent(writer) ? ' <span class="tag">New agent, saved under How it works, in Settings, when you turn this on</span>' : ''}</span></p>
         <p class="note">Tools: ${TOOLS.jiraSearch[0]} and ${TOOLS.jiraRead[0]} read Jira. ${TOOLS.jiraCreate[0]} writes to Jira, after a yes.</p>
       </div></details>
-      <div class="pcard-f"><button class="btn primary" data-act="turnOn"${left.length ? ' disabled' : ''}>Turn it on</button>
-        ${left.length ? `<span class="left">${leftWords(left.length)}: ${andList(left)}.</span>` : '<span class="note">Nothing is unclear. Turn it on when you’re ready.</span>'}</div>
+      <div class="pcard-f"><button class="btn primary" data-act="turnOn"${left.length ? ' disabled' : ''}>${crossed ? 'Set up the part I can' : 'Turn it on'}</button>
+        ${left.length ? `<span class="left">${leftWords(left.length)}: ${andList(left)}.</span>` : `<span class="note">${crossed ? `${crossed === 1 ? 'The part with a cross is' : `The ${crossed} parts with a cross are`} left out.` : 'Nothing is unclear. Turn it on when you’re ready.'}</span>`}</div>
     </div>`;
+  }
+  const leftOutOf = (id) => ((id === 'conf' ? S.nr : madeOf(id) ? madeOf(id).nr : null) || {}).leftOut || [];
+  const leftOutLine = (labels) => (labels.length ? `Left out: ${andList(labels)}.` : '');
+  /* A workflow the card turned on, read from the workflow itself, so a pause, a new schedule or a delete shows here too. */
+  function setupDone(d) {
+    if (!has(d.id)) return `<p class="small muted">${esc(d.name)} isn’t here any more.</p>`;
+    const r = R(d.id);
+    return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(r.name)} ${S.paused[d.id] ? 'is paused.' : 'is on.'}</b>${leftOutOf(d.id).length ? `<span>${leftOutLine(leftOutOf(d.id))}</span>` : ''}<span>${S.paused[d.id] ? 'It won’t run until you resume it.' : `First run ${r.next}, Singapore time.`} Before its ticket is created, any Approver on your team except you is asked for a yes in Teams.${d.newAgent ? ` The ${AGENTS[d.newAgent].name} is saved under How it works, in Settings.` : ''}</span><span>${PROMISES}</span><span class="btns">${d.id === 'conf' ? '<button class="btn primary sm" data-act="testRun">Do a test run</button>' : ''}<button class="linkbtn" data-act="go" data-arg="workflows">See it in Workflows</button>${d.id === 'conf' ? '<span class="small muted">A test run does the real work once, so it still waits for a yes.</span>' : ''}</span></div></div>`;
   }
 
   const watchLeft = (c) => (c.repoState !== 'ok' ? 1 : 0) + (!c.newest && !c.version.trim() ? 1 : 0);
+  /* The parts of a request to watch software (ADR 0043). The watchlist checks every software together, so a time in
+     the request either matches its schedule or gets a cross. One question at a time: the project, then the version. */
+  function watchParts(m) {
+    const c = m.card;
+    const id = m.id;
+    const text = c.text || c.name;
+    const sw = R('sw');
+    const it = parseIntent(text);
+    const src = srcName(c.src);
+    const [label, ph, help] = SRC_FIELD[c.src];
+    const parts = [{ key: 'name', mark: 'ok', label: 'Software', body: `<b>${esc(c.name)}</b><span class="schip ok">From your words</span>` }];
+    if (c.repoState === 'guess') parts.push({ key: 'repo', mark: 'ask', label: 'Published on', body: `<span class="pq" id="q-${id}">Is this the right project?</span><span>${src}</span><b>${esc(c.repo)}</b><span class="pnote">${guessNote(c)}</span><span class="pick" role="group" aria-labelledby="q-${id}"><button type="button" class="chip" data-act="repoOk" data-mid="${id}">Looks right</button><button type="button" class="chip" data-act="repoEdit" data-mid="${id}">Change</button></span>` });
+    else if (c.repoState === 'edit') parts.push({ key: 'repo', mark: 'ask', label: 'Published on', body: `<label class="pq" for="repo-${id}">Which ${lc(label)} is it?</label><input type="text" class="inp" id="repo-${id}" data-card="repoDraft" data-mid="${id}" value="${esc(c.repoDraft)}" placeholder="${ph}"${c.repoErr ? ' aria-invalid="true"' : ''}><button class="btn sm" data-act="repoUse" data-mid="${id}">Use this</button><span class="pnote">${c.repoErr || help}</span>` });
+    if (c.repoState !== 'ok' && !c.newest && !c.version.trim()) parts.push({ key: 'version', mark: 'later', label: 'Version you run', body: 'Asked next' });
+    else if (c.repoState === 'ok') {
+      parts.push({ key: 'repo', mark: 'ok', label: 'Published on', body: `<span>${src}</span><b>${esc(c.repo)}</b><span class="schip changed">Checked by you</span>` });
+      if (c.newest) parts.push({ key: 'version', mark: 'ok', label: 'Version you run', body: `<b>Not known</b><span class="schip changed">Chosen by you</span><button class="linkbtn" data-act="verType" data-mid="${id}">Add it<span class="vh">, the version you run</span></button><span class="pnote">I’ll tell you about releases newer than today’s. Add the version you run to compare against it.</span>` });
+      else parts.push({ key: 'version', mark: c.version.trim() ? 'ok' : 'ask', label: 'Version you run', body: `${c.version.trim() ? '' : `<label class="pq" for="ver-${id}">Which version do you run?</label>`}<input type="text" class="inp" id="ver-${id}" data-card="version" data-mid="${id}" value="${esc(c.version)}" placeholder="For example 1.2.14" inputmode="decimal"${c.version.trim() ? ' aria-label="Version you run"' : ''}><button type="button" class="chip" data-act="verNewest" data-mid="${id}">Not sure? Start from the newest</button>` });
+    }
+    const said = ['freq', 'day', 'time'].filter((k) => it[k]);
+    const fits = said.every((k) => it[k] === sw.sched[k]);
+    parts.push({ key: 'when', mark: 'ok', label: 'Checked', body: `<span>${sw.when}</span><span class="schip ${said.length && fits ? 'ok">From your words' : 'filled">Same for all software'}</span>` });
+    const ticket = spansOf(text, [HEARD.watch[2]]).length > 0;
+    parts.push({ key: 'then', mark: 'ok', label: 'Then', body: `<span>An upgrade ticket in Jira for each newer version</span><span class="schip ${ticket ? 'ok">From your words' : 'filled">Same for all software'}</span>` });
+    parts.push({ key: 'approves', mark: 'ok', label: 'Who says yes', body: `<span>${sw.approves}</span><span class="schip filled">Same for all software</span>${apprOf('sw') ? PLANNED_TAG : ''}` });
+    return parts.concat(watchCrosses(c));
+  }
+  /* What a request to watch software asks that the watchlist can't do: its own time, and any clause no rule read. */
+  function watchCrosses(c) {
+    const text = c.text || c.name;
+    const sw = R('sw');
+    const it = parseIntent(text);
+    const said = ['freq', 'day', 'time'].filter((k) => it[k]);
+    const whenSpans = spansOf(text, HEARD.when);
+    const own = said.length && !said.every((k) => it[k] === sw.sched[k]) ? [{ key: 'own', mark: 'no', label: quote(text.slice(Math.min(...whenSpans.map((x) => x[0])), Math.max(...whenSpans.map((x) => x[1])))), body: `The Software watchlist checks all your software together, ${lc(sw.when)}. I can’t give one software its own time yet.` }] : [];
+    const names = [c.name, c.said].filter(Boolean).flatMap((n) => { const i = text.toLowerCase().indexOf(n.toLowerCase()); return i < 0 ? [] : [[i, i + n.length]]; });
+    const clash = clashParts(text);
+    return own.concat(clash, leftoverParts(text, [...whenSpans, ...spansOf(text, [...HEARD.frame, ...HEARD.watch]), ...names, ...clash.map((x) => x.span)]));
+  }
   function watchCard(m) {
     const c = m.card;
     const id = m.id;
+    if (c.done && S.removed.includes(c.done)) return `<p class="small muted">${esc(c.name)} isn’t on the Software watchlist any more.</p>`;
     if (c.done) return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(c.name)} is on the Software watchlist.</b><span>First check ${R('sw').next}, with the rest of your software. ${apprOf('sw') ? apprText(apprOf('sw')).replace(/,.*$/, '') : R('sw').approves} is asked before any ticket is created.</span><span class="btns"><button class="linkbtn" data-act="go" data-arg="software">Open Software watchlist</button></span></div></div>`;
-    const src = srcName(c.src);
-    const [label, ph, help] = SRC_FIELD[c.src];
-    const repo = c.repoState === 'ok' ? `<b>${esc(c.repo)}</b><span class="schip changed">Checked by you</span>`
-      : c.repoState === 'guess' ? `<b>${esc(c.repo)}</b><span class="schip missing">I guessed this</span><span class="fld-note">${guessNote(c)}</span><span class="btns"><button class="btn sm" data-act="repoOk" data-mid="${id}">Looks right</button><button class="linkbtn" data-act="repoEdit" data-mid="${id}">Change</button></span>`
-        : `<label class="vh" for="repo-${id}">${label}</label><input type="text" class="inp" id="repo-${id}" data-card="repoDraft" data-mid="${id}" value="${esc(c.repoDraft)}" placeholder="${ph}"${c.repoErr ? ' aria-invalid="true"' : ''}><button class="btn sm" data-act="repoUse" data-mid="${id}">Use this</button><span class="schip missing">Please tell me</span><span class="fld-note">${c.repoErr || help}</span>`;
-    const ver = c.newest ? `<b>Not known</b><span class="schip changed">Chosen by you</span><button class="linkbtn" data-act="verType" data-mid="${id}">Add it<span class="vh">, the version you run</span></button><span class="fld-note">I’ll tell you about releases newer than today’s. Add the version you run to compare against it.</span>`
-      : `<label class="vh" for="ver-${id}">Version you run</label><input type="text" class="inp" id="ver-${id}" data-card="version" data-mid="${id}" value="${esc(c.version)}" placeholder="For example 1.2.14" inputmode="decimal">${c.version.trim() ? '' : '<span class="schip missing">Please tell me</span>'}<button class="linkbtn" data-act="verNewest" data-mid="${id}">Not sure? Start from the newest</button>`;
+    const parts = watchParts(m);
     const n = watchLeft(c);
     return `<div class="pcard" data-pres="watch:${id}" data-unbuilt="Adding software from the Planner">
-      <div class="pcard-h"><h3>Add ${esc(c.name)} to the Software watchlist</h3><span class="kind">${I.box(16)}Software watchlist</span></div>
-      <div class="flds">
-        <div class="fld"><div class="fld-k">Software</div><div class="fld-v"><b>${esc(c.name)}</b><span class="schip ok">From your words</span></div></div>
-        <div class="fld${c.repoState === 'ok' ? '' : ' needs'}"><div class="fld-k">Published on</div><div class="fld-v"><span>${src}</span>${repo}</div></div>
-        <div class="fld${!c.newest && !c.version.trim() ? ' needs' : ''}"><div class="fld-k">Version you run</div><div class="fld-v">${ver}</div></div>
-        <div class="fld"><div class="fld-k">Checked</div><div class="fld-v"><span>${R('sw').when}</span><span class="schip filled">Same for all software</span></div></div>
-        <div class="fld"><div class="fld-k">Who says yes</div><div class="fld-v"><span>${R('sw').approves}</span><span class="schip filled">Same for all software</span>${apprOf('sw') ? PLANNED_TAG : ''}</div></div>
-      </div>
-      <div class="pcard-f"><button class="btn primary" data-act="watchAdd" data-mid="${id}"${n ? ' disabled' : ''}>Add ${esc(c.name)}</button>${n ? `<span class="left">${leftWords(n)}</span>` : ''}<button class="linkbtn push" data-act="watchOwn" data-mid="${id}">No, set it up as a new workflow</button></div>
+      <div class="pcard-h"><h3 tabindex="-1" id="card-h-${id}">Add ${esc(c.name)} to the Software watchlist</h3><span class="kind">${I.box(16)}Software watchlist</span></div>
+      ${partsList(parts)}
+      <div class="pcard-f"><button class="btn primary" data-act="watchAdd" data-mid="${id}"${n ? ' disabled' : ''}>${hasCross(parts) ? 'Set up the part I can' : `Add ${esc(c.name)}`}</button>${n ? `<span class="left">${leftWords(n)}</span>` : ''}<button class="linkbtn push" data-act="watchOwn" data-mid="${id}">No, set it up as a new workflow</button></div>
     </div>`;
   }
 
@@ -3674,7 +4207,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The watch a release request keeps: the software is already watched, or adding it is the part I can do. */
   function watchAlt(m) {
     const w = m.card.watch;
-    return w.listed ? `<div class="alt"><p>${esc(w.name)} is already on the Software watchlist, which checks it for new releases every Monday.</p><button class="btn primary sm" data-act="go" data-arg="software">Open the Software watchlist</button></div>`
+    return w.listed ? `<div class="alt"><p>${esc(w.name)} is already on the Software watchlist, which checks it for new releases ${swDays()}.</p><button class="btn primary sm" data-act="go" data-arg="software">Open the Software watchlist</button></div>`
       : `<div class="alt"><p>Watch ${w.name ? esc(w.name) : 'your software'} for new releases on the Software watchlist. New releases show there, and each upgrade ticket waits for a yes.</p><button class="btn primary sm" data-act="instead" data-mid="${m.id}">Set that up</button></div>`;
   }
   /* Can't (spec 6.2): the nearest real alternative when there is one, else only Ask the team. */
@@ -3702,6 +4235,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* Jira isn't answering: the request is kept as a draft, so nothing is lost and nothing is claimed. */
   function downCard(m) {
     if (m.card.saved) return '<p class="small muted">Saved as a draft. Find it on Workflows, and open it once Jira is back.</p>';
+    if (!jiraDown()) return `<div class="btns"><button class="btn sm" data-act="say" data-arg="${esc(m.card.text)}">Ask again</button></div>`;
     return `<div class="pcard" data-pres="down:${m.id}">
       <div class="pcard-h"><h3>Keep it for later?</h3><span class="schip cant">Jira isn’t answering</span></div>
       <div class="alt"><p>I can save this as a draft on Workflows. Once Jira is back, open it and I’ll fill in what I can.</p><button class="btn sm" data-act="draftNow" data-mid="${m.id}">Save as a draft</button></div>
@@ -3728,18 +4262,37 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function msgHTML(m) {
     if (m.from === 'me') return `<li class="cmsg me" data-flip="msg:${m.id}" data-mid="${m.id}"><div class="cmsg-body"><div class="cmsg-bubble"><span class="vh">You: </span>${esc(m.text)}</div></div></li>`;
     const st = m.thinking ? 'thinking' : m.mood || 'idle';
-    /* An answer about her workflows is read from live state on every redraw, so the sentence and the card under it
-       never disagree (I8). While the words are still being typed, the partial text shows. */
-    const say = m.live && !m.typing ? ANSWERS[m.card.kind].say(m.card) : m.say;
+    /* Every answer with a card is read from live state on every redraw, so a change made anywhere shows in older answers
+       too, and the sentence and its card never disagree (I8, ADR 0043). While the words are typed, the partial text shows. */
+    const say = m.card && !m.typing ? ANSWERS[m.card.kind].say(m.card) : m.say;
     const body = m.thinking ? `<div class="cmsg-bubble"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><p class="wait small muted" role="status">${m.slow ? WAIT_LONG : WAIT_SHORT}</p></div>`
       : `${say != null ? `<div class="cmsg-bubble" data-say>${esc(say)}</div>` : ''}${m.card ? `<div data-pres="card:${m.id}">${cardHTML(m)}</div>` : ''}`;
     return `<li class="cmsg" data-flip="msg:${m.id}" data-mid="${m.id}"><span class="cmsg-av">${face('lead', 40, st, { k: `chat:${m.id}` })}</span><div class="cmsg-body"><span class="cmsg-who" style="color:${AGENTS.lead.hue}">Planner</span>${body}</div></li>`;
   }
   const msgById = (id) => S.chat.msgs.find((m) => m.id === +id);
   const onHome = () => S.view.name === 'home' && me().op;
+  /* The chat column scrolls itself. scrollIntoView and a plain focus() also scroll #app, which moved the whole app up
+     on a phone, header and box included, so neither is used in the chat. */
   function scrollToMsg(id, block = 'nearest') {
     const el = $app.querySelector(`[data-mid="${id}"]`);
-    if (el) el.scrollIntoView({ block, behavior: motionQuery.matches ? 'auto' : 'smooth' });
+    const sc = $app.querySelector('.chatscroll');
+    if (!el || !sc) return;
+    const r = el.getBoundingClientRect();
+    const v = sc.getBoundingClientRect();
+    let top = sc.scrollTop;
+    if (block === 'start' || r.top < v.top) top += r.top - v.top - 8;
+    else if (r.bottom > v.bottom) top += Math.min(r.bottom - v.bottom + 8, r.top - v.top - 8);
+    sc.scrollTo({ top, behavior: motionQuery.matches ? 'auto' : 'smooth' });
+  }
+  function focusChat(el) {
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    const sc = el.closest('.chatscroll');
+    if (!sc) return;
+    const r = el.getBoundingClientRect();
+    const v = sc.getBoundingClientRect();
+    if (r.top < v.top + 8) sc.scrollTop -= v.top + 8 - r.top;
+    else if (r.bottom > v.bottom - 8) sc.scrollTop += r.bottom - v.bottom + 8;
   }
   /* A request goes in, the Planner thinks for a moment, then its answer shows at once: the card, and the sentence
      written word by word with the speaking face. Nothing waits for the words. Reduced motion shows it all at once.
@@ -3771,12 +4324,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
         announce(say);
         if (onHome()) {
           render();
-          const h = ['setup', 'watch'].includes(a.kind) ? $app.querySelector(`[data-mid="${wait.id}"] .pcard-h h3`) : null;
+          const h = ['setup', 'watch', 'edit'].includes(a.kind) ? $app.querySelector(`[data-mid="${wait.id}"] .pcard-h h3`) : null;
           if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); } else focusComposer();
         }
         if (mood === 'sorry') setTimeout(() => { wait.mood = 'idle'; if (onHome()) render(); }, 1800);
       };
-      Object.assign(wait, { thinking: false, say: '', mood: 'speaking', card: ans.card ? a : null, live: LIVE_KINDS.has(a.kind), typing: true });
+      Object.assign(wait, { thinking: false, say: '', mood: 'speaking', card: ans.card ? a : null, typing: true });
+      if (a.kind === 'setup' && !a.resumed) openBuild(wait.id);
       if (motionQuery.matches) { done(); scrollToMsg(wait.id, wait.card ? 'start' : 'nearest'); return; }
       if (onHome()) { render(); scrollToMsg(wait.id, wait.card ? 'start' : 'nearest'); }
       const words = say.split(' ');
@@ -4647,7 +5201,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
           <li>Reloading the page starts over.</li></ul></details>
         <div><button class="mreset" data-act="reset">Start over</button></div>
       </div>` : ''}
-      <button class="testctl-toggle" data-act="testToggle" aria-expanded="${S.testOpen}"${S.testOpen ? ' aria-controls="testctl-panel"' : ''}>${I.gear(16)}${S.testOpen ? 'Hide test controls' : 'Test controls'}${sims.length && !S.testOpen ? `<span class="testctl-dot">${sims.length}<span class="vh"> things you can simulate</span></span>` : ''}</button>
+      <button class="testctl-toggle" data-act="testToggle" aria-expanded="${S.testOpen}"${S.testOpen ? ' aria-controls="testctl-panel"' : ''} title="${S.testOpen ? 'Hide test controls' : 'Test controls'}">${I.gear(16)}<span class="tlbl">${S.testOpen ? 'Hide test controls' : 'Test controls'}</span>${sims.length && !S.testOpen ? `<span class="testctl-dot">${sims.length}<span class="vh"> things you can simulate</span></span>` : ''}</button>
     </div>`;
   }
 
@@ -4681,6 +5235,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function render() {
     if (pressing) { pendingRender = true; return; }
     syncRoles();
+    syncBuild();
     document.documentElement.classList.toggle('mark-unbuilt', S.markUnbuilt);
     const v = S.view;
     let main = '';
@@ -4720,6 +5275,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (S.panel && chatMode()) $app.querySelectorAll('.thread .btn[data-act], .pinned .btn[data-act], [data-flow-of]').forEach((el) => { if (el.dataset.flowOf ? el.dataset.flowOf.split(':')[1] === S.panel.id && S.panel.kind !== 'software' : sameItem(itemOf(el.dataset.act, el.dataset.arg, el), S.panel)) el.hidden = true; });
     $app.querySelectorAll('.thread .pcard-f').forEach((f) => { const bs = [...f.querySelectorAll('button')]; if (bs.length && bs.every((b) => b.closest('[hidden]'))) f.hidden = true; });
     $app.classList.toggle('chatting', chatMode());
+    if (chatMode()) { $app.scrollTop = 0; if (window.scrollY) window.scrollTo(0, 0); }
     dockVar();
     const chatEl = $app.querySelector('.chatscroll');
     if (chatEl) chatEl.scrollTop = S.chatScroll == null ? chatEl.scrollHeight : S.chatScroll;
@@ -5047,6 +5603,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   S.view = { name: linkedView() };
   if (S.view.name === 'agents') { S.view = { name: 'settings' }; S.setTab = 'how'; }
   try { window.history.replaceState({ name: S.view.name }, '', `#${S.view.name}`); } catch (e) { /* As above. */ }
+  /* While chatting, #app is exactly the window's height and never scrolls, so the header and the box stay put. */
+  $app.addEventListener('scroll', () => { if ($app.classList.contains('chatting') && $app.scrollTop) $app.scrollTop = 0; });
   /* The control that opened a dialog or the Teams drawer gets focus back when it closes. */
   let opener = null;
   let panelOpener = null;
@@ -5555,38 +6113,36 @@ details > .m-close { animation: fold 140ms ease-in both; }
         const d = S.drafts.splice(i, 1)[0];
         S.wiz = d.wiz;
         const c = S.chat;
-        c.msgs.push({ id: (c.seq += 1), from: 'me', text: d.wiz.text }, { id: (c.seq += 1), from: 'planner', say: 'Here’s your draft, where you left it.', card: { kind: 'setup' } });
+        c.msgs.push({ id: (c.seq += 1), from: 'me', text: d.wiz.text }, { id: (c.seq += 1), from: 'planner', say: 'Here’s your draft, where you left it.', card: { kind: 'setup', resumed: true } });
       }
       go('home');
       scrollToMsg(liveSetup().id, 'start');
     },
-    stopAsk: (_, m) => { m.card.stopping = true; render(); const b = $app.querySelector(`[data-mid="${m.id}"][data-act="stopKeep"]`); if (b) b.focus(); },
-    stopKeep: (_, m) => { m.card.stopping = false; render(); const b = $app.querySelector(`[data-mid="${m.id}"][data-act="stopAsk"]`); if (b) b.focus(); },
+    stopAsk: (_, m) => { m.card.stopping = true; render(); focusChat($app.querySelector(`[data-mid="${m.id}"][data-act="stopKeep"]`)); },
+    stopKeep: (_, m) => { m.card.stopping = false; render(); focusChat($app.querySelector(`[data-mid="${m.id}"][data-act="stopAsk"]`)); },
     stopYes: (_, m) => { const key = m.card.about; m.card.stopping = false; A.removeSw(key); },
     repoOk: (_, m) => { m.card.repoState = 'ok'; m.card.confirmed = true; render(); },
-    repoEdit: (_, m) => { m.card.repoState = 'edit'; m.card.repoDraft = m.card.repo; render(); const f = document.getElementById(`repo-${m.id}`); if (f) f.focus(); },
+    repoEdit: (_, m) => { m.card.repoState = 'edit'; m.card.repoDraft = m.card.repo; render(); focusChat(document.getElementById(`repo-${m.id}`)); },
     repoUse: (_, m) => {
       const c = m.card;
       const [label, , , shape, bad] = SRC_FIELD[c.src];
       const v = c.src === 'github' ? repoOf(c.repoDraft) : c.repoDraft.trim();
       c.repoErr = !v ? `Type its ${lc(label)}.` : !shape.test(v) ? bad : '';
-      if (c.repoErr) { render(); document.getElementById(`repo-${m.id}`).focus(); return; }
+      if (c.repoErr) { render(); focusChat(document.getElementById(`repo-${m.id}`)); return; }
       c.repo = v; c.repoState = 'ok'; c.confirmed = false; render();
     },
     verNewest: (_, m) => { m.card.newest = true; render(); },
-    verType: (_, m) => { m.card.newest = false; render(); const f = document.getElementById(`ver-${m.id}`); if (f) f.focus(); },
+    verType: (_, m) => { m.card.newest = false; render(); focusChat(document.getElementById(`ver-${m.id}`)); },
     /* Adding from the card is the same as adding on the Software watchlist page. */
     watchAdd: (_, m) => {
       const c = m.card;
       if (watchLeft(c)) return;
       S.added.push({ name: c.name, kind: c.src, repo: c.repo, ours: c.newest ? '' : c.version.trim(), by: S.user, planner: c.confirmed ? 'confirmed' : 'entered' });
       S.swOpen = `add${S.added.length - 1}`;
-      c.done = true;
+      c.done = S.swOpen;
       m.mood = 'success';
-      m.say = `${c.name} is on the Software watchlist. It’s checked at the next check, ${R('sw').next}.`;
       render();
-      const b = $app.querySelector(`[data-mid="${m.id}"] .linkbtn`);
-      if (b) b.focus();
+      focusChat($app.querySelector(`[data-mid="${m.id}"] .linkbtn`));
     },
     watchOwn: (_, m) => ask(S.chat.msgs.find((x) => x.id === m.id - 1).text, 'setup'),
     instead: (_, m) => ask(m.card.next),
@@ -5638,23 +6194,83 @@ details > .m-close { animation: fold 140ms ease-in both; }
       render();
     },
     destOpen: () => { S.wiz.destOpen = !S.wiz.destOpen; render(); },
-    destDone: () => { S.wiz.destOpen = false; render(); const b = $app.querySelector('[data-act="destOpen"]'); if (b) b.focus(); },
-    whenOpen: () => { S.wiz.whenOpen = true; render(); const f = document.getElementById('sched-freq'); if (f) f.focus(); },
+    destDone: () => { S.wiz.destOpen = false; render(); focusChat($app.querySelector('[data-act="destOpen"]')); },
+    whenOpen: () => { S.wiz.whenOpen = true; render(); focusChat(document.getElementById('sched-freq')); },
+    /* The edit card: pick the workflow, choose a day, save as a new version, undo it, or leave it. */
+    /* The draft above is one of the choices (fix pass N2): its schedule changes on its own card. */
+    editPick: (id, m) => {
+      const c = m.card;
+      if (id === 'draft') {
+        if (!liveSetup()) return;
+        const it = parseIntent(c.text);
+        const sc = S.wiz.sched;
+        if (it.freq) { sc.freq = it.freq; sc.day = it.freq === 'week' ? it.day || sc.day || '' : ''; }
+        if (it.time) sc.time = it.time;
+        S.wiz.schedErr = {};
+        c.state = 'draft';
+        announce(editSay(c));
+        render();
+        focusChat($app.querySelector(`[data-mid="${liveSetup().id}"] .pcard-h h3`));
+        return;
+      }
+      c.id = id;
+      render();
+      focusChat($app.querySelector(`[data-mid="${m.id}"] .pcard-h h3`));
+    },
+    editSet: (arg, m) => { const [k, v] = arg.split(/:(.*)/); m.card.set[k] = v; render(); focusChat($app.querySelector(`[data-act="editSave"][data-mid="${m.id}"]`)); },
+    editSave: (_, m) => {
+      const c = m.card;
+      const p = c.state === 'open' && has(c.id) ? editPlan(c) : {};
+      if (!p.to || p.ask || p.same || holdsSave(editCrosses(c))) return;
+      c.from = { ...R(c.id).sched };
+      c.to = { ...p.to };
+      const pub = publishSched(c.id, p.to, undefined, 'chat');
+      c.ver = pub.v;
+      c.off = pub.off;
+      c.state = 'saved';
+      m.mood = 'success';
+      announce(editSay(c));
+      render();
+      focusChat($app.querySelector(`[data-act="editUndo"][data-mid="${m.id}"]`));
+    },
+    editUndo: (_, m) => {
+      const c = m.card;
+      if (c.state !== 'saved' || changedSince(c, c.ver)) return;
+      c.undoVer = publishSched(c.id, c.from, c.ver, 'chat').v;
+      c.state = 'undone';
+      announce(editSay(c));
+      render();
+      focusChat($app.querySelector(`[data-mid="${m.id}"] .pcard-h h3`));
+    },
+    editKeep: (_, m) => { m.card.state = 'kept'; announce(editSay(m.card)); render(); focusComposer(); },
+    /* A choice on the set-up card's one question. Focus moves to the next question, or to the button once none is left. */
+    answer: (arg) => {
+      const [k, v] = arg.split(/:(.*)/);
+      if (['freq', 'day', 'time'].includes(k)) { S.wiz.sched[k] = v; delete S.wiz.schedErr[k]; }
+      else if (k === 'tickets') pickTickets(v);
+      else S.wiz.edits[k] = v;
+      render();
+      const m = liveSetup();
+      const card = m && $app.querySelector(`[data-mid="${m.id}"]`);
+      const next = card && (card.querySelector('.part[data-mark="ask"] .chip') || card.querySelector('[data-act="turnOn"]:not([disabled])') || card.querySelector('.pcard-h h3'));
+      focusChat(next);
+    },
     whenDone: () => {
       S.wiz.schedErr = schedProblems(S.wiz.sched);
       const keys = Object.keys(S.wiz.schedErr);
-      if (keys.length) { render(); const first = document.getElementById(`sched-${keys[0]}`); if (first) first.focus(); return; }
-      S.wiz.whenOpen = false; render(); const b = $app.querySelector('[data-act="whenOpen"]'); if (b) b.focus();
+      if (keys.length) { render(); focusChat(document.getElementById(`sched-${keys[0]}`)); return; }
+      S.wiz.whenOpen = false; render(); focusChat($app.querySelector('[data-act="whenOpen"]'));
     },
-    rename: () => { S.wiz.renaming = true; render(); const i = document.getElementById('rname'); if (i) { i.focus(); i.select(); } },
-    renameDone: () => { S.wiz.renaming = false; render(); const b = $app.querySelector('[data-act="rename"]'); if (b) b.focus(); },
+    rename: () => { S.wiz.renaming = true; render(); const i = document.getElementById('rname'); if (i) { focusChat(i); i.select(); } },
+    renameDone: () => { S.wiz.renaming = false; render(); focusChat($app.querySelector('[data-act="rename"]')); },
     /* One yes turns the workflow on. The card becomes its done box, the Planner is pleased, and the row glides into Workflows. */
     turnOn: () => {
       const m = liveSetup();
       if (!m || setupLeft().length) return;
       const f = draftNr();
       const newAgent = isNewAgent(writerOf(f)) ? writerOf(f) : null;
-      const nr = { ...f, sched: { ...S.wiz.sched }, name: S.wiz.name.trim() || f.name };
+      /* What was left out stays with the workflow, so its card and its page keep saying so (fix pass S1). */
+      const nr = { ...f, sched: { ...S.wiz.sched }, name: S.wiz.name.trim() || f.name, leftOut: setupParts(m.id).filter((x) => x.mark === 'no').map((x) => x.label) };
       /* The first workflow made on Home keeps the slot with the sample run and request. Each later one takes a new
          made:N slot, so nothing already on loses its run, its open request or its history. */
       let k = 'conf';
@@ -5668,14 +6284,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
         delete S.deleted.conf; delete S.paused.conf; delete S.sched.conf; delete S.appr.conf;
       }
       S.wiz = newWiz();
-      m.card.done = { id: k, name: nr.name, next: R(k).next, newAgent };
+      m.card.done = { id: k, name: nr.name, next: R(k).next, newAgent, leftOut: nr.leftOut };
       m.mood = 'success';
-      m.say = `${nr.name} is on. Its first run is ${R(k).next}.`;
       S.justOn = k;
       render();
       scrollToMsg(m.id, 'start');
-      const b = $app.querySelector(`[data-mid="${m.id}"] .linkbtn`);
-      if (b) b.focus();
+      focusChat($app.querySelector(`[data-mid="${m.id}"] .linkbtn`));
     },
     testRun: () => { if (runBlocked('conf')) return; S.conf = 'waiting'; S.confYes = []; S.confAsk = 0; S.confStarter = S.user; S.confReq = apprOf('conf') ? copyAppr(apprOf('conf')) : null; go('run', 'conf', { live: true }); },
     editSched: (id) => { S.editing = id; S.editingAppr = null; S.schedForm = { monthDay: '1', ...R(id).sched }; S.schedErr = {}; render(); const f = document.getElementById('sf-freq'); if (f) f.focus(); },
@@ -5684,14 +6298,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       S.schedErr = schedProblems(S.schedForm);
       const keys = Object.keys(S.schedErr);
       if (keys.length) { render(); const first = document.getElementById(`sf-${keys[0]}`); if (first) first.focus(); return; }
-      /* Work everything out first, then write, so a failure leaves nothing half-saved. Saving the watchlist's schedule
-         makes the saver its owner, and an owner can't be one of its named Approvers, so they come off that list. */
-      let off = false;
-      const named = id === 'sw' && apprOf('sw') ? copyAppr(apprOf('sw')) : null;
-      if (named) named.steps.forEach((s) => { if (s.first === S.user) { s.first = hasBackup(s) ? s.backup : ''; s.backup = 'none'; off = true; } else if (s.backup === S.user) { s.backup = 'none'; off = true; } });
-      S.sched[id] = { ...S.schedForm };
-      if (id === 'conf') S.nr = { ...S.nr, sched: { ...S.schedForm } };
-      if (id === 'sw') { S.swOwner = S.user; if (off) S.appr.sw = named; }
+      const { off } = publishSched(id, S.schedForm);
       S.editing = null;
       toast(`Saved. Next run ${R(id).next}.${id === 'sw' ? ` You now own this schedule, so you can’t approve its checks.${off ? ' You’re no longer one of its Approvers, so choose a new backup under Change who approves.' : ''}` : ''}`);
       render();
@@ -5876,6 +6483,6 @@ details > .m-close { animation: fold 140ms ease-in both; }
 
   render();
   /* For the check script only: the refusal rule and the plan-step renderer, called through page.evaluate. */
-  window.mock = { UNSAFE, stepsList };
+  window.mock = { UNSAFE, stepsList, STOP: [...STOP] };
 })();
 </script>
