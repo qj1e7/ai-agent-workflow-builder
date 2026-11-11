@@ -62,7 +62,7 @@ A slim rail on the left holds three items. Each can carry a count, with words fo
 - **The header** keeps AI Workflow Builder (to Home), Teams with its own count of approvals waiting for this person, Settings, and the signed-in person.
 - **How it works,** the old Agent library, is a tab in Settings, for Operators only (12). No daily task needs it.
 - **Every role sees the three items.** For an Approver who can't set up workflows, the pages are read only. They show no control that changes anything and no dead button, and one note on each page says who makes changes, such as "Only Operators change workflows. Ask Alice or Carol." The names come from the People list.
-- **Who may do what.** One table opens each action to anyone (reading and moving around), to Approvers (deciding on a request, asking its requester a question, confirming a change), to people with n8n access, or to the test controls. Every other action needs an Operator, so a new action stays closed until someone opens it. The table is checked when an action runs, so a control that isn't drawn can't be reached another way.
+- **Who may do what.** One table opens each action to anyone (reading, moving around, and asking the team, as ADR 0038 has it), to Approvers (deciding on a request, asking its requester a question, confirming a change), to people with n8n access, or to the test controls. Every other action needs an Operator, so a new action stays closed until someone opens it. The table is checked when an action runs, so a control that isn't drawn can't be reached another way.
 
 ### 3.2 Where an item opens
 
@@ -219,9 +219,10 @@ An Approver who can't set up workflows gets the same calm Home, with the box for
   - what he decided before: "Here are your 2 decisions.", each with its workflow, Approved or Declined, when, and what it did, such as "Approved by Bob, Mon 26 Oct, 8:00. 1 ticket created (MOCK-12)." A decline uses the declined record's words (10.5). "Did I decline anything?" and "What did I approve?" list only those, or say "You haven't declined any requests yet.";
   - how the workflows are doing, his software's versions, and why a run stopped, with the three answers and "An Operator can retry the run." in place of Retry;
   - what he can ask, which ends "Operators set up workflows. Ask Alice or Carol."
-- **Any change is refused.** A request to set up, change, pause, watch, retry or delete gets "Operators set up workflows. Ask Alice or Carol.", with the Operators' names from the People list, and never a card that changes anything. It fails closed: a sentence that mixes a question with a change gets the refusal for the whole of it, so he asks the question again on its own.
+- **Any change is refused, clause by clause.** A request to set up, change, pause, watch, retry or delete gets "Operators set up workflows. Ask Alice or Carol.", with the Operators' names from the People list, and never a card that changes anything. When a question comes with a change, in either order and with any joining word, the question gets the answer it would get on its own, and the change gets a cross with the same words. "What is waiting for my yes, and pause the morning new-ticket check" answers "1 request is waiting for your yes." and crosses "pause the morning new-ticket check". Nothing changes.
 - **Approve or decline goes to the request.** "Approve the upgrade tickets" gets "I can't approve or decline for you. Open the request to see exactly what it will write, and decide there." with Review and decide. Nobody decides in the chat. A question asked in the same sentence keeps its cross (6.5).
 - **With no AI model,** his Home says "I can't answer questions until an AI model is connected" and "An Operator can connect one in Settings.", and keeps his requests first.
+- **Two mixes aren't split yet.** A question asked with an approve or decline gets a cross, "Ask this on its own, and I'll answer it.", so it is kept but not answered. A question asked with a request to open n8n, or to skip a yes, gets only the refusal, and the question is dropped. That fails closed, because nothing changes, but it falls short of principle 4. The Portal must keep or flag every part.
 
 Each person has their own conversation. Bob never sees Alice's, and hers is still there when she comes back.
 
@@ -723,6 +724,7 @@ Everything in the prototype is simulated. Specifically:
 - Versions, questions on a request and their answers are sample data. A requester answers through a test control, or by acting as Carol.
 - Connections, keys and Teams are sample data. Teams is a practice copy: "Nothing reaches the real Teams."
 - Time stands still at Tuesday 27 October, 9:10, Singapore time.
+- The Approver's box drops the question in two kinds of mixed sentence (5.3). The Portal must not copy that.
 
 "Mark what isn't built" shows which screen parts the built Portal lacks. `IMPLEMENTATION-PLAN.md` lists what each needs from the backend.
 

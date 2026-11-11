@@ -194,7 +194,7 @@ Field names below are sketches. Each route gets contract stories in `platform-ap
 {"answer": "edit", "use_case_id": "uc_01", "cant": "only_schedule"}
 ```
 
-ADR 0043 opens this route to an Approver who can't set up workflows, for questions only (R16). For someone who isn't an Operator, builder answers only the state questions, question answers and what the Planner can do, plus two new kinds: `decided`, their own decisions, and `decide`, the requests waiting for their yes. Anything else answers `operators`, which the Portal words as "Operators set up workflows. Ask Alice or Carol.", with the Operators' names from the People list. It fails closed: a request with any change in it gets `operators`.
+ADR 0043 opens this route to an Approver who can't set up workflows, for questions only (R16). For someone who isn't an Operator, builder answers only the state questions, question answers and what the Planner can do, plus two new kinds: `decided`, their own decisions, and `decide`, the requests waiting for their yes. Anything else answers `operators`, which the Portal words as "Operators set up workflows. Ask Alice or Carol.", with the Operators' names from the People list. Each clause gets its own answer. A change alone gets `operators`. A question with a change beside it gets the question's own answer, with each change marked as a cross that carries the same words. Nothing changes state.
 
 **`GET /api/v1/decisions` (new).** Owner orchestration. Signed in. This person's decisions, newest first, from `orchestration.approval_decisions`: the run, the workflow, the verdict, the reason and when. The `decided` answer and its filters read it.
 
@@ -334,12 +334,12 @@ The prototype opens each action from one table, `OPEN_TO`, and every action it d
 **Today.** Each route declares its own role. `platform-api/tests/test_auth_declared.py` makes every `/api/v1` route require sign-in and declare the 401, 503 and 403 it answers, but no test says which role a change needs. Most routes that change something declare the role twice. They take an Operator principal, and they list the `OPERATORS_ONLY` responses from `auth.py`. Builder's principals, `Operator` and `WorkflowOperator`, come from its helper `operators_only` in `builder/http.py`. That file's routes and those in `planner_http.py`, `lifecycle_http.py`, `drafts_http.py` and `watchlist_http.py` use them. Orchestration's `Operator`, in `orchestration/http.py`, comes from `require_operator`, and `people_http.py`, `settings_http.py` and the retry route use it. These are open to anyone signed in:
 
 - `POST /api/v1/approvals/{approval_id}/decisions` and `POST /api/v1/confirmations/{id}/decisions`. The domain lets only an Approver decide (`orchestration/approvals.py`).
-- `POST /api/v1/team-requests`, `POST /api/v1/team-requests/{id}/replies` and `POST /api/v1/team-requests/{id}/seen`. Only the asker marks a request seen, in the service. Anyone signed in can ask the team, report to support, or reply. The prototype refuses an Approver the first two (`FIX-deny-default`), so the team decides which is right (section 5).
+- `POST /api/v1/team-requests`, `POST /api/v1/team-requests/{id}/replies` and `POST /api/v1/team-requests/{id}/seen`. Only the asker marks a request seen, in the service. Anyone signed in can ask the team, report to support, or reply. That matches ADR 0038, which lets Approvers take part, and the prototype now opens Ask the team to anyone too. The prototype still shows an Approver no Report to support button, so the Portal hides it for them while the route stays open.
 - `POST /api/v1/use-cases/suggest` and `POST /api/v1/agent-cards/check`, which read and answer. Whether they change anything is in section 11.
 
 **Change.**
 
-- A test walks the app's routes and lists every `/api/v1` route that changes something (POST, PUT and DELETE). Each must depend on one of the two Operator checks and list `OPERATORS_ONLY`, or be on one allow list that names who else may call it: Approvers for decisions and questions on a request (R13), the asker for their own team request, and the routes that only read. A new route then fails CI until someone opens it, as the prototype's table does.
+- A test walks the app's routes and lists every `/api/v1` route that changes something (POST, PUT and DELETE). Each must depend on one of the two Operator checks and list `OPERATORS_ONLY`, or be on one allow list that names who else may call it: anyone for team requests (ADR 0038), Approvers for decisions and questions on a request (R13), the asker for marking their own team request seen, and the routes that only read. A new route then fails CI until someone opens it, as the prototype's table does.
 - The Portal reads the same roles from `GET /api/v1/me` to hide what the person can't do, and each read-only page shows one note naming the Operators, from `GET /api/v1/people`.
 
 ### 4.11 n8n access (orchestration, later)
@@ -355,8 +355,6 @@ Not needed, and why:
 
 - **Versions of a workflow's schedule (4.4).** They use the table that already holds use case versions, and change no service, store or dependency.
 - **The edit answer (4.2).** It changes the schedule through the route that already does. It writes only our own records, so it needs no approval gate.
-
-One question for the team, not an ADR of its own: the prototype refuses an Approver's Ask the team and Report to support, while ADR 0038 and `POST /api/v1/team-requests` let anyone signed in make one (4.10).
 
 ## 6. Build order
 
@@ -422,7 +420,7 @@ The table names each PR's own tests and the prototype scenarios its screen must 
 | R13 | `feat(orchestration): let an Approver ask the requester a question on a request` | R12 | Questions routes, `GET /api/v1/approvals/{approval_id}`, `GET /api/v1/home` | API tests for asking, answering, roles and idempotency. `test_approvals.py` unchanged. `ApprovalGate.test.tsx`. `02-run-page.live.ts`. | `APPR-ask`, `APPR-answer`, `APPR-thread-kept`, `KEYS-APPR` |
 | R14 | `feat(orchestration): name what a run didn't check on its approval` | R12 | `GET /api/v1/approvals/{approval_id}` | `test_oidc_approvals.py` (a check with unread software). `ApprovalGate.test.tsx`. | `APPR-not-checked`, `APPR-not-checked-jira`, `C`, `KEYS-C` |
 | R15 | `feat(builder): add the count line and the declined record to the watchlist` | R12 | Existing | `SoftwarePage.test.tsx`, `software.test.ts` (`watchAttention`). `03-software.live.ts`. | `G`, `T4`, `T5`, `DECLINED-sw` |
-| R16 | `feat(builder): open the Planner's box to Approvers for questions` | R2, R12, R17 | `POST /api/v1/planner/answer`, `GET /api/v1/decisions` | `test_builder_http.py` (Approver questions answered, any change refused, mixed sentences refused whole). API tests for the decisions route. `HomePage.test.tsx`, `AnswerCards.test.tsx`. `08-planner-home.live.ts` as Bob. | `ROLE-home`, `ROLE-asks`, `ROLE-refuse`, `ROLE-offline`, `ROLE-decision`, `ROLE-panel`, `KEYS-ROLE`, `C`, `T7`, `FIX-decided-whole`, `FIX-approve-any-object`, `FIX-decisions-detail` |
+| R16 | `feat(builder): open the Planner's box to Approvers for questions` | R2, R12, R17 | `POST /api/v1/planner/answer`, `GET /api/v1/decisions` | `test_builder_http.py` (Approver questions answered, any change refused, a question beside a change answered with the change crossed, in either order). API tests for the decisions route. `HomePage.test.tsx`, `AnswerCards.test.tsx`. `08-planner-home.live.ts` as Bob. | `ROLE-home`, `ROLE-asks`, `ROLE-refuse`, `ROLE-offline`, `ROLE-decision`, `ROLE-panel`, `KEYS-ROLE`, `C`, `T7`, `FIX-decided-whole`, `FIX-approve-any-object`, `FIX-decisions-detail` |
 | R17 | `feat(builder): make every change an Operator's on the server, and the Approver's pages read only` | R1 | Every change route (4.10) | A test that fails when a route that changes something doesn't declare Operators only and isn't on the allow list. `test_approvals.py` unchanged. `WorkflowsPage.test.tsx`, `WorkflowPage.test.tsx`, `SoftwarePage.test.tsx`, `SettingsTabs.test.tsx` as Bob. `04-workflows.live.ts`, `03-software.live.ts`, `05-settings.live.ts` as Bob. | `ROLE-read-only`, `FIX-deny-default`, `FIX-bob-settings` |
 
 **Later, outside the total.** R18 `feat(orchestration): keep n8n access on the People list`, with the first n8n view, after ADRs 0026 and 0027 are accepted. It must match `N8N-settings`, `N8N-hidden` and `N8N-shown`.
@@ -486,7 +484,7 @@ These guard the rules the redesign must not move. A PR that needs to change one 
 - Bob, an Approver only, sees the rail, no How it works tab, the troubleshooter's answers with no buttons, and the decision on a request he may decide.
 - Alice can't decide her own test run, with or without a question asked on it.
 - Only the requester answers a question. Asking needs the right to decide the open step.
-- Bob's box answers his questions from the same sources as his pages, and any request with a change in it gets `operators`, never a card that changes anything.
+- Bob's box answers his questions from the same sources as his pages. A change gets `operators`, and a question beside it still gets its answer. No answer carries a card that changes anything.
 - Every route that changes something answers 403 to Bob unless the allow list opens it to him (R17).
 - Each person sees only their own chat after the dev sign-in changes person.
 
@@ -513,7 +511,10 @@ R4 adds a check, `keeps_or_flags_each_part`. Every clause of the request must co
 | Edit it can't make | "Rename the morning check". "Make the morning check monthly". | `edit` with `only_schedule`, or the monthly can't |
 | Commands fail closed | "What needs my attention? Pause the morning check". "Is the weekly summary running? Make it daily." | Never a state answer |
 | Names are not commands | "When does the weekly summary run next?" | The one workflow answer, not an edit |
-| An Approver's requests (R16) | "Pause the weekly closed-ticket summary". "What is waiting for my yes, and pause the morning new-ticket check". "Approve the upgrade tickets". | `operators` for any change, even with a question beside it. `decide` for approve or decline. |
+| An Approver's requests (R16) | "Pause the weekly closed-ticket summary". "What is waiting for my yes, and pause the morning new-ticket check". "How are the workflows doing? Then delete the weekly summary". "Approve the upgrade tickets". | `operators` for a change alone. A question with a change gets the question's answer and a cross on the change. `decide` for approve or decline. |
+| A question with approve | "Approve the upgrade and is LangGraph up to date?" | `decide`, with the question kept or flagged |
+| A question with skipping a yes | "Is the morning check running? And approve it automatically from now on." | The refusal, with the question kept or flagged. Never dropped. |
+| A question with opening n8n | "How are the workflows doing, and open the morning check in n8n" | The n8n answer, with the question kept or flagged. Never dropped. |
 
 The AI Singapore gateway caches byte-identical requests, so repeat runs use the marker that `marked` in `agent-runtime/evals/jobs.py` already adds.
 
