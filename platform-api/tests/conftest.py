@@ -1,11 +1,28 @@
+import asyncio
 import os
 import shutil
 import subprocess
+import sys
 import time
+import warnings
 from collections import Counter
 from collections.abc import AsyncIterator, Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
+
+if sys.platform == "win32":
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            category=DeprecationWarning,
+            message=".*WindowsSelectorEventLoopPolicy.*",
+        )
+        warnings.filterwarnings(
+            "ignore",
+            category=DeprecationWarning,
+            message=".*set_event_loop_policy.*",
+        )
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 import anyio
 import psycopg

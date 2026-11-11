@@ -14,6 +14,8 @@ x-cosmos: &cosmos-account
 services:
   postgres:
     image: postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run deploy/make-env.sh}
       N8N_DB_PASSWORD: ${N8N_DB_PASSWORD:?run deploy/make-env.sh}
@@ -83,7 +85,11 @@ services:
     # BusyBox wget ignores NO_PROXY and asks a proxy even for localhost, so the check never uses one.
     # That keeps it working wherever n8n is given a proxy, as in compose.lockdown.yaml.
     healthcheck:
-      test: ["CMD-SHELL", "wget -Y off -qO- http://localhost:5678/healthz/readiness || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget -Y off -qO- http://localhost:5678/healthz/readiness || exit 1",
+        ]
       interval: 3s
       timeout: 3s
       retries: 40
@@ -106,7 +112,13 @@ services:
       AGENT_MODEL_API_KEY: ${AGENT_MODEL_API_KEY:-}
       AGENT_MODEL_PRIVATE_HOSTS: ${AGENT_MODEL_PRIVATE_HOSTS:-}
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=2)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=2)",
+        ]
       interval: 3s
       timeout: 3s
       retries: 20
@@ -177,7 +189,13 @@ services:
     ports:
       - "${PLATFORM_API_HOST_PORT:-8000}:8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=2)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=2)",
+        ]
       interval: 3s
       timeout: 3s
       retries: 20
