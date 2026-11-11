@@ -352,6 +352,7 @@ export function toggleProblems(): Problem[] {
   if (!toggles.length || !main) return []
   const name = (el: Element): string => `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}${typeof el.className === 'string' && el.className.trim() ? `.${el.className.trim().split(/\s+/).slice(0, 2).join('.')}` : ''}`
   const drawn = (el: Element): boolean => {
+    if (el.closest('details:not([open])') && !el.closest('summary')) return false
     for (let e: Element | null = el; e && e !== document.documentElement; e = e.parentElement) {
       const cs = getComputedStyle(e)
       if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') return false
