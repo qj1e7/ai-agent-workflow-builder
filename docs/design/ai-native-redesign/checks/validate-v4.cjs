@@ -314,12 +314,15 @@ async function main() {
     ok(!bad.length, bad.join(' || '));
   });
 
+  /* ADR 0043 step 4 gave Bob the Planner's box for questions only, so the box and its suggestions are no longer
+     creation controls by themselves. What he types is: a request to set up, change or watch gets "Operators set up
+     workflows." and no card that creates anything, and every suggestion is a question. */
   await check(B, 'roles-bob-creates-nothing', async (b) => {
     for (const preview of [false, true]) {
       await session(b, async (k, page) => {
         await k.setUser('bob');
         if (preview) await k.ctl('preview', 'on');
-        const creation = 'main :is([data-ask], form[data-submit="ask"], [data-act="example"], [data-act="say"], [data-act="askPlanner"], [data-act="newChat"], [data-act="n8nNew"], #sw-name, form[data-submit="swFind"], form[data-submit="swAdd"])';
+        const creation = 'main :is([data-act="say"], [data-act="askPlanner"], [data-act="newChat"], [data-act="n8nNew"], #sw-name, form[data-submit="swFind"], form[data-submit="swAdd"])';
         const named = /^(Set up|Ask the Planner|Start in n8n|Add software|Find it|New chat|Turn it on)/;
         const at = async (where) => {
           ok((await page.locator(creation).count()) === 0, `${where}${preview ? ' (Planned shown)' : ''}: Bob sees a creation control`);
@@ -328,6 +331,15 @@ async function main() {
           ok(!hit, `${where}${preview ? ' (Planned shown)' : ''}: Bob sees “${hit}”`);
         };
         await at('Home');
+        const chips = await page.$$eval('main [data-act="example"]', (cs) => cs.map((c) => c.textContent.trim()));
+        ok(chips.every((c) => /\?$/.test(c)), `${preview ? '(Planned shown) ' : ''}Bob’s suggestions are not all questions: ${chips.join(' | ')}`);
+        for (const ask of [WEEKLY_SUMMARY, 'Watch Redis releases', 'Make the morning new-ticket check run on Mondays only']) {
+          await k.ask(ask);
+          const say = await page.locator('.thread [data-say]').last().innerText();
+          ok(/^Operators set up workflows\./.test(say), `${preview ? '(Planned shown) ' : ''}Bob asked “${ask}” and was not told Operators set up workflows: “${say}”`);
+          const made = await page.locator('main .thread :is([data-act="turnOn"], [data-act="watchAdd"], [data-act="instead"], [data-act="editSave"], .pcard)').count();
+          ok(made === 0, `${preview ? '(Planned shown) ' : ''}Bob asked “${ask}” and got ${made} creation controls or cards`);
+        }
         await k.go('workflows'); await at('Workflows');
         await k.go('software'); await at('Software watchlist');
         ok((await page.locator('.rail [data-act="go"][data-arg="agents"]').count()) === 0, 'Bob has an Agent library link');
@@ -766,11 +778,13 @@ async function main() {
     ok((await page.locator('main .abil-not .tag.planned').count()) === 0, 'the Not yet lines carry a Planned tag by default');
   }));
 
-  /* Review item 4: these are hidden by default, and shown with a Planned tag under Planned features. */
+  /* Review item 4: these are hidden by default, and shown with a Planned tag under Planned features. Since ADR 0043
+     step 4 the n8n views show only to someone with n8n access, so this runs as Carol, an Operator who has it. */
   await check(B, 'planned-hidden-by-default', async (b) => {
     const bad = [];
     for (const preview of [false, true]) {
       await session(b, async (k, page) => {
+        await k.setUser('carol');
         if (preview) await k.ctl('preview', 'on');
         const say = (feature, shown, tagged) => {
           if (!preview && shown) bad.push(`${feature} shows by default`);
@@ -911,9 +925,12 @@ async function main() {
     ok(await page.evaluate(() => document.activeElement.matches('[data-act="menu"]')), 'focus does not return to More actions');
   }));
 
-  await check(B, 'control-bob-has-a-text-box', async (b) => session(b, async (k, page) => {
+  /* ADR 0043 step 4 gave Bob the box on purpose, so the old control (Bob has the box) now passes. This one asserts what
+     must stay false: Bob's box never gives him a set-up card. */
+  await check(B, 'control-bob-gets-a-set-up-card', async (b) => session(b, async (k, page) => {
     await k.setUser('bob');
-    ok((await page.locator('main [data-ask]').count()) === 1, 'seeded control: Bob has the Planner box');
+    await k.ask(WEEKLY_SUMMARY);
+    ok((await page.locator('main .thread [data-act="turnOn"]').count()) === 1, 'seeded control: Bob gets a set-up card with Turn it on');
   }), { expectedFail: true });
 
   /* Fix pass M3: the words the leftover check skips are function words only. A verb there would make a whole clause,
