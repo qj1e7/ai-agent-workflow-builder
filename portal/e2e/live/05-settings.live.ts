@@ -16,13 +16,13 @@ test.afterAll(async () => {
   await api.dispose()
 })
 
-test('Settings opens on Connections, and People and roles lists everyone with their roles', async ({ page }, info) => {
+test('Settings opens on Connections, and People and permissions lists everyone with their roles', async ({ page }, info) => {
   await page.goto('/settings')
   await expect(settingsTab(page, 'Connections')).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByRole('heading', { level: 2, name: 'Connections' })).toBeVisible()
-  await settingsTab(page, 'People and roles').click()
+  await settingsTab(page, 'People and permissions').click()
   await expect(page).toHaveURL(/\/settings\?tab=people$/)
-  await expect(settingsTab(page, 'People and roles')).toBeFocused()
+  await expect(settingsTab(page, 'People and permissions')).toBeFocused()
   for (const [email, name] of [
     ['alice@example.test', 'Alice'],
     ['bob@example.test', 'Bob'],

@@ -299,7 +299,7 @@ function HowItWorks({ plan, kinds, reused }: { plan: PlanView | null; kinds: Too
               <b>{agent.name}</b>
               {agent.card.kind === 'drafted' && reused !== null && !reused.has(agent.index) ? (
                 <span className={styles['tag']} data-state="changed">
-                  New agent, saved to the Agent library when you turn this on
+                  New agent, saved under How it works, in Settings, when you turn this on
                 </span>
               ) : null}
             </div>
@@ -366,7 +366,7 @@ function Done({ useCaseId, writes, draftKept, newAgents }: { useCaseId: string; 
             ? 'Nothing it does changes data, so no yes is needed.'
             : 'Before it changes anything, any Approver on your team except you is asked for a yes in Teams.'}
         </p>
-        {newAgents.length > 0 ? <p>{newAgents.length === 1 ? `The ${newAgents[0] ?? ''} is saved in the Agent library.` : `${andList(newAgents.map((agent) => `the ${agent}`))} are saved in the Agent library.`}</p> : null}
+        {newAgents.length > 0 ? <p>{newAgents.length === 1 ? `The ${newAgents[0] ?? ''} is saved under How it works, in Settings.` : `${andList(newAgents.map((agent) => `the ${agent}`))} are saved under How it works, in Settings.`}</p> : null}
         <p className="muted">{PROMISES}</p>
         {draftKept ? <p className="muted">Your draft is still on Workflows. This workflow is already on, so there is no need to turn it on again.</p> : null}
         <div className={styles['btns']}>

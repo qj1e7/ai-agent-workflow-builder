@@ -81,8 +81,8 @@ test('alice signs in and sees her name, bob signs in at a deep link, and signing
     ['bob@example.test', false, true, false],
   ])
 
-  for (const label of ['Workflows', 'Software watchlist', 'Agent library', 'Home']) {
-    await alice.page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: new RegExp(`^${label}(\\s*, \\d+ need you)?$`) }).click()
+  for (const label of ['Workflows', 'Watchlist', 'Chat']) {
+    await alice.page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: new RegExp(`^${label}(\\s*, \\d+ need (you|action))?$`) }).click()
     await expect(alice.page.getByRole('heading', { level: 1 })).toBeVisible()
   }
   await alice.page.reload()
@@ -105,9 +105,9 @@ test('alice signs in and sees her name, bob signs in at a deep link, and signing
   await expect(header, 'a reload after the renewal keeps alice signed in').toContainText('Alice')
   expect(alice.devHeaders, 'still no request carries X-Dev-User').toEqual([])
 
-  const bob = await signIn(browser, backend, 'bob', '/agents', info)
-  await expect(bob.page, 'bob lands on the deep link he asked for').toHaveURL(/\/agents$/)
-  await expect(bob.page.getByRole('heading', { level: 1 })).toHaveText('Agent library')
+  const bob = await signIn(browser, backend, 'bob', '/software', info)
+  await expect(bob.page, 'bob lands on the deep link he asked for').toHaveURL(/\/software$/)
+  await expect(bob.page.getByRole('heading', { level: 1 })).toHaveText('Software watchlist')
   await expect(bob.page.getByRole('banner')).toContainText('Bob')
   await expect(bob.page.getByRole('banner')).toContainText('Approver')
   await expect(bob.page.getByRole('banner')).not.toContainText('Operator')

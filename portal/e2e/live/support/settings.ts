@@ -129,14 +129,14 @@ export async function signedInAs(browser: Browser, user: string, { phone = false
   return context
 }
 
-const TAB_HEADINGS = { connections: 'Connections', people: 'People and roles', model: 'AI model' } as const
+const TAB_HEADINGS = { connections: 'Connections', people: 'People and permissions', model: 'AI model' } as const
 
 export async function openSettings(page: Page, tab: keyof typeof TAB_HEADINGS = 'model'): Promise<void> {
   await page.goto(tab === 'connections' ? '/settings' : `/settings?tab=${tab}`)
   await expect(page.getByRole('heading', { level: 2, name: TAB_HEADINGS[tab] })).toBeVisible()
 }
 
-export function settingsTab(page: Page, name: 'Connections' | 'AI model' | 'People and roles'): Locator {
+export function settingsTab(page: Page, name: 'Connections' | 'AI model' | 'People and permissions' | 'How it works'): Locator {
   return page.getByRole('group', { name: 'Settings sections' }).getByRole('button', { name: new RegExp(`^${name}`) })
 }
 

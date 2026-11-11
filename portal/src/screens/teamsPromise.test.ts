@@ -18,7 +18,7 @@ describe('what a screen says about Teams', () => {
     expect(TEAMS_DOES_WORDS).toBe('Sends approval requests to Approvers')
   })
 
-  it('never promises a Teams message on the Agent library or Settings', () => {
+  it('never promises a Teams message on How it works or Settings', () => {
     const promises = SCREENS.flatMap(sourcesOf).flatMap(({ name, text }) =>
       text.split('\n').filter((line) => PROMISE.test(line) && !/approval request/i.test(line)).map((line) => `${name}: ${line.trim()}`),
     )

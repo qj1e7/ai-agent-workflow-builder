@@ -71,7 +71,7 @@ test('bob approves on the run page, and the item has left Home when he comes bac
   await itemOf(page, approvalId).getByRole('link', { name: 'Review and decide' }).click()
   await page.getByRole('button', { name: 'Approve 1 ticket' }).click()
   await expect(page.getByText('Approved. The platform is writing now.').or(page.getByRole('heading', { level: 1, name: /created in Jira/ }))).toBeVisible()
-  await page.getByRole('navigation', { name: 'Main' }).filter({ visible: true }).getByRole('link', { name: 'Home' }).click()
+  await page.getByRole('navigation', { name: 'Main' }).filter({ visible: true }).getByRole('link', { name: 'Chat' }).click()
   await expect(page.getByRole('heading', { level: 2, name: /Needs you/ })).toBeVisible()
   await expect(itemOf(page, approvalId)).toHaveCount(0)
   expect(await notReloaded(page), 'Home updated without a reload').toBe(true)
@@ -91,7 +91,7 @@ test('a yes from the Teams card’s link takes the item off Home at once, withou
   // Like real Teams, the card has no Approve button: its link opens the approval page, and Bob decides there.
   await message.getByRole('link', { name: 'Open in AI Workflow Builder' }).click()
   await page.getByRole('button', { name: 'Approve 1 ticket' }).click()
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Home' }).click()
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Chat' }).click()
   await expect(itemOf(page, approvalId)).toHaveCount(0, { timeout: 15_000 })
   await page.getByRole('button', { name: /^Teams, practice copy/ }).click()
   await expect(message).toContainText('Approved by Bob', { timeout: 30_000 })
@@ -101,7 +101,7 @@ test('a yes from the Teams card’s link takes the item off Home at once, withou
   await context.close()
 })
 
-test('the count on the tab, on Home and on Workflows is the same number, and it is on Home for an Approver', async ({ browser, backend }) => {
+test('the count on the rail, on Home and on Workflows is the same number, and it is on Chat for an Approver', async ({ browser, backend }) => {
   const { approvalId } = await backend.waitingRun('alice')
   const context = await devContext(browser, 'bob')
   const page = await context.newPage()
@@ -111,15 +111,15 @@ test('the count on the tab, on Home and on Workflows is the same number, and it 
   await expect(itemOf(page, approvalId)).toBeVisible()
   const onHome = Number((await heading.innerText()).replace(/\D/g, ''))
   expect(onHome).toBeGreaterThan(0)
-  await expect(menu.getByRole('link', { name: new RegExp(`^Home, ${onHome} need you$`) })).toBeVisible()
-  await expect(menu.getByRole('link', { name: 'Workflows', exact: true }), 'an Approver has the count on Home only').toBeVisible()
-  await expect(menu.getByRole('link', { name: 'Agent library' }), 'an Approver has no Agent library').toHaveCount(0)
+  await expect(menu.getByRole('link', { name: new RegExp(`^Chat, ${onHome} need you$`) })).toBeVisible()
+  await expect(menu.getByRole('link', { name: 'Workflows', exact: true }), 'an Approver has the count on Chat only').toBeVisible()
+  await expect(menu.getByRole('link', { name: 'Watchlist', exact: true }), 'an Approver has no Watchlist count').toBeVisible()
 
   await menu.getByRole('link', { name: 'Workflows' }).click()
   await expect(page).toHaveURL(/\/workflows$/)
   await expect(heading).toContainText(String(onHome))
-  await expect(menu.getByRole('link', { name: new RegExp(`^Home, ${onHome} need you$`) })).toBeVisible()
-  await menu.getByRole('link', { name: 'Home' }).click()
+  await expect(menu.getByRole('link', { name: new RegExp(`^Chat, ${onHome} need you$`) })).toBeVisible()
+  await menu.getByRole('link', { name: 'Chat' }).click()
   await expect(heading).toContainText(String(onHome))
   await context.close()
 })

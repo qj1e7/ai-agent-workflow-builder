@@ -3,7 +3,7 @@ import { failureReasonLabel } from '../../api/labels'
 import type { CapabilityView, Day, FailureReason, Refusal, ScheduleHold, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView } from '../../api/types'
 import { dateAndClock, scheduleZoneName, timesZone } from '../workflows/times'
 
-/** Where releases are read from, said from the capability registry so this page never claims more than Agent library does. Null while the registry is not there. */
+/** Where releases are read from, said from the capability registry so this page never claims more than How it works does. Null while the registry is not there. */
 export function sourcesNote(capabilities: readonly CapabilityView[] | undefined): string | null {
   if (capabilities === undefined) return null
   const sources = capabilities.filter((c) => c.id.endsWith('.releases') && c.system !== null)
