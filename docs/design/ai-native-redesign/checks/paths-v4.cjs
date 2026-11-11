@@ -572,6 +572,14 @@ add('ANS-clash-day', 'Two days in a set-up request ask which one, and an edit ca
   await t.expect('Focus is on the edit card’s heading', focused(t.page), /^h3#card-h-\d+$/);
 }, [1280]);
 
+add('ANS-clash-time', 'Two times in a set-up request ask which one, never the first picked', async (t) => {
+  await t.ask('every Friday at 9am and 5pm list open tickets in MOCK');
+  await t.expectText('The time is a question between the two', /9:00 or 17:00\?/, S.asks);
+  await t.expect('No time is ticked', t.page.innerText(`${lastCard} .parts`), (v) => !/Every Friday at \d{1,2}:\d{2}, Singapore time/.test(v));
+  await t.click(S.answer('time:17:00'), 'Choose 17:00', { decision: true });
+  await t.expectText('Then it runs at the time chosen', /Every Friday at 17:00, Singapore time/, `${lastCard} .parts`);
+}, [1280]);
+
 add('ANS-testctl', 'The test controls never cover the product, scrolled or not, chatting or not', async (t) => {
   const covered = () => t.page.evaluate(() => {
     const b = document.querySelector('.testctl-toggle').getBoundingClientRect();

@@ -3505,6 +3505,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     .filter((x, i, all) => all.findIndex((y) => y.label === x.label) === i);
   /* A schedule has one day and one time. A second of either is a cross, never a silent pick of the first. */
   const clashDays = (text) => [...new Set([...text.replace(/\bmonday to friday\b/gi, ' ').matchAll(new RegExp(`\\b(${DAY_RE})s?\\b`, 'gi'))].map((m) => cap(m[1].toLowerCase())))];
+  /* The distinct times a text names, as 24-hour times, in the order it names them. */
+  const clashTimes = (text) => [...new Set([...text.matchAll(/\b\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b|\b(?:[01]?\d|2[0-3])[:.][0-5]\d\b/gi)].map((m) => parseIntent(m[0]).time).filter(Boolean))];
   function clashParts(text) {
     const t = text.replace(/\bmonday to friday\b/gi, ' ');
     const find = (re, norm) => { const ms = [...t.matchAll(re)]; return { ms, n: new Set(ms.map(norm)).size }; };
@@ -3524,6 +3526,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (!s.freq) return { key: 'when', q: 'How often should it run?', choices: Object.entries(FREQ_WORD).filter(([v]) => v !== 'month' || shows('monthly')).map(([v, l]) => [`freq:${v}`, l]) };
     if (s.freq === 'week' && !s.day) { const only = S.wiz.dayChoices; return { key: 'when', q: only ? `${orList(only)}?` : 'Which day should it run?', choices: (only || DAYS).map((d) => [`day:${d}`, d]) }; }
     const bare = (S.wiz.intent || {}).bareHour;
+    if (!s.time && S.wiz.timeChoices) return { key: 'when', q: `${orList(S.wiz.timeChoices.map(clock))}?`, choices: S.wiz.timeChoices.map((x) => [`time:${x}`, clock(x)]) };
     if (!s.time) return { key: 'when', q: bare ? `At ${clock(hourChoices(bare)[0])} or ${clock(hourChoices(bare)[1])}?` : 'What time should it run?', choices: (bare ? hourChoices(bare) : Q_TIMES).map((x) => [`time:${x}`, clock(x)]), more: '<button type="button" class="chip" data-act="whenOpen" aria-expanded="false" aria-controls="whenpick">Another time</button>' };
     const row = intentRows().find((r) => r.state === 'missing');
     return row ? { key: row.key, q: row.note || QUESTION[row.key], choices: row.options.map(([v, l]) => [`${row.key}:${v}`, l]) } : null;
@@ -4078,9 +4081,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const draftRows = () => (liveSetup() ? [{ id: 'live', name: S.wiz.name.trim() || draftNr().name, left: setupLeft().length, need: setupLeft(), crossed: hasCross(setupParts('d')) }] : []).concat(S.drafts.map((d) => ({ id: d.id, name: d.name, left: d.left, need: d.need || [], crossed: d.crossed })));
   function startDraft(text, it) {
     saveLive();
-    /* Two days for one schedule: the day is a question between them, never the first one picked (fix pass F5). */
+    /* Two days, or two times, for one schedule: it is a question between them, never the first one picked. */
     const days = clashDays(text);
-    S.wiz = { ...newWiz(), text, intent: it, dayChoices: days.length > 1 ? days : null, sched: { freq: days.length > 1 ? 'week' : it.freq || '', day: days.length > 1 ? '' : it.day || '', time: it.time || '', monthDay: '1' } };
+    const times = clashTimes(text);
+    S.wiz = { ...newWiz(), text, intent: it, dayChoices: days.length > 1 ? days : null, timeChoices: times.length > 1 ? times : null, sched: { freq: days.length > 1 ? 'week' : it.freq || '', day: days.length > 1 ? '' : it.day || '', time: times.length > 1 ? '' : it.time || '', monthDay: '1' } };
     return { kind: 'setup', crossed: hasCross(setupParts('new')) };
   }
   /* The watchlist's days in the words a sentence uses, such as "every Monday", read from its schedule. */
