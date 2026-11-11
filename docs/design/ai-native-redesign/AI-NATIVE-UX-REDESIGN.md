@@ -87,7 +87,7 @@ A list opened from the chat, such as "N more" on the pinned line or a link to Se
   - Software: its status, the version you run, the newest, and "Checked by The Version checker, every Monday, on GitHub". More details opens the Software watchlist.
 - **Actions stay in the panel,** because they change something rather than go somewhere: Approve, Decline, Ask a question, Retry, Pause and Resume. After one, the panel goes back to its top and focuses its heading. The schedule is changed on the workflow's page, or by asking in the chat (6.7).
 - **A flow shows once.** While an item is open in the panel, the chat hides the buttons that open it and its own copy of the steps. Both come back when the panel closes.
-- **Width.** 400 px, or 40% of the window when that is less. It opens by itself only while the Planner builds (6.8).
+- **Width.** It is 400 px wide, or 40% of the window when that is less. It opens by itself only while the Planner builds (6.8).
 
 ### 3.4 One breakpoint, 900 px
 
@@ -285,7 +285,7 @@ With no AI model, the Planner gives no answer. Home says so instead (5.4).
 
 An alternative is offered only when it is a real near-equivalent that sets up with every part Ready. Otherwise the only next step is Ask the team. For an Unsupported capability the answer says it isn't on the team's plan.
 
-The answers that read platform state (check my workflows, one workflow, why it stopped, what needs me, her data) are decided and filled in by code. In the prototype, word rules pick them. In the built app, the model picks the kind and code fills it from platform-api.
+Code decides and fills in the answers that read platform state: check my workflows, one workflow, why it stopped, what needs me, and her data. In the prototype, word rules pick them. In the built app, the model picks the kind and code fills it from platform-api.
 
 ### 6.4 Questions in any wording, and changes that fail closed
 
@@ -349,7 +349,7 @@ A workflow can be changed by asking. In this first version, the edit card change
 
 ### 6.8 Live cards
 
-- **Every card is a live view.** Each answer's sentence and card are worked out again on every redraw, from the same state the pages read. A workflow turned on in the chat and then paused on its page reads as paused back in the chat. An approval decided on another page shows in the card.
+- **Every card is a live view.** The prototype works out each answer's sentence and card again on every redraw, from the same state the pages read. A workflow turned on in the chat and then paused on its page reads as paused back in the chat. An approval decided on another page shows in the card.
 - **The side panel opens by itself while the Planner builds,** only when the window is wider than 900 px. It shows "Draft", "Adding the steps…", the plain steps arriving one by one, and "It runs once you turn it on from the card in the chat." After Turn it on it becomes the workflow's panel. Focus stays on the card's heading. While the panel shows the steps, the card hides How this workflow works and its own Open button. The panel shows plain steps, not n8n blocks, and keeps its usual width.
 - **Cards fit beside the panel.** A card lays out by its own width. In a narrow chat, the part rows go to two columns.
 
@@ -700,7 +700,6 @@ ADR 0043 (proposed) changes ADR 0037 in four places. They take effect when ADR 0
 - **Schedule changes are not in the side panel.** The ADR lists changing the schedule among the panel's actions. The prototype changes it on the workflow's page or by asking in the chat (3.3).
 - **The run page has no timed log.** The ADR's run page adds one. The prototype shows the agents' conversation without times (10.2).
 - **The Watchlist's count line** reads "3 have a newer version · 4 can't be checked", where the ADR's example says "1 can't be found".
-- **The breakpoint is 900 px,** as step 2 set it. ADR 0043 says 900 too.
 
 ## 19. What is simulated in version 4
 
@@ -725,7 +724,7 @@ Each step was checked the way version 4 was, and its results are in `checks/resu
   - `ANS-*`: part marks, one question at a time, the edit card, questions in any wording, commands that fail closed, live cards and the panel while the Planner builds;
   - `RUN-*`, `APPR-*`, `DECLINED-*`, `WF-last-run`, `MARK-approval` and `KEYS-APPR`: the three answers, the run line, Not checked, questions on a request, the decline reason, the declined record and each workflow's last run.
 
-  Each new scenario was shown failing on the head before it, for the right reason.
+  The builder showed each new scenario failing on the head before it, for the right reason.
 - **The judge's checks.** `checks/validate-v4.cjs` passed 32 of 32, and its seeded control failed as it should. Step 2 changed the checks where the card changed on purpose (one question at a time, crosses read as a can't) and added `stop-words-are-function-words`, so a verb can't be skipped silently again.
 - **Fit.** `checks/fit.cjs`, new in step 1, fails any screen where text spills, is cut off or overlaps, or where buttons side by side don't line up. It found 0 problems on 62 screens at 1440, 1280, 1024, 861, 768 and 390 px, and 0 at 901, 950 and 1000 px with the side panel open. Its seeded control was caught.
 - **Quality.** `checks/quality.cjs` on the same 62 screens at 1280 and 390 px:
@@ -733,7 +732,7 @@ Each step was checked the way version 4 was, and its results are in `checks/resu
   - nothing scrolls sideways at 390 px;
   - no animation runs under reduced motion;
   - the keyboard reaches the Operator's box in 8 Tab presses and Bob's Review and decide in 8, with visible focus at every stop.
-- **Independent reviews.** A Fable reviewer drove each step in a browser at several widths, tried its own wordings, and tried to break the approval gate. Every finding was fixed, and the reviewer checked the fixes:
+- **Independent reviews.** A Fable reviewer drove each step in a browser at several widths, tried its own wordings, and tried to break the approval gate. The builder fixed every finding, and the reviewer checked the fixes:
   - step 1: 6 should-fix;
   - step 2: three rounds, with 9 must-fix, 12 should-fix and 13 smaller findings;
   - step 3: no must-fix, 4 should-fix and 6 nits.

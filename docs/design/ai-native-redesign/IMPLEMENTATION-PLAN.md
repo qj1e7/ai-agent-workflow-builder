@@ -35,7 +35,7 @@ Each screen lists the files to change, what to reuse, what is new, and how state
 
 ### 2.1 The rail and Settings (spec 3, 12, 13)
 
-- **New.** `portal/src/shell/Rail.tsx` **(new)** replaces `Menu` and `TabBar` in `portal/src/shell/Menu.tsx`. Three items, Chat, Workflows and Watchlist, each a link with its count in the accessible name (", 5 need you"). Wider than 900 px it is a column on the left. At 900 px and narrower it is a bar across the top, as the prototype draws it.
+- **New.** `portal/src/shell/Rail.tsx` **(new)** replaces `Menu` and `TabBar` in `portal/src/shell/Menu.tsx`. It has three items, Chat, Workflows and Watchlist, each a link with its count in the accessible name (", 5 need you"). Wider than 900 px it is a column on the left. At 900 px and narrower it is a bar across the top, as the prototype draws it.
 - **Change.** `portal/src/shell/routes.tsx`.
   - `PAGES` becomes chat (`/`), workflows and software in the rail. Settings stays out of the rail, reached by the gear.
   - `/agents/:agentId?` redirects to `/settings?tab=how`, keeping the agent id, for Operators. Others go to `/`.
@@ -51,15 +51,15 @@ Each screen lists the files to change, what to reuse, what is new, and how state
 - **Change.** `portal/src/screens/home/HomePage.tsx`. Before the first message nothing changes. After it, the box docks at the bottom with "Ask for something else", and Needs you gives way to the pinned line (2.3).
 - **Move.** The thread's state (`threadReducer` in `threadState.ts`) moves from `OperatorHome` to a provider above the routes, `portal/src/screens/home/ChatProvider.tsx` **(new)**, so leaving for Workflows or the Watchlist and coming back returns the conversation and its scroll position. It is still never saved, because the chat is not the record.
 - **Change.** New chat clears the thread and closes the side panel. A set-up card she hadn't finished is saved through `useSaveDraft` first, with the message "Your draft is saved. Find it on Workflows."
-- **Change.** `portal/src/screens/home/home.ts`. `groupOf(need)` **(new)** gives Do now or Set up, from the need's kind: stops, approvals, questions to answer and declined test runs are Do now; connections, moved addresses and confirmations are Set up. `needsOf` keeps its urgency order inside each group. Home's three rows, the pinned line and the Workflows section all read it.
+- **Change.** `portal/src/screens/home/home.ts`. `groupOf(need)` **(new)** gives Do now or Set up, from the need's kind. Stops, approvals, questions to answer and declined test runs are Do now. Connections, moved addresses and confirmations are Set up. `needsOf` keeps its urgency order inside each group. Home's three rows, the pinned line and the Workflows section all read it.
 - **Reuse.** `PlannerBox`, `NeedsSection`, `NeedItem`, `RetryButton`, `PlannerBot`.
 - **State.** `['home', user]` for Needs you and the pinned line. Nothing new.
 - **Must match.** `B-home`, `SHELL-pinned`, `ASK-needs`, `OFFLINE`, `KEYS-A`.
 
 ### 2.3 The pinned line, the side panel and Back to the chat (spec 3.2 to 3.5)
 
-- **New.** `portal/src/screens/home/PinnedLine.tsx` **(new)**. The first of the grouped needs, with Open and "N more". Open opens the item in the side panel. "N more" opens `/workflows` with Back to the chat. It shows while the thread has messages and `needsTotal(home)` is above 0, whatever the last answer was.
-- **New.** `portal/src/screens/home/SidePanel.tsx` **(new)**. One item at a time, kept in the chat's provider, never in the address. Its bar has the title, More details and Close. Escape closes it and returns focus. At 900 px and narrower it is a full-window dialog with the chat made inert behind it, and it opens only when the person presses Open.
+- **New.** `portal/src/screens/home/PinnedLine.tsx` **(new)**. It shows the first of the grouped needs, with Open and "N more". Open opens the item in the side panel. "N more" opens `/workflows` with Back to the chat. It shows while the thread has messages and `needsTotal(home)` is above 0, whatever the last answer was.
+- **New.** `portal/src/screens/home/SidePanel.tsx` **(new)**. It shows one item at a time. The chat's provider holds it, never the address. Its bar has the title, More details and Close. Escape closes it and returns focus. At 900 px and narrower it is a full-window dialog with the chat made inert behind it, and it opens only when the person presses Open.
 - **New.** Panel views, each built from the components the pages already use, so a panel and its page can't disagree:
   - `WorkflowPanel` from `WorkflowRow` facts, `Troubleshooting` and the Pause and Resume buttons;
   - `RunPanel` from `RunLine` (small and upright, 2.8) and `Troubleshooting`;
@@ -77,7 +77,7 @@ Each screen lists the files to change, what to reuse, what is new, and how state
   - **Part marks.** One `PartsList` **(new)** draws every answer's parts as a tick, a cross with its reason, or a question. It reads the parts the runtime returns (4.1). Until R4 lands, it draws today's rows as ticks, today's can't rows as crosses, and a missing row as a question.
   - **Leftover crosses.** The part, can't, check, why, what needs me and question answers draw the clauses they didn't read above their card, from the same list.
   - **Live cards.** Each card's sentence is fixed text worked out at render from the queries the pages read, as the state answers already do (`StateAnswers.tsx`). The confirmation after Turn it on reads the workflow's state, so a pause on its page shows in the chat.
-- **New.** `EditCard.tsx` **(new)** for the `edit` answer (4.2): "Change <name>", When it runs with Before and After, Save change and Never mind. Save calls the schedule route (3.2). The saved card shows "Saved as version N." with Undo, which calls the restore route.
+- **New.** `EditCard.tsx` **(new)** draws the `edit` answer (4.2). It shows "Change <name>", When it runs with Before and After, Save change and Never mind. Save calls the schedule route (3.2). The saved card shows "Saved as version N." with Undo, which calls the restore route.
 - **Change.** While the Planner builds a set-up card and the window is wider than 900 px, the side panel opens by itself on the draft's steps, and turns into the workflow's panel after Turn it on. Focus stays on the card's heading.
 - **State.** `usePlannerAnswer` stays a mutation. The edit card's Save and Undo invalidate `['use-case', user, id]` and `['use-cases', user]`.
 - **Must match.** `ASK-status`, `ASK-why`, `ANS-status`, `ANS-status-commands`, `ANS-name-words`, `ANS-questions`, `ANS-live`, `ANS-live-done`, `ANS-panel`, `ANS-panel-focus`, `ANS-narrow-cards`, and every `ANS-edit-*` scenario.
@@ -115,7 +115,7 @@ Each screen lists the files to change, what to reuse, what is new, and how state
 - **Change.** `portal/src/screens/run/RunLine.tsx`. Each link between two steps takes the state of the step it leads into: marching dashes into the step at work, slower amber dashes into a step waiting for a yes, red into a stop, faint dots into skipped steps, and solid once the next step is done. Reduced motion stops the march and keeps the look (`motionAllowed` in `portal/src/ui/motion.ts`). A `small` variant draws it upright without faces for the side panel.
 - **Change.** `portal/src/screens/run/Outcome.tsx`, `Troubleshooting`. Three `dt` and `dd` pairs: What happened, What was affected, Safe to retry. Retry or Report to support sits under them. Someone who isn't an Operator sees the answers with a note, such as "An Operator can retry the run.", and no buttons.
 - **Change.** `portal/src/screens/run/ApprovalGate.tsx` and `decision.ts`.
-  - **Not checked,** after What will change, from the approval's `not_checked` and the not-ready capabilities its workflow uses (4.8).
+  - **Not checked** comes after What will change. It reads the approval's `not_checked` and the capabilities its workflow uses that aren't Ready (4.8).
   - **Questions.** "Not sure yet? Ask Carol a question" opens a question box. Sending keeps the request waiting. The thread shows on the request, read only once it is decided.
   - **Decline reason.** Decline opens "Why are you declining? Optional." with a few quick reasons, then Decline and Back. `decisionFor` sends `reason` with a decline.
 - **Change.** `portal/src/screens/run/words.ts` and `RunPage.tsx`. One `declinedRecord(run)` **(new)** gives "Declined by Bob. Nothing was written. Reason: ..." for the run page, the panel, the toast, Needs you, the watchlist row and the Workflows row. A declined run's write step says "Nothing written", its last step "Ended", and the pill is a grey Declined.
@@ -207,7 +207,7 @@ ADR 0043 opens this route to an Approver who can't set up workflows, for questio
 {"versions": [{"version": 2, "at": "...", "by": "alice", "via": "chat", "change": {"schedule": {"from": {"day": "weekdays", "at": "08:00"}, "to": {"day": "monday", "at": "08:00"}}}, "undid": null, "running": true}]}
 ```
 
-**`POST /api/v1/use-cases/{use_case_id}/versions/{version}/restore` (new).** Owner builder. Operators only. Undo: publishes the schedule of the version before `version` as a new version, with `undid` set. It answers 409 when a later version exists, so Undo never throws away someone else's change.
+**`POST /api/v1/use-cases/{use_case_id}/versions/{version}/restore` (new).** Owner builder. Operators only. Undo publishes the schedule of the version before `version` as a new version, with `undid` set. It answers 409 when a later version exists, so Undo never throws away someone else's change.
 
 **`POST /api/v1/approvals/{approval_id}/decisions` (changed).** Owner orchestration. `DecisionIn` (`orchestration/http.py`) gains an optional `reason`, up to 200 characters, accepted only with `"verdict": "decline"`. Today the model forbids extra fields (`wire.py`), so an old Portal sending none is unaffected.
 
@@ -274,7 +274,7 @@ The rest stays a fixed table, and it claims no cause it can't know.
 
 ### 4.4 A schedule change publishes a new version (builder and orchestration)
 
-**Today.** `PUT /api/v1/use-cases/{use_case_id}/schedule` (`builder/lifecycle_http.py`) calls `BuilderService.save_schedule` (`builder/service.py`), which overwrites the row in `orchestration.schedules` through `ScheduleBook.save` (`orchestration/schedule_store.py`). It makes no version: `builder.use_case_versions` is not touched, and only watchlist software changes bump a version (`builder/watchlist.py`). There is no versions list and no undo. A watchlist use case is refused with 409, because the watchlist has its own schedule route.
+**Today.** `PUT /api/v1/use-cases/{use_case_id}/schedule` (`builder/lifecycle_http.py`) calls `BuilderService.save_schedule` (`builder/service.py`), which overwrites the row in `orchestration.schedules` through `ScheduleBook.save` (`orchestration/schedule_store.py`). It makes no version. It doesn't touch `builder.use_case_versions`, and only watchlist software changes bump a version (`builder/watchlist.py`). There is no versions list and no undo. A watchlist use case is refused with 409, because the watchlist has its own schedule route.
 
 **Change.**
 
@@ -462,9 +462,9 @@ These guard the rules the redesign must not move. A PR that needs to change one 
 
 ### 7.5 Golden-set cases for this round
 
-The `answer` job (`agent-runtime/evals/answer.py`, cases in `agent-runtime/evals/cases/answer.json`) has 287 cases today. Its checks are per word: a case lists the words it expects as read, as can't, or kept out. No case checks that every part of a request is kept or flagged, and no case says "haven't been updated". The "no update for 10 days" cases check only that "10 days" appears, which "updated in the last 10 days" also passes.
+The `answer` job (`agent-runtime/evals/answer.py`, cases in `agent-runtime/evals/cases/answer.json`) has 287 cases today. Its checks are per word. A case lists the words it expects as read, as can't, or kept out. No case checks that every part of a request is kept or flagged, and no case says "haven't been updated". The "no update for 10 days" cases check only that "10 days" appears, which "updated in the last 10 days" also passes.
 
-R4 adds a check, `keeps_or_flags_each_part`: every clause of the request must come back as a part with a mark, and a negated time filter must fill `updated_before`, never a within filter. R4 and R7 add these groups. Each case must pass in every run, like the safety-critical cases.
+R4 adds a check, `keeps_or_flags_each_part`. Every clause of the request must come back as a part with a mark, and a negated time filter must fill `updated_before`, never a within filter. R4 and R7 add these groups. Each case must pass in every run, like the safety-critical cases.
 
 | Group | Example requests | Expected |
 |---|---|---|
