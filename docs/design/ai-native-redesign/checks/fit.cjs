@@ -191,21 +191,29 @@ function seedControl() {
   document.body.prepend(host);
 }
 
-/* Runs in the page. Resolves once no scroll container has moved for 3 frames in a row, so nothing is measured while a
-   smooth scroll is still under way. A page that keeps scrolling past the cap is reported, so it can't pass quietly. */
-function stillScroll(cap) {
+/* Runs in the page. Resolves once nothing that can move a measured box is moving: no scroll container has moved, and
+   no finite animation is running, for 3 frames in a row. Scroll containers are found again on every frame, so one that
+   appears late is watched too. Endless animations, such as the marching dashes, and animations inside SVG, which this
+   check doesn't measure, don't count. A page still moving at the cap is reported, and a timer reports it too if frames
+   stop coming, so the check can never wait forever or pass quietly. */
+function stillPage(cap) {
   return new Promise((resolve) => {
-    const boxes = [document.scrollingElement, ...document.querySelectorAll('*')].filter((el) => el && (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth));
-    const read = () => boxes.map((el) => `${el.scrollTop},${el.scrollLeft}`).join('|');
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; resolve(v); } };
+    setTimeout(() => finish(`no steady frames within ${cap + 500} ms`), cap + 500);
+    const read = () => [document.scrollingElement, ...document.querySelectorAll('*')].filter((el) => el && (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth)).map((el) => `${el.scrollTop},${el.scrollLeft}`).join('|');
+    const running = () => document.getAnimations().filter((x) => x.playState === 'running' && x.effect && x.effect.getTiming().iterations !== Infinity && !(x.effect.target && x.effect.target.closest && x.effect.target.closest('svg'))).length;
     const t0 = performance.now();
     let last = read();
     let calm = 0;
     const tick = () => {
+      if (done) return;
       const now = read();
-      calm = now === last ? calm + 1 : 0;
+      const anims = running();
+      calm = now === last && !anims ? calm + 1 : 0;
       last = now;
-      if (calm >= 3) { resolve(''); return; }
-      if (performance.now() - t0 > cap) { resolve(`still scrolling after ${cap} ms`); return; }
+      if (calm >= 3) { finish(''); return; }
+      if (performance.now() - t0 > cap) { finish(`still moving after ${cap} ms${anims ? `, ${anims} animation${anims > 1 ? 's' : ''} running` : ''}`); return; }
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -243,7 +251,7 @@ async function main() {
         await screen.prepare(kit);
         await kit.replied();
         await kit.settle(900);
-        const moving = await o.page.evaluate(stillScroll, 2000);
+        const moving = await o.page.evaluate(stillPage, 2000);
         problems = await o.page.evaluate(measure);
         if (moving) problems.push({ kind: 'not settled', where: 'scroll', text: moving });
       } catch (e) {
