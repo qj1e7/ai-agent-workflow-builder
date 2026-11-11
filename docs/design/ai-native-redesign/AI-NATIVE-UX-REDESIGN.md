@@ -749,7 +749,7 @@ Each step was checked the way version 4 was, and its results are in `checks/resu
   - axe found no problems at any impact;
   - nothing scrolls sideways at 390 px;
   - no console errors;
-  - no animation runs under reduced motion, on any of the 178 views (89 screens, at each width);
+  - no animation runs under reduced motion, on any of the 178 views (89 screens, at 1280 and 390 px);
   - every Tab stop shows focus, on the 8 stops to the Operator's box and the 12 to Bob's Review and decide.
 - **Independent reviews.** A Fable reviewer drove each step in a browser at several widths, tried its own wordings, and tried to break the approval gate. The builder fixed every finding, and the reviewer checked the fixes:
   - step 1: 6 should-fix;
