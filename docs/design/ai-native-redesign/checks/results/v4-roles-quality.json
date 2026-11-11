@@ -1,0 +1,3611 @@
+{
+  "prototype": "docs/design/ai-native-redesign/prototype.html",
+  "paths": "docs/design/ai-native-redesign/checks/paths-v4.cjs",
+  "screens": [
+    {
+      "name": "day-one-home",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "home",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "approver-home",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "planner-setup-card",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "planner-cant-email",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "planner-watch-kubernetes",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "workflows",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "workflow-page",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "run-stopped",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "run-approval",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "software",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "agent-library",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "agent-library-tools",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "settings-connections",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "teams-drawer",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "drafts",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "home-needs-you",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "planner-check-workflows",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "planner-why-stopped",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "workflow-more-menu",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "run-detailed-activity",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "software-attention",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "library-what-it-can-do",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "offline-home",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "preview-software",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "shell-chat-pinned",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "shell-side-panel",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 1
+        },
+        "axeViolations": [
+          {
+            "id": "aria-allowed-role",
+            "impact": "minor",
+            "nodes": 1,
+            "help": "ARIA role should be appropriate for the element"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "shell-side-panel-run",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 1
+        },
+        "axeViolations": [
+          {
+            "id": "aria-allowed-role",
+            "impact": "minor",
+            "nodes": 1,
+            "help": "ARIA role should be appropriate for the element"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "shell-side-panel-approval",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 1
+        },
+        "axeViolations": [
+          {
+            "id": "aria-allowed-role",
+            "impact": "minor",
+            "nodes": 1,
+            "help": "ARIA role should be appropriate for the element"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "shell-full-page-back",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "shell-settings-how-it-works",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "mark-unbuilt-home",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "answers-watch-marks",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "answers-cross",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "answers-edit",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "answers-edit-saved",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "answers-versions",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "answers-status",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "answers-panel-building",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-card-stopped",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-panel-stopped",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 1
+        },
+        "axeViolations": [
+          {
+            "id": "aria-allowed-role",
+            "impact": "minor",
+            "nodes": 1,
+            "help": "ARIA role should be appropriate for the element"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-line-waiting",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-line-mid",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-approval-panel",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 1
+        },
+        "axeViolations": [
+          {
+            "id": "aria-allowed-role",
+            "impact": "minor",
+            "nodes": 1,
+            "help": "ARIA role should be appropriate for the element"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-ask-open",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-ask-panel",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 1
+        },
+        "axeViolations": [
+          {
+            "id": "aria-allowed-role",
+            "impact": "minor",
+            "nodes": 1,
+            "help": "ARIA role should be appropriate for the element"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-asked",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-answer",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-needs-question",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-decline-reasons",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-panel-decline-reasons",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 1
+        },
+        "axeViolations": [
+          {
+            "id": "aria-allowed-role",
+            "impact": "minor",
+            "nodes": 1,
+            "help": "ARIA role should be appropriate for the element"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-declined-run",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-declined-detail",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-declined-panel",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 1
+        },
+        "axeViolations": [
+          {
+            "id": "aria-allowed-role",
+            "impact": "minor",
+            "nodes": 1,
+            "help": "ARIA role should be appropriate for the element"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-declined-needs",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-declined-teams",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-declined-watchlist",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-workflows-last-run",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-check-card-declined",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-thread-kept",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-declined-access",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "runs-mark-approval",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-bob-asked-needs",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-bob-decided",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-bob-refused",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-bob-decide",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-bob-abilities",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-bob-panel",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 1
+        },
+        "axeViolations": [
+          {
+            "id": "aria-allowed-role",
+            "impact": "minor",
+            "nodes": 1,
+            "help": "ARIA role should be appropriate for the element"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-bob-workflows",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-bob-workflow-page",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-bob-watchlist",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-bob-offline",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-alice-n8n-refused",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-alice-build-planned",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-alice-n8n-change",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-carol-home",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-carol-build-n8n",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-carol-workflow-n8n",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-carol-menu-n8n",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-carol-n8n-ask",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-carol-n8n-dialog",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "roles-settings-people",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    }
+  ],
+  "keyboard": [
+    {
+      "target": "[data-ask]",
+      "who": "operator",
+      "presses": 8,
+      "reached": true,
+      "stopsWithoutVisibleFocus": []
+    },
+    {
+      "target": "[data-act=\"run\"][data-arg=\"sw\"]",
+      "who": "bob",
+      "presses": 12,
+      "reached": true,
+      "stopsWithoutVisibleFocus": []
+    }
+  ]
+}
