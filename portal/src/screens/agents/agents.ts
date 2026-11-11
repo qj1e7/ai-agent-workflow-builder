@@ -97,3 +97,9 @@ export function howItWorksPath({ show = null, agent = null }: { show?: string | 
   if (agent !== null) params.set('agent', agent)
   return `/settings?${params.toString()}`
 }
+
+/** True when an address names an agent that has a page to open: a platform agent, or a card the platform lists. */
+export function agentShown(agentId: string | null, cards: readonly Pick<CardView, 'card_id'>[] | undefined): boolean {
+  if (agentId === null) return false
+  return PLATFORM_AGENTS.some((agent) => agent.id === agentId) || (cards?.some((card) => card.card_id === agentId) ?? false)
+}

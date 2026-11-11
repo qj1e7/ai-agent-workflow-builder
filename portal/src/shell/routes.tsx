@@ -96,6 +96,17 @@ function Lazy({ children }: { children: ReactNode }) {
 
 export const RAIL_PAGE_IDS: readonly PageId[] = PAGE_IDS.filter((id) => PAGES[id].inRail)
 
+const under = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`)
+
+/** The rail item marked current: Chat only at Home, an item on the addresses under it, and a run or approval page under `ofRun`. */
+export function railCurrent(pathname: string, ofRun: PageId): PageId | null {
+  if (pathname === PAGES.home.path) return 'home'
+  if (under(pathname, PAGES.workflows.path)) return 'workflows'
+  if (under(pathname, PAGES.software.path)) return 'software'
+  if (under(pathname, '/runs') || under(pathname, '/approvals')) return ofRun
+  return null
+}
+
 export interface RailCount {
   readonly total: number
   readonly says: 'need you' | 'need action'

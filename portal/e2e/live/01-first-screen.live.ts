@@ -217,6 +217,7 @@ test('at 390 px wide the page does not scroll sideways, and every rail item can 
   const bar = mainMenu(page)
   await expect(bar.getByRole('link')).toHaveText([linkText('Chat'), linkText('Workflows'), linkText('Watchlist')])
   const bannerBottom = (await page.getByRole('banner').boundingBox())?.height ?? 0
+  expect(bannerBottom, 'at 390 px the header stays on one row').toBeLessThanOrEqual(70)
   const barTop = (await bar.boundingBox())?.y ?? -1
   expect(barTop, 'at 390 px the rail is a bar across the top, under the header').toBeGreaterThanOrEqual(bannerBottom - 1)
   for (const [label, to, words] of [
@@ -237,6 +238,17 @@ test('at 390 px wide the page does not scroll sideways, and every rail item can 
   }
   await expect(page.getByRole('banner')).toContainText('Workflow Builder')
   await shot(page, info, 'p1-09-phone')
+  await context.close()
+})
+
+test('WCAG 2.2 AA: no violations on every page at 900 px, where the rail is a bar across the top', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 900, height: 844 }, locale: 'en-SG', timezoneId: 'Asia/Singapore' })
+  const page = await context.newPage()
+  for (const item of PAGES) {
+    await page.goto(item.path)
+    await expect(heading(page)).toBeVisible()
+    await expectAccessible(page, path.join(OUT, 'axe'), `${item.label.toLowerCase().replaceAll(' ', '-')}-900`)
+  }
   await context.close()
 })
 

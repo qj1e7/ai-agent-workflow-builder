@@ -9,12 +9,22 @@
   max-width: calc(100% - 32px);
 }
 
+/* The test controls never cover the product. Wide, the toggle is a small button in the rail's column. At 900 px and
+   narrower it sits in the flow at the page's end (the prototype's ANS-testctl). */
+@media (max-width: 900px) {
+  .root {
+    position: static;
+    max-width: none;
+    padding: 8px 16px 16px;
+  }
+}
+
 .toggle {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   min-height: 40px;
-  padding: 0 14px;
+  padding: 0 10px;
   border: 0;
   border-radius: 999px;
   background: var(--mock-bg);
@@ -100,4 +110,22 @@
 .segmented button[aria-pressed='true'] {
   background: var(--mock-on);
   color: var(--mock-on-ink);
+}
+
+/* The label is read out but not shown until the panel is open. */
+.label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.open .label {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
 }

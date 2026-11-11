@@ -1,17 +1,19 @@
 import type { Page } from '@playwright/test'
 
 /**
- * The fit check: every piece of text stays inside the card, box, button or pill that holds it, nothing is cut off, no two
- * pieces of text sit on top of each other, buttons side by side line up, and the page never scrolls sideways.
+ * The fit check. In one page it finds text that spills out of the card, box, button or pill that holds it, text that is cut
+ * off, two pieces of text drawn on top of each other in the same layer, buttons side by side that differ in height or centre,
+ * a page that scrolls sideways, a control a fixed or floating element covers (five points of each control are tested), and
+ * product text or a control under the Test controls toggle at the top, middle and end of the page.
  *
- * `measure` is ported from the prototype's docs/design/ai-native-redesign/checks/fit.cjs and keeps its rules. Two changes:
- * it is typed, and it skips what carries data-fit-skip in place of the prototype's .testctl, because the Portal's class
- * names are hashed. Only SVG and decorative marks carry data-fit-skip. The Portal's floating Test controls are measured
- * like the rest of the page. `coverProblems` is new: it fails when a fixed or floating element covers a control.
+ * `measure` is ported from the prototype's docs/design/ai-native-redesign/checks/fit.cjs and keeps its rules. Two changes: it
+ * is typed, and it skips what carries data-fit-skip, which nothing in the Portal carries today. Text in SVG isn't measured.
+ * Unlike fit.cjs, the Test controls are not hidden. `measure` still doesn't compare text across layers, so
+ * `coverProblems` and `toggleProblems` look for what it can't see, as the prototype's ANS-testctl does for the toggle.
  */
 
 export interface Problem {
-  readonly kind: 'cut off' | 'spills' | 'overlaps' | 'uneven' | 'covered' | 'sideways' | 'not settled'
+  readonly kind: 'cut off' | 'spills' | 'overlaps' | 'uneven' | 'covered' | 'under toggle' | 'sideways' | 'not settled'
   readonly where: string
   readonly text: string
 }
@@ -222,8 +224,8 @@ export function measure(): Problem[] {
 }
 
 /**
- * Runs in the page. Adds a card with a word too long for it, a clipped label, two labels drawn on top of each other and two
- * unequal buttons. The Portal's content security policy refuses inline style attributes, so the styles are set through the
+ * Runs in the page. Adds a card with a word too long for it, a clipped label, two labels drawn on top of each other, two
+ * unequal buttons, a button a floating box covers only a part of, and a Test controls toggle sitting on the page's heading. The Portal's content security policy refuses inline style attributes, so the styles are set through the
  * style object, which it allows.
  */
 export function seedControl(): void {
@@ -247,7 +249,12 @@ export function seedControl(): void {
   document.body.prepend(host)
   const at = target.getBoundingClientRect()
   const cover = put(host, 'div', 'Floating', { position: 'fixed', zIndex: '99999', background: '#333', color: '#fff' })
-  Object.assign(cover.style, { left: `${String(at.left)}px`, top: `${String(at.top)}px`, width: `${String(at.width)}px`, height: `${String(at.height)}px` })
+  Object.assign(cover.style, { left: `${String(at.left)}px`, top: `${String(at.top)}px`, width: `${String(at.width * 0.4)}px`, height: `${String(at.height)}px` })
+  const heading = document.querySelector<HTMLElement>('main h1')
+  const under = heading?.getBoundingClientRect()
+  const toggle = put(host, 'button', 'Test controls', { position: 'fixed', zIndex: '99999', width: '60px', height: '40px', overflow: 'hidden' })
+  toggle.setAttribute('aria-expanded', 'false')
+  Object.assign(toggle.style, { left: `${String((under?.left ?? 0) + 4)}px`, top: `${String(under?.top ?? 0)}px` })
 }
 
 /**
@@ -301,7 +308,7 @@ export function stillPage(cap: number): Promise<string> {
 
 /**
  * Runs in the page. A control a fixed or floating element sits on can't be pressed. Each visible control is scrolled to the
- * bottom edge of the window, where a floating button lives, and its centre is tested for what is drawn there. The scroll
+ * bottom edge of the window, where a floating button lives, and five points of it are tested for what is drawn there. The scroll
  * position is put back. While a modal dialog is open nothing behind it can be pressed by design, so only its own controls count.
  */
 export function coverProblems(): Problem[] {
@@ -322,8 +329,9 @@ export function coverProblems(): Problem[] {
     el.scrollIntoView({ block: 'end', inline: 'nearest', behavior: 'instant' })
     const r = el.getBoundingClientRect()
     if (r.bottom > window.innerHeight + 1 || r.top < 0 || r.right > window.innerWidth + 1 || r.left < 0) continue
-    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
-    if (hit && !el.contains(hit) && !hit.contains(el)) {
+    const points: [number, number][] = [[0.5, 0.5], [0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]]
+    const hit = points.map(([fx, fy]) => document.elementFromPoint(r.left + r.width * fx, r.top + r.height * fy)).find((at) => at && !el.contains(at) && !at.contains(el))
+    if (hit) {
       const key = `${name(el)}|${name(hit)}`
       if (seen.has(key)) continue
       seen.add(key)
@@ -334,15 +342,76 @@ export function coverProblems(): Problem[] {
   return problems
 }
 
+/**
+ * Runs in the page. The Test controls toggle must never sit on the product (the prototype's ANS-testctl). At the top, middle
+ * and end of the page no text or control inside main may touch any part of the toggle's rectangle.
+ */
+export function toggleProblems(): Problem[] {
+  const toggles = [...document.querySelectorAll<HTMLElement>('button[aria-expanded]')].filter((b) => /^(hide )?test controls$/i.test((b.textContent ?? '').trim()))
+  const main = document.querySelector('main')
+  if (!toggles.length || !main) return []
+  const name = (el: Element): string => `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}${typeof el.className === 'string' && el.className.trim() ? `.${el.className.trim().split(/\s+/).slice(0, 2).join('.')}` : ''}`
+  const drawn = (el: Element): boolean => {
+    for (let e: Element | null = el; e && e !== document.documentElement; e = e.parentElement) {
+      const cs = getComputedStyle(e)
+      if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') return false
+    }
+    return true
+  }
+  /* The part of a rect that shows through every clipping ancestor. */
+  const shown = (r: DOMRect, el: Element) => {
+    let { left, top, right, bottom } = r
+    for (let e = el.parentElement; e && e !== document.documentElement; e = e.parentElement) {
+      const cs = getComputedStyle(e)
+      if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue
+      const b = e.getBoundingClientRect()
+      if (cs.overflowX !== 'visible') {
+        left = Math.max(left, b.left)
+        right = Math.min(right, b.right)
+      }
+      if (cs.overflowY !== 'visible') {
+        top = Math.max(top, b.top)
+        bottom = Math.min(bottom, b.bottom)
+      }
+    }
+    return right - left > 1 && bottom - top > 1 ? { left, top, right, bottom } : null
+  }
+  const items = [...main.querySelectorAll<HTMLElement>('*')].filter((el) => {
+    if (el.closest('svg, [data-fit-skip]')) return false
+    const text = !el.children.length && (el.textContent ?? '').trim() !== ''
+    return (text || el.matches('button, a[href], input, select, textarea, [role="button"], summary')) && drawn(el)
+  })
+  const x = window.scrollX
+  const y = window.scrollY
+  const last = Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+  const problems: Problem[] = []
+  const seen = new Set<string>()
+  for (const at of [0, Math.round(last / 2), last]) {
+    window.scrollTo(x, at)
+    for (const toggle of toggles) {
+      const b = toggle.getBoundingClientRect()
+      for (const el of items) {
+        const hit = [...el.getClientRects()].map((r) => shown(r, el)).find((s) => s && s.left < b.right && s.right > b.left && s.top < b.bottom && s.bottom > b.top)
+        const key = name(el)
+        if (!hit || seen.has(key)) continue
+        seen.add(key)
+        problems.push({ kind: 'under toggle', where: key, text: `"${(el.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40)}" is under the Test controls toggle at scroll ${String(at)}` })
+      }
+    }
+  }
+  window.scrollTo(x, y)
+  return problems
+}
+
 /** Waits for the page to stop moving, then measures it. A page that never settles is a problem of its own. */
 export async function fitProblems(page: Page): Promise<Problem[]> {
   const moving = await page.evaluate(stillPage, 2000)
-  const problems = [...(await page.evaluate(measure)), ...(await page.evaluate(coverProblems))]
+  const problems = [...(await page.evaluate(measure)), ...(await page.evaluate(coverProblems)), ...(await page.evaluate(toggleProblems))]
   if (moving) problems.push({ kind: 'not settled', where: 'scroll', text: moving })
   return problems
 }
 
-export const CONTROL_KINDS: readonly Problem['kind'][] = ['spills', 'cut off', 'overlaps', 'uneven', 'covered']
+export const CONTROL_KINDS: readonly Problem['kind'][] = ['spills', 'cut off', 'overlaps', 'uneven', 'covered', 'under toggle']
 
 export function describeProblems(problems: readonly Problem[]): string {
   return problems.map((p) => `${p.kind}: ${p.where}  ${p.text}`).join('\n')

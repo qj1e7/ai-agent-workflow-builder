@@ -18,7 +18,7 @@ import { watchAttention } from '../screens/software/software'
 import { focusMovedOutside } from './PersonChip'
 import { TEAMS_TITLE } from './TeamsPanel'
 import { TEST_NOTE } from './TestControls'
-import { oldAgentsDestination, PAGES, railCountFor, RAIL_PAGE_IDS } from './routes'
+import { oldAgentsDestination, PAGES, railCountFor, railCurrent, RAIL_PAGE_IDS } from './routes'
 
 const ORIGIN = 'http://portal.test'
 const MORNING = new Date('2026-10-29T03:00:00Z')
@@ -135,8 +135,20 @@ describe('the rail', () => {
     expect(new Set(currentLinks(html))).toEqual(new Set([path]))
   })
 
-  it('keeps Home current only at Home', () => {
+  it('keeps Home current only at Home, and an item current on the addresses under it', () => {
     expect(currentLinks(render({ path: '/' }))).toEqual(['/'])
+    expect(currentLinks(render({ path: '/workflows/uc_01JB7' }))).toEqual(['/workflows'])
+    expect(currentLinks(render({ path: '/software/anything' }))).toEqual(['/software'])
+  })
+
+  it('marks Workflows current on a run page and an approval page, and Watchlist when the run is the watchlist’s', () => {
+    expect(currentLinks(render({ path: '/runs/run_01JB8' }))).toEqual(['/workflows'])
+    expect(currentLinks(render({ path: '/approvals/apr_01JB8' }))).toEqual(['/workflows'])
+    expect(railCurrent('/runs/run_01JB8', 'software')).toBe('software')
+    expect(railCurrent('/approvals/apr_01JB8', 'software')).toBe('software')
+    expect(railCurrent('/runs/run_01JB8', 'workflows')).toBe('workflows')
+    expect(railCurrent('/workflows', 'software')).toBe('workflows')
+    expect(railCurrent('/settings', 'workflows')).toBeNull()
   })
 
   it('marks nothing current for a path the rail does not name', () => {
@@ -240,7 +252,7 @@ describe('a run or an approval link', () => {
     const html = render({ path })
     expect(headings(html)).toEqual([])
     expect(text(mainOf(html))).toBe('Loading')
-    expect(currentLinks(html)).toEqual([])
+    expect(currentLinks(html)).toEqual(['/workflows'])
   })
 })
 

@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { CONTROL_KINDS, coverProblems, describeProblems, fitProblems, measure, seedControl } from './support/fit'
+import { CONTROL_KINDS, coverProblems, describeProblems, fitProblems, measure, seedControl, toggleProblems } from './support/fit'
 import { connectMockModel } from './support/settings'
 import { expect, test } from './support/test'
 import { devContext } from './support/ui'
@@ -78,13 +78,13 @@ for (const user of USERS) {
   }
 }
 
-test('the check can fail: a seeded overflow, a clipped label, an overlap, two unequal buttons and a covered button are all caught', async ({ browser }) => {
+test('the check can fail: a seeded overflow, a clipped label, an overlap, two unequal buttons, a part-covered button and a toggle on the product are all caught', async ({ browser }) => {
   const context = await devContext(browser, 'alice', { reducedMotion: true })
   const page = await context.newPage()
   await page.goto('/workflows')
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   await page.evaluate(seedControl)
-  const kinds = new Set([...(await page.evaluate(measure)), ...(await page.evaluate(coverProblems))].map((p) => p.kind))
+  const kinds = new Set([...(await page.evaluate(measure)), ...(await page.evaluate(coverProblems)), ...(await page.evaluate(toggleProblems))].map((p) => p.kind))
   expect([...kinds].sort(), 'the check names each seeded problem').toEqual(expect.arrayContaining([...CONTROL_KINDS].sort()))
   await context.close()
 })

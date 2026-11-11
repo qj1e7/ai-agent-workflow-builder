@@ -1,15 +1,25 @@
-import { NavLink } from 'react-router'
+import { Link, useLocation, useMatch } from 'react-router'
 import { HOME_REFRESH_MS, useHome } from '../api/homeQueries'
-import { useWatchlist } from '../api/queries'
+import { useApproval, useRun, useUseCase, useWatchlist } from '../api/queries'
 import { needsTotal } from '../screens/home/home'
 import { watchAttention } from '../screens/software/software'
 import { cx } from '../ui/cx'
-import { PAGES, railCountFor, RAIL_PAGE_IDS } from './routes'
+import { PAGES, railCountFor, railCurrent, RAIL_PAGE_IDS, type PageId } from './routes'
 import styles from './Rail.module.css'
 
 interface RailProps {
   readonly operator: boolean
   readonly onList: boolean
+}
+
+/** A run page, or an approval page, belongs to Workflows, or to the Watchlist when the run is the watchlist's. */
+function useRunsRailItem(): PageId {
+  const approval = useMatch('/approvals/:approvalId')
+  const run = useMatch('/runs/:runId')
+  const approvalView = useApproval(approval?.params.approvalId ?? '', { enabled: approval !== null })
+  const runView = useRun(run?.params.runId ?? approvalView.data?.run_id ?? '')
+  const useCase = useUseCase(runView.data?.use_case_id ?? '')
+  return useCase.data?.template === 'software_watchlist' ? 'software' : 'workflows'
 }
 
 /**
@@ -19,6 +29,8 @@ interface RailProps {
 export function Rail({ operator, onList }: RailProps) {
   const home = useHome({ enabled: onList })
   const watchlist = useWatchlist({ enabled: onList && operator, poll: HOME_REFRESH_MS })
+  const { pathname } = useLocation()
+  const current = railCurrent(pathname, useRunsRailItem())
   const needs = home.data ? needsTotal(home.data) : 0
   const watch = watchAttention(watchlist.data?.software ?? [])
   return (
@@ -27,7 +39,7 @@ export function Rail({ operator, onList }: RailProps) {
         const { path, railLabel, icon: Icon } = PAGES[id]
         const count = railCountFor(id, operator, needs, watch)
         return (
-          <NavLink key={id} to={path} end={id === 'home'} className={cx(styles['link'])} aria-label={count ? `${railLabel}, ${count.total} ${count.says}` : undefined}>
+          <Link key={id} to={path} aria-current={current === id ? 'page' : undefined} className={cx(styles['link'])} aria-label={count ? `${railLabel}, ${count.total} ${count.says}` : undefined}>
             <Icon size={22} />
             <span>{railLabel}</span>
             {count ? (
@@ -35,7 +47,7 @@ export function Rail({ operator, onList }: RailProps) {
                 {count.total}
               </span>
             ) : null}
-          </NavLink>
+          </Link>
         )
       })}
     </nav>

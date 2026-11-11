@@ -51,7 +51,7 @@
   }
 }
 
-@media (min-width: 901px) and (max-width: 1045px), (max-width: 380px) {
+@media (min-width: 901px) and (max-width: 1045px), (max-width: 420px) {
   .brandText {
     position: absolute;
     width: 1px;

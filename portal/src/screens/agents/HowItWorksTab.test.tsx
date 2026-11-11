@@ -175,20 +175,32 @@ describe('a card', () => {
     }
   })
 
-  it('tells the shell that the page moves focus itself when an agent is asked for, and not otherwise', () => {
-    const heading = (path: string) =>
-      /<h1\b[^>]*>/.exec(
-        renderToStaticMarkup(
-          <QueryClientProvider client={new QueryClient()}>
-            <MemoryRouter initialEntries={[path]}>
-              <SettingsPage heading="Settings" lead="" now={new Date('2026-11-09T03:00:00Z')} />
-            </MemoryRouter>
-          </QueryClientProvider>,
-        ),
-      )?.[0] ?? ''
+  it('tells the shell that the page moves focus itself once an agent that exists is asked for, and not otherwise', () => {
+    const heading = (path: string, me: Me = ALICE) => {
+      const session = createDevSession(null)
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
+      queryClient.setQueryData(['me', session.cacheScope()], me)
+      queryClient.setQueryData(['agent-cards', session.cacheScope()], CARDS)
+      return (
+        /<h1\b[^>]*>/.exec(
+          renderToStaticMarkup(
+            <QueryClientProvider client={queryClient}>
+              <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
+                <MemoryRouter initialEntries={[path]}>
+                  <SettingsPage heading="Settings" lead="" now={new Date('2026-11-09T03:00:00Z')} />
+                </MemoryRouter>
+              </ApiProvider>
+            </QueryClientProvider>,
+          ),
+        )?.[0] ?? ''
+      )
+    }
     expect(heading(HOW)).not.toContain('data-page-moves-focus')
     expect(heading(agentAt('crd_version_checker'))).toContain('data-page-moves-focus')
     expect(heading(agentAt('planner'))).toContain('data-page-moves-focus')
+    expect(heading(agentAt('crd_nothing')), 'a missing agent opens no dialog, so the heading takes focus').not.toContain('data-page-moves-focus')
+    expect(heading(agentAt('planner'), BOB), 'an Approver has no How it works').not.toContain('data-page-moves-focus')
+    expect(heading('/settings?tab=people&agent=planner'), 'another tab').not.toContain('data-page-moves-focus')
   })
 
   it('labels the dialog with its title', () => {

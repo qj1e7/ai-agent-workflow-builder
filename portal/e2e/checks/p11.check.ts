@@ -170,7 +170,7 @@ test('@lane3 bob approves from Home and the item leaves his Home without a reloa
     await approvalItem(page, viaRunPage.approvalId).getByRole('link', { name: 'Review and decide' }).click()
     await page.getByRole('button', { name: 'Approve 1 ticket' }).click()
     await backend.waitToLeave(viaRunPage.runId, 'awaiting_approval')
-    await mainMenu(page).getByRole('link', { name: 'Home' }).click()
+    await mainMenu(page).getByRole('link', { name: 'Chat' }).click()
     await expect(page.getByRole('heading', { level: 2, name: /^Needs you/ })).toBeVisible()
     await expect(approvalItem(page, viaRunPage.approvalId)).toHaveCount(0)
     const sameAfterRunPage = await stillTheSamePage(page)
@@ -187,7 +187,7 @@ test('@lane3 bob approves from Home and the item leaves his Home without a reloa
     await page.getByRole('button', { name: 'Approve 1 ticket' }).click()
     const decidedAt = Date.now()
     await backend.waitToLeave(viaTeams.runId, 'awaiting_approval')
-    await mainMenu(page).getByRole('link', { name: 'Home' }).click()
+    await mainMenu(page).getByRole('link', { name: 'Chat' }).click()
     await expect(approvalItem(page, viaTeams.approvalId)).toHaveCount(0, { timeout: 5_000 })
     const leftAfterMs = Date.now() - decidedAt
     await page.getByRole('button', { name: /^Teams, practice copy/ }).click()
@@ -471,7 +471,7 @@ test('@review-video bob decides from Home, then alice sees her stopped run with 
   await page.waitForTimeout(1_000)
   await page.getByRole('button', { name: 'Approve 1 ticket' }).click()
   await page.waitForTimeout(4_000)
-  await mainMenu(page).getByRole('link', { name: 'Home' }).click()
+  await mainMenu(page).getByRole('link', { name: 'Chat' }).click()
   await expect(approvalItem(page, waiting.approvalId)).toHaveCount(0)
   await page.waitForTimeout(4_000)
   await page.getByRole('button', { name: 'Test controls' }).click()
@@ -544,7 +544,7 @@ async function menuMoveTo(browser: Browser, from: string, label: string, slowHom
 
 test('@focus-home a menu move to Home puts focus on its heading, like every other page, once Home has loaded', async ({ browser }) => {
   const rows: { from: string; to: string; slowHomeMs: number; active: string }[] = []
-  for (const slow of [0, 0, 0, 0, 0, 300, 300, 300]) rows.push({ from: '/settings', to: 'Home', slowHomeMs: slow, active: await menuMoveTo(browser, '/settings', 'Home', slow) })
+  for (const slow of [0, 0, 0, 0, 0, 300, 300, 300]) rows.push({ from: '/settings', to: 'Chat', slowHomeMs: slow, active: await menuMoveTo(browser, '/settings', 'Chat', slow) })
   for (const slow of [0, 300]) rows.push({ from: '/settings', to: 'Workflows', slowHomeMs: slow, active: await menuMoveTo(browser, '/settings', 'Workflows', slow) })
   save('probes', 'focus-home.json', rows)
   expect(rows.filter((row) => !row.active.startsWith('h1')), 'every move ends with focus on the page heading').toEqual([])
