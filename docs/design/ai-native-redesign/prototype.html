@@ -962,7 +962,7 @@ select { padding: 9px 12px; width: auto; }
 .askbox { display: grid; gap: 12px; }
 .askbox textarea { min-height: 80px; }
 .asks { display: grid; gap: 8px; padding: 12px 14px; border-radius: var(--r-well); background: var(--sunk); }
-.asks h3 { font-size: 0.875rem; color: var(--muted); }
+.asks h2 { font-size: 0.875rem; color: var(--muted); }
 .asks ul { display: grid; gap: 12px; }
 .asks li { display: grid; gap: 6px; overflow-wrap: anywhere; }
 .asks li + li { padding-top: 12px; border-top: 1px solid var(--hair); }
@@ -3514,7 +3514,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const list = S.asks[id] || [];
     if (!list.length) return '';
     const who = (u, cap1) => (u === S.user ? (cap1 ? 'You' : 'you') : nm(u));
-    return `<section class="asks" aria-labelledby="asks-h-${id}"><h3 id="asks-h-${id}" tabindex="-1">Questions</h3><ul>${list.map((x, i) => `<li>
+    return `<section class="asks" aria-labelledby="asks-h-${id}"><h2 id="asks-h-${id}" tabindex="-1">Questions</h2><ul>${list.map((x, i) => `<li>
         <p><b>${who(x.by, true)} asked ${who(x.to)}:</b> ${esc(x.text)}</p>
         ${x.answer ? `<p><b>${who(x.to, true)} answered:</b> ${esc(x.answer)}</p>` : x.to === S.user ? `<form class="askbox" data-submit="askAnswer" data-arg="${id}:${i}" novalidate><div class="field"><label for="ans-${id}-${i}">Your answer for ${nm(x.by)}</label><textarea id="ans-${id}-${i}" data-askans="${id}:${i}" rows="2"${fieldAttrs(`ans-${id}-${i}`, S.answerErr === `${id}:${i}` ? 'Type your answer.' : '', 'It shows on this request. It doesn’t decide anything.')}>${esc(S.answerText[`${id}:${i}`] || '')}</textarea>${fieldNotes(`ans-${id}-${i}`, S.answerErr === `${id}:${i}` ? 'Type your answer.' : '', 'It shows on this request. It doesn’t decide anything.')}</div><div class="btns"><button type="submit" class="btn primary sm">Send answer</button></div></form>` : '<p class="small muted">No answer yet. The request is still waiting for a yes.</p>'}
       </li>`).join('')}</ul></section>`;

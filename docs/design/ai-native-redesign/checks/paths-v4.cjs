@@ -975,7 +975,7 @@ add('APPR-ask', 'An Approver asks the requester a question: the request stays op
   await t.field('#ask-sw', 'Has the FastAPI change been tested with our login service?', 'Type the question');
   await t.click('main form[data-submit="askSend"] button[type="submit"]', 'Send question', { decision: true });
   await t.expectText('The question shows on the request', /You asked Carol: Has the FastAPI change been tested with our login service\?\s+No answer yet\. The request is still waiting for a yes\./, 'main .asks');
-  await t.expect('Focus is on the questions’ heading', focused(t.page), 'h3#asks-h-sw');
+  await t.expect('Focus is on the questions’ heading', focused(t.page), 'h2#asks-h-sw');
   await t.expectText('The request is still waiting for a yes', /Waiting for a yes/, 'main .runhead');
   await t.expectCount('Approve and Decline are still there', 'main :is([data-act="approve"], [data-act="decline"])[data-arg="sw"]', 2);
   await t.setup((k) => ctl(k, 'answerAs', 'sw:0'));
