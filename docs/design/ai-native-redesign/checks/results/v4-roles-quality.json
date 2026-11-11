@@ -1147,16 +1147,9 @@
           "critical": 0,
           "serious": 0,
           "moderate": 0,
-          "minor": 1
+          "minor": 0
         },
-        "axeViolations": [
-          {
-            "id": "aria-allowed-role",
-            "impact": "minor",
-            "nodes": 1,
-            "help": "ARIA role should be appropriate for the element"
-          }
-        ],
+        "axeViolations": [],
         "sidewaysScroll": {
           "scrolls": false,
           "scrollWidth": 390,
@@ -1197,16 +1190,9 @@
           "critical": 0,
           "serious": 0,
           "moderate": 0,
-          "minor": 1
+          "minor": 0
         },
-        "axeViolations": [
-          {
-            "id": "aria-allowed-role",
-            "impact": "minor",
-            "nodes": 1,
-            "help": "ARIA role should be appropriate for the element"
-          }
-        ],
+        "axeViolations": [],
         "sidewaysScroll": {
           "scrolls": false,
           "scrollWidth": 390,
@@ -1247,16 +1233,9 @@
           "critical": 0,
           "serious": 0,
           "moderate": 0,
-          "minor": 1
+          "minor": 0
         },
-        "axeViolations": [
-          {
-            "id": "aria-allowed-role",
-            "impact": "minor",
-            "nodes": 1,
-            "help": "ARIA role should be appropriate for the element"
-          }
-        ],
+        "axeViolations": [],
         "sidewaysScroll": {
           "scrolls": false,
           "scrollWidth": 390,
@@ -1770,16 +1749,9 @@
           "critical": 0,
           "serious": 0,
           "moderate": 0,
-          "minor": 1
+          "minor": 0
         },
-        "axeViolations": [
-          {
-            "id": "aria-allowed-role",
-            "impact": "minor",
-            "nodes": 1,
-            "help": "ARIA role should be appropriate for the element"
-          }
-        ],
+        "axeViolations": [],
         "sidewaysScroll": {
           "scrolls": false,
           "scrollWidth": 390,
@@ -1906,16 +1878,9 @@
           "critical": 0,
           "serious": 0,
           "moderate": 0,
-          "minor": 1
+          "minor": 0
         },
-        "axeViolations": [
-          {
-            "id": "aria-allowed-role",
-            "impact": "minor",
-            "nodes": 1,
-            "help": "ARIA role should be appropriate for the element"
-          }
-        ],
+        "axeViolations": [],
         "sidewaysScroll": {
           "scrolls": false,
           "scrollWidth": 390,
@@ -1999,16 +1964,9 @@
           "critical": 0,
           "serious": 0,
           "moderate": 0,
-          "minor": 1
+          "minor": 0
         },
-        "axeViolations": [
-          {
-            "id": "aria-allowed-role",
-            "impact": "minor",
-            "nodes": 1,
-            "help": "ARIA role should be appropriate for the element"
-          }
-        ],
+        "axeViolations": [],
         "sidewaysScroll": {
           "scrolls": false,
           "scrollWidth": 390,
@@ -2221,16 +2179,9 @@
           "critical": 0,
           "serious": 0,
           "moderate": 0,
-          "minor": 1
+          "minor": 0
         },
-        "axeViolations": [
-          {
-            "id": "aria-allowed-role",
-            "impact": "minor",
-            "nodes": 1,
-            "help": "ARIA role should be appropriate for the element"
-          }
-        ],
+        "axeViolations": [],
         "sidewaysScroll": {
           "scrolls": false,
           "scrollWidth": 390,
@@ -2357,16 +2308,9 @@
           "critical": 0,
           "serious": 0,
           "moderate": 0,
-          "minor": 1
+          "minor": 0
         },
-        "axeViolations": [
-          {
-            "id": "aria-allowed-role",
-            "impact": "minor",
-            "nodes": 1,
-            "help": "ARIA role should be appropriate for the element"
-          }
-        ],
+        "axeViolations": [],
         "sidewaysScroll": {
           "scrolls": false,
           "scrollWidth": 390,
@@ -2966,16 +2910,9 @@
           "critical": 0,
           "serious": 0,
           "moderate": 0,
-          "minor": 1
+          "minor": 0
         },
-        "axeViolations": [
-          {
-            "id": "aria-allowed-role",
-            "impact": "minor",
-            "nodes": 1,
-            "help": "ARIA role should be appropriate for the element"
-          }
-        ],
+        "axeViolations": [],
         "sidewaysScroll": {
           "scrolls": false,
           "scrollWidth": 390,
@@ -3550,6 +3487,307 @@
     },
     {
       "name": "roles-settings-people",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "fix-bob-people",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "fix-bob-declines",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "fix-edit-tickets",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "fix-gitlab",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "fix-day-choice",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "fix-open-software",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "fix-run-log",
       "desktop": {
         "axe": {
           "critical": 0,

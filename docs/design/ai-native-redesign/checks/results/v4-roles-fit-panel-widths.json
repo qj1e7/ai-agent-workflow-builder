@@ -1238,6 +1238,111 @@
       "screen": "roles-settings-people",
       "width": 1000,
       "problems": []
+    },
+    {
+      "screen": "fix-bob-people",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-people",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-people",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-declines",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-declines",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-declines",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "fix-edit-tickets",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "fix-edit-tickets",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "fix-edit-tickets",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "fix-gitlab",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "fix-gitlab",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "fix-gitlab",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "fix-day-choice",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "fix-day-choice",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "fix-day-choice",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "fix-open-software",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "fix-open-software",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "fix-open-software",
+      "width": 1000,
+      "problems": []
+    },
+    {
+      "screen": "fix-run-log",
+      "width": 901,
+      "problems": []
+    },
+    {
+      "screen": "fix-run-log",
+      "width": 950,
+      "problems": []
+    },
+    {
+      "screen": "fix-run-log",
+      "width": 1000,
+      "problems": []
     }
   ]
 }

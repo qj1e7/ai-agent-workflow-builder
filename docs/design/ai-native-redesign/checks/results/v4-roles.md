@@ -2,7 +2,7 @@
 
 Prototype: `docs/design/ai-native-redesign/prototype.html`. Paths: `docs/design/ai-native-redesign/checks/paths-v4.cjs`.
 
-Real scenarios: 145 passed, 0 failed, 1 not possible. Control (must fail): failed, as it should.
+Real scenarios: 163 passed, 0 failed, 1 not possible. Control (must fail): failed, as it should.
 
 | Id | Width | Task | Passed | Clicks | Fields | Selects | Decisions | Screens | Notes |
 |---|---|---|---|---|---|---|---|---|---|
@@ -152,5 +152,23 @@ Real scenarios: 145 passed, 0 failed, 1 not possible. Control (must fail): faile
 | N8N-settings | 1280 | n8n access is set in Settings, People and permissions, for Operators only, and giving it to Alice shows her the n8n views | yes | 7 | 0 | 0 | 2 | 4 |  |
 | MARK-roles | 1280 | With Mark what isn’t built on, Bob’s box, his decisions card, the read-only note, the n8n blocks and the n8n access box each carry a label | yes | 5 | 2 | 0 | 0 | 3 |  |
 | KEYS-ROLE | 1280 | With the keyboard only, Bob reaches his box, asks, and reaches Review and decide in the answer, each stop with a visible focus | yes | 22 | 0 | 0 | 0 | 1 |  |
+| FIX-deny-default | 1280 | An Approver is refused every change, including Settings, agents and asking the team: the actions deny anything not opened to him | yes | 0 | 0 | 0 | 0 | 1 |  |
+| FIX-name-not-command | 1280 | A question about a workflow whose name holds a schedule word, such as “weekly”, gets its state, for Bob and for Alice | yes | 2 | 2 | 0 | 0 | 1 |  |
+| FIX-decided-whole | 1280 | Asking to see past decisions reads the whole question, with no part marked as not followed | yes | 1 | 1 | 0 | 0 | 1 |  |
+| FIX-approve-any-object | 1280 | An Approver’s approve or decline goes to the request whatever it names, and a second change in the same request is still refused | yes | 4 | 4 | 0 | 0 | 1 |  |
+| FIX-decisions-detail | 1280 | Today’s decisions carry their outcome from the run page, and asking about declines lists only declines | yes | 2 | 2 | 0 | 0 | 1 |  |
+| FIX-bob-settings | 1280 | Bob’s People and permissions is text he can read, with no control he can’t use | yes | 2 | 0 | 0 | 0 | 2 |  |
+| FIX-rail-count | 1280 | The Watchlist count is for whoever can act on it: Alice’s agrees with the page, and Bob has none | yes | 1 | 0 | 0 | 0 | 2 |  |
+| FIX-wide | 1920 | On a wide screen the header lines up with the page, Workflows rows use their width, and the chat sits next to its side panel | yes | 4 | 1 | 0 | 0 | 2 |  |
+| FIX-wide | 1440 | On a wide screen the header lines up with the page, Workflows rows use their width, and the chat sits next to its side panel | yes | 4 | 1 | 0 | 0 | 2 |  |
+| FIX-starts-count | 1280 | “Set up another workflow” says as many places to start as it shows | yes | 1 | 1 | 0 | 0 | 1 |  |
+| FIX-offline-count | 1280 | With no AI model, Needs you lists the model row it counts, pointing to the button above it | yes | 0 | 0 | 0 | 0 | 1 |  |
+| FIX-gitlab | 1280 | A request that reads a system the Planner can’t is a cross, and Set up the part I can sets it up on Jira | yes | 2 | 1 | 0 | 1 | 1 |  |
+| FIX-day-choice | 1280 | After choosing one of two days, the workflow keeps the chosen day and names only the other as left out | yes | 3 | 1 | 0 | 2 | 1 |  |
+| FIX-edit-tickets | 1280 | Changing a workflow made on Home to run every day changes the tickets it reads too, shown on the card and kept on its page | yes | 4 | 1 | 0 | 1 | 3 |  |
+| FIX-open-software | 1280 | “Open Redis on the Software page” opens Redis, for Alice and for Bob | yes | 6 | 2 | 0 | 0 | 1 |  |
+| FIX-never-mind | 1280 | A set-up card and an add-software card each have Never mind, which changes nothing | yes | 5 | 2 | 0 | 0 | 2 |  |
+| FIX-mark-more | 1280 | Mark what isn’t built outlines the run line, the three answers, the last-run line, the count line, the edit card, versions and the declined record | yes | 6 | 1 | 0 | 0 | 5 |  |
+| FIX-run-times | 1280 | Each entry in a run page’s log has its time, the first with its day | yes | 3 | 0 | 0 | 0 | 4 |  |
 
 A click includes a key press on a button. Menu steps and page changes are included. A decision is also counted as a click, a select or a field. Test controls are never counted.

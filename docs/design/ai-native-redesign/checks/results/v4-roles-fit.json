@@ -7,7 +7,8 @@
     1280,
     1024,
     861,
-    768
+    768,
+    390
   ],
   "controlCaught": true,
   "total": 0,
@@ -43,6 +44,11 @@
       "problems": []
     },
     {
+      "screen": "day-one-home",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "home",
       "width": 1920,
       "problems": []
@@ -70,6 +76,11 @@
     {
       "screen": "home",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "home",
+      "width": 390,
       "problems": []
     },
     {
@@ -103,6 +114,11 @@
       "problems": []
     },
     {
+      "screen": "approver-home",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "planner-setup-card",
       "width": 1920,
       "problems": []
@@ -130,6 +146,11 @@
     {
       "screen": "planner-setup-card",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "planner-setup-card",
+      "width": 390,
       "problems": []
     },
     {
@@ -163,6 +184,11 @@
       "problems": []
     },
     {
+      "screen": "planner-cant-email",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "planner-watch-kubernetes",
       "width": 1920,
       "problems": []
@@ -190,6 +216,11 @@
     {
       "screen": "planner-watch-kubernetes",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "planner-watch-kubernetes",
+      "width": 390,
       "problems": []
     },
     {
@@ -223,6 +254,11 @@
       "problems": []
     },
     {
+      "screen": "workflows",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "workflow-page",
       "width": 1920,
       "problems": []
@@ -250,6 +286,11 @@
     {
       "screen": "workflow-page",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "workflow-page",
+      "width": 390,
       "problems": []
     },
     {
@@ -283,6 +324,11 @@
       "problems": []
     },
     {
+      "screen": "run-stopped",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "run-approval",
       "width": 1920,
       "problems": []
@@ -310,6 +356,11 @@
     {
       "screen": "run-approval",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "run-approval",
+      "width": 390,
       "problems": []
     },
     {
@@ -343,6 +394,11 @@
       "problems": []
     },
     {
+      "screen": "software",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "agent-library",
       "width": 1920,
       "problems": []
@@ -370,6 +426,11 @@
     {
       "screen": "agent-library",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "agent-library",
+      "width": 390,
       "problems": []
     },
     {
@@ -403,6 +464,11 @@
       "problems": []
     },
     {
+      "screen": "agent-library-tools",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "settings-connections",
       "width": 1920,
       "problems": []
@@ -430,6 +496,11 @@
     {
       "screen": "settings-connections",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "settings-connections",
+      "width": 390,
       "problems": []
     },
     {
@@ -463,6 +534,11 @@
       "problems": []
     },
     {
+      "screen": "teams-drawer",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "drafts",
       "width": 1920,
       "problems": []
@@ -490,6 +566,11 @@
     {
       "screen": "drafts",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "drafts",
+      "width": 390,
       "problems": []
     },
     {
@@ -523,6 +604,11 @@
       "problems": []
     },
     {
+      "screen": "home-needs-you",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "planner-check-workflows",
       "width": 1920,
       "problems": []
@@ -550,6 +636,11 @@
     {
       "screen": "planner-check-workflows",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "planner-check-workflows",
+      "width": 390,
       "problems": []
     },
     {
@@ -583,6 +674,11 @@
       "problems": []
     },
     {
+      "screen": "planner-why-stopped",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "workflow-more-menu",
       "width": 1920,
       "problems": []
@@ -610,6 +706,11 @@
     {
       "screen": "workflow-more-menu",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "workflow-more-menu",
+      "width": 390,
       "problems": []
     },
     {
@@ -643,6 +744,11 @@
       "problems": []
     },
     {
+      "screen": "run-detailed-activity",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "software-attention",
       "width": 1920,
       "problems": []
@@ -670,6 +776,11 @@
     {
       "screen": "software-attention",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "software-attention",
+      "width": 390,
       "problems": []
     },
     {
@@ -703,6 +814,11 @@
       "problems": []
     },
     {
+      "screen": "library-what-it-can-do",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "offline-home",
       "width": 1920,
       "problems": []
@@ -730,6 +846,11 @@
     {
       "screen": "offline-home",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "offline-home",
+      "width": 390,
       "problems": []
     },
     {
@@ -763,6 +884,11 @@
       "problems": []
     },
     {
+      "screen": "preview-software",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "shell-chat-pinned",
       "width": 1920,
       "problems": []
@@ -790,6 +916,11 @@
     {
       "screen": "shell-chat-pinned",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "shell-chat-pinned",
+      "width": 390,
       "problems": []
     },
     {
@@ -823,6 +954,11 @@
       "problems": []
     },
     {
+      "screen": "shell-side-panel",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "shell-side-panel-run",
       "width": 1920,
       "problems": []
@@ -850,6 +986,11 @@
     {
       "screen": "shell-side-panel-run",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "shell-side-panel-run",
+      "width": 390,
       "problems": []
     },
     {
@@ -883,6 +1024,11 @@
       "problems": []
     },
     {
+      "screen": "shell-side-panel-approval",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "shell-full-page-back",
       "width": 1920,
       "problems": []
@@ -910,6 +1056,11 @@
     {
       "screen": "shell-full-page-back",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "shell-full-page-back",
+      "width": 390,
       "problems": []
     },
     {
@@ -943,6 +1094,11 @@
       "problems": []
     },
     {
+      "screen": "shell-settings-how-it-works",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "mark-unbuilt-home",
       "width": 1920,
       "problems": []
@@ -970,6 +1126,11 @@
     {
       "screen": "mark-unbuilt-home",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "mark-unbuilt-home",
+      "width": 390,
       "problems": []
     },
     {
@@ -1003,6 +1164,11 @@
       "problems": []
     },
     {
+      "screen": "answers-watch-marks",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "answers-cross",
       "width": 1920,
       "problems": []
@@ -1030,6 +1196,11 @@
     {
       "screen": "answers-cross",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "answers-cross",
+      "width": 390,
       "problems": []
     },
     {
@@ -1063,6 +1234,11 @@
       "problems": []
     },
     {
+      "screen": "answers-edit",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "answers-edit-saved",
       "width": 1920,
       "problems": []
@@ -1090,6 +1266,11 @@
     {
       "screen": "answers-edit-saved",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "answers-edit-saved",
+      "width": 390,
       "problems": []
     },
     {
@@ -1123,6 +1304,11 @@
       "problems": []
     },
     {
+      "screen": "answers-versions",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "answers-status",
       "width": 1920,
       "problems": []
@@ -1150,6 +1336,11 @@
     {
       "screen": "answers-status",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "answers-status",
+      "width": 390,
       "problems": []
     },
     {
@@ -1183,6 +1374,11 @@
       "problems": []
     },
     {
+      "screen": "answers-panel-building",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "runs-card-stopped",
       "width": 1920,
       "problems": []
@@ -1210,6 +1406,11 @@
     {
       "screen": "runs-card-stopped",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "runs-card-stopped",
+      "width": 390,
       "problems": []
     },
     {
@@ -1243,6 +1444,11 @@
       "problems": []
     },
     {
+      "screen": "runs-panel-stopped",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "runs-line-waiting",
       "width": 1920,
       "problems": []
@@ -1270,6 +1476,11 @@
     {
       "screen": "runs-line-waiting",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "runs-line-waiting",
+      "width": 390,
       "problems": []
     },
     {
@@ -1303,6 +1514,11 @@
       "problems": []
     },
     {
+      "screen": "runs-line-mid",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "runs-approval-panel",
       "width": 1920,
       "problems": []
@@ -1330,6 +1546,11 @@
     {
       "screen": "runs-approval-panel",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "runs-approval-panel",
+      "width": 390,
       "problems": []
     },
     {
@@ -1363,6 +1584,11 @@
       "problems": []
     },
     {
+      "screen": "runs-ask-open",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "runs-ask-panel",
       "width": 1920,
       "problems": []
@@ -1390,6 +1616,11 @@
     {
       "screen": "runs-ask-panel",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "runs-ask-panel",
+      "width": 390,
       "problems": []
     },
     {
@@ -1423,6 +1654,11 @@
       "problems": []
     },
     {
+      "screen": "runs-asked",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "runs-answer",
       "width": 1920,
       "problems": []
@@ -1450,6 +1686,11 @@
     {
       "screen": "runs-answer",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "runs-answer",
+      "width": 390,
       "problems": []
     },
     {
@@ -1483,6 +1724,11 @@
       "problems": []
     },
     {
+      "screen": "runs-needs-question",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "runs-decline-reasons",
       "width": 1920,
       "problems": []
@@ -1510,6 +1756,11 @@
     {
       "screen": "runs-decline-reasons",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "runs-decline-reasons",
+      "width": 390,
       "problems": []
     },
     {
@@ -1543,6 +1794,11 @@
       "problems": []
     },
     {
+      "screen": "runs-panel-decline-reasons",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "runs-declined-run",
       "width": 1920,
       "problems": []
@@ -1570,6 +1826,11 @@
     {
       "screen": "runs-declined-run",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-run",
+      "width": 390,
       "problems": []
     },
     {
@@ -1603,6 +1864,11 @@
       "problems": []
     },
     {
+      "screen": "runs-declined-detail",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "runs-declined-panel",
       "width": 1920,
       "problems": []
@@ -1630,6 +1896,11 @@
     {
       "screen": "runs-declined-panel",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-panel",
+      "width": 390,
       "problems": []
     },
     {
@@ -1663,6 +1934,11 @@
       "problems": []
     },
     {
+      "screen": "runs-declined-needs",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "runs-declined-teams",
       "width": 1920,
       "problems": []
@@ -1690,6 +1966,11 @@
     {
       "screen": "runs-declined-teams",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "runs-declined-teams",
+      "width": 390,
       "problems": []
     },
     {
@@ -1723,6 +2004,11 @@
       "problems": []
     },
     {
+      "screen": "runs-declined-watchlist",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "runs-workflows-last-run",
       "width": 1920,
       "problems": []
@@ -1750,6 +2036,11 @@
     {
       "screen": "runs-workflows-last-run",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "runs-workflows-last-run",
+      "width": 390,
       "problems": []
     },
     {
@@ -1783,6 +2074,11 @@
       "problems": []
     },
     {
+      "screen": "runs-check-card-declined",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "runs-thread-kept",
       "width": 1920,
       "problems": []
@@ -1810,6 +2106,11 @@
     {
       "screen": "runs-thread-kept",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "runs-thread-kept",
+      "width": 390,
       "problems": []
     },
     {
@@ -1843,6 +2144,11 @@
       "problems": []
     },
     {
+      "screen": "runs-declined-access",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "runs-mark-approval",
       "width": 1920,
       "problems": []
@@ -1870,6 +2176,11 @@
     {
       "screen": "runs-mark-approval",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "runs-mark-approval",
+      "width": 390,
       "problems": []
     },
     {
@@ -1903,6 +2214,11 @@
       "problems": []
     },
     {
+      "screen": "roles-bob-asked-needs",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "roles-bob-decided",
       "width": 1920,
       "problems": []
@@ -1930,6 +2246,11 @@
     {
       "screen": "roles-bob-decided",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-decided",
+      "width": 390,
       "problems": []
     },
     {
@@ -1963,6 +2284,11 @@
       "problems": []
     },
     {
+      "screen": "roles-bob-refused",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "roles-bob-decide",
       "width": 1920,
       "problems": []
@@ -1990,6 +2316,11 @@
     {
       "screen": "roles-bob-decide",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-decide",
+      "width": 390,
       "problems": []
     },
     {
@@ -2023,6 +2354,11 @@
       "problems": []
     },
     {
+      "screen": "roles-bob-abilities",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "roles-bob-panel",
       "width": 1920,
       "problems": []
@@ -2050,6 +2386,11 @@
     {
       "screen": "roles-bob-panel",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-panel",
+      "width": 390,
       "problems": []
     },
     {
@@ -2083,6 +2424,11 @@
       "problems": []
     },
     {
+      "screen": "roles-bob-workflows",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "roles-bob-workflow-page",
       "width": 1920,
       "problems": []
@@ -2110,6 +2456,11 @@
     {
       "screen": "roles-bob-workflow-page",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-workflow-page",
+      "width": 390,
       "problems": []
     },
     {
@@ -2143,6 +2494,11 @@
       "problems": []
     },
     {
+      "screen": "roles-bob-watchlist",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "roles-bob-offline",
       "width": 1920,
       "problems": []
@@ -2170,6 +2526,11 @@
     {
       "screen": "roles-bob-offline",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "roles-bob-offline",
+      "width": 390,
       "problems": []
     },
     {
@@ -2203,6 +2564,11 @@
       "problems": []
     },
     {
+      "screen": "roles-alice-n8n-refused",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "roles-alice-build-planned",
       "width": 1920,
       "problems": []
@@ -2230,6 +2596,11 @@
     {
       "screen": "roles-alice-build-planned",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "roles-alice-build-planned",
+      "width": 390,
       "problems": []
     },
     {
@@ -2263,6 +2634,11 @@
       "problems": []
     },
     {
+      "screen": "roles-alice-n8n-change",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "roles-carol-home",
       "width": 1920,
       "problems": []
@@ -2290,6 +2666,11 @@
     {
       "screen": "roles-carol-home",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "roles-carol-home",
+      "width": 390,
       "problems": []
     },
     {
@@ -2323,6 +2704,11 @@
       "problems": []
     },
     {
+      "screen": "roles-carol-build-n8n",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "roles-carol-workflow-n8n",
       "width": 1920,
       "problems": []
@@ -2353,6 +2739,11 @@
       "problems": []
     },
     {
+      "screen": "roles-carol-workflow-n8n",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "roles-carol-menu-n8n",
       "width": 1920,
       "problems": []
@@ -2383,6 +2774,11 @@
       "problems": []
     },
     {
+      "screen": "roles-carol-menu-n8n",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "roles-carol-n8n-ask",
       "width": 1920,
       "problems": []
@@ -2413,6 +2809,11 @@
       "problems": []
     },
     {
+      "screen": "roles-carol-n8n-ask",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "roles-carol-n8n-dialog",
       "width": 1920,
       "problems": []
@@ -2443,6 +2844,11 @@
       "problems": []
     },
     {
+      "screen": "roles-carol-n8n-dialog",
+      "width": 390,
+      "problems": []
+    },
+    {
       "screen": "roles-settings-people",
       "width": 1920,
       "problems": []
@@ -2470,6 +2876,256 @@
     {
       "screen": "roles-settings-people",
       "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "roles-settings-people",
+      "width": 390,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-people",
+      "width": 1920,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-people",
+      "width": 1440,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-people",
+      "width": 1280,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-people",
+      "width": 1024,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-people",
+      "width": 861,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-people",
+      "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-people",
+      "width": 390,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-declines",
+      "width": 1920,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-declines",
+      "width": 1440,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-declines",
+      "width": 1280,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-declines",
+      "width": 1024,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-declines",
+      "width": 861,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-declines",
+      "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "fix-bob-declines",
+      "width": 390,
+      "problems": []
+    },
+    {
+      "screen": "fix-edit-tickets",
+      "width": 1920,
+      "problems": []
+    },
+    {
+      "screen": "fix-edit-tickets",
+      "width": 1440,
+      "problems": []
+    },
+    {
+      "screen": "fix-edit-tickets",
+      "width": 1280,
+      "problems": []
+    },
+    {
+      "screen": "fix-edit-tickets",
+      "width": 1024,
+      "problems": []
+    },
+    {
+      "screen": "fix-edit-tickets",
+      "width": 861,
+      "problems": []
+    },
+    {
+      "screen": "fix-edit-tickets",
+      "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "fix-edit-tickets",
+      "width": 390,
+      "problems": []
+    },
+    {
+      "screen": "fix-gitlab",
+      "width": 1920,
+      "problems": []
+    },
+    {
+      "screen": "fix-gitlab",
+      "width": 1440,
+      "problems": []
+    },
+    {
+      "screen": "fix-gitlab",
+      "width": 1280,
+      "problems": []
+    },
+    {
+      "screen": "fix-gitlab",
+      "width": 1024,
+      "problems": []
+    },
+    {
+      "screen": "fix-gitlab",
+      "width": 861,
+      "problems": []
+    },
+    {
+      "screen": "fix-gitlab",
+      "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "fix-gitlab",
+      "width": 390,
+      "problems": []
+    },
+    {
+      "screen": "fix-day-choice",
+      "width": 1920,
+      "problems": []
+    },
+    {
+      "screen": "fix-day-choice",
+      "width": 1440,
+      "problems": []
+    },
+    {
+      "screen": "fix-day-choice",
+      "width": 1280,
+      "problems": []
+    },
+    {
+      "screen": "fix-day-choice",
+      "width": 1024,
+      "problems": []
+    },
+    {
+      "screen": "fix-day-choice",
+      "width": 861,
+      "problems": []
+    },
+    {
+      "screen": "fix-day-choice",
+      "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "fix-day-choice",
+      "width": 390,
+      "problems": []
+    },
+    {
+      "screen": "fix-open-software",
+      "width": 1920,
+      "problems": []
+    },
+    {
+      "screen": "fix-open-software",
+      "width": 1440,
+      "problems": []
+    },
+    {
+      "screen": "fix-open-software",
+      "width": 1280,
+      "problems": []
+    },
+    {
+      "screen": "fix-open-software",
+      "width": 1024,
+      "problems": []
+    },
+    {
+      "screen": "fix-open-software",
+      "width": 861,
+      "problems": []
+    },
+    {
+      "screen": "fix-open-software",
+      "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "fix-open-software",
+      "width": 390,
+      "problems": []
+    },
+    {
+      "screen": "fix-run-log",
+      "width": 1920,
+      "problems": []
+    },
+    {
+      "screen": "fix-run-log",
+      "width": 1440,
+      "problems": []
+    },
+    {
+      "screen": "fix-run-log",
+      "width": 1280,
+      "problems": []
+    },
+    {
+      "screen": "fix-run-log",
+      "width": 1024,
+      "problems": []
+    },
+    {
+      "screen": "fix-run-log",
+      "width": 861,
+      "problems": []
+    },
+    {
+      "screen": "fix-run-log",
+      "width": 768,
+      "problems": []
+    },
+    {
+      "screen": "fix-run-log",
+      "width": 390,
       "problems": []
     }
   ]

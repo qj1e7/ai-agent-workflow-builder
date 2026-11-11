@@ -4,8 +4,8 @@
   "version": "v4",
   "summary": {
     "real": {
-      "total": 145,
-      "passed": 145,
+      "total": 163,
+      "passed": 163,
       "failed": 0,
       "notPossible": 1
     },
@@ -9627,6 +9627,1010 @@
           "nav": false,
           "decision": false,
           "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-deny-default",
+      "key": "FIX-deny-default@1280",
+      "title": "An Approver is refused every change, including Settings, agents and asking the team: the actions deny anything not opened to him",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 0,
+        "fields": 0,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 0
+      },
+      "screenList": [
+        "workflows"
+      ],
+      "steps": [],
+      "errors": []
+    },
+    {
+      "id": "FIX-name-not-command",
+      "key": "FIX-name-not-command@1280",
+      "title": "A question about a workflow whose name holds a schedule word, such as “weekly”, gets its state, for Bob and for Alice",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 2,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 4
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: how is the weekly closed-ticket summary doing?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: how is the weekly closed-ticket summary doing?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-decided-whole",
+      "key": "FIX-decided-whole@1280",
+      "title": "Asking to see past decisions reads the whole question, with no part marked as not followed",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: show my past decisions",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-approve-any-object",
+      "key": "FIX-approve-any-object@1280",
+      "title": "An Approver’s approve or decline goes to the request whatever it names, and a second change in the same request is still refused",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 4,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 8
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: approve the upgrade",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: decline that request",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: approve it",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "field",
+          "label": "Type: approve the upgrade and pause the morning new-ticket check",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-decisions-detail",
+      "key": "FIX-decisions-detail@1280",
+      "title": "Today’s decisions carry their outcome from the run page, and asking about declines lists only declines",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 2,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 4
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: did I decline anything?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: What did I decide before?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-bob-settings",
+      "key": "FIX-bob-settings@1280",
+      "title": "Bob’s People and permissions is text he can read, with no control he can’t use",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 2
+      },
+      "screenList": [
+        "home",
+        "settings"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Settings",
+          "nav": true,
+          "decision": false,
+          "screen": "settings"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "People and permissions",
+          "nav": false,
+          "decision": false,
+          "screen": "settings"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-rail-count",
+      "key": "FIX-rail-count@1280",
+      "title": "The Watchlist count is for whoever can act on it: Alice’s agrees with the page, and Bob has none",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 1
+      },
+      "screenList": [
+        "home",
+        "software"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open the Watchlist",
+          "nav": true,
+          "decision": false,
+          "screen": "software"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-wide",
+      "key": "FIX-wide@1920",
+      "title": "On a wide screen the header lines up with the page, Workflows rows use their width, and the chat sits next to its side panel",
+      "viewport": 1920,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 1,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 5
+      },
+      "screenList": [
+        "home",
+        "workflows"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Back to Chat",
+          "nav": true,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Open Morning new-ticket check from the card",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-wide",
+      "key": "FIX-wide@1440",
+      "title": "On a wide screen the header lines up with the page, Workflows rows use their width, and the chat sits next to its side panel",
+      "viewport": 1440,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 1,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 5
+      },
+      "screenList": [
+        "home",
+        "workflows"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Back to Chat",
+          "nav": true,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Open Morning new-ticket check from the card",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-starts-count",
+      "key": "FIX-starts-count@1280",
+      "title": "“Set up another workflow” says as many places to start as it shows",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: set up another workflow",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-offline-count",
+      "key": "FIX-offline-count@1280",
+      "title": "With no AI model, Needs you lists the model row it counts, pointing to the button above it",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 0,
+        "fields": 0,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 0
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [],
+      "errors": []
+    },
+    {
+      "id": "FIX-gitlab",
+      "key": "FIX-gitlab@1280",
+      "title": "A request that reads a system the Planner can’t is a cross, and Set up the part I can sets it up on Jira",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 1,
+        "screens": 1,
+        "interactions": 3
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Every Monday at 9am, sum up the closed tickets from GitLab in MOCK",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Set up the part I can",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-day-choice",
+      "key": "FIX-day-choice@1280",
+      "title": "After choosing one of two days, the workflow keeps the chosen day and names only the other as left out",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 2,
+        "screens": 1,
+        "interactions": 4
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Every Monday and Friday at 9am, sum up the closed tickets in MOCK",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Monday",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Set up the part I can",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-edit-tickets",
+      "key": "FIX-edit-tickets@1280",
+      "title": "Changing a workflow made on Home to run every day changes the tickets it reads too, shown on the card and kept on its page",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 1,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 1,
+        "screens": 3,
+        "interactions": 5
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "workflow"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Make the friday closed ticket summary run every day",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Save change",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Open Friday closed ticket summary",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-open-software",
+      "key": "FIX-open-software@1280",
+      "title": "“Open Redis on the Software page” opens Redis, for Alice and for Bob",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 2,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 8
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Open Redis on the Software page",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Open Redis on the Software page",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Close",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: Open Redis on the Software page",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Open Redis on the Software page",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "Close",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-never-mind",
+      "key": "FIX-never-mind@1280",
+      "title": "A set-up card and an add-software card each have Never mind, which changes nothing",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 5,
+        "fields": 2,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 7
+      },
+      "screenList": [
+        "home",
+        "software"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Never mind",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "field",
+          "label": "Type: Monitor Kubernetes releases",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Never mind",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Open the Watchlist",
+          "nav": true,
+          "decision": false,
+          "screen": "software"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-mark-more",
+      "key": "FIX-mark-more@1280",
+      "title": "Mark what isn’t built outlines the run line, the three answers, the last-run line, the count line, the edit card, versions and the declined record",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 1,
+        "selects": 0,
+        "navs": 4,
+        "decisions": 0,
+        "screens": 5,
+        "interactions": 7
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "workflow",
+        "run",
+        "software"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Make the morning new-ticket check run on Mondays only",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Save change",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Open Morning new-ticket check",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "See the run",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Open the Watchlist",
+          "nav": true,
+          "decision": false,
+          "screen": "software"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-run-times",
+      "key": "FIX-run-times@1280",
+      "title": "Each entry in a run page’s log has its time, the first with its day",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 0,
+        "selects": 0,
+        "navs": 3,
+        "decisions": 0,
+        "screens": 4,
+        "interactions": 3
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "workflow",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open Morning new-ticket check",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "See the run",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
         }
       ],
       "errors": []
