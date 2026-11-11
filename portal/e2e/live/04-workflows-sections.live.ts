@@ -339,6 +339,8 @@ async function lineFits(lines: Locator, { mayWrap = false } = {}): Promise<{ row
 for (const user of ['alice', 'bob']) {
   test(`${user} sees each workflow's last run on one line in its row at every width${user === 'alice' ? ', and the chat’s check card says the same' : ''}`, async ({ browser, backend }, info) => {
     const { approvalId } = await backend.waitingRun('alice')
+    const quietName = `Last run lane ${randomUUID().slice(0, 6)}`
+    await backend.post('alice', '/api/v1/agent-use-cases', { name: quietName, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents: [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }] }, undefined, [201])
     const context = await devContext(browser, user)
     const page = await context.newPage()
     const rows = page.getByRole('list', { name: 'Workflows' }).locator('li[data-workflow-id]')
@@ -357,7 +359,7 @@ for (const user of ['alice', 'bob']) {
       for (const text of await lastLine(rows).allInnerTexts()) expect(text === 'No runs yet' || LAST_RUN.test(text), `"${text}" is a last-run line`).toBe(true)
       await expectAccessible(page, path.join(OUT, 'axe'), `workflows-last-run-${user}-${width}`)
       await page.getByRole('button', { name: 'Search workflows' }).click()
-      await page.getByRole('searchbox', { name: 'Find a workflow' }).fill('Find bug tickets')
+      await page.getByRole('searchbox', { name: 'Find a workflow' }).fill(quietName)
       const quiet = rows.filter({ hasNotText: /Review and decide|See why it stopped/ })
       await expect(quiet.first(), 'with no action in any row, the list gives its width to the descriptions').toBeVisible()
       expect(await rows.count(), 'only rows with no action are left').toBe(await quiet.count())
