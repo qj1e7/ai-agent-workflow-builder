@@ -176,6 +176,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .brand { font-size: 1rem; }
   .brand-ai { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
+/* Wider than a phone, the header lines up with the page under it: past the rail, in the same column as the content. */
+@media (min-width: 901px) {
+  .hdr { display: grid; grid-template-columns: 96px minmax(0, 1fr) 8px; }
+  .hdr-in { grid-column: 2; width: 100%; max-width: 1180px; padding-left: 16px; padding-right: 16px; }
+}
 /* The rail (ADR 0043): a slim column on the left with Chat, Workflows and Watchlist. On a phone it is a bar across the top. */
 .shell { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: start; }
 .rail { position: sticky; top: calc(60px + env(safe-area-inset-top, 0px)); display: grid; gap: 4px; padding: 6px 6px 0 12px; }
@@ -360,7 +365,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .composer textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Once the conversation starts, Home is the chat: the box docks at the bottom and the thread fills the page (ADR 0043). */
 .wrap.chatmode { max-width: none; width: 100%; margin: 0; padding: 0; flex: 1; min-height: 0; overflow: hidden; }
-.home.chatlayout { display: flex; gap: 0; height: 100%; max-width: none; margin: 0; }
+/* The chat and its side panel share the page's column, so on a wide screen they sit together under the header. */
+.home.chatlayout { display: flex; gap: 0; height: 100%; width: 100%; max-width: 1180px; margin: 0 auto; }
 .chatcol { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
 .chatbar, .chatin, .chatdock { width: 100%; max-width: 820px; margin: 0 auto; padding-inline: 16px; }
 .chatbar { padding-top: 12px; display: grid; gap: 8px; }
@@ -514,6 +520,8 @@ html:has(#app.chatting) { overflow: hidden; overscroll-behavior: none; }
 .wf-next { font-size: 0.875rem; color: var(--muted); white-space: nowrap; }
 .wf-act { justify-self: end; position: relative; z-index: var(--z-raised); }
 .wf-act:empty { display: none; }
+/* When no row has an action, the list gives that column to the descriptions. */
+@media (min-width: 961px) { .wf-list.no-act .wf-row { grid-template-columns: minmax(0, 1fr) auto 172px; } }
 .section > h2 .sec-tool { margin-left: auto; }
 .wf-add { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 16px 20px; border: 0; border-radius: 0 0 var(--r-card) var(--r-card); background: none; color: var(--muted); cursor: pointer; transition: background-color var(--dur-press) ease, transform var(--dur-press) var(--ease-out); }
 .wf-add b { color: var(--ink); }
@@ -703,6 +711,9 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .chat-marker { display: flex; align-items: center; gap: 12px; font-size: 0.875rem; font-weight: 600; color: var(--muted); text-align: center; }
 .chat-marker::before, .chat-marker::after { content: ""; flex: 1 1 24px; height: 1px; background: var(--rule); }
 .chat-marker > span { max-width: 560px; }
+/* The run page's log gives each entry its time (ADR 0043). */
+.log-at { font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 8px; }
+.cmsg-who .log-at { margin: 0 0 0 8px; }
 .chat-marker > span > svg { vertical-align: -2px; margin-right: 6px; }
 .chat-marker .faces { vertical-align: -5px; margin-right: 8px; }
 .chat-marker.wait { color: var(--amber-ink); }
@@ -837,6 +848,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .roles .checkrow { margin: 0; }
 /* n8n access isn't a role, so it sits under the roles, and the two roles line up down the list. */
 .person .person-n8n { grid-column: 3; margin: 0; }
+.roles-text { font-weight: 600; text-align: right; }
 .person-note { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 0; }
 .role-rules { margin: 4px 0 18px; }
 /* Usage figures: one container split by hairlines, label over value. No tile per figure. */
@@ -1804,6 +1816,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
      A schedule change publishes a new version, from the chat's edit card or the page's schedule editor alike. Undo
      publishes the version before it again, so the list only grows. Version 1 is the one the workflow was turned on with. */
   const versionsOf = (id) => [{ v: 1 }].concat(S.vers[id] || []);
+  /* A workflow made on Home reads the tickets of its schedule's period, as its set-up card does when the two disagree:
+     run every day, it reads the day's tickets. Open tickets have no period. */
+  const nrOf = (id) => (id === 'conf' ? S.nr : madeOf(id) ? madeOf(id).nr : null);
+  const periodFor = (nr, sched) => (nr.tickets && nr.tickets !== 'open' && SCHED_PERIOD[sched.freq]) || nr.period;
   const verNow = (id) => versionsOf(id).length;
   /* Work everything out first, then write, so a failure leaves nothing half-saved. Saving the watchlist's schedule
      makes the saver its owner, and an owner can't be one of its named Approvers, so they come off that list. */
@@ -1813,7 +1829,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const named = id === 'sw' && apprOf('sw') ? copyAppr(apprOf('sw')) : null;
     if (named) named.steps.forEach((x) => { if (x.first === S.user) { x.first = hasBackup(x) ? x.backup : ''; x.backup = 'none'; off = true; } else if (x.backup === S.user) { x.backup = 'none'; off = true; } });
     S.sched[id] = { ...sched };
-    if (id === 'conf') S.nr = { ...S.nr, sched: { ...sched } };
+    const nr = nrOf(id);
+    if (nr) { const next = { ...nr, sched: { ...sched }, period: periodFor(nr, sched) }; if (id === 'conf') S.nr = next; else madeOf(id).nr = next; }
     if (id === 'sw') { S.swOwner = S.user; if (off) S.appr.sw = named; }
     const v = verNow(id) + 1;
     (S.vers[id] = S.vers[id] || []).push({ v, from, to: { ...sched }, by: S.user, undid, via });
@@ -1821,7 +1838,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
   const verText = (x) => (x.v === 1 ? 'The version it was turned on with.' : x.undid ? `${nm(x.by)} undid version ${x.undid}, so it runs ${lc(schedText(x.to))} again.` : `${nm(x.by)} changed when it runs from ${lc(schedText(x.from))} to ${lc(schedText(x.to))}.`);
   /* The version list a workflow's page shows once it has more than one, newest first. */
-  const versionsList = (id) => `<ol class="timeline" aria-label="Versions, newest first">${versionsOf(id).slice().reverse().map((x) => `<li><b>Version ${x.v}</b><span>${x.v > 1 ? 'Today, 9:10. ' : ''}${verText(x)}${x.v === verNow(id) ? ' This is the version running now.' : ''}</span></li>`).join('')}</ol>`;
+  const versionsList = (id) => `<ol class="timeline" aria-label="Versions, newest first" data-unbuilt="Versions (ADR 0043)">${versionsOf(id).slice().reverse().map((x) => `<li><b>Version ${x.v}</b><span>${x.v > 1 ? 'Today, 9:10. ' : ''}${verText(x)}${x.v === verNow(id) ? ' This is the version running now.' : ''}</span></li>`).join('')}</ol>`;
   const versionsPanel = (id) => (S.vers[id] ? `<div class="panel" style="margin-top:16px"><h2>Versions</h2>${versionsList(id)}</div>` : '');
   const routineIds = () => (S.firstDay ? [] : ['sw', 'issues', 'nudge', 'access']).concat(S.made.map((_, i) => `made:${i}`), S.conf !== 'none' ? ['conf'] : []).filter((id) => !S.deleted[id] && (!BASE[id] || !BASE[id].planned || shows(BASE[id].planned)));
   const has = (id) => routineIds().includes(id);
@@ -2068,7 +2085,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const e = S.wiz.edits;
     const f = draftNr();
     const rows = [];
-    if (it.badSource) rows.push({ key: 'source', label: 'Reads', value: it.badSource, state: 'cant', note: `I can only read ${andList(canRead())} so far. Go back and describe a task about Jira tickets, or ask the team to add ${it.badSource}.`, block: 'the task uses a system I can read' });
+    if (it.badSource) rows.push({ key: 'source', label: 'Reads', value: it.badSource, state: 'cant', note: `I can only read ${andList(canRead())} so far, so the part I can do reads Jira tickets instead.`, block: 'the task uses a system I can read' });
     /* The sentence says the schedule in words; the When section holds its control and its missing state. */
     const s = S.wiz.sched || { freq: it.freq || '', day: it.day || '', time: it.time || '' };
     rows.push({ key: 'when', label: 'When', value: Object.keys(schedProblems(s)).length ? whenAsked(it) : schedText(s), state: 'ok', note: '' });
@@ -2671,8 +2688,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const approvalsWord = (n) => (n === 1 ? '1 approval' : `${n} approvals`);
 
   /* The rail (ADR 0043): Chat, Workflows and Watchlist, each with a count. A slim column on the left; on a phone it is a bar across the top.
-     Workflows counts what needs you. The Watchlist counts software that needs action. An Approver who can't set up workflows
-     sees what needs them on Chat, where their approvals are. */
+     Workflows counts what needs you. The Watchlist counts software that needs action, for an Operator, who can act on it. An
+     Approver who can't set up workflows sees what needs them on Chat, where their approvals are. */
   /* What the Software page lists under Needs attention. The rail's badge and the page's heading both read it. */
   function swAttnCount(hit = () => true) {
     const full = shows('registries');
@@ -2691,7 +2708,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const items = [
       ['home', 'Chat', I.chat(22), v === 'home', count(me().op ? 0 : k, 'needs')],
       ['workflows', 'Workflows', I.grid(22), ['workflows', 'workflow'].includes(v) || (v === 'run' && !swRun), count(me().op ? k : 0, 'needs')],
-      ['software', 'Watchlist', I.box(22), v === 'software' || swRun, count(swAttnCount(), 'sw')],
+      ['software', 'Watchlist', I.box(22), v === 'software' || swRun, count(me().op ? swAttnCount() : 0, 'sw')],
     ];
     return `<nav class="rail" aria-label="Main">${items.map(([arg, label, icon, on, n]) => `<button class="rail-a" data-act="go" data-arg="${arg}"${on ? ' aria-current="page"' : ''}>${icon}<span>${label}</span>${n}</button>`).join('')}</nav>`;
   }
@@ -2819,13 +2836,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function needRow(t, i, primary) {
     return `<li class="nrow" data-flip="n:${keyOf(t.title)}" data-stagger style="--i:${i}"${t.unbuilt ? ` data-unbuilt="${t.unbuilt}"` : ''}><span class="ico ${t.kind}">${t.icon}</span><div class="nrow-text"><b>${t.title}${t.planned ? ` ${PLANNED_TAG}` : ''}</b><span class="nrow-why">${t.held || (t.why ? firstSentence(t.why) : t.meta)}</span></div>${i === 0 && primary ? oneAction(t.actions) : firstButton(t.actions)}</li>`;
   }
-  /* o.total: the count shown when the strip leaves an item out. o.primary: false when the screen's one primary action sits elsewhere. */
+  /* o.primary: false when the screen's one primary action sits elsewhere. */
   function needsStrip(items, max = 3, unbuilt = '', o = {}) {
     const n = items.length;
     const primary = o.primary !== false;
     const shown = byGroup(items).slice(0, max);
     return `<section class="section needs" aria-labelledby="needs-h" data-flip-group="needs"${unbuilt ? ` data-unbuilt="${unbuilt}"` : ''}>
-      <h2 id="needs-h">Needs you <span class="count" data-val="needs-count">${o.total || n}</span></h2>
+      <h2 id="needs-h">Needs you <span class="count" data-val="needs-count">${n}</span></h2>
       ${NEED_GROUPS.map(([g, label]) => { const list = shown.filter((t) => needGroup(t) === g); return list.length ? `<div class="ngroup" role="group" aria-labelledby="ng-${g}"><h3 id="ng-${g}">${label}</h3><ul class="queue" data-flip-group="nrows-${g}">${list.map((t) => needRow(t, shown.indexOf(t), primary)).join('')}</ul></div>` : ''; }).join('')}
       ${n > max ? '<p class="small"><button class="linkbtn" data-act="go" data-arg="workflows">See all on Workflows</button></p>' : ''}
     </section>`;
@@ -2878,7 +2895,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const narrow = () => window.matchMedia('(max-width: 900px)').matches;
   window.matchMedia('(max-width: 900px)').addEventListener('change', () => { if (S.panel) render(); });
   function itemOf(act, arg, el) {
-    if (el && el.dataset.open) { const [kind, id] = el.dataset.open.split(':'); return { kind, id }; }
+    /* A software's key can hold a colon ("ok:Redis"), so only the first one splits. */
+    if (el && el.dataset.open) { const at = el.dataset.open.indexOf(':'); return { kind: el.dataset.open.slice(0, at), id: el.dataset.open.slice(at + 1) }; }
     if (act === 'workflow' && arg !== 'sw') return { kind: 'workflow', id: arg };
     if (act === 'run') return { kind: 'run', id: arg };
     return null;
@@ -2920,7 +2938,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (m.state === 'waiting' && canApprove(p.id)) return { title: esc(r.name), page: `run:${p.id}`, body: approvePanel(p.id, true) };
     const t = m.state === 'failed' && TROUBLE[p.id] ? TROUBLE[p.id]() : null;
     const answers = t ? `${answersDL(t)}${troubleActs(t)}` : askThread(p.id);
-    return { title: esc(r.name), page: `run:${p.id}`, body: `<div>${pill(runTone[m.state])}</div><p>${m.state === 'declined' ? declinedWords(p.id) : m.headline}</p>${runLine(m, stepStates(m))}${answers}` };
+    return { title: esc(r.name), page: `run:${p.id}`, body: `<div>${pill(runTone[m.state])}</div><p${m.state === 'declined' ? ' data-unbuilt="The declined record (ADR 0043)"' : ''}>${m.state === 'declined' ? declinedWords(p.id) : m.headline}</p>${runLine(m, stepStates(m))}${answers}` };
   }
   /* The build view follows its card: it becomes the workflow once the card turns it on, and closes when the draft is
      saved or discarded, or when the window becomes as narrow as a phone, where the panel never opens by itself. */
@@ -2973,8 +2991,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* An Approver who can't set up workflows asks questions only (ADR 0043), so each suggestion is one. */
   const APPROVER_ASKS = ['What is waiting for my yes?', 'What did I decide before?', 'How are the workflows doing?'];
   const stoppedIds = () => routineIds().filter((id) => !S.paused[id] && status(id).tone === 'bad');
-  /* The rows Home shows under the box. Offline, the hero already carries Connect a model, so its row is left out. */
-  const homeNeeds = () => needs().filter((t) => curModel() || t.id !== 'model');
+  /* The rows Home shows under the box: every item it counts. Offline, the hero carries Connect a model, so the model
+     row keeps its place in the list but points up to it instead of offering the button twice. */
+  const homeNeeds = () => needs().map((t) => (t.id === 'model' ? { ...t, actions: '', held: 'Connect one with the button above.' } : t));
   /* Software versioning is the front door (8 Nov). With software on the watchlist the chips are about it; with none, the
      day-one pair. The general workflow builder is frozen, so no chip sets up a general workflow. */
   function suggestions() {
@@ -3056,7 +3075,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return `<div class="home planner" data-unbuilt="The offline Home (ADR 0037)">
       <div class="welcome offline">${face('lead', 128, 'sorry', { id: 'hero' })}<div class="hello-text"><h1 tabindex="-1">I can’t read new requests until an AI model is connected</h1><p class="lead">Without an AI model, the Planner can’t answer questions. The Software watchlist keeps checking for new releases.</p>
         <div class="btns"><button class="btn primary" data-act="setGo" data-arg="model">Connect a model</button></div></div></div>
-      ${items.length ? needsStrip(items, 3, '', { total: needs().length, primary: false }) : ''}
+      ${items.length ? needsStrip(items, 3, '', { primary: false }) : ''}
       ${abilitiesHTML()}
     </div>`;
   }
@@ -3114,6 +3133,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const justOn = S.justOn;
     S.justOn = null;
     let mainUsed = false;
+    const anyAct = order.some((id) => !inNeeds.has(id) && actionFor(id));
     const rows = order.map((id, i) => {
       const r = R(id);
       let act = inNeeds.has(id) ? '' : actionFor(id);
@@ -3123,7 +3143,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         <span class="wf-pills">${pills(id)}${BASE[id] && BASE[id].planned ? PLANNED_TAG : ''}</span>
         <span class="wf-next">${S.paused[id] ? '' : `Next run ${r.next}`}</span>
         <span class="wf-act">${act}</span>
-        <p class="wf-last" data-val="last:${id}">${lastRunLine(id)}</p>
+        <p class="wf-last" data-val="last:${id}" data-unbuilt="Last run line (ADR 0043)">${lastRunLine(id)}</p>
       </li>`;
     }).join('');
     const canAdd = me().op && !q && S.filter === 'all';
@@ -3138,7 +3158,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         <div class="filters btns" role="group" aria-label="Show">${FILTERS.map(([k, l]) => `<button data-act="filter" data-arg="${k}" aria-pressed="${S.filter === k}">${l}</button>`).join('')}</div></div>` : ''}
       ${empty}
       ${ids.length && !order.length ? '<div class="quiet"><b>No workflows match</b>Try other words, or see them all.<div class="btns quiet-act"><button class="btn sm" data-act="clearFind" data-arg="workflows">Show all workflows</button></div></div>' : ''}
-      ${rows || add ? `<ul class="wf-list" aria-label="Workflows" data-flip-group="wf-list">${rows}${add}</ul>` : ''}
+      ${rows || add ? `<ul class="wf-list${anyAct ? '' : ' no-act'}" aria-label="Workflows" data-flip-group="wf-list">${rows}${add}</ul>` : ''}
       ${canAdd && n8nOK() ? `<p class="small muted n8n-start" data-unbuilt="Start in n8n (ADR 0026, 0027)">Prefer to build it yourself? <button class="linkbtn" data-act="n8nNew">Start in n8n</button> ${PLANNED_TAG}</p>` : ''}
       </section>`;
   }
@@ -3315,7 +3335,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       ${S.vers.sw ? `<h3>Versions</h3>${versionsList('sw')}` : ''}
       ${S.editingAppr === 'sw' ? `<div data-flip="ed:a:sw" data-enter="reveal">${apprEditor('sw')}</div>` : ''}
     </div></section>`;
-    return `<div class="pagehead"><div><h1 tabindex="-1">Software watchlist</h1><p>${watchLine()}</p>${op ? '' : opsNote('the watchlist')}</div>
+    return `<div class="pagehead"><div><h1 tabindex="-1">Software watchlist</h1><p data-unbuilt="The count line (ADR 0043)">${watchLine()}</p>${op ? '' : opsNote('the watchlist')}</div>
         ${day1 || !op ? '' : '<button class="btn" data-act="checkNow">Check now</button>'}</div>
       ${attnSec}${watching}${how}
       ${op ? '<p class="note" style="margin-top:24px">Ask the Planner on Home for a release check, and it adds the software here.</p>' : ''}`;
@@ -3443,7 +3463,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function runLine(m, states, o = {}) {
     const mini = !o.who;
     const k = mini ? 12 : 1;
-    return `<ol class="line${mini ? ' mini' : ''}" style="--n:${m.stations.length}" aria-label="Steps of this run">${m.stations.map((s, i) => {
+    return `<ol class="line${mini ? ' mini' : ''}" style="--n:${m.stations.length}" aria-label="Steps of this run" data-unbuilt="The run line’s links between steps (ADR 0043). The built run page has the steps">${m.stations.map((s, i) => {
       const st = states[i];
       const ic = (fn, big, small) => fn(mini ? small : big);
       /* A declined run's last step, Ended, is a plain dot, so it never reads as Done. */
@@ -3478,7 +3498,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const moved = P.shown < P.at;
     const line = runLine(m, states, { who: (s, i, st) => whoAvatar(s.who, 44, faceOf(s, i, st), `st:${id}:${i}`), arrive: moved ? P.at : -1, grow: moved ? [P.shown, finished ? P.at : P.at - 1] : null });
     /* A step that was skipped never speaks, so a declined run never says it created anything. */
-    const msgs = m.stations.slice(0, Math.min(P.at, m.end) + 1).filter((s) => !s.skip).map((s) => s.msg).filter(Boolean);
+    const times = stepTimes(id, m);
+    const msgs = m.stations.slice(0, Math.min(P.at, m.end) + 1).map((s, i) => (!s.skip && s.msg ? { ...s.msg, at: logAt(times, i) } : null)).filter(Boolean);
     P.feedNext = msgs.length;
     P.latest = msgs.length ? `${feedName(msgs[msgs.length - 1].who)}: ${msgs[msgs.length - 1].text}` : '';
     const open = runDetailOpen();
@@ -3507,12 +3528,26 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const chatAvatar = (w, state = 'idle') => (w === 'portal' || w === 'platform' ? `<span class="sysav app">${I.mark()}</span>` : w === 'gate' ? `<span class="sysav gate">${I.shield(20)}</span>` : face(w, 40, state));
   /* The run as a group chat. Events from the platform and the approval gate are quiet markers; agents speak in bubbles.
      When the Planner speaks, the agents it brings in join the chat. */
+  /* When each step of a run happened, for the run page's timed log (ADR 0043). A run starts at its own time, asks for a
+     yes when its request was sent, and goes on once the decision came today. The sample's steps are a minute apart. */
+  const RUN_START = { sw: () => new Date(2026, 9, 26, 9, 0), issues: () => (S.issues === 'failed' ? new Date(2026, 9, 27, 8, 0) : NOW), nudge: () => (S.nudge === 'failed' ? new Date(2026, 9, 23, 16, 0) : NOW), access: () => new Date(2026, 9, 19, 9, 0), edit: () => new Date(2026, 9, 27, 9, 15) };
+  const RUN_ASKED = { sw: () => SW_ASKED, access: () => ACCESS_ASKED };
+  function stepTimes(id, m) {
+    const start = (RUN_START[id] || (() => NOW))();
+    const gi = m.stations.findIndex((s) => s.gate);
+    const plus = (d, k) => new Date(d.getTime() + k * 60000);
+    const asked = gi < 0 ? null : RUN_ASKED[id] ? RUN_ASKED[id]() : plus(start, gi);
+    return m.stations.map((s, i) => (gi < 0 || i < gi ? plus(start, i) : i === gi ? asked : plus(asked > NOW ? asked : NOW, i - gi - 1)));
+  }
+  /* The first entry says the day; later ones say only the time unless the day changed. */
+  const logAt = (times, i) => { const d = times[i]; return i && d.toDateString() === times[0].toDateString() ? hm(d) : `${DAY_SHORT[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}, ${hm(d)}`; };
   function chatItem(g, isNew, m) {
     const cls = `${g.tone || ''}${isNew ? ' in' : ''}`;
-    if (g.who === 'portal' || g.who === 'platform') return `<li class="chat-marker ${cls}"><span>${g.text}</span></li>`;
-    if (g.who === 'gate') return `<li class="chat-marker gate-said ${cls}" data-gate="1" tabindex="-1"><span>${I.shield(14)}${g.text}</span></li>`;
+    const when = g.at ? `<time class="log-at">${g.at}</time>` : '';
+    if (g.who === 'portal' || g.who === 'platform') return `<li class="chat-marker ${cls}"><span>${when}${g.text}</span></li>`;
+    if (g.who === 'gate') return `<li class="chat-marker gate-said ${cls}" data-gate="1" tabindex="-1"><span>${when}${I.shield(14)}${g.text}</span></li>`;
     const joined = g.who === 'lead' ? R(m.workflow).agents.filter((a) => a !== 'lead') : [];
-    return `<li class="cmsg ${cls}"><span class="cmsg-av">${face(g.who, 40, g.tone === 'bad' ? 'error' : 'idle', { k: `chat:${keyOf(g.text)}` })}</span><div class="cmsg-body"><span class="cmsg-who" style="color:${feedHue(g.who)}">${feedName(g.who)}</span><div class="cmsg-bubble">${g.text}</div></div></li>${joined.length ? `<li class="chat-marker${isNew ? ' in' : ''}"><span>${faces(joined, 22)}${andList(joined.map((a) => AGENTS[a].name))} joined${joined.includes('vuln') ? ` ${PLANNED_TAG}` : ''}</span></li>` : ''}`;
+    return `<li class="cmsg ${cls}"><span class="cmsg-av">${face(g.who, 40, g.tone === 'bad' ? 'error' : 'idle', { k: `chat:${keyOf(g.text)}` })}</span><div class="cmsg-body"><span class="cmsg-who" style="color:${feedHue(g.who)}">${feedName(g.who)}${when}</span><div class="cmsg-bubble">${g.text}</div></div></li>${joined.length ? `<li class="chat-marker${isNew ? ' in' : ''}"><span>${faces(joined, 22)}${andList(joined.map((a) => AGENTS[a].name))} joined${joined.includes('vuln') ? ` ${PLANNED_TAG}` : ''}</span></li>` : ''}`;
   }
   /* The last word goes to whoever needs the person: the approval gate with the buttons, the AI troubleshooter with the fix, or Workflow Builder when it's done. */
   function chatAct(id, m) {
@@ -3626,7 +3661,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     }
     /* A declined run shows its record and what happens next. It has no result, ticket or "created". */
     const done = m.state === 'declined'
-      ? `<h2>Declined</h2><p>${declinedWords(id)} ${DECLINED_NEXT[id]}</p>${id === 'conf' && me().op ? (heldWhy('conf') ? `<p class="note">${heldWhy('conf')}</p>` : `<div class="btns">${testAgain('Do a test run again')}</div>`) : ''}`
+      ? `<h2>Declined</h2><p data-unbuilt="The declined record (ADR 0043)">${declinedWords(id)} ${DECLINED_NEXT[id]}</p>${id === 'conf' && me().op ? (heldWhy('conf') ? `<p class="note">${heldWhy('conf')}</p>` : `<div class="btns">${testAgain('Do a test run again')}</div>`) : ''}`
       : {
         sw: () => `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>${nm(S.swBy)} approved, and the platform created the tickets.</p><div class="result-chips">${ticketBtn('MOCK-16', 'Log4j core')}${ticketBtn('MOCK-14', 'LangGraph')}${ticketBtn('MOCK-15', 'FastAPI')}</div>`,
         issues: () => `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>The retry read Jira. No tickets were created in the last day, so there was nothing to write.</p>`,
@@ -3675,12 +3710,19 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const clashDays = (text) => [...new Set([...text.replace(/\bmonday to friday\b/gi, ' ').matchAll(new RegExp(`\\b(${DAY_RE})s?\\b`, 'gi'))].map((m) => cap(m[1].toLowerCase())))];
   /* The distinct times a text names, as 24-hour times, in the order it names them. */
   const clashTimes = (text) => [...new Set([...text.matchAll(/\b\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b|\b(?:[01]?\d|2[0-3])[:.][0-5]\d\b/gi)].map((m) => parseIntent(m[0]).time).filter(Boolean))];
-  function clashParts(text) {
+  /* chose: the day and time she picked from the two, so the cross names only what was left out, never what runs. */
+  function clashParts(text, chose = {}) {
     const t = text.replace(/\bmonday to friday\b/gi, ' ');
     const find = (re, norm) => { const ms = [...t.matchAll(re)]; return { ms, n: new Set(ms.map(norm)).size }; };
     const days = find(new RegExp(`\\b(${DAY_RE})s?\\b`, 'gi'), (m) => m[1].toLowerCase());
     const times = find(/\b\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b|\b(?:[01]?\d|2[0-3])[:.][0-5]\d\b/gi, (m) => m[0].replace(/\s+/g, '').toLowerCase());
-    const cross = (x, key, what) => { const span = [x.ms[0].index, x.ms[x.ms.length - 1].index + x.ms[x.ms.length - 1][0].length]; return { key, mark: 'no', span, label: quote(t.slice(...span)), body: `I can only set one ${what}.` }; };
+    const cross = (x, key, what) => {
+      const span = [x.ms[0].index, x.ms[x.ms.length - 1].index + x.ms[x.ms.length - 1][0].length];
+      const kept = chose[key];
+      const out = kept ? [...new Set(x.ms.map((m) => m[0]))].filter((w) => (key === 'days' ? cap(w.toLowerCase().replace(/s$/, '')) : parseIntent(w).time) !== kept) : [];
+      return kept && out.length ? { key, mark: 'no', span, label: andList(out.map(quote)), body: `I can only set one ${what}, so it runs ${key === 'days' ? `on ${kept}` : `at ${clock(kept)}`} only.` }
+        : { key, mark: 'no', span, label: quote(t.slice(...span)), body: `I can only set one ${what}.` };
+    };
     return [...(days.n > 1 ? [cross(days, 'days', 'day')] : []), ...(times.n > 1 ? [cross(times, 'times', 'time')] : [])];
   }
   const hasCross = (parts) => parts.filter((p) => p.mark === 'no').length;
@@ -3724,7 +3766,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (k.source) parts.push({ key: 'source', mark: 'no', label: `Reads ${esc(k.source.value)}`, body: `${k.source.note} ${sentToTeam(k.source.value) ? '<span class="pill wait">Asked the team</span>' : `<button class="linkbtn" data-act="teamReq" data-arg="${esc(k.source.value)}|wiz">Ask the team</button>`}` });
     const monthly = it.monthly && (w.text.match(/\b(?:every|each) month\b|\bmonthly\b/i) || [])[0];
     if (monthly) parts.push({ key: 'monthly', mark: 'no', label: quote(monthly), body: 'I can’t run things monthly yet.' });
-    const clash = clashParts(w.text);
+    const clash = clashParts(w.text, { days: w.dayChoices && w.dayChoices.includes(s.day) ? s.day : '', times: w.timeChoices && w.timeChoices.includes(s.time) ? s.time : '' });
     return parts.concat(clash, leftoverParts(w.text, [...spansOf(w.text, [...HEARD.frame, ...HEARD.when, ...HEARD.setup]), ...clash.map((x) => x.span)]));
   }
 
@@ -3838,8 +3880,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
      else that asks for a change, in any words, gets "Operators set up workflows." and never a set-up or edit card: it
      fails closed. Nobody decides in the chat, so approve and decline get the requests to open instead (principle 6). */
   const DECIDE_WORDS = /\b(?:approve|decline|reject|accept|sign off|say (?:yes|no) to)\b/i;
-  /* "Approve the upgrade tickets": there, "upgrade" names the tickets and asks for nothing. */
-  const decideAsk = (t) => (DECIDE_WORDS.test(t) && !isCommand(t.replace(new RegExp(DECIDE_WORDS.source, 'gi'), ' ').replace(/\bupgrade (?=tickets?\b)/gi, ' ')) ? { kind: 'decide', text: t } : null);
+  /* An Approver's approve or decline goes to the request, whatever it names ("approve the upgrade"). Another clause that
+     asks for a change still gets the refusal, so no part of the request is dropped. */
+  const decideAsk = (t) => {
+    const clauses = t.split(/\b(?:and|then|also|but)\b|[,;]/i).map((x) => x.trim()).filter(Boolean);
+    return clauses.some((x) => DECIDE_WORDS.test(x)) && !clauses.some((x) => !DECIDE_WORDS.test(x) && isCommand(withoutName(x, nameRef(x)))) ? { kind: 'decide', text: t } : null;
+  };
   function approverAnswer(t) {
     if (UNSAFE.test(t)) return { kind: 'refuse', text: t, next: '' };
     if (N8N_ASK.test(t)) return n8nAnswer(t);
@@ -3849,7 +3895,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (about && about.kind !== 'starts') return about;
     const decide = !about && decideAsk(t);
     if (decide) return decide;
-    if (about || isCommand(t) || RELEASE_WORDS.test(t) || isSecurityAsk(t) || taskAnswer(t, parseIntent(t)).kind !== 'abilities') return { kind: 'operators', text: t };
+    const own = withoutName(t, nameRef(t));
+    if (about || isCommand(own) || RELEASE_WORDS.test(own) || isSecurityAsk(t) || taskAnswer(own, parseIntent(own)).kind !== 'abilities') return { kind: 'operators', text: t };
     return { kind: 'abilities', unknown: !/what can|what do you|help|can you|abilit/i.test(t), text: t };
   }
   /* Who sets up and changes workflows, named for anyone who can't: the Planner's refusal and every read-only page say it. */
@@ -3912,6 +3959,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const COMMAND = /\b(make|set|change|turn|pause|stop|delete|remove|create|add|watch|track|monitor|run|move|rename|switch|schedule|reschedule|resume|start|cancel|edit|update|upgrade|put|enable|disable|close|approve|decline|retry|report|send|post|e-?mail|raise|file|assign|every|daily|weekly|monthly)\b/i;
   const isCommand = (t) => COMMAND.test(t.replace(/\b(?:the|a|this|that|last|next|each|its|my) runs?\b/gi, ' '));
   /* "Is LangGraph up to date?": a software on the watchlist, one that isn't on it, or all of them. */
+  const SW_OPEN = /^(?:open|show(?: me)?|find|go to)\s+(.+?)\s+(?:on|in)\s+the\s+(?:software(?:\s+(?:page|watchlist))?|watchlist)\s*[.?!]*$/i;
   const IS_CURRENT = /\b(?:is|are)\s+(.+?)\s+(?:up to date|current|behind|out of date|outdated|on the (?:latest|newest)(?: version)?|the (?:latest|newest)(?: version)?)\b/i;
   function softAbout(t) {
     const words = (t.match(IS_CURRENT) || [])[1] || t;
@@ -3928,15 +3976,18 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const DECIDED_ASK = /\b(?:did|have) i\b[^.?!]*\b(?:decid|approv|declin|said (?:yes|no))\w*|\bwhat i (?:decided|approved|declined)\b|\b(?:my )?(?:past|recent|earlier|previous|last) (?:decisions?|approvals?)\b|\bmy decisions?\b/i;
   const ABOUT = [
     /* "What did I decide before?": this person's decisions, newest first. Its own words, such as "approve", ask here. */
-    [DECIDED_ASK, () => ({ kind: 'decided' }), /\b(?:decid|approv|declin)\w*|\bsaid (?:yes|no)\b/gi],
+    [DECIDED_ASK, (t) => ({ kind: 'decided', only: /declin|said no|reject/i.test(t) ? 'declined' : /approv|said yes/i.test(t) && !/decid/i.test(t) ? 'approved' : '' }), /\b(?:decid|approv|declin)\w*|\bsaid (?:yes|no)\b/gi],
     [/\bwhy\b.*\b(stop|stopped|fail|failed|broke|broken|went wrong)\b|\bwhat (went wrong|happened)\b/i, (t) => ({ kind: 'why', id: (nameRef(t) || {}).id || stoppedIds()[0] || null }), /\bwhy\b[^?.!]*?\b(?:stop|fail|break)\b/i],
-    /* "when does the software check run next?", "is the morning check running?": one workflow's state and next run. */
-    [/\b(?:when|what time|what day)\b[^.?!]*\b(?:runs?|next|due)\b|\bnext run\b|^(?:is|are)\b[^.?!]*\b(?:running|working|on|stopped|paused|ok(?:ay)?)\b/i, (t) => { const r = nameRef(t); return r && r.id ? { kind: 'one', id: r.id } : null; }, /\b(?:runs?|running)\b/gi],
+    /* "when does the software check run next?", "is the morning check running?", "how is the weekly closed-ticket summary
+       doing?": one workflow's state and next run. Its name is taken out before the command test, so "weekly" asks nothing. */
+    [/\b(?:when|what time|what day)\b[^.?!]*\b(?:runs?|next|due)\b|\bnext run\b|^(?:is|are)\b[^.?!]*\b(?:running|working|on|stopped|paused|ok(?:ay)?)\b|\bhow(?:'s|’s|\s+is|\s+are)\s+(?:the|my|our)\b[^.?!]*\b(?:doing|going|getting on)\b/i, (t) => { const r = nameRef(t); return r && r.id ? { kind: 'one', id: r.id } : null; }, /\b(?:runs?|running)\b/gi],
     [/\b(?:do i have|are there|is there|any)\b[^.?!]*\b(?:approvals?|requests?)\b|\bapprovals?\b[^.?!]*\bwaiting\b/i, () => ({ kind: 'mine', only: 'yes' })],
     [/\b(?:which|what)\s+version\b|\bversion of\b/i, softAbout, /\b(?:do|does|are)\s+(?:we|you|i)\s+(?:run|use|have|running|using)\b/gi],
     [/^(set up )?another workflow\b|^(a )?new workflow\b|^what else( can i (do|ask( for)?))?\s*\??$|^(any )?starting points?\s*\??$|^(any )?ideas?\s*\??$/i, () => ({ kind: 'starts' }), /^(set up )?another workflow\b|^(a )?new workflow\b/i],
     [/\b(?:what|anything|something)\b[^.?!]*?\b(?:needs? (?:me|my)|waiting (?:on|for) (?:me|my)|for me|to approve|(?:do )?i need to do|on my plate)\b|\bneeds? my (?:attention|yes|approval)\b|\bmy (?:to-?do|approvals?)\b/i, () => ({ kind: 'mine' })],
     [IS_CURRENT, softAbout],
+    /* "Open Redis on the Software page": that software's row, or that it isn't watched. */
+    [SW_OPEN, (t) => { const name = t.match(SW_OPEN)[1].replace(/^(?:the|our|my)\s+/i, ''); const row = liveSoftware().find((x) => x.name.toLowerCase() === name.toLowerCase()); return row ? { kind: 'data', looked: ['watchlist'], about: row.key, open: true } : { kind: 'data', looked: ['watchlist'], notOn: (namedIn(name) || [cap(name)])[0] }; }, /^(?:open|show(?: me)?|find|go to)\b|\b(?:on|in) the (?:software page|software watchlist|software|watchlist)\b/gi],
     [/\b(?:which|what|any(?:thing)?)\b[^.?!]*\b(?:behind|out of date|outdated|newer versions?|new versions?)\b/i, () => ({ kind: 'data', looked: ['watchlist'], behind: true })],
     [/\b(?:how|what)(?:'s|’s| is| are)?\b[^.?!]*\bworkflows?\b|\bworkflows?\b[^.?!]*\b(?:doing|going|running|working|ok(?:ay)?|fine)\b|\b(?:status|state)\b[^.?!]*\bworkflows?\b|^(?:check|show(?: me)?|see)\b[^.?!]*\bworkflows?\b|^(?:is|are)\b.*\b(?:running|working|on|stopped|paused)\s*\?*$/i, () => ({ kind: 'check' })],
     [/^(help me )?(check )?(how many|which|what)\b.*\b(software|tools?|watchlist)\b/i, () => ({ kind: 'data', looked: ['watchlist'] })],
@@ -3970,7 +4021,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const [tone, label] = stateOf(id);
       let act = actionFor(id);
       if (act) { if (mainUsed) act = demote(act); mainUsed = true; }
-      return `<li class="row"><div><button class="linkbtn" data-act="workflow" data-arg="${id}">${esc(r.name)}</button><span class="row-sub">${pill({ tone, label })}${S.paused[id] ? '' : `<span>Next run ${r.next}</span>`}</span></div>${act ? `<span data-flow-of="workflow:${id}">${act}</span>` : ''}<span class="row-last">${lastRunLine(id)}</span></li>`;
+      return `<li class="row"><div><button class="linkbtn" data-act="workflow" data-arg="${id}">${esc(r.name)}</button><span class="row-sub">${pill({ tone, label })}${S.paused[id] ? '' : `<span>Next run ${r.next}</span>`}</span></div>${act ? `<span data-flow-of="workflow:${id}">${act}</span>` : ''}<span class="row-last" data-unbuilt="Last run line (ADR 0043)">${lastRunLine(id)}</span></li>`;
     }).join('')}</ul></div>`;
   }
   /* The AI troubleshooter's three answers for each stop in the sample data (ADR 0043, spec 10.3): what happened, what
@@ -4005,7 +4056,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   };
   const troubleBtn = (t, sm) => [t.act && ['btn primary', t.act], t.also && ['btn', t.also]].filter(Boolean).map(([cls, a]) => `<button class="${cls}${sm ? ' sm' : ''}" data-act="${a.do}"${a.arg ? ` data-arg="${a.arg}"` : ''}${a.unbuilt ? ` data-unbuilt="${a.unbuilt}"` : ''}>${a.label}</button>`).join('');
   const THREE = [['happened', 'What happened'], ['affected', 'What was affected'], ['safe', 'Safe to retry']];
-  const answersDL = (t) => `<dl class="qa3">${THREE.map(([k, label]) => `<div><dt>${label}</dt><dd>${t[k]}</dd></div>`).join('')}</dl>`;
+  const answersDL = (t) => `<dl class="qa3" data-unbuilt="The three answers (ADR 0043). The built run page has What happened and What to do">${THREE.map(([k, label]) => `<div><dt>${label}</dt><dd>${t[k]}</dd></div>`).join('')}</dl>`;
   /* Under the answers: the button for an Operator, and for anyone else the reason it isn't theirs. */
   const troubleActs = (t, sm) => (!t.act ? '' : me().op ? `<div class="btns">${troubleBtn(t, sm)}</div>` : `<p class="note">${t.deny}</p>`);
   const stoppedNow = (id) => !!id && !!TROUBLE[id] && stoppedIds().includes(id);
@@ -4050,6 +4101,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (a && a.about) {
       const r = rows.find((x) => x.key === a.about);
       if (!r) return 'That software isn’t on the Software watchlist any more.';
+      if (a.open) return `${esc(r.name)} is on the Software watchlist. Open it from here.`;
       if (r.newest === '?') return `${esc(r.name)} could not be checked, so there is no newest version to compare.`;
       if (r.ours === 'Not known') return `The version of ${esc(r.name)} you run isn’t known, so I can’t say if it’s behind. The newest is ${esc(r.newest)}.`;
       return r.ours === r.newest ? `${esc(r.name)} is up to date at ${esc(r.newest)}.` : `${esc(r.name)} is behind. You run ${esc(r.ours)} and the newest is ${esc(r.newest)}.`;
@@ -4058,18 +4110,20 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return n ? `There ${n === 1 ? 'is 1 software' : `are ${n} software`} on the Software watchlist.` : 'Nothing is on the Software watchlist yet.';
   };
   const LOOKED = { watchlist: ['Software', 'software'], workflows: ['Workflows', 'workflows'], needs_you: ['Needs you', 'workflows'] };
-  /* Under an answer about one watched software, an Operator gets the Software page's own actions: open its row, check the
-     whole watchlist (that is all the page's Check now does), and last, Stop watching, which asks first and keeps the
-     page's Undo. An Approver gets none, as on the Software page. */
+  /* Under an answer about one watched software, anyone can open its row. An Operator also gets the Software page's own
+     actions: check the whole watchlist (that is all the page's Check now does), and last, Stop watching, which asks first
+     and keeps the page's Undo. */
   const dataActions = (m) => {
     const c = m.card;
     const r = c.about ? liveSoftware().find((x) => x.key === c.about) : null;
     if (me().op && c.notOn && !onList(c.notOn)) return `<div class="btns"><button class="btn sm" data-act="say" data-arg="Keep track of the ${esc(c.notOn)} version">Watch ${esc(c.notOn)}</button></div>`;
-    if (!me().op || !r) return '';
+    if (!r) return '';
+    const open = `<button class="btn sm" data-act="go" data-arg="software" data-open="software:${r.key}">Open<span class="vh"> ${esc(r.name)}</span> on the Software page</button>`;
+    if (!me().op) return `<div class="btns sw-acts">${open}</div>`;
     const stop = c.stopping
       ? `<span class="btns" role="group" aria-label="Stop watching ${esc(r.name)}"><span>Stop watching ${esc(r.name)}? It won’t be checked any more.</span><button class="btn sm" data-act="stopKeep" data-mid="${m.id}">Keep it</button><button class="btn sm bad" data-act="stopYes" data-mid="${m.id}">Yes, stop watching<span class="vh"> ${esc(r.name)}</span></button></span>`
       : `<button class="btn sm" data-act="stopAsk" data-mid="${m.id}">Stop watching<span class="vh"> ${esc(r.name)}</span></button>`;
-    return `<div class="btns sw-acts"><button class="btn sm" data-act="go" data-arg="software" data-open="software:${r.key}">Open<span class="vh"> ${esc(r.name)}</span> on the Software page</button>${stop}</div><div class="btns"><button class="btn sm" data-act="checkNow">Check all software now</button></div>`;
+    return `<div class="btns sw-acts">${open}${stop}</div><div class="btns"><button class="btn sm" data-act="checkNow">Check all software now</button></div>`;
   };
   const dataCard = (m) => `<p class="looked small muted">Looked at: ${m.card.looked.map((k) => `<button class="linkbtn" data-act="go" data-arg="${LOOKED[k][1]}">${LOOKED[k][0]}</button>`).join(', ')}</p>${dataActions(m)}`;
   /* A short follow-up after an answer about the watchlist: "and Redis?". A name on the list is a question about that
@@ -4228,15 +4282,21 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const sw = c.id !== 'sw' ? '' : c.state === 'open' ? `<p class="note">This changes when all ${n} software on the watchlist are checked. Saving makes you the owner of this schedule. Its checks then count as your work, so you won’t be able to approve them.</p>`
       : `<p class="note">This changed when all ${n} software on the watchlist are checked, and made you the owner of this schedule. Its checks count as your work now, so you can’t approve them.</p>`;
     const since = c.state === 'saved' ? changedSince(c, c.ver) : c.state === 'undone' ? changedSince(c, c.undoVer) : '';
+    /* The tickets it reads follow the new schedule, so that change is shown too (principle 4). */
+    const nr = nrOf(c.id);
+    const tFrom = nr && ticketLabel(nr.tickets, periodFor(nr, from));
+    const tTo = nr && !(p && p.ask) && ticketLabel(nr.tickets, periodFor(nr, to));
+    const tickets = tTo && tTo !== tFrom ? `<section class="pcard-s"><h4>Which tickets</h4><dl class="ba"><dt>Before</dt><dd>${tFrom}</dd><dt>After</dt><dd><b>${tTo}</b></dd></dl></section>` : '';
     const later = S.paused[c.id] ? 'It’s paused, so it won’t run until you resume it.' : `Next run ${r.next}.`;
     const foot = c.state === 'open'
       ? `<button class="btn primary" data-act="editSave" data-mid="${id}"${held ? ' disabled' : ''}>Save change</button><button class="btn" data-act="editKeep" data-mid="${id}">Never mind</button>${holdsSave(no) ? '<span class="left">Ask again without the part with a cross.</span>' : ''}`
       : c.state === 'saved' ? `<span class="note">${I.check(14)} Saved as version ${c.ver}. ${since ? `Changed again since, ${since}.` : later}</span>${!since ? `<button class="btn sm" data-act="editUndo" data-mid="${id}">Undo</button>` : ''}`
         : `<span class="note">Undone, as version ${c.undoVer}.${since ? ` Changed again since, ${since}.` : ''}</span>`;
-    return `<div class="pcard" data-pres="edit:${id}">
+    return `<div class="pcard" data-pres="edit:${id}" data-unbuilt="The edit card (ADR 0043)">
       <div class="pcard-h"><h3 tabindex="-1" id="card-h-${id}">Change ${esc(r.name)}</h3></div>
       ${asks.length || no.length ? partsList([...asks, ...no]) : ''}
       <section class="pcard-s"><h4>When it runs</h4><dl class="ba"><dt>Before</dt><dd>${schedText(from)}</dd><dt>After</dt><dd>${p && p.ask ? `<span class="muted">${p.ask === 'day' ? 'Choose a day' : 'Choose a time'}</span>` : `<b>${schedText(to)}</b>`}</dd></dl>${sw}</section>
+      ${tickets}
       <div class="pcard-f">${foot}</div>
     </div>`;
   }
@@ -4251,19 +4311,22 @@ details > .m-close { animation: fold 140ms ease-in both; }
     { id: 'nudge', when: 'Fri 16 Oct, 16:00', by: 'bob', did: '1 ticket created (MOCK-11)' },
   ];
   const earlierLine = (id, when) => { const e = EARLIER.find((x) => x.id === id && x.when === when); return `${e.did}, approved by ${nm(e.by)}`; };
-  function decisionsOf(u) {
+  /* What a decided request did, from the run page's own headline, so the two never disagree. */
+  const outcomeOf = (id, r) => (r.state === 'declined' ? declineTail(id) : r.state === 'approved' ? `${runModel(id).headline}.` : 'It waits for the next yes.');
+  function decisionsOf(u, only = '') {
     const today = REQ_IDS.map((id) => [id, reqRecord(id)]).filter(([, r]) => r && (r.yes.includes(u) || (r.state === 'declined' && r.by === u)))
-      .map(([id, r]) => ({ id, act: 'run', state: r.state === 'declined' ? 'declined' : 'approved', line: r.state === 'waiting' ? `Approved by ${r.yes.map(decidedAt).join(', then ')}. It waits for the next yes.` : `${decidedLine(id, r)}.${r.state === 'declined' ? ` ${declineTail(id)}` : ''}` }));
+      .map(([id, r]) => ({ id, act: 'run', state: r.state === 'declined' && r.by === u ? 'declined' : 'approved', line: `${r.state === 'waiting' ? `Approved by ${r.yes.map(decidedAt).join(', then ')}` : decidedLine(id, r)}. ${outcomeOf(id, r)}` }));
     const before = EARLIER.filter((e) => e.by === u && has(e.id)).map((e) => ({ id: e.id, act: 'workflow', state: 'approved', line: `Approved by ${nm(e.by)}, ${e.when}. ${cap(e.did)}.` }));
-    return today.concat(before);
+    return today.concat(before).filter((d) => !only || d.state === only);
   }
-  const decidedSay = () => {
+  const decidedSay = (a) => {
     if (!me().ap) return 'You don’t decide on requests, because you aren’t an Approver.';
-    const n = decisionsOf(S.user).length;
+    const n = decisionsOf(S.user, a.only).length;
+    if (a.only) return n ? `You ${a.only} ${n === 1 ? '1 request' : `${n} requests`}.` : `You haven’t ${a.only} any requests yet.`;
     return n ? `Here ${n === 1 ? 'is your decision' : `are your ${n} decisions`}.` : 'You haven’t decided on any requests yet.';
   };
-  const decidedCard = () => {
-    const list = me().ap ? decisionsOf(S.user) : [];
+  const decidedCard = (m) => {
+    const list = me().ap ? decisionsOf(S.user, m.card.only) : [];
     return list.length ? `<div class="pcard wfcheck decided" data-unbuilt="Planner answers about your decisions (ADR 0043)"><ul class="rows">${list.map((d) => `<li class="row"><div><button class="linkbtn" data-act="${d.act}" data-arg="${d.id}">${esc(R(d.id).name)}</button><span class="row-sub">${pill(d.state === 'declined' ? runTone.declined : { tone: 'ok', label: 'Approved' })}</span></div><p class="row-last">${d.line}</p></li>`).join('')}</ul></div>` : '';
   };
   const mineCard = (m) => { const items = needs().filter((x) => !m.card.only || x.yes); return items.length ? needsStrip(items, 99, 'Planner answers about your workflows') : ''; };
@@ -4285,13 +4348,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
     abilities: { say: (a) => (!me().op ? (a.unknown ? 'I can’t help with that here. I answer questions about your approvals and the workflows.' : 'Here’s what you can ask me.') : a.unknown ? 'I can’t help with that here. I check software versions and watch for new releases. Here’s what I can do.' : 'Here’s what I can do for software versions.'), card: () => (me().op ? abilitiesHTML() : approverCan()), mood: (a) => (a.unknown ? 'sorry' : 'idle') },
     operators: { say: opsSay, mood: 'sorry' },
     decide: { say: () => (needs().some((x) => x.yes) ? 'I can’t approve or decline for you. Open the request to see exactly what it will write, and decide there.' : 'Nothing is waiting for your yes, so there’s nothing to decide.'), card: () => mineCard({ card: { only: 'yes' } }) },
-    decided: { say: decidedSay, card: () => decidedCard() },
+    decided: { say: decidedSay, card: (m) => decidedCard(m) },
     n8n: { say: n8nSay, card: (m) => n8nCard(m), mood: () => (n8nOK() ? 'idle' : 'sorry') },
     check: { say: checkSay, card: () => checkCard() },
     why: { say: whySay, card: (m) => whyCard(m), mood: (a) => (stoppedNow(a.id) ? 'sorry' : 'idle') },
     mine: { say: mineSay, card: (m) => mineCard(m) },
     one: { say: oneSay, card: (m) => (has(m.card.id) ? checkCard(m.card.id) : '') },
-    starts: { say: () => 'Here are three places to start. Pick one, or tell me something else.', card: () => startsCard() },
+    starts: { say: () => { const n = starts().length; return !n ? 'You already watch the software I’d suggest. Tell me what else to watch.' : n === 1 ? 'Here is a place to start. Pick it, or tell me something else.' : `Here are ${n} places to start. Pick one, or tell me something else.`; }, card: () => startsCard() },
     data: { say: dataSay, card: (m) => dataCard(m) },
     edit: { say: editSay, card: (m) => editCard(m) },
     nocheck: { say: nocheckSay, card: (m) => nocheckCard(m) },
@@ -4300,7 +4363,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
      list them among their parts; every other answer lists them above its card. Each kind names what it read. */
   const NAMES = () => [...routineIds().map((id) => R(id).name), ...liveSoftware().map((x) => x.name), ...Object.keys(KNOWN), ...Object.values(KNOWN).map((k) => k[0])];
   const nameSpans = (text) => NAMES().flatMap((n) => { const out = []; const low = text.toLowerCase(); const k = n.toLowerCase(); for (let i = low.indexOf(k); i >= 0; i = low.indexOf(k, i + 1)) out.push([i, i + k.length]); return out; });
-  const STATUS_WORDS = [/\b(?:today|now|right now|this morning|at the moment|currently|attention|yes|approvals?|plate|doing|going|running|working|status|state|next|due)\b/gi];
+  const STATUS_WORDS = [/\b(?:today|now|right now|this morning|at the moment|currently|attention|yes|approvals?|plate|doing|going|running|working|status|state|next|due)\b/gi, /\b(?:show(?: me)?|list|tell me|give me|let me see)\b/gi];
   const READ_BY = {
     part: () => [...HEARD.frame, ...HEARD.when, ...HEARD.setup, ...HEARD.needs],
     cant: () => [...HEARD.frame, ...HEARD.when, ...HEARD.setup, ...HEARD.needs, ...HEARD.cant, ...HEARD.watch],
@@ -4355,8 +4418,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function setupLeft() {
     const left = [];
     if (Object.keys(schedProblems(S.wiz.sched)).length) left.push('when it runs');
-    const names = { source: 'what it reads', tickets: 'which tickets', project: 'the Jira project', action: 'what it does' };
-    intentRows().filter((r) => r.key !== 'when' && (r.state === 'missing' || r.state === 'cant')).forEach((r) => left.push(names[r.key]));
+    const names = { tickets: 'which tickets', project: 'the Jira project', action: 'what it does' };
+    intentRows().filter((r) => r.key !== 'when' && r.state === 'missing').forEach((r) => left.push(names[r.key]));
     return left;
   }
   const leftWords = (n) => (n === 1 ? '1 choice left' : `${n} choices left`);
@@ -4395,7 +4458,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         <p class="agents-line">${face('jira', 26)}<span><b>${AGENTS.jira.name}</b> reads the tickets.</span>${face(writer, 26)}<span><b>${AGENTS[writer].name}</b> ${job}.${isNewAgent(writer) ? ' <span class="tag">New agent, saved under How it works, in Settings, when you turn this on</span>' : ''}</span></p>
         <p class="note">Tools: ${TOOLS.jiraSearch[0]} and ${TOOLS.jiraRead[0]} read Jira. ${TOOLS.jiraCreate[0]} writes to Jira, after a yes.</p>
       </div></details>
-      <div class="pcard-f"><button class="btn primary" data-act="turnOn"${left.length ? ' disabled' : ''}>${crossed ? 'Set up the part I can' : 'Turn it on'}</button>
+      <div class="pcard-f"><button class="btn primary" data-act="turnOn"${left.length ? ' disabled' : ''}>${crossed ? 'Set up the part I can' : 'Turn it on'}</button><button class="btn" data-act="discardDraft" data-arg="live">Never mind</button>
         ${left.length ? `<span class="left">${leftWords(left.length)}: ${andList(left)}.</span>` : `<span class="note">${crossed ? `${crossed === 1 ? 'The part with a cross is' : `The ${crossed} parts with a cross are`} left out.` : 'Nothing is unclear. Turn it on when you’re ready.'}</span>`}</div>
     </div>`;
   }
@@ -4451,6 +4514,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function watchCard(m) {
     const c = m.card;
     const id = m.id;
+    if (c.kept) return `<p class="small muted">Not added. Nothing changed.</p>`;
     if (c.done && S.removed.includes(c.done)) return `<p class="small muted">${esc(c.name)} isn’t on the Software watchlist any more.</p>`;
     if (c.done) return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(c.name)} is on the Software watchlist.</b><span>First check ${R('sw').next}, with the rest of your software. ${apprOf('sw') ? apprText(apprOf('sw')).replace(/,.*$/, '') : R('sw').approves} is asked before any ticket is created.</span><span class="btns"><button class="linkbtn" data-act="go" data-arg="software">Open Software watchlist</button></span></div></div>`;
     const parts = watchParts(m);
@@ -4458,7 +4522,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return `<div class="pcard" data-pres="watch:${id}" data-unbuilt="Adding software from the Planner">
       <div class="pcard-h"><h3 tabindex="-1" id="card-h-${id}">Add ${esc(c.name)} to the Software watchlist</h3><span class="kind">${I.box(16)}Software watchlist</span></div>
       ${partsList(parts)}
-      <div class="pcard-f"><button class="btn primary" data-act="watchAdd" data-mid="${id}"${n ? ' disabled' : ''}>${hasCross(parts) ? 'Set up the part I can' : `Add ${esc(c.name)}`}</button>${n ? `<span class="left">${leftWords(n)}</span>` : ''}<button class="linkbtn push" data-act="watchOwn" data-mid="${id}">No, set it up as a new workflow</button></div>
+      <div class="pcard-f"><button class="btn primary" data-act="watchAdd" data-mid="${id}"${n ? ' disabled' : ''}>${hasCross(parts) ? 'Set up the part I can' : `Add ${esc(c.name)}`}</button><button class="btn" data-act="watchKeep" data-mid="${id}">Never mind</button>${n ? `<span class="left">${leftWords(n)}</span>` : ''}<button class="linkbtn push" data-act="watchOwn" data-mid="${id}">No, set it up as a new workflow</button></div>
     </div>`;
   }
 
@@ -4797,9 +4861,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
       return `<li class="person">
         <span class="pav t${p.tone}" aria-hidden="true">${p.name.charAt(0)}</span>
         <div class="person-name"><b>${esc(p.name)}${u === S.user ? ' <span class="tag">You</span>' : ''}</b><span class="small muted">${r.added ? 'Hasn’t signed in yet' : named.length ? `Named as an Approver on ${named.length === 1 ? '1 workflow' : `${named.length} workflows`} ${PLANNED_TAG}` : r.ap ? (shows('namedApprovers') ? 'Not named on any workflow' : 'Can decide on any workflow except their own') : ''}</span></div>
-        <div class="roles"><label class="checkrow"><input type="checkbox" data-role="${u}:op"${r.op ? ' checked' : ''}${op ? '' : ' disabled'}${err ? ` aria-describedby="role-err-${u}"` : ''}>Operator<span class="vh">, ${esc(p.name)}</span></label>
-          <label class="checkrow"><input type="checkbox" data-role="${u}:ap"${r.ap || r.pendingAp ? ' checked' : ''}${op && !r.pendingAp ? '' : ' disabled'}${err ? ` aria-describedby="role-err-${u}"` : ''}>Approver<span class="vh">, ${esc(p.name)}</span></label></div>
-        ${shows('n8n') && r.op ? `<label class="checkrow person-n8n" data-unbuilt="n8n access (ADR 0043)"><input type="checkbox" data-role="${u}:n8n"${r.n8n ? ' checked' : ''}${op ? '' : ' disabled'}${err ? ` aria-describedby="role-err-${u}"` : ''}>n8n access<span class="vh">, ${esc(p.name)}</span> ${PLANNED_TAG}</label>` : ''}
+        ${op ? `<div class="roles"><label class="checkrow"><input type="checkbox" data-role="${u}:op"${r.op ? ' checked' : ''}${err ? ` aria-describedby="role-err-${u}"` : ''}>Operator<span class="vh">, ${esc(p.name)}</span></label>
+          <label class="checkrow"><input type="checkbox" data-role="${u}:ap"${r.ap || r.pendingAp ? ' checked' : ''}${r.pendingAp ? ' disabled' : ''}${err ? ` aria-describedby="role-err-${u}"` : ''}>Approver<span class="vh">, ${esc(p.name)}</span></label></div>
+        ${shows('n8n') && r.op ? `<label class="checkrow person-n8n" data-unbuilt="n8n access (ADR 0043)"><input type="checkbox" data-role="${u}:n8n"${r.n8n ? ' checked' : ''}${err ? ` aria-describedby="role-err-${u}"` : ''}>n8n access<span class="vh">, ${esc(p.name)}</span> ${PLANNED_TAG}</label>` : ''}`
+          : `<p class="roles-text">${[r.op && 'Operator', r.ap && 'Approver'].filter(Boolean).join(' and ')}</p>`}
         ${r.pendingAp ? `<div class="person-note"><span class="pill wait">${I.lock(12)}Approver: waiting for another Approver to confirm</span>${canConfirm ? `<span class="btns"><button class="btn bad sm" data-act="roleNotNow" data-arg="${u}">Not now</button><button class="btn good sm" data-act="roleConfirm" data-arg="${u}">Confirm</button></span>` : `<span class="small muted">Asked by ${nm(r.pendingBy)}${S.user === r.pendingBy ? ', so you can’t confirm it' : ''}.</span>`}</div>` : ''}
         ${err ? `<p class="err person-note" id="role-err-${u}">${I.alert(16)}<span>${err}</span></p>` : ''}
       </li>`;
@@ -4807,7 +4872,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const np = S.newPerson;
     return `<section class="panel"><h2>People and permissions</h2><p class="note">Operators set up workflows and change settings. Approvers say yes or no to changes. People sign in with their NCS account.</p>
       <ul class="people">${Object.keys(S.roles).map(row).join('')}</ul>
-      <ul class="checks role-rules"><li>${I.shield(16)}<span>Making someone an Approver needs another Approver to confirm it.</span></li>${shows('n8n') ? `<li data-unbuilt="n8n access (ADR 0043)">${I.shield(16)}<span>Only Operators can have n8n access, because a change made in n8n changes a workflow. ${PLANNED_TAG}</span></li>` : ''}${shows('namedApprovers') ? `<li>${I.shield(16)}<span>Someone named on a workflow keeps the Approver role until another person is named there. ${PLANNED_TAG}</span></li>` : ''}<li>${I.shield(16)}<span>At least 2 people are Approvers, so nobody has to approve their own work.</span></li></ul>
+      <ul class="checks role-rules"><li>${I.shield(16)}<span>Making someone an Approver needs another Approver to confirm it.</span></li>${shows('n8n') && op ? `<li data-unbuilt="n8n access (ADR 0043)">${I.shield(16)}<span>Only Operators can have n8n access, because a change made in n8n changes a workflow. ${PLANNED_TAG}</span></li>` : ''}${shows('namedApprovers') ? `<li>${I.shield(16)}<span>Someone named on a workflow keeps the Approver role until another person is named there. ${PLANNED_TAG}</span></li>` : ''}<li>${I.shield(16)}<span>At least 2 people are Approvers, so nobody has to approve their own work.</span></li></ul>
       ${op ? `<form class="model-form" data-submit="personAdd" novalidate><h3>Add a person</h3>
         <div class="field"><label for="np-name">Name</label><input type="text" id="np-name" data-np="name" value="${esc(np.name)}" placeholder="Mei Ling"${fieldErr('np-name', np.err.name, '')}</div>
         <div class="field"><label for="np-email">Work email</label><input type="email" id="np-email" data-np="email" value="${esc(np.email)}" placeholder="name@example.com"${fieldErr('np-email', np.err.email, 'They sign in with the NCS account that uses this email.')}</div>
@@ -6013,7 +6078,6 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (i) i.focus();
     },
     useNewAddress: () => {
-      if (!me().op) return;
       S.lsFixed = true;
       toast(`LangServe is now read from ${LS_NEW}. It’s checked at the next check, ${R('sw').next}.`, { label: 'Undo', act: 'undoAddress' });
       render();
@@ -6432,6 +6496,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       scrollToMsg(liveSetup().id, 'start');
     },
     stopAsk: (_, m) => { m.card.stopping = true; render(); focusChat($app.querySelector(`[data-mid="${m.id}"][data-act="stopKeep"]`)); },
+    watchKeep: (_, m) => { m.card.kept = true; render(); focusComposer(); },
     stopKeep: (_, m) => { m.card.stopping = false; render(); focusChat($app.querySelector(`[data-mid="${m.id}"][data-act="stopAsk"]`)); },
     stopYes: (_, m) => { const key = m.card.about; m.card.stopping = false; A.removeSw(key); },
     repoOk: (_, m) => { m.card.repoState = 'ok'; m.card.confirmed = true; render(); },
@@ -6677,22 +6742,28 @@ details > .m-close { animation: fold 140ms ease-in both; }
     toast: (t) => { toast(t); render(); },
   };
   /* Who may do what (ADR 0043), checked when an action runs, so a control that isn't drawn can't be reached any other
-     way: changes are for Operators, and opening n8n is for Operators with n8n access. */
-  const ONLY = {
-    op: ['checkNow', 'swFind', 'swChange', 'swReset', 'swAdd', 'useNewAddress', 'undoAddress', 'removeSw', 'undoRemove', 'focusAdd', 'retryIssues', 'retryNudge', 'report', 'sendReport',
-      'openDraft', 'discardDraft', 'undoDiscard', 'draftNow', 'stopAsk', 'stopYes', 'repoOk', 'repoEdit', 'repoUse', 'verNewest', 'verType', 'watchAdd', 'watchOwn', 'instead',
-      'destOpen', 'destDone', 'whenOpen', 'editPick', 'editSet', 'editSave', 'editUndo', 'answer', 'whenDone', 'rename', 'renameDone', 'turnOn', 'testRun',
-      'editSched', 'saveSched', 'editAppr', 'saveAppr', 'apprFromRun', 'runNow', 'pause', 'resume', 'menu', 'askDelete', 'confirmDelete', 'undoDelete', 'n8nUndo',
-      'agentSuggest', 'agentSave', 'toolDraft', 'toolSend', 'toolAddTo', 'roleToggle', 'roleUndo', 'personAdd'],
+     way. Every action is a change that needs an Operator unless it is listed here: reading and moving around, an
+     Approver's decision, opening n8n with n8n access, and the test controls, which aren't a person. A new action is
+     therefore an Operator's until someone opens it up. */
+  const OPEN_TO = {
+    anyone: ['go', 'workflow', 'run', 'watch', 'replay', 'runDetail', 'swHist', 'swShowRow', 'ticket', 'watchFromTicket', 'teams', 'speed', 'agent', 'agentWorkflow', 'modalBack',
+      'toRisk', 'libTab', 'libTools', 'toolOpen', 'toolCheck', 'connTest', 'connShow', 'modelTest', 'modelShowKey', 'setTab', 'setGo', 'panelOpen', 'panelClose', 'panelPage',
+      'abil', 'ask', 'example', 'say', 'newChat', 'filter', 'findOpen', 'clearFind', 'closeModal', 'skipMain', 'menuPick', 'menuClose', 'cancelSched', 'cancelAppr',
+      'connCancel', 'modelCancel', 'editKeep', 'stopKeep', 'watchKeep', 'moreAppr', 'decideBack', 'askAnswer', 'toast'],
+    ap: ['approve', 'decline', 'declinePick', 'declineYes', 'askOpen', 'askSend', 'roleConfirm', 'roleNotNow', 'modelConfirm', 'modelNotNow', 'toolOk'],
     n8n: ['n8nAsk', 'n8nOpen', 'n8nGiveBack', 'n8nNew', 'n8nNewOpen'],
+    test: ['testToggle', 'day', 'user', 'modelOn', 'preview', 'markUnbuilt', 'jiraDown', 'jiraUp', 'reset', 'yesAs', 'answerAs', 'escalate', 'expire', 'advance', 'n8nChange', 'n8nRun', 'okJiraComp', 'simBadKey'],
   };
-  const MAY = { op: () => me().op, n8n: n8nOK };
-  const REFUSED = { op: opsSay, n8n: () => n8nSay({}) };
-  Object.entries(ONLY).forEach(([need, acts]) => acts.forEach((k) => {
+  const NEED = Object.fromEntries(Object.entries(OPEN_TO).flatMap(([need, acts]) => acts.map((k) => [k, need])));
+  Object.keys(NEED).forEach((k) => { if (!A[k]) throw new Error(`No action ${k}`); });
+  const MAY = { op: () => me().op, ap: () => me().ap, n8n: n8nOK };
+  const REFUSED = { op: opsSay, ap: () => 'Only Approvers decide on requests.', n8n: () => n8nSay({}) };
+  Object.keys(A).forEach((k) => {
+    const need = NEED[k] || 'op';
+    if (!MAY[need]) return;
     const fn = A[k];
-    if (!fn) throw new Error(`No action ${k}`);
     A[k] = (...a) => { if (MAY[need]()) return fn(...a); toast(REFUSED[need]()); render(); return undefined; };
-  }));
+  });
 
   document.addEventListener('click', (e) => {
     const t = e.target.closest('[data-act]');
