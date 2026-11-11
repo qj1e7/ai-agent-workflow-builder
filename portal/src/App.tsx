@@ -5,9 +5,9 @@ import { useMe } from './api/queries'
 import { useNow } from './api/ticking'
 import { AskToBeAdded } from './shell/AskToBeAdded'
 import { Header } from './shell/Header'
-import { TabBar } from './shell/Menu'
 import { PlatformDown, platformIsDown } from './shell/PlatformDown'
 import { PRODUCT } from './shell/product'
+import { Rail } from './shell/Rail'
 import { AppRoutes } from './shell/routes'
 import { TestControls } from './shell/TestControls'
 import { ErrorBoundary } from './ui/ErrorBoundary'
@@ -60,7 +60,7 @@ export function App({ now = WALL_CLOCK }: { now?: () => Date }) {
   if (me.isPending) content = <p className="muted" role="status">Loading</p>
   else if (me.isError && platformIsDown(me.error)) content = <PlatformDown onRetry={() => void me.refetch()} />
   else if (me.data?.on_list === false) content = <AskToBeAdded display={me.data.display} />
-  else content = <AppRoutes context={{ name: me.data?.display ?? null, now: at }} />
+  else content = <AppRoutes context={{ name: me.data?.display ?? null, now: at, operator: isOperator(me.data) }} />
 
   return (
     <>
@@ -68,12 +68,14 @@ export function App({ now = WALL_CLOCK }: { now?: () => Date }) {
         Skip to main content
       </button>
       <Header person={me.data ?? null} />
-      <main id="main" tabIndex={-1} className={styles['sheet']}>
-        <div className={styles['wrap']}>
-          <ErrorBoundary resetKey={pathname}>{content}</ErrorBoundary>
-        </div>
-      </main>
-      <TabBar operator={isOperator(me.data)} onList={me.data !== undefined && !notOnTheList(me.data)} />
+      <div className={styles['shell']}>
+        <Rail operator={isOperator(me.data)} onList={me.data !== undefined && !notOnTheList(me.data)} />
+        <main id="main" tabIndex={-1} className={styles['sheet']}>
+          <div className={styles['wrap']}>
+            <ErrorBoundary resetKey={pathname}>{content}</ErrorBoundary>
+          </div>
+        </main>
+      </div>
       <TestControls />
     </>
   )

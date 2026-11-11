@@ -1,7 +1,7 @@
 import type { CapabilityView, CardView, ToolView } from '../../api/types'
 import { approvalWords, kindLabel, systemOf } from './agents'
 import { toolHealth } from './capabilities'
-import styles from './AgentsPage.module.css'
+import styles from './HowItWorks.module.css'
 
 function usedBy(tool: ToolView, cards: readonly CardView[]): string {
   const names = cards.filter((card) => card.tools.includes(tool.id)).map((card) => card.name)

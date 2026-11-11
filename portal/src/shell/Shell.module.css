@@ -16,6 +16,12 @@
   top: 12px;
 }
 
+.shell {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: start;
+}
+
 .sheet {
   min-height: calc(100dvh - 68px);
   margin: 0 8px 8px;
@@ -33,13 +39,14 @@
 }
 
 @media (max-width: 900px) {
-  .sheet {
-    margin: 0;
-    border-width: 1px 0 0;
-    border-radius: 0;
+  .shell {
+    display: block;
   }
 
-  .wrap {
-    padding-bottom: 210px;
+  .sheet {
+    min-height: calc(100dvh - 106px);
+    margin: 0;
+    border-width: 0;
+    border-radius: 0;
   }
 }

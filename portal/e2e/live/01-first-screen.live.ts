@@ -15,14 +15,13 @@ test.beforeAll(async ({ baseURL }) => {
   await connectMockModel(String(baseURL))
 })
 
-const MENU = [
-  { label: 'Home', path: '/', heading: HOME_ALICE, built: true },
-  { label: 'Workflows', path: '/workflows', heading: 'Workflows', built: true },
-  { label: 'Software watchlist', path: '/software', heading: 'Software watchlist', built: true },
-  { label: 'Agent library', path: '/agents', heading: 'Agent library', built: true },
+const RAIL = [
+  { label: 'Chat', path: '/', heading: HOME_ALICE },
+  { label: 'Workflows', path: '/workflows', heading: 'Workflows' },
+  { label: 'Watchlist', path: '/software', heading: 'Software watchlist' },
 ] as const
 
-const PAGES = [...MENU.map(({ path: to, label }) => ({ label, path: to })), { label: 'Settings', path: '/settings' }]
+const PAGES = [...RAIL.map(({ path: to, label }) => ({ label, path: to })), { label: 'Settings', path: '/settings' }]
 
 /** Axe reads colours as they are drawn, so it waits for a panel's opening animation to end. */
 const settled = (page: Page) => page.waitForFunction(() => document.getAnimations().length === 0)
@@ -46,44 +45,43 @@ async function loaded(page: Page): Promise<void> {
   await expect(drawn.first()).toBeVisible()
 }
 
-/** A menu link's text. The Needs you count sits beside the name, so a reused stack with something waiting reads “Workflows2”. */
+/** A rail link's text. The count sits beside the name, so a reused stack with something waiting reads “Workflows2”. */
 const linkText = (label: string) => new RegExp(`^${label}\\d*$`)
 
-/** A menu link's name, which carries ", N need you" when something waits for the person. */
-const linkName = (label: string) => new RegExp(`^${label}(\\s*, \\d+ need you)?$`)
+/** A rail link's name, which carries ", N need you" or ", N need action" when something waits for the person. */
+const linkName = (label: string) => new RegExp(`^${label}(\\s*, \\d+ need (you|action))?$`)
 
-test('Home greets the signed-in person and the menu reads Home, Workflows, Software watchlist, Agent library', async ({ page }, info) => {
+test('Home greets the signed-in person and the rail reads Chat, Workflows, Watchlist', async ({ page }, info) => {
   await page.goto('/')
   await expect(heading(page)).toHaveText(HOME_ALICE)
   await expect(page.getByRole('banner')).toContainText('Alice')
   await expect(page.getByRole('banner')).toContainText('Operator and Approver')
-  await expect(mainMenu(page).getByRole('link')).toHaveText(MENU.map((item) => linkText(item.label)))
-  await expect(mainMenu(page).getByRole('link', { name: 'New workflow' }), 'New workflow has no entry in the menu').toHaveCount(0)
-  await expect(mainMenu(page).getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
+  await expect(mainMenu(page).getByRole('link')).toHaveText(RAIL.map((item) => linkText(item.label)))
+  await expect(mainMenu(page).getByRole('link', { name: 'New workflow' }), 'New workflow has no entry in the rail').toHaveCount(0)
+  await expect(mainMenu(page).getByRole('link', { name: 'Chat' })).toHaveAttribute('aria-current', 'page')
   await expect(page).toHaveTitle(/^(Good (morning|afternoon|evening)! Alice|Which software should we keep up to date\?) · AI Workflow Builder$/)
   await shot(page, info, 'p1-01-home')
 })
 
-test('each menu item changes the URL and opens a page with its own heading', async ({ page }, info) => {
+test('each rail item changes the URL and opens a page with its own heading', async ({ page }, info) => {
   await slowHome(page)
   await page.goto('/settings')
-  for (const item of MENU) {
+  for (const item of RAIL) {
     await mainMenu(page).getByRole('link', { name: linkName(item.label) }).click()
     await expect(page).toHaveURL(new RegExp(`${item.path === '/' ? '/$' : `${item.path}$`}`))
     await expect(heading(page)).toHaveText(item.heading)
     await loaded(page)
     await expect(heading(page), 'a page change puts focus on the new heading, and it is still there once the page has loaded').toBeFocused()
     await expect(mainMenu(page).getByRole('link', { name: linkName(item.label) })).toHaveAttribute('aria-current', 'page')
-    if (!item.built) await expect(page.getByRole('main')).toContainText('This page is not built yet.')
-    await shot(page, info, `p1-02-menu-${item.label.toLowerCase().replaceAll(' ', '-')}`)
+    await shot(page, info, `p1-02-rail-${item.label.toLowerCase().replaceAll(' ', '-')}`)
   }
 })
 
 test('Back and Forward walk across three pages', async ({ page }) => {
   await page.goto('/')
-  await mainMenu(page).getByRole('link', { name: 'Workflows' }).click()
-  await mainMenu(page).getByRole('link', { name: 'Agent library' }).click()
-  await expect(heading(page)).toHaveText('Agent library')
+  await mainMenu(page).getByRole('link', { name: linkName('Workflows') }).click()
+  await mainMenu(page).getByRole('link', { name: linkName('Watchlist') }).click()
+  await expect(heading(page)).toHaveText('Software watchlist')
   await page.goBack()
   await expect(page).toHaveURL(/\/workflows$/)
   await expect(heading(page)).toHaveText('Workflows')
@@ -93,8 +91,8 @@ test('Back and Forward walk across three pages', async ({ page }) => {
   await page.goForward()
   await expect(heading(page)).toHaveText('Workflows')
   await page.goForward()
-  await expect(page).toHaveURL(/\/agents$/)
-  await expect(heading(page)).toHaveText('Agent library')
+  await expect(page).toHaveURL(/\/software$/)
+  await expect(heading(page)).toHaveText('Software watchlist')
 })
 
 test('the Settings gear opens Settings, and a path that does not exist says so', async ({ page }, info) => {
@@ -166,7 +164,7 @@ test('Tab reaches every header control with a visible focus ring, and the skip l
   const walk = await walkTabs(page)
   const labels = walk.stops.map((stop) => stop.label)
   expect(labels[0], `the skip link is the first stop; stops: ${labels.join(', ')}`).toBe('Skip to main content')
-  for (const name of ['AI Workflow Builder', 'Home', 'Workflows', 'Software watchlist', 'Agent library', 'Teams, practice copy', 'Settings', 'Test controls']) {
+  for (const name of ['AI Workflow Builder', 'Chat', 'Workflows', 'Watchlist', 'Teams, practice copy', 'Settings', 'Test controls']) {
     expect(labels.filter((label) => label.includes(name)).length, `Tab reaches ${name}; stops: ${labels.join(', ')}`).toBeGreaterThan(0)
   }
   expect(walk.unreached, 'controls Tab never reached').toEqual([])
@@ -211,20 +209,23 @@ for (const [size, options] of [
   })
 }
 
-test('at 390 px wide the page does not scroll sideways, and every tab bar item can be reached', async ({ browser }, info) => {
+test('at 390 px wide the page does not scroll sideways, and every rail item can be reached', async ({ browser }, info) => {
   const context = await openContext(browser, { phone: true })
   const page = await context.newPage()
   await page.goto('/')
   await expect(heading(page)).toBeVisible()
   const bar = mainMenu(page)
-  await expect(bar.getByRole('link')).toHaveText([linkText('Home'), linkText('Workflows'), linkText('Watchlist'), linkText('Agents')])
+  await expect(bar.getByRole('link')).toHaveText([linkText('Chat'), linkText('Workflows'), linkText('Watchlist')])
+  const bannerBottom = (await page.getByRole('banner').boundingBox())?.height ?? 0
+  expect(bannerBottom, 'at 390 px the header stays on one row').toBeLessThanOrEqual(70)
+  const barTop = (await bar.boundingBox())?.y ?? -1
+  expect(barTop, 'at 390 px the rail is a bar across the top, under the header').toBeGreaterThanOrEqual(bannerBottom - 1)
   for (const [label, to, words] of [
     ['Workflows', /\/workflows$/, 'Workflows'],
     ['Watchlist', /\/software$/, 'Software watchlist'],
-    ['Agents', /\/agents$/, 'Agent library'],
-    ['Home', /\/$/, HOME_ALICE],
+    ['Chat', /\/$/, HOME_ALICE],
   ] as const) {
-    const tab = bar.getByRole('link', { name: label })
+    const tab = bar.getByRole('link', { name: linkName(label) })
     const box = await tab.boundingBox()
     expect(box, `${label} is on the screen`).not.toBeNull()
     expect((box?.x ?? -1) >= 0 && (box?.x ?? 0) + (box?.width ?? 0) <= 390, `${label} fits within 390 px`).toBe(true)
@@ -238,4 +239,33 @@ test('at 390 px wide the page does not scroll sideways, and every tab bar item c
   await expect(page.getByRole('banner')).toContainText('Workflow Builder')
   await shot(page, info, 'p1-09-phone')
   await context.close()
+})
+
+test('WCAG 2.2 AA: no violations on every page at 900 px, where the rail is a bar across the top', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 900, height: 844 }, locale: 'en-SG', timezoneId: 'Asia/Singapore' })
+  const page = await context.newPage()
+  for (const item of PAGES) {
+    await page.goto(item.path)
+    await expect(heading(page)).toBeVisible()
+    await expectAccessible(page, path.join(OUT, 'axe'), `${item.label.toLowerCase().replaceAll(' ', '-')}-900`)
+  }
+  await context.close()
+})
+
+test('wider than 900 px the rail is a column on the left, and at 900 px it becomes a bar across the top', async ({ browser }) => {
+  for (const [width, column] of [
+    [1280, true],
+    [901, true],
+    [900, false],
+  ] as const) {
+    const context = await browser.newContext({ viewport: { width, height: 900 }, locale: 'en-SG', timezoneId: 'Asia/Singapore' })
+    const page = await context.newPage()
+    await page.goto('/workflows')
+    await expect(heading(page)).toBeVisible()
+    const links = await mainMenu(page).getByRole('link').evaluateAll((all) => all.map((a) => a.getBoundingClientRect()).map((r) => ({ x: r.x, y: r.y })))
+    const sameColumn = new Set(links.map((l) => Math.round(l.x))).size === 1
+    const sameRow = new Set(links.map((l) => Math.round(l.y))).size === 1
+    expect({ width, column: sameColumn && !sameRow, bar: sameRow && !sameColumn }).toEqual({ width, column, bar: !column })
+    await context.close()
+  }
 })

@@ -80,3 +80,26 @@ export function faceId(card: Pick<CardView, 'card_id'>): string {
 export function versionWords(card: Pick<CardView, 'starter' | 'version'>): string {
   return card.starter ? `Version ${card.version}. Ships with the platform` : `Version ${card.version}`
 }
+
+export type HowShow = 'can' | 'agents' | 'tools'
+
+/** Which of How it works' own tabs an address asks for. An agent's address opens on the Agents tab, where its tile is. */
+export function howShowOf(show: string | null, agent: string | null): HowShow {
+  if (show === 'agents' || show === 'tools') return show
+  return agent === null ? 'can' : 'agents'
+}
+
+/** Where How it works, or one agent in it, lives in Settings. */
+export function howItWorksPath({ show = null, agent = null }: { show?: string | null; agent?: string | null } = {}): string {
+  const params = new URLSearchParams({ tab: 'how' })
+  const tab = howShowOf(show, agent)
+  if (tab !== 'can') params.set('show', tab)
+  if (agent !== null) params.set('agent', agent)
+  return `/settings?${params.toString()}`
+}
+
+/** True when an address names an agent that has a page to open: a platform agent, or a card the platform lists. */
+export function agentShown(agentId: string | null, cards: readonly Pick<CardView, 'card_id'>[] | undefined): boolean {
+  if (agentId === null) return false
+  return PLATFORM_AGENTS.some((agent) => agent.id === agentId) || (cards?.some((card) => card.card_id === agentId) ?? false)
+}

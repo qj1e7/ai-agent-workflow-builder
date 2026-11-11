@@ -16,15 +16,12 @@ const SAMPLE = Number(process.env['SAMPLE'] ?? '0')
 const DESKTOP = { width: 1440, height: 900 }
 const PHONE = { width: 390, height: 844 }
 const GREETING = (name: string) => new RegExp(`^Good (morning|afternoon|evening)! ${name}$`)
-const MENU = ['Home', 'Workflows', 'Software watchlist', 'Agent library'] as const
-// An Operator's menu also ends with New workflow, since P13 (#75), as portal/src/shell/shell.test.tsx says. The review
-// video still walks MENU only: whether it should show New workflow is a product choice.
-const OPERATOR_MENU = [...MENU, 'New workflow']
+const MENU = ['Chat', 'Workflows', 'Watchlist'] as const
+const OPERATOR_MENU = MENU
 const PAGES = [
-  { label: 'Home', path: '/', heading: GREETING('Alice') },
+  { label: 'Chat', path: '/', heading: GREETING('Alice') },
   { label: 'Workflows', path: '/workflows', heading: /^Workflows$/ },
-  { label: 'Software watchlist', path: '/software', heading: /^Software watchlist$/ },
-  { label: 'Agent library', path: '/agents', heading: /^Agent library$/ },
+  { label: 'Watchlist', path: '/software', heading: /^Software watchlist$/ },
 ] as const
 const WCAG_22_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']
 
@@ -118,10 +115,10 @@ test('@lane1-capture sign in as alice and read the menu', async ({ browser }) =>
   if (TARGET === 'head') {
     expect(me.status(), 'GET /api/v1/me signs alice in').toBe(200)
     expect(meBody).toMatchObject({ id: 'alice', display: 'Alice' })
-    expect(menu, 'head menu: alice is an Operator, so it ends with New workflow').toEqual(OPERATOR_MENU)
+    expect(menu, 'head rail: Chat, Workflows and Watchlist').toEqual(OPERATOR_MENU)
     expect(heading).toMatch(GREETING('Alice'))
     await expect(page.getByRole('banner')).toContainText('Alice')
-    await expect(mainMenu(page).first().getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
+    await expect(mainMenu(page).first().getByRole('link', { name: 'Chat' })).toHaveAttribute('aria-current', 'page')
   } else {
     expect(menu, 'trunk shows the old menu').toEqual(expect.arrayContaining(['Runs', 'Builder', 'Approvals']))
   }
@@ -198,7 +195,7 @@ test('@lane4 Back and Forward land on the page before and after', async ({ brows
   await record('load Home', home)
   await mainMenu(page).getByRole('link', { name: 'Workflows', exact: true }).click()
   await record('click Workflows', workflows)
-  await mainMenu(page).getByRole('link', { name: 'Software watchlist', exact: true }).click()
+  await mainMenu(page).getByRole('link', { name: 'Watchlist', exact: true }).click()
   await record('click Software watchlist', software)
   await page.goBack()
   await record('Back', workflows)
@@ -271,8 +268,8 @@ for (const mobile of [true, false]) {
       expect(widths.after, `${label}: a sideways scroll does not move the page`).toBe(0)
     }
     save(5, `p1-phone-${mode}.json`, { labels, header, results })
-    expect(labels.length, 'four menu items').toBe(4)
-    expect(results.map((r) => r['url']), 'every item opens its own page').toEqual(['/', '/workflows', '/software', '/agents'])
+    expect(labels.length, 'three rail items').toBe(3)
+    expect(results.map((r) => r['url']), 'every item opens its own page').toEqual(['/', '/workflows', '/software'])
     // Settings and Teams in the header are reachable too.
     await page.getByRole('banner').getByRole('link', { name: 'Settings' }).click()
     await expect(h1(page)).toHaveText('Settings')
@@ -366,10 +363,10 @@ test('@lane6 keyboard: focus rings in the header and the skip link', async ({ br
   save(6, 'p1-skip-link.json', { skipBox, afterSkipThenTab: after })
   expect(after.inHeader, 'Tab after the skip link goes on into the page, not back to the header').toBe(false)
   // The same on a second page, from a fresh load: the skip link goes to that page's heading.
-  await mainMenu(page).getByRole('link', { name: 'Agent library', exact: true }).click()
-  await expect(h1(page)).toHaveText('Agent library')
+  await mainMenu(page).getByRole('link', { name: 'Watchlist', exact: true }).click()
+  await expect(h1(page)).toHaveText('Software watchlist')
   await page.reload()
-  await expect(h1(page)).toHaveText('Agent library')
+  await expect(h1(page)).toHaveText('Software watchlist')
   await page.keyboard.press('Tab')
   await expect(skip).toBeFocused()
   await page.keyboard.press('Enter')
@@ -499,7 +496,7 @@ test('@lane9 the Portal says it cannot reach the platform, offers to try again, 
   await expect(retry).toBeVisible()
   await expect(page.getByRole('main')).toContainText('Check your connection, or try again in a moment.')
   await expect(page.getByRole('banner')).toContainText('Workflow Builder')
-  await expect(mainMenu(page).getByRole('link')).toHaveCount(4)
+  await expect(mainMenu(page).getByRole('link')).toHaveCount(3)
   const bodyText = await page.evaluate(() => document.body.innerText)
   await shotTo(page, path.join(dir, 'p1-api-down.png'))
 
@@ -514,7 +511,7 @@ test('@lane9 the Portal says it cannot reach the platform, offers to try again, 
   // A deep link while down shows the same message.
   start = Date.now()
   const callsBeforeDeep = calls.length
-  await page.goto('/agents', { waitUntil: 'commit' })
+  await page.goto('/software', { waitUntil: 'commit' })
   const deepLink = await timeline(180_000, (s) => s === 'message')
   const deepLinkCalls = calls.slice(callsBeforeDeep)
   await shotTo(page, path.join(dir, 'p1-api-down-deep-link.png'))
@@ -525,7 +522,7 @@ test('@lane9 the Portal says it cannot reach the platform, offers to try again, 
   start = Date.now()
   const callsBeforeUp = calls.length
   await page.getByRole('button', { name: 'Try again' }).click()
-  await expect(h1(page)).toHaveText('Agent library', { timeout: 30_000 })
+  await expect(h1(page)).toHaveText('Software watchlist', { timeout: 30_000 })
   const recoveredMs = Date.now() - start
   await shotTo(page, path.join(dir, 'p1-api-back.png'))
 
@@ -674,7 +671,7 @@ test('@lane2 alice signs in through the mock identity provider and no X-Dev-User
   await expect(mainMenu(page).getByRole('link')).toHaveText(OPERATOR_MENU)
   await expect(page.getByRole('button', { name: /Test controls/ }), 'real sign-in hides the test controls').toHaveCount(0)
   await shotTo(page, path.join(dir, 'p1-oidc-sign-in.png'))
-  for (const label of ['Workflows', 'Software watchlist', 'Agent library', 'Home']) {
+  for (const label of ['Workflows', 'Watchlist', 'Chat']) {
     await mainMenu(page).getByRole('link', { name: label, exact: true }).click()
     await expect(h1(page)).toBeVisible()
   }
@@ -751,7 +748,7 @@ test('@review-video alice walks the menu, Teams, Test controls and Settings, the
     await expect(mainMenu(page).first().getByRole('link', { name: label, exact: true })).toHaveAttribute('aria-current', 'page')
     await pause(page)
   }
-  await mainMenu(page).first().getByRole('link', { name: 'Home', exact: true }).click()
+  await mainMenu(page).first().getByRole('link', { name: 'Chat', exact: true }).click()
   await pause(page)
 
   await page.getByRole('banner').getByRole('button', { name: /Teams/ }).click()
@@ -770,13 +767,13 @@ test('@review-video alice walks the menu, Teams, Test controls and Settings, the
   await expect(h1(page)).toHaveText('Settings')
   await pause(page, 2500)
 
-  await mainMenu(page).first().getByRole('link', { name: 'Home', exact: true }).click()
+  await mainMenu(page).first().getByRole('link', { name: 'Chat', exact: true }).click()
   await pause(page, 1000)
   await page.setViewportSize(PHONE)
   await expect(h1(page)).toHaveText(GREETING('Bob'))
   await pause(page, 2500)
   // The phone bar shortens some labels, so reach the items by position.
-  for (const index of [1, 2, 3]) {
+  for (const index of [1, 2]) {
     await mainMenu(page).first().getByRole('link').nth(index).click()
     await pause(page, 2200)
   }

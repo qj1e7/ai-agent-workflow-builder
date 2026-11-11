@@ -141,7 +141,8 @@ function Steps({ useCase }: { useCase: UseCaseView }) {
   )
 }
 
-function Technical({ useCase, paused }: { useCase: UseCaseView; paused: boolean }) {
+/** An agent's page is in How it works, which only an Operator is offered, so anyone else sees the name without a link. */
+function Technical({ useCase, paused, operator }: { useCase: UseCaseView; paused: boolean; operator: boolean }) {
   return (
     <details className={styles['tech']}>
       <summary>Technical details</summary>
@@ -150,12 +151,20 @@ function Technical({ useCase, paused }: { useCase: UseCaseView; paused: boolean 
         <section>
           <h3>Agents</h3>
           <span className={styles['chips']}>
-            {agentsOf(useCase).map((agent) => (
-              <Link key={agent.to} to={agent.to} state={FROM_LIST} className={styles['chip']}>
-                <AgentFace id={agent.face} display={agent.name} size={28} state={paused ? 'stopped' : 'idle'} />
-                {agent.name}
-              </Link>
-            ))}
+            {agentsOf(useCase).map((agent) => {
+              const face = <AgentFace id={agent.face} display={agent.name} size={28} state={paused ? 'stopped' : 'idle'} />
+              return operator ? (
+                <Link key={agent.to} to={agent.to} state={FROM_LIST} className={styles['chip']}>
+                  {face}
+                  {agent.name}
+                </Link>
+              ) : (
+                <span key={agent.to} className={styles['chipPlain']}>
+                  {face}
+                  {agent.name}
+                </span>
+              )
+            })}
           </span>
         </section>
       </div>
@@ -471,7 +480,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
             )}
           </section>
         )}
-        <Technical useCase={useCase} paused={paused} />
+        <Technical useCase={useCase} paused={paused} operator={viewer.operator} />
       </div>
       {asking ? (
         <DeleteDialog

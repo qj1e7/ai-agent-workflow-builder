@@ -38,8 +38,6 @@ export const SettingsIcon = drawn(
   </>,
 )
 
-export const HomeIcon = drawn('HomeIcon', <path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z" />)
-
 export const GridIcon = drawn(
   'GridIcon',
   <>
@@ -55,14 +53,6 @@ export const BoxIcon = drawn(
   <>
     <path d="M4 7.5L12 3.5l8 4v9l-8 4-8-4z" />
     <path d="M4 7.5l8 4 8-4M12 11.5v9" />
-  </>,
-)
-
-export const BotIcon = drawn(
-  'BotIcon',
-  <>
-    <rect x="4.5" y="8" width="15" height="11.5" rx="3.5" />
-    <path d="M12 4.5V8M9.2 13.4v.2M14.8 13.4v.2" />
   </>,
 )
 

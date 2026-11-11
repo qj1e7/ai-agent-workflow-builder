@@ -106,7 +106,15 @@ test('Home keeps the design rules in each of its states', async ({ browser, back
   await context.close()
 })
 
-test('the Needs you count is one number on Home, the tab and the Planner’s answer', async ({ browser, backend }) => {
+const rail = (page: Page) => page.getByRole('navigation', { name: 'Main' }).filter({ visible: true })
+
+/** The number a rail item's accessible name carries, such as "Watchlist, 2 need action". No count is 0. */
+async function railCount(page: Page, label: string): Promise<number> {
+  const name = (await rail(page).getByRole('link', { name: new RegExp(`^${label}`) }).getAttribute('aria-label')) ?? ''
+  return Number(/, (\d+) need/.exec(name)?.[1] ?? 0)
+}
+
+test('the Needs you count is one number on Home, the rail and the Planner’s answer, and the Watchlist count is the page’s Needs attention', async ({ browser, backend }) => {
   await backend.waitingRun('alice')
   const repair = await jiraDown(backend)
   const context = await devContext(browser, 'alice')
@@ -115,11 +123,32 @@ test('the Needs you count is one number on Home, the tab and the Planner’s ans
   const heading = main(page).getByRole('heading', { level: 2, name: /^Needs you/ })
   await expect(heading).toBeVisible()
   const onHome = Number((await heading.innerText()).replace(/\D/g, ''))
-  const tab = page.getByRole('navigation', { name: 'Main' }).filter({ visible: true }).getByRole('link', { name: /^Workflows, \d+ need you$/ })
-  await expect(tab, 'Principle 7 (one source per fact): the tab count').toHaveAccessibleName(`Workflows, ${String(onHome)} need you`)
+  const tab = rail(page).getByRole('link', { name: /^Workflows, \d+ need you$/ })
+  await expect(tab, 'Principle 7 (one source per fact): the rail count').toHaveAccessibleName(`Workflows, ${String(onHome)} need you`)
   await ask(page, 'What needs me?')
   await expect(main(page), 'Principle 7: the Planner’s answer').toContainText(`${String(onHome)} ${onHome === 1 ? 'thing needs' : 'things need'} you.`)
+
+  await rail(page).getByRole('link', { name: /^Watchlist/ }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Software watchlist' })).toBeVisible()
+  await expect(main(page).getByRole('status').filter({ hasText: /^Loading/ })).toHaveCount(0)
+  const attention = main(page).locator('#needs-attention-heading')
+  const onPage = (await attention.count()) === 0 ? 0 : Number((await attention.innerText()).replace(/\D/g, ''))
+  expect(await railCount(page, 'Watchlist'), 'Principle 7: the rail’s Watchlist count is the page’s Needs attention').toBe(onPage)
   await repair()
+  await context.close()
+})
+
+test('an Approver who is not an Operator has the Needs you count on Chat and no Watchlist count', async ({ browser, backend }) => {
+  await backend.waitingRun('alice')
+  const context = await devContext(browser, 'bob')
+  const page = await context.newPage()
+  await page.goto('/')
+  const heading = main(page).getByRole('heading', { level: 2, name: /^Needs you/ })
+  await expect(heading).toBeVisible()
+  const onHome = Number((await heading.innerText()).replace(/\D/g, ''))
+  await expect(rail(page).getByRole('link', { name: /^Chat/ }), 'Principle 7: the rail count').toHaveAccessibleName(`Chat, ${String(onHome)} need you`)
+  expect(await railCount(page, 'Workflows'), 'Principle 7: an Approver has the count on Chat only').toBe(0)
+  expect(await railCount(page, 'Watchlist'), 'Principle 7: an Approver who cannot act on the list has no Watchlist count').toBe(0)
   await context.close()
 })
 

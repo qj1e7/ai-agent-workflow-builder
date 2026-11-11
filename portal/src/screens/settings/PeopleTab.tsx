@@ -59,7 +59,7 @@ export function PeopleTab({ me }: { me: Me | undefined }) {
   const viewer = useCacheScope()
   if (people.isPending) {
     return (
-      <section className={styles['panel']} aria-label="People and roles">
+      <section className={styles['panel']} aria-label="People and permissions">
         <p className="muted" role="status">
           Loading
         </p>
@@ -68,7 +68,7 @@ export function PeopleTab({ me }: { me: Me | undefined }) {
   }
   if (people.isError) {
     return (
-      <section className={styles['panel']} aria-label="People and roles">
+      <section className={styles['panel']} aria-label="People and permissions">
         <p role="status">{words(people.error)}</p>
         <div className={styles['buttons']}>
           <Button onClick={() => void people.refetch()}>Try again</Button>
@@ -185,7 +185,7 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
 
   return (
     <section className={styles['panel']} aria-labelledby="people-heading">
-      <h2 id="people-heading">People and roles</h2>
+      <h2 id="people-heading">People and permissions</h2>
       <p className={styles['note']}>{PEOPLE_LEAD}</p>
       {operator ? null : <p className={styles['note']}>{ONLY_OPERATORS_WORDS}</p>}
       <p className="visually-hidden" role="status">

@@ -1,13 +1,13 @@
 import { lazy, Suspense, type ReactNode } from 'react'
-import { Navigate, Route, Routes, useSearchParams } from 'react-router'
-import { AgentsPage } from '../screens/agents/AgentsPage'
+import { Navigate, Route, Routes, useParams, useSearchParams } from 'react-router'
 import { HomePage } from '../screens/home/HomePage'
 import { SettingsPage } from '../screens/settings/SettingsPage'
 import type { Icon } from '../ui/icons'
 import { WorkflowRoute } from '../screens/workflows/WorkflowPage'
 import { WorkflowsPage } from '../screens/workflows/WorkflowsPage'
+import { howItWorksPath } from '../screens/agents/agents'
 import { JIRA_PATH } from '../screens/jira/tickets'
-import { BotIcon, BoxIcon, GridIcon, HomeIcon, SettingsIcon, TicketIcon } from './icons'
+import { BoxIcon, ChatIcon, GridIcon, SettingsIcon, TicketIcon } from './icons'
 import { NotFoundPage } from './NotFoundPage'
 import { PageHead } from './PageHead'
 import { greeting, today } from './today'
@@ -15,79 +15,63 @@ import { greeting, today } from './today'
 export interface PageContext {
   readonly name: string | null
   readonly now: Date
+  readonly operator: boolean
 }
 
 type Words = string | ((context: PageContext) => string)
 
 export interface PageEntry {
   readonly path: string
-  readonly menuLabel: string
-  readonly tabLabel: string
+  readonly railLabel: string
   readonly icon: Icon
   readonly heading: Words
   readonly lead: Words
-  readonly inMenu: boolean
-  readonly operatorOnly?: boolean
+  readonly inRail: boolean
 }
 
-export const PAGE_IDS = ['home', 'workflows', 'software', 'agents', 'jira', 'settings'] as const
+export const PAGE_IDS = ['home', 'workflows', 'software', 'jira', 'settings'] as const
 export type PageId = (typeof PAGE_IDS)[number]
 
 export const PAGES: Readonly<Record<PageId, PageEntry>> = {
   home: {
     path: '/',
-    menuLabel: 'Home',
-    tabLabel: 'Home',
-    icon: HomeIcon,
+    railLabel: 'Chat',
+    icon: ChatIcon,
     heading: ({ name, now }) => (name ? `${greeting(now)}! ${name}` : greeting(now)),
     lead: ({ now }) => `${today(now)}.`,
-    inMenu: true,
+    inRail: true,
   },
   workflows: {
     path: '/workflows',
-    menuLabel: 'Workflows',
-    tabLabel: 'Workflows',
+    railLabel: 'Workflows',
     icon: GridIcon,
     heading: 'Workflows',
     lead: 'The jobs that run by themselves, such as the Software watchlist, and what needs you.',
-    inMenu: true,
+    inRail: true,
   },
   software: {
     path: '/software',
-    menuLabel: 'Software watchlist',
-    tabLabel: 'Watchlist',
+    railLabel: 'Watchlist',
     icon: BoxIcon,
     heading: 'Software watchlist',
     lead: 'Everything your team runs, in one list. Each check reads the newest release from GitHub, and its upgrade tickets go out in one approval.',
-    inMenu: true,
-  },
-  agents: {
-    path: '/agents',
-    menuLabel: 'Agent library',
-    tabLabel: 'Agents',
-    icon: BotIcon,
-    heading: 'Agent library',
-    lead: 'The agents and tools behind software version checks.',
-    inMenu: true,
-    operatorOnly: true,
+    inRail: true,
   },
   jira: {
     path: JIRA_PATH,
-    menuLabel: 'Practice Jira',
-    tabLabel: 'Jira',
+    railLabel: 'Practice Jira',
     icon: TicketIcon,
     heading: 'Practice Jira',
     lead: 'Practice copy. Nothing reaches a real Jira.',
-    inMenu: false,
+    inRail: false,
   },
   settings: {
     path: '/settings',
-    menuLabel: 'Settings',
-    tabLabel: 'Settings',
+    railLabel: 'Settings',
     icon: SettingsIcon,
     heading: 'Settings',
     lead: 'For whoever looks after the platform. Every change here is recorded with who made it.',
-    inMenu: false,
+    inRail: false,
   },
 }
 
@@ -110,20 +94,43 @@ function Lazy({ children }: { children: ReactNode }) {
   )
 }
 
-export const MENU_PAGE_IDS: readonly PageId[] = PAGE_IDS.filter((id) => PAGES[id].inMenu)
+export const RAIL_PAGE_IDS: readonly PageId[] = PAGE_IDS.filter((id) => PAGES[id].inRail)
 
-export function menuFor(operator: boolean): readonly PageId[] {
-  return MENU_PAGE_IDS.filter((id) => operator || (PAGES[id].operatorOnly !== true))
+const under = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`)
+
+/** The rail item marked current: Chat only at Home, an item on the addresses under it, and a run or approval page under `ofRun`. */
+export function railCurrent(pathname: string, ofRun: PageId): PageId | null {
+  if (pathname === PAGES.home.path) return 'home'
+  if (under(pathname, PAGES.workflows.path)) return 'workflows'
+  if (under(pathname, PAGES.software.path)) return 'software'
+  if (under(pathname, '/runs') || under(pathname, '/approvals')) return ofRun
+  return null
 }
 
-/** The tab that carries the Needs you count: Workflows holds the list for an Operator, Home for an Approver who is not one. */
-export const needsTab = (operator: boolean): PageId => (operator ? 'workflows' : 'home')
+export interface RailCount {
+  readonly total: number
+  readonly says: 'need you' | 'need action'
+}
+
+/**
+ * Each rail item's count. Workflows holds what needs an Operator, Chat holds it for anyone else, and Watchlist holds what
+ * needs action on the list, for someone who can act on it. An Approver who is not an Operator gets no Watchlist count.
+ */
+export function railCountFor(id: PageId, operator: boolean, needs: number, watch: number): RailCount | null {
+  const count: RailCount | null =
+    id === 'workflows' && operator ? { total: needs, says: 'need you' }
+    : id === 'home' && !operator ? { total: needs, says: 'need you' }
+    : id === 'software' && operator ? { total: watch, says: 'need action' }
+    : null
+  return count !== null && count.total > 0 ? count : null
+}
 
 export function wordsOf(words: Words, context: PageContext): string {
   return typeof words === 'function' ? words(context) : words
 }
 
 const OLD_NEW_PATH = '/new'
+const OLD_AGENTS_PATH = '/agents'
 
 /** The old New workflow address, and a saved draft's old link: both lead to Home, which reopens the draft as the Planner's card. */
 function OldNewAddress() {
@@ -132,13 +139,21 @@ function OldNewAddress() {
   return <Navigate to={draft ? `${PAGES.home.path}?draft=${encodeURIComponent(draft)}` : PAGES.home.path} replace />
 }
 
+/** The Agent library is now How it works in Settings. An agent's address and tab carry over for an Operator, and anyone else goes Home. */
+export function oldAgentsDestination(operator: boolean, agentId: string | null, tab: string | null): string {
+  return operator ? howItWorksPath({ show: tab, agent: agentId }) : PAGES.home.path
+}
+
+function OldAgentsAddress({ operator }: { operator: boolean }) {
+  const { agentId = null } = useParams()
+  const [search] = useSearchParams()
+  return <Navigate to={oldAgentsDestination(operator, agentId, search.get('tab'))} replace />
+}
+
 export function AppRoutes({ context }: { context: PageContext }) {
   return (
     <Routes>
-      <Route
-        path={`${PAGES.agents.path}/:agentId?`}
-        element={<AgentsPage heading={wordsOf(PAGES.agents.heading, context)} now={context.now} />}
-      />
+      <Route path={`${OLD_AGENTS_PATH}/:agentId?`} element={<OldAgentsAddress operator={context.operator} />} />
       <Route
         path={PAGES.workflows.path}
         element={<WorkflowsPage heading={wordsOf(PAGES.workflows.heading, context)} lead={wordsOf(PAGES.workflows.lead, context)} now={context.now} />}

@@ -327,6 +327,7 @@ export function useWatchlist(options?: QueryOptions) {
     queryKey: keys.watchlist(user),
     queryFn: async () => unwrap(await client.GET('/api/v1/watchlist')).watchlist,
     refetchInterval: pollEvery(options),
+    enabled: options?.enabled ?? true,
   })
 }
 

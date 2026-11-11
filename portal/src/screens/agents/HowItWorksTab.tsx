@@ -1,69 +1,60 @@
 import { useEffect, useState } from 'react'
-import { useLocation, useParams, useSearchParams } from 'react-router'
+import { useSearchParams } from 'react-router'
 import { useCapabilities } from '../../api/capabilityQueries'
 import { useAgentCards, useTools } from '../../api/queries'
-import { PageHead } from '../../shell/PageHead'
 import { Button } from '../../ui/Button'
 import { CardDialog, CardTile, PlatformDialog, PlatformTile, tileId, useCloseWithoutHistoryEntry, type ToolIndex } from './AgentCard'
-import { faceId, PLATFORM_AGENTS, toolsUnavailableWords } from './agents'
+import { faceId, howShowOf, PLATFORM_AGENTS, toolsUnavailableWords, type HowShow } from './agents'
 import { CapabilitiesTab } from './CapabilitiesTab'
 import { ToolsTab } from './ToolsTab'
-import styles from './AgentsPage.module.css'
+import styles from './HowItWorks.module.css'
 
 export const CARDS_UNAVAILABLE_WORDS = 'The specialist agents are not available right now.'
 export const NOT_FOUND_WORDS = 'That agent is not in the library.'
 
-type Tab = 'can' | 'agents' | 'tools'
-
-const LEADS: Record<Tab, string> = {
+const LEADS: Record<HowShow, string> = {
   can: 'What the platform can do for software versioning. An agent can use only what is listed under I can.',
   agents: 'The agents behind software version checks. Anything that changes data waits for a yes.',
   tools: 'Tools are how agents reach GitHub and Jira. A tool that changes data waits for a yes, every time.',
 }
 
-/** An agent's own address opens on the Agents tab, which is where its tile is. */
-function tabOf(param: string | null, agentId: string | null): Tab {
-  if (param === 'agents' || param === 'tools') return param
-  return agentId === null ? 'can' : 'agents'
-}
-
-function useFocusBackToTile(shownId: string | null, cardOpen: boolean): boolean {
+function useFocusBackToTile(shownId: string | null, cardOpen: boolean): void {
   const [lastShown, setLastShown] = useState<string | null>(null)
   if (shownId !== null && shownId !== lastShown) setLastShown(shownId)
   useEffect(() => {
     if (!cardOpen && lastShown !== null) document.getElementById(tileId(lastShown))?.focus()
   }, [cardOpen, lastShown])
-  return lastShown !== null
 }
 
-export function AgentsPage({ heading, now }: { heading: string; now: Date }) {
-  const { agentId = null } = useParams()
+/** The Settings tab for Operators that shows what the platform can do, its agents and its tools. */
+export function HowItWorksTab({ now }: { now: Date }) {
   const [params, setParams] = useSearchParams()
-  const { search } = useLocation()
+  const agentId = params.get('agent')
   const cards = useAgentCards()
   const tools = useTools()
   const capabilities = useCapabilities()
-  const tab = tabOf(params.get('tab'), agentId)
+  const tab = howShowOf(params.get('show'), agentId)
+  const show = (next: HowShow) => setParams(next === 'can' ? { tab: 'how' } : { tab: 'how', show: next }, { replace: true })
 
   const toolIndex: ToolIndex = new Map((tools.data ?? []).map((tool) => [tool.id, tool]))
   const card = agentId === null ? undefined : cards.data?.find((entry) => entry.card_id === agentId)
   const platform = agentId === null ? undefined : PLATFORM_AGENTS.find((entry) => entry.id === agentId)
 
-  const movesFocus = useFocusBackToTile(platform ? platform.id : card ? faceId(card) : null, agentId !== null)
+  useFocusBackToTile(platform ? platform.id : card ? faceId(card) : null, agentId !== null)
   const close = useCloseWithoutHistoryEntry()
 
   const specialists = cards.data ?? []
   return (
     <>
-      <PageHead heading={heading} lead={LEADS[tab]} movesFocus={movesFocus} />
+      <p className={styles['lead']}>{LEADS[tab]}</p>
       <div className={styles['tabs']} role="group" aria-label="Show">
-        <button type="button" aria-pressed={tab === 'can'} onClick={() => setParams({}, { replace: true })}>
+        <button type="button" aria-pressed={tab === 'can'} onClick={() => show('can')}>
           What it can do
         </button>
-        <button type="button" aria-pressed={tab === 'agents'} onClick={() => setParams({ tab: 'agents' }, { replace: true })}>
+        <button type="button" aria-pressed={tab === 'agents'} onClick={() => show('agents')}>
           Agents <span className={styles['count']}>{PLATFORM_AGENTS.length + specialists.length}</span>
         </button>
-        <button type="button" aria-pressed={tab === 'tools'} onClick={() => setParams({ tab: 'tools' }, { replace: true })}>
+        <button type="button" aria-pressed={tab === 'tools'} onClick={() => show('tools')}>
           Tools {tools.data ? <span className={styles['count']}>{tools.data.length}</span> : null}
         </button>
       </div>
@@ -94,7 +85,7 @@ export function AgentsPage({ heading, now }: { heading: string; now: Date }) {
             <h2>Platform agents</h2>
             <div className={styles['grid']}>
               {PLATFORM_AGENTS.map((agent) => (
-                <PlatformTile key={agent.id} agent={agent} search={search} />
+                <PlatformTile key={agent.id} agent={agent} />
               ))}
             </div>
           </section>
@@ -113,7 +104,7 @@ export function AgentsPage({ heading, now }: { heading: string; now: Date }) {
             ) : (
               <div className={styles['grid']}>
                 {specialists.map((entry) => (
-                  <CardTile key={entry.card_id} card={entry} tools={toolIndex} search={search} />
+                  <CardTile key={entry.card_id} card={entry} tools={toolIndex} />
                 ))}
               </div>
             )}

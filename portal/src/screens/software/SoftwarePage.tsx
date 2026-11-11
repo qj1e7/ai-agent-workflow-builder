@@ -52,6 +52,7 @@ import {
   stoppedWords,
   ticketsOf,
   waitingWords,
+  watchAttention,
   type Decision,
 } from './software'
 import styles from './Software.module.css'
@@ -386,7 +387,7 @@ function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; op
       {decisions.length > 0 || addresses.length > 0 ? (
         <section className={styles['section']} aria-labelledby="needs-attention-heading">
           <h2 id="needs-attention-heading">
-            Needs attention <span className={styles['count']}>{decisions.length + addresses.length}</span>
+            Needs attention <span className={styles['count']}>{watchAttention(software)}</span>
           </h2>
           {decisions.map((decision) => (
             <DecisionBar key={decision.approvalId} decision={decision} />

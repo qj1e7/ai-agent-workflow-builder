@@ -19,10 +19,11 @@ import {
   versionWords,
   cardAccess,
   faceId,
+  howItWorksPath,
   type Access,
   type PlatformAgent,
 } from './agents'
-import styles from './AgentsPage.module.css'
+import styles from './HowItWorks.module.css'
 
 export const tileId = (id: string) => `agent-tile-${id}`
 
@@ -31,7 +32,7 @@ export function useCloseWithoutHistoryEntry(): () => void {
   const location = useLocation()
   return () => {
     if (openedFromList(location.state)) void navigate(-1)
-    else void navigate(`/agents${location.search}`, { replace: true })
+    else void navigate(howItWorksPath({ show: new URLSearchParams(location.search).get('show') }), { replace: true })
   }
 }
 
@@ -74,7 +75,7 @@ function Tile({ id, name, what, access, toolCount, platform, to }: TileProps) {
   )
 }
 
-export function PlatformTile({ agent, search }: { agent: PlatformAgent; search: string }) {
+export function PlatformTile({ agent }: { agent: PlatformAgent }) {
   return (
     <Tile
       id={agent.id}
@@ -83,12 +84,12 @@ export function PlatformTile({ agent, search }: { agent: PlatformAgent; search: 
       access="none"
       toolCount={0}
       platform
-      to={`/agents/${agent.id}${search}`}
+      to={howItWorksPath({ show: 'agents', agent: agent.id })}
     />
   )
 }
 
-export function CardTile({ card, tools, search }: { card: CardView; tools: ToolIndex; search: string }) {
+export function CardTile({ card, tools }: { card: CardView; tools: ToolIndex }) {
   const kinds = new Map([...tools].map(([id, tool]) => [id, tool.kind]))
   return (
     <Tile
@@ -98,7 +99,7 @@ export function CardTile({ card, tools, search }: { card: CardView; tools: ToolI
       access={cardAccess(card, kinds)}
       toolCount={card.tools.length}
       platform={false}
-      to={`/agents/${card.card_id}${search}`}
+      to={howItWorksPath({ show: 'agents', agent: card.card_id })}
     />
   )
 }

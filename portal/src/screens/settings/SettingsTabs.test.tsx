@@ -44,7 +44,7 @@ const approverOnly = (confirmations: { confirmations: unknown[] }) =>
 
 interface Setup {
   readonly me?: Me
-  readonly tab?: 'connections' | 'model' | 'people'
+  readonly tab?: 'connections' | 'model' | 'people' | 'how'
   readonly connections?: ConnectionsView | Error
   readonly model?: unknown
   readonly people?: PersonOut[]
@@ -87,12 +87,28 @@ const checkboxes = (html: string) => [...html.matchAll(/<input[^>]*type="checkbo
 const buttonsIn = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))
 
 describe('the Settings tabs', () => {
-  it('offer Connections, People and roles and the AI model in that order, with the one shown marked pressed', () => {
+  it('offer Connections, People and permissions, the AI model and How it works to an Operator, in that order, with the one shown marked pressed', () => {
     const html = render({ tab: 'connections' })
     expect(html).toMatch(/role="group" aria-label="Settings sections"/)
-    expect(html).toMatch(/<button type="button" aria-pressed="true">Connections.*<button type="button" aria-pressed="false">People and roles.*<button type="button" aria-pressed="false">AI model/s)
-    expect(render({ tab: 'people' })).toMatch(/<button type="button" aria-pressed="true">People and roles/)
+    expect(html).toMatch(
+      /<button type="button" aria-pressed="true">Connections.*<button type="button" aria-pressed="false">People and permissions.*<button type="button" aria-pressed="false">AI model.*<button type="button" aria-pressed="false">How it works/s,
+    )
+    expect(render({ tab: 'people' })).toMatch(/<button type="button" aria-pressed="true">People and permissions/)
     expect(render({ tab: 'model' })).toMatch(/<button type="button" aria-pressed="true">AI model/)
+    expect(render({ tab: 'how' })).toMatch(/<button type="button" aria-pressed="true">How it works/)
+  })
+
+  it('leave How it works out for an Approver who is not an Operator, and open Connections if the address asks for it', () => {
+    const html = render({ me: BOB, tab: 'how' })
+    expect(buttonsIn(html).slice(0, 3)).toEqual(['Connections', 'People and permissions', 'AI model'])
+    expect(html).not.toContain('How it works')
+    expect(html).toMatch(/<button type="button" aria-pressed="true">Connections/)
+  })
+
+  it('put the Agent library’s tabs inside How it works', () => {
+    const html = render({ tab: 'how' })
+    expect(html).toContain('aria-label="Show"')
+    expect(text(html)).toContain('What it can do')
   })
 
   it('mark the tabs that need the viewer', () => {
@@ -285,7 +301,7 @@ describe('the AI model tab', () => {
   })
 })
 
-describe('the People and roles tab', () => {
+describe('the People and permissions tab', () => {
   it('lists everyone with their roles, and says who has not signed in yet', () => {
     const html = render({ tab: 'people', confirmations: approverOnly(confirmationsAlice) })
     const main = text(html)
@@ -354,7 +370,7 @@ describe('the People and roles tab', () => {
     expect(boxes.length).toBe(PEOPLE.length * 2)
     expect(boxes.every((box) => box.includes('disabled=""'))).toBe(true)
     expect(html).not.toContain('<form')
-    expect(buttonsIn(html).filter((name) => !['Connections', 'AI model', 'People and roles'].includes(name))).toEqual([])
+    expect(buttonsIn(html).filter((name) => !['Connections', 'AI model', 'People and permissions'].includes(name))).toEqual([])
   })
 
   it('explains the rules, two Approvers and one Operator among them', () => {

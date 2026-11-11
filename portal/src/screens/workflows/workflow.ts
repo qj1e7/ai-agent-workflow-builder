@@ -4,7 +4,7 @@ import { pressOnce, type Latch, type Outcome } from '../../api/latch'
 import type { BlockKind, Me, RunView, ScheduleIn, UseCaseView } from '../../api/types'
 import { agentIdentity } from '../../ui/agents'
 import { andList, count, type NameOf } from '../run/words'
-import { faceId } from '../agents/agents'
+import { faceId, howItWorksPath } from '../agents/agents'
 import { heldWords, repeatWords, TAKE_OVER_WORDS } from '../software/software'
 import { nextRunAt, runWhen, zoneWords } from './times'
 
@@ -120,7 +120,7 @@ export interface AgentLink {
   readonly to: string
 }
 
-const PLANNER: AgentLink = { face: 'planner', name: agentIdentity('planner').name, to: '/agents/planner' }
+const PLANNER: AgentLink = { face: 'planner', name: agentIdentity('planner').name, to: howItWorksPath({ show: 'agents', agent: 'planner' }) }
 const VERSION_CHECKER_CARD = 'crd_version_checker'
 const WATCHLIST_TEMPLATE = 'software_watchlist'
 export const SOFTWARE_PAGE = '/software'
@@ -207,7 +207,7 @@ export function agentsOf(useCase: Pick<UseCaseView, 'template' | 'agents'>): Age
       ? [{ card_id: VERSION_CHECKER_CARD, name: agentIdentity(faceId({ card_id: VERSION_CHECKER_CARD })).name }]
       : useCase.agents
   const unique = cards.filter((card, index) => cards.findIndex((other) => other.card_id === card.card_id) === index)
-  return [PLANNER, ...unique.map((card) => ({ face: faceId(card), name: card.name, to: `/agents/${card.card_id}` }))]
+  return [PLANNER, ...unique.map((card) => ({ face: faceId(card), name: card.name, to: howItWorksPath({ show: 'agents', agent: card.card_id }) }))]
 }
 
 export type RowAction = { readonly kind: 'decide' | 'why'; readonly runId: string }

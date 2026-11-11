@@ -266,8 +266,8 @@ describe('the runs of a workflow', () => {
 describe('the agents on a workflow', () => {
   it('start with the Planner, then each agent card, each linking to its card', () => {
     expect(agentsOf(AGENTS)).toEqual([
-      { face: 'planner', name: 'Planner', to: '/agents/planner' },
-      { face: 'version_checker', name: 'Version checker', to: '/agents/crd_version_checker' },
+      { face: 'planner', name: 'Planner', to: '/settings?tab=how&show=agents&agent=planner' },
+      { face: 'version_checker', name: 'Version checker', to: '/settings?tab=how&show=agents&agent=crd_version_checker' },
     ])
   })
 

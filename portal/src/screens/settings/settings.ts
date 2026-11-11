@@ -15,16 +15,29 @@ import type {
   SettingsChangeOut,
 } from '../../api/types'
 
-export type SettingsTab = 'connections' | 'people' | 'model'
+export type SettingsTab = 'connections' | 'people' | 'model' | 'how'
 
-export const SETTINGS_TABS: readonly { readonly id: SettingsTab; readonly label: string }[] = [
+interface SettingsTabEntry {
+  readonly id: SettingsTab
+  readonly label: string
+  readonly operatorOnly?: true
+}
+
+const SETTINGS_TAB_LIST: readonly SettingsTabEntry[] = [
   { id: 'connections', label: 'Connections' },
-  { id: 'people', label: 'People and roles' },
+  { id: 'people', label: 'People and permissions' },
   { id: 'model', label: 'AI model' },
+  { id: 'how', label: 'How it works', operatorOnly: true },
 ]
 
-export function tabFrom(param: string | null): SettingsTab {
-  return param === 'people' || param === 'model' ? param : 'connections'
+/** How it works is for Operators. Nobody else is offered it. */
+export function settingsTabsFor(operator: boolean): readonly SettingsTabEntry[] {
+  return SETTINGS_TAB_LIST.filter((tab) => operator || tab.operatorOnly !== true)
+}
+
+export function tabFrom(param: string | null, operator: boolean): SettingsTab {
+  if (param === 'people' || param === 'model') return param
+  return param === 'how' && operator ? 'how' : 'connections'
 }
 
 export const ONLY_OPERATORS_WORDS = 'Only Operators change settings.'

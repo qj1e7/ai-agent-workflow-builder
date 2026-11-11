@@ -295,3 +295,8 @@
   cursor: pointer;
   font-weight: 600;
 }
+
+.lead {
+  margin: 0 0 var(--space-4);
+  color: var(--muted);
+}

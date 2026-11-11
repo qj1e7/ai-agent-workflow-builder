@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import { useCacheScope, useSession } from '../api/context'
 import { useDevUsers } from '../api/queries'
+import { cx } from '../ui/cx'
 import { SettingsIcon } from './icons'
 import styles from './TestControls.module.css'
 
@@ -37,13 +38,13 @@ function Panel({ choose }: { choose: (id: string) => void }) {
       ) : null}
       <button
         type="button"
-        className={styles['toggle']}
+        className={cx(styles['toggle'], open && styles['open'])}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((value) => !value)}
       >
         <SettingsIcon size={16} />
-        {open ? 'Hide test controls' : 'Test controls'}
+        <span className={styles['label']}>{open ? 'Hide test controls' : 'Test controls'}</span>
       </button>
     </div>
   )
