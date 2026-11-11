@@ -266,3 +266,7 @@ A person who approves write actions, and who confirms a new Approver and a new A
 **People list**:
 The platform's own record of who may use it and which roles they hold. Sign-in only says who someone is; the People list gives them their roles. Someone who signs in but is not on it is told to ask an Operator.
 _Avoid_: Users, accounts, app roles
+
+**n8n access**:
+A mark on an Operator in the People list that lets them see a workflow's n8n blocks and open it in n8n, where they can change it. Only Operators can have it, because a change made in n8n changes a workflow. Everyone else sees the workflow's plain steps. It is not a third role. Planned (ADR 0043).
+_Avoid_: n8n role, admin
