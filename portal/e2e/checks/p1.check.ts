@@ -268,7 +268,7 @@ for (const mobile of [true, false]) {
       expect(widths.after, `${label}: a sideways scroll does not move the page`).toBe(0)
     }
     save(5, `p1-phone-${mode}.json`, { labels, header, results })
-    expect(labels.length, 'four menu items').toBe(4)
+    expect(labels.length, 'three rail items').toBe(3)
     expect(results.map((r) => r['url']), 'every item opens its own page').toEqual(['/', '/workflows', '/software'])
     // Settings and Teams in the header are reachable too.
     await page.getByRole('banner').getByRole('link', { name: 'Settings' }).click()
