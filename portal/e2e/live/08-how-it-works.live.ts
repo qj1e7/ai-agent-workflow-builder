@@ -29,6 +29,7 @@ test('the Tools tab gives each tool its health from the registry, and the Agents
   await expect(page.getByRole('link', { name: 'Planner' })).toBeVisible()
 })
 
+// The old address redirects while the page loads, so the navigation is done once the server answers.
 test('an agent opens from its tile, closes back to the tile, and the old Agent library address leads to it', async ({ page }) => {
   await page.goto(`${HOW}&show=agents`)
   await page.getByRole('link', { name: 'Planner' }).click()
@@ -39,12 +40,12 @@ test('an agent opens from its tile, closes back to the tile, and the old Agent l
   await expect(dialog).toBeHidden()
   await expect(page.getByRole('link', { name: 'Planner' })).toBeFocused()
 
-  await page.goto('/agents/planner')
+  await page.goto('/agents/planner', { waitUntil: 'commit' })
   await expect(page).toHaveURL(/\/settings\?tab=how&show=agents&agent=planner$/)
   await expect(page.getByRole('dialog', { name: 'Planner' })).toBeVisible()
-  await page.goto('/agents?tab=tools')
+  await page.goto('/agents?tab=tools', { waitUntil: 'commit' })
   await expect(page).toHaveURL(/\/settings\?tab=how&show=tools$/)
-  await page.goto('/agents')
+  await page.goto('/agents', { waitUntil: 'commit' })
   await expect(page).toHaveURL(/\/settings\?tab=how$/)
 })
 
@@ -56,7 +57,7 @@ test('an Approver who is not an Operator is not offered How it works, and the ol
   await expect(page.getByRole('group', { name: 'Settings sections' }).getByRole('button', { name: 'How it works' })).toHaveCount(0)
   await page.goto(HOW)
   await expect(settingsTab(page, 'Connections')).toHaveAttribute('aria-pressed', 'true')
-  await page.goto('/agents')
+  await page.goto('/agents', { waitUntil: 'commit' })
   await expect(page).toHaveURL(/\/$/)
   await bob.close()
 })
