@@ -257,14 +257,14 @@
 }
 
 /* When no row has an action, the list gives that column to the descriptions, as the prototype's no-act does. */
-@container (min-width: 861px) {
+@container (min-width: 961px) {
   .noAct .row {
     grid-template-columns: 196px minmax(0, 1fr) 172px;
   }
 }
 
 /* A list inside a narrow card, such as the chat's check card, stacks its rows too, whatever the window. */
-@container (max-width: 860px) {
+@container (max-width: 960px) {
   .row {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
