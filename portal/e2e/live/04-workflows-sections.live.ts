@@ -371,6 +371,7 @@ for (const user of ['alice', 'bob']) {
     }
 
     if (user === 'alice') {
+      await page.goto('/workflows')
       const before = await lastLine(watchlist).innerText()
       for (const width of [1920, 1280, 1050, 900, 390]) {
         await page.setViewportSize({ width, height: 900 })
