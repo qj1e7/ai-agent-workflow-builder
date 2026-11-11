@@ -38,5 +38,6 @@
       "kind": "write_action"
     }
   ],
-  "agents": []
+  "agents": [],
+  "last_run": null
 }

@@ -4,13 +4,29 @@ API answers them."""
 from datetime import UTC, datetime, timedelta
 
 from platform_api.builder.lifecycle import RESTORE_WINDOW
-from platform_api.builder.models import DraftIn, DraftList, DraftView, UseCaseDeleted
+from platform_api.builder.models import DraftIn, DraftList, DraftView, LastRunView, UseCaseDeleted
 from platform_api.contracts.cards_stories import USE_CASE as AGENT_USE_CASE
-from platform_api.contracts.stories import USE_CASE, USE_CASE_SCHEDULE
+from platform_api.contracts.stories import BOB, REJECTED, USE_CASE, USE_CASE_SCHEDULE
 from platform_api.contracts.watchlist_stories import SCHEDULE, STATUSES
 from platform_api.wire import WireModel
 
 PAUSED = USE_CASE.model_copy(update={"state": "paused", "next_run_at": None})
+# Bob declined the last check. Nothing was written. The decline reason is not part of the
+# record yet.
+DECLINED = USE_CASE.model_copy(
+    update={
+        "last_run": LastRunView(
+            run_id=REJECTED.run_id,
+            state="rejected",
+            at=REJECTED.t0,
+            test=False,
+            declined_by=BOB,
+            proposed=1,
+            written=0,
+            tickets=True,
+        )
+    }
+)
 # Alice has left the People list, so the watchlist's schedule starts no run until an Operator
 # saves it.
 HELD = USE_CASE.model_copy(
@@ -57,6 +73,7 @@ def lifecycle_fixtures() -> dict[str, WireModel | list[WireModel]]:
     return {
         "builder/use-case.paused.json": PAUSED,
         "builder/use-case.held.json": HELD,
+        "builder/use-case.declined.json": DECLINED,
         "watchlist/paused.json": PAUSED_WATCHLIST,
         "builder/use-case.deleted.json": DELETED,
         "builder/draft.in.json": DRAFT_IN,

@@ -87,6 +87,25 @@ class UseCaseSchedule(WireModel):
     )
 
 
+class LastRunView(WireModel):
+    run_id: RunId
+    state: RunStateName
+    at: AwareDatetime = Field(description="When the run started.")
+    test: bool = Field(
+        description="True when a person started it by hand to try the workflow, which is a test "
+        "run. False when its schedule started it."
+    )
+    declined_by: UserId | None = Field(
+        description="Who declined it. Null unless the run was declined."
+    )
+    proposed: int = Field(description="How many writes the run asked a yes for. 0 if none.")
+    written: int = Field(description="How many writes the run made. 0 if none.")
+    tickets: bool = Field(
+        description="True when each of those writes is a ticket, so the Portal can say tickets "
+        "rather than changes."
+    )
+
+
 class UseCaseView(WireModel):
     use_case_id: str
     version: int
@@ -117,6 +136,10 @@ class UseCaseView(WireModel):
     agents: list[UseCaseAgentView] = Field(
         description="The agents of an agent use case, with the values they run with. "
         "Empty for a template use case."
+    )
+    last_run: LastRunView | None = Field(
+        description="The newest run of this workflow, whatever its state. Null when it has "
+        "never run."
     )
 
 

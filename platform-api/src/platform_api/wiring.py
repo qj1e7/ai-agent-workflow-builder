@@ -283,6 +283,7 @@ async def build(settings: Settings) -> Services:
         settings.public_base_url,
         CardPlanning(db, model_settings, agents),
         schedules,
+        orchestrator,
     )
     request_channel = request_channel_for(settings)
     team_requests = TeamRequests(
@@ -301,7 +302,7 @@ async def build(settings: Settings) -> Services:
             watchlist,
             CapabilityRegistry(agents),
             connections,
-            PlannerFactsReader(watchlist, builder, orchestrator, home),
+            PlannerFactsReader(watchlist, builder, home),
         ),
         home=home,
         watchlist=watchlist,

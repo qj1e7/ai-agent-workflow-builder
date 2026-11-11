@@ -13,6 +13,7 @@ from platform_api.builder.cards import (
     tool_list,
 )
 from platform_api.builder.drafts import Drafts, TooManyDrafts
+from platform_api.builder.last_run import RunHistory, newest_runs
 from platform_api.builder.lifecycle import (
     AlreadyDeleted,
     Deleted,
@@ -39,6 +40,7 @@ from platform_api.builder.models import (
     DraftIn,
     DraftList,
     DraftView,
+    LastRunView,
     PlanOut,
     ScheduleIn,
     SuggestOut,
@@ -105,6 +107,7 @@ def _view(
     row: Mapping[str, Any],
     agents: Sequence[PinnedAgent],
     schedule: SavedSchedule | None,
+    last_run: LastRunView | None,
     now: datetime,
 ) -> UseCaseView:
     template = TEMPLATES[row["template"]]
@@ -136,6 +139,7 @@ def _view(
             )
             for a in agents
         ],
+        last_run=last_run,
     )
 
 
@@ -189,6 +193,7 @@ class Builder:
         public_base_url: str,
         planner: CardPlanner | None = None,
         schedules: ScheduleBook | None = None,
+        history: RunHistory | None = None,
     ) -> None:
         self._db = db
         self._runs = runs
@@ -197,6 +202,7 @@ class Builder:
         self._schedules = schedules or ScheduleBook(db)
         self._drafts = Drafts(db)
         self._planner = planner or NoPlanner()
+        self._history = history
         self.public_base_url = public_base_url
 
     async def list_use_cases(self) -> UseCaseList:
@@ -234,12 +240,14 @@ class Builder:
             if row["template"] == AGENT_CARDS.key
         ]
         agents = await self._cards.agents_of(agent_cases)
+        last_runs = {} if self._history is None else newest_runs(await self._history.list_runs())
         now = self._db.clock()
         return [
             _view(
                 row,
                 agents.get((row["use_case_id"], row["version"]), []),
                 schedules.get(row["use_case_id"]),
+                last_runs.get(row["use_case_id"]),
                 now,
             )
             for row in rows

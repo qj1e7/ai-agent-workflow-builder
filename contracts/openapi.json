@@ -4499,6 +4499,68 @@
         "title": "LastCheckView",
         "type": "object"
       },
+      "LastRunView": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "When the run started.",
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "declined_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who declined it. Null unless the run was declined.",
+            "title": "Declined By"
+          },
+          "proposed": {
+            "description": "How many writes the run asked a yes for. 0 if none.",
+            "title": "Proposed",
+            "type": "integer"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/RunState"
+          },
+          "test": {
+            "description": "True when a person started it by hand to try the workflow, which is a test run. False when its schedule started it.",
+            "title": "Test",
+            "type": "boolean"
+          },
+          "tickets": {
+            "description": "True when each of those writes is a ticket, so the Portal can say tickets rather than changes.",
+            "title": "Tickets",
+            "type": "boolean"
+          },
+          "written": {
+            "description": "How many writes the run made. 0 if none.",
+            "title": "Written",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "state",
+          "at",
+          "test",
+          "declined_by",
+          "proposed",
+          "written",
+          "tickets"
+        ],
+        "title": "LastRunView",
+        "type": "object"
+      },
       "Leg": {
         "enum": [
           "work",
@@ -8581,6 +8643,17 @@
             "title": "Instruction",
             "type": "string"
           },
+          "last_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LastRunView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newest run of this workflow, whatever its state. Null when it has never run."
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -8658,7 +8731,8 @@
           "next_run_at",
           "schedule",
           "plan",
-          "agents"
+          "agents",
+          "last_run"
         ],
         "title": "UseCaseView",
         "type": "object"
