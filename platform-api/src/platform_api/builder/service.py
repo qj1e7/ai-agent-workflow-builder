@@ -13,7 +13,7 @@ from platform_api.builder.cards import (
     tool_list,
 )
 from platform_api.builder.drafts import Drafts, TooManyDrafts
-from platform_api.builder.last_run import RunHistory, newest_runs
+from platform_api.builder.last_run import RunHistory, last_run_view
 from platform_api.builder.lifecycle import (
     AlreadyDeleted,
     Deleted,
@@ -205,7 +205,7 @@ class Builder:
         self._history = history
         self.public_base_url = public_base_url
 
-    async def list_use_cases(self) -> UseCaseList:
+    async def list_use_cases(self, viewer: Principal | None = None) -> UseCaseList:
         """Team-wide by design: one team, two roles, and Approvers need the context.
         Per-team scoping comes with Entra ID, if more teams join."""
         async with self._db.connection("builder") as conn:
@@ -215,9 +215,11 @@ class Builder:
             )
             rows = await cursor.fetchall()
         schedules = {saved.use_case_id: saved for saved in await self._schedules.all()}
-        return UseCaseList(use_cases=await self._views(rows, schedules))
+        return UseCaseList(use_cases=await self._views(rows, schedules, viewer))
 
-    async def get_use_case(self, use_case_id: str) -> UseCaseView | None:
+    async def get_use_case(
+        self, use_case_id: str, viewer: Principal | None = None
+    ) -> UseCaseView | None:
         """None for a deleted use case too: it has left the list until it is restored."""
         async with self._db.connection("builder") as conn:
             cursor = await conn.execute(
@@ -229,10 +231,13 @@ class Builder:
             return None
         saved = await self._schedules.get(UseCaseId(use_case_id))
         schedules = {} if saved is None else {saved.use_case_id: saved}
-        return (await self._views([row], schedules))[0]
+        return (await self._views([row], schedules, viewer))[0]
 
     async def _views(
-        self, rows: Sequence[Mapping[str, Any]], schedules: Mapping[UseCaseId, SavedSchedule]
+        self,
+        rows: Sequence[Mapping[str, Any]],
+        schedules: Mapping[UseCaseId, SavedSchedule],
+        viewer: Principal | None,
     ) -> list[UseCaseView]:
         agent_cases = [
             (row["use_case_id"], row["version"])
@@ -240,14 +245,20 @@ class Builder:
             if row["template"] == AGENT_CARDS.key
         ]
         agents = await self._cards.agents_of(agent_cases)
-        last_runs = {} if self._history is None else newest_runs(await self._history.list_runs())
+        newest = (
+            {}
+            if self._history is None
+            else await self._history.newest_runs(
+                [UseCaseId(row["use_case_id"]) for row in rows], viewer
+            )
+        )
         now = self._db.clock()
         return [
             _view(
                 row,
                 agents.get((row["use_case_id"], row["version"]), []),
                 schedules.get(row["use_case_id"]),
-                last_runs.get(row["use_case_id"]),
+                last_run_view(gist) if (gist := newest.get(row["use_case_id"])) else None,
                 now,
             )
             for row in rows

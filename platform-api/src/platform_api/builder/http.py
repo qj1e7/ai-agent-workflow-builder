@@ -147,7 +147,7 @@ async def create_use_case(
 
 @router.get("/use-cases", responses=SIGNED_IN)
 async def list_use_cases(principal: CurrentPrincipal, builder: CurrentBuilder) -> UseCaseList:
-    return await builder.list_use_cases()
+    return await builder.list_use_cases(principal)
 
 
 @router.post("/use-cases/suggest", responses=SIGNED_IN)
@@ -161,7 +161,7 @@ def suggest_template(
 async def get_use_case(
     use_case_id: str, principal: CurrentPrincipal, builder: CurrentBuilder
 ) -> UseCaseView:
-    view = await builder.get_use_case(use_case_id)
+    view = await builder.get_use_case(use_case_id, principal)
     if view is None:
         raise HTTPException(404, NO_SUCH)
     return view

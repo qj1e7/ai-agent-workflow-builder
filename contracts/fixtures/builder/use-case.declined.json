@@ -47,6 +47,9 @@
     "declined_by": "bob",
     "proposed": 1,
     "written": 0,
-    "tickets": true
+    "tickets": true,
+    "you_can_decide": false,
+    "retryable": false,
+    "reason": null
   }
 }

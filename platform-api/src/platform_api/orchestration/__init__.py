@@ -90,7 +90,7 @@ from platform_api.orchestration.planning import (
     ProjectFinding,
     RuntimeDown,
 )
-from platform_api.orchestration.run_gist import RunGist, gist_of
+from platform_api.orchestration.run_gist import RunGist
 from platform_api.orchestration.runs import state_name
 from platform_api.orchestration.schedule import AT_PATTERN, Day, Schedule, parse_at
 from platform_api.orchestration.schedule_store import (
@@ -252,7 +252,6 @@ __all__ = [
     "RunGist",
     "RunSpec",
     "state_name",
-    "gist_of",
     "RunStarted",
     "RunStarter",
     "SavedSchedule",

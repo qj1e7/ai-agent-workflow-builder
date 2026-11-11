@@ -4,10 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import agentUseCase from '../../../../contracts/fixtures/cards/use-case.json'
 import watchlistUseCase from '../../../../contracts/fixtures/builder/use-case.json'
-import failed from '../../../../contracts/fixtures/views/failure.final.json'
-import declined from '../../../../contracts/fixtures/views/rejected.final.json'
-import waiting from '../../../../contracts/fixtures/views/success.awaiting_approval.json'
-import done from '../../../../contracts/fixtures/views/success.final.json'
+import declinedWatchlist from '../../../../contracts/fixtures/builder/use-case.declined.json'
 import { App } from '../../App'
 import { ApiError } from '../../api/client'
 import { ApiProvider } from '../../api/context'
@@ -17,7 +14,7 @@ import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
 import setupCardFixture from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import { cardFrom, draftContent } from '../home/card'
 import draftsFixture from '../../../../contracts/fixtures/builder/drafts.json'
-import type { DraftView, HomeOut, Me, ReplyView, RunView, TeamRequestView, UnderstoodRowView, UseCaseView } from '../../api/types'
+import type { DraftView, HomeOut, Me, ReplyView, TeamRequestView, UnderstoodRowView, UseCaseView } from '../../api/types'
 import type { LastRun } from './workflow'
 import { needsTotal } from '../home/home'
 
@@ -28,60 +25,38 @@ const CAROL: Me = { id: 'carol', display: 'Carol', roles: ['operator'] }
 const WATCHLIST = watchlistUseCase as UseCaseView
 const LANGGRAPH: UseCaseView = { ...(agentUseCase as UseCaseView), use_case_id: 'uc_lang', state: 'paused' }
 const BUGS: UseCaseView = { ...(agentUseCase as UseCaseView), use_case_id: 'uc_bugs', name: 'Morning bug report check', instruction: 'Raise a ticket for each new bug report.' }
-const RUNS = [
-  { ...(failed as RunView), use_case_id: 'uc_bugs', run_id: 'run_bugs' },
-  waiting as RunView,
-  { ...(done as RunView), run_id: 'run_older', started_at: '2026-11-01T02:14:00Z' },
-]
+const lr = (change: Partial<LastRun>): LastRun => ({ run_id: 'run_x', state: 'succeeded', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: null, ...change })
+const STOPPED_BUGS: UseCaseView = { ...BUGS, last_run: lr({ run_id: 'run_bugs', state: 'failed', retryable: true, reason: 'AgentError' }) }
+const WAITING_WATCHLIST: UseCaseView = { ...WATCHLIST, last_run: lr({ run_id: 'run_01JB8', state: 'awaiting_approval', proposed: 1, tickets: true }) }
+const DECLINED_WATCHLIST = declinedWatchlist as UseCaseView
 
 const NOW = new Date('2026-11-04T15:00:00+08:00')
 
 interface Setup {
   readonly me?: Me
   readonly useCases?: UseCaseView[] | Error | 'loading'
-  readonly runs?: RunView[]
   readonly state?: unknown
   readonly home?: HomeOut
   readonly drafts?: DraftView[]
   readonly request?: { readonly id: string; readonly data?: TeamRequestView | Error }
 }
 
-/** What the platform says a workflow's newest run was, made from the runs the test gives it. */
-function lastRunFrom(runs: readonly RunView[], useCaseId: string): LastRun | null {
-  const newest = runs.filter((run) => run.use_case_id === useCaseId).sort((a, b) => b.started_at.localeCompare(a.started_at))[0]
-  if (!newest) return null
-  const actions = 'proposal' in newest ? newest.proposal.actions : []
-  const written = newest.state === 'succeeded' ? newest.written : []
-  const counted = written.length > 0 ? written : actions
-  return {
-    run_id: newest.run_id,
-    state: newest.state,
-    at: newest.started_at,
-    test: newest.trigger === 'person',
-    declined_by: newest.state === 'rejected' ? newest.rejected_by : null,
-    proposed: actions.length,
-    written: written.length,
-    tickets: counted.length > 0 && counted.every((action) => action.operation === 'create_ticket'),
-  }
-}
-
 /** The platform answers for the person asking. In these tests only Bob may decide the waiting run. */
-const asSeenBy = (me: Me, runs: RunView[]): RunView[] =>
-  runs.map((run) => (run.state === 'awaiting_approval' ? { ...run, you_can_decide: me.id === 'bob' } : run))
+const asSeenBy = (me: Me, useCase: UseCaseView): UseCaseView =>
+  useCase.last_run?.state === 'awaiting_approval' ? { ...useCase, last_run: { ...useCase.last_run, you_can_decide: me.id === 'bob' } } : useCase
 
-function render({ me = ALICE, useCases = [BUGS, WATCHLIST, LANGGRAPH], runs = RUNS, state, home, drafts, request }: Setup = {}): string {
+function render({ me = ALICE, useCases = [STOPPED_BUGS, WAITING_WATCHLIST, LANGGRAPH], state, home, drafts, request }: Setup = {}): string {
   const session = createDevSession(null)
   const scope = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', scope], me)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB, CAROL])
-  queryClient.setQueryData(['runs', scope], asSeenBy(me, runs))
   if (home) queryClient.setQueryData(['home', scope], home)
   if (drafts) queryClient.setQueryData(['drafts', scope], drafts)
   if (request?.data instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: ['team-request', scope, request.id] }).setState({ status: 'error', error: request.data, fetchStatus: 'idle' })
   else if (request?.data) queryClient.setQueryData(['team-request', scope, request.id], request.data)
   if (useCases instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: ['use-cases', scope] }).setState({ status: 'error', error: useCases, fetchStatus: 'idle' })
-  else if (useCases !== 'loading') queryClient.setQueryData(['use-cases', scope], useCases.map((useCase) => ({ ...useCase, last_run: lastRunFrom(runs, useCase.use_case_id) })))
+  else if (useCases !== 'loading') queryClient.setQueryData(['use-cases', scope], useCases.map((useCase) => asSeenBy(me, useCase)))
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
@@ -119,41 +94,40 @@ describe('the Workflows list', () => {
     const lastOf = (html: string, id: string) => text(/<p[^>]*class="[^"]*last[^"]*"[^>]*>[\s\S]*?<\/p>/.exec(rowOf(html, id))?.[0] ?? '')
 
     it('says No runs yet for a workflow that never ran, and no pill but On or Paused', () => {
-      const html = render({ useCases: [BUGS, LANGGRAPH], runs: [] })
+      const html = render({ useCases: [BUGS, LANGGRAPH] })
       expect(lastOf(html, 'uc_bugs')).toBe('No runs yet')
       expect(rowOf(html, 'uc_bugs')).toMatch(/data-life="on"[^>]*>.*On<\/span>/)
       expect(lastOf(html, 'uc_lang')).toBe('No runs yet')
     })
 
     it('says a stopped run stopped, on the day and time it started', () => {
-      const stopped = { ...(failed as RunView), use_case_id: 'uc_bugs', started_at: '2026-11-04T00:00:00Z', trigger: 'schedule' } as RunView
-      expect(lastOf(render({ runs: [stopped] }), 'uc_bugs')).toBe('Last run Today 8:00 · Stopped')
+      const stopped = { ...BUGS, last_run: lr({ state: 'failed', at: '2026-11-04T00:00:00Z' }) }
+      expect(lastOf(render({ useCases: [stopped] }), 'uc_bugs')).toBe('Last run Today 8:00 · Stopped')
     })
 
-    it('names who declined, gives no pill for it, and marks a test run', () => {
-      const html = render({ useCases: [WATCHLIST], runs: [declined as RunView] })
-      expect(lastOf(html, 'uc_01JB7')).toBe('Last run Thu 5 Nov, test · Declined by Bob')
-      expect(rowOf(html, 'uc_01JB7')).toMatch(/data-life="on"[^>]*>.*On<\/span>/)
-      expect(text(rowOf(html, 'uc_01JB7'))).toContain('Test run')
-    })
-
-    it('does not mark a run its schedule started as a test run', () => {
-      const scheduled = { ...(declined as RunView), trigger: 'schedule' } as RunView
-      const html = render({ useCases: [WATCHLIST], runs: [scheduled] })
+    it('names who declined, and gives no pill for it', () => {
+      const html = render({ useCases: [DECLINED_WATCHLIST] })
       expect(lastOf(html, 'uc_01JB7')).toBe('Last run Thu 5 Nov · Declined by Bob')
+      expect(rowOf(html, 'uc_01JB7')).toMatch(/data-life="on"[^>]*>.*On<\/span>/)
       expect(text(rowOf(html, 'uc_01JB7'))).not.toContain('Test run')
     })
 
+    it('marks a test run in the line and beside the status', () => {
+      const tried = { ...BUGS, last_run: lr({ state: 'awaiting_approval', test: true, proposed: 1, tickets: true }) }
+      const html = render({ useCases: [tried] })
+      expect(lastOf(html, 'uc_bugs')).toBe('Last run Today 10:14, test · 1 ticket proposed')
+      expect(text(rowOf(html, 'uc_bugs'))).toContain('Test run')
+    })
+
     it('shows Paused alone for a paused workflow, whatever its last run, and keeps that run’s line', () => {
-      const html = render({ useCases: [{ ...BUGS, state: 'paused' }], runs: [{ ...(failed as RunView), use_case_id: 'uc_bugs' }] })
+      const html = render({ useCases: [{ ...STOPPED_BUGS, state: 'paused' }] })
       expect(rowOf(html, 'uc_bugs')).toMatch(/data-life="paused"[^>]*>.*Paused<\/span>/)
       expect(rowOf(html, 'uc_bugs')).not.toContain('Stopped</span>')
       expect(lastOf(html, 'uc_bugs')).toMatch(/^Last run .* · Stopped$/)
     })
 
     it('reads the same for an Approver as for an Operator', () => {
-      const runs = [declined as RunView]
-      expect(lastOf(render({ me: BOB, useCases: [WATCHLIST], runs }), 'uc_01JB7')).toBe(lastOf(render({ me: ALICE, useCases: [WATCHLIST], runs }), 'uc_01JB7'))
+      expect(lastOf(render({ me: BOB, useCases: [DECLINED_WATCHLIST] }), 'uc_01JB7')).toBe(lastOf(render({ me: ALICE, useCases: [DECLINED_WATCHLIST] }), 'uc_01JB7'))
     })
   })
 
@@ -166,8 +140,7 @@ describe('the Workflows list', () => {
 
   it('for a London schedule, names London next to its next run, and keeps its latest run’s start in Singapore time', () => {
     const london: UseCaseView = { ...BUGS, next_run_at: '2026-11-04T09:00:00Z', schedule: { day: 'every_day', at: '09:00', time_zone: 'Europe/London', owner_name: 'Alice' } }
-    const ran = { ...(done as RunView), use_case_id: 'uc_bugs', started_at: '2026-11-04T06:00:00Z' }
-    const row = text(rowOf(render({ useCases: [london], runs: [ran] }), 'uc_bugs'))
+    const row = text(rowOf(render({ useCases: [{ ...london, last_run: lr({ at: '2026-11-04T06:00:00Z' }) }] }), 'uc_bugs'))
     expect(row).toContain('Next: Today, 9:00 London time')
   })
 
@@ -268,7 +241,7 @@ const labelsOf = (html: string, ...label: string[]) => label.flatMap((words) => 
 
 describe('one action per workflow on Workflows', () => {
   it('keeps one primary button when Needs you lists the Operator’s stopped run, and offers no row button for it', () => {
-    const html = render({ home: aliceHome as HomeOut, runs: [{ ...(failed as RunView), use_case_id: 'uc_01JB7', run_id: 'run_01JB9' }] })
+    const html = render({ home: aliceHome as HomeOut, useCases: [{ ...WATCHLIST, last_run: lr({ run_id: 'run_01JB9', state: 'failed', retryable: true, reason: 'AgentError' }) }] })
     expect(primaries(mainOf(html))).toBe(1)
     expect(rowOf(html, 'uc_01JB7')).not.toMatch(/See why it stopped|Review and decide/)
   })

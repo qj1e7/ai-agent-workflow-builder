@@ -6,8 +6,8 @@ import { useLatch } from '../../api/latch'
 import { useHome } from '../../api/homeQueries'
 import { useDeleteDraft, useDrafts, useSaveDraft } from '../../api/plannerQueries'
 import { useDisplayName } from '../../api/people'
-import { useMe, useRuns, useUseCases } from '../../api/queries'
-import type { DraftView, HomeOut, Me, RunView, UseCaseView } from '../../api/types'
+import { useMe, useUseCases } from '../../api/queries'
+import type { DraftView, HomeOut, Me, UseCaseView } from '../../api/types'
 import { useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
 import { PageHead } from '../../shell/PageHead'
 import { Button, ButtonLink } from '../../ui/Button'
@@ -147,11 +147,9 @@ interface LoadedProps {
   readonly now: Date
   readonly me: Me
   readonly useCases: readonly UseCaseView[]
-  readonly runs: readonly RunView[]
-  readonly runsFailed: boolean
 }
 
-function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps) {
+function Loaded({ handedOver, now, me, useCases }: LoadedProps) {
   const back = useNavigationType() === NavigationType.Pop
   const [note, setNote] = useState<Note | null>(() => (handedOver ? { kind: 'deleted', id: 0, row: handedOver } : null))
   const [problem, setProblem] = useState<string | null>(null)
@@ -199,7 +197,7 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
 
   const inNeeds = useMemo(() => (home ? runsInNeeds(home) : undefined), [home])
   const needsCard = home !== undefined && needsTotal(home) > 0
-  const rows = rowsOf(useCases, runs, viewer, filter, query, inNeeds)
+  const rows = rowsOf(useCases, viewer, filter, query, inNeeds)
   const firstAction = needsCard ? -1 : rows.findIndex((row) => row.action !== null)
 
   function undo(row: Deleted) {
@@ -270,7 +268,6 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
           {problem}
         </p>
       ) : null}
-      {runsFailed ? <p className={styles['problem']}>The latest runs could not be loaded, so each workflow shows none. They load again in a moment.</p> : null}
       {viewer.operator && drafts ? <DraftsSection drafts={drafts} now={now} onDiscard={(draft) => { setDiscardProblem(null); setDiscarding(draft) }} /> : null}
       {home ? <WaitingSection items={home.waiting_on_others} total={home.waiting_on_others_total} now={now} /> : null}
       {home ? <FollowingSection items={home.following_up} total={home.following_up_total} now={now} meId={me.id} /> : null}
@@ -368,7 +365,6 @@ export function WorkflowsPage({ heading, lead, now }: { heading: string; lead: s
 function WorkflowsBody({ handedOver, now }: { handedOver: Deleted | null; now: Date }) {
   const me = useMe()
   const useCases = useUseCases({ poll: REFRESH_MS })
-  const runs = useRuns({ poll: REFRESH_MS })
   if ((useCases.isError && !useCases.data) || me.isError) {
     return (
       <>
@@ -377,12 +373,12 @@ function WorkflowsBody({ handedOver, now }: { handedOver: Deleted | null; now: D
       </>
     )
   }
-  if (!useCases.data || !me.data || (runs.isPending && !runs.isError)) {
+  if (!useCases.data || !me.data) {
     return (
       <p className="muted" role="status">
         Loading the workflows
       </p>
     )
   }
-  return <Loaded handedOver={handedOver} now={now} me={me.data} useCases={useCases.data} runs={runs.data ?? []} runsFailed={runs.isError && !runs.data} />
+  return <Loaded handedOver={handedOver} now={now} me={me.data} useCases={useCases.data} />
 }

@@ -41,12 +41,13 @@ RUN_WORDS: Final[dict[RunState, str]] = {
     "working": "Running",
     "proposed": "Running",
     "acting": "Running",
-    "awaiting_approval": "Needs a yes",
+    "awaiting_approval": "Waiting for a yes",
     "succeeded": "Done",
     "rejected": "Declined",
     "failed": "Stopped",
 }
-"""The Workflows page's words for a run (`runFact` in the Portal)."""
+"""A run's state in the Workflows page's words: its pill while it needs someone or is going, and
+its last-run line once it is over (`pillOf` and `lastRunLine` in the Portal)."""
 
 
 class WatchlistSource(Protocol):

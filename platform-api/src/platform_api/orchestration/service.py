@@ -71,6 +71,7 @@ from platform_api.orchestration.dispatch import (
     without_addresses,
 )
 from platform_api.orchestration.person_runs import PersonRuns, runs_of
+from platform_api.orchestration.run_gist import RunGist, gist_of
 from platform_api.orchestration.runs import (
     PLANNER,
     Acting,
@@ -146,6 +147,7 @@ from platform_api.shared import (
     Role,
     RunId,
     TaskId,
+    UseCaseId,
     UserId,
     new_id,
 )
@@ -915,6 +917,17 @@ class Orchestrator:
     async def list_runs(self) -> list[RunDetail]:
         async with self._db.transaction("orchestration") as uow:
             return await self._details(uow, await self._store.list_runs(uow))
+
+    async def newest_runs(
+        self, use_case_ids: Sequence[UseCaseId], viewer: Principal | None = None
+    ) -> dict[UseCaseId, RunGist]:
+        """The newest run of each named workflow, with only those runs read in full."""
+        if not use_case_ids:
+            return {}
+        async with self._db.transaction("orchestration") as uow:
+            records = await self._store.newest_runs(uow, use_case_ids)
+            details = await self._details(uow, records)
+        return {d.record.spec.use_case_id: gist_of(d, viewer) for d in details}
 
     async def runs_for(self, viewer: Principal) -> PersonRuns:
         async with self._db.transaction("orchestration") as uow:

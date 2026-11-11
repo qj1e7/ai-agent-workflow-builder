@@ -39,7 +39,7 @@ import {
   pressRunNow,
   REFRESH_MS,
   rereadWhenOutOfDate,
-  runFact,
+  pillOf,
   runsOf,
   scheduleSaver,
   SOFTWARE_PAGE,
@@ -340,13 +340,11 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   }, [changingSchedule])
 
   const recent = runsOf(runs.data ?? [], id)
-  const latest = recent[0] ?? null
-  const fact = latest ? runFact(latest, nameOf) : null
   const paused = useCase.state === 'paused'
   const controls = controlsOf(useCase, viewer)
   const menuActions = menuActionsOf(useCase, viewer)
   const mayPause = controls.includes('pause')
-  const banner = bannerOf({ useCase, latest, viewer, now, nameOf })
+  const banner = bannerOf({ useCase, viewer, now })
 
   // The control that took the press leaves the page, so focus follows to its replacement: Resume in the banner, or Pause in the header.
   useEffect(() => {
@@ -424,7 +422,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
       <BackToList />
       <div className={styles['head']}>
         <div>
-          <StatusPills state={useCase.state} fact={fact} />
+          <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} test={useCase.last_run?.test === true} />
           <h1 tabIndex={-1}>{useCase.name}</h1>
           <p>{useCase.instruction}</p>
         </div>
@@ -505,7 +503,7 @@ function notFound(error: unknown): boolean {
 }
 
 function WorkflowLoader({ useCaseId, now }: { useCaseId: string; now: Date }) {
-  const useCase = useUseCase(useCaseId)
+  const useCase = useUseCase(useCaseId, true, { poll: REFRESH_MS })
   const me = useMe()
   const shown = useCase.data && me.data && !useCase.isError ? controlsOf(useCase.data, viewerOf(me.data)).map(placeOf) : []
   const refocus = useFocusAfterReread(PLACES_IN_PAGE_ORDER, shown, Math.max(useCase.dataUpdatedAt, useCase.errorUpdatedAt))

@@ -173,6 +173,8 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "builder/use-case.paused.json": TypeAdapter(UseCaseView),
     "builder/use-case.held.json": TypeAdapter(UseCaseView),
     "builder/use-case.declined.json": TypeAdapter(UseCaseView),
+    "builder/use-case.waiting.json": TypeAdapter(UseCaseView),
+    "builder/use-case.stopped.json": TypeAdapter(UseCaseView),
     "builder/use-case.deleted.json": TypeAdapter(UseCaseDeleted),
     "builder/draft.in.json": TypeAdapter(DraftIn),
     "builder/drafts.json": TypeAdapter(DraftList),

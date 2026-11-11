@@ -92,7 +92,7 @@ function lastRunWhat(last: LastRun, nameOf: NameOf): string {
     case 'awaiting_approval':
       return last.proposed > 0 ? `${count(last.proposed, noun)} proposed` : 'Waiting for a yes'
     case 'succeeded':
-      return last.written > 0 ? `${count(last.written, noun)} ${last.tickets ? 'created' : 'written'}` : 'Nothing to write'
+      return last.written > 0 ? `${count(last.written, noun)} ${last.tickets ? 'created' : 'written'}` : 'Nothing new to write'
     case 'rejected':
       return last.declined_by ? `Declined by ${nameOf(last.declined_by)}` : 'Declined'
     case 'failed':
@@ -154,15 +154,6 @@ const newestFirst = (a: RunView, b: RunView) => b.started_at.localeCompare(a.sta
 
 export function runsOf(runs: readonly RunView[], useCaseId: string): RunView[] {
   return runs.filter((run) => run.use_case_id === useCaseId).sort(newestFirst)
-}
-
-export function latestRuns(runs: readonly RunView[]): ReadonlyMap<string, RunView> {
-  const latest = new Map<string, RunView>()
-  for (const run of runs) {
-    const seen = latest.get(run.use_case_id)
-    if (!seen || newestFirst(run, seen) < 0) latest.set(run.use_case_id, run)
-  }
-  return latest
 }
 
 export interface AgentLink {
@@ -264,12 +255,12 @@ export function agentsOf(useCase: Pick<UseCaseView, 'template' | 'agents'>): Age
 export type RowAction = { readonly kind: 'decide' | 'why'; readonly runId: string }
 
 /** The platform says whether the person can decide a waiting run. Only it knows who retried a run or is named on a step. */
-export function rowAction(latest: RunView | null, viewer: Viewer): RowAction | null {
-  if (!latest) return null
-  if (latest.state === 'awaiting_approval') {
-    return latest.you_can_decide ? { kind: 'decide', runId: latest.run_id } : null
+export function rowAction(last: LastRun | null, viewer: Viewer): RowAction | null {
+  if (!last) return null
+  if (last.state === 'awaiting_approval') {
+    return last.you_can_decide ? { kind: 'decide', runId: last.run_id } : null
   }
-  if (latest.state === 'failed' && viewer.operator) return { kind: 'why', runId: latest.run_id }
+  if (last.state === 'failed' && viewer.operator) return { kind: 'why', runId: last.run_id }
   return null
 }
 
@@ -283,8 +274,6 @@ export const FILTERS: readonly (readonly [Filter, string])[] = [
 
 export interface Row {
   readonly useCase: UseCaseView
-  /** The workflow's newest run in full, which only the row's action reads. Its state, count and line come from the use case's last run. */
-  readonly latest: RunView | null
   readonly action: RowAction | null
 }
 
@@ -302,21 +291,18 @@ function kept(row: Row, filter: Filter, words: string): boolean {
 
 const NOTHING: ReadonlySet<string> = new Set()
 
-/** A row's action is on its workflow's latest run. When Needs you already offers that run, the row keeps only its status, so no run is offered twice. */
+/** A row's pill, line and action all read its workflow's last run. When Needs you already offers that run, the row keeps only its status, so no run is offered twice. */
 export function rowsOf(
   useCases: readonly UseCaseView[],
-  runs: readonly RunView[],
   viewer: Viewer,
   filter: Filter,
   query: string,
   runsInNeeds: ReadonlySet<string> = NOTHING,
 ): Row[] {
-  const latest = latestRuns(runs)
   const words = query.trim().toLowerCase()
   const rows = useCases.map((useCase) => {
-    const run = latest.get(useCase.use_case_id) ?? null
-    const action = rowAction(run, viewer)
-    return { useCase, latest: run, action: action && runsInNeeds.has(action.runId) ? null : action }
+    const action = rowAction(useCase.last_run, viewer)
+    return { useCase, action: action && runsInNeeds.has(action.runId) ? null : action }
   })
   const needsYou = (row: Row) => (row.action ? 0 : 1)
   return rows.filter((row) => kept(row, filter, words)).sort((a, b) => needsYou(a) - needsYou(b))
@@ -396,31 +382,37 @@ export interface Banner {
 }
 
 interface BannerFacts {
-  readonly useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule'>
-  readonly latest: RunView | null
+  readonly useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule' | 'last_run'>
   readonly viewer: Viewer
   readonly now: Date
-  readonly nameOf: NameOf
 }
 
 const atWords = (when: string) => when.replace(/^Today, /, 'today at ').replace(/^(.+), (\d+:\d+)$/, '$1 at $2')
 
-/** One sentence on the state, and the one action that moves it on. Pause wins over the latest run, because a paused workflow starts nothing. */
-export function bannerOf({ useCase, latest, viewer, now, nameOf }: BannerFacts): Banner {
+function waitingWords(last: LastRun): string {
+  if (last.proposed === 0) return 'Waiting for a yes.'
+  const noun = count(last.proposed, last.tickets ? 'ticket' : 'change')
+  return `${noun} ${last.proposed === 1 ? 'is' : 'are'} waiting for a yes.`
+}
+
+/** One sentence on the state, and the one action that moves it on. Pause wins over the last run, because a paused workflow starts nothing. */
+export function bannerOf({ useCase, viewer, now }: BannerFacts): Banner {
+  const last = useCase.last_run
   if (useCase.state === 'paused') {
     return { tone: 'off', text: 'Paused. It won’t run until you resume it.', action: viewer.operator ? { kind: 'resume' } : null }
   }
-  if (latest?.state === 'awaiting_approval') {
-    return { tone: 'wait', text: runFact(latest, nameOf).words, action: latest.you_can_decide ? { kind: 'decide', runId: latest.run_id } : null }
+  if (last?.state === 'awaiting_approval') {
+    return { tone: 'wait', text: waitingWords(last), action: last.you_can_decide ? { kind: 'decide', runId: last.run_id } : null }
   }
-  if (latest?.state === 'failed') {
+  if (last?.state === 'failed') {
+    const why = last.reason ? ` ${failureReasonLabel[last.reason]}.` : ''
     return {
       tone: 'bad',
-      text: `Stopped ${atWords(runWhen(latest.started_at, now))}. ${failureReasonLabel[latest.reason]}.`,
-      action: viewer.operator ? { kind: 'stopped', runId: latest.run_id, retryable: latest.retryable } : null,
+      text: `Stopped ${atWords(runWhen(last.at, now))}.${why}`,
+      action: viewer.operator ? { kind: 'stopped', runId: last.run_id, retryable: last.retryable } : null,
     }
   }
-  if (latest && runFact(latest, nameOf).tone === 'new') return { tone: 'new', text: 'Running now.', action: null }
+  if (last && pillOf(last).tone === 'new') return { tone: 'new', text: 'Running now.', action: null }
   const held = heldNote(useCase)
   if (held) return { tone: 'ok', text: held, action: null }
   if (!useCase.schedule) return { tone: 'ok', text: 'On. It has no schedule, so it runs when an Operator presses Run now.', action: null }

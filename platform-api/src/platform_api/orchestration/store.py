@@ -1,4 +1,4 @@
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Any
@@ -217,6 +217,21 @@ class Store:
             await uow.conn.execute(
                 f"SELECT {RUN_COLUMNS} FROM orchestration.runs "
                 "ORDER BY started_at DESC, run_id DESC"
+            )
+        ).fetchall()
+        return [_record(row) for row in rows]
+
+    async def newest_runs(
+        self, uow: UnitOfWork, use_case_ids: Sequence[UseCaseId]
+    ) -> list[RunRecord]:
+        """The newest run of each named use case, one row each, by the index on
+        (use_case_id, started_at DESC)."""
+        rows = await (
+            await uow.conn.execute(
+                f"SELECT DISTINCT ON (use_case_id) {RUN_COLUMNS} FROM orchestration.runs "
+                "WHERE use_case_id = ANY(%s) "
+                "ORDER BY use_case_id, started_at DESC, run_id DESC",
+                (list(use_case_ids),),
             )
         ).fetchall()
         return [_record(row) for row in rows]

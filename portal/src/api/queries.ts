@@ -101,7 +101,7 @@ export function useUseCases(options?: QueryOptions) {
   })
 }
 
-export function useUseCase(useCaseId: string, enabled = true) {
+export function useUseCase(useCaseId: string, enabled = true, options?: Pick<QueryOptions, 'poll'>) {
   const client = useApiClient()
   const user = useCacheScope()
   return useQuery({
@@ -109,6 +109,7 @@ export function useUseCase(useCaseId: string, enabled = true) {
     queryFn: async () =>
       unwrap(await client.GET('/api/v1/use-cases/{use_case_id}', { params: { path: { use_case_id: useCaseId } } })),
     enabled: enabled && useCaseId !== '',
+    refetchInterval: pollEvery(options),
   })
 }
 

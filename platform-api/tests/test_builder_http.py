@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -41,6 +41,7 @@ from platform_api.orchestration import (
     RefusedAnswer,
     RowKind,
     RunDetail,
+    RunGist,
     RunSpec,
     RunStarted,
     RuntimeDown,
@@ -55,6 +56,7 @@ from platform_api.orchestration import (
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
+from platform_api.orchestration.run_gist import gist_of
 from platform_api.orchestration.runs import (
     AwaitingApproval,
     Failed,
@@ -270,9 +272,22 @@ class RunBook:
 
     def __init__(self) -> None:
         self.runs: list[RunDetail] = []
+        self.asked: list[list[UseCaseId]] = []
 
-    async def list_runs(self) -> list[RunDetail]:
-        return list(self.runs)
+    async def newest_runs(
+        self, use_case_ids: Sequence[UseCaseId], viewer: Principal | None = None
+    ) -> dict[UseCaseId, RunGist]:
+        self.asked.append(list(use_case_ids))
+        newest: dict[UseCaseId, RunDetail] = {}
+        for run in self.runs:
+            key = run.record.spec.use_case_id
+            if key in use_case_ids and (
+                key not in newest
+                or (run.record.started_at, run.record.run_id)
+                > (newest[key].record.started_at, newest[key].record.run_id)
+            ):
+                newest[key] = run
+        return {key: gist_of(run, viewer) for key, run in newest.items()}
 
     def add(
         self,
@@ -881,6 +896,9 @@ async def test_a_declined_run_names_who_declined_and_writes_nothing(front: Front
         "proposed": 3,
         "written": 0,
         "tickets": True,
+        "you_can_decide": False,
+        "retryable": False,
+        "reason": None,
     }
 
 
@@ -900,6 +918,7 @@ async def test_a_stopped_run_is_the_last_run_with_no_one_declining(front: Front)
         0,
         False,
     )
+    assert (last["retryable"], last["reason"]) == (True, "AgentError")
 
 
 async def test_a_run_started_by_hand_on_a_workflow_is_a_test_run(front: Front):
@@ -981,3 +1000,12 @@ async def test_the_planner_reads_the_same_last_run_the_rows_show(front: Front):
     assert last is not None
     assert (fact.last_run, fact.last_run_at) == ("Declined", LONG_AGO)
     assert last["at"] == "2026-10-26T01:41:00Z"
+
+
+async def test_builder_asks_only_for_the_workflows_it_shows(front: Front):
+    first = await make_workflow(front, "One")
+    await make_workflow(front, "Two")
+    front.book.asked.clear()
+    r = await front.client.get(f"{USE_CASES}/{first}", headers=ALICE)
+    assert r.status_code == 200
+    assert front.book.asked == [[first]]

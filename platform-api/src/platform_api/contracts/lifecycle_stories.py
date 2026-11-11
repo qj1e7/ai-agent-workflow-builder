@@ -11,19 +11,43 @@ from platform_api.contracts.watchlist_stories import SCHEDULE, STATUSES
 from platform_api.wire import WireModel
 
 PAUSED = USE_CASE.model_copy(update={"state": "paused", "next_run_at": None})
+LAST_RUN = LastRunView(
+    run_id=REJECTED.run_id,
+    state="rejected",
+    at=REJECTED.t0,
+    test=False,
+    declined_by=BOB,
+    proposed=1,
+    written=0,
+    tickets=True,
+    you_can_decide=False,
+    retryable=False,
+    reason=None,
+)
 # Bob declined the last check. Nothing was written. The decline reason is not part of the
 # record yet.
-DECLINED = USE_CASE.model_copy(
+DECLINED = USE_CASE.model_copy(update={"last_run": LAST_RUN})
+# The last check waits for a yes that Bob may give.
+WAITING = USE_CASE.model_copy(
     update={
-        "last_run": LastRunView(
-            run_id=REJECTED.run_id,
-            state="rejected",
-            at=REJECTED.t0,
-            test=False,
-            declined_by=BOB,
-            proposed=1,
-            written=0,
-            tickets=True,
+        "last_run": LAST_RUN.model_copy(
+            update={"state": "awaiting_approval", "declined_by": None, "you_can_decide": True}
+        )
+    }
+)
+# The last run of a workflow a person started by hand stopped, and a retry may start it again.
+STOPPED = AGENT_USE_CASE.model_copy(
+    update={
+        "last_run": LAST_RUN.model_copy(
+            update={
+                "state": "failed",
+                "test": True,
+                "declined_by": None,
+                "proposed": 0,
+                "tickets": False,
+                "retryable": True,
+                "reason": "AgentError",
+            }
         )
     }
 )
@@ -74,6 +98,8 @@ def lifecycle_fixtures() -> dict[str, WireModel | list[WireModel]]:
         "builder/use-case.paused.json": PAUSED,
         "builder/use-case.held.json": HELD,
         "builder/use-case.declined.json": DECLINED,
+        "builder/use-case.waiting.json": WAITING,
+        "builder/use-case.stopped.json": STOPPED,
         "watchlist/paused.json": PAUSED_WATCHLIST,
         "builder/use-case.deleted.json": DELETED,
         "builder/draft.in.json": DRAFT_IN,

@@ -50,7 +50,7 @@ class FakeBuilder:
     def __init__(self, started: object = None) -> None:
         self._started = started
 
-    async def get_use_case(self, use_case_id: str) -> None:
+    async def get_use_case(self, use_case_id: str, viewer: object = None) -> None:
         return None
 
     async def start_run(self, *args: object) -> object:

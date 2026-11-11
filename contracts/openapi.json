@@ -4521,9 +4521,25 @@
             "title": "Declined By"
           },
           "proposed": {
-            "description": "How many writes the run asked a yes for. 0 if none.",
+            "description": "How many writes the run asked a yes for. Counted only while the run waits for a yes or after it was declined. 0 for a run that finished or stopped.",
             "title": "Proposed",
             "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailureReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why a stopped run stopped. Null for any other run."
+          },
+          "retryable": {
+            "description": "True when the run stopped and a retry may start it again.",
+            "title": "Retryable",
+            "type": "boolean"
           },
           "run_id": {
             "title": "Run Id",
@@ -4546,6 +4562,11 @@
             "description": "How many writes the run made. 0 if none.",
             "title": "Written",
             "type": "integer"
+          },
+          "you_can_decide": {
+            "description": "True when the person asking may decide the yes this run waits for. False for any other run, and in an answer that is not for a person.",
+            "title": "You Can Decide",
+            "type": "boolean"
           }
         },
         "required": [
@@ -4556,7 +4577,10 @@
           "declined_by",
           "proposed",
           "written",
-          "tickets"
+          "tickets",
+          "you_can_decide",
+          "retryable",
+          "reason"
         ],
         "title": "LastRunView",
         "type": "object"

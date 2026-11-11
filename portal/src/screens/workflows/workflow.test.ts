@@ -26,7 +26,6 @@ import {
   formatterFactory,
   changeWords,
   heldNote,
-  latestRuns,
   lifeWords,
   lastRunLine,
   lineWhen,
@@ -73,7 +72,7 @@ const CAROL: Viewer = { id: 'carol', operator: true, approver: false }
 
 const NOW = new Date('2026-11-04T15:00:00+08:00')
 
-const LAST: LastRun = { run_id: 'run_07', state: 'rejected', at: '2026-10-26T01:41:00Z', test: false, declined_by: 'bob', proposed: 3, written: 0, tickets: true }
+const LAST: LastRun = { run_id: 'run_07', state: 'rejected', at: '2026-10-26T01:41:00Z', test: false, declined_by: 'bob', proposed: 3, written: 0, tickets: true, you_can_decide: false, retryable: false, reason: null }
 const lastOf = (change: Partial<LastRun>): Pick<UseCaseView, 'last_run'> => ({ last_run: { ...LAST, ...change } })
 
 describe('the status words', () => {
@@ -127,7 +126,7 @@ describe('the last run line', () => {
     expect(line({ state: 'awaiting_approval', declined_by: null, proposed: 0 })).toBe('Last run Mon 26 Oct · Waiting for a yes')
     expect(line({ state: 'succeeded', declined_by: null, proposed: 3, written: 3 })).toBe('Last run Mon 26 Oct · 3 tickets created')
     expect(line({ state: 'succeeded', declined_by: null, proposed: 2, written: 2, tickets: false })).toBe('Last run Mon 26 Oct · 2 changes written')
-    expect(line({ state: 'succeeded', declined_by: null, proposed: 0, tickets: false })).toBe('Last run Mon 26 Oct · Nothing to write')
+    expect(line({ state: 'succeeded', declined_by: null, proposed: 0, tickets: false })).toBe('Last run Mon 26 Oct · Nothing new to write')
   })
 
   it('says a run in progress is running now', () => {
@@ -302,13 +301,6 @@ describe('the runs of a workflow', () => {
   it('keep only that workflow’s runs, newest first', () => {
     expect(runsOf(runs, 'uc_01JB7').map((r) => r.run_id)).toEqual(['run_01JBA', 'run_01JB9', 'run_01JB8'])
   })
-
-  it('give each workflow its newest run, whatever order the list came in', () => {
-    const latest = latestRuns(runs)
-    expect(latest.get('uc_01JB7')?.run_id).toBe('run_01JBA')
-    expect(latest.get('uc_01JBW')?.run_id).toBe('run_01JBB')
-    expect(latest.get('uc_none')).toBeUndefined()
-  })
 })
 
 describe('the agents on a workflow', () => {
@@ -325,34 +317,28 @@ describe('the agents on a workflow', () => {
 })
 
 describe('the button at the end of a row', () => {
-  const stopped = run(failed)
-
-  const yes = (youCanDecide: boolean) => run(waiting, { you_can_decide: youCanDecide })
+  const last = (change: Partial<LastRun>): LastRun => ({ ...LAST, declined_by: null, ...change })
+  const yes = (youCanDecide: boolean) => last({ state: 'awaiting_approval', you_can_decide: youCanDecide })
+  const stopped = last({ state: 'failed', retryable: true, reason: 'AgentError' })
 
   it('offers to decide exactly when the platform says the person can decide', () => {
-    expect(rowAction(yes(true), BOB)).toEqual({ kind: 'decide', runId: 'run_01JB8' })
+    expect(rowAction(yes(true), BOB)).toEqual({ kind: 'decide', runId: 'run_07' })
     expect(rowAction(yes(false), BOB)).toBeNull()
   })
 
-  it('offers nothing on a run the person retried, though they did not start it or own the workflow', () => {
-    // Bob is an Approver, did not start the run and does not own the workflow, but he retried it.
-    const retried = run(waiting, { started_by: 'carol', you_can_decide: false })
-    expect(rowAction(retried, BOB)).toBeNull()
-  })
-
-  it('offers nothing on a workflow the person owns, and follows the platform when it says yes', () => {
-    const owned = run(waiting, { started_by: 'carol', you_can_decide: false })
-    expect(rowAction(owned, ALICE)).toBeNull()
-    expect(rowAction(yes(true), CAROL)).toEqual({ kind: 'decide', runId: 'run_01JB8' })
+  it('offers nothing on a run the person may not decide, whoever they are', () => {
+    expect(rowAction(yes(false), ALICE)).toBeNull()
+    expect(rowAction(yes(true), CAROL)).toEqual({ kind: 'decide', runId: 'run_07' })
   })
 
   it('shows Operators why a run stopped, and Approvers nothing', () => {
-    expect(rowAction(stopped, CAROL)).toEqual({ kind: 'why', runId: 'run_01JB9' })
+    expect(rowAction(stopped, CAROL)).toEqual({ kind: 'why', runId: 'run_07' })
     expect(rowAction(stopped, BOB)).toBeNull()
   })
 
-  it('is empty when the latest run needs nobody', () => {
-    expect(rowAction(run(done), ALICE)).toBeNull()
+  it('is empty when the last run needs nobody', () => {
+    expect(rowAction(last({ state: 'succeeded' }), ALICE)).toBeNull()
+    expect(rowAction(last({}), ALICE)).toBeNull()
     expect(rowAction(null, ALICE)).toBeNull()
   })
 })
@@ -397,33 +383,32 @@ describe('the manage controls of a workflow page', () => {
 })
 
 describe('the rows of the list', () => {
-  const nudge: UseCaseView = { ...AGENTS, use_case_id: 'uc_nudge', name: 'Stale ticket nudge', instruction: 'Ask owners about old tickets.', state: 'paused' }
-  const bugs: UseCaseView = { ...AGENTS, use_case_id: 'uc_bugs', name: 'Morning bug report check', instruction: 'Raise a ticket for each new bug report.' }
-  const stoppedLast = { ...LAST, state: 'failed' } as LastRun
-  const useCases = [nudge, WATCHLIST, { ...bugs, last_run: stoppedLast }]
-  const runsFor = (viewer: Viewer) => [run(failed, { use_case_id: 'uc_bugs', run_id: 'run_bugs' }), run(waiting, { you_can_decide: viewer === BOB })]
-  const runs = runsFor(ALICE)
+  const last = (change: Partial<LastRun>): LastRun => ({ ...LAST, declined_by: null, ...change })
+  const nudge: UseCaseView = { ...AGENTS, use_case_id: 'uc_nudge', name: 'Stale ticket nudge', instruction: 'Ask owners about old tickets.', state: 'paused', last_run: null }
+  const bugs: UseCaseView = { ...AGENTS, use_case_id: 'uc_bugs', name: 'Morning bug report check', instruction: 'Raise a ticket for each new bug report.', last_run: last({ run_id: 'run_bugs', state: 'failed', retryable: true, reason: 'AgentError' }) }
+  const watchlist = (viewer: Viewer): UseCaseView => ({ ...WATCHLIST, last_run: last({ run_id: 'run_01JB8', state: 'awaiting_approval', you_can_decide: viewer === BOB }) })
+  const useCasesFor = (viewer: Viewer) => [nudge, watchlist(viewer), bugs]
   const ids = (rows: { useCase: UseCaseView }[]) => rows.map((row) => row.useCase.use_case_id)
 
   it('put the rows that need you first and keep the platform’s order for the rest', () => {
-    expect(ids(rowsOf(useCases, runsFor(BOB), BOB, 'all', ''))).toEqual(['uc_01JB7', 'uc_nudge', 'uc_bugs'])
-    expect(ids(rowsOf(useCases, runsFor(CAROL), CAROL, 'all', ''))).toEqual(['uc_bugs', 'uc_nudge', 'uc_01JB7'])
+    expect(ids(rowsOf(useCasesFor(BOB), BOB, 'all', ''))).toEqual(['uc_01JB7', 'uc_nudge', 'uc_bugs'])
+    expect(ids(rowsOf(useCasesFor(CAROL), CAROL, 'all', ''))).toEqual(['uc_bugs', 'uc_nudge', 'uc_01JB7'])
   })
 
-  it('carry each workflow’s latest run, or none', () => {
-    const rows = rowsOf(useCases, runs, ALICE, 'all', '')
-    expect(rows.map((row) => row.latest?.run_id ?? null)).toEqual(['run_bugs', null, 'run_01JB8'])
+  it('take each row’s action from its last run, and none when Needs you already offers that run', () => {
+    expect(rowsOf(useCasesFor(ALICE), ALICE, 'all', '').map((row) => row.action?.runId ?? null)).toEqual(['run_bugs', null, null])
+    expect(rowsOf(useCasesFor(CAROL), CAROL, 'all', '', new Set(['run_bugs'])).map((row) => row.action)).toEqual([null, null, null])
   })
 
   it('filter to what stopped and what is paused', () => {
-    expect(ids(rowsOf(useCases, runsFor(BOB), BOB, 'stopped', ''))).toEqual(['uc_bugs'])
-    expect(ids(rowsOf(useCases, runsFor(BOB), BOB, 'paused', ''))).toEqual(['uc_nudge'])
+    expect(ids(rowsOf(useCasesFor(BOB), BOB, 'stopped', ''))).toEqual(['uc_bugs'])
+    expect(ids(rowsOf(useCasesFor(BOB), BOB, 'paused', ''))).toEqual(['uc_nudge'])
   })
 
   it('find a workflow by words in its name or what it does, in any case', () => {
-    expect(ids(rowsOf(useCases, runsFor(BOB), BOB, 'all', '  BUG '))).toEqual(['uc_bugs'])
-    expect(ids(rowsOf(useCases, runsFor(BOB), BOB, 'all', 'old tickets'))).toEqual(['uc_nudge'])
-    expect(ids(rowsOf(useCases, runsFor(BOB), BOB, 'paused', 'bug'))).toEqual([])
+    expect(ids(rowsOf(useCasesFor(BOB), BOB, 'all', '  BUG '))).toEqual(['uc_bugs'])
+    expect(ids(rowsOf(useCasesFor(BOB), BOB, 'all', 'old tickets'))).toEqual(['uc_nudge'])
+    expect(ids(rowsOf(useCasesFor(BOB), BOB, 'paused', 'bug'))).toEqual([])
   })
 })
 
@@ -629,10 +614,12 @@ describe('the More actions menu', () => {
 })
 
 describe('the status banner', () => {
-  const nameOf = (id: string) => id
   const NOW = new Date('2026-11-04T15:00:00+08:00')
   const on = { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null } } as UseCaseView
-  const facts = (change: object) => ({ useCase: on, latest: null, viewer: ALICE, now: NOW, nameOf, ...change })
+  const last = (change: Partial<LastRun>): LastRun => ({ ...LAST, declined_by: null, ...change })
+  const facts = (change: object) => ({ useCase: on, viewer: ALICE, now: NOW, ...change })
+  const withLast = (change: Partial<LastRun>) => ({ ...on, last_run: last(change) }) as UseCaseView
+  const stoppedAt = (change: Partial<LastRun> = {}) => withLast({ run_id: 'run_stop', state: 'failed', at: '2026-11-04T00:00:00Z', reason: 'AgentError', ...change })
 
   it('says a workflow that is on has its next run, and offers no button', () => {
     expect(bannerOf(facts({}))).toEqual({ tone: 'ok', text: 'On. Next run Mon 9 Nov, 9:00.', action: null })
@@ -648,38 +635,35 @@ describe('the status banner', () => {
     expect(bannerOf(facts({ useCase: paused, viewer: BOB })).action).toBeNull()
   })
 
-  it('lets a paused workflow say Paused even when its latest run stopped', () => {
-    const paused = { ...on, state: 'paused' } as UseCaseView
-    expect(bannerOf(facts({ useCase: paused, latest: run(failed) })).tone).toBe('off')
+  it('lets a paused workflow say Paused even when its last run stopped', () => {
+    expect(bannerOf(facts({ useCase: { ...stoppedAt(), state: 'paused' } })).tone).toBe('off')
   })
 
-  it('for a stopped run, says when it stopped and the list’s reason, as one sentence', () => {
-    const stopped = run(failed, { started_at: '2026-11-04T00:00:00Z', retryable: false, message: 'UpstreamUnavailable: Could not check LangGraph: GitHub returned 503' })
-    const banner = bannerOf(facts({ latest: stopped }))
-    expect(banner).toEqual({ tone: 'bad', text: 'Stopped today at 8:00. An agent could not finish its work.', action: { kind: 'stopped', runId: stopped.run_id, retryable: false } })
+  it('for a stopped run, says when it stopped and why, as one sentence', () => {
+    expect(bannerOf(facts({ useCase: stoppedAt() }))).toEqual({ tone: 'bad', text: 'Stopped today at 8:00. An agent could not finish its work.', action: { kind: 'stopped', runId: 'run_stop', retryable: false } })
   })
 
   it('names the stop from the run’s reason, as the Workflows list does', () => {
-    const stopped = run(failed, { reason: 'TimedOut' })
-    expect(bannerOf(facts({ latest: stopped })).text).toMatch(/^Stopped .+\. A step took too long\.$/)
-    expect(bannerOf(facts({ latest: stopped, viewer: BOB })).text).toBe(bannerOf(facts({ latest: stopped })).text)
+    const useCase = stoppedAt({ reason: 'TimedOut' })
+    expect(bannerOf(facts({ useCase })).text).toMatch(/^Stopped .+\. A step took too long\.$/)
+    expect(bannerOf(facts({ useCase, viewer: BOB })).text).toBe(bannerOf(facts({ useCase })).text)
   })
 
   it('carries whether the platform says a stopped run can be retried', () => {
-    const retryable = run(failed, { retryable: true })
-    expect(bannerOf(facts({ latest: retryable })).action).toEqual({ kind: 'stopped', runId: retryable.run_id, retryable: true })
+    expect(bannerOf(facts({ useCase: stoppedAt({ retryable: true }) })).action).toEqual({ kind: 'stopped', runId: 'run_stop', retryable: true })
   })
 
   it('gives an Approver the stop without an action', () => {
-    expect(bannerOf(facts({ latest: run(failed), viewer: BOB })).action).toBeNull()
+    expect(bannerOf(facts({ useCase: stoppedAt(), viewer: BOB })).action).toBeNull()
   })
 
   it('for a run waiting for a yes, offers Review and decide only when the platform says the person may decide', () => {
-    const mayDecide = run(waiting, { you_can_decide: true })
-    const mayNot = run(waiting, { you_can_decide: false })
-    expect(bannerOf(facts({ latest: mayDecide })).action).toEqual({ kind: 'decide', runId: mayDecide.run_id })
-    expect(bannerOf(facts({ latest: mayNot })).action).toBeNull()
-    expect(bannerOf(facts({ latest: mayNot })).tone).toBe('wait')
+    const mayDecide = withLast({ state: 'awaiting_approval', you_can_decide: true })
+    const mayNot = withLast({ state: 'awaiting_approval', you_can_decide: false })
+    expect(bannerOf(facts({ useCase: mayDecide })).action).toEqual({ kind: 'decide', runId: 'run_07' })
+    expect(bannerOf(facts({ useCase: mayNot })).action).toBeNull()
+    expect(bannerOf(facts({ useCase: mayNot })).tone).toBe('wait')
+    expect(bannerOf(facts({ useCase: mayNot })).text).toBe('3 tickets are waiting for a yes.')
   })
 
   it('says a held schedule is not running, and why', () => {

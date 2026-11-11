@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { useHome } from '../../api/homeQueries'
 import { useDisplayName } from '../../api/people'
 import { isOperator } from '../../api/me'
-import { useMe, useModelOff, useRuns, useTroubleshoot, useUseCases } from '../../api/queries'
+import { useMe, useModelOff, useTroubleshoot, useUseCases } from '../../api/queries'
 import { ButtonLink } from '../../ui/Button'
 import { WorkflowRow } from '../workflows/WorkflowsPage'
 import { REFRESH_MS, rowsOf, viewerOf } from '../workflows/workflow'
@@ -30,19 +30,18 @@ export function useSaidOnce(text: string | null, say: Say) {
 export function CheckWorkflowsAnswer({ useCaseId, now, say }: { useCaseId: string | null; now: Date; say: Say }) {
   const me = useMe()
   const useCases = useUseCases({ poll: REFRESH_MS })
-  const runs = useRuns({ poll: REFRESH_MS })
   const nameOf = useDisplayName()
   const rows = useMemo(() => {
-    if (!me.data || !useCases.data || !runs.data) return null
-    const all = rowsOf(useCases.data, runs.data, viewerOf(me.data), 'all', '', NOTHING)
+    if (!me.data || !useCases.data) return null
+    const all = rowsOf(useCases.data, viewerOf(me.data), 'all', '', NOTHING)
     return useCaseId === null ? all : all.filter((row) => row.useCase.use_case_id === useCaseId)
-  }, [me.data, useCases.data, runs.data, useCaseId])
+  }, [me.data, useCases.data, useCaseId])
   const sentence = rows ? workflowsSay(rows) : null
   useSaidOnce(sentence, say)
   if (!rows) {
     return (
       <p className="muted" role="status">
-        {useCases.isError || runs.isError ? 'I couldn’t read your workflows just now.' : 'Checking your workflows'}
+        {useCases.isError ? 'I couldn’t read your workflows just now.' : 'Checking your workflows'}
       </p>
     )
   }
