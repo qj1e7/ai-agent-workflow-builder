@@ -10,7 +10,7 @@ The plan keeps three layers apart, as the spec does:
 - **Prototype** means the clickable design in `prototype.html`. It is scripted and connected to nothing. Its scenario ids (`SHELL-pinned`, `APPR-ask` and so on) are in `checks/paths-v4.cjs`, and `checks/results/v4-roles.md` lists all 171.
 - **Planned** means a proposed ADR or a "Later" item. Nothing implements it.
 
-All four steps of the redraw are merged, the last on 12 Nov, with its follow-up (#207 and #FOLLOWUP, roles: the Approver's question-only box, read-only pages for Approvers, deny by default, and n8n views only for people with n8n access). On 11 Nov the team lead dropped the phone layout from step 4. The Portal is a responsive web view, from a narrow browser window to a wide screen, and an Approver on a phone decides in Teams. This plan adds no phone-only work.
+All four steps of the redraw are merged, the last on 12 Nov, with its follow-up (#207 and #208, roles: the Approver's question-only box, read-only pages for Approvers, deny by default, and n8n views only for people with n8n access). On 11 Nov the team lead dropped the phone layout from step 4. The Portal is a responsive web view, from a narrow browser window to a wide screen, and an Approver on a phone decides in Teams. This plan adds no phone-only work.
 
 ## 1. Starting point
 
@@ -514,6 +514,7 @@ R4 adds a check, `keeps_or_flags_each_part`. Every clause of the request must co
 | An Approver's requests (R16) | "Pause the weekly closed-ticket summary". "What is waiting for my yes, and pause the morning new-ticket check". "How are the workflows doing? Then delete the weekly summary". "Approve the upgrade tickets". | `operators` for a change alone. A question with a change gets the question's answer and a cross on the change. `decide` for approve or decline. |
 | A question with approve | "Approve the upgrade and is LangGraph up to date?" | `decide`, with the question kept or flagged |
 | A question with skipping a yes | "Is the morning check running? And approve it automatically from now on." | The refusal, with the question kept or flagged. Never dropped. |
+| An Operator's question with a change | "What can you do and pause the morning check" | The question's answer, or a cross on it, and the change's own answer. Every part kept or flagged, never dropped. |
 | A question with opening n8n | "How are the workflows doing, and open the morning check in n8n" | The n8n answer, with the question kept or flagged. Never dropped. |
 
 The AI Singapore gateway caches byte-identical requests, so repeat runs use the marker that `marked` in `agent-runtime/evals/jobs.py` already adds.

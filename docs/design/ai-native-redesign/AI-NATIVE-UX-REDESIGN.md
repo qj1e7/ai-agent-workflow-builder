@@ -1,6 +1,6 @@
 # AI-native UX redesign of the AI Workflow Builder
 
-Status: the build target since 7 Nov 2026. ADR 0043 (proposed) redrew the prototype as a chat with a rail, in four steps. All four steps merged between 10 and 12 Nov (#204 to #207), with step 4's follow-up (#FOLLOWUP), and this spec follows them.
+Status: the build target since 7 Nov 2026. ADR 0043 (proposed) redrew the prototype as a chat with a rail, in four steps. All four steps merged between 10 and 12 Nov (#204 to #207), with step 4's follow-up (#208), and this spec follows them.
 
 This spec answers the team's AI-native redesign brief, which followed an independent review of the handover package. It changes the existing prototype. It does not start again or change the product's architecture. The redesigned prototype is `prototype.html` in this folder (version 4). The evidence for each change is in `UX-AUDIT.md`, the before and after numbers are in `USER-JOURNEY-COMPARISON.md`, and the build order is in `IMPLEMENTATION-PLAN.md`.
 
@@ -725,6 +725,7 @@ Everything in the prototype is simulated. Specifically:
 - Connections, keys and Teams are sample data. Teams is a practice copy: "Nothing reaches the real Teams."
 - Time stands still at Tuesday 27 October, 9:10, Singapore time.
 - The Approver's box drops the question in two kinds of mixed sentence (5.3). The Portal must not copy that.
+- An Operator's question asked with a change is dropped too, with no cross. "What can you do and pause the morning check" gets only "From the chat I can only change when Morning new-ticket check runs." That falls short of principle 4, and the Portal must not copy it.
 
 "Mark what isn't built" shows which screen parts the built Portal lacks. `IMPLEMENTATION-PLAN.md` lists what each needs from the backend.
 
@@ -732,7 +733,7 @@ Everything in the prototype is simulated. Specifically:
 
 ### 20.1 The redraw (ADR 0043, steps 1 to 4)
 
-Each step was checked the way version 4 was, and its results are in `checks/results/` (`v4-shell-*`, `v4-answers-*`, `v4-runs-*`, `v4-roles-*`). The numbers below are for step 4 and its follow-up (#FOLLOWUP), measured on the follow-up's final commit, bf63e98. They include steps 1 to 3.
+Each step was checked the way version 4 was, and its results are in `checks/results/` (`v4-shell-*`, `v4-answers-*`, `v4-runs-*`, `v4-roles-*`). The numbers below are for step 4 and its follow-up (#208), measured on the follow-up's final commit, bf63e98. They include steps 1 to 3.
 
 - **Scenarios.** `checks/run.cjs` with `checks/paths-v4.cjs`: 170 passed, 0 failed and 1 not possible, of 171, with the control failing as it should (`results/v4-roles.md`). T1 is not possible, because since 8 Nov no starting point sets up a general Jira workflow. The redraw added these groups:
   - `SHELL-*`: the pinned line, the side panel, More details with Back to the chat, and the rail returning to the chat;
@@ -748,7 +749,8 @@ Each step was checked the way version 4 was, and its results are in `checks/resu
   - axe found no problems at any impact;
   - nothing scrolls sideways at 390 px;
   - no console errors;
-  - both keyboard paths, to the Operator's box and to Bob's Review and decide, reach their target with visible focus at every stop.
+  - no animation runs under reduced motion, on any of the 178 views (89 screens, at each width);
+  - every Tab stop shows focus, on the 8 stops to the Operator's box and the 12 to Bob's Review and decide.
 - **Independent reviews.** A Fable reviewer drove each step in a browser at several widths, tried its own wordings, and tried to break the approval gate. The builder fixed every finding, and the reviewer checked the fixes:
   - step 1: 6 should-fix;
   - step 2: three rounds, with 9 must-fix, 12 should-fix and 13 smaller findings;
