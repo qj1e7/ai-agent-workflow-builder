@@ -240,7 +240,7 @@ The check that every agent action passes before it runs. It denies write actions
 The animated view of a run that shows agents talking, hand-offs, and where something failed.
 
 **Run line**:
-The row of a run's steps, in plain words, that shows where the run is without reading: moving dashes into the step at work, slow amber dashes into a step waiting for a yes, red where it stopped, and a solid link once a step is done.
+The row of a run's steps, in plain words, whose links show where the run is: which step is at work, which waits for a yes, where it stopped, and which steps are done.
 _Avoid_: Progress bar, station strip
 
 **Activity event**:

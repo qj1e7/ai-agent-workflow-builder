@@ -7,7 +7,7 @@ The reader is a developer on the team. Every path below was checked against `mai
 The plan keeps three layers apart, as the spec does:
 
 - **Built** means code in `portal/`, `platform-api/` or `agent-runtime/` today.
-- **Prototype** means the clickable design in `prototype.html`. It is scripted and connected to nothing. Its scenario ids (`SHELL-pinned`, `APPR-ask` and so on) are in `checks/paths-v4.cjs`, and `checks/results/v4-runs.md` lists them all.
+- **Prototype** means the clickable design in `prototype.html`. It is scripted and connected to nothing. Its scenario ids (`SHELL-pinned`, `APPR-ask` and so on) are in `checks/paths-v4.cjs`, and `checks/results/v4-roles.md` lists all 168.
 - **Planned** means a proposed ADR or a "Later" item. Nothing implements it.
 
 All four steps of the redraw are merged, the last on 12 Nov (#207, roles: the Approver's question-only box, read-only pages for Approvers, deny by default, and n8n views only for people with n8n access). On 11 Nov the team lead dropped the phone layout from step 4. The Portal is a responsive web view, from a narrow browser window to a wide screen, and an Approver on a phone decides in Teams. This plan adds no phone-only work.
@@ -18,7 +18,7 @@ What the built app has for each spec section today, and what the redrawn prototy
 
 | Spec section | Built today | The redrawn prototype adds |
 |---|---|---|
-| 3. Rail and pages | A menu of Home, Workflows, Software watchlist and Agent library, with a bottom tab bar under 900 px (`portal/src/shell/routes.tsx`, `PAGES` and `menuFor`; `Menu.tsx`, `Menu` and `TabBar`; `Menu.module.css`). One Needs you count, on Workflows for an Operator and on Home for an Approver (`routes.tsx`, `needsTotal`). Settings is reached by the header's gear. Every item opens as a page. | A rail of Chat, Workflows and Watchlist, each with a count. The Agent library moves into Settings as How it works. The side panel for items opened from the chat, and Back to the chat. The pinned Needs you line. Needs you grouped Do now and Set up. |
+| 3. Rail and pages | A menu of Home, Workflows, Software watchlist and Agent library, with a bottom tab bar under 900 px (`portal/src/shell/routes.tsx`, `PAGES` and `menuFor`; `Menu.tsx`, `Menu` and `TabBar`; `Menu.module.css`). One Needs you count, from `needsTotal` in `portal/src/screens/home/home.ts`, which `Menu.tsx` puts on Workflows for an Operator and on Home for an Approver. Settings is reached by the header's gear. Every item opens as a page. | A rail of Chat, Workflows and Watchlist, each with a count. The Agent library moves into Settings as How it works. The side panel for items opened from the chat, and Back to the chat. The pinned Needs you line. Needs you grouped Do now and Set up. |
 | 5. Home | The Planner box, chips, the thread and the answer cards (`portal/src/screens/home/HomePage.tsx`, `PlannerBox.tsx`, `threadState.ts`, `AnswerCards.tsx`, `StateAnswers.tsx`). Needs you shows only while the thread is empty, at most 3 rows (`home.ts`, `HOME_NEEDS_SHOWN`). The offline Home and the Approver-only Home without a box. The thread lives in a reducer and is never saved. | The box docks at the bottom after the first message. The conversation survives a trip to Workflows and back. New chat keeps an unfinished card as a draft. |
 | 6. Planner's answers | `POST /api/v1/planner/answer` with 13 reply kinds (`platform-api/src/platform_api/builder/planner.py`, `PlannerReply`), including question answers (ADR 0042). | Part marks on every answer that reads a request, one question at a time, the edit card, commands that fail closed, live cards, and the panel opening by itself while the Planner builds. |
 | 7. Set-up card | `SetupCard.tsx` with What will happen, When, What needs a yes, How this workflow works and the footer. Marks are chip styles only (`SetupCard.tsx`, `data-state`). | A row per part with a tick, a cross or a question. "Set up the part I can". The Left out line after turning it on. |
@@ -78,7 +78,7 @@ Each screen lists the files to change, what to reuse, what is new, and how state
   - **Part marks.** One `PartsList` **(new)** draws every answer's parts as a tick, a cross with its reason, or a question. It reads the parts the runtime returns (4.1). Until R4 lands, it draws today's rows as ticks, today's can't rows as crosses, and a missing row as a question.
   - **Leftover crosses.** The part, can't, check, why, what needs me and question answers draw the clauses they didn't read above their card, from the same list.
   - **Live cards.** Each card's sentence is fixed text worked out at render from the queries the pages read, as the state answers already do (`StateAnswers.tsx`). The confirmation after Turn it on reads the workflow's state, so a pause on its page shows in the chat.
-- **New.** `EditCard.tsx` **(new)** draws the `edit` answer (4.2). It shows "Change <name>", When it runs with Before and After, Save change and Never mind. Save calls the schedule route (3.2). The saved card shows "Saved as version N." with Undo, which calls the restore route.
+- **New.** `EditCard.tsx` **(new)** draws the `edit` answer (4.2). It shows "Change <name>", When it runs with Before and After, Save change and Never mind. Save calls the schedule route (3.2). The saved card shows "Saved as version N." with Undo, which calls the undo route.
 - **Change.** While the Planner builds a set-up card and the window is wider than 900 px, the side panel opens by itself on the draft's steps, and turns into the workflow's panel after Turn it on. Focus stays on the card's heading.
 - **State.** `usePlannerAnswer` stays a mutation. The edit card's Save and Undo invalidate `['use-case', user, id]` and `['use-cases', user]`.
 - **Must match.** `ASK-status`, `ASK-why`, `ANS-status`, `ANS-status-commands`, `ANS-name-words`, `ANS-questions`, `ANS-live`, `ANS-live-done`, `ANS-panel`, `ANS-panel-focus`, `ANS-narrow-cards`, and every `ANS-edit-*` scenario.
@@ -172,7 +172,7 @@ The rules for ownership come from `platform-api/pyproject.toml`. The import-lint
 | Chat and answers | `POST /api/v1/planner/answer`, `POST /api/v1/planner/check-part`, `GET /api/v1/capabilities`, the drafts routes, `POST /api/v1/agent-use-cases` | `POST /api/v1/planner/answer` (changed: parts, the edit answer, and Approvers' questions), `POST /api/v1/agent-use-cases` (changed: `left_out`), `GET /api/v1/decisions` (new) |
 | Side panel | The routes of each page it summarises | None |
 | Workflows | `GET /api/v1/home`, `GET /api/v1/use-cases`, `GET /api/v1/runs`, the drafts routes | `GET /api/v1/use-cases` (changed: `last_run`) |
-| Workflow page | `GET /api/v1/use-cases/{use_case_id}`, the lifecycle routes, `POST /api/v1/runs/{run_id}/retry` | `PUT /api/v1/use-cases/{use_case_id}/schedule` (changed: publishes a version), `GET /api/v1/use-cases/{use_case_id}/versions` (new), `POST /api/v1/use-cases/{use_case_id}/versions/{version}/restore` (new) |
+| Workflow page | `GET /api/v1/use-cases/{use_case_id}`, the lifecycle routes, `POST /api/v1/runs/{run_id}/retry` | `PUT /api/v1/use-cases/{use_case_id}/schedule` (changed: publishes a version), `GET /api/v1/use-cases/{use_case_id}/versions` (new), `POST /api/v1/use-cases/{use_case_id}/versions/{version}/undo` (new) |
 | Run page | `GET /api/v1/runs/{run_id}`, `GET /api/v1/runs/{run_id}/events`, `GET /api/v1/runs/{run_id}/troubleshoot`, `POST /api/v1/runs/{run_id}/retry`, `POST /api/v1/team-requests` | `GET /api/v1/runs/{run_id}/troubleshoot` (changed: wording), `GET /api/v1/approvals/{approval_id}` (changed), `POST /api/v1/approvals/{approval_id}/decisions` (changed), `POST /api/v1/approvals/{approval_id}/questions` (new), `POST /api/v1/approvals/{approval_id}/questions/{question_id}/answer` (new) |
 | Needs you | `GET /api/v1/home` | `GET /api/v1/home` (changed: questions to answer, declined test runs) |
 | Software watchlist | The watchlist routes | None |
@@ -217,7 +217,7 @@ ADR 0043 opens this route to an Approver who can't set up workflows, for questio
 {"versions": [{"version": 2, "at": "...", "by": "alice", "via": "chat", "change": {"schedule": {"from": {"day": "weekdays", "at": "08:00"}, "to": {"day": "monday", "at": "08:00"}}}, "undid": null, "running": true}]}
 ```
 
-**`POST /api/v1/use-cases/{use_case_id}/versions/{version}/restore` (new).** Owner builder. Operators only. Undo publishes the schedule of the version before `version` as a new version, with `undid` set. It answers 409 when a later version exists, so Undo never throws away someone else's change.
+**`POST /api/v1/use-cases/{use_case_id}/versions/{version}/undo` (new).** Owner builder. Operators only. It is Undo for a schedule change, unlike the existing `POST /api/v1/use-cases/{use_case_id}/restore`, which brings back a deleted workflow. It publishes the schedule of the version before `version` as a new version, with `undid` set. It answers 409 when a later version exists, so Undo never throws away someone else's change.
 
 **`POST /api/v1/approvals/{approval_id}/decisions` (changed).** Owner orchestration. `DecisionIn` (`orchestration/http.py`) gains an optional `reason`, up to 200 characters, accepted only with `"verdict": "decline"`. Today the model forbids extra fields (`wire.py`), so an old Portal sending none is unaffected.
 
@@ -284,12 +284,12 @@ The rest stays a fixed table, and it claims no cause it can't know.
 
 ### 4.4 A schedule change publishes a new version (builder and orchestration)
 
-**Today.** `PUT /api/v1/use-cases/{use_case_id}/schedule` (`builder/lifecycle_http.py`) calls `BuilderService.save_schedule` (`builder/service.py`), which overwrites the row in `orchestration.schedules` through `ScheduleBook.save` (`orchestration/schedule_store.py`). It makes no version. It doesn't touch `builder.use_case_versions`, and only watchlist software changes bump a version (`builder/watchlist.py`). There is no versions list and no undo. A watchlist use case is refused with 409, because the watchlist has its own schedule route.
+**Today.** `PUT /api/v1/use-cases/{use_case_id}/schedule` (`builder/lifecycle_http.py`) calls `Builder.save_schedule` (`builder/service.py`), which overwrites the row in `orchestration.schedules` through `ScheduleBook.save` (`orchestration/schedule_store.py`). It makes no version. It doesn't touch `builder.use_case_versions`, and only watchlist software changes bump a version (`builder/watchlist.py`). There is no versions list and no undo. A watchlist use case is refused with 409, because the watchlist has its own schedule route.
 
 **Change.**
 
-- `save_schedule` writes a new row in `builder.use_case_versions` with the schedule, who saved it and where (`page` or `chat`), sets `current_version`, then saves the schedule as today. Both happen in one transaction, so a version never names a schedule that didn't save. The migration is `platform-api/src/platform_api/migrations/builder/versions/0010_use_case_version_changes.py` **(new)**.
-- The versions route and the restore route of 3.2.
+- `Builder.save_schedule` writes a new row in `builder.use_case_versions` with the schedule, who saved it and where (`page` or `chat`), sets `current_version`, then saves the schedule as today. Both happen in one transaction, so a version never names a schedule that didn't save. The migration is `platform-api/src/platform_api/migrations/builder/versions/0010_use_case_version_changes.py` **(new)**.
+- The versions route and the undo route of 3.2.
 - The edit card saves through the same route, with `via: "chat"`. There is one path for a schedule change.
 
 ### 4.5 Each workflow's last run (builder)
@@ -331,7 +331,7 @@ ADR 0043 is the decision behind 4.1 to 4.8. Its reason and questions add to the 
 
 The prototype opens each action from one table, `OPEN_TO`, and every action it doesn't list needs an Operator. The Portal can only hide a control. The server is the check.
 
-**Today.** Each route declares its own role. `platform-api/tests/test_auth_declared.py` makes every `/api/v1` route require sign-in and declare the 401, 503 and 403 it answers, but no test says which role a change needs. Most routes that change something use `operators_only` (`builder/http.py`, `lifecycle_http.py`, `drafts_http.py`, `planner_http.py`, `watchlist_http.py`, `people_http.py`, `settings_http.py`, and retry in `orchestration/http.py`). These are open to anyone signed in:
+**Today.** Each route declares its own role. `platform-api/tests/test_auth_declared.py` makes every `/api/v1` route require sign-in and declare the 401, 503 and 403 it answers, but no test says which role a change needs. Most routes that change something declare the role twice. They take an Operator principal, and they list the `OPERATORS_ONLY` responses from `auth.py`. Builder's principals, `Operator` and `WorkflowOperator`, come from its helper `operators_only` in `builder/http.py`. That file's routes and those in `planner_http.py`, `lifecycle_http.py`, `drafts_http.py` and `watchlist_http.py` use them. Orchestration's `Operator`, in `orchestration/http.py`, comes from `require_operator`, and `people_http.py`, `settings_http.py` and the retry route use it. These are open to anyone signed in:
 
 - `POST /api/v1/approvals/{approval_id}/decisions` and `POST /api/v1/confirmations/{id}/decisions`. The domain lets only an Approver decide (`orchestration/approvals.py`).
 - `POST /api/v1/team-requests`, `POST /api/v1/team-requests/{id}/replies` and `POST /api/v1/team-requests/{id}/seen`. Only the asker marks a request seen, in the service. Anyone signed in can ask the team, report to support, or reply. The prototype refuses an Approver the first two (`FIX-deny-default`), so the team decides which is right (section 5).
@@ -339,7 +339,7 @@ The prototype opens each action from one table, `OPEN_TO`, and every action it d
 
 **Change.**
 
-- A test like `test_auth_declared.py` lists every `/api/v1` route that changes something (POST, PUT and DELETE). Each must declare Operators only, or be on one allow list that names who else may call it: Approvers for decisions and questions on a request (R13), the asker for their own team request, and the routes that only read. A new route then fails CI until someone opens it, as the prototype's table does.
+- A test walks the app's routes and lists every `/api/v1` route that changes something (POST, PUT and DELETE). Each must depend on one of the two Operator checks and list `OPERATORS_ONLY`, or be on one allow list that names who else may call it: Approvers for decisions and questions on a request (R13), the asker for their own team request, and the routes that only read. A new route then fails CI until someone opens it, as the prototype's table does.
 - The Portal reads the same roles from `GET /api/v1/me` to hide what the person can't do, and each read-only page shows one note naming the Operators, from `GET /api/v1/people`.
 
 ### 4.11 n8n access (orchestration, later)
@@ -412,7 +412,7 @@ The table names each PR's own tests and the prototype scenarios its screen must 
 | R3 | `feat(builder): open items from the chat in a side panel, with Back to the chat` | R2 | Existing | `SidePanel.test.tsx` **(new)** (one item, Close, Escape, focus). `10-side-panel.live.ts` **(new)** at 1280 and 900 px. | `SHELL-panel`, `SHELL-more`, `APPR-panel`, `RUN-retry-panel`, `RUN-retry-from-chat`, `FIX-open-software`, `FIX-wide` |
 | R4 | `feat(runtime): account for every clause of a request, negations included` | R0 | `POST /v1/planner/answer` | `tests/test_answers.py` and `tests/test_planner_words.py`: negations, whole-clause crosses, watchlist clauses, state questions with task words, clashes. The golden-set cases in 7.5 reach the agreed pass rate on the demo model. | None (backend) |
 | R5 | `feat(builder): mark every part on the Planner's cards and ask one question at a time` | R2, R4 | `POST /api/v1/planner/answer`, `POST /api/v1/agent-use-cases` | `card.test.ts` (`nextQuestion`, `setupLeft` with crosses), `AnswerCards.test.tsx` (`PartsList`). `test_builder_http.py` for `left_out`. `08-planner-home.live.ts`. | `A`, `E`, `T2`, `ANS-cross`, `ANS-left-out`, `ANS-verbs`, `ANS-whole-clause`, `ANS-stale`, `ANS-none-hers`, `ANS-one-question`, `ANS-no-time`, `ANS-clash-day`, `ANS-clash-time`, `ANS-watch-parts`, `ANS-cant-*`, `ANS-ticked-runs`, `FIX-gitlab`, `FIX-day-choice`, `FIX-never-mind`, `FIX-mixed-decide`, `FIX-decide-question` |
-| R6 | `feat(builder): publish each schedule change as a new version, with Undo` | R0 | `PUT .../schedule`, versions and restore routes | `test_builder_lifecycle.py` (version written, 409 on a stale Undo, roles), `test_migrations.py`. `WorkflowPage.test.tsx` for Versions. `04-workflows.live.ts`. | `H` |
+| R6 | `feat(builder): publish each schedule change as a new version, with Undo` | R0 | `PUT .../schedule`, the versions and undo routes | `test_builder_lifecycle.py` (version written, 409 on a stale Undo, roles), `test_migrations.py`. `WorkflowPage.test.tsx` for Versions. `04-workflows.live.ts`. | `H` |
 | R7 | `feat(runtime): answer a schedule change with an edit answer that fails closed` | R4, R6 | `POST /v1/planner/answer`, `POST /api/v1/planner/answer` | `tests/test_answers.py` (edit, missing, only schedule, commands never status). `test_builder_http.py` (matching a workflow by whole words). Golden set: the edit and command groups in 7.5. | None (backend) |
 | R8 | `feat(builder): change a workflow's schedule by asking, with the edit card` | R5, R7 | Existing after R6 and R7 | `EditCard.test.tsx` **(new)**. `08-planner-home.live.ts`. | `ANS-edit-save`, `ANS-edit-never`, `ANS-edit-honest`, `ANS-edit-missing`, `ANS-edit-days`, `ANS-edit-after`, `ANS-name-words`, `ANS-status-commands`, `ANS-questions`, `ANS-asks`, `FIX-edit-tickets`, `FIX-name-not-command`, `FIX-name-status` |
 | R9 | `feat(builder): give each workflow its last run` | None | `GET /api/v1/use-cases` | `test_builder_http.py` (never run, declined, stopped, test run). `workflow.test.ts` (`lastRunLine`), `WorkflowsPage.test.tsx`. `04-workflows-sections.live.ts`. | `WF-last-run`, `ASK-status`, `H2` |
@@ -429,7 +429,7 @@ The table names each PR's own tests and the prototype scenarios its screen must 
 
 `MARK-approval`, `MARK-roles` and `FIX-mark-more` check the prototype's Mark what isn't built control, which the Portal doesn't have, so no PR matches them.
 
-That is 18 PRs. The team sizes them after R4, because R4 and R7 depend on how well the demo model reads clauses and negations. Frontend PRs R1 to R3, R9, R10 and R11 need no new backend and can start now. This plan does not trim the design to fit a date.
+That is 18 PRs. The team sizes them after R4, because R4 and R7 depend on how well the demo model reads clauses and negations. R1 to R3 and R11 need no backend change. R9 and R10 change a route's answer but add no route. None of the six waits for another PR, so all can start now. This plan does not trim the design to fit a date.
 
 ## 7. Regression tests
 
@@ -457,7 +457,7 @@ These guard the rules the redesign must not move. A PR that needs to change one 
 | `portal/src/screens/home/HomePage.test.tsx`, `Thread.test.tsx`, `threadState.test.ts` | The docked box, New chat keeping a draft, the thread surviving a page change | R2 |
 | `portal/e2e/live/06-home.live.ts`, `08-planner-home.live.ts` | The pinned line in place of Needs you during a chat | R2, R5, R8 |
 | `portal/src/screens/home/card.test.ts`, `AnswerCards.test.tsx`, `answers.test.ts` | Part marks, `nextQuestion`, "Set up the part I can", Left out | R5 |
-| `platform-api/tests/test_builder_lifecycle.py`, `test_migrations.py` | A schedule save writes a version, restore | R6 |
+| `platform-api/tests/test_builder_lifecycle.py`, `test_migrations.py` | A schedule save writes a version, and Undo | R6 |
 | `portal/src/screens/workflows/WorkflowPage.test.tsx`, `ScheduleChangePanel.test.tsx` | Versions, the saved message, Left out | R6, R5 |
 | `agent-runtime/tests/test_answers.py`, `test_planner_words.py`, `test_api.py`, `test_contracts.py`, `platform-api/tests/test_contracts.py` | Parts, negations, the edit kind, regenerated contracts | R4, R7 |
 | `e2e/mock_model/model_server.py`, `test_model_server.py` | The mock model answers the edit kind and fills a negated search | R4, R7 |
@@ -558,7 +558,7 @@ These use tools already in the repo:
 |---|---|---|---|
 | The model reads a negation the wrong way, so a part flips meaning without a mark | Medium. The golden set has no such case today. | High. It is the failure the UX review found. | R4's direction check and paraphrase group, which must pass in every run. A negation no structure explains is a cross. |
 | The approval's new record is mistaken for a change to the gate | Low | High | `decide()` is untouched. A reason and a question live in their own column and table. `test_approvals.py` and `test_write_actions.py` pass unchanged. ADR 0043 is accepted first (R0). |
-| Undo throws away someone else's later change | Medium | Medium | Restore answers 409 when a later version exists, and the card then says the workflow changed since. |
+| Undo throws away someone else's later change | Medium | Medium | Undo answers 409 when a later version exists, and the card then says the workflow changed since. |
 | The conversation is lost on a page change | Medium | Medium | The thread lives above the routes (R2), and a live lane leaves and returns. |
 | `GET /api/v1/runs` grows without a limit | High as runs pile up | Medium | R9 serves `last_run` from the server, so the Workflows list no longer needs every run. |
 | The side panel traps focus or loses it | Medium | Medium | R3's focus tests, at 1280 and 900 px |

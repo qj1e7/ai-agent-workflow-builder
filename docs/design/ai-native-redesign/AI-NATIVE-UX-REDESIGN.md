@@ -558,7 +558,7 @@ From top to bottom:
 
 1. **Needs attention.**
    - The weekly upgrade request waiting for a yes: "This week's check wants to raise 3 upgrade tickets." with Review and decide.
-   - Software the check couldn't read, with the AI troubleshooter's fix. Example: "GitHub can't find langchain-ai/langserve. It moved to langchain-ai/langchain." with **Use the new address**. Built today: only a GitHub rename, where GitHub redirects the old name to the new one and the platform can read the new name. This LangServe example is a 404, which names no new home, so the platform refuses the switch (409) and the button stays tagged as not built in the prototype. An Approver sees "An Operator can fix this."
+   - Software the check couldn't read, with the AI troubleshooter's fix. Example: "GitHub can't find langchain-ai/langserve. It moved to langchain-ai/langchain." with **Use the new address**. Built today: only a GitHub rename, where GitHub redirects the old name to the new one and the platform can read the new name. This LangServe example is a 404, which names no new home, so the platform refuses the switch (409) and the button stays tagged as not built in the prototype. An Approver sees the card with no button.
 2. **Software we watch,** with Find software. A row each, with:
    - the name, and what checks it, such as "Checked on GitHub · langchain-ai/langgraph";
    - the version we run, with where it came from, such as "From MOCK-6, marked Done". When nobody gave it, it says "Not known", and nothing is compared with it. "Not sure? Start from the newest" means watching for releases newer than today's. It never records the newest release as the version the team runs, which could hide an out-of-date install;
@@ -599,7 +599,7 @@ Settings opens from the header. "For whoever looks after the platform. Every cha
 - People and permissions
 - AI model
 - How it works (Operators only, 12)
-- AI usage, only with Planned features shown, tagged Planned
+- Usage, only with Planned features shown. Its heading, AI usage, is tagged Planned.
 
 A tab that needs attention carries a dot.
 
@@ -680,7 +680,7 @@ They stay in the corner panel, apart from the product screens, and never cover t
 
 ## 17. The nine inconsistencies
 
-Each was found in version 3 (`03b-PROTOTYPE-UI-INVENTORY.md`, section 8).
+Each was found in version 3, and `UX-AUDIT.md` lists them.
 
 | ID | Source in version 3 | Correct current behaviour | Version 4 |
 |---|---|---|---|
