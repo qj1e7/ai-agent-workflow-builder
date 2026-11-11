@@ -1,6 +1,6 @@
 # AI-native UX redesign of the AI Workflow Builder
 
-Status: the build target since 7 Nov 2026. ADR 0043 (proposed) redrew the prototype as a chat with a rail, in four steps. Steps 1 to 3 merged on 10 and 11 Nov (#204, #205, #206), and this spec follows them. Step 4, roles, is still being built, and the paragraphs it may change are marked.
+Status: the build target since 7 Nov 2026. ADR 0043 (proposed) redrew the prototype as a chat with a rail, in four steps. All four steps merged between 10 and 12 Nov (#204 to #207), and this spec follows them.
 
 This spec answers the team's AI-native redesign brief, which followed an independent review of the handover package. It changes the existing prototype. It does not start again or change the product's architecture. The redesigned prototype is `prototype.html` in this folder (version 4). The evidence for each change is in `UX-AUDIT.md`, the before and after numbers are in `USER-JOURNEY-COMPARISON.md`, and the build order is in `IMPLEMENTATION-PLAN.md`.
 
@@ -56,15 +56,13 @@ A slim rail on the left holds three items. Each can carry a count, with words fo
 |---|---|---|
 | Chat | Home, the chat (5) | What needs this person, for someone who isn't an Operator |
 | Workflows | The Workflows page, full width (8) | What needs this person, for an Operator |
-| Watchlist | The Software watchlist, full width (11) | What needs action on the watchlist |
+| Watchlist | The Software watchlist, full width (11) | What needs action on the watchlist, for someone who can act on it. An Approver who isn't an Operator sees no count. |
 
 - **Going back to Chat** returns the conversation where it was, scroll position included.
 - **The header** keeps AI Workflow Builder (to Home), Teams with its own count of approvals waiting for this person, Settings, and the signed-in person.
 - **How it works,** the old Agent library, is a tab in Settings, for Operators only (12). No daily task needs it.
-- **Every role sees the three items** today.
-
-<!-- step 4: confirm against the prototype -->
-ADR 0043 makes the rail's lists read only for an Approver who can't set up workflows.
+- **Every role sees the three items.** For an Approver who can't set up workflows, the pages are read only. They show no control that changes anything and no dead button, and one note on each page says who makes changes, such as "Only Operators change workflows. Ask Alice or Carol." The names come from the People list.
+- **Who may do what.** One table opens each action to anyone (reading and moving around), to Approvers (deciding on a request, asking its requester a question, confirming a change), to people with n8n access, or to the test controls. Every other action needs an Operator, so a new action stays closed until someone opens it. The table is checked when an action runs, so a control that isn't drawn can't be reached another way.
 
 ### 3.2 Where an item opens
 
@@ -102,6 +100,8 @@ The main layout changes at one width, a window 900 px wide or narrower:
 
 Smaller steps at other widths only reflow one part, such as a row's button moving under its text.
 
+On a wide screen, up to 1920 px and more, the content keeps one column at most 1180 px wide. The header lines up with it, the chat and its side panel share it, and a Workflows list with no actions drops its empty action column.
+
 ### 3.5 Needs you, pinned and grouped
 
 - **The pinned line.** During a conversation, one line at the top of the chat names the most urgent item, with Open and "N more". For example "Morning new-ticket check stopped. Jira didn't answer at 8:00." with Open and "4 more". Screen readers hear it as the region "Most urgent".
@@ -130,6 +130,7 @@ One function feeds every place that shows the same fact, so no two places can di
 | A stopped run's three answers | `TROUBLE` | Needs you, the pinned line, the chat's card, the side panel, the run page |
 | A declined run's record | `declinedWords()` | Every place a declined run shows (10.5) |
 | What a set-up card still lacks | `setupLeft()` | The card's footer, the reason Turn it on is off, and the draft's line on Workflows. The chat sentence repeats no count. |
+| Who may do each action | `OPEN_TO` | Every control and action. Anything it doesn't list needs an Operator. |
 | What the platform can do | `CAPS` and `capState()` | The Planner's answers, "What can I ask for?", How it works, Settings Connections, the watchlist sources, the approval's Not checked line |
 
 ## 4. The capability registry
@@ -210,11 +211,19 @@ From 8 Nov 2026 Home is the front door for software versioning, and the general 
 
 ### 5.3 Approver only
 
-<!-- step 4: confirm against the prototype -->
-ADR 0043 gives an Approver who can't set up workflows the box, for questions only. It answers what waits for their yes and what they decided before. A request to set something up gets "Operators set up workflows."
+An Approver who can't set up workflows gets the same calm Home, with the box for questions only.
 
-<!-- step 4: confirm against the prototype -->
-Until step 4 of the redraw, the prototype gives them no box and no chat. Home shows the greeting with "1 request is waiting for your yes", Needs you in full with the first request as a card and Review and decide, and the note "You're an Approver, so you decide on requests. Operators set up workflows." When nothing waits, it says "All quiet" with what is next.
+- **Before the first message.** Home shows the Visor bot, "Good morning! Bob" and a line such as "1 request is waiting for your yes.", then the box, with "Ask about your approvals, or how the workflows are doing". Three suggestions follow: "What is waiting for my yes?", "What did I decide before?" and "How are the workflows doing?". Then come Needs you in full and the note "You're an Approver, so you decide on requests. Operators set up workflows."
+- **Questions get answers from platform state,** as they do for an Operator:
+  - what waits for his yes, in the same words as his Home line, Needs you and the rail count;
+  - what he decided before: "Here are your 2 decisions.", each with its workflow, Approved or Declined, when, and what it did, such as "Approved by Bob, Mon 26 Oct, 8:00. 1 ticket created (MOCK-12)." A decline uses the declined record's words (10.5). "Did I decline anything?" and "What did I approve?" list only those, or say "You haven't declined any requests yet.";
+  - how the workflows are doing, his software's versions, and why a run stopped, with the three answers and "An Operator can retry the run." in place of Retry;
+  - what he can ask, which ends "Operators set up workflows. Ask Alice or Carol."
+- **Any change is refused.** A request to set up, change, pause, watch, retry or delete gets "Operators set up workflows. Ask Alice or Carol.", with the Operators' names from the People list, and never a card that changes anything. It fails closed: a sentence that mixes a question with a change gets the refusal for the whole of it, so he asks the question again on its own.
+- **Approve or decline goes to the request.** "Approve the upgrade tickets" gets "I can't approve or decline for you. Open the request to see exactly what it will write, and decide there." with Review and decide. Nobody decides in the chat. A question asked in the same sentence keeps its cross (6.5).
+- **With no AI model,** his Home says "I can't answer questions until an AI model is connected" and "An Operator can connect one in Settings.", and keeps his requests first.
+
+Each person has their own conversation. Bob never sees Alice's, and hers is still there when she comes back.
 
 ### 5.4 When there is no AI model
 
@@ -224,7 +233,7 @@ When Settings has no working AI model (a test control can switch this), the Plan
 - A conversation that was open stays hidden until a model is connected again.
 - It says what the built app says: agent workflows can't run and new ones can't be planned until a model is connected. Only the Software watchlist's summary uses a simple template instead.
 - Capabilities that need the model show as Needs setup in the capability lists, which still show.
-- Needs you still shows, because it is read from the platform, not the model. Its "No AI model connected" row is left out while the hero already offers Connect a model.
+- Needs you still shows, because it is read from the platform, not the model. Its "No AI model connected" row says "Connect one with the button above.", so the list counts every row it shows and offers no second Connect a model.
 - A row whose action needs the model says so instead of offering it, for example "Can run again once an AI model is connected." with See the run. Actions that work without the model, such as Review and decide and Report to support, stay. The rule is the one every Retry and Run reads (`cantRunWhy`), and it also holds a run back while a key needs replacing. A system that is down may answer at any moment, so its Retry stays and says why if it still can't start.
 
 Version 3 let the Planner work on day one with no model (I5). ADR 0037's Consequences already describe this offline answer.
@@ -257,11 +266,11 @@ Code reads a request in this order and stops at the first rule that fits. In the
 2. A reply to "Which software should I watch?" is read as the software's name. "Never mind", "cancel", "no", "forget it" or "skip" backs out, with "No problem. Ask for something else whenever you like."
 3. A short follow-up such as "and FastAPI?" or "what about React?", right after an answer about software, is read against that answer.
 4. A question about her workflows, her approvals or her software is answered from platform state (6.4).
-5. A change to a workflow she already has gets the edit card (6.7). Only an Operator gets it.
+5. A change to a workflow she already has gets the edit card (6.7). Only an Operator gets it. An approve or decline inside the request gets a cross with a button to the request (6.5), because nobody decides in the chat.
 6. A release word, a security word, or a known software name with watch, track or monitor goes to the Software watchlist answers.
 7. Anything else is read as a task. It gets a set-up card, the part I can do, a can't, Jira not answering, or what the Planner can do.
 
-"No, set it up as a new workflow" on a watch card skips step 6 and reads the request as a task.
+"No, set it up as a new workflow" on a watch card skips step 6 and reads the request as a task. An Approver who can't set up workflows has his own routing (5.3).
 
 ### 6.3 The answers
 
@@ -280,10 +289,12 @@ Code reads a request in this order and stops at the first rule that fits. In the
 | Why it stopped | "Why did X stop?", "what went wrong" | "Morning new-ticket check stopped. Here's what the AI troubleshooter found." If it hasn't stopped: "... hasn't stopped. It's on, and its next run is ..." | The AI troubleshooter's three answers (10.3), Retry the run or Report to support, and See the run |
 | What needs me | "What needs me?", "anything for me?", "my approvals" | "5 things need you." | Needs you, grouped Do now and Set up (3) |
 | Her data | A question about her software (ADR 0042) | "LangGraph is behind. You run 1.2.14 and the newest is 1.2.17." | "Looked at: Software". For one software: Open it on the Software page, Stop watching (which asks first) and Check all software now. For software not on the list: Watch it. |
-| Places to start | "Set up another workflow" | "Here are three places to start. Pick one, or tell me something else." | Today one chip, "Keep track of the React version" |
+| Places to start | "Set up another workflow" | "Here is a place to start. Pick it, or tell me something else." The count follows the chips it shows. | One chip by default, "Keep track of the React version" |
 | Jira not answering | A Jira task while Jira is down (a test control) | "Jira isn't answering right now, so I can't check that. I'll be able to once it's back." | "Keep it for later?" with **Save as a draft** |
 | Edit card | A change to a workflow she has | "Here's the change. Nothing changes until you save it." | The edit card (6.7) |
 | No such check | A change to a check she doesn't have | "You don't have a React check. React isn't on the Software watchlist, which checks software every Monday." | Watch React |
+| Approve or decline | "Approve the upgrade tickets" | "I can't approve or decline for you. Open the request to see exactly what it will write, and decide there." | Review and decide |
+| Open n8n | "Open the morning check in n8n" | With n8n access: "Morning new-ticket check opens in n8n from the button below." Without it: "Only people with n8n access can open n8n." | Open it in n8n, only with n8n access (9) |
 
 With no AI model, the Planner gives no answer. Home says so instead (5.4).
 
@@ -295,7 +306,7 @@ Code decides and fills in the answers that read platform state: check my workflo
 
 - **Any wording.** A question about her workflows, approvals or software gets its answer from platform state, however she words it. "What needs my attention today?", "anything for me?" and "what's waiting on me" all get What needs me. "When does the software check run next?" gets that workflow's state and next run.
 - **A change word makes it a command.** Code takes out the question's own words and the workflow's name. If a change word is left, from "make" to "monthly", the text goes to the edit card, never to a status answer. "What needs my attention? Pause the morning check" gets "From the chat I can only change when Morning new-ticket check runs."
-- **A workflow's own name is neither.** A schedule word inside a name, such as "Weekly" in Weekly closed-ticket summary, is not read as a schedule or a command. "Make the weekly summary run at 10am" changes only the time.
+- **A workflow's name is never a command.** Code takes a named workflow's words out before it looks for a change word, so "weekly" or "up to date" in a name asks nothing. "When does the weekly summary run next?" gets its state, and "Make the weekly summary run at 10am" changes only the time.
 - **"The run" is a noun.** Asking about "the run" is not a command to run something.
 
 ### 6.5 Every part shows what happened to it
@@ -315,7 +326,8 @@ The set-up card and the watch card list each part of the request with a mark:
   - "I can only set one day." or "I can only set one time.";
   - "I can't run things monthly yet.";
   - a source the platform can't read, such as GitLab;
-  - on the watch card, a time: "The Software watchlist checks all your software together, every Monday at 9:00. I can't give one software its own time yet."
+  - on the watch card, a time: "The Software watchlist checks all your software together, every Monday at 9:00. I can't give one software its own time yet.";
+  - an approve or decline inside a longer request: "I can't approve or decline for you. Open the request, and decide there.", with a button to the request.
 - **A cross changes the button.** While any part has a cross, the button says "Set up the part I can", the footer says "The part with a cross is left out.", and "Nothing is unclear" never shows.
 - **What was left out stays visible.** After she turns it on, the confirmation and the workflow's page keep a Left out line, such as "Left out: "colour them by team". It was set up without that part."
 - **No card of guesses.** A request with no part in her own words gets what the Planner can do, with its crosses, never a set-up card the Planner filled in alone.
@@ -330,17 +342,17 @@ The set-up card and the watch card list each part of the request with a mark:
   - "Which tickets should it find?"
   - "Which Jira project should it use?"
   - "What should it do with them?"
-- **A time is never guessed.** A bare hour asks "At 9:00 or 21:00?". Two days ask "Monday or Friday?" and two times ask "9:00 or 17:00?", and neither picks the first one.
+- **A time is never guessed.** A bare hour asks "At 9:00 or 21:00?". Two days ask "Monday or Friday?" and two times ask "9:00 or 17:00?", and neither picks the first one. Once she picks, the workflow keeps her choice and names only the other as left out.
 - **The watch card** asks "Is this the right project?" with Looks right and Change, then "Which version do you run?".
 - **Guesses show.** A value the Planner filled in is a grey chip, "Filled in by me", that she can change. A guess that changes what is written, such as the Jira project, is asked, not filled in.
-- **Backing out.** The edit card has Never mind. The other questions have no Never mind button. She leaves one by asking for something else, or by typing "never mind" to the which-software question.
+- **Backing out.** The set-up card, the add-software card and the edit card each have Never mind, which changes nothing. Typing "never mind" backs out of the which-software question.
 
 ### 6.7 The edit card
 
 A workflow can be changed by asking. In this first version, the edit card changes only the schedule.
 
 - **When it shows.** A change word with a workflow she names: its full name, a short form such as "the morning check", a watched software such as "the React check", or "it" for the workflow just discussed. For example, "Make the morning new-ticket check run on Mondays only".
-- **What it shows.** "Change Morning new-ticket check", then When it runs, with only what changes, Before and After. For the watchlist it adds who will own the schedule.
+- **What it shows.** "Change Morning new-ticket check", then When it runs, with only what changes, Before and After. A change of how often also changes which tickets it reads, such as the last day's for a daily run, and the card shows that too. For the watchlist it adds who will own the schedule.
 - **Save change and Never mind.** Never mind answers "No problem. Nothing changed."
 - **Saving publishes a new version,** through the same path as the schedule editor on the workflow's page. The card says "Saved as version 2. Next run Mon 2 Nov, 8:00." with Undo. Undo publishes again, "Undone, as version 3.", and the workflow's page lists both versions (9).
 - **After saving it says what follows.**
@@ -354,7 +366,7 @@ A workflow can be changed by asking. In this first version, the edit card change
 ### 6.8 Live cards
 
 - **Every card is a live view.** The prototype works out each answer's sentence and card again on every redraw, from the same state the pages read. A workflow turned on in the chat and then paused on its page reads as paused back in the chat. An approval decided on another page shows in the card.
-- **The side panel opens by itself while the Planner builds,** only when the window is wider than 900 px. It shows "Draft", "Adding the steps…", the plain steps arriving one by one, and "It runs once you turn it on from the card in the chat." After Turn it on it becomes the workflow's panel. Focus stays on the card's heading. While the panel shows the steps, the card hides How this workflow works and its own Open button. The panel shows plain steps, not n8n blocks, and keeps its usual width.
+- **The side panel opens by itself while the Planner builds,** only when the window is wider than 900 px. It shows "Draft", "Adding the steps…", the plain steps arriving one by one, and "It runs once you turn it on from the card in the chat." After Turn it on it becomes the workflow's panel. Focus stays on the card's heading. While the panel shows the steps, the card hides How this workflow works and its own Open button. For someone with n8n access, with Planned features shown, the panel widens and shows the n8n blocks going in instead ("Adding the blocks in n8n…").
 - **Cards fit beside the panel.** A card lays out by its own width. In a narrow chat, the part rows go to two columns.
 
 ### 6.9 When the Planner is unsure
@@ -415,8 +427,7 @@ The page opens with "The jobs that run by themselves, such as the Software watch
 
 Empty: "Nothing here yet. Watch software on the Software page, or ask the Planner on Home. Its checks show up here." Approver only: "Operators set up workflows, and you approve their changes."
 
-<!-- step 4: confirm against the prototype -->
-An Approver who can't set up workflows sees Needs you and All workflows, with no Drafts, no Waiting on others and no row to ask for a new one. ADR 0043 makes the rail's lists read only for them.
+An Approver who can't set up workflows sees Needs you and All workflows, read only, with "Only Operators change workflows. Ask Alice or Carol." There are no Drafts, no Waiting on others and no row to ask for a new one.
 
 ## 9. Workflow page
 
@@ -445,16 +456,15 @@ Order:
 - **More actions menu,** a button labelled "More actions" with:
   - Run now, where the workflow has a sample run;
   - Change schedule;
-  - Open in n8n, only with Planned features shown, tagged Planned;
+  - Open in n8n, for someone with n8n access, only with Planned features shown, tagged Planned;
   - Delete, last and in red, after a divider.
 
   Delete always asks first: "It stops running and leaves Workflows. Its schedule and settings go with it. Its past runs and their records stay. You can undo this from the message that follows." Undo stays in the message.
-- **Technical details** (collapsed): the steps with what each reads or writes, and the agents and tools. "In n8n" and "Change history" show only with Planned features shown.
+- **Technical details** (collapsed): the steps with what each reads or writes, and the agents and tools. For someone with n8n access, with Planned features shown, it adds the n8n blocks, "In n8n" and "Change history".
 
-<!-- step 4: confirm against the prototype -->
-**n8n views.** ADR 0043 shows n8n views only to people with n8n access, and everyone else sees the plain steps. Today the prototype shows them to Operators with Planned features shown.
+**n8n views.** Only someone with n8n access sees n8n, and only an Operator can hold it (13). Carol has it in the prototype. The n8n parts also need Planned features shown, because the Portal doesn't open n8n yet (ADR 0026, 0027). Everyone else sees the plain steps and never the word n8n, and asking the Planner to open n8n gets "Only people with n8n access can open n8n."
 
-An Approver sees the page without Pause, More actions, Change or the banner's button.
+An Approver sees the page read only, without Pause, More actions, Change or the banner's button, and with "Only Operators change this workflow. Ask Alice or Carol."
 
 ## 10. Run page
 
@@ -480,7 +490,7 @@ An Approver sees the page without Pause, More actions, Change or the banner's bu
 
 ### 10.2 On request: what each agent did
 
-**Show what each agent did** opens the agents' conversation, with "X and Y joined" where agents come in, and Replay the run once it has finished, at 1x, 2x or Instant. It is open while the run plays and folded at the end. **Hide what each agent did** folds it again.
+**Show what each agent did** opens the agents' conversation as a timed log. Each entry has its time, the first one with its day, such as "Tue 27 Oct, 8:00", and "X and Y joined" marks where agents come in. A request's asking and deciding sit on the same clock as the log. Replay the run comes once it has finished, at 1x, 2x or Instant. It is open while the run plays and folded at the end. **Hide what each agent did** folds it again.
 
 What shows first follows the run's state:
 
@@ -542,7 +552,7 @@ A declined run reads the same everywhere it appears, and never looks as if it wr
 
 ## 11. Software watchlist
 
-The page title is Software watchlist, and the rail calls it Watchlist. Under the title, one count line, such as "3 have a newer version · 4 can't be checked", and **Check now**.
+The page title is Software watchlist, and the rail calls it Watchlist. Under the title, one count line, such as "3 have a newer version · 4 can't be checked", and **Check now** for Operators. An Approver reads the page with "Only Operators change the watchlist. Ask Alice or Carol."
 
 From top to bottom:
 
@@ -599,8 +609,9 @@ A tab that needs attention carries a dot.
 
 Replace the key appears only with Planned features shown. Teams is described as "Sends approval requests to Approvers". Nothing else promises a Teams message (I1).
 
-<!-- step 4: confirm against the prototype -->
-**People and permissions.** Everyone on the People list, each with Operator and Approver. Only Operators change them, and everyone else reads "Only Operators change settings." "Making someone an Approver needs another Approver to confirm it." and "At least 2 people are Approvers, so nobody has to approve their own work." ADR 0043 shows n8n views only to people with n8n access. The People list doesn't show n8n access yet.
+**People and permissions.** Everyone on the People list with their roles. An Operator changes them with an Operator box and an Approver box for each person. Someone who isn't an Operator reads each person's roles as text, such as "Operator and Approver", with no control they can't use. "Making someone an Approver needs another Approver to confirm it." and "At least 2 people are Approvers, so nobody has to approve their own work."
+
+With Planned features shown, an Operator also sets n8n access here. Only an Operator can hold it, because a change made in n8n changes a workflow, and it is not a third role.
 
 **AI model.** The connected model and its address, with Test now and Change the model or key. Someone who isn't an Operator reads "Only Operators change the AI model. Approvers confirm a new address before runs use it."
 
@@ -659,10 +670,10 @@ They stay in the corner panel, apart from the product screens, and never cover t
 | Control | Choices | Why |
 |---|---|---|
 | Show | A normal week, Day one | As in version 3 |
-| Act as | Alice, an Operator and Approver; Bob, an Approver only | As in version 3 |
+| Act as | Alice, an Operator and Approver; Bob, an Approver only; Carol, an Operator with n8n access | Shows each role's screens. Each person keeps their own chat. |
 | AI model | Connected, Not connected | Shows the offline Home (5.4) |
 | Planned features | Hidden, Shown and tagged | Lets reviewers see planned designs without the product claiming them: named Approvers (ADR 0024), more watchlist sources and security findings (ADR 0025), Open in n8n and its history (ADR 0026, 0027), drafting a tool, changing an agent in plain English, coding agents preparing a fix in a support case, replacing a key in Settings, monthly schedules, AI usage, and the access review with its two Approvers in turn |
-| Mark what isn't built | Off, On | Outlines the screen parts the built Portal doesn't have yet, so a reviewer can tell the prototype from the product. The approval's Not checked line, Ask the requester, the questions, the decline reasons, and Show what each agent did with its replay are marked. |
+| Mark what isn't built | Off, On | Outlines the screen parts the built Portal doesn't have yet, so a reviewer can tell the prototype from the product. Every part this redraw added is marked, from the Approver's box and the n8n access box to the run line, the three answers, the declined record, versions, the last-run line, the count line and the edit card. |
 | Make something happen | What can happen next from the current state | Jira stops answering and works again, a tool or key confirmed or failing, a yes to a test run, time passing with no answer, support moving a case on, the requester answering a question, and an n8n change |
 
 "Start over" keeps the four switches. "About this prototype" keeps saying the data is sample data and requests are read with simple word rules, not a model.
@@ -695,14 +706,12 @@ ADR 0043 (proposed) changes ADR 0037 in four places. They take effect when ADR 0
 
 1. **The chat is Home.** ADR 0037 rejected this because urgent items scroll away, and pinning them rebuilds Home inside the chat. The pinned line is one row, not Home again, and the rail keeps the lists one tap away (3).
 2. **Changes happen where the thing lives,** and now also by asking. The edit card changes a workflow's schedule from the chat (6.7). Every other change keeps its editor on the workflow's page, where the schedule editor also stays.
-3. **The Approver-only Home gains the box,** for questions only (5.3). This is step 4 of the redraw.
+3. **The Approver-only Home gains the box,** for questions only (5.3).
 4. **The menu becomes the rail** (3.1). The Agent library moves into Settings as How it works (12).
 
 ### 18.3 Where the prototype and ADR 0043 differ
 
-- **The side panel while the Planner builds** shows the plain steps going in, not n8n blocks, and keeps its width (6.8).
 - **Schedule changes are not in the side panel.** The ADR lists changing the schedule among the panel's actions. The prototype changes it on the workflow's page or by asking in the chat (3.3).
-- **The run page has no timed log.** The ADR's run page adds one. The prototype shows the agents' conversation without times (10.2).
 - **The Watchlist's count line** reads "3 have a newer version · 4 can't be checked", where the ADR's example says "1 can't be found".
 
 ## 19. What is simulated in version 4
@@ -711,7 +720,7 @@ Everything in the prototype is simulated. Specifically:
 - Requests are classified with word rules, not a model.
 - The answers about workflows and data read sample state.
 - Runs are scripted replays. Only the sample workflows and the first workflow made on Home have one, so another workflow made on Home has no Run now or test run. A test note on the page says so.
-- Versions, questions on a request and their answers are sample data. A requester answers only through a test control.
+- Versions, questions on a request and their answers are sample data. A requester answers through a test control, or by acting as Carol.
 - Connections, keys and Teams are sample data. Teams is a practice copy: "Nothing reaches the real Teams."
 - Time stands still at Tuesday 27 October, 9:10, Singapore time.
 
@@ -719,28 +728,31 @@ Everything in the prototype is simulated. Specifically:
 
 ## 20. How it was checked
 
-### 20.1 The redraw (ADR 0043, steps 1 to 3)
+### 20.1 The redraw (ADR 0043, steps 1 to 4)
 
-Each step was checked the way version 4 was, and its results are in `checks/results/` (`v4-shell-*`, `v4-answers-*`, `v4-runs-*`). The numbers below are for step 3, merge 98961ef, which includes steps 1 and 2.
+Each step was checked the way version 4 was, and its results are in `checks/results/` (`v4-shell-*`, `v4-answers-*`, `v4-runs-*`, `v4-roles-*`). The numbers below are for step 4, merge f9e7c2f, which includes steps 1 to 3.
 
-- **Scenarios.** `checks/run.cjs` with `checks/paths-v4.cjs`: 127 passed, 0 failed and 1 not possible, with the control failing as it should (`results/v4-runs.md`). T1 is not possible, because since 8 Nov no starting point sets up a general Jira workflow. The redraw added these groups:
+- **Scenarios.** `checks/run.cjs` with `checks/paths-v4.cjs`: 167 passed, 0 failed and 1 not possible, of 168, with the control failing as it should (`results/v4-roles.md`). T1 is not possible, because since 8 Nov no starting point sets up a general Jira workflow. The redraw added these groups:
   - `SHELL-*`: the pinned line, the side panel, More details with Back to the chat, and the rail returning to the chat;
   - `ANS-*`: part marks, one question at a time, the edit card, questions in any wording, commands that fail closed, live cards and the panel while the Planner builds;
-  - `RUN-*`, `APPR-*`, `DECLINED-*`, `WF-last-run`, `MARK-approval` and `KEYS-APPR`: the three answers, the run line, Not checked, questions on a request, the decline reason, the declined record and each workflow's last run.
+  - `RUN-*`, `APPR-*`, `DECLINED-*`, `WF-last-run`, `MARK-approval` and `KEYS-APPR`: the three answers, the run line, Not checked, questions on a request, the decline reason, the declined record and each workflow's last run;
+  - `ROLE-*`, `N8N-*`, `KEYS-ROLE` and `MARK-roles`: the Approver's box and read-only pages, each person's own chat, and n8n only with n8n access;
+  - `FIX-*`: deny by default, wide screens, and the defects found in steps 1 to 3 while this spec was written.
 
   The builder showed each new scenario failing on the head before it, for the right reason.
-- **The judge's checks.** `checks/validate-v4.cjs` passed 32 of 32, and its seeded control failed as it should. Step 2 changed the checks where the card changed on purpose (one question at a time, crosses read as a can't) and added `stop-words-are-function-words`, so a verb can't be skipped silently again.
-- **Fit.** `checks/fit.cjs`, new in step 1, fails any screen where text spills, is cut off or overlaps, or where buttons side by side don't line up. It found 0 problems on 62 screens at 1440, 1280, 1024, 861, 768 and 390 px, and 0 at 901, 950 and 1000 px with the side panel open. Its seeded control was caught.
-- **Quality.** `checks/quality.cjs` on the same 62 screens at 1280 and 390 px:
-  - axe found no critical, serious or moderate problems, and 8 minor ones;
+- **The judge's checks.** `checks/validate-v4.cjs` passed 32 of 32, and its seeded control failed as it should. Step 2 changed the checks where the card changed on purpose (one question at a time, crosses read as a can't) and added `stop-words-are-function-words`, so a verb can't be skipped silently again. Step 4 changed three: `roles-bob-creates-nothing` follows the refusal, the control became `control-bob-gets-a-set-up-card`, and `planned-hidden-by-default` runs as Carol, the one person who can see n8n.
+- **Fit.** `checks/fit.cjs`, new in step 1, fails any screen where text spills, is cut off or overlaps, or where buttons side by side don't line up. It found 0 problems on 89 screens at 1920, 1440, 1280, 1024, 861, 768 and 390 px, and 0 at 901, 950 and 1000 px with the side panel open. Its seeded control was caught.
+- **Quality.** `checks/quality.cjs` on the same 89 screens at 1280 and 390 px:
+  - axe found no problems at any impact;
   - nothing scrolls sideways at 390 px;
   - no animation runs under reduced motion;
-  - the keyboard reaches the Operator's box in 8 Tab presses and Bob's Review and decide in 8, with visible focus at every stop.
+  - every Tab stop shows focus, on the 8 stops to the Operator's box and the 12 to Bob's Review and decide.
 - **Independent reviews.** A Fable reviewer drove each step in a browser at several widths, tried its own wordings, and tried to break the approval gate. The builder fixed every finding, and the reviewer checked the fixes:
   - step 1: 6 should-fix;
   - step 2: three rounds, with 9 must-fix, 12 should-fix and 13 smaller findings;
-  - step 3: no must-fix, 4 should-fix and 6 nits.
-- **Screenshots.** `screenshots/shell/`, `screenshots/answers/` and `screenshots/runs/`, at desktop and 390 px widths. The step 1 shots show the shell before steps 2 and 3, so their troubleshooter and check card are older.
+  - step 3: no must-fix, 4 should-fix and 6 nits;
+  - step 4: no must-fix, 5 should-fix and 6 nits, plus 10 defects from steps 1 to 3 found while this spec was written. The reviewer re-drove all 16 fixes. 13 held, and the other 3 held after one more round.
+- **Screenshots.** `screenshots/shell/`, `screenshots/answers/` and `screenshots/runs/`, at desktop and 390 px widths, and `screenshots/roles/` at 1024, 1440 and 1920 px. Step 4 re-shot the shots the header move changed. `runs/approval-panel-1440.png` still predates the last-run line on the check card.
 - **The redraw's reason.** An independent UX review on 10 Nov tested version 4 and a chat-first sketch with eight Operator tasks (`docs/evidence/usability/2026-11-10-ux-review/`). ADR 0043 records what it found.
 
 The redraw's pull requests don't report the builders' gates (`gates-*.cjs`).
