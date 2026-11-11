@@ -1618,6 +1618,53 @@ add('FIX-run-times', 'Each entry in a run page’s log has its time, the first w
   await t.expect('The first says its day', times[0], /^Tue 27 Oct, 8:00$/);
 }, [1280]);
 
+/* Step 4 re-verify: three gaps the check at cd5199a7 found. Each failed on cd5199a7 before the fix. */
+add('FIX-mixed-decide', 'An approve or decline asked with another change is never dropped: Alice gets a cross on it that opens the request, whatever the other change gets', async (t) => {
+  for (const [q, said] of [['approve the upgrade and pause the morning check', 'approve the upgrade'], ['decline it, then delete the weekly summary', 'decline it'], ['say yes to the tickets and make it run daily', 'say yes to the tickets']]) {
+    await t.ask(q);
+    await t.expectText(`“${said}” has its cross, saying where to decide`, new RegExp(`“${said}”\\s*I can’t approve or decline for you\\.`), lastCard);
+  }
+  await t.click(`${lastCard} .part[data-mark="no"] [data-act="run"][data-arg="sw"]`, 'Review and decide, from the cross');
+  await t.expectCount('The request opens in the side panel', '#sidepanel [data-act="approve"][data-arg="sw"]', 1);
+}, [1280]);
+
+add('FIX-decide-question', 'A question asked with an approve keeps its cross, for Alice and for Bob', async (t) => {
+  for (const u of ['alice', 'bob']) {
+    await t.setup((k) => k.setUser(u));
+    await t.ask('approve the upgrade and is LangGraph up to date?');
+    await t.expect(`${u === 'bob' ? 'Bob' : 'Alice'} is sent to the request`, lastSay(t), /^I can’t approve or decline for you\./);
+    await t.expectText('…and the question is marked, to ask on its own', /“is LangGraph up to date”\s*Ask this on its own, and I’ll answer it\./, lastCard);
+  }
+}, [1280]);
+
+add('FIX-name-status', 'A question about a workflow by its full name gets its state, even when the name sounds like a software question, for Alice and for Bob', async (t) => {
+  const q = 'How is keep our software up to date doing?';
+  for (const u of ['alice', 'bob']) {
+    await t.setup((k) => k.setUser(u));
+    await t.ask(q);
+    await t.expect(`${u === 'bob' ? 'Bob' : 'Alice'} gets its state`, lastSay(t), /^Keep our software up to date is waiting for a yes\. Its next run is /);
+    await t.expectCount('…with no part marked as not followed', `${lastCard} .part[data-mark="no"]`, 0);
+  }
+  await t.ask('how are the workflows doing?');
+  await t.expect('Asking about all of them still gives the count', lastSay(t), /^The team has \d+ workflows\./);
+}, [1280]);
+
+add('FIX-decision-time', 'A decision is logged at the time the decisions list gives, and a run made today leads up to it, for a test run and for the software check', async (t) => {
+  const openLog = async (k) => { if (!(await k.page.$('#run-detail'))) { await k.page.click('main [data-act="runDetail"]'); await k.settle(); } };
+  const log = () => t.page.$$eval('#run-detail .chat > li:not(.typing)', (ls) => ls.map((l) => ({ at: (l.querySelector('time.log-at') || {}).textContent || '', gate: !!l.dataset.gate })).filter((x) => x.at));
+  const mins = (s) => { const [h, m] = s.replace(/^.*, /, '').split(':').map(Number); return h * 60 + m; };
+  await t.setup(async (k) => { await testRunWaiting(k); await bobDeclines(k, 'conf'); await openLog(k); });
+  const conf = await log();
+  await t.setup(async (k) => { await bobDeclines(k, 'sw', 'Wrong version'); await openLog(k); });
+  const sw = await log();
+  await t.setup((k) => k.go('home'));
+  await t.ask('What did I decide before?');
+  const at = ((await t.page.locator(lastCard).innerText()).match(/Declined by Bob at (\d+:\d\d) today/) || [])[1] || '(none)';
+  await t.expect('The test run’s gate gives the decline at the decisions list’s time', (conf.find((x) => x.gate) || {}).at, at);
+  await t.expect('…and its log runs in order', conf.map((x) => mins(x.at)), (v) => v.length > 3 && v.every((x, i) => !i || x >= v[i - 1]));
+  await t.expect('The software check’s gate gives the decline today, at the same time', (sw.find((x) => x.gate) || {}).at, `Tue 27 Oct, ${at}`);
+}, [1280]);
+
 /* Screens shot by shots.cjs and measured by quality.cjs. prepare(k) sets the screen up like a user would reach it. */
 const open = async (k, sel) => { await k.page.click(sel); await k.settle(); };
 /* While chatting, only the side panel's body scrolls: bring a part of it to the top of the panel. */

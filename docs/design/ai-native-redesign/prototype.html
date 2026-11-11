@@ -2373,13 +2373,18 @@ details > .m-close { animation: fold 140ms ease-in both; }
      The access review's removals were asked on Monday at 9:30. */
   const SW_ASKED = new Date(2026, 9, 26, 9, 41);
   const ACCESS_ASKED = new Date(2026, 9, 26, 9, 30);
+  /* When each request was sent. A run made today asks now. Every decision in the sample is made now, and the decisions
+     list, the request's card, Teams and the run's log all read DECIDED_AT, so they give one time. */
+  const ASKED_AT = { sw: SW_ASKED, access: ACCESS_ASKED };
+  const DECIDED_AT = NOW;
   /* A waiting approval request. It keeps the people and waits it was sent with, even if the workflow changes later. */
   function req(id) {
     const rec = reqRecord(id);
     if (!rec || !['waiting', 'expired'].includes(rec.state)) return null;
     const a = reqAppr(id);
     const step = a ? Math.min(rec.yes.length, a.steps.length - 1) : 0;
-    const asked = id === 'sw' ? SW_ASKED : id === 'access' && !rec.yes.length ? ACCESS_ASKED : NOW;
+    /* The access review's second step was asked when the first was decided. */
+    const asked = id === 'access' && rec.yes.length ? DECIDED_AT : ASKED_AT[id] || NOW;
     const escalated = id === 'sw' || (id === 'access' && !rec.yes.length) || (id === 'conf' && S.confAsk > 0);
     const expired = rec.state === 'expired';
     const parties = partiesOf(id);
@@ -3529,16 +3534,20 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const chatAvatar = (w, state = 'idle') => (w === 'portal' || w === 'platform' ? `<span class="sysav app">${I.mark()}</span>` : w === 'gate' ? `<span class="sysav gate">${I.shield(20)}</span>` : face(w, 40, state));
   /* The run as a group chat. Events from the platform and the approval gate are quiet markers; agents speak in bubbles.
      When the Planner speaks, the agents it brings in join the chat. */
-  /* When each step of a run happened, for the run page's timed log (ADR 0043). A run starts at its own time, asks for a
-     yes when its request was sent, and goes on once the decision came today. The sample's steps are a minute apart. */
-  const RUN_START = { sw: () => new Date(2026, 9, 26, 9, 0), issues: () => (S.issues === 'failed' ? new Date(2026, 9, 27, 8, 0) : NOW), nudge: () => (S.nudge === 'failed' ? new Date(2026, 9, 23, 16, 0) : NOW), access: () => new Date(2026, 9, 19, 9, 0), edit: () => new Date(2026, 9, 27, 9, 15) };
-  const RUN_ASKED = { sw: () => SW_ASKED, access: () => ACCESS_ASKED };
+  /* When each step of a run happened, for the run page's timed log (ADR 0043). A run starts at its own time. One made
+     today starts now, or, when it asks for a yes, early enough to ask now, as its request and Teams say. The gate gives
+     the time the request was sent, or once it is decided, DECIDED_AT. The sample's steps are a minute apart. */
+  const RUN_START = { sw: () => new Date(2026, 9, 26, 9, 0), issues: () => (S.issues === 'failed' ? new Date(2026, 9, 27, 8, 0) : null), nudge: () => (S.nudge === 'failed' ? new Date(2026, 9, 23, 16, 0) : null), access: () => new Date(2026, 9, 19, 9, 0), edit: () => new Date(2026, 9, 27, 9, 15) };
   function stepTimes(id, m) {
-    const start = (RUN_START[id] || (() => NOW))();
-    const gi = m.stations.findIndex((s) => s.gate);
     const plus = (d, k) => new Date(d.getTime() + k * 60000);
-    const asked = gi < 0 ? null : RUN_ASKED[id] ? RUN_ASKED[id]() : plus(start, gi);
-    return m.stations.map((s, i) => (gi < 0 || i < gi ? plus(start, i) : i === gi ? asked : plus(asked > NOW ? asked : NOW, i - gi - 1)));
+    /* The request waits at the last gate the run reaches. An earlier gate was decided on the way. */
+    const gi = m.stations.map((s) => !!s.gate && !s.skip).lastIndexOf(true);
+    const q = req(id);
+    const rec = reqRecord(id);
+    const asked = q ? q.asked : ASKED_AT[id] || NOW;
+    const gateAt = rec && ['approved', 'declined'].includes(rec.state) ? DECIDED_AT : asked;
+    const start = (RUN_START[id] && RUN_START[id]()) || (gi < 0 ? NOW : plus(asked, -gi));
+    return m.stations.map((s, i) => (gi < 0 || i < gi ? plus(start, i) : plus(gateAt, i - gi)));
   }
   /* The first entry says the day; later ones say only the time unless the day changed. */
   const logAt = (times, i) => { const d = times[i]; return i && d.toDateString() === times[0].toDateString() ? hm(d) : `${DAY_SHORT[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}, ${hm(d)}`; };
@@ -3704,8 +3713,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const partsList = (parts) => `<ul class="parts" aria-label="Each part of your request">${parts.map(partRow).join('')}</ul>`;
   /* A question and its choices. The choices are named by the question for a screen reader. */
   const askBody = (q, id) => `<span class="pq" id="${id}">${q.q}</span><span class="pick" role="group" aria-labelledby="${id}">${q.choices.map(([v, l]) => `<button type="button" class="chip" data-act="${q.act || 'answer'}" data-arg="${esc(v)}"${q.mid ? ` data-mid="${q.mid}"` : ''}>${esc(l)}</button>`).join('')}${q.more || ''}</span>`;
-  /* Every clause no rule read, as a cross that quotes it. A question in it is answered when it is asked on its own. */
-  const leftoverParts = (text, spans) => unheard(text, spans).map((x, i) => (aboutWorkflows(x.clause) ? { key: `left${i}`, mark: 'no', label: quote(x.clause), body: 'Ask this on its own, and I’ll answer it.' } : { key: `left${i}`, mark: 'no', label: quote(x.quote), body: 'I didn’t follow this part.' }))
+  /* Every clause no rule read, as a cross that quotes it. A question in it is answered when it is asked on its own; an
+     approve or decline goes to the request. Both are kept by every answer, so neither is lost. */
+  const leftoverParts = (text, spans) => unheard(text, spans).map((x, i) => (aboutWorkflows(x.clause) ? { key: `left${i}`, mark: 'no', label: quote(x.clause), body: 'Ask this on its own, and I’ll answer it.', keep: true }
+    : DECIDE_WORDS.test(x.clause) ? { key: `left${i}`, mark: 'no', label: quote(x.clause), body: decideBody(), keep: true } : { key: `left${i}`, mark: 'no', label: quote(x.quote), body: 'I didn’t follow this part.' }))
     .filter((x, i, all) => all.findIndex((y) => y.label === x.label) === i);
   /* A schedule has one day and one time. A second of either is a cross, never a silent pick of the first. */
   const clashDays = (text) => [...new Set([...text.replace(/\bmonday to friday\b/gi, ' ').matchAll(new RegExp(`\\b(${DAY_RE})s?\\b`, 'gi'))].map((m) => cap(m[1].toLowerCase())))];
@@ -3979,9 +3990,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
     /* "What did I decide before?": this person's decisions, newest first. Its own words, such as "approve", ask here. */
     [DECIDED_ASK, (t) => ({ kind: 'decided', only: /declin|said no|reject/i.test(t) ? 'declined' : /approv|said yes/i.test(t) && !/decid/i.test(t) ? 'approved' : '' }), /\b(?:decid|approv|declin)\w*|\bsaid (?:yes|no)\b/gi],
     [/\bwhy\b.*\b(stop|stopped|fail|failed|broke|broken|went wrong)\b|\bwhat (went wrong|happened)\b/i, (t) => ({ kind: 'why', id: (nameRef(t) || {}).id || stoppedIds()[0] || null }), /\bwhy\b[^?.!]*?\b(?:stop|fail|break)\b/i],
-    /* "when does the software check run next?", "is the morning check running?", "how is the weekly closed-ticket summary
-       doing?": one workflow's state and next run. Its name is taken out before the command test, so "weekly" asks nothing. */
-    [/\b(?:when|what time|what day)\b[^.?!]*\b(?:runs?|next|due)\b|\bnext run\b|^(?:is|are)\b[^.?!]*\b(?:running|working|on|stopped|paused|ok(?:ay)?)\b|\bhow(?:'s|’s|\s+is|\s+are)\s+(?:the|my|our)\b[^.?!]*\b(?:doing|going|getting on)\b/i, (t) => { const r = nameRef(t); return r && r.id ? { kind: 'one', id: r.id } : null; }, /\b(?:runs?|running)\b/gi],
+    /* "when does the software check run next?", "is the morning check running?", "how is keep our software up to date
+       doing?": one workflow's state and next run. Its name is taken out before the command test, so "weekly" asks nothing.
+       It comes before the software routes, so a name such as "keep our software up to date" is never read as software. */
+    [/\b(?:when|what time|what day)\b[^.?!]*\b(?:runs?|next|due)\b|\bnext run\b|^(?:is|are)\b[^.?!]*\b(?:running|working|on|stopped|paused|ok(?:ay)?)\b|\bhow(?:'s|’s|\s+is|\s+are)\b[^.?!]*\b(?:doing|going|getting on)\b/i, (t) => { const r = nameRef(t); return r && r.id ? { kind: 'one', id: r.id } : null; }, /\b(?:runs?|running)\b/gi],
     [/\b(?:do i have|are there|is there|any)\b[^.?!]*\b(?:approvals?|requests?)\b|\bapprovals?\b[^.?!]*\bwaiting\b/i, () => ({ kind: 'mine', only: 'yes' })],
     [/\b(?:which|what)\s+version\b|\bversion of\b/i, softAbout, /\b(?:do|does|are)\s+(?:we|you|i)\s+(?:run|use|have|running|using)\b/gi],
     [/^(set up )?another workflow\b|^(a )?new workflow\b|^what else( can i (do|ask( for)?))?\s*\??$|^(any )?starting points?\s*\??$|^(any )?ideas?\s*\??$/i, () => ({ kind: 'starts' }), /^(set up )?another workflow\b|^(a )?new workflow\b/i],
@@ -4270,8 +4282,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (!has(c.id) || c.state === 'kept') return '';
     const r = R(c.id);
     const p = c.state === 'open' ? editPlan(c) : null;
-    /* A change the card can't make keeps only a question asked alongside it, so that part isn't lost. */
-    const no = p && p.no ? editCrosses(c).filter((x) => /on its own/.test(x.body)) : c.state === 'open' ? editCrosses(c) : [];
+    /* A change the card can't make keeps only a question or an approve asked alongside it, so that part isn't lost. */
+    const no = p && p.no ? editCrosses(c).filter((x) => x.keep) : c.state === 'open' ? editCrosses(c) : [];
     if (p && p.no) return `${no.length ? `<div class="pcard">${partsList(no)}</div>` : ''}${p.no === 'other' ? `<div class="btns"><button class="btn sm" data-act="workflow" data-arg="${c.id}">Open ${esc(r.name)}</button></div>` : ''}`;
     if (p && p.same && !no.length) return '';
     const from = p ? r.sched : c.from;
@@ -4331,6 +4343,14 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return list.length ? `<div class="pcard wfcheck decided" data-unbuilt="Planner answers about your decisions (ADR 0043)"><ul class="rows">${list.map((d) => `<li class="row"><div><button class="linkbtn" data-act="${d.act}" data-arg="${d.id}">${esc(R(d.id).name)}</button><span class="row-sub">${pill(d.state === 'declined' ? runTone.declined : { tone: 'ok', label: 'Approved' })}</span></div><p class="row-last">${d.line}</p></li>`).join('')}</ul></div>` : '';
   };
   const mineCard = (m) => { const items = needs().filter((x) => !m.card.only || x.yes); return items.length ? needsStrip(items, 99, 'Planner answers about your workflows') : ''; };
+  /* An approve or decline asked alongside something else: it goes to the request, where the person sees exactly what it
+     writes (rule 6), with a button to each request waiting for their yes. */
+  const decideBody = () => {
+    if (!me().ap) return 'Only Approvers approve or decline, on the request itself.';
+    const ids = mayDecide();
+    if (!ids.length) return 'Nothing is waiting for your yes, so there’s nothing to decide.';
+    return `<span class="pq">I can’t approve or decline for you. Open the request, and decide there.</span><span class="pick">${ids.map((id) => `<button type="button" class="chip" data-act="run" data-arg="${id}">${ids.length > 1 ? `Review ${esc(R(id).name)}` : 'Review and decide'}</button>`).join('')}</span>`;
+  };
   const startsCard = () => `<div class="chips starts" role="group" aria-label="Starting points" data-unbuilt="Planner answers about your workflows">${starts().map((t) => `<button class="chip" data-act="say" data-arg="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
 
   /* The answers (spec 6.2). Each covers what I understood, what I can do, what I need from you, and what happens next
@@ -4370,6 +4390,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     cant: () => [...HEARD.frame, ...HEARD.when, ...HEARD.setup, ...HEARD.needs, ...HEARD.cant, ...HEARD.watch],
     abilities: (c) => (c.from === 'setup' ? [...HEARD.frame, ...HEARD.when, ...HEARD.setup] : null),
     nocheck: () => [...HEARD.frame, ...HEARD.when, new RegExp(`${SCHED_VERB.source}|${OTHER_VERB.source}`, 'gi'), /\b(?:instead of|rather than)\b[^,.;]*/gi],
+    /* "approve the upgrade": each approve or decline clause, whatever it names. A question asked with it is marked. */
+    decide: () => [...HEARD.frame, new RegExp(`(?:${DECIDE_WORDS.source})(?:(?!\\b(?:and|then|but|also)\\b)[^,.;!?])*`, 'gi')],
     ...Object.fromEntries(['data', 'check', 'mine', 'why', 'one', 'decided'].map((k) => [k, () => [...HEARD.frame, ...ABOUT.map(([re]) => new RegExp(`(?:${re.source})(?:(?!\\b(?:and|then|but|also)\\b)[^,.;!?])*`, 'gi')), ...STATUS_WORDS, ...HEARD.watch]])),
   };
   const extraCrosses = (c) => {
@@ -5362,7 +5384,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       changes: [`Upgrade Log4j core to 2.25.2${shows('registries') ? ` (urgent: critical and actively exploited) ${PLANNED_TAG}` : ''}`, 'Upgrade LangGraph to 1.2.17', 'Upgrade FastAPI to 0.120.1'],
       found: shows('registries') ? `Newer versions on the registries and GitHub, and 4 known vulnerabilities in Log4j core 2.14.1. ${PLANNED_TAG}` : 'Newer releases on GitHub for 3 of the 14 projects on the Software watchlist.' }),
     nudge: () => ({ time: `Today ${hm(NOW)}`, what: 'Weekly closed-ticket summary wants to create 1 Jira ticket on the practice Jira', changes: ['Create one ticket in MOCK with the summary of the week of 19 Oct'], found: '11 tickets closed in MOCK in the week of 19 Oct.' }),
-    conf: () => ({ time: 'Today 9:10', what: `${esc(S.nr.name)} wants to ${confWrite(S.nr).teamsVerb} on the practice Jira (test run)`, changes: [`Create one ticket in ${S.nr.project} with the ${thingOf(S.nr)}`], found: confPreview(S.nr).replace(/<p class="note">[\s\S]*$/, '').replace(/<\/?div[^>]*>/g, '') }),
+    conf: () => ({ time: `Today ${hm(NOW)}`, what: `${esc(S.nr.name)} wants to ${confWrite(S.nr).teamsVerb} on the practice Jira (test run)`, changes: [`Create one ticket in ${S.nr.project} with the ${thingOf(S.nr)}`], found: confPreview(S.nr).replace(/<p class="note">[\s\S]*$/, '').replace(/<\/?div[^>]*>/g, '') }),
     access: () => ({ time: 'Mon 9:30', what: `Quarterly access review wants to ${ACCESS_WRITE.teamsVerb}`, changes: ACCESS_REMOVALS.map((x) => `Remove ${x.replace(/\. .*$/, '')}`), found: '48 people reviewed. Their managers confirmed 45 in Teams. Nobody confirmed these 3.', planned: true }),
   };
   function teamsCard(id) {
@@ -5371,7 +5393,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const cant = partiesOf(id).map((u) => `${nm(u)}, who ${partyWhy(id, u)}`);
     return `<b>${c.what}</b>${c.planned ? ` ${PLANNED_TAG}` : ''}<dl class="kv tcard"><dt>Workflow</dt><dd>${esc(R(id).name)}, set up by ${nm(ownerOf(id))}</dd><dt>Changes</dt><dd><ul class="mini-list">${c.changes.map((x) => `<li>${x}</li>`).join('')}</ul></dd><dt>Found</dt><dd>${c.found}</dd><dt>Who can decide</dt><dd>${q ? `${whoOr(q.may)}${q.steps > 1 ? `, as the ${q.step === 0 ? 'first' : 'second'} of 2 Approvers` : ''}` : R(id).approves}</dd><dt>Who can’t</dt><dd>${cant.join('; ')}. Nobody approves their own work.</dd></dl>`;
   }
-  const decidedAt = (by) => `${nm(by)} at ${hm(NOW)} today`;
+  const decidedAt = (by) => `${nm(by)} at ${hm(DECIDED_AT)} today`;
   /* The request's outcome, read from the platform, as the card shows it after a decision. */
   const decidedLine = (id, rec) => (rec.state === 'approved' ? `Approved by ${rec.yes.map(decidedAt).join(', then ')}` : rec.state === 'declined' ? declinedHead(id, decidedAt) : rec.state === 'expired' ? 'No answer' : null);
   function teamsItems() {
