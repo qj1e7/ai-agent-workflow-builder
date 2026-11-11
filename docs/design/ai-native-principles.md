@@ -70,7 +70,7 @@ These are the product's safety rules, and no design may weaken them (AGENTS.md):
 
 ### 7. Honest states, one source per fact
 
-The same words mean the same state everywhere: AI suggestion, Draft, Waiting for a yes, On, Running, Done, Stopped and Test run (spec section 15). A count or status comes from one function, so Home, Workflows, the tab badge and the Planner never disagree.
+The same words mean the same state everywhere: AI suggestion, Draft, Waiting for a yes, On, Paused, Running, Done, Declined, Stopped and Test run (spec section 15). A count or status comes from one function, so Home, Workflows, the tab badge and the Planner never disagree.
 
 - **Check:** change the state once. Does every place that shows it change together?
 
@@ -78,7 +78,7 @@ The same words mean the same state everywhere: AI suggestion, Draft, Waiting for
 
 Agents appear with their faces and plain step names, not their internals.
 - While a run is going, the live activity view shows the agents at work.
-- When a run stops, the AI troubleshooter gives four answers: what happened, what was affected, whether it is safe to fix, and what to do.
+- When a run stops, the AI troubleshooter gives three answers: what happened, what was affected, and whether a retry is safe. The next step, such as Retry or Report to support, sits under them.
 - Waiting for a yes, the decision comes first.
 
 - **Check:** at every point in a run, can the person say what the AI is doing now and why?
@@ -102,7 +102,7 @@ The box is for intent. Chips, menus and buttons are used wherever they are faste
 - **Keyboard.** Every action is reachable by keyboard, with a visible focus ring.
 - **Never colour alone.** Status always has words or an icon too.
 - **Announcements.** The Planner's replies are announced politely.
-- **Phones.** Nothing scrolls sideways at 390 px, and touch targets are at least 44 px.
+- **Responsive web view.** The Portal adapts to any browser window, from a narrow window to a wide screen of 1920 px and more. Nothing scrolls sideways and no text spills at any width. Phone-only layouts, flows and touch-target work are out of scope, because an Approver on a phone decides in Teams.
 - **Motion.** Reduced motion stops every loop.
 
 - **Check:** the automated accessibility checks pass with no serious issue, and a keyboard-only pass of the main task works.
@@ -133,7 +133,7 @@ Each of these breaks a principle above. None of them ships:
 |---|---|---|
 | 3, 5, 7, 11 | `docs/design/ai-native-redesign/checks/gates-*.cjs` and `validate-v4.cjs` | `portal/e2e/live/design-rules.spec.ts`, planned in `docs/design/ai-native-redesign/IMPLEMENTATION-PLAN.md` section 7.6 |
 | 6 | the gates' approval and Teams checks | `platform-api` approval tests and the safety checker's tests |
-| 11 | `checks/quality.cjs` (axe, keyboard, 390 px, reduced motion) | plan section 8 |
+| 11 | `checks/quality.cjs` (axe, keyboard, a narrow 390 px window, reduced motion) | plan section 8 |
 | 1, 2, 4, 8, 9, 10, 12 | scenario paths in `checks/paths-v4.cjs`, and a person's review against this page | the same review, plus the click-through test |
 
 When a review finds the same kind of mistake twice, turn it into a check here instead of adding more words.

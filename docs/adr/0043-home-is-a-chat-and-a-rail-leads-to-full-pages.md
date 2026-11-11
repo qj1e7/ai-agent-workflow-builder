@@ -22,10 +22,10 @@ A third version of the sketch combined the two and offered three ways to browse:
 ## Decision
 
 - **Home is the chat, and it starts calm.** Before the first message, Home is as version 4 draws it: the Visor bot, the heading, the box, three suggestions, and Needs you rows under them. After the first message the box moves to the bottom and the conversation fills the page. The chat is still not the record. Every card is a live view of the same data the lists and pages use.
-- **A rail replaces the tabs.** A slim column on the left holds three items: Chat, Workflows and Watchlist, each with a count. Workflows and Watchlist open as full pages, and the chat shows only on Chat. Going back to Chat returns the conversation where it was. Needs you sits at the top of the Workflows page, as version 4 has it. The Agent library moves into Settings as "How it works", because no daily task needs it. Teams, Settings and the signed-in person stay in the header. On a phone the rail is a bar across the top.
+- **A rail replaces the tabs.** A slim column on the left holds three items: Chat, Workflows and Watchlist, each with a count. Workflows and Watchlist open as full pages, and the chat shows only on Chat. Going back to Chat returns the conversation where it was. Needs you sits at the top of the Workflows page, as version 4 has it. The Agent library moves into Settings as "How it works", because no daily task needs it. Teams, Settings and the signed-in person stay in the header. In a window 900 px wide or narrower, the rail is a bar across the top.
 - **Where you came from decides how an item opens.**
   - **From the rail or a page:** a workflow, run, approval or software row opens as a full page, with Back.
-  - **From a card in the chat:** it opens in a side panel beside the chat, so the conversation stays in view. Wider than 900 px, a card's answer may open its view in the panel by itself, such as the n8n blocks going in while the Planner builds. On a phone the panel opens full screen with Close, and only when the person taps Open. A flow shows once: while a card's item is open in the panel, the card hides its own flow and its Open button, and both come back when the panel closes.
+  - **From a card in the chat:** it opens in a side panel beside the chat, so the conversation stays in view. Wider than 900 px, a card's answer may open its view in the panel by itself, such as the n8n blocks going in while the Planner builds. In a window 900 px wide or narrower, the panel covers the window with Close, and opens only when the person presses Open. A flow shows once: while a card's item is open in the panel, the card hides its own flow and its Open button, and both come back when the panel closes.
   - **From inside the side panel:** the panel shows one thing and keeps no history. A link inside it, such as "Open the run" on a workflow, opens a full page with Back to the chat, and the panel is still there on return. More details in the panel's bar does the same for what it shows. Actions such as Retry, Approve, Pause or changing the schedule stay in the panel, because they change something rather than go somewhere.
 - **The side panel is a summary, and the full page adds the details.** The panel shows what the item is, its state and the next step, and the chat keeps the width. The panel widens only while the Planner builds, to show the n8n blocks going in. The full page adds what helps someone understand the item, and nothing for show:
   - **Workflow:** the panel shows the sentence, any problem with its fix, and the last and next run. The page adds the steps, the schedule editor, who says yes, recent runs, versions and Pause.
@@ -67,11 +67,13 @@ Nothing here changes the approval gate or the safety checker. Every write still 
   - "Changes happen where the thing lives" now allows asking for a schedule change in the chat.
   - The Approver-only Home gains the box, for questions only.
   - The menu becomes the rail.
-- **The prototype is redrawn before the Portal changes.** Version 4, `docs/design/ai-native-redesign/prototype.html`, is redrawn in four steps, each checked like version 4 was (axe, keyboard, 390 px, reduced motion):
+- **The prototype is redrawn before the Portal changes.** Version 4, `docs/design/ai-native-redesign/prototype.html`, is redrawn in four steps, each checked like version 4 was (axe, keyboard, a narrow window, reduced motion):
   1. **The shell.** The rail with full pages for Workflows and the Watchlist, Home as a chat, the pinned Needs you line, and the side panel for items opened from the chat. The Agent library moves to Settings.
   2. **The Planner's answers.** Part marks on the set-up card, one question at a time, the edit card, status questions in any wording, and live cards.
   3. **Runs and approvals.** The three answers on a stopped run, the approval page's three additions, and the declined record.
-  4. **Roles and phones.** The Approver's box, n8n views for people with n8n access, and the phone layout.
+  4. **Roles.** The Approver's box and n8n views for people with n8n access.
+
+  On 11 Nov the team lead dropped the phone layout. The Portal is a responsive web view, from a narrow browser window to a wide screen, and approvals on a phone happen in Teams.
 
   Then the spec (`AI-NATIVE-UX-REDESIGN.md`, sections 3, 5 to 12 and 18) and `IMPLEMENTATION-PLAN.md` follow the redrawn prototype.
 - **The agent runtime's answer grows.** The set-up card's parts must account for every clause of the request. The Planner gains an edit answer for an existing workflow. The evals' golden set adds paraphrases that must keep or flag each part, such as "haven't been updated for 10 days", so a lost part fails CI.
