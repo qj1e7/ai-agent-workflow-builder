@@ -234,7 +234,7 @@ describe('Needs you at the top of Workflows', () => {
     const section = /<section[^>]*aria-labelledby="[^"]*"[\s\S]*?<\/section>/.exec(html)?.[0] ?? ''
     expect(text(section)).toContain(`Needs you ${total}`)
     expect(section).toContain('data-home-item="stopped:run_01JB9"')
-    expect(navNames(html).filter((name) => name.startsWith('Workflows'))).toEqual([`Workflows, ${total} need you`, `Workflows, ${total} need you`])
+    expect(navNames(html).filter((name) => name.startsWith('Workflows'))).toEqual([`Workflows, ${total} need you`])
     expect(html.indexOf('aria-label="Needs you"')).toBeLessThan(html.indexOf('aria-label="Workflows"'))
   })
 
@@ -322,7 +322,7 @@ describe('the sections under Needs you', () => {
     expect(text(mainOf(html))).toContain('Bob replied to your report')
     expect(text(mainOf(html))).toContain('Looking into it.')
     expect(mainOf(html)).toMatch(/<a[^>]*href="\/workflows\?request=trq_01JD5RP"[^>]*>Read the reply<\/a>/)
-    expect(navNames(html).filter((name) => name.startsWith('Workflows'))).toEqual([`Workflows, ${needsTotal(HOME)} need you`, `Workflows, ${needsTotal(HOME)} need you`])
+    expect(navNames(html).filter((name) => name.startsWith('Workflows'))).toEqual([`Workflows, ${needsTotal(HOME)} need you`])
   })
 
   it('leaves a request in Following up but not in Needs you once the person has opened it', () => {

@@ -30,6 +30,7 @@ import {
   statusWords,
   versionSourceWords,
   waitingWords,
+  watchAttention,
 } from './software'
 import { formatterFactory, nextRunWords } from '../workflows/workflow'
 
@@ -154,6 +155,14 @@ describe('the list', () => {
     expect(decisionsOf([waiting('a', 'apr_1'), waiting('b', 'apr_1'), waiting('c', 'apr_1')])).toEqual([{ approvalId: 'apr_1', software: 3 }])
     expect(decisionsOf([waiting('a', null)])).toEqual([])
     expect(decisionsOf([])).toEqual([])
+  })
+
+  it('counts what needs action as one decision per check plus each address that needs a person, as the page’s Needs attention does', () => {
+    const moved: WatchedSoftwareView = { ...ROWS[0]!, id: 'm', status: 'behind', approval_id: null, moved_to: 'new/name' }
+    const gone: WatchedSoftwareView = { ...ROWS[0]!, id: 'g', status: 'cant_check', approval_id: null, not_found: true }
+    expect(watchAttention(ROWS)).toBe(1)
+    expect(watchAttention([...ROWS, moved, gone])).toBe(3)
+    expect(watchAttention([])).toBe(0)
   })
 
   it('names the tickets the yes covers, in the singular too', () => {

@@ -69,6 +69,11 @@ export function addressAttentionOf(rows: readonly WatchedSoftwareView[]): Attent
   })
 }
 
+/** What the Software page lists under Needs attention. The page's heading and the rail's Watchlist count both read it. */
+export function watchAttention(rows: readonly WatchedSoftwareView[]): number {
+  return decisionsOf(rows).length + addressAttentionOf(rows).length
+}
+
 export const PAUSED_WORDS = 'Paused. No check runs until an Operator resumes it.'
 
 /** True when the schedule starts checks: it is set, and not held because its owner can no longer run it. */

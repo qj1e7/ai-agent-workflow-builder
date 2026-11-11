@@ -1,10 +1,9 @@
 import { Link, NavLink } from 'react-router'
-import { isOperator, notOnTheList } from '../api/me'
+import { notOnTheList } from '../api/me'
 import { useJiraBrowseUrl } from '../api/ticketLinks'
 import type { Me } from '../api/types'
 import { cx } from '../ui/cx'
 import { Mark, SettingsIcon, TicketIcon } from './icons'
-import { Menu } from './Menu'
 import { PersonChip } from './PersonChip'
 import { PRODUCT, PRODUCT_PREFIX } from './product'
 import { PAGES } from './routes'
@@ -27,7 +26,6 @@ export function Header({ person }: { person: Me | null }) {
             {PRODUCT.slice(PRODUCT_PREFIX.length)}
           </span>
         </Link>
-        <Menu operator={isOperator(person)} onList={person !== null && !notOnTheList(person)} />
         <div className={styles['tools']}>
           {/* Its badge polls runs and Teams messages, which the platform refuses to someone not on the People list. */}
           {notOnTheList(person) ? null : <TeamsButton person={person} />}

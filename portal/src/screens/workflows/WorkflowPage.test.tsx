@@ -150,9 +150,18 @@ describe('a workflow page', () => {
     expect(text(mainOf(html))).not.toContain('Not running')
   })
 
-  it('names its agents, each opening its card', () => {
+  it('names its agents, each opening its card in How it works', () => {
     const agents = /<h3>Agents<\/h3>([\s\S]*?)<\/section>/.exec(render())?.[1] ?? ''
-    expect([...agents.matchAll(/<a[^>]*href="([^"]+)"/g)].map((m) => m[1])).toEqual(['/agents/planner', '/agents/crd_version_checker'])
+    expect([...agents.matchAll(/<a[^>]*href="([^"]+)"/g)].map((m) => m[1])).toEqual([
+      '/settings?tab=how&amp;show=agents&amp;agent=planner',
+      '/settings?tab=how&amp;show=agents&amp;agent=crd_version_checker',
+    ])
+    expect(text(agents)).toBe('Planner Version checker')
+  })
+
+  it('names its agents without a link for an Approver, who is not offered How it works', () => {
+    const agents = /<h3>Agents<\/h3>([\s\S]*?)<\/section>/.exec(render({ me: BOB }))?.[1] ?? ''
+    expect(agents).not.toContain('<a')
     expect(text(agents)).toBe('Planner Version checker')
   })
 

@@ -35,6 +35,22 @@
   margin-left: auto;
 }
 
+/* Wider than 900 px the header lines up with the page under it: past the rail, in the same column as the content. */
+@media (min-width: 901px) {
+  .header {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr) 8px;
+  }
+
+  .inner {
+    grid-column: 2;
+    width: 100%;
+    max-width: 1180px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
 @media (min-width: 901px) and (max-width: 1045px), (max-width: 380px) {
   .brandText {
     position: absolute;
@@ -47,6 +63,10 @@
 }
 
 @media (max-width: 900px) {
+  .header {
+    position: static;
+  }
+
   .inner {
     gap: 6px 12px;
     padding-block: 8px;
