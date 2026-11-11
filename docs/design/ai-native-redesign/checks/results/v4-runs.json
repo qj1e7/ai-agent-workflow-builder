@@ -1,0 +1,7411 @@
+{
+  "prototype": "docs/design/ai-native-redesign/prototype.html",
+  "paths": "docs/design/ai-native-redesign/checks/paths-v4.cjs",
+  "version": "v4",
+  "summary": {
+    "real": {
+      "total": 119,
+      "passed": 119,
+      "failed": 0,
+      "notPossible": 1
+    },
+    "control": {
+      "failed": true
+    }
+  },
+  "scenarios": [
+    {
+      "id": "A",
+      "key": "A@1280",
+      "title": "First-time Operator sets up a weekly Jira summary and turns it on",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 3,
+        "screens": 1,
+        "interactions": 5,
+        "plannerQuestions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Choose 17:00",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Choose MOCK",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Turn it on",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "A",
+      "key": "A@390",
+      "title": "First-time Operator sets up a weekly Jira summary and turns it on",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 3,
+        "screens": 1,
+        "interactions": 5,
+        "plannerQuestions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Choose 17:00",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Choose MOCK",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Turn it on",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "B",
+      "key": "B@1280",
+      "title": "Experienced Operator finds what needs attention and fixes the stopped Morning new-ticket check",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 0,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 1,
+        "screens": 3,
+        "interactions": 2
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": true,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "B",
+      "key": "B@390",
+      "title": "Experienced Operator finds what needs attention and fixes the stopped Morning new-ticket check",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 0,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 1,
+        "screens": 3,
+        "interactions": 2
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": true,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "C",
+      "key": "C@1280",
+      "title": "Bob, an Approver only, opens the upgrade request, sees what changes and the evidence, and approves",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 2
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Approve",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "C",
+      "key": "C@390",
+      "title": "Bob, an Approver only, opens the upgrade request, sees what changes and the evidence, and approves",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 2
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Approve",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "C-self",
+      "key": "C-self@1280",
+      "title": "Alice turns on a workflow, does a test run, and cannot approve her own test run",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 5,
+        "fields": 1,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 3,
+        "screens": 2,
+        "interactions": 6
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Choose 17:00",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Choose MOCK",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Turn it on",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Do a test run",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "D",
+      "key": "D@1280",
+      "title": "An Operator asks to email a weekly list, and the limit is explained with a next step",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: email me a list of open bugs every Monday",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "E",
+      "key": "E@1280",
+      "title": "The user corrects the Planner’s guess of project and schedule on the card, without starting again",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 1,
+        "selects": 2,
+        "navs": 0,
+        "decisions": 2,
+        "screens": 1,
+        "interactions": 6
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: a request the Planner reads as MOCK and Friday",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "select",
+          "label": "Correct the Jira project",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Open the schedule",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "select",
+          "label": "Correct the day",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Close the schedule",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "F",
+      "key": "F@1280",
+      "title": "Recover the stop the user can fix, and report the platform bug to support",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 0,
+        "selects": 0,
+        "navs": 3,
+        "decisions": 2,
+        "screens": 3,
+        "interactions": 6
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": true,
+          "decision": true,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Back to Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Report to support",
+          "nav": false,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Send report",
+          "nav": false,
+          "decision": true,
+          "screen": "workflows"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Done",
+          "nav": false,
+          "decision": false,
+          "screen": "workflows"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "G",
+      "key": "G@1280",
+      "title": "Monitor Kubernetes releases from Home ends with Kubernetes on the Software watchlist",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 2,
+        "screens": 1,
+        "interactions": 5
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Monitor Kubernetes releases",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Looks right",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Not sure? Start from the newest",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Add Kubernetes",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "H",
+      "key": "H@1280",
+      "title": "Pause a workflow, change its schedule, and delete one with its confirmation",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 10,
+        "fields": 1,
+        "selects": 2,
+        "navs": 5,
+        "decisions": 5,
+        "screens": 3,
+        "interactions": 13
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "workflow"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open Morning new-ticket check",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Change schedule",
+          "nav": false,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 4,
+          "kind": "select",
+          "label": "How often",
+          "nav": false,
+          "decision": true,
+          "screen": "workflow"
+        },
+        {
+          "n": 5,
+          "kind": "select",
+          "label": "Day",
+          "nav": false,
+          "decision": true,
+          "screen": "workflow"
+        },
+        {
+          "n": 6,
+          "kind": "field",
+          "label": "Time",
+          "nav": false,
+          "decision": true,
+          "screen": "workflow"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Save the schedule",
+          "nav": false,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "Pause",
+          "nav": false,
+          "decision": true,
+          "screen": "workflow"
+        },
+        {
+          "n": 9,
+          "kind": "click",
+          "label": "Back to Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 10,
+          "kind": "click",
+          "label": "Open Weekly closed-ticket summary",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 11,
+          "kind": "click",
+          "label": "More actions",
+          "nav": false,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 12,
+          "kind": "click",
+          "label": "Delete",
+          "nav": false,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 13,
+          "kind": "click",
+          "label": "Delete workflow",
+          "nav": true,
+          "decision": true,
+          "screen": "workflows"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T1",
+      "key": "T1@1280",
+      "title": "Set up a workflow from example 1: example, time, Jira project, Turn it on",
+      "viewport": 1280,
+      "passed": false,
+      "notPossible": true,
+      "reason": "Since 8 Nov the starting points under “Set up another workflow” are software versioning only (Keep track of the React version). None sets up a general Jira workflow, so there is no example to tap. Typing the same request is scenario T2.",
+      "failed": null,
+      "counts": null,
+      "steps": [],
+      "errors": []
+    },
+    {
+      "id": "T2",
+      "key": "T2@1280",
+      "title": "Set up a typed workflow with every part stated: type, Enter, Turn it on",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 1,
+        "screens": 1,
+        "interactions": 3
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: a request with every part stated",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Turn it on",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T3",
+      "key": "T3@1280",
+      "title": "Do a test run after turning one on",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 1
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Do a test run",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T4",
+      "key": "T4@1280",
+      "title": "Add software from Home with example 3: example, Looks right, Start from the newest, Add React",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 5,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 2,
+        "screens": 1,
+        "interactions": 6
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Set up another workflow",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Tap Keep track of the React version",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Looks right",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Not sure? Start from the newest",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Add React",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T5",
+      "key": "T5@1280",
+      "title": "Add software on the Software watchlist page",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 2,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 5
+      },
+      "screenList": [
+        "home",
+        "software"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Watchlist",
+          "nav": true,
+          "decision": false,
+          "screen": "software"
+        },
+        {
+          "n": 2,
+          "kind": "field",
+          "label": "Name",
+          "nav": false,
+          "decision": false,
+          "screen": "software"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Find it",
+          "nav": false,
+          "decision": false,
+          "screen": "software"
+        },
+        {
+          "n": 4,
+          "kind": "field",
+          "label": "GitHub repository",
+          "nav": false,
+          "decision": false,
+          "screen": "software"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Add Prometheus",
+          "nav": false,
+          "decision": false,
+          "screen": "software"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T6",
+      "key": "T6@1280",
+      "title": "Approve from Workflows: Workflows, Review and decide, Approve 3 tickets",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 0,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 1,
+        "screens": 3,
+        "interactions": 3
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Approve",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T7",
+      "key": "T7@1280",
+      "title": "Approve from Home as an Approver only: Review and decide, Approve",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 2
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Approve",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T8",
+      "key": "T8@1280",
+      "title": "Approve from the Teams drawer: Teams, Approve",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 3
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Teams",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open in AI Workflow Builder",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Approve",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T9",
+      "key": "T9@1280",
+      "title": "Fix a stopped run the user can fix: Workflows, See why and fix it, retry",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 0,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 1,
+        "screens": 3,
+        "interactions": 2
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": true,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T10",
+      "key": "T10@1280",
+      "title": "Report a platform bug: Workflows, Report to support, Send report, Done",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 4
+      },
+      "screenList": [
+        "home",
+        "workflows"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Report to support",
+          "nav": false,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Send report",
+          "nav": false,
+          "decision": true,
+          "screen": "workflows"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Done",
+          "nav": false,
+          "decision": false,
+          "screen": "workflows"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T11",
+      "key": "T11@1280",
+      "title": "Pause a workflow: Workflows, row, Pause",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 0,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 1,
+        "screens": 3,
+        "interactions": 3
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "workflow"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open Morning new-ticket check",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Pause",
+          "nav": false,
+          "decision": true,
+          "screen": "workflow"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T12",
+      "key": "T12@1280",
+      "title": "Delete a workflow: Workflows, row, Delete, Delete workflow",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 5,
+        "fields": 0,
+        "selects": 0,
+        "navs": 3,
+        "decisions": 1,
+        "screens": 3,
+        "interactions": 5
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "workflow"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open Weekly closed-ticket summary",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "More actions",
+          "nav": false,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Delete",
+          "nav": false,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Delete workflow",
+          "nav": true,
+          "decision": true,
+          "screen": "workflows"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T13",
+      "key": "T13@1280",
+      "title": "Change who approves: Workflows, row, Change who approves, Save",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 0,
+        "selects": 2,
+        "navs": 2,
+        "decisions": 2,
+        "screens": 3,
+        "interactions": 6
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "workflow"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open Morning new-ticket check",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Change who approves",
+          "nav": false,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 4,
+          "kind": "select",
+          "label": "Asked first",
+          "nav": false,
+          "decision": true,
+          "screen": "workflow"
+        },
+        {
+          "n": 5,
+          "kind": "select",
+          "label": "Backup",
+          "nav": false,
+          "decision": true,
+          "screen": "workflow"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Save",
+          "nav": false,
+          "decision": false,
+          "screen": "workflow"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T14",
+      "key": "T14@1280",
+      "title": "Change an agent in plain English: Settings, How it works, Details and changes, chip, Suggest a change, Save",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 7,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 7
+      },
+      "screenList": [
+        "home",
+        "settings"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Settings",
+          "nav": true,
+          "decision": false,
+          "screen": "settings"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open How it works",
+          "nav": false,
+          "decision": false,
+          "screen": "settings"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Open the Agents tab",
+          "nav": false,
+          "decision": false,
+          "screen": "settings"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Ticket writer: Details and changes",
+          "nav": false,
+          "decision": false,
+          "screen": "settings"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Pick a suggested change",
+          "nav": false,
+          "decision": false,
+          "screen": "settings"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Suggest a change",
+          "nav": false,
+          "decision": false,
+          "screen": "settings"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Save as version 2",
+          "nav": false,
+          "decision": true,
+          "screen": "settings"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T15",
+      "key": "T15@1280",
+      "title": "Ask the team for a new system, after a \"can’t\" answer",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 0,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 1,
+        "screens": 1,
+        "interactions": 1
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Ask the team",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "H2",
+      "key": "H2@1280",
+      "title": "Discard a draft set-up card from Workflows",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 2
+      },
+      "screenList": [
+        "home",
+        "workflows"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Discard",
+          "nav": false,
+          "decision": true,
+          "screen": "workflows"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "B-home",
+      "key": "B-home@1280",
+      "title": "Find and act on the stopped workflow from Home’s Needs you",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 1
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": true,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "B-home",
+      "key": "B-home@390",
+      "title": "Find and act on the stopped workflow from Home’s Needs you",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 1
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": true,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ASK-status",
+      "key": "ASK-status@1280",
+      "title": "“Check my workflows” typed to the Planner",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ASK-status",
+      "key": "ASK-status@390",
+      "title": "“Check my workflows” typed to the Planner",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ASK-why",
+      "key": "ASK-why@1280",
+      "title": "“Why did Morning new-ticket check stop?” ending in a retry from the answer",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 1,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 3
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Why did Morning new-ticket check stop?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": true,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ASK-needs",
+      "key": "ASK-needs@1280",
+      "title": "“What needs me?”",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: What needs me?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "OFFLINE",
+      "key": "OFFLINE@1280",
+      "title": "No AI model: Home says so and offers Connect a model",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 1
+      },
+      "screenList": [
+        "home",
+        "settings"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Connect a model",
+          "nav": true,
+          "decision": false,
+          "screen": "settings"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "OFFLINE",
+      "key": "OFFLINE@390",
+      "title": "No AI model: Home says so and offers Connect a model",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 1
+      },
+      "screenList": [
+        "home",
+        "settings"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Connect a model",
+          "nav": true,
+          "decision": false,
+          "screen": "settings"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "DOWN",
+      "key": "DOWN@1280",
+      "title": "Jira stops answering: the Planner says so, then Jira works again",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "PREVIEW",
+      "key": "PREVIEW@1280",
+      "title": "Planned features shown: each planned item is tagged",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 0,
+        "selects": 0,
+        "navs": 3,
+        "decisions": 0,
+        "screens": 4,
+        "interactions": 3
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "workflow",
+        "software"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open Quarterly access review",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Open Watchlist",
+          "nav": true,
+          "decision": false,
+          "screen": "software"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "SHELL-pinned",
+      "key": "SHELL-pinned@1280",
+      "title": "The pinned Needs you line shows after the first message, with Open and N more",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 1,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 3
+      },
+      "screenList": [
+        "home",
+        "workflows"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "4 more",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "SHELL-pinned",
+      "key": "SHELL-pinned@390",
+      "title": "The pinned Needs you line shows after the first message, with Open and N more",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 1,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 3
+      },
+      "screenList": [
+        "home",
+        "workflows"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "4 more",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "SHELL-panel",
+      "key": "SHELL-panel@1280",
+      "title": "A card in the chat opens its workflow in a side panel, or full screen on a phone, and Close puts it back",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 4
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Open Morning new-ticket check from the card",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Close",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "SHELL-panel",
+      "key": "SHELL-panel@390",
+      "title": "A card in the chat opens its workflow in a side panel, or full screen on a phone, and Close puts it back",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 4
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Open Morning new-ticket check from the card",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Close",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "SHELL-more",
+      "key": "SHELL-more@1280",
+      "title": "More details gives a full page with Back to the chat, and the panel is still there on return",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 1,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 5
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Why did Morning new-ticket check stop?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "See the run from the card",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "More details",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Back to the chat",
+          "nav": true,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "SHELL-more",
+      "key": "SHELL-more@390",
+      "title": "More details gives a full page with Back to the chat, and the panel is still there on return",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 1,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 5
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Why did Morning new-ticket check stop?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "See the run from the card",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "More details",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Back to the chat",
+          "nav": true,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "SHELL-rail",
+      "key": "SHELL-rail@1280",
+      "title": "The rail returns to the chat as it was, scroll position included",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 2,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 6
+      },
+      "screenList": [
+        "home",
+        "workflows"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: What can you do?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Back to Chat",
+          "nav": true,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "SHELL-rail",
+      "key": "SHELL-rail@390",
+      "title": "The rail returns to the chat as it was, scroll position included",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 2,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 6
+      },
+      "screenList": [
+        "home",
+        "workflows"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: What can you do?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Back to Chat",
+          "nav": true,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-cross",
+      "key": "ANS-cross@1280",
+      "title": "A clause the Planner can’t read gets a cross that quotes it, and the button sets up the part it can",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 3,
+        "screens": 1,
+        "interactions": 5
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: a request with “colour them by team”, which no rule reads",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Choose Open tickets",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Choose MOCK",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Set up the part I can",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-cross",
+      "key": "ANS-cross@390",
+      "title": "A clause the Planner can’t read gets a cross that quotes it, and the button sets up the part it can",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 3,
+        "screens": 1,
+        "interactions": 5
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: a request with “colour them by team”, which no rule reads",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Choose Open tickets",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Choose MOCK",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Set up the part I can",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-left-out",
+      "key": "ANS-left-out@1280",
+      "title": "After “Set up the part I can”, the card and the workflow’s page still say what was left out",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 1,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 3,
+        "screens": 3,
+        "interactions": 7
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "workflow"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Every Friday at 9 AM, find the Jira tickets and prepare a summary, and colour them by team",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Choose Open tickets",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Choose MOCK",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Set up the part I can",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Open the new workflow",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-verbs",
+      "key": "ANS-verbs@1280",
+      "title": "A clause of verbs and little words, such as “let me know”, still gets a cross, and never “Nothing is unclear”",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 3,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 6
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday at 5pm, sum up the tickets we closed this week in MOCK and let me know",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: every Friday at 5pm, sum up the tickets we closed this week in MOCK, and then check it",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: every Friday at 5pm, sum up the tickets we closed this week in MOCK, and for them",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-whole-clause",
+      "key": "ANS-whole-clause@1280",
+      "title": "A cross quotes the whole clause, not one word of it",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: watch Kubernetes but only the major releases",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-stale",
+      "key": "ANS-stale@1280",
+      "title": "Every wording of “not updated for a while” gets the honest can’t, never a silent drop",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 3,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 6
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, list the tickets that haven't been updated for 10 days",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: every Friday, list the tickets that have not been updated for 10 days",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: every Friday, list the tickets with no update since Monday",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-none-hers",
+      "key": "ANS-none-hers@1280",
+      "title": "A request with no part in her own words gets no set-up card of guesses",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: which software is behind, then raise tickets for them",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-leftover-everywhere",
+      "key": "ANS-leftover-everywhere@1280",
+      "title": "A part answer and an edit card mark the clauses they didn’t read too",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 2,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 4
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday at 5pm, sum up the closed tickets in MOCK, excluding bugs, and tag Bob",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: is LangGraph up to date? set it to check daily",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-cant-clause",
+      "key": "ANS-cant-clause@1280",
+      "title": "A can’t answer never crosses the clause it answered",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the closed tickets and email the summary to the team",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-cant-runs",
+      "key": "ANS-cant-runs@1280",
+      "title": "A can’t answer reads only its can’t phrase, so the rest of that clause is still marked",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 3,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 6
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the closed tickets and email the summary in French to the team",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: every Friday sum up the closed tickets in MOCK and email it to Bob with a chart",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: watch Grafana every day at 8am on Slack too",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-phrase-runs",
+      "key": "ANS-phrase-runs@1280",
+      "title": "A summary’s describing words are read, and a quote keeps its object and the phrase it names",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 3,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 6
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday prepare a detailed summary of the closed tickets in MOCK",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: every Friday at 9am, list the closed tickets in MOCK, group them by assignee and highlight blockers",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: watch Kubernetes and ping Bob when a new version is out",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-cant-alternative",
+      "key": "ANS-cant-alternative@1280",
+      "title": "The alternative to an email request sets up cleanly, with the email clause gone",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 0,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 1,
+        "screens": 1,
+        "interactions": 1
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Set that up",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-ticked-runs",
+      "key": "ANS-ticked-runs@1280",
+      "title": "In a clause a rule read, a cross quotes only the unread words, and the gaps are read",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 4,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 8
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday at 5pm sum up the closed tickets in MOCK with a chart",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: give me a short summary of the closed tickets in MOCK every Monday at 9am",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: every Monday at 9am sum up the closed tickets in MOCK, then file it as a Jira ticket",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "field",
+          "label": "Type: watch Grafana and tell me when there is a new version",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-narrow-cards",
+      "key": "ANS-narrow-cards@901",
+      "title": "Beside the panel, a narrow chat gives the cards two-column rows, and a chip stays on one line",
+      "viewport": 901,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-narrow-cards",
+      "key": "ANS-narrow-cards@1024",
+      "title": "Beside the panel, a narrow chat gives the cards two-column rows, and a chip stays on one line",
+      "viewport": 1024,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-clash-day",
+      "key": "ANS-clash-day@1280",
+      "title": "Two days in a set-up request ask which one, and an edit card takes focus at its heading",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 2,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 4
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Monday and Friday at 9am list open tickets in MOCK",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: Make the morning new-ticket check run on Mondays only",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-clash-time",
+      "key": "ANS-clash-time@1280",
+      "title": "Two times in a set-up request ask which one, never the first picked",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 1,
+        "screens": 1,
+        "interactions": 3
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday at 9am and 5pm list open tickets in MOCK",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Choose 17:00",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-testctl",
+      "key": "ANS-testctl@1280",
+      "title": "The test controls never cover the product, scrolled or not, chatting or not",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-testctl",
+      "key": "ANS-testctl@900",
+      "title": "The test controls never cover the product, scrolled or not, chatting or not",
+      "viewport": 900,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-testctl",
+      "key": "ANS-testctl@390",
+      "title": "The test controls never cover the product, scrolled or not, chatting or not",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-edit-days",
+      "key": "ANS-edit-days@1280",
+      "title": "Two days for one schedule get a cross, and Save change waits",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: make the morning new-ticket check run on Mondays and Thursdays",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-name-words",
+      "key": "ANS-name-words@1280",
+      "title": "A schedule word in a workflow’s name is neither a schedule nor a command",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 3,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 6
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: make the weekly summary run at 10am",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: what went wrong with the weekly summary?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: what went wrong with the weekly summary? pause it",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-questions",
+      "key": "ANS-questions@1280",
+      "title": "Asking when a workflow runs gets its state and next run, never “I can only change”",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 4,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 8
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: when does the software check run next?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: when is the next run of the morning check",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: is the morning check running?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "field",
+          "label": "Type: when does the morning check run? make it run daily",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-edit-missing",
+      "key": "ANS-edit-missing@1280",
+      "title": "A workflow that doesn’t exist is named, and a change it can’t make keeps the question asked with it",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 2,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 4
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: make the morning check run on Mondays only",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: how are my workflows? turn the weekly one off",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-edit-after",
+      "key": "ANS-edit-after@1280",
+      "title": "After Save change: the watchlist says who owns it, a paused workflow says so, and a later change elsewhere is named",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 2,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 2,
+        "screens": 1,
+        "interactions": 6
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Make the software watchlist check run every day at 7am",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Save change",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "field",
+          "label": "Type: Make the morning new-ticket check run on Mondays only",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Save change",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-asks",
+      "key": "ANS-asks@1280",
+      "title": "A bare hour is asked, “make it daily” after a draft offers the draft, and three more questions are answered from state",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 5,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 1,
+        "screens": 1,
+        "interactions": 11
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: make the morning check run at 9",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Choose 9:00",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "field",
+          "label": "Type: make it daily",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 8,
+          "kind": "field",
+          "label": "Type: do I have approvals waiting",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 9,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 10,
+          "kind": "field",
+          "label": "Type: which version of FastAPI do we run?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 11,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-one-question",
+      "key": "ANS-one-question@1280",
+      "title": "With nothing said about when, the card asks how often, then the day, then the time, one at a time",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 3,
+        "screens": 1,
+        "interactions": 5
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: a request with no schedule",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Every week",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Friday",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Choose 9:00",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-one-question",
+      "key": "ANS-one-question@390",
+      "title": "With nothing said about when, the card asks how often, then the day, then the time, one at a time",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 3,
+        "screens": 1,
+        "interactions": 5
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: a request with no schedule",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Every week",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Friday",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Choose 9:00",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-no-time",
+      "key": "ANS-no-time@1280",
+      "title": "A request that names a day but no time is asked for the time, never given one",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-watch-parts",
+      "key": "ANS-watch-parts@1280",
+      "title": "Watching software marks each part, and a time the watchlist doesn’t keep gets a cross",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 2,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 4
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: watch Kubernetes every Monday at 9am and create a Jira ticket",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: watch Grafana every day at 8am",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-watch-parts",
+      "key": "ANS-watch-parts@390",
+      "title": "Watching software marks each part, and a time the watchlist doesn’t keep gets a cross",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 2,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 4
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: watch Kubernetes every Monday at 9am and create a Jira ticket",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: watch Grafana every day at 8am",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-edit-save",
+      "key": "ANS-edit-save@1280",
+      "title": "Change a schedule by asking: Save change publishes version 2, the page lists it, and Undo goes back",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 1,
+        "selects": 0,
+        "navs": 3,
+        "decisions": 2,
+        "screens": 3,
+        "interactions": 7
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "workflow"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Make the morning new-ticket check run on Mondays only",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Save change",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Open Morning new-ticket check",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Back to Chat",
+          "nav": true,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Undo",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-edit-save",
+      "key": "ANS-edit-save@390",
+      "title": "Change a schedule by asking: Save change publishes version 2, the page lists it, and Undo goes back",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 1,
+        "selects": 0,
+        "navs": 3,
+        "decisions": 2,
+        "screens": 3,
+        "interactions": 7
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "workflow"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Make the morning new-ticket check run on Mondays only",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Save change",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Open Morning new-ticket check",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Back to Chat",
+          "nav": true,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Undo",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-edit-never",
+      "key": "ANS-edit-never@1280",
+      "title": "The review’s “every day instead of every Monday” gets an edit card, and Never mind changes nothing",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 1,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 4
+      },
+      "screenList": [
+        "home",
+        "software"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Run the software check every day instead of every Monday",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Never mind",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Open Watchlist",
+          "nav": true,
+          "decision": false,
+          "screen": "software"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-edit-honest",
+      "key": "ANS-edit-honest@1280",
+      "title": "A change the card can’t make gets an honest answer, and a check that doesn’t exist is named",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 2,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 4
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Make the React check run on Mondays only",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: rename the morning check to Daily tickets",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-status",
+      "key": "ANS-status@1280",
+      "title": "Questions in other words get answers from platform state",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 6,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 12
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: what needs my attention today?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: anything for me?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: what’s waiting on me",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "field",
+          "label": "Type: is LangGraph up to date?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 9,
+          "kind": "field",
+          "label": "Type: which software is behind?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 10,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 11,
+          "kind": "field",
+          "label": "Type: how are my workflows doing",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 12,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-status",
+      "key": "ANS-status@390",
+      "title": "Questions in other words get answers from platform state",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 6,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 12
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: what needs my attention today?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: anything for me?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: what’s waiting on me",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "field",
+          "label": "Type: is LangGraph up to date?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 9,
+          "kind": "field",
+          "label": "Type: which software is behind?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 10,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 11,
+          "kind": "field",
+          "label": "Type: how are my workflows doing",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 12,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-status-commands",
+      "key": "ANS-status-commands@1280",
+      "title": "A question with a change word in it is a command, never a status answer",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 4,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 8
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: can you make the React check daily?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: what needs my attention? pause the morning check",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: is LangGraph up to date? if not, watch it every day",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "field",
+          "label": "Type: how are my workflows doing? make the morning check run at 10am",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-live",
+      "key": "ANS-live@1280",
+      "title": "An older answer reads current state: a pause in the panel and an approval on another page show in it",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 8,
+        "fields": 1,
+        "selects": 0,
+        "navs": 3,
+        "decisions": 2,
+        "screens": 3,
+        "interactions": 9
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Open Morning new-ticket check from the card",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Pause it in the panel",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Close",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "Approve",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        },
+        {
+          "n": 9,
+          "kind": "click",
+          "label": "Back to Chat",
+          "nav": true,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-live-done",
+      "key": "ANS-live-done@1280",
+      "title": "A workflow turned on in the chat, then paused on its page, reads as paused back in the chat",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 0,
+        "selects": 0,
+        "navs": 3,
+        "decisions": 1,
+        "screens": 3,
+        "interactions": 4
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "workflow"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open Friday closed ticket summary",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Pause",
+          "nav": false,
+          "decision": true,
+          "screen": "workflow"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Back to Chat",
+          "nav": true,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-panel",
+      "key": "ANS-panel@1280",
+      "title": "While the Planner builds, the panel opens by itself with the steps going in, but never on a phone",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 3
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Close",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-panel",
+      "key": "ANS-panel@880",
+      "title": "While the Planner builds, the panel opens by itself with the steps going in, but never on a phone",
+      "viewport": 880,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-panel",
+      "key": "ANS-panel@390",
+      "title": "While the Planner builds, the panel opens by itself with the steps going in, but never on a phone",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-panel-focus",
+      "key": "ANS-panel-focus@1440",
+      "title": "Focus stays on the card’s heading while the panel opens by itself and the steps go in",
+      "viewport": 1440,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-panel-focus",
+      "key": "ANS-panel-focus@1280",
+      "title": "Focus stays on the card’s heading while the panel opens by itself and the steps go in",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ANS-scroll-390",
+      "key": "ANS-scroll-390@390",
+      "title": "On a phone, answering the card’s questions and saving a change never scrolls the app out of place",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 5,
+        "fields": 2,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 3,
+        "screens": 1,
+        "interactions": 7
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Choose 17:00",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Choose MOCK",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: Make the morning new-ticket check run on Mondays only",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Save change",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "KEYS-A",
+      "key": "KEYS-A@1280",
+      "title": "Scenario A with the keyboard only",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 12,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 3,
+        "screens": 1,
+        "interactions": 13
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Tab to Skip to main content",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Skip to main content",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Tab towards the Planner box",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "field",
+          "label": "Type the request",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Tab towards the 17:00 choice",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Tab towards the 17:00 choice",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "Tab towards the 17:00 choice",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 9,
+          "kind": "click",
+          "label": "Tab towards the 17:00 choice",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 10,
+          "kind": "click",
+          "label": "Tab towards the 17:00 choice",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 11,
+          "kind": "click",
+          "label": "Choose 17:00",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 12,
+          "kind": "click",
+          "label": "Choose MOCK",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 13,
+          "kind": "click",
+          "label": "Turn it on",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "KEYS-C",
+      "key": "KEYS-C@1280",
+      "title": "Scenario C with the keyboard only",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 12,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 12
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Tab to Skip to main content",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Skip to main content",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Tab towards Review and decide",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Tab towards Approve",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Tab towards Approve",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Tab towards Approve",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "Tab towards Approve",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 9,
+          "kind": "click",
+          "label": "Tab towards Approve",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 10,
+          "kind": "click",
+          "label": "Tab towards Approve",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 11,
+          "kind": "click",
+          "label": "Tab towards Approve",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 12,
+          "kind": "click",
+          "label": "Approve",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "RUN-three",
+      "key": "RUN-three@1280",
+      "title": "A stopped run answers what happened, what was affected and whether a retry is safe, the same in Needs you, the chat, the side panel and the run page",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 5,
+        "fields": 1,
+        "selects": 0,
+        "navs": 3,
+        "decisions": 0,
+        "screens": 3,
+        "interactions": 6
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Back to Chat",
+          "nav": true,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: Why did Weekly closed-ticket summary stop?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "See the run",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "More details",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "RUN-three",
+      "key": "RUN-three@390",
+      "title": "A stopped run answers what happened, what was affected and whether a retry is safe, the same in Needs you, the chat, the side panel and the run page",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 5,
+        "fields": 1,
+        "selects": 0,
+        "navs": 3,
+        "decisions": 0,
+        "screens": 3,
+        "interactions": 6
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Back to Chat",
+          "nav": true,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: Why did Weekly closed-ticket summary stop?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "See the run",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "More details",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "RUN-three-approver",
+      "key": "RUN-three-approver@1280",
+      "title": "An Approver sees a stopped run’s three answers with no buttons, and the note that says who can act",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 0,
+        "selects": 0,
+        "navs": 3,
+        "decisions": 0,
+        "screens": 4,
+        "interactions": 3
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "workflow",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open Morning new-ticket check",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "See the run",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "RUN-line",
+      "key": "RUN-line@1280",
+      "title": "The FLOW run line: red into the stop, amber and slow into a waiting yes, dashes into the working step, faint into skipped ones, solid once the next step is done",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 0,
+        "selects": 0,
+        "navs": 6,
+        "decisions": 0,
+        "screens": 3,
+        "interactions": 6
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "See the stopped run",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Back to Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Back to Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "RUN-line",
+      "key": "RUN-line@861",
+      "title": "The FLOW run line: red into the stop, amber and slow into a waiting yes, dashes into the working step, faint into skipped ones, solid once the next step is done",
+      "viewport": 861,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 0,
+        "selects": 0,
+        "navs": 6,
+        "decisions": 0,
+        "screens": 3,
+        "interactions": 6
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "See the stopped run",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Back to Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Back to Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "RUN-line",
+      "key": "RUN-line@390",
+      "title": "The FLOW run line: red into the stop, amber and slow into a waiting yes, dashes into the working step, faint into skipped ones, solid once the next step is done",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 0,
+        "selects": 0,
+        "navs": 6,
+        "decisions": 0,
+        "screens": 3,
+        "interactions": 6
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "See the stopped run",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Back to Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Back to Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "RUN-retry-from-chat",
+      "key": "RUN-retry-from-chat@1280",
+      "title": "A retry on a run page opened from the chat keeps Back to the chat, and the chat card follows",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 5,
+        "fields": 1,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 6
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Why did Morning new-ticket check stop?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "See the run",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "More details",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Back to the chat",
+          "nav": true,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "RUN-retry-from-chat",
+      "key": "RUN-retry-from-chat@390",
+      "title": "A retry on a run page opened from the chat keeps Back to the chat, and the chat card follows",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 5,
+        "fields": 1,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 6
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Why did Morning new-ticket check stop?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "See the run",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "More details",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Back to the chat",
+          "nav": true,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "RUN-line-panel",
+      "key": "RUN-line-panel@1280",
+      "title": "The side panel’s run line is the same line, small, with the same links",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 3
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Why did Weekly closed-ticket summary stop?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "See the run",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "RUN-line-panel",
+      "key": "RUN-line-panel@901",
+      "title": "The side panel’s run line is the same line, small, with the same links",
+      "viewport": 901,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 3
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Why did Weekly closed-ticket summary stop?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "See the run",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "RUN-line-panel",
+      "key": "RUN-line-panel@390",
+      "title": "The side panel’s run line is the same line, small, with the same links",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 3
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Why did Weekly closed-ticket summary stop?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "See the run",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "APPR-not-checked",
+      "key": "APPR-not-checked@1280",
+      "title": "The approval names what wasn’t checked, from the run and the capability registry, and the side panel trims nothing that will be written",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 1,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 4
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Review and decide, from the card",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "More details",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "APPR-not-checked",
+      "key": "APPR-not-checked@390",
+      "title": "The approval names what wasn’t checked, from the run and the capability registry, and the side panel trims nothing that will be written",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 1,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 4
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Review and decide, from the card",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "More details",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "APPR-not-checked-jira",
+      "key": "APPR-not-checked-jira@1280",
+      "title": "A ticket summary’s approval says the agents can’t see a ticket’s type, priority or owner",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 0,
+        "fields": 0,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 0
+      },
+      "screenList": [
+        "run"
+      ],
+      "steps": [],
+      "errors": []
+    },
+    {
+      "id": "APPR-ask",
+      "key": "APPR-ask@1280",
+      "title": "An Approver asks the requester a question: the request stays open, the answer shows on it, and nothing is decided",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 1,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 5
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Ask Carol a question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Send with nothing typed",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 4,
+          "kind": "field",
+          "label": "Type the question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Send question",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "APPR-ask",
+      "key": "APPR-ask@390",
+      "title": "An Approver asks the requester a question: the request stays open, the answer shows on it, and nothing is decided",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 1,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 5
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Ask Carol a question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Send with nothing typed",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 4,
+          "kind": "field",
+          "label": "Type the question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Send question",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "APPR-answer",
+      "key": "APPR-answer@1280",
+      "title": "The requester finds the question in Needs you and answers it on the request, which still waits for someone else’s yes",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 1,
+        "selects": 0,
+        "navs": 3,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 5
+      },
+      "screenList": [
+        "run",
+        "workflows"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Answer Bob",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type the answer",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Send answer",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Back to Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "APPR-decline",
+      "key": "APPR-decline@1280",
+      "title": "Decline asks why, with quick reasons and none needed, and the reason shows with the declined record",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 2,
+        "screens": 2,
+        "interactions": 4
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Wrong version",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "APPR-decline",
+      "key": "APPR-decline@390",
+      "title": "Decline asks why, with quick reasons and none needed, and the reason shows with the declined record",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 2,
+        "screens": 2,
+        "interactions": 4
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Wrong version",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "APPR-decline-none",
+      "key": "APPR-decline-none@1280",
+      "title": "A decline needs no reason, and then the record has none",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 3
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Decline, with no reason",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "APPR-panel",
+      "key": "APPR-panel@1280",
+      "title": "Deciding in the side panel: focus goes to the panel’s heading, #app stays put, and the card in the chat follows",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 2,
+        "screens": 1,
+        "interactions": 7
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Review and decide, from the card",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Not this week",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Close",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "APPR-panel",
+      "key": "APPR-panel@901",
+      "title": "Deciding in the side panel: focus goes to the panel’s heading, #app stays put, and the card in the chat follows",
+      "viewport": 901,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 2,
+        "screens": 1,
+        "interactions": 7
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Review and decide, from the card",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Not this week",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Close",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "APPR-panel",
+      "key": "APPR-panel@390",
+      "title": "Deciding in the side panel: focus goes to the panel’s heading, #app stays put, and the card in the chat follows",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 2,
+        "screens": 1,
+        "interactions": 7
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Review and decide, from the card",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Not this week",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Close",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "DECLINED-sw",
+      "key": "DECLINED-sw@1280",
+      "title": "A declined upgrade check says Declined, shows no write and gives the reason: on its line, in its agents’ chat, in Teams and on the watchlist",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 4
+      },
+      "screenList": [
+        "run",
+        "software"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Show what each agent did",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open Teams",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Open Watchlist",
+          "nav": true,
+          "decision": false,
+          "screen": "software"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Open LangGraph’s history",
+          "nav": false,
+          "decision": false,
+          "screen": "software"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "DECLINED-test-run",
+      "key": "DECLINED-test-run@1280",
+      "title": "A declined test run reads the same in Needs you, on its workflow page, in the chat’s side panel and in Teams",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 1,
+        "selects": 0,
+        "navs": 3,
+        "decisions": 0,
+        "screens": 4,
+        "interactions": 7
+      },
+      "screenList": [
+        "run",
+        "workflows",
+        "workflow",
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open the workflow",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Back to Chat",
+          "nav": true,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "field",
+          "label": "Type: What needs me?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "See the run, from the card",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Open Teams",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "KEYS-APPR",
+      "key": "KEYS-APPR@1280",
+      "title": "Ask, the decline reasons and Decline with the keyboard only, each with a visible focus",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 24,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 3,
+        "screens": 2,
+        "interactions": 24
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Tab to Skip to main content",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Skip to main content",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Tab towards Review and decide",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Tab towards Ask Carol a question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Tab towards Ask Carol a question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Tab towards Ask Carol a question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "Tab towards Ask Carol a question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 9,
+          "kind": "click",
+          "label": "Tab towards Ask Carol a question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 10,
+          "kind": "click",
+          "label": "Tab towards Ask Carol a question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 11,
+          "kind": "click",
+          "label": "Tab towards Ask Carol a question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 12,
+          "kind": "click",
+          "label": "Tab towards Ask Carol a question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 13,
+          "kind": "click",
+          "label": "Tab towards Ask Carol a question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 14,
+          "kind": "click",
+          "label": "Open the question box",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 15,
+          "kind": "click",
+          "label": "Tab towards Send question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 16,
+          "kind": "click",
+          "label": "Send question",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        },
+        {
+          "n": 17,
+          "kind": "click",
+          "label": "Tab towards Decline",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 18,
+          "kind": "click",
+          "label": "Tab towards Decline",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 19,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 20,
+          "kind": "click",
+          "label": "Tab to Wrong version",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 21,
+          "kind": "click",
+          "label": "Pick Wrong version",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        },
+        {
+          "n": 22,
+          "kind": "click",
+          "label": "Tab towards Decline",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 23,
+          "kind": "click",
+          "label": "Tab towards Decline",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 24,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    }
+  ],
+  "control": {
+    "id": "CONTROL-must-fail",
+    "key": "CONTROL-must-fail@1280",
+    "title": "Control: asserts text that does not exist, so it must fail",
+    "viewport": 1280,
+    "passed": false,
+    "failed": {
+      "label": "The page says this impossible sentence",
+      "expected": "/Zebra pelican 4471 never appears/",
+      "actual": "Good morning! Alice\n\nSome things need you.\n\nAsk the Planner about software versions\nWhich software has a newer version?\nWatch another software for new versions\nWhat can you do?\nNeeds you\n5\nDo now\nMorning new-ticket check stopped\nJira didn’t answer at 8:00.\nRetry the run\nWeekly closed-ticket summary stopped\nThe step that reads tickets stopped on MOCK-31.\nReport to support\n3 upgrade tickets are wait..."
+    },
+    "failures": [
+      {
+        "label": "The page says this impossible sentence",
+        "expected": "/Zebra pelican 4471 never appears/",
+        "actual": "Good morning! Alice\n\nSome things need you.\n\nAsk the Planner about software versions\nWhich software has a newer version?\nWatch another software for new versions\nWhat can you do?\nNeeds you\n5\nDo now\nMorning new-ticket check stopped\nJira didn’t answer at 8:00.\nRetry the run\nWeekly closed-ticket summary stopped\nThe step that reads tickets stopped on MOCK-31.\nReport to support\n3 upgrade tickets are wait..."
+      }
+    ],
+    "counts": {
+      "clicks": 0,
+      "fields": 0,
+      "selects": 0,
+      "navs": 0,
+      "decisions": 0,
+      "screens": 1,
+      "interactions": 0
+    },
+    "screenList": [
+      "home"
+    ],
+    "steps": [],
+    "errors": []
+  }
+}
