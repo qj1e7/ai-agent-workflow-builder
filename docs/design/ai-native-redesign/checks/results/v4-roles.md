@@ -2,7 +2,7 @@
 
 Prototype: `docs/design/ai-native-redesign/prototype.html`. Paths: `docs/design/ai-native-redesign/checks/paths-v4.cjs`.
 
-Real scenarios: 163 passed, 0 failed, 1 not possible. Control (must fail): failed, as it should.
+Real scenarios: 167 passed, 0 failed, 1 not possible. Control (must fail): failed, as it should.
 
 | Id | Width | Task | Passed | Clicks | Fields | Selects | Decisions | Screens | Notes |
 |---|---|---|---|---|---|---|---|---|---|
@@ -170,5 +170,9 @@ Real scenarios: 163 passed, 0 failed, 1 not possible. Control (must fail): faile
 | FIX-never-mind | 1280 | A set-up card and an add-software card each have Never mind, which changes nothing | yes | 5 | 2 | 0 | 0 | 2 |  |
 | FIX-mark-more | 1280 | Mark what isn’t built outlines the run line, the three answers, the last-run line, the count line, the edit card, versions and the declined record | yes | 6 | 1 | 0 | 0 | 5 |  |
 | FIX-run-times | 1280 | Each entry in a run page’s log has its time, the first with its day | yes | 3 | 0 | 0 | 0 | 4 |  |
+| FIX-mixed-decide | 1280 | An approve or decline asked with another change is never dropped: Alice gets a cross on it that opens the request, whatever the other change gets | yes | 4 | 3 | 0 | 0 | 1 |  |
+| FIX-decide-question | 1280 | A question asked with an approve keeps its cross, for Alice and for Bob | yes | 2 | 2 | 0 | 0 | 1 |  |
+| FIX-name-status | 1280 | A question about a workflow by its full name gets its state, even when the name sounds like a software question, for Alice and for Bob | yes | 3 | 3 | 0 | 0 | 1 |  |
+| FIX-decision-time | 1280 | A decision is logged at the time the decisions list gives, and a run made today leads up to it, for a test run and for the software check | yes | 1 | 1 | 0 | 0 | 1 |  |
 
 A click includes a key press on a button. Menu steps and page changes are included. A decision is also counted as a click, a select or a field. Test controls are never counted.

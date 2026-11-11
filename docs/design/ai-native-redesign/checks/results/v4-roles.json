@@ -4,8 +4,8 @@
   "version": "v4",
   "summary": {
     "real": {
-      "total": 163,
-      "passed": 163,
+      "total": 167,
+      "passed": 167,
       "failed": 0,
       "notPossible": 1
     },
@@ -10631,6 +10631,254 @@
           "nav": true,
           "decision": false,
           "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-mixed-decide",
+      "key": "FIX-mixed-decide@1280",
+      "title": "An approve or decline asked with another change is never dropped: Alice gets a cross on it that opens the request, whatever the other change gets",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 3,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 7
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: approve the upgrade and pause the morning check",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: decline it, then delete the weekly summary",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: say yes to the tickets and make it run daily",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Review and decide, from the cross",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-decide-question",
+      "key": "FIX-decide-question@1280",
+      "title": "A question asked with an approve keeps its cross, for Alice and for Bob",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 2,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 4
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: approve the upgrade and is LangGraph up to date?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: approve the upgrade and is LangGraph up to date?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-name-status",
+      "key": "FIX-name-status@1280",
+      "title": "A question about a workflow by its full name gets its state, even when the name sounds like a software question, for Alice and for Bob",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 3,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 6
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: How is keep our software up to date doing?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: How is keep our software up to date doing?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "field",
+          "label": "Type: how are the workflows doing?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "FIX-decision-time",
+      "key": "FIX-decision-time@1280",
+      "title": "A decision is logged at the time the decisions list gives, and a run made today leads up to it, for a test run and for the software check",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: What did I decide before?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
         }
       ],
       "errors": []
