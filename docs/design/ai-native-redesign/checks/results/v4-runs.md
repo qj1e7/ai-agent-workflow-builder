@@ -2,7 +2,7 @@
 
 Prototype: `docs/design/ai-native-redesign/prototype.html`. Paths: `docs/design/ai-native-redesign/checks/paths-v4.cjs`.
 
-Real scenarios: 119 passed, 0 failed, 1 not possible. Control (must fail): failed, as it should.
+Real scenarios: 127 passed, 0 failed, 1 not possible. Control (must fail): failed, as it should.
 
 | Id | Width | Task | Passed | Clicks | Fields | Selects | Decisions | Screens | Notes |
 |---|---|---|---|---|---|---|---|---|---|
@@ -124,7 +124,15 @@ Real scenarios: 119 passed, 0 failed, 1 not possible. Control (must fail): faile
 | APPR-panel | 901 | Deciding in the side panel: focus goes to the panel’s heading, #app stays put, and the card in the chat follows | yes | 6 | 1 | 0 | 2 | 1 |  |
 | APPR-panel | 390 | Deciding in the side panel: focus goes to the panel’s heading, #app stays put, and the card in the chat follows | yes | 6 | 1 | 0 | 2 | 1 |  |
 | DECLINED-sw | 1280 | A declined upgrade check says Declined, shows no write and gives the reason: on its line, in its agents’ chat, in Teams and on the watchlist | yes | 4 | 0 | 0 | 0 | 2 |  |
-| DECLINED-test-run | 1280 | A declined test run reads the same in Needs you, on its workflow page, in the chat’s side panel and in Teams | yes | 6 | 1 | 0 | 0 | 4 |  |
+| DECLINED-test-run | 1280 | A declined test run reads the same in Needs you, on its workflow page, in the chat’s side panel and in Teams | yes | 8 | 1 | 0 | 0 | 4 |  |
 | KEYS-APPR | 1280 | Ask, the decline reasons and Decline with the keyboard only, each with a visible focus | yes | 24 | 0 | 0 | 3 | 2 |  |
+| MARK-approval | 1280 | With Mark what isn’t built on, Not checked, Ask, the question box, the questions and the decline reasons each carry a label | yes | 4 | 1 | 0 | 0 | 2 |  |
+| RUN-retry-panel | 1280 | A retry in the side panel puts focus on the panel’s heading, and #app stays put | yes | 3 | 1 | 0 | 1 | 1 |  |
+| RUN-retry-panel | 390 | A retry in the side panel puts focus on the panel’s heading, and #app stays put | yes | 3 | 1 | 0 | 1 | 1 |  |
+| APPR-decide-nav | 1280 | A half-picked decline reason doesn’t survive leaving the page | yes | 5 | 0 | 0 | 0 | 3 |  |
+| APPR-thread-kept | 1280 | Once a request is decided its questions stay on the record, read only, for the Approver and the requester | yes | 5 | 1 | 0 | 1 | 2 |  |
+| DECLINED-access | 1280 | When the second Approver declines after the first said yes, the record says both, in the run and in Teams | yes | 5 | 0 | 0 | 2 | 2 |  |
+| WF-last-run | 1280 | Workflows rows and the chat’s check card give each workflow’s last run from one source, a declined run included, each on one line | yes | 3 | 1 | 0 | 0 | 3 |  |
+| WF-last-run | 390 | Workflows rows and the chat’s check card give each workflow’s last run from one source, a declined run included, each on one line | yes | 3 | 1 | 0 | 0 | 3 |  |
 
 A click includes a key press on a button. Menu steps and page changes are included. A decision is also counted as a click, a select or a field. Test controls are never counted.

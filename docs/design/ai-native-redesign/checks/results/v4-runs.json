@@ -4,8 +4,8 @@
   "version": "v4",
   "summary": {
     "real": {
-      "total": 119,
-      "passed": 119,
+      "total": 127,
+      "passed": 127,
       "failed": 0,
       "notPossible": 1
     },
@@ -7083,13 +7083,13 @@
       "failed": null,
       "failures": [],
       "counts": {
-        "clicks": 6,
+        "clicks": 8,
         "fields": 1,
         "selects": 0,
-        "navs": 3,
+        "navs": 4,
         "decisions": 0,
         "screens": 4,
-        "interactions": 7
+        "interactions": 9
       },
       "screenList": [
         "run",
@@ -7153,6 +7153,22 @@
           "nav": false,
           "decision": false,
           "screen": "home"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "More details",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 9,
+          "kind": "click",
+          "label": "Show what each agent did",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
         }
       ],
       "errors": []
@@ -7370,6 +7386,503 @@
           "nav": false,
           "decision": true,
           "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "MARK-approval",
+      "key": "MARK-approval@1280",
+      "title": "With Mark what isn’t built on, Not checked, Ask, the question box, the questions and the decline reasons each carry a label",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 1,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 5
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Ask Carol a question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type the question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Send question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "RUN-retry-panel",
+      "key": "RUN-retry-panel@1280",
+      "title": "A retry in the side panel puts focus on the panel’s heading, and #app stays put",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 1,
+        "screens": 1,
+        "interactions": 4
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Why did Morning new-ticket check stop?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "See the run",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "RUN-retry-panel",
+      "key": "RUN-retry-panel@390",
+      "title": "A retry in the side panel puts focus on the panel’s heading, and #app stays put",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 1,
+        "screens": 1,
+        "interactions": 4
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Why did Morning new-ticket check stop?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "See the run",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "APPR-decide-nav",
+      "key": "APPR-decide-nav@1280",
+      "title": "A half-picked decline reason doesn’t survive leaving the page",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 5,
+        "fields": 0,
+        "selects": 0,
+        "navs": 3,
+        "decisions": 0,
+        "screens": 3,
+        "interactions": 5
+      },
+      "screenList": [
+        "home",
+        "run",
+        "workflows"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Wrong version",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Review and decide again",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "APPR-thread-kept",
+      "key": "APPR-thread-kept@1280",
+      "title": "Once a request is decided its questions stay on the record, read only, for the Approver and the requester",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 5,
+        "fields": 1,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 6
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Ask Carol a question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type the question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Send question",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "DECLINED-access",
+      "key": "DECLINED-access@1280",
+      "title": "When the second Approver declines after the first said yes, the record says both, in the run and in Teams",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 5,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 2,
+        "screens": 2,
+        "interactions": 5
+      },
+      "screenList": [
+        "workflows",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Someone still needs access",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Decline",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Open Teams",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "WF-last-run",
+      "key": "WF-last-run@1280",
+      "title": "Workflows rows and the chat’s check card give each workflow’s last run from one source, a declined run included, each on one line",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 1,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 0,
+        "screens": 3,
+        "interactions": 4
+      },
+      "screenList": [
+        "run",
+        "workflows",
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Back to Chat",
+          "nav": true,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "WF-last-run",
+      "key": "WF-last-run@390",
+      "title": "Workflows rows and the chat’s check card give each workflow’s last run from one source, a declined run included, each on one line",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 1,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 0,
+        "screens": 3,
+        "interactions": 4
+      },
+      "screenList": [
+        "run",
+        "workflows",
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Back to Chat",
+          "nav": true,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "field",
+          "label": "Type: Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
         }
       ],
       "errors": []
