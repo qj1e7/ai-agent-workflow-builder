@@ -1250,14 +1250,21 @@ add('ROLE-asks', 'Bob asks what waits for his yes, what he decided and how thing
   await t.expect('#app has not scrolled', appScroll(t), 0);
 }, [1280]);
 
-add('ROLE-refuse', 'Bob’s requests to set up, change a schedule, pause or watch get “Operators set up workflows.” and the Operators’ names, never a card that changes anything', async (t) => {
+add('ROLE-refuse', 'Bob’s requests to set up, change a schedule, pause or watch get “Operators set up workflows.” and the Operators’ names, never a card that changes anything; a question asked with one is answered, with the change marked', async (t) => {
   await t.setup((k) => k.setUser('bob'));
   const asks = [WEEKLY_SUMMARY, 'Make the morning new-ticket check run on Mondays only', 'Pause the weekly closed-ticket summary', 'Watch Redis releases', 'Keep track of the React version', 'set up another workflow',
-    'Could you make the morning check daily?', 'What is waiting for my yes, and pause the morning new-ticket check', 'How are the workflows doing? Then delete the weekly summary'];
+    'Could you make the morning check daily?'];
   for (const q of asks) {
     await t.ask(q);
     await t.expect(`“${q}” gets the refusal`, lastSay(t), OPS);
     await t.expectCount(`“${q}” gets no card`, `${lastCard} [data-pres]`, 0);
+  }
+  /* Step 4 follow-up: the question is answered as it is alone, and the change gets a cross saying who makes changes. */
+  for (const [q, change, said] of [['What is waiting for my yes, and pause the morning new-ticket check', 'pause the morning new-ticket check', /^1 request is waiting for your yes\./],
+    ['How are the workflows doing? Then delete the weekly summary', 'delete the weekly summary', /^The team has \d+ workflows\./]]) {
+    await t.ask(q);
+    await t.expect(`“${q}” answers the question`, lastSay(t), said);
+    await t.expectText('…and marks the change with who makes changes', new RegExp(`“${change}”\\s*Operators set up workflows\\. Ask Alice or Carol\\.`), lastCard);
   }
   await t.ask('approve the upgrade tickets');
   await t.expect('Approve gets the request to open, never a decision in the chat', lastSay(t), 'I can’t approve or decline for you. Open the request to see exactly what it will write, and decide there.');
