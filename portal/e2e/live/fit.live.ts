@@ -166,8 +166,7 @@ const SHOT_WIDTHS: ReadonlySet<number> = new Set([1920, 1280, 1050, 900, 390])
 
 /**
  * The side panel beside the chat at 1920 to 901 px and over the whole window at 900 px and narrower, with each of its views:
- * a workflow, a request to decide, a stopped run and a software. Only an Operator has a chat to open it from until the Planner's
- * box opens to Approvers (R16), so Bob is not drawn here.
+ * a workflow, a request to decide, a stopped run and a software. Bob's chat and his request in the panel are drawn below.
  */
 for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
   test(`the side panel and each of its views fit beside the chat, or over the window at 900 px and narrower, as an Operator at ${String(width)} px`, async ({ browser, backend }, info) => {
@@ -205,6 +204,60 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
         await panel.getByRole('button', { name: 'Close' }).click()
         await expect(panel).toHaveCount(0)
       }
+    } finally {
+      await context.close()
+    }
+    expect(found, found.join('\n')).toEqual([])
+  })
+}
+
+/** A run Bob approved, so his decisions answer has a row. */
+let bobsDecision: string | undefined
+
+/** Bob's chat (R16): his Home with the box, what waits for his yes, his decisions, a refusal, a question beside a change, and his request in the side panel. */
+for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
+  test(`bob’s chat, his answers and his request in the side panel fit, as an Approver at ${String(width)} px`, async ({ browser, backend }, info) => {
+    test.slow()
+    runId ??= (await backend.waitingRun('alice')).runId
+    if (bobsDecision === undefined) {
+      bobsDecision = (await backend.waitingRun('alice')).runId
+      await approve(backend, bobsDecision)
+    }
+    const context = await devContext(browser, 'bob', { reducedMotion: true })
+    const page = await context.newPage()
+    await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
+    const box = page.getByLabel('Ask the Planner about your approvals and the workflows')
+    const newest = page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
+    const panel = page.locator('#side-panel')
+    const found: string[] = []
+    const check = async (state: string) => {
+      await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined)
+      if (SHOT_WIDTHS.has(width)) await shot(page, info, `r16-bob-${state}-${String(width)}`)
+      const problems = await fitProblems(page)
+      if (problems.length) found.push(`Bob's ${state} at ${String(width)} px:\n${describeProblems(problems).replace(/^/gm, '    ')}`)
+    }
+    try {
+      await page.goto('/')
+      await expect(box).toBeVisible()
+      await check('home')
+      const asks = [
+        ['needs', 'What is waiting for my yes?'],
+        ['decided', 'What did I decide before?'],
+        ['refused', 'Pause the weekly closed-ticket summary'],
+        ['mixed', 'What is waiting for my yes, and pause the morning new-ticket check'],
+        ['decide', 'approve the upgrade tickets'],
+      ] as const
+      for (const [state, words] of asks) {
+        await box.fill(words)
+        await box.press('Enter')
+        await expect(newest).toHaveAttribute('data-answer', 'true')
+        await check(state)
+      }
+      await newest.locator(`[data-opens="run:${String(runId)}"]`).click()
+      await expect(panel.getByRole('button', { name: 'Decline' })).toBeVisible({ timeout: 20_000 })
+      await expect(panel).toHaveAttribute('role', width > 900 ? 'complementary' : 'dialog')
+      await check('panel')
+      if (width === 1280 || width === 900) await expectAccessible(page, path.join(OUT, 'axe'), `side-panel-bob-${String(width)}`)
     } finally {
       await context.close()
     }
