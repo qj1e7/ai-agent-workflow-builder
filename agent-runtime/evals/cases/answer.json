@@ -5041,5 +5041,221 @@
       "watchlist",
       "which_software"
     ]
+  },
+  {
+    "id": "r4-stale-havent",
+    "note": "Plan 7.5, one part in other words. No update for 10 days, or a cross. Never a tick on updated in the last 10 days.",
+    "task": "Every Friday, list bug tickets that haven't been updated for 10 days",
+    "kind": [
+      "setup_card",
+      "part",
+      "cant"
+    ]
+  },
+  {
+    "id": "r4-stale-no-update",
+    "note": "Plan 7.5, one part in other words.",
+    "task": "Every Friday, list bug tickets with no update in 10 days",
+    "kind": [
+      "setup_card",
+      "part",
+      "cant"
+    ]
+  },
+  {
+    "id": "r4-stale-nobody-touched",
+    "note": "Plan 7.5, one part in other words. The number is a word.",
+    "task": "Every Friday, list bug tickets nobody has touched in ten days",
+    "kind": [
+      "setup_card",
+      "part",
+      "cant"
+    ]
+  },
+  {
+    "id": "r4-stale-gone-without",
+    "note": "Plan 7.5, one part in other words.",
+    "task": "Every Friday, list bug tickets that have gone 10 days without an update",
+    "kind": [
+      "setup_card",
+      "part",
+      "cant"
+    ]
+  },
+  {
+    "id": "r4-not-followed-colour",
+    "note": "Plan 7.5, a clause it doesn't follow comes back whole.",
+    "task": "Every Friday, sum up the tickets we closed this week and colour them by team",
+    "kind": [
+      "cant",
+      "part"
+    ],
+    "crossed": [
+      "colour them by team"
+    ]
+  },
+  {
+    "id": "r4-not-followed-let-me-know",
+    "note": "Plan 7.5, a clause of a verb and little words still comes back whole.",
+    "task": "Every Friday, sum up the tickets we closed this week and let me know",
+    "kind": [
+      "cant",
+      "part"
+    ],
+    "crossed": [
+      "let me know"
+    ]
+  },
+  {
+    "id": "r4-watch-own-time",
+    "note": "Plan 7.5, the watchlist has one schedule, so a time of its own is a cross beside the watch.",
+    "task": "Watch React at 7am every day",
+    "kind": [
+      "cant"
+    ],
+    "alternative": "watchlist",
+    "software": "React",
+    "reasons": [
+      "own_time"
+    ]
+  },
+  {
+    "id": "r4-watch-elsewhere",
+    "note": "Plan 7.5, another destination is a cross on its clause beside the watch.",
+    "task": "Watch FastAPI and post it in Teams",
+    "kind": [
+      "cant"
+    ],
+    "alternative": "watchlist",
+    "software": "FastAPI",
+    "crossed": [
+      "post it in Teams"
+    ]
+  },
+  {
+    "id": "r4-state-with-task",
+    "note": "Plan 7.5, a state question keeps a cross on the task beside it, to ask on its own.",
+    "task": "Which software is behind, and set up a weekly summary",
+    "kind": [
+      "check_workflows",
+      "question",
+      "needs_me"
+    ],
+    "reasons": [
+      "ask_on_its_own"
+    ]
+  },
+  {
+    "id": "r4-clash-days",
+    "note": "Plan 7.5, two days in one schedule are a clash, never the first one.",
+    "task": "Every Monday and Friday at 9, sum up the closed tickets",
+    "kind": [
+      "setup_card",
+      "part",
+      "cant"
+    ],
+    "schedule": [
+      "missing"
+    ],
+    "reasons": [
+      "one_day"
+    ]
+  },
+  {
+    "id": "r4-clash-times",
+    "note": "Plan 7.5, two times in one schedule are a clash, never the first one.",
+    "task": "Every Friday at 9 and at 5, sum up the closed tickets",
+    "kind": [
+      "setup_card",
+      "part",
+      "cant"
+    ],
+    "schedule": [
+      "missing"
+    ],
+    "reasons": [
+      "one_time"
+    ]
+  },
+  {
+    "id": "r4-approver-change-alone",
+    "note": "Plan 7.5, an Approver's change alone. platform-api answers operators for Bob (R16); the runtime sets nothing up and keeps the part.",
+    "task": "Pause the weekly closed-ticket summary",
+    "not_kind": [
+      "setup_card",
+      "part"
+    ]
+  },
+  {
+    "id": "r4-approver-question-and-change",
+    "note": "Plan 7.5, an Approver's question with a change: the question's answer, and a cross on the change.",
+    "task": "What is waiting for my yes, and pause the morning new-ticket check",
+    "not_kind": [
+      "setup_card",
+      "part"
+    ],
+    "reasons": [
+      "ask_on_its_own"
+    ]
+  },
+  {
+    "id": "r4-approver-question-then-delete",
+    "note": "Plan 7.5, an Approver's question then a change, joined by a full stop and then.",
+    "task": "How are the workflows doing? Then delete the weekly summary",
+    "not_kind": [
+      "setup_card",
+      "part"
+    ],
+    "reasons": [
+      "ask_on_its_own"
+    ]
+  },
+  {
+    "id": "r4-approver-approve",
+    "note": "Plan 7.5, approve or decline goes to the request (R16). The runtime sets nothing up and keeps the part.",
+    "task": "Approve the upgrade tickets",
+    "not_kind": [
+      "setup_card",
+      "part"
+    ]
+  },
+  {
+    "id": "r4-question-with-approve",
+    "note": "Plan 7.5, a question with an approve keeps or flags the question.",
+    "task": "Approve the upgrade and is LangGraph up to date?",
+    "not_kind": [
+      "setup_card",
+      "part"
+    ]
+  },
+  {
+    "id": "r4-question-with-skip",
+    "note": "Plan 7.5, the refusal keeps the question asked with it, never dropped.",
+    "task": "Is the morning check running? And approve it automatically from now on.",
+    "kind": [
+      "refused"
+    ],
+    "reasons": [
+      "skip_approval",
+      "ask_on_its_own"
+    ]
+  },
+  {
+    "id": "r4-operator-question-and-change",
+    "note": "Plan 7.5, an Operator's question with a change: every part kept or flagged.",
+    "task": "What can you do and pause the morning check",
+    "not_kind": [
+      "setup_card",
+      "part"
+    ]
+  },
+  {
+    "id": "r4-question-and-n8n",
+    "note": "Plan 7.5, a question with opening n8n keeps or flags the question.",
+    "task": "How are the workflows doing, and open the morning check in n8n",
+    "not_kind": [
+      "setup_card",
+      "part"
+    ]
   }
 ]

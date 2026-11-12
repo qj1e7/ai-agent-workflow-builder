@@ -647,3 +647,35 @@ def test_a_word_rule_refusal_scores_as_the_product_answers_even_when_the_reading
     case = answer_case("find-bugs-in-mock")
     checks = ANSWER.score(case, Answer(None, "<not json", None))
     assert failed(checks) == {"answered"}
+
+
+SUMMARY_READ = {
+    "schedule": "Every Friday",
+    "search": {"status": "done", "done": {"how": "within", "days": 7}, "said": "closed"},
+    "ticket": {"creates": False, "says": "summary", "said": "sum up"},
+}
+
+
+def test_a_clause_left_out_of_the_reading_must_come_back_as_a_cross():
+    case = answer_case("r4-not-followed-colour")
+    assert failed(ANSWER.score(case, read_answer(**SUMMARY_READ))) == set()
+
+
+@pytest.mark.parametrize("how", ["before", "within"])
+def test_a_negated_update_passes_as_no_update_or_as_a_cross_never_as_a_tick(how: str):
+    search = {"issue_types": ["bug"], "updated": {"how": how, "days": 10}, "said": "bug tickets"}
+    reading = read_answer(schedule="Every Friday", search=search, ticket=SUMMARY_READ["ticket"])
+    assert failed(ANSWER.score(answer_case("r4-stale-havent"), reading)) == set()
+
+
+def test_a_clash_is_scored_on_the_schedule_and_its_reason():
+    case = answer_case("r4-clash-days")
+    assert (
+        failed(ANSWER.score(case, read_answer(**{**SUMMARY_READ, "schedule": "Every Monday at 9"})))
+        == set()
+    )
+
+
+def test_a_refusal_keeps_the_question_asked_with_it_without_any_reading():
+    case = answer_case("r4-question-with-skip")
+    assert failed(ANSWER.score(case, Answer(None, "", None))) == set()

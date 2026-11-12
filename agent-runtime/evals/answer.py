@@ -22,13 +22,16 @@ from agent_runtime.contract import (
     PlannerFacts,
     PreviousTurn,
     QuestionAnswer,
+    RequestPart,
     RowState,
     SetupCardAnswer,
     UnderstoodRow,
     WatchlistAnswer,
 )
-from agent_runtime.planner import said_in
+from agent_runtime.parts import parts_of
+from agent_runtime.planner import said_in, visible_words
 from agent_runtime.questions import QuestionReply, answer_of_reply, question_messages
+from agent_runtime.reading import POLITE, clauses_of
 from evals.checks import (
     Check,
     check,
@@ -48,6 +51,14 @@ _CLOCK_WORDS = re.compile(
     r"five|six|seven|eight|nine|ten|eleven|twelve)\b",
     re.IGNORECASE,
 )
+_NO_UPDATE = re.compile(
+    r"\b(?:no|without(?:\s+an?)?|not(?:\s+been)?|never(?:\s+been)?)\s+(?:update|updated|touched)\b|"
+    r"n't\s+(?:been\s+)?(?:updated|touched)\b|\bnobody\s+(?:has\s+)?(?:touched|updated)\b|"
+    r"\buntouched\b",
+    re.IGNORECASE,
+)
+"""A request that says a ticket has had no update."""
+_UPDATED_WITHIN = re.compile(r"\bupdated\s+(?:in\s+the\s+last|today|since)\b", re.IGNORECASE)
 _DAY_WORDS = re.compile(
     r"\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekday|weekdays|daily|"
     r"weekly|monthly|hourly)\b",
@@ -69,6 +80,8 @@ class AnswerCase(Case):
     also: str | None = None
     understood: list[str] = []
     schedule: list[RowState] = []
+    crossed: list[str] = []
+    reasons: list[str] = []
     facts: PlannerFacts | None = None
     previous: PreviousTurn | None = None
 
@@ -232,6 +245,42 @@ def _card_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
     return found
 
 
+def _dropped(task: str, parts: list[RequestPart]) -> list[str]:
+    """Each clause of the request, thanks and please aside, that no part quotes."""
+    text = visible_words(task)
+    quoted = [" ".join(p.text.removesuffix("…").casefold().split()) for p in parts]
+    found: list[str] = []
+    for start, end in clauses_of(text):
+        clause = " ".join(text[start:end].casefold().split())
+        if set(re.findall(r"[\w']+", clause)) <= POLITE:
+            continue
+        if not any(q and q in clause for q in quoted):
+            found.append(f"dropped: {text[start:end]}")
+    return found
+
+
+def _part_checks(case: AnswerCase, shown: PlannerAnswer, parts: list[RequestPart]) -> list[Check]:
+    """Every clause comes back as a part with a mark, and a request that says no update never
+    gets a tick on an update within some days (plan 7.5)."""
+    flipped: list[str] = []
+    if _NO_UPDATE.search(case.task):
+        card = card_of(shown) or []
+        flipped = [
+            f"flipped: {r.text}"
+            for r in card
+            if r.state in ACCEPTED and _UPDATED_WITHIN.search(r.text)
+        ]
+    found = [check("keeps_or_flags_each_part", _dropped(case.task, parts) + flipped)]
+    if case.crossed:
+        crosses = [p.text for p in parts if p.mark == "cant"]
+        missing = [w for w in case.crossed if not any(mentions(t, w) for t in crosses)]
+        found.append(check("crosses_the_part", missing))
+    if case.reasons:
+        given = {p.reason for p in parts}
+        found.append(check("gives_the_reason", [r for r in case.reasons if r not in given]))
+    return found
+
+
 def follow_up(model: BaseChatModel, case: AnswerCase, first: Answer, marker: str) -> Answer:
     """The question lane's own call, for a request the decision sends there. The marker is on its
     own line so the gateway cannot answer it from its store."""
@@ -270,16 +319,25 @@ def score(case: AnswerCase, answer: Answer) -> list[Check]:
     if shown is None:
         return [check("answered", []), check("right_kind", ["the reading does not hold together"])]
     text = " ".join(_texts(shown))
+    parts = _part_checks(
+        case, shown, parts_of(value if isinstance(value, TaskRead) else None, case.task, shown)
+    )
     if isinstance(shown, QuestionAnswer):
         # Its words quote the person's own software names, such as n8n, so the jargon check
         # does not apply. The model's text is still held to the themed-name rule.
-        return [check("answered", []), *_kind_checks(case, shown.kind), no_themed_names(text)]
+        return [
+            check("answered", []),
+            *_kind_checks(case, shown.kind),
+            *parts,
+            no_themed_names(text),
+        ]
     return [
         check("answered", []),
         *_kind_checks(case, shown.kind),
         *_field_checks(case, shown),
         *_cant_checks(case, shown),
         *_card_checks(case, shown),
+        *parts,
         no_jargon(text),
         no_themed_names(text),
     ]
