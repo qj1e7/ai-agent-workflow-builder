@@ -35,5 +35,7 @@
   "started_by": "alice",
   "trigger": "person",
   "retried_by": [],
-  "found": "LangGraph has a new release: 1.2.16."
+  "found": "LangGraph has a new release: 1.2.16.",
+  "requester": "alice",
+  "questions": []
 }

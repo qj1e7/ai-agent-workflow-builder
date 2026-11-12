@@ -87,7 +87,15 @@ def test_sections_are_listed_in_the_order_the_facts_hold_them():
         watchlist=WATCHED,
         workflows=[WorkflowFact(name="Weekly", state="on", last_run=None, last_run_at=None)],
         needs_you=NeedsYouFact(
-            approvals=1, confirmations=0, stopped=0, connections=0, addresses=0, replies=0, total=1
+            approvals=1,
+            confirmations=0,
+            stopped=0,
+            connections=0,
+            addresses=0,
+            replies=0,
+            declined=0,
+            questions=0,
+            total=1,
         ),
     )
     reply = QuestionReply(about_their_data=True, text="One thing needs you.")

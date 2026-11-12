@@ -463,6 +463,8 @@ class NeedsYouFact(WireModel):
     connections: int = Field(ge=0)
     addresses: int = Field(ge=0)
     replies: int = Field(ge=0)
+    declined: int = Field(ge=0)
+    questions: int = Field(ge=0)
     total: int = Field(ge=0)
 
 

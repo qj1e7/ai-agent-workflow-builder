@@ -20,14 +20,18 @@ function BackHome() {
   )
 }
 
-/** `declinedNext` is what happens after a decline, from declinedNext in words.ts. */
-export function Outcome({ model, nameOf, declinedNext = null }: { model: RunModel; nameOf: NameOf; declinedNext?: string | null }) {
+/**
+ * `declinedNext` is what happens after a decline, from declinedNext in words.ts. `thread` is the request's questions, which
+ * stay on its record, read only, above Back to Home (spec 10.4).
+ */
+export function Outcome({ model, nameOf, declinedNext = null, thread = null }: { model: RunModel; nameOf: NameOf; declinedNext?: string | null; thread?: ReactNode }) {
   const declined = declinedOf(model)
   if (declined) {
     return (
       <div className={styles['panel']}>
         <h2>Declined</h2>
         <p>{declinedWithNext(declined, declinedNext, nameOf)}</p>
+        {thread}
         <BackHome />
       </div>
     )
@@ -58,6 +62,7 @@ export function Outcome({ model, nameOf, declinedNext = null }: { model: RunMode
           ))}
         </ul>
       ) : null}
+      {thread}
       <BackHome />
     </div>
   )

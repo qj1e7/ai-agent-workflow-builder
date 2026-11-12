@@ -799,7 +799,13 @@ class NeedsYouFact(WireModel):
     connections: int = Field(ge=0)
     addresses: int = Field(ge=0)
     replies: int = Field(ge=0)
-    total: int = Field(ge=0, description="The count Home shows under Needs you.")
+    declined: int = Field(ge=0, description="The person's own test runs an Approver declined.")
+    questions: int = Field(
+        ge=0, description="Questions Approvers asked the person on requests waiting for a yes."
+    )
+    total: int = Field(
+        ge=0, description="The count Home shows under Needs you, the sum of the counts above."
+    )
 
 
 type WatchDay = Literal[
