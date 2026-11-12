@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useEffect, useEffectEvent, useId, useRef, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import type { CardView, ToolId, ToolView } from '../../api/types'
 import { agentIdentity } from '../../ui/agents'
@@ -149,16 +149,35 @@ export function pressClosesCard(start: Spot | null, end: Spot, card: Edges): boo
   return start !== null && offCard(start, card) && offCard(end, card)
 }
 
+/**
+ * The address says which agent is open, so closing asks for the address to change and the dialog goes when the address no
+ * longer names the agent. Closing the dialog first would hide it while a step back was still on its way, and that step
+ * could land after the person had already gone somewhere else.
+ */
 function Modal({ face, title, under, onClose, children }: ModalProps) {
   const dialog = useRef<HTMLDialogElement>(null)
   const topClose = useRef<HTMLButtonElement>(null)
   const titleId = useId()
+  const asked = useRef(false)
+  const close = () => {
+    if (asked.current) return
+    asked.current = true
+    onClose()
+  }
+  const closeFromEffect = useEffectEvent(close)
   useEffect(() => {
     const element = dialog.current
     if (!element) return
     if (!element.open) element.showModal()
     topClose.current?.focus()
-    const onKey = (event: KeyboardEvent) => keepTabInside(element, event)
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeFromEffect()
+        return
+      }
+      keepTabInside(element, event)
+    }
     let pressStart: Spot | null = null
     const onPointerDown = (event: PointerEvent) => {
       pressStart = event
@@ -166,7 +185,7 @@ function Modal({ face, title, under, onClose, children }: ModalProps) {
     const onClick = (event: MouseEvent) => {
       const closes = event.target === element && pressClosesCard(pressStart, event, element.getBoundingClientRect())
       pressStart = null
-      if (closes) element.close()
+      if (closes) closeFromEffect()
     }
     document.addEventListener('keydown', onKey)
     element.addEventListener('pointerdown', onPointerDown)
@@ -177,9 +196,8 @@ function Modal({ face, title, under, onClose, children }: ModalProps) {
       element.removeEventListener('click', onClick)
     }
   }, [])
-  const close = () => dialog.current?.close()
   return (
-    <dialog ref={dialog} className={styles['dialog']} aria-labelledby={titleId} onClose={onClose}>
+    <dialog ref={dialog} className={styles['dialog']} aria-labelledby={titleId} onClose={close}>
       <div className={cx(styles['tileTop'], styles['dialogTop'])}>
         <AgentFace id={face} size={56} />
         <div>

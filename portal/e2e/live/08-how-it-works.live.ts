@@ -75,6 +75,20 @@ test('an agent closes by going back before it hides, so a page opened straight a
   await expect(page.getByRole('dialog', { name: 'Planner' })).toBeVisible()
 })
 
+test('Close and a press outside the card each close an agent back to its tile', async ({ page }) => {
+  await page.goto(`${HOW}&show=agents`)
+  const dialog = page.getByRole('dialog', { name: 'Planner' })
+  for (const how of ['Close', 'a press outside'] as const) {
+    await page.getByRole('link', { name: 'Planner' }).click()
+    await expect(dialog).toBeVisible()
+    if (how === 'Close') await dialog.getByRole('button', { name: 'Close' }).last().click()
+    else await page.mouse.click(5, 5)
+    await expect(dialog, `${how} closes the agent`).toBeHidden()
+    expect(page.url(), `${how} leaves the address on the list`).toMatch(/\/settings\?tab=how&show=agents$/)
+    await expect(page.getByRole('link', { name: 'Planner' })).toBeFocused()
+  }
+})
+
 test('an Approver who is not an Operator is not offered How it works, and the old address leads Home', async ({ browser }) => {
   const bob = await signedInAs(browser, 'bob')
   const page = await bob.newPage()
