@@ -18,7 +18,7 @@ import { askedWords, foundOf, partyOf, useDecision, yourPart } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { Outcome, Troubleshooting } from './Outcome'
 import { RunLine } from './RunLine'
-import { isFinished, PLANNER_ID, reachOf, stationsOf, type PlanBlock, type RunModel } from './runModel'
+import { isFinished, PLANNER_ID, stationsOf, type PlanBlock, type RunModel } from './runModel'
 import { feedTroubleOf, headlineOf, lineOf, RUN_MISSING, RUN_PROBLEM, shortTime, speakerName, writeLabel, type NameOf, type Speaker } from './words'
 import styles from './RunPage.module.css'
 
@@ -218,10 +218,9 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   })
 
   const stations = stationsOf(shown, planOf(useCase), writeLabel)
-  const reach = reachOf(stations)
   const proposal = approval.data && waiting ? approval.data.actions : null
   const headline = headlineOf(shown, stations, proposal)
-  const arrivedLive = shown.spotSeq > loadedUpTo ? (stations.find((station) => station.state === 'now' || station.state === 'wait')?.key ?? null) : null
+  const arrivedLive = shown.spotSeq > loadedUpTo ? (stations.findLast((station) => station.state !== 'todo')?.key ?? null) : null
   const newest = shown.chat.at(-1)
   const announce = newest && newest.seq > loadedUpTo ? lineOf(newest, nameOf, run.trigger) : null
 
@@ -264,7 +263,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
       <p className={styles['status']} role="status">
         {statusWords(decision.recorded, live)}
       </p>
-      <RunLine stations={stations} reach={reach} arrivedLive={arrivedLive} startedAt={shortTime(run.started_at)} nameOf={nameOf} />
+      <RunLine stations={stations} arrivedLive={arrivedLive} startedAt={shortTime(run.started_at)} nameOf={nameOf} />
       {working ? null : <NeedsYou>{last}</NeedsYou>}
       <details className={styles['detail']} open={open}>
         <summary
