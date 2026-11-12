@@ -1,7 +1,7 @@
 import { assertClean, watchPage } from '../support/test'
 import { expectAccessible } from '../support/axe'
 import { expect, test } from './support/test'
-import { devContext, expectReadOnly, OUT, shot } from './support/ui'
+import { decline, devContext, expectReadOnly, OUT, shot } from './support/ui'
 import path from 'node:path'
 
 // A moved or missing repository stays in Operators' Needs you on Home and Workflows, so these tests leave no software behind for the lanes after them.
@@ -293,7 +293,7 @@ for (const phone of [false, true]) {
     const bobPage = await bob.newPage()
     await bobPage.goto(`/approvals/${approvalId}`)
     await expect(bobPage.getByRole('main')).toContainText('tiangolo/fastapi, which GitHub now calls fastapi/fastapi')
-    await bobPage.getByRole('button', { name: 'Decline' }).click()
+    await decline(bobPage)
     await expect(bobPage.getByRole('heading', { level: 1 })).toHaveText('Declined, nothing was written', { timeout: 60_000 })
     await bob.close()
 

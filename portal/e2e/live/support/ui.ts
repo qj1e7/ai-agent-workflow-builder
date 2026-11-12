@@ -1,4 +1,4 @@
-import { expect, type Browser, type BrowserContext, type Page, type TestInfo } from '@playwright/test'
+import { expect, type Browser, type BrowserContext, type Locator, type Page, type TestInfo } from '@playwright/test'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 
@@ -49,4 +49,15 @@ export async function expectReadOnly(page: Page, what: string): Promise<void> {
   await expect(note).toHaveText(new RegExp(`^Only Operators change ${what}\\. Ask .*Alice.*Carol.*\\.$`))
   await expect(note).not.toContainText('Bob')
   await expect(main.locator(':is(button, input, select, textarea):disabled, [aria-disabled="true"]')).toHaveCount(0)
+}
+
+/** The reasons Decline opens, before anything is declined (spec 10.4). */
+export const declineReasons = (scope: Page | Locator): Locator => scope.getByRole('group', { name: /^Why are you declining\? Optional\./ })
+
+/** Decline asks why first. This picks the reason when there is one, then declines. */
+export async function decline(scope: Page | Locator, reason?: string): Promise<void> {
+  await scope.getByRole('button', { name: 'Decline' }).click()
+  const why = declineReasons(scope)
+  if (reason !== undefined) await why.getByRole('button', { name: reason }).click()
+  await why.getByRole('button', { name: 'Decline' }).click()
 }

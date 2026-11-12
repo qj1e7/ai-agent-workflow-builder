@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import { connectMockModel } from './support/settings'
 import { SettingsApi } from './support/settings'
 import type { Backend } from './support/stack'
@@ -169,5 +169,35 @@ test('with the AI model off, Home shows no dead button and still follows the rul
   } finally {
     await settings.dispose()
     await connectMockModel(String(baseURL))
+  }
+})
+
+/** Principles 5 and 7: a declined run never claims a write. No "created", no "Sent" and no ticket link. */
+async function noWriteClaimed(scope: Locator, state: string): Promise<void> {
+  await expect(scope.first(), `Principles 5 and 7 (a declined run never claims a write): ${state} is not there`).toBeVisible()
+  const words = (await scope.allInnerTexts()).join('\n')
+  expect(words, `Principles 5 and 7 (a declined run never claims a write): ${state} says "created"`).not.toMatch(/\bcreated\b/i)
+  expect(words, `Principle 5 (never claim more than the platform can do): ${state} says "Sent"`).not.toMatch(/\bSent\b/)
+  expect(await scope.locator('a[href*="/jira/"]').count(), `Principles 5 and 7: ${state} links a ticket`).toBe(0)
+}
+
+test('a declined run never claims a write, on its page, in its chat, on Workflows or on the watchlist', async ({ browser, backend }) => {
+  const { runId, approvalId } = await backend.waitingRun('alice')
+  const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
+  await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest, reason: 'Wrong version' }, undefined, [201])
+  await backend.waitForState(runId, ['rejected'])
+  for (const user of ['alice', 'bob']) {
+    const context = await devContext(browser, user)
+    const page = await context.newPage()
+    await page.goto(`/runs/${runId}`)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Declined, nothing was written')
+    await page.locator('summary', { hasText: /what each agent did$/ }).click()
+    await expect(page.getByRole('list', { name: 'What the agents said' })).toBeVisible()
+    await noWriteClaimed(main(page), `the declined run’s page and chat, as ${user}`)
+    await page.goto('/workflows')
+    await noWriteClaimed(main(page).locator('li[data-workflow-id]').filter({ hasText: 'Declined by Bob' }), `the declined run’s Workflows row, as ${user}`)
+    await page.goto('/software')
+    await noWriteClaimed(main(page).locator('li[data-status]').filter({ hasText: 'Declined by Bob.' }), `the watchlist row of the declined check, as ${user}`)
+    await context.close()
   }
 })

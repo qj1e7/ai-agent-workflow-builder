@@ -6,7 +6,7 @@ import { assertClean, watchPage } from '../support/test'
 import { connectMockModel } from './support/settings'
 import { setMockGithubMode, type Backend } from './support/stack'
 import { expect, test } from './support/test'
-import { devContext, OUT, shot } from './support/ui'
+import { decline, devContext, OUT, shot } from './support/ui'
 
 /**
  * The side panel (spec 3.3, 3.4, ADR 0043): an item opened from a card in the chat shows beside it, one at a time, with More
@@ -207,15 +207,50 @@ test('APPR-panel: Alice declines in the side panel, focus goes to its heading, t
   await expect(panel(page), 'Why, Who asked and Your part wait for the page').not.toContainText(/Who asked|Your part|\bWhy\b/)
   await expectAccessible(page, path.join(OUT, 'axe'), 'side-panel-approval-1280')
   await shot(page, info, 'r3-side-panel-approval-1280')
-  await panel(page).getByRole('button', { name: 'Decline' }).click()
+  await decline(panel(page), 'Not needed this time')
   await expect(heading(page), 'focus is on the panel’s heading').toBeFocused()
-  await expect(panel(page)).toContainText('Declined', { timeout: 15_000 })
+  await expect(panel(page), 'the panel gives the declined record').toContainText(/Declined\s*Declined by Alice\. Nothing was written\. Reason: Not needed this time\./, { timeout: 15_000 })
+  await expect(panel(page), 'its line says nothing was written').toContainText('Nothing written')
+  await shot(page, info, 'r12-panel-declined-by-alice-1280')
   expect(await pageScroll(page), '#app has not scrolled').toEqual([0, 0, 0])
   await panel(page).getByRole('button', { name: 'Close' }).click()
   await expect(newest(page).locator(`[data-opens="run:${runId}"]`), 'the card in the chat no longer waits for a yes').toHaveCount(0, { timeout: 20_000 })
   assertClean(watch)
   await context.close()
 })
+
+for (const width of [1280, 390]) {
+  test(`DECLINED-test-run at ${width} px: Alice’s declined test run is in her Needs you and in the side panel, in the record’s words, with no write`, async ({ browser, backend }, info) => {
+    const useCaseId = await newWorkflow(backend, 'alice', `Alice’s test ${randomUUID().slice(0, 6)}`)
+    const started = await backend.post<{ run_id: string }>('alice', `/api/v1/use-cases/${useCaseId}/runs`, { test: true }, { 'Idempotency-Key': randomUUID() }, [201])
+    const runId = started.run_id
+    await backend.waitForState(runId, ['awaiting_approval'])
+    const approvalId = await backend.approvalIdOf(runId)
+    const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
+    await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest, reason: 'Something in it is wrong' }, undefined, [201])
+    await backend.waitForState(runId, ['rejected'])
+    const record = /Declined\s*Declined by Bob\. Nothing was written\. Reason: Something in it is wrong\./
+
+    const context = await devContext(browser, 'alice', { reducedMotion: true })
+    const page = await context.newPage()
+    await page.setViewportSize({ width, height: 900 })
+    try {
+      await page.goto('/workflows')
+      const needs = page.getByRole('list', { name: 'Needs you' })
+      await expect(needs, 'Needs you says Bob declined it, in the record’s words').toContainText(/Bob declined your test run[\s\S]{0,120}Nothing was written\. Reason: Something in it is wrong\./)
+      await shot(page, info, `r12-needs-you-declined-test-alice-${width}`)
+      await page.goto('/')
+      await openRequest(page, runId)
+      await expect(panel(page), 'the side panel gives the state and the record').toContainText(record, { timeout: 15_000 })
+      await expect(panel(page), 'its line says the write did not happen').toContainText('Nothing written')
+      await expect(panel(page), 'the panel shows no write').not.toContainText(/created|MOCK-\d/)
+      await shot(page, info, `r12-panel-declined-test-alice-${width}`)
+    } finally {
+      await context.close()
+      await backend.delete('alice', `/api/v1/use-cases/${useCaseId}`)
+    }
+  })
+}
 
 test('APPR-panel at 900 px: Alice approves in the full-window panel, and it shows the run going on', async ({ browser, backend }, info) => {
   const runId = await carolsWaitingRun(backend)
