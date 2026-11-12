@@ -73,6 +73,7 @@ export const SAY = {
   refused: 'I can’t set that up. Anything that changes data waits for a yes, every time.',
   abilities: 'Here is what I can do, and what I can’t do yet.',
   nothingNeeds: 'Nothing needs you right now.',
+  edit: 'I can’t change a workflow from the chat yet. Open it on the Workflows page to change it.',
 } as const
 
 export const watchlistSay = (software: string | null, listed: boolean): string => {
@@ -111,6 +112,8 @@ export function sayOf(reply: PlannerReply): string | null {
       return reply.message
     case 'question':
       return reply.text
+    case 'edit':
+      return SAY.edit
     case 'check_workflows':
     case 'why_stopped':
     case 'needs_me':
