@@ -1,0 +1,13 @@
+{
+  "parts": [
+    {
+      "text": "did I decline anything",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ],
+  "answer": "decided",
+  "only": "decline"
+}

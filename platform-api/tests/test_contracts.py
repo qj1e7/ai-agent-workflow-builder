@@ -65,6 +65,7 @@ from platform_api.orchestration.agents import CapabilityList as AgentCapabilityL
 from platform_api.orchestration.agents import ToolList as AgentToolList
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.confirmations import DecideRefusal
+from platform_api.orchestration.decisions_http import DecisionsView
 from platform_api.orchestration.http import (
     ApprovalView,
     DecisionOut,
@@ -151,6 +152,8 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "approvals/apr_01JB8.bob.json": TypeAdapter(ApprovalView),
     "approvals/decision.approved.json": TypeAdapter(DecisionOut),
     "approvals/refusal.own_work.json": TypeAdapter(RefusalOut),
+    "approvals/decisions.bob.json": TypeAdapter(DecisionsView),
+    "approvals/decisions.none.json": TypeAdapter(DecisionsView),
     "builder/templates.json": TypeAdapter(TemplateList),
     "builder/use-case.json": TypeAdapter(UseCaseView),
     "builder/suggest.json": TypeAdapter(SuggestOut),
@@ -172,6 +175,12 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "planner/answer.check_workflows.leftover.json": TypeAdapter(PlannerReply),
     "planner/answer.why_stopped.json": TypeAdapter(PlannerReply),
     "planner/answer.needs_me.json": TypeAdapter(PlannerReply),
+    "planner/answer.needs_me.operators.json": TypeAdapter(PlannerReply),
+    "planner/answer.operators.json": TypeAdapter(PlannerReply),
+    "planner/answer.decided.json": TypeAdapter(PlannerReply),
+    "planner/answer.decided.declines.json": TypeAdapter(PlannerReply),
+    "planner/answer.decide.json": TypeAdapter(PlannerReply),
+    "planner/answer.decide.question.json": TypeAdapter(PlannerReply),
     "planner/answer.question.json": TypeAdapter(PlannerReply),
     "planner/answer.offline.json": TypeAdapter(PlannerReply),
     "planner/answer.offline.too_slow.json": TypeAdapter(PlannerReply),

@@ -861,15 +861,215 @@ async def test_a_broken_answer_is_the_offline_answer_never_a_guess(
     assert set(reply) == {"parts", "answer", "why", "message", "starters"}
 
 
-async def test_only_an_operator_is_answered_and_a_blank_or_double_request_is_refused(
+async def test_anyone_signed_in_is_answered_and_a_blank_or_double_request_is_refused(
     front: Front,
 ):
-    assert (await front.client.post(ANSWER, json={"text": "x"}, headers=BOB)).status_code == 403
     assert (await front.client.post(ANSWER, json={"text": "x"})).status_code == 401
     assert (await front.client.post(ANSWER, json={"text": " "}, headers=ALICE)).status_code == 422
     both = {"text": "x", "intent": "abilities"}
     assert (await front.client.post(ANSWER, json=both, headers=ALICE)).status_code == 422
     assert front.answers.asked == []
+
+
+async def ask_as_bob(front: Front, text: str) -> dict[str, object]:
+    r = await front.client.post(ANSWER, json={"text": text}, headers=BOB)
+    assert r.status_code == 200, r.text
+    return cast(dict[str, object], r.json())
+
+
+def done(text: str) -> RequestPart:
+    return RequestPart(text=text, mark="will_do")
+
+
+def crossed(text: str, reason: str = "ask_on_its_own") -> RequestPart:
+    return RequestPart(text=text, mark="cant", reason=reason)  # type: ignore[arg-type]
+
+
+def marks(reply: dict[str, object]) -> list[tuple[object, object, object]]:
+    parts = cast(list[dict[str, object]], reply["parts"])
+    return [(p["text"], p["mark"], p["reason"]) for p in parts]
+
+
+async def test_an_approvers_questions_get_the_runtimes_answer_as_an_operators_would(front: Front):
+    front.answers.result = Answered(
+        answer=NeedsMeAnswer(), parts=[done("What is waiting for my yes")]
+    )
+    reply = await ask_as_bob(front, "What is waiting for my yes?")
+    assert reply["answer"] == "needs_me"
+    assert marks(reply) == [("What is waiting for my yes", "will_do", None)]
+    front.answers.result = Answered(
+        answer=QuestionAnswer(
+            text="LangGraph is behind.", looked_at=["watchlist"], about_software=["LangGraph"]
+        ),
+        parts=[done("Is LangGraph up to date")],
+    )
+    assert (await ask_as_bob(front, "Is LangGraph up to date?"))["text"] == "LangGraph is behind."
+    front.answers.result = Answered(answer=AbilitiesAnswer(), parts=[done("What can you do")])
+    assert (await ask_as_bob(front, "What can you do?"))["answer"] == "abilities"
+    front.answers.result = answered(CheckWorkflowsAnswer(workflow_words=None))
+    assert (await ask_as_bob(front, "How are the workflows doing?"))["answer"] == "check_workflows"
+
+
+SET_UP = answered(SetupCardAnswer(name="Friday summary", rows=FOUR_ROWS))
+
+
+@pytest.mark.parametrize(
+    ("text", "answer"),
+    [
+        ("Every Friday, sum up the tickets we closed this week", SET_UP),
+        ("Pause the weekly closed-ticket summary", answered(AbilitiesAnswer())),
+        ("Make the morning new-ticket check run on Mondays only", answered(NeedsMeAnswer())),
+        ("Watch Redis releases", answered(WatchlistAnswer(word="releases", software="Redis"))),
+        ("Keep track of the React version", answered(WhichSoftwareAnswer(word="version"))),
+        ("Could you make the morning check daily?", answered(CantAnswer(cant=[EMAIL]))),
+        ("Email me the open bugs", answered(PartAnswer(name="x", rows=FOUR_ROWS, cant=[EMAIL]))),
+    ],
+)
+async def test_an_approver_asking_for_any_change_gets_operators_and_never_a_card(
+    front: Front, text: str, answer: Answered
+):
+    front.answers.result = answer
+    reply = await ask_as_bob(front, text)
+    assert reply["answer"] == "operators"
+    assert set(reply) == {"answer", "parts"}
+
+
+async def test_set_up_ideas_are_an_operators_but_an_approvers_chips_are_answered(front: Front):
+    async def tap(intent: str) -> object:
+        r = await front.client.post(ANSWER, json={"intent": intent}, headers=BOB)
+        return r.json()["answer"]
+
+    assert await tap("setup_ideas") == "operators"
+    assert [await tap(i) for i in ("needs_me", "check_workflows", "abilities", "decided")] == [
+        "needs_me",
+        "check_workflows",
+        "abilities",
+        "decided",
+    ]
+    assert front.answers.asked == []
+
+
+@pytest.mark.parametrize(
+    ("text", "answer", "parts"),
+    [
+        (
+            "What is waiting for my yes, and pause the morning new-ticket check",
+            NeedsMeAnswer(),
+            [
+                done("What is waiting for my yes"),
+                crossed("pause the morning new-ticket check"),
+            ],
+        ),
+        (
+            "Delete the weekly summary, then how are the workflows doing?",
+            CheckWorkflowsAnswer(workflow_words=None),
+            [
+                crossed("Delete the weekly summary", "not_followed"),
+                done("how are the workflows doing"),
+            ],
+        ),
+        (
+            "How are the workflows doing? Then delete the weekly summary",
+            CheckWorkflowsAnswer(workflow_words=None),
+            [done("How are the workflows doing"), done("delete the weekly summary")],
+        ),
+    ],
+)
+async def test_a_question_beside_a_change_is_answered_and_the_change_crossed_in_either_order(
+    front: Front, text: str, answer: object, parts: list[RequestPart]
+):
+    front.answers.result = Answered(answer=answer, parts=parts)  # type: ignore[arg-type]
+    reply = await ask_as_bob(front, text)
+    assert reply["answer"] == answer.kind  # type: ignore[attr-defined]
+    change = next(p.text for p in parts if p.text.split()[0].lower() in {"pause", "delete"})
+    question = next(p.text for p in parts if p.text != change)
+    assert marks(reply) == [
+        (p.text, *(("will_do", None) if p.text == question else ("cant", "operators")))
+        for p in parts
+    ]
+
+
+async def test_an_operators_question_beside_a_change_keeps_the_runtimes_marks(front: Front):
+    parts = [done("What is waiting for my yes"), crossed("pause the morning new-ticket check")]
+    front.answers.result = Answered(answer=NeedsMeAnswer(), parts=parts)
+    reply = await say(front, "What is waiting for my yes, and pause the morning new-ticket check")
+    assert marks(reply)[1] == ("pause the morning new-ticket check", "cant", "ask_on_its_own")
+
+
+@pytest.mark.parametrize(
+    ("text", "only"),
+    [
+        ("What did I decide before?", None),
+        ("show my past decisions", None),
+        ("did I decline anything?", "decline"),
+        ("What did I approve?", "approve"),
+    ],
+)
+async def test_an_approvers_own_decisions_are_read_from_the_whole_question(
+    front: Front, text: str, only: str | None
+):
+    front.answers.result = Answered(answer=AbilitiesAnswer(), parts=[crossed(text, "not_followed")])
+    reply = await ask_as_bob(front, text)
+    assert reply == {
+        "answer": "decided",
+        "only": only,
+        "parts": [
+            {
+                "text": text.rstrip("?"),
+                "mark": "will_do",
+                "reason": None,
+                "note": None,
+                "choices": [],
+            }
+        ],
+    }
+
+
+async def test_a_change_beside_a_question_about_decisions_is_crossed_for_the_operators(
+    front: Front,
+):
+    front.answers.result = answered(AbilitiesAnswer())
+    reply = await ask_as_bob(front, "What did I decide before, and pause the morning check?")
+    assert reply["answer"] == "decided"
+    assert marks(reply) == [
+        ("What did I decide before", "will_do", None),
+        ("pause the morning check", "cant", "operators"),
+    ]
+
+
+@pytest.mark.parametrize("text", ["approve the upgrade", "decline that request", "approve it"])
+async def test_an_approve_or_decline_goes_to_the_request_whatever_it_names(front: Front, text: str):
+    front.answers.result = answered(CantAnswer(cant=[EMAIL]))
+    reply = await ask_as_bob(front, text)
+    assert reply["answer"] == "decide"
+    assert marks(reply) == [(text, "will_do", None)]
+
+
+async def test_a_question_beside_an_approve_is_kept_and_asked_on_its_own(front: Front):
+    front.answers.result = answered(CantAnswer(cant=[EMAIL]))
+    reply = await ask_as_bob(front, "Approve the upgrade and is LangGraph up to date?")
+    assert reply["answer"] == "decide"
+    assert marks(reply) == [
+        ("Approve the upgrade", "will_do", None),
+        ("is LangGraph up to date", "cant", "ask_on_its_own"),
+    ]
+
+
+async def test_an_approve_beside_a_change_is_refused_whole(front: Front):
+    front.answers.result = answered(NeedsMeAnswer())
+    reply = await ask_as_bob(front, "approve the upgrade and pause the morning new-ticket check")
+    assert reply["answer"] == "operators"
+    assert marks(reply) == [
+        ("approve the upgrade", "cant", "operators"),
+        ("pause the morning new-ticket check", "cant", "operators"),
+    ]
+
+
+async def test_skipping_a_yes_and_no_model_answer_an_approver_as_anyone(front: Front):
+    front.answers.result = answered(RefusedAnswer(said="automatically", rest=""))
+    assert (await ask_as_bob(front, "Approve it automatically"))["answer"] == "refused"
+    front.answers.result = NoModel()
+    assert (await ask_as_bob(front, "What did I decide before?"))["answer"] == "offline"
 
 
 CHECK = "/api/v1/planner/check-part"
