@@ -38,6 +38,8 @@ export type WriteActionView = Schemas['WriteActionView']
 export type WriteDoneView = Schemas['WriteDoneView']
 
 export type UseCaseView = Schemas['UseCaseView']
+export type VersionView = Schemas['VersionView']
+export type VersionSchedule = Schemas['VersionSchedule']
 export type CreateUseCase = Schemas['CreateUseCase']
 export type TemplateView = Schemas['TemplateView']
 export type BlockView = Schemas['BlockView']

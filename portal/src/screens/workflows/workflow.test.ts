@@ -14,7 +14,7 @@ import heldSchedule from '../../../../contracts/fixtures/watchlist/schedule.held
 import { ApiError } from '../../api/client'
 import { errorWords } from '../../api/errors'
 import { createLatch } from '../../api/latch'
-import type { RunView, ScheduleHold, ScheduleView, UseCaseView } from '../../api/types'
+import type { RunView, ScheduleHold, ScheduleView, UseCaseView, VersionSchedule, VersionView } from '../../api/types'
 import { placeAfterRedraw } from '../../ui/focus'
 import { nextCheckWords, TAKE_OVER_WORDS } from '../software/software'
 import {
@@ -40,6 +40,7 @@ import {
   pressRunNow,
   rereadWhenOutOfDate,
   mayChangeSchedule,
+  mayUndo,
   rowAction,
   scheduleSaver,
   scheduleSavedWords,
@@ -51,6 +52,9 @@ import {
   timesZone,
   whenWords,
   workflowPath,
+  undoneWords,
+  undoProblem,
+  versionWords,
   type ChangeOutcome,
   type LastRun,
   type RunNowOutcome,
@@ -691,5 +695,48 @@ describe('what Delete says is lost', () => {
     const words = deleteWords('Nudge', null)
     expect(words).not.toMatch(/runs yet|past run/)
     expect(words).toBe('Nudge leaves Workflows, and its schedule stops, so no more runs start. Undo stays in the message that follows.')
+  })
+})
+
+describe('the Versions words', () => {
+  const nameOf = (id: string) => ({ alice: 'Alice', carol: 'Carol' })[id] ?? id
+  const at = (day: VersionSchedule['day'], clock: string, zone = 'Asia/Singapore'): VersionSchedule => ({ day, at: clock, time_zone: zone })
+  const version = (change: Partial<VersionView> & Pick<VersionView, 'version'>): VersionView => ({
+    at: '2026-11-04T01:10:00Z',
+    by: 'carol',
+    via: 'page',
+    change: null,
+    undid: null,
+    running: false,
+    ...change,
+  })
+  const moved = (before: VersionSchedule | null, after: VersionSchedule | null) => ({ schedule: { before, after } })
+
+  it('says a first schedule was set, and an Undo of it leaves none', () => {
+    expect(versionWords(version({ version: 2, change: moved(null, at('monday', '09:00')) }), nameOf)).toBe('Carol set it to run every Monday at 9:00.')
+    expect(versionWords(version({ version: 3, undid: 2, change: moved(at('monday', '09:00'), null) }), nameOf)).toBe('Carol undid version 2, so it has no schedule again.')
+  })
+
+  it('names a zone that is not Singapore', () => {
+    const words = versionWords(version({ version: 2, change: moved(at('monday', '09:00', 'Europe/London'), at('friday', '17:30')) }), nameOf)
+    expect(words).toBe('Carol changed when it runs from every Monday at 9:00 London time to every Friday at 17:30.')
+  })
+
+  it('offers Undo only to an Operator, on the version running now, when it changed the schedule', () => {
+    const newest = version({ version: 2, running: true, change: moved(null, at('monday', '09:00')) })
+    const operator = { id: 'alice', operator: true, approver: true }
+    expect(mayUndo(newest, operator)).toBe(true)
+    expect(mayUndo({ ...newest, running: false }, operator)).toBe(false)
+    expect(mayUndo({ ...newest, change: null, by: null, via: null }, operator)).toBe(false)
+    expect(mayUndo(newest, { id: 'bob', operator: false, approver: true })).toBe(false)
+  })
+
+  it('says what an Undo published, and why one could not be made', () => {
+    expect(undoneWords({ name: 'Morning new-ticket check', version: 3, schedule: { day: 'weekdays', at: '08:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null } })).toBe(
+      'Undone, as version 3. Morning new-ticket check runs every weekday at 8:00 now.',
+    )
+    expect(undoneWords({ name: 'Nudge', version: 3, schedule: null })).toBe('Undone, as version 3. Nudge has no schedule now.')
+    const stale = new ApiError(409, { detail: 'changed' })
+    expect(undoProblem(2, 'Nudge', stale, errorWords)).toBe('Could not undo version 2. Nudge changed again since, so Undo would throw that change away.')
   })
 })

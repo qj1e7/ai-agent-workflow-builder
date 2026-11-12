@@ -1,12 +1,12 @@
 import { ApiError } from '../../api/client'
 import { failureReasonLabel } from '../../api/labels'
 import { pressOnce, type Latch, type Outcome } from '../../api/latch'
-import type { BlockKind, Me, RunView, ScheduleIn, UseCaseView } from '../../api/types'
+import type { BlockKind, Me, RunView, ScheduleIn, UseCaseView, VersionSchedule, VersionView } from '../../api/types'
 import { agentIdentity } from '../../ui/agents'
 import { andList, count, type NameOf } from '../run/words'
 import { faceId, howItWorksPath } from '../agents/agents'
 import { heldWords, repeatWords, TAKE_OVER_WORDS } from '../software/software'
-import { lineWhen, nextRunAt, runWhen, zoneWords } from './times'
+import { lineWhen, nextRunAt, runWhen, scheduleZoneName, zoneWords } from './times'
 
 export type Tone = 'ok' | 'wait' | 'bad' | 'new'
 
@@ -231,6 +231,45 @@ export function scheduleSaver(mutate: (body: ScheduleIn, answers: SavedAnswers) 
         rereadIfOutOfDate(failure)
       },
     })
+}
+
+/** "every Monday at 8:00", with the zone after it when it is not Singapore. */
+function runsAt(schedule: VersionSchedule): string {
+  const zone = scheduleZoneName(schedule.time_zone)
+  return `${repeatWords(schedule)}${zone ? ` ${zone}` : ''}`
+}
+
+/** What a version changed and who changed it, as the prototype's Versions list says it. */
+export function versionWords(version: VersionView, nameOf: NameOf): string {
+  const change = version.change?.schedule
+  if (!change || !version.by) return version.version === 1 ? 'The version it was turned on with.' : 'A change to what it checks.'
+  const who = nameOf(version.by)
+  if (version.undid !== null) return `${who} undid version ${version.undid}, so ${change.after ? `it runs ${runsAt(change.after)}` : 'it has no schedule'} again.`
+  if (!change.before) return `${who} set it to run ${change.after ? runsAt(change.after) : 'with no schedule'}.`
+  return `${who} changed when it runs from ${runsAt(change.before)} to ${change.after ? runsAt(change.after) : 'no schedule'}.`
+}
+
+/** "Today, 9:10. Alice changed ... This is the version running now." The first version has no time, as in the prototype. */
+export function versionLine(version: VersionView, now: Date, nameOf: NameOf): string {
+  const when = version.version > 1 ? `${runWhen(version.at, now)}. ` : ''
+  return `${when}${versionWords(version, nameOf)}${version.running ? ' This is the version running now.' : ''}`
+}
+
+/** Undo sits on the newest version only, for an Operator, and only when that version changed the schedule. */
+export function mayUndo(version: VersionView, viewer: Viewer): boolean {
+  return viewer.operator && version.running && version.change !== null
+}
+
+export function undoneWords(view: Pick<UseCaseView, 'name' | 'version' | 'schedule'>): string {
+  const now = view.schedule ? `runs ${runsAt(view.schedule)} now` : 'has no schedule now'
+  return `Undone, as version ${view.version}. ${view.name} ${now}.`
+}
+
+export function undoProblem(version: number, name: string, error: unknown, words: (error: unknown) => string): string {
+  const start = `Could not undo version ${version}.`
+  if (answered(error, 409)) return `${start} ${name} changed again since, so Undo would throw that change away.`
+  if (answered(error, 404)) return `${start} It was deleted.`
+  return `${start} ${words(error)}`
 }
 
 /** What the More actions menu holds, in order. Delete is last. A workflow with none shows no menu. */

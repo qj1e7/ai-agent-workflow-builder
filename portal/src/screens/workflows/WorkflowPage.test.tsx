@@ -8,11 +8,15 @@ import troubleshooting from '../../../../contracts/fixtures/troubleshooting/fail
 import failed from '../../../../contracts/fixtures/views/failure.final.json'
 import done from '../../../../contracts/fixtures/views/success.final.json'
 import peopleList from '../../../../contracts/fixtures/people/list.json'
+import versionedUseCase from '../../../../contracts/fixtures/builder/use-case.versioned.json'
+import undoneUseCase from '../../../../contracts/fixtures/builder/use-case.undone.json'
+import changed from '../../../../contracts/fixtures/builder/versions.json'
+import undone from '../../../../contracts/fixtures/builder/versions.undone.json'
 import { App } from '../../App'
 import { ApiError } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { Me, PersonOut, RunView, TroubleshootingOut, UseCaseView } from '../../api/types'
+import type { Me, PersonOut, RunView, TroubleshootingOut, UseCaseView, VersionView } from '../../api/types'
 import type { LastRun } from './workflow'
 import { formatterFactory } from './workflow'
 import { ScheduleChangePanel, WHO_APPROVES } from './WorkflowPage'
@@ -35,9 +39,11 @@ interface Setup {
   readonly runs?: RunView[]
   readonly id?: string
   readonly advice?: TroubleshootingOut
+  /** The versions the platform lists for the workflow at its version. */
+  readonly versions?: VersionView[]
 }
 
-function render({ me = ALICE, useCase: given = AGENTS, runs = [], id, advice, last }: Setup = {}): string {
+function render({ me = ALICE, useCase: given = AGENTS, runs = [], id, advice, last, versions }: Setup = {}): string {
   const useCase = last && !(given instanceof Error) ? { ...given, last_run: { ...STOPPED, ...last } } : given
   const session = createDevSession(null)
   const scope = session.cacheScope()
@@ -52,6 +58,7 @@ function render({ me = ALICE, useCase: given = AGENTS, runs = [], id, advice, la
   const key = ['use-case', scope, useCaseId]
   if (useCase instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: key }).setState({ status: 'error', error: useCase, fetchStatus: 'idle' })
   else queryClient.setQueryData(key, useCase)
+  if (versions && !(useCase instanceof Error)) queryClient.setQueryData(['versions', scope, useCaseId, useCase.version], versions)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
@@ -314,6 +321,46 @@ describe('a workflow page', () => {
   it('keeps Workflows marked in the menu', () => {
     const current = [...render().matchAll(/<a\b[^>]*aria-current="page"[^>]*>/g)].map((m) => /href="([^"]*)"/.exec(m[0])?.[1])
     expect(new Set(current)).toEqual(new Set(['/workflows']))
+  })
+})
+
+const CHANGED = { useCase: versionedUseCase as UseCaseView, versions: changed.versions as VersionView[] }
+const UNDONE = { useCase: undoneUseCase as UseCaseView, versions: undone.versions as VersionView[] }
+const versionsOf = (html: string) => text(/<section[^>]*><h2[^>]*>Versions<\/h2>([\s\S]*?)<\/section>/.exec(mainOf(html))?.[1] ?? '')
+
+describe('the Versions list', () => {
+  it('is not shown while the workflow has one version', () => {
+    expect(text(mainOf(render()))).not.toContain('Versions')
+  })
+
+  it('lists each version newest first, with when, who and what changed, as the prototype says it', () => {
+    expect(versionsOf(render(CHANGED))).toBe(
+      'Version 2 Today, 9:10. Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00. This is the version running now. Undo version 2 ' +
+        'Version 1 The version it was turned on with.',
+    )
+  })
+
+  it('names an Undo as a new version that undid the one before, and offers Undo on the newest only', () => {
+    const html = render(UNDONE)
+    expect(versionsOf(html)).toMatch(/^Version 3 Today, 9:12\. Alice undid version 2, so it runs every weekday at 8:00 again\. This is the version running now\. Undo version 3 Version 2 Today, 9:10\. Alice changed .* to every Monday at 8:00\. Version 1/)
+    expect(buttons(html).filter((label) => label.startsWith('Undo'))).toEqual(['Undo version 3'])
+  })
+
+  it('lists the versions for an Approver too, read only, with no Undo', () => {
+    const html = render({ ...CHANGED, me: BOB })
+    expect(versionsOf(html)).toContain('Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00.')
+    expect(buttons(html).filter((label) => label.startsWith('Undo'))).toEqual([])
+  })
+
+  it('sits after Recent activity and before Technical details, as the spec orders the page', () => {
+    const html = mainOf(render(CHANGED))
+    const order = ['Recent activity', '>Versions<', 'Technical details'].map((needle) => html.indexOf(needle))
+    expect(order.every((place) => place >= 0)).toBe(true)
+    expect(order).toEqual([...order].sort((a, b) => a - b))
+  })
+
+  it('shows the schedule the newest version runs on in the Schedule row', () => {
+    expect(whenOf(render(UNDONE))).toBe('Every weekday at 8:00 Singapore time (SGT).')
   })
 })
 

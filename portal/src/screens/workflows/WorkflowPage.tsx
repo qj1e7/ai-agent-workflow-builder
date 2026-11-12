@@ -24,6 +24,7 @@ import { ScheduleForm, useEditorThatRefocusesItsOpener, type SaveSchedule } from
 import { useArrivalScroll } from './arrival'
 import { RecentRuns } from './RecentRuns'
 import { StatusPills, useChanges } from './Status'
+import { Versions } from './Versions'
 import {
   agentsOf,
   bannerOf,
@@ -487,6 +488,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
             )}
           </section>
         )}
+        <Versions useCase={useCase} viewer={viewer} now={now} nameOf={nameOf} say={(text) => setSaid((before) => ({ id: (before?.id ?? 0) + 1, text }))} />
         <Technical useCase={useCase} paused={paused} operator={viewer.operator} />
       </div>
       {asking ? (
