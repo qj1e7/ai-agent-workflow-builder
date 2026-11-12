@@ -14,7 +14,7 @@ import { Toast, type ToastMessage } from '../../ui/Toast'
 import { useFromChat } from '../../ui/fromChat'
 import { motionAllowed } from '../../ui/motion'
 import { nextRunOf } from '../workflows/workflow'
-import { ApprovalGate } from './ApprovalGate'
+import { ApprovalGate, NotChecked } from './ApprovalGate'
 import { Chat, DECISION_ID, LastWord, NeedsYou, Typing } from './Chat'
 import { askedWords, declineReasons, foundOf, partyOf, useDecision, useNotChecked, yourPart, type Decision } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
@@ -335,7 +335,7 @@ interface LastWordForProps {
   readonly approval: ApprovalView | undefined
   readonly found: string
   readonly decision: ReturnType<typeof useDecision>
-  readonly notChecked: readonly string[]
+  readonly notChecked: readonly string[] | null
   readonly questions: Questions
   readonly troubleshoot: ReturnType<typeof useTroubleshoot>
   readonly nameOf: NameOf
@@ -352,7 +352,7 @@ function LastWordFor({ model, approval, found, decision, notChecked, questions, 
     case 'awaiting_approval':
       return (
         <LastWord speaker={{ kind: 'gate' }}>
-          {approval ? (
+          {approval && notChecked ? (
             <ApprovalGate
               approval={approval}
               page={{ found, part: yourPart(approval, partyOf(approval, me?.id), nameOf), askedBy: askedWords(approval, nameOf) }}
@@ -394,7 +394,14 @@ function LastWordFor({ model, approval, found, decision, notChecked, questions, 
             model={model}
             nameOf={nameOf}
             declinedNext={declinedNext}
-            thread={approval ? <QuestionThread approval={approval} me={me?.id} nameOf={nameOf} answer={questions.answer} /> : null}
+            record={
+              approval ? (
+                <>
+                  <NotChecked lines={notChecked ?? []} />
+                  <QuestionThread approval={approval} me={me?.id} nameOf={nameOf} answer={questions.answer} />
+                </>
+              ) : null
+            }
           />
         </LastWord>
       )

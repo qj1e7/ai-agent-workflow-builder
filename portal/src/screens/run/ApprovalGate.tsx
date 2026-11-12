@@ -24,6 +24,20 @@ function Change({ action }: { action: WriteActionView }) {
   )
 }
 
+/** What the run didn't check, from notCheckedWords in decision.ts: on a waiting request and, read only, on its record. */
+export function NotChecked({ lines }: { lines: readonly string[] }) {
+  if (lines.length === 0) return null
+  return (
+    <Row name="Not checked">
+      <ul className={styles['unchecked']}>
+        {lines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </Row>
+  )
+}
+
 function Row({ name, children }: { name: string; children: ReactNode }) {
   return (
     <dl className={styles['qa']}>
@@ -137,15 +151,7 @@ export function ApprovalGate({ approval, page, decision, notChecked, reasons, re
         ))}
         <p className={styles['note']}>{EXACT_WORDS}</p>
       </Row>
-      {notChecked.length > 0 ? (
-        <Row name="Not checked">
-          <ul className={styles['unchecked']}>
-            {notChecked.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </Row>
-      ) : null}
+      <NotChecked lines={notChecked} />
       {page ? (
         <>
           <Row name="Why">

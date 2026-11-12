@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { ApprovalView, CapabilitiesView, CapabilityView } from '../../api/types'
 import { MemoryRouter } from 'react-router'
-import { ApprovalGate, DeclineReasons, EXACT_WORDS } from './ApprovalGate'
+import { ApprovalGate, DeclineReasons, EXACT_WORDS, NotChecked } from './ApprovalGate'
 import { withQuestion } from '../../api/queries'
 import { APPROVE, askedWords, declinedNow, declineReasons, decisionFor, foundOf, notCheckedWords, partyOf, yourPart, type Decision } from './decision'
 import type { LiveRun } from './liveRun'
@@ -202,6 +202,7 @@ describe('what the run didn’t check', () => {
   const withSummary = (capabilities: readonly CapabilityView[]) =>
     capabilities.map((c) => (c.tools.includes('jira.search') ? { ...c, agents: [...c.agents, ...SUMMARY_CARD] } : c))
   const UNREAD = ['Grafana', 'LangServe', 'PostgreSQL', 'Python']
+  const SUMMARY_LINES = ['The platform can’t yet see a ticket’s component or priority.', 'The platform can’t yet look past the 50 newest tickets.']
   const SOFTWARE_LINES = ['Grafana, LangServe, PostgreSQL and Python couldn’t be read, so no ticket is proposed for them.', 'The platform can’t yet check registries or security advisories.']
   const panel = (notChecked: readonly string[]) =>
     renderToStaticMarkup(
@@ -216,12 +217,13 @@ describe('what the run didn’t check', () => {
   })
 
   it('gives a ticket summary what its agents can’t see of a ticket, only as far as the registry says so', () => {
-    expect(notCheckedWords([], SUMMARY_CARD, withSummary(CAPABILITIES))).toEqual(['The platform can’t yet see a ticket\'s component or priority.'])
+    expect(notCheckedWords([], SUMMARY_CARD, withSummary(CAPABILITIES))).toEqual(SUMMARY_LINES)
     const planned = withSummary(CAPABILITIES).map((c) => (c.id === 'jira.find_by_update' ? { ...c, state: 'planned' as const, cant: 'see when a ticket was last updated, its type or who owns it' } : c))
-    expect(notCheckedWords([], SUMMARY_CARD, planned)).toEqual([
-      'The platform can’t yet see when a ticket was last updated, its type or who owns it.',
-      'The platform can’t yet see a ticket\'s component or priority.',
-    ])
+    expect(notCheckedWords([], SUMMARY_CARD, planned)).toEqual(['The platform can’t yet see when a ticket was last updated, its type or who owns it.', ...SUMMARY_LINES])
+  })
+
+  it('writes the registry’s apostrophes the way the Portal writes its own', () => {
+    for (const line of notCheckedWords([], SUMMARY_CARD, withSummary(CAPABILITIES))) expect(line).not.toContain("'")
   })
 
   it('gives a release check the release line, though its agent also reads Jira for the tickets it raised', () => {
@@ -255,6 +257,27 @@ describe('what the run didn’t check', () => {
 
   it('adds no button, so Approve stays the next stop for the keyboard', () => {
     expect(buttons(panel(SOFTWARE_LINES))).toEqual(['Approve 1 ticket', 'Decline', 'Ask Alice a question'])
+  })
+
+  it('shows the second of two Approvers what the first was told', () => {
+    const second: ApprovalView = {
+      ...BOB,
+      steps: [
+        { index: 0, label: 'First approver', status: 'approved', decided_by: 'carol', decided_at: '2026-11-03T02:20:23Z', reason: null },
+        { index: 1, label: 'Second approver', status: 'open', decided_by: null, decided_at: null, reason: null },
+      ],
+    }
+    const html = text(draw(second, OTHER, idle, BOB.found, 'bob', SOFTWARE_LINES))
+    expect(html).toContain(`Not checked ${SOFTWARE_LINES.join(' ')}`)
+    expect(html).toContain('Carol said yes. Your yes is the second of two.')
+    expect(buttons(draw(second, OTHER, idle, BOB.found, 'bob', SOFTWARE_LINES))).toEqual(['Approve 1 ticket', 'Decline', 'Ask Alice a question'])
+  })
+
+  it('stays on the record, read only, once the request is decided', () => {
+    const html = renderToStaticMarkup(<NotChecked lines={SOFTWARE_LINES} />)
+    expect(text(html)).toBe(`Not checked ${SOFTWARE_LINES.join(' ')}`)
+    expect(buttons(html)).toEqual([])
+    expect(renderToStaticMarkup(<NotChecked lines={[]} />)).toBe('')
   })
 })
 
