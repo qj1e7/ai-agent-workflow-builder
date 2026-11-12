@@ -6,17 +6,17 @@ import type { RunView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { useAfterPanelAction } from '../../ui/sidePanel'
-import { Toast } from '../../ui/Toast'
+import { useChat } from '../home/ChatProvider'
 import { ApprovalGate } from './ApprovalGate'
 import { declineReasons, openStep, partyOf, useDecision } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { Troubleshooting } from './Outcome'
 import { QuestionThread } from './QuestionThread'
 import { useQuestions } from './questions'
-import { approvalIdOf, planOf, POLL_FAILED_MS, statusWords, useNameOf, useReconnectWhenBehind } from './RunPage'
+import { approvalIdOf, declinedSoFarWords, planOf, POLL_FAILED_MS, statusWords, useNameOf, useReconnectWhenBehind } from './RunPage'
 import { RunLine } from './RunLine'
 import { declinedOf, stationsOf } from './runModel'
-import { declinedNext, declinedWithNext, feedTroubleOf, headlineOf, RUN_PROBLEM, shortTime, writeLabel } from './words'
+import { declinedNext, declinedNowWords, declinedWithNext, feedTroubleOf, headlineOf, RUN_PROBLEM, shortTime, writeLabel } from './words'
 import { nextRunOf } from '../workflows/workflow'
 import styles from './RunPage.module.css'
 
@@ -91,14 +91,18 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
   const approval = useApproval(approvalId ?? '', { poll: waiting, enabled: approvalId !== null })
   const attempt = head.chat.filter((item) => item.kind === 'retried').length
   const troubleshoot = useTroubleshoot(run.run_id, shown.phase.state === 'failed' && head.phase.state === 'failed', attempt)
+  const { say } = useChat()
   const party = partyOf(approval.data, me?.id)
-  const decision = useDecision(approval.data, party, () => backToTop?.())
-  const questions = useQuestions(approval.data, nameOf)
-  const sent = <Toast message={questions.said} onDismiss={questions.dismiss} focusAfter={() => document.querySelector<HTMLElement>('main h1')} />
+  const decision = useDecision(approval.data, party, (recorded) => {
+    backToTop?.()
+    if (recorded.verdict === 'decline') say(declinedNowWords({ reason: recorded.reason ?? null }))
+  })
+  const questions = useQuestions(approval.data, nameOf, say)
 
   const stations = stationsOf(shown, planOf(useCase.data), writeLabel)
   const headline = headlineOf(shown, stations, approval.data && waiting ? approval.data.actions : null)
-  const status = statusWords(decision, live, nameOf)
+  const status = statusWords(decision, live)
+  const declinedSoFar = declinedSoFarWords(decision, live, nameOf)
   const declined = declinedOf(shown)
 
   if (waiting && approvalId !== null && !approval.data && !approval.isError) {
@@ -110,19 +114,16 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
   }
   if (waiting && approval.data?.you_can_decide && openStep(approval.data) && decision.recorded === null) {
     return (
-      <>
-        <ApprovalGate
-          approval={approval.data}
-          page={null}
-          decision={decision}
-          reasons={declineReasons(useCase.data?.template)}
-          requester={nameOf(approval.data.requester)}
-          questions={questions}
-          me={me?.id}
-          nameOf={nameOf}
-        />
-        {sent}
-      </>
+      <ApprovalGate
+        approval={approval.data}
+        page={null}
+        decision={decision}
+        reasons={declineReasons(useCase.data?.template)}
+        requester={nameOf(approval.data.requester)}
+        questions={questions}
+        me={me?.id}
+        nameOf={nameOf}
+      />
     )
   }
   return (
@@ -136,6 +137,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
           {status}
         </p>
       ) : null}
+      {declinedSoFar ? <p className="muted">{declinedSoFar}</p> : null}
       <RunLine stations={stations} arrivedLive={null} startedAt={shortTime(run.started_at)} nameOf={nameOf} small />
       {shown.phase.state === 'failed' ? (
         <Troubleshooting
@@ -151,7 +153,6 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
       ) : approval.data ? (
         <QuestionThread approval={approval.data} me={me?.id} nameOf={nameOf} answer={questions.answer} />
       ) : null}
-      {sent}
     </>
   )
 }

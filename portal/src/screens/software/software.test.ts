@@ -1,14 +1,17 @@
+import capabilitiesFixture from '@contracts/fixtures/planner/capabilities.json'
 import statuses from '@contracts/fixtures/watchlist/statuses.json'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
-import type { ScheduleView, WatchedSoftwareView } from '../../api/types'
+import type { CapabilityView, ScheduleView, SoftwareStatus, WatchedSoftwareView } from '../../api/types'
 import {
   addProblems,
   cantCheckWords,
   checkClock,
+  checkedOnWords,
   checkName,
   checkRepo,
   checkVersion,
+  countLine,
   DAYS,
   dayOption,
   decisionsOf,
@@ -165,6 +168,54 @@ describe('the list', () => {
     expect(watchAttention([...ROWS, moved, gone])).toBe(3)
     expect(watchAttention([])).toBe(0)
   })
+})
+
+describe('the count line under the title', () => {
+  const rowsOf = (...states: readonly (readonly [SoftwareStatus, string | null])[]) =>
+    states.map(([status, ours], index): WatchedSoftwareView => ({ ...ROWS[0]!, id: `r${String(index)}`, status, our_version: ours }))
+
+  it('counts what has a newer version, what can’t be checked and what isn’t checked yet, from every row', () => {
+    expect(countLine(ROWS)).toBe('3 have a newer version · 1 can’t be checked · 1 not checked yet')
+  })
+
+  it('counts a row whose upgrade ticket waits for a yes, or is open, as having a newer version', () => {
+    expect(countLine(rowsOf(['awaiting_approval', '1.0.0'], ['ticket_open', '1.0.0']))).toBe('2 have a newer version')
+    expect(countLine(rowsOf(['behind', '1.0.0'], ['up_to_date', '1.0.0']))).toBe('1 has a newer version')
+  })
+
+  it('leaves out a part with nothing in it', () => {
+    expect(countLine(rowsOf(['cant_check', '1.0.0'], ['cant_check', '1.0.0'], ['up_to_date', '1.0.0']))).toBe('2 can’t be checked')
+    expect(countLine(rowsOf(['not_checked', null]))).toBe('1 not checked yet')
+  })
+
+  it('says everything is up to date only when every row has a version to be up to date with', () => {
+    expect(countLine(rowsOf(['up_to_date', '1.0.0'], ['up_to_date', '2.0.0']))).toBe('Everything is up to date.')
+    expect(countLine(rowsOf(['up_to_date', '1.0.0'], ['up_to_date', null]))).toBe('Nothing newer yet.')
+  })
+
+  it('has no count for an empty list', () => {
+    expect(countLine([])).toBeNull()
+  })
+
+  it('never claims a row is up to date while the list has one not checked yet', () => {
+    expect(countLine(rowsOf(['up_to_date', '1.0.0'], ['not_checked', null]))).not.toMatch(/up to date|Nothing newer/i)
+  })
+})
+
+describe('what checks a row', () => {
+  const REGISTRY = capabilitiesFixture.capabilities as CapabilityView[]
+  const withReleases = (state: CapabilityView['state']) => REGISTRY.map((c) => (c.id === 'github.releases' ? { ...c, state } : c))
+
+  it('says it is checked on GitHub while the registry says GitHub releases can be read', () => {
+    expect(checkedOnWords('github', REGISTRY)).toBe('Checked on GitHub')
+  })
+
+  it('never says it is checked while the registry says GitHub is not working, or before the registry is there', () => {
+    expect(checkedOnWords('github', withReleases('down'))).toBe('On GitHub')
+    expect(checkedOnWords('github', withReleases('needs_setup'))).toBe('On GitHub')
+    expect(checkedOnWords('github', undefined)).toBe('On GitHub')
+    expect(checkedOnWords('github', REGISTRY.filter((c) => c.id !== 'github.releases'))).toBe('On GitHub')
+  })
 
   it('names the tickets the yes covers, in the singular too', () => {
     expect(decisionTitle(3)).toBe('The latest check wants to raise 3 upgrade tickets.')
@@ -285,6 +336,15 @@ describe('the schedule', () => {
 })
 
 describe('a row’s history', () => {
+  it('gives the declined record on the line of the check that found the newer version, in the row note’s words', () => {
+    const langgraph = ROWS.find((r) => r.status === 'behind')!
+    const record = 'Declined by Bob. Nothing was written. Reason: Wrong version. The tickets will be proposed again at the next check, Mon 16 Nov, 9:00.'
+    const words = historyOf(langgraph, nameOf, record).map((line) => line.words)
+    expect(words).toContain(`Found 1.2.16. ${record}`)
+    expect(words.join(' ')).not.toMatch(/created|Checked\. The newest version/)
+    expect(historyOf(langgraph, nameOf, null).map((line) => line.words)).toContain('Checked. The newest version is 1.2.16.')
+  })
+
   it('says who used the new address and who put it back, from and to, newest first', () => {
     const row: WatchedSoftwareView = {
       ...(ROWS.find((r) => r.name === 'FastAPI') as WatchedSoftwareView),
@@ -293,7 +353,7 @@ describe('a row’s history', () => {
         { kind: 'use', from_repo: 'tiangolo/fastapi', to_repo: 'fastapi/fastapi', by: 'alice', at: '2026-11-10T02:00:00Z' },
       ],
     }
-    const words = historyOf(row, nameOf).map((line) => line.words)
+    const words = historyOf(row, nameOf, null).map((line) => line.words)
     expect(words).toContain('Alice put the address back to tiangolo/fastapi. It was fastapi/fastapi.')
     expect(words).toContain('Alice used the new address fastapi/fastapi. It was tiangolo/fastapi.')
     expect(words.indexOf('Alice put the address back to tiangolo/fastapi. It was fastapi/fastapi.')).toBeLessThan(words.indexOf('Alice used the new address fastapi/fastapi. It was tiangolo/fastapi.'))
@@ -305,7 +365,7 @@ describe('a row’s history', () => {
       our_version: '1.2.16',
       our_version_source: { kind: 'ticket_done', at: '2026-11-17T03:00:00Z', ticket: 'MOCK-143' },
     }
-    const words = historyOf(row, nameOf).map((line) => line.words)
+    const words = historyOf(row, nameOf, null).map((line) => line.words)
     expect(words).toContain('Our version moved to 1.2.16. It came from MOCK-143, marked Done.')
     expect(words.at(-1)).toBe('Added by Alice.')
   })
@@ -320,19 +380,19 @@ describe('a row’s history', () => {
       our_version: '1.2.16',
       our_version_source: { kind: 'ticket_done', at: '2026-11-17T03:00:00Z', ticket: 'MOCK-143' },
     }
-    expect(historyOf(row, nameOf).map((line) => line.when)).toEqual(['Now', 'Tue 17 Nov, 11:00', 'Tue 10 Nov, 9:00', 'Mon 2 Nov, 18:00'])
+    expect(historyOf(row, nameOf, null).map((line) => line.when)).toEqual(['Now', 'Tue 17 Nov, 11:00', 'Tue 10 Nov, 9:00', 'Mon 2 Nov, 18:00'])
     const given = ROWS.find((r) => r.name === 'FastAPI') as WatchedSoftwareView
-    expect(historyOf(given, nameOf).map((line) => line.words).slice(-2)).toEqual(['Our version is 0.115.0. Given when added.', 'Added by Alice.'])
+    expect(historyOf(given, nameOf, null).map((line) => line.words).slice(-2)).toEqual(['Our version is 0.115.0. Given when added.', 'Added by Alice.'])
   })
 
   it('says why a check failed and when it will try again', () => {
     const row = ROWS.find((r) => r.status === 'cant_check') as WatchedSoftwareView
-    expect(historyOf(row, nameOf).map((line) => line.words)).toContain('Couldn’t check. GitHub answered 404 Not Found.')
+    expect(historyOf(row, nameOf, null).map((line) => line.words)).toContain('Couldn’t check. GitHub answered 404 Not Found.')
   })
 
   it('keeps the newest version an earlier check read below the check that failed', () => {
     const row = ROWS.find((r) => r.status === 'cant_check') as WatchedSoftwareView
-    expect(historyOf(row, nameOf)).toEqual([
+    expect(historyOf(row, nameOf, null)).toEqual([
       { when: 'Mon 16 Nov, 9:00', words: 'Couldn’t check. GitHub answered 404 Not Found.' },
       { when: 'Mon 9 Nov, 9:00', words: 'Checked. The newest version is 0.115.2.' },
       { when: 'Mon 2 Nov, 18:00', words: 'Our version is 0.115.0. Given when added.' },
@@ -342,7 +402,7 @@ describe('a row’s history', () => {
 
   it('says a new row was not checked yet', () => {
     const row = ROWS.find((r) => r.status === 'not_checked') as WatchedSoftwareView
-    expect(historyOf(row, nameOf)[0]).toEqual({ when: 'Not yet', words: 'Not checked yet.' })
+    expect(historyOf(row, nameOf, null)[0]).toEqual({ when: 'Not yet', words: 'Not checked yet.' })
   })
 })
 
@@ -366,7 +426,7 @@ describe('what the team runs', () => {
 
   it('tells the row history what the checks compare from', () => {
     const first = { ...base, our_version: null, our_version_source: { kind: 'first_check', at: '2026-11-09T01:00:00Z', ticket: null }, compared_from: '8.2.0' } as WatchedSoftwareView
-    const words = historyOf(first, nameOf).map((line) => line.words)
+    const words = historyOf(first, nameOf, null).map((line) => line.words)
     expect(words).toContain('Our version is not known. Later checks tell about releases newer than 8.2.0, the newest the first check read.')
     expect(words.some((line) => line.startsWith('Our version is 8.2.0'))).toBe(false)
   })

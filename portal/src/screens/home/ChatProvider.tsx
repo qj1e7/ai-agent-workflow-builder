@@ -32,6 +32,8 @@ export interface Chat {
   readonly resume: (start: CardStart) => void
   readonly newChat: () => void
   readonly readNote: () => void
+  /** Shows words in Home's one message at the bottom of the page, as the side panel does after a decline. */
+  readonly say: (text: string) => void
   /** Where the conversation was scrolled to when Home was left. It is never saved. */
   readonly scroll: { readonly get: () => number; readonly set: (top: number) => void }
   readonly cardMemory: (messageId: number) => CardMemory
@@ -122,6 +124,7 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
         if (unfinished) here({ type: 'note', text: DRAFT_SAVED })
       },
       readNote: () => here({ type: 'note_read' }),
+      say: (text) => here({ type: 'note', text }),
       scroll,
       cardMemory,
       panel,
