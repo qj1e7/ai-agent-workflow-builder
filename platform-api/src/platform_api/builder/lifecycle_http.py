@@ -1,16 +1,31 @@
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
 
-from platform_api.auth import OPERATORS_ONLY
+from fastapi import APIRouter, Body, HTTPException
+
+from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.builder.http import NO_SUCH, NOT_FOUND, CurrentBuilder, WorkflowOperator
 from platform_api.builder.lifecycle import TooLate
-from platform_api.builder.models import ScheduleIn, UseCaseDeleted, UseCaseView
+from platform_api.builder.models import (
+    UndoIn,
+    UseCaseDeleted,
+    UseCaseScheduleIn,
+    UseCaseView,
+    VersionList,
+)
 from platform_api.builder.service import ScheduleOnSoftwarePage, WatchlistStays
+from platform_api.builder.versions import ChangedSince, NoSuchVersion, NotAScheduleChange
 from platform_api.wire import error_response
 
 router = APIRouter(prefix="/api/v1", tags=["builder"])
 
 SCHEDULE_ON_SOFTWARE_PAGE = "The Software watchlist's schedule is saved on the Software page."
 WATCHLIST_STAYS = "The Software watchlist can't be deleted. Remove its software instead."
+NO_SUCH_VERSION = "No such version"
+CHANGED_SINCE = (
+    "The workflow changed again since this version, so Undo would throw that change away."
+)
+NOT_A_SCHEDULE_CHANGE = "Only a change of when the workflow runs can be undone."
+NO_UNDO_BODY = UndoIn()
 
 
 @router.post(
@@ -96,8 +111,9 @@ async def restore_use_case(
     description="Saves when the workflow runs on its own, in Singapore time. The caller "
     "becomes the schedule owner, whose scheduled runs start as them and who can never approve "
     "them. That lifts a hold, so an Operator takes over a workflow whose owner can no longer "
-    "run it by saving its schedule. A paused workflow stays paused. Saving is not a write to "
-    "Jira or Confluence, so it needs no approval.",
+    "run it by saving its schedule. A new schedule publishes a new version of the workflow, "
+    "which the answer names. Saving the same schedule again publishes none. A paused workflow "
+    "stays paused. Saving is not a write to Jira or Confluence, so it needs no approval.",
     responses={
         **OPERATORS_ONLY,
         404: NOT_FOUND,
@@ -105,12 +121,59 @@ async def restore_use_case(
     },
 )
 async def save_schedule(
-    use_case_id: str, body: ScheduleIn, principal: WorkflowOperator, builder: CurrentBuilder
+    use_case_id: str, body: UseCaseScheduleIn, principal: WorkflowOperator, builder: CurrentBuilder
 ) -> UseCaseView:
     match await builder.save_schedule(use_case_id, principal, body):
         case ScheduleOnSoftwarePage():
             raise HTTPException(409, SCHEDULE_ON_SOFTWARE_PAGE)
         case None:
             raise HTTPException(404, NO_SUCH)
+        case view:
+            return view
+
+
+@router.get(
+    "/use-cases/{use_case_id}/versions",
+    description="Every published version of the workflow, newest first, with when, who and what "
+    "changed. Changing when it runs, or undoing that, publishes a version.",
+    responses={**SIGNED_IN, 404: NOT_FOUND},
+)
+async def list_versions(
+    use_case_id: str, principal: CurrentPrincipal, builder: CurrentBuilder
+) -> VersionList:
+    versions = await builder.list_versions(use_case_id)
+    if versions is None:
+        raise HTTPException(404, NO_SUCH)
+    return versions
+
+
+@router.post(
+    "/use-cases/{use_case_id}/versions/{version}/undo",
+    description="Undoes a change of when the workflow runs: publishes the schedule from before "
+    "it again, as a new version, and makes the caller the schedule owner, as a save does. Only "
+    "the newest version can be undone, so Undo never throws away a later change. Undoing it "
+    "again answers the same. Not a write to Jira or Confluence, so it needs no approval.",
+    responses={
+        **OPERATORS_ONLY,
+        404: error_response("No such workflow, or it is deleted, or no such version"),
+        409: error_response(f"{CHANGED_SINCE} Or: {NOT_A_SCHEDULE_CHANGE}"),
+    },
+)
+async def undo_version(
+    use_case_id: str,
+    version: int,
+    principal: WorkflowOperator,
+    builder: CurrentBuilder,
+    body: Annotated[UndoIn, Body()] = NO_UNDO_BODY,
+) -> UseCaseView:
+    match await builder.undo_version(use_case_id, version, principal, body):
+        case None:
+            raise HTTPException(404, NO_SUCH)
+        case NoSuchVersion():
+            raise HTTPException(404, NO_SUCH_VERSION)
+        case ChangedSince():
+            raise HTTPException(409, CHANGED_SINCE)
+        case NotAScheduleChange():
+            raise HTTPException(409, NOT_A_SCHEDULE_CHANGE)
         case view:
             return view

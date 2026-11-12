@@ -7146,6 +7146,39 @@
         "title": "SavedOut",
         "type": "object"
       },
+      "ScheduleChangeView": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionSchedule"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when an Undo took the schedule away again."
+          },
+          "before": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionSchedule"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when it had no schedule."
+          }
+        },
+        "required": [
+          "before",
+          "after"
+        ],
+        "title": "ScheduleChangeView",
+        "type": "object"
+      },
       "ScheduleHold": {
         "enum": [
           "owner_removed",
@@ -8518,6 +8551,18 @@
         "title": "UnderstoodRowView",
         "type": "object"
       },
+      "UndoIn": {
+        "additionalProperties": false,
+        "properties": {
+          "via": {
+            "$ref": "#/components/schemas/Via",
+            "default": "page",
+            "description": "Where the change was made: page, the workflow's page, or chat, the Planner's chat. The version keeps it."
+          }
+        },
+        "title": "UndoIn",
+        "type": "object"
+      },
       "UseCaseAgentView": {
         "additionalProperties": false,
         "properties": {
@@ -8651,6 +8696,29 @@
           "owner_name"
         ],
         "title": "UseCaseSchedule",
+        "type": "object"
+      },
+      "UseCaseScheduleIn": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "$ref": "#/components/schemas/ClockTime",
+            "description": "Time of day in Singapore, HH:MM on a 5-minute step."
+          },
+          "day": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "via": {
+            "$ref": "#/components/schemas/Via",
+            "default": "page",
+            "description": "Where the change was made: page, the workflow's page, or chat, the Planner's chat. The version keeps it."
+          }
+        },
+        "required": [
+          "day",
+          "at"
+        ],
+        "title": "UseCaseScheduleIn",
         "type": "object"
       },
       "UseCaseState": {
@@ -8865,6 +8933,59 @@
         "pattern": "^[vV]?\\d+\\.\\d+\\.\\d+$",
         "type": "string"
       },
+      "VersionChange": {
+        "additionalProperties": false,
+        "properties": {
+          "schedule": {
+            "$ref": "#/components/schemas/ScheduleChangeView"
+          }
+        },
+        "required": [
+          "schedule"
+        ],
+        "title": "VersionChange",
+        "type": "object"
+      },
+      "VersionList": {
+        "additionalProperties": false,
+        "properties": {
+          "versions": {
+            "description": "Newest first.",
+            "items": {
+              "$ref": "#/components/schemas/VersionView"
+            },
+            "title": "Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "versions"
+        ],
+        "title": "VersionList",
+        "type": "object"
+      },
+      "VersionSchedule": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "$ref": "#/components/schemas/ClockTime"
+          },
+          "day": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "time_zone": {
+            "title": "Time Zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "at",
+          "time_zone"
+        ],
+        "title": "VersionSchedule",
+        "type": "object"
+      },
       "VersionSourceKind": {
         "enum": [
           "given",
@@ -8903,6 +9024,90 @@
         ],
         "title": "VersionSourceView",
         "type": "object"
+      },
+      "VersionView": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "When it was published.",
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who changed it. Null when change is null.",
+            "title": "By"
+          },
+          "change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionChange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What changed. Null for version 1, and for a version the Software watchlist published when its software changed."
+          },
+          "running": {
+            "description": "True for the version running now, which is the newest.",
+            "title": "Running",
+            "type": "boolean"
+          },
+          "undid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The version this one undid, publishing the schedule from before it again.",
+            "title": "Undid"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "via": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Via"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where it was changed. Null when change is null."
+          }
+        },
+        "required": [
+          "version",
+          "at",
+          "by",
+          "via",
+          "change",
+          "undid",
+          "running"
+        ],
+        "title": "VersionView",
+        "type": "object"
+      },
+      "Via": {
+        "enum": [
+          "page",
+          "chat"
+        ],
+        "type": "string"
       },
       "WaitingItem": {
         "additionalProperties": false,
@@ -14589,7 +14794,7 @@
     },
     "/api/v1/use-cases/{use_case_id}/schedule": {
       "put": {
-        "description": "Saves when the workflow runs on its own, in Singapore time. The caller becomes the schedule owner, whose scheduled runs start as them and who can never approve them. That lifts a hold, so an Operator takes over a workflow whose owner can no longer run it by saving its schedule. A paused workflow stays paused. Saving is not a write to Jira or Confluence, so it needs no approval.",
+        "description": "Saves when the workflow runs on its own, in Singapore time. The caller becomes the schedule owner, whose scheduled runs start as them and who can never approve them. That lifts a hold, so an Operator takes over a workflow whose owner can no longer run it by saving its schedule. A new schedule publishes a new version of the workflow, which the answer names. Saving the same schedule again publishes none. A paused workflow stays paused. Saving is not a write to Jira or Confluence, so it needs no approval.",
         "operationId": "save_schedule_api_v1_use_cases__use_case_id__schedule_put",
         "parameters": [
           {
@@ -14606,7 +14811,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ScheduleIn"
+                "$ref": "#/components/schemas/UseCaseScheduleIn"
               }
             }
           },
@@ -14693,6 +14898,219 @@
           }
         ],
         "summary": "Save Schedule",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/use-cases/{use_case_id}/versions": {
+      "get": {
+        "description": "Every published version of the workflow, newest first, with when, who and what changed. Changing when it runs, or undoing that, publishes a version.",
+        "operationId": "list_versions_api_v1_use_cases__use_case_id__versions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "use_case_id",
+            "required": true,
+            "schema": {
+              "title": "Use Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such workflow, or it is deleted"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "List Versions",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/use-cases/{use_case_id}/versions/{version}/undo": {
+      "post": {
+        "description": "Undoes a change of when the workflow runs: publishes the schedule from before it again, as a new version, and makes the caller the schedule owner, as a save does. Only the newest version can be undone, so Undo never throws away a later change. Undoing it again answers the same. Not a write to Jira or Confluence, so it needs no approval.",
+        "operationId": "undo_version_api_v1_use_cases__use_case_id__versions__version__undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "use_case_id",
+            "required": true,
+            "schema": {
+              "title": "Use Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "title": "Version",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UndoIn",
+                "default": {
+                  "via": "page"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UseCaseView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such workflow, or it is deleted, or no such version"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The workflow changed again since this version, so Undo would throw that change away. Or: Only a change of when the workflow runs can be undone."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Undo Version",
         "tags": [
           "builder"
         ]

@@ -347,6 +347,58 @@ class ScheduleIn(WireIn):
     at: ClockTime = Field(description="Time of day in Singapore, HH:MM on a 5-minute step.")
 
 
+type Via = Literal["page", "chat"]
+
+VIA_WORDS = (
+    "Where the change was made: page, the workflow's page, or chat, the Planner's chat. The "
+    "version keeps it."
+)
+
+
+class UseCaseScheduleIn(ScheduleIn):
+    via: Via = Field(default="page", description=VIA_WORDS)
+
+
+class UndoIn(WireIn):
+    via: Via = Field(default="page", description=VIA_WORDS)
+
+
+class VersionSchedule(WireModel):
+    day: Day
+    at: ClockTime
+    time_zone: str
+
+
+class ScheduleChangeView(WireModel):
+    before: VersionSchedule | None = Field(description="Null when it had no schedule.")
+    after: VersionSchedule | None = Field(
+        description="Null when an Undo took the schedule away again."
+    )
+
+
+class VersionChange(WireModel):
+    schedule: ScheduleChangeView
+
+
+class VersionView(WireModel):
+    version: int
+    at: AwareDatetime = Field(description="When it was published.")
+    by: UserId | None = Field(description="Who changed it. Null when change is null.")
+    via: Via | None = Field(description="Where it was changed. Null when change is null.")
+    change: VersionChange | None = Field(
+        description="What changed. Null for version 1, and for a version the Software "
+        "watchlist published when its software changed."
+    )
+    undid: int | None = Field(
+        description="The version this one undid, publishing the schedule from before it again."
+    )
+    running: bool = Field(description="True for the version running now, which is the newest.")
+
+
+class VersionList(WireModel):
+    versions: list[VersionView] = Field(description="Newest first.")
+
+
 class ScheduleView(WireModel):
     day: Day
     at: ClockTime
