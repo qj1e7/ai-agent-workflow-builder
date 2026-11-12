@@ -1182,6 +1182,46 @@ test.describe('the edit card (spec 6.7)', () => {
     await context.close()
   })
 
+  test('pressing on the card: Save waits for the workflow’s read, Enter in Another time only picks, and saving one card turns an older card on the same workflow stale', async ({ browser, backend }) => {
+    const morning = await scheduledWorkflow(backend, `Morning check ${tag()}`, WEEKDAYS_8)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const puts: string[] = []
+    page.on('request', (request) => {
+      if (request.method() === 'PUT' && request.url().includes(morning.id)) puts.push(request.url())
+    })
+    let release: () => void = () => undefined
+    const held = new Promise<void>((resolve) => (release = resolve))
+    await page.route(`**/api/v1/use-cases/${morning.id}`, async (route) => {
+      if (route.request().method() === 'GET') await held
+      await route.continue()
+    })
+    await page.goto('/')
+
+    const early = await askAndWait(page, `make the ${morning.name} run at 10am`)
+    const save = editCard(early).getByRole('button', { name: 'Save change' })
+    await expect(save, 'Save waits while the workflow is read').toHaveAttribute('aria-busy', 'true')
+    await save.click({ force: true })
+    release()
+    await expect(save).not.toHaveAttribute('aria-busy', 'true')
+    expect(puts, 'a press before the read saved nothing').toEqual([])
+
+    const unread = await askAndWait(page, `make the ${morning.name} run on Mondays in the afternoon`)
+    await expect(editCard(unread)).toContainText('What time should it run?')
+    await editCard(unread).getByRole('button', { name: 'Another time' }).click()
+    await editCard(unread).getByLabel('Time, Singapore').fill('10:05')
+    await editCard(unread).getByLabel('Time, Singapore').press('Enter')
+    await expect(editCard(unread)).toHaveText(/After\s*Every Monday at 10:05/)
+    expect(puts, 'Enter in Another time picks the time and saves nothing').toEqual([])
+
+    await editCard(unread).getByRole('button', { name: 'Save change' }).click()
+    await expect(editCard(unread)).toContainText('Saved as version 3.')
+    await expect(early.locator('p[id$="-sentence"]'), 'the older card on the same workflow is out of date now').toHaveText(`${morning.name} changed since I read it, and runs every Monday at 10:05 now. Ask again to change it.`)
+    await expect(editCard(early), 'and offers no Save').toHaveCount(0)
+    expect(await shown(backend, morning.id)).toMatchObject({ version: 3, schedule: { day: 'monday', at: '10:05' } })
+    await context.close()
+  })
+
   test('bob, an Approver, never gets an edit answer', async ({ backend }) => {
     const morning = await scheduledWorkflow(backend, `Morning check ${tag()}`, WEEKDAYS_8)
     const answer = await backend.send<{ answer?: string }>('POST', 'bob', '/api/v1/planner/answer', { text: `Make the ${morning.name} run on Mondays only` })
