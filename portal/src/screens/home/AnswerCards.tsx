@@ -147,9 +147,12 @@ export function WatchlistAnswer({ reply, typed }: { reply: WatchlistReply; typed
 const NO_PAGE: Page = { ask: () => undefined, edit: () => undefined }
 
 function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { answer: 'refused' }>; typed: string; page: Page }) {
-  // Someone who isn't an Operator sets nothing up, so the refusal offers them no set-up with a yes.
-  const { rest } = useAsker() === 'operator' ? refusalNext(reply) : { rest: null }
-  const main = useMainButton()
+  // Someone who isn't an Operator sets nothing up, so the refusal offers them no set-up with a yes. Their main button is the request
+  // to open, drawn under the card.
+  const operator = useAsker() === 'operator'
+  const { rest } = operator ? refusalNext(reply) : { rest: null }
+  const newest = useMainButton()
+  const main = operator ? newest : 'secondary'
   return (
     <Card title="How approvals work">
       <div className={styles['pcardPart']}>

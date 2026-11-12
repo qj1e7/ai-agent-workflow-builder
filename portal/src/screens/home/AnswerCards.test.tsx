@@ -381,6 +381,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     const html = ask(refused as PlannerReply)
     expect(buttons(html)).toEqual(['Say it another way', 'Review and decide'])
     expect(answerOf(html)).toContain('Nobody approves their own work')
+    expect(html.match(/class="[^"]*_primary_[^"]*"/g) ?? [], 'one main button, on the request').toHaveLength(1)
   })
 
   it('answers in one line when the model is slow or missing, with no starting points and no Connect a model', () => {
