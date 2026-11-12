@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef } from 'react'
 import { Button, ButtonLink } from '../../ui/Button'
-import { InSidePanel, type PanelItem, type PanelView } from '../../ui/sidePanel'
+import { escapeCloses, InSidePanel, wrapTab, type PanelItem, type PanelView } from '../../ui/sidePanel'
 import { SoftwarePanel } from '../software/SoftwarePanel'
 import { WorkflowPanel } from '../workflows/WorkflowPanel'
 import styles from './SidePanel.module.css'
@@ -11,23 +11,6 @@ export const PANEL_HEADING = 'side-panel-h'
 const RunPanel = lazy(() => import('../run/RunPanel').then((module) => ({ default: module.RunPanel })))
 
 const TAB_STOPS = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
-
-/** In a narrow window the panel is a dialog over the page, so Tab goes round inside it. */
-function keepTabInside(event: KeyboardEvent, panel: HTMLElement): void {
-  const stops = [...panel.querySelectorAll<HTMLElement>(TAB_STOPS)].filter((stop) => stop.getClientRects().length > 0)
-  const first = stops[0]
-  const last = stops.at(-1)
-  if (!first || !last) return
-  const active = document.activeElement
-  const inside = stops.some((stop) => stop === active)
-  if (event.shiftKey && (!inside || active === first)) {
-    event.preventDefault()
-    last.focus()
-  } else if (!event.shiftKey && (!inside || active === last)) {
-    event.preventDefault()
-    first.focus()
-  }
-}
 
 interface SidePanelProps {
   readonly item: PanelItem
@@ -48,9 +31,17 @@ export function SidePanel({ item, now, narrow, onClose }: SidePanelProps) {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || document.querySelector('dialog[open]')) return
-      if (event.key === 'Escape') onClose()
-      else if (event.key === 'Tab' && narrow && panel.current) keepTabInside(event, panel.current)
+      const dialogOpen = document.querySelector('dialog[open]') !== null
+      if (escapeCloses(event, dialogOpen)) {
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab' || event.defaultPrevented || dialogOpen || !narrow || !panel.current) return
+      const stops = [...panel.current.querySelectorAll<HTMLElement>(TAB_STOPS)].filter((stop) => stop.getClientRects().length > 0)
+      const next = wrapTab(stops, document.activeElement, event.shiftKey)
+      if (!next) return
+      event.preventDefault()
+      next.focus()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)

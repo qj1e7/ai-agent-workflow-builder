@@ -5,6 +5,7 @@ import aliceHome from '../../../../contracts/fixtures/builder/home.alice.json'
 import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
 import dayOne from '../../../../contracts/fixtures/builder/home.day-one.json'
 import type { HomeOut } from '../../api/types'
+import { OpensInPanel, type PanelItem } from '../../ui/sidePanel'
 import { needsTotal } from './home'
 import { PinnedLine } from './PinnedLine'
 
@@ -16,6 +17,14 @@ const draw = (home: HomeOut) =>
   renderToStaticMarkup(
     <MemoryRouter>
       <PinnedLine home={home} now={NOW} />
+    </MemoryRouter>,
+  )
+const inChat = (home: HomeOut, shown: PanelItem | null) =>
+  renderToStaticMarkup(
+    <MemoryRouter>
+      <OpensInPanel.Provider value={{ shown, open: () => undefined }}>
+        <PinnedLine home={home} now={NOW} />
+      </OpensInPanel.Provider>
     </MemoryRouter>,
   )
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
@@ -58,5 +67,12 @@ describe('the pinned line', () => {
 
   it('has one button, and it is not the main one, because the newest answer has that', () => {
     expect((draw(ALICE).match(/_primary_/g) ?? []).length).toBe(0)
+  })
+
+  it('in the chat opens a stop in the side panel, and gives way while the panel shows it', () => {
+    expect(inChat(ALICE, null)).toMatch(/<button[^>]*data-opens="run:run_01JB9"[^>]*>Open/)
+    expect(links(inChat(ALICE, null)).map(([words]) => words)).toEqual([`${String(needsTotal(ALICE) - 1)} more that need you`])
+    expect(text(inChat(ALICE, { kind: 'run', id: 'run_01JB9' }))).not.toContain('Open')
+    expect(inChat(ALICE, { kind: 'run', id: 'run_other' })).toContain('data-opens="run:run_01JB9"')
   })
 })

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import type { HomeOut } from '../../api/types'
 import { InChat } from '../../ui/fromChat'
 import { NARROW, useMediaQuery } from '../../ui/media'
-import { OpensInPanel, panelKey, type PanelItem, type PanelOpener } from '../../ui/sidePanel'
+import { openerAfterClose, OpensInPanel, panelKey, type PanelItem, type PanelOpener } from '../../ui/sidePanel'
 import type { Page } from './AnswerCards'
 import { useChat, type OpenPanel } from './ChatProvider'
 import { PinnedLine } from './PinnedLine'
@@ -90,8 +90,7 @@ export function ChatView({ home, now, page, box, onNewChat }: ChatViewProps) {
     const was = closed.current
     if (!was || panel) return
     closed.current = null
-    const all = openersOf(column.current, was.item)
-    const back = all[was.from] ?? all[0] ?? document.getElementById('planner-box')
+    const back = openerAfterClose(openersOf(column.current, was.item), was.from) ?? document.getElementById('planner-box')
     back?.focus({ preventScroll: true })
   }, [panel])
 

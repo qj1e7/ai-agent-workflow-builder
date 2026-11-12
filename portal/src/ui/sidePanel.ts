@@ -46,3 +46,23 @@ export function useShownInPanel(...items: readonly PanelItem[]): boolean {
 export function useAfterPanelAction(): (() => void) | null {
   return useContext(InSidePanel)
 }
+
+/** Escape closes the panel, unless a dialog over it, such as Teams, or the control with focus took the key first. */
+export function escapeCloses(event: { readonly key: string; readonly defaultPrevented: boolean }, dialogOpen: boolean): boolean {
+  return event.key === 'Escape' && !event.defaultPrevented && !dialogOpen
+}
+
+/** Where Tab goes in a panel that covers the window: round from the last stop to the first, and back. Null lets it move as usual. */
+export function wrapTab<T>(stops: readonly T[], active: unknown, back: boolean): T | null {
+  const first = stops[0]
+  const last = stops.at(-1)
+  if (first === undefined || last === undefined) return null
+  const inside = stops.some((stop) => stop === active)
+  if (back) return !inside || active === first ? last : null
+  return !inside || active === last ? first : null
+}
+
+/** What takes focus when the panel closes: the control that opened it, which shows again, else another way to open the same item. */
+export function openerAfterClose<T>(openers: readonly T[], from: number): T | null {
+  return openers[from] ?? openers[0] ?? null
+}
