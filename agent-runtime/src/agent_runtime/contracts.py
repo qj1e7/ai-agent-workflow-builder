@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from agent_runtime.abilities import CAPABILITY_LIST
-from agent_runtime.answers import SkipRead, TaskRead, answer_of, check_one_part
+from agent_runtime.answers import SkipRead, TaskRead, answer_of, check_one_part, parts_of
 from agent_runtime.api import AGENT_CARDS
 from agent_runtime.contract import (
     RELEASE_TAG_PATTERN,
@@ -73,6 +73,7 @@ from agent_runtime.contract import (
     TaskRequest,
     WatchedFact,
     WatchlistInputs,
+    WatchlistScheduleFact,
     WireModel,
     agent_event_adapter,
 )
@@ -822,8 +823,7 @@ def answer_request(task: str = FOLLOW_UP_TASK) -> AnswerRequest:
 
 def _answered(read: TaskRead, task: str) -> Answered:
     answer = answer_of(read, task)
-    assert answer is not None
-    return Answered(answer=answer)
+    return Answered(answer=answer, parts=parts_of(read, task, answer))
 
 
 def answered_card() -> Answered:
@@ -894,7 +894,9 @@ def question_request() -> AnswerRequest:
     return AnswerRequest(
         task="how many software are on our watchlist",
         model=draft_request().model,
-        facts=PlannerFacts(watchlist=watched),
+        facts=PlannerFacts(
+            watchlist=watched, watchlist_schedule=WatchlistScheduleFact(day="monday", at="09:00")
+        ),
         previous=PreviousTurn(request="What is the newest version of LangGraph?"),
     )
 
@@ -902,7 +904,7 @@ def question_request() -> AnswerRequest:
 def answered_question() -> Answered:
     text = "LangGraph is behind. You run 1.2.14 and the newest is 1.2.16."
     answer = QuestionAnswer(text=text, looked_at=["watchlist"], about_software=["LangGraph"])
-    return Answered(answer=answer)
+    return Answered(answer=answer, parts=parts_of(None, question_request().task, answer))
 
 
 def fixtures() -> dict[str, WireModel]:

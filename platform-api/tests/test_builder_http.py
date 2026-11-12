@@ -592,6 +592,19 @@ async def test_the_runtime_gets_the_facts_the_screens_show_for_the_signed_in_per
     assert [v.user_id for v in front.home.viewers] == ["alice"]
 
 
+async def test_the_facts_carry_the_watchlists_schedule_as_its_page_shows_it(front: Front):
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
+    await front.watchlist.add(alice, AddSoftware.model_validate(LANGGRAPH))
+    front.answers.result = answered(AbilitiesAnswer())
+    await say(front, "watch React every Monday at 9am")
+    (facts,) = front.answers.facts
+    page = (await front.client.get("/api/v1/watchlist", headers=ALICE)).json()["watchlist"]
+    assert page["schedule"] is not None
+    assert facts is not None and facts.watchlist_schedule is not None
+    shown = facts.watchlist_schedule
+    assert (shown.day, shown.at) == (page["schedule"]["day"], page["schedule"]["at"])
+
+
 async def test_a_follow_up_passes_the_previous_turn_on_and_changes_nothing_else(front: Front):
     front.answers.result = answered(WhichSoftwareAnswer(word="version"))
     previous = {

@@ -2220,13 +2220,20 @@
             "$ref": "#/components/schemas/RowKind"
           },
           "needs": {
-            "description": "new_tool: the platform already reaches the system, so the team decides on a tool. new_system: it names a system or source the platform doesn't reach, or none.",
-            "enum": [
-              "new_tool",
-              "new_system"
+            "anyOf": [
+              {
+                "enum": [
+                  "new_tool",
+                  "new_system"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Needs",
-            "type": "string"
+            "description": "new_tool: the platform already reaches the system, so the team decides on a tool. new_system: it names a system or source the platform doesn't reach. Null for a part the Planner didn't follow, which names nothing to build.",
+            "title": "Needs"
           },
           "note": {
             "description": "Why the platform can't do it, in plain words.",

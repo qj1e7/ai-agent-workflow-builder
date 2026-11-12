@@ -16,6 +16,7 @@ from platform_api.orchestration import (
     PlannerFacts,
     Status,
     WatchedFact,
+    WatchlistScheduleFact,
     WorkflowFact,
 )
 from platform_api.shared import Principal
@@ -125,6 +126,7 @@ class PlannerFactsReader:
             watchlist=await self._section("watchlist", self._read_watchlist()),
             workflows=await self._section("workflows", self._read_workflows()),
             needs_you=await self._section("needs_you", self._read_needs_you(viewer)),
+            watchlist_schedule=await self._section("schedule", self._read_schedule()),
         )
 
     async def _section[T](self, name: str, reading: Awaitable[T]) -> T | None:
@@ -141,6 +143,14 @@ class PlannerFactsReader:
         if view is None or len(view.software) > WATCHED_CAP:
             return None
         return watched_facts(view.software)
+
+    async def _read_schedule(self) -> WatchlistScheduleFact | None:
+        """When the Software watchlist checks, so a watch request that names the same time is
+        no cross. None while it is off or paused."""
+        view = await self._watchlist.view()
+        if view is None or view.schedule is None or view.state != "on":
+            return None
+        return WatchlistScheduleFact(day=view.schedule.day, at=view.schedule.at)
 
     async def _read_workflows(self) -> list[WorkflowFact] | None:
         use_cases = (await self._workflows.list_use_cases()).use_cases

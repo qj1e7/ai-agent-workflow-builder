@@ -10,6 +10,7 @@ value the request never gave is dropped, and the request's words for it come bac
 """
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final, Literal
 
@@ -38,6 +39,7 @@ type DayHow = Literal["within", "before", "since_last_run"]
 type Detail = Literal["owner", "type", "status", "created", "updated", "done"]
 type Says = Literal["list", "count", "summary"]
 type SkipWhose = Literal["nobody", "only_me", "an_approver_or_anyone_else"]
+type ClashReason = Literal["one_day", "one_time", "one_frequency"]
 type AsksAbout = Literal["none", "my_workflows", "why_stopped", "needs_me", "abilities"]
 
 FILLED_IN: Final = "I filled this in. Your words didn't say it, so please check it."
@@ -45,7 +47,12 @@ FILLED_IN_FROM: Final = 'I filled some of this in from your words "{}". Please c
 READ_FROM: Final = 'Read from your words "{}".'
 NO_TIME_SAID: Final = "Your words didn't say a time. Please choose one."
 NO_TIME_BUT: Final = 'Your words said "{}" but not a time. Please choose one.'
+NO_DAYS: Final = 'Your words said "{}" but not how many days. Please say how many.'
+ONE_DAY: Final = "Your words said {}. I can only set one day, so please choose one."
+ONE_TIME: Final = "Your words said {}. I can only set one time, so please choose one."
+ONE_FREQUENCY: Final = "Your words said {}. Please choose how often it runs."
 SAID_LIMIT: Final = 200
+NO_ASSIGNEE: Final = "with no assignee"
 
 
 class DaysRead(BaseModel):
@@ -220,30 +227,30 @@ class TaskRead(BaseModel):
 # claim. A word in one explains a request word only when that structure is filled, and only
 # inside that structure's own stretch of the request (`leftovers`).
 FILLER: Final = words(
-    "a an the this that these those each every all any some no none we us our ours you your "
-    "yours it its it's they them their theirs there here one ones who whom whose which what "
-    "where when how why in on at to of for with without from into onto over about as per via "
-    "through after before since until during between among against and or nor but so then "
-    "than if whether while once yet also just only please too very rather really even ever "
-    "already always again now right soon quickly simply up down out off back away is are was "
-    "were be been being am do does did has have had having can could will would shall should "
-    "may might must need needs needed want wants wanted like not never don't doesn't didn't "
-    "won't can't cannot isn't aren't wasn't weren't shouldn't wouldn't couldn't haven't hasn't "
-    "get gets got getting go goes going gone let keep keeps something anything everything "
-    "nothing thanks thank hi hello hey etc able sure make makes making help t s d m ll ve re"
+    "a an the this that these those each every all any some we us our ours you your yours it "
+    "its it's they them their theirs there here one ones who whom whose which what where when "
+    "how why in on at to of for with from into onto over about as per via through after before "
+    "since until during between among against and or nor but so then than if whether while "
+    "once yet also just only please too very rather really even ever already always again now "
+    "right soon quickly simply up down out off back away is are was were be been being am do "
+    "does did has have had having can could will would shall should may might must need needs "
+    "needed want wants wanted like get gets got getting go goes going gone let keep keeps "
+    "something anything everything thanks thank hi hello hey etc able sure make makes making "
+    "help t s d m ll ve re"
 )
 """Words that name no part of a task on their own. "make" is here for "make sure"; a ticket
 made is "create" or "make" in the ticket's own words, which the ticket vocabulary explains.
 "I", "me" and "my", "by", "under" and "still" are not here: each can carry a filter ("opened by
 me", "still under review"), so a structure must explain it where it stands, or it comes back."""
 SCHEDULE_WORDS: Final = words(
-    "monday tuesday wednesday thursday friday saturday sunday weekday weekdays daily weekly "
+    "monday tuesday wednesday thursday friday saturday sunday mondays tuesdays wednesdays "
+    "thursdays fridays saturdays sundays weekday weekdays daily weekly "
     "monthly hourly quarterly yearly annually fortnightly biweekly day days week weeks month "
     "months hour hours quarter quarters year years fortnight morning afternoon evening night "
     "noon midday midnight"
 )
 SCHEDULE_VOCAB: Final = SCHEDULE_WORDS | words(
-    "every each on at in the and to from by before after first last other twice once per a an "
+    "every each on at in the and or to from by before after first last other twice once per a an "
     "am pm o'clock start end of beginning eod"
 )
 TIME_OF_DAY: Final = re.compile(
@@ -252,6 +259,38 @@ TIME_OF_DAY: Final = re.compile(
     r"\b(?:noon|midday|midnight|morning|afternoon|evening|night)\b",
     re.IGNORECASE,
 )
+FREQUENCY: Final = re.compile(
+    r"\b(?:every|each)\s+(day|weekday|week|fortnight|month|quarter|year|hour)\b|"
+    r"\b(daily|weekdays|weekly|fortnightly|biweekly|monthly|quarterly|yearly|annually|hourly)\b",
+    re.IGNORECASE,
+)
+"""How often a schedule runs, as "every week" or "weekly"."""
+OFTEN: Final = {
+    "daily": "day",
+    "weekdays": "weekday",
+    "weekly": "week",
+    "fortnightly": "fortnight",
+    "biweekly": "fortnight",
+    "monthly": "month",
+    "quarterly": "quarter",
+    "yearly": "year",
+    "annually": "year",
+    "hourly": "hour",
+}
+"""Each frequency word as the one it means, so "daily" and "every day" are the same."""
+DAY_NAMES: Final = r"monday|tuesday|wednesday|thursday|friday|saturday|sunday"
+DAY: Final = re.compile(rf"\b({DAY_NAMES})s?\b", re.IGNORECASE)
+DAY_RANGE: Final = re.compile(
+    rf"\b(?:{DAY_NAMES})s?\s*(?:to|through|thru|till|until|-)\s*(?:{DAY_NAMES})s?\b",
+    re.IGNORECASE,
+)
+CLOCK: Final = re.compile(
+    r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b|\b(\d{1,2}):(\d{2})\b|"
+    r"\b(?:at|or|and)\s+(\d{1,2})\b(?![:.]\d)(?!\s*(?:am|pm)\b)|\b(noon|midday|midnight)\b",
+    re.IGNORECASE,
+)
+"""A time of day as the request writes it: "9am", "17:00", "noon", or a bare hour after "at",
+"or" or "and", as in "at 9 or 10"."""
 CLOCK_TOKEN: Final = re.compile(r"^\d{1,2}(?::\d{2})?(?:am|pm)$|^\d{1,2}(?:st|nd|rd|th)$")
 SEARCH_VOCAB: Final = words(
     "ticket tickets issue issues item items entry entries find finds finding found list lists "
@@ -276,7 +315,18 @@ STATUS_VOCAB: Final[dict[StatusRead, frozenset[str]]] = {
     ),
     "done": words("done closed resolved finished completed complete fixed shipped solved"),
 }
-NEGATIONS: Final = words("not never no isn't aren't wasn't weren't hasn't haven't un without")
+NEGATIONS: Final = words(
+    "not never no none nothing nobody no-one isn't aren't wasn't weren't hasn't haven't un without"
+)
+"""Words that turn the words after them round. They are not filler: a structure explains one
+only when it holds that direction ("with no update for 10 days" as updated before), so a negation
+the model read the other way round comes back to the person."""
+NOT_UPDATED: Final = words("untouched stale idle dormant quiet")
+"""Update words that say no update on their own: a filter on them runs before, never within."""
+EXCLUSIONS: Final = words("except excepting excluding exclude excludes unless besides")
+"""Words that leave out what follows them. A search can't leave anything out, so like a
+negation one is explained only where a structure holds that direction. "other than" and "apart
+from" are read as pairs."""
 ISSUE_TYPES: Final[dict[str, tuple[str, ...]]] = {
     "Bug": ("bug", "bugs"),
     "Task": ("task", "tasks"),
@@ -310,6 +360,15 @@ WHEN_VOCAB: Final[dict[str, frozenset[str]]] = {
     ),
     "done": STATUS_VOCAB["done"] | words("closing closure"),
 }
+GOVERNED: Final = (
+    frozenset(TYPE_BY_FORM)
+    | ASSIGNEE_VOCAB
+    | ME_WORDS
+    | NOT_UPDATED
+    | frozenset(w for v in STATUS_VOCAB.values() for w in v)
+    | frozenset(w for v in WHEN_VOCAB.values() for w in v)
+)
+"""The filter words a negation or an exclusion can turn round."""
 TOPIC_VOCAB: Final = words(
     "about mentioning mention mentions titled called named regarding concerning containing "
     "contain contains saying say says related area topic subject feature module page title "
@@ -422,6 +481,15 @@ NEGATED: Final = re.compile(
 )
 SPEAKS_OF_SELF: Final = re.compile(r"\b(?:i|i'd|i'm|i'll|i've|me|my|mine|myself)\b", re.IGNORECASE)
 CLAUSE_END: Final = re.compile(r"[,;:.!?]+(?=\s|$)|[()]")
+JOIN: Final = re.compile(
+    r"\b(?:and|then|but|also|plus)\b(?=\s+(?P<next>[^\W_][\w'’-]*))", re.IGNORECASE
+)
+LEADING_JOIN: Final = re.compile(r"(?:(?:and|then|but|also|plus)\s+)+", re.IGNORECASE)
+POLITE: Final = words("please thanks thank you kindly hi hello hey there cheers")
+POLITE_PHRASE: Final = re.compile(
+    r"\b(?:no\s+problem|no\s+worries|without\s+fail|if\s+possible|thank\s+you)\b", re.IGNORECASE
+)
+"""Phrases that ask for nothing, so they are never a part to mark."""
 LEAD_IN: Final = re.compile(
     r"\b(?:without|no|not|neither|nor|never|don't)(?:\s+(?:a|an|the|any|my|their))?\s*$",
     re.IGNORECASE,
@@ -562,7 +630,7 @@ def _assignee(text: str, said: str | None) -> tuple[str, frozenset[str]] | None:
             text,
             re.IGNORECASE,
         )
-        return None if framed is None else ("with no assignee", ASSIGNEE_VOCAB | NOBODY_WORDS)
+        return None if framed is None else (NO_ASSIGNEE, ASSIGNEE_VOCAB | NOBODY_WORDS)
     if NAME.fullmatch(value) is None:
         return None
     name = re.escape(value)
@@ -601,16 +669,63 @@ def _topic(text: str, said: str | None) -> tuple[str, frozenset[str]] | None:
     return found, TOPIC_VOCAB | frozenset(_low(t) for t, _, _ in _request_tokens(found))
 
 
+def _turns(tokens: list[tuple[str, int, int]], at: int) -> str | None:
+    """The negation or exclusion that stands at token `at`, as written, or None."""
+    low = _low(tokens[at][0])
+    after = _low(tokens[at + 1][0]) if at + 1 < len(tokens) else ""
+    if low in NEGATIONS or low in EXCLUSIONS or low.endswith("n't"):
+        return low
+    return low if (low, after) in (("other", "than"), ("apart", "from")) else None
+
+
+def _governed(text: str) -> list[tuple[str, list[str]]]:
+    """Each filter word that a negation or an exclusion turns round, with the words that turn
+    it. One governs the first filter word after it in its clause, however far, so "nobody on
+    the duty team has updated" turns "updated", and "not assigned to me that are open" turns
+    "assigned", never "open"."""
+    tokens = _request_tokens(text)
+    clause_of = _clause_of(text, tokens)
+    found: dict[int, list[str]] = {}
+    for at in range(len(tokens)):
+        turn = _turns(tokens, at)
+        if turn is None:
+            continue
+        for after in range(at + 1, len(tokens)):
+            if clause_of[after] != clause_of[at]:
+                break
+            if _low(tokens[after][0]) in GOVERNED:
+                found.setdefault(after, []).append(turn)
+                break
+    return [(_low(tokens[at][0]), turns) for at, turns in sorted(found.items())]
+
+
+def _negations(text: str, forms: frozenset[str]) -> frozenset[str]:
+    """The negations and exclusions that turn one of `forms` round. Empty when none does."""
+    return frozenset(t for word, turns in _governed(text) if word in forms for t in turns)
+
+
+def _doubled(text: str, forms: frozenset[str]) -> bool:
+    """Whether one of `forms` is turned round twice, as "not gone without an update"."""
+    return any(len(turns) > 1 for word, turns in _governed(text) if word in forms)
+
+
+def says_no_change(text: str) -> bool:
+    """Whether the words say a ticket was not created, updated or done, as "nobody has touched
+    for 10 days" or "untouched": a day filter that runs before, never within."""
+    return _forms_in(text, NOT_UPDATED) or any(_negations(text, v) for v in WHEN_VOCAB.values())
+
+
+def turns_round(text: str) -> bool:
+    """Whether a negation or an exclusion in the words turns a filter word round, as "except
+    bugs". "Won't Fix" turns none."""
+    return bool(_governed(text))
+
+
 def _negated_done(text: str) -> frozenset[str]:
-    """Done words that a negation turns into open, as "not done" or "aren't finished"."""
-    tokens = [_low(t) for t, _, _ in _request_tokens(text)]
-    found: set[str] = set()
-    for at, token in enumerate(tokens):
-        if token in STATUS_VOCAB["done"] and any(
-            t in NEGATIONS or t.endswith("n't") for t in tokens[max(0, at - 2) : at]
-        ):
-            found.add(token)
-    return frozenset(found)
+    """Done words that one negation turns into open, as "not done" or "aren't finished"."""
+    return frozenset(
+        word for word, turns in _governed(text) if word in STATUS_VOCAB["done"] and len(turns) == 1
+    )
 
 
 PERSONS_ACTION: Final = re.compile(
@@ -675,16 +790,23 @@ def render_search(read: SearchRead, text: str) -> Rendered:
     types = list(
         dict.fromkeys(t for t in (TYPE_BY_FORM.get(_low(x)) for x in read.issue_types) if t)
     )
-    kept_types = [t for t in types if _forms_in(text, frozenset(ISSUE_TYPES[t]))]
+    kept_types = [
+        t
+        for t in types
+        if _forms_in(text, frozenset(ISSUE_TYPES[t]))
+        and not _negations(text, frozenset(ISSUE_TYPES[t]))
+    ]
     for name in kept_types:
         explained.update(ISSUE_TYPES[name])
     subject = " and ".join(kept_types[:3]).lower() + " tickets" if kept_types else "tickets"
     status = ""
-    if read.status is not None:
+    # A status whose own words are negated, as "not done" read as done, is the wrong way round,
+    # so it is dropped and its words come back. "not done" read as open holds the negation.
+    if read.status is not None and not _negations(text, STATUS_VOCAB[read.status]):
         vocab = STATUS_VOCAB[read.status]
         negated = _negated_done(text) if read.status == "open" else frozenset[str]()
         if _forms_in(text, vocab) or negated:
-            explained.update(vocab | negated)
+            explained.update(vocab | negated | _negations(text, negated))
         else:
             sourced = False
         explained.update(STILL)
@@ -696,24 +818,22 @@ def render_search(read: SearchRead, text: str) -> Rendered:
         explained.add(project.casefold())
     assignee = _assignee(text, read.assignee)
     if assignee is not None:
-        parts.append(assignee[0])
-        explained.update(assignee[1])
+        negations = _negations(text, assignee[1])
+        if not negations or assignee[0] == NO_ASSIGNEE:
+            parts.append(assignee[0])
+            explained.update(assignee[1] | negations)
     tail: list[str] = []
-    for when, filter_ in (
-        ("created", read.created),
-        ("updated", read.updated),
-        ("done", read.done),
-    ):
-        # A day filter on a date the request never names, as "the last comment is older than 5
-        # days" read as no update, is dropped like an assignee or a topic it never framed.
-        if filter_ is None or not _forms_in(text, WHEN_VOCAB[when]):
-            continue
+    for when, filter_ in _day_filters(read, text):
+        quoted = text[said[0] : said[1]] if said is not None else ""
+        explained.update(
+            (WHEN_VOCAB[when] - _persons_action(quoted, when))
+            | DAYS_VOCAB
+            | _negations(text, WHEN_VOCAB[when])
+        )
         shown = _days_text(when, filter_)
         if shown is None:
             continue
         tail.append(shown)
-        quoted = text[said[0] : said[1]] if said is not None else ""
-        explained.update((WHEN_VOCAB[when] - _persons_action(quoted, when)) | DAYS_VOCAB)
         if filter_.days is not None:
             if said_in(str(filter_.days), text) or (filter_.days == 0 and said_in("today", text)):
                 explained.add(str(filter_.days))
@@ -725,14 +845,50 @@ def render_search(read: SearchRead, text: str) -> Rendered:
         explained.update(topic[1])
     shown = " ".join(parts) + (", " + ", ".join(tail) if tail else "")
     shown = shown[:1].upper() + shown[1:]
+    asked = days_asked(read, text)
     row = UnderstoodRow(
         kind="look_for",
         text=plain(shown, TEXT_LIMIT),
-        state="understood" if sourced else "changed",
-        note=_note(text, said, sourced),
+        state="missing" if asked else "understood" if sourced else "changed",
+        note=NO_DAYS.format(text[asked[0] : asked[1]]) if asked else _note(text, said, sourced),
     )
     stands = said if said is not None else _own_run(text, frozenset(explained))
     return Rendered(row, frozenset(explained), stands)
+
+
+def _day_filters(read: SearchRead, text: str) -> list[tuple[str, DaysRead]]:
+    """The day filters the request frames in their own direction. One on a date the request
+    never names, as "the last comment is older than 5 days" read as no update, is dropped like
+    an assignee or a topic it never framed. One the model read the other way round, as "haven't
+    been updated for 10 days" read as updated within 10 days, or turned round twice, as "not
+    gone without an update", is dropped too: its words come back, never shown as understood."""
+    found: list[tuple[str, DaysRead]] = []
+    for when, filter_ in (
+        ("created", read.created),
+        ("updated", read.updated),
+        ("done", read.done),
+    ):
+        forms = WHEN_VOCAB[when]
+        if filter_ is None or not _forms_in(text, forms) or _doubled(text, forms):
+            continue
+        no_change = _negations(text, forms) or (when == "updated" and _forms_in(text, NOT_UPDATED))
+        if not no_change or filter_.how == "before":
+            found.append((when, filter_))
+    return found
+
+
+def days_asked(read: SearchRead | None, text: str) -> tuple[int, int] | None:
+    """Where the request names a span of days with no number, as "stale" or "no update": the
+    number is asked for, never guessed. None when every day filter has its number."""
+    for when, filter_ in _day_filters(read, text) if read is not None else []:
+        if filter_.how == "since_last_run" or filter_.days is not None:
+            continue
+        tokens = _request_tokens(text)
+        for at, (raw, start, end) in enumerate(tokens):
+            if _low(raw) in WHEN_VOCAB[when] | NOT_UPDATED:
+                lead = at > 0 and _turns(tokens, at - 1) is not None
+                return (tokens[at - 1][1] if lead else start), end
+    return None
 
 
 def _open_as_create(text: str) -> frozenset[str]:
@@ -882,15 +1038,139 @@ def _schedule_explained(text: str) -> frozenset[str]:
     )
 
 
+@dataclass(frozen=True)
+class Clash:
+    """Two days, or two times, in one schedule's words. A schedule runs on one day at one time,
+    so the person picks one, and neither is picked for them."""
+
+    reason: ClashReason
+    choices: tuple[str, ...]
+    start: int
+    end: int
+
+
+def _clock(match: re.Match[str]) -> str:
+    hour, minute, half, hour24, minute24, bare, named = match.groups()
+    if named is not None:
+        return "00:00" if named.casefold() == "midnight" else "12:00"
+    if bare is not None:
+        return bare
+    if half is None:
+        return f"{int(hour24):02d}:{minute24}"
+    return f"{int(hour) % 12 + (12 if half.casefold() == 'pm' else 0):02d}:{minute or '00'}"
+
+
+def _schedule_run(text: str, said: tuple[int, int] | None) -> tuple[int, int] | None:
+    """Where the schedule stands, grown over the schedule words beside it in its clause, so
+    "every Monday at 9am and every Friday at 9am" is one stretch, whichever part was quoted."""
+    tokens = _request_tokens(text)
+    inside = [i for i, (_, a, b) in enumerate(tokens) if said and a < said[1] and b > said[0]]
+    if not inside:
+        return None
+    clause_of = _clause_of(text, tokens)
+    first, last = inside[0], inside[-1]
+    while first > 0 and clause_of[first - 1] == clause_of[first]:
+        if not _schedule_token(tokens[first - 1][0]):
+            break
+        first -= 1
+    while last + 1 < len(tokens) and clause_of[last + 1] == clause_of[last]:
+        if not _schedule_token(tokens[last + 1][0]):
+            break
+        last += 1
+    return tokens[first][1], tokens[last][2]
+
+
+def _clash(
+    reason: ClashReason, found: list[re.Match[str]], key: Callable[[re.Match[str]], str], at: int
+) -> list[Clash]:
+    """A clash when the matches name two or more different days or times, each in the words it
+    was first said in."""
+    named: dict[str, str] = {}
+    for match in found:
+        said = match.group(1) if reason == "one_day" else match.group(0)
+        named.setdefault(key(match), re.sub(r"^(?:at|or|and)\s+", "", said, flags=re.IGNORECASE))
+    if len(named) < 2:
+        return []
+    return [Clash(reason, tuple(named.values()), at + found[0].start(), at + found[-1].end())]
+
+
+def _clashes(text: str, said: tuple[int, int] | None) -> list[Clash]:
+    run = _schedule_run(text, said)
+    if run is None:
+        return []
+    stretch = DAY_RANGE.sub(lambda m: " " * len(m.group(0)), text[run[0] : run[1]])
+    days = list(DAY.finditer(stretch))
+    times = list(CLOCK.finditer(stretch))
+    often = list(FREQUENCY.finditer(stretch))
+    return (
+        _clash("one_frequency", often, _often, run[0])
+        + _clash("one_day", days, lambda m: m.group(1).casefold(), run[0])
+        + _clash("one_time", times, _clock, run[0])
+    )
+
+
+def _often(match: re.Match[str]) -> str:
+    word = (match.group(1) or match.group(2)).casefold()
+    return OFTEN.get(word, word)
+
+
+def _kept(schedule: str | None) -> list[str]:
+    return [t for t in (visible_words(schedule) or "").split() if _schedule_token(t.strip(",."))]
+
+
+def schedule_stretch(schedule: str | None, text: str) -> tuple[int, int] | None:
+    """Where the request says when it runs, with every schedule word beside it, or None."""
+    run = _schedule_run(text, _schedule_span(text, " ".join(_kept(schedule)).strip(" ,")))
+    if run is None or not any(_a_schedule_word(t) for t in text[run[0] : run[1]].split()):
+        return None
+    return run
+
+
+def schedule_clashes(schedule: str | None, text: str) -> list[Clash]:
+    """The days or times that clash in the request's schedule, in the request's own words."""
+    return _clashes(text, _schedule_span(text, " ".join(_kept(schedule)).strip(" ,")))
+
+
+def said_schedule(words: str) -> tuple[str | None, str | None]:
+    """The one day and the one time the words name, each None when they name none or more
+    than one. A time is 24-hour, as 09:00, except a bare hour, which stays as written, so it
+    never matches a time it might not mean."""
+    if _clashes(words, (0, len(words))):
+        return None, None
+    low = words.casefold()
+    day = None
+    if DAY_RANGE.search(low) or re.search(r"\bweekdays?\b", low):
+        day = "weekdays"
+    elif re.search(r"\b(?:every|each)\s+day\b|\bdaily\b", low):
+        day = "every_day"
+    elif (found := DAY.search(low)) is not None:
+        day = found.group(1)
+    at = next((_clock(m) for m in CLOCK.finditer(low)), None)
+    return day, at
+
+
+def _clash_note(clashes: list[Clash]) -> str:
+    return " ".join(
+        {"one_day": ONE_DAY, "one_time": ONE_TIME, "one_frequency": ONE_FREQUENCY}[c.reason].format(
+            " and ".join(f'"{choice}"' for choice in c.choices)
+        )
+        for c in clashes
+    )
+
+
 def render_schedule(schedule: str | None, text: str) -> Rendered:
     """The schedule row: the model's words kept to schedule words only, with a time the request
-    never said asked for, not filled in, and a day it never said shown as a guess. With no
+    never said asked for, not filled in, and a day it never said shown as a guess. Two days or
+    two times in the request's schedule are asked for, never the first one picked. With no
     schedule read, the row is missing and asks for one, and the request's own schedule words
     stand under it, so they are never a can't of another kind."""
-    kept = [t for t in (visible_words(schedule) or "").split() if _schedule_token(t.strip(",."))]
+    kept = _kept(schedule)
     shown = " ".join(kept).strip(" ,")
     said = _schedule_span(text, shown)
     explained = _schedule_explained(text)
+    clashes = _clashes(text, said)
+    if clashes:
+        return Rendered(missing_row("schedule", _clash_note(clashes)), explained, said)
     if not any(_low(t) in SCHEDULE_WORDS or CLOCK_TOKEN.match(_low(t)) for t in kept):
         return Rendered(missing_row("schedule"), explained, said)
     if any(not said_in(time.strip(), text) for time in TIME_OF_DAY.findall(shown)):
@@ -906,19 +1186,46 @@ def render_schedule(schedule: str | None, text: str) -> Rendered:
     return Rendered(row, explained, said)
 
 
-def _clauses(text: str) -> list[tuple[int, int]]:
+def polite(words: str) -> bool:
+    """Whether the words ask for nothing: thanks, please, "no problem" or "without fail"."""
+    rest = POLITE_PHRASE.sub(" ", words)
+    return all(_low(t) in POLITE for t, _, _ in _request_tokens(rest))
+
+
+def _clause_ends(text: str) -> list[tuple[int, int]]:
+    joins = [
+        (m.start(), m.end()) for m in JOIN.finditer(text) if not _schedule_token(m.group("next"))
+    ]
+    return sorted([(m.start(), m.end()) for m in CLAUSE_END.finditer(text)] + joins)
+
+
+def clauses_of(text: str) -> list[tuple[int, int]]:
+    """Each clause of the request, trimmed. A clause ends at a comma, a full stop or other
+    punctuation, or at "and", "then", "but", "also" or "plus", except inside a schedule, so
+    "every Monday and Friday at 9am" stays one clause."""
     found: list[tuple[int, int]] = []
     at = 0
-    for mark in CLAUSE_END.finditer(text):
-        if mark.start() > at:
-            found.append((at, mark.start()))
-        at = mark.end()
-    if at < len(text):
-        found.append((at, len(text)))
+    for start, end in [*_clause_ends(text), (len(text), len(text))]:
+        clause = trim(text, at, start)
+        lead = LEADING_JOIN.match(text, clause[0], clause[1])
+        if lead is not None:
+            clause = trim(text, lead.end(), clause[1])
+        if clause[0] < clause[1]:
+            found.append(clause)
+        at = max(at, end)
     return found
 
 
-def _trim(text: str, start: int, end: int) -> tuple[int, int]:
+def _clause_of(text: str, tokens: list[tuple[str, int, int]]) -> list[int]:
+    """The index of the clause each token stands in, or -1 for a joining word between two."""
+    clauses = clauses_of(text)
+    return [
+        next((n for n, (a, b) in enumerate(clauses) if a <= start < b), -1)
+        for _, start, _ in tokens
+    ]
+
+
+def trim(text: str, start: int, end: int) -> tuple[int, int]:
     while start < end and not text[start].isalnum():
         start += 1
     while end > start and not text[end - 1].isalnum():
@@ -956,7 +1263,9 @@ def _kind_of(
         return "do"
     if _overlaps(said.get("where"), run):
         return "where"
-    if beside is not None:
+    # Unread words beside a schedule are the schedule's only when they are schedule words.
+    unread = [t for t, _, _ in _request_tokens(text[run[0] : run[1]])]
+    if beside is not None and (beside != "schedule" or any(map(_schedule_token, unread))):
         return beside
     if _overlaps(said.get("do"), run):
         return "do"
@@ -1096,17 +1405,15 @@ def leftovers(
     the run of its own words and filler around that, so the search's assignee never explains
     "assign" in the new ticket's clause, and the schedule never explains "Friday" in "finished
     by this Friday". A clause whose first content word is unexplained comes back from that
-    word to its end, because the whole part is unread; otherwise the run from the first
-    unexplained word to the last. A "without", "no" or "not" right before the run comes with
-    it, so "without approval" keeps its "without". In a request that writes, a run that names
-    a yes, a person, a role or a group takes its whole clause, so the refusal reads as the
-    person wrote it."""
+    word to its end, because the whole part is unread, and a clause no structure explains a
+    word of comes back whole, little words and all ("let me know", "for them"), unless it is
+    only thanks or please; otherwise the run from the first unexplained word to the last. A
+    "without", "no" or "not" right before the run comes with it, so "without approval" keeps
+    its "without". In a request that writes, a run that names a yes, a person, a role or a
+    group takes its whole clause, so the refusal reads as the person wrote it."""
     tokens = _request_tokens(text)
-    clauses = _clauses(text)
-    clause_of = [
-        next((n for n, (a, b) in enumerate(clauses) if a <= start < b), -1)
-        for _, start, _ in tokens
-    ]
+    clauses = clauses_of(text)
+    clause_of = _clause_of(text, tokens)
     explains: list[set[int]] = []
     for r in rendered:
         region: set[int] = set()
@@ -1124,10 +1431,11 @@ def leftovers(
     # to skip outside it.
     quoted = [r.said for r in rendered if r.row.kind == "look_for" and r.said is not None]
     covered = [(a, b) for a, b in covered if not any(q[0] <= a and b <= q[1] for q in quoted)]
+    kind_words = covered + [(m.start(), m.end()) for m in POLITE_PHRASE.finditer(text)]
     known |= {
         i
         for i, (_, start, end) in enumerate(tokens)
-        if any(a <= start and end <= b for a, b in covered)
+        if any(a <= start and end <= b for a, b in kind_words)
     }
     spans: list[Span] = []
     for n, (c_start, c_end) in enumerate(clauses):
@@ -1155,12 +1463,17 @@ def leftovers(
             content.append((start, end))
             if i not in known:
                 unread.append(i)
-        if not unread:
+        mine = [i for i, c in enumerate(clause_of) if c == n]
+        unheard = not any(i in known for i in mine)
+        if not unread and (content or not unheard or polite(text[c_start:c_end])):
             continue
+        if not unread:
+            unread = mine
+            content = [(tokens[i][1], tokens[i][2]) for i in mine]
         _, first, _ = tokens[unread[0]]
         _, _, last = tokens[unread[-1]]
         run = (first, last)
-        start = first
+        start = c_start if unheard else first
         end = c_end if first == content[0][0] else last
         lead = LEAD_IN.search(text[c_start:start])
         if lead is not None:
@@ -1169,7 +1482,7 @@ def leftovers(
         someone = names_a_person(text, start, end)
         if (names or someone) and writes:
             start, end = content[0][0], c_end
-        start, end = _trim(text, start, end)
+        start, end = trim(text, start, end)
         beside = _beside(clause_of, parts_at, unread[0], unread[-1])
         kind = _kind_of(text, start, end, run, said, beside)
         spans.append(Span(text[start:end], start, end, kind, names, someone))

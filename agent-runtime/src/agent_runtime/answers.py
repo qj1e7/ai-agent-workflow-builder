@@ -9,7 +9,7 @@ that writes, else as a part the platform can't do, in their own words.
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final
 
 from agent_runtime.abilities import (
@@ -33,6 +33,7 @@ from agent_runtime.abilities import (
     why_not_the_field,
     without_the_phrase,
     without_the_skip,
+    words,
 )
 from agent_runtime.contract import (
     AbilitiesAnswer,
@@ -55,11 +56,13 @@ from agent_runtime.contract import (
     SetupCardAnswer,
     UnderstoodRow,
     WatchlistAnswer,
+    WatchlistScheduleFact,
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
 from agent_runtime.drafting import ask_model
 from agent_runtime.follow_ups import follow_up_of, watch_offer_of
+from agent_runtime.parts import NOT_FOLLOWED, OWN_TIME, locate, parts_of
 from agent_runtime.planner import (
     CANT_YET,
     NOTE_LIMIT,
@@ -73,11 +76,13 @@ from agent_runtime.planner import (
 )
 from agent_runtime.questions import answer_question, is_fallback, question_messages
 from agent_runtime.reading import (
+    FILLER,
     SAID_LIMIT,
     SkipRead,
     Span,
     TaskRead,
     a_statement,
+    clauses_of,
     leftovers,
     names_a_person,
     names_a_yes,
@@ -86,8 +91,12 @@ from agent_runtime.reading import (
     render_schedule,
     render_search,
     render_ticket,
+    said_schedule,
+    says_no_change,
+    schedule_stretch,
     speaks_only_of_self,
     task_shaped,
+    turns_round,
 )
 from agent_runtime.summary import ChatFor
 from agent_runtime.tools import tools_text
@@ -98,6 +107,7 @@ __all__ = [
     "answer_of",
     "answer_task",
     "check_one_part",
+    "parts_of",
     "word_rule_refusal",
 ]
 
@@ -118,7 +128,7 @@ LEFT_OUT_DO: Final = (
 )
 LEFT_OUT_WHERE: Final = "I can only put the result in a Jira project."
 LEFT_OUT_SCHEDULE: Final = "I couldn't read this as a schedule."
-LEFT_OUT_PART: Final = "I can't do this part yet."
+LEFT_OUT_PART: Final = NOT_FOLLOWED
 
 ANSWER_SYSTEM: Final = (
     "You are the Planner on a platform used by the support staff of CODESparks, a team in "
@@ -216,6 +226,11 @@ ANSWER_SYSTEM: Final = (
 
 
 SKIP_PART_NOTE = "I can't skip the yes. Nothing is written without a yes."
+TOLD: Final = re.compile(
+    r"\blet\s+(?:me|us)\s+know\b|\bkeep\s+(?:me|us)\s+(?:posted|updated|informed)\b",
+    re.IGNORECASE,
+)
+"""Words that ask to be told, which a skip of the staff member's own attention never covers."""
 
 
 def word_rule_refusal(request: str) -> RefusedAnswer | None:
@@ -267,9 +282,11 @@ def _skip_verdict(skip: SkipRead, text: str) -> _Skip:
         return _Skip(refused=_refused(text, quote))
     if not speaks_only_of_self(text, at, end):
         return _Skip(unverified=quote)
-    if (change_verbs_in(quote) or other_systems(quote)) and not negated(quote):
-        # "Email me" names the staff member and a change too: nothing is covered, so the
-        # change comes back through the coverage check. "Don't ping me" asks for none.
+    if (change_verbs_in(quote) or other_systems(quote) or TOLD.search(quote)) and not negated(
+        quote
+    ):
+        # "Email me" or "let me know" names the staff member and a delivery too: nothing is
+        # covered, so it comes back through the coverage check. "Don't ping me" asks for none.
         return _Skip()
     return _Skip(covered=(at, end))
 
@@ -290,21 +307,37 @@ def _name_of(said: str | None, request: str) -> str:
     return plain(said, NAME_LIMIT) or plain(request, NAME_LIMIT)
 
 
+WATCH_WORDS: Final = words(
+    "add watch track monitor follow check tell me us let know notify alert ping when whenever "
+    "there is are has have new newer latest next out available comes come"
+)
+"""What a clause about the releases may say beside the release word and still be the watch's
+own, as "tell me about new releases"."""
+
+
+def _about_releases_only(clause: str) -> bool:
+    """Whether the clause names a release word and nothing else but watch words and filler.
+    "only the major releases" names more, so it comes back."""
+    word = release_word_in(clause)
+    rest = [
+        w
+        for w in re.findall(r"[\w'’-]+", clause.casefold())
+        if w not in FILLER and w not in WATCH_WORDS
+    ]
+    return word is not None and rest == [word.casefold()]
+
+
 def _watch_clauses(read: TaskRead, text: str) -> list[tuple[int, int]]:
-    """The clauses a watchlist answer already carries: the ones with the release word or the
-    software's name."""
-    word = task_form_of(text, read.watchlist_word) or release_word_in(text)
-    names = [w for w in (word, _software_of(read, text)) if w]
-    if not names:
-        return []
-    found: list[tuple[int, int]] = []
-    at = 0
-    for mark in re.finditer(r"[,;:.!?()]+|$", text):
-        clause = text[at : mark.start()]
-        if any(re.search(rf"(?<!\w){re.escape(n)}(?!\w)", clause, re.IGNORECASE) for n in names):
-            found.append((at, mark.start()))
-        at = mark.end()
-    return found
+    """The clauses a watchlist answer already carries: one that names the software, and one
+    about its releases with nothing else in it. Any other clause comes back if nothing reads
+    it."""
+    software = _software_of(read, text)
+    return [
+        (start, end)
+        for start, end in clauses_of(text)
+        if (software is not None and whole_word_of(text[start:end], software) is not None)
+        or _about_releases_only(text[start:end])
+    ]
 
 
 def _writes(read: TaskRead, text: str) -> bool:
@@ -330,12 +363,17 @@ def _left_out(span: Span, searching: bool) -> CantRow:
     match span.kind:
         case "look_for" | None:
             field = unread_field_in(text)
-            if span.names_a_yes:
+            # A negation no filter holds was read the other way round, or not at all.
+            if says_no_change(text):
+                note = LEFT_OUT_PART
+            elif span.names_a_yes:
                 note = LEFT_OUT_YES
             elif field is not None:
                 note = why_not_the_field("look_for", text, field)
             elif span.names_a_person:
                 note = LEFT_OUT_DO
+            elif turns_round(text):
+                note = LEFT_OUT_PART
             else:
                 note = LEFT_OUT_SEARCH if span.kind else LEFT_OUT_PART
         case "do":
@@ -349,6 +387,11 @@ def _left_out(span: Span, searching: bool) -> CantRow:
         case "schedule":
             note = LEFT_OUT_SCHEDULE
     need = need_of(kind, text)
+    unreached = need.needs == "new_system" and need.system is not None
+    if note == LEFT_OUT_PART and not unreached:
+        # Words the Planner didn't follow name nothing to build, unless they name a system it
+        # doesn't reach, as Entra.
+        return CantRow(kind=kind, text=text, note=note)
     if need == Need("new_system", None) and span.kind == "look_for" and searching:
         need = Need("new_tool", "Jira")
     return CantRow(
@@ -426,10 +469,15 @@ def _refused_span(task: _Task, text: str) -> RefusedAnswer | None:
     return None if span is None else _refused(text, span.text)
 
 
+def _offers(task: _Task) -> bool:
+    """Whether the task reads something to look for or to do, so a card is worth offering."""
+    return any(r.kind in ("look_for", "do") and r.state in ACCEPTED for r in task.rows)
+
+
 def _from_task(read: TaskRead, task: _Task, text: str) -> PlannerAnswer:
     """The answer for a task: every row from a structure, every unexplained word back to the
     person as a part the platform can't do."""
-    offered = any(r.kind in ("look_for", "do") and r.state in ACCEPTED for r in task.rows)
+    offered = _offers(task)
     name = _name_of(read.name, text)
     card = SetupCardAnswer(name=name, rows=task.rows) if offered else None
     if not task.spans:
@@ -497,9 +545,17 @@ def _watch_verb(read: TaskRead, request: str) -> str | None:
     software = _software_of(read, request)
     if software is None or _TICKET_KEY.fullmatch(software) or names_a_ticket_field(software):
         return None
-    if _TICKET_KEY.search(request) or _NOT_A_WATCH.search(request):
+    if _TICKET_KEY.search(request) or _NOT_A_WATCH.search(_without_systems(request)):
         return None
     return whole_word_of(request, said)
+
+
+def _without_systems(request: str) -> str:
+    """The request without the systems it names, so "post it in Teams" is a destination, not a
+    team of people."""
+    for system in other_systems(request):
+        request = re.sub(rf"(?<!\w){re.escape(system)}(?!\w)", " ", request, flags=re.IGNORECASE)
+    return request
 
 
 def _without(request: str, word: str) -> str:
@@ -527,7 +583,9 @@ def _other_source(read: TaskRead, request: str) -> CantAnswer | None:
     return CantAnswer(cant=[cant], alternative=WatchlistAnswer(word=word, software=software))
 
 
-def _watchlist(read: TaskRead, task: _Task | None, request: str) -> PlannerAnswer | None:
+def _watchlist(
+    read: TaskRead, task: _Task | None, request: str, schedule: WatchlistScheduleFact | None
+) -> PlannerAnswer | None:
     verb = None
     word = (
         task_form_of(request, read.watchlist_word)
@@ -552,20 +610,58 @@ def _watchlist(read: TaskRead, task: _Task | None, request: str) -> PlannerAnswe
     elsewhere = [
         s for s in other_systems(request) if software is None or s.casefold() != software.casefold()
     ]
+    system_row = None
     if elsewhere:
         system = elsewhere[0]
         note = why_not("where", system) or CANT_YET
-        cant = CantRow(kind="where", text=system, note=note, needs="new_system", system=system)
-        instead = None if software is None else WatchlistAnswer(word=word, software=software)
-        return CantAnswer(cant=[cant], alternative=instead)
+        system_row = CantRow(
+            kind="where", text=system, note=note, needs="new_system", system=system
+        )
+        if software is None:
+            return CantAnswer(cant=[system_row])
     if software is None:
         return WhichSoftwareAnswer(word=word)
     watching = WatchlistAnswer(word=word, software=software, also=_also(read, task, request))
     if watching.also is not None:
         return watching
-    return _with_the_change_cant(
-        watching, request if verb is None else _without(request, f"{verb} {software}")
-    )
+    changes = request if verb is None else _without(request, f"{verb} {software}")
+    rows = _watch_rows(read, task, request, system_row, changes, schedule)
+    return CantAnswer(cant=rows, alternative=watching) if rows else watching
+
+
+def _watch_rows(
+    read: TaskRead,
+    task: _Task | None,
+    request: str,
+    system: CantRow | None,
+    changes: str,
+    schedule: WatchlistScheduleFact | None,
+) -> list[CantRow]:
+    """A can't row for each part of a watch request the watchlist doesn't do, in this order:
+    another destination, a time of its own, a change, then any other words nothing read. A
+    stretch of the request gets one row, the first that reaches it."""
+    found: list[tuple[tuple[int, int], CantRow]] = []
+    if system is not None:
+        at = _stretch(request, system.text)
+        found.append((next((c for c in clauses_of(request) if c[0] <= at[0] < c[1]), at), system))
+    stretch = schedule_stretch(read.schedule, request)
+    watched = _watch_clauses(read, request)
+    own = stretch is not None and not _its_schedule(request[stretch[0] : stretch[1]], schedule)
+    if own and stretch and any(a <= stretch[0] and stretch[1] <= b for a, b in watched):
+        text = plain(request[stretch[0] : stretch[1]], TEXT_LIMIT)
+        found.append(
+            (stretch, CantRow(kind="schedule", text=text, note=OWN_TIME, needs="new_tool"))
+        )
+    for clause in _change_clauses(changes):
+        found.append((_stretch(request, clause), _change_row(clause)))
+    # Words beside the watch stand beside no part of a task, so a part is never named for them.
+    for span in task.spans if task is not None else []:
+        found.append(((span.start, span.end), _left_out(replace(span, kind=None), False)))
+    kept: list[tuple[tuple[int, int], CantRow]] = []
+    for at, row in found:
+        if not any(at[0] < b and a < at[1] for (a, b), _ in kept):
+            kept.append((at, row))
+    return [row for _, row in kept]
 
 
 # Words that are write verbs for a ticket but read plainly beside software: "which version do we
@@ -590,15 +686,26 @@ def _change_clauses(text: str) -> list[str]:
     return [clause for clause in found if clause]
 
 
-def _with_the_change_cant(answer: WatchlistAnswer, request: str) -> PlannerAnswer:
-    """The watchlist answer shows the newest versions, so a request that also asks for a change
-    gets a can't row for each such part, in its own words. No part of a request is dropped."""
-    rows: list[CantRow] = []
-    for clause in _change_clauses(request):
-        text = plain(clause, TEXT_LIMIT)
-        note = why_not("do", text) or CANT_YET
-        rows.append(CantRow(kind="do", text=text, note=plain(note, NOTE_LIMIT), needs="new_tool"))
-    return CantAnswer(cant=rows, alternative=answer) if rows else answer
+def _its_schedule(words: str, watching: WatchlistScheduleFact | None) -> bool:
+    """Whether the words name only the day and the time the Software watchlist already runs on.
+    A day or a time they leave out is no difference. Naming neither is no match."""
+    day, at = said_schedule(words)
+    if watching is None or (day is None and at is None):
+        return False
+    return day in (None, watching.day) and at in (None, watching.at)
+
+
+def _stretch(request: str, words: str) -> tuple[int, int]:
+    """Where the request writes `words`, or an empty stretch at its end, which reaches nothing."""
+    return locate(request, words) or (len(request), len(request))
+
+
+def _change_row(clause: str) -> CantRow:
+    """The watchlist answer shows the newest versions, so a change asked beside it is a can't
+    row in its own words."""
+    text = plain(clause, TEXT_LIMIT)
+    note = why_not("do", text) or CANT_YET
+    return CantRow(kind="do", text=text, note=plain(note, NOTE_LIMIT), needs="new_tool")
 
 
 def _about(read: TaskRead, request: str) -> PlannerAnswer:
@@ -615,13 +722,17 @@ def _about(read: TaskRead, request: str) -> PlannerAnswer:
             return AbilitiesAnswer()
 
 
-def answer_of(read: TaskRead, request: str) -> PlannerAnswer:
+def answer_of(
+    read: TaskRead, request: str, watch_schedule: WatchlistScheduleFact | None = None
+) -> PlannerAnswer:
     """The answer code decides from the model's reading: refused, by the word rule, by the
     model's answer to the skip question, or by words naming a yes that nothing explains in a
     request that writes; then the watchlist, a question about the person's workflows, then the
     structures. A request the model called a task is always read against its structures, so
     words they do not hold come back; "abilities" is the catch-all, so a request that asks for
-    a change wins over it: a planted "close all tickets" comes back as a can't."""
+    a change wins over it: a planted "close all tickets" comes back as a can't.
+    `watch_schedule` is when the Software watchlist checks, so a time a watch request names
+    that matches it is no cross."""
     text = visible_words(request)
     refused = _refusal(text)
     if refused is not None:
@@ -636,22 +747,27 @@ def answer_of(read: TaskRead, request: str) -> PlannerAnswer:
     if elsewhere is not None:
         return elsewhere
     task = None
+    covered = [skip.covered] if skip.covered is not None else []
+    watched = _watch_clauses(read, text) if read.belongs_on_watchlist else []
+    writes = _writes(read, text)
     if read.asks_about == "none" or task_shaped(read, text):
-        covered = [skip.covered] if skip.covered is not None else []
-        if read.belongs_on_watchlist:
-            covered += _watch_clauses(read, text)
-        writes = _writes(read, text)
-        task = _read_task(read, text, covered, writes)
-        if writes:
-            refused = _refused_span(task, text)
-            if refused is not None:
-                return refused
+        task = _read_task(read, text, covered + watched, writes)
+        refused = _refused_span(task, text) if writes else None
+        if refused is not None:
+            return refused
     if skip.unverified is not None:
         return _refused(text, skip.unverified)
     if read.belongs_on_watchlist:
-        answer = _watchlist(read, task, text)
+        answer = _watchlist(read, task, text, watch_schedule)
         if answer is not None:
             return answer
+    unwatched = _read_task(read, text, covered, writes) if task is not None and watched else None
+    if unwatched is not None and _offers(unwatched):
+        # The card it offers watches nothing, so the watch's own words come back beside it.
+        task = unwatched
+        refused = _refused_span(task, text) if writes else None
+        if refused is not None:
+            return refused
     if read.asks_about != "none" and not (read.asks_about == "abilities" and task is not None):
         return _about(read, text)
     if task is None:
@@ -698,7 +814,8 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     watchlist offer for software the watchlist already holds, which software for a question
     while the watchlist holds some, or check workflows for a request that names the watchlist.
     Every other answer stands. Only code routes: the reading itself is never changed."""
-    answer = answer_of(read, request.task)
+    watching = request.facts.watchlist_schedule if request.facts is not None else None
+    answer = answer_of(read, request.task, watching)
     if question_messages(request) is None:
         return answer
     text = visible_words(request.task)
@@ -764,7 +881,7 @@ def _state_answer_about_the_watchlist(
 def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     refused = word_rule_refusal(request.task)
     if refused is not None:
-        return Answered(answer=refused)
+        return Answered(answer=refused, parts=parts_of(None, request.task, refused))
     read = ask_model(
         chat_for,
         ANSWER_SYSTEM,
@@ -774,16 +891,21 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     )
     if isinstance(read, ModelProblem):
         return read
+    answer = _answer(read, request, chat_for)
+    return Answered(answer=answer, parts=parts_of(read, request.task, answer))
+
+
+def _answer(read: TaskRead, request: AnswerRequest, chat_for: ChatFor) -> PlannerAnswer:
     decided = decide(read, request)
     if not isinstance(decided, AskTheQuestionLane):
-        return Answered(answer=decided)
+        return decided
     asked = answer_question(request, chat_for)
     # The lane may improve an answer, never make it worse: when its call fails, the first stands.
     if asked is None or isinstance(asked, ModelProblem):
-        return Answered(answer=decided.otherwise)
+        return decided.otherwise
     if decided.first_on_reject and is_fallback(asked):
-        return Answered(answer=decided.otherwise)
-    return Answered(answer=asked)
+        return decided.otherwise
+    return asked
 
 
 APPROVAL_WORDS: Final = re.compile(

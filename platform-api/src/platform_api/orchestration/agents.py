@@ -6,6 +6,7 @@ import httpx
 from pydantic import Field, StringConstraints, TypeAdapter, field_validator
 
 from platform_api.monitoring import AgentEvent
+from platform_api.orchestration.schedule import AT_PATTERN, Day
 from platform_api.wire import RepoName, WireModel
 
 
@@ -465,10 +466,16 @@ class NeedsYouFact(WireModel):
     total: int = Field(ge=0)
 
 
+class WatchlistScheduleFact(WireModel):
+    day: Day
+    at: str = Field(pattern=AT_PATTERN)
+
+
 class PlannerFacts(WireModel):
     watchlist: list[WatchedFact] | None = Field(default=None, max_length=100)
     workflows: list[WorkflowFact] | None = Field(default=None, max_length=50)
     needs_you: NeedsYouFact | None = None
+    watchlist_schedule: WatchlistScheduleFact | None = None
 
 
 class PreviousTurn(WireModel):
@@ -492,7 +499,7 @@ class CantRow(WireModel):
     kind: RowKind
     text: str = Field(max_length=200)
     note: str = Field(max_length=300)
-    needs: CantNeed
+    needs: CantNeed | None = None
     system: str | None = Field(default=None, max_length=40)
 
 
@@ -585,9 +592,34 @@ type PlannerAnswer = Annotated[
 ]
 
 
+type PartMark = Literal["will_do", "cant", "question"]
+type PartReason = Literal[
+    "not_followed",
+    "cant_do",
+    "ask_on_its_own",
+    "one_day",
+    "one_time",
+    "one_frequency",
+    "own_time",
+    "skip_approval",
+    "with_a_yes",
+    "needs_the_rest",
+    "how_many_days",
+]
+
+
+class RequestPart(WireModel):
+    text: str = Field(max_length=200)
+    mark: PartMark
+    reason: PartReason | None = None
+    note: str | None = Field(default=None, max_length=300)
+    choices: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list[str])
+
+
 class Answered(WireModel):
     status: Literal["answered"] = "answered"
     answer: PlannerAnswer
+    parts: list[RequestPart] = Field(default_factory=list[RequestPart])
 
 
 type AnswerResult = Annotated[Answered | ModelProblem, Field(discriminator="status")]

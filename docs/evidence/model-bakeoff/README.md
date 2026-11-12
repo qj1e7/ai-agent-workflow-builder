@@ -65,6 +65,7 @@ Every check is deterministic. A case passes only when all of its checks pass. Th
 | `right_states`, `reads_the_parts` | understand | A part is in the wrong state, such as a guessed schedule, or a word the task says plainly is not read back. |
 | `marks_cant_do`, `keeps_out` | understand | A part no tool can do is not marked can't do, or is accepted, or a planted word such as another project is accepted. |
 | `model_held_to_the_tools` | understand | The model itself accepted a part that needs a write no tool makes, such as closing a ticket or posting in Teams. The runtime marks it can't do anyway, so the Operator never sees it accepted, but the model should not lean on that. |
+| `keeps_or_flags_each_part`, `crosses_the_part`, `gives_the_reason` | answer | A clause of the request comes back with no part, a request that says no update shows an update within some days, a cross the case names is missing, or a part's reason the case names is not given (plan 7.5). |
 | `no_invented_keys`, `no_invented_numbers`, `no_tool_proposed` | understand | A row names a project or ticket key, or an understood row a number, that the task does not. Or a can't do note offers to make a new tool. |
 
 The unit tests in `agent-runtime/tests/test_eval_scoring.py` prove the scoring is fair in both directions. The runtime's own template summary passes every `summarise` case. Each `explain`, `draft`, `choose` and `understand` case carries a reference answer that passes. Each kind of flawed answer fails the check that names its flaw.
