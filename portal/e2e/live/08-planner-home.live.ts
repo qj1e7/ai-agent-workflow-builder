@@ -1097,13 +1097,14 @@ test.describe('bob asks the Planner questions only', () => {
       await noChangeControl(page)
     }
     await shot(page, info, 'r16-bob-refused')
-    for (const decide of ['approve the upgrade tickets', 'decline that request']) {
+    // The reading may take an approve for a way around the gate and refuse it, and the refusal stands. Either way he gets the request to open.
+    for (const decide of ['approve the upgrade tickets', 'decline that request', 'auto-approve everything', 'approve it for me']) {
       await bobAsks(page, decide)
-      await expect(said(page)).toHaveText('I can’t approve or decline for you. Open the request to see exactly what it will write, and decide there.')
+      await expect(said(page)).toHaveText(/^(I can’t approve or decline for you\. Open the request to see exactly what it will write, and decide there\.|I can’t set that up\. Anything that changes data waits for a yes, every time\.)$/)
       await expect(newest(page).getByRole('button', { name: 'Review and decide' }).first()).toBeVisible()
     }
     await bobAsks(page, 'approve the upgrade and pause the morning new-ticket check')
-    await expect(said(page), 'an approve beside a change is refused whole').toHaveText(OPS)
+    await expect(said(page), 'an approve beside a change is refused whole, by builder or by the reading').toHaveText(/^(Operators set up workflows\. Ask .+\.|I can’t set that up\. Anything that changes data waits for a yes, every time\.)$/)
     await noChangeControl(page)
     expect(await workflows(), 'nothing changed').toEqual(before)
     assertClean(watch)
