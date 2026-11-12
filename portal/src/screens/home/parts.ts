@@ -23,14 +23,19 @@ const REASON_WORDS: Readonly<Record<PartReason, string>> = {
   with_a_yes: 'This waits until it’s set up with a yes.',
   needs_the_rest: 'It can’t run without the part I can’t do.',
   how_many_days: 'Your words don’t say how many days.',
+  operators: 'Operators set up workflows.',
   only_schedule: 'From the chat I can only change when it runs.',
   how_often: 'I can’t run things that often yet.',
 }
 
-/** What the words of a cross are read against: the card’s schedule, the Software watchlist’s schedule for a watch request, and the workflow an edit changes. */
+/**
+ * What the words of a cross are read against: the card’s schedule, the Software watchlist’s schedule for a watch request, who
+ * makes changes, named from the People list, for a change asked by someone who isn’t an Operator, and the workflow an edit changes.
+ */
 export interface CrossContext {
   readonly when?: When
   readonly watchlist?: ScheduleView | null
+  readonly operators?: string
   readonly workflow?: string
 }
 
@@ -47,6 +52,7 @@ export function howOftenWords(text: string): string {
 export function crossWords(part: PartView, context: CrossContext = {}): string {
   if (part.reason === null) return part.mark === 'question' ? REASON_WORDS.how_many_days : REASON_WORDS.not_followed
   if (part.reason === 'cant_do' && part.note !== null && part.note.trim() !== '') return part.note
+  if (part.reason === 'operators' && context.operators) return context.operators
   if (part.reason === 'how_often') return howOftenWords(part.text)
   if (part.reason === 'only_schedule' && context.workflow) return `From the chat I can only change when ${context.workflow} runs.`
   if (part.reason === 'own_time' && context.watchlist)
@@ -107,12 +113,17 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
       return []
     case 'cant':
       return reply.alternative?.answer === 'setup_card' ? [] : above(reply.parts.filter((part) => part.reason !== 'cant_do' && part.reason !== 'needs_the_rest'))
+    case 'operators':
+      // The answer’s sentence already says who makes the changes, so only a question beside them is marked.
+      return above(reply.parts.filter((part) => part.reason !== 'operators'))
     case 'watchlist':
     case 'abilities':
     case 'check_workflows':
     case 'why_stopped':
     case 'needs_me':
     case 'question':
+    case 'decided':
+    case 'decide':
       return above(reply.parts)
   }
 }

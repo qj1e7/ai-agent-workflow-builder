@@ -74,11 +74,18 @@ const primaries = (html: string) => (html.match(/class="[^"]*_primary_[^"]*"/g) 
 describe('Home for an Approver with a run waiting for his yes', () => {
   const html = mainOf(render(BOB, BOB_HOME))
 
-  it('says how many things need him under the greeting, and what runs next', () => {
+  it('says how many things need him under the greeting', () => {
     expect(text(html)).toContain('Good afternoon! Bob 3 things need you.')
-    expect(text(html)).toContain('Coming up next: Software watchlist , Mon 9 Nov, 9:00.')
-    expect(linksIn(html)).toContainEqual(['Software watchlist', '/software'])
-    expect(linksIn(html)).toContainEqual(['See all workflows', '/workflows'])
+  })
+
+  it('has the Planner’s box for his questions, then his three questions, then Needs you in full (ROLE-home)', () => {
+    expect(html).toContain('placeholder="Ask about your approvals, or how the workflows are doing"')
+    expect(text(html)).toContain('Ask the Planner about your approvals and the workflows')
+    const suggestions = /<div[^>]*role="group"[^>]*aria-label="Suggestions"[^>]*>([\s\S]*?)<\/div>/.exec(html)?.[1] ?? ''
+    expect(buttonsIn(suggestions)).toEqual(['What is waiting for my yes?', 'What did I decide before?', 'How are the workflows doing?'])
+    const at = ['<textarea', 'What is waiting for my yes?', 'Needs you'].map((mark) => html.indexOf(mark))
+    expect(at.every((place, index) => place >= 0 && (index === 0 || place > (at[index - 1] ?? 0)))).toBe(true)
+    expect([...html.matchAll(/data-home-item=/g)]).toHaveLength(needsTotal(BOB_HOME))
   })
 
   it('puts the waiting run first, as the card with the one main button, which opens the run at the decision', () => {
@@ -103,9 +110,8 @@ describe('Home for an Approver with a run waiting for his yes', () => {
     expect([...buttonsIn(html), ...linksIn(html).map(([name]) => name)].filter((name) => /^(Approve|Decline|Confirm|Not now)/.test(name ?? ''))).toEqual([])
   })
 
-  it('has no box, no suggestions and nothing to create, only the note that says why', () => {
-    expect(html).not.toContain('<textarea')
-    expect(html).not.toContain('Planner')
+  it('offers nothing to set up, only the note that says who does', () => {
+    expect(html).not.toContain('What can I ask for?')
     expect(html).not.toContain('Waiting on others')
     expect(html).not.toContain('Your drafts')
     expect(buttonsIn(html)).not.toContain('How it works')
@@ -173,10 +179,12 @@ describe('Home on day one', () => {
     expect(text(html)).not.toMatch(/running out|needs attention/i)
   })
 
-  it('keeps an Approver on all quiet, with no first workflow', () => {
+  it('tells an Approver where requests will come from, with his box for questions and no first workflow', () => {
     const approver = mainOf(render(BOB, DAY_ONE))
-    expect(text(sectionOf(approver, 'Needs you'))).toContain('All quiet Nothing is scheduled yet.')
-    expect(approver).not.toContain('<textarea')
+    expect(text(approver)).toContain('Good afternoon! Bob Nothing needs you yet. When a workflow wants to change something, it shows up here and in Teams.')
+    expect(approver).toContain('<textarea')
+    expect(text(approver)).not.toContain('Which software should we keep up to date?')
+    expect(sectionOf(approver, 'Needs you')).toBe('')
   })
 })
 
@@ -250,17 +258,31 @@ describe('Home with no working AI model', () => {
 describe('Home with nothing to do on a team with workflows', () => {
   it('says nothing needs you right now and names what runs next', () => {
     const html = mainOf(render(BOB, { ...BOB_HOME, approvals: [], approvals_total: 0, confirmations: [] }))
-    expect(text(html)).toContain('Nothing needs you right now.')
-    expect(text(html)).toContain('All quiet Next up: Software watchlist , Mon 9 Nov, 9:00.')
-    expect(html).not.toContain('Coming up next')
+    expect(text(html)).toContain('Good afternoon! Bob Nothing needs you right now. Next up: Software watchlist, Mon 9 Nov, 9:00.')
+    expect(sectionOf(html, 'Needs you')).toBe('')
   })
 
-  it('names London next to what runs next when its schedule is in London, in both places, as the workflow page does', () => {
+  it('names London next to what runs next when its schedule is in London, as the workflow page does', () => {
     const london = { ...BOB_HOME.coming_up!, name: 'Watch LangGraph', template: 'agent_cards', next_run_at: '2026-11-03T09:00:00Z', time_zone: 'Europe/London' }
-    const busy = mainOf(render(BOB, { ...BOB_HOME, coming_up: london }))
     const quiet = mainOf(render(BOB, { ...BOB_HOME, approvals: [], approvals_total: 0, confirmations: [], coming_up: london }))
-    expect(text(busy)).toContain('Coming up next: Watch LangGraph , Today, 9:00 London time.')
-    expect(text(quiet)).toContain('All quiet Next up: Watch LangGraph , Today, 9:00 London time.')
+    expect(text(quiet)).toContain('Next up: Watch LangGraph, Today, 9:00 London time.')
+  })
+})
+
+describe('An Approver’s Home with no AI model (ROLE-offline)', () => {
+  const html = mainOf(render(BOB, BOB_HOME, { model: 'none' }))
+
+  it('says the Planner can’t answer and who can connect one, with no box and no Connect a model', () => {
+    expect(headingsOf(html)).toEqual(['I can’t answer questions until an AI model is connected'])
+    expect(text(html)).toContain('An Operator can connect one in Settings. 3 things need you.')
+    expect(html).not.toContain('<textarea')
+    expect(linksIn(html).map(([name]) => name)).not.toContain('Connect a model')
+  })
+
+  it('keeps his request first, with Review and decide as the one main button', () => {
+    expect(/data-home-item="([^"]+)"/.exec(html)?.[1]).toBe('approval:apr_01JB8')
+    expect(linksIn(itemOf(html, 'approval:apr_01JB8'))).toEqual([['Review and decide', '/runs/run_01JB8']])
+    expect(primaries(html)).toBe(1)
   })
 })
 

@@ -83,7 +83,10 @@ def test_without_a_model_the_planner_answers_offline_and_the_chips_still_work(ap
     for intent in ("abilities", "needs_me", "setup_ideas"):
         chip = api.post("alice", "/api/v1/planner/answer", {"intent": intent}, expect=(200,))
         assert chip.json()["answer"] in ("abilities", "needs_me", "ideas")
-    api.post("bob", "/api/v1/planner/answer", {"intent": "abilities"}, expect=(403,))
+    asked = api.post("bob", "/api/v1/planner/answer", {"intent": "decided"}, expect=(200,))
+    assert asked.json()["answer"] == "decided", "an Approver's question chips work with no model"
+    ideas = api.post("bob", "/api/v1/planner/answer", {"intent": "setup_ideas"}, expect=(200,))
+    assert ideas.json()["answer"] == "operators", "setting up is an Operator's, so Bob is refused"
 
 
 def test_one_changed_part_is_checked_by_code_and_the_capabilities_list_what_works(

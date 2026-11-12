@@ -158,6 +158,19 @@ test.describe('with no AI model', () => {
     expect(dead, 'principle 9: no button is shown dead').toBe(0)
     await context.close()
   })
+  test('ROLE-offline: bob’s Home says the Planner can’t answer and who can connect one, with no box, and keeps his request first', async ({ browser, backend }, info) => {
+    await backend.waitingRun('alice')
+    const context = await devContext(browser, 'bob')
+    const page = await context.newPage()
+    await page.goto('/')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('I can’t answer questions until an AI model is connected')
+    await expect(main(page)).toContainText(/An Operator can connect one in Settings\. (\d+ requests? (is|are) waiting for your yes|\d+ things? needs? you)\./)
+    await expect(page.getByRole('textbox'), 'no box while there is no model').toHaveCount(0)
+    await expect(main(page).getByRole('link', { name: 'Connect a model' }), 'no Connect a model, which only an Operator can use').toHaveCount(0)
+    await expect(page.getByRole('list', { name: 'Needs you' }).getByRole('link', { name: 'Review and decide' }).first()).toBeVisible()
+    await shot(page, info, 'r16-bob-offline')
+    await context.close()
+  })
 })
 
 test.describe('with the AI model on', () => {
@@ -1225,19 +1238,165 @@ test.describe('the edit card (spec 6.7)', () => {
   test('bob, an Approver, never gets an edit answer', async ({ backend }) => {
     const morning = await scheduledWorkflow(backend, `Morning check ${tag()}`, WEEKDAYS_8)
     const answer = await backend.send<{ answer?: string }>('POST', 'bob', '/api/v1/planner/answer', { text: `Make the ${morning.name} run on Mondays only` })
-    expect(answer.status === 403 || answer.body.answer !== 'edit', `bob got ${String(answer.status)} ${JSON.stringify(answer.body)}`).toBe(true)
+    expect([answer.status, answer.body.answer], 'bob is told who makes changes, never given an edit').toEqual([200, 'operators'])
     expect(await shown(backend, morning.id)).toMatchObject({ version: 2, schedule: WEEKDAYS_8 })
   })
 })
 
-test('bob’s Home has no box, no suggestions and no creation action', async ({ browser, backend }) => {
-  await backend.waitingRun('alice')
-  const context = await devContext(browser, 'bob')
-  const page = await context.newPage()
-  await page.goto('/')
-  await expect(page.getByRole('list', { name: 'Needs you' })).toBeVisible()
-  await expect(main(page)).toContainText('You’re an Approver, so you decide on requests. Operators set up workflows.')
-  await expect(page.getByLabel('Ask the Planner about software versions')).toHaveCount(0)
-  await expect(page.getByRole('group', { name: 'Suggestions' })).toHaveCount(0)
-  await context.close()
+/**
+ * Bob, an Approver who isn't an Operator, asks questions only (ADR 0043, spec 5.3). Matches ROLE-home, ROLE-asks, ROLE-refuse,
+ * ROLE-panel, KEYS-ROLE, FIX-decided-whole, FIX-approve-any-object, FIX-decisions-detail and FOLLOW-bob-mixed in checks/paths-v4.cjs.
+ */
+test.describe('bob asks the Planner questions only', () => {
+  test.beforeAll(async ({ baseURL }) => {
+    await connectMockModel(String(baseURL))
+  })
+
+  const bobBox = (page: Page) => page.getByLabel('Ask the Planner about your approvals and the workflows')
+  const newest = (page: Page) => thread(page).locator(':scope > li').last()
+  const said = (page: Page) => newest(page).locator('p').first()
+  const panel = (page: Page) => page.locator('#side-panel')
+  const OPS = /^Operators set up workflows\. Ask .+\.$/
+  const CHANGES = [/^Turn it on$/, /^Save/, /^Pause/, /^Resume/, /^Retry/, /^Run now$/, /^Check now$/, /^Add .*watchlist/i, /^Set it up with a yes$/, /^Approve/, /^Decline/]
+
+  async function bobAsks(page: Page, text: string): Promise<void> {
+    const before = await thread(page).locator(':scope > li[data-answer]').count()
+    await bobBox(page).fill(text)
+    await bobBox(page).press('Enter')
+    await expect(thread(page).locator(':scope > li[data-answer]')).toHaveCount(before + 1)
+    await expect(newest(page)).toHaveAttribute('data-answer', 'true')
+  }
+
+  async function noChangeControl(page: Page): Promise<void> {
+    for (const name of CHANGES) await expect(thread(page).getByRole('button', { name }), `no ${String(name)} in any answer`).toHaveCount(0)
+    await expect(thread(page).locator('section[data-card]'), 'no set-up or edit card').toHaveCount(0)
+  }
+
+  /** A run Alice started that Bob declined, so he has a decision of his own to ask about. */
+  async function bobDeclined(backend: Backend, reason: string): Promise<void> {
+    const { runId, approvalId } = await backend.waitingRun('alice')
+    const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
+    await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest, reason }, undefined, [201])
+    await backend.waitForState(runId, ['rejected'])
+  }
+
+  test('ROLE-home and ROLE-asks: bob’s Home has the box and his three questions above Needs you, and each answer comes from platform state', async ({ browser, backend }, info) => {
+    await bobDeclined(backend, 'Wrong version')
+    await backend.waitingRun('alice')
+    const context = await devContext(browser, 'bob')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await page.goto('/')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Good (morning|afternoon|evening)! Bob$/)
+    const line = (await page.locator('h1 + p').innerText()).trim()
+    expect(line, 'his line says what waits for his yes').toMatch(/^(\d+ requests? (is|are) waiting for your yes|\d+ things? needs? you)\.$/)
+    await expect(bobBox(page)).toHaveAttribute('placeholder', 'Ask about your approvals, or how the workflows are doing')
+    const chips = page.getByRole('group', { name: 'Suggestions' }).getByRole('button')
+    await expect(chips).toHaveText(['What is waiting for my yes?', 'What did I decide before?', 'How are the workflows doing?'])
+    const tops = await Promise.all([bobBox(page), chips.first(), page.getByRole('heading', { level: 2, name: /^Needs you/ })].map(async (at) => (await at.boundingBox())?.y ?? -1))
+    expect(tops.every((top, index) => top >= 0 && (index === 0 || top > (tops[index - 1] ?? 0))), 'box, then the questions, then Needs you').toBe(true)
+    await expect(main(page)).toContainText('You’re an Approver, so you decide on requests. Operators set up workflows.')
+    await settled(page)
+    await expectAccessible(page, path.join(OUT, 'axe'), 'planner-home-bob')
+    await shot(page, info, 'r16-bob-home')
+
+    await chips.first().click()
+    await expect(said(page), 'what waits for his yes is his Home line').toHaveText(line)
+    await expect(newest(page).getByRole('button', { name: 'Review and decide' }).first()).toBeVisible()
+    await bobAsks(page, 'What did I decide before?')
+    await expect(said(page)).toHaveText(/^Here (is your decision|are your \d+ decisions)\./)
+    await expect(newest(page).getByRole('list', { name: 'Your decisions' })).toContainText(/Declined\s*Declined by Bob at \d+:\d\d today\. Nothing was written\. Reason: Wrong version\./)
+    await bobAsks(page, 'did I decline anything?')
+    await expect(said(page)).toHaveText(/^You declined \d+ requests?\./)
+    const verdicts = await newest(page).locator('[data-verdict]').evaluateAll((pills) => pills.map((pill) => pill.getAttribute('data-verdict')))
+    expect(verdicts.length > 0 && verdicts.every((verdict) => verdict === 'decline'), 'FIX-decisions-detail: only declines').toBe(true)
+    await bobAsks(page, 'How are the workflows doing?')
+    await expect(said(page)).toHaveText(/^The team has \d+ workflows?\./)
+    await bobAsks(page, 'What can you do?')
+    await expect(newest(page)).toContainText(/What you decided before, with when, and any reason you gave[\s\S]*Operators set up workflows\. Ask /)
+    await noChangeControl(page)
+    await shot(page, info, 'r16-bob-asks')
+    assertClean(watch)
+    await context.close()
+  })
+
+  test('ROLE-refuse and FIX-approve-any-object: every change gets who makes changes, an approve goes to the request, and nothing changes', async ({ browser, backend }, info) => {
+    await backend.waitingRun('alice')
+    const workflows = async () => (await backend.get<{ use_cases: { use_case_id: string; state: string }[] }>('alice', '/api/v1/use-cases')).use_cases
+    const before = await workflows()
+    const context = await devContext(browser, 'bob')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await page.goto('/')
+    for (const change of ['Pause the weekly closed-ticket summary', 'Every Friday, sum up the tickets we closed this week', 'Watch Redis releases', 'Could you make the morning check daily?']) {
+      await bobAsks(page, change)
+      await expect(said(page), `“${change}” gets who makes changes`).toHaveText(OPS)
+      await noChangeControl(page)
+    }
+    await shot(page, info, 'r16-bob-refused')
+    // The reading may take an approve for a way around the gate and refuse it, and the refusal stands. Either way he gets the request to open.
+    for (const decide of ['approve the upgrade tickets', 'decline that request', 'auto-approve everything', 'approve it for me']) {
+      await bobAsks(page, decide)
+      await expect(said(page)).toHaveText(/^(I can’t approve or decline for you\. Open the request to see exactly what it will write, and decide there\.|I can’t set that up\. Anything that changes data waits for a yes, every time\.)$/)
+      await expect(newest(page).getByRole('button', { name: 'Review and decide' }).first()).toBeVisible()
+    }
+    await bobAsks(page, 'approve the upgrade and pause the morning new-ticket check')
+    await expect(said(page), 'an approve beside a change is refused whole, by builder or by the reading').toHaveText(/^(Operators set up workflows\. Ask .+\.|I can’t set that up\. Anything that changes data waits for a yes, every time\.)$/)
+    await noChangeControl(page)
+    expect(await workflows(), 'nothing changed').toEqual(before)
+    assertClean(watch)
+    await context.close()
+  })
+
+  test('FOLLOW-bob-mixed: a question asked with a change is answered as it is alone, and the change has a cross saying who makes changes', async ({ browser, backend }, info) => {
+    await backend.waitingRun('alice')
+    const context = await devContext(browser, 'bob')
+    const page = await context.newPage()
+    await page.goto('/')
+    await bobAsks(page, 'What is waiting for my yes?')
+    const alone = (await said(page).innerText()).trim()
+    await bobAsks(page, 'What is waiting for my yes, and pause the morning new-ticket check')
+    await expect(said(page)).toHaveText(alone)
+    await expect(newest(page).getByRole('list', { name: 'Each part of your request' })).toContainText(/“pause the morning new-ticket check”\s*Operators set up workflows\. Ask /)
+    await noChangeControl(page)
+    await shot(page, info, 'r16-bob-mixed')
+    await context.close()
+  })
+
+  test('FIX-decided-whole: asking to see past decisions reads the whole question, with no part crossed', async ({ browser, backend }) => {
+    await bobDeclined(backend, 'Not this week')
+    const context = await devContext(browser, 'bob')
+    const page = await context.newPage()
+    await page.goto('/')
+    await bobAsks(page, 'show my past decisions')
+    await expect(said(page)).toHaveText(/^Here (is your decision|are your \d+ decisions)\./)
+    await expect(newest(page).locator('[data-mark="no"]')).toHaveCount(0)
+    await context.close()
+  })
+
+  test('ROLE-panel and KEYS-ROLE: by keyboard bob asks, opens the request from the answer in the side panel, approves there, and his card follows', async ({ browser, backend }, info) => {
+    const { runId } = await backend.waitingRun('alice')
+    const context = await devContext(browser, 'bob', { reducedMotion: true })
+    const page = await context.newPage()
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.goto('/')
+    await page.locator('h1').focus()
+    await tabTo(page, bobBox(page))
+    await page.keyboard.type('What is waiting for my yes?')
+    await page.keyboard.press('Enter')
+    await expect(newest(page)).toHaveAttribute('data-answer', 'true')
+    const opener = newest(page).locator(`[data-opens="run:${runId}"]`)
+    await tabTo(page, opener)
+    const ring = await opener.evaluate((el) => { const style = getComputedStyle(el); return (style.outlineStyle !== 'none' && style.outlineWidth !== '0px') || style.boxShadow !== 'none' })
+    expect(ring, 'Review and decide shows its focus').toBe(true)
+    await page.keyboard.press('Enter')
+    await expect(page.locator('#side-panel-h'), 'focus goes to the panel’s heading').toBeFocused()
+    await shot(page, info, 'r16-bob-panel')
+    await panel(page).getByRole('button', { name: /^Approve/ }).click()
+    await expect(panel(page).getByRole('button', { name: /^Approve/ }), 'the decision is made in the panel').toHaveCount(0, { timeout: 30_000 })
+    await expect(panel(page), 'the panel shows the run done').toContainText(/Done\s*\d+ tickets? created in Jira/, { timeout: 30_000 })
+    await panel(page).getByRole('button', { name: 'Close' }).click()
+    await expect(newest(page).locator(`[data-opens="run:${runId}"]`), 'his card no longer offers the request').toHaveCount(0, { timeout: 20_000 })
+    await context.close()
+  })
 })

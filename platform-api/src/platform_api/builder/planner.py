@@ -16,6 +16,7 @@ from typing import Annotated, Final, Literal, Protocol, Self
 
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
 
+from platform_api.builder import asks
 from platform_api.builder.models import (
     CardList,
     ClockTime,
@@ -76,7 +77,10 @@ answer to a question about the person's data (ADR 0042). This is the platform's 
 the whole call, so a runtime that hangs still gives the person an answer."""
 
 type CapabilityState = Literal["ready", "needs_setup", "down", "planned", "unsupported"]
-type Intent = Literal["check_workflows", "needs_me", "abilities", "setup_ideas", "why_stopped"]
+type Intent = Literal[
+    "check_workflows", "needs_me", "abilities", "setup_ideas", "why_stopped", "decided"
+]
+type ReplyReason = PartReason | Literal["operators"]
 
 
 class PreviousIn(WireIn):
@@ -152,12 +156,13 @@ class PartView(WireModel):
         description="will_do for a part the answer does, cant for one it doesn't, and question "
         "for one it asks about."
     )
-    reason: PartReason | None = Field(
+    reason: ReplyReason | None = Field(
         description="Why, for a cant or a question: not_followed (no rule read it), cant_do (see "
         "note), ask_on_its_own, one_day, one_time or one_frequency (a schedule with two, see "
         "choices), own_time (a time on a watch request), skip_approval, with_a_yes, "
         "needs_the_rest, how_many_days, only_schedule (a change to a workflow other than when it "
-        "runs) and how_often (a schedule it can't hold, such as monthly). Null for will_do."
+        "runs), how_often (a schedule it can't hold, such as monthly), and operators (a change "
+        "asked by someone who isn't an Operator). Null for will_do."
     )
     note: str | None = Field(description="For cant_do, why, in the registry's words.")
     choices: list[str] = Field(
@@ -367,6 +372,30 @@ class EditReply(Reply):
     )
 
 
+class OperatorsReply(Reply):
+    """A change asked by someone who isn't an Operator. Only Operators set up and change
+    workflows, so nothing is offered that changes anything (ADR 0043)."""
+
+    answer: Literal["operators"] = "operators"
+
+
+class DecidedReply(Reply):
+    """The person's own decisions, which the Portal reads from GET /api/v1/decisions."""
+
+    answer: Literal["decided"] = "decided"
+    only: Literal["approve", "decline"] | None = Field(
+        description='approve or decline when the question asks for only those, as "Did I '
+        'decline anything?". Null for all of them.'
+    )
+
+
+class DecideReply(Reply):
+    """An approve or decline asked in the chat. Nobody decides there: the Portal offers the
+    requests waiting for the person's yes, to open and decide on."""
+
+    answer: Literal["decide"] = "decide"
+
+
 class OfflineReply(Reply):
     answer: Literal["offline"] = "offline"
     why: FallbackWhy = Field(
@@ -393,6 +422,9 @@ type PlannerReply = Annotated[
     | NeedsMeReply
     | QuestionReply
     | EditReply
+    | OperatorsReply
+    | DecidedReply
+    | DecideReply
     | OfflineReply,
     Field(discriminator="answer"),
 ]
@@ -569,6 +601,80 @@ def _rows(rows: Sequence[UnderstoodRow]) -> list[UnderstoodRowView]:
     return [UnderstoodRowView(kind=r.kind, text=r.text, state=r.state, note=r.note) for r in rows]
 
 
+QUESTIONS: Final = frozenset(
+    {"needs_me", "check_workflows", "why_stopped", "question", "abilities", "decided"}
+)
+"""The answers that change nothing, for someone who isn't an Operator (plan 3.2)."""
+
+
+def _cross(text: str, reason: ReplyReason) -> PartView:
+    return PartView(text=text, mark="cant", reason=reason, note=None, choices=[])
+
+
+def _done(text: str) -> PartView:
+    return PartView(text=text, mark="will_do", reason=None, note=None, choices=[])
+
+
+CROSS_FOR: Final[dict[asks.Ask, ReplyReason]] = {
+    "change": "operators",
+    "decide": "operators",
+    "question": "ask_on_its_own",
+    "decided": "ask_on_its_own",
+    "other": "not_followed",
+}
+"""Why a clause an answer doesn't answer has a cross: a change and an approve or decline are an
+Operator's or the request's, a question is asked on its own, and anything else wasn't followed."""
+
+
+def _parts(clauses: list[asks.Clause], answered: asks.Ask | None) -> list[PartView]:
+    return [
+        _done(c.text) if c.ask == answered else _cross(c.text, CROSS_FOR[c.ask]) for c in clauses
+    ]
+
+
+def _remark(part: PartView) -> PartView:
+    """A clause that asks for a change is never ticked, whatever the reading made of it, and
+    only a question is: anything else ticked gets its cross."""
+    ask = asks.ask_of(part.text)
+    if ask == "change" or (part.mark == "will_do" and ask not in ("question", "decided")):
+        return _cross(part.text, CROSS_FOR[ask])
+    return part
+
+
+def past_decisions(text: str) -> DecidedReply | None:
+    """A question about the person's own decisions, answered from platform state with no model:
+    there is nothing in it for the runtime to refuse. None when the request holds an approve or
+    decline, which the runtime reads first, or no question about decisions at all."""
+    clauses = asks.clauses_of(text)
+    kinds = {c.ask for c in clauses}
+    if "decided" not in kinds or "decide" in kinds:
+        return None
+    return DecidedReply(only=asks.only_of(clauses), parts=_parts(clauses, "decided"))
+
+
+def questions_only(reply: PlannerReply, text: str | None) -> PlannerReply:
+    """The answer for someone who can't change workflows (ADR 0043, spec 5.3). Their own
+    decisions and an approve or decline are read from their words here, clause by clause; any
+    other question keeps the runtime's answer. A change gets "operators", alone or beside an
+    approve or decline. Beside a question, it is a cross that says the same. The runtime's
+    refusal stands, whatever the words, and so does the offline answer. Questions about past
+    decisions are answered before the runtime is asked (`past_decisions`)."""
+    if reply.answer in ("offline", "refused"):
+        return reply
+    decided = past_decisions(text or "")
+    if decided is not None:
+        return decided
+    clauses = asks.clauses_of(text or "")
+    kinds = {c.ask for c in clauses}
+    if "decide" in kinds:
+        if "change" in kinds:
+            return OperatorsReply(parts=_parts(clauses, None))
+        return DecideReply(parts=_parts(clauses, "decide"))
+    if reply.answer not in QUESTIONS or ("change" in kinds and "question" not in kinds):
+        return OperatorsReply(parts=_parts(clauses, None))
+    return reply.model_copy(update={"parts": [_remark(p) for p in reply.parts]})
+
+
 class PlannerFront:
     def __init__(
         self,
@@ -587,10 +693,18 @@ class PlannerFront:
         self._connections = connections
 
     async def answer(self, body: AnswerIn, viewer: Principal) -> PlannerReply | NoSuchWorkflow:
+        operator = Role.OPERATOR in viewer.roles
+        decided = None if operator or body.text is None else past_decisions(body.text)
+        if decided is not None:
+            return decided
         if body.text is not None:
-            return await self._typed(body.text, viewer, body.previous)
-        assert body.intent is not None
-        return await self._intent(body.intent, body.use_case_id)
+            reply = await self._typed(body.text, viewer, body.previous)
+        else:
+            assert body.intent is not None
+            reply = await self._intent(body.intent, body.use_case_id)
+        if operator or isinstance(reply, NoSuchWorkflow):
+            return reply
+        return questions_only(reply, body.text)
 
     async def _intent(
         self, intent: Intent, use_case_id: str | None
@@ -602,6 +716,8 @@ class PlannerFront:
                 return IdeasReply()
             case "needs_me":
                 return NeedsMeReply()
+            case "decided":
+                return DecidedReply(only=None)
             case "check_workflows":
                 return CheckWorkflowsReply(use_case_id=None)
             case "why_stopped":

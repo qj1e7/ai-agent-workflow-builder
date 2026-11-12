@@ -105,6 +105,20 @@ export function needsOf(home: HomeOut, limit = Infinity): Needs {
   return { shown, total, more: { approvals, others: total - shown.length - approvals } }
 }
 
+/** The line under their greeting: what waits for their yes, and when nothing does, what runs next (spec 5.3). */
+export function approverHomeLine(home: HomeOut, now: Date): string {
+  if (needsTotal(home) > 0) return approverLine(home)
+  if (home.workflows === 0) return 'Nothing needs you yet. When a workflow wants to change something, it shows up here and in Teams.'
+  const next = comingUpOf(home, now)
+  return next ? `${approverLine(home)} Next up: ${next.name}, ${next.when}.` : approverLine(home)
+}
+
+/** The requests waiting for this person’s yes, from the same list as Needs you, so the two never disagree. */
+export function approvalsOf(home: HomeOut): Needs {
+  const shown = needsOf(home).shown.filter((need) => need.kind === 'approval')
+  return { shown, total: home.approvals_total, more: { approvals: home.approvals_total - shown.length, others: 0 } }
+}
+
 /** The one line under the greeting. It never repeats the count, because Needs you under it carries that. */
 export function stateLine(home: HomeOut, now: Date): string {
   const total = needsTotal(home)
@@ -113,7 +127,7 @@ export function stateLine(home: HomeOut, now: Date): string {
   return next ? `Nothing needs you. Next up: ${next.name}, ${next.when}.` : 'Nothing needs you. Nothing is scheduled yet.'
 }
 
-/** The line under an Approver’s greeting. An Approver has no box, so it says what waits for a yes. */
+/** What waits for the yes of someone who isn’t an Operator, in the same words on their Home, in the chat’s answer and on the rail. */
 export function approverLine(home: HomeOut): string {
   const total = needsTotal(home)
   if (total === 0) return 'Nothing needs you right now.'
@@ -125,6 +139,13 @@ export interface Suggestion {
   readonly label: string
   readonly ask: PlannerAnswerIn
 }
+
+/** The three questions Home suggests to someone who isn’t an Operator (spec 5.3). Each is a chip that never asks the model. */
+export const APPROVER_SUGGESTIONS: readonly Suggestion[] = [
+  { label: 'What is waiting for my yes?', ask: { intent: 'needs_me' } },
+  { label: 'What did I decide before?', ask: { intent: 'decided' } },
+  { label: 'How are the workflows doing?', ask: { intent: 'check_workflows' } },
+]
 
 /** What Home offers once software is on the watchlist. The question lane answers the first, and “Watch another software ...” gets the watchlist answer. */
 const WATCHED_CHIPS: readonly Suggestion[] = [

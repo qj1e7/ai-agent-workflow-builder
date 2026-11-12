@@ -1,0 +1,49 @@
+{
+  "decisions": [
+    {
+      "run_id": "run_01JBC",
+      "use_case_id": "uc_01JBW",
+      "use_case_name": "Keep our software up to date",
+      "verdict": "decline",
+      "reason": "Wrong version",
+      "at": "2026-11-13T01:10:00Z",
+      "run_state": "rejected",
+      "written": 0,
+      "tickets": true,
+      "connector": "jira",
+      "approved_before": [],
+      "declined_by": "bob"
+    },
+    {
+      "run_id": "run_01JB8",
+      "use_case_id": "uc_01JB8",
+      "use_case_name": "Morning new-ticket check",
+      "verdict": "approve",
+      "reason": null,
+      "at": "2026-10-26T00:00:00Z",
+      "run_state": "succeeded",
+      "written": 1,
+      "tickets": true,
+      "connector": "jira",
+      "approved_before": [],
+      "declined_by": null
+    },
+    {
+      "run_id": "run_01JBD",
+      "use_case_id": "uc_01JBS",
+      "use_case_name": "Weekly closed-ticket summary",
+      "verdict": "approve",
+      "reason": null,
+      "at": "2026-10-16T08:00:00Z",
+      "run_state": "rejected",
+      "written": 0,
+      "tickets": true,
+      "connector": "jira",
+      "approved_before": [
+        "bob"
+      ],
+      "declined_by": "alice"
+    }
+  ],
+  "total": 3
+}

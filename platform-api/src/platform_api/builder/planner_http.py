@@ -33,15 +33,18 @@ CurrentFront = Annotated[PlannerFront, Depends(current_front)]
 
 @router.post(
     "/planner/answer",
-    description="The Planner's one answer to what an Operator types or taps on Home. A typed "
+    description="The Planner's one answer to what a person types or taps on Home. A typed "
     "request is read by the AI model and answered as a set-up card, a part, a can't, a "
     "watchlist row, a question about software, a refusal, or one of the question kinds the "
     "Portal fills from its own routes. An intent chip never asks the model. Without a model, "
     "or after 10 seconds, or when the answer cannot be used, it answers `offline` with the "
-    "starter workflows. Nothing is saved or written.",
-    responses={**OPERATORS_ONLY, 404: error_response("No such workflow")},
+    "starter workflows. Someone who isn't an Operator asks questions only (ADR 0043): they "
+    "get the question kinds, `decided` for their own decisions and `decide` for an approve or "
+    "decline, which goes to the request. Anything else answers `operators`, and a change "
+    "beside a question is a part marked `operators`. Nothing is saved or written.",
+    responses={**SIGNED_IN, 404: error_response("No such workflow")},
 )
-async def answer(body: AnswerIn, principal: Operator, front: CurrentFront) -> PlannerReply:
+async def answer(body: AnswerIn, principal: CurrentPrincipal, front: CurrentFront) -> PlannerReply:
     match await front.answer(body, principal):
         case NoSuchWorkflow():
             raise HTTPException(404, "No such workflow")

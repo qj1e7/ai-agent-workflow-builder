@@ -7,12 +7,13 @@ import { Leftovers } from './PartsList'
 import { CardLive, NewestAnswer } from './primary'
 import { SetupCard } from './SetupCard'
 import { sayOf } from './answers'
-import { CheckWorkflowsAnswer, IdeasSentence, NeedsMeAnswer, useSaidOnce, WhyStoppedAnswer, type Say } from './StateAnswers'
+import { useAsker } from './asker'
+import { CheckWorkflowsAnswer, DecideAnswer, DecidedAnswer, IdeasSentence, NeedsMeAnswer, OperatorsAnswer, RequestsToOpen, useSaidOnce, WhyStoppedAnswer, type Say } from './StateAnswers'
 import type { Message, Thread as ThreadState } from './threadState'
 import { Waiting } from './Waiting'
 import styles from './Planner.module.css'
 
-const SORRY = new Set(['cant', 'refused', 'offline'])
+const SORRY = new Set(['cant', 'refused', 'offline', 'operators'])
 const RESUMED = 'Here’s your draft. Pick up where you left off.'
 
 interface ThreadProps {
@@ -37,7 +38,8 @@ function aboutBefore(messages: readonly Message[], index: number, memory: Thread
 
 function ReplyBody({ message, now, page, say, about }: { message: Extract<Message, { kind: 'reply' }>; now: Date; page: Page; say: Say; about: string | null }) {
   const { reply } = message
-  const sentence = sayOf(reply)
+  const asker = useAsker()
+  const sentence = sayOf(reply, asker)
   useSaidOnce(sentence, say)
   return (
     <div className={styles['reply']}>
@@ -48,7 +50,11 @@ function ReplyBody({ message, now, page, say, about }: { message: Extract<Messag
       {reply.answer === 'ideas' ? <IdeasSentence say={say} /> : null}
       {reply.answer === 'needs_me' ? <NeedsMeAnswer now={now} say={say} /> : null}
       {reply.answer === 'edit' ? <EditCard reply={reply} typed={message.typed} page={page} say={say} now={now} about={about} /> : null}
+      {reply.answer === 'operators' ? <OperatorsAnswer say={say} /> : null}
+      {reply.answer === 'decided' ? <DecidedAnswer only={reply.only} now={now} say={say} /> : null}
+      {reply.answer === 'decide' ? <DecideAnswer now={now} say={say} /> : null}
       <Answer reply={reply} typed={message.typed} page={page} />
+      {reply.answer === 'refused' && asker === 'approver' ? <RequestsToOpen now={now} /> : null}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import type { CantRowView, CapabilitiesView, CapabilityView, PlannerReply, RowKind, UnderstoodRowView } from '../../api/types'
+import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PlannerReply, RowKind, UnderstoodRowView } from '../../api/types'
 import { count } from '../run/words'
 import { isRunning, type Row } from '../workflows/workflow'
 import { cantOnCard } from './parts'
@@ -74,8 +74,20 @@ export const SAY = {
   which_software: 'Which software should I watch?',
   refused: 'I can’t set that up. Anything that changes data waits for a yes, every time.',
   abilities: 'Here is what I can do, and what I can’t do yet.',
+  approverAbilities: 'Here’s what you can ask me.',
+  approverUnknown: 'I can’t help with that here. I answer questions about your approvals and the workflows.',
   nothingNeeds: 'Nothing needs you right now.',
 } as const
+
+/** Who is asking: an Operator sets up and changes workflows, and anyone else asks questions only (ADR 0043). */
+export type Asker = 'operator' | 'approver'
+
+/** The offline answer to someone who isn’t an Operator: one line, with no place to start and nothing only an Operator can do. */
+const APPROVER_OFFLINE: Readonly<Record<OfflineReply['why'], string>> = {
+  no_model: 'I can’t answer questions until an AI model is connected. An Operator can connect one in Settings.',
+  too_slow: 'The Planner took too long to read your question. Try again in a moment.',
+  trouble: 'The Planner couldn’t read your question just now. Try again in a moment.',
+}
 
 export const watchlistSay = (software: string | null, listed: boolean): string => {
   if (software === null) return 'That belongs on the Software watchlist, which checks the software on it for new releases.'
@@ -90,8 +102,11 @@ export const ideasSay = (places: number): string =>
 
 export const needsSay = (total: number): string => (total === 0 ? SAY.nothingNeeds : `${count(total, 'thing')} ${total === 1 ? 'needs' : 'need'} you.`)
 
-/** The sentence for an answer the Planner reply alone decides. The state answers and the edit card fill theirs in from the platform as it is now. */
-export function sayOf(reply: PlannerReply): string | null {
+/**
+ * The sentence for an answer the Planner reply alone decides. The state answers, the person’s decisions, the requests to decide,
+ * who makes changes and the edit card are filled in from the platform as it is now.
+ */
+export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | null {
   switch (reply.answer) {
     case 'setup_card':
       return reply.parts.some((part) => part.mark === 'cant') ? SAY.setupCrossed : SAY.setup_card
@@ -108,17 +123,21 @@ export function sayOf(reply: PlannerReply): string | null {
     case 'refused':
       return SAY.refused
     case 'abilities':
-      return SAY.abilities
+      if (asker === 'operator') return SAY.abilities
+      return reply.parts.some((part) => part.mark !== 'will_do') ? SAY.approverUnknown : SAY.approverAbilities
     case 'ideas':
       return null
     case 'offline':
-      return reply.message
+      return asker === 'operator' ? reply.message : APPROVER_OFFLINE[reply.why]
     case 'question':
       return reply.text
     case 'edit':
     case 'check_workflows':
     case 'why_stopped':
     case 'needs_me':
+    case 'operators':
+    case 'decided':
+    case 'decide':
       return null
   }
 }
@@ -135,9 +154,9 @@ export function refusalNext(reply: { readonly rest: string }): RefusalNext {
 
 export const SAY_ANOTHER_WAY = 'If you only meant that you don’t need to look at it yourself, say it another way.'
 
-/** Check my workflows: one sentence from the same rows the Workflows list draws. */
-export function workflowsSay(rows: readonly Row[]): string {
-  if (rows.length === 0) return 'You have no workflows yet.'
+/** Check my workflows: one sentence from the same rows the Workflows list draws. Someone who isn’t an Operator reads the team’s. */
+export function workflowsSay(rows: readonly Row[], asker: Asker = 'operator'): string {
+  if (rows.length === 0) return asker === 'operator' ? 'You have no workflows yet.' : 'There are no workflows yet. Operators set them up.'
   const stopped = rows.filter((row) => row.useCase.last_run?.state === 'failed').length
   const waiting = rows.filter((row) => row.useCase.last_run?.state === 'awaiting_approval').length
   const paused = rows.filter((row) => row.useCase.state === 'paused').length
@@ -149,7 +168,7 @@ export function workflowsSay(rows: readonly Row[]): string {
     paused > 0 ? `${paused} ${paused === 1 ? 'is' : 'are'} paused` : null,
     running > 0 ? `${running} ${running === 1 ? 'is' : 'are'} running` : null,
   ].filter((part) => part !== null)
-  return `You have ${count(rows.length, 'workflow')}. ${parts.length > 0 ? `${parts.join(', ')}.` : 'None needs you.'}`
+  return `${asker === 'operator' ? 'You have' : 'The team has'} ${count(rows.length, 'workflow')}. ${parts.length > 0 ? `${parts.join(', ')}.` : 'None needs you.'}`
 }
 
 export interface CapabilityGroups {

@@ -9,14 +9,13 @@ import { useMe, useModelSettings, useWatchlist } from '../../api/queries'
 import type { HomeOut, PlannerReply } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
 import { Button, ButtonLink } from '../../ui/Button'
-import { IconClock } from '../../ui/icons'
 import { useMediaQuery } from '../../ui/media'
 import { Toast } from '../../ui/Toast'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
 import { restoreDraft } from './card'
 import { NEEDS_YOU_ANCHOR, type Page } from './AnswerCards'
 import { CapabilityLists } from './CapabilityLists'
-import { approverLine, comingUpOf, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, stateLine, suggestionsOf, type Needs, type Next } from './home'
+import { APPROVER_SUGGESTIONS, approverHomeLine, approverLine, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, stateLine, suggestionsOf, type Needs } from './home'
 import { NeedsSection, useArrival } from './NeedsSection'
 import { ChatView, NEWEST } from './ChatView'
 import { useChat } from './ChatProvider'
@@ -64,58 +63,7 @@ export function HomePage({ heading, today, now }: HomePageProps) {
 export function HomeBody({ heading, home, now }: { heading: string; home: HomeOut; now: Date }) {
   const operator = isOperator(useMe().data)
   const person = useCacheScope()
-  return operator ? <OperatorHome key={person} heading={heading} home={home} now={now} /> : <ApproverHome heading={heading} home={home} now={now} />
-}
-
-function ComingNext({ next }: { next: Next }) {
-  return (
-    <div className={homeStyles['coming']}>
-      <IconClock size={16} />
-      <span>
-        <b>Coming up next:</b> <Link to={next.to}>{next.name}</Link>, {next.when}
-        {next.more > 0 ? `, and ${next.more} more` : ''}.
-      </span>
-      <Link to="/workflows">See all workflows</Link>
-    </div>
-  )
-}
-
-function AllQuiet({ next }: { next: Next | null }) {
-  return (
-    <div className={homeStyles['quiet']}>
-      <b>All quiet</b>
-      {next ? (
-        <>
-          Next up: <Link to={next.to}>{next.name}</Link>, {next.when}.
-        </>
-      ) : (
-        'Nothing is scheduled yet.'
-      )}
-    </div>
-  )
-}
-
-/** An Approver who is not an Operator: what waits for a yes, in full. No box, no suggestions, nothing to create. */
-function ApproverHome({ heading, home, now }: { heading: string; home: HomeOut; now: Date }) {
-  const needs = useMemo(() => needsOf(home), [home])
-  const next = comingUpOf(home, now)
-  const arrival = useArrival(needs.shown.map((need) => need.key))
-  const total = needsTotal(home)
-  return (
-    <>
-      <PageHead heading={heading} lead={approverLine(home)}>
-        {total > 0 && next ? <ComingNext next={next} /> : null}
-      </PageHead>
-      <NeedsSection
-        needs={needs}
-        now={now}
-        arrival={arrival}
-        more={moreWords(needs.more) ? <p className={homeStyles['more']}>{moreWords(needs.more)}</p> : null}
-        whenNone={<AllQuiet next={next} />}
-      />
-      <p className="muted">You’re an Approver, so you decide on requests. Operators set up workflows.</p>
-    </>
-  )
+  return <PlannerHome key={person} heading={heading} home={home} now={now} operator={operator} />
 }
 
 const PHONE = '(max-width: 600px)'
@@ -128,15 +76,23 @@ const DAY_ONE_LEAD = 'Ask about your watchlist, or tell me what software to watc
 const OFFLINE_HEADING = 'I can’t read new requests until an AI model is connected'
 const OFFLINE_LEAD =
   'Without an AI model, the Planner can’t answer questions. The Software watchlist keeps checking for new releases.'
+const APPROVER_OFFLINE_HEADING = 'I can’t answer questions until an AI model is connected'
+const APPROVER_OFFLINE_LEAD = 'An Operator can connect one in Settings.'
+const APPROVER_NOTE = 'You’re an Approver, so you decide on requests. Operators set up workflows.'
 
 /** Needs you on Home: the most urgent few of the grouped list. The count is the platform’s, and the model’s row stays, so every row counted is listed. */
 function needsHere(home: HomeOut): Needs {
   return { ...needsOf(home, HOME_NEEDS_SHOWN), total: needsTotal(home) }
 }
 
-function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; now: Date }) {
+/**
+ * Home, the chat with the Planner (spec 5). An Operator asks for anything. Someone who isn’t an Operator gets the same calm Home with
+ * the box for questions only, their three questions as suggestions and Needs you in full (spec 5.3). The server refuses them every
+ * change, so the Portal only draws no control that changes anything.
+ */
+function PlannerHome({ heading, home, now, operator }: { heading: string; home: HomeOut; now: Date; operator: boolean }) {
   const model = useModelSettings()
-  const capabilities = useCapabilities()
+  const capabilities = useCapabilities({ enabled: operator })
   const chat = useChat()
   const { thread, text, problem, busy } = chat
   const [keys, setKeys] = useState(0)
@@ -145,19 +101,19 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
   const focusOn = useRef<number | null>(null)
   const phone = useMediaQuery(PHONE)
   const [params, setParams] = useSearchParams()
-  const wanted = params.get('draft')
+  const wanted = operator ? params.get('draft') : null
   const drafts = useDrafts(wanted !== null)
   const reopened = useRef<string | null>(null)
   /** The draft id the newest card wrote in the address, as opposed to one Resume brought here. */
   const written = useRef<string | null>(null)
   const offline = model.data !== undefined && model.data.active === null
-  const dayOne = home.workflows === 0
+  const dayOne = operator && home.workflows === 0
   const empty = thread.messages.length === 0
-  const needs = useMemo(() => needsHere(home), [home])
+  const needs = useMemo(() => (operator ? needsHere(home) : needsOf(home)), [home, operator])
   const arrival = useArrival(needs.shown.map((need) => need.key))
-  const watching = useWatchlist().data?.software.length
-  const watched = watching !== undefined && watching > 0
-  const suggestions = useMemo(() => suggestionsOf(watching, capabilities.data), [watching, capabilities.data])
+  const watching = useWatchlist({ enabled: operator }).data?.software.length
+  const watched = !operator || (watching !== undefined && watching > 0)
+  const suggestions = useMemo(() => (operator ? suggestionsOf(watching, capabilities.data) : APPROVER_SUGGESTIONS), [operator, watching, capabilities.data])
   const { resume, type, setProblem } = chat
 
   // Resume on Workflows lands here with the draft's id in the address, and the draft opens as the card it was, after any
@@ -232,6 +188,22 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
   const look = ((text.length % 24) - 12) / 12
   const toast = <Toast message={chat.note} onDismiss={chat.readNote} focusAfter={() => boxRef.current ?? document.querySelector<HTMLElement>('main h1')} />
 
+  if (offline && !operator) {
+    return (
+      <div className={styles['planner']}>
+        <div className={`${styles['welcome']} ${styles['offline']}`}>
+          <PlannerBot state="sorry" size={phone ? 96 : 128} />
+          <h1 tabIndex={-1}>{APPROVER_OFFLINE_HEADING}</h1>
+          <p className={styles['lead']}>
+            {APPROVER_OFFLINE_LEAD} {approverLine(home)}
+          </p>
+        </div>
+        {needs.shown.length > 0 ? <NeedsHere needs={needs} now={now} arrival={arrival} full /> : null}
+        <p className={`muted ${styles['centred']}`}>{APPROVER_NOTE}</p>
+      </div>
+    )
+  }
+
   if (offline) {
     return (
       <div className={styles['planner']}>
@@ -257,6 +229,7 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
       busy={busy}
       empty={empty}
       phone={phone}
+      asker={operator ? 'operator' : 'approver'}
       problem={problem}
       boxRef={boxRef}
       onChange={(value) => {
@@ -299,7 +272,7 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
           ) : (
             <>
               <h1 tabIndex={-1}>{heading}</h1>
-              <p className={styles['lead']}>{stateLine(home, now)}</p>
+              <p className={styles['lead']}>{operator ? stateLine(home, now) : approverHomeLine(home, now)}</p>
             </>
           )}
         </div>
@@ -320,8 +293,9 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
           </button>
         ))}
       </div>
-      {needs.shown.length > 0 ? <NeedsHere needs={needs} now={now} arrival={arrival} /> : null}
-      {!dayOne && !suggestions.some((suggestion) => suggestion.ask.intent === 'abilities') ? (
+      {needs.shown.length > 0 ? <NeedsHere needs={needs} now={now} arrival={arrival} full={!operator} /> : null}
+      {operator ? null : <p className={`muted ${styles['centred']}`}>{APPROVER_NOTE}</p>}
+      {operator && !dayOne && !suggestions.some((suggestion) => suggestion.ask.intent === 'abilities') ? (
         <div className={styles['centred']}>
           <button type="button" className={styles['linkButton']} aria-expanded={lists} onClick={() => setLists((open) => !open)}>
             {lists ? 'Hide what I can do' : 'What can I ask for?'}
@@ -334,9 +308,13 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
   )
 }
 
-/** `quiet`: the page has its own main button, so Needs you has none. */
-function NeedsHere({ needs, now, arrival, quiet = false, connectAbove = false }: { needs: Needs; now: Date; arrival: ReturnType<typeof useArrival>; quiet?: boolean; connectAbove?: boolean }) {
+/**
+ * `quiet`: the page has its own main button, so Needs you has none. `full`: Home already lists all the platform returned, as it does for
+ * someone who isn’t an Operator, so what is left is said, not linked to Workflows, which lists no more.
+ */
+function NeedsHere({ needs, now, arrival, quiet = false, connectAbove = false, full = false }: { needs: Needs; now: Date; arrival: ReturnType<typeof useArrival>; quiet?: boolean; connectAbove?: boolean; full?: boolean }) {
   const left = needs.total - needs.shown.length
+  const said = full ? moreWords(needs.more) : null
   return (
     <NeedsSection
       needs={needs}
@@ -346,7 +324,9 @@ function NeedsHere({ needs, now, arrival, quiet = false, connectAbove = false }:
       connectAbove={connectAbove}
       anchor={NEEDS_YOU_ANCHOR}
       more={
-        left > 0 ? (
+        said !== null ? (
+          <p className={homeStyles['more']}>{said}</p>
+        ) : left > 0 && !full ? (
           <p className={homeStyles['more']}>
             <Link to="/workflows">{SEE_ALL_WORDS}</Link>
           </p>

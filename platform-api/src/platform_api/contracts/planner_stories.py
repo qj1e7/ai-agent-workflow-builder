@@ -19,6 +19,8 @@ from platform_api.builder.planner import (
     CantRowView,
     CheckPartIn,
     CheckWorkflowsReply,
+    DecidedReply,
+    DecideReply,
     EditAfter,
     EditBefore,
     EditChoice,
@@ -26,6 +28,7 @@ from platform_api.builder.planner import (
     IdeasReply,
     ListedSoftware,
     NeedsMeReply,
+    OperatorsReply,
     PartCheckCantDo,
     PartCheckFits,
     PartReply,
@@ -33,6 +36,7 @@ from platform_api.builder.planner import (
     PlannerFront,
     QuestionReply,
     RefusedReply,
+    ReplyReason,
     SetupCardReply,
     SimilarWorkflow,
     WatchlistReply,
@@ -47,7 +51,6 @@ from platform_api.orchestration import (
     ConnectionId,
     ConnectionState,
     NoModel,
-    PartReason,
     PlannerFacts,
     PreviousTurn,
     RuntimeDown,
@@ -76,7 +79,7 @@ def does(text: str) -> PartView:
     return PartView(text=text, mark="will_do", reason=None, note=None, choices=[])
 
 
-def crossed(text: str, reason: PartReason, *choices: str, note: str | None = None) -> PartView:
+def crossed(text: str, reason: ReplyReason, *choices: str, note: str | None = None) -> PartView:
     return PartView(text=text, mark="cant", reason=reason, note=note, choices=list(choices))
 
 
@@ -308,6 +311,28 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
         ),
         "planner/answer.why_stopped.json": WhyStoppedReply(use_case_id="uc_01JB8"),
         "planner/answer.needs_me.json": NeedsMeReply(),
+        "planner/answer.needs_me.operators.json": NeedsMeReply(
+            parts=[
+                does("What is waiting for my yes"),
+                crossed("pause the morning new-ticket check", "operators"),
+            ]
+        ),
+        "planner/answer.operators.json": OperatorsReply(
+            parts=[crossed("Pause the weekly closed-ticket summary", "operators")]
+        ),
+        "planner/answer.decided.json": DecidedReply(
+            only=None, parts=[does("What did I decide before")]
+        ),
+        "planner/answer.decided.declines.json": DecidedReply(
+            only="decline", parts=[does("did I decline anything")]
+        ),
+        "planner/answer.decide.json": DecideReply(parts=[does("Approve the upgrade tickets")]),
+        "planner/answer.decide.question.json": DecideReply(
+            parts=[
+                does("Approve the upgrade"),
+                crossed("is LangGraph up to date", "ask_on_its_own"),
+            ]
+        ),
         "planner/answer.question.json": QuestionReply(
             text="LangGraph is behind. You run 1.2.14 and the newest is 1.2.16.",
             looked_at=["watchlist"],

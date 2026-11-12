@@ -3747,6 +3747,75 @@
         "title": "DecideRefusalOut",
         "type": "object"
       },
+      "DecideReply": {
+        "additionalProperties": false,
+        "description": "An approve or decline asked in the chat. Nobody decides there: the Portal offers the\nrequests waiting for the person's yes, to open and decide on.",
+        "properties": {
+          "answer": {
+            "const": "decide",
+            "default": "decide",
+            "title": "Answer",
+            "type": "string"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "parts",
+          "answer"
+        ],
+        "title": "DecideReply",
+        "type": "object"
+      },
+      "DecidedReply": {
+        "additionalProperties": false,
+        "description": "The person's own decisions, which the Portal reads from GET /api/v1/decisions.",
+        "properties": {
+          "answer": {
+            "const": "decided",
+            "default": "decided",
+            "title": "Answer",
+            "type": "string"
+          },
+          "only": {
+            "anyOf": [
+              {
+                "enum": [
+                  "approve",
+                  "decline"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "approve or decline when the question asks for only those, as \"Did I decline anything?\". Null for all of them.",
+            "title": "Only"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "parts",
+          "answer",
+          "only"
+        ],
+        "title": "DecidedReply",
+        "type": "object"
+      },
       "DecisionIn": {
         "additionalProperties": false,
         "properties": {
@@ -3844,6 +3913,30 @@
           "reason"
         ],
         "title": "DecisionView",
+        "type": "object"
+      },
+      "DecisionsView": {
+        "additionalProperties": false,
+        "properties": {
+          "decisions": {
+            "description": "Newest first, at most 50.",
+            "items": {
+              "$ref": "#/components/schemas/PastDecisionView"
+            },
+            "title": "Decisions",
+            "type": "array"
+          },
+          "total": {
+            "description": "How many decisions match, shown or not.",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "decisions",
+          "total"
+        ],
+        "title": "DecisionsView",
         "type": "object"
       },
       "DeclineReason": {
@@ -4949,7 +5042,8 @@
           "needs_me",
           "abilities",
           "setup_ideas",
-          "why_stopped"
+          "why_stopped",
+          "decided"
         ],
         "type": "string"
       },
@@ -5774,6 +5868,32 @@
         "title": "OperatorIn",
         "type": "object"
       },
+      "OperatorsReply": {
+        "additionalProperties": false,
+        "description": "A change asked by someone who isn't an Operator. Only Operators set up and change\nworkflows, so nothing is offered that changes anything (ADR 0043).",
+        "properties": {
+          "answer": {
+            "const": "operators",
+            "default": "operators",
+            "title": "Answer",
+            "type": "string"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "parts",
+          "answer"
+        ],
+        "title": "OperatorsReply",
+        "type": "object"
+      },
       "ParamSpec": {
         "additionalProperties": false,
         "properties": {
@@ -5982,13 +6102,13 @@
           "reason": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PartReason"
+                "$ref": "#/components/schemas/ReplyReason"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Why, for a cant or a question: not_followed (no rule read it), cant_do (see note), ask_on_its_own, one_day, one_time or one_frequency (a schedule with two, see choices), own_time (a time on a watch request), skip_approval, with_a_yes, needs_the_rest, how_many_days, only_schedule (a change to a workflow other than when it runs) and how_often (a schedule it can't hold, such as monthly). Null for will_do."
+            "description": "Why, for a cant or a question: not_followed (no rule read it), cant_do (see note), ask_on_its_own, one_day, one_time or one_frequency (a schedule with two, see choices), own_time (a time on a watch request), skip_approval, with_a_yes, needs_the_rest, how_many_days, only_schedule (a change to a workflow other than when it runs), how_often (a schedule it can't hold, such as monthly), and operators (a change asked by someone who isn't an Operator). Null for will_do."
           },
           "text": {
             "description": "The request's own words: a whole clause, or, in a clause the Planner partly read, only the words it didn't read.",
@@ -6004,6 +6124,112 @@
           "choices"
         ],
         "title": "PartView",
+        "type": "object"
+      },
+      "PastDecisionView": {
+        "additionalProperties": false,
+        "properties": {
+          "approved_before": {
+            "description": "On a declined run, who said yes before the decline, in step order. Empty for any other run.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Approved Before",
+            "type": "array"
+          },
+          "at": {
+            "description": "When they decided.",
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "connector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the run writes, as jira.",
+            "title": "Connector"
+          },
+          "declined_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who declined the run, when it was declined.",
+            "title": "Declined By"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why they declined, when they gave a reason.",
+            "title": "Reason"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "run_state": {
+            "$ref": "#/components/schemas/RunState",
+            "description": "How the run they decided stands now."
+          },
+          "tickets": {
+            "description": "True when every write the run made, or proposed, is a ticket.",
+            "title": "Tickets",
+            "type": "boolean"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "description": "The workflow's name when the run started.",
+            "title": "Use Case Name",
+            "type": "string"
+          },
+          "verdict": {
+            "enum": [
+              "approve",
+              "decline"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          },
+          "written": {
+            "description": "The writes the run made.",
+            "title": "Written",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "use_case_id",
+          "use_case_name",
+          "verdict",
+          "reason",
+          "at",
+          "run_state",
+          "written",
+          "tickets",
+          "connector",
+          "approved_before",
+          "declined_by"
+        ],
+        "title": "PastDecisionView",
         "type": "object"
       },
       "PendingApproverOut": {
@@ -6381,10 +6607,13 @@
             "abilities": "#/components/schemas/AbilitiesReply",
             "cant": "#/components/schemas/CantReply",
             "check_workflows": "#/components/schemas/CheckWorkflowsReply",
+            "decide": "#/components/schemas/DecideReply",
+            "decided": "#/components/schemas/DecidedReply",
             "edit": "#/components/schemas/EditReply",
             "ideas": "#/components/schemas/IdeasReply",
             "needs_me": "#/components/schemas/NeedsMeReply",
             "offline": "#/components/schemas/OfflineReply",
+            "operators": "#/components/schemas/OperatorsReply",
             "part": "#/components/schemas/PartReply",
             "question": "#/components/schemas/QuestionReply",
             "refused": "#/components/schemas/RefusedReply",
@@ -6434,6 +6663,15 @@
           },
           {
             "$ref": "#/components/schemas/EditReply"
+          },
+          {
+            "$ref": "#/components/schemas/OperatorsReply"
+          },
+          {
+            "$ref": "#/components/schemas/DecidedReply"
+          },
+          {
+            "$ref": "#/components/schemas/DecideReply"
           },
           {
             "$ref": "#/components/schemas/OfflineReply"
@@ -7258,6 +7496,17 @@
         ],
         "title": "ReplyIn",
         "type": "object"
+      },
+      "ReplyReason": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/PartReason"
+          },
+          {
+            "const": "operators",
+            "type": "string"
+          }
+        ]
       },
       "ReplyView": {
         "additionalProperties": false,
@@ -12178,6 +12427,98 @@
         ]
       }
     },
+    "/api/v1/decisions": {
+      "get": {
+        "description": "The signed-in person's own decisions on requests, newest first, each with the run it\ndecided as it stands now. `verdict` keeps only approvals or only declines.",
+        "operationId": "decisions_api_v1_decisions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "verdict",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "approve",
+                    "decline"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Verdict"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Decisions",
+        "tags": [
+          "orchestration"
+        ]
+      }
+    },
     "/api/v1/dev/users": {
       "get": {
         "operationId": "list_dev_users_api_v1_dev_users_get",
@@ -13257,7 +13598,7 @@
     },
     "/api/v1/planner/answer": {
       "post": {
-        "description": "The Planner's one answer to what an Operator types or taps on Home. A typed request is read by the AI model and answered as a set-up card, a part, a can't, a watchlist row, a question about software, a refusal, or one of the question kinds the Portal fills from its own routes. An intent chip never asks the model. Without a model, or after 10 seconds, or when the answer cannot be used, it answers `offline` with the starter workflows. Nothing is saved or written.",
+        "description": "The Planner's one answer to what a person types or taps on Home. A typed request is read by the AI model and answered as a set-up card, a part, a can't, a watchlist row, a question about software, a refusal, or one of the question kinds the Portal fills from its own routes. An intent chip never asks the model. Without a model, or after 10 seconds, or when the answer cannot be used, it answers `offline` with the starter workflows. Someone who isn't an Operator asks questions only (ADR 0043): they get the question kinds, `decided` for their own decisions and `decide` for an approve or decline, which goes to the request. Anything else answers `operators`, and a change beside a question is a part marked `operators`. Nothing is saved or written.",
         "operationId": "answer_api_v1_planner_answer_post",
         "requestBody": {
           "content": {
@@ -13298,7 +13639,7 @@
                 }
               }
             },
-            "description": "Only an Operator can do this, or the person is not on the People list"
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
           },
           "404": {
             "content": {

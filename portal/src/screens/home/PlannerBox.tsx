@@ -1,5 +1,6 @@
 import { useEffect, useRef, type KeyboardEvent, type RefObject } from 'react'
 import { IconSend } from '../../ui/icons'
+import type { Asker } from './answers'
 import styles from './Planner.module.css'
 
 interface PlannerBoxProps {
@@ -7,20 +8,27 @@ interface PlannerBoxProps {
   readonly busy: boolean
   readonly empty: boolean
   readonly phone: boolean
+  readonly asker: Asker
   readonly problem: string | null
   readonly boxRef: RefObject<HTMLTextAreaElement | null>
   readonly onChange: (text: string) => void
   readonly onSend: () => void
 }
 
-function placeholderOf(busy: boolean, empty: boolean, phone: boolean): string {
+/** What the box offers before the first message: an Operator’s software, or the questions someone who isn’t an Operator can ask. */
+const FIRST: Readonly<Record<Asker, { readonly wide: string; readonly phone: string; readonly label: string }>> = {
+  operator: { wide: 'Ask about your software versions, or name software to watch', phone: 'Ask about your software versions', label: 'Ask the Planner about software versions' },
+  approver: { wide: 'Ask about your approvals, or how the workflows are doing', phone: 'Ask about your approvals', label: 'Ask the Planner about your approvals and the workflows' },
+}
+
+function placeholderOf(busy: boolean, empty: boolean, phone: boolean, asker: Asker): string {
   if (busy) return 'The Planner is answering'
-  if (!empty) return 'Ask for something else'
-  return phone ? 'Ask about your software versions' : 'Ask about your software versions, or name software to watch'
+  if (!empty) return asker === 'operator' ? 'Ask for something else' : 'Ask something else'
+  return phone ? FIRST[asker].phone : FIRST[asker].wide
 }
 
 /** The Planner's box. Enter sends, Shift+Enter starts a new line, and the box grows with the text. */
-export function PlannerBox({ text, busy, empty, phone, problem, boxRef, onChange, onSend }: PlannerBoxProps) {
+export function PlannerBox({ text, busy, empty, phone, asker, problem, boxRef, onChange, onSend }: PlannerBoxProps) {
   const grown = useRef(0)
   useEffect(() => {
     const box = boxRef.current
@@ -44,7 +52,7 @@ export function PlannerBox({ text, busy, empty, phone, problem, boxRef, onChange
     >
       <div className={styles['composer']}>
         <label className="visually-hidden" htmlFor="planner-box">
-          Ask the Planner about software versions
+          {FIRST[asker].label}
         </label>
         <textarea
           id="planner-box"
@@ -53,7 +61,7 @@ export function PlannerBox({ text, busy, empty, phone, problem, boxRef, onChange
           value={text}
           disabled={busy}
           maxLength={2000}
-          placeholder={placeholderOf(busy, empty, phone)}
+          placeholder={placeholderOf(busy, empty, phone, asker)}
           enterKeyHint="send"
           aria-describedby={problem ? 'planner-problem' : undefined}
           onChange={(event) => onChange(event.target.value)}
