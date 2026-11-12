@@ -1,0 +1,29 @@
+{
+  "parts": [
+    {
+      "text": "make the morning check run at 9",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ],
+  "answer": "edit",
+  "use_case_id": "uc_01JB8",
+  "name": "Morning new-ticket check",
+  "watchlist": false,
+  "missing": null,
+  "software": null,
+  "choices": [],
+  "before": {
+    "day": "weekdays",
+    "at": "08:00"
+  },
+  "after": {
+    "day": "weekdays",
+    "at": null
+  },
+  "hour": 9,
+  "cant": null,
+  "holds_save": false
+}
