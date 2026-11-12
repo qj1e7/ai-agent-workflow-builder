@@ -961,6 +961,8 @@ class Orchestrator:
                 return NotFound()
             await self._store.load_run(uow, request.run_id, lock=True)
             kept = await asked_with(uow, approval_id, principal.user_id, idempotency_key)
+            # A replay hands back what this person already asked and writes nothing, so it needs
+            # no fresh check, even after the request is decided or their role is taken away.
             if kept is not None:
                 return QuestionAsked(kept, True) if kept.text == text else KeyAskedAnother()
             if self._people is not None:

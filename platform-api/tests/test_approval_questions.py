@@ -171,6 +171,25 @@ async def test_a_named_second_step_approver_cannot_ask_before_the_first_step_is_
     assert (await ask(lab, "bob", approval_id, "Is it urgent?")).status_code == 201
 
 
+async def test_a_question_sent_again_with_its_key_is_handed_back_after_the_request_is_decided(
+    lab: Lab,
+):
+    run_id = await waiting_run(lab, await workflow(lab))
+    seen = await approval_of(lab, run_id)
+    approval_id = seen["approval_id"]
+    first = await ask(lab, "bob", approval_id, "Is it urgent?", key="kept")
+    assert (await decide(lab, "bob", seen, "decline")).status_code == 201
+
+    again = await ask(lab, "bob", approval_id, "Is it urgent?", key="kept")
+    fresh = await ask(lab, "bob", approval_id, "Is it urgent?", key="fresh")
+
+    assert (again.status_code, again.json()) == (200, first.json()), "the kept question, as asked"
+    assert (fresh.status_code, fresh.json()["refusal"]) == (403, "not_open")
+    assert [q["question_id"] for q in (await view(lab, approval_id, "bob"))["questions"]] == [
+        first.json()["question_id"]
+    ]
+
+
 async def test_an_approver_who_decided_the_first_step_cannot_ask_on_the_second(lab: Lab):
     started = await lab.h.orchestrator.start_run(
         replace(SPEC, approval_policy=TWO_STEPS), CAROL, "two-steps"
