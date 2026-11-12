@@ -6,7 +6,8 @@ import { Button, ButtonLink } from '../../ui/Button'
 import { OpenButton } from '../../ui/OpenItem'
 import { AskTheTeam } from './AskTheTeam'
 import { cantLines, refusalNext, SAY_ANOTHER_WAY, startingPoints, TAG_CANT, TAG_CHOICE } from './answers'
-import { cardFrom } from './card'
+import { cardFrom, isClash } from './card'
+import { cantOnCard, crossesInstead, crossesOnCard } from './parts'
 import { SetupCard, type CardStart } from './SetupCard'
 import { CapabilityLists } from './CapabilityLists'
 import { NewestAnswer, useMainButton } from './primary'
@@ -29,6 +30,9 @@ function partsOf(reply: SetupCardReply | PartReply): readonly PartView[] {
   const crosses = cantLines(reply.cant).map((line): PartView => ({ text: line.text, mark: 'cant', reason: 'cant_do', note: line.note || null, choices: [] }))
   return [...reply.parts, ...crosses]
 }
+
+/** An answer inside another keeps the whole request’s crosses that `keep` picks, so its card still marks them and keeps them as left out. */
+const withCrosses = <T extends PlannerReply>(inner: T, outer: PlannerReply, keep: (part: PartView) => boolean): T => ({ ...inner, parts: outer.parts.filter(keep) })
 
 /** A set-up card from the Planner’s rows and parts. The person’s own words go with it, so a saved draft keeps them. */
 function startOf(reply: SetupCardReply | PartReply, typed: string): CardStart {
@@ -57,9 +61,17 @@ export function SetupCardAnswer({ reply, typed }: { reply: SetupCardReply | Part
   return <SetupCard start={startOf(reply, typed)} />
 }
 
+/**
+ * A can’t answer names only a place the platform can’t send to. Anything else it can’t do, or a clause it didn’t follow, is a
+ * cross on the card that sets up the part it can (spec 6.3 and 6.5).
+ */
 export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }) {
-  const rows = cantLines(reply.cant)
   const alternative = reply.alternative
+  if (cantOnCard(reply) && alternative?.answer === 'setup_card') return <SetupCard start={startOf(withCrosses(alternative, reply, crossesOnCard), typed)} />
+  const rows = cantLines(reply.cant.filter((row) => row.needs !== null))
+  const card = alternative?.answer === 'setup_card' ? <SetupCard start={startOf(withCrosses(alternative, reply, crossesInstead), typed)} /> : null
+  const watch = alternative?.answer === 'watchlist' ? <WatchlistAnswer reply={withCrosses(alternative, reply, isClash)} typed={typed} /> : null
+  if (rows.length === 0 && alternative !== null) return card ?? watch
   return (
     <>
       <Card title="What I can’t do yet">
@@ -79,13 +91,13 @@ export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }
           />
         </div>
       </Card>
-      {alternative?.answer === 'setup_card' ? (
+      {card ? (
         <>
           <h3 className={styles['altHeading']}>What I can do instead</h3>
-          <SetupCard start={startOf(alternative, typed)} />
+          {card}
         </>
       ) : null}
-      {alternative?.answer === 'watchlist' ? <WatchlistAnswer reply={alternative} typed={typed} /> : null}
+      {watch}
     </>
   )
 }
@@ -121,7 +133,7 @@ export function WatchlistAnswer({ reply, typed }: { reply: WatchlistReply; typed
         <>
           <p>The rest of your request:</p>
           <NewestAnswer.Provider value={false}>
-            <Answer reply={reply.also} typed={typed} page={NO_PAGE} />
+            <Answer reply={withCrosses(reply.also, reply, isClash)} typed={typed} page={NO_PAGE} />
           </NewestAnswer.Provider>
         </>
       ) : null}

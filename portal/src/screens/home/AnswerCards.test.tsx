@@ -14,8 +14,9 @@ import setupClash from '../../../../contracts/fixtures/planner/answer.setup_card
 import setupCross from '../../../../contracts/fixtures/planner/answer.setup_card.cross.json'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { CantReply, OfflineReply, PartReply, PlannerReply, QuestionReply, SetupCardReply, WatchlistReply } from '../../api/types'
+import type { CantReply, OfflineReply, PartReply, PartView, PlannerReply, QuestionReply, SetupCardReply, WatchlistReply } from '../../api/types'
 import { Answer, type Page } from './AnswerCards'
+import { sayOf } from './answers'
 import { Leftovers } from './PartsList'
 
 const PAGE: Page = { ask: () => undefined, edit: () => undefined }
@@ -87,6 +88,48 @@ describe('PartsList on a set-up card', () => {
     const html = draw(setupCross as SetupCardReply)
     for (const mark of ['ok', 'no']) expect(html).toContain(`data-mark="${mark}"`)
     expect(html.match(/class="visually-hidden">(?:Will do|Can’t do|Question|Question for later): </g)?.length).toBe(html.match(/data-mark=/g)?.length)
+  })
+})
+
+describe('a clause the Planner didn’t follow, sent as a can’t with the rest to set up', () => {
+  const NOT_FOLLOWED: PartView = { text: 'Colour them by team', mark: 'cant', reason: 'not_followed', note: null, choices: [] }
+  const reply: CantReply = {
+    answer: 'cant',
+    cant: [{ kind: 'look_for', text: 'Colour them by team', note: 'I didn’t follow this part.', needs: null, system: null }],
+    alternative: { ...(setupCard as SetupCardReply), parts: [] },
+    parts: [{ text: 'Every Friday', mark: 'will_do', reason: null, note: null, choices: [] }, NOT_FOLLOWED],
+  }
+
+  it('is one set-up card with the clause crossed, never a can’t card, and keeps it as left out', () => {
+    const html = draw(reply)
+    expect(text(html)).not.toContain('What I can’t do yet')
+    expect(text(html)).not.toContain('What I can do instead')
+    expect(text(cardOf(html))).toContain('Can’t do: “Colour them by team” I didn’t follow this part.')
+    expect(buttons(html)).toContain('Set up the part I can')
+    expect(sayOf(reply)).toBe('Here’s what I understood. I can’t do every part of it.')
+    expect(draw(reply, { leftovers: true })).toBe('')
+  })
+
+  it('is the part it can do when what it can’t do is a filter or a tool the team could add: a cross with Ask the team on one card', () => {
+    const note = 'I can’t search by this yet.'
+    const filter: CantReply = {
+      ...reply,
+      cant: [{ kind: 'look_for', text: 'mention VPN', note, needs: 'new_tool', system: 'Jira' }],
+      parts: [{ text: 'mention VPN', mark: 'cant', reason: 'cant_do', note, choices: [] }],
+    }
+    const html = draw(filter)
+    expect(text(html)).not.toContain('What I can’t do yet')
+    expect(text(cardOf(html))).toContain('Can’t do: “mention VPN” I can’t search by this yet. Ask the team')
+    expect(buttons(html)).toEqual(expect.arrayContaining(['Set up the part I can', 'Ask the team']))
+  })
+
+  it('still names a real can’t on its own card, with the clause crossed on the card it sets up instead', () => {
+    const mixed: CantReply = { ...(cant as CantReply), parts: [...(cant as CantReply).parts, NOT_FOLLOWED] }
+    const html = draw(mixed)
+    expect(text(html)).toContain('What I can’t do yet')
+    expect(text(html)).toContain('What I can do instead')
+    expect(text(cardOf(html))).toContain('“Colour them by team” I didn’t follow this part.')
+    expect(text(cardOf(html))).not.toMatch(/email/i)
   })
 })
 

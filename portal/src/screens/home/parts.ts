@@ -1,4 +1,4 @@
-import type { PartReason, PartView, PlannerReply, ScheduleView } from '../../api/types'
+import type { CantReply, PartReason, PartView, PlannerReply, ScheduleView } from '../../api/types'
 import { clockWords, repeatWords } from '../software/software'
 import { andList, clashChosen, isClash, type When } from './card'
 
@@ -52,6 +52,19 @@ export function crossLabel(part: PartView, when?: When): string {
   return others.length > 0 ? andList(others.map(quote)) : quote(part.text)
 }
 
+/** A can’t answer’s crosses that its alternative set-up card keeps: all but the can’t itself and a watch request’s own time. */
+export const crossesInstead = (part: PartView): boolean => part.mark === 'cant' && part.reason !== 'cant_do' && part.reason !== 'needs_the_rest' && part.reason !== 'own_time'
+
+/** Every cross of a request, for the card that sets up the part the Planner can do. */
+export const crossesOnCard = (part: PartView): boolean => part.mark === 'cant' && part.reason !== 'needs_the_rest' && part.reason !== 'own_time'
+
+/**
+ * Whether a can’t answer is really the part the Planner can do (spec 6.3): a set-up card with a cross on each part it can’t do.
+ * That holds when every part it can’t do is a clause it didn’t follow, or a filter or tool the team could add to a system the
+ * platform already reaches. A system it doesn’t reach, such as email, stays a can’t with an alternative.
+ */
+export const cantOnCard = (reply: CantReply): boolean => reply.alternative?.answer === 'setup_card' && reply.cant.every((row) => row.needs !== 'new_system')
+
 /**
  * The clauses an answer didn’t read, which it draws above its card (spec 6.5). The set-up card marks its own parts. The can’t
  * answer’s card already names what it can’t do, so only the clauses it didn’t read are added. The refusal, which software,
@@ -67,7 +80,7 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
     case 'offline':
       return []
     case 'cant':
-      return reply.parts.filter((part) => part.mark === 'cant' && part.reason !== 'cant_do' && part.reason !== 'needs_the_rest')
+      return reply.alternative?.answer === 'setup_card' ? [] : reply.parts.filter((part) => part.mark === 'cant' && part.reason !== 'cant_do' && part.reason !== 'needs_the_rest')
     case 'watchlist':
     case 'abilities':
     case 'check_workflows':

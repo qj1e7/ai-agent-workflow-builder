@@ -1,6 +1,7 @@
 import type { CantRowView, CapabilitiesView, CapabilityView, PlannerReply, RowKind, UnderstoodRowView } from '../../api/types'
 import { count } from '../run/words'
 import { isRunning, type Row } from '../workflows/workflow'
+import { cantOnCard } from './parts'
 
 /** The words for each part of a request. They match the names the removed New workflow screen used. */
 export const ROW_LABEL: Readonly<Record<RowKind, string>> = {
@@ -97,6 +98,8 @@ export function sayOf(reply: PlannerReply): string | null {
     case 'part':
       return SAY.part
     case 'cant':
+      if (cantOnCard(reply)) return SAY.setupCrossed
+      if (reply.alternative && reply.cant.every((row) => row.needs === null)) return sayOf(reply.alternative)
       return reply.alternative ? SAY.cantWithAlternative : SAY.cant
     case 'watchlist':
       return watchlistSay(reply.software, reply.already_listed !== null)
