@@ -90,6 +90,7 @@ class AnswerCase(Case):
     reasons: list[str] = []
     change: ScheduleChange | None = None
     edit_cant: EditCant | None = None
+    changes_workflows: bool = True
     facts: PlannerFacts | None = None
     previous: PreviousTurn | None = None
 
@@ -97,7 +98,13 @@ class AnswerCase(Case):
 def _request(case: AnswerCase) -> AnswerRequest:
     """The request the decision reads. The eval never calls the model again."""
     access = ModelAccess(style="openai", base_url="http://eval.invalid", model="eval", api_key="-")
-    return AnswerRequest(task=case.task, model=access, facts=case.facts, previous=case.previous)
+    return AnswerRequest(
+        task=case.task,
+        model=access,
+        facts=case.facts,
+        previous=case.previous,
+        changes_workflows=case.changes_workflows,
+    )
 
 
 def prompt(case: AnswerCase) -> str:

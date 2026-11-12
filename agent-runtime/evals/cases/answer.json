@@ -5223,16 +5223,18 @@
   },
   {
     "id": "r4-approver-change-alone",
-    "note": "Plan 7.5, an Approver's change alone. platform-api answers operators for Bob (R16); the runtime sets nothing up and keeps the part.",
+    "note": "Plan 7.5, an Approver's change alone. platform-api answers operators for Bob (R16); the runtime sets nothing up and keeps the part. The asker can't change workflows, so the runtime proposes no edit.",
     "task": "Pause the weekly closed-ticket summary",
     "not_kind": [
-      "setup_card",
-      "part"
-    ]
+      "edit",
+      "part",
+      "setup_card"
+    ],
+    "changes_workflows": false
   },
   {
     "id": "r4-approver-question-and-change",
-    "note": "Plan 7.5, an Approver's question with a change: the question's answer, and a cross on the change.",
+    "note": "Plan 7.5, an Approver's question with a change: the question's answer, and a cross on the change. The asker can't change workflows.",
     "task": "What is waiting for my yes, and pause the morning new-ticket check",
     "not_kind": [
       "setup_card",
@@ -5240,11 +5242,16 @@
     ],
     "reasons": [
       "ask_on_its_own"
+    ],
+    "changes_workflows": false,
+    "kind": [
+      "needs_me",
+      "question"
     ]
   },
   {
     "id": "r4-approver-question-then-delete",
-    "note": "Plan 7.5, an Approver's question then a change, joined by a full stop and then.",
+    "note": "Plan 7.5, an Approver's question then a change, joined by a full stop and then: the question's answer, and a cross on the change.",
     "task": "How are the workflows doing? Then delete the weekly summary",
     "not_kind": [
       "setup_card",
@@ -5252,6 +5259,11 @@
     ],
     "reasons": [
       "ask_on_its_own"
+    ],
+    "changes_workflows": false,
+    "kind": [
+      "check_workflows",
+      "question"
     ]
   },
   {
