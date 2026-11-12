@@ -499,6 +499,15 @@ const sentToast = (page: Page) => page.getByRole('status').filter({ hasText: /^S
 const escaped = (words: string) => words.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** Lines of the thread in order, whatever space the page puts between them. */
 const inOrder = (...lines: string[]) => new RegExp(lines.map(escaped).join('\\s*'))
+/** Puts focus before the first control, as a fresh page has it, the way the prototype's scenario starts. */
+const focusTop = (page: Page) =>
+  page.evaluate(() => {
+    const probe = document.createElement('span')
+    probe.tabIndex = -1
+    document.body.prepend(probe)
+    probe.focus()
+    probe.remove()
+  })
 const ringShows = (page: Page) =>
   page.evaluate(() => {
     const el = document.activeElement
@@ -640,9 +649,12 @@ test('KEYS-APPR: Ask, the decline reasons and Decline with the keyboard only, ea
   const { runId, approvalId } = await backend.waitingRun('alice')
   const { context, page } = await opened(browser, 'bob', 1280)
   await page.goto('/')
+  await expect(heading(page)).toBeVisible()
+  await focusTop(page)
   await page.keyboard.press('Tab')
   await expect(page.getByRole('button', { name: 'Skip to main content' })).toBeFocused()
   await page.keyboard.press('Enter')
+  await expect(heading(page), 'Skip to main content lands on the heading').toBeFocused()
   const review = page.locator(`li[data-home-item="approval:${approvalId}"]`).getByRole('link', { name: 'Review and decide' })
   await tabTo(page, review, 40)
   expect(await ringShows(page), 'Review and decide has a visible focus').toBe(true)
