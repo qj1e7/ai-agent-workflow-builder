@@ -255,6 +255,28 @@ export function versionLine(version: VersionView, now: Date, nameOf: NameOf): st
   return `${when}${versionWords(version, nameOf)}${version.running ? ' This is the version running now.' : ''}`
 }
 
+/** What an Undo published, for the chat's edit card. "Undone, as version 3. Morning new-ticket check runs every weekday at 8:00 now.", or, while it is paused, that it won't run until resumed, as in the prototype. */
+export function undoneWords(view: Pick<UseCaseView, 'name' | 'version' | 'state' | 'schedule'>): string {
+  const then =
+    view.state === 'paused'
+      ? `${view.name} is paused, so it won’t run until you resume it.`
+      : view.schedule
+        ? `${view.name} runs ${runsAt(view.schedule)} now.`
+        : `${view.name} has no schedule now.`
+  return `Undone, as version ${view.version}. ${then}`
+}
+
+/** The undo route's own refusal for a version that changed no schedule. Its other 409 means a later version exists. */
+const NOT_A_SCHEDULE_CHANGE = 'Only a change of when the workflow runs can be undone.'
+
+export function undoProblem(version: number, name: string, error: unknown, words: (error: unknown) => string): string {
+  const start = `Could not undo version ${version}.`
+  if (answered(error, 409) && error instanceof ApiError && error.message === NOT_A_SCHEDULE_CHANGE) return `${start} Only a change of when ${name} runs can be undone.`
+  if (answered(error, 409)) return `${start} ${name} changed again since, so Undo would throw that change away.`
+  if (answered(error, 404)) return `${start} It was deleted.`
+  return `${start} ${words(error)}`
+}
+
 /** What the More actions menu holds, in order. Delete is last. A workflow with none shows no menu. */
 export type MenuAction = 'run' | 'schedule' | 'delete'
 

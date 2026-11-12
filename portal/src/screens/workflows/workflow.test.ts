@@ -52,6 +52,8 @@ import {
   whenWords,
   workflowPath,
   versionWords,
+  undoneWords,
+  undoProblem,
   type ChangeOutcome,
   type LastRun,
   type RunNowOutcome,
@@ -717,5 +719,21 @@ describe('the Versions words', () => {
   it('names a zone that is not Singapore', () => {
     const words = versionWords(version({ version: 2, change: moved(at('monday', '09:00', 'Europe/London'), at('friday', '17:30')) }), nameOf)
     expect(words).toBe('Carol changed when it runs from every Monday at 9:00 London time to every Friday at 17:30.')
+  })
+
+  it('says what an Undo published, and that a paused workflow won’t run until it is resumed, as the prototype’s edit card does', () => {
+    const schedule = { day: 'weekdays' as const, at: '08:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null }
+    const undone = { name: 'Morning new-ticket check', version: 3, state: 'on' as const, schedule }
+    expect(undoneWords(undone)).toBe('Undone, as version 3. Morning new-ticket check runs every weekday at 8:00 now.')
+    expect(undoneWords({ ...undone, state: 'paused' })).toBe('Undone, as version 3. Morning new-ticket check is paused, so it won’t run until you resume it.')
+    expect(undoneWords({ ...undone, schedule: null })).toBe('Undone, as version 3. Morning new-ticket check has no schedule now.')
+  })
+
+  it('tells the undo route’s two refusals apart', () => {
+    const later = new ApiError(409, { detail: 'The workflow changed again since this version, so Undo would throw that change away.' })
+    const notAChange = new ApiError(409, { detail: 'Only a change of when the workflow runs can be undone.' })
+    expect(undoProblem(4, 'Nudge', later, words)).toBe('Could not undo version 4. Nudge changed again since, so Undo would throw that change away.')
+    expect(undoProblem(1, 'Nudge', notAChange, words)).toBe('Could not undo version 1. Only a change of when Nudge runs can be undone.')
+    expect(undoProblem(2, 'Nudge', new ApiError(404, { detail: 'No such workflow' }), words)).toBe('Could not undo version 2. It was deleted.')
   })
 })
