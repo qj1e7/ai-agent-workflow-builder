@@ -91,7 +91,7 @@ describe('the sentence for each answer', () => {
 
   it('leaves the three state answers to the pages’ own functions', () => {
     for (const answer of ['check_workflows', 'why_stopped', 'needs_me'] as const) {
-      expect(sayOf({ answer, use_case_id: null })).toBeNull()
+      expect(sayOf({ answer, use_case_id: null, parts: [] })).toBeNull()
     }
   })
 
@@ -187,6 +187,6 @@ describe('Set up another workflow counts its places to start (FIX-starts-count)'
   })
 
   it('is said by the list under it, so the reply itself carries no fixed count', () => {
-    expect(sayOf({ answer: 'ideas' })).toBeNull()
+    expect(sayOf({ answer: 'ideas', parts: [] })).toBeNull()
   })
 })

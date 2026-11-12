@@ -13,7 +13,7 @@ import { Link } from '../../ui/Link'
 import { useAfterPanelAction } from '../../ui/sidePanel'
 import { Troubleshooting } from '../run/Outcome'
 import { StatusPills } from './Status'
-import { bannerOf, changeProblem, changeWords, controlsOf, lastRunWords, NO_RUNS, nextRunWords, pillOf, pressChange, REFRESH_MS, rereadWhenOutOfDate, viewerOf, type LastRun } from './workflow'
+import { bannerOf, changeProblem, changeWords, controlsOf, lastRunWords, leftOutWords, NO_RUNS, nextRunWords, pillOf, pressChange, REFRESH_MS, rereadWhenOutOfDate, viewerOf, type LastRun } from './workflow'
 import styles from './Workflows.module.css'
 
 /** A workflow in the side panel (spec 3.3): its status, its sentence, a stop's three answers with Retry, its last and next run, Open the run, and Pause or Resume. */
@@ -57,6 +57,7 @@ function Summary({ useCase, me, now }: { useCase: UseCaseView; me: Me; now: Date
         <StatusPills state={useCase.state} fact={last ? pillOf(last) : null} test={last?.test === true} />
       </div>
       <p>{useCase.instruction}</p>
+      {leftOutWords(useCase.left_out) ? <p className="muted">{leftOutWords(useCase.left_out)}</p> : null}
       {stopped ? (
         <Troubleshooting
           runId={stopped.run_id}

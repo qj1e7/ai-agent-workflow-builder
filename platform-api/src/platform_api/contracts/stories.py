@@ -697,6 +697,7 @@ USE_CASE = UseCaseView(
     plan=template_view(SOFTWARE_WATCHLIST).blocks,
     agents=[],
     last_run=None,
+    left_out=[],
 )
 
 SUGGESTION = Builder.suggest(INSTRUCTION)

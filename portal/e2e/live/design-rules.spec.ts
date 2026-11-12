@@ -44,6 +44,14 @@ async function noDeadButtons(page: Page, state: string): Promise<void> {
   expect(dead, `Principle 9 (the person stays in control): ${state} shows ${String(dead)} dead buttons`).toBe(0)
 }
 
+/** Principle 4: a clause the Planner didn't follow keeps its cross, and the card never says nothing is unclear while it does. */
+async function noPartDropped(page: Page, state: string): Promise<void> {
+  const card = main(page).locator('section[data-card]').last()
+  await expect(card.locator('[data-mark="no"]'), `Principle 4 (no part dropped): ${state} shows no cross`).not.toHaveCount(0)
+  await expect(card, `Principle 4: ${state} says nothing is unclear while a part has a cross`).not.toContainText('Nothing is unclear')
+  await expect(card.getByRole('button', { name: 'Set up the part I can' }), `Principle 4: ${state} offers to set up the whole request`).toBeVisible()
+}
+
 /** Principle 5: the "I can" lists name only what the platform's registry says is ready. */
 async function listsMatchTheRegistry(page: Page, registry: readonly Capability[], state: string): Promise<void> {
   const ready = new Set(registry.filter((entry) => entry.state === 'ready').map((entry) => entry.plain))
@@ -102,6 +110,11 @@ test('Home keeps the design rules in each of its states', async ({ browser, back
   await ask(page, 'Every Friday, email me the list of tickets we closed this week')
   await expect(main(page).getByRole('heading', { name: 'What I can’t do yet' }).last()).toBeVisible()
   await allRules(page, capabilities, 'the can’t answer')
+
+  await ask(page, 'Every Friday at 5pm, find bug tickets in MOCK with no update for 10 days and create one ticket that lists them. Colour them by team.')
+  await expect(main(page).locator('section[data-card]').last()).toContainText('I didn’t follow this part.')
+  await noPartDropped(page, 'a set-up card with a clause it didn’t follow')
+  await allRules(page, capabilities, 'a set-up card with a cross')
   await repair()
   await context.close()
 })

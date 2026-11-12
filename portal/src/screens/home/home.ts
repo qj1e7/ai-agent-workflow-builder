@@ -1,5 +1,5 @@
 import { ApiError } from '../../api/client'
-import { andList } from './card'
+import { andList, crossedWords, type Left } from './card'
 import { connectorLabel, starterName } from '../../api/labels'
 import type { AddressItem, CapabilitiesView, PlannerAnswerIn, ApprovalItem, ConfirmationItem, ConnectionItem, DeclinedItem, DraftItem, FollowingUpItem, HomeOut, QuestionItem, StoppedItem, WaitingItem } from '../../api/types'
 import { count, declineTail, withCurrentNames } from '../run/words'
@@ -446,10 +446,21 @@ export function waitingWords(item: WaitingItem, now: Date): RowWords & { readonl
 /** The four steps of the removed New workflow screen, which a draft saved by it still counts in. */
 const OLD_DRAFT_STEPS = 4
 
-/** `left` is what setupLeft says still stops the saved card, or null when the draft holds no card (an old four-step draft, or only words). */
-export function draftWords(draft: DraftItem, now: Date, left?: readonly string[] | null): RowWords {
+/** `left` is what setupLeft says of the saved card, or null when the draft holds no card (an old four-step draft, or only words). */
+export function draftWords(draft: DraftItem, now: Date, left?: Left | null): RowWords {
   const saved = `Last saved ${runWhen(draft.saved_at, now)}.`
-  const why = left === undefined ? (draft.step === null ? '' : `Step ${draft.step} of ${OLD_DRAFT_STEPS}. `) : left === null ? 'Only your words are saved. ' : left.length > 0 ? `Needs ${andList(left)}. ` : 'Nothing is unclear. '
+  const why =
+    left === undefined
+      ? draft.step === null
+        ? ''
+        : `Step ${draft.step} of ${OLD_DRAFT_STEPS}. `
+      : left === null
+        ? 'Only your words are saved. '
+        : left.choices.length > 0
+          ? `Needs ${andList(left.choices)}. `
+          : left.leftOut.length > 0
+            ? `${crossedWords(left.leftOut.length)} `
+            : 'Nothing is unclear. '
   return { name: draft.name ?? 'New workflow', sub: `${why}${saved}` }
 }
 

@@ -357,3 +357,68 @@ test('the check can fail: a seeded overflow, a clipped label, an overlap, two un
   expect([...kinds].sort(), 'the check names each seeded problem').toEqual(expect.arrayContaining([...CONTROL_KINDS].sort()))
   await context.close()
 })
+
+const LONG_CROSS = 'Colour them by team and order them by how long each one has waited, oldest first, with the name of whoever reported it beside each one'
+const CARD_SHOTS: ReadonlySet<number> = new Set([1920, 1280, 900, 390])
+
+/** Each state of the Planner's parts list, long crosses included, and the Left out line on a workflow's page (spec 6.5 and 7). */
+for (const width of WIDTHS) {
+  test(`the parts list fits with ticks, a long cross, a question, a clash and the part I can do, and so does Left out, as an Operator at ${String(width)} px`, async ({ browser, backend }) => {
+    test.slow()
+    const drafts = async () => (await backend.get<{ drafts: { draft_id: string }[] }>('alice', '/api/v1/drafts')).drafts.map((draft) => draft.draft_id)
+    const before = await drafts()
+    const context = await devContext(browser, 'alice', { reducedMotion: true })
+    const page = await context.newPage()
+    await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
+    const box = page.getByLabel('Ask the Planner about software versions')
+    const newest = page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
+    const found: string[] = []
+    const check = async (state: string, name: string, part: Locator) => {
+      await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined)
+      const problems = await fitProblems(page)
+      if (CARD_SHOTS.has(width)) {
+        // A tall window, so the whole answer is in the shot rather than cut off by the docked box.
+        await page.setViewportSize({ width, height: 2400 })
+        await part.screenshot({ path: path.join(OUT, 'shots', `r5-${name}-${String(width)}.png`), caret: 'hide' })
+        await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
+      }
+      if (problems.length) found.push(`${state} at ${String(width)} px:\n${describeProblems(problems).replace(/^/gm, '    ')}`)
+    }
+    const states = [
+      ['a set-up card with ticks, a long cross and a question', 'card', `Find bug tickets in MOCK with no update for 10 days and create one ticket that lists them. ${LONG_CROSS}.`, 'How often should it run?'],
+      ['the part I can do', 'part', 'Every Friday at 5pm, find tickets in MOCK with no update for 10 days that mention VPN and create one ticket that lists them', 'Ask the team'],
+      ['a clash between two days', 'clash', 'Every Monday and Friday at 9am, find bug tickets in MOCK with no update for 10 days and create one ticket that lists them', 'Monday or Friday?'],
+    ] as const
+    try {
+      await page.goto('/')
+      for (const [state, name, words, ready] of states) {
+        await box.fill(words)
+        await box.press('Enter')
+        await expect(newest).toHaveAttribute('data-answer', 'true')
+        await expect(newest).toContainText(ready, { timeout: 20_000 })
+        await check(state, name, newest)
+      }
+      const before = await page.evaluate(() => [window.scrollX, document.documentElement.scrollLeft])
+      await newest.getByRole('button', { name: 'Monday', exact: true }).click()
+      await expect(newest).toContainText('Every Monday at 9:00, Singapore time')
+      expect(await page.evaluate(() => [window.scrollX, document.documentElement.scrollLeft]), 'answering a question never scrolls the app sideways (ANS-scroll-390)').toEqual(before)
+      await check('a clash after the day is chosen', 'clash-chosen', newest)
+      const made = await backend.post<{ use_case_id: string }>(
+        'alice',
+        '/api/v1/agent-use-cases',
+        { name: `Left out ${randomUUID().slice(0, 6)}`, instruction: 'Find bug tickets in MOCK with no update for 10 days. Create one ticket that lists them.', agents: AGENTS, left_out: [LONG_CROSS, 'Friday'] },
+        undefined,
+        [201],
+      )
+      await page.goto(`/workflows/${made.use_case_id}`)
+      await expect(page.getByRole('main')).toContainText('It was set up without those parts.')
+      await check('a workflow page with Left out', 'left-out', page.getByRole('main'))
+    } finally {
+      await context.close()
+      // The cards a newer answer replaced were kept as drafts, which alice's draft limit counts.
+      await new Promise((resolve) => setTimeout(resolve, 1_500))
+      for (const id of await drafts()) if (!before.includes(id)) await backend.send('DELETE', 'alice', `/api/v1/drafts/${id}`)
+    }
+    expect(found, found.join('\n')).toEqual([])
+  })
+}

@@ -5,6 +5,8 @@ import type {
   Day,
   DraftView,
   InputKind,
+  PartReason,
+  PartView,
   PlanOut,
   RowKind,
   RowState,
@@ -12,7 +14,7 @@ import type {
   ToolId,
   UseCaseCreated,
 } from '../../api/types'
-import { checkClock, checkRepo, repeatWords, repoOf } from '../software/software'
+import { checkClock, checkRepo, clockWords, repeatWords, repoOf } from '../software/software'
 
 export type Step = 1 | 2 | 3 | 4
 
@@ -55,11 +57,13 @@ export interface Form {
   readonly name: string
   /** The Operator chose a new workflow over the Software watchlist, so each part is checked as a part, never sent to the watchlist. */
   readonly carriedOn: boolean
+  /** Each part of her request the Planner marked with a cross or a question (spec 6.5). A tick needs no keeping, since the rows hold what it will do. */
+  readonly marked: readonly PartView[]
 }
 
 export const EMPTY_WHEN: When = { often: '', day: '', at: '', filledFrom: null }
 
-export const EMPTY_FORM: Form = { step: 1, text: '', rows: [], typed: {}, when: EMPTY_WHEN, name: '', carriedOn: false }
+export const EMPTY_FORM: Form = { step: 1, text: '', rows: [], typed: {}, when: EMPTY_WHEN, name: '', carriedOn: false, marked: [] }
 
 export const ROW_LABEL: Record<RowKind, string> = { schedule: 'When', look_for: 'Looks for', do: 'Does', where: 'Where it goes' }
 
@@ -84,7 +88,9 @@ export function changeRow(form: Form, index: number, typed: string): Form {
     if (text === '') return { kind: row.kind, text: '', state: 'missing', note: null, planner }
     return { kind: row.kind, text, state: 'checking', note: null, planner }
   })
-  return { ...form, rows }
+  // Her new words for the tickets replace the ones the Planner asked how many days about.
+  const marked = form.rows[index]?.kind === 'look_for' ? form.marked.filter((part) => part.reason !== 'how_many_days') : form.marked
+  return { ...form, rows, marked }
 }
 
 type Part = Pick<Row, 'kind' | 'text'>
@@ -272,7 +278,19 @@ function clockIn(text: string): string {
   }
   const day = /\b([01]?\d|2[0-3])[:.]([0-5]\d)\b/.exec(text)
   if (day) return `${(day[1] ?? '').padStart(2, '0')}:${day[2] ?? ''}`
+  // “at 17” can only mean 17:00. “at 9” could be 9:00 or 21:00, so it is asked (bareHour).
+  const late = BARE_HOUR.exec(text)
+  if (late && Number(late[1]) >= 13 && Number(late[1]) <= 23) return `${late[1] ?? ''}:00`
   return /\b(?:noon|midday)\b/.test(text) ? '12:00' : ''
+}
+
+const BARE_HOUR = /\bat\s+(\d{1,2})\b(?![:.]\d)(?!\s*(?:am|pm)\b)/i
+
+/** The hour of “at 9”, which could be morning or evening. Null when the words name no such hour. */
+export function bareHour(said: string): number | null {
+  const found = BARE_HOUR.exec(said)
+  const hour = found ? Number(found[1]) : NaN
+  return hour >= 1 && hour <= 12 ? hour : null
 }
 
 export function readWhen(said: string): When {
@@ -295,6 +313,136 @@ export function enterWhen(form: Form): Form {
 }
 
 export type WhenField = 'often' | 'day' | 'at'
+
+const OFTEN_NAMES: Readonly<Record<Exclude<Often, ''>, string>> = { every_day: 'Every day', weekdays: 'Every weekday', week: 'Every week' }
+const DAY_WORD = (day: Weekday) => day.charAt(0).toUpperCase() + day.slice(1)
+const CLASHES: readonly PartReason[] = ['one_frequency', 'one_day', 'one_time']
+
+/** Two days, two times or two frequencies in one schedule. The card asks which one, and never picks the first (spec 6.6). */
+export const isClash = (part: PartView): boolean => part.mark === 'cant' && part.reason !== null && CLASHES.includes(part.reason)
+
+function oftenOf(words: string): Often {
+  const text = words.toLowerCase()
+  if (/\bweek ?days?\b|\bmonday to friday\b/.test(text)) return 'weekdays'
+  if (/\b(?:day|daily|morning|evening)\b/.test(text)) return 'every_day'
+  return /\bweek(?:ly)?\b/.test(text) ? 'week' : ''
+}
+
+const dayOf = (words: string): Weekday | '' => DAY_NAMES.find((day) => new RegExp(`^${day}s?$`).test(words.trim().toLowerCase())) ?? ''
+
+/** What one of a clash’s choices sets on the schedule, or null when the choice can’t be read as one. */
+function clashSet(reason: PartView['reason'], choice: string): Partial<When> | null {
+  if (reason === 'one_frequency') {
+    const often = oftenOf(choice)
+    return often === '' ? null : { often }
+  }
+  if (reason === 'one_day') {
+    const day = dayOf(choice)
+    return day === '' ? null : { often: 'week', day }
+  }
+  if (reason === 'one_time') {
+    const at = clockIn(` ${choice.toLowerCase()} `)
+    return at === '' ? null : { at }
+  }
+  return null
+}
+
+/** The choice of a clash the schedule holds now, in her words, or null while it holds none of them. */
+export function clashChosen(when: When, part: PartView): string | null {
+  return part.choices.find((choice) => {
+    const set = clashSet(part.reason, choice)
+    return set !== null && (Object.keys(set) as (keyof When)[]).every((field) => when[field] === set[field])
+  }) ?? null
+}
+
+/** Her words for each part with a cross. After she picks one of a clash’s choices, only the others are left out. */
+export function leftOutOf(form: Form): string[] {
+  return form.marked.flatMap((part) => {
+    if (part.mark !== 'cant') return []
+    const chosen = isClash(part) ? clashChosen(form.when, part) : null
+    const others = chosen === null ? [] : part.choices.filter((choice) => choice !== chosen)
+    return [others.length > 0 ? andList(others) : part.text]
+  })
+}
+
+export interface WhenChoice {
+  readonly label: string
+  readonly set: Partial<When>
+}
+
+/** The one thing the card asks now (spec 6.6). A schedule part is answered with choice buttons, a part in words with its editor. */
+export type Question =
+  | { readonly kind: 'when'; readonly field: WhenField; readonly words: string; readonly choices: readonly WhenChoice[] }
+  | { readonly kind: 'row'; readonly index: number; readonly words: string }
+  | { readonly kind: 'days'; readonly words: string }
+  | { readonly kind: 'input'; readonly agent: number; readonly input: string; readonly words: string }
+
+const OFTEN_CHOICES: readonly WhenChoice[] = (Object.entries(OFTEN_NAMES) as [Exclude<Often, ''>, string][]).map(([often, label]) => ({ label, set: { often } }))
+const DAY_CHOICES: readonly WhenChoice[] = DAY_NAMES.map((day) => ({ label: DAY_WORD(day), set: { day } }))
+const TIMES = ['08:00', '09:00', '13:00', '17:00']
+const ASK_ROW: Readonly<Record<RowKind, string>> = {
+  schedule: 'How often should it run?',
+  look_for: 'Which tickets should it find?',
+  do: 'What should it do with them?',
+  where: 'Where should the result go?',
+}
+export const ASK_DAYS = 'Your words don’t say how many days. Change which tickets it finds to say.'
+
+function clashQuestion(form: Form, reason: PartReason, field: WhenField): Question | null {
+  const part = form.marked.find((one) => one.mark === 'cant' && one.reason === reason)
+  const choices = (part?.choices ?? []).flatMap((choice): WhenChoice[] => {
+    const set = clashSet(reason, choice)
+    if (set === null) return []
+    const label = set.at !== undefined ? clockWords(set.at) : set.day ? DAY_WORD(set.day) : set.often ? OFTEN_NAMES[set.often] : choice
+    return [{ label, set }]
+  })
+  return choices.length >= 2 ? { kind: 'when', field, words: `${orList(choices.map((choice) => choice.label))}?`, choices } : null
+}
+
+function timeQuestion(form: Form): Question {
+  const hour = bareHour(form.rows.find((row) => row.kind === 'schedule')?.text || form.text)
+  const times = hour === null ? TIMES : [`${String(hour % 12).padStart(2, '0')}:00`, `${String((hour % 12) + 12)}:00`]
+  const choices = times.map((at) => ({ label: clockWords(at), set: { at } }))
+  return { kind: 'when', field: 'at', words: hour === null ? 'What time should it run?' : `At ${orList(choices.map((choice) => choice.label))}?`, choices }
+}
+
+function inputQuestion(form: Form, plan: PlanView | null, first: boolean): Question | null {
+  if (plan?.kind !== 'agents') return null
+  for (const agent of plan.agents)
+    for (const input of agent.inputs) {
+      if ((input.kind === 'jira_project') !== first || valueProblem(input.kind, valueOf(form, agent, input.name)) === null) continue
+      const words = input.kind === 'jira_project' ? 'Which Jira project should it use?' : input.kind === 'github_repo' ? 'Which GitHub repository should it read?' : `What should the ${lowerFirst(input.name)} be?`
+      return { kind: 'input', agent: agent.index, input: input.name, words }
+    }
+  return null
+}
+
+function rowQuestion(form: Form, kind: RowKind): Question | null {
+  const index = form.rows.findIndex((row) => row.kind === kind && row.state === 'missing')
+  return index < 0 ? null : { kind: 'row', index, words: ASK_ROW[kind] }
+}
+
+/**
+ * The one question to ask now, in the spec’s order: how often, the day of a weekly run, the time, which tickets, the Jira
+ * project, then what it does. Two days or two times from the runtime ask which one, and a bare hour asks morning or evening.
+ * Null when nothing is left to ask. What the footer counts still comes from setupLeft.
+ */
+export function nextQuestion(form: Form, plan: PlanView | null): Question | null {
+  const { often, day } = form.when
+  if (often === '') return clashQuestion(form, 'one_frequency', 'often') ?? { kind: 'when', field: 'often', words: 'How often should it run?', choices: OFTEN_CHOICES }
+  if (often === 'week' && day === '') return clashQuestion(form, 'one_day', 'day') ?? { kind: 'when', field: 'day', words: 'Which day should it run?', choices: DAY_CHOICES }
+  if (whenProblems(form.when).at !== undefined) return clashQuestion(form, 'one_time', 'at') ?? timeQuestion(form)
+  return (
+    rowQuestion(form, 'look_for') ??
+    (form.marked.some((part) => part.reason === 'how_many_days') ? { kind: 'days', words: ASK_DAYS } : null) ??
+    inputQuestion(form, plan, true) ??
+    rowQuestion(form, 'do') ??
+    rowQuestion(form, 'where') ??
+    inputQuestion(form, plan, false)
+  )
+}
+
+export const answerWhen = (form: Form, set: Partial<When>): Form => ({ ...form, when: { ...form.when, ...set } })
 
 export function whenProblems(when: When): Partial<Record<WhenField, string>> {
   const out: Partial<Record<WhenField, string>> = {}
@@ -365,6 +513,7 @@ export function createBody(form: Form, plan: PlanView, savedDrafts: Readonly<Rec
       values: Object.fromEntries(agent.inputs.map((input) => [input.name, normalised(input.kind, valueOf(form, agent, input.name))])),
     })),
     schedule: scheduleOf(form.when),
+    left_out: leftOutOf(form),
   }
 }
 
@@ -443,6 +592,35 @@ const isString = (value: unknown): value is string => typeof value === 'string'
 const STEPS: readonly unknown[] = [1, 2, 3, 4]
 const ROW_STATES: readonly unknown[] = ['understood', 'changed', 'missing', 'cant_do', 'edited']
 const OFTEN: readonly unknown[] = ['', 'every_day', 'weekdays', 'week']
+const MARKS: readonly unknown[] = ['will_do', 'cant', 'question']
+const REASONS: readonly unknown[] = [
+  'not_followed',
+  'cant_do',
+  'ask_on_its_own',
+  'one_day',
+  'one_time',
+  'one_frequency',
+  'own_time',
+  'skip_approval',
+  'with_a_yes',
+  'needs_the_rest',
+  'how_many_days',
+]
+
+function isPart(value: unknown): value is PartView {
+  return (
+    isRecord(value) &&
+    isString(value['text']) &&
+    MARKS.includes(value['mark']) &&
+    (value['reason'] === null || REASONS.includes(value['reason'])) &&
+    (value['note'] === null || isString(value['note'])) &&
+    Array.isArray(value['choices']) &&
+    value['choices'].every(isString)
+  )
+}
+
+/** The marked parts a saved draft kept. A draft saved before parts were kept has none. */
+const markedIn = (form: Record<string, unknown>): PartView[] => (Array.isArray(form['marked']) ? form['marked'].filter(isPart) : [])
 
 function isRow(value: unknown): value is Row {
   return isRecord(value) && KINDS.includes(value['kind'] as RowKind) && isString(value['text']) && ROW_STATES.includes(value['state'])
@@ -474,7 +652,7 @@ function checkedAgain(form: Form): Form {
 }
 
 /** What still stops a saved card, from the draft as it was saved. Null when the draft holds no card. */
-export function savedLeft(draft: DraftView): string[] | null {
+export function savedLeft(draft: DraftView): Left | null {
   const { form, plan } = restoreDraft(draft, false)
   if (form.rows.length === 0) return null
   return setupLeft(form, plan ? planView(plan.answer, form.rows) : null)
@@ -483,7 +661,10 @@ export function savedLeft(draft: DraftView): string[] | null {
 export function restoreDraft(draft: DraftView, recheck = true): { readonly form: Form; readonly plan: Planned | null } {
   const { form, plan, text, intent } = draft.content as Record<string, unknown>
   const carriedOn = isRecord(form) && form['carriedOn'] === true
-  if (isForm(form)) return { form: recheck ? checkedAgain({ ...form, carriedOn }) : { ...form, carriedOn }, plan: isPlanned(plan) ? plan : null }
+  if (isForm(form)) {
+    const kept = { ...form, carriedOn, marked: markedIn(form as unknown as Record<string, unknown>) }
+    return { form: recheck ? checkedAgain(kept) : kept, plan: isPlanned(plan) ? plan : null }
+  }
   const task = isString(text) ? text : isString(intent) ? intent : ''
   return { form: { ...EMPTY_FORM, text: task }, plan: null }
 }
@@ -498,6 +679,7 @@ const LEFT_CANT = 'a part I can’t do yet'
 const LEFT_CHECKING = 'my check of your new words'
 const LEFT_WHEN = 'when it runs'
 const LEFT_PLAN = 'the Planner to choose the agents'
+const LEFT_DAYS = 'how many days'
 
 function leftOfRow(row: Row): string | null {
   if (row.state === 'missing') return LEFT_NAME[row.kind]
@@ -508,17 +690,29 @@ function leftOfRow(row: Row): string | null {
 /** What stops the plan from being asked for. The schedule is not one of them: the When section holds it, and the plan does not depend on it. */
 export const cardBlockers = (rows: readonly Row[]): Blocker[] => rowBlockers(rows.filter((row) => row.kind !== 'schedule'))
 
+export interface Left {
+  /** What still stops Turn it on, in plain words. */
+  readonly choices: readonly string[]
+  /** Her own words for each part with a cross, which the workflow is set up without. */
+  readonly leftOut: readonly string[]
+}
+
 /**
- * What still stops Turn it on, in plain words. The card’s footer, the reason Turn it on is disabled and a draft’s reason on
- * Workflows all read this one list, so no two places count differently. A time is never guessed: no time is something left.
+ * What still stops Turn it on, and what it would be set up without. The card’s footer, its button, what Turn it on sends and
+ * a draft’s line on Workflows all read this, so no two places count differently. A time is never guessed: no time is something left.
  */
-export function setupLeft(form: Form, plan: PlanView | null): string[] {
+export function setupLeft(form: Form, plan: PlanView | null): Left {
+  return { choices: choicesLeft(form, plan), leftOut: leftOutOf(form) }
+}
+
+function choicesLeft(form: Form, plan: PlanView | null): string[] {
   const left: string[] = []
   const add = (words: string | null) => {
     if (words !== null && !left.includes(words)) left.push(words)
   }
   for (const row of form.rows) if (row.kind !== 'schedule') add(leftOfRow(row))
   if (Object.keys(whenProblems(form.when)).length > 0) add(LEFT_WHEN)
+  if (form.marked.some((part) => part.reason === 'how_many_days')) add(LEFT_DAYS)
   if (cardBlockers(form.rows).length > 0) return left
   if (plan === null) add(LEFT_PLAN)
   else if (plan.kind === 'cannot') add('a request I can do')
@@ -535,25 +729,66 @@ export function setupLeft(form: Form, plan: PlanView | null): string[] {
 export const andList = (items: readonly string[]): string =>
   items.length <= 2 ? items.join(' and ') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1] ?? ''}`
 
-export const leftWords = (left: readonly string[]): string =>
-  left.length === 0 ? 'Nothing is unclear. Turn it on when you’re ready.' : `${left.length === 1 ? '1 choice left' : `${left.length} choices left`}: ${andList(left)}.`
+export const orList = (items: readonly string[]): string =>
+  items.length <= 2 ? items.join(' or ') : `${items.slice(0, -1).join(', ')} or ${items[items.length - 1] ?? ''}`
+
+export const crossedWords = (count: number): string => (count === 1 ? 'The part with a cross is left out.' : `The ${count} parts with a cross are left out.`)
+
+/** The footer’s line. “Nothing is unclear” never shows while a part has a cross. */
+export function leftWords({ choices, leftOut }: Left): string {
+  if (choices.length > 0) return `${choices.length === 1 ? '1 choice left' : `${choices.length} choices left`}: ${andList(choices)}.`
+  return leftOut.length > 0 ? crossedWords(leftOut.length) : 'Nothing is unclear. Turn it on when you’re ready.'
+}
+
+/** “Set up the part I can” while any part has a cross, so the button never claims the whole request. */
+export const turnOnWords = (left: Left): string => (left.leftOut.length > 0 ? 'Set up the part I can' : 'Turn it on')
 
 /** Resume reopens the card on Home, where the draft's id sits in the address. */
 export const draftPath = (draftId: string) => `/?draft=${encodeURIComponent(draftId)}`
 
 export const CARD_STEP: Step = 2
 
-/** A set-up card’s starting state from the Planner’s rows. The schedule is read from its words only, so a time is never guessed. */
-export function cardFrom(name: string, rows: readonly { readonly kind: RowKind; readonly text: string; readonly state: RowState; readonly note: string | null }[], typed: string): Form {
+/** The clause of the typed request that holds the words, cut at a comma or a full stop. */
+function clauseOf(text: string, words: string): string {
+  const at = text.toLowerCase().indexOf(words.toLowerCase())
+  if (at < 0 || words === '') return ''
+  const start = text.slice(0, at).search(/[^,.;!?]*$/)
+  const end = text.slice(at).search(/[,.;!?]/)
+  return text.slice(start, end < 0 ? text.length : at + end)
+}
+
+const UNSET: Readonly<Partial<Record<PartReason, Partial<When>>>> = { one_frequency: { often: '', day: '' }, one_day: { often: 'week', day: '' }, one_time: { at: '' } }
+
+/**
+ * The schedule from her words. A clash leaves its schedule row empty, so the rest of that clause is read instead, with the
+ * clashing day, time or frequency left for her to choose. Nothing is ever picked for her.
+ */
+function whenFrom(said: string, typed: string, marked: readonly PartView[]): When {
+  const clashes = marked.filter(isClash)
+  const first = clashes[0]
+  if (first === undefined) return readWhen(said)
+  const read = readWhen(clauseOf(typed, first.text))
+  return clashes.reduce<When>((when, part) => ({ ...when, ...(part.reason ? UNSET[part.reason] : {}) }), { ...read, filledFrom: said })
+}
+
+/** A set-up card’s starting state from the Planner’s rows and parts. The schedule is read from her words only, so a time is never guessed. */
+export function cardFrom(
+  name: string,
+  rows: readonly { readonly kind: RowKind; readonly text: string; readonly state: RowState; readonly note: string | null }[],
+  typed: string,
+  parts: readonly PartView[] = [],
+): Form {
   const kept = rows.filter((row) => row.state !== 'cant_do')
   const said = kept.find((row) => row.kind === 'schedule')?.text ?? ''
+  const marked = parts.filter((part) => part.mark !== 'will_do')
   return {
     ...EMPTY_FORM,
     step: CARD_STEP,
     text: typed,
     name: name.trim(),
     rows: kept.map((row) => ({ kind: row.kind, text: row.text, state: row.state, note: row.note, planner: null })),
-    when: readWhen(said),
+    when: whenFrom(said, typed, marked),
+    marked,
   }
 }
 

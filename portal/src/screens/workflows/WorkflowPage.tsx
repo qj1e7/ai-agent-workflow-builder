@@ -33,6 +33,7 @@ import {
   controlsOf,
   deleteWords,
   heldNote,
+  leftOutWords,
   mayChangeSchedule,
   menuActionsOf,
   nextRunWords,
@@ -430,6 +431,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} test={useCase.last_run?.test === true} />
           <h1 tabIndex={-1}>{useCase.name}</h1>
           <p>{useCase.instruction}</p>
+          {leftOutWords(useCase.left_out) ? <p className={styles['leftOut']}>{leftOutWords(useCase.left_out)}</p> : null}
           {viewer.operator ? null : (
             <p className={styles['opsNote']}>
               <OperatorsNote what="this workflow" />
