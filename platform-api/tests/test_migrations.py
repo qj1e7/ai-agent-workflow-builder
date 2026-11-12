@@ -915,6 +915,8 @@ async def test_migration_0018_keeps_questions_with_whole_answers_and_a_downgrade
             ("q_no_one_answered", "Is it?", "Yes", None, None),
             ("q_no_time", "Is it?", "Yes", "alice", None),
             ("q_no_words", "Is it?", None, "alice", NOW),
+            ("q_empty_answer", "Is it?", "", "alice", NOW),
+            ("q_long_answer", "Is it?", "x" * 1001, "alice", NOW),
         ):
             with pytest.raises(psycopg.errors.CheckViolation):
                 conn.execute(

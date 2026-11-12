@@ -5,6 +5,7 @@ from typing import Any
 import httpx
 import pytest
 
+from platform_api.orchestration.approvals import ApprovalPolicy, ApprovalStep, OneOf
 from platform_api.orchestration.people import Person
 from platform_api.shared import Principal, Role, RunId, UserId
 from tests.declared import declared_status
@@ -149,6 +150,25 @@ async def test_an_approver_whose_role_is_taken_away_cannot_ask(lab: Lab):
 
     assert refused.status_code == 403
     assert (await view(lab, approval_id, "bob"))["questions"] == []
+
+
+async def test_a_named_second_step_approver_cannot_ask_before_the_first_step_is_decided(lab: Lab):
+    named = ApprovalPolicy(
+        (
+            ApprovalStep("First Approver", OneOf(frozenset({UserId("bob")}))),
+            ApprovalStep("Second Approver", OneOf(frozenset({UserId("erin")}))),
+        )
+    )
+    started = await lab.h.orchestrator.start_run(
+        replace(SPEC, approval_policy=named), CAROL, "named"
+    )
+    await work(lab, started.run_id, cards=False)
+    approval_id = (await approval_of(lab, started.run_id))["approval_id"]
+
+    early = await ask(lab, "erin", approval_id, "Is the first step done?")
+
+    assert (early.status_code, early.json()["refusal"]) == (403, "not_eligible")
+    assert (await ask(lab, "bob", approval_id, "Is it urgent?")).status_code == 201
 
 
 async def test_an_approver_who_decided_the_first_step_cannot_ask_on_the_second(lab: Lab):
