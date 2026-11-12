@@ -54,6 +54,15 @@ The team adopted the AI-native redesign as the design target: prototype version 
 
 The 6 Nov prototype, version 3, stays in `docs/design/portal-routines/` as the record of this ADR's first form.
 
+## Changes on 12 Nov 2026
+
+ADR 0043, accepted on 12 Nov 2026, makes Home a chat with a rail that leads to full pages. It changes this decision in four places. Section 18.2 of the spec gives the reasons.
+
+- **The chat is Home.** This decision rejected that, because urgent items scroll away and pinning them rebuilds Home inside the chat. The pinned Needs you line is one row, not Home again, and the rail keeps the lists one tap away.
+- **Changes happen where the thing lives, and now also by asking.** The edit card changes a workflow's schedule from the chat. Every other change keeps its editor on the workflow's page, where the schedule editor also stays.
+- **The Approver-only Home gains the box,** for questions only.
+- **The menu becomes the rail.** The Agent library moves into Settings as How it works.
+
 ## Considered options
 
 - **Keep the tabs and add more tips.** Little work, but it is the third try at the same fix, and the first two didn't remove the complaint.
