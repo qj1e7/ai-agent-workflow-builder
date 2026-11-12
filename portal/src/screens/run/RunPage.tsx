@@ -10,7 +10,7 @@ import { PageHead } from '../../shell/PageHead'
 import { PRODUCT } from '../../shell/product'
 import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
-import { Toast } from '../../ui/Toast'
+import { Toast, type ToastMessage } from '../../ui/Toast'
 import { useFromChat } from '../../ui/fromChat'
 import { motionAllowed } from '../../ui/motion'
 import { nextRunOf } from '../workflows/workflow'
@@ -23,7 +23,7 @@ import { QuestionThread } from './QuestionThread'
 import { useQuestions, type Questions } from './questions'
 import { RunLine } from './RunLine'
 import { isFinished, PLANNER_ID, stationsOf, type PlanBlock, type RunModel } from './runModel'
-import { declinedNext, declinedRecord, feedTroubleOf, headlineOf, lineOf, RUN_MISSING, RUN_PROBLEM, shortTime, speakerName, writeLabel, type NameOf, type Speaker } from './words'
+import { declinedNext, declinedNowWords, declinedRecord, feedTroubleOf, headlineOf, lineOf, RUN_MISSING, RUN_PROBLEM, shortTime, speakerName, writeLabel, type NameOf, type Speaker } from './words'
 import styles from './RunPage.module.css'
 
 const LANDS_ON_DECISION = new Set(['awaiting_approval', 'failed', 'rejected'])
@@ -211,8 +211,13 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const party = partyOf(approval.data, me?.id)
   const saidByMe = me ? shown.chat.findLast((item) => item.kind === 'decided' && item.by === me.id) : undefined
   const open = detailOpen(detail.choice, shown)
-  const decision = useDecision(approval.data, party)
-  const questions = useQuestions(approval.data, nameOf)
+  const [said, setSaid] = useState<ToastMessage | null>(null)
+  const say = (text: string) => setSaid((before) => ({ id: (before?.id ?? 0) + 1, text }))
+  const decision = useDecision(approval.data, party, (recorded) => {
+    if (recorded.verdict === 'decline') say(declinedNowWords({ reason: recorded.reason ?? null }))
+  })
+  const declinedSoFar = declinedSoFarWords(decision, live, nameOf)
+  const questions = useQuestions(approval.data, nameOf, say)
   const answered = decision.recorded !== null && !waiting && !WORKING.has(shown.phase.state)
   const focused = useRef(false)
   useEffect(() => {
@@ -280,8 +285,9 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
         </h1>
         <span className={cx(styles['pill'], styles[headline.pill.tone])}>{headline.pill.label}</span>
       </div>
-      <p className={styles['status']} role="status">
-        {statusWords(decision, live, nameOf)}
+      <p className={styles['status']}>
+        <span role="status">{statusWords(decision, live)}</span>
+        {declinedSoFar ? ` ${declinedSoFar}` : null}
       </p>
       <RunLine stations={stations} arrivedLive={arrivedLive} startedAt={shortTime(run.started_at)} nameOf={nameOf} />
       {working ? null : <NeedsYou>{last}</NeedsYou>}
@@ -300,19 +306,26 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
       <div className="visually-hidden" aria-live="polite">
         {announce ? `${speakerName(announce.speaker)}: ${announce.text}` : ''}
       </div>
-      <Toast message={questions.said} onDismiss={questions.dismiss} focusAfter={() => document.querySelector<HTMLElement>('main h1')} />
+      <Toast message={said} onDismiss={() => setSaid(null)} />
     </div>
   )
 }
 
-/** What the page says right after this person decided, before the run's own events catch up. A decline gives its record. */
-export function statusWords(decision: Pick<Decision, 'recorded' | 'declined'>, live: LiveRun, nameOf: NameOf): string {
+/** What the page says right after this person approved, before the run's own events catch up. */
+export function statusWords(decision: Pick<Decision, 'recorded'>, live: LiveRun): string {
   if (live.connection.is === 'reconnecting') return 'Lost the live connection. Trying again.'
   if (live.connection.is === 'closed') return 'Stopped following this run. Reload the page to see what changed.'
   if (isFinished(live.shown.phase)) return ''
-  if (decision.declined) return declinedRecord(decision.declined, nameOf)
   if (decision.recorded === 'approve') return 'Approved. The platform is writing now.'
   return ''
+}
+
+/**
+ * The decline this person just recorded, until the run's own events show it. Its message at the bottom of the page announces it,
+ * so the line that keeps it is not live.
+ */
+export function declinedSoFarWords(decision: Pick<Decision, 'declined'>, live: LiveRun, nameOf: NameOf): string | null {
+  return decision.declined && !isFinished(live.shown.phase) ? declinedRecord(decision.declined, nameOf) : null
 }
 
 interface LastWordForProps {

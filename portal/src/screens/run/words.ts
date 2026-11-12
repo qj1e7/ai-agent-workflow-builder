@@ -33,6 +33,11 @@ export function declineTail(declined: Pick<Declined, 'reason'>): string {
   return `Nothing was written.${declined.reason ? ` Reason: ${sentence(declined.reason)}` : ''}`
 }
 
+/** What the person who declined reads at the bottom of the page right after: "Declined. Nothing was written. Reason: Wrong version." */
+export function declinedNowWords(declined: Pick<Declined, 'reason'>): string {
+  return `Declined. ${declineTail(declined)}`
+}
+
 /**
  * A declined run's record, in the same words everywhere it shows: "Declined by Bob. Nothing was written. Reason: Wrong version.",
  * or "Approved by Bob, then declined by Alice. ..." when a first yes came before. It never names a result or a ticket.

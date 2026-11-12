@@ -46,7 +46,7 @@ interface ApprovalGateProps {
   readonly approval: ApprovalView
   /** Null in the side panel, which shows everything that will be written and the decision, and leaves the rest for the page. */
   readonly page: PageDetails | null
-  readonly decision: Pick<Decision, 'pending' | 'error' | 'decide'>
+  readonly decision: Pick<Decision, 'pending' | 'recorded' | 'error' | 'decide'>
   /** The quick reasons Decline offers, from declineReasons in decision.ts. */
   readonly reasons: readonly string[]
   /** Who sees the reason with the record, and answers questions, by name. */
@@ -108,7 +108,9 @@ export function DeclineReasons({ reasons, requester, picked, pending, busy, onPi
  * it helps the reader. It is never the check: the platform checks the digest and the deciding person again at the write.
  */
 export function ApprovalGate({ approval, page, decision, reasons, requester, questions, me, nameOf }: ApprovalGateProps) {
-  const open = openStep(approval) !== null
+  // Once this person's decision is recorded, the gate offers them nothing more, though the run's own events may take a while to say so.
+  // The question thread does not depend on it.
+  const open = openStep(approval) !== null && decision.recorded === null
   const canDecide = approval.you_can_decide && open
   const busy = decision.pending !== null
   const [opened, setOpened] = useState<Opened | null>(null)
