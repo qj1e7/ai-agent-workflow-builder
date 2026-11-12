@@ -7,5 +7,5 @@ import { declinedNowWords } from './words'
 export function DeclinedToast({ declined }: { declined: Declined | null }) {
   const [readBy, setReadBy] = useState<string | null>(null)
   const message = declined && declined.by !== readBy ? { id: 1, text: declinedNowWords(declined) } : null
-  return <Toast message={message} onDismiss={() => setReadBy(declined?.by ?? null)} focusAfter={() => document.querySelector<HTMLElement>('main h1')} />
+  return <Toast message={message} onDismiss={() => setReadBy(declined?.by ?? null)} />
 }
