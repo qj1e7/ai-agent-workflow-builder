@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
 import { Answer, type Page } from './AnswerCards'
 import { CardMemoryContext, NO_MEMORY, type CardMemory } from './cardMemory'
+import { Leftovers } from './PartsList'
 import { CardLive, NewestAnswer } from './primary'
 import { SetupCard } from './SetupCard'
 import { sayOf } from './answers'
@@ -28,6 +29,7 @@ function ReplyBody({ message, now, page, say }: { message: Extract<Message, { ki
   return (
     <div className={styles['reply']}>
       {sentence !== null ? <p>{sentence}</p> : null}
+      <Leftovers reply={reply} />
       {reply.answer === 'check_workflows' ? <CheckWorkflowsAnswer useCaseId={reply.use_case_id} now={now} say={say} /> : null}
       {reply.answer === 'why_stopped' ? <WhyStoppedAnswer useCaseId={reply.use_case_id} say={say} /> : null}
       {reply.answer === 'ideas' ? <IdeasSentence say={say} /> : null}

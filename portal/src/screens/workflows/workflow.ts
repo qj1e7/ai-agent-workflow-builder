@@ -10,6 +10,12 @@ import { lineWhen, nextRunAt, runWhen, scheduleZoneName, zoneWords } from './tim
 
 export type Tone = 'ok' | 'wait' | 'bad' | 'new'
 
+/** What a workflow was set up without, in her words (plan 4.6). Text for people to read: nothing runs from it. Null when nothing was left out. */
+export function leftOutWords(leftOut: readonly string[]): string | null {
+  if (leftOut.length === 0) return null
+  return `Left out: ${andList(leftOut.map((words) => `“${words}”`))}. It was set up without ${leftOut.length === 1 ? 'that part' : 'those parts'}.`
+}
+
 export interface RunFact {
   readonly tone: Tone
   readonly pill: string | null

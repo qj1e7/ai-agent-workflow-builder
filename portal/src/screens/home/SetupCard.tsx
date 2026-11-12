@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
 import { Link } from '../../ui/Link'
 import { useChatNavigate } from '../../ui/fromChat'
@@ -15,9 +15,11 @@ import { IconCheck } from '../../ui/icons'
 import { systemOf } from '../agents/agents'
 import { runWhen, timesZone } from '../workflows/workflow'
 import { AskTheTeam } from './AskTheTeam'
-import { ROW_LABEL, TAG_CHOICE, TAG_FILLED } from './answers'
+import { TAG_FILLED } from './answers'
 import {
   afterPartCheck,
+  answerWhen,
+  ASK_DAYS,
   canDrop,
   changeRow,
   DEST_WORDS,
@@ -28,6 +30,7 @@ import {
   lowerFirst,
   nameProblem,
   nameOf,
+  nextQuestion,
   planView,
   reusedAgents,
   cardBlockers,
@@ -35,6 +38,7 @@ import {
   setupLeft,
   taskWithoutSchedule,
   turnOn,
+  turnOnWords,
   valueKey,
   valueOf,
   valueProblem,
@@ -42,8 +46,8 @@ import {
   whenSaid,
   type Often,
   type Planned,
-  type PlanAgent,
   type PlanView,
+  type Question,
   type Row,
   type Weekday,
   type When,
@@ -52,6 +56,8 @@ import {
 } from './card'
 import { DiscardDialog } from '../workflows/Sections'
 import { CardMemoryContext } from './cardMemory'
+import { ASKED_NEXT, quote } from './parts'
+import { crossParts, PartsList, type Part } from './PartsList'
 import { CardLive, useMainButton } from './primary'
 import styles from './SetupCard.module.css'
 
@@ -93,6 +99,8 @@ const HINT: Record<Row['state'], string> = {
   checking: 'checking your new words',
 }
 const NOT_SAID: Record<Row['kind'], string> = { schedule: 'when it runs', look_for: 'what to look for', do: 'what it does', where: 'where it goes' }
+/** The card’s parts, named as spec 7.1 names them. */
+const PART_LABEL: Record<Row['kind'], string> = { schedule: 'When', look_for: 'Which tickets', do: 'What it does', where: 'Where it goes' }
 
 type ToolKinds = ReadonlyMap<ToolId, ToolView['kind']>
 
@@ -110,7 +118,7 @@ function writesOf(plan: PlanView | null, kinds: ToolKinds): boolean | null {
 export const soften = (text: string): string => lowerFirst(text)
 
 function Chip({ row, index, open, editorId, onOpen }: { row: Row; index: number; open: boolean; editorId: string; onOpen: (index: number) => void }) {
-  const label = ROW_LABEL[row.kind]
+  const label = PART_LABEL[row.kind]
   const shown = row.text === '' ? NOT_SAID[row.kind] : soften(row.text)
   return (
     <button
@@ -238,65 +246,6 @@ function WhenPicker({ when, problems, focus, onWhen, onDone }: { when: When; pro
   )
 }
 
-function Notes({ form, onDrop }: { form: Form; onDrop: (index: number) => void }) {
-  const items = form.rows.flatMap((row, index) => {
-    if (row.kind === 'schedule' || row.state === 'checking' || row.state === 'understood') return []
-    const note = row.state === 'edited' && row.planner?.text ? `Your request said: “${row.planner.text}”.` : row.note
-    return note === null || note.trim() === '' ? [] : [{ row, index, note }]
-  })
-  if (items.length === 0) return null
-  return (
-    <ul className={styles['notes']}>
-      {items.map(({ row, index, note }) => (
-        <li key={`${String(index)}:${row.kind}`} data-state={row.state}>
-          <span>
-            <b>{ROW_LABEL[row.kind]}:</b> {note}
-          </span>
-          {row.state === 'cant_do' && canDrop(form.rows, index) ? (
-            <button type="button" className={styles['link']} onClick={() => onDrop(index)}>
-              Leave it out
-            </button>
-          ) : null}
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-function Inputs({ form, agents, shown, onValue }: { form: Form; agents: readonly PlanAgent[]; shown: boolean; onValue: (key: string, value: string) => void }) {
-  const inputs = agents.flatMap((agent) => agent.inputs.map((input) => ({ agent, input })))
-  if (inputs.length === 0) return null
-  return (
-    <div className={styles['inputs']}>
-      {inputs.map(({ agent, input }) => {
-        const id = `value-${String(agent.index)}-${input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
-        const key = valueKey(agent.index, input.name)
-        const value = valueOf(form, agent, input.name)
-        const problem = valueProblem(input.kind, value)
-        const said = shown || value !== '' ? problem : null
-        const tag = problem !== null ? TAG_CHOICE : form.typed[key] === undefined ? TAG_FILLED : null
-        return (
-          <div key={id} className={styles['field']}>
-            <label htmlFor={id}>
-              {input.name}
-              {tag ? <span className={styles['tag']} data-state={problem !== null ? 'missing' : 'changed'}>{tag}</span> : null}
-            </label>
-            <input id={id} type="text" value={value} aria-invalid={said ? true : undefined} aria-describedby={`${id}-help${said ? ` ${id}-error` : ''}`} onChange={(event) => onValue(key, event.target.value)} />
-            <span className={styles['help']} id={`${id}-help`}>
-              {input.what}
-            </span>
-            {said ? (
-              <span className={styles['problem']} id={`${id}-error`}>
-                {said}
-              </span>
-            ) : null}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 function HowItWorks({ plan, kinds, reused }: { plan: PlanView | null; kinds: ToolKinds; reused: ReadonlySet<number> | null }) {
   let body
   if (plan === null) body = <p className="muted">The Planner is still choosing the agents.</p>
@@ -373,6 +322,7 @@ function Done({ useCaseId, writes, draftKept, newAgents }: { useCaseId: string; 
         <p>
           <b>{name ? `${name} is on.` : 'Your workflow is on.'}</b>
         </p>
+        {useCase.data && useCase.data.left_out.length > 0 ? <p>Left out: {andList(useCase.data.left_out.map(quote))}.</p> : null}
         {useCase.data ? <p>{firstRun(useCase.data, now)}</p> : null}
         <p>
           {writes === false
@@ -458,9 +408,9 @@ export function SetupCard({ start }: { start: CardStart }) {
   const kinds: ToolKinds = useMemo(() => new Map((tools.data ?? []).map((tool) => [tool.id, tool.kind])), [tools.data])
   const reused = reusedAgents(plan, library.data, me.data?.id)
   const left = setupLeft(form, plan)
+  const question = nextQuestion(form, plan)
   const problems = whenProblems(form.when)
   const timeText = whenSaid(form.when)
-  const pickerOpen = editing === 'when' || (timeText === null && left.length === 1 && left[0] === 'when it runs')
 
   const dirty = useRef(false)
   const turningOn = useRef(false)
@@ -538,6 +488,22 @@ export function SetupCard({ start }: { start: CardStart }) {
   const edit = (next: (before: Form) => Form) => {
     dirty.current = true
     setForm(next)
+  }
+
+  // After a choice, focus moves on to the next question, or to the button once nothing is left to ask.
+  const focusNext = useRef(false)
+  useEffect(() => {
+    if (!focusNext.current) return
+    focusNext.current = false
+    const next = document.querySelector<HTMLElement>(`[data-card="${id}"] [data-mark="ask"] :is(button, input)`) ?? document.getElementById(`${id}-turn-on`)
+    next?.focus()
+  })
+
+  const leaveOut = (index: number) => edit((before) => dropRow(before, index))
+
+  const choose = (set: Partial<When>) => {
+    focusNext.current = true
+    edit((before) => answerWhen(before, set))
   }
 
   const checkPart = (part: Pick<Row, 'kind' | 'text'>) => {
@@ -649,16 +615,12 @@ export function SetupCard({ start }: { start: CardStart }) {
 
   const pointAtWhatIsLeft = () => {
     setShown(true)
-    const row = form.rows.findIndex((r) => r.kind !== 'schedule' && (r.state === 'missing' || r.state === 'cant_do' || r.state === 'checking'))
+    const row = form.rows.findIndex((r) => r.kind !== 'schedule' && (r.state === 'cant_do' || r.state === 'checking'))
     if (row >= 0) {
       document.getElementById(`${id}-chip-${row}`)?.focus()
       return
     }
-    if (timeText === null) {
-      setEditing('when')
-      return
-    }
-    document.querySelector<HTMLElement>(`[data-card="${id}"] input[aria-invalid="true"], [data-card="${id}"] [data-state="missing"] input`)?.focus()
+    document.querySelector<HTMLElement>(`[data-card="${id}"] [data-mark="ask"] :is(button, input)`)?.focus()
   }
 
   if (phase.kind === 'never_mind')
@@ -684,48 +646,222 @@ export function SetupCard({ start }: { start: CardStart }) {
 
   const title = nameOf(form, plan) || 'New workflow'
   const rowsOf = (kind: Row['kind']) => form.rows.flatMap((row, index) => (row.kind === kind ? [{ row, index }] : []))
-  const chips = (kind: 'look_for' | 'do' | 'where') => {
-    const list = rowsOf(kind)
-    return list.map(({ row, index }, at) => (
-      <span key={index}>
-        {at > 0 ? ' and ' : ''}
-        <Chip row={row} index={index} open={editing === index} editorId={id} onOpen={open} />
+  const whyWaiting = left.choices.length > 0
+  const asked = (words: string, body: ReactNode) => (
+    <>
+      <span className={styles['pq']} id={`${id}-q`}>
+        {words}
       </span>
-    ))
+      {body}
+    </>
+  )
+  const chipOf = (row: Row, index: number) => <Chip row={row} index={index} open={editing === index} editorId={id} onOpen={open} />
+  const editorOf = (index: number) => {
+    const row = form.rows[index]
+    if (editing !== index || row === undefined) return null
+    const close = () => {
+      back.current = `${id}-chip-${index}`
+      setEditing(null)
+    }
+    return <Editor id={`${id}-editor`} label={PART_LABEL[row.kind]} row={row} onSave={(text) => changePart(index, text)} onCancel={close} />
   }
-  const editedRow = typeof editing === 'number' ? form.rows[editing] : undefined
-  const whyWaiting = left.length > 0
-  const sentence = (
-    <p className={styles['sentence']}>
-      {timeText !== null ? (
-        timeText
-      ) : (
-        <button type="button" className={styles['chip']} data-state="missing" aria-expanded={editing === 'when'} onClick={() => open('when')}>
-          Choose when it runs
+  const noteOf = (row: Row): string | null => (row.state === 'edited' && row.planner?.text ? `Your request said: “${row.planner.text}”.` : row.state === 'changed' || row.state === 'cant_do' ? row.note : null)
+  const askedRow = (q: Question | null, index: number): q is Extract<Question, { kind: 'row' }> => q?.kind === 'row' && q.index === index
+
+  const picker =
+    editing === 'when' ? (
+      <WhenPicker
+        when={form.when}
+        problems={shown || form.when.often !== '' || form.when.at !== '' ? problems : {}}
+        focus
+        onWhen={(when) => edit((before) => ({ ...before, when }))}
+        onDone={() => setEditing(null)}
+      />
+    ) : null
+  const whenPart: Part =
+    question?.kind === 'when'
+      ? {
+          key: 'when',
+          mark: 'ask',
+          label: PART_LABEL.schedule,
+          body: asked(
+            question.words,
+            <>
+              <span className={styles['pick']} role="group" aria-labelledby={`${id}-q`}>
+                {question.choices.map((choice) => (
+                  <button key={choice.label} type="button" className={styles['choice']} onClick={() => choose(choice.set)}>
+                    {choice.label}
+                  </button>
+                ))}
+                {question.field === 'at' ? (
+                  <button type="button" className={styles['choice']} aria-expanded={editing === 'when'} onClick={() => open('when')}>
+                    Another time
+                  </button>
+                ) : null}
+              </span>
+              {picker}
+            </>,
+          ),
+        }
+      : {
+          key: 'when',
+          mark: 'ok',
+          label: PART_LABEL.schedule,
+          body: (
+            <>
+              <span>{timeText ?? ''}, Singapore time</span>
+              <Button aria-expanded={editing === 'when'} onClick={() => open('when')}>
+                Change<span className="visually-hidden"> when it runs</span>
+              </Button>
+              {picker}
+            </>
+          ),
+        }
+
+  const rowPart = ({ row, index }: { row: Row; index: number }): Part => {
+    const kind = row.kind
+    const key = `${kind}-${String(index)}`
+    if (row.state === 'missing')
+      return askedRow(question, index)
+        ? { key, mark: 'ask', label: PART_LABEL[kind], body: asked(question.words, <>{chipOf(row, index)}{editorOf(index)}</>) }
+        : { key, mark: 'later', label: PART_LABEL[kind], body: ASKED_NEXT }
+    const note = noteOf(row)
+    return {
+      key,
+      mark: row.state === 'cant_do' ? 'no' : row.state === 'checking' ? 'later' : 'ok',
+      label: PART_LABEL[kind],
+      body: (
+        <>
+          {chipOf(row, index)}
+          {note ? <span className={styles['pnote']}>{note}</span> : null}
+          {row.state === 'cant_do' && canDrop(form.rows, index) ? (
+            <button type="button" className={styles['link']} onClick={() => leaveOut(index)}>
+              Leave it out
+            </button>
+          ) : null}
+          {editorOf(index)}
+        </>
+      ),
+    }
+  }
+
+  const firstLook = rowsOf('look_for')[0]
+  const dayParts: Part[] = form.marked
+    .filter((part) => part.reason === 'how_many_days')
+    .map((part, at) => ({
+      key: `days-${String(at)}`,
+      mark: question?.kind === 'days' ? 'ask' : 'later',
+      label: quote(part.text),
+      body:
+        question?.kind === 'days' ? (
+          asked(
+            ASK_DAYS,
+            firstLook ? (
+              <button type="button" className={styles['choice']} onClick={() => open(firstLook.index)}>
+                Change which tickets
+              </button>
+            ) : null,
+          )
+        ) : (
+          ASKED_NEXT
+        ),
+    }))
+
+  const inputParts: Part[] =
+    plan?.kind === 'agents'
+      ? plan.agents
+          .flatMap((agent) => agent.inputs.map((input) => ({ agent, input })))
+          .sort((a, b) => Number(b.input.kind === 'jira_project') - Number(a.input.kind === 'jira_project'))
+          .map(({ agent, input }): Part => {
+            const fieldId = `${id}-value-${String(agent.index)}-${input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+            const key = valueKey(agent.index, input.name)
+            const value = valueOf(form, agent, input.name)
+            const problem = valueProblem(input.kind, value)
+            const said = shown || value !== '' ? problem : null
+            const now = question?.kind === 'input' && question.agent === agent.index && question.input === input.name ? question : null
+            const part = { key: `input-${key}`, label: input.name }
+            if (problem !== null && now === null) return { ...part, mark: 'later', body: ASKED_NEXT }
+            const field = (
+              <>
+                <input
+                  id={fieldId}
+                  className={styles['value']}
+                  type="text"
+                  aria-label={input.name}
+                  value={value}
+                  aria-invalid={said ? true : undefined}
+                  aria-describedby={`${fieldId}-help${said ? ` ${fieldId}-error` : ''}`}
+                  onChange={(event) => edit((before) => ({ ...before, typed: { ...before.typed, [key]: event.target.value } }))}
+                />
+                {problem === null && form.typed[key] === undefined ? (
+                  <span className={styles['tag']} data-state="changed">
+                    {TAG_FILLED}
+                  </span>
+                ) : null}
+                <span className={styles['help']} id={`${fieldId}-help`}>
+                  {input.what}
+                </span>
+                {said ? (
+                  <span className={styles['problem']} id={`${fieldId}-error`}>
+                    {said}
+                  </span>
+                ) : null}
+              </>
+            )
+            return { ...part, mark: now ? 'ask' : 'ok', body: now ? asked(now.words, field) : field }
+          })
+      : []
+
+  const whereRows = rowsOf('where')
+  const whereAsked = whereRows.find(({ index }) => askedRow(question, index))
+  const destPart: Part = {
+    key: 'dest',
+    mark: whereAsked ? 'ask' : whereRows.some(({ row }) => row.state === 'missing') ? 'later' : whereRows.some(({ row }) => row.state === 'cant_do') ? 'no' : 'ok',
+    label: PART_LABEL.where,
+    body: (
+      <>
+        {whereAsked && question ? (
+          <span className={styles['pq']} id={`${id}-q`}>
+            {question.words}
+          </span>
+        ) : null}
+        {whereRows.map(({ row, index }) => (
+          <span key={index} className={styles['pnote']}>
+            {chipOf(row, index)}
+            {editorOf(index)}
+          </span>
+        ))}
+        <button
+          type="button"
+          id={`${id}-dest`}
+          className={styles['chip']}
+          data-state="changed"
+          aria-expanded={editing === 'dest'}
+          aria-controls={editing === 'dest' ? `${id}-editor` : undefined}
+          title="Filled in by me. It’s written after a yes."
+          onClick={() => open('dest')}
+        >
+          {DEST_WORDS}
+          <span className="visually-hidden">, filled in by me, written after a yes. Change</span>
         </button>
-      )}
-      {rowsOf('look_for').length > 0 ? <>, find </> : ', '}
-      {chips('look_for')}
-      {rowsOf('do').length > 0 ? <>, </> : null}
-      {chips('do')}
-      {rowsOf('where').length > 0 ? <>, </> : null}
-      {chips('where')}
-      {', and put the result in '}
-      <button
-        type="button"
-        id={`${id}-dest`}
-        className={styles['chip']}
-        data-state="changed"
-        aria-expanded={editing === 'dest'}
-        aria-controls={editing === 'dest' ? `${id}-editor` : undefined}
-        title="Filled in by me. It’s written after a yes."
-        onClick={() => open('dest')}
-      >
-        {DEST_WORDS}
-        <span className="visually-hidden">, filled in by me, written after a yes. Change</span>
-      </button>
-      .
-    </p>
+        <span>after a yes</span>
+        {editing === 'dest' ? (
+          <DestEditor
+            id={`${id}-editor`}
+            onDone={() => {
+              back.current = `${id}-dest`
+              setEditing(null)
+            }}
+          />
+        ) : null}
+      </>
+    ),
+  }
+
+  const crosses = crossParts(
+    form.marked.filter((part) => part.mark === 'cant'),
+    { when: form.when },
+    (part) => (part.reason === 'cant_do' ? <AskTheTeam capability={part.text} starter={`I asked the Planner for: ${form.text}\n\nWhat it can't do yet: ${part.text}`} /> : null),
   )
 
   return (
@@ -763,7 +899,9 @@ export function SetupCard({ start }: { start: CardStart }) {
           </div>
         ) : (
           <>
-            <h3 id={`${id}-title`}>{title}</h3>
+            <h3 id={`${id}-title`} tabIndex={-1}>
+              {title}
+            </h3>
             {filled ? (
               <span className={styles['tag']} data-state="changed">
                 {TAG_FILLED}
@@ -776,63 +914,26 @@ export function SetupCard({ start }: { start: CardStart }) {
         )}
       </div>
 
-      <div className={styles['part']}>
-        <h4>What will happen</h4>
-        {sentence}
-        {editedRow !== undefined && typeof editing === 'number' ? (
-          <Editor id={`${id}-editor`} label={ROW_LABEL[editedRow.kind]} row={editedRow} onSave={(text) => changePart(editing, text)} onCancel={() => ((back.current = `${id}-chip-${editing}`), setEditing(null))} />
-        ) : null}
-        {editing === 'dest' ? (
-          <DestEditor
-            id={`${id}-editor`}
-            onDone={() => {
-              back.current = `${id}-dest`
-              setEditing(null)
-            }}
-          />
-        ) : null}
-        <Notes form={form} onDrop={(index) => edit((before) => dropRow(before, index))} />
-        {start.similar ? (
-          <p className={styles['similar']}>
-            You already have a workflow with this name. <Link to={`/workflows/${encodeURIComponent(start.similar.use_case_id)}`}>Open {start.similar.name}</Link>
-          </p>
-        ) : null}
-        {plan?.kind === 'agents' ? <Inputs form={form} agents={plan.agents} shown={shown} onValue={(key, value) => edit((before) => ({ ...before, typed: { ...before.typed, [key]: value } }))} /> : null}
-        {plan?.kind === 'cannot' ? <p className={styles['problem']}>I can’t set this up. {plan.reason}</p> : null}
-        {plan?.kind === 'trouble' || planQuery.isError ? (
-          <div>
-            <p className={styles['problem']} role="alert">
-              {plan?.kind === 'trouble' ? plan.message : planQuery.isError ? words(planQuery.error) : ''}
-            </p>
-            <Button onClick={() => void planQuery.refetch()}>Try again</Button>
-          </div>
-        ) : null}
-      </div>
+      <PartsList parts={[whenPart, ...rowsOf('look_for').map(rowPart), ...dayParts, ...inputParts, ...rowsOf('do').map(rowPart), destPart, ...crosses]} />
 
-      <div className={styles['part']}>
-        <h4>When</h4>
-        <p className={styles['whenLine']}>
-          {timeText !== null ? (
-            <span>{timeText}, Singapore time</span>
-          ) : (
-            <span className={styles['chip']} data-state="missing">
-              Choose when it runs
-            </span>
-          )}
-          <Button aria-expanded={pickerOpen} onClick={() => setEditing((now) => (now === 'when' && timeText !== null ? null : 'when'))}>
-            Change<span className="visually-hidden"> when it runs</span>
-          </Button>
-        </p>
-        {pickerOpen ? (
-          <WhenPicker
-            when={form.when}
-            problems={shown || form.when.often !== '' || form.when.at !== '' ? problems : {}}
-            focus={editing === 'when'}
-            onWhen={(when) => edit((before) => ({ ...before, when }))}
-            onDone={() => setEditing(null)}
-          />
-        ) : null}
-      </div>
+      {start.similar || plan?.kind === 'cannot' || plan?.kind === 'trouble' || planQuery.isError ? (
+        <div className={styles['part']}>
+          {start.similar ? (
+            <p className={styles['similar']}>
+              You already have a workflow with this name. <Link to={`/workflows/${encodeURIComponent(start.similar.use_case_id)}`}>Open {start.similar.name}</Link>
+            </p>
+          ) : null}
+          {plan?.kind === 'cannot' ? <p className={styles['problem']}>I can’t set this up. {plan.reason}</p> : null}
+          {plan?.kind === 'trouble' || planQuery.isError ? (
+            <div>
+              <p className={styles['problem']} role="alert">
+                {plan?.kind === 'trouble' ? plan.message : planQuery.isError ? words(planQuery.error) : ''}
+              </p>
+              <Button onClick={() => void planQuery.refetch()}>Try again</Button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className={styles['part']}>
         <h4>What needs a yes</h4>
@@ -848,12 +949,13 @@ export function SetupCard({ start }: { start: CardStart }) {
       <div className={styles['foot']}>
         <button
           type="button"
+          id={`${id}-turn-on`}
           className={buttonClassName(main)}
           aria-describedby={`${id}-left`}
           aria-busy={create.isPending || saveCard.isPending || undefined}
           onClick={whyWaiting ? pointAtWhatIsLeft : turnItOn}
         >
-          Turn it on
+          {turnOnWords(left)}
         </button>
         <span className={styles['left']} id={`${id}-left`}>
           {leftWords(left)}

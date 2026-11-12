@@ -1,6 +1,6 @@
 import { useId, useState, type ReactNode } from 'react'
 import { Link } from '../../ui/Link'
-import type { CantReply, OfflineReply, PartReply, PlannerReply, QuestionReply, SetupCardReply, WatchlistReply } from '../../api/types'
+import type { CantReply, OfflineReply, PartReply, PartView, PlannerReply, QuestionReply, SetupCardReply, WatchlistReply } from '../../api/types'
 import { useCapabilities } from '../../api/plannerQueries'
 import { Button, ButtonLink } from '../../ui/Button'
 import { OpenButton } from '../../ui/OpenItem'
@@ -23,9 +23,16 @@ export interface Page {
 }
 
 
-/** A set-up card from the Planner’s rows. The person’s own words go with it, so a saved draft keeps them. */
+/** The parts of a reply, with each can’t row of a part answer kept as a cross even if no part names it, so none is dropped. */
+function partsOf(reply: SetupCardReply | PartReply): readonly PartView[] {
+  if (reply.answer !== 'part' || reply.parts.some((part) => part.reason === 'cant_do')) return reply.parts
+  const crosses = cantLines(reply.cant).map((line): PartView => ({ text: line.text, mark: 'cant', reason: 'cant_do', note: line.note || null, choices: [] }))
+  return [...reply.parts, ...crosses]
+}
+
+/** A set-up card from the Planner’s rows and parts. The person’s own words go with it, so a saved draft keeps them. */
 function startOf(reply: SetupCardReply | PartReply, typed: string): CardStart {
-  return { form: cardFrom(reply.name, reply.rows, typed), plan: null, draftId: null, similar: reply.similar }
+  return { form: cardFrom(reply.name, reply.rows, typed, partsOf(reply)), plan: null, draftId: null, similar: reply.similar }
 }
 
 function tagClass(tag: string): string {
@@ -45,32 +52,9 @@ function Card({ title, tag, children }: { title: string; tag?: string; children:
   )
 }
 
+/** A set-up card, and a part answer as one: what it can’t do is a cross on the card itself, with Ask the team. */
 export function SetupCardAnswer({ reply, typed }: { reply: SetupCardReply | PartReply; typed: string }) {
-  const left = reply.answer === 'part' ? cantLines(reply.cant) : []
-  return (
-    <>
-      <SetupCard start={startOf(reply, typed)} />
-      {left.length > 0 ? (
-        <Card title="What I can’t do yet">
-          <div className={styles['pcardPart']}>
-            <ul className={styles['lines']}>
-              {left.map((line) => (
-                <li key={line.text}>
-                  {line.text}
-                  {line.note ? <span className={styles['note']}>{line.note}</span> : null}
-                </li>
-              ))}
-            </ul>
-            {reply.answer === 'part' ? (
-              <div className={styles['buttons']}>
-                <AskTheTeam capability={reply.cant[0]?.system ?? left[0]?.text ?? 'part of a request'} starter={`I asked the Planner for: ${typed}\n\nWhat it can't do yet: ${left.map((line) => line.text).join('; ')}`} />
-              </div>
-            ) : null}
-          </div>
-        </Card>
-      ) : null}
-    </>
-  )
+  return <SetupCard start={startOf(reply, typed)} />
 }
 
 export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }) {

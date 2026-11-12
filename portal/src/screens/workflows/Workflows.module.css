@@ -890,3 +890,7 @@ button.rowLink {
   flex-basis: 100%;
   margin: 0;
 }
+
+.leftOut {
+  color: var(--muted);
+}
