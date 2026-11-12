@@ -2,6 +2,7 @@ import path from 'node:path'
 import type { Page } from '@playwright/test'
 import { expectAccessible } from '../support/axe'
 import { assertClean, watchPage } from '../support/test'
+import { holdRunAtWork, linkAnimations, marchReadings, runLinks } from './support/runLine'
 import { setMockGithubMode } from './support/stack'
 import { expect, test } from './support/test'
 import { devContext, OUT, shot } from './support/ui'
@@ -16,6 +17,8 @@ const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 const toggle = (page: Page) => page.locator('summary', { hasText: /what each agent did$/ })
 const agentsSaid = (page: Page) => page.getByRole('list', { name: 'What the agents said' })
 const answer = (page: Page, name: string) => page.locator('dl', { has: page.locator('dt', { hasText: new RegExp(`^${name}$`) }) })
+/** Every animation that ends has ended. The dashes marching into a yes that waits loop, as they should. */
+const settled = (page: Page) => page.waitForFunction(() => document.getAnimations().every((animation) => animation.effect?.getComputedTiming().iterations === Infinity))
 const steps = (page: Page) => page.getByRole('list', { name: 'Steps of this run' }).locator('li[data-state]')
 
 test('alice starts a check; bob opens the waiting run, sees the ticket it will create, approves, and watches it reach Done', async ({ browser, backend }, info) => {
@@ -49,6 +52,7 @@ test('alice starts a check; bob opens the waiting run, sees the ticket it will c
   await expect(main).toContainText(title)
   await expect(main).toContainText('This is exactly what will be written, and nothing else.')
   await expect(bob.locator('li[aria-current="step"]')).toContainText('Waiting for a yes')
+  expect(await runLinks(bob), 'slow amber dashes march into the yes that waits, and the links into the steps done are solid').toEqual(['solid', 'solid', 'wait+', 'todo', 'todo'])
   await shot(bob, info, 'p5-02-bob-waiting')
 
   const ticketsBefore = (await backend.tickets()).filter((ticket) => ticket.run_id === runId)
@@ -59,10 +63,14 @@ test('alice starts a check; bob opens the waiting run, sees the ticket it will c
   await expect(steps(bob)).toHaveCount(6)
   for (const step of await steps(bob).all()) await expect(step).toHaveAttribute('data-state', 'done')
   await expect(steps(bob).last()).toContainText('Done: Done')
+  await expect.poll(() => runLinks(bob), { message: 'every link is solid once the run is done' }).toEqual(['solid', 'solid', 'solid', 'solid', 'solid'])
   await expect(heading(bob), 'the agents’ chat stays folded, so after the yes focus moves to the heading').toBeFocused()
   await expect(toggle(bob)).toHaveText('Show what each agent did')
   await toggle(bob).click()
-  await expect(bob.locator('[data-gate-said]').last()).toHaveText('Bob approved.')
+  const said = bob.locator('[data-gate-said]').last()
+  await expect(said).toContainText('Bob approved.')
+  await expect(said.locator('time'), 'the yes has its time in the log, with its day only if the day changed').toHaveText(/^(\w{3} \d{1,2} \w{3}, )?\d{1,2}:\d{2}$/)
+  await expect(agentsSaid(bob).locator('time').first(), 'the first entry in the log says its day').toHaveText(/^\w{3} \d{1,2} \w{3}, \d{1,2}:\d{2}$/)
 
   const written = (await backend.tickets()).filter((ticket) => ticket.run_id === runId)
   expect(written.map((ticket) => ticket.title)).toEqual([title])
@@ -101,6 +109,7 @@ test('the link in a Teams message opens the run page at the decision', async ({ 
   await page.getByRole('button', { name: 'Decline' }).click()
   await expect(heading(page)).toHaveText('Declined, nothing was written', { timeout: 60_000 })
   await expect(page.getByRole('main')).toContainText('Bob declined, so nothing was written.')
+  expect(await runLinks(page), 'faint dots lead into the write that was not needed').toEqual(['solid', 'solid', 'solid', 'dead', 'solid'])
   expect((await backend.tickets()).filter((ticket) => ticket.run_id === runId)).toEqual([])
   assertClean(watch)
   await context.close()
@@ -131,7 +140,7 @@ for (const phone of [false, true]) {
 
     await expect(toggle(page)).toHaveText('Show what each agent did')
     await expect(agentsSaid(page), 'folded while the run waits for a yes').toBeHidden()
-    await page.waitForFunction(() => document.getAnimations().length === 0)
+    await settled(page)
     await expectAccessible(page, path.join(OUT, 'axe'), `run-waiting-bob-${width}`)
     const widths = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth])
     expect(widths[0], 'no sideways scroll').toBeLessThanOrEqual(widths[1] ?? 0)
@@ -161,7 +170,7 @@ for (const phone of [false, true]) {
     await expect(page.getByRole('button', { name: /^(Approve|Decline)/ }), 'no dead button').toHaveCount(0)
     await expect(answer(page, 'What happens')).toContainText('Nothing is written until an Approver says yes.')
     await expect(answer(page, 'Why')).toBeVisible()
-    await page.waitForFunction(() => document.getAnimations().length === 0)
+    await settled(page)
     await expectAccessible(page, path.join(OUT, 'axe'), `run-waiting-alice-${width}`)
     const widths = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth])
     expect(widths[0], 'no sideways scroll').toBeLessThanOrEqual(widths[1] ?? 0)
@@ -201,6 +210,47 @@ test('scenario C: a bob who pressed Show what each agent did before deciding sti
   await context.close()
 })
 
+test('the run line marches into the step at work by moving its dashes only, stops while the tab is hidden, and holds still with reduced motion', async ({ browser, backend }, info) => {
+  const { runId } = await backend.waitingRun('alice')
+  const frames = path.join(OUT, 'shots')
+  for (const reducedMotion of [false, true]) {
+    const context = await devContext(browser, 'alice', { reducedMotion })
+    const page = await context.newPage()
+    await holdRunAtWork(page, runId)
+    await page.goto(`/runs/${runId}`)
+    await expect(heading(page)).toHaveText('The agents are working')
+    const line = page.getByRole('list', { name: 'Steps of this run' })
+    const [before, after] = await marchReadings(page)
+    if (reducedMotion) {
+      expect(await runLinks(page), 'the same dashes into the step at work, holding still').toEqual(['solid', 'flow', 'todo', 'todo', 'todo'])
+      expect(after, 'the dashes do not move').toBe(before)
+      expect(await linkAnimations(page), 'no animation runs on the links').toEqual([])
+      await shot(page, info, 'r11-02-at-work-reduced')
+      for (const frame of [1, 2]) {
+        await line.screenshot({ path: path.join(frames, `r11-march-reduced-${String(frame)}.png`) })
+        await page.waitForTimeout(200)
+      }
+    } else {
+      expect(await runLinks(page), 'dashes march into the step at work, and the links into the steps done are solid').toEqual(['solid', 'flow+', 'todo', 'todo', 'todo'])
+      expect(after, 'the dashes move').not.toBe(before)
+      expect(await linkAnimations(page), 'the march moves the dashes by transform, and nothing else animates on the links').toEqual([['transform']])
+      await shot(page, info, 'r11-02-at-work')
+      for (const frame of [1, 2, 3]) {
+        await line.screenshot({ path: path.join(frames, `r11-march-${String(frame)}.png`) })
+        await page.waitForTimeout(200)
+      }
+      await page.evaluate(() => {
+        Object.defineProperty(document, 'hidden', { configurable: true, get: () => true })
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      const paused = await page.locator('[data-link="flow"]').evaluate((link) => getComputedStyle(link, '::before').animationPlayState)
+      expect(paused, 'the march stops while the tab is hidden').toBe('paused')
+    }
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
+    await context.close()
+  }
+})
+
 test('scenario B: a stopped run opens on the three answers, an Operator retries it on the page, and an Approver is told who can', async ({ browser, backend }, info) => {
   let runId = ''
   try {
@@ -234,12 +284,16 @@ test('scenario B: a stopped run opens on the three answers, an Operator retries 
   await expect(answer(page, 'Safe to retry')).toContainText('Yes. A retry runs the work again, and any write still waits for a yes.')
   await expect(answer(page, 'What was affected')).toContainText('Nothing was written.')
   await expect(answer(page, 'What happened')).toContainText('The failure text:')
+  expect(await runLinks(page), 'red dashes lead into the stop, and the links after it are plain').toEqual(['solid', 'stop', 'todo', 'todo', 'todo'])
   await expect(page.getByRole('main')).not.toContainText(/write key/i)
   await expect(toggle(page)).toHaveText('Show what each agent did')
   await expect(page.getByRole('button', { name: 'Report to support' }), 'a retryable stop offers Retry, not a report').toHaveCount(0)
   await shot(page, info, 'n15-b-stopped')
 
   await page.getByRole('button', { name: 'Retry the run' }).click()
+  await expect
+    .poll(() => runLinks(page), { message: 'mid-run, dashes march into the step at work and the links before it are solid', intervals: [100], timeout: 90_000 })
+    .toEqual(['solid', 'flow+', 'todo', 'todo', 'todo'])
   await expect(heading(page)).toHaveText('1 ticket is waiting for a yes', { timeout: 90_000 })
   await expect(page.getByRole('button', { name: 'Retry the run' })).toHaveCount(0)
   expect((await backend.tickets()).filter((ticket) => ticket.run_id === runId), 'a retry writes nothing before a yes').toEqual([])
