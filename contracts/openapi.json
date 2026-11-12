@@ -1969,6 +1969,14 @@
             "title": "Found",
             "type": "string"
           },
+          "not_checked": {
+            "description": "What this run couldn't check: the software a check couldn't read, by name, in the watchlist's order. Empty when it read everything, for a workflow of agents, and once the request is decided. It is for the reader and decides nothing.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Not Checked",
+            "type": "array"
+          },
           "owner": {
             "description": "Who set the workflow up.",
             "title": "Owner",
@@ -2051,6 +2059,7 @@
           "trigger",
           "retried_by",
           "found",
+          "not_checked",
           "requester",
           "questions"
         ],

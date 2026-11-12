@@ -249,6 +249,11 @@ class ApprovalView(WireModel):
         "decided, and it can be empty before. The digest covers only the actions, so a decision "
         "never covers this text."
     )
+    not_checked: list[str] = Field(
+        description="What this run couldn't check: the software a check couldn't read, by name, "
+        "in the watchlist's order. Empty when it read everything, for a workflow of agents, and "
+        "once the request is decided. It is for the reader and decides nothing."
+    )
     requester: UserId = Field(
         description="Who answers questions on this request: whoever started the run, or the "
         "workflow's owner when its schedule started it."
@@ -621,6 +626,7 @@ async def get_approval(
         trigger=run.spec.trigger,
         retried_by=[u for u in dict.fromkeys(run.retried_by) if u in detail.request.parties],
         found=detail.found,
+        not_checked=list(detail.not_checked),
         requester=detail.requester,
         questions=[question_view(q) for q in detail.questions],
     )

@@ -309,6 +309,7 @@ class AwaitingApproval:
     proposal_id: ProposalId
     approval_id: ApprovalId
     summary: str = ""
+    unread: tuple[str, ...] = ()
 
     def approve(self, now: datetime) -> Moved[Acting]:
         state = Acting(
@@ -340,6 +341,9 @@ class Proposed:
     deadline_at: datetime
     # The agents' summary, for the approval message. Runs saved before it existed load with "".
     summary: str = ""
+    # The software a check couldn't read, by name, for the approval's Not checked. Runs saved
+    # before it existed load with none.
+    unread: tuple[str, ...] = ()
 
     def open_approval(
         self, approval_id: ApprovalId, steps: list[ApprovalStepView], link: str
@@ -351,7 +355,7 @@ class Proposed:
             ApprovalRequestedData(approval_id=approval_id, steps=steps, link=link),
         )
         return Moved(
-            AwaitingApproval(self.run_id, self.proposal_id, approval_id, self.summary),
+            AwaitingApproval(self.run_id, self.proposal_id, approval_id, self.summary, self.unread),
             (
                 _step_started(StepName.ASK_APPROVAL, self.execution, 1),
                 requested,
@@ -408,6 +412,7 @@ class Working:
         proposer: Actor,
         summary: str,
         now: datetime,
+        unread: tuple[str, ...] = (),
     ) -> Moved[Proposed]:
         count = len(lines)
         proposed = PendingEvent(
@@ -426,6 +431,7 @@ class Working:
                 self.attempt,
                 deadline(Proposed, now),
                 summary,
+                unread,
             ),
             (
                 proposed,

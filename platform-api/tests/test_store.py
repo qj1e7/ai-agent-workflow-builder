@@ -59,6 +59,8 @@ STATES: list[RunState] = [
     Proposed(RUN, PRP, EXEC, 1, NOW),
     AwaitingApproval(RUN, PRP, APR),
     AwaitingApproval(RUN, PRP, APR, "LangGraph has a new release: 1.2.16."),
+    Proposed(RUN, PRP, EXEC, 1, NOW, "1 new release.", ("FastAPI", "PostgreSQL")),
+    AwaitingApproval(RUN, PRP, APR, "1 new release.", ("FastAPI", "PostgreSQL")),
     Acting(RUN, PRP, APR, 1, None, NOW),
     Acting(RUN, PRP, APR, 2, EXEC, NOW),
     Succeeded(
@@ -83,6 +85,12 @@ def test_a_run_saved_waiting_before_the_summary_was_kept_loads_with_none():
     name, data = dump_state(AwaitingApproval(RUN, PRP, APR, "dropped"))
     del data["summary"]
     assert load_state(name, data) == AwaitingApproval(RUN, PRP, APR, "")
+
+
+def test_a_run_saved_waiting_before_unread_software_was_kept_loads_with_none():
+    name, data = dump_state(AwaitingApproval(RUN, PRP, APR, "kept", ("FastAPI",)))
+    del data["unread"]
+    assert load_state(name, data) == AwaitingApproval(RUN, PRP, APR, "kept")
 
 
 PENDING = Pending(RUN, 1, None, NOW)

@@ -130,7 +130,13 @@ from platform_api.orchestration.store import (
     RunRecord,
     Store,
 )
-from platform_api.orchestration.watch import Reviewed, Unusable, all_could_not_read, review
+from platform_api.orchestration.watch import (
+    Reviewed,
+    Unusable,
+    all_could_not_read,
+    review,
+    unread_of,
+)
 from platform_api.orchestration.watch_store import WatchStore
 from platform_api.orchestration.write_actions import (
     AuthorizedWrite,
@@ -227,6 +233,8 @@ class ApprovalDetail:
     why_not: Refusal | None
     run: RunRecord
     found: str
+    not_checked: tuple[str, ...]
+    """What the run couldn't check, by name, while the request waits."""
     site_names: tuple[str, ...]
     """Where each action writes, as people read it, in the order of the proposal's actions."""
     questions: tuple[Question, ...]
@@ -619,6 +627,7 @@ class Orchestrator:
         output: TaskOutput,
     ) -> StepReply:
         reviewed: Reviewed | None = None
+        unread: tuple[str, ...] = ()
         task = record.spec.task
         if isinstance(task, CardsTask):
             match review_cards(task, output.proposed):
@@ -635,7 +644,7 @@ class Orchestrator:
                         uow, record, working, FailureReason.AGENT_ERROR, detail
                     )
                 case Reviewed() as reviewed:
-                    pass
+                    unread = unread_of(task, reviewed)
             intents = [ProposedIntent(p.kind, dict(p.fields), p.reason) for p in output.proposed]
             bound = bind(intents, record.spec.bindings)
         proposal: Proposal | None = None
@@ -656,7 +665,7 @@ class Orchestrator:
                 await self._store.insert_proposal(uow, proposal)
                 lines = tuple(describe(action) for action in actions)
                 moved = working.propose(
-                    proposal.id, proposal.digest, lines, PLANNER, summary, uow.now
+                    proposal.id, proposal.digest, lines, PLANNER, summary, uow.now, unread
                 )
                 reply = StepReply(True, "proposed", summary)
         if reviewed is not None:
@@ -871,10 +880,12 @@ class Orchestrator:
             decisions = await self._store.load_decisions(uow, approval_id)
             asked = await load_questions_for(uow, [approval_id])
         match record.state:
-            case AwaitingApproval(approval_id=waiting, summary=summary) if waiting == approval_id:
-                found = summary
+            case AwaitingApproval(approval_id=waiting, summary=summary, unread=unread) if (
+                waiting == approval_id
+            ):
+                found, not_checked = summary, unread
             case _:
-                found = ""
+                found, not_checked = "", ()
         return ApprovalDetail(
             request,
             proposal,
@@ -882,6 +893,7 @@ class Orchestrator:
             approvals.why_not(request, decisions, principal),
             record,
             found,
+            not_checked,
             tuple(site_name(action, self._gateway.sites) for action in proposal.actions),
             asked.get(approval_id, ()),
             requester_of(record.spec, record.started_by),

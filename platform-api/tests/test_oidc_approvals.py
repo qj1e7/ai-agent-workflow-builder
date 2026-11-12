@@ -26,7 +26,17 @@ from tests.oidc_support import (
     oidc_app,
     token,
 )
-from tests.support import CAROL, MOCK_OIDC_CONFIG, SPEC, SUMMARY
+from tests.support import (
+    CAROL,
+    FASTAPI,
+    LANGGRAPH,
+    MOCK_OIDC_CONFIG,
+    POSTGRES,
+    REDIS,
+    SPEC,
+    SUMMARY,
+    WATCHLIST_SPEC,
+)
 from tests.test_orchestrator import (
     ASK_APPROVAL,
     RUN_AGENTS,
@@ -34,6 +44,7 @@ from tests.test_orchestrator import (
     open_harness,
     work_leg_to_approval,
 )
+from tests.test_watchlist_runs import ONE_BEHIND, finding
 
 
 @pytest.fixture
@@ -132,7 +143,40 @@ async def test_the_approval_page_says_who_asked_and_what_the_agents_found(
         "retried_by": [],
     }
     assert view["found"] == SUMMARY
+    assert view["not_checked"] == [], "the check read every software"
     assert (view["you_can_decide"], view["why_not"]) == (True, None)
+
+
+@pytest.mark.anyio
+async def test_the_approval_names_the_software_the_check_could_not_read_while_it_waits(
+    harness: Harness, client: httpx.AsyncClient
+):
+    harness.agent.output = ONE_BEHIND.model_copy(
+        update={
+            "findings": [
+                finding(POSTGRES, "cant_check", None, "GitHub answered 503."),
+                finding(LANGGRAPH, "behind", "1.2.16"),
+                finding(FASTAPI, "cant_check", None, "GitHub answered 404 Not Found."),
+                finding(REDIS, "starting_point", "8.2.1"),
+            ]
+        }
+    )
+    run_id = (await harness.orchestrator.start_run(WATCHLIST_SPEC, OIDC_ALICE, "key-1")).run_id
+    await harness.orchestrator.tick()
+    await harness.orchestrator.on_step(run_id, RUN_AGENTS, N8nExecutionId("41"))
+    await harness.orchestrator.on_step(run_id, ASK_APPROVAL, N8nExecutionId("41"))
+    state = await harness.state(run_id)
+    assert isinstance(state, AwaitingApproval)
+    bob = bearer(token(claims=BOB_CLAIMS))
+    view = (await client.get(f"/api/v1/approvals/{state.approval_id}", headers=bob)).json()
+    assert view["not_checked"] == ["FastAPI", "PostgreSQL"], "named in the watchlist's order"
+    assert [a["fields"]["title"] for a in view["actions"]] == [
+        "Upgrade LangGraph from 1.2.14 to 1.2.16"
+    ]
+    declined = await decline(client, state.approval_id, bob, view["digest"], None)
+    assert declined.status_code == 201
+    view = (await client.get(f"/api/v1/approvals/{state.approval_id}", headers=bob)).json()
+    assert view["not_checked"] == [], "a decided request no longer carries it, as with found"
 
 
 @pytest.mark.anyio
