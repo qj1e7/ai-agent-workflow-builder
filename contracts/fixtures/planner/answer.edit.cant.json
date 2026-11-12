@@ -1,0 +1,17 @@
+{
+  "answer": "edit",
+  "use_case_id": "uc_01JB8",
+  "name": "Morning new-ticket check",
+  "watchlist": false,
+  "missing": null,
+  "software": null,
+  "choices": [],
+  "before": {
+    "day": "weekdays",
+    "at": "08:00"
+  },
+  "after": null,
+  "hour": null,
+  "cant": "only_schedule",
+  "holds_save": false
+}

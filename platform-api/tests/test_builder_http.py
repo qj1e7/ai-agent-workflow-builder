@@ -27,6 +27,7 @@ from platform_api.orchestration import (
     CheckPartResult,
     CheckWorkflowsAnswer,
     ConnectionCheck,
+    EditAnswer,
     ExampleSpec,
     Given,
     ModelProblem,
@@ -46,6 +47,7 @@ from platform_api.orchestration import (
     RunStarted,
     RuntimeDown,
     ScheduleBook,
+    ScheduleChange,
     SetupCardAnswer,
     SoftwareFacts,
     Standing,
@@ -466,12 +468,13 @@ def answered(answer: object) -> Answered:
     return Answered(answer=answer)  # type: ignore[arg-type]
 
 
-async def make_workflow(front: Front, name: str) -> str:
+async def make_workflow(front: Front, name: str, schedule: dict[str, str] | None = None) -> str:
     made = await front.builder.create_agent_use_case(
         Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice"),
         CreateAgentUseCase.model_validate(
             {
                 "name": name,
+                "schedule": schedule,
                 "instruction": "x",
                 "agents": [
                     {
@@ -662,7 +665,7 @@ async def test_the_other_kinds_come_back_as_they_were_read(front: Front):
     assert await say(front) == {"answer": "needs_me"}
 
 
-async def test_a_workflow_named_in_a_question_is_matched_to_the_one_that_has_the_name(front: Front):
+async def test_a_workflow_named_in_a_question_is_matched_by_whole_words(front: Front):
     first = await make_workflow(front, "Morning new-ticket check")
     await make_workflow(front, "Friday summary")
     front.answers.result = answered(CheckWorkflowsAnswer(workflow_words=None))
@@ -670,7 +673,7 @@ async def test_a_workflow_named_in_a_question_is_matched_to_the_one_that_has_the
     front.answers.result = answered(CheckWorkflowsAnswer(workflow_words="morning new-ticket check"))
     assert (await say(front))["use_case_id"] == first
     front.answers.result = answered(WhyStoppedAnswer(workflow_words="the morning check"))
-    assert (await say(front))["use_case_id"] is None
+    assert (await say(front))["use_case_id"] == first
     front.answers.result = answered(WhyStoppedAnswer(workflow_words="Morning"))
     assert (await say(front))["use_case_id"] == first
 
@@ -1080,3 +1083,139 @@ async def test_every_change_answers_for_the_person_who_made_it(front: Front):
         if name != "delete":
             assert {v.user_id for v in front.book.viewers if v} == {"alice"}, name
             assert None not in front.book.viewers, name
+
+
+WEEKDAYS_8 = {"day": "weekdays", "at": "08:00"}
+FRIDAY_16 = {"day": "friday", "at": "16:00"}
+
+
+async def edit_reply(front: Front, answer: EditAnswer) -> dict[str, object]:
+    front.answers.result = answered(answer)
+    return await say(front, "make the morning check run on Mondays only")
+
+
+async def test_an_edit_names_the_workflow_by_whole_words_with_before_and_after(front: Front):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    await make_workflow(front, "Weekly closed-ticket summary", FRIDAY_16)
+    monday = ScheduleChange(day="monday")
+    reply = await edit_reply(front, EditAnswer(workflow_words="morning check", schedule=monday))
+    assert reply == {
+        "answer": "edit",
+        "use_case_id": morning,
+        "name": "Morning new-ticket check",
+        "watchlist": False,
+        "missing": None,
+        "software": None,
+        "choices": [],
+        "before": WEEKDAYS_8,
+        "after": {"day": "monday", "at": "08:00"},
+        "hour": None,
+        "cant": None,
+        "holds_save": False,
+    }
+
+
+@pytest.mark.parametrize(
+    ("words", "change", "after"),
+    [
+        ("weekly summary", ScheduleChange(at="10:00"), {"day": "friday", "at": "10:00"}),
+        ("weekly one", ScheduleChange(day="every_day"), {"day": "every_day", "at": "16:00"}),
+        ("Weekly closed-ticket summary", ScheduleChange(weekly=True), FRIDAY_16),
+        ("weekly summary", ScheduleChange(hour=9), {"day": "friday", "at": None}),
+    ],
+)
+async def test_the_after_keeps_what_the_change_leaves_out(
+    front: Front, words: str, change: ScheduleChange, after: dict[str, str | None]
+):
+    await make_workflow(front, "Weekly closed-ticket summary", FRIDAY_16)
+    reply = await edit_reply(front, EditAnswer(workflow_words=words, schedule=change))
+    assert (reply["before"], reply["after"]) == (FRIDAY_16, after)
+    assert reply["hour"] == change.hour
+
+
+async def test_weekly_with_no_day_leaves_the_day_to_pick_when_it_runs_every_weekday(front: Front):
+    await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    weekly = EditAnswer(workflow_words="morning check", schedule=ScheduleChange(weekly=True))
+    assert (await edit_reply(front, weekly))["after"] == {"day": None, "at": "08:00"}
+
+
+async def test_words_that_name_no_workflow_are_missing_and_nothing_is_proposed(front: Front):
+    await make_workflow(front, "Weekly closed-ticket summary", FRIDAY_16)
+    monday = ScheduleChange(day="monday")
+    reply = await edit_reply(front, EditAnswer(workflow_words="morning check", schedule=monday))
+    assert (reply["use_case_id"], reply["missing"], reply["before"], reply["after"]) == (
+        None,
+        "morning check",
+        None,
+        None,
+    )
+
+
+async def test_a_word_inside_another_word_is_no_match(front: Front):
+    await make_workflow(front, "Checkout errors", FRIDAY_16)
+    reply = await edit_reply(front, EditAnswer(workflow_words="out", schedule=ScheduleChange()))
+    assert (reply["use_case_id"], reply["missing"]) == (None, "out")
+
+
+async def test_words_that_match_several_workflows_offer_them_as_choices(front: Front):
+    first = await make_workflow(front, "Friday summary", FRIDAY_16)
+    second = await make_workflow(front, "Friday follow-up", FRIDAY_16)
+    reply = await edit_reply(front, EditAnswer(workflow_words="Friday", schedule=ScheduleChange()))
+    assert (reply["use_case_id"], reply["missing"]) == (None, None)
+    assert sorted(c["use_case_id"] for c in cast(list[dict[str, str]], reply["choices"])) == sorted(
+        [first, second]
+    )
+
+
+async def test_a_watched_softwares_check_is_the_watchlists_schedule(front: Front):
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
+    await front.watchlist.add(alice, AddSoftware.model_validate(LANGGRAPH))
+    tuesday = ScheduleChange(day="tuesday")
+    edit = EditAnswer(workflow_words="LangGraph check", software="LangGraph", schedule=tuesday)
+    reply = await edit_reply(front, edit)
+    listed = (await front.builder.list_use_cases()).use_cases
+    [watchlist] = [u for u in listed if u.template == "software_watchlist"]
+    assert (reply["use_case_id"], reply["watchlist"], reply["missing"]) == (
+        watchlist.use_case_id,
+        True,
+        None,
+    )
+    assert watchlist.schedule is not None
+    assert reply["after"] == {"day": "tuesday", "at": watchlist.schedule.at}
+    software = EditAnswer(workflow_words="software watchlist check", schedule=tuesday)
+    assert (await edit_reply(front, software))["use_case_id"] == watchlist.use_case_id
+
+
+async def test_a_software_check_for_software_not_watched_is_missing_and_names_it(front: Front):
+    edit = EditAnswer(workflow_words="React check", software="React", schedule=ScheduleChange())
+    reply = await edit_reply(front, edit)
+    assert (reply["use_case_id"], reply["missing"], reply["software"]) == (
+        None,
+        "React check",
+        "React",
+    )
+
+
+async def test_a_change_the_chat_cant_make_names_the_workflow_and_proposes_nothing(front: Front):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    for cant in ("only_schedule", "how_often"):
+        edit = EditAnswer(workflow_words="morning check", cant=cant)  # type: ignore[arg-type]
+        reply = await edit_reply(front, edit)
+        assert (reply["use_case_id"], reply["cant"], reply["after"]) == (morning, cant, None)
+        assert reply["before"] == WEEKDAYS_8
+
+
+async def test_a_clash_holds_save_with_no_after(front: Front):
+    await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    reply = await edit_reply(front, EditAnswer(workflow_words="morning check", holds_save=True))
+    assert (reply["holds_save"], reply["after"]) == (True, None)
+
+
+async def test_an_edit_saves_nothing(front: Front):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    monday = ScheduleChange(day="monday")
+    await edit_reply(front, EditAnswer(workflow_words="morning check", schedule=monday))
+    versions = await front.client.get(f"/api/v1/use-cases/{morning}/versions", headers=ALICE)
+    assert [v["version"] for v in versions.json()["versions"]] == [1]
+    shown = await front.client.get(f"/api/v1/use-cases/{morning}", headers=ALICE)
+    assert shown.json()["schedule"]["day"] == "weekdays"

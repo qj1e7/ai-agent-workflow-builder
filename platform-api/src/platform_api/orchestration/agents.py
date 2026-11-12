@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Annotated, Any, Final, Literal, Protocol
+from typing import Annotated, Any, Final, Literal, Protocol, Self
 
 import httpx
-from pydantic import Field, StringConstraints, TypeAdapter, field_validator
+from pydantic import Field, StringConstraints, TypeAdapter, field_validator, model_validator
 
 from platform_api.monitoring import AgentEvent
 from platform_api.orchestration.schedule import AT_PATTERN, Day
@@ -576,6 +576,42 @@ class QuestionAnswer(WireModel):
     )
 
 
+type EditCant = Literal["only_schedule", "how_often"]
+
+
+class ScheduleChange(WireModel):
+    """When a request asks a workflow to run. A part it doesn't name is None, so the saved one
+    stays. `weekly` is once a week with no day named, and `hour` an hour with no am or pm."""
+
+    day: Day | None = None
+    weekly: bool = False
+    at: str | None = Field(default=None, pattern=AT_PATTERN)
+    hour: int | None = Field(default=None, ge=1, le=12)
+
+    @model_validator(mode="after")
+    def _one_of_each(self) -> Self:
+        if (self.day is not None and self.weekly) or (
+            self.at is not None and self.hour is not None
+        ):
+            raise ValueError("A day or a time is named once")
+        return self
+
+
+class EditAnswer(WireModel):
+    kind: Literal["edit"] = "edit"
+    workflow_words: str | None = Field(default=None, max_length=80)
+    software: str | None = Field(default=None, max_length=80)
+    schedule: ScheduleChange | None = None
+    cant: EditCant | None = None
+    holds_save: bool = False
+
+    @model_validator(mode="after")
+    def _a_cant_proposes_nothing(self) -> Self:
+        if self.cant is not None and (self.schedule is not None or self.holds_save):
+            raise ValueError("An edit the chat can't make proposes no schedule")
+        return self
+
+
 type PlannerAnswer = Annotated[
     SetupCardAnswer
     | PartAnswer
@@ -587,7 +623,8 @@ type PlannerAnswer = Annotated[
     | WhyStoppedAnswer
     | NeedsMeAnswer
     | AbilitiesAnswer
-    | QuestionAnswer,
+    | QuestionAnswer
+    | EditAnswer,
     Field(discriminator="kind"),
 ]
 
@@ -605,6 +642,8 @@ type PartReason = Literal[
     "with_a_yes",
     "needs_the_rest",
     "how_many_days",
+    "only_schedule",
+    "how_often",
 ]
 
 

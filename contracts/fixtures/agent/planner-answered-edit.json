@@ -1,0 +1,25 @@
+{
+  "status": "answered",
+  "answer": {
+    "kind": "edit",
+    "workflow_words": "morning new-ticket check",
+    "software": null,
+    "schedule": {
+      "day": "monday",
+      "weekly": false,
+      "at": null,
+      "hour": null
+    },
+    "cant": null,
+    "holds_save": false
+  },
+  "parts": [
+    {
+      "text": "Make the morning new-ticket check run on Mondays only",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ]
+}
