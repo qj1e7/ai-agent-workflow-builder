@@ -2089,6 +2089,18 @@
           "title": "Connections",
           "type": "integer"
         },
+        "declined": {
+          "description": "The person's own test runs an Approver declined.",
+          "minimum": 0,
+          "title": "Declined",
+          "type": "integer"
+        },
+        "questions": {
+          "description": "Questions Approvers asked the person on requests waiting for a yes.",
+          "minimum": 0,
+          "title": "Questions",
+          "type": "integer"
+        },
         "replies": {
           "minimum": 0,
           "title": "Replies",
@@ -2100,7 +2112,7 @@
           "type": "integer"
         },
         "total": {
-          "description": "The count Home shows under Needs you.",
+          "description": "The count Home shows under Needs you, the sum of the counts above.",
           "minimum": 0,
           "title": "Total",
           "type": "integer"
@@ -2113,6 +2125,8 @@
         "connections",
         "addresses",
         "replies",
+        "declined",
+        "questions",
         "total"
       ],
       "title": "NeedsYouFact",

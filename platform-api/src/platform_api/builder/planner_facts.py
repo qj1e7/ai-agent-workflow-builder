@@ -92,14 +92,15 @@ def watched_facts(software: Sequence[WatchedSoftwareView]) -> list[WatchedFact]:
 
 
 def needs_you_fact(home: HomeOut) -> NeedsYouFact:
-    """The same sum Home's Needs you shows (`needsTotal` in the Portal)."""
+    """The same sum Home's Needs you shows (`needsTotal` in the Portal), with every part named."""
     approvals = home.approvals_total
     confirmations = len(home.confirmations)
     stopped = home.stopped_total
     connections = len(home.connections)
     addresses = len(home.addresses)
     replies = len(home.replied)
-    others = home.declined_total + home.questions_for_me_total
+    declined = home.declined_total
+    questions = home.questions_for_me_total
     return NeedsYouFact(
         approvals=approvals,
         confirmations=confirmations,
@@ -107,7 +108,16 @@ def needs_you_fact(home: HomeOut) -> NeedsYouFact:
         connections=connections,
         addresses=addresses,
         replies=replies,
-        total=approvals + confirmations + stopped + connections + addresses + replies + others,
+        declined=declined,
+        questions=questions,
+        total=approvals
+        + confirmations
+        + stopped
+        + connections
+        + addresses
+        + replies
+        + declined
+        + questions,
     )
 
 
