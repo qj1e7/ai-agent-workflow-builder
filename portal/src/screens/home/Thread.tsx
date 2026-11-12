@@ -23,12 +23,16 @@ interface ThreadProps {
   readonly memory?: (messageId: number) => CardMemory
 }
 
-/** The one workflow an answer was about, which "it" in the next request means. A card in between, such as a draft, means no one workflow. */
-function aboutBefore(messages: readonly Message[], index: number): string | null {
+/**
+ * The one workflow an answer was about, which "it" in the next request means: the one it named, or the one she picked on its
+ * edit card. A card in between, such as a draft, means no one workflow.
+ */
+function aboutBefore(messages: readonly Message[], index: number, memory: ThreadProps['memory']): string | null {
   const before = messages.slice(0, index).findLast((message) => message.kind !== 'me' && message.kind !== 'thinking')
   if (before?.kind !== 'reply') return null
   const { reply } = before
-  return reply.answer === 'why_stopped' || reply.answer === 'check_workflows' || reply.answer === 'edit' ? reply.use_case_id : null
+  if (reply.answer === 'edit') return reply.use_case_id ?? memory?.(before.id).edit.kept()?.picks.useCaseId ?? null
+  return reply.answer === 'why_stopped' || reply.answer === 'check_workflows' ? reply.use_case_id : null
 }
 
 function ReplyBody({ message, now, page, say, about }: { message: Extract<Message, { kind: 'reply' }>; now: Date; page: Page; say: Say; about: string | null }) {
@@ -100,7 +104,7 @@ export function Thread({ thread, now, page, memory }: ThreadProps) {
                   ) : (
                     <NewestAnswer.Provider value={message.id === newest}>
                       <CardLive.Provider value={message.id === newest}>
-                        <ReplyBody message={message} now={now} page={page} say={message.id === newest ? sayFor(message.id) : () => undefined} about={aboutBefore(thread.messages, index)} />
+                        <ReplyBody message={message} now={now} page={page} say={message.id === newest ? sayFor(message.id) : () => undefined} about={aboutBefore(thread.messages, index, memory)} />
                       </CardLive.Provider>
                     </NewestAnswer.Provider>
                   )}
