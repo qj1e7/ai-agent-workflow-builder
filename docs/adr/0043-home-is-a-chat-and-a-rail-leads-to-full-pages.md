@@ -1,8 +1,10 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Home is a chat, and a rail leads to full pages
+
+The team lead accepted this decision on 12 Nov 2026, after all four redraw steps were merged (#204 to #208) and the spec and build plan followed them (#210).
 
 This amends ADR 0037 and the AI-native redesign spec. It keeps the Planner's answers, the capability registry and the approval gate as they are, and changes where things sit and how a conversation continues.
 

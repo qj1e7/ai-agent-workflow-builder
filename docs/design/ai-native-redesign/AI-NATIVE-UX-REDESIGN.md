@@ -1,6 +1,6 @@
 # AI-native UX redesign of the AI Workflow Builder
 
-Status: the build target since 7 Nov 2026. ADR 0043 (proposed) redrew the prototype as a chat with a rail, in four steps. All four steps merged between 10 and 12 Nov (#204 to #207), with step 4's follow-up (#208), and this spec follows them.
+Status: the build target since 7 Nov 2026. ADR 0043 (accepted 12 Nov) redrew the prototype as a chat with a rail, in four steps. All four steps merged between 10 and 12 Nov (#204 to #207), with step 4's follow-up (#208), and this spec follows them.
 
 This spec answers the team's AI-native redesign brief, which followed an independent review of the handover package. It changes the existing prototype. It does not start again or change the product's architecture. The redesigned prototype is `prototype.html` in this folder (version 4). The evidence for each change is in `UX-AUDIT.md`, the before and after numbers are in `USER-JOURNEY-COMPARISON.md`, and the build order is in `IMPLEMENTATION-PLAN.md`.
 
@@ -703,7 +703,7 @@ When the team adopted version 4, ADR 0037 gained its "Changes on 7 Nov 2026" sec
 
 ### 18.2 ADR 0043's changes to ADR 0037
 
-ADR 0043 (proposed) changes ADR 0037 in four places. They take effect when ADR 0043 is accepted.
+ADR 0043 changes ADR 0037 in four places. The team lead accepted it on 12 Nov 2026, and ADR 0037's "Changes on 12 Nov 2026" records them.
 
 1. **The chat is Home.** ADR 0037 rejected this because urgent items scroll away, and pinning them rebuilds Home inside the chat. The pinned line is one row, not Home again, and the rail keeps the lists one tap away (3).
 2. **Changes happen where the thing lives,** and now also by asking. The edit card changes a workflow's schedule from the chat (6.7). Every other change keeps its editor on the workflow's page, where the schedule editor also stays.
