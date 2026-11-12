@@ -488,7 +488,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
             )}
           </section>
         )}
-        <Versions useCase={useCase} viewer={viewer} now={now} nameOf={nameOf} say={(text) => setSaid((before) => ({ id: (before?.id ?? 0) + 1, text }))} />
+        <Versions useCase={useCase} now={now} nameOf={nameOf} />
         <Technical useCase={useCase} paused={paused} operator={viewer.operator} />
       </div>
       {asking ? (

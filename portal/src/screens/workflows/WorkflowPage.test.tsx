@@ -335,21 +335,22 @@ describe('the Versions list', () => {
 
   it('lists each version newest first, with when, who and what changed, as the prototype says it', () => {
     expect(versionsOf(render(CHANGED))).toBe(
-      'Version 2 Today, 9:10. Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00. This is the version running now. Undo version 2 ' +
+      'Version 2 Today, 9:10. Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00. This is the version running now. ' +
         'Version 1 The version it was turned on with.',
     )
   })
 
-  it('names an Undo as a new version that undid the one before, and offers Undo on the newest only', () => {
-    const html = render(UNDONE)
-    expect(versionsOf(html)).toMatch(/^Version 3 Today, 9:12\. Alice undid version 2, so it runs every weekday at 8:00 again\. This is the version running now\. Undo version 3 Version 2 Today, 9:10\. Alice changed .* to every Monday at 8:00\. Version 1/)
-    expect(buttons(html).filter((label) => label.startsWith('Undo'))).toEqual(['Undo version 3'])
+  it('names an Undo as a new version that undid the one before', () => {
+    expect(versionsOf(render(UNDONE))).toMatch(/^Version 3 Today, 9:12\. Alice undid version 2, so it runs every weekday at 8:00 again\. This is the version running now\. Version 2 Today, 9:10\. Alice changed .* to every Monday at 8:00\. Version 1/)
   })
 
-  it('lists the versions for an Approver too, read only, with no Undo', () => {
-    const html = render({ ...CHANGED, me: BOB })
-    expect(versionsOf(html)).toContain('Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00.')
-    expect(buttons(html).filter((label) => label.startsWith('Undo'))).toEqual([])
+  it('only reads, for an Operator and an Approver alike: Undo is on the chat’s edit card, as in the prototype', () => {
+    for (const me of [ALICE, BOB]) {
+      const html = render({ ...UNDONE, me })
+      expect(versionsOf(html)).toContain('Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00.')
+      expect(/<h2[^>]*>Versions<\/h2>[\s\S]*?<\/section>/.exec(mainOf(html))?.[0]).not.toMatch(/<button/)
+      expect(buttons(html).filter((label) => label.startsWith('Undo'))).toEqual([])
+    }
   })
 
   it('sits after Recent activity and before Technical details, as the spec orders the page', () => {

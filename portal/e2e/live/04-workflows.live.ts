@@ -246,7 +246,11 @@ async function saveSchedule(request: APIRequestContext, user: string, useCaseId:
   expect(response.status(), `${user} saves the schedule: ${await response.text()}`).toBe(200)
 }
 
-test('alice’s schedule changes publish versions the page lists, Undo publishes the one before again, a stale Undo is refused, and bob reads them without Undo', async ({ browser, request }, info) => {
+async function undo(request: APIRequestContext, user: string, useCaseId: string, version: number) {
+  return request.post(`/api/v1/use-cases/${useCaseId}/versions/${version}/undo`, { headers: { 'X-Dev-User': user }, data: { via: 'chat' } })
+}
+
+test('alice’s schedule changes publish versions the page lists read only, an Undo shows as a new version, a stale Undo is refused, and bob reads the same list', async ({ browser, request }, info) => {
   const workflow = await agentWorkflow(request, 'versions')
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
@@ -266,29 +270,29 @@ test('alice’s schedule changes publish versions the page lists, Undo publishes
   await saveSchedule(request, 'alice', workflow.id, { day: 'monday', at: '08:00', via: 'chat' })
   await page.reload()
   await expect(newest).toContainText('Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00. This is the version running now.')
-  await expect(page.getByRole('button', { name: /^Undo version/ }), 'Undo sits on the newest version only').toHaveCount(1)
 
-  await page.getByRole('button', { name: 'Undo version 3' }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'Undone' })).toHaveText(`Undone, as version 4. ${workflow.name} runs every weekday at 8:00 now.`)
-  await expect(page.getByRole('heading', { name: 'Versions', exact: true }), 'focus moves to the list, not onto the next Undo').toBeFocused()
+  const undone = await undo(request, 'alice', workflow.id, 3)
+  expect(undone.status(), `alice undoes version 3 from the chat: ${await undone.text()}`).toBe(200)
+  await page.reload()
   await expect(newest).toContainText('Alice undid version 3, so it runs every weekday at 8:00 again. This is the version running now.')
   await expect(page.getByRole('main')).toContainText('Every weekday at 8:00')
+  await expect(page.getByRole('button', { name: /^Undo/ }), 'the page only reads: Undo is on the chat’s edit card').toHaveCount(0)
 
   await saveSchedule(request, 'carol', workflow.id, { day: 'friday', at: '17:30' })
-  await page.getByRole('button', { name: 'Undo version 4' }).click()
-  await expect(page.getByText(/^Could not undo version 4\./)).toHaveText(`Could not undo version 4. ${workflow.name} changed again since, so Undo would throw that change away.`)
-  await expect(newest, 'the page reads the workflow again').toContainText('Carol changed when it runs from every weekday at 8:00 to every Friday at 17:30.')
-  const listed = await request.get(`/api/v1/use-cases/${workflow.id}/versions`, { headers: { 'X-Dev-User': 'alice' } })
-  expect(((await listed.json()) as { versions: unknown[] }).versions, 'the stale Undo published nothing').toHaveLength(5)
+  const stale = await undo(request, 'alice', workflow.id, 4)
+  expect(stale.status(), 'an Undo with a later version is refused').toBe(409)
+  expect(await stale.json()).toEqual({ detail: 'The workflow changed again since this version, so Undo would throw that change away.' })
+  await page.reload()
+  await expect(versionsList(page).getByRole('listitem'), 'the stale Undo published nothing').toHaveCount(5)
+  await expect(newest).toContainText('Carol changed when it runs from every weekday at 8:00 to every Friday at 17:30.')
 
   const bobContext = await devContext(browser, 'bob')
   const bob = await bobContext.newPage()
   await bob.goto(`/workflows/${workflow.id}`)
   await expect(versionsList(bob).getByRole('listitem')).toHaveCount(5)
-  await expect(bob.getByRole('button', { name: /^Undo/ }), 'an Approver gets no Undo').toHaveCount(0)
+  await expect(bob.getByRole('button', { name: /^Undo/ })).toHaveCount(0)
   await expectReadOnly(bob, 'this workflow')
 
-  await page.reload()
   for (const [who, reader] of [['alice', page], ['bob', bob]] as const) {
     for (const width of [1920, 1280, 900, 390]) {
       await reader.setViewportSize({ width, height: 900 })

@@ -522,15 +522,15 @@ button.rowLink {
 }
 
 .versions > li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
   padding: 12px 6px;
   border-bottom: 1px solid var(--rule);
 }
 
-.versions > li > span > span {
+.versions b {
+  display: block;
+}
+
+.versions span {
   display: block;
   color: var(--muted);
   font-size: 0.875rem;

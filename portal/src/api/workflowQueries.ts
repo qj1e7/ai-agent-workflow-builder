@@ -109,17 +109,3 @@ export function useVersions(useCaseId: string, version: number) {
     placeholderData: (before) => before,
   })
 }
-
-/** Undo publishes the schedule from before the version as a new version. The view that comes back names it. */
-export function useUndoVersion(useCaseId: string) {
-  const client = useApiClient()
-  const queryClient = useQueryClient()
-  const user = useCacheScope()
-  return useMutation({
-    mutationFn: async (version: number) =>
-      unwrap(
-        await client.POST('/api/v1/use-cases/{use_case_id}/versions/{version}/undo', { params: { path: { use_case_id: useCaseId, version } }, body: { via: 'page' } }),
-      ),
-    onSuccess: (view: UseCaseView) => applySavedView(queryClient, user, view),
-  })
-}

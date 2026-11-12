@@ -255,23 +255,6 @@ export function versionLine(version: VersionView, now: Date, nameOf: NameOf): st
   return `${when}${versionWords(version, nameOf)}${version.running ? ' This is the version running now.' : ''}`
 }
 
-/** Undo sits on the newest version only, for an Operator, and only when that version changed the schedule. */
-export function mayUndo(version: VersionView, viewer: Viewer): boolean {
-  return viewer.operator && version.running && version.change !== null
-}
-
-export function undoneWords(view: Pick<UseCaseView, 'name' | 'version' | 'schedule'>): string {
-  const now = view.schedule ? `runs ${runsAt(view.schedule)} now` : 'has no schedule now'
-  return `Undone, as version ${view.version}. ${view.name} ${now}.`
-}
-
-export function undoProblem(version: number, name: string, error: unknown, words: (error: unknown) => string): string {
-  const start = `Could not undo version ${version}.`
-  if (answered(error, 409)) return `${start} ${name} changed again since, so Undo would throw that change away.`
-  if (answered(error, 404)) return `${start} It was deleted.`
-  return `${start} ${words(error)}`
-}
-
 /** What the More actions menu holds, in order. Delete is last. A workflow with none shows no menu. */
 export type MenuAction = 'run' | 'schedule' | 'delete'
 
