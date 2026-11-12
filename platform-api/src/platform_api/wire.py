@@ -134,6 +134,13 @@ type DeclineReason = Annotated[
 ]
 """Why an Approver declined, such as "Wrong version". Optional, and only with a decline."""
 
+QUESTION_MAX = 1000
+
+type QuestionText = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=QUESTION_MAX)
+]
+"""A question on a request, or its answer. It is a message, and decides nothing."""
+
 
 class ApprovalStepView(WireModel):
     index: int

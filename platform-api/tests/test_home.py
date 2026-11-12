@@ -75,6 +75,8 @@ EMPTY = {
     "stopped_total": 0,
     "declined": [],
     "declined_total": 0,
+    "questions_for_me": [],
+    "questions_for_me_total": 0,
     "waiting_on_others": [],
     "waiting_on_others_total": 0,
     "drafts": [],
@@ -755,4 +757,4 @@ def test_a_declined_test_run_with_no_recorded_decline_is_left_out_rather_than_fa
     record = RunRecord(
         RunId("run_1"), replace(SPEC, test=True), UserId("alice"), NOW, NOW, 1, rejected, (), None
     )
-    assert runs_of([RunDetail(record, 0, None, None, ())], ALICE_NOW).declined == ()
+    assert runs_of([RunDetail(record, 0, None, None, ())], ALICE_NOW, {}).declined == ()

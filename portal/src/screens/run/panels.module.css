@@ -213,6 +213,127 @@
   font-weight: 600;
 }
 
+/* Questions on a request: the thread, read only once it is decided, and the boxes that ask and answer. */
+.asks {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: var(--r-well);
+  background: var(--sunk);
+}
+
+.asks h2 {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+/* A send moves focus here, as a page's h1 takes it, with no ring. */
+.asks h2:focus {
+  outline: none;
+}
+
+.asks ul {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.asks li {
+  display: grid;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+
+.asks li + li {
+  padding-top: 12px;
+  border-top: 1px solid var(--hair);
+}
+
+.asks .askbox {
+  margin-top: 4px;
+}
+
+.small {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.askbox {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field label {
+  font-weight: 600;
+}
+
+.field textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 10px 12px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-ctl);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--text-16);
+  line-height: 1.5;
+}
+
+.field textarea[aria-invalid='true'] {
+  border-color: var(--red-ink);
+}
+
+.help {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.fieldError {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--red-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.askLine {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.linkButton {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 0 -4px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--rail);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.linkButton:hover {
+  color: var(--ink);
+  text-decoration-color: currentColor;
+}
+
 @media (max-width: 600px) {
   .panel {
     padding: 16px;

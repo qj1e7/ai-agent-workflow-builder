@@ -1,9 +1,10 @@
 import path from 'node:path'
-import type { Page, TestInfo } from '@playwright/test'
+import type { Browser, BrowserContext, Page, TestInfo } from '@playwright/test'
 import { expectAccessible } from '../support/axe'
+import { tabTo } from '../support/keyboard'
 import { assertClean, watchPage } from '../support/test'
 import { holdRunAtWork, linkAnimations, marchReadings, runLinks } from './support/runLine'
-import { setMockGithubMode } from './support/stack'
+import { setMockGithubMode, type Backend } from './support/stack'
 import { expect, test } from './support/test'
 import { decline, declineReasons, devContext, OUT, shot } from './support/ui'
 
@@ -489,5 +490,199 @@ test('APPR-decide-nav: a half-picked decline reason does not survive leaving the
   await expect(declineReasons(page), 'the reasons are closed').toHaveCount(0)
   await expect(page.getByRole('button', { name: /^(Approve 1 ticket|Decline)$/ }), 'Approve and Decline are back').toHaveCount(2)
   expect((await backend.run(runId)).state, 'nothing was decided').toBe('awaiting_approval')
+  await context.close()
+})
+
+const WIDTHS = [1920, 1280, 900, 390] as const
+const questionsOf = (page: Page) => page.getByRole('region', { name: 'Questions' })
+const sentToast = (page: Page) => page.getByRole('status').filter({ hasText: /^Sent to / })
+const escaped = (words: string) => words.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+/** Lines of the thread in order, whatever space the page puts between them. */
+const inOrder = (...lines: string[]) => new RegExp(lines.map(escaped).join('\\s*'))
+/** Puts focus before the first control, as a fresh page has it, the way the prototype's scenario starts. */
+const focusTop = (page: Page) =>
+  page.evaluate(() => {
+    const probe = document.createElement('span')
+    probe.tabIndex = -1
+    document.body.prepend(probe)
+    probe.focus()
+    probe.remove()
+  })
+const ringShows = (page: Page) =>
+  page.evaluate(() => {
+    const el = document.activeElement
+    if (!el) return false
+    const style = getComputedStyle(el)
+    return (style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0) || style.boxShadow !== 'none'
+  })
+
+async function opened(browser: Browser, user: string, width: number): Promise<{ context: BrowserContext; page: Page }> {
+  const context = await devContext(browser, user, { phone: width === 390 })
+  const page = await context.newPage()
+  if (width !== 390) await page.setViewportSize({ width, height: 900 })
+  return { context, page }
+}
+
+async function asked(backend: Backend, approvalId: string, text: string, key: string): Promise<string> {
+  const question = await backend.post<{ question_id: string }>('bob', `/api/v1/approvals/${approvalId}/questions`, { text }, { 'Idempotency-Key': key })
+  return question.question_id
+}
+
+for (const width of WIDTHS) {
+  test(`APPR-ask at ${width} px: bob asks alice a question, the request keeps waiting, and her answer shows under it`, async ({ browser, backend }, info) => {
+    const question = 'Has the 1.2.16 change been tested with our login service?'
+    const { runId, approvalId } = await backend.waitingRun('alice')
+    const { context, page: bob } = await opened(browser, 'bob', width)
+    const watch = watchPage(bob)
+    await bob.goto(`/runs/${runId}`)
+    await expect(bob.getByRole('main')).toContainText('Not sure yet? Ask Alice a question')
+    await bob.getByRole('button', { name: 'Ask Alice a question' }).click()
+    const box = bob.getByRole('textbox', { name: 'Your question for Alice' })
+    await expect(box, 'focus is in the question box').toBeFocused()
+    await expect(bob.getByRole('main')).toContainText('Alice sees it on this request and can answer. It stays open, waiting for a yes.')
+    await bob.getByRole('button', { name: 'Send question' }).click()
+    await expect(bob.getByRole('main'), 'an empty question is asked for').toContainText('Type your question.')
+    await expect(box).toBeFocused()
+    await box.fill(question)
+    await expectAccessible(bob, path.join(OUT, 'axe'), `ask-box-${width}`)
+    await shot(bob, info, `r13-ask-box-bob-${width}`)
+    await bob.getByRole('button', { name: 'Send question' }).click()
+
+    const thread = questionsOf(bob)
+    await expect(thread).toContainText(inOrder(`You asked Alice: ${question}`, 'No answer yet. The request is still waiting for a yes.'))
+    await expect(thread.getByRole('heading', { name: 'Questions' }), 'focus is on the questions’ heading').toBeFocused()
+    await expect(sentToast(bob), 'a toast says it was sent').toHaveText('Sent to Alice. The request is still waiting for a yes.')
+    await expect(thread.getByRole('heading', { name: 'Questions' }), 'the toast leaves focus where it was').toBeFocused()
+    await expect(heading(bob), 'the request is still waiting for a yes').toHaveText('1 ticket is waiting for a yes')
+    await expect(bob.getByRole('button', { name: /^(Approve 1 ticket|Decline)$/ }), 'Approve and Decline are still there').toHaveCount(2)
+    expect((await backend.run(runId)).state, 'nothing was decided').toBe('awaiting_approval')
+
+    const view = await backend.get<{ questions: { question_id: string }[] }>('bob', `/api/v1/approvals/${approvalId}`)
+    const [sent] = view.questions
+    await backend.post('alice', `/api/v1/approvals/${approvalId}/questions/${sent?.question_id ?? ''}/answer`, { text: 'Yes. I checked it with the team on Friday.' })
+    await expect(thread, 'alice’s answer shows under it').toContainText(inOrder(question, 'Alice answered: Yes. I checked it with the team on Friday.'), { timeout: 15_000 })
+    await expect(heading(bob), 'still waiting for a yes').toHaveText('1 ticket is waiting for a yes')
+    await expect(bob.getByRole('button', { name: 'Approve 1 ticket' }), 'bob still decides').toHaveCount(1)
+    await thread.scrollIntoViewIfNeeded()
+    await shot(bob, info, `r13-thread-answered-bob-${width}`)
+    assertClean(watch)
+    await context.close()
+  })
+
+  test(`APPR-answer at ${width} px: alice finds bob’s question in Needs you, answers it on the request, and it still waits for someone else’s yes`, async ({ browser, backend }, info) => {
+    const question = 'Should 1.2.16 be in this check?'
+    const { runId, approvalId } = await backend.waitingRun('alice')
+    const questionId = await asked(backend, approvalId, question, `appr-answer-${width}`)
+    const { context, page: alice } = await opened(browser, 'alice', width)
+    const watch = watchPage(alice)
+
+    await alice.goto('/')
+    const onHome = alice.locator(`li[data-home-item="question:${questionId}"]`)
+    await expect(onHome).toContainText(/Bob asked you about /)
+    await expect(onHome).toContainText(`“${question}”`)
+    await onHome.scrollIntoViewIfNeeded()
+    await shot(alice, info, `r13-needs-you-home-alice-${width}`)
+
+    await alice.goto('/workflows')
+    const item = alice.locator(`li[data-home-item="question:${questionId}"]`)
+    await expect(item).toContainText(/Bob asked you about /)
+    await expect(item).toContainText('The request is still waiting for a yes')
+    await expect(item).toContainText(`“${question}”`)
+    await item.scrollIntoViewIfNeeded()
+    await shot(alice, info, `r13-needs-you-alice-${width}`)
+    await item.getByRole('link', { name: 'Answer Bob' }).click()
+
+    const box = alice.getByRole('textbox', { name: 'Your answer for Bob' })
+    await expect(box).toBeVisible()
+    await expect(alice.getByRole('main')).toContainText('It shows on this request. It doesn’t decide anything.')
+    await alice.getByRole('button', { name: 'Send answer' }).click()
+    await expect(alice.getByRole('main'), 'an empty answer is asked for').toContainText('Type your answer.')
+    await box.fill('Yes, it was released on Friday.')
+    await box.scrollIntoViewIfNeeded()
+    await expectAccessible(alice, path.join(OUT, 'axe'), `answer-box-${width}`)
+    await shot(alice, info, `r13-answer-box-alice-${width}`)
+    await alice.getByRole('button', { name: 'Send answer' }).click()
+
+    const thread = questionsOf(alice)
+    await expect(thread).toContainText(inOrder(`Bob asked you: ${question}`, 'You answered: Yes, it was released on Friday.'))
+    await expect(thread.getByRole('heading', { name: 'Questions' }), 'focus is on the questions’ heading').toBeFocused()
+    await expect(sentToast(alice), 'a toast says it was sent').toHaveText('Sent to Bob. The request is still waiting for a yes.')
+    await expect(alice.getByRole('button', { name: /^Approve/ }), 'alice still can’t approve her own run').toHaveCount(0)
+    expect((await backend.run(runId)).state, 'the answer decided nothing').toBe('awaiting_approval')
+    await shot(alice, info, `r13-thread-answered-alice-${width}`)
+    await alice.goto('/workflows')
+    await expect(alice.locator(`li[data-home-item="question:${questionId}"]`), 'the question leaves Needs you').toHaveCount(0)
+    assertClean(watch)
+    await context.close()
+  })
+
+  test(`APPR-thread-kept at ${width} px: once the request is decided its questions stay on the record, read only, for bob and alice`, async ({ browser, backend }, info) => {
+    const { runId, approvalId } = await backend.waitingRun('alice')
+    const questionId = await asked(backend, approvalId, 'Is this urgent?', `appr-kept-${width}`)
+    const { context, page: bob } = await opened(browser, 'bob', width)
+    await bob.goto(`/runs/${runId}`)
+    await expect(questionsOf(bob)).toContainText(inOrder('You asked Alice: Is this urgent?', 'No answer yet.'))
+    await decline(bob)
+    await expect(heading(bob)).toHaveText('Declined, nothing was written', { timeout: 60_000 })
+    const kept = inOrder('Is this urgent?', 'Not answered before the request was decided.')
+    await expect(questionsOf(bob), 'the question is on the record').toContainText(kept)
+    await expect(bob.getByRole('button', { name: 'Ask Alice a question' }), 'no way to ask').toHaveCount(0)
+    await expect(bob.getByRole('textbox'), 'no question or answer box').toHaveCount(0)
+    await questionsOf(bob).scrollIntoViewIfNeeded()
+    await shot(bob, info, `r13-decided-thread-bob-${width}`)
+    await context.close()
+
+    const { context: aliceContext, page: alice } = await opened(browser, 'alice', width)
+    await alice.goto(`/runs/${runId}`)
+    await expect(heading(alice)).toHaveText('Declined, nothing was written')
+    await expect(questionsOf(alice)).toContainText(inOrder('Bob asked you: Is this urgent?', 'Not answered before the request was decided.'))
+    await expect(alice.getByRole('textbox', { name: 'Your answer for Bob' }), 'alice has no answer box once it is decided').toHaveCount(0)
+    await questionsOf(alice).scrollIntoViewIfNeeded()
+    await shot(alice, info, `r13-decided-thread-alice-${width}`)
+    const late = await backend.send('POST', 'alice', `/api/v1/approvals/${approvalId}/questions/${questionId}/answer`, { text: 'No.' })
+    expect(late.status, 'the platform takes no answer after the decision').toBe(409)
+    await aliceContext.close()
+  })
+}
+
+test('KEYS-APPR: Ask, the decline reasons and Decline with the keyboard only, each with a visible focus', async ({ browser, backend }) => {
+  const { runId, approvalId } = await backend.waitingRun('alice')
+  const { context, page } = await opened(browser, 'bob', 1280)
+  await page.goto('/')
+  await expect(heading(page)).toBeVisible()
+  await focusTop(page)
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('button', { name: 'Skip to main content' })).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(heading(page), 'Skip to main content lands on the heading').toBeFocused()
+  const review = page.locator(`li[data-home-item="approval:${approvalId}"]`).getByRole('link', { name: 'Review and decide' })
+  await tabTo(page, review, 40)
+  expect(await ringShows(page), 'Review and decide has a visible focus').toBe(true)
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(new RegExp(`/runs/${runId}$`))
+  await expect(heading(page)).toHaveText('1 ticket is waiting for a yes')
+  await tabTo(page, page.getByRole('button', { name: 'Ask Alice a question' }))
+  expect(await ringShows(page), 'Ask has a visible focus').toBe(true)
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('textbox', { name: 'Your question for Alice' }), 'focus is in the box').toBeFocused()
+  await page.keyboard.type('Is the LangGraph upgrade urgent?')
+  await tabTo(page, page.getByRole('button', { name: 'Send question' }), 5)
+  expect(await ringShows(page), 'Send question has a visible focus').toBe(true)
+  await page.keyboard.press('Enter')
+  await expect(questionsOf(page)).toContainText('You asked Alice: Is the LangGraph upgrade urgent?')
+  await tabTo(page, page.getByRole('button', { name: 'Decline' }), 20)
+  await page.keyboard.press('Enter')
+  const why = declineReasons(page)
+  await expect(why.getByRole('button', { name: 'Not this week' }), 'focus is on the first reason').toBeFocused()
+  expect(await ringShows(page), 'the first reason has a visible focus').toBe(true)
+  await page.keyboard.press('Tab')
+  await page.keyboard.press('Enter')
+  await expect(why.getByRole('button', { name: 'Wrong version' }), 'the pick keeps focus').toBeFocused()
+  await expect(why.locator('[aria-pressed="true"]')).toHaveText('Wrong version')
+  await tabTo(page, why.getByRole('button', { name: 'Decline' }), 5)
+  expect(await ringShows(page), 'Decline has a visible focus').toBe(true)
+  await page.keyboard.press('Enter')
+  await expect(heading(page)).toHaveText('Declined, nothing was written', { timeout: 60_000 })
+  await expect(page.getByRole('main')).toContainText('Declined by Bob. Nothing was written. Reason: Wrong version.')
   await context.close()
 })

@@ -1307,6 +1307,31 @@
         "title": "AnswerIn",
         "type": "object"
       },
+      "AnswerView": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "title": "By",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "by",
+          "at"
+        ],
+        "title": "AnswerView",
+        "type": "object"
+      },
       "Answers": {
         "additionalProperties": false,
         "properties": {
@@ -1949,6 +1974,19 @@
             "title": "Owner",
             "type": "string"
           },
+          "questions": {
+            "description": "What Approvers asked the requester, the first asked first. A question decides nothing. Once the request is decided they stay here, read only.",
+            "items": {
+              "$ref": "#/components/schemas/QuestionView"
+            },
+            "title": "Questions",
+            "type": "array"
+          },
+          "requester": {
+            "description": "Who answers questions on this request: whoever started the run, or the workflow's owner when its schedule started it.",
+            "title": "Requester",
+            "type": "string"
+          },
           "retried_by": {
             "description": "Who retried the run, as the approval gate counts them for this request, each named once, in the order of their first retry. The gate refuses owner, started_by and these people as their own work.",
             "items": {
@@ -2012,7 +2050,9 @@
           "started_by",
           "trigger",
           "retried_by",
-          "found"
+          "found",
+          "requester",
+          "questions"
         ],
         "title": "ApprovalView",
         "type": "object"
@@ -4541,6 +4581,18 @@
             "title": "Following Up Total",
             "type": "integer"
           },
+          "questions_for_me": {
+            "description": "Questions Approvers asked this person on requests they started, or whose schedule they own, while each request waits for a yes and the question has no answer. The newest first. They are part of Needs you. At most 10.",
+            "items": {
+              "$ref": "#/components/schemas/QuestionItem"
+            },
+            "title": "Questions For Me",
+            "type": "array"
+          },
+          "questions_for_me_total": {
+            "title": "Questions For Me Total",
+            "type": "integer"
+          },
           "replied": {
             "description": "This person's own requests that someone on the team has replied to since they last opened them, the newest reply first, each with that reply. They are part of Needs you, and a request leaves this list when its asker opens it. Done requests leave after 30 days.",
             "items": {
@@ -4589,6 +4641,8 @@
           "waiting_on_others_total",
           "declined",
           "declined_total",
+          "questions_for_me",
+          "questions_for_me_total",
           "drafts",
           "following_up",
           "following_up_total",
@@ -6525,6 +6579,97 @@
         "title": "ProposedView",
         "type": "object"
       },
+      "QuestionAnswerIn": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "$ref": "#/components/schemas/QuestionText",
+            "description": "The requester's answer, 1 to 1000 characters."
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "QuestionAnswerIn",
+        "type": "object"
+      },
+      "QuestionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "$ref": "#/components/schemas/QuestionText",
+            "description": "The question for the requester, 1 to 1000 characters."
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "QuestionIn",
+        "type": "object"
+      },
+      "QuestionItem": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "asked_at": {
+            "format": "date-time",
+            "title": "Asked At",
+            "type": "string"
+          },
+          "asked_by": {
+            "title": "Asked By",
+            "type": "string"
+          },
+          "asked_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the Approver who asked is no longer on the list.",
+            "title": "Asked By Name"
+          },
+          "question_id": {
+            "title": "Question Id",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question_id",
+          "approval_id",
+          "run_id",
+          "use_case_id",
+          "use_case_name",
+          "asked_by",
+          "asked_by_name",
+          "asked_at",
+          "text"
+        ],
+        "title": "QuestionItem",
+        "type": "object"
+      },
       "QuestionReply": {
         "additionalProperties": false,
         "properties": {
@@ -6572,6 +6717,53 @@
           "about_software"
         ],
         "title": "QuestionReply",
+        "type": "object"
+      },
+      "QuestionText": {
+        "maxLength": 1000,
+        "minLength": 1,
+        "type": "string"
+      },
+      "QuestionView": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The requester's answer. Null until they answer, and for good when the request was decided first."
+          },
+          "asked_at": {
+            "format": "date-time",
+            "title": "Asked At",
+            "type": "string"
+          },
+          "asked_by": {
+            "title": "Asked By",
+            "type": "string"
+          },
+          "question_id": {
+            "title": "Question Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question_id",
+          "asked_by",
+          "asked_at",
+          "text",
+          "answer"
+        ],
+        "title": "QuestionView",
         "type": "object"
       },
       "Readiness": {
@@ -11122,6 +11314,276 @@
           }
         ],
         "summary": "Decide",
+        "tags": [
+          "orchestration"
+        ]
+      }
+    },
+    "/api/v1/approvals/{approval_id}/questions": {
+      "post": {
+        "description": "Asks the requester a question on a request that waits for a yes. Only someone who may decide the open step may ask. A question decides nothing: the request keeps waiting, and its steps and decisions stay as they were. The same Idempotency-Key from the same person, with the same words, answers the question it asked before.",
+        "operationId": "ask_question_api_v1_approvals__approval_id__questions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "title": "Approval Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionView"
+                }
+              }
+            },
+            "description": "This Idempotency-Key asked it before"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/RefusalOut"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorBody"
+                    }
+                  ],
+                  "title": "Response 403 Ask Question Api V1 Approvals  Approval Id  Questions Post"
+                }
+              }
+            },
+            "description": "This person cannot decide the open step, so cannot ask, or is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such approval"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "This Idempotency-Key already asked a question with other words"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Ask Question",
+        "tags": [
+          "orchestration"
+        ]
+      }
+    },
+    "/api/v1/approvals/{approval_id}/questions/{question_id}/answer": {
+      "post": {
+        "description": "Answers a question on a request. Only the requester may answer: whoever started the run, or the workflow's owner when its schedule started it. Each question takes one answer, while the request waits. An answer decides nothing: the request keeps waiting for someone else's yes. The same answer sent again answers the question as it is.",
+        "operationId": "answer_question_api_v1_approvals__approval_id__questions__question_id__answer_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "title": "Approval Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "question_id",
+            "required": true,
+            "schema": {
+              "title": "Question Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestionAnswerIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionView"
+                }
+              }
+            },
+            "description": "The same answer was already kept"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only the requester can answer, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such question on this approval"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request was decided before the answer, or the question has another answer"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Answer Question",
         "tags": [
           "orchestration"
         ]
