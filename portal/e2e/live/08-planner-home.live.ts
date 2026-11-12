@@ -52,6 +52,12 @@ async function platformNeeds(backend: Backend, user: string): Promise<number> {
   return home.approvals_total + home.stopped_total + home.confirmations.length + home.connections.length + home.addresses.length + home.replied.length
 }
 
+/** Alice asks the team for something and bob replies, so the reply sits in her Needs you until she opens it. */
+async function teamReplied(backend: Backend): Promise<void> {
+  const made = await backend.post<{ request_id: string }>('alice', '/api/v1/team-requests', { kind: 'ask_the_team', about: { capability: 'email.send' }, note: `Please add email ${randomUUID().slice(0, 6)}` }, { 'Idempotency-Key': randomUUID() }, [201])
+  await backend.post('bob', `/api/v1/team-requests/${made.request_id}/replies`, { text: 'Not on the plan yet, we will tell you.' }, undefined, [201])
+}
+
 /** A draft alice saved from a set-up card, which Resume reopens as that card. */
 async function cardDraft(backend: Backend, label: string): Promise<string> {
   const id = randomUUID()
@@ -624,7 +630,7 @@ test.describe('the chat after the first message', () => {
 
   test('SHELL-pinned: the pinned line appears with the first message, the box docks, and N more plus one is the count everywhere', async ({ browser, backend }, info) => {
     await backend.freshWatchlist('alice', [REDIS])
-    await backend.waitingRun('alice')
+    await teamReplied(backend)
     const repair = await jiraDown(backend)
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
@@ -637,7 +643,7 @@ test.describe('the chat after the first message', () => {
     await expect(box(page), 'an answer with no card hands focus back to the box').toBeFocused()
     await expect(main(page).getByRole('heading', { level: 2, name: /^Needs you/ }), 'Needs you gives way to the pinned line').toHaveCount(0)
     const total = await needsTotal(page)
-    expect(total, 'a waiting run and Jira not answering are two needs').toBeGreaterThan(1)
+    expect(total, 'a reply from the team and Jira not answering are two needs').toBeGreaterThan(1)
     expect(total, 'the rail’s count is the platform’s').toBe(await platformNeeds(backend, 'alice'))
     await expect(pinned(page).getByRole('link', { name: /^Open/ })).toHaveAttribute('href', /^\/(runs|settings|software|workflows)/)
     await expect(pinned(page).getByRole('link', { name: `${String(total - 1)} more that need you` })).toHaveAttribute('href', '/workflows')
