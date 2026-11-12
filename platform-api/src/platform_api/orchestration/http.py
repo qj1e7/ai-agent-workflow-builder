@@ -251,8 +251,9 @@ class ApprovalView(WireModel):
     )
     not_checked: list[str] = Field(
         description="What this run couldn't check: the software a check couldn't read, by name, "
-        "in the watchlist's order. Empty when it read everything, for a workflow of agents, and "
-        "once the request is decided. It is for the reader and decides nothing."
+        "in the watchlist's order. Empty when it read everything and for a workflow of agents. "
+        "It stays once the request is decided, so the record shows what the Approver was told. "
+        "It is for the reader and decides nothing."
     )
     requester: UserId = Field(
         description="Who answers questions on this request: whoever started the run, or the "

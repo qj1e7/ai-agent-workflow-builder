@@ -61,6 +61,14 @@ STATES: list[RunState] = [
     AwaitingApproval(RUN, PRP, APR, "LangGraph has a new release: 1.2.16."),
     Proposed(RUN, PRP, EXEC, 1, NOW, "1 new release.", ("FastAPI", "PostgreSQL")),
     AwaitingApproval(RUN, PRP, APR, "1 new release.", ("FastAPI", "PostgreSQL")),
+    Acting(RUN, PRP, APR, 1, EXEC, NOW, ("FastAPI",)),
+    Rejected(RUN, PRP, APR, UserId("bob"), 0, ("FastAPI",)),
+    Failed(
+        RUN,
+        Stage.ACTING,
+        Failure(FailureReason.WRITE_FAILED, "slow", True),
+        ResumeAct(PRP, APR, 2, ("FastAPI",)),
+    ),
     Acting(RUN, PRP, APR, 1, None, NOW),
     Acting(RUN, PRP, APR, 2, EXEC, NOW),
     Succeeded(
@@ -87,10 +95,40 @@ def test_a_run_saved_waiting_before_the_summary_was_kept_loads_with_none():
     assert load_state(name, data) == AwaitingApproval(RUN, PRP, APR, "")
 
 
-def test_a_run_saved_waiting_before_unread_software_was_kept_loads_with_none():
-    name, data = dump_state(AwaitingApproval(RUN, PRP, APR, "kept", ("FastAPI",)))
+@pytest.mark.parametrize(
+    ("kept", "saved_before"),
+    [
+        (
+            AwaitingApproval(RUN, PRP, APR, "kept", ("FastAPI",)),
+            AwaitingApproval(RUN, PRP, APR, "kept"),
+        ),
+        (Acting(RUN, PRP, APR, 1, EXEC, NOW, ("FastAPI",)), Acting(RUN, PRP, APR, 1, EXEC, NOW)),
+        (
+            Rejected(RUN, PRP, APR, UserId("bob"), 0, ("FastAPI",)),
+            Rejected(RUN, PRP, APR, UserId("bob"), 0),
+        ),
+        (
+            Succeeded(RUN, Outcome.WRITTEN, (), ("FastAPI",)),
+            Succeeded(RUN, Outcome.WRITTEN, ()),
+        ),
+    ],
+    ids=lambda s: type(s).__name__,
+)
+def test_a_run_saved_before_unread_software_was_kept_loads_with_none(
+    kept: RunState, saved_before: RunState
+):
+    name, data = dump_state(kept)
     del data["unread"]
-    assert load_state(name, data) == AwaitingApproval(RUN, PRP, APR, "kept")
+    assert load_state(name, data) == saved_before
+
+
+def test_a_failed_write_saved_before_unread_software_was_kept_loads_with_none():
+    failure = Failure(FailureReason.WRITE_FAILED, "slow", True)
+    name, data = dump_state(
+        Failed(RUN, Stage.ACTING, failure, ResumeAct(PRP, APR, 2, ("FastAPI",)))
+    )
+    del data["resume"]["unread"]
+    assert load_state(name, data) == Failed(RUN, Stage.ACTING, failure, ResumeAct(PRP, APR, 2))
 
 
 PENDING = Pending(RUN, 1, None, NOW)

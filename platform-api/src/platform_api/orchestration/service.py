@@ -114,6 +114,7 @@ from platform_api.orchestration.runs import (
     referee,
     state_name,
     step_finished,
+    unread_in,
 )
 from platform_api.orchestration.spec import (
     CardsTask,
@@ -234,7 +235,7 @@ class ApprovalDetail:
     run: RunRecord
     found: str
     not_checked: tuple[str, ...]
-    """What the run couldn't check, by name, while the request waits."""
+    """What the run couldn't check, by name, kept once the request is decided."""
     site_names: tuple[str, ...]
     """Where each action writes, as people read it, in the order of the proposal's actions."""
     questions: tuple[Question, ...]
@@ -880,12 +881,10 @@ class Orchestrator:
             decisions = await self._store.load_decisions(uow, approval_id)
             asked = await load_questions_for(uow, [approval_id])
         match record.state:
-            case AwaitingApproval(approval_id=waiting, summary=summary, unread=unread) if (
-                waiting == approval_id
-            ):
-                found, not_checked = summary, unread
+            case AwaitingApproval(approval_id=waiting, summary=summary) if waiting == approval_id:
+                found = summary
             case _:
-                found, not_checked = "", ()
+                found = ""
         return ApprovalDetail(
             request,
             proposal,
@@ -893,7 +892,7 @@ class Orchestrator:
             approvals.why_not(request, decisions, principal),
             record,
             found,
-            not_checked,
+            unread_in(record.state),
             tuple(site_name(action, self._gateway.sites) for action in proposal.actions),
             asked.get(approval_id, ()),
             requester_of(record.spec, record.started_by),

@@ -176,7 +176,8 @@ async def test_the_approval_names_the_software_the_check_could_not_read_while_it
     declined = await decline(client, state.approval_id, bob, view["digest"], None)
     assert declined.status_code == 201
     view = (await client.get(f"/api/v1/approvals/{state.approval_id}", headers=bob)).json()
-    assert view["not_checked"] == [], "a decided request no longer carries it, as with found"
+    assert view["not_checked"] == ["FastAPI", "PostgreSQL"], "the decided record keeps it"
+    assert view["found"] == "", "found still goes once it is decided"
 
 
 @pytest.mark.anyio

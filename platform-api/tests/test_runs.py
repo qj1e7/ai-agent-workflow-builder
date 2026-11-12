@@ -38,6 +38,7 @@ from platform_api.orchestration.runs import (
     WriteDone,
     created_events,
     referee,
+    unread_in,
 )
 from platform_api.shared import (
     WRITE_STOP_ADVICE,
@@ -361,3 +362,18 @@ def test_a_written_ticket_carries_where_people_open_it():
 def test_an_event_from_before_links_still_reads_with_no_url():
     old = {"connector": "jira", "operation": "create_ticket", "external_reference": "MOCK-1"}
     assert WriteActionDoneData.model_validate({**old, "approved_by": ["bob"]}).url is None
+
+
+def test_the_software_a_check_could_not_read_stays_with_the_run_to_its_end():
+    unread = ("FastAPI", "PostgreSQL")
+    waiting = AwaitingApproval(RUN, PROPOSAL, APPROVAL, "summary", unread)
+    acting = waiting.approve(NOW).state.claim(HOLDER)
+    failed = acting.fail(WRITE_DOWN).state
+    retried = failed.retry(ALICE, LATER).state
+    assert isinstance(retried, Acting)
+    written = retried.succeed(HOLDER, (TICKET,), "Created MOCK-1").state
+    declined = waiting.reject(UserId("bob"), "Bob", 0).state
+    for state in (waiting, acting, failed, retried, written, declined):
+        assert unread_in(state) == unread, type(state).__name__
+    assert unread_in(NOTHING_WRITTEN) == ()
+    assert unread_in(FAILED) == (), "a failed check never reached an approval"

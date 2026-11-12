@@ -121,6 +121,7 @@ class ResumeAct:
     proposal_id: ProposalId
     approval_id: ApprovalId
     attempt: int
+    unread: tuple[str, ...] = ()
 
 
 def _step_started(step: StepName, execution: N8nExecutionId, try_number: int) -> PendingEvent:
@@ -211,9 +212,15 @@ class Failed:
             case ResumeWork(attempt):
                 pending = Pending(self.run_id, attempt, None, deadline(Pending, now))
                 return Moved(pending, _retried(by, Leg.WORK, attempt))
-            case ResumeAct(proposal_id, approval_id, attempt):
+            case ResumeAct(proposal_id, approval_id, attempt, unread):
                 acting = Acting(
-                    self.run_id, proposal_id, approval_id, attempt, None, deadline(Acting, now)
+                    self.run_id,
+                    proposal_id,
+                    approval_id,
+                    attempt,
+                    None,
+                    deadline(Acting, now),
+                    unread,
                 )
                 return Moved(acting, _retried(by, Leg.ACT, attempt))
 
@@ -233,6 +240,7 @@ class Succeeded:
     run_id: RunId
     outcome: Outcome
     written: tuple[WriteDone, ...]
+    unread: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -242,6 +250,7 @@ class Rejected:
     approval_id: ApprovalId
     by: UserId
     step: int
+    unread: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -252,6 +261,7 @@ class Acting:
     attempt: int
     claimant: N8nExecutionId | None
     deadline_at: datetime
+    unread: tuple[str, ...] = ()
 
     def claim(self, execution: N8nExecutionId) -> Acting:
         return replace(self, claimant=execution)
@@ -287,7 +297,7 @@ class Acting:
             RunSucceededData(outcome=Outcome.WRITTEN.value),
         )
         return Moved(
-            Succeeded(self.run_id, Outcome.WRITTEN, written),
+            Succeeded(self.run_id, Outcome.WRITTEN, written, self.unread),
             (
                 *done,
                 step_finished(StepName.WRITE_ACTION, execution, 1, "written", detail),
@@ -296,7 +306,7 @@ class Acting:
         )
 
     def fail(self, failure: Failure) -> Moved[Failed]:
-        resume = ResumeAct(self.proposal_id, self.approval_id, self.attempt + 1)
+        resume = ResumeAct(self.proposal_id, self.approval_id, self.attempt + 1, self.unread)
         return Moved(
             Failed(self.run_id, Stage.ACTING, failure, resume),
             (run_failed(Stage.ACTING, failure),),
@@ -313,7 +323,13 @@ class AwaitingApproval:
 
     def approve(self, now: datetime) -> Moved[Acting]:
         state = Acting(
-            self.run_id, self.proposal_id, self.approval_id, 1, None, deadline(Acting, now)
+            self.run_id,
+            self.proposal_id,
+            self.approval_id,
+            1,
+            None,
+            deadline(Acting, now),
+            self.unread,
         )
         return Moved(state, (_leg_dispatched(Leg.ACT, 1),))
 
@@ -328,7 +344,8 @@ class AwaitingApproval:
             RunRejectedData(by=by, step=step, reason=reason),
         )
         return Moved(
-            Rejected(self.run_id, self.proposal_id, self.approval_id, by, step), (rejected,)
+            Rejected(self.run_id, self.proposal_id, self.approval_id, by, step, self.unread),
+            (rejected,),
         )
 
 
@@ -501,6 +518,24 @@ type RunState = (
     Pending | Working | Proposed | AwaitingApproval | Acting | Succeeded | Rejected | Failed
 )
 type ActiveState = Pending | Working | Proposed | Acting
+
+
+def unread_in(state: RunState) -> tuple[str, ...]:
+    """The software the run's check couldn't read. It is kept from the proposal to the run's end,
+    so a decided request still says what its Approver was told."""
+    match state:
+        case (
+            Proposed(unread=unread)
+            | AwaitingApproval(unread=unread)
+            | Acting(unread=unread)
+            | Rejected(unread=unread)
+            | Succeeded(unread=unread)
+            | Failed(resume=ResumeAct(unread=unread))
+        ):
+            return unread
+        case _:
+            return ()
+
 
 STATE_NAMES: Mapping[type[RunState], RunStateName] = {
     Pending: "pending",
