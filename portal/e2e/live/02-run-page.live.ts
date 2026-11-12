@@ -637,9 +637,17 @@ for (const width of WIDTHS) {
 }
 
 test('KEYS-APPR: Ask, the decline reasons and Decline with the keyboard only, each with a visible focus', async ({ browser, backend }) => {
-  const { runId } = await backend.waitingRun('alice')
+  const { runId, approvalId } = await backend.waitingRun('alice')
   const { context, page } = await opened(browser, 'bob', 1280)
-  await page.goto(`/runs/${runId}`)
+  await page.goto('/')
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('button', { name: 'Skip to main content' })).toBeFocused()
+  await page.keyboard.press('Enter')
+  const review = page.locator(`li[data-home-item="approval:${approvalId}"]`).getByRole('link', { name: 'Review and decide' })
+  await tabTo(page, review, 40)
+  expect(await ringShows(page), 'Review and decide has a visible focus').toBe(true)
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(new RegExp(`/runs/${runId}$`))
   await expect(heading(page)).toHaveText('1 ticket is waiting for a yes')
   await tabTo(page, page.getByRole('button', { name: 'Ask Alice a question' }))
   expect(await ringShows(page), 'Ask has a visible focus').toBe(true)
