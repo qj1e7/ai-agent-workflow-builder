@@ -2407,3 +2407,12 @@ def test_a_task_beside_an_edit_is_kept_to_ask_on_its_own_and_reads_no_schedule(
 )
 def test_an_hour_that_can_only_be_one_time_is_that_time(task: str, change: ScheduleChange):
     assert edited(read(asks_about="change"), task).schedule == change
+
+
+def test_a_change_to_a_softwares_check_is_an_edit_even_when_read_as_a_watch():
+    task = "Make the React check run on Mondays only"
+    fields = read(belongs_on_watchlist=True, watchlist_word="check", software="React")
+    answer = edited(fields, task, None)
+    assert (answer.workflow_words, answer.software) == ("React check", "React")
+    assert answer.schedule == ScheduleChange(day="monday")
+    assert not isinstance(answer_of(fields, "Make a React check every Monday"), EditAnswer)

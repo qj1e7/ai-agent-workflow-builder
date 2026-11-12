@@ -262,11 +262,17 @@ def edit_of(read: TaskRead, text: str, facts: PlannerFacts | None) -> EditAnswer
 
 
 def _orders_one(read: TaskRead, text: str, facts: PlannerFacts | None) -> bool:
-    """Whether a clause orders a change with a verb and names one of the person's workflows, or
-    the workflow the reading named."""
+    """Whether a clause orders a change with a verb and names one of the person's workflows, the
+    workflow the reading named, or a software's check, as "make the React check run daily"."""
     named = [s for s in [_said(read.workflow_words, text)] if s is not None]
     for name in [w.name for w in (facts.workflows if facts is not None else None) or []]:
         named += _name_runs(text, name)
+    software = whole_word_of(text, read.software)
+    named += [
+        m.span()
+        for m in REFERENCE.finditer(text)
+        if software is not None and whole_word_of(m.group(0), software) is not None
+    ]
     left = _blank(text, named)
     return any(
         any(start <= a < end for a, _ in named)
