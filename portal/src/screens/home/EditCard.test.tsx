@@ -21,7 +21,7 @@ import type { EditReply, Me, UseCaseView, VersionView, WatchlistView } from '../
 import { chatScheduleOptions, undoOptions } from '../../api/workflowQueries'
 import type { Page } from './AnswerCards'
 import { CardMemoryContext, newCardMemory, type EditKept } from './cardMemory'
-import { editView, NO_PICKS, openSay, pressSave, publishedVersion, type Read, type Schedule } from './edit'
+import { doneLine, doneSay, editView, NO_PICKS, openSay, pressSave, publishedVersion, sinceUnversioned, type Read, type Schedule } from './edit'
 import { EditCard } from './EditCard'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
@@ -226,6 +226,18 @@ describe('the edit card once she has pressed', () => {
     expect(sentence(html)).toBe('Saved. Next run Mon 23 Nov, 9:00. You now own this schedule, so you can’t approve its checks.')
     expect(text(html)).toContain('This changed when all 6 software on the watchlist are checked, and made you the owner of this schedule.')
     expect(buttons(html)).toEqual(['Change it on the Software page'])
+  })
+
+  it('a save that kept no version says so once the schedule changed again, and stops naming a next run it no longer has', () => {
+    const watch = { use_case_id: 'uc_01WL', name: 'Keep our software up to date', watchlist: true, before: { day: 'monday' as const, at: '09:00' }, after: { day: 'every_day' as const, at: '09:00' } }
+    const phase = { kind: 'saved' as const, target: watch, after: { day: 'every_day' as const, at: '09:00' }, version: null }
+    const since = sinceUnversioned(phase.after, read({ day: 'friday', at: '17:30' }))
+    expect(since).toBe('Changed again since.')
+    expect(sinceUnversioned(phase.after, read(phase.after)), 'still what she saved').toBeNull()
+    expect(sinceUnversioned(phase.after, { kind: 'reading' }), 'not read yet').toBeNull()
+    const now = { paused: false, next: 'Mon 23 Nov, 9:00' }
+    expect(doneSay(phase, now, since, undefined)).toBe('Saved. Changed again since.')
+    expect(doneLine(phase, now, since)).toEqual({ words: 'Saved. Changed again since.', undo: false })
   })
 
   it('never mind: changes nothing and says so, with no card', () => {

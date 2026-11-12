@@ -161,6 +161,11 @@ export function changedSince(live: Pick<UseCaseView, 'version'> | undefined, ver
   return `Changed again since${where}.`
 }
 
+/** For a save that kept no version: whether the schedule read now is still the one she saved. No version names where it changed. */
+export function sinceUnversioned(after: Schedule, read: Read): string | null {
+  return read.kind === 'read' && !sameSchedule(read.schedule, after) ? 'Changed again since.' : null
+}
+
 /** What follows a save, as the workflow is now: paused, or running from its next run. */
 export interface Now {
   readonly paused: boolean
@@ -179,7 +184,7 @@ export function doneSay(phase: Exclude<Phase, { kind: 'open' }>, now: Now, since
       return 'No problem. Nothing changed.'
     case 'saved': {
       const name = phase.target.name
-      if (since !== null && phase.version !== null) return `Saved as version ${String(phase.version)}. ${since}`
+      if (since !== null) return phase.version !== null ? `Saved as version ${String(phase.version)}. ${since}` : `Saved. ${since}`
       if (phase.target.watchlist) return `Saved.${now.next ? ` Next run ${now.next}.` : ''} You now own this schedule, so you can’t approve its checks.`
       return now.paused ? `Saved. ${name} ${PAUSED}` : `Saved. ${name} runs ${repeatWords(phase.after)} now.`
     }
@@ -193,7 +198,7 @@ export function doneSay(phase: Exclude<Phase, { kind: 'open' }>, now: Now, since
 export function doneLine(phase: Extract<Phase, { kind: 'saved' | 'undone' }>, now: Now, since: string | null): { readonly words: string; readonly undo: boolean } {
   if (phase.kind === 'undone') return { words: `Undone, as version ${String(phase.version)}.${since ? ` ${since}` : ''}`, undo: false }
   const later = now.paused ? 'It’s paused, so it won’t run until you resume it.' : now.next ? `Next run ${now.next}.` : ''
-  if (phase.version === null) return { words: `Saved.${later ? ` ${later}` : ''}`, undo: false }
+  if (phase.version === null) return { words: since !== null ? `Saved. ${since}` : `Saved.${later ? ` ${later}` : ''}`, undo: false }
   if (since !== null) return { words: `Saved as version ${String(phase.version)}. ${since}`, undo: false }
   return { words: `Saved as version ${String(phase.version)}.${later ? ` ${later}` : ''}`, undo: true }
 }

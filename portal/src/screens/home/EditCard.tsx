@@ -16,11 +16,12 @@ import {
   doneSay,
   editView,
   firstPicks,
-  targetOf,
   openSay,
   pressSave,
   publishedVersion,
   scheduleText,
+  sinceUnversioned,
+  targetOf,
   type Now,
   type Phase,
   type Picks,
@@ -96,7 +97,7 @@ export function EditCard({ reply, typed, page, say, now, about }: EditCardProps)
   const watchlist = useWatchlist({ enabled: target?.watchlist === true || (view.kind === 'missing' && view.software !== null) })
 
   const mine = phase.kind === 'saved' ? phase.version : phase.kind === 'undone' ? phase.version : null
-  const since = mine === null ? null : changedSince(live.data, versions.data, mine)
+  const since = mine !== null ? changedSince(live.data, versions.data, mine) : phase.kind === 'saved' ? sinceUnversioned(phase.after, read) : null
   const nextAt = target?.watchlist ? watchlist.data?.schedule?.next_at : live.data?.next_run_at
   const zone = target?.watchlist ? watchlist.data?.schedule?.time_zone : live.data?.schedule?.time_zone
   const state: Now = { paused: live.data?.state === 'paused', next: nextAt ? nextRunAt(nextAt, now, zone) : null }
