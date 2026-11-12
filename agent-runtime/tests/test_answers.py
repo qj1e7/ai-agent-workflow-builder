@@ -2548,3 +2548,9 @@ def test_a_watch_request_the_reading_called_a_change_is_read_as_the_watch():
 def test_it_alone_names_no_workflow():
     answer = edited(read(asks_about="change", workflow_words="it"), "make it daily", None)
     assert answer.workflow_words is None
+
+
+def test_a_change_that_names_no_workflow_and_no_it_is_not_an_edit():
+    answer = answer_of(read(asks_about="change"), "delete every closed ticket", WORKFLOWS)
+    assert isinstance(answer, CantAnswer)
+    assert isinstance(answer_of(read(asks_about="change"), "pause it", WORKFLOWS), EditAnswer)

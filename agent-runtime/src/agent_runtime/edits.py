@@ -125,6 +125,8 @@ REFERENCE: Final = re.compile(
 one"."""
 ARTICLE: Final = re.compile(r"^(?:the|my|our|that|this|a|an)\s+", re.IGNORECASE)
 PRONOUNS: Final = frozenset({"it", "this", "that", "them", "this one", "that one"})
+PRONOUN: Final = re.compile(r"\b(?:it|them|this\s+one|that\s+one)\b", re.IGNORECASE)
+"""A workflow named only as the one just talked about, as "make it daily"."""
 TIME: Final = re.compile(
     r"(?<![\d.:])\b\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b|(?<![\d.:])\b\d{1,2}:\d{2}\b|"
     r"\bat\s+\d{1,2}\b(?![:.]\d)|\b(?:noon|midday|midnight)\b",
@@ -307,6 +309,9 @@ def edit_of(read: TaskRead, text: str, facts: PlannerFacts | None) -> EditAnswer
         if read.asks_about not in STATE_KINDS and not _orders_one(read, text, facts):
             return None
     target = _target(read, text, facts)
+    if target is None and not PRONOUN.search(text):
+        # "delete every closed ticket" changes tickets, not a workflow: it is a task's can't.
+        return None
     names = _Names(_names(read, text, facts), None if target is None else _said(target, text))
     schedule, cant, clashes = _schedule_of(text, names)
     return EditAnswer(
