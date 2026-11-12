@@ -737,6 +737,6 @@ describe('the Versions words', () => {
     )
     expect(undoneWords({ name: 'Nudge', version: 3, schedule: null })).toBe('Undone, as version 3. Nudge has no schedule now.')
     const stale = new ApiError(409, { detail: 'changed' })
-    expect(undoProblem(2, 'Nudge', stale, errorWords)).toBe('Could not undo version 2. Nudge changed again since, so Undo would throw that change away.')
+    expect(undoProblem(2, 'Nudge', stale, words)).toBe('Could not undo version 2. Nudge changed again since, so Undo would throw that change away.')
   })
 })
