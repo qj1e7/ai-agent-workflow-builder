@@ -700,19 +700,34 @@ test.describe('what a run didn’t check', () => {
     await connectMockModel(String(baseURL))
   })
 
-  /** The requests these tests leave waiting. Bob declines them, and the watchlist goes back to LangGraph, so later tests find Needs you as it was. */
+  /**
+   * What these tests leave behind: requests that wait, and Carol's workflows. Bob declines the requests, Carol deletes her
+   * workflows and the watchlist goes back to LangGraph, so later tests find Needs you as it was. A cleanup that fails is
+   * logged, never thrown over the test's own result. There is no route that deletes an agent card, so the cards stay.
+   */
   const leftWaiting: string[] = []
+  const carolsWorkflows: string[] = []
   test.afterAll(async ({ backend }) => {
-    for (const approvalId of leftWaiting.splice(0)) {
-      const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
-      await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest })
+    const tidy = async (what: string, step: () => Promise<unknown>) => {
+      try {
+        await step()
+      } catch (error) {
+        console.warn(`cleanup: ${what} failed: ${String(error)}`)
+      }
     }
-    await backend.freshWatchlist('alice')
+    for (const approvalId of leftWaiting.splice(0)) {
+      await tidy(`declining ${approvalId}`, async () => {
+        const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
+        await backend.send('POST', 'bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest })
+      })
+    }
+    for (const useCaseId of carolsWorkflows.splice(0)) await tidy(`deleting ${useCaseId}`, () => backend.send('DELETE', 'carol', `/api/v1/use-cases/${useCaseId}`))
+    await tidy('resetting the watchlist', () => backend.freshWatchlist('alice'))
   })
 
   const REDIS_UNREAD = 'Redis couldn’t be read, so no ticket is proposed for it.'
   const NO_REGISTRIES = 'The platform can’t yet check registries or security advisories.'
-  const NO_DETAILS = 'The platform can’t yet see a ticket\'s component or priority.'
+  const NO_DETAILS = ['The platform can’t yet see a ticket’s component or priority.', 'The platform can’t yet look past the 50 newest tickets.']
   /** The Not checked answer. The inner locator of has is matched inside the dl, so it starts from the page. */
   const unchecked = (scope: Page | Locator) => scope.locator('dl', { has: ('page' in scope ? scope.page() : scope).locator('dt', { hasText: /^Not checked$/ }) })
   const box = (page: Page) => page.getByLabel('Ask the Planner about software versions')
@@ -758,6 +773,7 @@ test.describe('what a run didn’t check', () => {
       undefined,
       [201],
     )
+    if (user === 'carol') carolsWorkflows.push(made.use_case_id)
     const runId = await backend.checkNow(user, made.use_case_id)
     await backend.waitForState(runId, ['awaiting_approval'])
     const approvalId = await backend.approvalIdOf(runId)
@@ -769,6 +785,7 @@ test.describe('what a run didn’t check', () => {
   async function carolsCheck(backend: Backend): Promise<WaitingRun> {
     const agents = [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }]
     const made = await backend.post<{ use_case_id: string }>('carol', '/api/v1/agent-use-cases', { name: `Carol’s check ${randomUUID().slice(0, 6)}`, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents }, undefined, [201])
+    carolsWorkflows.push(made.use_case_id)
     const runId = await backend.checkNow('carol', made.use_case_id)
     await backend.waitForState(runId, ['awaiting_approval'])
     const approvalId = await backend.approvalIdOf(runId)
@@ -809,13 +826,14 @@ test.describe('what a run didn’t check', () => {
     const registry = (await backend.get<{ capabilities: { id: string; state: string }[] }>('bob', '/api/v1/capabilities')).capabilities
     expect(registry.find((c) => c.id === 'jira.find_by_detail')?.state, 'the registry says the agents can’t see a component or priority').toBe('planned')
     expect(registry.find((c) => c.id === 'jira.find_by_update')?.state, 'and that they can see when a ticket was updated, its type and its owner').toBe('ready')
+    expect(registry.find((c) => c.id === 'jira.find_older')?.state, 'and that a search stops at the 50 newest tickets').toBe('planned')
     for (const user of ['bob', 'alice'] as const) {
       for (const width of WIDTHS) {
         const { context, page } = await opened(browser, user, width)
         const watch = watchPage(page)
         await page.goto(`/runs/${runId}`)
         await expect(heading(page)).toHaveText('1 ticket is waiting for a yes')
-        await expect(unchecked(page)).toHaveText(inOrder('Not checked', NO_DETAILS))
+        await expect(unchecked(page)).toHaveText(inOrder('Not checked', ...NO_DETAILS))
         await expect(unchecked(page), 'nothing about software on a ticket summary').not.toContainText(/registries|couldn’t be read/)
         await expect(page.getByRole('button', { name: /^(Approve|Decline)/ }), 'carol started it, so both may decide').toHaveCount(2)
         await noSidewaysScroll(page)
@@ -831,7 +849,7 @@ test.describe('what a run didn’t check', () => {
     test.slow()
     const runs = [
       { kind: 'software', run: await carolsCheck(backend), lines: [NO_REGISTRIES] },
-      { kind: 'summary', run: await summaryWaiting(backend, 'carol'), lines: [NO_DETAILS] },
+      { kind: 'summary', run: await summaryWaiting(backend, 'carol'), lines: NO_DETAILS },
     ] as const
     for (const { kind, run, lines } of runs) {
       for (const width of WIDTHS) {
@@ -876,6 +894,29 @@ test.describe('what a run didn’t check', () => {
     await page.keyboard.press('Enter')
     await expect(heading(page)).toHaveText('1 ticket created in Jira', { timeout: 60_000 })
     await expect(page.getByRole('main')).toContainText('Bob approved, and the platform created the ticket.')
+    await expect(unchecked(page), 'the decided record keeps what Bob was told, read only').toContainText(inOrder('Not checked', REDIS_UNREAD, NO_REGISTRIES))
+    expect((await backend.get<{ not_checked: string[] }>('alice', `/api/v1/approvals/${approvalId}`)).not_checked).toEqual(['Redis'])
+    await shot(page, info, 'r14-not-checked-decided-bob-1280')
+    await context.close()
+  })
+
+  test('Not checked waits for the registry, so Approve never moves under the pointer at 390 px', async ({ browser, backend }) => {
+    const { runId, approvalId } = await backend.waitingRunWithUnread('alice')
+    leftWaiting.push(approvalId)
+    const { context, page } = await opened(browser, 'bob', 390)
+    await page.route('**/api/v1/capabilities', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 2_000))
+      await route.continue()
+    })
+    await page.goto(`/runs/${runId}`)
+    const approve = page.getByRole('button', { name: 'Approve 1 ticket' })
+    await expect(approve).toBeVisible({ timeout: 15_000 })
+    expect(await page.getByText(NO_REGISTRIES).isVisible(), 'the registry line is there before Approve shows').toBe(true)
+    /** Where Approve sits inside the decision, which scrolling the page does not change. */
+    const place = () => approve.evaluate((el) => el.getBoundingClientRect().top - (el.closest('#decision')?.getBoundingClientRect().top ?? 0))
+    const before = await place()
+    await page.waitForLoadState('networkidle')
+    expect(await place(), 'Approve stays where it first showed').toBe(before)
     await context.close()
   })
 })

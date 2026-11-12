@@ -186,11 +186,16 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
     const box = page.getByLabel('Ask the Planner about software versions')
     const newest = page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
     const panel = page.locator('#side-panel')
-    const views: readonly (readonly [string, string, () => Locator, () => Locator])[] = [
-      ['workflow', 'Check my workflows', () => newest.getByRole('button', { name: facts.workflow, exact: true }), () => panel.getByText('Next run')],
-      ['approval', 'What needs me?', () => newest.locator(`[data-opens="run:${facts.request}"]`), () => panel.getByText('The platform can’t yet check registries or security advisories.')],
-      ['run', `Why did ${facts.stopped.name} stop?`, () => newest.locator(`[data-opens="run:${facts.stopped.runId}"]`), () => panel.getByText('Safe to retry')],
-      ['software', 'Monitor LangGraph releases', () => newest.getByRole('button', { name: 'Open it' }), () => panel.getByText('Checked by')],
+    const views: readonly (readonly [string, string, () => Locator, () => readonly Locator[]])[] = [
+      ['workflow', 'Check my workflows', () => newest.getByRole('button', { name: facts.workflow, exact: true }), () => [panel.getByText('Next run')]],
+      [
+        'approval',
+        'What needs me?',
+        () => newest.locator(`[data-opens="run:${facts.request}"]`),
+        () => [panel.getByRole('button', { name: 'Decline' }), panel.getByText('The platform can’t yet check registries or security advisories.')],
+      ],
+      ['run', `Why did ${facts.stopped.name} stop?`, () => newest.locator(`[data-opens="run:${facts.stopped.runId}"]`), () => [panel.getByText('Safe to retry')]],
+      ['software', 'Monitor LangGraph releases', () => newest.getByRole('button', { name: 'Open it' }), () => [panel.getByText('Checked by')]],
     ]
     const found: string[] = []
     try {
@@ -200,7 +205,7 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
         await box.press('Enter')
         await expect(newest).toHaveAttribute('data-answer', 'true')
         await opener().click()
-        await expect(ready()).toBeVisible({ timeout: 20_000 })
+        for (const shown of ready()) await expect(shown).toBeVisible({ timeout: 20_000 })
         await expect(panel).toHaveAttribute('role', width > 900 ? 'complementary' : 'dialog')
         await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined)
         // The shot comes first, because the cover check scrolls each control into view.
