@@ -39,14 +39,12 @@ from agent_runtime.reading import (
 )
 
 NOT_FOLLOWED: Final = "I didn't follow this part."
-ASK_ON_ITS_OWN: Final = "Ask this on its own, and I'll answer it."
 OWN_TIME: Final = (
     "The Software watchlist checks all your software together, on one schedule. I can't give "
     "one software its own time yet."
 )
 REASON_OF_NOTE: Final[dict[str, PartReason]] = {
     NOT_FOLLOWED: "not_followed",
-    ASK_ON_ITS_OWN: "ask_on_its_own",
     OWN_TIME: "own_time",
 }
 """The can't rows whose note is a reason the Portal words itself. Any other note is the
@@ -182,11 +180,11 @@ def _sets_up(answer: PlannerAnswer | None) -> bool:
 def _crosses(read: TaskRead | None, text: str, answer: PlannerAnswer) -> list[_Cross]:
     found: list[_Cross] = []
     if isinstance(answer, RefusedAnswer):
-        at = _locate(text, answer.said)
+        at = locate(text, answer.said)
         if at is not None:
             found.append(_Cross(*at, "skip_approval"))
     for row in _rows(answer):
-        at = _locate(text, row.text)
+        at = locate(text, row.text)
         if at is None:
             continue
         if row.system is not None and row.text.casefold() == row.system.casefold():
@@ -201,7 +199,7 @@ def _crosses(read: TaskRead | None, text: str, answer: PlannerAnswer) -> list[_C
     return found
 
 
-def _locate(text: str, quote: str) -> Span | None:
+def locate(text: str, quote: str) -> Span | None:
     """Where the request writes a row's words, spacing and case aside. A row cut at its limit
     is found by the words it kept."""
     words = re.findall(r"\w+", quote.removesuffix("…"))

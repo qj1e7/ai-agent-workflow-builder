@@ -61,7 +61,7 @@ from agent_runtime.contract import (
 )
 from agent_runtime.drafting import ask_model
 from agent_runtime.follow_ups import follow_up_of, watch_offer_of
-from agent_runtime.parts import NOT_FOLLOWED, OWN_TIME, parts_of
+from agent_runtime.parts import NOT_FOLLOWED, OWN_TIME, locate, parts_of
 from agent_runtime.planner import (
     CANT_YET,
     NOTE_LIMIT,
@@ -654,8 +654,7 @@ def _change_clauses(text: str) -> list[str]:
 
 def _stretch(request: str, words: str) -> tuple[int, int]:
     """Where the request writes `words`, or an empty stretch at its end, which reaches nothing."""
-    at = request.casefold().find(words.casefold())
-    return (len(request), len(request)) if at < 0 else (at, at + len(words))
+    return locate(request, words) or (len(request), len(request))
 
 
 def _change_row(clause: str) -> CantRow:
