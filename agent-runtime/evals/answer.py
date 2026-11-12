@@ -31,7 +31,7 @@ from agent_runtime.contract import (
 from agent_runtime.parts import parts_of
 from agent_runtime.planner import said_in, visible_words
 from agent_runtime.questions import QuestionReply, answer_of_reply, question_messages
-from agent_runtime.reading import POLITE, clauses_of
+from agent_runtime.reading import polite
 from evals.checks import (
     Check,
     check,
@@ -52,12 +52,15 @@ _CLOCK_WORDS = re.compile(
     re.IGNORECASE,
 )
 _NO_UPDATE = re.compile(
-    r"\b(?:no|without(?:\s+an?)?|not(?:\s+been)?|never(?:\s+been)?)\s+(?:update|updated|touched)\b|"
-    r"n't\s+(?:been\s+)?(?:updated|touched)\b|\bnobody\s+(?:has\s+)?(?:touched|updated)\b|"
+    r"(?:\b(?:no|not|never|nobody|without)\b|n't\b)[^,;:.!?]*?\b(?:updates?|updated|touched)\b|"
     r"\buntouched\b",
     re.IGNORECASE,
 )
-"""A request that says a ticket has had no update."""
+"""A request that says a ticket has had no update: a negation before an update word in the
+same stretch between punctuation, however far."""
+_SPLIT = re.compile(r"[,;:.!?()]+|\b(?:and|then|but|also|plus|or)\b", re.IGNORECASE)
+"""Where the scoring splits a request, on its own and more finely than the runtime does, so a
+part the runtime never marks can't hide in a clause it chose."""
 _UPDATED_WITHIN = re.compile(r"\bupdated\s+(?:in\s+the\s+last|today|since)\b", re.IGNORECASE)
 _DAY_WORDS = re.compile(
     r"\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekday|weekdays|daily|"
@@ -203,7 +206,8 @@ def _cant_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
     if case.needs is not None:
         found.append(
             check(
-                "needs", [] if any(c.needs == case.needs for c in cant) else [c.needs for c in cant]
+                "needs",
+                [] if any(c.needs == case.needs for c in cant) else [str(c.needs) for c in cant],
             )
         )
     if case.system is not None:
@@ -245,32 +249,48 @@ def _card_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
     return found
 
 
-def _dropped(task: str, parts: list[RequestPart]) -> list[str]:
-    """Each clause of the request, thanks and please aside, that no part quotes."""
+def dropped(task: str, parts: list[RequestPart]) -> list[str]:
+    """Each piece of the request, split here, not by the runtime, that no part's words reach.
+    Thanks and please ask for nothing, so they need no part."""
     text = visible_words(task)
-    quoted = [" ".join(p.text.removesuffix("…").casefold().split()) for p in parts]
+    marked = [m for p in parts if (m := _found(text, p.text)) is not None]
     found: list[str] = []
-    for start, end in clauses_of(text):
-        clause = " ".join(text[start:end].casefold().split())
-        if set(re.findall(r"[\w']+", clause)) <= POLITE:
-            continue
-        if not any(q and q in clause for q in quoted):
-            found.append(f"dropped: {text[start:end]}")
+    at = 0
+    for cut in [*_SPLIT.finditer(text), None]:
+        end = len(text) if cut is None else cut.start()
+        piece = text[at:end].strip()
+        start = at + text[at:end].find(piece)
+        if (
+            piece
+            and not polite(piece)
+            and not any(a < start + len(piece) and b > start for a, b in marked)
+        ):
+            found.append(f"dropped: {piece}")
+        at = len(text) if cut is None else cut.end()
     return found
+
+
+def _found(text: str, words: str) -> tuple[int, int] | None:
+    pattern = r"\W+".join(re.escape(w) for w in re.findall(r"\w+", words.removesuffix("…")))
+    hit = re.search(rf"(?<!\w){pattern}", text, re.IGNORECASE) if pattern else None
+    return None if hit is None else (hit.start(), hit.end())
+
+
+def flipped(task: str, rows: list[UnderstoodRow]) -> list[str]:
+    """Each accepted row that shows an update within some days for a request that says no
+    update: the meaning turned round with a tick."""
+    if not _NO_UPDATE.search(task):
+        return []
+    return [
+        f"flipped: {r.text}" for r in rows if r.state in ACCEPTED and _UPDATED_WITHIN.search(r.text)
+    ]
 
 
 def _part_checks(case: AnswerCase, shown: PlannerAnswer, parts: list[RequestPart]) -> list[Check]:
     """Every clause comes back as a part with a mark, and a request that says no update never
     gets a tick on an update within some days (plan 7.5)."""
-    flipped: list[str] = []
-    if _NO_UPDATE.search(case.task):
-        card = card_of(shown) or []
-        flipped = [
-            f"flipped: {r.text}"
-            for r in card
-            if r.state in ACCEPTED and _UPDATED_WITHIN.search(r.text)
-        ]
-    found = [check("keeps_or_flags_each_part", _dropped(case.task, parts) + flipped)]
+    problems = dropped(case.task, parts) + flipped(case.task, card_of(shown) or [])
+    found = [check("keeps_or_flags_each_part", problems)]
     if case.crossed:
         crosses = [p.text for p in parts if p.mark == "cant"]
         missing = [w for w in case.crossed if not any(mentions(t, w) for t in crosses)]

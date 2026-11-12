@@ -561,7 +561,7 @@
   },
   {
     "id": "mixed-watch-and-list",
-    "note": "A watchlist item and a workflow. The watchlist leads, the list is carried as the rest.",
+    "note": "A watchlist item and a workflow. The watchlist leads, the list is carried as the rest. \"stale\" with no number of days is asked, never guessed, so only Friday must be read.",
     "task": "Watch React releases and list stale bug tickets every Friday",
     "kind": [
       "watchlist"
@@ -572,8 +572,7 @@
     ],
     "also": "setup_card",
     "understood": [
-      "Friday",
-      "stale*"
+      "Friday"
     ]
   },
   {
@@ -5134,7 +5133,7 @@
   },
   {
     "id": "r4-state-with-task",
-    "note": "Plan 7.5, a state question keeps a cross on the task beside it, to ask on its own.",
+    "note": "Plan 7.5, a state question keeps a cross on the task beside it. Waits for R7: the question lane is closed to a request with a change word, so today the task is answered and the question crossed \"ask on its own\". The harness has no skip or expected-fail, so this case fails until R7.",
     "task": "Which software is behind, and set up a weekly summary",
     "kind": [
       "check_workflows",

@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 import pytest
-from evals.answer import ANSWER, AnswerCase, _cant_checks, _card_checks
+from evals.answer import ANSWER, AnswerCase, _cant_checks, _card_checks, dropped, flipped
 from evals.checks import Check, jargon, mentions, write_claims
 from evals.choose import CHOOSE, ChooseCase
 from evals.draft import DRAFT, DraftCase
@@ -26,7 +26,7 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
 from agent_runtime.answers import TaskRead, answer_of
-from agent_runtime.contract import CantRow, PartAnswer, SetupCardAnswer, UnderstoodRow
+from agent_runtime.contract import CantRow, PartAnswer, RequestPart, SetupCardAnswer, UnderstoodRow
 from agent_runtime.summary import SUMMARY_TIMEOUT_SECONDS, ModelSummarizer, template_check_summary
 
 
@@ -679,3 +679,26 @@ def test_a_clash_is_scored_on_the_schedule_and_its_reason():
 def test_a_refusal_keeps_the_question_asked_with_it_without_any_reading():
     case = answer_case("r4-question-with-skip")
     assert failed(ANSWER.score(case, Answer(None, "", None))) == set()
+
+
+def test_a_clause_with_no_part_fails_keeps_or_flags_each_part():
+    task = "Every Friday, sum up the closed tickets and colour them by team"
+    kept = [
+        RequestPart(text="Every Friday", mark="will_do"),
+        RequestPart(text="sum up the closed tickets", mark="will_do"),
+    ]
+    assert dropped(task, kept) == ["dropped: colour them by team"]
+    crossed = RequestPart(text="colour them", mark="cant", reason="not_followed")
+    assert dropped(task, [*kept, crossed]) == []
+    assert dropped("Every Friday, list the open bugs, thanks", kept[:1]) == [
+        "dropped: list the open bugs"
+    ]
+
+
+def test_a_request_that_says_no_update_fails_on_an_update_within_some_days():
+    row = UnderstoodRow(
+        kind="look_for", text="Bug tickets, updated in the last 10 days", state="understood"
+    )
+    far = "Every Friday, list bugs in MOCK that nobody on the duty team has updated for 10 days"
+    assert flipped(far, [row]) == ["flipped: Bug tickets, updated in the last 10 days"]
+    assert flipped("Every Friday, list bugs updated in the last 10 days", [row]) == []
