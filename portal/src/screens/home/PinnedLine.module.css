@@ -38,7 +38,8 @@
     grid-column: 2 / -1;
   }
 
-  .pinned > a:nth-of-type(1) {
+  /* Open is a link to a page, or a button when it opens the side panel. */
+  .pinned > :is(a, button):not(.more) {
     grid-column: 2;
     justify-self: start;
   }

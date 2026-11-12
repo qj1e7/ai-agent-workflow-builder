@@ -196,10 +196,11 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
         await expect(ready()).toBeVisible({ timeout: 20_000 })
         await expect(panel).toHaveAttribute('role', width > 900 ? 'complementary' : 'dialog')
         await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined)
+        // The shot comes first, because the cover check scrolls each control into view.
+        if (SHOT_WIDTHS.has(width)) await shot(page, info, `r3-panel-${view}-alice-${String(width)}`)
         const problems = await fitProblems(page)
         if (problems.length) found.push(`The side panel's ${view} view at ${String(width)} px:\n${describeProblems(problems).replace(/^/gm, '    ')}`)
         if (width === 1280 || width === 900) await expectAccessible(page, path.join(OUT, 'axe'), `side-panel-${view}-${String(width)}`)
-        if (SHOT_WIDTHS.has(width)) await shot(page, info, `r3-panel-${view}-alice-${String(width)}`)
         await panel.getByRole('button', { name: 'Close' }).click()
         await expect(panel).toHaveCount(0)
       }

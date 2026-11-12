@@ -491,6 +491,8 @@ test.describe('with the AI model on', () => {
       expect(await names(), 'the page’s Undo puts it back').toContain('Redis')
 
       await open.click()
+      await expect(page.locator('#side-panel-h'), 'Redis opens in the side panel').toHaveText('Redis')
+      await page.locator('#side-panel').getByRole('link', { name: 'More details' }).click()
       await expect(page).toHaveURL(/\/software\?row=/)
       await context.close()
     })
