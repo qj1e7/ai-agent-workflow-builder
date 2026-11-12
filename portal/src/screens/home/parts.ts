@@ -65,12 +65,23 @@ export const crossesInstead = (part: PartView): boolean => crossesOnCard(part) &
  */
 export const cantOnCard = (reply: CantReply): boolean => reply.alternative?.answer === 'setup_card' && reply.cant.every((row) => row.needs !== 'new_system')
 
+/** What a set-up card inside another answer asks itself, since it runs on that schedule and search: a clash and how many days. */
+export const asksOnCard = (part: PartView): boolean => isClash(part) || part.reason === 'how_many_days'
+
+/** Whether a set-up card is drawn somewhere inside the answer. */
+function holdsCard(reply: PlannerReply): boolean {
+  if (reply.answer === 'setup_card' || reply.answer === 'part') return true
+  if (reply.answer === 'cant') return reply.alternative !== null && holdsCard(reply.alternative)
+  return reply.answer === 'watchlist' && reply.also !== null && holdsCard(reply.also)
+}
+
 /**
  * The clauses an answer didn’t read, which it draws above its card (spec 6.5). The set-up card marks its own parts. The can’t
- * answer’s card already names what it can’t do, so only the clauses it didn’t read are added. The refusal, which software,
- * places to start and the offline answer draw none.
+ * answer’s card already names what it can’t do, so only the clauses it didn’t read are added. A card inside the answer asks its
+ * own clash and days, so they aren’t drawn twice. The refusal, which software, places to start and the offline answer draw none.
  */
 export function leftoverParts(reply: PlannerReply): PartView[] {
+  const above = (parts: readonly PartView[]) => parts.filter((part) => part.mark !== 'will_do' && !(holdsCard(reply) && asksOnCard(part)))
   switch (reply.answer) {
     case 'setup_card':
     case 'part':
@@ -80,13 +91,13 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
     case 'offline':
       return []
     case 'cant':
-      return reply.alternative?.answer === 'setup_card' ? [] : reply.parts.filter((part) => part.mark === 'cant' && part.reason !== 'cant_do' && part.reason !== 'needs_the_rest')
+      return reply.alternative?.answer === 'setup_card' ? [] : above(reply.parts.filter((part) => part.reason !== 'cant_do' && part.reason !== 'needs_the_rest'))
     case 'watchlist':
     case 'abilities':
     case 'check_workflows':
     case 'why_stopped':
     case 'needs_me':
     case 'question':
-      return reply.parts.filter((part) => part.mark !== 'will_do')
+      return above(reply.parts)
   }
 }

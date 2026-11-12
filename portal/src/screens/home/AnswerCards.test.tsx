@@ -164,6 +164,18 @@ describe('a can’t answer with nothing it can’t do', () => {
   })
 })
 
+describe('a clash inside a watch answer', () => {
+  it('is asked on the card inside, and never drawn above it too', () => {
+    const clash: PartView = { text: 'Monday and Friday', mark: 'cant', reason: 'one_day', note: null, choices: ['Monday', 'Friday'] }
+    const notFollowed: PartView = { text: 'only the major releases', mark: 'cant', reason: 'not_followed', note: null, choices: [] }
+    const watch: WatchlistReply = { ...(ownTime as WatchlistReply), also: { ...(setupClash as SetupCardReply), parts: [] }, parts: [clash, notFollowed] }
+    const above = text(draw(watch, { leftovers: true }))
+    expect(above).toContain('“only the major releases”')
+    expect(above).not.toContain('Monday and Friday')
+    expect(text(draw(watch)).match(/Monday or Friday\?/g)).toHaveLength(1)
+  })
+})
+
 describe('the clauses an answer didn’t read', () => {
   it('are drawn above a state answer, to ask on their own', () => {
     expect(text(draw(checkLeftover as PlannerReply, { leftovers: true }))).toBe('Can’t do: “every Friday sum up the closed tickets” Ask this on its own, and I’ll answer it.')

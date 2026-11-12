@@ -6,8 +6,8 @@ import { Button, ButtonLink } from '../../ui/Button'
 import { OpenButton } from '../../ui/OpenItem'
 import { AskTheTeam } from './AskTheTeam'
 import { cantLines, refusalNext, SAY_ANOTHER_WAY, startingPoints, TAG_CANT, TAG_CHOICE } from './answers'
-import { cardFrom, isClash } from './card'
-import { cantOnCard, crossesInstead, crossesOnCard } from './parts'
+import { cardFrom } from './card'
+import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard } from './parts'
 import { SetupCard, type CardStart } from './SetupCard'
 import { CapabilityLists } from './CapabilityLists'
 import { NewestAnswer, useMainButton } from './primary'
@@ -70,7 +70,7 @@ export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }
   if (cantOnCard(reply) && alternative?.answer === 'setup_card') return <SetupCard start={startOf(withCrosses(alternative, reply, crossesOnCard), typed)} />
   const rows = cantLines(reply.cant.filter((row) => row.needs !== null))
   const card = alternative?.answer === 'setup_card' ? <SetupCard start={startOf(withCrosses(alternative, reply, crossesInstead), typed)} /> : null
-  const watch = alternative?.answer === 'watchlist' ? <WatchlistAnswer reply={withCrosses(alternative, reply, isClash)} typed={typed} /> : null
+  const watch = alternative?.answer === 'watchlist' ? <WatchlistAnswer reply={withCrosses(alternative, reply, asksOnCard)} typed={typed} /> : null
   // With no can’t of its own, the card would be empty: the clauses it didn’t follow are drawn above it.
   if (rows.length === 0) return card ?? watch
   return (
@@ -134,7 +134,7 @@ export function WatchlistAnswer({ reply, typed }: { reply: WatchlistReply; typed
         <>
           <p>The rest of your request:</p>
           <NewestAnswer.Provider value={false}>
-            <Answer reply={withCrosses(reply.also, reply, isClash)} typed={typed} page={NO_PAGE} />
+            <Answer reply={withCrosses(reply.also, reply, asksOnCard)} typed={typed} page={NO_PAGE} />
           </NewestAnswer.Provider>
         </>
       ) : null}
