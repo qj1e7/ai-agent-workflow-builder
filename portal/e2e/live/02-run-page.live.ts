@@ -701,10 +701,19 @@ test.describe('what a run didn’t check', () => {
   const REDIS_UNREAD = 'Redis couldn’t be read, so no ticket is proposed for it.'
   const NO_REGISTRIES = 'The platform can’t yet check registries or security advisories.'
   const NO_DETAILS = 'The platform can’t yet see a ticket\'s component or priority.'
-  const unchecked = (scope: Page | Locator) => scope.locator('dl', { has: scope.locator('dt', { hasText: /^Not checked$/ }) })
+  /** The Not checked answer. The inner locator of has is matched inside the dl, so it starts from the page. */
+  const unchecked = (scope: Page | Locator) => scope.locator('dl', { has: ('page' in scope ? scope.page() : scope).locator('dt', { hasText: /^Not checked$/ }) })
   const box = (page: Page) => page.getByLabel('Ask the Planner about software versions')
   const newest = (page: Page) => page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
   const sidePanel = (page: Page) => page.locator('#side-panel')
+  /** For the shot: scrolls Not checked into view only when it is not there, so a page that fits keeps its place. */
+  const intoView = async (section: Locator) => {
+    const seen = await section.evaluate((el) => {
+      const box = el.getBoundingClientRect()
+      return box.top >= 0 && box.bottom <= window.innerHeight
+    })
+    if (!seen) await section.scrollIntoViewIfNeeded()
+  }
   const noSidewaysScroll = async (page: Page) => {
     const widths = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth])
     expect(widths[0], 'no sideways scroll').toBeLessThanOrEqual(widths[1] ?? 0)
@@ -768,7 +777,7 @@ test.describe('what a run didn’t check', () => {
         await expect(page.getByRole('button', { name: /^(Approve|Decline)/ }), user === 'bob' ? 'bob decides' : 'alice, whose run it is, has no button').toHaveCount(user === 'bob' ? 2 : 0)
         await noSidewaysScroll(page)
         if (width === 1280) await expectAccessible(page, path.join(OUT, 'axe'), `r14-not-checked-${user}-1280`)
-        await unchecked(page).scrollIntoViewIfNeeded()
+        await intoView(unchecked(page))
         await shot(page, info, `r14-not-checked-software-page-${user}-${String(width)}`)
         assertClean(watch)
         await context.close()
@@ -793,7 +802,7 @@ test.describe('what a run didn’t check', () => {
         await expect(unchecked(page), 'nothing about software on a ticket summary').not.toContainText(/registries|couldn’t be read/)
         await expect(page.getByRole('button', { name: /^(Approve|Decline)/ }), 'carol started it, so both may decide').toHaveCount(2)
         await noSidewaysScroll(page)
-        await unchecked(page).scrollIntoViewIfNeeded()
+        await intoView(unchecked(page))
         await shot(page, info, `r14-not-checked-summary-page-${user}-${String(width)}`)
         assertClean(watch)
         await context.close()
@@ -822,7 +831,7 @@ test.describe('what a run didn’t check', () => {
         await expect(panel, 'Why, Who asked and Your part wait for the page').not.toContainText(/Who asked|Your part|\bWhy\b/)
         await noSidewaysScroll(page)
         if (width === 1280) await expectAccessible(page, path.join(OUT, 'axe'), `r14-not-checked-panel-${kind}-1280`)
-        await unchecked(panel).scrollIntoViewIfNeeded()
+        await intoView(unchecked(panel))
         await shot(page, info, `r14-not-checked-${kind}-panel-alice-${String(width)}`)
         assertClean(watch)
         await context.close()
