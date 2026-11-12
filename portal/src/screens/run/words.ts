@@ -1,10 +1,10 @@
 import { OPEN_RUN_AGAIN_WORDS } from '../../api/errors'
 import { connectorLabel, refusalLabel, starterName } from '../../api/labels'
 import type { SessionKind } from '../../api/session'
-import type { ApprovalActionView, Refusal, Trigger, WriteActionView } from '../../api/types'
+import type { ApprovalActionView, ApprovalStepView, Refusal, Trigger, WriteActionView } from '../../api/types'
 import { PRODUCT } from '../../shell/product'
 import type { LiveRun } from './liveRun'
-import type { AgentRef, ChatItem, RunModel, Station } from './runModel'
+import type { AgentRef, ChatItem, Declined, RunModel, Station } from './runModel'
 
 export type NameOf = (id: string) => string
 
@@ -15,6 +15,38 @@ export function count(n: number, noun: string): string {
 export function andList(items: readonly string[]): string {
   if (items.length < 2) return items.join('')
   return `${items.slice(0, -1).join(', ')} and ${items.at(-1) ?? ''}`
+}
+
+/** One closing full stop, unless the words bring their own, as the platform writes it. */
+function sentence(text: string): string {
+  return /[.!?…]$/.test(text) ? text : `${text}.`
+}
+
+/** Who declined, in the short form a list's line has room for. */
+export function declinedBy(declined: Pick<Declined, 'by'>, nameOf: NameOf): string {
+  return `Declined by ${nameOf(declined.by)}`
+}
+
+/** What the decline left, with the reason when there is one. */
+export function declineTail(declined: Pick<Declined, 'reason'>): string {
+  return `Nothing was written.${declined.reason ? ` Reason: ${sentence(declined.reason)}` : ''}`
+}
+
+/**
+ * A declined run's record, in the same words everywhere it shows: "Declined by Bob. Nothing was written. Reason: Wrong version.",
+ * or "Approved by Bob, then declined by Alice. ..." when a first yes came before. It never names a result or a ticket.
+ */
+export function declinedRecord(declined: Declined, nameOf: NameOf): string {
+  const head = declined.approvedBy.length > 0 ? `Approved by ${declined.approvedBy.map(nameOf).join(', then ')}, then declined by ${nameOf(declined.by)}` : declinedBy(declined, nameOf)
+  return `${head}. ${declineTail(declined)}`
+}
+
+/** The record's facts from a request's steps, as the run and approval routes give them. Null unless a step was declined. */
+export function declinedOfSteps(steps: readonly ApprovalStepView[]): Declined | null {
+  const declined = steps.find((step) => step.status === 'declined')
+  if (!declined?.decided_by) return null
+  const approvedBy = steps.filter((step) => step.index < declined.index && step.status === 'approved' && step.decided_by).map((step) => step.decided_by ?? '')
+  return { by: declined.decided_by, approvedBy, reason: declined.reason ?? null }
 }
 
 export function writeLabel(connector: string | null): string {
@@ -132,7 +164,7 @@ export function lineOf(item: ChatItem, nameOf: NameOf, trigger: Trigger): Line {
         tone: 'ok',
       }
     case 'declined':
-      return { speaker: app, text: trigger === 'schedule' ? 'Done. Nothing was written. The next check asks again.' : 'Done. Nothing was written.', tone: 'plain' }
+      return { speaker: app, text: `${declinedRecord(item.record, nameOf)} The run ended.${trigger === 'schedule' ? ' The next check asks again.' : ''}`, tone: 'plain' }
     case 'stopped':
       return {
         speaker: platform,

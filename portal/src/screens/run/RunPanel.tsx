@@ -7,13 +7,13 @@ import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { useAfterPanelAction } from '../../ui/sidePanel'
 import { ApprovalGate } from './ApprovalGate'
-import { openStep, partyOf, useDecision } from './decision'
+import { declineReasons, openStep, partyOf, requesterOf, useDecision } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { Troubleshooting } from './Outcome'
 import { approvalIdOf, planOf, POLL_FAILED_MS, statusWords, useNameOf, useReconnectWhenBehind } from './RunPage'
 import { RunLine } from './RunLine'
-import { stationsOf } from './runModel'
-import { feedTroubleOf, headlineOf, RUN_PROBLEM, shortTime, writeLabel } from './words'
+import { declinedOf, stationsOf } from './runModel'
+import { declinedRecord, feedTroubleOf, headlineOf, RUN_PROBLEM, shortTime, writeLabel } from './words'
 import styles from './RunPage.module.css'
 
 function Loading() {
@@ -91,7 +91,8 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
 
   const stations = stationsOf(shown, planOf(useCase.data), writeLabel)
   const headline = headlineOf(shown, stations, approval.data && waiting ? approval.data.actions : null)
-  const status = statusWords(decision.recorded, live)
+  const status = statusWords(decision, live, nameOf)
+  const declined = declinedOf(shown)
 
   if (waiting && approvalId !== null && !approval.data && !approval.isError) {
     return (
@@ -101,14 +102,22 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
     )
   }
   if (waiting && approval.data?.you_can_decide && openStep(approval.data) && decision.recorded === null) {
-    return <ApprovalGate approval={approval.data} page={null} decision={decision} />
+    return (
+      <ApprovalGate
+        approval={approval.data}
+        page={null}
+        decision={decision}
+        reasons={declineReasons(useCase.data?.template)}
+        requester={nameOf(requesterOf(approval.data))}
+      />
+    )
   }
   return (
     <>
       <div>
         <span className={cx(styles['pill'], styles[headline.pill.tone])}>{headline.pill.label}</span>
       </div>
-      <p>{headline.text}</p>
+      <p>{declined ? declinedRecord(declined, nameOf) : headline.text}</p>
       {status ? (
         <p className="muted" role="status">
           {status}

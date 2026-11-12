@@ -3,7 +3,7 @@ import { failureReasonLabel } from '../../api/labels'
 import { pressOnce, type Latch, type Outcome } from '../../api/latch'
 import type { BlockKind, Me, RunView, ScheduleIn, UseCaseView, VersionSchedule, VersionView } from '../../api/types'
 import { agentIdentity } from '../../ui/agents'
-import { andList, count, type NameOf } from '../run/words'
+import { andList, count, declinedBy, declinedOfSteps, declinedRecord, type NameOf } from '../run/words'
 import { faceId, howItWorksPath } from '../agents/agents'
 import { heldWords, repeatWords, TAKE_OVER_WORDS } from '../software/software'
 import { lineWhen, nextRunAt, runWhen, scheduleZoneName, zoneWords } from './times'
@@ -77,7 +77,7 @@ export function runFact(run: RunView, nameOf: NameOf): RunFact {
     case 'succeeded':
       return { ...PILLS[run.state], words: doneWords(run, nameOf) }
     case 'rejected':
-      return { ...PILLS[run.state], words: `Declined by ${nameOf(run.rejected_by)}. Nothing was written.` }
+      return { ...PILLS[run.state], words: declinedRecord(declinedOfSteps(run.approval.steps) ?? { by: run.rejected_by, approvedBy: [], reason: null }, nameOf) }
     case 'pending':
     case 'working':
     case 'proposed':
@@ -86,15 +86,21 @@ export function runFact(run: RunView, nameOf: NameOf): RunFact {
   }
 }
 
-function lastRunWhat(last: LastRun, nameOf: NameOf): string {
+/** A row's one line has room for who declined. The side panel's Last run has room for the whole declined record (spec 10.5). */
+type Room = 'line' | 'record'
+
+function lastRunWhat(last: LastRun, nameOf: NameOf, room: Room): string {
   const noun = last.tickets ? 'ticket' : 'change'
   switch (last.state) {
     case 'awaiting_approval':
       return last.proposed > 0 ? `${count(last.proposed, noun)} proposed` : 'Waiting for a yes'
     case 'succeeded':
       return last.written > 0 ? `${count(last.written, noun)} ${last.tickets ? 'created' : 'written'}` : 'Nothing new to write'
-    case 'rejected':
-      return last.declined_by ? `Declined by ${nameOf(last.declined_by)}` : 'Declined'
+    case 'rejected': {
+      if (!last.declined_by) return 'Declined'
+      const declined = { by: last.declined_by, approvedBy: last.approved_by, reason: last.decline_reason }
+      return room === 'line' ? declinedBy(declined, nameOf) : declinedRecord(declined, nameOf)
+    }
     case 'failed':
       return 'Stopped'
     case 'pending':
@@ -110,17 +116,17 @@ function lastRunWhat(last: LastRun, nameOf: NameOf): string {
  * chat's check card both read it, so they cannot disagree. A test run says so after the day.
  */
 export function lastRunLine(useCase: Pick<UseCaseView, 'last_run'>, now: Date, nameOf: NameOf): string {
-  const words = lastRunWords(useCase, now, nameOf)
+  const words = lastRunWords(useCase, now, nameOf, 'line')
   return words === null ? NO_RUNS : `Last run ${words}`
 }
 
 export const NO_RUNS = 'No runs yet'
 
-/** The same line without its label, "Mon 26 Oct · Declined by Bob", for the side panel's Last run. Null before the first run. */
-export function lastRunWords({ last_run: last }: Pick<UseCaseView, 'last_run'>, now: Date, nameOf: NameOf): string | null {
+/** The line without its label, for the side panel's Last run, where a declined run gives its whole record. Null before the first run. */
+export function lastRunWords({ last_run: last }: Pick<UseCaseView, 'last_run'>, now: Date, nameOf: NameOf, room: Room = 'record'): string | null {
   if (!last) return null
   const when = lineWhen(last.at, now)
-  return `${last.test ? `${when}, test` : when} · ${lastRunWhat(last, nameOf)}`
+  return `${last.test ? `${when}, test` : when} · ${lastRunWhat(last, nameOf, room)}`
 }
 
 export { formatterFactory, lineWhen, nextRunAt, runWhen, timesZone } from './times'

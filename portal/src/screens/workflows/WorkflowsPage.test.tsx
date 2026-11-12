@@ -27,7 +27,7 @@ const TEAM = (peopleList.people as PersonOut[]).filter((person) => ['alice', 'bo
 const WATCHLIST = watchlistUseCase as UseCaseView
 const LANGGRAPH: UseCaseView = { ...(agentUseCase as UseCaseView), use_case_id: 'uc_lang', state: 'paused' }
 const BUGS: UseCaseView = { ...(agentUseCase as UseCaseView), use_case_id: 'uc_bugs', name: 'Morning bug report check', instruction: 'Raise a ticket for each new bug report.' }
-const lr = (change: Partial<LastRun>): LastRun => ({ run_id: 'run_x', state: 'succeeded', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: null, ...change })
+const lr = (change: Partial<LastRun>): LastRun => ({ run_id: 'run_x', state: 'succeeded', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: null, ...change })
 const STOPPED_BUGS: UseCaseView = { ...BUGS, last_run: lr({ run_id: 'run_bugs', state: 'failed', retryable: true, reason: 'AgentError' }) }
 const WAITING_WATCHLIST: UseCaseView = { ...WATCHLIST, last_run: lr({ run_id: 'run_01JB8', state: 'awaiting_approval', proposed: 1, tickets: true }) }
 const DECLINED_WATCHLIST = declinedWatchlist as UseCaseView

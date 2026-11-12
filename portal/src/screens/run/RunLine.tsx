@@ -30,7 +30,7 @@ const MARCHES: ReadonlySet<Link> = new Set(['flow', 'wait'])
 function subOf(station: Station, startedAt: string): string | null {
   switch (station.state) {
     case 'skip':
-      return 'Not needed'
+      return station.sub ?? 'Not needed'
     case 'fail':
       return 'Stopped here'
     case 'wait':
@@ -52,6 +52,7 @@ function dotOf(station: Station, small: boolean): ReactNode {
     if (station.state === 'declined') return <IconX size={small ? 11 : 16} />
     return <IconShield size={gate} />
   }
+  if (station.ended) return <span className={styles['endDot']} />
   if (station.state === 'done') return <IconCheck size={mark} />
   if (station.state === 'fail') return <IconX size={mark} />
   return null

@@ -28,6 +28,7 @@ import {
   heldNote,
   lifeWords,
   lastRunLine,
+  lastRunWords,
   lineWhen,
   meansOutOfDate,
   menuActionsOf,
@@ -75,7 +76,7 @@ const CAROL: Viewer = { id: 'carol', operator: true, approver: false }
 
 const NOW = new Date('2026-11-04T15:00:00+08:00')
 
-const LAST: LastRun = { run_id: 'run_07', state: 'rejected', at: '2026-10-26T01:41:00Z', test: false, declined_by: 'bob', proposed: 3, written: 0, tickets: true, you_can_decide: false, retryable: false, reason: null }
+const LAST: LastRun = { run_id: 'run_07', state: 'rejected', at: '2026-10-26T01:41:00Z', test: false, declined_by: 'bob', decline_reason: null, approved_by: [], proposed: 3, written: 0, tickets: true, you_can_decide: false, retryable: false, reason: null }
 const lastOf = (change: Partial<LastRun>): Pick<UseCaseView, 'last_run'> => ({ last_run: { ...LAST, ...change } })
 
 describe('the status words', () => {
@@ -98,8 +99,8 @@ describe('the status words', () => {
     expect(runFact(run(done, { outcome: 'nothing_to_write', written: [] }), nameOf).words).toBe('Done. Nothing to write.')
   })
 
-  it('say a declined run wrote nothing, with no pill, because nobody needs to act', () => {
-    expect(runFact(run(declined), nameOf)).toEqual({ tone: 'ok', pill: null, words: 'Declined by Bob. Nothing was written.' })
+  it('say a declined run wrote nothing, with no pill, because nobody needs to act, in the declined record’s words', () => {
+    expect(runFact(run(declined), nameOf)).toEqual({ tone: 'ok', pill: null, words: 'Declined by Bob. Nothing was written. Reason: Wrong version.' })
   })
 
   it('say a run that is still going is running', () => {
@@ -114,9 +115,17 @@ describe('the last run line', () => {
     expect(lastRunLine({ last_run: null }, NOW, nameOf)).toBe('No runs yet')
   })
 
-  it('names who declined, on the day it started', () => {
-    expect(line({})).toBe('Last run Mon 26 Oct · Declined by Bob')
+  it('names who declined, on the day it started, short enough for one line', () => {
+    expect(line({ decline_reason: 'Wrong version' })).toBe('Last run Mon 26 Oct · Declined by Bob')
     expect(line({ declined_by: null })).toBe('Last run Mon 26 Oct · Declined')
+  })
+
+  it('gives the side panel the whole declined record, with the reason and any first yes', () => {
+    const words = (change: Partial<LastRun>) => lastRunWords(lastOf(change), NOW, nameOf)
+    expect(words({})).toBe('Mon 26 Oct · Declined by Bob. Nothing was written.')
+    expect(words({ decline_reason: 'Wrong version' })).toBe('Mon 26 Oct · Declined by Bob. Nothing was written. Reason: Wrong version.')
+    expect(words({ declined_by: 'alice', approved_by: ['bob'] })).toBe('Mon 26 Oct · Approved by Bob, then declined by Alice. Nothing was written.')
+    expect(words({ state: 'failed', declined_by: null })).toBe('Mon 26 Oct · Stopped')
   })
 
   it('says Today with the time for a run that started today', () => {

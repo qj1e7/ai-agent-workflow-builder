@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import aliceHome from '../../../../contracts/fixtures/builder/home.alice.json'
 import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
 import dayOne from '../../../../contracts/fixtures/builder/home.day-one.json'
+import declinedTest from '../../../../contracts/fixtures/builder/home.alice.declined-test.json'
 import type { AddressItem, ApprovalItem, ConnectionItem, FollowingUpItem, HomeOut, ReplyView, StoppedItem, WaitingItem } from '../../api/types'
 import { ApiError } from '../../api/client'
 import capabilities from '../../../../contracts/fixtures/planner/capabilities.json'
@@ -11,6 +12,7 @@ import { actionsOf, approverLine, comingUpOf, draftWords, firstSentence, groupOf
 const BOB = bobHome as HomeOut
 const ALICE = aliceHome as HomeOut
 const DAY_ONE = dayOne as HomeOut
+const DECLINED_TEST = declinedTest as HomeOut
 const NOW = new Date('2026-11-03T15:00:00+08:00')
 
 const [ASK] = BOB.approvals as [ApprovalItem]
@@ -246,6 +248,29 @@ describe('what each item lets you do', () => {
     const final = { ...stopped, item: { ...STOP, retryable: false } } as Need
     expect(actionsOf(final, true)).toEqual(actionsOf(final))
     expect(wordsOf(final, NOW, true).note).toBeNull()
+  })
+})
+
+describe('a test run an Approver declined', () => {
+  const [need] = needsOf(DECLINED_TEST).shown as [Need]
+
+  it('is in its starter’s Do now, counted with the rest', () => {
+    expect(need.kind).toBe('declined')
+    expect(groupOf(need)).toBe('now')
+    expect(needsTotal(DECLINED_TEST)).toBe(1)
+    expect(stateLine(DECLINED_TEST, NOW)).toBe('Something needs you.')
+  })
+
+  it('says who declined it and gives the rest of the declined record, with the reason', () => {
+    const words = wordsOf(need, NOW)
+    expect(words.title).toBe('Bob declined your test run')
+    expect(words.meta).toMatch(/^Weekly closed-ticket summary · /)
+    expect(words.note).toBe('Nothing was written. Reason: Something in it is wrong.')
+  })
+
+  it('opens the run, in the side panel from the chat, and offers nothing that writes', () => {
+    expect(actionsOf(need)).toEqual([{ kind: 'open', label: 'See the run', to: '/runs/run_01JD7TS', item: { kind: 'run', id: 'run_01JD7TS' } }])
+    expect(openPathOf(need)).toBe('/runs/run_01JD7TS')
   })
 })
 

@@ -34,6 +34,13 @@ export type Spot =
   | { readonly at: 'write' }
   | { readonly at: 'done' }
 
+/** A declined request: who said yes to the steps before, who declined, and why when they said (spec 10.5). */
+export interface Declined {
+  readonly by: string
+  readonly approvedBy: readonly string[]
+  readonly reason: string | null
+}
+
 export interface ApprovalStep {
   readonly index: number
   readonly label: string
@@ -66,7 +73,7 @@ export type ChatItem = { readonly seq: number; readonly at: RunTime } & (
   | { readonly kind: 'denied' }
   | { readonly kind: 'retried'; readonly by: string | null }
   | { readonly kind: 'finished'; readonly outcome: RunOutcome; readonly count: number; readonly operation: string | null }
-  | { readonly kind: 'declined' }
+  | { readonly kind: 'declined'; readonly record: Declined }
   | { readonly kind: 'stopped'; readonly stage: FailureStage }
   | { readonly kind: 'reported'; readonly by: string; readonly requestId: string }
 )
@@ -88,6 +95,8 @@ export interface RunModel {
   readonly connector: string | null
   readonly written: readonly Written[]
   readonly approvedBy: readonly string[]
+  /** Why the Approver declined, from the decline event, when they gave a reason. */
+  readonly declineReason: string | null
   readonly retriedBy: readonly string[]
   /** What the agents said they found, from the step that closed their work. Kept after the approval stops carrying it. */
   readonly found: string
@@ -113,6 +122,7 @@ export const emptyModel: RunModel = {
   connector: null,
   written: [],
   approvedBy: [],
+  declineReason: null,
   retriedBy: [],
   found: '',
   reports: [],
@@ -316,8 +326,10 @@ function apply(model: RunModel, event: RunEvent): RunModel {
       })
     }
     case 'run_rejected': {
-      const next = advanceTo({ ...model, phase: { state: 'rejected', by: event.data.by, step: event.data.step } }, { at: 'done' }, event.seq)
-      return say(next, { kind: 'declined', seq: event.seq, at: event.at })
+      const { by, step } = event.data
+      const record: Declined = { by, approvedBy: model.approvedBy, reason: event.data.reason ?? null }
+      const next = advanceTo({ ...model, phase: { state: 'rejected', by, step }, declineReason: record.reason }, { at: 'done' }, event.seq)
+      return say(next, { kind: 'declined', seq: event.seq, at: event.at, record })
     }
     case 'run_failed': {
       const { stage, reason, retryable, message } = event.data
@@ -386,6 +398,8 @@ export interface Station {
   readonly who: StationWho
   readonly state: StationState
   readonly face: FaceState
+  /** The last step of a declined run, Ended. It is reached but did nothing, so it never shows a tick. */
+  readonly ended?: true
 }
 
 interface Skeleton {
@@ -394,6 +408,7 @@ interface Skeleton {
   readonly label: string
   readonly sub: string | null
   readonly who: StationWho
+  readonly ended?: true
 }
 
 function skeleton(model: RunModel, plan: readonly PlanBlock[] | null, writeLabel: (connector: string | null) => string): Skeleton[] {
@@ -402,6 +417,7 @@ function skeleton(model: RunModel, plan: readonly PlanBlock[] | null, writeLabel
   const hasGate = plan === null || plan.some((block) => block.kind === 'approval')
   const hasWrite = plan === null || writeBlock !== undefined
   const count = Math.max(agentBlocks.length, model.agents.length)
+  const declined = model.phase.state === 'rejected'
   const agents: Skeleton[] = Array.from({ length: count }, (_, index) => {
     const agent = model.agents[index] ?? null
     const named = agentBlocks[index]?.name
@@ -419,9 +435,11 @@ function skeleton(model: RunModel, plan: readonly PlanBlock[] | null, writeLabel
     ...agents,
     ...(hasGate ? [{ key: 'gate', spot: { at: 'gate' } as Spot, label: 'Approval gate', sub: null, who: { kind: 'none' } as StationWho }] : []),
     ...(hasWrite
-      ? [{ key: 'write', spot: { at: 'write' } as Spot, label: writeBlock?.name ?? writeLabel(model.connector), sub: null, who: { kind: 'platform' } as StationWho }]
+      ? [{ key: 'write', spot: { at: 'write' } as Spot, label: writeBlock?.name ?? writeLabel(model.connector), sub: declined ? 'Nothing written' : null, who: { kind: 'platform' } as StationWho }]
       : []),
-    { key: 'done', spot: { at: 'done' }, label: 'Done', sub: null, who: { kind: 'none' } },
+    declined
+      ? { key: 'done', spot: { at: 'done' }, label: 'Ended', sub: null, who: { kind: 'none' }, ended: true }
+      : { key: 'done', spot: { at: 'done' }, label: 'Done', sub: null, who: { kind: 'none' } },
   ]
 }
 
@@ -509,6 +527,12 @@ export function reachOf(stations: readonly Station[]): number {
     if (station.state !== 'todo') reached = index
   })
   return reached / (stations.length - 1)
+}
+
+/** A declined run's record: who said yes first, who declined, and why. Null for a run that wasn't declined. */
+export function declinedOf(model: RunModel): Declined | null {
+  const { phase } = model
+  return phase.state === 'rejected' ? { by: phase.by, approvedBy: model.approvedBy, reason: model.declineReason } : null
 }
 
 export function isFinished(phase: Phase): boolean {

@@ -1,8 +1,8 @@
 import { ApiError } from '../../api/client'
 import { andList } from './card'
 import { connectorLabel, starterName } from '../../api/labels'
-import type { AddressItem, CapabilitiesView, PlannerAnswerIn, ApprovalItem, ConfirmationItem, ConnectionItem, DraftItem, FollowingUpItem, HomeOut, StoppedItem, WaitingItem } from '../../api/types'
-import { count, withCurrentNames } from '../run/words'
+import type { AddressItem, CapabilitiesView, PlannerAnswerIn, ApprovalItem, ConfirmationItem, ConnectionItem, DeclinedItem, DraftItem, FollowingUpItem, HomeOut, StoppedItem, WaitingItem } from '../../api/types'
+import { count, declineTail, withCurrentNames } from '../run/words'
 import { requestKindWords, requestPath } from '../workflows/requests'
 import { movedHeadline, notFoundHeadline } from '../software/software'
 import { lineWhen, nextRunAt, runWhen, workflowPath } from '../workflows/workflow'
@@ -19,6 +19,7 @@ export type Need =
   | { readonly kind: 'address'; readonly key: string; readonly at: string; readonly item: AddressItem }
   | { readonly kind: 'confirmation'; readonly key: string; readonly at: string; readonly item: ConfirmationItem }
   | { readonly kind: 'stopped'; readonly key: string; readonly at: string; readonly item: StoppedItem }
+  | { readonly kind: 'declined'; readonly key: string; readonly at: string; readonly item: DeclinedItem }
   | { readonly kind: 'reply'; readonly key: string; readonly at: string; readonly item: FollowingUpItem }
 
 export interface LeftOut {
@@ -32,7 +33,7 @@ export interface Needs {
   readonly more: LeftOut
 }
 
-const KIND_ORDER: Record<Need['kind'], number> = { stopped: 0, approval: 1, connection: 2, address: 3, confirmation: 4, reply: 5 }
+const KIND_ORDER: Record<Need['kind'], number> = { stopped: 0, approval: 1, declined: 2, connection: 3, address: 4, confirmation: 5, reply: 6 }
 
 /** Needs you is grouped wherever it is listed in full (spec 3.5): what to do now, then what to set up. */
 export type NeedGroup = 'now' | 'set'
@@ -43,13 +44,14 @@ export const NEED_GROUPS: readonly (readonly [NeedGroup, string])[] = [
 ]
 
 /**
- * Stops, approvals and replies are Do now, and so is a connection that doesn't work, because it stops every run (no AI model,
+ * Stops, approvals, declined test runs and replies are Do now, and so is a connection that doesn't work, because it stops every run (no AI model,
  * Jira not answering). A key that still works but runs out soon, software whose address moved, and confirmations are Set up.
  */
 export function groupOf(need: Need): NeedGroup {
   switch (need.kind) {
     case 'stopped':
     case 'approval':
+    case 'declined':
     case 'reply':
       return 'now'
     case 'connection':
@@ -68,7 +70,8 @@ const rankOf = (need: Need): number => (need.kind === 'connection' && noModel(ne
 const urgentFirst = (a: Need, b: Need) =>
   GROUP_ORDER[groupOf(a)] - GROUP_ORDER[groupOf(b)] || rankOf(a) - rankOf(b) || b.at.localeCompare(a.at) || a.key.localeCompare(b.key)
 
-export const needsTotal = (home: HomeOut) => home.approvals_total + home.confirmations.length + home.stopped_total + home.connections.length + home.addresses.length + home.replied.length
+export const needsTotal = (home: HomeOut) =>
+  home.approvals_total + home.confirmations.length + home.stopped_total + home.declined_total + home.connections.length + home.addresses.length + home.replied.length
 
 /** The runs Needs you on Workflows offers an action on, so the list of workflows under it need not offer the same run again. */
 export const runsInNeeds = (home: HomeOut): ReadonlySet<string> =>
@@ -82,6 +85,7 @@ export function needsOf(home: HomeOut, limit = Infinity): Needs {
     ...home.addresses.map((item): Need => ({ kind: 'address', key: `address:${item.software_id}`, at: item.checked_at ?? '', item })),
     ...home.confirmations.map((item): Need => ({ kind: 'confirmation', key: `confirmation:${item.confirmation_id}`, at: item.asked_at, item })),
     ...home.stopped.map((item): Need => ({ kind: 'stopped', key: `stopped:${item.run_id}`, at: item.stopped_at, item })),
+    ...home.declined.map((item): Need => ({ kind: 'declined', key: `declined:${item.run_id}`, at: item.declined_at, item })),
     ...home.replied.map((item): Need => ({ kind: 'reply', key: `reply:${item.request_id}`, at: item.latest_reply?.replied_at ?? item.asked_at, item })),
   ].sort(urgentFirst)
   const shown = all.slice(0, limit)
@@ -242,6 +246,18 @@ function stoppedWords(item: StoppedItem, now: Date, modelOff: boolean): ItemWord
   }
 }
 
+/** The person's own test run an Approver declined, with the rest of the declined record under it (spec 10.5). */
+function declinedWords(item: DeclinedItem, now: Date): ItemWords {
+  return {
+    tone: 'info',
+    title: `${item.declined_by_name ?? 'An Approver'} declined your test run`,
+    meta: `${item.use_case_name} · ${runWhen(item.declined_at, now)}`,
+    lines: [],
+    note: declineTail({ reason: item.decline_reason }),
+    why: null,
+  }
+}
+
 const REPLY_SHOWN = 160
 
 function replyWords(item: FollowingUpItem, now: Date): ItemWords {
@@ -269,6 +285,8 @@ export function wordsOf(need: Need, now: Date, modelOff = false): ItemWords {
       return confirmationWords(need.item, now)
     case 'stopped':
       return stoppedWords(need.item, now, modelOff)
+    case 'declined':
+      return declinedWords(need.item, now)
     case 'reply':
       return replyWords(need.item, now)
   }
@@ -293,6 +311,8 @@ export function actionsOf(need: Need, modelOff = false): readonly Action[] {
       return [{ kind: 'open', label: 'Review in Settings', to: need.item.kind === 'approver' ? '/settings?tab=people' : '/settings?tab=model' }]
     case 'stopped':
       return stoppedActions(need.item.run_id, need.item.retryable, modelOff)
+    case 'declined':
+      return [{ kind: 'open', label: 'See the run', to: `/runs/${need.item.run_id}`, item: runItem(need.item.run_id) }]
     case 'reply':
       return [{ kind: 'open', label: 'Read the reply', to: requestPath(need.item.request_id) }]
   }
@@ -306,7 +326,7 @@ export function openPathOf(need: Need): string {
 
 /** A stop or a request opens its run in the side panel (spec 3.5). Anything else follows its own first action, to its page. */
 export function panelItemOf(need: Need): PanelItem | null {
-  return need.kind === 'stopped' || need.kind === 'approval' ? runItem(need.item.run_id) : null
+  return need.kind === 'stopped' || need.kind === 'approval' || need.kind === 'declined' ? runItem(need.item.run_id) : null
 }
 
 export interface Pinned {
