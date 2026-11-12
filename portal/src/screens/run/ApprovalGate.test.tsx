@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import type { ApprovalView } from '../../api/types'
 import { MemoryRouter } from 'react-router'
 import { ApprovalGate, DeclineReasons, EXACT_WORDS } from './ApprovalGate'
+import { DeclinedToast } from './DeclinedToast'
 import { APPROVE, askedWords, declinedNow, declineReasons, decisionFor, foundOf, partyOf, requesterOf, yourPart, type Decision } from './decision'
 import { approvalTitle, lockWords, withCurrentNames, proposalTitle, type Party } from './words'
 
@@ -276,5 +277,12 @@ describe('the troubleshooter’s words', () => {
     expect(withCurrentNames('The agents proposed an action this use case cannot carry out.')).toBe('The agents proposed an action this workflow cannot carry out.')
     expect(withCurrentNames('the room lead and the Release checker')).toBe('the Planner and the Version checker')
     expect(withCurrentNames('An agent could not finish its work.')).toBe('An agent could not finish its work.')
+  })
+})
+
+describe('the message after a decline', () => {
+  it('gives the person who declined the record at the bottom of the page, and says nothing before a decline', () => {
+    expect(renderToStaticMarkup(<DeclinedToast declined={{ by: 'bob', approvedBy: [], reason: 'Wrong version' }} />)).toContain('Declined. Nothing was written. Reason: Wrong version.')
+    expect(renderToStaticMarkup(<DeclinedToast declined={null} />)).not.toContain('Declined')
   })
 })

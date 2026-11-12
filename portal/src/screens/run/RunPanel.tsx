@@ -7,6 +7,7 @@ import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { useAfterPanelAction } from '../../ui/sidePanel'
 import { ApprovalGate } from './ApprovalGate'
+import { DeclinedToast } from './DeclinedToast'
 import { declineReasons, openStep, partyOf, requesterOf, useDecision } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { Troubleshooting } from './Outcome'
@@ -92,7 +93,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
 
   const stations = stationsOf(shown, planOf(useCase.data), writeLabel)
   const headline = headlineOf(shown, stations, approval.data && waiting ? approval.data.actions : null)
-  const status = statusWords(decision, live, nameOf)
+  const status = statusWords(decision, live)
   const declined = declinedOf(shown)
 
   if (waiting && approvalId !== null && !approval.data && !approval.isError) {
@@ -125,6 +126,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
         </p>
       ) : null}
       <RunLine stations={stations} arrivedLive={null} startedAt={shortTime(run.started_at)} nameOf={nameOf} small />
+      <DeclinedToast declined={decision.declined} />
       {shown.phase.state === 'failed' ? (
         <Troubleshooting
           runId={run.run_id}
