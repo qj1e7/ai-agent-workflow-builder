@@ -5,21 +5,22 @@ import { useSession } from '../../api/context'
 import { displayName, usePeople } from '../../api/people'
 import { isOperator } from '../../api/me'
 import { useApproval, useMe, useModelOff, useRun, useTroubleshoot, useUseCase } from '../../api/queries'
-import type { ApprovalView, Me, RunView, UseCaseView, Verdict } from '../../api/types'
+import type { ApprovalView, Me, RunView, UseCaseView } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
 import { PRODUCT } from '../../shell/product'
 import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { useFromChat } from '../../ui/fromChat'
 import { motionAllowed } from '../../ui/motion'
+import { nextRunOf } from '../workflows/workflow'
 import { ApprovalGate } from './ApprovalGate'
 import { Chat, DECISION_ID, LastWord, NeedsYou, Typing } from './Chat'
-import { askedWords, foundOf, partyOf, useDecision, yourPart } from './decision'
+import { askedWords, declineReasons, foundOf, partyOf, requesterOf, useDecision, yourPart, type Decision } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { Outcome, Troubleshooting } from './Outcome'
 import { RunLine } from './RunLine'
 import { isFinished, PLANNER_ID, stationsOf, type PlanBlock, type RunModel } from './runModel'
-import { feedTroubleOf, headlineOf, lineOf, RUN_MISSING, RUN_PROBLEM, shortTime, speakerName, writeLabel, type NameOf, type Speaker } from './words'
+import { declinedNext, declinedRecord, feedTroubleOf, headlineOf, lineOf, RUN_MISSING, RUN_PROBLEM, shortTime, speakerName, writeLabel, type NameOf, type Speaker } from './words'
 import styles from './RunPage.module.css'
 
 const LANDS_ON_DECISION = new Set(['awaiting_approval', 'failed', 'rejected'])
@@ -222,7 +223,8 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const headline = headlineOf(shown, stations, proposal)
   const arrivedLive = shown.spotSeq > loadedUpTo ? (stations.findLast((station) => station.state !== 'todo')?.key ?? null) : null
   const newest = shown.chat.at(-1)
-  const announce = newest && newest.seq > loadedUpTo ? lineOf(newest, nameOf, run.trigger) : null
+  const next = declinedNext({ test: run.test, watchlist: useCase?.template === 'software_watchlist' }, nextRunOf(useCase), new Date())
+  const announce = newest && newest.seq > loadedUpTo ? lineOf(newest, nameOf, next) : null
 
   useEffect(() => {
     document.title = `${headline.text} · ${PRODUCT}`
@@ -244,7 +246,20 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
 
   const working = WORKING.has(shown.phase.state)
   const resting = working ? <Typing {...workingNow(shown)} /> : null
-  const last = <LastWordFor model={shown} approval={approval.data} found={foundOf(head.found, approval.data?.found)} decision={decision} troubleshoot={troubleshoot} nameOf={nameOf} me={me} runId={run.run_id} />
+  const last = (
+    <LastWordFor
+      model={shown}
+      approval={approval.data}
+      found={foundOf(head.found, approval.data?.found)}
+      decision={decision}
+      troubleshoot={troubleshoot}
+      nameOf={nameOf}
+      me={me}
+      runId={run.run_id}
+      reasons={declineReasons(useCase?.template)}
+      declinedNext={next}
+    />
+  )
 
   return (
     <div className={styles['page']}>
@@ -261,7 +276,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
         <span className={cx(styles['pill'], styles[headline.pill.tone])}>{headline.pill.label}</span>
       </div>
       <p className={styles['status']} role="status">
-        {statusWords(decision.recorded, live)}
+        {statusWords(decision, live, nameOf)}
       </p>
       <RunLine stations={stations} arrivedLive={arrivedLive} startedAt={shortTime(run.started_at)} nameOf={nameOf} />
       {working ? null : <NeedsYou>{last}</NeedsYou>}
@@ -275,7 +290,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
         >
           {open ? 'Hide what each agent did' : 'Show what each agent did'}
         </summary>
-        <Chat ref={chatList} items={shown.chat} loadedUpTo={loadedUpTo} nameOf={nameOf} trigger={run.trigger} last={resting} />
+        <Chat ref={chatList} items={shown.chat} loadedUpTo={loadedUpTo} nameOf={nameOf} declinedNext={next} last={resting} />
       </details>
       <div className="visually-hidden" aria-live="polite">
         {announce ? `${speakerName(announce.speaker)}: ${announce.text}` : ''}
@@ -284,12 +299,13 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   )
 }
 
-export function statusWords(recorded: Verdict | null, live: LiveRun): string {
+/** What the page says right after this person decided, before the run's own events catch up. A decline gives its record. */
+export function statusWords(decision: Pick<Decision, 'recorded' | 'declined'>, live: LiveRun, nameOf: NameOf): string {
   if (live.connection.is === 'reconnecting') return 'Lost the live connection. Trying again.'
   if (live.connection.is === 'closed') return 'Stopped following this run. Reload the page to see what changed.'
   if (isFinished(live.shown.phase)) return ''
-  if (recorded === 'approve') return 'Approved. The platform is writing now.'
-  if (recorded === 'decline') return 'Declined. Nothing will be written.'
+  if (decision.declined) return declinedRecord(decision.declined, nameOf)
+  if (decision.recorded === 'approve') return 'Approved. The platform is writing now.'
   return ''
 }
 
@@ -302,9 +318,11 @@ interface LastWordForProps {
   readonly nameOf: NameOf
   readonly me: Me | undefined
   readonly runId: string
+  readonly reasons: readonly string[]
+  readonly declinedNext: string | null
 }
 
-function LastWordFor({ model, approval, found, decision, troubleshoot, nameOf, me, runId }: LastWordForProps) {
+function LastWordFor({ model, approval, found, decision, troubleshoot, nameOf, me, runId, reasons, declinedNext }: LastWordForProps) {
   const modelOff = useModelOff()
   const { phase } = model
   switch (phase.state) {
@@ -316,6 +334,8 @@ function LastWordFor({ model, approval, found, decision, troubleshoot, nameOf, m
               approval={approval}
               page={{ found, part: yourPart(approval, partyOf(approval, me?.id), nameOf), askedBy: askedWords(approval, nameOf) }}
               decision={decision}
+              reasons={reasons}
+              requester={nameOf(requesterOf(approval))}
             />
           ) : (
             <p className="muted" role="status">
@@ -343,7 +363,7 @@ function LastWordFor({ model, approval, found, decision, troubleshoot, nameOf, m
     case 'rejected':
       return (
         <LastWord speaker={{ kind: 'app' }}>
-          <Outcome model={model} nameOf={nameOf} />
+          <Outcome model={model} nameOf={nameOf} declinedNext={declinedNext} />
         </LastWord>
       )
     default:

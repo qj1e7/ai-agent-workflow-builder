@@ -120,7 +120,7 @@ function View({ item, now }: { item: PanelItem; now: Date }) {
             </p>
           }
         >
-          <RunPanel id={item.id} />
+          <RunPanel key={item.id} id={item.id} />
         </Suspense>
       )
     case 'software':

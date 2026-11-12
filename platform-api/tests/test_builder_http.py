@@ -56,6 +56,7 @@ from platform_api.orchestration import (
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
+from platform_api.orchestration.approvals import Decision, Verdict
 from platform_api.orchestration.run_gist import gist_of
 from platform_api.orchestration.runs import (
     AwaitingApproval,
@@ -302,6 +303,7 @@ class RunBook:
         proposed: int = 0,
         task: Task = SPEC.task,
         test: bool = False,
+        decisions: tuple[Decision, ...] = (),
     ) -> RunId:
         run_id = RunId(f"run_{len(self.runs) + 1}")
         record = RunRecord(
@@ -318,7 +320,7 @@ class RunBook:
             None,
         )
         proposal = Proposal(ProposalId("prp_1"), run_id, (TICKET,) * proposed, Digest("d"))
-        self.runs.append(RunDetail(record, 0, proposal if proposed else None, None, ()))
+        self.runs.append(RunDetail(record, 0, proposal if proposed else None, None, decisions))
         return run_id
 
 
@@ -901,13 +903,18 @@ async def test_a_workflow_that_never_ran_has_no_last_run(front: Front):
     assert await last_run_of(front, "Never ran") is None
 
 
-async def test_a_declined_run_names_who_declined_and_writes_nothing(front: Front):
+def decided(step: int, by: str, verdict: Verdict, reason: str | None = None) -> Decision:
+    return Decision(ApprovalId("apr_1"), step, UserId(by), verdict, Digest("d"), LONG_AGO, reason)
+
+
+async def test_a_declined_run_names_who_declined_and_why_and_writes_nothing(front: Front):
     use_case_id = await make_workflow(front, "Declined")
     run_id = front.book.add(
         use_case_id,
         Rejected(RunId("run_1"), ProposalId("prp_1"), ApprovalId("apr_1"), UserId("bob"), 0),
         LONG_AGO,
         proposed=3,
+        decisions=(decided(0, "bob", Verdict.DECLINE, "Wrong version"),),
     )
     assert await last_run_of(front, "Declined") == {
         "run_id": run_id,
@@ -915,6 +922,8 @@ async def test_a_declined_run_names_who_declined_and_writes_nothing(front: Front
         "at": "2026-10-26T01:41:00Z",
         "test": False,
         "declined_by": "bob",
+        "decline_reason": "Wrong version",
+        "approved_by": [],
         "proposed": 3,
         "written": 0,
         "tickets": True,
@@ -922,6 +931,24 @@ async def test_a_declined_run_names_who_declined_and_writes_nothing(front: Front
         "retryable": False,
         "reason": None,
     }
+
+
+async def test_a_run_declined_at_the_second_step_names_who_said_yes_first(front: Front):
+    use_case_id = await make_workflow(front, "Second")
+    front.book.add(
+        use_case_id,
+        Rejected(RunId("run_1"), ProposalId("prp_1"), ApprovalId("apr_1"), UserId("alice"), 1),
+        LONG_AGO,
+        proposed=1,
+        decisions=(decided(0, "bob", Verdict.APPROVE), decided(1, "alice", Verdict.DECLINE)),
+    )
+    last = await last_run_of(front, "Second")
+    assert last is not None
+    assert (last["declined_by"], last["approved_by"], last["decline_reason"]) == (
+        "alice",
+        ["bob"],
+        None,
+    )
 
 
 async def test_a_stopped_run_is_the_last_run_with_no_one_declining(front: Front):

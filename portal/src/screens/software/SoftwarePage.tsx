@@ -32,6 +32,7 @@ import {
   type ChangeFeedback,
   type Moved,
 } from './removal'
+import { declinedNext, declinedOfSteps, declinedWithNext } from '../run/words'
 import { SoftwareHistory } from './SoftwareHistory'
 import {
   addressAttentionOf,
@@ -41,6 +42,7 @@ import {
   DECISION_NOTE,
   emptyWords,
   newestOf,
+  nextCheckOf,
   oursOf,
   REFRESH_MS,
   rowDomId,
@@ -79,6 +81,8 @@ interface RowProps {
   readonly confirming: boolean
   readonly switching: boolean
   readonly nameOf: (id: string) => string
+  /** The latest check's declined record and what happens next, when an Approver declined it. Each row with a new version gives it. */
+  readonly declined: string | null
   readonly onToggle: () => void
   readonly onRemove: () => void
   readonly onAskAddress: () => void
@@ -86,7 +90,7 @@ interface RowProps {
   readonly onCancelAddress: () => void
 }
 
-function Row({ row, operator, scheduled, paused, open, removing, confirming, switching, nameOf, onToggle, onRemove, onAskAddress, onConfirmAddress, onCancelAddress }: RowProps) {
+function Row({ row, operator, scheduled, paused, open, removing, confirming, switching, nameOf, declined, onToggle, onRemove, onAskAddress, onConfirmAddress, onCancelAddress }: RowProps) {
   const historyId = `history-${row.id}`
   const newest = newestOf(row)
   const ours = oursOf(row)
@@ -124,6 +128,7 @@ function Row({ row, operator, scheduled, paused, open, removing, confirming, swi
           {statusWords(row)}
         </span>
         {row.status === 'cant_check' && !row.not_found ? <span className={styles['src']}>{cantCheckWords(row.problem, { scheduled, paused })}</span> : null}
+        {declined && row.status === 'behind' ? <span className={styles['src']}>{declined}</span> : null}
         <NotFoundNote row={row} operator={operator} scheduled={scheduled} paused={paused} />
         <MovedNote row={row} operator={operator} confirming={confirming} busy={switching} onAsk={onAskAddress} onConfirm={onConfirmAddress} onCancel={onCancelAddress} />
         {row.status === 'ticket_open' && row.open_ticket ? (
@@ -158,6 +163,7 @@ interface RowsProps {
   readonly confirming: string | null
   readonly switching: string | null
   readonly nameOf: (id: string) => string
+  readonly declined: string | null
   readonly onToggle: (id: string) => void
   readonly onRemove: (row: WatchedSoftwareView) => void
   readonly onAskAddress: (row: WatchedSoftwareView) => void
@@ -181,6 +187,7 @@ function Rows({ rows, ...rest }: RowsProps) {
           confirming={rest.confirming === row.id}
           switching={rest.switching === row.id}
           nameOf={rest.nameOf}
+          declined={rest.declined}
           onToggle={() => rest.onToggle(row.id)}
           onRemove={() => rest.onRemove(row)}
           onAskAddress={() => rest.onAskAddress(row)}
@@ -209,6 +216,19 @@ function CheckNow({ useCaseId }: { useCaseId: string }) {
       ) : null}
     </div>
   )
+}
+
+/**
+ * The latest check's declined record, read from its run so the rows say it in the run's own words, and what happens next: the tickets
+ * are proposed again at the next check, when one is due.
+ */
+function useLastCheckDeclined(view: WatchlistView | null, nameOf: (id: string) => string): string | null {
+  const last = view?.last_check
+  const run = useRun(last?.state === 'rejected' ? last.run_id : '')
+  if (run.data?.state !== 'rejected') return null
+  const declined = declinedOfSteps(run.data.approval.steps)
+  if (!declined) return null
+  return declinedWithNext(declined, declinedNext({ test: run.data.test, watchlist: true }, nextCheckOf(view), new Date()), nameOf)
 }
 
 function LastCheckStopped({ last }: { last: LastCheckView }) {
@@ -328,9 +348,11 @@ function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; op
   const decisions = decisionsOf(software)
   const addresses = addressAttentionOf(software)
   const searching = query.trim() !== ''
+  const declined = useLastCheckDeclined(view, nameOf)
 
   const rowProps = {
     operator,
+    declined,
     scheduled,
     paused,
     opened,

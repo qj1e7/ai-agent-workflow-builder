@@ -165,6 +165,7 @@ class Story:
 
 SUCCESS = Story("success", RunId("run_01JB8"), datetime(2026, 11, 3, 2, 14, tzinfo=UTC), "41", "42")
 FAILURE = Story("failure", RunId("run_01JB9"), datetime(2026, 11, 4, 2, 14, tzinfo=UTC), "43")
+DECLINE_REASON = "Wrong version"
 REJECTED = Story("rejected", RunId("run_01JBA"), datetime(2026, 11, 5, 2, 14, tzinfo=UTC), "44")
 
 
@@ -201,10 +202,10 @@ def open_step() -> ApprovalStepView:
     return ApprovalStepView(index=0, label="Team approver", status="open")
 
 
-def decided_step(verdict: Verdict, at: datetime) -> ApprovalStepView:
+def decided_step(verdict: Verdict, at: datetime, reason: str | None = None) -> ApprovalStepView:
     status = "approved" if verdict is Verdict.APPROVE else "declined"
     return ApprovalStepView(
-        index=0, label="Team approver", status=status, decided_by=BOB, decided_at=at
+        index=0, label="Team approver", status=status, decided_by=BOB, decided_at=at, reason=reason
     )
 
 
@@ -515,8 +516,8 @@ def rejected_events() -> Timeline:
         RunRejected,
         251.92,
         PLATFORM,
-        "Bob declined the request. Nothing was written.",
-        RunRejectedData(by=BOB, step=0),
+        f"Bob declined the request. Nothing was written. Reason: {DECLINE_REASON}.",
+        RunRejectedData(by=BOB, step=0, reason=DECLINE_REASON),
     )
     return tl
 
@@ -536,6 +537,7 @@ class RunBaseFields(TypedDict):
     use_case_version: int
     started_by: UserId
     trigger: Trigger
+    test: bool
     started_at: datetime
     updated_at: datetime
     last_seq: int
@@ -550,6 +552,7 @@ def _base(story: Story, tl: Timeline, seq: int) -> RunBaseFields:
         use_case_version=1,
         started_by=ALICE,
         trigger="person",
+        test=False,
         started_at=story.t0,
         updated_at=tl.events[seq - 1].ts,
         last_seq=seq,
@@ -607,7 +610,9 @@ def rejected_final_view(tl: Timeline) -> RunView:
     return RejectedView(
         **_base(REJECTED, tl, len(tl.events)),
         proposal=proposal_view(REJECTED),
-        approval=approval_ref(REJECTED, [decided_step(Verdict.DECLINE, decided.ts)]),
+        approval=approval_ref(
+            REJECTED, [decided_step(Verdict.DECLINE, decided.ts, DECLINE_REASON)]
+        ),
         rejected_by=BOB,
         step=0,
     )
@@ -637,7 +642,7 @@ def decision_out(tl: Timeline) -> DecisionOut:
     decided = next(e for e in tl.events if e.kind == "approval_decided")
     return DecisionOut(
         status="approved",
-        decision=DecisionView(step=0, by=BOB, verdict=Verdict.APPROVE, at=decided.ts),
+        decision=DecisionView(step=0, by=BOB, verdict=Verdict.APPROVE, at=decided.ts, reason=None),
     )
 
 
@@ -709,12 +714,11 @@ APPROVAL_NOTICE = ApprovalNotice(
 )
 
 
-def teams_messages(tl: Timeline, decided: bool = False) -> TeamsStubMessages:
-    """The practice Teams copy as the run asks for a yes, and, when decided, after Bob's yes."""
+def teams_messages(tl: Timeline, outcome: ApprovalOutcome | None = None) -> TeamsStubMessages:
+    """The practice Teams copy as the run asks for a yes, and with the outcome once decided."""
     announced = next(e for e in tl.events if e.kind == "approval_announced")
     card = approval_card(APPROVAL_NOTICE)
-    if decided:
-        outcome = ApprovalOutcome("approved", ("Bob",), USE_CASE_NAME, APPROVAL_NOTICE.open_url)
+    if outcome is not None:
         card = with_outcome(card, outcome)
     return TeamsStubMessages(
         messages=[
@@ -787,7 +791,19 @@ def fixtures() -> dict[str, WireModel | list[WireModel]]:
         "internal/workflow-failure.json": WORKFLOW_FAILURE,
         "stubs/dev-users.json": DEV_USERS,
         "stubs/teams-messages.json": teams_messages(success),
-        "stubs/teams-messages.decided.json": teams_messages(success, decided=True),
+        "stubs/teams-messages.decided.json": teams_messages(
+            success, ApprovalOutcome("approved", ("Bob",), USE_CASE_NAME, APPROVAL_NOTICE.open_url)
+        ),
+        "stubs/teams-messages.declined.json": teams_messages(
+            success,
+            ApprovalOutcome(
+                "declined",
+                ("Bob",),
+                USE_CASE_NAME,
+                APPROVAL_NOTICE.open_url,
+                reason=DECLINE_REASON,
+            ),
+        ),
         "stubs/mock-jira-tickets.json": mock_jira_tickets(success),
         "troubleshooting/failure.json": troubleshooting(failure),
     }

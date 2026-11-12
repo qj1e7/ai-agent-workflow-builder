@@ -120,6 +120,8 @@ function lastRunOf(run: Run | undefined): UseCaseView['last_run'] {
     at: view.started_at,
     test: false,
     declined_by: null,
+    decline_reason: null,
+    approved_by: [],
     proposed: 1,
     written: 0,
     tickets: true,

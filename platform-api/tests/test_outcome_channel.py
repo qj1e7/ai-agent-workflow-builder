@@ -37,7 +37,7 @@ HOOK_B = "https://teams.example/workflows/b/run?sig=signature-of-channel-b"
 ASKED = (
     f"{SPEC.use_case_name} wants to make 1 change. Nothing is written until an Approver says yes."
 )
-APPROVED = f"{SPEC.use_case_name}: approved by bob."
+APPROVED = f"{SPEC.use_case_name}: approved by Bob."
 
 
 @dataclass

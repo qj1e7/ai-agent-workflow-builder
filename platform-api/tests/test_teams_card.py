@@ -57,6 +57,8 @@ NOTICE = ApprovalNotice(
 )
 APPROVED = ApprovalOutcome("approved", ("Bob",), "Software watchlist", OPEN_URL)
 DECLINED = ApprovalOutcome("declined", ("Bob",), "Software watchlist", OPEN_URL)
+GIVEN_A_REASON = replace(DECLINED, reason="Wrong version")
+AFTER_A_YES = replace(DECLINED, by=("Alice",), approved_first=("Bob",), reason="Not this week")
 
 
 def wire(card: AdaptiveCard) -> dict[str, Any]:
@@ -86,6 +88,9 @@ def every_card() -> dict[str, AdaptiveCard]:
         "queued before the card": approval_card(old),
         "approved": with_outcome(approval_card(NOTICE), APPROVED),
         "declined": with_outcome(approval_card(NOTICE), DECLINED),
+        "declined with a reason": with_outcome(approval_card(NOTICE), GIVEN_A_REASON),
+        "declined after a yes": with_outcome(approval_card(NOTICE), AFTER_A_YES),
+        "declined on its own": outcome_card(GIVEN_A_REASON),
         "approved after a decline": with_outcome(
             with_outcome(approval_card(NOTICE), DECLINED), APPROVED
         ),
@@ -193,7 +198,12 @@ def test_web_addresses_and_markdown_links_in_text_we_did_not_write_are_inert():
         owner_name=INERT,
     )
     outcome = ApprovalOutcome("approved", (INERT,), INERT, OPEN_URL)
-    for card in (approval_card(notice), with_outcome(approval_card(notice), outcome)):
+    declined = ApprovalOutcome("declined", (INERT,), INERT, OPEN_URL, (INERT,), INERT)
+    for card in (
+        approval_card(notice),
+        with_outcome(approval_card(notice), outcome),
+        with_outcome(approval_card(notice), declined),
+    ):
         runs = texts(wire(card), "TextRun", "text")
         assert runs and all(INERT not in run for run in runs)
         for run in runs:
@@ -265,6 +275,32 @@ def test_an_outcome_goes_on_top_and_replaces_an_earlier_one():
     assert declined["inlines"][0]["text"] == "Declined by Bob"
     assert declined["inlines"][0]["color"] == "attention"
     assert approved["body"][1:] == wire(approval_card(NOTICE))["body"]
+
+
+def test_a_declined_card_gives_the_declined_record_under_who_decided():
+    def record(outcome: ApprovalOutcome) -> list[list[str]]:
+        body = wire(with_outcome(approval_card(NOTICE), outcome))["body"]
+        return [[run["text"] for run in block["inlines"]] for block in body[:2]]
+
+    assert record(DECLINED) == [["Declined by Bob"], ["Nothing was written."]]
+    assert record(GIVEN_A_REASON) == [
+        ["Declined by Bob"],
+        ["Nothing was written. Reason: Wrong version."],
+    ]
+    assert record(AFTER_A_YES) == [
+        ["Approved by Bob, then declined by Alice"],
+        ["Nothing was written. Reason: Not this week."],
+    ]
+    lone = texts(wire(outcome_card(GIVEN_A_REASON)), "TextRun", "text")
+    assert "".join(lone) == (
+        "Software watchlist: declined by Bob. Nothing was written. Reason: Wrong version."
+    )
+
+
+def test_an_approval_after_a_decline_leaves_no_line_of_the_decline():
+    card = with_outcome(with_outcome(approval_card(NOTICE), GIVEN_A_REASON), APPROVED)
+    runs = texts(wire(card), "TextRun", "text")
+    assert not any("Nothing was written" in run or "Reason:" in run for run in runs)
 
 
 def test_no_field_of_the_notice_can_carry_a_secret_into_a_card():

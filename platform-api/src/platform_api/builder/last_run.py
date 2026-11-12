@@ -23,6 +23,8 @@ def last_run_view(gist: RunGist) -> LastRunView:
         at=gist.started_at,
         test=gist.test,
         declined_by=gist.declined_by,
+        decline_reason=gist.decline_reason,
+        approved_by=list(gist.approved_by),
         proposed=gist.proposed,
         written=gist.written,
         tickets=gist.tickets,

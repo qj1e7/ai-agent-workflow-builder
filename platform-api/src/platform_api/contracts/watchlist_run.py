@@ -556,6 +556,7 @@ def awaiting_approval_view(tl: Timeline) -> RunView:
         use_case_version=USE_CASE_VERSION,
         started_by=ALICE,
         trigger="person",
+        test=False,
         started_at=CHECK.t0,
         updated_at=announced.ts,
         last_seq=announced.seq,

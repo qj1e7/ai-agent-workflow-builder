@@ -109,6 +109,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -137,6 +142,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -1879,6 +1885,18 @@
             "title": "Label",
             "type": "string"
           },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the Approver declined this step, when they gave a reason. Null for any other step.",
+            "title": "Reason"
+          },
           "status": {
             "$ref": "#/components/schemas/ApprovalStepStatus"
           }
@@ -2023,6 +2041,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -2055,6 +2078,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -3647,6 +3671,17 @@
             "title": "Digest",
             "type": "string"
           },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeclineReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the Approver declines, up to 200 characters. Optional, and only with \"verdict\": \"decline\". It is a note on the decline and decides nothing."
+          },
           "step": {
             "title": "Step",
             "type": "integer"
@@ -3698,6 +3733,18 @@
             "title": "By",
             "type": "string"
           },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the Approver declined, when they gave a reason.",
+            "title": "Reason"
+          },
           "step": {
             "title": "Step",
             "type": "integer"
@@ -3710,9 +3757,82 @@
           "step",
           "by",
           "verdict",
-          "at"
+          "at",
+          "reason"
         ],
         "title": "DecisionView",
+        "type": "object"
+      },
+      "DeclineReason": {
+        "maxLength": 200,
+        "minLength": 1,
+        "type": "string"
+      },
+      "DeclinedItem": {
+        "additionalProperties": false,
+        "properties": {
+          "decline_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the Approver declined, when they gave a reason.",
+            "title": "Decline Reason"
+          },
+          "declined_at": {
+            "format": "date-time",
+            "title": "Declined At",
+            "type": "string"
+          },
+          "declined_by": {
+            "title": "Declined By",
+            "type": "string"
+          },
+          "declined_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the Approver who declined is no longer on the list.",
+            "title": "Declined By Name"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "use_case_id",
+          "use_case_name",
+          "started_at",
+          "declined_at",
+          "declined_by",
+          "declined_by_name",
+          "decline_reason"
+        ],
+        "title": "DeclinedItem",
         "type": "object"
       },
       "DeniedReason": {
@@ -4059,6 +4179,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -4087,6 +4212,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -4340,6 +4466,18 @@
             "title": "Connections",
             "type": "array"
           },
+          "declined": {
+            "description": "An Operator's own test runs that an Approver declined, while each is the newest run of its workflow, the newest decline first. They are part of Needs you, and one leaves when the workflow runs again. At most 10.",
+            "items": {
+              "$ref": "#/components/schemas/DeclinedItem"
+            },
+            "title": "Declined",
+            "type": "array"
+          },
+          "declined_total": {
+            "title": "Declined Total",
+            "type": "integer"
+          },
           "drafts": {
             "description": "An Operator's own drafts, the last saved first.",
             "items": {
@@ -4406,6 +4544,8 @@
           "stopped_total",
           "waiting_on_others",
           "waiting_on_others_total",
+          "declined",
+          "declined_total",
           "drafts",
           "following_up",
           "following_up_total",
@@ -4509,11 +4649,31 @@
       "LastRunView": {
         "additionalProperties": false,
         "properties": {
+          "approved_by": {
+            "description": "Who said yes to its request, in step order. On a declined run, those who said yes before it was declined. Empty when nobody did.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Approved By",
+            "type": "array"
+          },
           "at": {
             "description": "When the run started.",
             "format": "date-time",
             "title": "At",
             "type": "string"
+          },
+          "decline_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it was declined, when the Approver gave a reason. Null otherwise.",
+            "title": "Decline Reason"
           },
           "declined_by": {
             "anyOf": [
@@ -4582,6 +4742,8 @@
           "at",
           "test",
           "declined_by",
+          "decline_reason",
+          "approved_by",
           "proposed",
           "written",
           "tickets",
@@ -5502,6 +5664,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -5530,6 +5697,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -6149,6 +6317,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -6177,6 +6350,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -6377,6 +6551,11 @@
             "title": "Step",
             "type": "integer"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -6405,6 +6584,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -6850,6 +7030,18 @@
           "by": {
             "title": "By",
             "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the Approver declined, when they gave a reason.",
+            "title": "Reason"
           },
           "step": {
             "title": "Step",
@@ -7893,6 +8085,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -7928,6 +8125,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -9619,6 +9817,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -9647,6 +9850,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",

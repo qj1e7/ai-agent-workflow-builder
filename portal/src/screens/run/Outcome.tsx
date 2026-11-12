@@ -7,9 +7,9 @@ import { RetryButton } from '../home/HomeItem'
 import { stoppedActions } from '../home/home'
 import { TicketLink } from '../jira/TicketKeys'
 import { ReportToSupport } from './Report'
-import type { Phase, RunModel } from './runModel'
+import { declinedOf, type Phase, type RunModel } from './runModel'
 import { failureText } from './support'
-import { andList, withCurrentNames, type NameOf } from './words'
+import { andList, declinedWithNext, withCurrentNames, type NameOf } from './words'
 import styles from './panels.module.css'
 
 function BackHome() {
@@ -20,13 +20,14 @@ function BackHome() {
   )
 }
 
-export function Outcome({ model, nameOf }: { model: RunModel; nameOf: NameOf }) {
-  const { phase } = model
-  if (phase.state === 'rejected') {
+/** `declinedNext` is what happens after a decline, from declinedNext in words.ts. */
+export function Outcome({ model, nameOf, declinedNext = null }: { model: RunModel; nameOf: NameOf; declinedNext?: string | null }) {
+  const declined = declinedOf(model)
+  if (declined) {
     return (
       <div className={styles['panel']}>
         <h2>Declined</h2>
-        <p>{nameOf(phase.by)} declined, so nothing was written.</p>
+        <p>{declinedWithNext(declined, declinedNext, nameOf)}</p>
         <BackHome />
       </div>
     )

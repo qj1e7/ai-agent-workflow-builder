@@ -81,8 +81,11 @@ describe('the run line', () => {
     ])
   })
 
-  it('shows a declined gate and a write that was not needed', () => {
-    expect(stepsSaid(line(replay(rejected))).slice(3)).toEqual(['Approval gate Declined', 'Create Jira tickets Not needed', 'Done: Done'])
+  it('shows a declined gate, a write that says nothing was written, and a run that ended without a tick', () => {
+    const html = line(replay(rejected))
+    expect(stepsSaid(html).slice(3)).toEqual(['Approval gate Declined', 'Create Jira tickets Nothing written', 'Done: Ended'])
+    const ended = [...html.matchAll(/<li\b[\s\S]*?<\/li>/g)].map((match) => match[0]).at(-1) ?? ''
+    expect(ended).not.toContain('<svg')
   })
 
   it('marks where a failed run stopped', () => {
@@ -160,7 +163,7 @@ describe('the chat', () => {
   function chat(model: RunModel, loadedUpTo = model.seq): string {
     return renderToStaticMarkup(
       <MemoryRouter>
-        <Chat items={model.chat} loadedUpTo={loadedUpTo} nameOf={nameOf} trigger="person" last={null} />
+        <Chat items={model.chat} loadedUpTo={loadedUpTo} nameOf={nameOf} declinedNext={null} last={null} />
       </MemoryRouter>,
     )
   }
@@ -176,10 +179,21 @@ describe('the chat', () => {
     expect(said).not.toMatch(/n8n|execution|workflow step|room lead|release checker|use case/i)
   })
 
-  it('says who declined and that nothing was written', () => {
+  it('gives a declined run’s record and what happens next on the page, with no write', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <Outcome model={replay(rejected)} nameOf={nameOf} declinedNext="Change what it does, or run the test again." />
+      </MemoryRouter>,
+    )
+    expect(text(html)).toContain('Declined Declined by Bob. Nothing was written. Reason: Wrong version. Change what it does, or run the test again.')
+    expect(html).not.toMatch(/created|href="\/jira\//)
+  })
+
+  it('says who declined, and ends on the declined record, never on Done', () => {
     const said = text(chat(replay(rejected)))
     expect(said).toContain('Bob declined.')
-    expect(said).toContain('Done. Nothing was written.')
+    expect(said).toContain('Declined by Bob. Nothing was written. Reason: Wrong version. The run ended.')
+    expect(said).not.toMatch(/Done\.|created/)
   })
 
   it('lets the agent that failed say so in a red bubble', () => {
@@ -220,11 +234,11 @@ describe('the chat', () => {
           items={[
             { kind: 'started', seq: 1, at: at('2026-10-27T00:00:00Z'), by: 'alice', trigger: 'person' },
             { kind: 'decided', seq: 2, at: at('2026-10-27T15:59:00Z'), by: 'bob', verdict: 'approve', step: null },
-            { kind: 'declined', seq: 3, at: at('2026-10-27T16:01:00Z') },
+            { kind: 'declined', seq: 3, at: at('2026-10-27T16:01:00Z'), record: { by: 'bob', approvedBy: [], reason: null } },
           ]}
           loadedUpTo={9}
           nameOf={nameOf}
-          trigger="person"
+          declinedNext={null}
           last={null}
         />
       </MemoryRouter>,
@@ -260,7 +274,7 @@ describe('ticket keys on the run page', () => {
   function chatHtml(items: RunModel['chat']): string {
     return renderToStaticMarkup(
       <MemoryRouter>
-        <Chat items={items} loadedUpTo={99} nameOf={nameOf} trigger="person" last={null} />
+        <Chat items={items} loadedUpTo={99} nameOf={nameOf} declinedNext={null} last={null} />
       </MemoryRouter>,
     )
   }

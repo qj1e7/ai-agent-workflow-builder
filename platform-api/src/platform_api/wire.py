@@ -3,7 +3,14 @@ from datetime import datetime
 from typing import Annotated, Any, Literal, NoReturn, cast
 
 from fastapi import HTTPException
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+)
 from pydantic_core import PydanticCustomError
 
 from platform_api.shared import UserId
@@ -120,12 +127,25 @@ type Trigger = Literal["person", "schedule"]
 type ApprovalStepStatus = Literal["waiting", "open", "approved", "declined"]
 
 
+DECLINE_REASON_MAX = 200
+
+type DeclineReason = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=DECLINE_REASON_MAX)
+]
+"""Why an Approver declined, such as "Wrong version". Optional, and only with a decline."""
+
+
 class ApprovalStepView(WireModel):
     index: int
     label: str
     status: ApprovalStepStatus
     decided_by: UserId | None = None
     decided_at: datetime | None = None
+    reason: str | None = Field(
+        default=None,
+        description="Why the Approver declined this step, when they gave a reason. Null for "
+        "any other step.",
+    )
 
 
 REPO_PATTERN = r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$"
