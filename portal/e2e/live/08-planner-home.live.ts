@@ -12,6 +12,8 @@ import { devContext, OUT, shot } from './support/ui'
 
 const GREETING = /^Good (morning|afternoon|evening)! Alice$/
 const OFFLINE = 'I can’t read new requests until an AI model is connected'
+/** A request the Planner answers with a set-up card. */
+const SUMMARY = 'Find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'
 
 const box = (page: Page) => page.getByLabel('Ask the Planner about software versions')
 const thread = (page: Page) => page.getByRole('list', { name: 'Conversation with the Planner' })
@@ -148,7 +150,6 @@ test.describe('with the AI model on', () => {
     await connectMockModel(String(baseURL))
   })
 
-  const SUMMARY = 'Find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'
   const card = (page: Page) => thread(page).locator('section[data-card]')
   const left = (page: Page) => card(page).locator('[id$="-left"]')
   const turnOn = (page: Page) => card(page).getByRole('button', { name: 'Turn it on', exact: true })
@@ -727,9 +728,9 @@ test.describe('the chat after the first message', () => {
     const page = await context.newPage()
     const saves = draftSaves(page)
     await page.goto('/')
-    await ask(page, 'Every Friday at 4pm, follow up on bug tickets in MOCK with no update for 41 days')
+    await ask(page, SUMMARY)
     const card = thread(page).locator('section[data-card]')
-    await expect(card.getByRole('heading', { level: 3 }).first(), 'a card answer takes focus at its heading').toBeFocused()
+    await expect(card.getByRole('heading', { level: 3 }).first(), 'a set-up card takes focus at its heading').toBeFocused()
     await card.getByRole('button', { name: /^Rename/ }).click()
     await card.getByLabel('Workflow name').fill(name)
     await page.keyboard.press('Enter')
