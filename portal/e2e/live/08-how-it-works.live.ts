@@ -49,6 +49,32 @@ test('an agent opens from its tile, closes back to the tile, and the old Agent l
   await expect(page).toHaveURL(/\/settings\?tab=how$/)
 })
 
+// CI run 43135325904: Escape hid the agent before the address went back a step, so the step back landed after the next page
+// had opened and took the person back to the list. Here the step back is slow and the next page takes a second to come.
+test('an agent closes by going back before it hides, so a page opened straight after stays open', async ({ page }) => {
+  await page.addInitScript(() => {
+    const go = history.go.bind(history)
+    history.go = (delta?: number) => {
+      setTimeout(() => go(delta), 300)
+    }
+  })
+  await page.route('**/agents/planner', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
+    await route.continue()
+  })
+  await page.goto(`${HOW}&show=agents`)
+  await page.getByRole('link', { name: 'Planner' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Planner' })
+  await expect(dialog).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  expect(page.url(), 'once the agent is hidden, the address no longer names it').toMatch(/\/settings\?tab=how&show=agents$/)
+
+  await page.goto('/agents/planner', { waitUntil: 'commit' })
+  await expect(page).toHaveURL(/\/settings\?tab=how&show=agents&agent=planner$/)
+  await expect(page.getByRole('dialog', { name: 'Planner' })).toBeVisible()
+})
+
 test('an Approver who is not an Operator is not offered How it works, and the old address leads Home', async ({ browser }) => {
   const bob = await signedInAs(browser, 'bob')
   const page = await bob.newPage()
