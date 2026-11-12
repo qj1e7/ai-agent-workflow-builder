@@ -462,13 +462,13 @@ test.describe('with the AI model on', () => {
       await ask(page, 'what about Redis?')
       await expect(thread(page)).toContainText('Redis runs 8.2.0.')
       await expect(thread(page).getByText('Looked at').last()).toBeVisible()
-      const open = thread(page).getByRole('link', { name: 'Open Redis on the Software page' })
-      await expect(open).toHaveAttribute('href', /^\/software\?row=/)
+      const open = thread(page).getByRole('button', { name: 'Open Redis on the Software page' })
+      await expect(open, 'from the chat it opens in the side panel').toHaveAttribute('data-opens', /^software:/)
       const stop = thread(page).getByRole('button', { name: 'Stop watching Redis' })
       await expect(stop, 'Stop watching comes after Open').toBeVisible()
       const check = thread(page).getByRole('button', { name: 'Check all software now' })
       await expect(check).toBeVisible()
-      expect(await tooSmall(page.locator('main').getByRole('link', { name: 'Open Redis on the Software page' })), 'principle 11: targets of at least 44 px').toEqual([])
+      expect(await tooSmall(open), 'principle 11: targets of at least 44 px').toEqual([])
       expect(await tooSmall(stop.or(check)), 'principle 11: targets of at least 44 px').toEqual([])
       await noSideways(page)
       await settled(page)
@@ -625,6 +625,7 @@ test.describe('the chat after the first message', () => {
   })
 
   const pinned = (page: Page) => page.getByRole('region', { name: 'Most urgent' })
+  const pinnedOpen = (page: Page) => pinned(page).getByRole('link', { name: /^Open/ }).or(pinned(page).getByRole('button', { name: /^Open/ }))
   const needsTotal = async (page: Page) =>
     Number(((await page.getByRole('navigation', { name: 'Main' }).filter({ visible: true }).getByRole('link', { name: /^Workflows, \d+ need you$/ }).getAttribute('aria-label')) ?? '').replace(/\D/g, ''))
 
@@ -645,7 +646,9 @@ test.describe('the chat after the first message', () => {
     const total = await needsTotal(page)
     expect(total, 'a reply from the team and Jira not answering are two needs').toBeGreaterThan(1)
     expect(total, 'the rail’s count is the platform’s').toBe(await platformNeeds(backend, 'alice'))
-    await expect(pinned(page).getByRole('link', { name: /^Open/ })).toHaveAttribute('href', /^\/(runs|settings|software|workflows)/)
+    await expect(pinnedOpen(page), 'Open shows a stop or a request in the side panel, and anything else on its page').toBeVisible()
+    if ((await pinned(page).getByRole('link', { name: /^Open/ }).count()) > 0) await expect(pinned(page).getByRole('link', { name: /^Open/ })).toHaveAttribute('href', /^\/(settings|software|workflows)/)
+    else await expect(pinned(page).getByRole('button', { name: /^Open/ })).toHaveAttribute('data-opens', /^run:/)
     await expect(pinned(page).getByRole('link', { name: `${String(total - 1)} more that need you` })).toHaveAttribute('href', '/workflows')
     await pinned(page).getByRole('link', { name: /more that need you/ }).click()
     await expect(page).toHaveURL(/\/workflows$/)
@@ -775,17 +778,21 @@ test.describe('the chat after the first message', () => {
     await context.close()
   })
 
-  test('a link in a chat card opens its page with Back to the chat, which puts focus back on the chat', async ({ browser }) => {
+  test('a workflow a chat card opens in the side panel has More details, a page with Back to the chat, which puts focus back on the chat', async ({ browser, backend }) => {
+    const name = `Back to the chat ${randomUUID().slice(0, 6)}`
+    await backend.post('alice', '/api/v1/agent-use-cases', { name, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents: [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }] }, undefined, [201])
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     await page.goto('/')
     await ask(page, 'Check my workflows')
-    await thread(page).getByRole('list', { name: 'Your workflows' }).getByRole('link').first().click()
+    await thread(page).getByRole('list', { name: 'Your workflows' }).getByRole('button', { name, exact: true }).click()
+    await page.locator('#side-panel').getByRole('link', { name: 'More details' }).click()
     await expect(page.getByRole('link', { name: 'Back to the chat' })).toBeVisible()
     await expect(main(page).getByRole('link', { name: 'Workflows', exact: true }), 'the page’s own Back gives way to Back to the chat').toHaveCount(0)
     await page.getByRole('link', { name: 'Back to the chat' }).click()
     await expect(thread(page)).toContainText('Check my workflows')
     await expect(page.getByRole('heading', { level: 1, name: 'Planner' })).toBeFocused()
+    await expect(page.locator('#side-panel'), 'the panel is still there on return').toBeVisible()
     await context.close()
   })
 
@@ -824,7 +831,7 @@ test.describe('the chat after the first message', () => {
     const page = await context.newPage()
     await page.goto('/')
     await ask(page, 'What can you do?')
-    await tabTo(page, pinned(page).getByRole('link', { name: /^Open/ }))
+    await tabTo(page, pinnedOpen(page))
     await tabTo(page, page.getByRole('button', { name: 'New chat' }))
     await page.keyboard.press('Enter')
     await expect(thread(page)).toHaveCount(0)
