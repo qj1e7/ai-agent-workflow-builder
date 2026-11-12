@@ -41,7 +41,7 @@ const ANY_HEADING = /\S/
 const SCREENS: readonly Screen[] = [
   { name: 'Chat', path: '/', heading: ANY_HEADING },
   { name: 'Workflows', path: '/workflows', heading: 'Workflows' },
-  { name: 'Watchlist', path: '/software', heading: 'Software watchlist', lead: /^(\d+ (has|have) a newer version|\d+ can’t be checked|\d+ not checked yet)( · \d+ (can’t be checked|not checked yet))*$|^Everything is up to date\.$|^Nothing newer yet\.$|^Everything your team runs, in one list\.$/ },
+  { name: 'Watchlist', path: '/software', heading: 'Software watchlist', lead: /^(?:\d+ (?:has|have) a newer version(?: · \d+ can’t be checked)?(?: · \d+ not checked yet)?|\d+ can’t be checked(?: · \d+ not checked yet)?|\d+ not checked yet|Everything is up to date\.|Nothing newer yet\.|Everything your team runs, in one list\.)$/ },
   { name: 'Settings, Connections', path: '/settings', heading: 'Settings' },
   { name: 'Settings, People and permissions', path: '/settings?tab=people', heading: 'Settings' },
   { name: 'Settings, AI model', path: '/settings?tab=model', heading: 'Settings' },
