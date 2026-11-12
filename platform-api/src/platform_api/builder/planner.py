@@ -605,28 +605,43 @@ def _parts(clauses: list[asks.Clause], answered: asks.Ask | None) -> list[PartVi
 
 
 def _remark(part: PartView) -> PartView:
-    """A clause that asks for a change is never ticked, whatever the reading made of it."""
-    return _cross(part.text, "operators") if asks.ask_of(part.text) == "change" else part
+    """A clause that asks for a change is never ticked, whatever the reading made of it, and
+    only a question is: anything else ticked gets its cross."""
+    ask = asks.ask_of(part.text)
+    if ask == "change" or (part.mark == "will_do" and ask not in ("question", "decided")):
+        return _cross(part.text, CROSS_FOR[ask])
+    return part
+
+
+def past_decisions(text: str) -> DecidedReply | None:
+    """A question about the person's own decisions, answered from platform state with no model:
+    there is nothing in it for the runtime to refuse. None when the request holds an approve or
+    decline, which the runtime reads first, or no question about decisions at all."""
+    clauses = asks.clauses_of(text)
+    kinds = {c.ask for c in clauses}
+    if "decided" not in kinds or "decide" in kinds:
+        return None
+    return DecidedReply(only=asks.only_of(clauses), parts=_parts(clauses, "decided"))
 
 
 def questions_only(reply: PlannerReply, text: str | None) -> PlannerReply:
     """The answer for someone who can't change workflows (ADR 0043, spec 5.3). Their own
     decisions and an approve or decline are read from their words here, clause by clause; any
     other question keeps the runtime's answer. A change gets "operators", alone or beside an
-    approve or decline. Beside a question, it is a cross that says the same. A request to skip
-    a yes keeps the runtime's refusal, and so does the offline answer, since no model read it."""
-    if reply.answer == "offline":
+    approve or decline. Beside a question, it is a cross that says the same. The runtime's
+    refusal stands, whatever the words, and so does the offline answer. Questions about past
+    decisions are answered before the runtime is asked (`past_decisions`)."""
+    if reply.answer in ("offline", "refused"):
         return reply
+    decided = past_decisions(text or "")
+    if decided is not None:
+        return decided
     clauses = asks.clauses_of(text or "")
     kinds = {c.ask for c in clauses}
-    if reply.answer == "refused" and ("decide" not in kinds or asks.SKIPPING.search(text or "")):
-        return reply
     if "decide" in kinds:
         if "change" in kinds:
             return OperatorsReply(parts=_parts(clauses, None))
         return DecideReply(parts=_parts(clauses, "decide"))
-    if "decided" in kinds:
-        return DecidedReply(only=asks.only_of(clauses), parts=_parts(clauses, "decided"))
     if reply.answer not in QUESTIONS or ("change" in kinds and "question" not in kinds):
         return OperatorsReply(parts=_parts(clauses, None))
     return reply.model_copy(update={"parts": [_remark(p) for p in reply.parts]})
@@ -650,12 +665,16 @@ class PlannerFront:
         self._connections = connections
 
     async def answer(self, body: AnswerIn, viewer: Principal) -> PlannerReply | NoSuchWorkflow:
+        operator = Role.OPERATOR in viewer.roles
+        decided = None if operator or body.text is None else past_decisions(body.text)
+        if decided is not None:
+            return decided
         if body.text is not None:
             reply = await self._typed(body.text, viewer, body.previous)
         else:
             assert body.intent is not None
             reply = await self._intent(body.intent, body.use_case_id)
-        if Role.OPERATOR in viewer.roles or isinstance(reply, NoSuchWorkflow):
+        if operator or isinstance(reply, NoSuchWorkflow):
             return reply
         return questions_only(reply, body.text)
 
