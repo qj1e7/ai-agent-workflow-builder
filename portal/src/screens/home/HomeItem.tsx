@@ -9,6 +9,8 @@ import { AgentFace } from '../../ui/AgentFace'
 import { Button, ButtonLink } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { IconAlert, IconChevronRight, IconInfo, IconShield, type Icon } from '../../ui/icons'
+import { OpenButton } from '../../ui/OpenItem'
+import { useAfterPanelAction, useShownInPanel } from '../../ui/sidePanel'
 import { draftPath } from './card'
 import { actionsOf, CONNECT_ABOVE, draftWords, isModelNeed, NO_MODEL_TITLE, retryProblem, waitingWords, wordsOf, type Action, type Need, type Tone } from './home'
 import styles from './Home.module.css'
@@ -34,12 +36,19 @@ function motionProps({ glide, arrive, stagger, leaving, onAnimationEnd }: Motion
   }
 }
 
+/**
+ * Retries a stopped run and opens it, so the person sees it go. In the side panel the run stays where it is, with the panel back
+ * at its top. While the panel shows the run, the chat hides its own Retry, because the panel has it.
+ */
 export function RetryButton({ runId, label, primary, describedBy }: { runId: string; label: string; primary: boolean; describedBy: string }) {
   const navigate = useChatNavigate()
-  const retry = useRetry(runId, () => navigate(`/runs/${runId}`))
+  const backToTop = useAfterPanelAction()
+  const retry = useRetry(runId, () => (backToTop ? backToTop() : navigate(`/runs/${runId}`)))
   const latch = useLatch()
   const words = useErrorWords()
+  const inPanel = useShownInPanel({ kind: 'run', id: runId })
   const press = () => latch.run((settled) => retry.mutate(undefined, { onSettled: settled }))
+  if (inPanel) return null
   return (
     <>
       <Button variant={primary ? 'primary' : 'secondary'} loading={retry.isPending} onClick={press} aria-describedby={describedBy}>
@@ -56,6 +65,13 @@ export function RetryButton({ runId, label, primary, describedBy }: { runId: str
 
 function ActionButton({ action, primary, describedBy }: { action: Action; primary: boolean; describedBy: string }) {
   if (action.kind === 'retry') return <RetryButton runId={action.runId} label={action.label} primary={primary} describedBy={describedBy} />
+  if (action.item) {
+    return (
+      <OpenButton item={action.item} to={action.to} variant={primary ? 'primary' : 'secondary'} aria-describedby={describedBy}>
+        {action.label}
+      </OpenButton>
+    )
+  }
   return (
     <ButtonLink to={action.to} variant={primary ? 'primary' : 'secondary'} aria-describedby={describedBy}>
       {action.label}

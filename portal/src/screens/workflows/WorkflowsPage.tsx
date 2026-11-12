@@ -13,10 +13,12 @@ import type { DraftView, HomeOut, Me, UseCaseView } from '../../api/types'
 import { useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
 import { OperatorsNote } from '../../shell/OperatorsNote'
 import { PageHead, PageNote } from '../../shell/PageHead'
-import { Button, ButtonLink } from '../../ui/Button'
+import { Button } from '../../ui/Button'
 import { useFocusWhenReady } from '../../ui/focus'
 import { FROM_LIST } from '../../ui/fromList'
 import { IconSearch, IconX } from '../../ui/icons'
+import { OpenButton, OpenLink } from '../../ui/OpenItem'
+import { useShownInPanel } from '../../ui/sidePanel'
 import { Toast, UNDO_ID, type ToastMessage } from '../../ui/Toast'
 import { moreWords, needsOf, needsTotal, runsInNeeds } from '../home/home'
 import { NeedsSection, useArrival } from '../home/NeedsSection'
@@ -26,7 +28,7 @@ import { StatusPills } from './Status'
 import { RequestView } from './RequestView'
 import { REQUEST_PARAM } from './requests'
 import { DiscardDialog, DraftsSection, draftItem, FollowingSection, WaitingSection } from './Sections'
-import { changeProblem, changeWords, FILTERS, lastRunLine, meansOutOfDate, nextRunWords, pillOf, pressChange, REFRESH_MS, rowsOf, viewerOf, workflowPath, type Filter, type Row } from './workflow'
+import { changeProblem, changeWords, FILTERS, lastRunLine, meansOutOfDate, nextRunWords, pillOf, pressChange, REFRESH_MS, rowsOf, SOFTWARE_PAGE, viewerOf, workflowPath, type Filter, type Row } from './workflow'
 import styles from './Workflows.module.css'
 
 export const rowLinkId = (useCaseId: string) => `workflow-${useCaseId}`
@@ -73,9 +75,16 @@ interface RowProps {
 export const listClass = (rows: readonly Row[], extra = ''): string =>
   [styles['list'], rows.some((row) => row.action !== null) ? null : styles['noAct'], extra].filter(Boolean).join(' ')
 
+/**
+ * One workflow: its state, what it does, its last and next run, and at most one action. In the chat its name and its action open
+ * in the side panel, and the action gives way while the panel shows the workflow. The Software watchlist always opens its page.
+ */
 export function WorkflowRow({ row, index, primary, arrive, now, nameOf }: RowProps) {
   const { useCase, action } = row
   const last = lastRunLine(useCase, now, nameOf)
+  const path = workflowPath(useCase)
+  const item = { kind: 'workflow', id: useCase.use_case_id } as const
+  const flowShown = useShownInPanel(item)
   return (
     <li
       className={arrive ? `${styles['row']} ${styles['arrive']}` : styles['row']}
@@ -86,9 +95,15 @@ export function WorkflowRow({ row, index, primary, arrive, now, nameOf }: RowPro
       <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} test={useCase.last_run?.test === true} />
       <div className={styles['main']}>
         <h3>
-          <Link id={rowLinkId(useCase.use_case_id)} to={workflowPath(useCase)} state={FROM_LIST} className={styles['rowLink']}>
-            {useCase.name}
-          </Link>
+          {path === SOFTWARE_PAGE ? (
+            <Link id={rowLinkId(useCase.use_case_id)} to={path} state={FROM_LIST} className={styles['rowLink']}>
+              {useCase.name}
+            </Link>
+          ) : (
+            <OpenLink item={item} id={rowLinkId(useCase.use_case_id)} to={path} state={FROM_LIST} className={styles['rowLink']}>
+              {useCase.name}
+            </OpenLink>
+          )}
         </h3>
         <p>{purposeOf(useCase)}</p>
         <p className={styles['last']} title={last}>
@@ -98,10 +113,10 @@ export function WorkflowRow({ row, index, primary, arrive, now, nameOf }: RowPro
       <div className={styles['foot']}>
         <span className={styles['next']}>{nextLine(useCase, now)}</span>
         <span className={styles['act']}>
-          {action ? (
-            <ButtonLink to={`/runs/${action.runId}`} variant={primary ? 'primary' : 'secondary'}>
+          {action && !flowShown ? (
+            <OpenButton item={{ kind: 'run', id: action.runId }} to={`/runs/${action.runId}`} variant={primary ? 'primary' : 'secondary'}>
               {action.kind === 'decide' ? 'Review and decide' : 'See why it stopped'}
-            </ButtonLink>
+            </OpenButton>
           ) : null}
         </span>
       </div>

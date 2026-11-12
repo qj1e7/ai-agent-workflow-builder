@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { escapeIsFree } from './escape'
 import { IconX } from './icons'
 import { motionAllowed } from './motion'
 import { readMs, startToastClock, type Hold, type ToastClock } from './toastClock'
@@ -59,11 +60,14 @@ function Card({ message, onDismiss, focusAfter }: { message: ToastMessage; onDis
   const latestLeave = useLatest(leave)
 
   useEffect(() => {
+    // On the window, so a menu, an editor or the side panel takes Escape first and this one waits for the next press.
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !document.querySelector('dialog[open]')) latestLeave.current()
+      if (!escapeIsFree(event, document.querySelector('dialog[open]') !== null)) return
+      event.preventDefault()
+      latestLeave.current()
     }
-    document.addEventListener('keydown', onKey)
-    if (!timed) return () => document.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey)
+    if (!timed) return () => window.removeEventListener('keydown', onKey)
     const started = startToastClock(readMs(message.text), () => latestLeave.current())
     clock.current = started
     const onVisibility = () => (document.hidden ? started.hold('hidden') : started.release('hidden'))
@@ -71,7 +75,7 @@ function Card({ message, onDismiss, focusAfter }: { message: ToastMessage; onDis
     document.addEventListener('visibilitychange', onVisibility)
     return () => {
       started.stop()
-      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('keydown', onKey)
       document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [timed, message.text, latestLeave])

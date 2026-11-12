@@ -222,7 +222,7 @@ describe('what each item lets you do', () => {
   const [stopped] = needsOf(ALICE).shown as [Need]
 
   it('opens the run at the decision, and never decides on Home', () => {
-    expect(actionsOf(approval)).toEqual([{ kind: 'open', label: 'Review and decide', to: '/runs/run_01JB8' }])
+    expect(actionsOf(approval)).toEqual([{ kind: 'open', label: 'Review and decide', to: '/runs/run_01JB8', item: { kind: 'run', id: 'run_01JB8' } }])
   })
 
   it('sends a confirmation to its Settings tab', () => {
@@ -233,14 +233,14 @@ describe('what each item lets you do', () => {
   it('retries a stopped run the platform can retry, and otherwise opens it', () => {
     expect(actionsOf(stopped)).toEqual([
       { kind: 'retry', label: 'Retry the run', runId: 'run_01JB9' },
-      { kind: 'open', label: 'See the run', to: '/runs/run_01JB9' },
+      { kind: 'open', label: 'See the run', to: '/runs/run_01JB9', item: { kind: 'run', id: 'run_01JB9' } },
     ])
     const final = { ...stopped, item: { ...STOP, retryable: false } } as Need
-    expect(actionsOf(final)).toEqual([{ kind: 'open', label: 'See why it stopped', to: '/runs/run_01JB9' }])
+    expect(actionsOf(final)).toEqual([{ kind: 'open', label: 'See why it stopped', to: '/runs/run_01JB9', item: { kind: 'run', id: 'run_01JB9' } }])
   })
 
   it('waits for the model instead of offering a retry that would fail again, and says so', () => {
-    expect(actionsOf(stopped, true)).toEqual([{ kind: 'open', label: 'See the run', to: '/runs/run_01JB9' }])
+    expect(actionsOf(stopped, true)).toEqual([{ kind: 'open', label: 'See the run', to: '/runs/run_01JB9', item: { kind: 'run', id: 'run_01JB9' } }])
     expect(wordsOf(stopped, NOW, true).note).toBe('Can run again once an AI model is connected.')
     expect(wordsOf(stopped, NOW).note).toBeNull()
     const final = { ...stopped, item: { ...STOP, retryable: false } } as Need

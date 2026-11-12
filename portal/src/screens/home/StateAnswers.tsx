@@ -5,6 +5,7 @@ import { useDisplayName } from '../../api/people'
 import { isOperator } from '../../api/me'
 import { useMe, useModelOff, useTroubleshoot, useUseCases } from '../../api/queries'
 import { ButtonLink } from '../../ui/Button'
+import { OpenButton } from '../../ui/OpenItem'
 import { listClass, WorkflowRow } from '../workflows/WorkflowsPage'
 import { REFRESH_MS, rowsOf, viewerOf } from '../workflows/workflow'
 import { useCapabilities } from '../../api/plannerQueries'
@@ -156,9 +157,9 @@ export function WhyStoppedAnswer({ useCaseId, say }: { useCaseId: string | null;
         quiet={main !== 'primary'}
       />
       <div className={styles['footer']}>
-        <ButtonLink to={`/runs/${stopped.run_id}`} variant="secondary">
+        <OpenButton item={{ kind: 'run', id: stopped.run_id }} to={`/runs/${stopped.run_id}`}>
           See the run
-        </ButtonLink>
+        </OpenButton>
       </div>
     </section>
   )

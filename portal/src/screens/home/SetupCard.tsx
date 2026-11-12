@@ -170,7 +170,15 @@ function DestEditor({ id, onDone }: { id: string; onDone: () => void }) {
       </p>
       <p className="muted">It’s the only place I can put the result today. Other places, such as Teams or email, aren’t built yet.</p>
       <div className={styles['btns']}>
-        <Button ref={done} onClick={onDone} onKeyDown={(event) => event.key === 'Escape' && onDone()}>
+        <Button
+          ref={done}
+          onClick={onDone}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape') return
+            event.preventDefault()
+            onDone()
+          }}
+        >
           Done
         </Button>
         <AskTheTeam capability={DEST_ASK} starter={`I would like a workflow’s result to go somewhere other than a Jira ticket: `} />
@@ -186,7 +194,9 @@ function WhenPicker({ when, problems, focus, onWhen, onDone }: { when: When; pro
     if (focus) first.current?.focus()
   }, [focus])
   const leave = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.key === 'Escape') onDone()
+    if (event.key !== 'Escape') return
+    event.preventDefault()
+    onDone()
   }
   return (
     <div className={styles['editor']} role="group" aria-label="Change when it runs">

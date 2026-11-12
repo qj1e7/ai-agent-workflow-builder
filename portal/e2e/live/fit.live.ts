@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import type { Page } from '@playwright/test'
+import path from 'node:path'
+import type { Locator, Page } from '@playwright/test'
+import { expectAccessible } from '../support/axe'
 import { CONTROL_KINDS, coverProblems, describeProblems, fitProblems, measure, seedControl, toggleProblems } from './support/fit'
 import { connectMockModel } from './support/settings'
+import { setMockGithubMode, type Backend } from './support/stack'
 import { expect, test } from './support/test'
-import { devContext } from './support/ui'
+import { devContext, OUT, shot } from './support/ui'
 
 /**
  * The team lead's fit rule: no text spills out of or is cut off inside its card, box, button or pill, nothing overlaps,
@@ -119,6 +122,92 @@ for (const width of WIDTHS) {
       await backend.post('alice', '/api/v1/settings/connections/jira/check')
       await context.close()
     }
+  })
+}
+
+/** What the side panel's views need: a workflow that never ran, a run that stopped, and a run Carol started that Alice may decide. */
+interface PanelFacts {
+  readonly workflow: string
+  readonly stopped: { readonly name: string; readonly runId: string }
+  readonly request: string
+}
+
+let panelFacts: PanelFacts | undefined
+
+const AGENTS = [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }]
+
+async function agentWorkflow(backend: Backend, user: string, name: string): Promise<string> {
+  const made = await backend.post<{ use_case_id: string }>(user, '/api/v1/agent-use-cases', { name, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents: AGENTS }, undefined, [201])
+  return made.use_case_id
+}
+
+async function panelSetup(backend: Backend): Promise<PanelFacts> {
+  const tag = randomUUID().slice(0, 6)
+  const workflow = `Fit panel ${tag}`
+  const stoppedName = `Fit stops ${tag}`
+  await agentWorkflow(backend, 'alice', workflow)
+  const stoppedId = await agentWorkflow(backend, 'alice', stoppedName)
+  let stopped = ''
+  try {
+    await setMockGithubMode('unavailable')
+    stopped = await backend.checkNow('alice', stoppedId)
+    await backend.waitForState(stopped, ['failed'], 150_000)
+  } finally {
+    await setMockGithubMode('ok')
+  }
+  const request = await backend.checkNow('carol', await agentWorkflow(backend, 'carol', `Fit request ${tag}`))
+  await backend.waitForState(request, ['awaiting_approval'])
+  await backend.freshWatchlist('alice')
+  return { workflow, stopped: { name: stoppedName, runId: stopped }, request }
+}
+
+const SHOT_WIDTHS: ReadonlySet<number> = new Set([1920, 1280, 1050, 900, 390])
+
+/**
+ * The side panel beside the chat at 1920 to 901 px and over the whole window at 900 px and narrower, with each of its views:
+ * a workflow, a request to decide, a stopped run and a software. Only an Operator has a chat to open it from until the Planner's
+ * box opens to Approvers (R16), so Bob is not drawn here.
+ */
+for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
+  test(`the side panel and each of its views fit beside the chat, or over the window at 900 px and narrower, as an Operator at ${String(width)} px`, async ({ browser, backend }, info) => {
+    test.slow()
+    panelFacts ??= await panelSetup(backend)
+    const facts = panelFacts
+    const context = await devContext(browser, 'alice', { reducedMotion: true })
+    const page = await context.newPage()
+    await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
+    const box = page.getByLabel('Ask the Planner about software versions')
+    const newest = page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
+    const panel = page.locator('#side-panel')
+    const views: readonly (readonly [string, string, () => Locator, () => Locator])[] = [
+      ['workflow', 'Check my workflows', () => newest.getByRole('button', { name: facts.workflow, exact: true }), () => panel.getByText('Next run')],
+      ['approval', 'What needs me?', () => newest.locator(`[data-opens="run:${facts.request}"]`), () => panel.getByRole('button', { name: 'Decline' })],
+      ['run', `Why did ${facts.stopped.name} stop?`, () => newest.locator(`[data-opens="run:${facts.stopped.runId}"]`), () => panel.getByText('Safe to retry')],
+      ['software', 'Monitor LangGraph releases', () => newest.getByRole('button', { name: 'Open it' }), () => panel.getByText('Checked by')],
+    ]
+    const found: string[] = []
+    try {
+      await page.goto('/')
+      for (const [view, words, opener, ready] of views) {
+        await box.fill(words)
+        await box.press('Enter')
+        await expect(newest).toHaveAttribute('data-answer', 'true')
+        await opener().click()
+        await expect(ready()).toBeVisible({ timeout: 20_000 })
+        await expect(panel).toHaveAttribute('role', width > 900 ? 'complementary' : 'dialog')
+        await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined)
+        // The shot comes first, because the cover check scrolls each control into view.
+        if (SHOT_WIDTHS.has(width)) await shot(page, info, `r3-panel-${view}-alice-${String(width)}`)
+        const problems = await fitProblems(page)
+        if (problems.length) found.push(`The side panel's ${view} view at ${String(width)} px:\n${describeProblems(problems).replace(/^/gm, '    ')}`)
+        if (width === 1280 || width === 900) await expectAccessible(page, path.join(OUT, 'axe'), `side-panel-${view}-${String(width)}`)
+        await panel.getByRole('button', { name: 'Close' }).click()
+        await expect(panel).toHaveCount(0)
+      }
+    } finally {
+      await context.close()
+    }
+    expect(found, found.join('\n')).toEqual([])
   })
 }
 

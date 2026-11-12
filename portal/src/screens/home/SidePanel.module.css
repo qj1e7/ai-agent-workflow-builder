@@ -1,0 +1,52 @@
+/* Beside the chat it is 400 px wide, or 40% of the column when that is less, and the chat keeps the rest (spec 3.3). */
+.panel {
+  display: flex;
+  flex: 0 0 min(400px, 40%);
+  flex-direction: column;
+  min-width: 0;
+  border-left: 1px solid var(--hair);
+  background: var(--bg);
+}
+
+.bar {
+  display: grid;
+  flex: none;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--hair);
+}
+
+.bar h2 {
+  font-size: 1.125rem;
+  overflow-wrap: anywhere;
+}
+
+/* The buttons sit above the title, while a screen reader meets the title first. */
+.btns {
+  display: flex;
+  order: -1;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.body {
+  display: grid;
+  flex: 1;
+  align-content: start;
+  gap: 14px;
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 900px) {
+  .panel {
+    position: fixed;
+    z-index: var(--z-overlay);
+    inset: 0;
+    flex: none;
+    padding-top: env(safe-area-inset-top, 0px);
+    border-left: 0;
+  }
+}

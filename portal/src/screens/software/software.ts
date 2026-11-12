@@ -3,13 +3,21 @@ import { failureReasonLabel } from '../../api/labels'
 import type { CapabilityView, Day, FailureReason, Refusal, ScheduleHold, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView } from '../../api/types'
 import { dateAndClock, scheduleZoneName, timesZone } from '../workflows/times'
 
+/** The Software page and the side panel both refresh the watchlist this often. */
+export const REFRESH_MS = 15_000
+
+/** The places releases are read from, from the capability registry, and those of them working now. */
+function releaseSources(capabilities: readonly CapabilityView[]): { readonly all: string; readonly working: string } {
+  const sources = capabilities.filter((c) => c.id.endsWith('.releases') && c.system !== null)
+  const systems = (list: readonly CapabilityView[]) => list.map((c) => c.system).join(' and ')
+  return { all: systems(sources), working: systems(sources.filter((c) => c.state === 'ready')) }
+}
+
 /** Where releases are read from, said from the capability registry so this page never claims more than How it works does. Null while the registry is not there. */
 export function sourcesNote(capabilities: readonly CapabilityView[] | undefined): string | null {
   if (capabilities === undefined) return null
-  const sources = capabilities.filter((c) => c.id.endsWith('.releases') && c.system !== null)
-  const working = sources.filter((c) => c.state === 'ready')
-  const systems = (list: readonly CapabilityView[]) => list.map((c) => c.system).join(' and ')
-  const first = working.length > 0 ? `${systems(working)} is the only place we can check today.` : sources.length > 0 ? `${systems(sources)} is the only place we check, and it is not working right now.` : 'No place can be checked right now.'
+  const { all, working } = releaseSources(capabilities)
+  const first = working ? `${working} is the only place we can check today.` : all ? `${all} is the only place we check, and it is not working right now.` : 'No place can be checked right now.'
   const notYet = capabilities.find((c) => c.id === 'registries.check' && (c.state === 'planned' || c.state === 'unsupported'))
   return notYet?.cant ? `${first} We can’t ${notYet.cant} yet.` : first
 }
@@ -102,6 +110,14 @@ export function nextCheckWords(schedule: ScheduleView, paused: boolean): string 
   if (schedule.held && !paused) return heldWords(schedule.held, schedule.owner_name, TAKE_OVER_WORDS)
   if (schedule.next_at === null) return PAUSED_WORDS
   return `Next check ${dateAndClock(schedule.next_at, schedule.time_zone)}, ${timesZone(schedule.time_zone)}.`
+}
+
+/** Who checks a watched software and where, from the same registry as the Software page's note. Null while the registry is not there. */
+export function checkedByWords(capabilities: readonly CapabilityView[] | undefined): string | null {
+  if (capabilities === undefined) return null
+  const { all, working } = releaseSources(capabilities)
+  if (working) return `The Version checker, on ${working}.`
+  return all ? `The Version checker, on ${all}, which is not working right now.` : 'The Version checker. No place can be checked right now.'
 }
 
 export function noScheduleWords({ operator, paused }: { readonly operator: boolean; readonly paused: boolean }): string {

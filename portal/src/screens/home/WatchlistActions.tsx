@@ -3,8 +3,9 @@ import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useMe, useRemoveSoftware, useRestoreSoftware, useStartRun, useWatchlist } from '../../api/queries'
 import type { WatchedSoftwareView } from '../../api/types'
-import { Button, ButtonLink } from '../../ui/Button'
+import { Button } from '../../ui/Button'
 import { useChatNavigate } from '../../ui/fromChat'
+import { OpenButton } from '../../ui/OpenItem'
 import { pressCheckNow } from '../software/checkNow'
 import { changeFeedback, noticeWords, NO_FEEDBACK, pressRemove, pressUndo } from '../software/removal'
 import { scheduleRuns } from '../software/software'
@@ -97,9 +98,9 @@ export function SoftwareActions({ names }: { names: readonly string[] }) {
           {held.map((row) => (
             <li key={row.id}>
               <b>{row.name}</b>
-              <ButtonLink to={`/software?row=${encodeURIComponent(row.id)}`}>
+              <OpenButton item={{ kind: 'software', id: row.id }} to={`/software?row=${encodeURIComponent(row.id)}`}>
                 Open<span className="visually-hidden"> {row.name}</span> on the Software page
-              </ButtonLink>
+              </OpenButton>
               <StopWatching
                 row={row}
                 confirming={confirming === row.id}

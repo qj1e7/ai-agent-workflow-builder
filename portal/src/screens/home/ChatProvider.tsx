@@ -1,7 +1,8 @@
-import { createContext, useCallback, useContext, useMemo, useReducer, useRef, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useMemo, useReducer, useRef, useState, type ReactNode } from 'react'
 import { useCacheScope } from '../../api/context'
 import { usePlannerAnswer } from '../../api/plannerQueries'
 import type { PlannerAnswerIn } from '../../api/types'
+import type { PanelItem } from '../../ui/sidePanel'
 import { deskOf, desksReducer, type DeskAction, type Desks, type Note } from './chatState'
 import { newCardMemory, type CardMemory } from './cardMemory'
 import type { CardStart } from './SetupCard'
@@ -9,6 +10,12 @@ import { isThinking, previousOf, type Thread } from './threadState'
 
 export const SEND_FAILED = 'That didn’t send. Try again.'
 export const DRAFT_SAVED = 'Your draft is saved. Find it on Workflows.'
+
+export interface OpenPanel {
+  readonly item: PanelItem
+  /** Which of the chat's ways to open the item was pressed, counted in page order, so Close hands focus back to it. */
+  readonly from: number
+}
 
 export interface Chat {
   readonly thread: Thread
@@ -28,6 +35,10 @@ export interface Chat {
   /** Where the conversation was scrolled to when Home was left. It is never saved. */
   readonly scroll: { readonly get: () => number; readonly set: (top: number) => void }
   readonly cardMemory: (messageId: number) => CardMemory
+  /** What the side panel shows beside the chat. It is kept across pages, so a page opened from the panel comes back to it. */
+  readonly panel: OpenPanel | null
+  readonly openPanel: (item: PanelItem, from: number) => void
+  readonly closePanel: () => void
 }
 
 const ChatContext = createContext<Chat | null>(null)
@@ -43,6 +54,10 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
   const [desks, dispatch] = useReducer(desksReducer, initial)
   const scrolls = useRef(new Map<string, number>())
   const cards = useRef(new Map<string, CardMemory>())
+  const [shown, setShown] = useState<{ readonly user: string; readonly panel: OpenPanel } | null>(null)
+  const panel = shown?.user === user ? shown.panel : null
+  const openPanel = useCallback((item: PanelItem, from: number) => setShown({ user, panel: { item, from } }), [user])
+  const closePanel = useCallback(() => setShown(null), [])
   const desk = deskOf(desks, user)
   const { thread } = desk
   const busy = isThinking(thread)
@@ -102,14 +117,18 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
         const unfinished = thread.messages.some((message) => cards.current.get(`${user}:${String(message.id)}`)?.kept()?.phase.kind === 'open')
         for (const key of [...cards.current.keys()]) if (key.startsWith(`${user}:`)) cards.current.delete(key)
         scrolls.current.delete(user)
+        setShown(null)
         here({ type: 'new_chat' })
         if (unfinished) here({ type: 'note', text: DRAFT_SAVED })
       },
       readNote: () => here({ type: 'note_read' }),
       scroll,
       cardMemory,
+      panel,
+      openPanel,
+      closePanel,
     }
-  }, [act, busy, cardMemory, desk.note, desk.problem, desk.text, scroll, send, thread, user])
+  }, [act, busy, cardMemory, closePanel, desk.note, desk.problem, desk.text, openPanel, panel, scroll, send, thread, user])
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>
 }

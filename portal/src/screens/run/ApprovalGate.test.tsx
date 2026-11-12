@@ -30,12 +30,25 @@ const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\
 function draw(approval: ApprovalView, party: Party | null, decision = idle, found = approval.found): string {
   return renderToStaticMarkup(
     <MemoryRouter>
-      <ApprovalGate approval={approval} found={found} part={yourPart(approval, party, nameOf)} askedBy={askedWords(approval, nameOf)} decision={decision} />
+      <ApprovalGate approval={approval} page={{ found, part: yourPart(approval, party, nameOf), askedBy: askedWords(approval, nameOf) }} decision={decision} />
     </MemoryRouter>,
   )
 }
 
 describe('the approval gate', () => {
+  it('in the side panel shows everything that will be written and the decision, and leaves Why, Who asked and Your part for the page', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <ApprovalGate approval={BOB} page={null} decision={idle} />
+      </MemoryRouter>,
+    )
+    expect(text(html)).toContain('What will change')
+    expect(text(html)).toContain(EXACT_WORDS)
+    expect(text(html)).toContain('Nothing is written until you say yes.')
+    expect(buttons(html)).toEqual(['Approve 1 ticket', 'Decline'])
+    for (const left of ['Why', 'Who asked', 'Your part']) expect(text(html)).not.toContain(left)
+  })
+
   it('shows bob, an Approver who is not a party to the run, Approve and Decline', () => {
     const html = draw(BOB, OTHER)
     expect(buttons(html)).toEqual(['Approve 1 ticket', 'Decline'])

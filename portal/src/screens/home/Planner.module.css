@@ -314,6 +314,11 @@
   gap: 8px 12px;
 }
 
+/* Buttons that gave way to the side panel leave no gap behind them. */
+.buttons:empty {
+  display: none;
+}
+
 .footer {
   display: flex;
   flex-wrap: wrap;
@@ -321,6 +326,11 @@
   gap: 8px 12px;
   padding: 12px 16px 14px;
   border-top: 1px solid var(--rule);
+}
+
+/* A footer whose buttons gave way to the side panel goes with them. */
+.footer:empty {
+  display: none;
 }
 
 .footer p {
@@ -521,12 +531,20 @@
   gap: 8px 12px;
 }
 
-/* Once the conversation starts, Home is the chat: the pinned line on top, the conversation scrolling, the box docked at the bottom. */
-.chat {
+/* Once the conversation starts, Home is the chat: the pinned line on top, the conversation scrolling, the box docked at the bottom.
+   The chat and its side panel share the page's column, so on a wide screen they sit together. */
+.chatLayout {
   display: flex;
   flex: 1;
-  flex-direction: column;
   width: 100%;
+  min-height: 0;
+}
+
+.chat {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
   min-height: 0;
 }
 
