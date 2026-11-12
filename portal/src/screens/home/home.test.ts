@@ -44,6 +44,20 @@ describe('the order of what needs you', () => {
     expect(wordsOf(need, NOW).title).toBe('Jira is not answering.')
   })
 
+  it('words the platform’s no AI model row as the prototype does, in Do now, with Connect a model and Open going there', () => {
+    const model: ConnectionItem = { id: 'model', name: 'AI model', state: 'not_set_up', problem: 'No AI model is turned on.', fix: 'Add an AI model under Settings, AI model.', checked_at: null, last_ok_at: null, expires_at: null }
+    const home: HomeOut = { ...BOB, approvals: [], approvals_total: 0, confirmations: [], connections: [model] }
+    const [need] = needsOf(home).shown as [Need]
+    expect(groupOf(need)).toBe('now')
+    expect(keys(needsOf({ ...ALICE, connections: [...ALICE.connections, model] }).shown)[0], 'it leads the list, as nothing that needs it can run').toBe('connection:model')
+    const words = wordsOf(need, NOW)
+    expect([words.title, words.meta]).toEqual(['No AI model connected', 'Settings, AI model'])
+    expect(words.note).toContain('the Planner can’t read new requests')
+    expect(actionsOf(need)).toEqual([{ kind: 'open', label: 'Connect a model', to: '/settings?tab=model' }])
+    expect(openPathOf(need)).toBe('/settings?tab=model')
+    expect(pinnedOf(home)).toEqual({ need, more: 0 })
+  })
+
   it('puts a moved or missing repository after the connections, counts it, and lands on its row', () => {
     const [moved, lost] = ALICE.addresses as [AddressItem, AddressItem]
     const home: HomeOut = { ...BOB, connections: [(ALICE.connections as [ConnectionItem])[0]], addresses: [moved, lost], stopped: [STOP], stopped_total: 1 }

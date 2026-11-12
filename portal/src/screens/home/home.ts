@@ -61,8 +61,11 @@ export function groupOf(need: Need): NeedGroup {
 
 const GROUP_ORDER: Record<NeedGroup, number> = { now: 0, set: 1 }
 
+/** No AI model leads Do now, as in the prototype, because nothing that needs the model can run until it is connected. */
+const rankOf = (need: Need): number => (need.kind === 'connection' && noModel(need.item) ? -1 : KIND_ORDER[need.kind])
+
 const urgentFirst = (a: Need, b: Need) =>
-  GROUP_ORDER[groupOf(a)] - GROUP_ORDER[groupOf(b)] || KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || b.at.localeCompare(a.at) || a.key.localeCompare(b.key)
+  GROUP_ORDER[groupOf(a)] - GROUP_ORDER[groupOf(b)] || rankOf(a) - rankOf(b) || b.at.localeCompare(a.at) || a.key.localeCompare(b.key)
 
 export const needsTotal = (home: HomeOut) => home.approvals_total + home.confirmations.length + home.stopped_total + home.connections.length + home.addresses.length + home.replied.length
 
@@ -191,7 +194,20 @@ function confirmationWords(item: ConfirmationItem, now: Date): ItemWords {
   }
 }
 
+/** The platform lists the AI model while none is set up. Without it the Planner and every agent workflow stop, so the row says so. */
+const noModel = (item: ConnectionItem): boolean => item.id === 'model' && item.state === 'not_set_up'
+
+const NO_MODEL: ItemWords = {
+  tone: 'bad',
+  title: 'No AI model connected',
+  meta: 'Settings, AI model',
+  lines: [],
+  note: 'Until a model is connected, the Planner can’t read new requests and agent workflows can’t run. Only the Software watchlist keeps going, with a simple summary.',
+  why: null,
+}
+
 function connectionWords(item: ConnectionItem, now: Date): ItemWords {
+  if (noModel(item)) return NO_MODEL
   const down = item.state !== 'working'
   return {
     tone: down ? 'bad' : 'wait',
@@ -266,7 +282,7 @@ export function actionsOf(need: Need, modelOff = false): readonly Action[] {
     case 'approval':
       return [{ kind: 'open', label: 'Review and decide', to: `/runs/${need.item.run_id}` }]
     case 'connection':
-      return [{ kind: 'open', label: 'See it in Settings', to: CONNECTIONS_PATH }]
+      return noModel(need.item) ? [{ kind: 'open', label: 'Connect a model', to: '/settings?tab=model' }] : [{ kind: 'open', label: 'See it in Settings', to: CONNECTIONS_PATH }]
     case 'address':
       return [{ kind: 'open', label: 'Show it on the watchlist', to: `/software?row=${encodeURIComponent(need.item.software_id)}` }]
     case 'confirmation':
@@ -307,7 +323,7 @@ export function pinnedWhy(need: Need, now: Date, modelOff = false): string {
 
 /** On Home with no AI model the hero already offers Connect a model, so the model's row points to it instead of offering a second button. */
 export const CONNECT_ABOVE = 'Connect one with the button above.'
-export const NO_MODEL_TITLE = 'No AI model connected'
+export const NO_MODEL_TITLE = NO_MODEL.title
 export const isModelNeed = (need: Need): boolean => need.kind === 'connection' && need.item.id === 'model'
 
 export const CAN_RUN_AGAIN = 'Can run again once an AI model is connected.'

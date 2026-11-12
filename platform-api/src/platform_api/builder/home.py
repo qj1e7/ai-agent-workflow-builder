@@ -179,7 +179,8 @@ class HomeOut(WireModel):
     )
     connections: list[ConnectionItem] = Field(
         description="For an Operator, the connections that do not work and the keys that run "
-        "out soon, as the last check left them. Home never starts a check."
+        "out soon, as the last check left them, and the AI model while none is set up, as its "
+        "settings say now. Home never starts a check."
     )
 
 

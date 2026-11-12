@@ -44,6 +44,12 @@ async function jiraDown(backend: Backend): Promise<() => Promise<void>> {
   }
 }
 
+/** The number every place shows for Needs you, read from the platform: each kind it counts, added up. */
+async function platformNeeds(backend: Backend, user: string): Promise<number> {
+  const home = await backend.get<{ approvals_total: number; stopped_total: number; confirmations: unknown[]; connections: unknown[]; addresses: unknown[]; replied: unknown[] }>(user, '/api/v1/home')
+  return home.approvals_total + home.stopped_total + home.confirmations.length + home.connections.length + home.addresses.length + home.replied.length
+}
+
 async function noSideways(page: Page): Promise<void> {
   const widths = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth])
   expect(widths[0], 'no sideways scroll').toBeLessThanOrEqual(widths[1] ?? 0)
@@ -63,7 +69,7 @@ test.describe('with no AI model', () => {
     await modelOff(String(baseURL))
   })
 
-  test('alice’s Home says it can’t read new requests, offers Connect a model, and keeps the lists and Needs you', async ({ browser, backend }, info) => {
+  test('alice’s Home says it can’t read new requests, offers Connect a model, and keeps the lists and Needs you, the model row first and counted (FIX-offline-count)', async ({ browser, backend }, info) => {
     await backend.waitingRun('alice')
     const repair = await jiraDown(backend)
     const context = await devContext(browser, 'alice')
@@ -75,11 +81,14 @@ test.describe('with no AI model', () => {
     await expect(main(page).getByRole('link', { name: 'Connect a model' })).toHaveAttribute('href', '/settings?tab=model')
     await expect(main(page).getByRole('heading', { name: 'I can', exact: true })).toBeVisible()
     await expect(main(page).getByRole('button', { name: 'Ask the team for something new' }), 'Home offers no request for the team').toHaveCount(0)
-    await expect(page.getByRole('list', { name: 'Needs you' })).toBeVisible()
-    await expect(page.locator('li[data-home-item="connection:model"]'), 'the platform counts no model row when none is connected, so none is listed and the hero has the only Connect a model').toHaveCount(0)
-    const listed = await page.getByRole('list', { name: 'Needs you' }).locator('li[data-home-item]').count()
-    await expect(page.getByRole('heading', { name: /^Needs you/, level: 2 }), 'FIX-offline-count: the number is the rows listed').toContainText(String(listed))
+    const needs = page.getByRole('list', { name: 'Needs you' })
+    await expect(needs.locator('li[data-home-item]').first(), 'FIX-offline-count: the first row is the model').toHaveAttribute('data-home-item', 'connection:model')
+    await expect(needs.locator('li[data-home-item="connection:model"]'), 'it points to the button above it').toHaveText(/No AI model connected\s*Connect one with the button above\./)
+    await expect(needs.locator('li[data-home-item="connection:model"]').getByRole('link'), 'it offers no second Connect a model').toHaveCount(0)
     await expect(main(page).getByRole('link', { name: 'Connect a model' }), 'the hero has the only Connect a model').toHaveCount(1)
+    const counted = await platformNeeds(backend, 'alice')
+    expect(counted, 'the platform counts the model row with the rest').toBeGreaterThan(1)
+    await expect(page.getByRole('heading', { name: /^Needs you/, level: 2 }), 'FIX-offline-count: the number is the platform’s count, the model row included').toHaveText(new RegExp(`^Needs you\\s*${String(counted)}$`))
     await settled(page)
     await expectAccessible(page, path.join(OUT, 'axe'), 'planner-home-offline')
     await shot(page, info, 'n10-08-offline')

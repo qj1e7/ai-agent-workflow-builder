@@ -229,21 +229,21 @@ describe('Home with no working AI model', () => {
     expect(html).toContain('data-home-item="stopped:run_01JB9"')
   })
 
+  const MODEL_ROW = { id: 'model', name: 'AI model', state: 'not_set_up', problem: 'No AI model is turned on.', fix: 'Add an AI model under Settings, AI model.', checked_at: null, last_ok_at: null, expires_at: null } as const
+  const withModelRow: HomeOut = { ...ALICE_HOME, connections: [...ALICE_HOME.connections, MODEL_ROW] }
+
   it('lists the model’s own row, pointing to the button above it, so every row the count includes is listed (FIX-offline-count)', () => {
-    const withModelRow: HomeOut = { ...ALICE_HOME, connections: [{ ...ALICE_HOME.connections[0]!, id: 'model', name: 'AI model' }] }
     const page = mainOf(render(ALICE, withModelRow, { model: 'none' }))
     expect(text(page)).toContain(`Needs you ${needsTotal(withModelRow)}`)
     const row = itemOf(page, 'connection:model')
-    expect(text(row)).toContain('No AI model connected')
-    expect(text(row)).toContain('Connect one with the button above.')
-    expect(linksIn(row)).toEqual([])
+    expect(text(row)).toContain('No AI model connected Connect one with the button above.')
+    expect(linksIn(row).map(([name]) => name)).not.toContain('Connect a model')
     expect(linksIn(page).filter(([name]) => name === 'Connect a model')).toHaveLength(1)
   })
 
-  it('keeps the Connections link on a model row when the page has no Connect a model above it', () => {
-    const withModelRow: HomeOut = { ...ALICE_HOME, connections: [{ ...ALICE_HOME.connections[0]!, id: 'model', name: 'AI model' }] }
+  it('offers Connect a model on the model row where the page has none above it', () => {
     const connected = mainOf(render(ALICE, withModelRow, { model: 'connected' }))
-    expect(linksIn(itemOf(connected, 'connection:model'))).toEqual([['See it in Settings', '/settings?tab=connections']])
+    expect(linksIn(itemOf(connected, 'connection:model'))[0]).toEqual(['Connect a model', '/settings?tab=model'])
   })
 })
 

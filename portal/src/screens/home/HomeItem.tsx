@@ -77,7 +77,7 @@ export function NeedItem({ need, card, quiet = false, connectAbove = false, now,
   const titleId = useId()
   const modelOff = useModelOff()
   const pointsUp = connectAbove && modelOff && isModelNeed(need)
-  const words = pointsUp ? { ...wordsOf(need, now, modelOff), title: NO_MODEL_TITLE, note: CONNECT_ABOVE } : wordsOf(need, now, modelOff)
+  const words = pointsUp ? { ...wordsOf(need, now, modelOff), title: NO_MODEL_TITLE, meta: CONNECT_ABOVE, note: null } : wordsOf(need, now, modelOff)
   const actions = pointsUp ? [] : actionsOf(need, modelOff)
   const Icon = TONE_ICON[words.tone]
   const { className, ...moving } = motionProps(motion)
@@ -94,7 +94,7 @@ export function NeedItem({ need, card, quiet = false, connectAbove = false, now,
         <div className={styles['rowText']}>
           <b id={titleId}>{words.title}</b>
           <span className={styles['rowMeta']}>{words.meta}</span>
-          {(need.kind === 'stopped' || pointsUp) && words.note ? <span className={styles['rowMeta']}>{words.note}</span> : null}
+          {need.kind === 'stopped' && words.note ? <span className={styles['rowMeta']}>{words.note}</span> : null}
           {words.why ? (
             <span className={styles['rowWhy']}>
               <b>AI troubleshooter:</b> {words.why}

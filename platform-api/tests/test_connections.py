@@ -245,12 +245,11 @@ async def _age(db: Database, connection: str, by: timedelta) -> None:
         )
 
 
-async def test_what_needs_attention_is_read_from_what_was_kept_and_asks_nobody(rig: Rig):
+async def test_what_needs_attention_is_read_from_what_was_kept_and_checks_nothing(rig: Rig):
     assert await rig.connections.needing_attention() == []
-    assert [p.calls for p in rig.probes.values()] == [0, 0, 0, 0]
+    assert [rig.probes[id].calls for id in ("jira", "github", "teams")] == [0, 0, 0]
 
     rig.probes["jira"].reading = DOWN
-    rig.probes["model"].reading = Reading("not_set_up", "No AI model is turned on.")
     rig.probes["github"].reading = Reading(
         "working", expires_at=datetime.now(UTC) + timedelta(days=9)
     )
@@ -262,6 +261,20 @@ async def test_what_needs_attention_is_read_from_what_was_kept_and_asks_nobody(r
     assert [(c.id, c.state) for c in found] == [("jira", "not_answering"), ("github", "working")]
     assert found[1].problem == "The key runs out soon."
     assert found[1].fix == "Ask whoever set up GitHub for a new key before this one runs out."
+
+
+async def test_no_ai_model_needs_attention_as_its_settings_say_now_with_no_check_first(rig: Rig):
+    rig.probes["model"].reading = Reading("not_set_up", "No AI model is turned on.")
+    (model,) = await rig.connections.needing_attention()
+    assert (model.id, model.state, model.fix) == (
+        "model",
+        "not_set_up",
+        "Add an AI model under Settings, AI model.",
+    )
+    assert [rig.probes[id].calls for id in ("jira", "github", "teams")] == [0, 0, 0]
+
+    rig.probes["model"].reading = WORKING
+    assert await rig.connections.needing_attention() == []
 
 
 async def test_the_stored_result_holds_no_secret_and_no_error_text(rig: Rig, db: Database):
