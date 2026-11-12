@@ -241,9 +241,9 @@ def edit_of(read: TaskRead, text: str, facts: PlannerFacts | None) -> EditAnswer
     """The edit a request asks for, or None. The reading calls it a change; or it asks about
     the person's workflows and a change word is left over, which fails closed to the edit; or an
     order to change one stands beside a workflow the person has, whatever the reading said."""
-    if NOT_AN_EDIT.search(text):
-        return None
     names = _names(read, text, facts)
+    if NOT_AN_EDIT.search(_blank(text, names)):
+        return None
     rest = _left(text, names)
     if read.asks_about != "change":
         if not _edit_words(rest):
@@ -301,12 +301,29 @@ def _software(read: TaskRead, text: str, target: str | None) -> str | None:
     return software
 
 
+def change_clauses(text: str, names: list[Span]) -> list[Span]:
+    """The clauses that hold the change: each that doesn't ask a question and orders one with a
+    verb, names the workflow or says "it", or holds nothing but a schedule. A clause beside them,
+    as "every Friday sum up the closed tickets", is a task of its own."""
+    unnamed = _blank(text, names)
+    found: list[Span] = []
+    for clause in clauses_of(text):
+        if asks(text, clause) or NEW_WORKFLOW.match(text[clause[0] : clause[1]]):
+            continue
+        words_ = {w for w, _, _ in _tokens(unnamed[clause[0] : clause[1]])}
+        named = any(clause[0] <= a < clause[1] for a, _ in names)
+        if words_ & EDIT_VERBS or named or "it" in words_ or words_ <= EDIT_WORDS:
+            found.append(clause)
+    return found
+
+
 def schedule_blanks(text: str, names: list[Span]) -> list[Span]:
     """What is not the new schedule: the names, the schedule it runs on now, and each clause that
-    asks a question."""
+    doesn't hold the change."""
     now = [m.span() for m in INSTEAD.finditer(text)]
-    questions = [c for c in clauses_of(text) if asks(text, c)]
-    return names + now + questions
+    kept = change_clauses(text, names)
+    others = [c for c in clauses_of(text) if c not in kept]
+    return names + now + others
 
 
 def _schedule_of(
@@ -329,10 +346,18 @@ def _schedule_of(
     weekly = day is None and bool(often & HOW_OFTEN_WORDS)
     hour = None
     if at is not None and at.isdigit():
-        hour, at = (int(at), None) if 1 <= int(at) <= 12 else (None, f"{int(at) % 24:02d}:00")
+        hour, at = _hour(int(at))
     if day is None and at is None and hour is None and not weekly:
         return None, "only_schedule", []
     return ScheduleChange(day=_day(day), weekly=weekly, at=at, hour=hour), None, []
+
+
+def _hour(hour: int) -> tuple[int | None, str | None]:
+    """A bare hour: 1 to 12 could be morning or evening, so the person picks; 0 and 13 to 23 can
+    only be one time; anything else is no time at all."""
+    if 1 <= hour <= 12:
+        return hour, None
+    return None, (f"{hour:02d}:00" if hour <= 23 else None)
 
 
 def _day(day: str | None) -> WatchDay | None:
@@ -383,53 +408,60 @@ def edit_marks(
     read: TaskRead | None, text: str, answer: EditAnswer, clauses: list[Span]
 ) -> list[EditMark]:
     """Each clause of a request the edit answers, marked: the change it reads, a cross on what it
-    can't make or didn't follow, and a question asked beside it kept to ask on its own."""
+    can't make or didn't follow, and a question or a task beside it kept to ask on its own."""
     names = _names(read, text, None)
     said = _said(answer.workflow_words, text)
     names += [said] if said is not None else []
     blanks = schedule_blanks(text, names)
     rest = _blank(text, blanks)
-    clashes = clashes_in(rest) if answer.holds_save else []
-    often = how_often(rest) if answer.cant == "how_often" else None
-    unnamed = _blank(text, names)
-    found: list[EditMark] = []
-    for clause in clauses:
-        found += _clause_marks(text, clause, answer, unnamed, rest, clashes, often, names + blanks)
-    return found
+    edit = _Edit(
+        answer=answer,
+        unnamed=_blank(text, names),
+        kept=change_clauses(text, names),
+        clashes=clashes_in(rest) if answer.holds_save else [],
+        often=how_often(rest) if answer.cant == "how_often" else None,
+        read=names + blanks,
+    )
+    return [mark for clause in clauses for mark in _clause_marks(text, clause, edit)]
 
 
-def _clause_marks(
-    text: str,
-    clause: Span,
-    answer: EditAnswer,
-    unnamed: str,
-    rest: str,
-    clashes: list[Clash],
-    often: Span | None,
-    explained: list[Span],
-) -> list[EditMark]:
+@dataclass(frozen=True)
+class _Edit:
+    """What marking a clause of an edit needs to know of the whole request."""
+
+    answer: EditAnswer
+    unnamed: str
+    kept: list[Span]
+    clashes: list[Clash]
+    often: Span | None
+    read: list[Span]
+
+
+def _clause_marks(text: str, clause: Span, edit: _Edit) -> list[EditMark]:
     start, end = clause
-    if asks(text, clause):
+    words_ = text[start:end]
+    tokens = {w for w, _, _ in _tokens(edit.unnamed[start:end])}
+    changes = clause in edit.kept
+    if asks(text, clause) or (
+        not changes and not tokens & EDIT_VERBS and STATE_WORDS.search(words_)
+    ):
         return [EditMark(start, end, "cant", "ask_on_its_own")]
-    tokens = {w for w, _, _ in _tokens(unnamed[start:end])}
-    verbs = tokens & EDIT_VERBS
-    others = (tokens & OTHER_CHANGES) | (set(change_verbs_in(unnamed[start:end])) - SCHEDULE_VERBS)
-    scheduled = SCHEDULE_SAID.search(rest[start:end]) is not None
-    if not verbs and not scheduled and STATE_WORDS.search(text[start:end]):
-        return [EditMark(start, end, "cant", "ask_on_its_own")]
-    if (answer.cant == "only_schedule" and (verbs or others)) or (others and not scheduled):
+    others = (tokens & OTHER_CHANGES) | (
+        set(change_verbs_in(edit.unnamed[start:end])) - SCHEDULE_VERBS
+    )
+    if others or (edit.answer.cant == "only_schedule" and changes):
         return [EditMark(start, end, "cant", "only_schedule")]
-    named = any(start <= a < end for a, _ in explained) or "it" in tokens
-    if not (verbs or scheduled or named):
-        return [EditMark(start, end, "cant", "not_followed")]
+    if not changes:
+        task = NEW_WORKFLOW.match(words_) or SCHEDULE_SAID.search(words_) or tokens & EDIT_VERBS
+        return [EditMark(start, end, "cant", "ask_on_its_own" if task else "not_followed")]
     marks = [
         EditMark(c.start, c.end, "cant", c.reason, c.choices)
-        for c in clashes
+        for c in edit.clashes
         if c.start < end and c.end > start
     ]
-    if often is not None and often[0] < end and often[1] > start:
-        marks.append(EditMark(*often, "cant", "how_often"))
-    reads = explained + times_in(text) + [(m.start, m.end) for m in marks]
+    if edit.often is not None and edit.often[0] < end and edit.often[1] > start:
+        marks.append(EditMark(*edit.often, "cant", "how_often"))
+    reads = edit.read + times_in(text) + [(m.start, m.end) for m in marks]
     marks += [EditMark(*s, "cant", "not_followed") for s in unexplained(text, clause, reads)]
     return sorted(marks, key=lambda m: m.start) or [EditMark(start, end, "will_do")]
 

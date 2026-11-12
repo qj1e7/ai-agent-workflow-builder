@@ -2375,3 +2375,35 @@ def test_a_part_of_an_edit_it_didnt_follow_is_crossed():
 def test_make_it_daily_with_no_workflow_named_leaves_the_workflow_to_pick():
     answer = edited(read(asks_about="change"), "make it daily", None)
     assert (answer.workflow_words, answer.schedule) == (None, ScheduleChange(day="every_day"))
+
+
+@pytest.mark.parametrize(
+    ("task", "beside"),
+    [
+        (
+            "Make the morning check run daily, and every Friday sum up the closed tickets",
+            "every Friday sum up the closed tickets",
+        ),
+        ("Make the morning check run daily and set up a weekly summary", "set up a weekly summary"),
+    ],
+)
+def test_a_task_beside_an_edit_is_kept_to_ask_on_its_own_and_reads_no_schedule(
+    task: str, beside: str
+):
+    fields = read(asks_about="change", workflow_words="morning check")
+    assert edited(fields, task).schedule == ScheduleChange(day="every_day")
+    assert marks(fields, task) == [
+        ("Make the morning check run daily", "will_do", None),
+        (beside, "cant", "ask_on_its_own"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("task", "change"),
+    [
+        ("make the morning check run at 14", ScheduleChange(at="14:00")),
+        ("make the morning check run at 0", ScheduleChange(at="00:00")),
+    ],
+)
+def test_an_hour_that_can_only_be_one_time_is_that_time(task: str, change: ScheduleChange):
+    assert edited(read(asks_about="change"), task).schedule == change
