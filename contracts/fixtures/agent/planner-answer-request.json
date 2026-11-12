@@ -7,5 +7,6 @@
     "api_key": "example-key-not-a-secret"
   },
   "previous": null,
-  "facts": null
+  "facts": null,
+  "changes_workflows": true
 }

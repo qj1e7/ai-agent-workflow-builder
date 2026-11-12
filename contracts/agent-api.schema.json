@@ -500,6 +500,12 @@
     "AnswerRequest": {
       "additionalProperties": false,
       "properties": {
+        "changes_workflows": {
+          "default": true,
+          "description": "False when the person asking can't change workflows, as an Approver who isn't an Operator: a change beside a question is crossed, and the question still gets its answer (plan 3.2).",
+          "title": "Changes Workflows",
+          "type": "boolean"
+        },
         "facts": {
           "anyOf": [
             {
@@ -1542,6 +1548,84 @@
       "title": "Drafted",
       "type": "object"
     },
+    "EditAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "cant": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EditCant"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "only_schedule: it asks for a change other than when the workflow runs, such as pausing or renaming it, which the chat can't make yet. how_often: it asks for a frequency the schedule can't hold, such as monthly. None when the change can be made."
+        },
+        "holds_save": {
+          "default": false,
+          "description": "True when the new schedule names two days, two times or two frequencies. Nothing can be saved until the person asks again without the part with a cross.",
+          "title": "Holds Save",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "edit",
+          "default": "edit",
+          "title": "Kind",
+          "type": "string"
+        },
+        "schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScheduleChange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When it should run. None when the request asks for no change to when it runs, or for one the schedule can't hold."
+        },
+        "software": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The software those words name, as \"the React check\" names React, so the platform can tell the Software watchlist's check of it. None when they name none.",
+          "title": "Software"
+        },
+        "workflow_words": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The words of the request that name the workflow to change, as it wrote them. The platform matches them to one of the person's workflows by whole words. None when the request names none, as \"make it daily\".",
+          "title": "Workflow Words"
+        }
+      },
+      "title": "EditAnswer",
+      "type": "object"
+    },
+    "EditCant": {
+      "enum": [
+        "only_schedule",
+        "how_often"
+      ],
+      "type": "string"
+    },
     "ExampleKind": {
       "enum": [
         "automate",
@@ -2247,7 +2331,9 @@
         "skip_approval",
         "with_a_yes",
         "needs_the_rest",
-        "how_many_days"
+        "how_many_days",
+        "only_schedule",
+        "how_often"
       ],
       "type": "string"
     },
@@ -2257,6 +2343,7 @@
           "abilities": "#/$defs/AbilitiesAnswer",
           "cant": "#/$defs/CantAnswer",
           "check_workflows": "#/$defs/CheckWorkflowsAnswer",
+          "edit": "#/$defs/EditAnswer",
           "needs_me": "#/$defs/NeedsMeAnswer",
           "part": "#/$defs/PartAnswer",
           "question": "#/$defs/QuestionAnswer",
@@ -2301,6 +2388,9 @@
         },
         {
           "$ref": "#/$defs/QuestionAnswer"
+        },
+        {
+          "$ref": "#/$defs/EditAnswer"
         }
       ]
     },
@@ -2601,7 +2691,7 @@
             }
           ],
           "default": null,
-          "description": "Why, for a cant: not_followed (no rule read it), cant_do (see note), ask_on_its_own (a question asked beside a request, or a request beside a question), one_day, one_time or one_frequency (a schedule with two, see choices), own_time (a time on a watch request), skip_approval (it asks to skip a yes), with_a_yes (it waits until the request is set up with a yes), needs_the_rest (it can't run without a part that can't be done), how_many_days (a question: the words name a span of days but no number). None for will_do."
+          "description": "Why, for a cant: not_followed (no rule read it), cant_do (see note), ask_on_its_own (a question asked beside a request, or a request beside a question), one_day, one_time or one_frequency (a schedule with two, see choices), own_time (a time on a watch request), skip_approval (it asks to skip a yes), with_a_yes (it waits until the request is set up with a yes), needs_the_rest (it can't run without a part that can't be done), how_many_days (a question: the words name a span of days but no number), only_schedule (a change to a workflow other than when it runs, which the chat can't make yet), how_often (a frequency the schedule can't hold, such as monthly). None for will_do."
         },
         "text": {
           "description": "The request's own words: the whole clause, or, in a clause the Planner partly read, only the words it didn't read.",
@@ -2647,6 +2737,67 @@
         "cant_do"
       ],
       "type": "string"
+    },
+    "ScheduleChange": {
+      "additionalProperties": false,
+      "description": "When a request asks a workflow it names to run, in the schedule's own terms. A part it\ndoesn't name is None, so the saved one stays.",
+      "properties": {
+        "at": {
+          "anyOf": [
+            {
+              "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The time it asks for, 24-hour, as 09:00.",
+          "title": "At"
+        },
+        "day": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WatchDay"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The day it asks for, if it names one."
+        },
+        "hour": {
+          "anyOf": [
+            {
+              "maximum": 12,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "An hour it names with no am or pm, as \"at 9\", which could be morning or evening, so the person picks one. Never guessed.",
+          "title": "Hour"
+        },
+        "time_unclear": {
+          "default": false,
+          "description": "A time it names that the schedule can't read, as \"in the afternoon\" or \"an hour later\": the person picks one. Never guessed.",
+          "title": "Time Unclear",
+          "type": "boolean"
+        },
+        "weekly": {
+          "default": false,
+          "description": "True for once a week with no day named. The saved day stays when it is one day of the week, and the person picks one when it isn't.",
+          "title": "Weekly",
+          "type": "boolean"
+        }
+      },
+      "title": "ScheduleChange",
+      "type": "object"
     },
     "SetupCardAnswer": {
       "additionalProperties": false,

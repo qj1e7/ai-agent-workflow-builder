@@ -87,14 +87,24 @@ class PlannerAnswers:
         self._agents = agents
 
     async def answer(
-        self, task: str, facts: PlannerFacts | None = None, previous: PreviousTurn | None = None
+        self,
+        task: str,
+        facts: PlannerFacts | None = None,
+        previous: PreviousTurn | None = None,
+        changes_workflows: bool = True,
     ) -> AnswerResult | NoModel | RuntimeDown:
         async with self._db.transaction("orchestration") as uow:
             model = await self._models.access(uow)
         if model is None:
             return NoModel()
         reply = await self._agents.answer(
-            AnswerRequest(task=task, model=model, facts=facts, previous=previous)
+            AnswerRequest(
+                task=task,
+                model=model,
+                facts=facts,
+                previous=previous,
+                changes_workflows=changes_workflows,
+            )
         )
         if isinstance(reply, AgentUnavailable | AgentRejected):
             return RuntimeDown(reply.detail)

@@ -132,6 +132,12 @@ ABOUT = (
         "abilities",
     ),
 )
+CHANGE = re.compile(
+    r"^(?:please\s+)?(?:make|change|move|switch|set|run|pause|resume|rename|turn|delete)\s+"
+    r"(?:the\s+)?(.+?)(?:\s+(?:run|to|on|at|every|daily|weekly|monthly|off|instead)\b|\s*$)",
+    re.IGNORECASE,
+)
+"""A change to a workflow the person has, and the words that name it."""
 WORKFLOW_NAMED = re.compile(
     r"(?:why did|is|are)\s+(?:the\s+)?(.+?)\s+"
     r"(?:stop|stopped|fail|failed|running|working|on|paused)\b",
@@ -509,11 +515,14 @@ def structures(task: str) -> dict[str, Any]:
 
 def reading(task: str) -> dict[str, Any]:
     about = next((kind for pattern, kind in ABOUT if pattern.search(task.strip())), "none")
+    change = CHANGE.match(task.strip()) if not task.lower().startswith("set up") else None
+    if change is not None:
+        about = "change"
     if about != "none":
-        named = WORKFLOW_NAMED.search(task) if about in ("why_stopped", "my_workflows") else None
+        named = WORKFLOW_NAMED.search(task) if about in ("why_stopped", "my_workflows") else change
         words = (
             named.group(1)
-            if named and named.group(1).lower() not in ("my", "my workflow")
+            if named and named.group(1).lower() not in ("my", "my workflow", "it")
             else None
         )
         return {
