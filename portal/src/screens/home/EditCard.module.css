@@ -1,0 +1,67 @@
+.sentence {
+  margin: 0;
+}
+
+.sentence:focus {
+  outline: none;
+}
+
+/* Before and After, the labels in a column and the schedules beside them. */
+.ba {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 0;
+}
+
+.ba dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.ba dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.note {
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+
+.status {
+  display: inline-flex;
+  flex: 1 1 14rem;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+}
+
+.another {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 0 16px 12px;
+}
+
+.another input {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-ctl);
+  font: inherit;
+}
+
+.next {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.problem {
+  margin: 0;
+  padding: 0 16px 14px;
+  color: var(--red-ink);
+}

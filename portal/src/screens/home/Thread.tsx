@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
 import { Answer, type Page } from './AnswerCards'
+import { EditCard } from './EditCard'
 import { CardMemoryContext, NO_MEMORY, type CardMemory } from './cardMemory'
 import { Leftovers } from './PartsList'
 import { CardLive, NewestAnswer } from './primary'
@@ -22,7 +23,15 @@ interface ThreadProps {
   readonly memory?: (messageId: number) => CardMemory
 }
 
-function ReplyBody({ message, now, page, say }: { message: Extract<Message, { kind: 'reply' }>; now: Date; page: Page; say: Say }) {
+/** The one workflow an answer was about, which "it" in the next request means. A card in between, such as a draft, means no one workflow. */
+function aboutBefore(messages: readonly Message[], index: number): string | null {
+  const before = messages.slice(0, index).findLast((message) => message.kind !== 'me' && message.kind !== 'thinking')
+  if (before?.kind !== 'reply') return null
+  const { reply } = before
+  return reply.answer === 'why_stopped' || reply.answer === 'check_workflows' || reply.answer === 'edit' ? reply.use_case_id : null
+}
+
+function ReplyBody({ message, now, page, say, about }: { message: Extract<Message, { kind: 'reply' }>; now: Date; page: Page; say: Say; about: string | null }) {
   const { reply } = message
   const sentence = sayOf(reply)
   useSaidOnce(sentence, say)
@@ -34,6 +43,7 @@ function ReplyBody({ message, now, page, say }: { message: Extract<Message, { ki
       {reply.answer === 'why_stopped' ? <WhyStoppedAnswer useCaseId={reply.use_case_id} say={say} /> : null}
       {reply.answer === 'ideas' ? <IdeasSentence say={say} /> : null}
       {reply.answer === 'needs_me' ? <NeedsMeAnswer now={now} say={say} /> : null}
+      {reply.answer === 'edit' ? <EditCard reply={reply} page={page} say={say} now={now} about={about} /> : null}
       <Answer reply={reply} typed={message.typed} page={page} />
     </div>
   )
@@ -53,7 +63,7 @@ export function Thread({ thread, now, page, memory }: ThreadProps) {
         Conversation with the Planner
       </h2>
       <ol className={styles['thread']} aria-labelledby="thread-h">
-        {thread.messages.map((message) => {
+        {thread.messages.map((message, index) => {
           if (message.kind === 'me') {
             return (
               <li key={message.id} className={styles['me']}>
@@ -90,7 +100,7 @@ export function Thread({ thread, now, page, memory }: ThreadProps) {
                   ) : (
                     <NewestAnswer.Provider value={message.id === newest}>
                       <CardLive.Provider value={message.id === newest}>
-                        <ReplyBody message={message} now={now} page={page} say={message.id === newest ? sayFor(message.id) : () => undefined} />
+                        <ReplyBody message={message} now={now} page={page} say={message.id === newest ? sayFor(message.id) : () => undefined} about={aboutBefore(thread.messages, index)} />
                       </CardLive.Provider>
                     </NewestAnswer.Provider>
                   )}

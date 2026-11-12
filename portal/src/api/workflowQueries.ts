@@ -90,6 +90,46 @@ export function saveScheduleOptions(client: ApiClient, queryClient: QueryClient,
   }
 }
 
+/** The workflow and the list read again, so a card that changed it, or failed to, shows what the platform holds now. */
+export function rereadChanged(queryClient: QueryClient, user: string, useCaseId: string): void {
+  void queryClient.invalidateQueries({ queryKey: keys.useCase(user, useCaseId) })
+  void queryClient.invalidateQueries({ queryKey: keys.useCases(user) })
+}
+
+/** The edit card's Save: the page's route, marked as a change from the chat. */
+export function chatScheduleOptions(client: ApiClient, queryClient: QueryClient, user: string) {
+  return {
+    mutationFn: async ({ useCaseId, schedule }: { useCaseId: string; schedule: ScheduleIn }) =>
+      unwrap(await client.PUT('/api/v1/use-cases/{use_case_id}/schedule', { params: { path: { use_case_id: useCaseId } }, body: { ...schedule, via: 'chat' } })),
+    onSuccess: (view: UseCaseView) => applySavedView(queryClient, user, view),
+    onSettled: (_view: unknown, _error: unknown, { useCaseId }: { useCaseId: string }) => rereadChanged(queryClient, user, useCaseId),
+  }
+}
+
+/** The edit card's Undo: publishes the schedule from before `version` again. A later version makes it a 409, and nothing is published. */
+export function undoOptions(client: ApiClient, queryClient: QueryClient, user: string) {
+  return {
+    mutationFn: async ({ useCaseId, version }: { useCaseId: string; version: number }) =>
+      unwrap(await client.POST('/api/v1/use-cases/{use_case_id}/versions/{version}/undo', { params: { path: { use_case_id: useCaseId, version } }, body: { via: 'chat' } })),
+    onSuccess: (view: UseCaseView) => applySavedView(queryClient, user, view),
+    onSettled: (_view: unknown, _error: unknown, { useCaseId }: { useCaseId: string }) => rereadChanged(queryClient, user, useCaseId),
+  }
+}
+
+export function useChatScheduleChange() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation(chatScheduleOptions(client, queryClient, user))
+}
+
+export function useUndoVersion() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation(undoOptions(client, queryClient, user))
+}
+
 export function useSaveWorkflowSchedule(useCaseId: string) {
   const client = useApiClient()
   const queryClient = useQueryClient()

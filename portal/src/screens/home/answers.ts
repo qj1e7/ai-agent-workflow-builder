@@ -75,7 +75,6 @@ export const SAY = {
   refused: 'I can’t set that up. Anything that changes data waits for a yes, every time.',
   abilities: 'Here is what I can do, and what I can’t do yet.',
   nothingNeeds: 'Nothing needs you right now.',
-  edit: 'I can’t change a workflow from the chat yet. Open it on the Workflows page to change it.',
 } as const
 
 export const watchlistSay = (software: string | null, listed: boolean): string => {
@@ -91,7 +90,7 @@ export const ideasSay = (places: number): string =>
 
 export const needsSay = (total: number): string => (total === 0 ? SAY.nothingNeeds : `${count(total, 'thing')} ${total === 1 ? 'needs' : 'need'} you.`)
 
-/** The sentence for an answer the Planner reply alone decides. The three state answers are filled in from the pages’ own functions. */
+/** The sentence for an answer the Planner reply alone decides. The state answers and the edit card fill theirs in from the platform as it is now. */
 export function sayOf(reply: PlannerReply): string | null {
   switch (reply.answer) {
     case 'setup_card':
@@ -117,7 +116,6 @@ export function sayOf(reply: PlannerReply): string | null {
     case 'question':
       return reply.text
     case 'edit':
-      return SAY.edit
     case 'check_workflows':
     case 'why_stopped':
     case 'needs_me':

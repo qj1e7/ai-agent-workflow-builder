@@ -286,6 +286,9 @@ function clockIn(text: string): string {
 
 const BARE_HOUR = /\bat\s+(\d{1,2})\b(?![:.]\d)(?!\s*(?:am|pm)\b)/i
 
+/** The two times a bare hour could mean, morning first: 9 is 9:00 or 21:00, and 12 is 0:00 or 12:00. */
+export const hourChoices = (hour: number): readonly [string, string] => [`${String(hour % 12).padStart(2, '0')}:00`, `${String((hour % 12) + 12)}:00`]
+
 /** The hour of “at 9”, which could be morning or evening. Null when the words name no such hour. */
 export function bareHour(said: string): number | null {
   const found = BARE_HOUR.exec(said)
@@ -379,7 +382,7 @@ export type Question =
 
 const OFTEN_CHOICES: readonly WhenChoice[] = (Object.entries(OFTEN_NAMES) as [Exclude<Often, ''>, string][]).map(([often, label]) => ({ label, set: { often } }))
 const DAY_CHOICES: readonly WhenChoice[] = DAY_NAMES.map((day) => ({ label: DAY_WORD(day), set: { day } }))
-const TIMES = ['08:00', '09:00', '13:00', '17:00']
+export const TIMES = ['08:00', '09:00', '13:00', '17:00']
 const ASK_ROW: Readonly<Record<RowKind, string>> = {
   schedule: 'How often should it run?',
   look_for: 'Which tickets should it find?',
@@ -401,7 +404,7 @@ function clashQuestion(form: Form, reason: PartReason, field: WhenField): Questi
 
 function timeQuestion(form: Form): Question {
   const hour = bareHour(form.rows.find((row) => row.kind === 'schedule')?.text || form.text)
-  const times = hour === null ? TIMES : [`${String(hour % 12).padStart(2, '0')}:00`, `${String((hour % 12) + 12)}:00`]
+  const times = hour === null ? TIMES : hourChoices(hour)
   const choices = times.map((at) => ({ label: clockWords(at), set: { at } }))
   return { kind: 'when', field: 'at', words: hour === null ? 'What time should it run?' : `At ${orList(choices.map((choice) => choice.label))}?`, choices }
 }

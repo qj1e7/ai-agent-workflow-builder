@@ -267,7 +267,7 @@ interface AnswerProps {
   readonly page: Page
 }
 
-/** The body of one Planner answer, past its sentence. The three state answers are in StateAnswers. */
+/** The body of one Planner answer, past its sentence. The state answers are in StateAnswers, and the edit card draws its own sentence. */
 export function Answer({ reply, typed, page }: AnswerProps) {
   switch (reply.answer) {
     case 'setup_card':

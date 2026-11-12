@@ -27,17 +27,28 @@ const REASON_WORDS: Readonly<Record<PartReason, string>> = {
   how_often: 'I can’t run things that often yet.',
 }
 
-/** What the words of a cross are read against: the card’s schedule, and the Software watchlist’s schedule for a watch request. */
+/** What the words of a cross are read against: the card’s schedule, the Software watchlist’s schedule for a watch request, and the workflow an edit changes. */
 export interface CrossContext {
   readonly when?: When
   readonly watchlist?: ScheduleView | null
+  readonly workflow?: string
+}
+
+/** “every weekday except Friday” leaves a day out, which no schedule here can hold. Anything else reads as how often. */
+const LEAVES_OUT = /^(?:except|excluding|but not|apart from|other than)\b/i
+
+export function howOftenWords(text: string): string {
+  const said = text.trim()
+  if (said === '') return REASON_WORDS.how_often
+  return LEAVES_OUT.test(said) ? 'I can’t leave days out of a schedule yet.' : `I can’t run things ${said} yet.`
 }
 
 /** Why a part has a cross or a question, in the prototype’s words. A can’t names the registry’s reason. */
 export function crossWords(part: PartView, context: CrossContext = {}): string {
   if (part.reason === null) return part.mark === 'question' ? REASON_WORDS.how_many_days : REASON_WORDS.not_followed
   if (part.reason === 'cant_do' && part.note !== null && part.note.trim() !== '') return part.note
-  if (part.reason === 'how_often' && part.text.trim() !== '') return `I can’t run things ${part.text.trim()} yet.`
+  if (part.reason === 'how_often') return howOftenWords(part.text)
+  if (part.reason === 'only_schedule' && context.workflow) return `From the chat I can only change when ${context.workflow} runs.`
   if (part.reason === 'own_time' && context.watchlist)
     return `The Software watchlist checks all your software together, ${repeatWords(context.watchlist)}. I can’t give one software its own time yet.`
   const chosen = context.when && isClash(part) ? clashChosen(context.when, part) : null
@@ -79,7 +90,7 @@ function holdsCard(reply: PlannerReply): boolean {
 }
 
 /**
- * The clauses an answer didn’t read, which it draws above its card (spec 6.5). The set-up card marks its own parts. The can’t
+ * The clauses an answer didn’t read, which it draws above its card (spec 6.5). The set-up card and the edit card mark their own parts. The can’t
  * answer’s card already names what it can’t do, so only the clauses it didn’t read are added. A card inside the answer asks its
  * own clash and days, so they aren’t drawn twice. The refusal, which software, places to start and the offline answer draw none.
  */
@@ -88,6 +99,7 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
   switch (reply.answer) {
     case 'setup_card':
     case 'part':
+    case 'edit':
     case 'refused':
     case 'which_software':
     case 'ideas':
@@ -95,7 +107,6 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
       return []
     case 'cant':
       return reply.alternative?.answer === 'setup_card' ? [] : above(reply.parts.filter((part) => part.reason !== 'cant_do' && part.reason !== 'needs_the_rest'))
-    case 'edit':
     case 'watchlist':
     case 'abilities':
     case 'check_workflows':

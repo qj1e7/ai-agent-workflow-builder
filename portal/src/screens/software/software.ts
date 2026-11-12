@@ -367,6 +367,9 @@ export function clockWords(at: string): string {
   return at.replace(/^0/, '')
 }
 
+/** "every Monday", "every weekday". */
+export const everyWords = (day: Day): string => dayLabel[day]
+
 export function repeatWords({ day, at }: { readonly day: Day; readonly at: string }): string {
   return `${dayLabel[day]} at ${clockWords(at)}`
 }
