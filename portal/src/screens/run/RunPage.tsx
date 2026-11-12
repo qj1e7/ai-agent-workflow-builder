@@ -16,7 +16,7 @@ import { motionAllowed } from '../../ui/motion'
 import { nextRunOf } from '../workflows/workflow'
 import { ApprovalGate } from './ApprovalGate'
 import { Chat, DECISION_ID, LastWord, NeedsYou, Typing } from './Chat'
-import { askedWords, declineReasons, foundOf, partyOf, useDecision, yourPart, type Decision } from './decision'
+import { askedWords, declineReasons, foundOf, partyOf, useDecision, useNotChecked, yourPart, type Decision } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { Outcome, Troubleshooting } from './Outcome'
 import { QuestionThread } from './QuestionThread'
@@ -213,6 +213,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const open = detailOpen(detail.choice, shown)
   const decision = useDecision(approval.data, party)
   const questions = useQuestions(approval.data, nameOf)
+  const notChecked = useNotChecked(approval.data, useCase)
   const answered = decision.recorded !== null && !waiting && !WORKING.has(shown.phase.state)
   const focused = useRef(false)
   useEffect(() => {
@@ -256,6 +257,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
       approval={approval.data}
       found={foundOf(head.found, approval.data?.found)}
       decision={decision}
+      notChecked={notChecked}
       questions={questions}
       troubleshoot={troubleshoot}
       nameOf={nameOf}
@@ -320,6 +322,7 @@ interface LastWordForProps {
   readonly approval: ApprovalView | undefined
   readonly found: string
   readonly decision: ReturnType<typeof useDecision>
+  readonly notChecked: readonly string[]
   readonly questions: Questions
   readonly troubleshoot: ReturnType<typeof useTroubleshoot>
   readonly nameOf: NameOf
@@ -329,7 +332,7 @@ interface LastWordForProps {
   readonly declinedNext: string | null
 }
 
-function LastWordFor({ model, approval, found, decision, questions, troubleshoot, nameOf, me, runId, reasons, declinedNext }: LastWordForProps) {
+function LastWordFor({ model, approval, found, decision, notChecked, questions, troubleshoot, nameOf, me, runId, reasons, declinedNext }: LastWordForProps) {
   const modelOff = useModelOff()
   const { phase } = model
   switch (phase.state) {
@@ -341,6 +344,7 @@ function LastWordFor({ model, approval, found, decision, questions, troubleshoot
               approval={approval}
               page={{ found, part: yourPart(approval, partyOf(approval, me?.id), nameOf), askedBy: askedWords(approval, nameOf) }}
               decision={decision}
+              notChecked={notChecked}
               reasons={reasons}
               requester={nameOf(approval.requester)}
               questions={questions}

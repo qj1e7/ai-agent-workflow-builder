@@ -8,7 +8,7 @@ import { cx } from '../../ui/cx'
 import { useAfterPanelAction } from '../../ui/sidePanel'
 import { Toast } from '../../ui/Toast'
 import { ApprovalGate } from './ApprovalGate'
-import { declineReasons, openStep, partyOf, useDecision } from './decision'
+import { declineReasons, openStep, partyOf, useDecision, useNotChecked } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { Troubleshooting } from './Outcome'
 import { QuestionThread } from './QuestionThread'
@@ -94,6 +94,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
   const party = partyOf(approval.data, me?.id)
   const decision = useDecision(approval.data, party, () => backToTop?.())
   const questions = useQuestions(approval.data, nameOf)
+  const notChecked = useNotChecked(approval.data, useCase.data)
   const sent = <Toast message={questions.said} onDismiss={questions.dismiss} focusAfter={() => document.querySelector<HTMLElement>('main h1')} />
 
   const stations = stationsOf(shown, planOf(useCase.data), writeLabel)
@@ -115,6 +116,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
           approval={approval.data}
           page={null}
           decision={decision}
+          notChecked={notChecked}
           reasons={declineReasons(useCase.data?.template)}
           requester={nameOf(approval.data.requester)}
           questions={questions}

@@ -3,13 +3,14 @@ import asked from '@contracts/fixtures/approvals/apr_01JB8.alice.asked.json'
 import bob from '@contracts/fixtures/approvals/apr_01JB8.bob.json'
 import answered from '@contracts/fixtures/approvals/apr_01JB8.bob.answered.json'
 import question from '@contracts/fixtures/approvals/question.asked.json'
+import registry from '@contracts/fixtures/planner/capabilities.json'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { ApprovalView } from '../../api/types'
+import type { ApprovalView, CapabilitiesView, CapabilityView } from '../../api/types'
 import { MemoryRouter } from 'react-router'
 import { ApprovalGate, DeclineReasons, EXACT_WORDS } from './ApprovalGate'
 import { withQuestion } from '../../api/queries'
-import { APPROVE, askedWords, declinedNow, declineReasons, decisionFor, foundOf, partyOf, yourPart, type Decision } from './decision'
+import { APPROVE, askedWords, declinedNow, declineReasons, decisionFor, foundOf, notCheckedWords, partyOf, yourPart, type Decision } from './decision'
 import { AskBox } from './QuestionThread'
 import { ANSWER_HELP, NO_QUESTIONS, NOT_ANSWERED, STILL_WAITING, askHelp, askRefusalWords, sentWords } from './questions'
 import { approvalTitle, lockWords, withCurrentNames, proposalTitle, type Party } from './words'
@@ -34,13 +35,14 @@ const REASONS = declineReasons('software_watchlist')
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replaceAll('&amp;', '&').replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))
 
-function draw(approval: ApprovalView, party: Party | null, decision = idle, found = approval.found, me?: string): string {
+function draw(approval: ApprovalView, party: Party | null, decision = idle, found = approval.found, me?: string, notChecked: readonly string[] = []): string {
   return renderToStaticMarkup(
     <MemoryRouter>
       <ApprovalGate
         approval={approval}
         page={{ found, part: yourPart(approval, party, nameOf), askedBy: askedWords(approval, nameOf) }}
         decision={decision}
+        notChecked={notChecked}
         reasons={REASONS}
         requester="Alice"
         questions={NO_QUESTIONS}
@@ -55,7 +57,7 @@ describe('the approval gate', () => {
   it('in the side panel shows everything that will be written and the decision, and leaves Why, Who asked and Your part for the page', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <ApprovalGate approval={BOB} page={null} decision={idle} reasons={REASONS} requester="Alice" questions={NO_QUESTIONS} me="bob" nameOf={nameOf} />
+        <ApprovalGate approval={BOB} page={null} decision={idle} notChecked={[]} reasons={REASONS} requester="Alice" questions={NO_QUESTIONS} me="bob" nameOf={nameOf} />
       </MemoryRouter>,
     )
     expect(text(html)).toContain('What will change')
@@ -186,6 +188,70 @@ describe('the approval gate', () => {
 
   it('says what went wrong as an alert', () => {
     expect(draw(BOB, OTHER, { ...idle, error: 'Another Approver decided this step first.' })).toMatch(/role="alert"[^>]*>Another Approver decided this step first\./)
+  })
+})
+
+describe('what the run didn’t check', () => {
+  const CAPABILITIES = (registry as CapabilitiesView).capabilities
+  const VERSION_CHECKER = ['crd_version_checker']
+  const SUMMARY_CARD = ['crd_weekly_summary']
+  /** The registry as the platform serves it once the team has a ticket summary agent: it reads Jira, and nothing else. */
+  const withSummary = (capabilities: readonly CapabilityView[]) =>
+    capabilities.map((c) => (c.tools.includes('jira.search') ? { ...c, agents: [...c.agents, ...SUMMARY_CARD] } : c))
+  const UNREAD = ['Grafana', 'LangServe', 'PostgreSQL', 'Python']
+  const SOFTWARE_LINES = ['Grafana, LangServe, PostgreSQL and Python couldn’t be read, so no ticket is proposed for them.', 'The platform can’t yet check registries or security advisories.']
+  const panel = (notChecked: readonly string[]) =>
+    renderToStaticMarkup(
+      <MemoryRouter>
+        <ApprovalGate approval={BOB} page={null} decision={idle} notChecked={notChecked} reasons={REASONS} requester="Alice" questions={NO_QUESTIONS} me="bob" nameOf={nameOf} />
+      </MemoryRouter>,
+    )
+
+  it('names the software a check couldn’t read, then what the registry says the platform can’t check yet, in the prototype’s words', () => {
+    expect(notCheckedWords(UNREAD, VERSION_CHECKER, CAPABILITIES)).toEqual(SOFTWARE_LINES)
+    expect(notCheckedWords(['Redis'], VERSION_CHECKER, CAPABILITIES)[0]).toBe('Redis couldn’t be read, so no ticket is proposed for it.')
+  })
+
+  it('gives a ticket summary what its agents can’t see of a ticket, only as far as the registry says so', () => {
+    expect(notCheckedWords([], SUMMARY_CARD, withSummary(CAPABILITIES))).toEqual(['The platform can’t yet see a ticket\'s component or priority.'])
+    const planned = withSummary(CAPABILITIES).map((c) => (c.id === 'jira.find_by_update' ? { ...c, state: 'planned' as const, cant: 'see when a ticket was last updated, its type or who owns it' } : c))
+    expect(notCheckedWords([], SUMMARY_CARD, planned)).toEqual([
+      'The platform can’t yet see when a ticket was last updated, its type or who owns it.',
+      'The platform can’t yet see a ticket\'s component or priority.',
+    ])
+  })
+
+  it('gives a release check the release line, though its agent also reads Jira for the tickets it raised', () => {
+    expect(notCheckedWords([], VERSION_CHECKER, CAPABILITIES)).toEqual(['The platform can’t yet check registries or security advisories.'])
+  })
+
+  it('never lists what the registry says is Ready, and claims nothing while the registry is not in', () => {
+    const ready = CAPABILITIES.map((c) => (c.id === 'registries.check' ? { ...c, state: 'ready' as const, cant: null } : c))
+    expect(notCheckedWords([], VERSION_CHECKER, ready)).toEqual([])
+    expect(notCheckedWords(['Redis'], VERSION_CHECKER, undefined)).toEqual(['Redis couldn’t be read, so no ticket is proposed for it.'])
+    expect(notCheckedWords([], [], CAPABILITIES)).toEqual([])
+  })
+
+  it('sits after What will change and before Why on the page', () => {
+    const html = text(draw(BOB, OTHER, idle, BOB.found, 'bob', SOFTWARE_LINES))
+    const at = ['What will change', 'Not checked', 'Why', 'Who asked', 'What happens', 'Your part'].map((name) => html.indexOf(name))
+    expect(at.every((index) => index >= 0)).toBe(true)
+    expect(at).toEqual([...at].sort((a, b) => a - b))
+    expect(html).toContain(`Not checked ${SOFTWARE_LINES.join(' ')}`)
+  })
+
+  it('shows in the side panel too, which trims nothing that will be written', () => {
+    const html = text(panel(SOFTWARE_LINES))
+    expect(html).toContain(`${EXACT_WORDS} Not checked ${SOFTWARE_LINES.join(' ')} What happens`)
+    for (const left of ['Why', 'Who asked', 'Your part']) expect(html).not.toContain(left)
+  })
+
+  it('leaves the section out when the run checked everything it could', () => {
+    expect(text(panel([]))).not.toContain('Not checked')
+  })
+
+  it('adds no button, so Approve stays the next stop for the keyboard', () => {
+    expect(buttons(panel(SOFTWARE_LINES))).toEqual(['Approve 1 ticket', 'Decline', 'Ask Alice a question'])
   })
 })
 
@@ -347,7 +413,7 @@ describe('questions on a request', () => {
   it('shows the questions in the side panel too', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <ApprovalGate approval={{ ...BOB, questions: ASKED.questions }} page={null} decision={idle} reasons={REASONS} requester="Alice" questions={NO_QUESTIONS} me="bob" nameOf={nameOf} />
+        <ApprovalGate approval={{ ...BOB, questions: ASKED.questions }} page={null} decision={idle} notChecked={[]} reasons={REASONS} requester="Alice" questions={NO_QUESTIONS} me="bob" nameOf={nameOf} />
       </MemoryRouter>,
     )
     expect(text(html)).toContain(`You asked Alice: ${QUESTION.text}`)

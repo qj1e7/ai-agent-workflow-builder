@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useCacheScope, useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
+import { useCapabilities } from '../../api/plannerQueries'
 import { isConflict, refusalOf, useDecide } from '../../api/queries'
-import type { ApprovalStepView, ApprovalView, DecisionIn, DecisionView, Verdict } from '../../api/types'
+import type { ApprovalStepView, ApprovalView, CapabilityView, DecisionIn, DecisionView, UseCaseView, Verdict } from '../../api/types'
 import { starterName } from '../../api/labels'
+import { cardsOf } from '../workflows/workflow'
 import type { Declined } from './runModel'
 import { andList, CONFLICT_WORDS, declinedOfSteps, lockWords, type NameOf, type Party } from './words'
 
@@ -42,6 +44,35 @@ export function happensWords(approval: ApprovalView, canDecide: boolean): string
   const who = canDecide ? 'you say yes' : 'an Approver says yes'
   const order = approval.steps.length > 1 ? ' It needs two Approvers, one after the other.' : ''
   return `Nothing is written until ${who}.${order} The request waits until someone decides. ${canDecide ? 'If you decline' : 'If an Approver declines'}, the run stops there.`
+}
+
+/**
+ * What a run checks, and the registry entries that would check more of it. The first a workflow's agents use is what the run
+ * checks: a release check also reads Jira, but only to find the tickets it raised.
+ */
+const CHECKS: readonly { readonly reads: string; readonly more: readonly string[] }[] = [
+  { reads: 'github.releases', more: ['registries.check'] },
+  { reads: 'jira.read', more: ['jira.find_by_update', 'jira.find_by_detail'] },
+]
+
+/**
+ * Not checked (spec 10.4), only from the run and the capability registry: the software the run couldn't read, then what the
+ * platform can't yet check of what the run checks. An entry the registry says is Ready is never listed.
+ */
+export function notCheckedWords(unread: readonly string[], cards: readonly string[], capabilities: readonly CapabilityView[] | undefined): readonly string[] {
+  const registry = capabilities ?? []
+  const check = CHECKS.find(({ reads }) => registry.some((c) => c.id === reads && c.agents.some((card) => cards.includes(card))))
+  const cant = registry.flatMap((c) => (check?.more.includes(c.id) && c.state !== 'ready' && c.cant ? [`The platform can’t yet ${c.cant}.`] : []))
+  const read = unread.length > 0 ? [`${andList(unread)} couldn’t be read, so no ticket is proposed for ${unread.length === 1 ? 'it' : 'them'}.`] : []
+  return [...read, ...cant]
+}
+
+/** Not checked for a request that waits for a yes. The registry is read only then. */
+export function useNotChecked(approval: ApprovalView | undefined, useCase: Pick<UseCaseView, 'template' | 'agents'> | undefined): readonly string[] {
+  const waiting = approval !== undefined && openStep(approval) !== null
+  const capabilities = useCapabilities({ enabled: waiting })
+  if (!approval) return []
+  return notCheckedWords(approval.not_checked, useCase ? cardsOf(useCase).map((card) => card.card_id) : [], capabilities.data?.capabilities)
 }
 
 /** The reader's part: why they can decide, which of two yeses is theirs, or why they can't. */
