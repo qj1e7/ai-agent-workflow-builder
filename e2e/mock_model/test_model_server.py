@@ -447,6 +447,19 @@ class ReadTest(unittest.TestCase):
                 self.assertEqual((read["asks_about"], read["workflow_words"]), (about, words))
                 self.assertEqual((read["search"], read["ticket"]), (None, None))
 
+    def test_a_change_to_a_workflow_is_read_as_a_change_naming_it(self) -> None:
+        for task, words in (
+            ("Make the morning new-ticket check run on Mondays only", "morning new-ticket check"),
+            ("Change the React check to Tuesdays", "React check"),
+            ("Pause the weekly summary", "weekly summary"),
+            ("make it daily", None),
+        ):
+            with self.subTest(task=task):
+                read = server.reading(task)
+                self.assertEqual((read["asks_about"], read["workflow_words"]), ("change", words))
+                self.assertEqual((read["search"], read["ticket"]), (None, None))
+        self.assertEqual(server.reading("Set up a weekly summary")["asks_about"], "none")
+
     def test_a_vulnerability_check_fills_no_search(self) -> None:
         read = server.reading("Warn me about any known vulnerabilities in Log4j")
         self.assertFalse(read["belongs_on_watchlist"])
