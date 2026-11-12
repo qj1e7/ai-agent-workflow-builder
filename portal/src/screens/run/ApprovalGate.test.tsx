@@ -11,8 +11,11 @@ import { MemoryRouter } from 'react-router'
 import { ApprovalGate, DeclineReasons, EXACT_WORDS } from './ApprovalGate'
 import { withQuestion } from '../../api/queries'
 import { APPROVE, askedWords, declinedNow, declineReasons, decisionFor, foundOf, notCheckedWords, partyOf, yourPart, type Decision } from './decision'
+import type { LiveRun } from './liveRun'
 import { AskBox } from './QuestionThread'
 import { ANSWER_HELP, NO_QUESTIONS, NOT_ANSWERED, STILL_WAITING, askHelp, askRefusalWords, sentWords } from './questions'
+import { declinedSoFarWords, statusWords } from './RunPage'
+import { emptyModel, type Phase } from './runModel'
 import { approvalTitle, lockWords, withCurrentNames, proposalTitle, type Party } from './words'
 
 const BOB = bob as ApprovalView
@@ -29,7 +32,7 @@ const nameOf = (id: string) => ({ alice: 'Alice', bob: 'Bob', carol: 'Carol' })[
 const NOBODY = { ownsIt: false, startedIt: false, retriedIt: false, schedule: false } as const
 const STARTER: Party = { ...NOBODY, ownsIt: true, startedIt: true }
 const OTHER: Party = NOBODY
-const idle: Pick<Decision, 'pending' | 'error' | 'decide'> = { pending: null, error: null, decide: () => undefined }
+const idle: Pick<Decision, 'pending' | 'recorded' | 'error' | 'decide'> = { pending: null, recorded: null, error: null, decide: () => undefined }
 const REASONS = declineReasons('software_watchlist')
 
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replaceAll('&amp;', '&').replace(/\s+/g, ' ').trim()
@@ -350,6 +353,40 @@ describe('the troubleshooter’s words', () => {
     expect(withCurrentNames('The agents proposed an action this use case cannot carry out.')).toBe('The agents proposed an action this workflow cannot carry out.')
     expect(withCurrentNames('the room lead and the Release checker')).toBe('the Planner and the Version checker')
     expect(withCurrentNames('An agent could not finish its work.')).toBe('An agent could not finish its work.')
+  })
+})
+
+describe('right after this person decides, before the run’s own events say so', () => {
+  const liveAt = (phase: Phase): LiveRun => {
+    const model = { ...emptyModel, phase }
+    return { shown: model, head: model, connection: { is: 'live' }, loadedUpTo: 0, loaded: true }
+  }
+  const declined = { by: 'bob', approvedBy: [], reason: 'Wrong version' }
+
+  it('offers Approve, Decline and Ask again to nobody whose decision is recorded, and no part left to play', () => {
+    expect(buttons(draw(BOB, OTHER)), 'before deciding').toEqual(['Approve 1 ticket', 'Decline', 'Ask Alice a question'])
+    for (const recorded of ['approve', 'decline'] as const) {
+      const html = draw(BOB, OTHER, { ...idle, recorded })
+      expect(buttons(html), `after ${recorded}`).toEqual([])
+      expect(text(html)).not.toMatch(/What happens|Your part/)
+      expect(text(html)).toContain(EXACT_WORDS)
+    }
+  })
+
+  it('still shows the question thread to the person who decided, and still offers Ask to an Approver who hasn’t', () => {
+    const asked = { ...BOB, questions: ASKED.questions }
+    const bobDecided = text(draw(asked, OTHER, { ...idle, recorded: 'decline' }, asked.found, 'bob'))
+    expect(bobDecided).toContain('Has 1.2.16 been tested with our login service?')
+    expect(bobDecided).not.toContain('Ask Alice a question')
+    expect(text(draw(asked, OTHER, idle, asked.found, 'dave')), 'another Approver').toContain('Not sure yet? Ask Alice a question')
+  })
+
+  it('keeps the declined record on the page until the run is declined, as approving keeps its words', () => {
+    const waiting = liveAt({ state: 'awaiting_approval' })
+    expect(declinedSoFarWords({ declined }, waiting, nameOf)).toBe('Declined by Bob. Nothing was written. Reason: Wrong version.')
+    expect(declinedSoFarWords({ declined }, liveAt({ state: 'rejected', by: 'bob', step: 0 }), nameOf)).toBeNull()
+    expect(declinedSoFarWords({ declined: null }, waiting, nameOf)).toBeNull()
+    expect(statusWords({ recorded: 'approve' }, liveAt({ state: 'acting' }))).toBe('Approved. The platform is writing now.')
   })
 })
 

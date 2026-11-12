@@ -45,12 +45,14 @@ from agent_runtime.contract import (
     CheckPartRequest,
     CheckPartResult,
     CheckWorkflowsAnswer,
+    EditAnswer,
     ModelProblem,
     NeedsMeAnswer,
     PartAnswer,
     PartCantDo,
     PartFits,
     PlannerAnswer,
+    PlannerFacts,
     RefusedAnswer,
     RowKind,
     SetupCardAnswer,
@@ -61,6 +63,14 @@ from agent_runtime.contract import (
     WhyStoppedAnswer,
 )
 from agent_runtime.drafting import ask_model
+from agent_runtime.edits import (
+    NEW_WORKFLOW,
+    asks,
+    asks_for_a_change,
+    commanded,
+    edit_of,
+    left_over,
+)
 from agent_runtime.follow_ups import follow_up_of, watch_offer_of
 from agent_runtime.parts import NOT_FOLLOWED, OWN_TIME, locate, parts_of
 from agent_runtime.planner import (
@@ -78,6 +88,7 @@ from agent_runtime.questions import answer_question, is_fallback, question_messa
 from agent_runtime.reading import (
     FILLER,
     SAID_LIMIT,
+    AsksAbout,
     SkipRead,
     Span,
     TaskRead,
@@ -149,8 +160,15 @@ ANSWER_SYSTEM: Final = (
     'approve?".\n'
     "- abilities: they ask what you can do, or the request is not a task for the team at all, "
     "such as a question about the weather.\n"
-    "For my_workflows and why_stopped, copy the words that name one workflow into "
-    "workflow_words, exactly as written, or leave it null when they ask about all of them.\n\n"
+    "- change: they ask to change a workflow they already have: when it runs, or to pause, "
+    'resume, rename or delete it, such as "Make the stale bug follow-up run on Tuesdays '
+    'only", "Move the Redis check to Thursdays" or "Pause the Friday summary". A request to '
+    "set up a new workflow is none, even when it says when to run. When a request both asks a "
+    "question and asks for a change, answer change.\n"
+    "For my_workflows, why_stopped and change, copy the words that name one workflow into "
+    'workflow_words, exactly as written, such as "Friday summary" or "Redis check", or leave it '
+    'null when they ask about all of them. When the change says "it", copy the words that name '
+    "the workflow earlier in the request, or leave it null when it names none.\n\n"
     "A request about software versions, releases, upgrades or patches belongs on the Software "
     "watchlist, where the team keeps all its software. Then set belongs_on_watchlist to true, "
     "copy the word from the request that made you think so, and name the software if the "
@@ -723,16 +741,21 @@ def _about(read: TaskRead, request: str) -> PlannerAnswer:
 
 
 def answer_of(
-    read: TaskRead, request: str, watch_schedule: WatchlistScheduleFact | None = None
+    read: TaskRead,
+    request: str,
+    facts: PlannerFacts | None = None,
+    changes_workflows: bool = True,
 ) -> PlannerAnswer:
     """The answer code decides from the model's reading: refused, by the word rule, by the
     model's answer to the skip question, or by words naming a yes that nothing explains in a
-    request that writes; then the watchlist, a question about the person's workflows, then the
-    structures. A request the model called a task is always read against its structures, so
-    words they do not hold come back; "abilities" is the catch-all, so a request that asks for
-    a change wins over it: a planted "close all tickets" comes back as a can't.
-    `watch_schedule` is when the Software watchlist checks, so a time a watch request names
-    that matches it is no cross."""
+    request that writes; then a change to a workflow the person has, then the watchlist, a
+    question about the person's workflows, then the structures. A request the model called a
+    task is always read against its structures, so words they do not hold come back;
+    "abilities" is the catch-all, so a request that asks for a change wins over it: a planted
+    "close all tickets" comes back as a can't. `facts` name the person's workflows, so a word in
+    a name is never a command, and say when the Software watchlist checks, so a time a watch
+    request names that matches it is no cross."""
+    watch_schedule = facts.watchlist_schedule if facts is not None else None
     text = visible_words(request)
     refused = _refusal(text)
     if refused is not None:
@@ -746,11 +769,17 @@ def answer_of(
     elsewhere = _other_source(read, text)
     if elsewhere is not None:
         return elsewhere
+    edit = edit_of(read, text, facts) if changes_workflows else None
+    if edit is not None:
+        return edit
+    if read.asks_about == "change":
+        unchanged = _unchanged(read, text, facts, changes_workflows)
+        read = read.model_copy(update={"asks_about": unchanged})
     task = None
     covered = [skip.covered] if skip.covered is not None else []
     watched = _watch_clauses(read, text) if read.belongs_on_watchlist else []
     writes = _writes(read, text)
-    if read.asks_about == "none" or task_shaped(read, text):
+    if read.asks_about == "none" or task_shaped(read, left_over(read, text, facts)):
         task = _read_task(read, text, covered + watched, writes)
         refused = _refused_span(task, text) if writes else None
         if refused is not None:
@@ -795,12 +824,6 @@ def _watched(answer: WatchlistAnswer, request: AnswerRequest) -> bool:
 QUESTION_SHAPE: Final = re.compile(
     r"^\s*(?:which|what|how|is|are|do|does|did|when)\b|\?\s*$", re.IGNORECASE
 )
-LANE_BLOCKERS: Final = re.compile(
-    r"\b(?:stop\s+watching|unwatch(?:ing)?|stop\s+tracking)\b", re.IGNORECASE
-)
-"""The gate fails closed: any change word, or these phrases that change_verbs_in misses, keeps the
-first answer, whatever the shape of the sentence. They stay here because change_verbs_in feeds
-other answers."""
 WATCHLIST_WORDS: Final = re.compile(r"\b(?:watchlist|watching|watched)\b", re.IGNORECASE)
 
 
@@ -813,13 +836,14 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     """The fixed answer for a reading, or the question lane when that answer is the catch-all, a
     watchlist offer for software the watchlist already holds, which software for a question
     while the watchlist holds some, or check workflows for a request that names the watchlist.
-    Every other answer stands. Only code routes: the reading itself is never changed."""
-    watching = request.facts.watchlist_schedule if request.facts is not None else None
-    answer = answer_of(read, request.task, watching)
-    if question_messages(request) is None:
+    Every other answer stands. Only code routes: the reading itself is never changed. The lane
+    fails closed: a change word left once the question's own words and the names are out keeps
+    the first answer, whatever the shape of the sentence (spec 6.4)."""
+    answer = answer_of(read, request.task, request.facts, request.changes_workflows)
+    if question_messages(request) is None or isinstance(answer, EditAnswer):
         return answer
     text = visible_words(request.task)
-    if change_verbs_in(text) or commands_a_change(text) or LANE_BLOCKERS.search(text):
+    if commanded(read, text, request.facts):
         return answer
     followed = follow_up_of(request)
     if followed is not None:
@@ -845,7 +869,50 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
         return AskTheQuestionLane(otherwise=answer, first_on_reject=True)
     if isinstance(answer, WhyStoppedAnswer) and _nothing_stopped(request):
         return AskTheQuestionLane(otherwise=answer, first_on_reject=True)
+    if _a_question_beside_a_new_workflow(answer, text, request):
+        return AskTheQuestionLane(otherwise=answer, first_on_reject=True)
     return answer
+
+
+WHY: Final = re.compile(r"\bwhy\b|\bwent\s+wrong\b|\bwhat\s+happened\b", re.IGNORECASE)
+NEEDS_ME: Final = re.compile(
+    r"\b(?:waiting|needs?\s+(?:me|my)|for\s+me|on\s+me|my\s+yes|to\s+approve|attention)\b",
+    re.IGNORECASE,
+)
+
+
+def _unchanged(
+    read: TaskRead, text: str, facts: PlannerFacts | None, changes_workflows: bool
+) -> AsksAbout:
+    """What a request the reading called a change is, when it isn't an edit. A watch request or
+    a change to something else, as "delete every closed ticket", is read as a task. One with no
+    change word left, as "when does the morning check run?", is a question about the person's
+    workflows, and so is a question beside a change from someone who can't change workflows."""
+    asked = any(asks(text, c) for c in clauses_of(text))
+    if read.belongs_on_watchlist or (
+        asks_for_a_change(read, text, facts) and (changes_workflows or not asked)
+    ):
+        return "none"
+    if WHY.search(text):
+        return "why_stopped"
+    return "needs_me" if NEEDS_ME.search(text) else "my_workflows"
+
+
+def _a_question_beside_a_new_workflow(
+    answer: PlannerAnswer, text: str, request: AnswerRequest
+) -> bool:
+    """A question, and beside it only a request for a new workflow, as "which software is
+    behind, and set up a weekly summary". A new workflow changes nothing that exists, so the
+    lane answers the question from the person's software or workflows, and the task is crossed
+    to ask on its own. The first answer stands if the lane says no."""
+    facts = request.facts
+    held = facts is not None and bool(_watched_names(request) or facts.workflows)
+    if not held or not isinstance(answer, CantAnswer | SetupCardAnswer | PartAnswer):
+        return False
+    clauses = clauses_of(text)
+    questions = [c for c in clauses if asks(text, c)]
+    others = [c for c in clauses if c not in questions]
+    return bool(questions and others) and all(NEW_WORKFLOW.match(text[a:b]) for a, b in others)
 
 
 def _follows(answer: PlannerAnswer) -> bool:
@@ -892,7 +959,7 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     if isinstance(read, ModelProblem):
         return read
     answer = _answer(read, request, chat_for)
-    return Answered(answer=answer, parts=parts_of(read, request.task, answer))
+    return Answered(answer=answer, parts=parts_of(read, request.task, answer, request.facts))
 
 
 def _answer(read: TaskRead, request: AnswerRequest, chat_for: ChatFor) -> PlannerAnswer:

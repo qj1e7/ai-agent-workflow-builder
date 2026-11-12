@@ -83,6 +83,49 @@ export function watchAttention(rows: readonly WatchedSoftwareView[]): number {
   return decisionsOf(rows).length + addressAttentionOf(rows).length
 }
 
+type LinePart = 'newer' | 'cant' | 'unchecked'
+
+/** The part of the count line each status counts in. A row whose upgrade ticket waits for a yes or is open still runs an older version. */
+const linePart: Record<SoftwareStatus, LinePart | null> = {
+  behind: 'newer',
+  awaiting_approval: 'newer',
+  ticket_open: 'newer',
+  cant_check: 'cant',
+  not_checked: 'unchecked',
+  up_to_date: null,
+}
+
+const lineWords: Record<LinePart, (count: number) => string> = {
+  newer: (count) => `${count} ${count === 1 ? 'has' : 'have'} a newer version`,
+  cant: (count) => `${count} can’t be checked`,
+  unchecked: (count) => `${count} not checked yet`,
+}
+
+const LINE_ORDER: readonly LinePart[] = ['newer', 'cant', 'unchecked']
+
+/**
+ * The line under the page's title, such as "3 have a newer version · 4 can’t be checked", from every row on the list, so a search
+ * never changes it. Null for an empty list. Up to date needs a version to be up to date with, as on the rows.
+ */
+export function countLine(rows: readonly WatchedSoftwareView[]): string | null {
+  if (rows.length === 0) return null
+  const parts = LINE_ORDER.flatMap((part) => {
+    const count = rows.filter((row) => linePart[row.status] === part).length
+    return count > 0 ? [lineWords[part](count)] : []
+  })
+  if (parts.length > 0) return parts.join(' · ')
+  return rows.every((row) => row.our_version !== null) ? 'Everything is up to date.' : 'Nothing newer yet.'
+}
+
+const SOURCE_NAME: Record<WatchedSoftwareView['source']['kind'], string> = { github: 'GitHub' }
+
+/** What checks a row, as "Checked on GitHub" only while the registry says releases are read there. Otherwise it names only where the project is. */
+export function checkedOnWords(kind: WatchedSoftwareView['source']['kind'], capabilities: readonly CapabilityView[] | undefined): string {
+  const releases = capabilities?.find((c) => c.id === `${kind}.releases`)
+  const where = releases?.system ?? SOURCE_NAME[kind]
+  return releases?.state === 'ready' ? `Checked on ${where}` : `On ${where}`
+}
+
 export const PAUSED_WORDS = 'Paused. No check runs until an Operator resumes it.'
 
 /** True when the schedule starts checks: it is set, and not held because its owner can no longer run it. */
@@ -127,6 +170,9 @@ export function checkedByWords(capabilities: readonly CapabilityView[] | undefin
   if (working) return `The Version checker, on ${working}.`
   return all ? `The Version checker, on ${all}, which is not working right now.` : 'The Version checker. No place can be checked right now.'
 }
+
+/** How it's checked says this with or without a schedule. The side panel's When row leaves it out. */
+export const ONE_APPROVAL = 'One approval covers all the upgrade tickets.'
 
 export function noScheduleWords({ operator, paused }: { readonly operator: boolean; readonly paused: boolean }): string {
   if (paused) return `No schedule. ${PAUSED_WORDS}`
@@ -397,8 +443,11 @@ interface HistoryLine {
   readonly words: string
 }
 
-/** What the platform has kept about one row. It stores the latest facts, not every earlier check. */
-export function historyOf(row: WatchedSoftwareView, nameOf: (id: string) => string): HistoryLine[] {
+/**
+ * What the platform has kept about one row. It stores the latest facts, not every earlier check. `declined` is the declined record of the
+ * check that found this row's newer version, with what happens next, in the words the row's note gives it.
+ */
+export function historyOf(row: WatchedSoftwareView, nameOf: (id: string) => string, declined: string | null): HistoryLine[] {
   const now: HistoryLine[] = []
   if (row.open_ticket) now.push({ when: 'Now', words: `${row.open_ticket} is open in Jira for the upgrade.` })
   else if (row.status === 'awaiting_approval') now.push({ when: 'Now', words: 'An upgrade ticket is waiting for a yes.' })
@@ -406,7 +455,7 @@ export function historyOf(row: WatchedSoftwareView, nameOf: (id: string) => stri
   const failed = row.status === 'cant_check'
   if (row.checked_at && failed) dated.push({ at: row.checked_at, words: row.problem ? `Couldn’t check. ${row.problem}` : 'Couldn’t check.' })
   const readAt = row.newest_read_at ?? (failed ? null : row.checked_at)
-  if (readAt) dated.push({ at: readAt, words: `Checked. The newest version is ${row.newest_version ?? 'unknown'}.` })
+  if (readAt) dated.push({ at: readAt, words: declined && row.newest_version ? `Found ${row.newest_version}. ${declined}` : `Checked. The newest version is ${row.newest_version ?? 'unknown'}.` })
   if (!row.checked_at) now.push({ when: 'Not yet', words: 'Not checked yet.' })
   const source = row.our_version_source
   if (source && row.our_version === null && row.compared_from) {

@@ -9,6 +9,7 @@ a guess. Nothing here writes.
 
 import asyncio
 import logging
+import re
 from collections.abc import Sequence
 from datetime import datetime
 from typing import Annotated, Final, Literal, Protocol, Self
@@ -17,6 +18,7 @@ from pydantic import ConfigDict, Field, StringConstraints, model_validator
 
 from platform_api.builder.models import (
     CardList,
+    ClockTime,
     StarterView,
     UnderstoodRowView,
     UseCaseList,
@@ -24,6 +26,7 @@ from platform_api.builder.models import (
     WatchlistView,
 )
 from platform_api.builder.planning import FALLBACK_WORDS, STARTERS, FallbackWhy
+from platform_api.builder.templates import SOFTWARE_WATCHLIST
 from platform_api.orchestration import (
     AbilitiesAnswer,
     Answered,
@@ -36,6 +39,9 @@ from platform_api.orchestration import (
     CheckWorkflowsAnswer,
     ConnectionCheck,
     ConnectionId,
+    Day,
+    EditAnswer,
+    EditCant,
     ExampleSpec,
     FactSection,
     ModelProblem,
@@ -59,7 +65,7 @@ from platform_api.orchestration import (
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
-from platform_api.shared import Principal
+from platform_api.shared import Principal, Role
 from platform_api.wire import WireIn, WireModel
 
 log = logging.getLogger(__name__)
@@ -150,7 +156,8 @@ class PartView(WireModel):
         description="Why, for a cant or a question: not_followed (no rule read it), cant_do (see "
         "note), ask_on_its_own, one_day, one_time or one_frequency (a schedule with two, see "
         "choices), own_time (a time on a watch request), skip_approval, with_a_yes, "
-        "needs_the_rest and how_many_days. Null for will_do."
+        "needs_the_rest, how_many_days, only_schedule (a change to a workflow other than when it "
+        "runs) and how_often (a schedule it can't hold, such as monthly). Null for will_do."
     )
     note: str | None = Field(description="For cant_do, why, in the registry's words.")
     choices: list[str] = Field(
@@ -282,6 +289,68 @@ class QuestionReply(Reply):
     )
 
 
+class EditBefore(WireModel):
+    day: Day
+    at: ClockTime
+
+
+class EditAfter(WireModel):
+    day: Day | None = Field(
+        description="Null when the person picks the day: weekly was asked for, and the saved "
+        "schedule isn't one day of the week."
+    )
+    at: ClockTime | None = Field(
+        description="Null when the person picks the time: the request named an hour with no am "
+        "or pm (hour), or a time the schedule can't read."
+    )
+
+
+class EditReply(Reply):
+    """A change to a workflow the person has, proposed. Nothing changes until they save it: an
+    Operator saves a workflow's schedule with PUT /api/v1/use-cases/{use_case_id}/schedule, with
+    via set to chat, which publishes a version that POST .../versions/{version}/undo undoes. The
+    Software watchlist's is saved with PUT /api/v1/watchlist/schedule and keeps no versions."""
+
+    answer: Literal["edit"] = "edit"
+    use_case_id: str | None = Field(
+        description="The workflow to change. Null when the request names none of the person's "
+        "workflows, or names several."
+    )
+    name: str | None = Field(description="Its name. Null with use_case_id.")
+    watchlist: bool = Field(description="True when it is the Software watchlist.")
+    missing: str | None = Field(
+        description="The request's words for a workflow the person doesn't have, as \"morning "
+        'check". Null otherwise.'
+    )
+    software: str | None = Field(
+        description='The software those words name, as React in "the React check". With missing '
+        "set, it isn't on the Software watchlist."
+    )
+    choices: list[SimilarWorkflow] = Field(
+        description="The workflows the words could mean, when they match more than one."
+    )
+    before: EditBefore | None = Field(
+        description="When it runs now. Null when no workflow matched, or it has no schedule."
+    )
+    after: EditAfter | None = Field(
+        description="When it would run once saved: the saved schedule with the change. Null "
+        "when nothing can be saved: no workflow matched, a change the chat can't make, or a "
+        "clash."
+    )
+    hour: int | None = Field(
+        description="An hour the request named with no am or pm, as 9: the person picks 9:00 or "
+        "21:00."
+    )
+    cant: EditCant | None = Field(
+        description="only_schedule: a change other than when it runs, which the chat can't make "
+        "yet. how_often: a frequency the schedule can't hold, such as monthly."
+    )
+    holds_save: bool = Field(
+        description="True when the request named two days, two times or two frequencies. "
+        "Nothing can be saved until the person asks again."
+    )
+
+
 class OfflineReply(Reply):
     answer: Literal["offline"] = "offline"
     why: FallbackWhy = Field(
@@ -307,6 +376,7 @@ type PlannerReply = Annotated[
     | WhyStoppedReply
     | NeedsMeReply
     | QuestionReply
+    | EditReply
     | OfflineReply,
     Field(discriminator="answer"),
 ]
@@ -366,7 +436,11 @@ class CapabilitiesView(WireModel):
 
 class Answering(Protocol):
     async def answer(
-        self, task: str, facts: PlannerFacts | None = None, previous: PreviousTurn | None = None
+        self,
+        task: str,
+        facts: PlannerFacts | None = None,
+        previous: PreviousTurn | None = None,
+        changes_workflows: bool = True,
     ) -> AnswerResult | NoModel | RuntimeDown: ...
 
     async def check_part(self, kind: RowKind, text: str) -> CheckPartResult | RuntimeDown: ...
@@ -416,6 +490,51 @@ def _cant_row(row: CantRow) -> CantRowView:
 
 def _norm(name: str) -> str:
     return " ".join(name.casefold().split())
+
+
+LITTLE_WORDS: Final = frozenset(
+    {"the", "a", "an", "my", "our", "this", "that", "it", "its", "one", "workflow", "check"}
+    | {"checks", "workflows"}
+)
+"""Words that name no workflow on their own, as in "the weekly one" or "the React check"."""
+WATCHLIST_WORDS: Final = frozenset({"software", "watchlist", "version", "versions"})
+ONE_DAY: Final[frozenset[Day]] = frozenset(
+    {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+)
+
+
+def _own_words(text: str, keep_check: bool = False) -> frozenset[str]:
+    """The words that name a workflow, little words aside, each as one of a kind, so "tickets"
+    is "ticket". With `keep_check`, "check" stays, so a name that holds it wins first."""
+    little = LITTLE_WORDS - {"check"} if keep_check else LITTLE_WORDS
+    return frozenset(_one(w) for w in re.findall(r"[^\W_]+", text.casefold()) if w not in little)
+
+
+def _one(word: str) -> str:
+    """The word as one of a kind: "summaries" is "summary", "statuses" is "status" and
+    "tickets" is "ticket", while "status", "news" and "this" stay as they are."""
+    if len(word) > 4 and word.endswith("ies"):
+        return word[:-3] + "y"
+    if len(word) > 5 and word.endswith(("sses", "shes", "ches", "xes", "uses")):
+        return word[:-2]
+    if len(word) > 4 and word.endswith("s") and not word.endswith(("ss", "us", "is")):
+        return word[:-1]
+    return word
+
+
+def _after(before: EditBefore | None, edit: EditAnswer) -> EditAfter | None:
+    """The saved schedule with the change made. A part the change leaves out stays as saved. A
+    weekly change keeps the saved day when it is one day of the week, and an hour with no am or
+    pm, or a time it can't read, leaves the time to pick. None when there is nothing to save."""
+    change = edit.schedule
+    if change is None:
+        return None
+    day = change.day or (before.day if before is not None else None)
+    if change.weekly:
+        day = before.day if before is not None and before.day in ONE_DAY else None
+    asked = change.hour is not None or change.time_unclear
+    at = change.at or (before.at if before is not None and not asked else None)
+    return EditAfter(day=day, at=at)
 
 
 def _rows(rows: Sequence[UnderstoodRow]) -> list[UnderstoodRowView]:
@@ -471,7 +590,12 @@ class PlannerFront:
         earlier = None if previous is None else PreviousTurn(**previous.model_dump())
         try:
             async with asyncio.timeout(ANSWER_LIMIT_SECONDS):
-                result = await self._answers.answer(text, await self._facts.read(viewer), earlier)
+                result = await self._answers.answer(
+                    text,
+                    await self._facts.read(viewer),
+                    earlier,
+                    changes_workflows=Role.OPERATOR in viewer.roles,
+                )
         except TimeoutError:
             log.warning("The Planner's answer took longer than %g seconds", ANSWER_LIMIT_SECONDS)
             return offline("too_slow")
@@ -522,6 +646,8 @@ class PlannerFront:
                 return AbilitiesReply()
             case QuestionAnswer(text=text, looked_at=looked_at, about_software=software):
                 return QuestionReply(text=text, looked_at=looked_at, about_software=software)
+            case EditAnswer() as edit:
+                return await self._edit(edit)
 
     async def _alternative(
         self, alternative: SetupCardAnswer | WatchlistAnswer | None
@@ -574,23 +700,69 @@ class PlannerFront:
             (
                 SimilarWorkflow(use_case_id=u.use_case_id, name=u.name)
                 for u in await self._use_cases()
-                if u.template != "software_watchlist" and _norm(u.name) == wanted
+                if u.template != SOFTWARE_WATCHLIST.key and _norm(u.name) == wanted
             ),
             None,
         )
 
     async def _which(self, words: str | None) -> str | None:
-        """The workflow a name means: the one whose name is the words, else the only one whose
-        name holds them or is held by them. Null when none or several match."""
-        if words is None or not words.strip():
+        """The workflow a name means, when exactly one matches. Null when none or several do."""
+        if words is None:
             return None
-        wanted = _norm(words)
+        matched = await self._matching(words, None)
+        return matched[0].use_case_id if len(matched) == 1 else None
+
+    async def _matching(self, words: str, software: str | None) -> list[UseCaseView]:
+        """The workflows the words name, by whole words: the one called that, else the Software
+        watchlist for the check of a software on it, as "the React check", else each whose whole
+        name the words hold, else each that has every one of the words, little words and "check"
+        aside. The watchlist's own words name it too."""
         cases = await self._use_cases()
+        wanted = _norm(words)
         exact = [u for u in cases if _norm(u.name) == wanted]
-        if len(exact) == 1:
-            return exact[0].use_case_id
-        near = [u for u in cases if wanted in _norm(u.name) or _norm(u.name) in wanted]
-        return near[0].use_case_id if len(near) == 1 else None
+        held = [u for u in cases if re.search(rf"(?<!\w){re.escape(_norm(u.name))}(?!\w)", wanted)]
+        own = _own_words(words)
+        watchlist = [u for u in cases if u.template == SOFTWARE_WATCHLIST.key]
+        watched = await self._listed(software) if software is not None else None
+        if not exact and watched is not None and own <= _own_words(software or ""):
+            return watchlist
+        every = _own_words(words, keep_check=True)
+        found = (
+            exact
+            or held
+            or [u for u in cases if every and every <= _own_words(u.name, keep_check=True)]
+            or [u for u in cases if own and own <= _own_words(u.name)]
+        )
+        if found:
+            return found
+        if (own and own <= WATCHLIST_WORDS) or watched is not None:
+            return watchlist
+        return []
+
+    async def _edit(self, edit: EditAnswer) -> EditReply:
+        """The change proposed, for the workflow its words name. The after is the saved schedule
+        with the change made. Nothing is saved here."""
+        words = edit.workflow_words
+        matched = await self._matching(words, edit.software) if words is not None else []
+        one = matched[0] if len(matched) == 1 else None
+        saved = None if one is None else one.schedule
+        before = None if saved is None else EditBefore(day=saved.day, at=saved.at)
+        return EditReply(
+            use_case_id=None if one is None else one.use_case_id,
+            name=None if one is None else one.name,
+            watchlist=one is not None and one.template == SOFTWARE_WATCHLIST.key,
+            missing=words if words is not None and not matched and _own_words(words) else None,
+            software=edit.software,
+            choices=[
+                SimilarWorkflow(use_case_id=u.use_case_id, name=u.name)
+                for u in (matched if len(matched) > 1 else [])
+            ],
+            before=before,
+            after=_after(before, edit) if one is not None else None,
+            hour=None if edit.schedule is None else edit.schedule.hour,
+            cant=edit.cant,
+            holds_save=edit.holds_save,
+        )
 
     async def check_part(self, body: CheckPartIn) -> PartChecked | RegistryUnavailable:
         checked = await self._answers.check_part(body.kind, body.text)

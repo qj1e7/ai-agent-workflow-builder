@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import styles from './PageHead.module.css'
 
-export function PageHead({ heading, lead, movesFocus = false, children }: { heading: string; lead: string; movesFocus?: boolean; children?: ReactNode }) {
+export function PageHead({ heading, lead, movesFocus = false, children }: { heading: string; lead: ReactNode; movesFocus?: boolean; children?: ReactNode }) {
   return (
     <div className={styles['head']}>
       <div>

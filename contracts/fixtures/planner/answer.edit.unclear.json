@@ -1,0 +1,29 @@
+{
+  "parts": [
+    {
+      "text": "in the afternoon",
+      "mark": "cant",
+      "reason": "not_followed",
+      "note": null,
+      "choices": []
+    }
+  ],
+  "answer": "edit",
+  "use_case_id": "uc_01JB8",
+  "name": "Morning new-ticket check",
+  "watchlist": false,
+  "missing": null,
+  "software": null,
+  "choices": [],
+  "before": {
+    "day": "weekdays",
+    "at": "08:00"
+  },
+  "after": {
+    "day": "weekdays",
+    "at": null
+  },
+  "hour": null,
+  "cant": null,
+  "holds_save": false
+}

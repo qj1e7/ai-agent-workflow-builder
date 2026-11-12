@@ -31,6 +31,8 @@ interface Screen {
   readonly name: string
   readonly path: string
   readonly heading: string | RegExp
+  /** The line under the title that comes from the page's data, measured once it is there. */
+  readonly lead?: RegExp
   /** How it works is for Operators only. */
   readonly operatorOnly?: true
   /** A section that must be on the screen before it is measured. */
@@ -41,7 +43,7 @@ const ANY_HEADING = /\S/
 const SCREENS: readonly Screen[] = [
   { name: 'Chat', path: '/', heading: ANY_HEADING },
   { name: 'Workflows', path: '/workflows', heading: 'Workflows' },
-  { name: 'Watchlist', path: '/software', heading: 'Software watchlist' },
+  { name: 'Watchlist', path: '/software', heading: 'Software watchlist', lead: /^(?:\d+ (?:has|have) a newer version(?: · \d+ can’t be checked)?(?: · \d+ not checked yet)?|\d+ can’t be checked(?: · \d+ not checked yet)?|\d+ not checked yet|Everything is up to date\.|Nothing newer yet\.|Everything your team runs, in one list\.)$/ },
   { name: 'Settings, Connections', path: '/settings', heading: 'Settings' },
   { name: 'Settings, People and permissions', path: '/settings?tab=people', heading: 'Settings' },
   { name: 'Settings, AI model', path: '/settings?tab=model', heading: 'Settings' },
@@ -60,6 +62,7 @@ async function settled(page: Page, screen: Screen): Promise<void> {
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   if (typeof screen.heading === 'string') await expect(page.getByRole('heading', { level: 1 })).toHaveText(screen.heading)
   await expect(page.getByRole('main').getByRole('status').filter({ hasText: /^Loading/ })).toHaveCount(0)
+  if (screen.lead) await expect(page.locator('main h1 + p'), `${screen.name}'s count line`).toHaveText(screen.lead)
   if (screen.path === '/') {
     const main = page.getByRole('main')
     await expect(main.locator('[data-home-item]').or(main.getByText('All quiet', { exact: true })).or(main.locator('#planner-box')).first()).toBeVisible()

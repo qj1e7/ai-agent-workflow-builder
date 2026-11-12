@@ -3,7 +3,6 @@ import { useCacheScope, useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { refusalOf, useAnswerQuestion, useAskQuestion } from '../../api/queries'
 import type { AnswerView, ApprovalView, QuestionView, Refusal } from '../../api/types'
-import type { ToastMessage } from '../../ui/Toast'
 import { openStep } from './decision'
 import type { NameOf } from './words'
 
@@ -64,21 +63,19 @@ export interface Questions {
   readonly ask: QuestionSend & { send(this: void, text: string, idempotencyKey: string, onSent: () => void): void }
   /** `pending` and `error` belong to `questionId`, the question last answered on this page. */
   readonly answer: QuestionSend & { readonly questionId: string | null; send(this: void, questionId: string, text: string, onSent: () => void): void }
-  /** The toast after the platform kept this person's question or answer. Focus stays where the send put it. */
-  readonly said: ToastMessage | null
-  dismiss(this: void): void
 }
 
 /** Nothing sent and nothing to send, for a gate drawn with no platform behind it. */
 export const NO_QUESTIONS: Questions = {
   ask: { pending: false, error: null, send: () => undefined },
   answer: { pending: false, error: null, questionId: null, send: () => undefined },
-  said: null,
-  dismiss: () => undefined,
 }
 
-/** A dev user switch starts clean, because each send remembers who sent it. */
-export function useQuestions(approval: ApprovalView | undefined, nameOf: NameOf): Questions {
+/**
+ * A dev user switch starts clean, because each send remembers who sent it. `say` puts the words after the platform kept this person's
+ * question or answer in the page's one message at the bottom. Focus stays where the send put it.
+ */
+export function useQuestions(approval: ApprovalView | undefined, nameOf: NameOf, say: (text: string) => void): Questions {
   const approvalId = approval?.approval_id ?? ''
   const asking = useAskQuestion(approvalId)
   const answering = useAnswerQuestion(approvalId)
@@ -88,10 +85,9 @@ export function useQuestions(approval: ApprovalView | undefined, nameOf: NameOf)
   const errorWords = useErrorWords()
   const [askedBy, setAskedBy] = useState<string | null>(null)
   const [answered, setAnswered] = useState<{ by: string; questionId: string } | null>(null)
-  const [said, setSaid] = useState<{ by: string; message: ToastMessage } | null>(null)
   const askMine = askedBy === user
   const answerMine = answered !== null && answered.by === user
-  const sentTo = (to: string) => setSaid((before) => ({ by: user, message: { id: (before?.message.id ?? 0) + 1, text: sentWords(nameOf(to)) } }))
+  const sentTo = (to: string) => say(sentWords(nameOf(to)))
 
   function askError(): string | null {
     if (!askMine || !asking.isError) return null
@@ -141,8 +137,6 @@ export function useQuestions(approval: ApprovalView | undefined, nameOf: NameOf)
         })
       },
     },
-    said: said !== null && said.by === user ? said.message : null,
-    dismiss: () => setSaid(null),
   }
 }
 

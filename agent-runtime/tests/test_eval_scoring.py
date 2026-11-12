@@ -702,3 +702,34 @@ def test_a_request_that_says_no_update_fails_on_an_update_within_some_days():
     far = "Every Friday, list bugs in MOCK that nobody on the duty team has updated for 10 days"
     assert flipped(far, [row]) == ["flipped: Bug tickets, updated in the last 10 days"]
     assert flipped("Every Friday, list bugs updated in the last 10 days", [row]) == []
+
+
+@pytest.mark.parametrize(
+    ("case_id", "read"),
+    [
+        ("r7-edit-mondays", {"asks_about": "change", "workflow_words": "morning new-ticket check"}),
+        ("r7-edit-instead", {"asks_about": "change", "workflow_words": "the weekly summary"}),
+        ("r7-edit-react", {"asks_about": "change", "workflow_words": "React check"}),
+        ("r7-edit-rename", {"asks_about": "change", "workflow_words": "morning check"}),
+        ("r7-edit-monthly", {"asks_about": "change", "workflow_words": "morning check"}),
+        ("r7-edit-two-days", {"asks_about": "change"}),
+        ("r7-command-pause", {"asks_about": "needs_me"}),
+        ("r7-command-daily", {"asks_about": "my_workflows", "workflow_words": "weekly summary"}),
+        ("r7-name-next-run", {"asks_about": "my_workflows", "workflow_words": "weekly summary"}),
+        ("r7-name-holds-weekly", {"asks_about": "my_workflows"}),
+    ],
+)
+def test_each_edit_case_passes_on_a_good_reading(case_id: str, read: dict[str, Any]) -> None:
+    assert failed(ANSWER.score(answer_case(case_id), read_answer(**read))) == set()
+
+
+def test_an_edit_with_the_wrong_schedule_or_cant_fails_the_check_that_names_it() -> None:
+    wrong = read_answer(asks_about="change", workflow_words="morning new-ticket check")
+    case = answer_case("r7-edit-mondays").model_copy(
+        update={"task": "Make the morning new-ticket check run on Tuesdays"}
+    )
+    assert failed(ANSWER.score(case, wrong)) == {"reads_the_new_schedule"}
+    case = answer_case("r7-edit-rename").model_copy(
+        update={"task": "Make the morning check run daily"}
+    )
+    assert failed(ANSWER.score(case, wrong)) >= {"names_the_change_it_cant_make"}
