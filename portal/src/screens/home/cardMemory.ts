@@ -11,13 +11,24 @@ export interface CardKept {
 
 /**
  * The chat keeps its conversation across pages, but a card is drawn again when Home comes back. This hands the card what it
- * had, so it carries on with the same draft and never turns on twice. `keep` also gives the chat a way to save the card as a draft.
+ * had, so it carries on with the same draft and never turns on twice. One message keeps the same memory for as long as the
+ * chat does.
  */
 export interface CardMemory {
-  readonly kept: CardKept | undefined
-  readonly keep: (kept: CardKept, save: () => void) => void
+  readonly kept: () => CardKept | undefined
+  readonly keep: (kept: CardKept) => void
 }
 
-export const NO_MEMORY: CardMemory = { kept: undefined, keep: () => undefined }
+export function newCardMemory(): CardMemory {
+  let kept: CardKept | undefined
+  return {
+    kept: () => kept,
+    keep: (next) => {
+      kept = next
+    },
+  }
+}
+
+export const NO_MEMORY: CardMemory = { kept: () => undefined, keep: () => undefined }
 
 export const CardMemoryContext = createContext<CardMemory>(NO_MEMORY)

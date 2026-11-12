@@ -1,7 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router'
-import { useErrorWords } from '../../api/context'
+import { useSearchParams } from 'react-router'
+import { Link } from '../../ui/Link'
+import { useChatNavigate } from '../../ui/fromChat'
+import { useErrorWords, useSession } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
 import { refusedWords, useCheckPart, useDeleteDraft, usePlanFor, useReadAgentCards, useSaveDraft } from '../../api/plannerQueries'
@@ -339,7 +341,7 @@ function Done({ useCaseId, writes, draftKept, newAgents }: { useCaseId: string; 
   const useCase = useUseCase(useCaseId)
   const start = useStartRun()
   const latch = useLatch()
-  const navigate = useNavigate()
+  const navigate = useChatNavigate()
   const words = useErrorWords()
   const [key] = useState(newIdempotencyKey)
   const [now] = useState(() => new Date())
@@ -348,7 +350,7 @@ function Done({ useCaseId, writes, draftKept, newAgents }: { useCaseId: string; 
     latch.run((settled) =>
       start.mutate(
         { useCaseId, idempotencyKey: key, test: true },
-        { onSuccess: (started) => void navigate(`/runs/${started.run_id}`), onError: (error) => setProblem(words(error)), onSettled: settled },
+        { onSuccess: (started) => navigate(`/runs/${started.run_id}`), onError: (error) => setProblem(words(error)), onSettled: settled },
       ),
     )
   const name = useCase.data?.name
@@ -406,9 +408,13 @@ export function SetupCard({ start }: { start: CardStart }) {
   const main = useMainButton()
   const live = useContext(CardLive)
   const memory = useContext(CardMemoryContext)
-  const [form, setForm] = useState(() => (memory.kept?.form ?? start.form))
-  const [draft, setDraft] = useState(() => (memory.kept ? memory.kept.draft : start.draftId))
-  const [phase, setPhase] = useState<Phase>(() => (memory.kept ? memory.kept.phase : { kind: 'open' }))
+  const session = useSession()
+  // The person the card was drawn for. Its draft is theirs, so nothing is saved once someone else has signed in.
+  const [owner] = useState(session.cacheScope)
+  const [kept] = useState(memory.kept)
+  const [form, setForm] = useState(kept?.form ?? start.form)
+  const [draft, setDraft] = useState(kept ? kept.draft : start.draftId)
+  const [phase, setPhase] = useState<Phase>(kept?.phase ?? { kind: 'open' })
   const [editing, setEditing] = useState<number | 'dest' | 'when' | 'name' | null>(null)
   const [shown, setShown] = useState(false)
   const [refused, setRefused] = useState<readonly string[]>([])
@@ -449,17 +455,17 @@ export function SetupCard({ start }: { start: CardStart }) {
   const dirty = useRef(false)
   const turningOn = useRef(false)
   const alive = useRef(true)
-  const latest = useRef({ form, plan: null as Planned | null, draft, phase })
+  const latest = useRef({ form, plan: null as Planned | null, draft, phase, live })
   useEffect(() => {
-    latest.current = { form, plan: planQuery.data ? { task, answer: planQuery.data } : null, draft, phase }
+    latest.current = { form, plan: planQuery.data ? { task, answer: planQuery.data } : null, draft, phase, live }
   })
 
   const persist = (onDone?: (saved: string) => void) => {
     const now = latest.current
-    if (now.phase.kind !== 'open' || turningOn.current) return
+    if (now.phase.kind !== 'open' || turningOn.current || session.cacheScope() !== owner) return
     const saved = now.draft ?? newIdempotencyKey()
     latest.current = { ...now, draft: saved }
-    memory.keep({ form: now.form, draft: saved, phase: now.phase }, () => persist())
+    memory.keep({ form: now.form, draft: saved, phase: now.phase })
     setDraft(saved)
     saveDraft.mutate(
       { draftId: saved, draft: { content: draftContent(now.form, now.plan) } },
@@ -468,7 +474,7 @@ export function SetupCard({ start }: { start: CardStart }) {
   }
 
   useEffect(() => {
-    memory.keep({ form, draft, phase }, () => persist())
+    memory.keep({ form, draft, phase })
   })
 
   const watching = useRef(false)
@@ -493,16 +499,18 @@ export function SetupCard({ start }: { start: CardStart }) {
     return () => {
       alive.current = false
       setTimeout(() => {
-        if (!alive.current && latest.current.phase.kind === 'open') persist()
+        if (!alive.current && latest.current.live && latest.current.phase.kind === 'open') persist()
       }, 0)
     }
-    // Leaving the page keeps what is on the card as a draft.
+    // Leaving the page keeps what is on the card as a draft. A card a newer answer replaced was kept when it was replaced.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const wasLive = useRef(live)
   useEffect(() => {
-    if (!live) persist()
-    // A newer answer replaces this card, which is kept as a draft.
+    if (wasLive.current && !live) persist()
+    wasLive.current = live
+    // A newer answer replaces this card, which is kept as a draft. Drawn again after that, it has nothing new to keep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live])
 

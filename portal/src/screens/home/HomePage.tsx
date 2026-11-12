@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { useSearchParams } from 'react-router'
+import { Link } from '../../ui/Link'
+import { useCacheScope } from '../../api/context'
 import { useHome } from '../../api/homeQueries'
 import { isOperator } from '../../api/me'
 import { useCapabilities, useDrafts } from '../../api/plannerQueries'
 import { useMe, useModelSettings, useWatchlist } from '../../api/queries'
-import type { HomeOut } from '../../api/types'
+import type { HomeOut, PlannerReply } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
 import { Button, ButtonLink } from '../../ui/Button'
 import { IconClock } from '../../ui/icons'
@@ -15,7 +17,7 @@ import { NEEDS_YOU_ANCHOR, type Page } from './AnswerCards'
 import { CapabilityLists } from './CapabilityLists'
 import { approverLine, comingUpOf, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, stateLine, suggestionsOf, type Needs, type Next } from './home'
 import { NeedsSection, useArrival } from './NeedsSection'
-import { ChatView } from './ChatView'
+import { ChatView, NEWEST } from './ChatView'
 import { useChat } from './ChatProvider'
 import { PlannerBox } from './PlannerBox'
 import homeStyles from './Home.module.css'
@@ -54,10 +56,14 @@ export function HomePage({ heading, today, now }: HomePageProps) {
   )
 }
 
-/** One heading for the whole visit, so the shell's focus stays on it. Home draws no heading while it loads, and the shell moves focus to the first one drawn. */
+/**
+ * One heading for the whole visit, so the shell's focus stays on it. Home draws no heading while it loads, and the shell moves focus to the first one drawn.
+ * Each person gets their own Home, so nothing one person had on a card is ever drawn, or saved, for the next.
+ */
 export function HomeBody({ heading, home, now }: { heading: string; home: HomeOut; now: Date }) {
   const operator = isOperator(useMe().data)
-  return operator ? <OperatorHome heading={heading} home={home} now={now} /> : <ApproverHome heading={heading} home={home} now={now} />
+  const person = useCacheScope()
+  return operator ? <OperatorHome key={person} heading={heading} home={home} now={now} /> : <ApproverHome heading={heading} home={home} now={now} />
 }
 
 function ComingNext({ next }: { next: Next }) {
@@ -127,6 +133,8 @@ function usePhone(): boolean {
 }
 
 const DRAFT_GONE = 'That draft is gone. Ask for it again below.'
+/** Answers that are a card to work on. Focus goes to the card's heading; any other answer hands it back to the box. */
+const CARD_ANSWERS: ReadonlySet<PlannerReply['answer']> = new Set(['setup_card', 'part', 'watchlist'])
 const DAY_ONE_HEADING = 'Which software should we keep up to date?'
 const DAY_ONE_LEAD = 'Ask about your watchlist, or tell me what software to watch.'
 const OFFLINE_HEADING = 'I can’t read new requests until an AI model is connected'
@@ -146,7 +154,7 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
   const [keys, setKeys] = useState(0)
   const [lists, setLists] = useState(false)
   const boxRef = useRef<HTMLTextAreaElement>(null)
-  const focusAnswer = useRef(false)
+  const focusOn = useRef<number | null>(null)
   const phone = usePhone()
   const [params, setParams] = useSearchParams()
   const wanted = params.get('draft')
@@ -162,31 +170,51 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
   const suggestions = useMemo(() => suggestionsOf(watching, capabilities.data), [watching, capabilities.data])
   const { resume, type, setProblem } = chat
 
-  // Resume on Workflows lands here with the draft's id in the address, and the draft opens as the card it was.
+  // Resume on Workflows lands here with the draft's id in the address, and the draft opens as the card it was, after any
+  // conversation. The newest card writes its own draft's id there too, and that card is already shown.
+  const newest = thread.messages.at(-1)
+  const newestDraft = newest ? chat.cardMemory(newest.id).kept()?.draft : undefined
   useEffect(() => {
-    if (wanted === null || reopened.current === wanted || thread.messages.length > 0) return
+    if (wanted === null) {
+      reopened.current = null
+      return
+    }
+    if (reopened.current === wanted || newestDraft === wanted) return
     if (!drafts.data || (drafts.isStale && !drafts.isFetchedAfterMount)) return
     reopened.current = wanted
+    setParams({}, { replace: true })
     const found = drafts.data.find((saved) => saved.draft_id === wanted)
     const { form, plan } = found ? restoreDraft(found) : { form: null, plan: null }
     if (form !== null && form.rows.length > 0) {
+      focusOn.current = thread.last + 1
       resume({ form, plan, draftId: wanted, similar: null, ...(found ? { resumed: found } : {}) })
       return
     }
-    setParams({}, { replace: true })
     setTimeout(() => {
       if (form === null) setProblem(DRAFT_GONE)
       else type(form.text)
       boxRef.current?.focus()
     }, 0)
-  }, [wanted, drafts.data, drafts.isStale, drafts.isFetchedAfterMount, thread.messages.length, setParams, resume, type, setProblem])
+  }, [wanted, newestDraft, drafts.data, drafts.isStale, drafts.isFetchedAfterMount, thread.last, setParams, resume, type, setProblem])
 
-  // A chip leaves the page when pressed, so focus would fall to the page. It goes to the answer once that arrives.
+  // The box is off while the Planner answers, so focus would fall to the page. A card takes it at its heading, and any other
+  // answer, or a send that failed, hands it back to the box.
   useEffect(() => {
-    if (!focusAnswer.current || thread.messages.at(-1)?.kind !== 'reply') return
-    focusAnswer.current = false
-    document.querySelector<HTMLElement>('#thread-h + ol > li:last-child')?.focus({ preventScroll: true })
-  }, [thread.messages])
+    if (newest === undefined) return
+    if (newest.kind === 'thinking') {
+      focusOn.current = newest.id
+      return
+    }
+    if (focusOn.current === null) return
+    const arrived = newest.id === focusOn.current
+    focusOn.current = null
+    const card = arrived && (newest.kind === 'card' || (newest.kind === 'reply' && CARD_ANSWERS.has(newest.reply.answer)))
+    const heading = card ? document.querySelector<HTMLElement>(`${NEWEST} section h3`) : null
+    if (heading) {
+      heading.tabIndex = -1
+      heading.focus({ preventScroll: true })
+    } else boxRef.current?.focus()
+  }, [newest])
 
   const page: Page = {
     ask: (words) => {
@@ -283,9 +311,7 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
             className={styles['chip']}
             aria-disabled={busy || undefined}
             onClick={() => {
-              if (busy) return
-              focusAnswer.current = true
-              chat.send(suggestion.ask, suggestion.label, null)
+              if (!busy) chat.send(suggestion.ask, suggestion.label, null)
             }}
           >
             {suggestion.label}

@@ -3,7 +3,7 @@ import { useCacheScope } from '../../api/context'
 import { usePlannerAnswer } from '../../api/plannerQueries'
 import type { PlannerAnswerIn } from '../../api/types'
 import { deskOf, desksReducer, type DeskAction, type Desks, type Note } from './chatState'
-import type { CardKept, CardMemory } from './cardMemory'
+import { newCardMemory, type CardMemory } from './cardMemory'
 import type { CardStart } from './SetupCard'
 import { isThinking, previousOf, type Thread } from './threadState'
 
@@ -32,11 +32,6 @@ export interface Chat {
 
 const ChatContext = createContext<Chat | null>(null)
 
-interface Kept {
-  readonly kept: CardKept
-  readonly save: () => void
-}
-
 /**
  * The conversation with the Planner, above the routes. Going to Workflows or the Watchlist and back returns it where it was.
  * Each signed-in person has their own. It lives in memory only: the chat is not the record, so a reload starts fresh.
@@ -47,7 +42,7 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
   const { mutateAsync: askPlanner } = usePlannerAnswer()
   const [desks, dispatch] = useReducer(desksReducer, initial)
   const scrolls = useRef(new Map<string, number>())
-  const cards = useRef(new Map<string, Kept>())
+  const cards = useRef(new Map<string, CardMemory>())
   const desk = deskOf(desks, user)
   const { thread } = desk
   const busy = isThinking(thread)
@@ -72,10 +67,20 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
 
   const scroll = useMemo(() => ({ get: () => scrolls.current.get(user) ?? 0, set: (top: number) => void scrolls.current.set(user, top) }), [user])
 
+  const cardMemory = useCallback(
+    (messageId: number): CardMemory => {
+      const key = `${user}:${String(messageId)}`
+      const known = cards.current.get(key)
+      if (known) return known
+      const memory = newCardMemory()
+      cards.current.set(key, memory)
+      return memory
+    },
+    [user],
+  )
+
   const value = useMemo<Chat>(() => {
     const here = act(user)
-    const memoryKey = (messageId: number) => `${user}:${String(messageId)}`
-    const unfinished = () => [...cards.current].filter(([key, card]) => key.startsWith(`${user}:`) && card.kept.phase.kind === 'open')
     return {
       thread,
       text: desk.text,
@@ -92,22 +97,19 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
         send(previous === null ? { text: typed } : { text: typed, previous }, typed, desk.text)
       },
       resume: (start) => here({ type: 'resumed', start }),
+      // A card she hadn't finished saves itself as a draft as it leaves the page, so New chat only needs to know there was one.
       newChat: () => {
-        const open = unfinished()
-        for (const [, card] of open) card.save()
-        for (const [key] of [...cards.current]) if (key.startsWith(`${user}:`)) cards.current.delete(key)
+        const unfinished = thread.messages.some((message) => cards.current.get(`${user}:${String(message.id)}`)?.kept()?.phase.kind === 'open')
+        for (const key of [...cards.current.keys()]) if (key.startsWith(`${user}:`)) cards.current.delete(key)
         scrolls.current.delete(user)
         here({ type: 'new_chat' })
-        if (open.length > 0) here({ type: 'note', text: DRAFT_SAVED })
+        if (unfinished) here({ type: 'note', text: DRAFT_SAVED })
       },
       readNote: () => here({ type: 'note_read' }),
       scroll,
-      cardMemory: (messageId) => ({
-        kept: cards.current.get(memoryKey(messageId))?.kept,
-        keep: (kept, save) => void cards.current.set(memoryKey(messageId), { kept, save }),
-      }),
+      cardMemory,
     }
-  }, [act, busy, desk.note, desk.problem, desk.text, scroll, send, thread, user])
+  }, [act, busy, cardMemory, desk.note, desk.problem, desk.text, scroll, send, thread, user])
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>
 }

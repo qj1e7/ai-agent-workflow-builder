@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import type { PlannerReply } from '../../api/types'
-import { ChatProvider, useChat } from './ChatProvider'
+import { EMPTY_FORM } from './card'
+import { ChatProvider, useChat, type Chat } from './ChatProvider'
 import { desksReducer, type Desks } from './chatState'
 
 const REPLY: PlannerReply = { answer: 'abilities' }
@@ -30,6 +31,47 @@ function draw(signedInAs: string, initial: Desks): string {
     </QueryClientProvider>,
   )
 }
+
+function Grab({ onChat }: { onChat: (chat: Chat) => void }) {
+  onChat(useChat())
+  return null
+}
+
+function chatOf(signedInAs: string): Chat {
+  const session = createDevSession({ getItem: () => signedInAs, setItem: () => undefined })
+  const drawn: Chat[] = []
+  renderToStaticMarkup(
+    <QueryClientProvider client={new QueryClient()}>
+      <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
+        <ChatProvider initial={ALICES}>
+          <Grab onChat={(chat) => drawn.push(chat)} />
+        </ChatProvider>
+      </ApiProvider>
+    </QueryClientProvider>,
+  )
+  const [chat] = drawn
+  if (chat === undefined) throw new Error('the chat was not drawn')
+  return chat
+}
+
+describe('a card’s memory in the chat', () => {
+  const KEPT = { form: { ...EMPTY_FORM, name: 'Weekly check' }, draft: 'drf-1', phase: { kind: 'open' } } as const
+
+  it('hands a card drawn again what it kept, from the same memory every time it is drawn', () => {
+    const chat = chatOf('alice')
+    const memory = chat.cardMemory(2)
+    expect(memory.kept()).toBeUndefined()
+    memory.keep(KEPT)
+    expect(chat.cardMemory(2)).toBe(memory)
+    expect(chat.cardMemory(2).kept()).toEqual(KEPT)
+  })
+
+  it('keeps each message’s card apart', () => {
+    const chat = chatOf('alice')
+    chat.cardMemory(2).keep(KEPT)
+    expect(chat.cardMemory(4).kept()).toBeUndefined()
+  })
+})
 
 describe('the chat above the routes', () => {
   it('gives a person the conversation they left, to whichever page reads it', () => {

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { InChat } from '../../ui/fromChat'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
 import { Answer, type Page } from './AnswerCards'
 import { CardMemoryContext, NO_MEMORY, type CardMemory } from './cardMemory'
@@ -51,56 +50,54 @@ export function Thread({ thread, now, page, memory }: ThreadProps) {
       <h2 className="visually-hidden" id="thread-h">
         Conversation with the Planner
       </h2>
-      <InChat.Provider value>
-          <ol className={styles['thread']} aria-labelledby="thread-h">
-            {thread.messages.map((message) => {
-              if (message.kind === 'me') {
-                return (
-                  <li key={message.id} className={styles['me']}>
-                    <div className={styles['bubble']}>
-                      <span className="visually-hidden">You: </span>
-                      {message.text}
-                    </div>
-                  </li>
-                )
-              }
-              const state: BotState = message.kind === 'thinking' ? 'thinking' : message.kind === 'reply' && SORRY.has(message.reply.answer) ? 'sorry' : 'idle'
-              return (
-                <li key={message.id} className={styles['said']} tabIndex={-1} data-answer={message.kind === 'reply' || undefined}>
-                  <PlannerBot state={state} size={40} />
-                  <CardMemoryContext.Provider value={memory?.(message.id) ?? NO_MEMORY}>
-                    <div className={styles['reply']}>
-                      <span className={styles['who']}>Planner</span>
-                      {message.kind === 'card' ? (
-                        <CardLive.Provider value={message.id === newest}>
-                          <>
-                            <p>{RESUMED}</p>
-                            <SetupCard start={message.start} />
-                          </>
-                        </CardLive.Provider>
-                      ) : message.kind === 'thinking' ? (
-                        <>
-                          <span className={styles['dots']} aria-hidden="true">
-                            <i />
-                            <i />
-                            <i />
-                          </span>
-                          <Waiting />
-                        </>
-                      ) : (
-                        <NewestAnswer.Provider value={message.id === newest}>
-                          <CardLive.Provider value={message.id === newest}>
-                            <ReplyBody message={message} now={now} page={page} say={message.id === newest ? sayFor(message.id) : () => undefined} />
-                          </CardLive.Provider>
-                        </NewestAnswer.Provider>
-                      )}
-                    </div>
-                  </CardMemoryContext.Provider>
-                </li>
-              )
-            })}
-          </ol>
-      </InChat.Provider>
+      <ol className={styles['thread']} aria-labelledby="thread-h">
+        {thread.messages.map((message) => {
+          if (message.kind === 'me') {
+            return (
+              <li key={message.id} className={styles['me']}>
+                <div className={styles['bubble']}>
+                  <span className="visually-hidden">You: </span>
+                  {message.text}
+                </div>
+              </li>
+            )
+          }
+          const state: BotState = message.kind === 'thinking' ? 'thinking' : message.kind === 'reply' && SORRY.has(message.reply.answer) ? 'sorry' : 'idle'
+          return (
+            <li key={message.id} className={styles['said']} tabIndex={-1} data-answer={message.kind === 'reply' || undefined}>
+              <PlannerBot state={state} size={40} />
+              <CardMemoryContext.Provider value={memory?.(message.id) ?? NO_MEMORY}>
+                <div className={styles['reply']}>
+                  <span className={styles['who']}>Planner</span>
+                  {message.kind === 'card' ? (
+                    <CardLive.Provider value={message.id === newest}>
+                      <>
+                        <p>{RESUMED}</p>
+                        <SetupCard start={message.start} />
+                      </>
+                    </CardLive.Provider>
+                  ) : message.kind === 'thinking' ? (
+                    <>
+                      <span className={styles['dots']} aria-hidden="true">
+                        <i />
+                        <i />
+                        <i />
+                      </span>
+                      <Waiting />
+                    </>
+                  ) : (
+                    <NewestAnswer.Provider value={message.id === newest}>
+                      <CardLive.Provider value={message.id === newest}>
+                        <ReplyBody message={message} now={now} page={page} say={message.id === newest ? sayFor(message.id) : () => undefined} />
+                      </CardLive.Provider>
+                    </NewestAnswer.Provider>
+                  )}
+                </div>
+              </CardMemoryContext.Provider>
+            </li>
+          )
+        })}
+      </ol>
       <div className="visually-hidden" role="status" aria-live="polite">
         {thread.messages.at(-1)?.kind === 'thinking' ? '' : said?.text ?? ''}
       </div>

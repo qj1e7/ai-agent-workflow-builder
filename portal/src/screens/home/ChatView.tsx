@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { HomeOut } from '../../api/types'
+import { InChat } from '../../ui/fromChat'
 import type { Page } from './AnswerCards'
 import { useChat } from './ChatProvider'
 import { PinnedLine } from './PinnedLine'
@@ -15,7 +16,7 @@ interface ChatViewProps {
   readonly onNewChat: () => void
 }
 
-const NEWEST = '#thread-h + ol > li:last-child'
+export const NEWEST = '#thread-h + ol > li:last-child'
 
 /**
  * Home once the first message is sent (spec 5.1): the pinned Needs you line and New chat on top, the conversation scrolling
@@ -27,9 +28,11 @@ export function ChatView({ home, now, page, box, onNewChat }: ChatViewProps) {
   const scroller = useRef<HTMLDivElement>(null)
   const restored = useRef(false)
   const shownCount = useRef(chat.thread.messages.length)
+  const [overflows, setOverflows] = useState(false)
   const { scroll } = chat
 
   useLayoutEffect(() => {
+    restored.current = false
     const top = scroll.get()
     if (scroller.current) scroller.current.scrollTop = top
     // The cards under it are drawn again, so a position beyond the first draw is applied once they have their height.
@@ -46,27 +49,42 @@ export function ChatView({ home, now, page, box, onNewChat }: ChatViewProps) {
     shownCount.current = count
   }, [count])
 
+  // The region is measured when the window or the conversation changes size, which a new message or a card opening does.
+  useLayoutEffect(() => {
+    const region = scroller.current
+    const content = region?.firstElementChild
+    if (!region || !content) return
+    const measure = () => setOverflows(region.scrollHeight > region.clientHeight)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(region)
+    observer.observe(content)
+    return () => observer.disconnect()
+  }, [])
+
   return (
-    <div className={styles['chat']} data-chat>
-      <div className={styles['chatBar']}>
-        <h1 className="visually-hidden" tabIndex={-1}>
-          Planner
-        </h1>
-        <PinnedLine home={home} now={now} />
-        <div className={styles['chatNew']}>
-          <button type="button" className={styles['linkButton']} onClick={onNewChat}>
-            New chat
-          </button>
+    <InChat.Provider value>
+      <div className={styles['chat']} data-chat>
+        <div className={styles['chatBar']}>
+          <h1 className="visually-hidden" tabIndex={-1}>
+            Planner
+          </h1>
+          <PinnedLine home={home} now={now} />
+          <div className={styles['chatNew']}>
+            <button type="button" className={styles['linkButton']} onClick={onNewChat}>
+              New chat
+            </button>
+          </div>
         </div>
-      </div>
-      {/* A scrolling region takes a Tab stop, so the keyboard can scroll it (axe: scrollable-region-focusable). */}
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
-      <div ref={scroller} className={styles['chatScroll']} role="region" aria-label="Conversation" tabIndex={0} onScroll={(event) => restored.current && scroll.set(event.currentTarget.scrollTop)}>
-        <div className={styles['chatIn']}>
-          <Thread thread={chat.thread} now={now} page={page} memory={chat.cardMemory} />
+        {/* While the conversation overflows, its region takes a Tab stop, so the keyboard can scroll it (axe: scrollable-region-focusable). */}
+        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+        <div ref={scroller} className={styles['chatScroll']} role="region" aria-label="Conversation" tabIndex={overflows ? 0 : undefined} onScroll={(event) => restored.current && scroll.set(event.currentTarget.scrollTop)}>
+          <div className={styles['chatIn']}>
+            <Thread thread={chat.thread} now={now} page={page} memory={chat.cardMemory} />
+          </div>
         </div>
+        <div className={styles['chatDock']}>{box}</div>
       </div>
-      <div className={styles['chatDock']}>{box}</div>
-    </div>
+    </InChat.Provider>
   )
 }
