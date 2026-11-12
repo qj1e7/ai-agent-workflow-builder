@@ -11,7 +11,7 @@ import { DeclinedToast } from './DeclinedToast'
 import { declineReasons, openStep, partyOf, requesterOf, useDecision } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { Troubleshooting } from './Outcome'
-import { approvalIdOf, planOf, POLL_FAILED_MS, statusWords, useNameOf, useReconnectWhenBehind } from './RunPage'
+import { approvalIdOf, declinedSoFarWords, planOf, POLL_FAILED_MS, statusWords, useNameOf, useReconnectWhenBehind } from './RunPage'
 import { RunLine } from './RunLine'
 import { declinedOf, stationsOf } from './runModel'
 import { declinedNext, declinedWithNext, feedTroubleOf, headlineOf, RUN_PROBLEM, shortTime, writeLabel } from './words'
@@ -94,6 +94,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
   const stations = stationsOf(shown, planOf(useCase.data), writeLabel)
   const headline = headlineOf(shown, stations, approval.data && waiting ? approval.data.actions : null)
   const status = statusWords(decision, live)
+  const declinedSoFar = declinedSoFarWords(decision, live, nameOf)
   const declined = declinedOf(shown)
 
   if (waiting && approvalId !== null && !approval.data && !approval.isError) {
@@ -125,6 +126,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
           {status}
         </p>
       ) : null}
+      {declinedSoFar ? <p className="muted">{declinedSoFar}</p> : null}
       <RunLine stations={stations} arrivedLive={null} startedAt={shortTime(run.started_at)} nameOf={nameOf} small />
       <DeclinedToast declined={decision.declined} />
       {shown.phase.state === 'failed' ? (

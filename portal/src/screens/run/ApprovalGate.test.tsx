@@ -6,6 +6,9 @@ import type { ApprovalView } from '../../api/types'
 import { MemoryRouter } from 'react-router'
 import { ApprovalGate, DeclineReasons, EXACT_WORDS } from './ApprovalGate'
 import { DeclinedToast } from './DeclinedToast'
+import type { LiveRun } from './liveRun'
+import { declinedSoFarWords, statusWords } from './RunPage'
+import { emptyModel, type Phase } from './runModel'
 import { APPROVE, askedWords, declinedNow, declineReasons, decisionFor, foundOf, partyOf, requesterOf, yourPart, type Decision } from './decision'
 import { approvalTitle, lockWords, withCurrentNames, proposalTitle, type Party } from './words'
 
@@ -23,7 +26,7 @@ const nameOf = (id: string) => ({ alice: 'Alice', bob: 'Bob', carol: 'Carol' })[
 const NOBODY = { ownsIt: false, startedIt: false, retriedIt: false, schedule: false } as const
 const STARTER: Party = { ...NOBODY, ownsIt: true, startedIt: true }
 const OTHER: Party = NOBODY
-const idle: Pick<Decision, 'pending' | 'error' | 'decide'> = { pending: null, error: null, decide: () => undefined }
+const idle: Pick<Decision, 'pending' | 'recorded' | 'error' | 'decide'> = { pending: null, recorded: null, error: null, decide: () => undefined }
 const REASONS = declineReasons('software_watchlist')
 
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replaceAll('&amp;', '&').replace(/\s+/g, ' ').trim()
@@ -277,6 +280,32 @@ describe('the troubleshooter’s words', () => {
     expect(withCurrentNames('The agents proposed an action this use case cannot carry out.')).toBe('The agents proposed an action this workflow cannot carry out.')
     expect(withCurrentNames('the room lead and the Release checker')).toBe('the Planner and the Version checker')
     expect(withCurrentNames('An agent could not finish its work.')).toBe('An agent could not finish its work.')
+  })
+})
+
+describe('right after this person decides, before the run’s own events say so', () => {
+  const liveAt = (phase: Phase): LiveRun => {
+    const model = { ...emptyModel, phase }
+    return { shown: model, head: model, connection: { is: 'live' }, loadedUpTo: 0, loaded: true }
+  }
+  const declined = { by: 'bob', approvedBy: [], reason: 'Wrong version' }
+
+  it('offers Approve and Decline again to nobody whose decision is recorded, and no part left to play', () => {
+    expect(buttons(draw(BOB, OTHER)), 'before deciding').toEqual(['Approve 1 ticket', 'Decline'])
+    for (const recorded of ['approve', 'decline'] as const) {
+      const html = draw(BOB, OTHER, { ...idle, recorded })
+      expect(buttons(html), `after ${recorded}`).toEqual([])
+      expect(text(html)).not.toMatch(/What happens|Your part/)
+      expect(text(html)).toContain(EXACT_WORDS)
+    }
+  })
+
+  it('keeps the declined record on the page until the run is declined, as approving keeps its words', () => {
+    const waiting = liveAt({ state: 'awaiting_approval' })
+    expect(declinedSoFarWords({ declined }, waiting, nameOf)).toBe('Declined by Bob. Nothing was written. Reason: Wrong version.')
+    expect(declinedSoFarWords({ declined }, liveAt({ state: 'rejected', by: 'bob', step: 0 }), nameOf)).toBeNull()
+    expect(declinedSoFarWords({ declined: null }, waiting, nameOf)).toBeNull()
+    expect(statusWords({ recorded: 'approve' }, liveAt({ state: 'acting' }))).toBe('Approved. The platform is writing now.')
   })
 })
 

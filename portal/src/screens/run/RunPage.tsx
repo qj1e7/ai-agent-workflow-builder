@@ -21,7 +21,7 @@ import { useLiveRun, type LiveRun } from './liveRun'
 import { Outcome, Troubleshooting } from './Outcome'
 import { RunLine } from './RunLine'
 import { isFinished, PLANNER_ID, stationsOf, type PlanBlock, type RunModel } from './runModel'
-import { declinedNext, feedTroubleOf, headlineOf, lineOf, RUN_MISSING, RUN_PROBLEM, shortTime, speakerName, writeLabel, type NameOf, type Speaker } from './words'
+import { declinedNext, declinedRecord, feedTroubleOf, headlineOf, lineOf, RUN_MISSING, RUN_PROBLEM, shortTime, speakerName, writeLabel, type NameOf, type Speaker } from './words'
 import styles from './RunPage.module.css'
 
 const LANDS_ON_DECISION = new Set(['awaiting_approval', 'failed', 'rejected'])
@@ -210,6 +210,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const saidByMe = me ? shown.chat.findLast((item) => item.kind === 'decided' && item.by === me.id) : undefined
   const open = detailOpen(detail.choice, shown)
   const decision = useDecision(approval.data, party)
+  const declinedSoFar = declinedSoFarWords(decision, live, nameOf)
   const answered = decision.recorded !== null && !waiting && !WORKING.has(shown.phase.state)
   const focused = useRef(false)
   useEffect(() => {
@@ -276,8 +277,9 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
         </h1>
         <span className={cx(styles['pill'], styles[headline.pill.tone])}>{headline.pill.label}</span>
       </div>
-      <p className={styles['status']} role="status">
-        {statusWords(decision, live)}
+      <p className={styles['status']}>
+        <span role="status">{statusWords(decision, live)}</span>
+        {declinedSoFar ? ` ${declinedSoFar}` : null}
       </p>
       <RunLine stations={stations} arrivedLive={arrivedLive} startedAt={shortTime(run.started_at)} nameOf={nameOf} />
       {working ? null : <NeedsYou>{last}</NeedsYou>}
@@ -301,13 +303,21 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   )
 }
 
-/** What the page says right after this person approved, before the run's own events catch up. A decline says so in its message at the bottom. */
+/** What the page says right after this person approved, before the run's own events catch up. */
 export function statusWords(decision: Pick<Decision, 'recorded'>, live: LiveRun): string {
   if (live.connection.is === 'reconnecting') return 'Lost the live connection. Trying again.'
   if (live.connection.is === 'closed') return 'Stopped following this run. Reload the page to see what changed.'
   if (isFinished(live.shown.phase)) return ''
   if (decision.recorded === 'approve') return 'Approved. The platform is writing now.'
   return ''
+}
+
+/**
+ * The decline this person just recorded, until the run's own events show it. Its message at the bottom of the page announces it,
+ * so the line that keeps it is not live.
+ */
+export function declinedSoFarWords(decision: Pick<Decision, 'declined'>, live: LiveRun, nameOf: NameOf): string | null {
+  return decision.declined && !isFinished(live.shown.phase) ? declinedRecord(decision.declined, nameOf) : null
 }
 
 interface LastWordForProps {
