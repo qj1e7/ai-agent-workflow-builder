@@ -298,6 +298,7 @@ interface AnswerProps {
 
 /** The body of one Planner answer, past its sentence. The three state answers are in StateAnswers. */
 export function Answer({ reply, typed, page }: AnswerProps) {
+  const asker = useAsker()
   switch (reply.answer) {
     case 'setup_card':
     case 'part':
@@ -315,7 +316,7 @@ export function Answer({ reply, typed, page }: AnswerProps) {
     case 'ideas':
       return <IdeasAnswer page={page} />
     case 'offline':
-      return <OfflineAnswer reply={reply} />
+      return asker === 'operator' ? <OfflineAnswer reply={reply} /> : null
     case 'question':
       return (
         <>

@@ -7,7 +7,7 @@ import { CardLive, NewestAnswer } from './primary'
 import { SetupCard } from './SetupCard'
 import { sayOf } from './answers'
 import { useAsker } from './asker'
-import { CheckWorkflowsAnswer, DecideAnswer, DecidedAnswer, IdeasSentence, NeedsMeAnswer, OperatorsAnswer, useSaidOnce, WhyStoppedAnswer, type Say } from './StateAnswers'
+import { CheckWorkflowsAnswer, DecideAnswer, DecidedAnswer, IdeasSentence, NeedsMeAnswer, OperatorsAnswer, RequestsToOpen, useSaidOnce, WhyStoppedAnswer, type Say } from './StateAnswers'
 import type { Message, Thread as ThreadState } from './threadState'
 import { Waiting } from './Waiting'
 import styles from './Planner.module.css'
@@ -25,7 +25,8 @@ interface ThreadProps {
 
 function ReplyBody({ message, now, page, say }: { message: Extract<Message, { kind: 'reply' }>; now: Date; page: Page; say: Say }) {
   const { reply } = message
-  const sentence = sayOf(reply, useAsker())
+  const asker = useAsker()
+  const sentence = sayOf(reply, asker)
   useSaidOnce(sentence, say)
   return (
     <div className={styles['reply']}>
@@ -39,6 +40,7 @@ function ReplyBody({ message, now, page, say }: { message: Extract<Message, { ki
       {reply.answer === 'decided' ? <DecidedAnswer only={reply.only} now={now} say={say} /> : null}
       {reply.answer === 'decide' ? <DecideAnswer now={now} say={say} /> : null}
       <Answer reply={reply} typed={message.typed} page={page} />
+      {reply.answer === 'refused' && asker === 'approver' ? <RequestsToOpen now={now} /> : null}
     </div>
   )
 }

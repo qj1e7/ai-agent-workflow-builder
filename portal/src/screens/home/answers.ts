@@ -1,4 +1,4 @@
-import type { CantRowView, CapabilitiesView, CapabilityView, PlannerReply, RowKind, UnderstoodRowView } from '../../api/types'
+import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PlannerReply, RowKind, UnderstoodRowView } from '../../api/types'
 import { count } from '../run/words'
 import { isRunning, type Row } from '../workflows/workflow'
 import { cantOnCard } from './parts'
@@ -83,6 +83,13 @@ export const SAY = {
 /** Who is asking: an Operator sets up and changes workflows, and anyone else asks questions only (ADR 0043). */
 export type Asker = 'operator' | 'approver'
 
+/** The offline answer to someone who isn’t an Operator: one line, with no place to start and nothing only an Operator can do. */
+const APPROVER_OFFLINE: Readonly<Record<OfflineReply['why'], string>> = {
+  no_model: 'I can’t answer questions until an AI model is connected. An Operator can connect one in Settings.',
+  too_slow: 'The Planner took too long to read your question. Try again in a moment.',
+  trouble: 'The Planner couldn’t read your question just now. Try again in a moment.',
+}
+
 export const watchlistSay = (software: string | null, listed: boolean): string => {
   if (software === null) return 'That belongs on the Software watchlist, which checks the software on it for new releases.'
   return listed
@@ -122,7 +129,7 @@ export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | 
     case 'ideas':
       return null
     case 'offline':
-      return reply.message
+      return asker === 'operator' ? reply.message : APPROVER_OFFLINE[reply.why]
     case 'question':
       return reply.text
     case 'edit':

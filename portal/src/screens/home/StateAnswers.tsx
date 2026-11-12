@@ -16,7 +16,7 @@ import { ideasSay, needsSay, startingPoints, workflowsSay } from './answers'
 import { Troubleshooting } from '../run/Outcome'
 import { useAsker } from './asker'
 import { decidedSay, decisionLine } from './decided'
-import { approvalsOf, approverLine, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, type Needs } from './home'
+import { approvalsOf, approverLine, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, wordsOf, type Needs } from './home'
 import { NeedsSection, useArrival } from './NeedsSection'
 import { useMainButton } from './primary'
 import styles from './Planner.module.css'
@@ -137,13 +137,48 @@ export function NeedsMeAnswer({ now, say }: { now: Date; say: Say }) {
 export const DECIDE_SAY = 'I can’t approve or decline for you. Open the request to see exactly what it will write, and decide there.'
 export const NOTHING_TO_DECIDE = 'Nothing is waiting for your yes, so there’s nothing to decide.'
 
+/**
+ * The requests waiting for this person’s yes, each with Review and decide, the newest few as Home shows them and how many more. It is
+ * what an approve, a decline or a refused way around the gate offers instead: the request, where they decide.
+ */
+export function RequestsToOpen({ now }: { now: Date }) {
+  const home = useHome()
+  const main = useMainButton()
+  const needs = useMemo(() => (home.data ? approvalsOf(home.data) : null), [home.data])
+  if (!needs) return null
+  const shown = needs.shown.slice(0, HOME_NEEDS_SHOWN)
+  const left = needs.total - shown.length
+  return (
+    <>
+      {shown.length > 0 ? (
+        <ul className={styles['starters']} aria-label="Requests waiting for your yes">
+          {shown.map((need, index) =>
+            need.kind === 'approval' ? (
+              <li key={need.key} className={styles['starter']}>
+                <div>
+                  <b>{wordsOf(need, now).title}</b>
+                  <span className={styles['note']}>{wordsOf(need, now).meta}</span>
+                </div>
+                <OpenButton variant={index === 0 ? main : 'secondary'} item={{ kind: 'run', id: need.item.run_id }} to={`/runs/${need.item.run_id}`}>
+                  Review and decide
+                </OpenButton>
+              </li>
+            ) : null,
+          )}
+        </ul>
+      ) : null}
+      {left > 0 ? <p className={styles['more']}>{moreWords({ approvals: left, others: 0 })}</p> : null}
+    </>
+  )
+}
+
 /** An approve or decline asked in the chat: nobody decides there, so the answer is the requests waiting for this person’s yes, to open. */
 export function DecideAnswer({ now, say }: { now: Date; say: Say }) {
   const home = useHome()
-  const needs = useMemo(() => (home.data ? approvalsOf(home.data) : null), [home.data])
-  const sentence = needs === null ? null : needs.total > 0 ? DECIDE_SAY : NOTHING_TO_DECIDE
+  const total = home.data?.approvals_total
+  const sentence = total === undefined ? null : total > 0 ? DECIDE_SAY : NOTHING_TO_DECIDE
   useSaidOnce(sentence, say)
-  if (!needs) {
+  if (sentence === null) {
     return (
       <p className="muted" role="status">
         {home.isError ? 'I couldn’t read what waits for your yes just now.' : 'Checking what waits for your yes'}
@@ -153,7 +188,7 @@ export function DecideAnswer({ now, say }: { now: Date; say: Say }) {
   return (
     <>
       <p>{sentence}</p>
-      <NeedsInAnswer needs={needs} now={now} />
+      <RequestsToOpen now={now} />
     </>
   )
 }

@@ -377,8 +377,30 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     )
   })
 
-  it('gives a refusal with no set-up offered', () => {
-    expect(buttons(ask(refused as PlannerReply))).toEqual(['Say it another way'])
+  it('gives a refusal with no set-up offered, and his request to open where he decides', () => {
+    const html = ask(refused as PlannerReply)
+    expect(buttons(html)).toEqual(['Say it another way', 'Review and decide'])
+    expect(answerOf(html)).toContain('Nobody approves their own work')
+  })
+
+  it('answers in one line when the model is slow or missing, with no starting points and no Connect a model', () => {
+    for (const [why, said] of [
+      ['too_slow', 'The Planner took too long to read your question. Try again in a moment.'],
+      ['no_model', 'I can’t answer questions until an AI model is connected. An Operator can connect one in Settings.'],
+    ] as const) {
+      const html = ask({ ...(offline as OfflineReply), why })
+      expect(answerOf(html)).toBe(said)
+      expect(buttons(html)).toEqual([])
+    }
+  })
+
+  it('offers the newest three requests to open, and says how many more, never the whole of Needs you (fix 7)', () => {
+    const [request] = HOME.approvals
+    const many = { ...HOME, approvals: Array.from({ length: 10 }, (_, n) => ({ ...request!, approval_id: `apr_${String(n)}`, run_id: `run_${String(n)}` })), approvals_total: 12 }
+    const html = ask(decideReply as PlannerReply, { home: many })
+    expect(buttons(html).filter((name) => name === 'Review and decide')).toHaveLength(3)
+    expect(answerOf(html)).toContain('9 more runs are waiting for your yes.')
+    expect(html).not.toMatch(/<h2[^>]*>\s*Needs you/)
   })
 
   it('speaks of the team’s workflows, and of why one stopped with who can retry, from his Workflows page’s rows', () => {
