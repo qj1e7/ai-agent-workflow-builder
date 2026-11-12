@@ -2,6 +2,9 @@ import { useId, useState, type ReactNode } from 'react'
 import { Link } from '../../ui/Link'
 import type { CantReply, OfflineReply, PartReply, PartView, PlannerReply, QuestionReply, SetupCardReply, WatchlistReply } from '../../api/types'
 import { useCapabilities } from '../../api/plannerQueries'
+import { isOperator } from '../../api/me'
+import { useMe } from '../../api/queries'
+import { useOperatorsSay } from '../../shell/OperatorsNote'
 import { Button, ButtonLink } from '../../ui/Button'
 import { OpenButton } from '../../ui/OpenItem'
 import { AskTheTeam } from './AskTheTeam'
@@ -145,7 +148,8 @@ export function WatchlistAnswer({ reply, typed }: { reply: WatchlistReply; typed
 const NO_PAGE: Page = { ask: () => undefined, edit: () => undefined }
 
 function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { answer: 'refused' }>; typed: string; page: Page }) {
-  const { rest } = refusalNext(reply)
+  // Someone who isn't an Operator sets nothing up, so the refusal offers them no set-up with a yes.
+  const { rest } = isOperator(useMe().data) ? refusalNext(reply) : { rest: null }
   const main = useMainButton()
   return (
     <Card title="How approvals work">
@@ -169,8 +173,34 @@ function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { 
   )
 }
 
+/** What someone who isn't an Operator can ask, each a question the Planner answers, and who sets up workflows (ADR 0043). */
+export const APPROVER_CAN = [
+  'What is waiting for your yes, and exactly what each request will write',
+  'What you decided before, with when, and any reason you gave',
+  'How the workflows and the software are doing',
+] as const
+
+function ApproverAbilities() {
+  const operators = useOperatorsSay()
+  return (
+    <div className={`${styles['abilities']} ${styles['abilitiesOne']}`}>
+      <div>
+        <h3>I can</h3>
+        <ul>
+          {APPROVER_CAN.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      </div>
+      <p className={styles['abilitiesFoot']}>{operators}</p>
+    </div>
+  )
+}
+
 function AbilitiesAnswer() {
-  const capabilities = useCapabilities()
+  const operator = isOperator(useMe().data)
+  const capabilities = useCapabilities({ enabled: operator })
+  if (!operator) return <ApproverAbilities />
   return (
     <>
       {capabilities.data ? (
@@ -297,6 +327,9 @@ export function Answer({ reply, typed, page }: AnswerProps) {
     case 'check_workflows':
     case 'why_stopped':
     case 'needs_me':
+    case 'operators':
+    case 'decided':
+    case 'decide':
       return null
   }
 }

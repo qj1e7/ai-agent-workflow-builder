@@ -388,6 +388,18 @@
   background: var(--sunk);
 }
 
+.abilitiesOne {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.abilitiesFoot {
+  margin: 0;
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
 .abilities h3 {
   font-size: 0.9375rem;
 }
@@ -585,4 +597,66 @@
 .chatDock {
   flex: none;
   padding-block: 8px 16px;
+}
+
+.decided {
+  display: grid;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  list-style: none;
+  overflow: hidden;
+}
+
+.decided > li {
+  display: grid;
+  gap: 2px;
+  padding: 6px 16px 12px;
+}
+
+.decided > li + li {
+  border-top: 1px solid var(--rule);
+}
+
+.decidedHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 10px;
+}
+
+.decidedHead h3 {
+  min-width: 0;
+  font-size: 1rem;
+}
+
+/* A workflow's name is a line of text under WCAG 2.5.8's 24 px, so it gets a full target. */
+.decidedHead h3 a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.decided p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.verdict {
+  padding: 1px 10px;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  background: var(--sunk);
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.verdict[data-verdict='approve'] {
+  border-color: var(--green-line);
+  background: var(--green-soft);
+  color: var(--green-ink);
 }

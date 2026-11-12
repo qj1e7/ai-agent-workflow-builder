@@ -95,6 +95,12 @@ export function needsOf(home: HomeOut, limit = Infinity): Needs {
   return { shown, total, more: { approvals, others: total - shown.length - approvals } }
 }
 
+/** The requests waiting for this person’s yes, from the same list as Needs you, so the two never disagree. */
+export function approvalsOf(home: HomeOut): Needs {
+  const shown = needsOf(home).shown.filter((need) => need.kind === 'approval')
+  return { shown, total: home.approvals_total, more: { approvals: home.approvals_total - shown.length, others: 0 } }
+}
+
 /** The one line under the greeting. It never repeats the count, because Needs you under it carries that. */
 export function stateLine(home: HomeOut, now: Date): string {
   const total = needsTotal(home)

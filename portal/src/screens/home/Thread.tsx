@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { isOperator } from '../../api/me'
+import { useMe } from '../../api/queries'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
 import { Answer, type Page } from './AnswerCards'
 import { CardMemoryContext, NO_MEMORY, type CardMemory } from './cardMemory'
@@ -6,12 +8,12 @@ import { Leftovers } from './PartsList'
 import { CardLive, NewestAnswer } from './primary'
 import { SetupCard } from './SetupCard'
 import { sayOf } from './answers'
-import { CheckWorkflowsAnswer, IdeasSentence, NeedsMeAnswer, useSaidOnce, WhyStoppedAnswer, type Say } from './StateAnswers'
+import { CheckWorkflowsAnswer, DecideAnswer, DecidedAnswer, IdeasSentence, NeedsMeAnswer, OperatorsAnswer, useSaidOnce, WhyStoppedAnswer, type Say } from './StateAnswers'
 import type { Message, Thread as ThreadState } from './threadState'
 import { Waiting } from './Waiting'
 import styles from './Planner.module.css'
 
-const SORRY = new Set(['cant', 'refused', 'offline'])
+const SORRY = new Set(['cant', 'refused', 'offline', 'operators'])
 const RESUMED = 'Here’s your draft. Pick up where you left off.'
 
 interface ThreadProps {
@@ -24,7 +26,7 @@ interface ThreadProps {
 
 function ReplyBody({ message, now, page, say }: { message: Extract<Message, { kind: 'reply' }>; now: Date; page: Page; say: Say }) {
   const { reply } = message
-  const sentence = sayOf(reply)
+  const sentence = sayOf(reply, isOperator(useMe().data) ? 'operator' : 'approver')
   useSaidOnce(sentence, say)
   return (
     <div className={styles['reply']}>
@@ -34,6 +36,9 @@ function ReplyBody({ message, now, page, say }: { message: Extract<Message, { ki
       {reply.answer === 'why_stopped' ? <WhyStoppedAnswer useCaseId={reply.use_case_id} say={say} /> : null}
       {reply.answer === 'ideas' ? <IdeasSentence say={say} /> : null}
       {reply.answer === 'needs_me' ? <NeedsMeAnswer now={now} say={say} /> : null}
+      {reply.answer === 'operators' ? <OperatorsAnswer say={say} /> : null}
+      {reply.answer === 'decided' ? <DecidedAnswer only={reply.only} now={now} say={say} /> : null}
+      {reply.answer === 'decide' ? <DecideAnswer now={now} say={say} /> : null}
       <Answer reply={reply} typed={message.typed} page={page} />
     </div>
   )

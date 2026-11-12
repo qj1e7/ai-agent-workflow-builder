@@ -23,18 +23,24 @@ const REASON_WORDS: Readonly<Record<PartReason, string>> = {
   with_a_yes: 'This waits until it’s set up with a yes.',
   needs_the_rest: 'It can’t run without the part I can’t do.',
   how_many_days: 'Your words don’t say how many days.',
+  operators: 'Operators set up workflows.',
 }
 
-/** What the words of a cross are read against: the card’s schedule, and the Software watchlist’s schedule for a watch request. */
+/**
+ * What the words of a cross are read against: the card’s schedule, the Software watchlist’s schedule for a watch request, and who
+ * makes changes, named from the People list, for a change asked by someone who isn’t an Operator.
+ */
 export interface CrossContext {
   readonly when?: When
   readonly watchlist?: ScheduleView | null
+  readonly operators?: string
 }
 
 /** Why a part has a cross or a question, in the prototype’s words. A can’t names the registry’s reason. */
 export function crossWords(part: PartView, context: CrossContext = {}): string {
   if (part.reason === null) return part.mark === 'question' ? REASON_WORDS.how_many_days : REASON_WORDS.not_followed
   if (part.reason === 'cant_do' && part.note !== null && part.note.trim() !== '') return part.note
+  if (part.reason === 'operators' && context.operators) return context.operators
   if (part.reason === 'own_time' && context.watchlist)
     return `The Software watchlist checks all your software together, ${repeatWords(context.watchlist)}. I can’t give one software its own time yet.`
   const chosen = context.when && isClash(part) ? clashChosen(context.when, part) : null
@@ -92,12 +98,17 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
       return []
     case 'cant':
       return reply.alternative?.answer === 'setup_card' ? [] : above(reply.parts.filter((part) => part.reason !== 'cant_do' && part.reason !== 'needs_the_rest'))
+    case 'operators':
+      // The answer’s sentence already says who makes the changes, so only a question beside them is marked.
+      return above(reply.parts.filter((part) => part.reason !== 'operators'))
     case 'watchlist':
     case 'abilities':
     case 'check_workflows':
     case 'why_stopped':
     case 'needs_me':
     case 'question':
+    case 'decided':
+    case 'decide':
       return above(reply.parts)
   }
 }
