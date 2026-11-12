@@ -43,7 +43,7 @@ function ReplyBody({ message, now, page, say, about }: { message: Extract<Messag
       {reply.answer === 'why_stopped' ? <WhyStoppedAnswer useCaseId={reply.use_case_id} say={say} /> : null}
       {reply.answer === 'ideas' ? <IdeasSentence say={say} /> : null}
       {reply.answer === 'needs_me' ? <NeedsMeAnswer now={now} say={say} /> : null}
-      {reply.answer === 'edit' ? <EditCard reply={reply} page={page} say={say} now={now} about={about} /> : null}
+      {reply.answer === 'edit' ? <EditCard reply={reply} typed={message.typed} page={page} say={say} now={now} about={about} /> : null}
       <Answer reply={reply} typed={message.typed} page={page} />
     </div>
   )

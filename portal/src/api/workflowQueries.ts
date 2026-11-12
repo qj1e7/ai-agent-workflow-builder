@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { unwrap, type ApiClient } from './client'
 import { useApiClient, useCacheScope } from './context'
 import { keys } from './queries'
-import type { ScheduleIn, UseCaseView } from './types'
+import type { ScheduleIn, UseCaseView, VersionView, WatchlistView } from './types'
 
 type Move = 'pause' | 'resume' | 'restore'
 
@@ -96,13 +96,40 @@ export function rereadChanged(queryClient: QueryClient, user: string, useCaseId:
   void queryClient.invalidateQueries({ queryKey: keys.useCases(user) })
 }
 
-/** The edit card's Save: the page's route, marked as a change from the chat. */
+interface ScheduleChange {
+  readonly useCaseId: string
+  readonly schedule: ScheduleIn
+}
+
+/** What a save from the chat answered: the workflow as it is now, and its newest version, which says who published it. */
+export interface ChatSaved {
+  readonly view: UseCaseView
+  readonly newest: VersionView | undefined
+}
+
+/**
+ * The edit card's Save: the page's route, marked as a change from the chat. The route answers with the running version even
+ * when it published none, so the newest version is read too. A failed read leaves it unknown, and the save still stands.
+ */
 export function chatScheduleOptions(client: ApiClient, queryClient: QueryClient, user: string) {
   return {
-    mutationFn: async ({ useCaseId, schedule }: { useCaseId: string; schedule: ScheduleIn }) =>
-      unwrap(await client.PUT('/api/v1/use-cases/{use_case_id}/schedule', { params: { path: { use_case_id: useCaseId } }, body: { ...schedule, via: 'chat' } })),
-    onSuccess: (view: UseCaseView) => applySavedView(queryClient, user, view),
-    onSettled: (_view: unknown, _error: unknown, { useCaseId }: { useCaseId: string }) => rereadChanged(queryClient, user, useCaseId),
+    mutationFn: async ({ useCaseId, schedule }: ScheduleChange): Promise<ChatSaved> => {
+      const path = { params: { path: { use_case_id: useCaseId } } }
+      const view = unwrap(await client.PUT('/api/v1/use-cases/{use_case_id}/schedule', { ...path, body: { ...schedule, via: 'chat' } }))
+      const versions = await client.GET('/api/v1/use-cases/{use_case_id}/versions', path).catch(() => null)
+      return { view, newest: versions?.data?.versions[0] }
+    },
+    onSuccess: ({ view }: ChatSaved) => applySavedView(queryClient, user, view),
+    onSettled: (_saved: unknown, _error: unknown, { useCaseId }: ScheduleChange) => rereadChanged(queryClient, user, useCaseId),
+  }
+}
+
+/** The edit card's Save for the Software watchlist, through the watchlist's own route, which keeps no versions. */
+export function chatWatchlistOptions(client: ApiClient, queryClient: QueryClient, user: string) {
+  return {
+    mutationFn: async ({ schedule }: ScheduleChange) => unwrap(await client.PUT('/api/v1/watchlist/schedule', { body: schedule })),
+    onSuccess: (view: WatchlistView) => queryClient.setQueryData(keys.watchlist(user), view),
+    onSettled: (_saved: unknown, _error: unknown, { useCaseId }: ScheduleChange) => rereadChanged(queryClient, user, useCaseId),
   }
 }
 
@@ -121,6 +148,13 @@ export function useChatScheduleChange() {
   const queryClient = useQueryClient()
   const user = useCacheScope()
   return useMutation(chatScheduleOptions(client, queryClient, user))
+}
+
+export function useChatWatchlistSchedule() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation(chatWatchlistOptions(client, queryClient, user))
 }
 
 export function useUndoVersion() {

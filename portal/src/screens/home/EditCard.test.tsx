@@ -21,7 +21,7 @@ import type { EditReply, Me, UseCaseView, VersionView, WatchlistView } from '../
 import { chatScheduleOptions, undoOptions } from '../../api/workflowQueries'
 import type { Page } from './AnswerCards'
 import { CardMemoryContext, newCardMemory, type EditKept } from './cardMemory'
-import { publishedVersion } from './edit'
+import { editView, NO_PICKS, openSay, publishedVersion } from './edit'
 import { EditCard } from './EditCard'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
@@ -37,13 +37,14 @@ const SAVED: EditKept = { picks: { useCaseId: null, day: null, at: null }, phase
 const version = (n: number, via: VersionView['via']): VersionView => ({ version: n, at: '2026-11-05T01:10:00Z', by: 'alice', via, change: null, undid: null, running: false })
 
 interface Drawn {
+  readonly typed?: string
   readonly kept?: EditKept
   readonly useCase?: UseCaseView
   readonly versions?: readonly VersionView[]
   readonly about?: string | null
 }
 
-function draw(reply: EditReply, { kept, useCase = { ...MORNING, version: 1, schedule: WEEKDAYS_8 }, versions, about = null }: Drawn = {}): string {
+function draw(reply: EditReply, { typed = 'make the morning check run on Mondays only', kept, useCase = { ...MORNING, version: 1, schedule: WEEKDAYS_8 }, versions, about = null }: Drawn = {}): string {
   const session = createDevSession({ getItem: () => ALICE.id, setItem: () => undefined })
   const scope = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
@@ -58,7 +59,7 @@ function draw(reply: EditReply, { kept, useCase = { ...MORNING, version: 1, sche
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
         <MemoryRouter>
           <CardMemoryContext.Provider value={memory}>
-            <EditCard reply={reply} page={PAGE} say={() => undefined} now={NOW} about={about} />
+            <EditCard reply={reply} typed={typed} page={PAGE} say={() => undefined} now={NOW} about={about} />
           </CardMemoryContext.Provider>
         </MemoryRouter>
       </ApiProvider>
@@ -113,11 +114,23 @@ describe('the edit card while it proposes a change', () => {
     expect(buttons(html)).toEqual(['Morning new-ticket check', 'Weekly closed-ticket summary'])
   })
 
-  it('reads “it” as the workflow the answer before was about, and names it on the card', () => {
-    const html = draw(editChoices as EditReply, { about: 'uc_01JB8' })
+  it('reads “it” as the workflow the answer before was about, names it on the card, and lets her pick another', () => {
+    const html = draw(editChoices as EditReply, { about: 'uc_01JB8', typed: 'make it daily' })
     expect(text(html)).toContain('Change Morning new-ticket check')
     expect(text(html)).toContain('Before Every weekday at 8:00 After Every day at 8:00')
-    expect(buttons(html)).toEqual(['Save change', 'Never mind'])
+    expect(buttons(html)).toEqual(['Pick another workflow', 'Save change', 'Never mind'])
+  })
+
+  it('never picks one of several workflows her words fit, even the one talked about before', () => {
+    expect(sentence(draw(editChoices as EditReply, { about: 'uc_01JB8', typed: 'make the summary one daily' }))).toBe('Which workflow should I change?')
+  })
+
+  it('asks again when a fresh read shows the workflow changed since the answer, so an older card never saves an After worked out from the old schedule', () => {
+    const stale = editView(EDIT, NO_PICKS, { day: 'monday', at: '09:00' })
+    expect(stale.kind).toBe('stale')
+    expect(openSay(EDIT, stale, null)).toBe('Morning new-ticket check changed since I read it, and runs every Monday at 9:00 now. Ask again to change it.')
+    expect(editView(EDIT, NO_PICKS, { day: 'weekdays', at: '08:00' }).kind, 'unchanged since').toBe('ready')
+    expect(editView(EDIT, NO_PICKS, undefined).kind, 'not read yet').toBe('ready')
   })
 
   it('names a check that doesn’t exist, says what the watchlist checks, and offers to watch it', () => {
@@ -150,7 +163,7 @@ describe('the edit card while it proposes a change', () => {
   })
 
   it('tells her saving the watchlist’s schedule makes her its owner', () => {
-    const html = draw(editWatchlist as EditReply, { useCase: { ...MORNING, use_case_id: 'uc_01WL', version: 3 } })
+    const html = draw(editWatchlist as EditReply, { useCase: { ...MORNING, use_case_id: 'uc_01WL', version: 3, schedule: { ...MONDAY_8, at: '09:00' } } })
     expect(text(html)).toContain('Before Every Monday at 9:00 After Every day at 9:00')
     expect(text(html)).toContain('This changes when all 6 software on the watchlist are checked. Saving makes you the owner of this schedule.')
     expect(buttons(html)).toEqual(['Save change', 'Never mind'])
@@ -181,7 +194,7 @@ describe('the edit card once she has pressed', () => {
   })
 
   it('undone: says the version Undo published and what it runs on again', () => {
-    const undone: EditKept = { ...SAVED, phase: { ...SAVED.phase, kind: 'undone', saved: 2, version: 3 } as EditKept['phase'] }
+    const undone: EditKept = { ...SAVED, phase: { ...SAVED.phase, kind: 'undone', version: 3 } as EditKept['phase'] }
     const html = draw(EDIT, { kept: undone, useCase: { ...MORNING, version: 3, schedule: WEEKDAYS_8 } })
     expect(sentence(html)).toBe('Undone, as version 3. Morning new-ticket check runs every weekday at 8:00 now.')
     expect(text(html)).toContain('Undone, as version 3.')
@@ -207,19 +220,27 @@ describe('the edit card once she has pressed', () => {
 describe('saving and undoing from the card', () => {
   const answered = (data: unknown) => Promise.resolve({ data, response: { ok: true, status: 200 } })
 
-  it('saves through the workflow’s schedule route, marked as a change from the chat, and reads the workflow and the list again', async () => {
+  it('saves through the workflow’s schedule route, marked as a change from the chat, reads who published the newest version, and reads the workflow and the list again', async () => {
     const queryClient = new QueryClient()
     queryClient.setQueryData(keys.useCase('me', 'uc_01JB8'), { ...MORNING, version: 1 })
     queryClient.setQueryData(keys.useCases('me'), [{ ...MORNING, version: 1 }])
     const sent: unknown[] = []
-    const client = { PUT: (path: string, init: unknown) => (sent.push([path, init]), answered(MORNING)) } as unknown as ApiClient
+    const client = {
+      PUT: (path: string, init: unknown) => (sent.push([path, init]), answered(MORNING)),
+      GET: (path: string) => (sent.push([path]), answered({ versions: [version(2, 'chat'), version(1, null)] })),
+    } as unknown as ApiClient
     const options = chatScheduleOptions(client, queryClient, 'me')
+    const change = { useCaseId: 'uc_01JB8', schedule: { day: 'monday' as const, at: '08:00' } }
 
-    const view = await options.mutationFn({ useCaseId: 'uc_01JB8', schedule: { day: 'monday', at: '08:00' } })
-    options.onSuccess(view)
-    options.onSettled(view, null, { useCaseId: 'uc_01JB8' })
+    const saved = await options.mutationFn(change)
+    options.onSuccess(saved)
+    options.onSettled(saved, null, change)
 
-    expect(sent).toEqual([['/api/v1/use-cases/{use_case_id}/schedule', { params: { path: { use_case_id: 'uc_01JB8' } }, body: { day: 'monday', at: '08:00', via: 'chat' } }]])
+    expect(saved.newest).toEqual(version(2, 'chat'))
+    expect(sent).toEqual([
+      ['/api/v1/use-cases/{use_case_id}/schedule', { params: { path: { use_case_id: 'uc_01JB8' } }, body: { day: 'monday', at: '08:00', via: 'chat' } }],
+      ['/api/v1/use-cases/{use_case_id}/versions'],
+    ])
     expect(queryClient.getQueryState(keys.useCase('me', 'uc_01JB8'))?.isInvalidated).toBe(true)
     expect(queryClient.getQueryState(keys.useCases('me'))?.isInvalidated).toBe(true)
   })
@@ -232,10 +253,15 @@ describe('saving and undoing from the card', () => {
     expect(sent).toEqual([['/api/v1/use-cases/{use_case_id}/versions/{version}/undo', { params: { path: { use_case_id: 'uc_01JB8', version: 2 } }, body: { via: 'chat' } }]])
   })
 
-  it('claims a version only when the save published one, so Undo never undoes a version it didn’t make', () => {
+  it('claims a version only when the save published it, so Undo never undoes a version it didn’t make', () => {
     const target = { use_case_id: 'uc_01JB8', name: 'Morning new-ticket check', watchlist: false, before: null, after: null }
-    expect(publishedVersion(target, { version: 2 }, 1)).toBe(2)
-    expect(publishedVersion(target, { version: 1 }, 1), 'the same schedule saved again, or a version lost after version 1').toBeNull()
-    expect(publishedVersion({ ...target, watchlist: true }, { version: 4 }, 3), 'the watchlist keeps no versions').toBeNull()
+    const mine = version(3, 'chat')
+    expect(publishedVersion(target, { version: 3 }, mine, 'alice', 2)).toBe(3)
+    expect(publishedVersion(target, { version: 3 }, mine, 'alice', undefined), 'before the workflow was read, the newest version still says whose it is').toBe(3)
+    expect(publishedVersion(target, { version: 3 }, { ...mine, by: 'carol' }, 'alice', undefined), 'a teammate made the same change first, so nothing was published').toBeNull()
+    expect(publishedVersion(target, { version: 3 }, { ...mine, via: 'page' }, 'alice', undefined), 'her own change on the page is not this card’s').toBeNull()
+    expect(publishedVersion(target, { version: 1 }, version(1, null), 'alice', 1), 'the same schedule saved again, or a version lost after version 1').toBeNull()
+    expect(publishedVersion(target, { version: 3 }, undefined, 'alice', 2), 'the versions could not be read').toBeNull()
+    expect(publishedVersion({ ...target, watchlist: true }, { version: 4 }, mine, 'alice', 3), 'the watchlist keeps no versions').toBeNull()
   })
 })

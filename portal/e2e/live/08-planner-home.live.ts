@@ -9,6 +9,7 @@ import { SettingsApi } from './support/settings'
 import { REDIS, type Backend } from './support/stack'
 import { expect, test } from './support/test'
 import { devContext, OUT, shot } from './support/ui'
+import { askAndWait, editCard, newestAnswer, rereadOf, scheduledWorkflow, shown, tag, versionsOf } from './support/edit'
 
 const GREETING = /^Good (morning|afternoon|evening)! Alice$/
 const OFFLINE = 'I can’t read new requests until an AI model is connected'
@@ -987,6 +988,201 @@ test.describe('the chat after the first message', () => {
     await expect(box(page)).toBeFocused()
     await repair()
     await context.close()
+  })
+})
+
+test.describe('the edit card (spec 6.7)', () => {
+  test.beforeAll(async ({ baseURL }) => {
+    await connectMockModel(String(baseURL))
+  })
+
+  const WEEKDAYS_8 = { day: 'weekdays', at: '08:00' }
+  const sentenceOf = (answer: Locator) => answer.locator('p[id$="-sentence"]')
+  const heading = (answer: Locator) => editCard(answer).getByRole('heading', { level: 3 })
+
+  test('ANS-edit-save: Save change publishes a version from the chat, the page lists it, and Undo publishes the one before again', async ({ browser, backend }) => {
+    const morning = await scheduledWorkflow(backend, `Morning check ${tag()}`, WEEKDAYS_8)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await page.goto('/')
+    const answer = await askAndWait(page, `Make the ${morning.name} run on Mondays only`)
+    await expect(sentenceOf(answer)).toHaveText('Here’s the change. Nothing changes until you save it.')
+    await expect(heading(answer), 'the card takes focus on its heading').toBeFocused()
+    await expect(heading(answer)).toHaveText(`Change ${morning.name}`)
+    await expect(editCard(answer)).toHaveText(/When it runs\s*Before\s*Every weekday at 8:00\s*After\s*Every Monday at 8:00/)
+    await expect(answer.getByRole('button', { name: 'Turn it on' }), 'no new set-up card').toHaveCount(0)
+    expect((await versionsOf(backend, morning.id)).map((v) => v.version), 'nothing is saved before Save change').toEqual([2, 1])
+
+    await editCard(answer).getByRole('button', { name: 'Save change' }).click()
+    await expect(editCard(answer)).toContainText(/Saved as version 3\. Next run .+, 8:00\./)
+    await expect(sentenceOf(answer)).toHaveText(`Saved. ${morning.name} runs every Monday at 8:00 now.`)
+    await expect(editCard(answer).getByRole('button', { name: /^Undo/ })).toBeFocused()
+    expect(await shown(backend, morning.id)).toMatchObject({ version: 3, schedule: { day: 'monday', at: '08:00' } })
+    expect((await versionsOf(backend, morning.id))[0]).toMatchObject({ version: 3, by: 'alice', via: 'chat' })
+
+    const rail = page.getByRole('navigation', { name: 'Main' }).filter({ visible: true })
+    await rail.getByRole('link', { name: /^Workflows/ }).click()
+    await main(page).getByRole('link', { name: morning.name, exact: true }).click()
+    await expect(page).toHaveURL(new RegExp(`/workflows/${morning.id}$`))
+    await expect(page.getByRole('list', { name: 'Versions, newest first' }).getByRole('listitem').first()).toContainText('Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00. This is the version running now.')
+    await rail.getByRole('link', { name: /^Chat/ }).click()
+    const kept = newestAnswer(page)
+    await expect(editCard(kept), 'the card keeps its Undo across pages').toContainText('Saved as version 3.')
+    await editCard(kept).getByRole('button', { name: /^Undo/ }).click()
+    await expect(sentenceOf(kept)).toHaveText(`Undone, as version 4. ${morning.name} runs every weekday at 8:00 now.`)
+    await expect(editCard(kept)).toContainText('Undone, as version 4.')
+    expect(await shown(backend, morning.id)).toMatchObject({ version: 4, schedule: WEEKDAYS_8 })
+    expect((await versionsOf(backend, morning.id))[0]).toMatchObject({ version: 4, via: 'chat', undid: 3 })
+    await expectAccessible(page, path.join(OUT, 'axe'), 'r8-edit-card')
+    assertClean(watch)
+    await context.close()
+  })
+
+  test('ANS-edit-after: a later change on its page is named and takes Undo away, a stale Undo is refused with a 409, and a paused workflow says so', async ({ browser, backend }) => {
+    const morning = await scheduledWorkflow(backend, `Morning check ${tag()}`, WEEKDAYS_8)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+    const answer = await askAndWait(page, `Make the ${morning.name} run on Mondays only`)
+    const reread = rereadOf(page, morning.id)
+    await editCard(answer).getByRole('button', { name: 'Save change' }).click()
+    await expect(editCard(answer)).toContainText('Saved as version 3.')
+    await reread
+    const later = await backend.send('PUT', 'carol', `/api/v1/use-cases/${morning.id}/schedule`, { day: 'friday', at: '17:30' })
+    expect(later.status, 'carol changes it on its page').toBe(200)
+    await editCard(answer).getByRole('button', { name: /^Undo/ }).click()
+    await expect(editCard(answer).getByRole('alert')).toHaveText(`Could not undo version 3. ${morning.name} changed again since, so Undo would throw that change away.`)
+    await expect(editCard(answer)).toContainText('Saved as version 3. Changed again since, on its page.')
+    await expect(editCard(answer).getByRole('button', { name: /^Undo/ }), 'no Undo that would throw away a later change').toHaveCount(0)
+    expect(await shown(backend, morning.id), 'the stale Undo published nothing').toMatchObject({ version: 4, schedule: { day: 'friday', at: '17:30' } })
+
+    await backend.post('alice', `/api/v1/use-cases/${morning.id}/pause`)
+    const paused = await askAndWait(page, `Make the ${morning.name} run at 9am`)
+    await editCard(paused).getByRole('button', { name: 'Save change' }).click()
+    await expect(sentenceOf(paused)).toHaveText(`Saved. ${morning.name} is paused, so it won’t run until you resume it.`)
+    await expect(editCard(paused)).toContainText('Saved as version 5. It’s paused, so it won’t run until you resume it.')
+    await context.close()
+  })
+
+  test('ANS-asks, ANS-edit-days and ANS-edit-honest: a bare hour is asked, two days hold Save, “it” is the workflow just discussed, and a change it can’t make names the workflow', async ({ browser, backend }) => {
+    const morning = await scheduledWorkflow(backend, `Morning check ${tag()}`, WEEKDAYS_8)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+
+    const hour = await askAndWait(page, `make the ${morning.name} run at 9`)
+    await expect(editCard(hour)).toContainText('At 9:00 or 21:00?')
+    await expect(editCard(hour)).toHaveText(/After\s*Choose a time/)
+    await editCard(hour).getByRole('button', { name: '9:00', exact: true }).click()
+    await expect(editCard(hour)).toHaveText(/After\s*Every weekday at 9:00/)
+    await expect(editCard(hour).getByRole('button', { name: 'Save change' }), 'focus moves to Save change once the time is picked').toBeFocused()
+
+    const it = await askAndWait(page, 'make it daily')
+    await expect(heading(it), '“it” is the workflow the answer before was about').toHaveText(`Change ${morning.name}`)
+    await expect(editCard(it)).toHaveText(/Before\s*Every weekday at 8:00\s*After\s*Every day at 8:00/)
+
+    const days = await askAndWait(page, `make the ${morning.name} run on Mondays and Thursdays`)
+    await expect(editCard(days)).toHaveText(/“Mondays and Thursdays”\s*I can only set one day\./)
+    await expect(editCard(days)).toContainText('Ask again without the part with a cross.')
+    await expect(editCard(days).getByRole('button', { name: 'Save change' }), 'no Save change that can’t work').toHaveCount(0)
+
+    const rename = await askAndWait(page, `rename the ${morning.name} to Daily tickets`)
+    await expect(sentenceOf(rename)).toHaveText(`From the chat I can only change when ${morning.name} runs.`)
+    await expect(editCard(rename)).toHaveCount(0)
+    await expect(rename.getByRole('button', { name: `Open ${morning.name}` }).or(rename.getByRole('link', { name: `Open ${morning.name}` }))).toBeVisible()
+
+    const react = await askAndWait(page, 'Make the React check run on Mondays only')
+    await expect(sentenceOf(react)).toHaveText(/^You don’t have a React check\. React isn’t on the Software watchlist/)
+    await expect(react.getByRole('button', { name: 'Watch React' })).toBeVisible()
+    const missing = await askAndWait(page, `make the purple ${tag()} report run on Mondays only`)
+    await expect(sentenceOf(missing)).toHaveText(/^You don’t have a workflow called “purple \w+ report”\.$/)
+    expect(await shown(backend, morning.id), 'no answer saved anything').toMatchObject({ version: 2, schedule: WEEKDAYS_8 })
+    await context.close()
+  })
+
+  test('ANS-status-commands, ANS-questions, ANS-name-words and FIX-name-*: a change beside a question is a command, a question is never one, and a schedule word in a name is neither', async ({ browser, backend }) => {
+    const morning = await scheduledWorkflow(backend, `Morning check ${tag()}`, WEEKDAYS_8)
+    const weekly = await scheduledWorkflow(backend, `Weekly report ${tag()}`, { day: 'friday', at: '16:00' })
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+
+    const pause = await askAndWait(page, `what needs my attention? pause the ${morning.name}`)
+    await expect(sentenceOf(pause)).toHaveText(`From the chat I can only change when ${morning.name} runs.`)
+    await expect(pause).toHaveText(/“what needs my attention”\s*Ask this on its own, and I’ll answer it\./)
+    const both = await askAndWait(page, `how are my workflows doing? make the ${morning.name} run at 10am`)
+    await expect(editCard(both)).toHaveText(/Before\s*Every weekday at 8:00\s*After\s*Every weekday at 10:00/)
+
+    const next = await askAndWait(page, `when does the ${morning.name} run next?`)
+    await expect(editCard(next), 'a question is never a change').toHaveCount(0)
+    await expect(next).not.toContainText('I can only change')
+    const asked = await askAndWait(page, `when does the ${morning.name} run? make it run daily`)
+    await expect(editCard(asked)).toHaveText(/Before\s*Every weekday at 8:00\s*After\s*Every day at 8:00/)
+
+    const ten = await askAndWait(page, `make the ${weekly.name} run at 10am`)
+    await expect(editCard(ten), 'only the time changes, and the day stays').toHaveText(/Before\s*Every Friday at 16:00\s*After\s*Every Friday at 10:00/)
+    const how = await askAndWait(page, `how is the ${weekly.name} doing?`)
+    await expect(editCard(how), 'FIX-name-not-command: a name with “weekly” in it asks nothing').toHaveCount(0)
+    await expect(how.getByRole('button', { name: 'Turn it on' })).toHaveCount(0)
+    await context.close()
+  })
+
+  test('ANS-edit-never and the watchlist: Never mind changes nothing, and saving the watchlist’s schedule says who owns it, with no Undo it can’t keep', async ({ browser, backend }, info) => {
+    const before = (await backend.get<{ watchlist: { schedule: { day: string; at: string } | null } | null }>('alice', '/api/v1/watchlist')).watchlist?.schedule ?? null
+    if ((await backend.get<{ watchlist: unknown }>('alice', '/api/v1/watchlist')).watchlist === null) await backend.freshWatchlist('alice')
+    const put = await backend.send('PUT', 'alice', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })
+    expect(put.status).toBe(200)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    try {
+      await page.goto('/')
+      const never = await askAndWait(page, 'Run the software check every day instead of every Monday')
+      await expect(editCard(never)).toHaveText(/Before\s*Every Monday at 9:00\s*After\s*Every day at 9:00[\s\S]*software on the watchlist are checked\. Saving makes you the owner of this schedule\./)
+      await editCard(never).getByRole('button', { name: 'Never mind' }).click()
+      await expect(sentenceOf(never)).toHaveText('No problem. Nothing changed.')
+      await expect(editCard(never)).toHaveCount(0)
+      expect((await backend.get<{ watchlist: { schedule: { day: string } } }>('alice', '/api/v1/watchlist')).watchlist.schedule.day, 'Never mind changed nothing').toBe('monday')
+
+      const seven = await askAndWait(page, 'Run the software check every day at 7am')
+      await editCard(seven).getByRole('button', { name: 'Save change' }).click()
+      await expect(sentenceOf(seven)).toHaveText(/^Saved\. Next run .+, 7:00\. You now own this schedule, so you can’t approve its checks\.$/)
+      await expect(editCard(seven)).toContainText('and made you the owner of this schedule.')
+      await expect(editCard(seven).getByRole('button', { name: /^Undo/ })).toHaveCount(0)
+      await expect(editCard(seven).getByRole('link', { name: 'Change it on the Software page' })).toBeVisible()
+      for (const width of [1920, 1280, 900, 390]) {
+        await page.setViewportSize({ width, height: 900 })
+        await noSideways(page)
+        await shot(page, info, `r8-edit-watchlist-saved-${String(width)}`)
+      }
+    } finally {
+      if (before) await backend.send('PUT', 'alice', '/api/v1/watchlist/schedule', before)
+      else await backend.send('DELETE', 'alice', '/api/v1/watchlist/schedule')
+      await context.close()
+    }
+  })
+
+  test('choices: words that fit two workflows ask which, and picking one shows its change', async ({ browser, backend }) => {
+    const both = tag()
+    await scheduledWorkflow(backend, `Friday digest ${both}`, { day: 'friday', at: '16:00' })
+    await scheduledWorkflow(backend, `Friday follow-up ${both}`, WEEKDAYS_8)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+    const which = await askAndWait(page, `make the Friday ${both} one run at 10am`)
+    await expect(sentenceOf(which)).toHaveText('Which workflow should I change?')
+    await expect(heading(which)).toBeFocused()
+    await editCard(which).getByRole('button', { name: `Friday follow-up ${both}` }).click()
+    await expect(heading(which)).toHaveText(`Change Friday follow-up ${both}`)
+    await expect(editCard(which)).toHaveText(/Before\s*Every weekday at 8:00\s*After\s*Every weekday at 10:00/)
+    await context.close()
+  })
+
+  test('bob, an Approver, never gets an edit answer', async ({ backend }) => {
+    const morning = await scheduledWorkflow(backend, `Morning check ${tag()}`, WEEKDAYS_8)
+    const answer = await backend.send<{ answer?: string }>('POST', 'bob', '/api/v1/planner/answer', { text: `Make the ${morning.name} run on Mondays only` })
+    expect(answer.status === 403 || answer.body.answer !== 'edit', `bob got ${String(answer.status)} ${JSON.stringify(answer.body)}`).toBe(true)
+    expect(await shown(backend, morning.id)).toMatchObject({ version: 2, schedule: WEEKDAYS_8 })
   })
 })
 

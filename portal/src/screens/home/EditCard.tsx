@@ -1,9 +1,8 @@
 import { useContext, useEffect, useId, useState, type ReactNode } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { useCacheScope, useErrorWords } from '../../api/context'
-import { useSaveSchedule, useUseCase, useWatchlist } from '../../api/queries'
+import { useErrorWords } from '../../api/context'
+import { useMe, useUseCase, useWatchlist } from '../../api/queries'
 import type { EditChoice, EditReply } from '../../api/types'
-import { rereadChanged, useChatScheduleChange, useUndoVersion, useVersions } from '../../api/workflowQueries'
+import { useChatScheduleChange, useChatWatchlistSchedule, useUndoVersion, useVersions } from '../../api/workflowQueries'
 import { Button, ButtonLink } from '../../ui/Button'
 import { IconCheck } from '../../ui/icons'
 import { OpenButton } from '../../ui/OpenItem'
@@ -17,6 +16,7 @@ import {
   doneSay,
   editView,
   firstPicks,
+  targetOf,
   openSay,
   publishedVersion,
   scheduleText,
@@ -37,6 +37,8 @@ type Focus = 'heading' | 'save' | 'undo' | 'sentence'
 
 interface EditCardProps {
   readonly reply: EditReply
+  /** What she typed, which says whether she meant "it". */
+  readonly typed: string
   readonly page: Page
   readonly say: Say
   readonly now: Date
@@ -59,27 +61,31 @@ function watchlistNote(saved: boolean, count: number | undefined): string {
  * schedule keeps no versions, so its card offers no Undo. The sentence and the card are worked out on every draw from the
  * workflow as the platform holds it now, so a later change anywhere shows here.
  */
-export function EditCard({ reply, page, say, now, about }: EditCardProps) {
+export function EditCard({ reply, typed, page, say, now, about }: EditCardProps) {
   const memory = useContext(CardMemoryContext).edit
   const [kept] = useState(memory.kept)
-  const [picks, setPicks] = useState<Picks>(kept?.picks ?? firstPicks(reply, about))
+  const [picks, setPicks] = useState<Picks>(kept?.picks ?? firstPicks(reply, about, typed))
   const [phase, setPhase] = useState<Phase>(kept?.phase ?? { kind: 'open' })
   const [problem, setProblem] = useState<string | null>(null)
-  const [another, setAnother] = useState(false)
+  const [another, setAnother] = useState<string | null>(null)
   const id = useId()
   const main = useMainButton()
   const words = useErrorWords()
-  const user = useCacheScope()
-  const queryClient = useQueryClient()
+  const me = useMe()
   const saveChange = useChatScheduleChange()
-  const saveWatchlist = useSaveSchedule()
+  const saveWatchlist = useChatWatchlistSchedule()
   const undoVersion = useUndoVersion()
+  const saving = saveChange.isPending || saveWatchlist.isPending
 
   useEffect(() => memory.keep({ picks, phase }))
 
-  const view = editView(reply, picks)
-  const target: EditChoice | null = phase.kind === 'saved' || phase.kind === 'undone' ? phase.target : 'target' in view ? view.target : null
+  const picked = targetOf(reply, picks)
+  const target: EditChoice | null = phase.kind === 'saved' || phase.kind === 'undone' ? phase.target : picked
   const live = useUseCase(target?.use_case_id ?? '', target !== null)
+  // Only a read made since the card was drawn can say its Before is out of date. An older read in the cache can't.
+  const fresh = live.isFetchedAfterMount ? live.data : undefined
+  const schedule = fresh ? (fresh.schedule ? { day: fresh.schedule.day, at: fresh.schedule.at } : null) : undefined
+  const view = editView(reply, picks, schedule)
   const versions = useVersions(target?.use_case_id ?? '', live.data?.version ?? 0)
   const watchlist = useWatchlist({ enabled: target?.watchlist === true || (view.kind === 'missing' && view.software !== null) })
 
@@ -96,14 +102,19 @@ export function EditCard({ reply, page, say, now, about }: EditCardProps) {
 
   const pick = (next: Partial<Picks>, then: Focus) => {
     setPicks((before) => ({ ...before, ...next }))
+    setAnother(null)
     focusSoon(then)
   }
 
-  const saved = (after: Schedule, version: number | null, chosen: EditChoice) => {
+  // Kept in the chat's memory at once, so a save that lands after she left Home still shows, with its Undo, when she comes back.
+  const settle = (next: Phase, then: Focus) => {
+    memory.keep({ picks, phase: next })
     setProblem(null)
-    setPhase({ kind: 'saved', target: chosen, after, version })
-    focusSoon(version === null ? 'heading' : 'undo')
+    setPhase(next)
+    focusSoon(then)
   }
+
+  const saved = (after: Schedule, version: number | null, chosen: EditChoice) => settle({ kind: 'saved', target: chosen, after, version }, version === null ? 'heading' : 'undo')
 
   const save = () => {
     if (view.kind === 'ask') {
@@ -112,21 +123,15 @@ export function EditCard({ reply, page, say, now, about }: EditCardProps) {
     }
     if (view.kind !== 'ready') return
     const { target: chosen, after } = view
+    const failed = (error: unknown) => setProblem(`Could not save the change. ${words(error)}`)
     if (chosen.watchlist) {
-      saveWatchlist.mutate(after, {
-        onSuccess: () => saved(after, null, chosen),
-        onError: (error) => setProblem(`Could not save the change. ${words(error)}`),
-        onSettled: () => rereadChanged(queryClient, user, chosen.use_case_id),
-      })
+      saveWatchlist.mutate({ useCaseId: chosen.use_case_id, schedule: after }, { onSuccess: () => saved(after, null, chosen), onError: failed })
       return
     }
     const known = live.data?.version
     saveChange.mutate(
       { useCaseId: chosen.use_case_id, schedule: after },
-      {
-        onSuccess: (answer) => saved(after, publishedVersion(chosen, answer, known), chosen),
-        onError: (error) => setProblem(`Could not save the change. ${words(error)}`),
-      },
+      { onSuccess: ({ view: answer, newest }) => saved(after, publishedVersion(chosen, answer, newest, me.data?.id, known), chosen), onError: failed },
     )
   }
 
@@ -136,19 +141,14 @@ export function EditCard({ reply, page, say, now, about }: EditCardProps) {
     undoVersion.mutate(
       { useCaseId: chosen.use_case_id, version },
       {
-        onSuccess: (answer) => {
-          setProblem(null)
-          setPhase({ kind: 'undone', target: chosen, after, saved: version, version: answer.version })
-          focusSoon('heading')
-        },
+        onSuccess: (answer) => settle({ kind: 'undone', target: chosen, after, version: answer.version }, 'heading'),
         onError: (error) => setProblem(undoProblem(version, chosen.name, error, words)),
       },
     )
   }
 
   const neverMind = () => {
-    setPhase({ kind: 'kept' })
-    focusSoon('sentence')
+    if (!saving) settle({ kind: 'kept' }, 'sentence')
   }
 
   const said = (
@@ -193,7 +193,7 @@ export function EditCard({ reply, page, say, now, about }: EditCardProps) {
     )
   }
 
-  if (phase.kind === 'open' && (view.kind === 'missing' || view.kind === 'cant' || view.kind === 'same')) {
+  if (phase.kind === 'open' && (view.kind === 'missing' || view.kind === 'cant' || view.kind === 'same' || view.kind === 'stale')) {
     const next =
       view.kind === 'missing' && view.software !== null ? (
         <Button variant={main} onClick={() => page.ask(`Keep track of the ${view.software ?? ''} version`)}>
@@ -227,31 +227,43 @@ export function EditCard({ reply, page, say, now, about }: EditCardProps) {
       ? []
       : [
           asked('when', 'When', question, (value) => pick(question.field === 'day' ? { day: value as Picks['day'] } : { at: value }, 'save'), question.another ? (
-            <button type="button" className={setup['choice']} aria-expanded={another} onClick={() => setAnother((open) => !open)}>
+            <button type="button" className={setup['choice']} aria-expanded={another !== null} onClick={() => setAnother((open) => (open === null ? '' : null))}>
               Another time
             </button>
           ) : null),
         ]
+  const onStep = another !== null && /^\d{2}:\d[05]$/.test(another)
   const anotherTime =
-    question?.another && another ? (
-      <label className={styles['another']}>
-        <span>Time, Singapore</span>
-        <input
-          type="time"
-          step={300}
-          onChange={(event) => {
-            const at = event.target.value
-            if (/^\d{2}:\d[05]$/.test(at)) pick({ at }, 'save')
-          }}
-        />
-      </label>
+    question?.another && another !== null ? (
+      <form
+        className={styles['another']}
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (onStep) pick({ at: another }, 'save')
+        }}
+      >
+        <label htmlFor={`${id}-another`}>Time, Singapore</label>
+        <input id={`${id}-another`} type="time" step={300} value={another} aria-describedby={`${id}-another-help`} onChange={(event) => setAnother(event.target.value)} />
+        <Button type="submit">Use this time</Button>
+        <span id={`${id}-another-help`} className={styles['note']}>
+          {another !== '' && !onStep ? 'Pick a time on a 5-minute step, such as 8:05.' : ''}
+        </span>
+      </form>
     ) : null
+  const pickedTime = phase.kind === 'open' && shown?.kind === 'ready' && (picks.day !== null || picks.at !== null)
 
   const after: ReactNode =
     phase.kind !== 'open' ? (
       <b>{scheduleText(phase.after)}</b>
     ) : shown?.kind === 'ready' ? (
-      <b>{scheduleText(shown.after)}</b>
+      <>
+        <b>{scheduleText(shown.after)}</b>
+        {pickedTime ? (
+          <button type="button" className={setup['link']} onClick={() => pick({ day: null, at: null }, 'heading')}>
+            Change<span className="visually-hidden"> when it runs</span>
+          </button>
+        ) : null}
+      </>
     ) : shown?.kind === 'ask' ? (
       <span className="muted">{shown.question.field === 'day' ? 'Choose a day' : 'Choose a time'}</span>
     ) : (
@@ -263,7 +275,17 @@ export function EditCard({ reply, page, say, now, about }: EditCardProps) {
   return (
     <>
       {said}
-      <Card id={id} title={`Change ${chosen.name}`}>
+      <Card
+        id={id}
+        title={`Change ${chosen.name}`}
+        action={
+          phase.kind === 'open' && reply.use_case_id === null ? (
+            <button type="button" className={setup['link']} onClick={() => pick({ useCaseId: null, day: null, at: null }, 'heading')}>
+              Pick another workflow
+            </button>
+          ) : null
+        }
+      >
         <PartsList parts={[...askPart, ...crosses]} />
         {anotherTime}
         <div className={setup['part']}>
@@ -278,7 +300,7 @@ export function EditCard({ reply, page, say, now, about }: EditCardProps) {
         </div>
         <div className={setup['foot']}>
           {done || held ? null : (
-            <Button id={`${id}-save`} variant={main} loading={saveChange.isPending || saveWatchlist.isPending} aria-describedby={question ? `${id}-q-when` : undefined} onClick={save}>
+            <Button id={`${id}-save`} variant={main} loading={saving} aria-describedby={question ? `${id}-q-when` : undefined} onClick={save}>
               Save change
             </Button>
           )}
@@ -288,7 +310,7 @@ export function EditCard({ reply, page, say, now, about }: EditCardProps) {
                 <IconCheck size={14} /> {done.words}
               </>
             ) : held ? (
-              'Ask again without the part with a cross.'
+              crosses.length > 0 ? 'Ask again without the part with a cross.' : 'Ask again with the day or the time.'
             ) : null}
           </p>
           {done?.undo ? (
@@ -309,13 +331,14 @@ export function EditCard({ reply, page, say, now, about }: EditCardProps) {
   )
 }
 
-function Card({ id, title, children }: { id: string; title: string; children: ReactNode }) {
+function Card({ id, title, action, children }: { id: string; title: string; action?: ReactNode; children: ReactNode }) {
   return (
     <section className={setup['card']} aria-labelledby={`${id}-heading`} data-card="edit">
       <div className={setup['head']}>
         <h3 id={`${id}-heading`} tabIndex={-1}>
           {title}
         </h3>
+        {action}
       </div>
       {children}
     </section>

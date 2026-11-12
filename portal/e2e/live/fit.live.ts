@@ -8,6 +8,7 @@ import { connectMockModel } from './support/settings'
 import { setMockGithubMode, type Backend } from './support/stack'
 import { expect, test } from './support/test'
 import { devContext, OUT, shot } from './support/ui'
+import { askAndWait, editCard, rereadOf, scheduledWorkflow, tag } from './support/edit'
 
 /**
  * The team lead's fit rule: no text spills out of or is cut off inside its card, box, button or pill, nothing overlaps,
@@ -418,6 +419,63 @@ for (const width of WIDTHS) {
       // The cards a newer answer replaced were kept as drafts, which alice's draft limit counts.
       await new Promise((resolve) => setTimeout(resolve, 1_500))
       for (const id of await drafts()) if (!before.includes(id)) await backend.send('DELETE', 'alice', `/api/v1/drafts/${id}`)
+    }
+    expect(found, found.join('\n')).toEqual([])
+  })
+}
+
+/** Each state of the edit card (spec 6.7): asking, ready, saved, undone, an Undo the platform refused, a workflow she doesn't have, and a choice of two. */
+for (const width of WIDTHS) {
+  test(`the edit card fits asking, ready, saved, undone, refused, missing and with two choices, as an Operator at ${String(width)} px`, async ({ browser, backend }) => {
+    test.slow()
+    const morning = await scheduledWorkflow(backend, `Morning check ${tag()}`, { day: 'weekdays', at: '08:00' })
+    const both = tag()
+    await scheduledWorkflow(backend, `Friday digest ${both}`, { day: 'friday', at: '16:00' })
+    await scheduledWorkflow(backend, `Friday follow-up ${both}`, { day: 'weekdays', at: '08:00' })
+    const context = await devContext(browser, 'alice', { reducedMotion: true })
+    const page = await context.newPage()
+    await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
+    const found: string[] = []
+    const check = async (state: string, name: string, part: Locator) => {
+      const problems = await fitProblems(page)
+      if (CARD_SHOTS.has(width)) {
+        await page.setViewportSize({ width, height: 2400 })
+        await part.screenshot({ path: path.join(OUT, 'shots', `r8-${name}-${String(width)}.png`), caret: 'hide' })
+        await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
+      }
+      if (problems.length) found.push(`${state} at ${String(width)} px:\n${describeProblems(problems).replace(/^/gm, '    ')}`)
+    }
+    try {
+      await page.goto('/')
+      const hour = await askAndWait(page, `make the ${morning.name} run at 9`)
+      await expect(editCard(hour)).toContainText('At 9:00 or 21:00?')
+      await check('the edit card asking for the time', 'asking', hour)
+      const ready = await askAndWait(page, `make the ${morning.name} run on Mondays only`)
+      await expect(editCard(ready)).toContainText('Every Monday at 8:00')
+      await check('the edit card ready to save', 'ready', ready)
+      await editCard(ready).getByRole('button', { name: 'Save change' }).click()
+      await expect(editCard(ready)).toContainText('Saved as version 3.')
+      await check('the edit card once saved', 'saved', ready)
+      await editCard(ready).getByRole('button', { name: /^Undo/ }).click()
+      await expect(editCard(ready)).toContainText('Undone, as version 4.')
+      await check('the edit card once undone', 'undone', ready)
+      const again = await askAndWait(page, `make the ${morning.name} run on Fridays only`)
+      const reread = rereadOf(page, morning.id)
+      await editCard(again).getByRole('button', { name: 'Save change' }).click()
+      await expect(editCard(again)).toContainText('Saved as version 5.')
+      await reread
+      expect((await backend.send('PUT', 'carol', `/api/v1/use-cases/${morning.id}/schedule`, { day: 'sunday', at: '07:00' })).status).toBe(200)
+      await editCard(again).getByRole('button', { name: /^Undo/ }).click()
+      await expect(editCard(again).getByRole('alert')).toContainText('changed again since, so Undo would throw that change away.')
+      await check('the edit card after a refused Undo', '409', again)
+      const missing = await askAndWait(page, 'Make the React check run on Mondays only')
+      await expect(missing).toContainText('You don’t have a React check.')
+      await check('a check she doesn’t have', 'missing', missing)
+      const which = await askAndWait(page, `make the Friday ${both} one run at 10am`)
+      await expect(which).toContainText('Which workflow?')
+      await check('a choice of two workflows', 'choices', which)
+    } finally {
+      await context.close()
     }
     expect(found, found.join('\n')).toEqual([])
   })

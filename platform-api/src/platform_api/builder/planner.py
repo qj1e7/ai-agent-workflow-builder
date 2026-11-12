@@ -774,14 +774,16 @@ class PlannerFront:
         named = words if words is not None and _own_words(words, keep_check=True) else None
         matched = [] if named is None else await self._matching(named, edit.software)
         one = _choice(matched[0], edit) if len(matched) == 1 else None
-        several = matched if len(matched) > 1 else await self._use_cases() if named is None else []
+        missing = named if named is not None and not matched and _own_words(named) else None
+        # "it", or "the check" that fits none, names no workflow: she picks from every one.
+        several = matched if matched else [] if missing is not None else await self._use_cases()
         return EditReply(
             use_case_id=None if one is None else one.use_case_id,
             name=None if one is None else one.name,
             watchlist=one is not None and one.watchlist,
-            missing=named if named is not None and not matched and _own_words(named) else None,
+            missing=missing,
             software=edit.software,
-            choices=[_choice(u, edit) for u in several],
+            choices=[] if one is not None else [_choice(u, edit) for u in several],
             before=None if one is None else one.before,
             after=None if one is None else one.after,
             hour=None if edit.schedule is None else edit.schedule.hour,

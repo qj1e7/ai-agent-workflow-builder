@@ -41,6 +41,7 @@ export type EditView =
   | { readonly kind: 'cant'; readonly target: EditChoice | null; readonly cant: NonNullable<EditReply['cant']> }
   | { readonly kind: 'same'; readonly target: EditChoice; readonly before: Schedule }
   | { readonly kind: 'held'; readonly target: EditChoice }
+  | { readonly kind: 'stale'; readonly target: EditChoice; readonly now: Schedule | null }
   | { readonly kind: 'ask'; readonly target: EditChoice; readonly question: Question }
   | { readonly kind: 'ready'; readonly target: EditChoice; readonly after: Schedule }
 
@@ -49,7 +50,7 @@ export type Phase =
   | { readonly kind: 'open' }
   | { readonly kind: 'kept' }
   | { readonly kind: 'saved'; readonly target: EditChoice; readonly after: Schedule; readonly version: number | null }
-  | { readonly kind: 'undone'; readonly target: EditChoice; readonly after: Schedule; readonly saved: number; readonly version: number }
+  | { readonly kind: 'undone'; readonly target: EditChoice; readonly after: Schedule; readonly version: number }
 
 export const NO_PICKS: Picks = { useCaseId: null, day: null, at: null }
 
@@ -68,11 +69,15 @@ export function targetOf(reply: EditReply, picks: Picks): EditChoice | null {
   return reply.choices.find((choice) => choice.use_case_id === picks.useCaseId) ?? null
 }
 
-/** "make it daily" means the workflow just talked about, when it is one of the choices. Otherwise she picks. */
-export function firstPicks(reply: EditReply, about: string | null): Picks {
-  const named = about !== null && reply.choices.some((choice) => choice.use_case_id === about)
+const IT = /\b(?:it|this one|that one)\b/i
+
+/** "make it daily" means the workflow just talked about, when it is one of the choices. Words that fit several never pick one. */
+export function firstPicks(reply: EditReply, about: string | null, typed: string): Picks {
+  const named = about !== null && IT.test(typed) && reply.choices.some((choice) => choice.use_case_id === about)
   return { ...NO_PICKS, useCaseId: named ? about : null }
 }
+
+const sameSchedule = (a: Schedule | null, b: Schedule | null): boolean => (a === null || b === null ? a === b : a.day === b.day && a.at === b.at)
 
 function timeQuestion(hour: number | null): Question {
   if (hour !== null) {
@@ -90,11 +95,16 @@ const DAY_QUESTION: Question = {
   another: false,
 }
 
-export function editView(reply: EditReply, picks: Picks): EditView {
+/**
+ * `now` is the workflow's schedule as the platform holds it, or undefined while it is read. A card whose Before is no longer
+ * true would save an After worked out from the old schedule, so it asks to be asked again instead.
+ */
+export function editView(reply: EditReply, picks: Picks, now?: Schedule | null): EditView {
   const target = targetOf(reply, picks)
   if (reply.cant !== null) return { kind: 'cant', target, cant: reply.cant }
   if (target === null) return reply.missing !== null ? { kind: 'missing', words: reply.missing, software: reply.software } : { kind: 'which', choices: reply.choices }
   if (reply.holds_save || target.after === null) return { kind: 'held', target }
+  if (now !== undefined && !sameSchedule(now, target.before)) return { kind: 'stale', target, now }
   const day = target.after.day ?? picks.day
   const at = target.after.at ?? picks.at
   if (day === null) return { kind: 'ask', target, question: DAY_QUESTION }
@@ -126,7 +136,11 @@ export function openSay(reply: EditReply, view: EditView, every: Day | null): st
       const now = repeatWords(view.before)
       return view.target.watchlist && reply.software ? `${reply.software} is checked with all your software, which already runs ${now}.` : `${view.target.name} already runs ${now}.`
     }
+    case 'stale':
+      return `${view.target.name} changed since I read it, and ${view.now ? `runs ${repeatWords(view.now)}` : 'has no schedule'} now. Ask again to change it.`
     case 'held':
+      if (crossesOf(reply, view).length === 0) return 'I couldn’t tell when it should run. Ask again with the day or the time.'
+      return `${view.target.watchlist && reply.software ? `${reply.software} is checked with all your software. ` : ''}Here’s the change, but I can’t do every part of it.`
     case 'ask':
     case 'ready': {
       const software = view.target.watchlist && reply.software ? `${reply.software} is checked with all your software. ` : ''
@@ -180,8 +194,13 @@ export function doneLine(phase: Extract<Phase, { kind: 'saved' | 'undone' }>, no
   return { words: `Saved as version ${String(phase.version)}.${later ? ` ${later}` : ''}`, undo: true }
 }
 
-/** The version a save published, or null when it published none: the schedule was already that, or the watchlist keeps no versions. */
-export function publishedVersion(target: EditChoice, saved: Pick<UseCaseView, 'version'>, known: number | undefined): number | null {
-  if (target.watchlist) return null
-  return saved.version > (known ?? 1) ? saved.version : null
+/**
+ * The version a save published, or null when it published none. The schedule route publishes nothing when the schedule was
+ * already so, and answers with the version running, which may be a teammate's. So a version counts as this save's only when it
+ * is the newest, hers, from the chat, and newer than the one the card knew of. Undo then never undoes someone else's change.
+ */
+export function publishedVersion(target: EditChoice, saved: Pick<UseCaseView, 'version'>, newest: VersionView | undefined, me: string | undefined, known: number | undefined): number | null {
+  if (target.watchlist || newest === undefined || me === undefined) return null
+  if (newest.version !== saved.version || newest.by !== me || newest.via !== 'chat') return null
+  return known === undefined || saved.version > known ? saved.version : null
 }

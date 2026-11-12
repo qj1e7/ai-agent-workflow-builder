@@ -2,10 +2,6 @@
   margin: 0;
 }
 
-.sentence:focus {
-  outline: none;
-}
-
 /* Before and After, the labels in a column and the schedules beside them. */
 .ba {
   display: grid;

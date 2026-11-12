@@ -1424,6 +1424,14 @@ async def test_it_alone_names_no_workflow_and_offers_every_one(front: Front, wor
     }
 
 
+async def test_the_check_that_fits_no_workflow_offers_every_one_rather_than_none(front: Front):
+    summary = await make_workflow(front, "Weekly closed-ticket summary", FRIDAY_16)
+    edit = EditAnswer(workflow_words="the check", schedule=ScheduleChange(day="monday"))
+    reply = await edit_reply(front, edit)
+    assert (reply["use_case_id"], reply["missing"]) == (None, None)
+    assert [c["use_case_id"] for c in cast(list[dict[str, str]], reply["choices"])] == [summary]
+
+
 async def test_the_runtime_is_told_an_operator_can_change_workflows(front: Front):
     front.answers.result = answered(AbilitiesAnswer())
     await say(front, "what can you do?")
