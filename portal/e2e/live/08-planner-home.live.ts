@@ -168,10 +168,10 @@ test.describe('with the AI model on', () => {
   const left = (page: Page) => card(page).locator('[id$="-left"]')
   const turnOn = (page: Page) => card(page).getByRole('button', { name: 'Turn it on', exact: true })
 
-  /** The card asks for what it lacks, and the plan may ask for the Jira project. Everything is filled from the keyboard. */
+  /** The card asks for what it lacks, and the plan may ask for the Jira project. Everything is filled from the keyboard, and a project the Planner already filled in is left as it is. */
   async function fillTheRest(page: Page, project: string): Promise<void> {
-    const field = card(page).getByLabel(/^Jira project/)
-    if (await field.count()) {
+    const field = card(page).last().getByLabel(/^Jira project/)
+    if ((await field.count()) && (await field.inputValue()) === '') {
       await field.focus()
       await page.keyboard.type(project)
     }
@@ -185,7 +185,7 @@ test.describe('with the AI model on', () => {
     const page = await context.newPage()
     const watch = watchPage(page)
     await page.goto('/')
-    await ask(page, 'Every Friday at 4pm, follow up on bug tickets in MOCK with no update for 37 days')
+    await ask(page, 'Every Friday at 4pm, find bug tickets in MOCK with no update for 37 days')
     await expect(card(page)).toBeVisible()
     await card(page).getByRole('button', { name: /what it does|^Create/i }).first().click()
     await card(page).getByRole('group', { name: /^Change/ }).getByRole('textbox').fill('Raise one follow-up ticket that lists them')
@@ -194,10 +194,9 @@ test.describe('with the AI model on', () => {
     await expect(card(page).locator('details')).toContainText('New agent, saved under How it works, in Settings, when you turn this on', { timeout: 30_000 })
     const before = await cards()
     await fillTheRest(page, 'MOCK')
-    // The Planner may cross “follow up on”, which it reads only in part, so the button may set up the part it can.
-    await expect(left(page)).toHaveText(/^(Nothing is unclear\. Turn it on when you’re ready\.|The part with a cross is left out\.)$/, { timeout: 30_000 })
+    await expect(left(page)).toHaveText('Nothing is unclear. Turn it on when you’re ready.', { timeout: 30_000 })
     expect((await cards()).length, 'nothing is saved to the library before Turn it on').toBe(before.length)
-    await card(page).getByRole('button', { name: /^(Turn it on|Set up the part I can)$/ }).click()
+    await turnOn(page).click()
     await expect(thread(page).getByRole('status')).toContainText('is saved under How it works, in Settings', { timeout: 30_000 })
     expect((await cards()).length, 'the new agent is in the library after Turn it on').toBe(before.length + 1)
     await shot(page, info, 'n11-i6')
