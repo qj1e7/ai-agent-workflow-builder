@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useId, useRef } from 'react'
 import { newIdempotencyKey } from '../../api/idempotency'
 import type { ApprovalView } from '../../api/types'
 import { AnswerQuestion } from './AnswerQuestion'
@@ -69,7 +69,12 @@ interface AskBoxProps {
 
 /** "Your question for Carol". Sending keeps the request waiting, and the question shows on it. */
 export function AskBox({ requester, ask, onSent, onCancel }: AskBoxProps) {
-  const [key] = useState(newIdempotencyKey)
+  // A resend of the same words keeps its key, so a send that landed before its answer was lost is not asked twice. Edited words are a new question.
+  const sent = useRef<{ readonly text: string; readonly key: string } | null>(null)
+  const keyFor = (text: string) => {
+    if (sent.current?.text !== text) sent.current = { text, key: newIdempotencyKey() }
+    return sent.current.key
+  }
   return (
     <MessageBox
       label={`Your question for ${requester}`}
@@ -78,7 +83,7 @@ export function AskBox({ requester, ask, onSent, onCancel }: AskBoxProps) {
       send="Send question"
       pending={ask.pending}
       error={ask.error}
-      onSend={(text) => ask.send(text, key, onSent)}
+      onSend={(text) => ask.send(text, keyFor(text), onSent)}
       onCancel={onCancel}
     />
   )

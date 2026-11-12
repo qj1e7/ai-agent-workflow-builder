@@ -464,7 +464,7 @@ describe('a question an Approver asked on a request this person made', () => {
 
   it('says who asked about which workflow, that the request still waits, and the question', () => {
     const words = wordsOf(need, NOW)
-    expect(words.tone).toBe('wait')
+    expect(words.tone, 'a message for this person, as a reply is, never the approval shield').toBe('info')
     expect(words.title).toBe('Bob asked you about Software watchlist')
     expect(words.meta).toBe('The request is still waiting for a yes')
     expect(words.note).toBe('“Has 1.2.16 been tested with our login service?”')

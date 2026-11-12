@@ -371,8 +371,12 @@ function LastWordFor({ model, approval, found, decision, questions, troubleshoot
     case 'rejected':
       return (
         <LastWord speaker={{ kind: 'app' }}>
-          <Outcome model={model} nameOf={nameOf} declinedNext={declinedNext} />
-          {approval ? <QuestionThread approval={approval} me={me?.id} nameOf={nameOf} answer={questions.answer} /> : null}
+          <Outcome
+            model={model}
+            nameOf={nameOf}
+            declinedNext={declinedNext}
+            thread={approval ? <QuestionThread approval={approval} me={me?.id} nameOf={nameOf} answer={questions.answer} /> : null}
+          />
         </LastWord>
       )
     default:

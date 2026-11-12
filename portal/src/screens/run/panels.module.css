@@ -228,6 +228,11 @@
   font-size: 0.875rem;
 }
 
+/* A send moves focus here, as a page's h1 takes it, with no ring. */
+.asks h2:focus {
+  outline: none;
+}
+
 .asks ul {
   display: grid;
   gap: 12px;

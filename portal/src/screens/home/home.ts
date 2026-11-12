@@ -272,7 +272,7 @@ function declinedWords(item: DeclinedItem, now: Date, modelOff: boolean): ItemWo
 /** An Approver's question on a request this person made, which waits for their answer (spec 10.4). */
 function questionWords(item: QuestionItem): ItemWords {
   return {
-    tone: 'wait',
+    tone: 'info',
     title: `${item.asked_by_name ?? 'An Approver'} asked you about ${item.use_case_name}`,
     meta: 'The request is still waiting for a yes',
     lines: [],

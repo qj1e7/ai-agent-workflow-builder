@@ -213,7 +213,11 @@ export function ApprovalGate({ approval, page, decision, reasons, requester, que
           </div>
           <p className={styles['askLine']}>
             Not sure yet?{' '}
-            <button ref={askButton} type="button" className={styles['linkButton']} aria-disabled={busy || undefined}
+            <button
+              ref={askButton}
+              type="button"
+              className={styles['linkButton']}
+              aria-disabled={busy || undefined}
               onClick={() => {
                 if (!busy) setOpened({ kind: 'ask' })
               }}
