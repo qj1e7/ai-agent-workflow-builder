@@ -1002,9 +1002,59 @@ type PlannerAnswer = Annotated[
 ]
 
 
+type PartMark = Literal["will_do", "cant", "question"]
+type PartReason = Literal[
+    "not_followed",
+    "cant_do",
+    "ask_on_its_own",
+    "one_day",
+    "one_time",
+    "own_time",
+    "skip_approval",
+    "with_a_yes",
+    "needs_the_rest",
+]
+
+
+class RequestPart(WireModel):
+    """One clause of the request and what the answer does with it (plan 4.1)."""
+
+    text: str = Field(
+        max_length=200,
+        description="The request's own words: the whole clause, or, in a clause the Planner "
+        "partly read, only the words it didn't read.",
+    )
+    mark: PartMark = Field(
+        description="will_do for a part the answer does, cant for one it doesn't, and question "
+        "for the one thing the answer asks."
+    )
+    reason: PartReason | None = Field(
+        default=None,
+        description="Why, for a cant: not_followed (no rule read it), cant_do (see note), "
+        "ask_on_its_own (a question asked beside a request, or a request beside a question), "
+        "one_day or one_time (a schedule with two, see choices), own_time (a time on a watch "
+        "request), skip_approval (it asks to skip a yes), with_a_yes (it waits until the "
+        "request is set up with a yes), needs_the_rest (it can't run without a part that "
+        "can't be done). None for will_do and question.",
+    )
+    note: str | None = Field(
+        default=None, max_length=300, description="For cant_do, why, in the registry's words."
+    )
+    choices: list[Annotated[str, Field(max_length=40)]] = Field(
+        default_factory=list[str],
+        description="For one_day and one_time, each day or time the request named, in its own "
+        "words, for the person to choose one.",
+    )
+
+
 class Answered(WireModel):
     status: Literal["answered"] = "answered"
     answer: PlannerAnswer
+    parts: list[RequestPart] = Field(
+        default_factory=list[RequestPart],
+        description="Every clause of the request, in order, with what happened to it. None is "
+        "dropped. Thanks and please get no part.",
+    )
 
 
 type AnswerResult = Annotated[Answered | ModelProblem, Field(discriminator="status")]

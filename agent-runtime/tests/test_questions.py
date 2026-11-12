@@ -63,8 +63,9 @@ def ask(
 def test_a_question_about_the_persons_data_is_answered_from_the_facts_in_the_models_words():
     reply = QuestionReply(about_their_data=True, text="Three: LangGraph, Redis and n8n.")
     result, chat = ask(reply)
-    assert result == Answered(
-        answer=QuestionAnswer(text="Three: LangGraph, Redis and n8n.", looked_at=["watchlist"])
+    assert isinstance(result, Answered)
+    assert result.answer == QuestionAnswer(
+        text="Three: LangGraph, Redis and n8n.", looked_at=["watchlist"]
     )
     assert chat.asked == [TaskRead, QuestionReply]
     assert chat.calls[1][0] == ("system", QUESTION_SYSTEM)
@@ -95,7 +96,7 @@ def test_no_facts_means_no_lane_so_the_fixed_answer_stands_and_the_model_is_aske
     reply = QuestionReply(about_their_data=True, text="Three.")
     for facts in (None, PlannerFacts()):
         result, chat = ask(reply, facts=facts)
-        assert result == Answered(answer=AbilitiesAnswer())
+        assert isinstance(result, Answered) and result.answer == AbilitiesAnswer()
         assert len(chat.calls) == 1
 
 
@@ -131,13 +132,13 @@ def test_a_second_call_that_fails_gives_the_first_answer():
 def test_the_catch_all_is_sent_to_the_lane_and_a_no_keeps_the_abilities_answer():
     reply = QuestionReply(about_their_data=False)
     result, chat = ask(reply, task="What can you do?")
-    assert result == Answered(answer=AbilitiesAnswer())
+    assert isinstance(result, Answered) and result.answer == AbilitiesAnswer()
     assert chat.asked == [TaskRead, QuestionReply]
 
 
 def test_without_facts_the_catch_all_stays_abilities_and_the_lane_is_not_asked():
     result, chat = ask(QuestionReply(about_their_data=True, text="Three."), facts=None)
-    assert result == Answered(answer=AbilitiesAnswer())
+    assert isinstance(result, Answered) and result.answer == AbilitiesAnswer()
     assert len(chat.calls) == 1
 
 

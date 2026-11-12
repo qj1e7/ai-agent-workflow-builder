@@ -9,7 +9,7 @@ that writes, else as a part the platform can't do, in their own words.
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final
 
 from agent_runtime.abilities import (
@@ -33,6 +33,7 @@ from agent_runtime.abilities import (
     why_not_the_field,
     without_the_phrase,
     without_the_skip,
+    words,
 )
 from agent_runtime.contract import (
     AbilitiesAnswer,
@@ -60,6 +61,7 @@ from agent_runtime.contract import (
 )
 from agent_runtime.drafting import ask_model
 from agent_runtime.follow_ups import follow_up_of, watch_offer_of
+from agent_runtime.parts import NOT_FOLLOWED, OWN_TIME, parts_of
 from agent_runtime.planner import (
     CANT_YET,
     NOTE_LIMIT,
@@ -73,11 +75,13 @@ from agent_runtime.planner import (
 )
 from agent_runtime.questions import answer_question, is_fallback, question_messages
 from agent_runtime.reading import (
+    FILLER,
     SAID_LIMIT,
     SkipRead,
     Span,
     TaskRead,
     a_statement,
+    clauses_of,
     leftovers,
     names_a_person,
     names_a_yes,
@@ -86,6 +90,7 @@ from agent_runtime.reading import (
     render_schedule,
     render_search,
     render_ticket,
+    schedule_stretch,
     speaks_only_of_self,
     task_shaped,
 )
@@ -98,6 +103,7 @@ __all__ = [
     "answer_of",
     "answer_task",
     "check_one_part",
+    "parts_of",
     "word_rule_refusal",
 ]
 
@@ -118,7 +124,7 @@ LEFT_OUT_DO: Final = (
 )
 LEFT_OUT_WHERE: Final = "I can only put the result in a Jira project."
 LEFT_OUT_SCHEDULE: Final = "I couldn't read this as a schedule."
-LEFT_OUT_PART: Final = "I can't do this part yet."
+LEFT_OUT_PART: Final = NOT_FOLLOWED
 
 ANSWER_SYSTEM: Final = (
     "You are the Planner on a platform used by the support staff of CODESparks, a team in "
@@ -290,21 +296,37 @@ def _name_of(said: str | None, request: str) -> str:
     return plain(said, NAME_LIMIT) or plain(request, NAME_LIMIT)
 
 
+WATCH_WORDS: Final = words(
+    "add watch track monitor follow check tell me us let know notify alert ping when whenever "
+    "there is are has have new newer latest next out available comes come"
+)
+"""What a clause about the releases may say beside the release word and still be the watch's
+own, as "tell me about new releases"."""
+
+
+def _about_releases_only(clause: str) -> bool:
+    """Whether the clause names a release word and nothing else but watch words and filler.
+    "only the major releases" names more, so it comes back."""
+    word = release_word_in(clause)
+    rest = [
+        w
+        for w in re.findall(r"[\w'’-]+", clause.casefold())
+        if w not in FILLER and w not in WATCH_WORDS
+    ]
+    return word is not None and rest == [word.casefold()]
+
+
 def _watch_clauses(read: TaskRead, text: str) -> list[tuple[int, int]]:
-    """The clauses a watchlist answer already carries: the ones with the release word or the
-    software's name."""
-    word = task_form_of(text, read.watchlist_word) or release_word_in(text)
-    names = [w for w in (word, _software_of(read, text)) if w]
-    if not names:
-        return []
-    found: list[tuple[int, int]] = []
-    at = 0
-    for mark in re.finditer(r"[,;:.!?()]+|$", text):
-        clause = text[at : mark.start()]
-        if any(re.search(rf"(?<!\w){re.escape(n)}(?!\w)", clause, re.IGNORECASE) for n in names):
-            found.append((at, mark.start()))
-        at = mark.end()
-    return found
+    """The clauses a watchlist answer already carries: one that names the software, and one
+    about its releases with nothing else in it. Any other clause comes back if nothing reads
+    it."""
+    software = _software_of(read, text)
+    return [
+        (start, end)
+        for start, end in clauses_of(text)
+        if (software is not None and whole_word_of(text[start:end], software) is not None)
+        or _about_releases_only(text[start:end])
+    ]
 
 
 def _writes(read: TaskRead, text: str) -> bool:
@@ -497,9 +519,17 @@ def _watch_verb(read: TaskRead, request: str) -> str | None:
     software = _software_of(read, request)
     if software is None or _TICKET_KEY.fullmatch(software) or names_a_ticket_field(software):
         return None
-    if _TICKET_KEY.search(request) or _NOT_A_WATCH.search(request):
+    if _TICKET_KEY.search(request) or _NOT_A_WATCH.search(_without_systems(request)):
         return None
     return whole_word_of(request, said)
+
+
+def _without_systems(request: str) -> str:
+    """The request without the systems it names, so "post it in Teams" is a destination, not a
+    team of people."""
+    for system in other_systems(request):
+        request = re.sub(rf"(?<!\w){re.escape(system)}(?!\w)", " ", request, flags=re.IGNORECASE)
+    return request
 
 
 def _without(request: str, word: str) -> str:
@@ -552,20 +582,52 @@ def _watchlist(read: TaskRead, task: _Task | None, request: str) -> PlannerAnswe
     elsewhere = [
         s for s in other_systems(request) if software is None or s.casefold() != software.casefold()
     ]
+    system_row = None
     if elsewhere:
         system = elsewhere[0]
         note = why_not("where", system) or CANT_YET
-        cant = CantRow(kind="where", text=system, note=note, needs="new_system", system=system)
-        instead = None if software is None else WatchlistAnswer(word=word, software=software)
-        return CantAnswer(cant=[cant], alternative=instead)
+        system_row = CantRow(
+            kind="where", text=system, note=note, needs="new_system", system=system
+        )
+        if software is None:
+            return CantAnswer(cant=[system_row])
     if software is None:
         return WhichSoftwareAnswer(word=word)
     watching = WatchlistAnswer(word=word, software=software, also=_also(read, task, request))
     if watching.also is not None:
         return watching
-    return _with_the_change_cant(
-        watching, request if verb is None else _without(request, f"{verb} {software}")
-    )
+    changes = request if verb is None else _without(request, f"{verb} {software}")
+    rows = _watch_rows(read, task, request, system_row, changes)
+    return CantAnswer(cant=rows, alternative=watching) if rows else watching
+
+
+def _watch_rows(
+    read: TaskRead, task: _Task | None, request: str, system: CantRow | None, changes: str
+) -> list[CantRow]:
+    """A can't row for each part of a watch request the watchlist doesn't do, in this order:
+    another destination, a time of its own, a change, then any other words nothing read. A
+    stretch of the request gets one row, the first that reaches it."""
+    found: list[tuple[tuple[int, int], CantRow]] = []
+    if system is not None:
+        at = _stretch(request, system.text)
+        found.append((next((c for c in clauses_of(request) if c[0] <= at[0] < c[1]), at), system))
+    stretch = schedule_stretch(read.schedule, request)
+    watched = _watch_clauses(read, request)
+    if stretch is not None and any(a <= stretch[0] and stretch[1] <= b for a, b in watched):
+        text = plain(request[stretch[0] : stretch[1]], TEXT_LIMIT)
+        found.append(
+            (stretch, CantRow(kind="schedule", text=text, note=OWN_TIME, needs="new_tool"))
+        )
+    for clause in _change_clauses(changes):
+        found.append((_stretch(request, clause), _change_row(clause)))
+    # Words beside the watch stand beside no part of a task, so a part is never named for them.
+    for span in task.spans if task is not None else []:
+        found.append(((span.start, span.end), _left_out(replace(span, kind=None), False)))
+    kept: list[tuple[tuple[int, int], CantRow]] = []
+    for at, row in found:
+        if not any(at[0] < b and a < at[1] for (a, b), _ in kept):
+            kept.append((at, row))
+    return [row for _, row in kept]
 
 
 # Words that are write verbs for a ticket but read plainly beside software: "which version do we
@@ -590,15 +652,18 @@ def _change_clauses(text: str) -> list[str]:
     return [clause for clause in found if clause]
 
 
-def _with_the_change_cant(answer: WatchlistAnswer, request: str) -> PlannerAnswer:
-    """The watchlist answer shows the newest versions, so a request that also asks for a change
-    gets a can't row for each such part, in its own words. No part of a request is dropped."""
-    rows: list[CantRow] = []
-    for clause in _change_clauses(request):
-        text = plain(clause, TEXT_LIMIT)
-        note = why_not("do", text) or CANT_YET
-        rows.append(CantRow(kind="do", text=text, note=plain(note, NOTE_LIMIT), needs="new_tool"))
-    return CantAnswer(cant=rows, alternative=answer) if rows else answer
+def _stretch(request: str, words: str) -> tuple[int, int]:
+    """Where the request writes `words`, or an empty stretch at its end, which reaches nothing."""
+    at = request.casefold().find(words.casefold())
+    return (len(request), len(request)) if at < 0 else (at, at + len(words))
+
+
+def _change_row(clause: str) -> CantRow:
+    """The watchlist answer shows the newest versions, so a change asked beside it is a can't
+    row in its own words."""
+    text = plain(clause, TEXT_LIMIT)
+    note = why_not("do", text) or CANT_YET
+    return CantRow(kind="do", text=text, note=plain(note, NOTE_LIMIT), needs="new_tool")
 
 
 def _about(read: TaskRead, request: str) -> PlannerAnswer:
@@ -764,7 +829,7 @@ def _state_answer_about_the_watchlist(
 def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     refused = word_rule_refusal(request.task)
     if refused is not None:
-        return Answered(answer=refused)
+        return Answered(answer=refused, parts=parts_of(None, request.task, refused))
     read = ask_model(
         chat_for,
         ANSWER_SYSTEM,
@@ -774,16 +839,21 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     )
     if isinstance(read, ModelProblem):
         return read
+    answer = _answer(read, request, chat_for)
+    return Answered(answer=answer, parts=parts_of(read, request.task, answer))
+
+
+def _answer(read: TaskRead, request: AnswerRequest, chat_for: ChatFor) -> PlannerAnswer:
     decided = decide(read, request)
     if not isinstance(decided, AskTheQuestionLane):
-        return Answered(answer=decided)
+        return decided
     asked = answer_question(request, chat_for)
     # The lane may improve an answer, never make it worse: when its call fails, the first stands.
     if asked is None or isinstance(asked, ModelProblem):
-        return Answered(answer=decided.otherwise)
+        return decided.otherwise
     if decided.first_on_reject and is_fallback(asked):
-        return Answered(answer=decided.otherwise)
-    return Answered(answer=asked)
+        return decided.otherwise
+    return asked
 
 
 APPROVAL_WORDS: Final = re.compile(

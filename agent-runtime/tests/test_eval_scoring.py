@@ -626,6 +626,7 @@ def test_a_mixed_request_is_scored_on_the_watchlist_and_the_rest():
     assert failed(ANSWER.score(answer_case("mixed-watch-and-list"), alone)) == {
         "carries_the_rest",
         "reads_the_parts",
+        "right_kind",
     }
 
 
