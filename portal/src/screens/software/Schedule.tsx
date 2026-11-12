@@ -17,7 +17,7 @@ export function ScheduleNote({ schedule, operator, paused }: { schedule: Schedul
   return (
     <>
       <p>
-        <b>{scheduleWords(schedule)}</b> {nextCheckWords(schedule, paused)}
+        <b>{scheduleWords(schedule)}</b> One approval covers all the upgrade tickets. {nextCheckWords(schedule, paused)}
       </p>
       {schedule.held ? null : <p className="muted">{scheduleOwnerWords(schedule)}</p>}
     </>

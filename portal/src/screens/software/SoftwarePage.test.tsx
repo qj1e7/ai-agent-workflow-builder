@@ -1,5 +1,6 @@
 import capabilitiesFixture from '@contracts/fixtures/planner/capabilities.json'
 import failedRun from '@contracts/fixtures/views/failure.final.json'
+import rejectedRun from '@contracts/fixtures/views/rejected.final.json'
 import empty from '@contracts/fixtures/watchlist/empty.json'
 import paused from '@contracts/fixtures/watchlist/paused.json'
 import moved from '@contracts/fixtures/watchlist/moved.json'
@@ -542,6 +543,57 @@ describe('the schedule note', () => {
   })
 })
 
+describe('the count line under the title', () => {
+  const page = (view: unknown, me: Me) => text(render(view, me, [], <AppRoutes context={{ name: me.display, now: new Date(), operator: me.roles.includes('operator') }} />))
+
+  it('says what has a newer version, what can’t be checked and what isn’t checked yet, right under the title, to Operators and Approvers', () => {
+    for (const me of [ALICE, BOB]) expect(page(statuses, me)).toContain('Software watchlist 3 have a newer version · 1 can’t be checked · 1 not checked yet')
+  })
+
+  it('keeps the plain lead while the list is empty', () => {
+    expect(page(empty, ALICE)).toContain('Software watchlist Everything your team runs, in one list.')
+  })
+})
+
+describe('what checks each row', () => {
+  it('says each row is checked on GitHub, from the registry', () => {
+    const words = text(render(statuses, ALICE))
+    for (const row of (statuses as WatchlistView).software) expect(words).toContain(`${row.name} Checked on GitHub · ${row.source.ref}`)
+  })
+
+  it('never says a row is checked while the registry says GitHub is not working', () => {
+    const down = capabilitiesFixture.capabilities.map((c) => (c.id === 'github.releases' ? { ...c, state: 'down' as const } : c))
+    const words = text(render(statuses, ALICE, [], <SoftwareRoute />, { ...capabilitiesFixture, capabilities: down }))
+    expect(words).toContain('LangGraph On GitHub · langchain-ai/langgraph')
+    expect(words).not.toContain('Checked on GitHub')
+  })
+})
+
+describe('after an Approver declines the latest check', () => {
+  const view = { ...statuses, last_check: { run_id: rejectedRun.run_id, state: 'rejected', started_at: '2026-11-16T01:00:12Z' } }
+  const record = /Declined by Bob\. Nothing was written\. Reason: Wrong version\. The tickets will be proposed again at the next check, [^.]+\./
+  const rowsOf = (html: string) => html.split('<li id="software-').slice(1)
+
+  it('gives the record, with the next check, on each row with a new version and on no other row', () => {
+    for (const me of [ALICE, BOB]) {
+      const noted = rowsOf(render(view, me, [rejectedRun])).filter((row) => record.test(text(row)))
+      expect(noted.map((row) => /<b>([^<]+)<\/b>/.exec(row)?.[1])).toEqual(['LangGraph'])
+    }
+  })
+
+  it('gives the same record in the history, on the line of the check that found the new version', () => {
+    const langgraph = (statuses as WatchlistView).software.find((row) => row.status === 'behind')!
+    const declined = 'Declined by Bob. Nothing was written. Reason: Wrong version. The tickets will be proposed again at the next check, Mon 16 Nov, 9:00.'
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <SoftwareHistory row={langgraph} nameOf={(id) => id} declined={declined} id="h" />
+      </MemoryRouter>,
+    )
+    expect(text(html)).toContain(`Mon 16 Nov, 9:00 Found 1.2.16. ${declined}`)
+    expect(html).not.toContain('href="/jira/')
+  })
+})
+
 describe('ticket keys on the Software watchlist', () => {
   // The project is a setting, so none of these keys is MOCK.
   const rows = (statuses as WatchlistView).software
@@ -566,7 +618,7 @@ describe('ticket keys on the Software watchlist', () => {
     const row = view.software.find((item) => item.id === open.id)!
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <SoftwareHistory row={row as WatchedSoftwareView} nameOf={(id) => id} id="h" />
+        <SoftwareHistory row={row as WatchedSoftwareView} nameOf={(id) => id} declined={null} id="h" />
       </MemoryRouter>,
     )
     expect(html).toMatch(link('OPS-143'))
@@ -603,7 +655,7 @@ describe('a repository GitHub moved', () => {
   it('says on the row that GitHub renamed the project, still reaches it, and offers the new address to an Operator', () => {
     const html = render(moved, ALICE)
     const row = text(rowOf(html, 'FastAPI'))
-    expect(row).toContain('GitHub · tiangolo/fastapi')
+    expect(row).toContain('Checked on GitHub · tiangolo/fastapi')
     expect(row).toContain('GitHub now calls this project fastapi/fastapi. We saved tiangolo/fastapi, and checks still reach it through GitHub’s redirect.')
     expect(buttons(rowOf(html, 'FastAPI'))).toContain('Use the new address for FastAPI')
     expect(row).toContain('New version')

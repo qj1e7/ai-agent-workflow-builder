@@ -5,7 +5,7 @@ import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
 import { useApproval, useMe, usePutAddressBack, useRemoveSoftware, useRestoreSoftware, useRun, useStartRun, useUseNewAddress, useWatchlist } from '../../api/queries'
-import type { LastCheckView, WatchedSoftwareView, WatchlistView } from '../../api/types'
+import type { CapabilityView, LastCheckView, WatchedSoftwareView, WatchlistView } from '../../api/types'
 import { Button, ButtonLink } from '../../ui/Button'
 import { IconExternal } from '../../ui/icons'
 import { ShieldMark } from '../settings/marks'
@@ -37,6 +37,7 @@ import { SoftwareHistory } from './SoftwareHistory'
 import {
   addressAttentionOf,
   cantCheckWords,
+  checkedOnWords,
   decisionsOf,
   decisionTitle,
   DECISION_NOTE,
@@ -81,7 +82,8 @@ interface RowProps {
   readonly confirming: boolean
   readonly switching: boolean
   readonly nameOf: (id: string) => string
-  /** The latest check's declined record and what happens next, when an Approver declined it. Each row with a new version gives it. */
+  readonly capabilities: readonly CapabilityView[] | undefined
+  /** The latest check's declined record and what happens next, when an Approver declined it and this row has a new version. */
   readonly declined: string | null
   readonly onToggle: () => void
   readonly onRemove: () => void
@@ -90,7 +92,7 @@ interface RowProps {
   readonly onCancelAddress: () => void
 }
 
-function Row({ row, operator, scheduled, paused, open, removing, confirming, switching, nameOf, declined, onToggle, onRemove, onAskAddress, onConfirmAddress, onCancelAddress }: RowProps) {
+function Row({ row, operator, scheduled, paused, open, removing, confirming, switching, nameOf, capabilities, declined, onToggle, onRemove, onAskAddress, onConfirmAddress, onCancelAddress }: RowProps) {
   const historyId = `history-${row.id}`
   const newest = newestOf(row)
   const ours = oursOf(row)
@@ -99,7 +101,7 @@ function Row({ row, operator, scheduled, paused, open, removing, confirming, swi
       <div className={styles['who']}>
         <b>{row.name}</b>
         <span className={styles['src']}>
-          GitHub ·{' '}
+          {checkedOnWords(row.source.kind, capabilities)} ·{' '}
           <a href={row.source.url} target="_blank" rel="noopener noreferrer">
             {row.source.ref}
             <IconExternal size={12} />
@@ -128,7 +130,7 @@ function Row({ row, operator, scheduled, paused, open, removing, confirming, swi
           {statusWords(row)}
         </span>
         {row.status === 'cant_check' && !row.not_found ? <span className={styles['src']}>{cantCheckWords(row.problem, { scheduled, paused })}</span> : null}
-        {declined && row.status === 'behind' ? <span className={styles['src']}>{declined}</span> : null}
+        {declined ? <span className={styles['src']}>{declined}</span> : null}
         <NotFoundNote row={row} operator={operator} scheduled={scheduled} paused={paused} />
         <MovedNote row={row} operator={operator} confirming={confirming} busy={switching} onAsk={onAskAddress} onConfirm={onConfirmAddress} onCancel={onCancelAddress} />
         {row.status === 'ticket_open' && row.open_ticket ? (
@@ -148,7 +150,7 @@ function Row({ row, operator, scheduled, paused, open, removing, confirming, swi
           </Button>
         ) : null}
       </div>
-      {open ? <SoftwareHistory row={row} nameOf={nameOf} id={historyId} /> : null}
+      {open ? <SoftwareHistory row={row} nameOf={nameOf} declined={declined} id={historyId} /> : null}
     </li>
   )
 }
@@ -163,6 +165,8 @@ interface RowsProps {
   readonly confirming: string | null
   readonly switching: string | null
   readonly nameOf: (id: string) => string
+  readonly capabilities: readonly CapabilityView[] | undefined
+  /** The latest check's declined record, which only the rows with a new version give. */
   readonly declined: string | null
   readonly onToggle: (id: string) => void
   readonly onRemove: (row: WatchedSoftwareView) => void
@@ -187,7 +191,8 @@ function Rows({ rows, ...rest }: RowsProps) {
           confirming={rest.confirming === row.id}
           switching={rest.switching === row.id}
           nameOf={rest.nameOf}
-          declined={rest.declined}
+          capabilities={rest.capabilities}
+          declined={row.status === 'behind' ? rest.declined : null}
           onToggle={() => rest.onToggle(row.id)}
           onRemove={() => rest.onRemove(row)}
           onAskAddress={() => rest.onAskAddress(row)}
@@ -308,7 +313,8 @@ function Notice({ box, feedback, scheduled, paused, onUndo, onDismiss }: NoticeP
 }
 
 function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; operator: boolean; answeredAt: number }) {
-  const sources = sourcesNote(useCapabilities().data?.capabilities)
+  const capabilities = useCapabilities().data?.capabilities
+  const sources = sourcesNote(capabilities)
   const [query, setQuery] = useState('')
   const [opened, setOpened] = useState<string | null>(null)
   const [feedback, dispatch] = useReducer(changeFeedback, NO_FEEDBACK)
@@ -352,6 +358,7 @@ function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; op
 
   const rowProps = {
     operator,
+    capabilities,
     declined,
     scheduled,
     paused,
