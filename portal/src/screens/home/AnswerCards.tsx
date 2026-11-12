@@ -71,7 +71,8 @@ export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }
   const rows = cantLines(reply.cant.filter((row) => row.needs !== null))
   const card = alternative?.answer === 'setup_card' ? <SetupCard start={startOf(withCrosses(alternative, reply, crossesInstead), typed)} /> : null
   const watch = alternative?.answer === 'watchlist' ? <WatchlistAnswer reply={withCrosses(alternative, reply, isClash)} typed={typed} /> : null
-  if (rows.length === 0 && alternative !== null) return card ?? watch
+  // With no can’t of its own, the card would be empty: the clauses it didn’t follow are drawn above it.
+  if (rows.length === 0) return card ?? watch
   return (
     <>
       <Card title="What I can’t do yet">

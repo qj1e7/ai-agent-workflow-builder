@@ -155,6 +155,15 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
   })
 })
 
+describe('a can’t answer with nothing it can’t do', () => {
+  it('draws no can’t card, since the clauses it didn’t follow are drawn above', () => {
+    const notFollowed: PartView = { text: 'only the major releases', mark: 'cant', reason: 'not_followed', note: null, choices: [] }
+    const bare: CantReply = { answer: 'cant', cant: [{ kind: 'look_for', text: 'only the major releases', note: 'I didn’t follow this part.', needs: null, system: null }], alternative: null, parts: [notFollowed] }
+    expect(draw(bare)).toBe('')
+    expect(text(draw(bare, { leftovers: true }))).toBe('Can’t do: “only the major releases” I didn’t follow this part.')
+  })
+})
+
 describe('the clauses an answer didn’t read', () => {
   it('are drawn above a state answer, to ask on their own', () => {
     expect(text(draw(checkLeftover as PlannerReply, { leftovers: true }))).toBe('Can’t do: “every Friday sum up the closed tickets” Ask this on its own, and I’ll answer it.')
