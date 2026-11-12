@@ -435,6 +435,47 @@ def test_migration_0010_keeps_each_schedule_change_beside_its_version_and_a_down
         builder.rollback()
 
 
+def test_migration_0011_keeps_what_a_workflow_left_out_and_a_row_from_before_has_nothing(
+    postgres: PostgresUrls,
+):
+    def column(conn: psycopg.Connection) -> bool:
+        return (
+            conn.execute(
+                "SELECT 1 FROM information_schema.columns WHERE table_schema = 'builder'"
+                " AND table_name = 'use_cases' AND column_name = 'left_out'"
+            ).fetchone()
+            is not None
+        )
+
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        downgrade("builder", postgres.owner, "0010")
+        assert not column(conn)
+        conn.execute(
+            "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version)"
+            " VALUES ('uc_before', 'alice', now(), 1)"
+        )
+        upgrade("builder", postgres.owner)
+        assert column(conn)
+    with psycopg.connect(postgres.contexts.builder) as builder:
+        builder.execute(
+            "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version,"
+            " left_out) VALUES ('uc_after', 'alice', now(), 1, %s)",
+            (["colour them by team"],),
+        )
+        assert builder.execute(
+            "SELECT use_case_id, left_out FROM builder.use_cases"
+            " WHERE use_case_id IN ('uc_before', 'uc_after') ORDER BY use_case_id"
+        ).fetchall() == [("uc_after", ["colour them by team"]), ("uc_before", [])]
+        builder.commit()
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        downgrade("builder", postgres.owner, "0010")
+        assert not column(conn)
+        assert conn.execute(
+            "SELECT count(*) FROM builder.use_cases WHERE use_case_id IN ('uc_before', 'uc_after')"
+        ).fetchone() == (2,)
+        upgrade("builder", postgres.owner)
+
+
 def test_migration_0006_adds_the_people_tables_and_folds_the_model_history_into_them(
     postgres: PostgresUrls,
 ):
