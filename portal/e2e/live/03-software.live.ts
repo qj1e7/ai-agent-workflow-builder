@@ -1,7 +1,7 @@
 import { assertClean, watchPage } from '../support/test'
 import { expectAccessible } from '../support/axe'
 import { expect, test } from './support/test'
-import { devContext, OUT, shot } from './support/ui'
+import { devContext, expectReadOnly, OUT, shot } from './support/ui'
 import path from 'node:path'
 
 // A moved or missing repository stays in Operators' Needs you on Home and Workflows, so these tests leave no software behind for the lanes after them.
@@ -189,6 +189,8 @@ test('an Approver who is not an Operator sees the list but no way to add', async
   await expect(page.getByText('LangGraph').first()).toBeVisible()
   await expect(page.getByLabel('Software name')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Find it' })).toHaveCount(0)
+  for (const name of ['Check now', 'Remove', 'Change schedule', 'Set a schedule', 'Turn off schedule']) await expect(page.getByRole('button', { name })).toHaveCount(0)
+  await expectReadOnly(page, 'the watchlist')
   await context.close()
 })
 

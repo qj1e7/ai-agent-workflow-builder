@@ -4,7 +4,7 @@ import path from 'node:path'
 import { expectAccessible } from '../support/axe'
 import { MOCK_MODEL, MOCK_MODEL_URL, SettingsApi } from './support/settings'
 import { expect, test } from './support/test'
-import { devContext, OUT, shot } from './support/ui'
+import { devContext, expectReadOnly, OUT, shot } from './support/ui'
 
 const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 const rowOf = (page: Page, useCaseId: string) => page.locator(`li[data-workflow-id="${useCaseId}"]`)
@@ -136,7 +136,12 @@ test('bob sees who may approve and the recent runs, with no Run now, Pause or De
   await expect(page.getByRole('main')).toContainText('Any Approver except the people who start or own it')
   await expect(page.getByRole('region', { name: 'Recent activity' }).getByRole('link').first()).toBeVisible()
   for (const name of ['Run now', 'Pause', 'Resume', 'Delete', 'More actions', 'Change schedule', 'Set schedule']) await expect(page.getByRole('button', { name })).toHaveCount(0)
+  await expectReadOnly(page, 'this workflow')
   await shot(page, info, 'p9-04-approver')
+  await page.goto('/workflows')
+  await expect(rowOf(page, workflow.id)).toBeVisible()
+  await expectReadOnly(page, 'workflows')
+  for (const name of ['Run now', 'Pause', 'Resume', 'Delete', 'Discard']) await expect(page.getByRole('main').getByRole('button', { name })).toHaveCount(0)
   await context.close()
 })
 

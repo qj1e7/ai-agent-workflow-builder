@@ -1,4 +1,4 @@
-import type { Browser, BrowserContext, Page, TestInfo } from '@playwright/test'
+import { expect, type Browser, type BrowserContext, type Page, type TestInfo } from '@playwright/test'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 
@@ -39,4 +39,14 @@ export async function shot(page: Page, info: TestInfo, name: string): Promise<vo
   await page.waitForTimeout(900)
   await page.screenshot({ path: path.join(dir, `${name}.png`), caret: 'hide' })
   info.annotations.push({ type: 'shot', description: name })
+}
+
+/** A page someone who isn't an Operator reads: one note naming the Operators, and no control there that is dead. */
+export async function expectReadOnly(page: Page, what: string): Promise<void> {
+  const main = page.getByRole('main')
+  const note = main.getByText(/^Only Operators change /)
+  await expect(note).toHaveCount(1)
+  await expect(note).toHaveText(new RegExp(`^Only Operators change ${what}\\. Ask .*Alice.*Carol.*\\.$`))
+  await expect(note).not.toContainText('Bob')
+  await expect(main.locator(':is(button, input, select, textarea):disabled, [aria-disabled="true"]')).toHaveCount(0)
 }
