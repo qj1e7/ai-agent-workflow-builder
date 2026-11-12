@@ -252,7 +252,7 @@ test('alice’s schedule changes publish versions the page lists, Undo publishes
   const page = await context.newPage()
   await page.goto(`/workflows/${workflow.id}`)
   await expect(heading(page)).toHaveText(workflow.name)
-  await expect(page.getByRole('heading', { name: 'Versions' }), 'one version shows no list').toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Versions', exact: true }), 'one version shows no list').toHaveCount(0)
 
   await page.getByRole('button', { name: 'Set schedule' }).click()
   await page.getByLabel('Day').selectOption('weekdays')
@@ -270,7 +270,7 @@ test('alice’s schedule changes publish versions the page lists, Undo publishes
 
   await page.getByRole('button', { name: 'Undo version 3' }).click()
   await expect(page.getByRole('status').filter({ hasText: 'Undone' })).toHaveText(`Undone, as version 4. ${workflow.name} runs every weekday at 8:00 now.`)
-  await expect(page.getByRole('heading', { name: 'Versions' }), 'focus moves to the list, not onto the next Undo').toBeFocused()
+  await expect(page.getByRole('heading', { name: 'Versions', exact: true }), 'focus moves to the list, not onto the next Undo').toBeFocused()
   await expect(newest).toContainText('Alice undid version 3, so it runs every weekday at 8:00 again. This is the version running now.')
   await expect(page.getByRole('main')).toContainText('Every weekday at 8:00')
 
@@ -292,7 +292,7 @@ test('alice’s schedule changes publish versions the page lists, Undo publishes
   for (const [who, reader] of [['alice', page], ['bob', bob]] as const) {
     for (const width of [1920, 1280, 900, 390]) {
       await reader.setViewportSize({ width, height: 900 })
-      await reader.getByRole('heading', { name: 'Versions' }).scrollIntoViewIfNeeded()
+      await reader.getByRole('heading', { name: 'Versions', exact: true }).scrollIntoViewIfNeeded()
       const widths = await reader.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth])
       expect(widths[0], `${who}’s page does not scroll sideways at ${width} px`).toBeLessThanOrEqual(widths[1] ?? 0)
       await shot(reader, info, `r6-versions-${who}-${width}`)
