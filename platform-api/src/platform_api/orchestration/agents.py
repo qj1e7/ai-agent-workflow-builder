@@ -599,6 +599,7 @@ type PartReason = Literal[
     "ask_on_its_own",
     "one_day",
     "one_time",
+    "one_frequency",
     "own_time",
     "skip_approval",
     "with_a_yes",

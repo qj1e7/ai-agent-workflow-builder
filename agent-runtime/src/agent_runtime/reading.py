@@ -39,7 +39,7 @@ type DayHow = Literal["within", "before", "since_last_run"]
 type Detail = Literal["owner", "type", "status", "created", "updated", "done"]
 type Says = Literal["list", "count", "summary"]
 type SkipWhose = Literal["nobody", "only_me", "an_approver_or_anyone_else"]
-type ClashReason = Literal["one_day", "one_time"]
+type ClashReason = Literal["one_day", "one_time", "one_frequency"]
 type AsksAbout = Literal["none", "my_workflows", "why_stopped", "needs_me", "abilities"]
 
 FILLED_IN: Final = "I filled this in. Your words didn't say it, so please check it."
@@ -50,6 +50,7 @@ NO_TIME_BUT: Final = 'Your words said "{}" but not a time. Please choose one.'
 NO_DAYS: Final = 'Your words said "{}" but not how many days. Please say how many.'
 ONE_DAY: Final = "Your words said {}. I can only set one day, so please choose one."
 ONE_TIME: Final = "Your words said {}. I can only set one time, so please choose one."
+ONE_FREQUENCY: Final = "Your words said {}. Please choose how often it runs."
 SAID_LIMIT: Final = 200
 NO_ASSIGNEE: Final = "with no assignee"
 
@@ -258,6 +259,25 @@ TIME_OF_DAY: Final = re.compile(
     r"\b(?:noon|midday|midnight|morning|afternoon|evening|night)\b",
     re.IGNORECASE,
 )
+FREQUENCY: Final = re.compile(
+    r"\b(?:every|each)\s+(day|weekday|week|fortnight|month|quarter|year|hour)\b|"
+    r"\b(daily|weekdays|weekly|fortnightly|biweekly|monthly|quarterly|yearly|annually|hourly)\b",
+    re.IGNORECASE,
+)
+"""How often a schedule runs, as "every week" or "weekly"."""
+OFTEN: Final = {
+    "daily": "day",
+    "weekdays": "weekday",
+    "weekly": "week",
+    "fortnightly": "fortnight",
+    "biweekly": "fortnight",
+    "monthly": "month",
+    "quarterly": "quarter",
+    "yearly": "year",
+    "annually": "year",
+    "hourly": "hour",
+}
+"""Each frequency word as the one it means, so "daily" and "every day" are the same."""
 DAY_NAMES: Final = r"monday|tuesday|wednesday|thursday|friday|saturday|sunday"
 DAY: Final = re.compile(rf"\b({DAY_NAMES})s?\b", re.IGNORECASE)
 DAY_RANGE: Final = re.compile(
@@ -1081,9 +1101,17 @@ def _clashes(text: str, said: tuple[int, int] | None) -> list[Clash]:
     stretch = DAY_RANGE.sub(lambda m: " " * len(m.group(0)), text[run[0] : run[1]])
     days = list(DAY.finditer(stretch))
     times = list(CLOCK.finditer(stretch))
-    return _clash("one_day", days, lambda m: m.group(1).casefold(), run[0]) + _clash(
-        "one_time", times, _clock, run[0]
+    often = list(FREQUENCY.finditer(stretch))
+    return (
+        _clash("one_frequency", often, _often, run[0])
+        + _clash("one_day", days, lambda m: m.group(1).casefold(), run[0])
+        + _clash("one_time", times, _clock, run[0])
     )
+
+
+def _often(match: re.Match[str]) -> str:
+    word = (match.group(1) or match.group(2)).casefold()
+    return OFTEN.get(word, word)
 
 
 def _kept(schedule: str | None) -> list[str]:
@@ -1123,7 +1151,7 @@ def said_schedule(words: str) -> tuple[str | None, str | None]:
 
 def _clash_note(clashes: list[Clash]) -> str:
     return " ".join(
-        (ONE_DAY if c.reason == "one_day" else ONE_TIME).format(
+        {"one_day": ONE_DAY, "one_time": ONE_TIME, "one_frequency": ONE_FREQUENCY}[c.reason].format(
             " and ".join(f'"{choice}"' for choice in c.choices)
         )
         for c in clashes

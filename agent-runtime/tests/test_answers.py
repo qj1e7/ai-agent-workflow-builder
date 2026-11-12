@@ -1915,6 +1915,14 @@ def clash_read(schedule: str) -> TaskRead:
         ("Every Monday or Friday at 9am", "Every Monday at 9am", "one_day", ["Monday", "Friday"]),
         ("Mondays and Fridays at 9am", "Mondays at 9am", "one_day", ["Monday", "Friday"]),
         (
+            "Every day and every week at 9am",
+            "Every day at 9am",
+            "one_frequency",
+            ["Every day", "every week"],
+        ),
+        ("Daily or weekly at 9am", "Daily at 9am", "one_frequency", ["Daily", "weekly"]),
+        ("Weekly or monthly at 9am", "Weekly at 9am", "one_frequency", ["Weekly", "monthly"]),
+        (
             "Every Monday at 9am and every Friday at 9am",
             "Every Monday at 9am",
             "one_day",
@@ -2037,6 +2045,9 @@ def test_an_exclusion_no_filter_holds_is_crossed_whole_never_ticked_the_other_wa
     reading, task = listing(task, said=task.split("list ", 1)[1], **fields)
     assert never.casefold() not in shown_rows(reading, task).casefold()
     assert (phrase, "not_followed") in crossed(reading, task)
+    answer = answer_of(reading, task)
+    assert isinstance(answer, CantAnswer)
+    assert [c.needs for c in answer.cant if c.text == phrase] == [None]
 
 
 @pytest.mark.parametrize(

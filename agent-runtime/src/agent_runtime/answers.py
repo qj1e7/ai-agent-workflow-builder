@@ -387,8 +387,10 @@ def _left_out(span: Span, searching: bool) -> CantRow:
         case "schedule":
             note = LEFT_OUT_SCHEDULE
     need = need_of(kind, text)
-    if note == LEFT_OUT_PART and need.system is None:
-        # Words the Planner didn't follow name nothing to build.
+    unreached = need.needs == "new_system" and need.system is not None
+    if note == LEFT_OUT_PART and not unreached:
+        # Words the Planner didn't follow name nothing to build, unless they name a system it
+        # doesn't reach, as Entra.
         return CantRow(kind=kind, text=text, note=note)
     if need == Need("new_system", None) and span.kind == "look_for" and searching:
         need = Need("new_tool", "Jira")

@@ -1034,6 +1034,7 @@ type PartReason = Literal[
     "ask_on_its_own",
     "one_day",
     "one_time",
+    "one_frequency",
     "own_time",
     "skip_approval",
     "with_a_yes",
@@ -1058,7 +1059,8 @@ class RequestPart(WireModel):
         default=None,
         description="Why, for a cant: not_followed (no rule read it), cant_do (see note), "
         "ask_on_its_own (a question asked beside a request, or a request beside a question), "
-        "one_day or one_time (a schedule with two, see choices), own_time (a time on a watch "
+        "one_day, one_time or one_frequency (a schedule with two, see choices), own_time (a "
+        "time on a watch "
         "request), skip_approval (it asks to skip a yes), with_a_yes (it waits until the "
         "request is set up with a yes), needs_the_rest (it can't run without a part that "
         "can't be done), how_many_days (a question: the words name a span of days but no "
