@@ -24,18 +24,22 @@ from agent_runtime.contract import (
     AnswerRequest,
     CantAnswer,
     CheckWorkflowsAnswer,
+    EditAnswer,
     ModelProblem,
     NeedsMeAnswer,
     PartAnswer,
     PlannerAnswer,
+    PlannerFacts,
     QuestionAnswer,
     RefusedAnswer,
     RequestPart,
+    ScheduleChange,
     SetupCardAnswer,
     WatchlistAnswer,
     WatchlistScheduleFact,
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
+    WorkflowFact,
     answer_result_adapter,
 )
 from agent_runtime.contracts import FOLLOW_UP_TASK, answer_request
@@ -1824,38 +1828,6 @@ def test_a_state_question_keeps_a_cross_on_the_task_words_it_did_not_answer():
     ]
 
 
-@pytest.mark.parametrize(
-    ("asks", "task", "question", "rest"),
-    [
-        (
-            "needs_me",
-            "What needs my attention? Pause the morning check",
-            "What needs my attention",
-            "Pause the morning check",
-        ),
-        (
-            "needs_me",
-            "What is waiting for my yes, and pause the morning new-ticket check",
-            "What is waiting for my yes",
-            "pause the morning new-ticket check",
-        ),
-        (
-            "my_workflows",
-            "Pause the morning check, then tell me how my workflows are doing",
-            "tell me how my workflows are doing",
-            "Pause the morning check",
-        ),
-    ],
-)
-def test_a_question_with_a_change_beside_it_is_answered_and_the_change_crossed(
-    asks: str, task: str, question: str, rest: str
-):
-    fields = read(asks_about=asks)
-    assert sorted(parts(fields, task)) == sorted(
-        [(question, "will_do", None), (rest, "cant", "ask_on_its_own")]
-    )
-
-
 def test_a_question_inside_a_task_is_asked_on_its_own():
     task = "What can you do and close all done tickets"
     fields = read(asks_about="abilities")
@@ -2070,11 +2042,6 @@ def test_polite_words_get_no_cross(task: str):
     [
         (
             "my_workflows",
-            "Pause the morning check",
-            [("Pause the morning check", "cant", "ask_on_its_own")],
-        ),
-        (
-            "my_workflows",
             "How are my workflows doing, and what's the weather",
             [
                 ("How are my workflows doing", "will_do", None),
@@ -2178,6 +2145,233 @@ MONDAY_9 = WatchlistScheduleFact(day="monday", at="09:00")
 )
 def test_a_watch_time_is_crossed_only_when_it_differs_from_the_watchlists(task: str, crosses: bool):
     fields = read(belongs_on_watchlist=True, watchlist_word="watch", software="React")
-    answer = answer_of(fields, task, MONDAY_9)
+    answer = answer_of(fields, task, PlannerFacts(watchlist_schedule=MONDAY_9))
     assert isinstance(answer, CantAnswer) is crosses
     assert isinstance(answer_of(fields, task), CantAnswer)
+
+
+WORKFLOWS = PlannerFacts(
+    workflows=[
+        WorkflowFact(name=name, state="on", last_run=None, last_run_at=None)
+        for name in (
+            "Morning new-ticket check",
+            "Weekly closed-ticket summary",
+            "Keep our software up to date",
+        )
+    ]
+)
+
+
+def edited(fields: TaskRead, task: str, facts: PlannerFacts | None = WORKFLOWS) -> EditAnswer:
+    answer = answer_of(fields, task, facts)
+    assert isinstance(answer, EditAnswer), answer
+    return answer
+
+
+def marks(fields: TaskRead, task: str) -> list[tuple[str, str, str | None]]:
+    answer = answer_of(fields, task, WORKFLOWS)
+    return [(p.text, p.mark, p.reason) for p in parts_of(fields, task, answer)]
+
+
+@pytest.mark.parametrize(
+    ("task", "words", "change"),
+    [
+        (
+            "Make the morning new-ticket check run on Mondays only",
+            "morning new-ticket check",
+            ScheduleChange(day="monday"),
+        ),
+        (
+            "Run the weekly summary every day instead of every Friday",
+            "weekly summary",
+            ScheduleChange(day="every_day"),
+        ),
+        ("make the weekly summary run at 10am", "weekly summary", ScheduleChange(at="10:00")),
+        ("make the morning check run at 9", "morning check", ScheduleChange(hour=9)),
+        ("make the morning check run weekly", "morning check", ScheduleChange(weekly=True)),
+        (
+            "Make the software watchlist check run every day at 7am",
+            "software watchlist check",
+            ScheduleChange(day="every_day", at="07:00"),
+        ),
+    ],
+)
+def test_a_change_of_when_it_runs_is_an_edit_with_the_new_schedule(
+    task: str, words: str, change: ScheduleChange
+):
+    answer = edited(read(asks_about="change", workflow_words=f"the {words}"), task)
+    assert (answer.workflow_words, answer.schedule, answer.cant) == (words, change, None)
+    assert [mark for _, mark, _ in marks(read(asks_about="change"), task)] == ["will_do"]
+
+
+def test_the_react_check_names_the_software_so_the_watchlist_can_be_told():
+    task = "Change the React check to Tuesdays"
+    answer = edited(read(asks_about="change", workflow_words="React check", software="React"), task)
+    assert (answer.workflow_words, answer.software) == ("React check", "React")
+    assert answer.schedule == ScheduleChange(day="tuesday")
+
+
+@pytest.mark.parametrize(
+    "task",
+    ["Rename the morning check", "rename the morning check to Daily tickets", "Pause it"],
+)
+def test_any_other_change_is_only_schedule_and_proposes_nothing(task: str):
+    answer = edited(read(asks_about="change", workflow_words="the morning check"), task)
+    assert (answer.cant, answer.schedule, answer.holds_save) == ("only_schedule", None, False)
+    assert marks(read(asks_about="change"), task) == [(task, "cant", "only_schedule")]
+
+
+@pytest.mark.parametrize(
+    ("task", "often"),
+    [
+        ("Make the morning check monthly", "monthly"),
+        ("Run the morning check every other day", "every other day"),
+        ("Make the weekly summary run every month", "every month"),
+    ],
+)
+def test_a_frequency_the_schedule_cant_hold_is_how_often(task: str, often: str):
+    answer = edited(read(asks_about="change"), task)
+    assert (answer.cant, answer.schedule) == ("how_often", None)
+    assert (often, "cant", "how_often") in marks(read(asks_about="change"), task)
+
+
+def test_two_days_hold_save_with_a_cross_never_the_first_day():
+    task = "make the morning new-ticket check run on Mondays and Thursdays"
+    answer = edited(read(asks_about="change"), task)
+    assert (answer.holds_save, answer.schedule, answer.cant) == (True, None, None)
+    [part] = parts_of(read(asks_about="change"), task, answer)
+    assert (part.text, part.mark, part.reason, part.choices) == (
+        "Mondays and Thursdays",
+        "cant",
+        "one_day",
+        ["Monday", "Thursday"],
+    )
+
+
+@pytest.mark.parametrize(
+    ("asks", "task", "question", "change", "reason"),
+    [
+        (
+            "needs_me",
+            "What needs my attention? Pause the morning check",
+            "What needs my attention",
+            "Pause the morning check",
+            "only_schedule",
+        ),
+        (
+            "my_workflows",
+            "Is the weekly summary running? Make it daily.",
+            "Is the weekly summary running",
+            "Make it daily",
+            None,
+        ),
+        (
+            "why_stopped",
+            "what went wrong with the weekly summary? pause it",
+            "what went wrong with the weekly summary",
+            "pause it",
+            "only_schedule",
+        ),
+        (
+            "my_workflows",
+            "how are my workflows? turn the weekly one off",
+            "how are my workflows",
+            "turn the weekly one off",
+            "only_schedule",
+        ),
+        (
+            "my_workflows",
+            "how are my workflows doing? make the morning check run at 10am",
+            "how are my workflows doing",
+            "make the morning check run at 10am",
+            None,
+        ),
+        (
+            "needs_me",
+            "What is waiting for my yes, and pause the morning new-ticket check",
+            "What is waiting for my yes",
+            "pause the morning new-ticket check",
+            "only_schedule",
+        ),
+    ],
+)
+def test_a_question_with_a_change_word_is_a_command_never_a_status_answer(
+    asks: str, task: str, question: str, change: str, reason: str | None
+):
+    fields = read(asks_about=asks)
+    edited(fields, task)
+    assert marks(fields, task) == [
+        (question, "cant", "ask_on_its_own"),
+        (change, "will_do" if reason is None else "cant", reason),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("asks", "task", "words"),
+    [
+        ("my_workflows", "When does the weekly summary run next?", "weekly summary"),
+        ("my_workflows", "how is the weekly closed-ticket summary doing?", None),
+        ("my_workflows", "is the morning check running?", None),
+        ("my_workflows", "when does the morning check run?", None),
+        ("why_stopped", "why did the morning check stop?", None),
+        ("my_workflows", "How is keep our software up to date doing?", None),
+        ("needs_me", "Anything waiting for me since Monday?", None),
+    ],
+)
+def test_a_name_or_a_question_word_is_never_a_command(asks: str, task: str, words: str | None):
+    for facts in (WORKFLOWS, None):
+        answer = answer_of(read(asks_about=asks, workflow_words=words), task, facts)
+        assert not isinstance(answer, EditAnswer), (task, facts)
+
+
+def test_a_change_after_the_question_is_an_edit_and_the_question_is_kept():
+    task = "Pause the morning check, then tell me how my workflows are doing"
+    fields = read(asks_about="my_workflows")
+    assert edited(fields, task).cant == "only_schedule"
+    assert marks(fields, task) == [
+        ("Pause the morning check", "cant", "only_schedule"),
+        ("tell me how my workflows are doing", "cant", "ask_on_its_own"),
+    ]
+    assert marks(fields, "Pause the morning check") == [
+        ("Pause the morning check", "cant", "only_schedule")
+    ]
+
+
+def test_a_change_order_beside_a_workflow_she_has_is_an_edit_whatever_the_reading():
+    task = "Make the morning new-ticket check run on Mondays only"
+    answer = edited(read(name="Morning check", schedule="on Mondays"), task)
+    assert answer.schedule == ScheduleChange(day="monday")
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "Every Friday, sum up the tickets we closed this week",
+        "Set up a weekly summary of the closed tickets",
+        "Every Monday, list the bugs the morning new-ticket check found",
+    ],
+)
+def test_a_new_task_is_never_an_edit(task: str):
+    fields = read(name="Weekly summary", schedule="Every Friday")
+    assert not isinstance(answer_of(fields, task, WORKFLOWS), EditAnswer)
+
+
+@pytest.mark.parametrize(
+    "task", ["Watch React every Tuesday", "is LangGraph up to date? if not, watch it every day"]
+)
+def test_a_watch_request_is_never_an_edit(task: str):
+    fields = read(asks_about="change", belongs_on_watchlist=True, software="React")
+    assert not isinstance(answer_of(fields, task, WORKFLOWS), EditAnswer)
+
+
+def test_a_part_of_an_edit_it_didnt_follow_is_crossed():
+    task = "make the weekly summary run at 10am and colour it blue"
+    assert marks(read(asks_about="change"), task) == [
+        ("make the weekly summary run at 10am", "will_do", None),
+        ("colour it blue", "cant", "not_followed"),
+    ]
+
+
+def test_make_it_daily_with_no_workflow_named_leaves_the_workflow_to_pick():
+    answer = edited(read(asks_about="change"), "make it daily", None)
+    assert (answer.workflow_words, answer.schedule) == (None, ScheduleChange(day="every_day"))

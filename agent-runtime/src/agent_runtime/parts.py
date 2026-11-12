@@ -16,6 +16,7 @@ from agent_runtime.contract import (
     CantAnswer,
     CantRow,
     CheckWorkflowsAnswer,
+    EditAnswer,
     NeedsMeAnswer,
     PartAnswer,
     PartMark,
@@ -29,6 +30,7 @@ from agent_runtime.contract import (
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
+from agent_runtime.edits import QUESTION_START, STATE_WORDS, edit_marks
 from agent_runtime.planner import NOTE_LIMIT, TEXT_LIMIT, plain, visible_words
 from agent_runtime.reading import (
     FILLER,
@@ -54,20 +56,6 @@ REASON_OF_NOTE: Final[dict[str, PartReason]] = {
 """The can't rows whose note is a reason the Portal words itself. Any other note is the
 registry's words for a part the platform can't do."""
 
-QUESTION_START: Final = re.compile(
-    r"^(?:which|what|what's|how|is|are|do|does|did|when|why|who|whose|has|have|any|anything)\b",
-    re.IGNORECASE,
-)
-STATE_WORDS: Final = re.compile(
-    r"\b(?:workflows?|running|runs?\s+next|next\s+run|stopped|stop|failed|fail|broke|broken|"
-    r"wrong|paused|status|doing|going|waiting|attention|approv\w*|decided|decisions?|"
-    r"declined?|behind|up\s+to\s+date|versions?|software|watchlist|watching|watched|latest|"
-    r"newest|releases?|needs?\s+(?:me|my)|for\s+me|on\s+me)\b",
-    re.IGNORECASE,
-)
-"""Words that ask about the person's workflows, approvals or software. Only a clause with one
-of them, or with the workflow or the software the answer names, is the one a state answer
-answers."""
 COMMAND: Final = re.compile(
     r"^(?:please\s+)?(?:pause|resume|stop|delete|remove|rename|disable|enable|cancel|restart|"
     r"retry|turn|make|change|move|set|run|start|edit|update|add|open|close|create|raise|watch|"
@@ -110,6 +98,11 @@ def parts_of(read: TaskRead | None, request: str, answer: PlannerAnswer) -> list
     if isinstance(answer, AbilitiesAnswer):
         about = [c for c in clauses if ABOUT_THE_PLANNER.search(text[c[0] : c[1]])]
         return _answered(text, clauses, about)
+    if isinstance(answer, EditAnswer):
+        return [
+            _part(text, trim(text, m.start, m.end), m.mark, m.reason, choices=m.choices)
+            for m in edit_marks(read, text, answer, clauses)
+        ]
     crosses = _crosses(read, text, answer)
     found: list[RequestPart] = []
     for clause in clauses:

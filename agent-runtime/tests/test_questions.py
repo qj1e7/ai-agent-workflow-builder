@@ -12,6 +12,7 @@ from agent_runtime.contract import (
     AbilitiesAnswer,
     Answered,
     AnswerRequest,
+    EditAnswer,
     NeedsYouFact,
     PlannerFacts,
     PreviousTurn,
@@ -23,6 +24,7 @@ from agent_runtime.contract import (
     WorkflowFact,
 )
 from agent_runtime.contracts import answer_request
+from agent_runtime.parts import parts_of
 from agent_runtime.questions import COULD_NOT_ANSWER, QUESTION_SYSTEM, QuestionReply
 from tests.fakes import ScriptedChat
 from tests.test_answers import follow_up
@@ -431,8 +433,10 @@ def test_the_fixed_fallback_is_about_no_software():
         "Can you stop watching Redis?",
         "Can you unwatch Redis?",
         "Can you stop tracking Redis?",
-        "Is the watchlist running?",
         "Did it open a ticket for Redis?",
+        "Is the watchlist running? Make it run daily",
+        "Which software is behind? And close the upgrade tickets",
+        "Can you run the watchlist now?",
     ],
 )
 @pytest.mark.parametrize("first", [watch_reading("Redis"), reading("abilities")])
@@ -441,7 +445,49 @@ def test_any_change_word_keeps_the_first_answer(task: str, first: TaskRead):
     assert not isinstance(out, AskTheQuestionLane)
 
 
-@pytest.mark.parametrize("task", ["what about Redis?", "How many software are we watching?"])
+@pytest.mark.parametrize(
+    "task",
+    [
+        "what about Redis?",
+        "How many software are we watching?",
+        "Is the watchlist running?",
+        "When does the watchlist run next?",
+        "Why did the watchlist check stop?",
+    ],
+)
 def test_plain_questions_still_reach_the_lane(task: str):
     out = decided(task, reading("abilities"))
     assert isinstance(out, AskTheQuestionLane)
+
+
+def test_a_question_beside_a_new_workflow_asked_for_reaches_the_lane():
+    """A new workflow changes nothing that exists, so the state answer comes back, with the task
+    crossed to ask on its own (plan 7.5, r4-state-with-task)."""
+    task = "Which software is behind, and set up a weekly summary"
+    first = reading(
+        "none",
+        belongs_on_watchlist=True,
+        watchlist_word="Which software is behind",
+        name="Weekly summary",
+        schedule="Weekly",
+    )
+    out = decided(task, first)
+    assert isinstance(out, AskTheQuestionLane) and out.first_on_reject
+    asked = QuestionAnswer(text="Redis is behind.", looked_at=["watchlist"])
+    assert [(p.text, p.mark, p.reason) for p in parts_of(first, task, asked)] == [
+        ("Which software is behind", "will_do", None),
+        ("set up a weekly summary", "cant", "ask_on_its_own"),
+    ]
+
+
+def test_an_edit_never_goes_to_the_lane():
+    out = decided(
+        "Is the watchlist running? Pause it", reading("change", workflow_words="watchlist")
+    )
+    assert isinstance(out, EditAnswer) and out.cant == "only_schedule"
+
+
+def test_a_question_crossed_as_not_followed_stays_a_cant_without_watched_software():
+    first = reading("none", belongs_on_watchlist=True, watchlist_word="Which software is behind")
+    task = "Which software is behind, and set up a weekly summary"
+    assert not isinstance(decided(task, first, PlannerFacts(watchlist=[])), AskTheQuestionLane)

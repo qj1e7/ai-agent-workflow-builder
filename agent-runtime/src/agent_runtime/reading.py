@@ -40,7 +40,7 @@ type Detail = Literal["owner", "type", "status", "created", "updated", "done"]
 type Says = Literal["list", "count", "summary"]
 type SkipWhose = Literal["nobody", "only_me", "an_approver_or_anyone_else"]
 type ClashReason = Literal["one_day", "one_time", "one_frequency"]
-type AsksAbout = Literal["none", "my_workflows", "why_stopped", "needs_me", "abilities"]
+type AsksAbout = Literal["none", "my_workflows", "why_stopped", "needs_me", "abilities", "change"]
 
 FILLED_IN: Final = "I filled this in. Your words didn't say it, so please check it."
 FILLED_IN_FROM: Final = 'I filled some of this in from your words "{}". Please check it.'
@@ -184,12 +184,13 @@ class TaskRead(BaseModel):
     asks_about: AsksAbout = Field(
         default="none",
         description="What the request is: a task or software to set up (none), a question "
-        "about the person's workflows, or what you can do.",
+        "about the person's workflows, what you can do, or a change to a workflow they already "
+        "have.",
     )
     workflow_words: str | None = Field(
         default=None,
-        description="For my_workflows and why_stopped: the words of the request that name one "
-        "workflow, copied exactly. Null when it asks about all of them.",
+        description="For my_workflows, why_stopped and change: the words of the request that "
+        "name one workflow, copied exactly. Null when it asks about all of them, or names none.",
     )
     belongs_on_watchlist: bool = Field(
         default=False,
@@ -1129,6 +1130,12 @@ def schedule_stretch(schedule: str | None, text: str) -> tuple[int, int] | None:
 def schedule_clashes(schedule: str | None, text: str) -> list[Clash]:
     """The days or times that clash in the request's schedule, in the request's own words."""
     return _clashes(text, _schedule_span(text, " ".join(_kept(schedule)).strip(" ,")))
+
+
+def clashes_in(words: str) -> list[Clash]:
+    """The days, times or frequencies that clash anywhere in the words, as an edit's new schedule
+    names them."""
+    return _clashes(words, (0, len(words)))
 
 
 def said_schedule(words: str) -> tuple[str | None, str | None]:

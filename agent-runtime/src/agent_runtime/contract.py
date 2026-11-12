@@ -2,7 +2,15 @@ from datetime import date, datetime
 from typing import Annotated, Any, Final, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    TypeAdapter,
+    model_validator,
+)
 
 
 class WireModel(BaseModel):
@@ -807,9 +815,12 @@ type WatchDay = Literal[
 ]
 
 
+CLOCK_PATTERN: Final = r"^(?:[01]\d|2[0-3]):[0-5]\d$"
+
+
 class WatchlistScheduleFact(WireModel):
     day: WatchDay
-    at: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$", description="24-hour time, as 09:00.")
+    at: str = Field(pattern=CLOCK_PATTERN, description="24-hour time, as 09:00.")
 
 
 class PlannerFacts(WireModel):
@@ -1011,6 +1022,78 @@ class QuestionAnswer(WireModel):
     )
 
 
+type EditCant = Literal["only_schedule", "how_often"]
+
+
+class ScheduleChange(WireModel):
+    """When a request asks a workflow it names to run, in the schedule's own terms. A part it
+    doesn't name is None, so the saved one stays."""
+
+    day: WatchDay | None = Field(default=None, description="The day it asks for, if it names one.")
+    weekly: bool = Field(
+        default=False,
+        description="True for once a week with no day named. The saved day stays when it is one "
+        "day of the week, and the person picks one when it isn't.",
+    )
+    at: str | None = Field(
+        default=None, pattern=CLOCK_PATTERN, description="The time it asks for, 24-hour, as 09:00."
+    )
+    hour: int | None = Field(
+        default=None,
+        ge=1,
+        le=12,
+        description='An hour it names with no am or pm, as "at 9", which could be morning or '
+        "evening, so the person picks one. Never guessed.",
+    )
+
+    @model_validator(mode="after")
+    def _one_of_each(self) -> ScheduleChange:
+        if self.day is not None and self.weekly:
+            raise ValueError("A day named is not weekly with no day")
+        if self.at is not None and self.hour is not None:
+            raise ValueError("A time named is not an hour with no am or pm")
+        return self
+
+
+class EditAnswer(WireModel):
+    kind: Literal["edit"] = "edit"
+    workflow_words: str | None = Field(
+        default=None,
+        max_length=80,
+        description="The words of the request that name the workflow to change, as it wrote "
+        "them. The platform matches them to one of the person's workflows by whole words. None "
+        'when the request names none, as "make it daily".',
+    )
+    software: str | None = Field(
+        default=None,
+        max_length=80,
+        description='The software those words name, as "the React check" names React, so the '
+        "platform can tell the Software watchlist's check of it. None when they name none.",
+    )
+    schedule: ScheduleChange | None = Field(
+        default=None,
+        description="When it should run. None when the request asks for no change to when it "
+        "runs, or for one the schedule can't hold.",
+    )
+    cant: EditCant | None = Field(
+        default=None,
+        description="only_schedule: it asks for a change other than when the workflow runs, "
+        "such as pausing or renaming it, which the chat can't make yet. how_often: it asks for "
+        "a frequency the schedule can't hold, such as monthly. None when the change can be made.",
+    )
+    holds_save: bool = Field(
+        default=False,
+        description="True when the new schedule names two days, two times or two frequencies. "
+        "Nothing can be saved until the person asks again without the part with a cross.",
+    )
+
+    @model_validator(mode="after")
+    def _a_cant_proposes_nothing(self) -> EditAnswer:
+        if self.cant is not None and (self.schedule is not None or self.holds_save):
+            raise ValueError("An edit the chat can't make proposes no schedule")
+        return self
+
+
 type PlannerAnswer = Annotated[
     SetupCardAnswer
     | PartAnswer
@@ -1022,7 +1105,8 @@ type PlannerAnswer = Annotated[
     | WhyStoppedAnswer
     | NeedsMeAnswer
     | AbilitiesAnswer
-    | QuestionAnswer,
+    | QuestionAnswer
+    | EditAnswer,
     Field(discriminator="kind"),
 ]
 
@@ -1040,6 +1124,8 @@ type PartReason = Literal[
     "with_a_yes",
     "needs_the_rest",
     "how_many_days",
+    "only_schedule",
+    "how_often",
 ]
 
 
@@ -1064,7 +1150,9 @@ class RequestPart(WireModel):
         "request), skip_approval (it asks to skip a yes), with_a_yes (it waits until the "
         "request is set up with a yes), needs_the_rest (it can't run without a part that "
         "can't be done), how_many_days (a question: the words name a span of days but no "
-        "number). None for will_do.",
+        "number), only_schedule (a change to a workflow other than when it runs, which the "
+        "chat can't make yet), how_often (a frequency the schedule can't hold, such as "
+        "monthly). None for will_do.",
     )
     note: str | None = Field(
         default=None, max_length=300, description="For cant_do, why, in the registry's words."
