@@ -83,6 +83,14 @@ async function cardDraft(backend: Backend, label: string): Promise<string> {
   return id
 }
 
+const draftIds = async (backend: Backend): Promise<string[]> => (await backend.get<{ drafts: { draft_id: string }[] }>('alice', '/api/v1/drafts')).drafts.map((draft) => draft.draft_id)
+
+/** Deletes the drafts a test's cards saved as newer answers replaced them, so alice's draft limit never stops a later test. */
+async function forgetNewDrafts(backend: Backend, before: readonly string[]): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 1_500))
+  for (const id of await draftIds(backend)) if (!before.includes(id)) await backend.send('DELETE', 'alice', `/api/v1/drafts/${id}`)
+}
+
 /** Every draft saved from this page, with the person it was saved as. */
 function draftSaves(page: Page): string[] {
   const saves: string[] = []
@@ -415,7 +423,8 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
-  test('ANS-clash-time, ANS-one-question and ANS-no-time: one question at a time, in order, and a time is never picked for her', async ({ browser }, info) => {
+  test('ANS-clash-time, ANS-one-question and ANS-no-time: one question at a time, in order, and a time is never picked for her', async ({ browser, backend }, info) => {
+    const before = await draftIds(backend)
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     const watch = watchPage(page)
@@ -445,6 +454,7 @@ test.describe('with the AI model on', () => {
     await expect(left(page).last()).toContainText('when it runs')
     assertClean(watch)
     await context.close()
+    await forgetNewDrafts(backend, before)
   })
 
   test('ANS-whole-clause and the leftovers of other answers: what an answer didn’t read is marked above its card', async ({ browser }, info) => {
@@ -679,6 +689,7 @@ test.describe('with the AI model on', () => {
     const size = phone ? '390' : '1440'
     test(`Home and its answers pass WCAG 2.2 AA, do not scroll sideways and keep 44 px targets at ${size} px`, async ({ browser, backend }, info) => {
       await backend.waitingRun('alice')
+      const before = await draftIds(backend)
       const context = await devContext(browser, 'alice', { phone })
       const page = await context.newPage()
       await page.goto('/')
@@ -703,6 +714,7 @@ test.describe('with the AI model on', () => {
       await noSideways(page)
       await shot(page, info, `n10-08-thread-${size}`)
       await context.close()
+      await forgetNewDrafts(backend, before)
     })
   }
 

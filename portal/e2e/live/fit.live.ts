@@ -365,6 +365,8 @@ const CARD_SHOTS: ReadonlySet<number> = new Set([1920, 1280, 900, 390])
 for (const width of WIDTHS) {
   test(`the parts list fits with ticks, a long cross, a question, a clash and the part I can do, and so does Left out, as an Operator at ${String(width)} px`, async ({ browser, backend }) => {
     test.slow()
+    const drafts = async () => (await backend.get<{ drafts: { draft_id: string }[] }>('alice', '/api/v1/drafts')).drafts.map((draft) => draft.draft_id)
+    const before = await drafts()
     const context = await devContext(browser, 'alice', { reducedMotion: true })
     const page = await context.newPage()
     await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
@@ -413,6 +415,9 @@ for (const width of WIDTHS) {
       await check('a workflow page with Left out', 'left-out', page.getByRole('main'))
     } finally {
       await context.close()
+      // The cards a newer answer replaced were kept as drafts, which alice's draft limit counts.
+      await new Promise((resolve) => setTimeout(resolve, 1_500))
+      for (const id of await drafts()) if (!before.includes(id)) await backend.send('DELETE', 'alice', `/api/v1/drafts/${id}`)
     }
     expect(found, found.join('\n')).toEqual([])
   })
