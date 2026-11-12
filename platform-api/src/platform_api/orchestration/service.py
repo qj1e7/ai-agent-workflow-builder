@@ -940,7 +940,7 @@ class Orchestrator:
 
     async def runs_for(self, viewer: Principal) -> PersonRuns:
         async with self._db.transaction("orchestration") as uow:
-            details = await self._details(uow, await self._store.open_runs(uow))
+            details = await self._details(uow, await self._store.open_runs(uow, viewer.user_id))
         return runs_of(details, viewer)
 
     async def _detail(self, uow: UnitOfWork, record: RunRecord) -> RunDetail:

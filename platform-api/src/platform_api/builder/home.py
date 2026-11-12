@@ -174,7 +174,7 @@ class HomeOut(WireModel):
     )
     waiting_on_others_total: int
     declined: list[DeclinedItem] = Field(
-        description="This person's own test runs that an Approver declined, while each is the "
+        description="An Operator's own test runs that an Approver declined, while each is the "
         "newest run of its workflow, the newest decline first. They are part of Needs you, and "
         "one leaves when the workflow runs again. At most 10."
     )

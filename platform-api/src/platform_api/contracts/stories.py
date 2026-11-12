@@ -537,6 +537,7 @@ class RunBaseFields(TypedDict):
     use_case_version: int
     started_by: UserId
     trigger: Trigger
+    test: bool
     started_at: datetime
     updated_at: datetime
     last_seq: int
@@ -551,6 +552,7 @@ def _base(story: Story, tl: Timeline, seq: int) -> RunBaseFields:
         use_case_version=1,
         started_by=ALICE,
         trigger="person",
+        test=False,
         started_at=story.t0,
         updated_at=tl.events[seq - 1].ts,
         last_seq=seq,

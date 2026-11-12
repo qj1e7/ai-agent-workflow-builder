@@ -114,6 +114,7 @@ class _RunBase(WireModel):
     use_case_version: int
     started_by: UserId
     trigger: Trigger
+    test: bool = Field(description="True when a person started it with Do a test run.")
     started_at: datetime
     updated_at: datetime
     last_seq: int
@@ -370,6 +371,7 @@ class RunBaseFields(TypedDict):
     use_case_version: int
     started_by: UserId
     trigger: Trigger
+    test: bool
     started_at: datetime
     updated_at: datetime
     last_seq: int
@@ -385,6 +387,7 @@ def run_view(detail: RunDetail, viewer: Principal) -> RunView:
         use_case_version=record.spec.use_case_version,
         started_by=record.started_by,
         trigger=record.spec.trigger,
+        test=record.spec.test,
         started_at=record.started_at,
         updated_at=record.updated_at,
         last_seq=detail.last_seq,

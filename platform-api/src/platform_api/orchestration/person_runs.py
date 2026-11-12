@@ -84,7 +84,7 @@ class PersonRuns:
     waiting: tuple[Waiting, ...]
     stopped: tuple[Stopped, ...]
     declined: tuple[DeclinedTest, ...]
-    """The person's own test runs that an Approver declined, while each is the newest run of its
+    """An Operator's own test runs that an Approver declined, while each is the newest run of its
     workflow. A new run of the workflow takes it off the list."""
 
 
@@ -174,11 +174,15 @@ def _stopped(record: RunRecord, state: Failed, viewer: Principal) -> Stopped | N
 
 def _declined_test(run: OpenRun, state: Rejected, viewer: Principal) -> DeclinedTest | None:
     record = run.record
-    if not record.spec.test or record.started_by != viewer.user_id:
+    own_test = record.spec.test and record.started_by == viewer.user_id
+    if not own_test or Role.OPERATOR not in viewer.roles:
         return None
     decline = next(
-        d for d in run.decisions if d.step_index == state.step and d.verdict is Verdict.DECLINE
+        (d for d in run.decisions if d.step_index == state.step and d.verdict is Verdict.DECLINE),
+        None,
     )
+    if decline is None:
+        return None
     return DeclinedTest(_facts(record), decline.at, state.by, decline.reason)
 
 

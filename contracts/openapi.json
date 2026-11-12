@@ -109,6 +109,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -137,6 +142,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -2035,6 +2041,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -2067,6 +2078,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -4160,6 +4172,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -4188,6 +4205,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -4442,7 +4460,7 @@
             "type": "array"
           },
           "declined": {
-            "description": "This person's own test runs that an Approver declined, while each is the newest run of its workflow, the newest decline first. They are part of Needs you, and one leaves when the workflow runs again. At most 10.",
+            "description": "An Operator's own test runs that an Approver declined, while each is the newest run of its workflow, the newest decline first. They are part of Needs you, and one leaves when the workflow runs again. At most 10.",
             "items": {
               "$ref": "#/components/schemas/DeclinedItem"
             },
@@ -5639,6 +5657,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -5667,6 +5690,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -6286,6 +6310,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -6314,6 +6343,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -6514,6 +6544,11 @@
             "title": "Step",
             "type": "integer"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -6542,6 +6577,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -8042,6 +8078,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -8077,6 +8118,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -9768,6 +9810,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -9796,6 +9843,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",

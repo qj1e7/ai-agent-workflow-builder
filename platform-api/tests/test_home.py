@@ -24,11 +24,23 @@ from platform_api.orchestration import (
 from platform_api.orchestration.connections import Reading
 from platform_api.orchestration.people import Person
 from platform_api.orchestration.people_store import People, PersonRow
-from platform_api.orchestration.runs import AwaitingApproval, Failed, Leg, Pending, StepName
+from platform_api.orchestration.person_runs import runs_of
+from platform_api.orchestration.runs import (
+    AwaitingApproval,
+    Failed,
+    Leg,
+    Pending,
+    Rejected,
+    StepName,
+)
+from platform_api.orchestration.service import RunDetail
+from platform_api.orchestration.store import RunRecord
 from platform_api.shared import (
+    ApprovalId,
     ExternalIdentity,
     N8nExecutionId,
     Principal,
+    ProposalId,
     Role,
     RunId,
     SeedPerson,
@@ -37,7 +49,7 @@ from platform_api.shared import (
 )
 from tests.conftest import PostgresUrls
 from tests.declared import declared_status
-from tests.support import ALICE, LOCAL_ENV, SPEC
+from tests.support import ALICE, LOCAL_ENV, NOW, SPEC
 from tests.test_builder_http import NothingLearned
 from tests.test_builder_lifecycle import ModelConnected
 from tests.test_card_runs import output, ticket
@@ -431,6 +443,19 @@ async def test_only_a_test_run_declined_counts_and_it_leaves_when_the_workflow_r
     assert await lab.run_ids("alice", "declined") == []
 
 
+async def test_a_declined_test_run_leaves_needs_you_when_its_starter_is_no_longer_an_operator(
+    lab: Lab,
+):
+    use_case_id = await workflow(lab, owner="dave")
+    run_id = await declined_run(lab, use_case_id, "dave", test=True, reason="Wrong version")
+    assert await lab.run_ids("dave", "declined") == [run_id]
+
+    assert isinstance(await lab.people.set_operator(ALICE_NOW, "dave", False), Person)
+
+    home = await lab.home("dave")
+    assert (home["declined"], home["declined_total"]) == ([], 0)
+
+
 async def test_a_confirmation_shows_to_approvers_who_may_decide_it_and_not_to_the_asker(lab: Lab):
     assert isinstance(await lab.people.ask_approver(ALICE_NOW, "carol"), PersonRow)
 
@@ -723,3 +748,11 @@ async def test_home_lists_the_moved_and_missing_software_for_an_operator_only(la
         ("FastAPI", "tiangolo/fastapi", "fastapi/fastapi", False),
         ("LangServe", "langchain-ai/langserve", None, True),
     ]
+
+
+def test_a_declined_test_run_with_no_recorded_decline_is_left_out_rather_than_failing_home():
+    rejected = Rejected(RunId("run_1"), ProposalId("prp_1"), ApprovalId("apr_1"), UserId("bob"), 0)
+    record = RunRecord(
+        RunId("run_1"), replace(SPEC, test=True), UserId("alice"), NOW, NOW, 1, rejected, (), None
+    )
+    assert runs_of([RunDetail(record, 0, None, None, ())], ALICE_NOW).declined == ()

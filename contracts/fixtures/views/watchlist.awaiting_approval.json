@@ -5,6 +5,7 @@
   "use_case_version": 6,
   "started_by": "alice",
   "trigger": "person",
+  "test": false,
   "started_at": "2026-11-20T02:14:00Z",
   "updated_at": "2026-11-20T02:14:11.400000Z",
   "last_seq": 26,

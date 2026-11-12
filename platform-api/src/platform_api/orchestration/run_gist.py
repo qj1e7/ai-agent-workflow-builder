@@ -61,7 +61,7 @@ def gist_of(detail: RunDetail, viewer: Principal | None) -> RunGist:
     )
     failed = state if isinstance(state, Failed) else None
     decisions = sorted(detail.decisions, key=lambda d: d.step_index)
-    declined = isinstance(state, Rejected)
+    reasons = (d.reason for d in decisions if d.reason)
     return RunGist(
         run_id=record.run_id,
         use_case_id=record.spec.use_case_id,
@@ -69,7 +69,7 @@ def gist_of(detail: RunDetail, viewer: Principal | None) -> RunGist:
         started_at=record.started_at,
         test=record.spec.test,
         declined_by=state.by if isinstance(state, Rejected) else None,
-        decline_reason=next((d.reason for d in decisions if declined and d.reason), None),
+        decline_reason=next(reasons, None) if isinstance(state, Rejected) else None,
         approved_by=tuple(d.by for d in decisions if d.verdict is Verdict.APPROVE),
         written=len(written),
         proposed=len(proposed),
