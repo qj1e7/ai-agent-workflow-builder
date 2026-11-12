@@ -52,6 +52,15 @@ OPEN_TO: dict[tuple[str, str], str] = {
         "Approvers decide on a request. The domain refuses anyone else and their own work, "
         "and keeps the access review's two Approvers in turn."
     ),
+    ("POST", "/api/v1/approvals/{approval_id}/questions"): (
+        "An Approver who may decide the open step asks the requester a question. The domain "
+        "refuses anyone the gate would refuse. The question is a message on the request: it "
+        "decides nothing and the request keeps waiting (ADR 0043)."
+    ),
+    ("POST", "/api/v1/approvals/{approval_id}/questions/{question_id}/answer"): (
+        "The requester answers a question on their own request. The domain refuses anyone "
+        "else, and any answer once the request is decided. An answer decides nothing (ADR 0043)."
+    ),
     ("POST", "/api/v1/confirmations/{confirmation_id}/decisions"): (
         "Approvers confirm a new Approver or a new AI model address. The domain refuses "
         "anyone else, the person who asked, and the person it is about."

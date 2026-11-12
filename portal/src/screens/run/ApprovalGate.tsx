@@ -5,7 +5,9 @@ import { Button } from '../../ui/Button'
 import { IconCheck, IconLock } from '../../ui/icons'
 import { TicketKeys } from '../jira/TicketKeys'
 import { APPROVE, happensWords, openStep, type Decision } from './decision'
-import { approvalTitle, approveLabel, bodyOf, ticketKeysIn, titleOf } from './words'
+import { AskBox, QuestionThread } from './QuestionThread'
+import { useFocusAfter, type Questions } from './questions'
+import { approvalTitle, approveLabel, bodyOf, ticketKeysIn, titleOf, type NameOf } from './words'
 import styles from './panels.module.css'
 
 export const EXACT_WORDS = 'This is exactly what will be written, and nothing else.'
@@ -47,9 +49,15 @@ interface ApprovalGateProps {
   readonly decision: Pick<Decision, 'pending' | 'error' | 'decide'>
   /** The quick reasons Decline offers, from declineReasons in decision.ts. */
   readonly reasons: readonly string[]
-  /** Who sees the reason with the record, by name. */
+  /** Who sees the reason with the record, and answers questions, by name. */
   readonly requester: string
+  readonly questions: Questions
+  readonly me: string | undefined
+  readonly nameOf: NameOf
 }
+
+/** Under Approve and Decline: the reasons Decline asks for, or the box Ask opens. Never both. */
+type Opened = { readonly kind: 'decline'; readonly picked: string | null } | { readonly kind: 'ask' }
 
 interface DeclineReasonsProps {
   readonly reasons: readonly string[]
@@ -99,18 +107,22 @@ export function DeclineReasons({ reasons, requester, picked, pending, busy, onPi
  * Exactly what will be written, from the approval route, so a slow stream never shows an old proposal. The summary around
  * it helps the reader. It is never the check: the platform checks the digest and the deciding person again at the write.
  */
-export function ApprovalGate({ approval, page, decision, reasons, requester }: ApprovalGateProps) {
+export function ApprovalGate({ approval, page, decision, reasons, requester, questions, me, nameOf }: ApprovalGateProps) {
   const open = openStep(approval) !== null
   const canDecide = approval.you_can_decide && open
   const busy = decision.pending !== null
-  const [declining, setDeclining] = useState<{ readonly picked: string | null } | null>(null)
+  const [opened, setOpened] = useState<Opened | null>(null)
   const declineButton = useRef<HTMLButtonElement>(null)
-  const backToButtons = useRef(false)
+  const askButton = useRef<HTMLButtonElement>(null)
+  const backTo = useRef<Opened['kind'] | null>(null)
+  const thread = useFocusAfter<HTMLHeadingElement>()
   useEffect(() => {
-    if (declining !== null || !backToButtons.current) return
-    backToButtons.current = false
-    declineButton.current?.focus()
-  }, [declining])
+    if (opened !== null || backTo.current === null) return
+    const to = backTo.current === 'ask' ? askButton : declineButton
+    backTo.current = null
+    to.current?.focus()
+  }, [opened])
+  const declining = opened?.kind === 'decline' ? opened : null
   const projects = approval.actions.flatMap((action) => (typeof action.target['project'] === 'string' ? [action.target['project']] : []))
   return (
     <div className={styles['panel']}>
@@ -151,6 +163,7 @@ export function ApprovalGate({ approval, page, decision, reasons, requester }: A
           )}
         </Row>
       ) : null}
+      <QuestionThread approval={approval} me={me} nameOf={nameOf} answer={questions.answer} heading={thread} />
       {canDecide && declining ? (
         <DeclineReasons
           reasons={reasons}
@@ -158,28 +171,60 @@ export function ApprovalGate({ approval, page, decision, reasons, requester }: A
           picked={declining.picked}
           pending={decision.pending === 'decline'}
           busy={busy}
-          onPick={(reason) => setDeclining({ picked: declining.picked === reason ? null : reason })}
+          onPick={(reason) => setOpened({ kind: 'decline', picked: declining.picked === reason ? null : reason })}
           onDecline={() => decision.decide({ verdict: 'decline', reason: declining.picked })}
           onBack={() => {
-            backToButtons.current = true
-            setDeclining(null)
+            backTo.current = 'decline'
+            setOpened(null)
           }}
         />
       ) : null}
-      {canDecide && !declining ? (
-        <div className={styles['buttons']}>
-          <Button
-            variant="approve"
-            icon={IconCheck}
-            loading={decision.pending === 'approve'}
-            disabled={busy && decision.pending !== 'approve'}
-            onClick={() => decision.decide(APPROVE)}
-          >
-            {approveLabel(approval.actions)}
-          </Button>
-          <Button ref={declineButton} variant="danger-outline" disabled={busy} onClick={() => setDeclining({ picked: null })}>
-            Decline
-          </Button>
+      {canDecide && opened?.kind === 'ask' ? (
+        <div className={styles['decide']}>
+          <AskBox
+            requester={requester}
+            ask={questions.ask}
+            onSent={() => {
+              thread.request()
+              setOpened(null)
+            }}
+            onCancel={() => {
+              backTo.current = 'ask'
+              setOpened(null)
+            }}
+          />
+        </div>
+      ) : null}
+      {canDecide && !opened ? (
+        <div className={styles['decide']}>
+          <div className={styles['buttons']}>
+            <Button
+              variant="approve"
+              icon={IconCheck}
+              loading={decision.pending === 'approve'}
+              disabled={busy && decision.pending !== 'approve'}
+              onClick={() => decision.decide(APPROVE)}
+            >
+              {approveLabel(approval.actions)}
+            </Button>
+            <Button ref={declineButton} variant="danger-outline" disabled={busy} onClick={() => setOpened({ kind: 'decline', picked: null })}>
+              Decline
+            </Button>
+          </div>
+          <p className={styles['askLine']}>
+            Not sure yet?{' '}
+            <button
+              ref={askButton}
+              type="button"
+              className={styles['linkButton']}
+              aria-disabled={busy || undefined}
+              onClick={() => {
+                if (!busy) setOpened({ kind: 'ask' })
+              }}
+            >
+              Ask {requester} a question
+            </button>
+          </p>
         </div>
       ) : null}
       {decision.error ? (

@@ -205,8 +205,12 @@ The line on an approval that names what the run could not check, such as softwar
 _Avoid_: Warnings, caveats
 
 **Question on a request**:
-A question an Approver asks the person who started a run, on its approval request, before deciding. The request stays waiting for a yes while they answer, and the questions stay on the record. A question decides nothing.
+A question an Approver who may decide asks the requester, on the approval request, before deciding. Only the requester answers, once, while the request waits for a yes. The questions stay on the record, read only, once it is decided. A question or an answer decides nothing.
 _Avoid_: Comment, chat
+
+**Requester**:
+The person a request is for: whoever started the run, or the workflow's owner when its schedule started it. They answer questions on the request and see the decline reason. They never decide their own request.
+_Avoid_: Asker, submitter
 
 **Decline reason**:
 The reason an Approver may give when declining, such as "Wrong version". It is optional, and it shows with the declined record.

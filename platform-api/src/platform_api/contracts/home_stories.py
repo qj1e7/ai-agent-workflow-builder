@@ -13,6 +13,7 @@ from platform_api.builder.home import (
     DeclinedItem,
     DraftItem,
     HomeOut,
+    QuestionItem,
     StoppedItem,
     WaitingItem,
 )
@@ -22,6 +23,7 @@ from platform_api.contracts.stories import (
     ALICE,
     BOB,
     FAILURE,
+    QUESTION,
     SUCCESS,
     TICKET_TITLE,
     USE_CASE_ID,
@@ -89,6 +91,8 @@ def home_for_bob() -> HomeOut:
         stopped_total=0,
         declined=[],
         declined_total=0,
+        questions_for_me=[],
+        questions_for_me_total=0,
         waiting_on_others=[],
         waiting_on_others_total=0,
         drafts=[],
@@ -141,6 +145,8 @@ def home_for_alice(failure: Timeline) -> HomeOut:
         stopped_total=1,
         declined=[],
         declined_total=0,
+        questions_for_me=[],
+        questions_for_me_total=0,
         waiting_on_others=[
             WaitingItem(
                 run_id=SUCCESS.run_id,
@@ -218,6 +224,8 @@ DAY_ONE = HomeOut(
     stopped_total=0,
     declined=[],
     declined_total=0,
+    questions_for_me=[],
+    questions_for_me_total=0,
     waiting_on_others=[],
     waiting_on_others_total=0,
     drafts=[],
@@ -252,10 +260,33 @@ DECLINED_TEST = DAY_ONE.model_copy(
 )
 
 
+# Bob asked Alice a question on the run she started, which still waits for his yes.
+QUESTION_FOR_ALICE = DAY_ONE.model_copy(
+    update={
+        "questions_for_me": [
+            QuestionItem(
+                question_id=QUESTION.question_id,
+                approval_id=SUCCESS.approval_id,
+                run_id=SUCCESS.run_id,
+                use_case_id=USE_CASE_ID,
+                use_case_name=USE_CASE_NAME,
+                asked_by=BOB,
+                asked_by_name="Bob",
+                asked_at=QUESTION.asked_at,
+                text=QUESTION.text,
+            )
+        ],
+        "questions_for_me_total": 1,
+        "workflows": 1,
+    }
+)
+
+
 def home_fixtures() -> dict[str, WireModel]:
     return {
         "builder/home.bob.json": home_for_bob(),
         "builder/home.alice.json": home_for_alice(failure_events()),
         "builder/home.alice.declined-test.json": DECLINED_TEST,
+        "builder/home.alice.question.json": QUESTION_FOR_ALICE,
         "builder/home.day-one.json": DAY_ONE,
     }

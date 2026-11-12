@@ -11,6 +11,7 @@ import type {
   CreateUseCase,
   DecisionIn,
   EventPage,
+  QuestionView,
   RefusalOut,
   SaveIn,
   ScheduleIn,
@@ -264,6 +265,60 @@ export function useDecide(approvalId: string) {
         }),
       ),
     onSettled: () => refreshAfterChange(queryClient),
+  })
+}
+
+/** The approval with this question in its place, so the thread shows it before the next read. */
+export function withQuestion(approval: ApprovalView, question: QuestionView): ApprovalView {
+  const known = approval.questions.some((kept) => kept.question_id === question.question_id)
+  const questions = known ? approval.questions.map((kept) => (kept.question_id === question.question_id ? question : kept)) : [...approval.questions, question]
+  return { ...approval, questions }
+}
+
+function useKeepQuestion(approvalId: string) {
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return {
+    onSuccess: (question: QuestionView) => queryClient.setQueryData<ApprovalView>(keys.approval(user, approvalId), (old) => (old ? withQuestion(old, question) : old)),
+    onSettled: () => Promise.all(['approval', 'home'].map((key) => queryClient.invalidateQueries({ queryKey: [key] }))),
+  }
+}
+
+export interface AskInput {
+  readonly text: string
+  readonly idempotencyKey: string
+}
+
+export function useAskQuestion(approvalId: string) {
+  const client = useApiClient()
+  return useMutation({
+    mutationFn: async ({ text, idempotencyKey }: AskInput) =>
+      unwrap(
+        await client.POST('/api/v1/approvals/{approval_id}/questions', {
+          params: { path: { approval_id: approvalId }, header: { 'Idempotency-Key': idempotencyKey } },
+          body: { text },
+        }),
+      ),
+    ...useKeepQuestion(approvalId),
+  })
+}
+
+export interface AnswerInput {
+  readonly questionId: string
+  readonly text: string
+}
+
+export function useAnswerQuestion(approvalId: string) {
+  const client = useApiClient()
+  return useMutation({
+    mutationFn: async ({ questionId, text }: AnswerInput) =>
+      unwrap(
+        await client.POST('/api/v1/approvals/{approval_id}/questions/{question_id}/answer', {
+          params: { path: { approval_id: approvalId, question_id: questionId } },
+          body: { text },
+        }),
+      ),
+    ...useKeepQuestion(approvalId),
   })
 }
 

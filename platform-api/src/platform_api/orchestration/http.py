@@ -18,6 +18,7 @@ from platform_api.orchestration.approvals import (
     why_not,
 )
 from platform_api.orchestration.connections import Connections
+from platform_api.orchestration.questions import AnswerRefusal, Question, QuestionId
 from platform_api.orchestration.runs import (
     Acting,
     AwaitingApproval,
@@ -31,12 +32,17 @@ from platform_api.orchestration.runs import (
 from platform_api.orchestration.runs import StepName as DomainStep
 from platform_api.orchestration.schedule_store import ScheduleTicker
 from platform_api.orchestration.service import (
+    AnswerRefused,
     Decided,
     DecisionRace,
     DecisionRefused,
+    KeyAskedAnother,
     NotFound,
     NotRetryable,
     Orchestrator,
+    QuestionAnswered,
+    QuestionAsked,
+    QuestionRefused,
     Retried,
     RunDetail,
     approval_link,
@@ -62,6 +68,7 @@ from platform_api.wire import (
     ErrorBody,
     FailureReason,
     FailureStage,
+    QuestionText,
     RunOutcome,
     StepName,
     StepOutcome,
@@ -194,6 +201,31 @@ class RetryAccepted(WireModel):
     state: Literal["pending", "acting"]
 
 
+class AnswerView(WireModel):
+    text: str
+    by: UserId
+    at: datetime
+
+
+class QuestionView(WireModel):
+    question_id: QuestionId
+    asked_by: UserId
+    asked_at: datetime
+    text: str
+    answer: AnswerView | None = Field(
+        description="The requester's answer. Null until they answer, and for good when the "
+        "request was decided first."
+    )
+
+
+class QuestionIn(WireIn):
+    text: QuestionText = Field(description="The question for the requester, 1 to 1000 characters.")
+
+
+class QuestionAnswerIn(WireIn):
+    text: QuestionText = Field(description="The requester's answer, 1 to 1000 characters.")
+
+
 class ApprovalView(WireModel):
     approval_id: ApprovalId
     run_id: RunId
@@ -216,6 +248,14 @@ class ApprovalView(WireModel):
         description="What the agents found, in their own words. It is empty once the request is "
         "decided, and it can be empty before. The digest covers only the actions, so a decision "
         "never covers this text."
+    )
+    requester: UserId = Field(
+        description="Who answers questions on this request: whoever started the run, or the "
+        "workflow's owner when its schedule started it."
+    )
+    questions: list[QuestionView] = Field(
+        description="What Approvers asked the requester, the first asked first. A question "
+        "decides nothing. Once the request is decided they stay here, read only."
     )
 
 
@@ -466,6 +506,27 @@ REFUSAL_MESSAGES: dict[Refusal, str] = {
 }
 
 
+ANSWER_REFUSALS: dict[AnswerRefusal, tuple[int, str]] = {
+    AnswerRefusal.NOT_THE_REQUESTER: (
+        403,
+        "Only the person who started this run, or owns its schedule, can answer.",
+    ),
+    AnswerRefusal.DECIDED: (409, "The request was decided before this answer."),
+    AnswerRefusal.ANSWERED: (409, "This question already has an answer."),
+}
+
+
+def question_view(question: Question) -> QuestionView:
+    answer = question.answer
+    return QuestionView(
+        question_id=question.id,
+        asked_by=question.asked_by,
+        asked_at=question.asked_at,
+        text=question.text,
+        answer=None if answer is None else AnswerView(text=answer.text, by=answer.by, at=answer.at),
+    )
+
+
 def _json(status_code: int, body: WireModel) -> JSONResponse:
     return JSONResponse(status_code=status_code, content=body.model_dump(mode="json"))
 
@@ -560,6 +621,8 @@ async def get_approval(
         trigger=run.spec.trigger,
         retried_by=[u for u in dict.fromkeys(run.retried_by) if u in detail.request.parties],
         found=detail.found,
+        requester=detail.requester,
+        questions=[question_view(q) for q in detail.questions],
     )
 
 
@@ -600,6 +663,95 @@ async def decide(
             raise HTTPException(status_code=409, detail="Another Approver decided this step first")
         case NotFound():
             raise HTTPException(status_code=404, detail="No such approval")
+
+
+@router.post(
+    "/api/v1/approvals/{approval_id}/questions",
+    status_code=201,
+    response_model=QuestionView,
+    tags=["orchestration"],
+    description=(
+        "Asks the requester a question on a request that waits for a yes. Only someone who may "
+        "decide the open step may ask. A question decides nothing: the request keeps waiting, "
+        "and its steps and decisions stay as they were. The same Idempotency-Key from the same "
+        "person, with the same words, answers the question it asked before."
+    ),
+    responses={
+        **SIGNED_IN,
+        200: {"model": QuestionView, "description": "This Idempotency-Key asked it before"},
+        403: {
+            "model": RefusalOut | ErrorBody,
+            "description": "This person cannot decide the open step, so cannot ask, or is not "
+            "on the People list",
+        },
+        404: error_response("No such approval"),
+        409: error_response("This Idempotency-Key already asked a question with other words"),
+    },
+)
+async def ask_question(
+    approval_id: ApprovalId,
+    body: QuestionIn,
+    principal: CurrentPrincipal,
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=200)],
+    orchestrator: CurrentOrchestrator,
+    response: Response,
+) -> QuestionView | JSONResponse:
+    match await orchestrator.ask(approval_id, principal, body.text, idempotency_key):
+        case QuestionAsked(question, repeated):
+            if repeated:
+                response.status_code = 200
+            return question_view(question)
+        case QuestionRefused(reason):
+            return _json(403, RefusalOut(refusal=reason, message=REFUSAL_MESSAGES[reason]))
+        case KeyAskedAnother():
+            raise HTTPException(
+                status_code=409, detail="This key already asked a question with other words."
+            )
+        case NotFound():
+            raise HTTPException(status_code=404, detail="No such approval")
+
+
+@router.post(
+    "/api/v1/approvals/{approval_id}/questions/{question_id}/answer",
+    status_code=201,
+    response_model=QuestionView,
+    tags=["orchestration"],
+    description=(
+        "Answers a question on a request. Only the requester may answer: whoever started the "
+        "run, or the workflow's owner when its schedule started it. Each question takes one "
+        "answer, while the request waits. An answer decides nothing: the request keeps waiting "
+        "for someone else's yes. The same answer sent again answers the question as it is."
+    ),
+    responses={
+        **SIGNED_IN,
+        200: {"model": QuestionView, "description": "The same answer was already kept"},
+        403: error_response(
+            "Only the requester can answer, or the person is not on the People list"
+        ),
+        404: error_response("No such question on this approval"),
+        409: error_response(
+            "The request was decided before the answer, or the question has another answer"
+        ),
+    },
+)
+async def answer_question(
+    approval_id: ApprovalId,
+    question_id: QuestionId,
+    body: QuestionAnswerIn,
+    principal: CurrentPrincipal,
+    orchestrator: CurrentOrchestrator,
+    response: Response,
+) -> QuestionView:
+    match await orchestrator.answer(approval_id, question_id, principal, body.text):
+        case QuestionAnswered(question, repeated):
+            if repeated:
+                response.status_code = 200
+            return question_view(question)
+        case AnswerRefused(reason):
+            status, words = ANSWER_REFUSALS[reason]
+            raise HTTPException(status_code=status, detail=words)
+        case NotFound():
+            raise HTTPException(status_code=404, detail="No such question on this approval")
 
 
 @router.post(

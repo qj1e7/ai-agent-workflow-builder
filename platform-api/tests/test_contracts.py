@@ -69,6 +69,7 @@ from platform_api.orchestration.decisions_http import DecisionsView
 from platform_api.orchestration.http import (
     ApprovalView,
     DecisionOut,
+    QuestionView,
     RefusalOut,
     StepResponseOut,
     TeamsStubMessages,
@@ -150,6 +151,10 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "views/watchlist.awaiting_approval.json": run_view_adapter,
     "approvals/apr_01JB8.alice.json": TypeAdapter(ApprovalView),
     "approvals/apr_01JB8.bob.json": TypeAdapter(ApprovalView),
+    "approvals/apr_01JB8.alice.asked.json": TypeAdapter(ApprovalView),
+    "approvals/apr_01JB8.bob.answered.json": TypeAdapter(ApprovalView),
+    "approvals/question.asked.json": TypeAdapter(QuestionView),
+    "approvals/question.answered.json": TypeAdapter(QuestionView),
     "approvals/decision.approved.json": TypeAdapter(DecisionOut),
     "approvals/refusal.own_work.json": TypeAdapter(RefusalOut),
     "approvals/decisions.bob.json": TypeAdapter(DecisionsView),
@@ -206,6 +211,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "builder/home.bob.json": TypeAdapter(HomeOut),
     "builder/home.alice.json": TypeAdapter(HomeOut),
     "builder/home.alice.declined-test.json": TypeAdapter(HomeOut),
+    "builder/home.alice.question.json": TypeAdapter(HomeOut),
     "builder/home.day-one.json": TypeAdapter(HomeOut),
     "internal/step-responses.json": TypeAdapter(list[StepResponseOut]),
     "internal/workflow-failure.json": TypeAdapter(WorkflowFailureIn),
@@ -401,6 +407,26 @@ def test_approval_views_follow_the_own_work_rule():
     assert (alice.you_can_decide, alice.why_not) == (False, Refusal.OWN_WORK)
     assert (bob.you_can_decide, bob.why_not) == (True, None)
     assert alice.digest == bob.digest
+
+
+def test_a_decider_asks_the_requester_answers_and_nothing_is_decided():
+    bob = ApprovalView.model_validate(load("approvals/apr_01JB8.bob.json"))
+    asked = ApprovalView.model_validate(load("approvals/apr_01JB8.alice.asked.json"))
+    answered = ApprovalView.model_validate(load("approvals/apr_01JB8.bob.answered.json"))
+    (question,) = asked.questions
+    (done,) = answered.questions
+    assert bob.you_can_decide and question.asked_by == "bob"
+    assert asked.requester == asked.started_by == "alice"
+    assert question.answer is None
+    assert done.answer is not None and done.answer.by == answered.requester
+    assert [step.status for step in answered.steps] == ["open"], "an answer decides nothing"
+    home = HomeOut.model_validate(load("builder/home.alice.question.json"))
+    (item,) = home.questions_for_me
+    assert (item.question_id, item.approval_id, item.text) == (
+        question.question_id,
+        asked.approval_id,
+        question.text,
+    )
 
 
 def test_home_fixtures_follow_the_own_work_rule():
