@@ -10,7 +10,7 @@ import { JIRA_PATH } from '../screens/jira/tickets'
 import { BoxIcon, ChatIcon, GridIcon, SettingsIcon, TicketIcon } from './icons'
 import { NotFoundPage } from './NotFoundPage'
 import { OperatorsNote } from './OperatorsNote'
-import { PageHead } from './PageHead'
+import { PageHead, PageNote } from './PageHead'
 import { greeting, today } from './today'
 
 export interface PageContext {
@@ -165,11 +165,13 @@ export function AppRoutes({ context }: { context: PageContext }) {
         path={PAGES.software.path}
         element={
           <>
-            <PageHead
-              heading={wordsOf(PAGES.software.heading, context)}
-              lead={wordsOf(PAGES.software.lead, context)}
-              note={context.operator ? null : <OperatorsNote what="the watchlist" />}
-            />
+            <PageHead heading={wordsOf(PAGES.software.heading, context)} lead={wordsOf(PAGES.software.lead, context)}>
+              {context.operator ? null : (
+                <PageNote>
+                  <OperatorsNote what="the watchlist" />
+                </PageNote>
+              )}
+            </PageHead>
             <Lazy>
               <SoftwareRoute />
             </Lazy>

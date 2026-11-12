@@ -428,6 +428,10 @@ describe('a request opened by its link', () => {
     expect(html).not.toContain('Send reply')
   })
 
+  it('shows an Approver no note about changing workflows on a request, which is not the list', () => {
+    expect(text(open({ me: BOB, request: { id: 'trq_01JD5RP', data: REQUEST } }))).not.toContain('Only Operators change')
+  })
+
   it('labels the asker’s own note as an addition, never as an answer', () => {
     const noted: TeamRequestView = { ...REQUEST, status: 'open', replies: [{ ...REQUEST.replies[0]!, replied_by: 'alice', replied_by_name: 'Alice', status: 'added' }] }
     const html = open({ me: BOB, request: { id: 'trq_01JD5RP', data: noted } })

@@ -629,10 +629,10 @@ describe('the status banner', () => {
     expect(bannerOf(facts({ useCase: AGENTS })).text).toBe('On. It has no schedule, so it runs when an Operator presses Run now.')
   })
 
-  it('holds Resume for an Operator while paused, and nothing for an Approver', () => {
+  it('holds Resume for an Operator while paused, and tells an Approver an Operator resumes it, with no action', () => {
     const paused = { ...on, state: 'paused' } as UseCaseView
     expect(bannerOf(facts({ useCase: paused }))).toEqual({ tone: 'off', text: 'Paused. It won’t run until you resume it.', action: { kind: 'resume' } })
-    expect(bannerOf(facts({ useCase: paused, viewer: BOB })).action).toBeNull()
+    expect(bannerOf(facts({ useCase: paused, viewer: BOB }))).toEqual({ tone: 'off', text: 'Paused. It won’t run until an Operator resumes it.', action: null })
   })
 
   it('lets a paused workflow say Paused even when its last run stopped', () => {

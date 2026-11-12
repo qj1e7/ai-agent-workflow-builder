@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import styles from './PageHead.module.css'
 
-export function PageHead({ heading, lead, movesFocus = false, note, children }: { heading: string; lead: string; movesFocus?: boolean; note?: ReactNode; children?: ReactNode }) {
+export function PageHead({ heading, lead, movesFocus = false, children }: { heading: string; lead: string; movesFocus?: boolean; children?: ReactNode }) {
   return (
     <div className={styles['head']}>
       <div>
@@ -9,9 +9,13 @@ export function PageHead({ heading, lead, movesFocus = false, note, children }: 
           {heading}
         </h1>
         <p>{lead}</p>
-        {note ? <p className={styles['note']}>{note}</p> : null}
         {children}
       </div>
     </div>
   )
+}
+
+/** A short note under the page's lead, such as who may change the page. */
+export function PageNote({ children }: { children: ReactNode }) {
+  return <p className={styles['note']}>{children}</p>
 }
