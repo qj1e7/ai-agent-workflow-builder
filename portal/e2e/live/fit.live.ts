@@ -35,6 +35,8 @@ interface Screen {
   readonly lead?: RegExp
   /** How it works is for Operators only. */
   readonly operatorOnly?: true
+  /** A section that must be on the screen before it is measured. */
+  readonly shows?: string
 }
 
 const ANY_HEADING = /\S/
@@ -71,7 +73,7 @@ async function settled(page: Page, screen: Screen): Promise<void> {
 for (const user of USERS) {
   for (const width of WIDTHS) {
     test(`nothing spills, is cut off or overlaps, and the page does not scroll sideways, as ${user.role} at ${String(width)} px`, async ({ browser, backend }) => {
-      runId ??= (await backend.waitingRun('alice')).runId
+      runId ??= (await backend.waitingRunWithUnread('alice')).runId
       if (quiet === undefined) {
         quiet = `Fit lane ${randomUUID().slice(0, 6)}`
         await backend.post('alice', '/api/v1/agent-use-cases', { name: quiet, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents: [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }] }, undefined, [201])
@@ -80,10 +82,11 @@ for (const user of USERS) {
       const page = await context.newPage()
       await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
       const found: string[] = []
-      const runPage: Screen = { name: 'A run waiting for a yes', path: `/runs/${runId}`, heading: ANY_HEADING }
+      const runPage: Screen = { name: 'A run waiting for a yes', path: `/runs/${runId}`, heading: ANY_HEADING, shows: 'Not checked' }
       for (const screen of [...SCREENS, runPage].filter((s) => user.id === 'alice' || s.operatorOnly !== true)) {
         await page.goto(screen.path)
         await settled(page, screen)
+        if (screen.shows) await expect(page.getByRole('main').getByText(screen.shows, { exact: true })).toBeVisible()
         const problems = await fitProblems(page)
         if (problems.length) found.push(`${screen.name} (${screen.path}) at ${String(width)} px as ${user.role}:\n${describeProblems(problems).replace(/^/gm, '    ')}`)
       }
@@ -182,11 +185,16 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
     const box = page.getByLabel('Ask the Planner about software versions')
     const newest = page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
     const panel = page.locator('#side-panel')
-    const views: readonly (readonly [string, string, () => Locator, () => Locator])[] = [
-      ['workflow', 'Check my workflows', () => newest.getByRole('button', { name: facts.workflow, exact: true }), () => panel.getByText('Next run')],
-      ['approval', 'What needs me?', () => newest.locator(`[data-opens="run:${facts.request}"]`), () => panel.getByRole('button', { name: 'Decline' })],
-      ['run', `Why did ${facts.stopped.name} stop?`, () => newest.locator(`[data-opens="run:${facts.stopped.runId}"]`), () => panel.getByText('Safe to retry')],
-      ['software', 'Monitor LangGraph releases', () => newest.getByRole('button', { name: 'Open it' }), () => panel.getByText('Checked by')],
+    const views: readonly (readonly [string, string, () => Locator, () => readonly Locator[]])[] = [
+      ['workflow', 'Check my workflows', () => newest.getByRole('button', { name: facts.workflow, exact: true }), () => [panel.getByText('Next run')]],
+      [
+        'approval',
+        'What needs me?',
+        () => newest.locator(`[data-opens="run:${facts.request}"]`),
+        () => [panel.getByRole('button', { name: 'Decline' }), panel.getByText('The platform can’t yet check registries or security advisories.')],
+      ],
+      ['run', `Why did ${facts.stopped.name} stop?`, () => newest.locator(`[data-opens="run:${facts.stopped.runId}"]`), () => [panel.getByText('Safe to retry')]],
+      ['software', 'Monitor LangGraph releases', () => newest.getByRole('button', { name: 'Open it' }), () => [panel.getByText('Checked by')]],
     ]
     const found: string[] = []
     try {
@@ -196,7 +204,7 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
         await box.press('Enter')
         await expect(newest).toHaveAttribute('data-answer', 'true')
         await opener().click()
-        await expect(ready()).toBeVisible({ timeout: 20_000 })
+        for (const shown of ready()) await expect(shown).toBeVisible({ timeout: 20_000 })
         await expect(panel).toHaveAttribute('role', width > 900 ? 'complementary' : 'dialog')
         await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined)
         // The shot comes first, because the cover check scrolls each control into view.

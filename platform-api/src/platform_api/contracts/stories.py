@@ -660,6 +660,7 @@ def approval_view_for(
         trigger="person",
         retried_by=[],
         found=SUMMARY,
+        not_checked=[],
         requester=ALICE,
         questions=list(questions),
     )

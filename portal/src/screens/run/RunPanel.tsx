@@ -7,8 +7,8 @@ import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { useAfterPanelAction } from '../../ui/sidePanel'
 import { useChat } from '../home/ChatProvider'
-import { ApprovalGate } from './ApprovalGate'
-import { declineReasons, openStep, partyOf, useDecision } from './decision'
+import { ApprovalGate, NotChecked } from './ApprovalGate'
+import { declineReasons, openStep, partyOf, useDecision, useNotChecked } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { Troubleshooting } from './Outcome'
 import { QuestionThread } from './QuestionThread'
@@ -98,6 +98,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
     if (recorded.verdict === 'decline') say(declinedNowWords({ reason: recorded.reason ?? null }))
   })
   const questions = useQuestions(approval.data, nameOf, say)
+  const notChecked = useNotChecked(approval.data, useCase.data)
 
   const stations = stationsOf(shown, planOf(useCase.data), writeLabel)
   const headline = headlineOf(shown, stations, approval.data && waiting ? approval.data.actions : null)
@@ -105,7 +106,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
   const declinedSoFar = declinedSoFarWords(decision, live, nameOf)
   const declined = declinedOf(shown)
 
-  if (waiting && approvalId !== null && !approval.data && !approval.isError) {
+  if (waiting && approvalId !== null && !approval.isError && (!approval.data || notChecked === null)) {
     return (
       <p className="muted" role="status">
         Loading what will be written
@@ -118,6 +119,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
         approval={approval.data}
         page={null}
         decision={decision}
+        notChecked={notChecked ?? []}
         reasons={declineReasons(useCase.data?.template)}
         requester={nameOf(approval.data.requester)}
         questions={questions}
@@ -151,7 +153,10 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
           modelOff={modelOff}
         />
       ) : approval.data ? (
-        <QuestionThread approval={approval.data} me={me?.id} nameOf={nameOf} answer={questions.answer} />
+        <>
+          {openStep(approval.data) === null ? <NotChecked lines={notChecked ?? []} /> : null}
+          <QuestionThread approval={approval.data} me={me?.id} nameOf={nameOf} answer={questions.answer} />
+        </>
       ) : null}
     </>
   )

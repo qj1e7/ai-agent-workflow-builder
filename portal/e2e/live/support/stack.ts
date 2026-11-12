@@ -138,6 +138,19 @@ export class Backend {
     return { runId, approvalId: await this.approvalIdOf(runId) }
   }
 
+  /** A check of LangGraph and Redis while GitHub has no Redis, so the request waits with one ticket and Redis not checked. */
+  async waitingRunWithUnread(user = 'alice'): Promise<WaitingRun> {
+    const useCaseId = await this.freshWatchlist(user, [LANGGRAPH, REDIS])
+    await setMockGithubMode('not_found', REDIS.repo)
+    try {
+      const runId = await this.checkNow(user, useCaseId)
+      await this.waitForState(runId, ['awaiting_approval'])
+      return { runId, approvalId: await this.approvalIdOf(runId) }
+    } finally {
+      await setMockGithubMode('ok', REDIS.repo)
+    }
+  }
+
   async runs(user = 'alice'): Promise<RunSnapshot[]> {
     return (await this.get<{ runs: RunSnapshot[] }>(user, '/api/v1/runs')).runs
   }
@@ -191,11 +204,12 @@ export class Backend {
   }
 }
 
-export async function setMockGithubMode(mode: 'ok' | 'unavailable' | 'not_found'): Promise<void> {
+/** Sets how the mock GitHub answers, for every repository or for one. */
+export async function setMockGithubMode(mode: 'ok' | 'unavailable' | 'not_found', repo?: string): Promise<void> {
   const http = await request.newContext()
   try {
-    const response = await http.post(`${MOCK_GITHUB_URL}/_admin/mode`, { data: { mode } })
-    expect(response.status(), `mock-github accepts mode ${mode}`).toBe(200)
+    const response = await http.post(`${MOCK_GITHUB_URL}/_admin/mode`, { data: repo === undefined ? { mode } : { mode, repo } })
+    expect(response.status(), `mock-github accepts mode ${mode}${repo === undefined ? '' : ` for ${repo}`}`).toBe(200)
   } finally {
     await http.dispose()
   }

@@ -312,11 +312,15 @@ export function controlsOf(useCase: Pick<UseCaseView, 'template' | 'state'>, vie
   return useCase.state === 'paused' ? ['resume', 'delete'] : ['run', 'pause', 'delete']
 }
 
+/** The agent cards a workflow runs. The Software watchlist's is the Version checker. */
+export function cardsOf(useCase: Pick<UseCaseView, 'template' | 'agents'>): readonly { readonly card_id: string; readonly name: string }[] {
+  return useCase.template === WATCHLIST_TEMPLATE
+    ? [{ card_id: VERSION_CHECKER_CARD, name: agentIdentity(faceId({ card_id: VERSION_CHECKER_CARD })).name }]
+    : useCase.agents
+}
+
 export function agentsOf(useCase: Pick<UseCaseView, 'template' | 'agents'>): AgentLink[] {
-  const cards: readonly { readonly card_id: string; readonly name: string }[] =
-    useCase.template === WATCHLIST_TEMPLATE
-      ? [{ card_id: VERSION_CHECKER_CARD, name: agentIdentity(faceId({ card_id: VERSION_CHECKER_CARD })).name }]
-      : useCase.agents
+  const cards = cardsOf(useCase)
   const unique = cards.filter((card, index) => cards.findIndex((other) => other.card_id === card.card_id) === index)
   return [PLANNER, ...unique.map((card) => ({ face: faceId(card), name: card.name, to: howItWorksPath({ show: 'agents', agent: card.card_id }) }))]
 }

@@ -24,6 +24,20 @@ function Change({ action }: { action: WriteActionView }) {
   )
 }
 
+/** What the run didn't check, from notCheckedWords in decision.ts: on a waiting request and, read only, on its record. */
+export function NotChecked({ lines }: { lines: readonly string[] }) {
+  if (lines.length === 0) return null
+  return (
+    <Row name="Not checked">
+      <ul className={styles['unchecked']}>
+        {lines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </Row>
+  )
+}
+
 function Row({ name, children }: { name: string; children: ReactNode }) {
   return (
     <dl className={styles['qa']}>
@@ -47,6 +61,8 @@ interface ApprovalGateProps {
   /** Null in the side panel, which shows everything that will be written and the decision, and leaves the rest for the page. */
   readonly page: PageDetails | null
   readonly decision: Pick<Decision, 'pending' | 'recorded' | 'error' | 'decide'>
+  /** What the run didn't check, from notCheckedWords in decision.ts. Information for the reader, never the check. */
+  readonly notChecked: readonly string[]
   /** The quick reasons Decline offers, from declineReasons in decision.ts. */
   readonly reasons: readonly string[]
   /** Who sees the reason with the record, and answers questions, by name. */
@@ -107,7 +123,7 @@ export function DeclineReasons({ reasons, requester, picked, pending, busy, onPi
  * Exactly what will be written, from the approval route, so a slow stream never shows an old proposal. The summary around
  * it helps the reader. It is never the check: the platform checks the digest and the deciding person again at the write.
  */
-export function ApprovalGate({ approval, page, decision, reasons, requester, questions, me, nameOf }: ApprovalGateProps) {
+export function ApprovalGate({ approval, page, decision, notChecked, reasons, requester, questions, me, nameOf }: ApprovalGateProps) {
   // Once this person's decision is recorded, the gate offers them nothing more, though the run's own events may take a while to say so.
   // The question thread does not depend on it.
   const open = openStep(approval) !== null && decision.recorded === null
@@ -135,6 +151,7 @@ export function ApprovalGate({ approval, page, decision, reasons, requester, que
         ))}
         <p className={styles['note']}>{EXACT_WORDS}</p>
       </Row>
+      <NotChecked lines={notChecked} />
       {page ? (
         <>
           <Row name="Why">

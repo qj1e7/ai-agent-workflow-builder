@@ -293,6 +293,12 @@ def review(
     return Reviewed(tuple(learned), tuple(tickets))
 
 
+def unread_of(task: WatchlistTask, reviewed: Reviewed) -> tuple[str, ...]:
+    """The software the check couldn't read, by name, in the watchlist's order."""
+    missed = {entry.software_id for entry in reviewed.learned if isinstance(entry, CouldNotRead)}
+    return tuple(software.name for software in task.software if software.id in missed)
+
+
 NOTHING_READABLE_TYPES = frozenset({"UpstreamUnavailable", "UpstreamRejected"})
 
 

@@ -139,6 +139,28 @@
   margin-bottom: 6px;
 }
 
+.unchecked {
+  display: grid;
+  gap: 4px;
+  font-size: 0.95rem;
+}
+
+.unchecked li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.unchecked li::before {
+  content: '';
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--muted);
+  transform: translateY(-3px);
+}
+
 .found {
   white-space: pre-line;
   overflow-wrap: anywhere;
