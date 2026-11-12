@@ -657,8 +657,16 @@
           "$ref": "#/$defs/RowKind"
         },
         "needs": {
-          "$ref": "#/$defs/CantNeed",
-          "description": "new_tool when the part is in a system the platform already reaches, such as Jira or GitHub, so a tool would have to be built and the team decides. new_system when it names a system or source the platform doesn't reach, or names none."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CantNeed"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "new_tool when the part is in a system the platform already reaches, such as Jira or GitHub, so a tool would have to be built and the team decides. new_system when it names a system or source the platform doesn't reach. None for a part the Planner didn't follow, which names nothing to build."
         },
         "note": {
           "description": "Why it can't do it yet.",
@@ -690,8 +698,7 @@
       "required": [
         "kind",
         "text",
-        "note",
-        "needs"
+        "note"
       ],
       "title": "CantRow",
       "type": "object"
@@ -2224,7 +2231,8 @@
         "own_time",
         "skip_approval",
         "with_a_yes",
-        "needs_the_rest"
+        "needs_the_rest",
+        "how_many_days"
       ],
       "type": "string"
     },
@@ -2311,6 +2319,18 @@
           ],
           "default": null,
           "title": "Watchlist"
+        },
+        "watchlist_schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WatchlistScheduleFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When the Software watchlist checks all its software. None when it is off or was not read, so a time asked for one software is a cross."
         },
         "workflows": {
           "anyOf": [
@@ -2566,7 +2586,7 @@
             }
           ],
           "default": null,
-          "description": "Why, for a cant: not_followed (no rule read it), cant_do (see note), ask_on_its_own (a question asked beside a request, or a request beside a question), one_day or one_time (a schedule with two, see choices), own_time (a time on a watch request), skip_approval (it asks to skip a yes), with_a_yes (it waits until the request is set up with a yes), needs_the_rest (it can't run without a part that can't be done). None for will_do and question."
+          "description": "Why, for a cant: not_followed (no rule read it), cant_do (see note), ask_on_its_own (a question asked beside a request, or a request beside a question), one_day or one_time (a schedule with two, see choices), own_time (a time on a watch request), skip_approval (it asks to skip a yes), with_a_yes (it waits until the request is set up with a yes), needs_the_rest (it can't run without a part that can't be done), how_many_days (a question: the words name a span of days but no number). None for will_do."
         },
         "text": {
           "description": "The request's own words: the whole clause, or, in a clause the Planner partly read, only the words it didn't read.",
@@ -3142,6 +3162,20 @@
       "title": "UnderstoodRow",
       "type": "object"
     },
+    "WatchDay": {
+      "enum": [
+        "every_day",
+        "weekdays",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "type": "string"
+    },
     "WatchedFact": {
       "additionalProperties": false,
       "properties": {
@@ -3373,6 +3407,26 @@
         "software"
       ],
       "title": "WatchlistInputs",
+      "type": "object"
+    },
+    "WatchlistScheduleFact": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "description": "24-hour time, as 09:00.",
+          "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+          "title": "At",
+          "type": "string"
+        },
+        "day": {
+          "$ref": "#/$defs/WatchDay"
+        }
+      },
+      "required": [
+        "day",
+        "at"
+      ],
+      "title": "WatchlistScheduleFact",
       "type": "object"
     },
     "WhichSoftwareAnswer": {

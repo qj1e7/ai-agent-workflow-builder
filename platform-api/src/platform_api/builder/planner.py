@@ -126,9 +126,10 @@ class CantRowView(WireModel):
     kind: RowKind
     text: str
     note: str = Field(description="Why the platform can't do it, in plain words.")
-    needs: Literal["new_tool", "new_system"] = Field(
+    needs: Literal["new_tool", "new_system"] | None = Field(
         description="new_tool: the platform already reaches the system, so the team decides on a "
-        "tool. new_system: it names a system or source the platform doesn't reach, or none."
+        "tool. new_system: it names a system or source the platform doesn't reach. Null for a "
+        "part the Planner didn't follow, which names nothing to build."
     )
     system: str | None
 

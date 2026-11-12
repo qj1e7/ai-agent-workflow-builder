@@ -73,6 +73,7 @@ from agent_runtime.contract import (
     TaskRequest,
     WatchedFact,
     WatchlistInputs,
+    WatchlistScheduleFact,
     WireModel,
     agent_event_adapter,
 )
@@ -893,7 +894,9 @@ def question_request() -> AnswerRequest:
     return AnswerRequest(
         task="how many software are on our watchlist",
         model=draft_request().model,
-        facts=PlannerFacts(watchlist=watched),
+        facts=PlannerFacts(
+            watchlist=watched, watchlist_schedule=WatchlistScheduleFact(day="monday", at="09:00")
+        ),
         previous=PreviousTurn(request="What is the newest version of LangGraph?"),
     )
 

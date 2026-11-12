@@ -55,6 +55,10 @@
       }
     ],
     "workflows": null,
-    "needs_you": null
+    "needs_you": null,
+    "watchlist_schedule": {
+      "day": "monday",
+      "at": "09:00"
+    }
   }
 }
