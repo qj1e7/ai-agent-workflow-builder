@@ -20,6 +20,7 @@ import {
   pendingApproverFor,
   personStatusWords,
   ROLE_RULES,
+  rolesWords,
   saidAfterListChange,
   saidAfterRefusal,
   undoneWords,
@@ -273,30 +274,33 @@ function PersonRow({ person, me, operator, confirmation, askedByName, busy, prob
         <span className={styles['small']}>{person.email}</span>
         {status ? <span className={styles['small']}>{status}</span> : null}
       </div>
-      <div className={styles['roles']}>
-        <label className={styles['check']}>
-          <input
-            type="checkbox"
-            id={operatorBoxId(person.id)}
-            checked={operatorTicked}
-            disabled={!operator}
-            aria-describedby={describedBy}
-            onChange={(event) => onOperator(event.target.checked)}
-          />
-          Operator<span className="visually-hidden"> for {person.display}</span>
-        </label>
-        <label className={styles['check']}>
-          <input
-            type="checkbox"
-            id={approverBoxId(person.id)}
-            checked={approverTicked}
-            disabled={!operator || pending}
-            aria-describedby={describedBy}
-            onChange={(event) => onApprover(event.target.checked)}
-          />
-          Approver<span className="visually-hidden"> for {person.display}</span>
-        </label>
-      </div>
+      {operator ? (
+        <div className={styles['roles']}>
+          <label className={styles['check']}>
+            <input
+              type="checkbox"
+              id={operatorBoxId(person.id)}
+              checked={operatorTicked}
+              aria-describedby={describedBy}
+              onChange={(event) => onOperator(event.target.checked)}
+            />
+            Operator<span className="visually-hidden"> for {person.display}</span>
+          </label>
+          <label className={styles['check']}>
+            <input
+              type="checkbox"
+              id={approverBoxId(person.id)}
+              checked={approverTicked}
+              disabled={pending}
+              aria-describedby={describedBy}
+              onChange={(event) => onApprover(event.target.checked)}
+            />
+            Approver<span className="visually-hidden"> for {person.display}</span>
+          </label>
+        </div>
+      ) : (
+        <p className={styles['rolesText']}>{rolesWords(person)}</p>
+      )}
       {pending ? (
         <div className={styles['rowNote']}>
           <span className={styles['pill']} data-tone="wait">

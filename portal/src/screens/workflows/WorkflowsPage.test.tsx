@@ -14,13 +14,15 @@ import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
 import setupCardFixture from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import { cardFrom, draftContent } from '../home/card'
 import draftsFixture from '../../../../contracts/fixtures/builder/drafts.json'
-import type { DraftView, HomeOut, Me, ReplyView, TeamRequestView, UnderstoodRowView, UseCaseView } from '../../api/types'
+import peopleList from '../../../../contracts/fixtures/people/list.json'
+import type { DraftView, HomeOut, Me, PersonOut, ReplyView, TeamRequestView, UnderstoodRowView, UseCaseView } from '../../api/types'
 import type { LastRun } from './workflow'
 import { needsTotal } from '../home/home'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
 const CAROL: Me = { id: 'carol', display: 'Carol', roles: ['operator'] }
+const TEAM = (peopleList.people as PersonOut[]).filter((person) => ['alice', 'bob', 'carol'].includes(person.id))
 
 const WATCHLIST = watchlistUseCase as UseCaseView
 const LANGGRAPH: UseCaseView = { ...(agentUseCase as UseCaseView), use_case_id: 'uc_lang', state: 'paused' }
@@ -51,6 +53,7 @@ function render({ me = ALICE, useCases = [STOPPED_BUGS, WAITING_WATCHLIST, LANGG
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', scope], me)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB, CAROL])
+  queryClient.setQueryData(['people', scope], TEAM)
   if (home) queryClient.setQueryData(['home', scope], home)
   if (drafts) queryClient.setQueryData(['drafts', scope], drafts)
   if (request?.data instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: ['team-request', scope, request.id] }).setState({ status: 'error', error: request.data, fetchStatus: 'idle' })
@@ -189,6 +192,20 @@ describe('the Workflows list', () => {
     const main = text(mainOf(render({ me: BOB })))
     expect(main).toContain('Morning bug report check')
     expect(main).not.toMatch(/\bPause\b|\bResume\b|\bDelete\b|Run now/)
+  })
+
+  it('is read only for an Approver: one note names the Operators, and nothing changes anything or is dead', () => {
+    const html = mainOf(render({ me: BOB }))
+    expect(text(html).match(/Only Operators change/g)).toHaveLength(1)
+    expect(text(html)).toContain('Only Operators change workflows. Ask Alice or Carol.')
+    expect(html).not.toMatch(/disabled=""|aria-disabled="true"/)
+    expect(text(html)).not.toMatch(/\bPause\b|\bResume\b|\bDelete\b|Run now|Discard|Change schedule/)
+  })
+
+  it('shows an Operator no such note, and an Approver none on an empty list, which says who sets workflows up', () => {
+    expect(text(mainOf(render()))).not.toContain('Only Operators change')
+    expect(text(mainOf(render({ me: CAROL })))).not.toContain('Only Operators change')
+    expect(text(mainOf(render({ me: BOB, useCases: [] })))).not.toContain('Only Operators change')
   })
 
   it('says when there is nothing yet, in words for the person reading', () => {
@@ -409,6 +426,10 @@ describe('a request opened by its link', () => {
     expect(html).toMatch(/<button[^>]*>Mark done<\/button>/)
     expect(html).not.toContain('type="radio"')
     expect(html).not.toContain('Send reply')
+  })
+
+  it('shows an Approver no note about changing workflows on a request, which is not the list', () => {
+    expect(text(open({ me: BOB, request: { id: 'trq_01JD5RP', data: REQUEST } }))).not.toContain('Only Operators change')
   })
 
   it('labels the asker’s own note as an addition, never as an answer', () => {

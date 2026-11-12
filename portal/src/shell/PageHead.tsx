@@ -14,3 +14,8 @@ export function PageHead({ heading, lead, movesFocus = false, children }: { head
     </div>
   )
 }
+
+/** A short note under the page's lead, such as who may change the page. */
+export function PageNote({ children }: { children: ReactNode }) {
+  return <p className={styles['note']}>{children}</p>
+}

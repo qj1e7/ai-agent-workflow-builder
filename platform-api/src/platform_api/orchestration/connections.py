@@ -277,7 +277,8 @@ class Connections:
 
     async def view(self) -> list[ConnectionCheck]:
         """Every connection with its last result. One the platform checks, and never checked with
-        what it uses now, is checked now, once."""
+        what it uses now, is checked now, once. That check only reads Jira or GitHub, but it keeps
+        its result in connection_checks, so this read writes our own row for whoever asks."""
         kept = await self._kept()
         shown: dict[ConnectionId, Shown | None] = {}
         for id, entry in self._entries.items():

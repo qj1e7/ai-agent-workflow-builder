@@ -4,13 +4,15 @@ import { NavigationType, useLocation, useNavigate, useNavigationType, useSearchP
 import { Link } from '../../ui/Link'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
+import { isOperator } from '../../api/me'
 import { useHome } from '../../api/homeQueries'
 import { useDeleteDraft, useDrafts, useSaveDraft } from '../../api/plannerQueries'
 import { useDisplayName } from '../../api/people'
 import { useMe, useUseCases } from '../../api/queries'
 import type { DraftView, HomeOut, Me, UseCaseView } from '../../api/types'
 import { useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
-import { PageHead } from '../../shell/PageHead'
+import { OperatorsNote } from '../../shell/OperatorsNote'
+import { PageHead, PageNote } from '../../shell/PageHead'
 import { Button, ButtonLink } from '../../ui/Button'
 import { useFocusWhenReady } from '../../ui/focus'
 import { FROM_LIST } from '../../ui/fromList'
@@ -349,12 +351,24 @@ function NeedsYouLoaded({ home, now }: { home: HomeOut; now: Date }) {
   )
 }
 
+function ReadOnlyNote() {
+  const me = useMe().data
+  const listed = useUseCases().data ?? []
+  return me && !isOperator(me) && listed.length > 0 ? (
+    <PageNote>
+      <OperatorsNote what="workflows" />
+    </PageNote>
+  ) : null
+}
+
 export function WorkflowsPage({ heading, lead, now }: { heading: string; lead: string; now: Date }) {
   const handedOver = useDeletedHandedOverOnce()
   const requestId = useSearchParams()[0].get(REQUEST_PARAM)
   return (
     <>
-      <PageHead heading={heading} lead={lead} movesFocus={handedOver !== null} />
+      <PageHead heading={heading} lead={lead} movesFocus={handedOver !== null}>
+        {requestId === null ? <ReadOnlyNote /> : null}
+      </PageHead>
       {requestId !== null ? (
         <RequestView key={requestId} requestId={requestId} now={now} />
       ) : (

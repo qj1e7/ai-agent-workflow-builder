@@ -399,7 +399,9 @@ function waitingWords(last: LastRun): string {
 export function bannerOf({ useCase, viewer, now }: BannerFacts): Banner {
   const last = useCase.last_run
   if (useCase.state === 'paused') {
-    return { tone: 'off', text: 'Paused. It won’t run until you resume it.', action: viewer.operator ? { kind: 'resume' } : null }
+    return viewer.operator
+      ? { tone: 'off', text: 'Paused. It won’t run until you resume it.', action: { kind: 'resume' } }
+      : { tone: 'off', text: 'Paused. It won’t run until an Operator resumes it.', action: null }
   }
   if (last?.state === 'awaiting_approval') {
     return { tone: 'wait', text: waitingWords(last), action: last.you_can_decide ? { kind: 'decide', runId: last.run_id } : null }
