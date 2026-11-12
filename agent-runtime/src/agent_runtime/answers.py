@@ -90,6 +90,7 @@ from agent_runtime.reading import (
     render_schedule,
     render_search,
     render_ticket,
+    says_no_change,
     schedule_stretch,
     speaks_only_of_self,
     task_shaped,
@@ -352,12 +353,17 @@ def _left_out(span: Span, searching: bool) -> CantRow:
     match span.kind:
         case "look_for" | None:
             field = unread_field_in(text)
-            if span.names_a_yes:
+            # A negation no filter holds was read the other way round, or not at all.
+            if says_no_change(text):
+                note = LEFT_OUT_PART
+            elif span.names_a_yes:
                 note = LEFT_OUT_YES
             elif field is not None:
                 note = why_not_the_field("look_for", text, field)
             elif span.names_a_person:
                 note = LEFT_OUT_DO
+            elif negated(text):
+                note = LEFT_OUT_PART
             else:
                 note = LEFT_OUT_SEARCH if span.kind else LEFT_OUT_PART
         case "do":

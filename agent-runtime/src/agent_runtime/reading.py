@@ -649,6 +649,12 @@ def _negations(text: str, forms: frozenset[str]) -> frozenset[str]:
     return frozenset(found)
 
 
+def says_no_change(text: str) -> bool:
+    """Whether the words say a ticket was not created, updated or done, as "nobody has touched
+    for 10 days" or "untouched": a day filter that runs before, never within."""
+    return _forms_in(text, NOT_UPDATED) or any(_negations(text, v) for v in WHEN_VOCAB.values())
+
+
 def _negated_done(text: str) -> frozenset[str]:
     """Done words that a negation turns into open, as "not done" or "aren't finished"."""
     tokens = [_low(t) for t, _, _ in _request_tokens(text)]

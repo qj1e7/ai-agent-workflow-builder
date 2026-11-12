@@ -1697,7 +1697,7 @@ def test_a_negated_update_read_the_other_way_round_is_a_cross_never_a_tick(
     assert "updated in the last" not in shown and "updated since" not in shown
     assert isinstance(answer, CantAnswer)
     [(text, reason)] = crossed(fields, task)
-    assert "10" in text and reason in ("not_followed", "cant_do")
+    assert "10" in text and reason == "not_followed"
 
 
 def test_a_negation_no_filter_holds_is_a_cross_and_the_filter_is_dropped():
