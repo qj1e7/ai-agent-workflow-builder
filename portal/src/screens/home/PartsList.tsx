@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { PartView, PlannerReply } from '../../api/types'
 import { useWatchlist } from '../../api/queries'
+import { useOperatorsSay } from '../../shell/OperatorsNote'
 import { IconCheck, IconX } from '../../ui/icons'
 import { crossLabel, crossWords, leftoverParts, MARK_WORDS, type CrossContext, type Mark } from './parts'
 import styles from './PartsList.module.css'
@@ -59,10 +60,11 @@ export function crossParts(parts: readonly PartView[], context: CrossContext = {
 export function Leftovers({ reply }: { reply: PlannerReply }) {
   const parts = leftoverParts(reply)
   const watchlist = useWatchlist({ enabled: parts.some((part) => part.reason === 'own_time') })
+  const operators = useOperatorsSay()
   if (parts.length === 0) return null
   return (
     <div className={styles['leftovers']}>
-      <PartsList parts={crossParts(parts, { watchlist: watchlist.data?.schedule ?? null })} />
+      <PartsList parts={crossParts(parts, { watchlist: watchlist.data?.schedule ?? null, operators })} />
     </div>
   )
 }

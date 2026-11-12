@@ -20,7 +20,7 @@ NOT_ANSWERING = FakePlannerFront(checked=RegistryUnavailable(), view=RegistryUna
 
 CASES = [
     pytest.param("POST", "/api/v1/planner/answer", {}, TEXT, ANSWERED, 401, id="answer-401"),
-    pytest.param("POST", "/api/v1/planner/answer", BOB, TEXT, ANSWERED, 403, id="answer-403"),
+    pytest.param("POST", "/api/v1/planner/answer", BOB, TEXT, ANSWERED, 200, id="answer-bob"),
     pytest.param("POST", "/api/v1/planner/answer", ALICE, TEXT, ANSWERED, 200, id="answer-200"),
     pytest.param(
         "POST", "/api/v1/planner/answer", ALICE, {"intent": "abilities"}, ANSWERED, 200, id="chip"

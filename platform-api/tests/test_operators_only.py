@@ -69,6 +69,11 @@ OPEN_TO: dict[tuple[str, str], str] = {
         "Approvers confirm a new AI model address. The route refuses anyone else, and the "
         "person who entered it."
     ),
+    ("POST", "/api/v1/planner/answer"): (
+        "Anyone signed in asks the Planner, and it keeps nothing. Someone who isn't an Operator "
+        "asks questions only: builder answers every change with operators, on the server, and "
+        "never a card that changes anything (ADR 0043)."
+    ),
     ("POST", "/api/v1/use-cases/suggest"): (
         "Only reads: it matches the words to a template in memory and keeps nothing."
     ),

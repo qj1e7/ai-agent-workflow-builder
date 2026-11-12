@@ -2,9 +2,11 @@ import { useId, useState, type ReactNode } from 'react'
 import { Link } from '../../ui/Link'
 import type { CantReply, OfflineReply, PartReply, PartView, PlannerReply, QuestionReply, SetupCardReply, WatchlistReply } from '../../api/types'
 import { useCapabilities } from '../../api/plannerQueries'
+import { useOperatorsSay } from '../../shell/OperatorsNote'
 import { Button, ButtonLink } from '../../ui/Button'
 import { OpenButton } from '../../ui/OpenItem'
 import { AskTheTeam } from './AskTheTeam'
+import { useAsker } from './asker'
 import { cantLines, refusalNext, SAY_ANOTHER_WAY, startingPoints, TAG_CANT, TAG_CHOICE } from './answers'
 import { cardFrom } from './card'
 import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard } from './parts'
@@ -145,8 +147,12 @@ export function WatchlistAnswer({ reply, typed }: { reply: WatchlistReply; typed
 const NO_PAGE: Page = { ask: () => undefined, edit: () => undefined }
 
 function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { answer: 'refused' }>; typed: string; page: Page }) {
-  const { rest } = refusalNext(reply)
-  const main = useMainButton()
+  // Someone who isn't an Operator sets nothing up, so the refusal offers them no set-up with a yes. Their main button is the request
+  // to open, drawn under the card.
+  const operator = useAsker() === 'operator'
+  const { rest } = operator ? refusalNext(reply) : { rest: null }
+  const newest = useMainButton()
+  const main = operator ? newest : 'secondary'
   return (
     <Card title="How approvals work">
       <div className={styles['pcardPart']}>
@@ -169,8 +175,34 @@ function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { 
   )
 }
 
+/** What someone who isn't an Operator can ask, each a question the Planner answers, and who sets up workflows (ADR 0043). */
+export const APPROVER_CAN = [
+  'What is waiting for your yes, and exactly what each request will write',
+  'What you decided before, with when, and any reason you gave',
+  'How the workflows and the software are doing',
+] as const
+
+function ApproverAbilities() {
+  const operators = useOperatorsSay()
+  return (
+    <div className={`${styles['abilities']} ${styles['abilitiesOne']}`}>
+      <div>
+        <h3>I can</h3>
+        <ul>
+          {APPROVER_CAN.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      </div>
+      <p className={styles['abilitiesFoot']}>{operators}</p>
+    </div>
+  )
+}
+
 function AbilitiesAnswer() {
-  const capabilities = useCapabilities()
+  const operator = useAsker() === 'operator'
+  const capabilities = useCapabilities({ enabled: operator })
+  if (!operator) return <ApproverAbilities />
   return (
     <>
       {capabilities.data ? (
@@ -269,6 +301,7 @@ interface AnswerProps {
 
 /** The body of one Planner answer, past its sentence. The three state answers are in StateAnswers. */
 export function Answer({ reply, typed, page }: AnswerProps) {
+  const asker = useAsker()
   switch (reply.answer) {
     case 'setup_card':
     case 'part':
@@ -286,7 +319,7 @@ export function Answer({ reply, typed, page }: AnswerProps) {
     case 'ideas':
       return <IdeasAnswer page={page} />
     case 'offline':
-      return <OfflineAnswer reply={reply} />
+      return asker === 'operator' ? <OfflineAnswer reply={reply} /> : null
     case 'question':
       return (
         <>
@@ -298,6 +331,9 @@ export function Answer({ reply, typed, page }: AnswerProps) {
     case 'check_workflows':
     case 'why_stopped':
     case 'needs_me':
+    case 'operators':
+    case 'decided':
+    case 'decide':
       return null
   }
 }

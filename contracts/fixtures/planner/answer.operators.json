@@ -1,0 +1,12 @@
+{
+  "parts": [
+    {
+      "text": "Pause the weekly closed-ticket summary",
+      "mark": "cant",
+      "reason": "operators",
+      "note": null,
+      "choices": []
+    }
+  ],
+  "answer": "operators"
+}

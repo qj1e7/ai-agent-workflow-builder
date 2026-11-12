@@ -23,8 +23,13 @@ from platform_api.db import Database
 from platform_api.monitoring import Copier
 from platform_api.monitoring import http as monitoring_http
 from platform_api.nul_guard import RefuseNul
+from platform_api.orchestration import (
+    decisions_http,
+    jira_reads_http,
+    people_http,
+    settings_http,
+)
 from platform_api.orchestration import http as orchestration_http
-from platform_api.orchestration import jira_reads_http, people_http, settings_http
 from platform_api.practice_jira import dev_router as practice_jira_dev_router
 from platform_api.practice_jira import router as practice_jira_router
 from platform_api.security_headers import SecurityHeaders
@@ -105,6 +110,7 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     app.include_router(watchlist_http.router)
     app.include_router(team_requests_http.router)
     app.include_router(orchestration_http.router)
+    app.include_router(decisions_http.router)
     # The practice Jira, its REST API and its own pages, only while it is the Jira in use.
     if settings.practice_systems and settings.jira.practice:
         app.include_router(practice_jira_router)
