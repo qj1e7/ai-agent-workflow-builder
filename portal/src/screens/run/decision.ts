@@ -67,11 +67,6 @@ export function declineReasons(template: string | undefined): readonly string[] 
   return template === 'software_watchlist' ? ['Not this week', 'Wrong version', 'Needs testing first'] : ['Not needed this time', 'Something in it is wrong']
 }
 
-/** Who sees the reason with the record: whoever started the run, or the workflow's owner when its schedule did. */
-export function requesterOf(approval: ApprovalView): string {
-  return approval.trigger === 'schedule' ? approval.owner : approval.started_by
-}
-
 /** What to post, or null when the platform said this person may not decide or nothing is open. Never from the stream. */
 export function decisionFor(approval: ApprovalView | undefined, choice: Choice): DecisionIn | null {
   if (!approval?.you_can_decide) return null

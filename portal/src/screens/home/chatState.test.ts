@@ -3,7 +3,7 @@ import type { PlannerReply } from '../../api/types'
 import { deskOf, desksReducer, EMPTY_DESK, type DeskAction, type Desks } from './chatState'
 import { isThinking } from './threadState'
 
-const REPLY: PlannerReply = { answer: 'abilities' }
+const REPLY: PlannerReply = { answer: 'abilities', parts: [] }
 
 const run = (actions: readonly (readonly [string, DeskAction])[], from: Desks = {}): Desks => actions.reduce((desks, [user, action]) => desksReducer(desks, { user, action }), from)
 

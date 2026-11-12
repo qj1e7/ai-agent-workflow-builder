@@ -35,6 +35,8 @@
   "waiting_on_others_total": 1,
   "declined": [],
   "declined_total": 0,
+  "questions_for_me": [],
+  "questions_for_me_total": 0,
   "drafts": [
     {
       "draft_id": "drf-7f3a2c",

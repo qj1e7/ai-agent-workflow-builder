@@ -8,9 +8,11 @@ import { cx } from '../../ui/cx'
 import { useAfterPanelAction } from '../../ui/sidePanel'
 import { useChat } from '../home/ChatProvider'
 import { ApprovalGate } from './ApprovalGate'
-import { declineReasons, openStep, partyOf, requesterOf, useDecision } from './decision'
+import { declineReasons, openStep, partyOf, useDecision } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { Troubleshooting } from './Outcome'
+import { QuestionThread } from './QuestionThread'
+import { useQuestions } from './questions'
 import { approvalIdOf, declinedSoFarWords, planOf, POLL_FAILED_MS, statusWords, useNameOf, useReconnectWhenBehind } from './RunPage'
 import { RunLine } from './RunLine'
 import { declinedOf, stationsOf } from './runModel'
@@ -86,14 +88,16 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
   const useCase = useUseCase(run.use_case_id)
   const approvalId = approvalIdOf(run, head)
   const waiting = shown.phase.state === 'awaiting_approval'
-  const approval = useApproval(approvalId ?? '', { poll: waiting, enabled: approvalId !== null && (waiting || head.phase.state === 'awaiting_approval') })
+  const approval = useApproval(approvalId ?? '', { poll: waiting, enabled: approvalId !== null })
   const attempt = head.chat.filter((item) => item.kind === 'retried').length
   const troubleshoot = useTroubleshoot(run.run_id, shown.phase.state === 'failed' && head.phase.state === 'failed', attempt)
   const { say } = useChat()
-  const decision = useDecision(approval.data, partyOf(approval.data, me?.id), (recorded) => {
+  const party = partyOf(approval.data, me?.id)
+  const decision = useDecision(approval.data, party, (recorded) => {
     backToTop?.()
     if (recorded.verdict === 'decline') say(declinedNowWords({ reason: recorded.reason ?? null }))
   })
+  const questions = useQuestions(approval.data, nameOf, say)
 
   const stations = stationsOf(shown, planOf(useCase.data), writeLabel)
   const headline = headlineOf(shown, stations, approval.data && waiting ? approval.data.actions : null)
@@ -115,7 +119,10 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
         page={null}
         decision={decision}
         reasons={declineReasons(useCase.data?.template)}
-        requester={nameOf(requesterOf(approval.data))}
+        requester={nameOf(approval.data.requester)}
+        questions={questions}
+        me={me?.id}
+        nameOf={nameOf}
       />
     )
   }
@@ -143,6 +150,8 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
           nameOf={nameOf}
           modelOff={modelOff}
         />
+      ) : approval.data ? (
+        <QuestionThread approval={approval.data} me={me?.id} nameOf={nameOf} answer={questions.answer} />
       ) : null}
     </>
   )

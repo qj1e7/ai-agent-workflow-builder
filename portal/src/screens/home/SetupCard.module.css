@@ -49,11 +49,6 @@
   margin: 0;
 }
 
-.sentence {
-  line-height: 2.4;
-  font-size: 1.0625rem;
-}
-
 .chip {
   display: inline-flex;
   align-items: center;
@@ -99,16 +94,8 @@ button.chip:hover {
 
 .chip[data-state='missing'] {
   border-style: dashed;
-  border-color: var(--amber);
-  background: var(--amber-soft);
-  color: var(--amber-ink);
 }
 
-.chip[data-state='cant_do'] {
-  border-color: var(--red-line);
-  background: var(--red-soft);
-  color: var(--red-ink);
-}
 
 .spin {
   width: 12px;
@@ -173,8 +160,7 @@ button.chip:hover {
   font: inherit;
 }
 
-.fields,
-.inputs {
+.fields {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -184,10 +170,6 @@ button.chip:hover {
   display: grid;
   gap: 4px;
   min-width: 0;
-}
-
-.inputs .field {
-  flex: 1 1 14rem;
 }
 
 .help {
@@ -207,30 +189,6 @@ button.chip:hover {
   gap: 8px 12px;
 }
 
-.notes {
-  display: grid;
-  gap: 6px;
-  padding: 0;
-  list-style: none;
-  color: var(--muted);
-  font-size: 0.9375rem;
-}
-
-.notes li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  align-items: baseline;
-}
-
-.notes li[data-state='cant_do'] {
-  color: var(--red-ink);
-}
-
-.notes li[data-state='missing'] {
-  color: var(--amber-ink);
-}
-
 .link {
   min-height: 44px;
   padding: 0 4px;
@@ -245,13 +203,6 @@ button.chip:hover {
 
 .similar {
   color: var(--muted);
-}
-
-.whenLine {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
 }
 
 .how {
@@ -352,4 +303,54 @@ button.chip:hover {
   border-radius: 50%;
   background: var(--green-ink);
   color: #fff;
+}
+
+.pq {
+  flex-basis: 100%;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.choice {
+  min-height: 44px;
+  padding: 6px 16px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.choice:hover {
+  border-color: var(--ink);
+}
+
+.pnote,
+.editor,
+.help,
+.problem {
+  flex-basis: 100%;
+}
+
+.pnote {
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+
+.value {
+  flex: 1 1 12rem;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-ctl);
+  font: inherit;
 }

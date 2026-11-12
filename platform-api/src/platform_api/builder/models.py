@@ -160,6 +160,10 @@ class UseCaseView(WireModel):
         description="The newest run of this workflow, whatever its state. Null when it has "
         "never run."
     )
+    left_out: list[str] = Field(
+        description="The parts of the request it was set up without, in the person's own words "
+        "(plan 4.6). Text for people to read: nothing runs from it."
+    )
 
 
 class UseCaseList(WireModel):
@@ -605,6 +609,17 @@ class CreateAgentUseCase(WireIn):
         description="When it runs on its own, in Singapore time. The person who sets it up "
         "owns the schedule, so its scheduled runs are their work. Leave it out to run it only "
         "by hand.",
+    )
+    left_out: Annotated[
+        list[
+            Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+        ],
+        Field(max_length=10),
+    ] = Field(
+        default_factory=list,
+        description="The parts of the request the Planner marked with a cross, in the person's "
+        "own words, so the workflow keeps what it was set up without (plan 4.6). Nothing runs "
+        "from them.",
     )
 
 

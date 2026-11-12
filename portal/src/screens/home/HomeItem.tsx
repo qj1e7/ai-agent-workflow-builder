@@ -138,7 +138,7 @@ export function NeedItem({ need, card, quiet = false, connectAbove = false, now,
         <div className={styles['rowText']}>
           <b id={titleId}>{words.title}</b>
           <span className={styles['rowMeta']}>{words.meta}</span>
-          {(need.kind === 'stopped' || need.kind === 'declined') && words.note ? <span className={styles['rowMeta']}>{words.note}</span> : null}
+          {(need.kind === 'stopped' || need.kind === 'declined' || need.kind === 'question') && words.note ? <span className={styles['rowMeta']}>{words.note}</span> : null}
           {words.why ? (
             <span className={styles['rowWhy']}>
               <b>AI troubleshooter:</b> {words.why}

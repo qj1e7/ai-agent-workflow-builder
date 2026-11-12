@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TypedDict
@@ -58,6 +59,7 @@ from platform_api.monitoring.troubleshooter import answers, explain
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.dispatch import ApprovalNotice, ApprovalOutcome, AskedStep
 from platform_api.orchestration.http import (
+    AnswerView,
     ApprovalActionView,
     ApprovalRef,
     ApprovalView,
@@ -66,6 +68,7 @@ from platform_api.orchestration.http import (
     DecisionView,
     FailedView,
     ProposalView,
+    QuestionView,
     RefusalOut,
     RejectedView,
     RunView,
@@ -79,6 +82,7 @@ from platform_api.orchestration.http import (
     WriteDoneView,
 )
 from platform_api.orchestration.jira import PRACTICE_SITE
+from platform_api.orchestration.questions import QuestionId
 from platform_api.orchestration.teams import approval_card, practice_text, with_outcome
 from platform_api.orchestration.write_actions import WriteAction, describe_at, digest
 from platform_api.practice_jira.http import MockJiraTicket, MockJiraTickets
@@ -618,7 +622,28 @@ def rejected_final_view(tl: Timeline) -> RunView:
     )
 
 
-def approval_view_for(story: Story, viewer: UserId) -> ApprovalView:
+# Bob asks Alice, who started the run, before he decides, and she answers. Neither decides.
+QUESTION = QuestionView(
+    question_id=QuestionId("q_01JB8QA5K0000000000000000"),
+    asked_by=BOB,
+    asked_at=datetime(2026, 11, 3, 2, 16, 5, tzinfo=UTC),
+    text="Has 1.2.16 been tested with our login service?",
+    answer=None,
+)
+ANSWERED = QUESTION.model_copy(
+    update={
+        "answer": AnswerView(
+            text="Yes. We tested it with the team on Friday.",
+            by=ALICE,
+            at=datetime(2026, 11, 3, 2, 18, 40, tzinfo=UTC),
+        )
+    }
+)
+
+
+def approval_view_for(
+    story: Story, viewer: UserId, questions: Sequence[QuestionView] = ()
+) -> ApprovalView:
     own_work = viewer == ALICE
     return ApprovalView(
         approval_id=story.approval_id,
@@ -635,6 +660,8 @@ def approval_view_for(story: Story, viewer: UserId) -> ApprovalView:
         trigger="person",
         retried_by=[],
         found=SUMMARY,
+        requester=ALICE,
+        questions=list(questions),
     )
 
 
@@ -670,6 +697,7 @@ USE_CASE = UseCaseView(
     plan=template_view(SOFTWARE_WATCHLIST).blocks,
     agents=[],
     last_run=None,
+    left_out=[],
 )
 
 SUGGESTION = Builder.suggest(INSTRUCTION)
@@ -782,6 +810,10 @@ def fixtures() -> dict[str, WireModel | list[WireModel]]:
         "views/rejected.final.json": rejected_final_view(rejected),
         "approvals/apr_01JB8.alice.json": approval_view_for(SUCCESS, ALICE),
         "approvals/apr_01JB8.bob.json": approval_view_for(SUCCESS, BOB),
+        "approvals/apr_01JB8.alice.asked.json": approval_view_for(SUCCESS, ALICE, [QUESTION]),
+        "approvals/apr_01JB8.bob.answered.json": approval_view_for(SUCCESS, BOB, [ANSWERED]),
+        "approvals/question.asked.json": QUESTION,
+        "approvals/question.answered.json": ANSWERED,
         "approvals/decision.approved.json": decision_out(success),
         "approvals/refusal.own_work.json": OWN_WORK_REFUSAL,
         "builder/templates.json": TEMPLATES,

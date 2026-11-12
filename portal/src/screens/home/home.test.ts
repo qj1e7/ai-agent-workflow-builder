@@ -3,16 +3,18 @@ import aliceHome from '../../../../contracts/fixtures/builder/home.alice.json'
 import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
 import dayOne from '../../../../contracts/fixtures/builder/home.day-one.json'
 import declinedTest from '../../../../contracts/fixtures/builder/home.alice.declined-test.json'
+import questionForAlice from '../../../../contracts/fixtures/builder/home.alice.question.json'
 import type { AddressItem, ApprovalItem, ConnectionItem, FollowingUpItem, HomeOut, ReplyView, StoppedItem, WaitingItem } from '../../api/types'
 import { ApiError } from '../../api/client'
 import capabilities from '../../../../contracts/fixtures/planner/capabilities.json'
 import type { CapabilitiesView } from '../../api/types'
-import { actionsOf, approverLine, comingUpOf, draftWords, firstSentence, groupOf, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, openPathOf, pinnedOf, pinnedWhy, retryProblem, stateLine, suggestionsOf, waitingWords, wordsOf, type Need } from './home'
+import { actionsOf, approverLine, comingUpOf, draftWords, firstSentence, groupOf, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, openPathOf, panelItemOf, pinnedOf, pinnedWhy, retryProblem, stateLine, suggestionsOf, waitingWords, wordsOf, type Need } from './home'
 
 const BOB = bobHome as HomeOut
 const ALICE = aliceHome as HomeOut
 const DAY_ONE = dayOne as HomeOut
 const DECLINED_TEST = declinedTest as HomeOut
+const QUESTION_FOR_ALICE = questionForAlice as HomeOut
 const NOW = new Date('2026-11-03T15:00:00+08:00')
 
 const [ASK] = BOB.approvals as [ApprovalItem]
@@ -447,5 +449,30 @@ describe('the pinned line', () => {
     expect(pinnedWhy(stopped, NOW)).not.toContain('Retry the run.')
     const approval = pinnedOf(BOB)?.need as Need
     expect(pinnedWhy(approval, NOW)).toBe('Software watchlist · Started by Alice, Today, 10:14')
+  })
+})
+
+describe('a question an Approver asked on a request this person made', () => {
+  const [need] = needsOf(QUESTION_FOR_ALICE).shown as [Need]
+
+  it('is in the requester’s Do now, counted with the rest', () => {
+    expect(need.kind).toBe('question')
+    expect(groupOf(need)).toBe('now')
+    expect(needsTotal(QUESTION_FOR_ALICE)).toBe(1)
+    expect(pinnedOf(QUESTION_FOR_ALICE)).toEqual({ need, more: 0 })
+  })
+
+  it('says who asked about which workflow, that the request still waits, and the question', () => {
+    const words = wordsOf(need, NOW)
+    expect(words.tone, 'a message for this person, as a reply is, never the approval shield').toBe('info')
+    expect(words.title).toBe('Bob asked you about Software watchlist')
+    expect(words.meta).toBe('The request is still waiting for a yes')
+    expect(words.note).toBe('“Has 1.2.16 been tested with our login service?”')
+  })
+
+  it('opens the run to answer it, in the side panel from the chat', () => {
+    const run = QUESTION_FOR_ALICE.questions_for_me[0]!.run_id
+    expect(actionsOf(need)).toEqual([{ kind: 'open', label: 'Answer Bob', to: `/runs/${run}`, item: { kind: 'run', id: run } }])
+    expect(panelItemOf(need)).toEqual({ kind: 'run', id: run })
   })
 })

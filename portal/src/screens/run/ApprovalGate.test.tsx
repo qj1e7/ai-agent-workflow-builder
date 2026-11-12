@@ -1,15 +1,20 @@
 import alice from '@contracts/fixtures/approvals/apr_01JB8.alice.json'
+import asked from '@contracts/fixtures/approvals/apr_01JB8.alice.asked.json'
 import bob from '@contracts/fixtures/approvals/apr_01JB8.bob.json'
+import answered from '@contracts/fixtures/approvals/apr_01JB8.bob.answered.json'
+import question from '@contracts/fixtures/approvals/question.asked.json'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { ApprovalView } from '../../api/types'
 import { MemoryRouter } from 'react-router'
 import { ApprovalGate, DeclineReasons, EXACT_WORDS } from './ApprovalGate'
-import { DeclinedToast } from './DeclinedToast'
+import { withQuestion } from '../../api/queries'
+import { APPROVE, askedWords, declinedNow, declineReasons, decisionFor, foundOf, partyOf, yourPart, type Decision } from './decision'
 import type { LiveRun } from './liveRun'
+import { AskBox } from './QuestionThread'
+import { ANSWER_HELP, NO_QUESTIONS, NOT_ANSWERED, STILL_WAITING, askHelp, askRefusalWords, sentWords } from './questions'
 import { declinedSoFarWords, statusWords } from './RunPage'
 import { emptyModel, type Phase } from './runModel'
-import { APPROVE, askedWords, declinedNow, declineReasons, decisionFor, foundOf, partyOf, requesterOf, yourPart, type Decision } from './decision'
 import { approvalTitle, lockWords, withCurrentNames, proposalTitle, type Party } from './words'
 
 const BOB = bob as ApprovalView
@@ -32,7 +37,7 @@ const REASONS = declineReasons('software_watchlist')
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replaceAll('&amp;', '&').replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))
 
-function draw(approval: ApprovalView, party: Party | null, decision = idle, found = approval.found): string {
+function draw(approval: ApprovalView, party: Party | null, decision = idle, found = approval.found, me?: string): string {
   return renderToStaticMarkup(
     <MemoryRouter>
       <ApprovalGate
@@ -41,6 +46,9 @@ function draw(approval: ApprovalView, party: Party | null, decision = idle, foun
         decision={decision}
         reasons={REASONS}
         requester="Alice"
+        questions={NO_QUESTIONS}
+        me={me}
+        nameOf={nameOf}
       />
     </MemoryRouter>,
   )
@@ -50,19 +58,19 @@ describe('the approval gate', () => {
   it('in the side panel shows everything that will be written and the decision, and leaves Why, Who asked and Your part for the page', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <ApprovalGate approval={BOB} page={null} decision={idle} reasons={REASONS} requester="Alice" />
+        <ApprovalGate approval={BOB} page={null} decision={idle} reasons={REASONS} requester="Alice" questions={NO_QUESTIONS} me="bob" nameOf={nameOf} />
       </MemoryRouter>,
     )
     expect(text(html)).toContain('What will change')
     expect(text(html)).toContain(EXACT_WORDS)
     expect(text(html)).toContain('Nothing is written until you say yes.')
-    expect(buttons(html)).toEqual(['Approve 1 ticket', 'Decline'])
+    expect(buttons(html)).toEqual(['Approve 1 ticket', 'Decline', 'Ask Alice a question'])
     for (const left of ['Why', 'Who asked', 'Your part']) expect(text(html)).not.toContain(left)
   })
 
   it('shows bob, an Approver who is not a party to the run, Approve and Decline', () => {
     const html = draw(BOB, OTHER)
-    expect(buttons(html)).toEqual(['Approve 1 ticket', 'Decline'])
+    expect(buttons(html)).toEqual(['Approve 1 ticket', 'Decline', 'Ask Alice a question'])
     expect(text(html)).toContain('You can decide because you didn’t set this up or start this run.')
     expect(text(html)).not.toContain('another Approver must decide')
   })
@@ -254,9 +262,8 @@ describe('declining', () => {
     expect(declineReasons(undefined)).toEqual(['Not needed this time', 'Something in it is wrong'])
   })
 
-  it('names whoever started the run as the one who sees the reason, or its owner when a schedule started it', () => {
-    expect(requesterOf(BOB)).toBe('alice')
-    expect(requesterOf({ ...BOB, trigger: 'schedule', owner: 'carol', started_by: 'carol' })).toBe('carol')
+  it('names the requester the platform gives as the one who sees the reason', () => {
+    expect(BOB.requester).toBe(BOB.started_by)
   })
 })
 
@@ -290,14 +297,22 @@ describe('right after this person decides, before the run’s own events say so'
   }
   const declined = { by: 'bob', approvedBy: [], reason: 'Wrong version' }
 
-  it('offers Approve and Decline again to nobody whose decision is recorded, and no part left to play', () => {
-    expect(buttons(draw(BOB, OTHER)), 'before deciding').toEqual(['Approve 1 ticket', 'Decline'])
+  it('offers Approve, Decline and Ask again to nobody whose decision is recorded, and no part left to play', () => {
+    expect(buttons(draw(BOB, OTHER)), 'before deciding').toEqual(['Approve 1 ticket', 'Decline', 'Ask Alice a question'])
     for (const recorded of ['approve', 'decline'] as const) {
       const html = draw(BOB, OTHER, { ...idle, recorded })
       expect(buttons(html), `after ${recorded}`).toEqual([])
       expect(text(html)).not.toMatch(/What happens|Your part/)
       expect(text(html)).toContain(EXACT_WORDS)
     }
+  })
+
+  it('still shows the question thread to the person who decided, and still offers Ask to an Approver who hasn’t', () => {
+    const asked = { ...BOB, questions: ASKED.questions }
+    const bobDecided = text(draw(asked, OTHER, { ...idle, recorded: 'decline' }, asked.found, 'bob'))
+    expect(bobDecided).toContain('Has 1.2.16 been tested with our login service?')
+    expect(bobDecided).not.toContain('Ask Alice a question')
+    expect(text(draw(asked, OTHER, idle, asked.found, 'dave')), 'another Approver').toContain('Not sure yet? Ask Alice a question')
   })
 
   it('keeps the declined record on the page until the run is declined, as approving keeps its words', () => {
@@ -309,9 +324,86 @@ describe('right after this person decides, before the run’s own events say so'
   })
 })
 
-describe('the message after a decline', () => {
-  it('gives the person who declined the record at the bottom of the page, and says nothing before a decline', () => {
-    expect(renderToStaticMarkup(<DeclinedToast declined={{ by: 'bob', approvedBy: [], reason: 'Wrong version' }} />)).toContain('Declined. Nothing was written. Reason: Wrong version.')
-    expect(renderToStaticMarkup(<DeclinedToast declined={null} />)).not.toContain('Declined')
+const ASKED = asked as ApprovalView
+const ANSWERED = answered as ApprovalView
+const QUESTION = question as ApprovalView['questions'][number]
+const decided = (approval: ApprovalView): ApprovalView => ({
+  ...approval,
+  you_can_decide: false,
+  why_not: 'not_open',
+  steps: approval.steps.map((step) => ({ ...step, status: 'declined', decided_by: 'bob', decided_at: '2026-11-03T02:20:23Z' })),
+})
+
+describe('questions on a request', () => {
+  it('offers Bob a quieter Ask under Approve and Decline, and nobody who can’t decide', () => {
+    expect(text(draw(BOB, OTHER, idle, BOB.found, 'bob'))).toContain('Not sure yet? Ask Alice a question')
+    for (const [approval, party] of [
+      [ALICE, STARTER],
+      [CAROL, OTHER],
+      [DECIDED, OTHER],
+    ] as const) {
+      expect(text(draw(approval, party))).not.toContain('Ask Alice a question')
+    }
+  })
+
+  it('opens a box that says Alice sees it and the request stays open, with Send question and Cancel', () => {
+    const html = renderToStaticMarkup(<AskBox requester="Alice" ask={NO_QUESTIONS.ask} onSent={() => undefined} onCancel={() => undefined} />)
+    expect(text(html)).toContain('Your question for Alice')
+    expect(text(html)).toContain(askHelp('Alice'))
+    expect(buttons(html)).toEqual(['Send question', 'Cancel'])
+  })
+
+  it('shows Bob his question waiting for an answer, and leaves him Approve, Decline and Ask', () => {
+    const html = draw({ ...BOB, questions: ASKED.questions }, OTHER, idle, BOB.found, 'bob')
+    expect(text(html)).toContain(`Questions You asked Alice: ${QUESTION.text} ${STILL_WAITING}`)
+    expect(buttons(html)).toEqual(['Approve 1 ticket', 'Decline', 'Ask Alice a question'])
+  })
+
+  it('gives Alice, the requester, an answer box under the question, and still no way to decide', () => {
+    const html = draw(ASKED, STARTER, idle, ASKED.found, 'alice')
+    expect(text(html)).toContain(`Bob asked you: ${QUESTION.text} Your answer for Bob`)
+    expect(text(html)).toContain(ANSWER_HELP)
+    expect(buttons(html)).toEqual(['Send answer'])
+  })
+
+  it('shows the answer under the question, in the reader’s own words', () => {
+    expect(text(draw(ANSWERED, OTHER, idle, ANSWERED.found, 'bob'))).toContain(`You asked Alice: ${QUESTION.text} Alice answered: Yes. We tested it with the team on Friday.`)
+    expect(text(draw(ANSWERED, OTHER, idle, ANSWERED.found, 'carol'))).toContain('Bob asked Alice:')
+  })
+
+  it.each([
+    ['alice', STARTER],
+    ['bob', OTHER],
+  ])('keeps the questions on the record once it is decided, read only, for %s', (me, party) => {
+    const html = draw(decided(ASKED), party, idle, '', me)
+    expect(text(html)).toContain(`${QUESTION.text} ${NOT_ANSWERED}`)
+    expect(text(html)).not.toContain('Your answer for')
+    expect(buttons(html)).toEqual([])
+  })
+
+  it('shows the questions in the side panel too', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <ApprovalGate approval={{ ...BOB, questions: ASKED.questions }} page={null} decision={idle} reasons={REASONS} requester="Alice" questions={NO_QUESTIONS} me="bob" nameOf={nameOf} />
+      </MemoryRouter>,
+    )
+    expect(text(html)).toContain(`You asked Alice: ${QUESTION.text}`)
+  })
+
+  it('says a refused question in its own words, never as a decision', () => {
+    const refusals = ['own_work', 'not_an_approver', 'not_open', 'decided_earlier_step', 'not_eligible', 'stale_digest'] as const
+    for (const refusal of refusals) expect(askRefusalWords(refusal)).toMatch(/\bask|question/)
+    expect(askRefusalWords('own_work')).toBe('This is your own request, so another Approver asks about it.')
+  })
+
+  it('confirms a kept question or answer in the prototype’s words', () => {
+    expect(sentWords('Carol')).toBe('Sent to Carol. The request is still waiting for a yes.')
+  })
+
+  it('puts a sent question or answer in its place before the next read, once', () => {
+    const sent = withQuestion(BOB, QUESTION)
+    expect(sent.questions).toEqual([QUESTION])
+    expect(withQuestion(sent, ANSWERED.questions[0]!).questions).toEqual(ANSWERED.questions)
+    expect(sent.steps).toEqual(BOB.steps)
   })
 })

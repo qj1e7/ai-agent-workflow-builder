@@ -1,0 +1,49 @@
+{
+  "approval_id": "apr_01JB8",
+  "run_id": "run_01JB8",
+  "digest": "sha256:4643d9dfc8577a7b21a6bf16196fde88777715a2e4fb44e786046f80fa921a38",
+  "actions": [
+    {
+      "connector": "jira",
+      "operation": "create_ticket",
+      "target": {
+        "project": "MOCK",
+        "site": "practice"
+      },
+      "fields": {
+        "title": "Upgrade LangGraph from 1.2.14 to 1.2.16",
+        "body": "LangGraph has 2 new releases on GitHub (langchain-ai/langgraph) newer than our version 1.2.14:\n- 1.2.16\n- 1.2.15\n\nProposed by the AI workflow builder."
+      },
+      "site_name": "the practice Jira"
+    }
+  ],
+  "steps": [
+    {
+      "index": 0,
+      "label": "Team approver",
+      "status": "open",
+      "decided_by": null,
+      "decided_at": null,
+      "reason": null
+    }
+  ],
+  "you_can_decide": false,
+  "why_not": "own_work",
+  "use_case_id": "uc_01JB7",
+  "use_case_name": "Software watchlist",
+  "owner": "alice",
+  "started_by": "alice",
+  "trigger": "person",
+  "retried_by": [],
+  "found": "LangGraph has a new release: 1.2.16.",
+  "requester": "alice",
+  "questions": [
+    {
+      "question_id": "q_01JB8QA5K0000000000000000",
+      "asked_by": "bob",
+      "asked_at": "2026-11-03T02:16:05Z",
+      "text": "Has 1.2.16 been tested with our login service?",
+      "answer": null
+    }
+  ]
+}

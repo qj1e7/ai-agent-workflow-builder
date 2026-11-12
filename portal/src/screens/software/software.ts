@@ -409,7 +409,7 @@ export function singaporeTime(iso: string): string {
   return dateAndClock(iso)
 }
 
-function clockWords(at: string): string {
+export function clockWords(at: string): string {
   return at.replace(/^0/, '')
 }
 
