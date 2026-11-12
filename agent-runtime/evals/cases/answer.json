@@ -5133,7 +5133,7 @@
   },
   {
     "id": "r4-state-with-task",
-    "note": "Plan 7.5, a state question keeps a cross on the task beside it. Waits for R7: the question lane is closed to a request with a change word, so today the task is answered and the question crossed \"ask on its own\". The harness has no skip or expected-fail, so this case fails until R7.",
+    "note": "Plan 7.5, a state question keeps a cross on the task beside it. R7 settles it: a new workflow asked for changes nothing that exists, so the question lane answers the question and the task is crossed to ask on its own. The lane needs the facts the platform always sends.",
     "task": "Which software is behind, and set up a weekly summary",
     "kind": [
       "check_workflows",
@@ -5142,7 +5142,52 @@
     ],
     "reasons": [
       "ask_on_its_own"
-    ]
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "React",
+          "repo": "x/react",
+          "our_version": "19.1.0",
+          "newest_version": "19.2.0",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning new-ticket check",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-10T00:00:00Z"
+        },
+        {
+          "name": "Weekly closed-ticket summary",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-06T08:00:00Z"
+        },
+        {
+          "name": "Keep our software up to date",
+          "state": "on",
+          "last_run": "Waiting for a yes",
+          "last_run_at": "2026-11-09T01:00:00Z"
+        }
+      ]
+    }
   },
   {
     "id": "r4-clash-days",
@@ -5178,16 +5223,18 @@
   },
   {
     "id": "r4-approver-change-alone",
-    "note": "Plan 7.5, an Approver's change alone. platform-api answers operators for Bob (R16); the runtime sets nothing up and keeps the part.",
+    "note": "Plan 7.5, an Approver's change alone. platform-api answers operators for Bob (R16); the runtime sets nothing up and keeps the part. The asker can't change workflows, so the runtime proposes no edit.",
     "task": "Pause the weekly closed-ticket summary",
     "not_kind": [
-      "setup_card",
-      "part"
-    ]
+      "edit",
+      "part",
+      "setup_card"
+    ],
+    "changes_workflows": false
   },
   {
     "id": "r4-approver-question-and-change",
-    "note": "Plan 7.5, an Approver's question with a change: the question's answer, and a cross on the change.",
+    "note": "Plan 7.5, an Approver's question with a change: the question's answer, and a cross on the change. The asker can't change workflows.",
     "task": "What is waiting for my yes, and pause the morning new-ticket check",
     "not_kind": [
       "setup_card",
@@ -5195,11 +5242,16 @@
     ],
     "reasons": [
       "ask_on_its_own"
+    ],
+    "changes_workflows": false,
+    "kind": [
+      "needs_me",
+      "question"
     ]
   },
   {
     "id": "r4-approver-question-then-delete",
-    "note": "Plan 7.5, an Approver's question then a change, joined by a full stop and then.",
+    "note": "Plan 7.5, an Approver's question then a change, joined by a full stop and then: the question's answer, and a cross on the change.",
     "task": "How are the workflows doing? Then delete the weekly summary",
     "not_kind": [
       "setup_card",
@@ -5207,6 +5259,11 @@
     ],
     "reasons": [
       "ask_on_its_own"
+    ],
+    "changes_workflows": false,
+    "kind": [
+      "check_workflows",
+      "question"
     ]
   },
   {
@@ -5256,5 +5313,678 @@
       "setup_card",
       "part"
     ]
+  },
+  {
+    "id": "r7-edit-mondays",
+    "note": "Plan 7.5, edit: the workflow and the new day.",
+    "task": "Make the morning new-ticket check run on Mondays only",
+    "kind": [
+      "edit"
+    ],
+    "workflow_words": "morning new-ticket check",
+    "change": {
+      "day": "monday"
+    },
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "React",
+          "repo": "x/react",
+          "our_version": "19.1.0",
+          "newest_version": "19.2.0",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning new-ticket check",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-10T00:00:00Z"
+        },
+        {
+          "name": "Weekly closed-ticket summary",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-06T08:00:00Z"
+        },
+        {
+          "name": "Keep our software up to date",
+          "state": "on",
+          "last_run": "Waiting for a yes",
+          "last_run_at": "2026-11-09T01:00:00Z"
+        }
+      ]
+    }
+  },
+  {
+    "id": "r7-edit-instead",
+    "note": "Plan 7.5, edit: the day it runs now is not the new one, and the name's weekly is no schedule.",
+    "task": "Run the weekly summary every day instead of every Friday",
+    "kind": [
+      "edit"
+    ],
+    "workflow_words": "weekly summary",
+    "change": {
+      "day": "every_day"
+    },
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "React",
+          "repo": "x/react",
+          "our_version": "19.1.0",
+          "newest_version": "19.2.0",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning new-ticket check",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-10T00:00:00Z"
+        },
+        {
+          "name": "Weekly closed-ticket summary",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-06T08:00:00Z"
+        },
+        {
+          "name": "Keep our software up to date",
+          "state": "on",
+          "last_run": "Waiting for a yes",
+          "last_run_at": "2026-11-09T01:00:00Z"
+        }
+      ]
+    }
+  },
+  {
+    "id": "r7-edit-react",
+    "note": "Plan 7.5, edit: a watched software's check is the Software watchlist's.",
+    "task": "Change the React check to Tuesdays",
+    "kind": [
+      "edit"
+    ],
+    "workflow_words": "React check",
+    "change": {
+      "day": "tuesday"
+    },
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "React",
+          "repo": "x/react",
+          "our_version": "19.1.0",
+          "newest_version": "19.2.0",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning new-ticket check",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-10T00:00:00Z"
+        },
+        {
+          "name": "Weekly closed-ticket summary",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-06T08:00:00Z"
+        },
+        {
+          "name": "Keep our software up to date",
+          "state": "on",
+          "last_run": "Waiting for a yes",
+          "last_run_at": "2026-11-09T01:00:00Z"
+        }
+      ]
+    }
+  },
+  {
+    "id": "r7-edit-time",
+    "note": "Spec 6.4, a schedule word in the name is no schedule: only the time changes.",
+    "task": "make the weekly summary run at 10am",
+    "kind": [
+      "edit"
+    ],
+    "workflow_words": "weekly summary",
+    "change": {
+      "at": "10:00"
+    },
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "React",
+          "repo": "x/react",
+          "our_version": "19.1.0",
+          "newest_version": "19.2.0",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning new-ticket check",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-10T00:00:00Z"
+        },
+        {
+          "name": "Weekly closed-ticket summary",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-06T08:00:00Z"
+        },
+        {
+          "name": "Keep our software up to date",
+          "state": "on",
+          "last_run": "Waiting for a yes",
+          "last_run_at": "2026-11-09T01:00:00Z"
+        }
+      ]
+    }
+  },
+  {
+    "id": "r7-edit-two-days",
+    "note": "Spec 6.7, two days hold Save with a cross, never the first day.",
+    "task": "make the morning new-ticket check run on Mondays and Thursdays",
+    "kind": [
+      "edit"
+    ],
+    "reasons": [
+      "one_day"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "React",
+          "repo": "x/react",
+          "our_version": "19.1.0",
+          "newest_version": "19.2.0",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning new-ticket check",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-10T00:00:00Z"
+        },
+        {
+          "name": "Weekly closed-ticket summary",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-06T08:00:00Z"
+        },
+        {
+          "name": "Keep our software up to date",
+          "state": "on",
+          "last_run": "Waiting for a yes",
+          "last_run_at": "2026-11-09T01:00:00Z"
+        }
+      ]
+    }
+  },
+  {
+    "id": "r7-edit-rename",
+    "note": "Plan 7.5, an edit it can't make: only the schedule changes from the chat.",
+    "task": "Rename the morning check",
+    "kind": [
+      "edit"
+    ],
+    "edit_cant": "only_schedule",
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "React",
+          "repo": "x/react",
+          "our_version": "19.1.0",
+          "newest_version": "19.2.0",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning new-ticket check",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-10T00:00:00Z"
+        },
+        {
+          "name": "Weekly closed-ticket summary",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-06T08:00:00Z"
+        },
+        {
+          "name": "Keep our software up to date",
+          "state": "on",
+          "last_run": "Waiting for a yes",
+          "last_run_at": "2026-11-09T01:00:00Z"
+        }
+      ]
+    }
+  },
+  {
+    "id": "r7-edit-monthly",
+    "note": "Plan 7.5, an edit it can't make: monthly.",
+    "task": "Make the morning check monthly",
+    "kind": [
+      "edit"
+    ],
+    "edit_cant": "how_often",
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "React",
+          "repo": "x/react",
+          "our_version": "19.1.0",
+          "newest_version": "19.2.0",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning new-ticket check",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-10T00:00:00Z"
+        },
+        {
+          "name": "Weekly closed-ticket summary",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-06T08:00:00Z"
+        },
+        {
+          "name": "Keep our software up to date",
+          "state": "on",
+          "last_run": "Waiting for a yes",
+          "last_run_at": "2026-11-09T01:00:00Z"
+        }
+      ]
+    }
+  },
+  {
+    "id": "r7-command-pause",
+    "note": "Plan 7.5, commands fail closed: a question with a pause is never a state answer.",
+    "task": "What needs my attention? Pause the morning check",
+    "kind": [
+      "edit"
+    ],
+    "edit_cant": "only_schedule",
+    "reasons": [
+      "ask_on_its_own"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "React",
+          "repo": "x/react",
+          "our_version": "19.1.0",
+          "newest_version": "19.2.0",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning new-ticket check",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-10T00:00:00Z"
+        },
+        {
+          "name": "Weekly closed-ticket summary",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-06T08:00:00Z"
+        },
+        {
+          "name": "Keep our software up to date",
+          "state": "on",
+          "last_run": "Waiting for a yes",
+          "last_run_at": "2026-11-09T01:00:00Z"
+        }
+      ]
+    }
+  },
+  {
+    "id": "r7-command-daily",
+    "note": "Plan 7.5, commands fail closed: a question with a change is the edit.",
+    "task": "Is the weekly summary running? Make it daily.",
+    "kind": [
+      "edit"
+    ],
+    "change": {
+      "day": "every_day"
+    },
+    "reasons": [
+      "ask_on_its_own"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "React",
+          "repo": "x/react",
+          "our_version": "19.1.0",
+          "newest_version": "19.2.0",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning new-ticket check",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-10T00:00:00Z"
+        },
+        {
+          "name": "Weekly closed-ticket summary",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-06T08:00:00Z"
+        },
+        {
+          "name": "Keep our software up to date",
+          "state": "on",
+          "last_run": "Waiting for a yes",
+          "last_run_at": "2026-11-09T01:00:00Z"
+        }
+      ]
+    }
+  },
+  {
+    "id": "r7-command-watch",
+    "note": "Spec 6.4, a software question with a watch in it is never a state answer.",
+    "task": "is LangGraph up to date? if not, watch it every day",
+    "not_kind": [
+      "check_workflows",
+      "why_stopped",
+      "needs_me",
+      "question",
+      "edit"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "React",
+          "repo": "x/react",
+          "our_version": "19.1.0",
+          "newest_version": "19.2.0",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning new-ticket check",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-10T00:00:00Z"
+        },
+        {
+          "name": "Weekly closed-ticket summary",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-06T08:00:00Z"
+        },
+        {
+          "name": "Keep our software up to date",
+          "state": "on",
+          "last_run": "Waiting for a yes",
+          "last_run_at": "2026-11-09T01:00:00Z"
+        }
+      ]
+    }
+  },
+  {
+    "id": "r7-name-next-run",
+    "note": "Plan 7.5, names are not commands: the one workflow answer, not an edit.",
+    "task": "When does the weekly summary run next?",
+    "kind": [
+      "check_workflows",
+      "question"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "React",
+          "repo": "x/react",
+          "our_version": "19.1.0",
+          "newest_version": "19.2.0",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning new-ticket check",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-10T00:00:00Z"
+        },
+        {
+          "name": "Weekly closed-ticket summary",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-06T08:00:00Z"
+        },
+        {
+          "name": "Keep our software up to date",
+          "state": "on",
+          "last_run": "Waiting for a yes",
+          "last_run_at": "2026-11-09T01:00:00Z"
+        }
+      ]
+    }
+  },
+  {
+    "id": "r7-name-holds-weekly",
+    "note": "Spec 6.4, a workflow named in full that holds a schedule word gets its state.",
+    "task": "how is the weekly closed-ticket summary doing?",
+    "kind": [
+      "check_workflows",
+      "question"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "React",
+          "repo": "x/react",
+          "our_version": "19.1.0",
+          "newest_version": "19.2.0",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning new-ticket check",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-10T00:00:00Z"
+        },
+        {
+          "name": "Weekly closed-ticket summary",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-06T08:00:00Z"
+        },
+        {
+          "name": "Keep our software up to date",
+          "state": "on",
+          "last_run": "Waiting for a yes",
+          "last_run_at": "2026-11-09T01:00:00Z"
+        }
+      ]
+    }
   }
 ]

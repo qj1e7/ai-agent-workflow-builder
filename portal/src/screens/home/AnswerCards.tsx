@@ -323,6 +323,7 @@ export function Answer({ reply, typed, page }: AnswerProps) {
           {(reply.about_software ?? []).length > 0 ? <SoftwareActions names={reply.about_software ?? []} /> : null}
         </>
       )
+    case 'edit':
     case 'check_workflows':
     case 'why_stopped':
     case 'needs_me':

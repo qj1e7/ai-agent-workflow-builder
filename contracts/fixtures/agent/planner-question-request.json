@@ -60,5 +60,6 @@
       "day": "monday",
       "at": "09:00"
     }
-  }
+  },
+  "changes_workflows": true
 }

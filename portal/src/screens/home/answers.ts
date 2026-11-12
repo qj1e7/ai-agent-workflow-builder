@@ -77,6 +77,7 @@ export const SAY = {
   approverAbilities: 'Here’s what you can ask me.',
   approverUnknown: 'I can’t help with that here. I answer questions about your approvals and the workflows.',
   nothingNeeds: 'Nothing needs you right now.',
+  edit: 'I can’t change a workflow from the chat yet. Open it on the Workflows page to change it.',
 } as const
 
 /** Who is asking: an Operator sets up and changes workflows, and anyone else asks questions only (ADR 0043). */
@@ -124,6 +125,8 @@ export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | 
       return reply.message
     case 'question':
       return reply.text
+    case 'edit':
+      return SAY.edit
     case 'check_workflows':
     case 'why_stopped':
     case 'needs_me':

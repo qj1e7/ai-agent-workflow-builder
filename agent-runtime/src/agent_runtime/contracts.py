@@ -873,6 +873,16 @@ def answered_refused() -> Answered:
     return _answered(TaskRead(skips_the_yes=NO_SKIP), SKIP_TASK)
 
 
+EDIT_TASK = "Make the morning new-ticket check run on Mondays only"
+
+
+def answered_edit() -> Answered:
+    read = TaskRead(
+        asks_about="change", workflow_words="morning new-ticket check", skips_the_yes=NO_SKIP
+    )
+    return _answered(read, EDIT_TASK)
+
+
 def question_request() -> AnswerRequest:
     watched = [
         WatchedFact(name=n, repo=r, our_version=o, newest_version=v, state=t)
@@ -953,6 +963,7 @@ def fixtures() -> dict[str, WireModel]:
         "planner-answered-cant.json": answered_cant(),
         "planner-answered-watchlist.json": answered_watchlist(),
         "planner-answered-refused.json": answered_refused(),
+        "planner-answered-edit.json": answered_edit(),
         "planner-question-request.json": question_request(),
         "planner-answered-question.json": answered_question(),
         "planner-check-part-request.json": CheckPartRequest(kind="do", text="Email the list"),
