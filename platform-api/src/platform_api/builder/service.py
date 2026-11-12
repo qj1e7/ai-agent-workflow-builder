@@ -109,6 +109,11 @@ _CURRENT_VERSION = """
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
 """
 
+_USE_CASE_ROW = (
+    "SELECT current_version, paused_at, paused_by, deleted_at, deleted_by"
+    " FROM builder.use_cases WHERE use_case_id = %s"
+)
+
 
 def _schedule_view(saved: SavedSchedule) -> UseCaseSchedule:
     return UseCaseSchedule(
@@ -345,11 +350,12 @@ class Builder:
 
     async def list_versions(self, use_case_id: str) -> VersionList | None:
         async with self._db.connection("builder") as conn:
-            if not isinstance(await _lifecycle_now(conn, use_case_id), On | Paused):
+            row = await (await conn.execute(_USE_CASE_ROW, (use_case_id,))).fetchone()
+            if row is None or not isinstance(lifecycle_of(row), On | Paused):
                 return None
             versions = await versions_of(conn, use_case_id)
-        newest = versions[0].number
-        return VersionList(versions=[version_view(version, newest) for version in versions])
+        running = row["current_version"]
+        return VersionList(versions=[version_view(version, running) for version in versions])
 
     async def undo_version(
         self, use_case_id: str, version: int, principal: Principal, body: UndoIn
@@ -373,25 +379,33 @@ class Builder:
     ) -> Undo | None:
         """Publishes what `decide` makes of the versions, and saves its schedule. The builder
         cannot write orchestration's schedules, so the schedule is saved in its own transaction,
-        before the version's commits. A save that fails leaves no version naming it."""
+        before the version's commits. A save that fails leaves no version naming it.
+
+        If the version's commit is lost after the schedule saved, the schedule runs on with no
+        version naming it until the change is made again. Whether anything changed is judged
+        against the schedule the newest version recorded, so that retry publishes the missing
+        version. Version 1 and the watchlist's versions record no schedule, so against them it
+        is judged on the live schedule, and the first change after version 1 stays without a
+        version if its commit is lost."""
         async with self._db.transaction("builder") as uow:
             # A delete holds this lock alone, so it waits until the schedule is stored, and a
             # delete that came first is seen here. The row lock puts changes in turn.
             await hold_workflow(uow.conn, use_case_id, alone=False)
             row = await (
-                await uow.conn.execute(
-                    "SELECT current_version, paused_at, paused_by, deleted_at, deleted_by"
-                    " FROM builder.use_cases WHERE use_case_id = %s FOR UPDATE",
-                    (use_case_id,),
-                )
+                await uow.conn.execute(_USE_CASE_ROW + " FOR UPDATE", (use_case_id,))
             ).fetchone()
             if row is None or not isinstance(lifecycle_of(row), On | Paused):
                 return None
-            decided = decide(await versions_of(uow.conn, use_case_id))
+            versions = await versions_of(uow.conn, use_case_id)
+            decided = decide(versions)
             if not isinstance(decided, Publish):
                 return decided
-            saved = await self._schedules.get(UseCaseId(use_case_id))
-            before = None if saved is None else saved.schedule
+            recorded = versions[0].change
+            if recorded is None:
+                saved = await self._schedules.get(UseCaseId(use_case_id))
+                before = None if saved is None else saved.schedule
+            else:
+                before = recorded.after
             if decided.after != before or decided.undid is not None:
                 change = ScheduleChange(
                     principal.user_id, via, before, decided.after, decided.undid

@@ -1338,3 +1338,49 @@ async def test_the_watchlist_keeps_its_own_versions_which_undo_leaves_alone(lab:
     assert refused.status_code == 409
     [listed] = await lab.listed()
     assert listed["version"] == 2
+
+
+class LostCommit:
+    """Saves the schedule for real, then fails, as if the process died before the builder's
+    transaction committed the version."""
+
+    def __init__(self, schedules: ScheduleBook) -> None:
+        self._schedules = schedules
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._schedules, name)
+
+    async def save(self, use_case_id: UseCaseId, schedule: Schedule, owner: Any) -> None:
+        await self._schedules.save(use_case_id, schedule, owner)
+        raise ConnectionError("lost before the version committed")
+
+
+async def test_a_retry_after_a_lost_version_commit_publishes_the_missing_version(lab: Lab):
+    use_case_id = await scheduled_workflow(lab, "alice")
+    await save_schedule(lab, "alice", use_case_id, EVERY_FRIDAY)
+    losing = Builder(
+        lab.h.db,
+        lab.h.orchestrator,
+        lab.app.state.watchlist,
+        "http://localhost:8000",
+        ModelConnected(),
+        schedules=LostCommit(ScheduleBook(lab.h.db)),  # type: ignore[arg-type]
+    )
+    weekdays = {"day": "weekdays", "at": "08:00"}
+    with pytest.raises(ConnectionError):
+        await losing.save_schedule(
+            use_case_id, CAROL, UseCaseScheduleIn(day="weekdays", at="08:00")
+        )
+    [lost] = await lab.listed()
+    assert (lost["version"], lost["schedule"]["day"]) == (2, "weekdays"), (
+        "the schedule saved and the version did not"
+    )
+
+    retried = await save_schedule(lab, "carol", use_case_id, weekdays)
+
+    assert retried.json()["version"] == 3
+    assert changes(await versions(lab, use_case_id)) == [
+        (3, "carol", "page", moved(EVERY_FRIDAY, weekdays), None, True),
+        (2, "alice", "page", moved(EVERY_MONDAY, EVERY_FRIDAY), None, False),
+        (1, None, None, None, None, False),
+    ]

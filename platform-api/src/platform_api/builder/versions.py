@@ -93,7 +93,7 @@ def _schedule_view(schedule: Schedule | None) -> VersionSchedule | None:
     return VersionSchedule(day=schedule.day, at=schedule.at, time_zone=schedule.time_zone)
 
 
-def version_view(version: Version, newest: int) -> VersionView:
+def version_view(version: Version, running: int) -> VersionView:
     change = version.change
     return VersionView(
         version=version.number,
@@ -108,7 +108,7 @@ def version_view(version: Version, newest: int) -> VersionView:
             )
         ),
         undid=None if change is None else change.undid,
-        running=version.number == newest,
+        running=version.number == running,
     )
 
 
