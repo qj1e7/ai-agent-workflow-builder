@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react'
+import { createContext, useContext } from 'react'
 
 /**
  * The one item the side panel shows (spec 3.3). A run waiting for a yes shows its approval, so an approval opens as its run.
@@ -11,20 +11,13 @@ export interface PanelItem {
 
 export const panelKey = (item: PanelItem): string => `${item.kind}:${item.id}`
 
-/** What a view gives the panel's bar and body. `page` is where More details goes, or null when the item has no page to open. */
-export interface PanelView {
+export const sameItem = (shown: PanelItem | null, item: PanelItem): boolean => shown !== null && shown.kind === item.kind && shown.id === item.id
+
+/** What the panel's bar says: the item's title, and where More details goes, or null when the item has no page to open. */
+export interface PanelHead {
   readonly title: string
   readonly page: string | null
-  readonly body: ReactNode
 }
-
-/** Each kind's view reads its own data and hands the panel what to draw. */
-export interface PanelViewProps {
-  readonly id: string
-  readonly children: (view: PanelView) => ReactNode
-}
-
-export const sameItem = (shown: PanelItem | null, item: PanelItem): boolean => shown !== null && shown.kind === item.kind && shown.id === item.id
 
 export interface PanelOpener {
   readonly shown: PanelItem | null
@@ -45,11 +38,6 @@ export function useShownInPanel(...items: readonly PanelItem[]): boolean {
 
 export function useAfterPanelAction(): (() => void) | null {
   return useContext(InSidePanel)
-}
-
-/** Escape closes the panel, unless a dialog over it, such as Teams, or the control with focus took the key first. */
-export function escapeCloses(event: { readonly key: string; readonly defaultPrevented: boolean }, dialogOpen: boolean): boolean {
-  return event.key === 'Escape' && !event.defaultPrevented && !dialogOpen
 }
 
 /** Where Tab goes in a panel that covers the window: round from the last stop to the first, and back. Null lets it move as usual. */

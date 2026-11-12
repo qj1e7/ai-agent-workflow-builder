@@ -1,7 +1,10 @@
-import { lazy, Suspense, useEffect, useRef } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef } from 'react'
+import { useRun, useUseCase, useWatchlist } from '../../api/queries'
 import { Button, ButtonLink } from '../../ui/Button'
-import { escapeCloses, InSidePanel, wrapTab, type PanelItem, type PanelView } from '../../ui/sidePanel'
+import { escapeIsFree } from '../../ui/escape'
+import { InSidePanel, wrapTab, type PanelHead, type PanelItem } from '../../ui/sidePanel'
 import { SoftwarePanel } from '../software/SoftwarePanel'
+import { workflowPath } from '../workflows/workflow'
 import { WorkflowPanel } from '../workflows/WorkflowPanel'
 import styles from './SidePanel.module.css'
 
@@ -11,6 +14,30 @@ export const PANEL_HEADING = 'side-panel-h'
 const RunPanel = lazy(() => import('../run/RunPanel').then((module) => ({ default: module.RunPanel })))
 
 const TAB_STOPS = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
+
+/**
+ * The bar's title and More details, from the same queries the view reads. The bar is drawn once, so the heading that has focus
+ * stays put while the view loads, and the title follows the item.
+ */
+function useHead(item: PanelItem): PanelHead {
+  const useCase = useUseCase(item.kind === 'workflow' ? item.id : '')
+  const run = useRun(item.kind === 'run' ? item.id : '')
+  const watchlist = useWatchlist({ enabled: item.kind === 'software' })
+  switch (item.kind) {
+    case 'workflow': {
+      const shown = useCase.isError ? undefined : useCase.data
+      return shown ? { title: shown.name, page: workflowPath(shown) } : { title: 'Workflow', page: null }
+    }
+    case 'run': {
+      const shown = run.isError ? undefined : run.data
+      return shown ? { title: shown.use_case_name, page: `/runs/${shown.run_id}` } : { title: 'Run', page: null }
+    }
+    case 'software': {
+      const row = watchlist.data?.software.find((software) => software.id === item.id)
+      return row ? { title: row.name, page: `/software?row=${encodeURIComponent(row.id)}` } : { title: 'Software', page: null }
+    }
+  }
+}
 
 interface SidePanelProps {
   readonly item: PanelItem
@@ -22,17 +49,20 @@ interface SidePanelProps {
 
 /**
  * One item opened from the chat, as a summary (spec 3.3). Its bar has the title, More details when the item has a page, and
- * Close. Escape closes it too. An action inside it keeps it open, back at its top, with focus on its heading.
+ * Close. Escape closes it too, after anything inside that took the key, and before a message at the bottom of the page. An action
+ * inside it keeps it open, back at its top, with focus on its heading.
  */
 export function SidePanel({ item, now, narrow, onClose }: SidePanelProps) {
   const panel = useRef<HTMLDivElement>(null)
   const body = useRef<HTMLDivElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
+  const head = useHead(item)
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const dialogOpen = document.querySelector('dialog[open]') !== null
-      if (escapeCloses(event, dialogOpen)) {
+      if (escapeIsFree(event, dialogOpen)) {
+        event.preventDefault()
         onClose()
         return
       }
@@ -47,54 +77,53 @@ export function SidePanel({ item, now, narrow, onClose }: SidePanelProps) {
     return () => document.removeEventListener('keydown', onKey)
   }, [narrow, onClose])
 
-  const backToTop = () => {
+  // When the window narrows and the panel becomes a dialog, the chat behind it waits, so focus there moves to the panel.
+  useEffect(() => {
+    if (narrow && !panel.current?.contains(document.activeElement)) heading.current?.focus({ preventScroll: true })
+  }, [narrow])
+
+  const backToTop = useCallback(() => {
     if (body.current) body.current.scrollTop = 0
     heading.current?.focus({ preventScroll: true })
-  }
+  }, [])
 
-  const frame = (view: PanelView) => (
+  return (
     <div ref={panel} id="side-panel" className={styles['panel']} role={narrow ? 'dialog' : 'complementary'} aria-modal={narrow || undefined} aria-labelledby={PANEL_HEADING}>
       <div className={styles['bar']}>
         <h2 ref={heading} id={PANEL_HEADING} tabIndex={-1}>
-          {view.title}
+          {head.title}
         </h2>
         <div className={styles['btns']}>
-          {view.page ? <ButtonLink to={view.page}>More details</ButtonLink> : <span />}
+          {head.page ? <ButtonLink to={head.page}>More details</ButtonLink> : <span />}
           <Button onClick={onClose}>Close</Button>
         </div>
       </div>
       <div ref={body} className={styles['body']}>
-        <InSidePanel.Provider value={backToTop}>{view.body}</InSidePanel.Provider>
+        <InSidePanel.Provider value={backToTop}>
+          <View item={item} now={now} />
+        </InSidePanel.Provider>
       </div>
     </div>
   )
+}
 
+function View({ item, now }: { item: PanelItem; now: Date }) {
   switch (item.kind) {
     case 'workflow':
+      return <WorkflowPanel id={item.id} now={now} />
+    case 'run':
       return (
-        <WorkflowPanel key={item.id} id={item.id} now={now}>
-          {frame}
-        </WorkflowPanel>
-      )
-    case 'run': {
-      const loading = (
-        <p className="muted" role="status">
-          Loading the run
-        </p>
-      )
-      return (
-        <Suspense fallback={frame({ title: 'Run', page: null, body: loading })}>
-          <RunPanel key={item.id} id={item.id}>
-            {frame}
-          </RunPanel>
+        <Suspense
+          fallback={
+            <p className="muted" role="status">
+              Loading the run
+            </p>
+          }
+        >
+          <RunPanel id={item.id} />
         </Suspense>
       )
-    }
     case 'software':
-      return (
-        <SoftwarePanel key={item.id} id={item.id}>
-          {frame}
-        </SoftwarePanel>
-      )
+      return <SoftwarePanel id={item.id} />
   }
 }

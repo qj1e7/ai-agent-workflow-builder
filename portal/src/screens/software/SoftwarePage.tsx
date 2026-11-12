@@ -42,6 +42,7 @@ import {
   emptyWords,
   newestOf,
   oursOf,
+  REFRESH_MS,
   rowDomId,
   rowsMatching,
   scheduleRuns,
@@ -56,8 +57,6 @@ import {
   type Decision,
 } from './software'
 import styles from './Software.module.css'
-
-const REFRESH_MS = 15_000
 
 function useFocusOnceRendered(feedback: ChangeFeedback) {
   const focusedFor = useRef<ChangeFeedback | null>(null)

@@ -5,50 +5,51 @@ import { useLatch } from '../../api/latch'
 import { isOperator } from '../../api/me'
 import { useDisplayName } from '../../api/people'
 import { useMe, useModelOff, useTroubleshoot, useUseCase } from '../../api/queries'
-import type { Me, UseCaseView } from '../../api/types'
+import type { FailureReason, Me, UseCaseView } from '../../api/types'
 import { useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
 import { Button } from '../../ui/Button'
 import { IconPause, IconPlay } from '../../ui/icons'
 import { Link } from '../../ui/Link'
-import { useAfterPanelAction, type PanelViewProps } from '../../ui/sidePanel'
+import { useAfterPanelAction } from '../../ui/sidePanel'
 import { Troubleshooting } from '../run/Outcome'
 import { StatusPills } from './Status'
-import { changeProblem, changeWords, controlsOf, lastRunWords, NO_RUNS, nextRunWords, pillOf, pressChange, REFRESH_MS, rereadWhenOutOfDate, viewerOf, workflowPath } from './workflow'
+import { bannerOf, changeProblem, changeWords, controlsOf, lastRunWords, NO_RUNS, nextRunWords, pillOf, pressChange, REFRESH_MS, rereadWhenOutOfDate, viewerOf, type LastRun } from './workflow'
 import styles from './Workflows.module.css'
 
-const WORKFLOW = 'Workflow'
-
 /** A workflow in the side panel (spec 3.3): its status, its sentence, a stop's three answers with Retry, its last and next run, Open the run, and Pause or Resume. */
-export function WorkflowPanel({ id, now, children }: PanelViewProps & { readonly now: Date }) {
+export function WorkflowPanel({ id, now }: { id: string; now: Date }) {
   const useCase = useUseCase(id, true, { poll: REFRESH_MS })
   const me = useMe()
   if (useCase.isError) {
-    const gone = useCase.error instanceof ApiError && useCase.error.status === 404
-    const body = gone ? (
-      <p className="muted">That workflow isn’t here any more.</p>
-    ) : (
+    if (useCase.error instanceof ApiError && useCase.error.status === 404) return <p className="muted">That workflow isn’t here any more.</p>
+    return (
       <p role="alert">
         The workflow could not be loaded. <Button onClick={() => void useCase.refetch()}>Try again</Button>
       </p>
     )
-    return children({ title: WORKFLOW, page: null, body })
   }
   if (!useCase.data || !me.data) {
-    const body = (
+    return (
       <p className="muted" role="status">
         Loading the workflow
       </p>
     )
-    return children({ title: WORKFLOW, page: null, body })
   }
-  return children({ title: useCase.data.name, page: workflowPath(useCase.data), body: <Summary useCase={useCase.data} me={me.data} now={now} /> })
+  return <Summary useCase={useCase.data} me={me.data} now={now} />
+}
+
+/** The page's banner decides whether the workflow is stopped, so a paused one offers Resume here, never Retry, as on its page and row. */
+function stopOf(useCase: UseCaseView, me: Me, now: Date): (LastRun & { readonly reason: FailureReason }) | null {
+  const last = useCase.last_run
+  if (bannerOf({ useCase, viewer: viewerOf(me), now }).tone !== 'bad' || last?.state !== 'failed' || last.reason === null) return null
+  return { ...last, reason: last.reason }
 }
 
 function Summary({ useCase, me, now }: { useCase: UseCaseView; me: Me; now: Date }) {
   const nameOf = useDisplayName()
   const modelOff = useModelOff()
   const last = useCase.last_run
-  const stopped = last?.state === 'failed' && last.reason !== null ? { ...last, reason: last.reason } : null
+  const stopped = stopOf(useCase, me, now)
   const troubleshoot = useTroubleshoot(stopped?.run_id ?? '', stopped !== null, 0)
   return (
     <>

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { HomeOut } from '../../api/types'
 import { InChat } from '../../ui/fromChat'
 import { NARROW, useMediaQuery } from '../../ui/media'
@@ -73,13 +73,17 @@ export function ChatView({ home, now, page, box, onNewChat }: ChatViewProps) {
   const opened = useRef(false)
   const closed = useRef<OpenPanel | null>(null)
 
-  const opener: PanelOpener = {
-    shown: panel?.item ?? null,
-    open: (item, from) => {
-      opened.current = true
-      openPanel(item, Math.max(0, openersOf(column.current, item).indexOf(from)))
-    },
-  }
+  const shown = panel?.item ?? null
+  const opener = useMemo<PanelOpener>(
+    () => ({
+      shown,
+      open: (item, from) => {
+        opened.current = true
+        openPanel(item, Math.max(0, openersOf(column.current, item).indexOf(from)))
+      },
+    }),
+    [openPanel, shown],
+  )
 
   // Opening moves focus to the panel's heading. Closing hands it back to what opened the panel, which shows again now.
   useEffect(() => {
@@ -125,7 +129,7 @@ export function ChatView({ home, now, page, box, onNewChat }: ChatViewProps) {
           </OpensInPanel.Provider>
           <div className={styles['chatDock']}>{box}</div>
         </div>
-        {panel ? <SidePanel item={panel.item} now={now} narrow={narrow} onClose={close} /> : null}
+        {panel ? <SidePanel key={panelKey(panel.item)} item={panel.item} now={now} narrow={narrow} onClose={close} /> : null}
       </div>
     </InChat.Provider>
   )

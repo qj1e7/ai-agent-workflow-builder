@@ -5,7 +5,7 @@ import { useApproval, useMe, useModelOff, useRun, useTroubleshoot, useUseCase } 
 import type { RunView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
-import { useAfterPanelAction, type PanelViewProps } from '../../ui/sidePanel'
+import { useAfterPanelAction } from '../../ui/sidePanel'
 import { ApprovalGate } from './ApprovalGate'
 import { openStep, partyOf, useDecision } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
@@ -15,8 +15,6 @@ import { RunLine } from './RunLine'
 import { reachOf, stationsOf } from './runModel'
 import { feedTroubleOf, headlineOf, RUN_PROBLEM, shortTime, writeLabel } from './words'
 import styles from './RunPage.module.css'
-
-const RUN = 'Run'
 
 function Loading() {
   return (
@@ -55,29 +53,26 @@ function FeedNotReady({ connection, onRetry }: { connection: LiveRun['connection
 
 /**
  * A run in the side panel (spec 3.3): its state, its headline and the run line, with a stop's three answers and Retry. While
- * it waits for a yes the reader may give, it is the approval instead, from the run page's own gate (spec 10.4).
+ * it waits for a yes the reader may give, it is the approval instead, from the run page's own gate (spec 10.4). Someone who
+ * can't decide sees the summary, as in the prototype.
  */
-export function RunPanel({ id, children }: PanelViewProps) {
+export function RunPanel({ id }: { id: string }) {
   const run = useRun(id)
   if (run.isError) {
     const gone = run.error instanceof ApiError && run.error.status === 404
-    return children({ title: RUN, page: null, body: gone ? <p className="muted">That run isn’t here any more.</p> : <Problem onRetry={() => void run.refetch()} /> })
+    return gone ? <p className="muted">That run isn’t here any more.</p> : <Problem onRetry={() => void run.refetch()} />
   }
-  if (!run.data) return children({ title: RUN, page: null, body: <Loading /> })
-  return <LiveRunPanel run={run.data}>{children}</LiveRunPanel>
+  if (!run.data) return <Loading />
+  return <LiveRunPanel run={run.data} />
 }
 
-function LiveRunPanel({ run, children }: { run: RunView; children: PanelViewProps['children'] }) {
+function LiveRunPanel({ run }: { run: RunView }) {
   const { live, restart, tryAgain } = useLiveRun(run.run_id)
   const failed = live.head.phase.state === 'failed'
   const latest = useRun(run.run_id, { poll: failed ? POLL_FAILED_MS : false }).data ?? run
   useReconnectWhenBehind(failed && live.loaded && latest.last_seq > live.head.seq, restart)
   const ready = live.loaded || live.connection.is === 'live' || live.connection.is === 'settled'
-  return children({
-    title: run.use_case_name,
-    page: `/runs/${run.run_id}`,
-    body: ready ? <RunSummary run={latest} live={live} /> : <FeedNotReady connection={live.connection} onRetry={tryAgain} />,
-  })
+  return ready ? <RunSummary run={latest} live={live} /> : <FeedNotReady connection={live.connection} onRetry={tryAgain} />
 }
 
 function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
@@ -98,6 +93,13 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
   const headline = headlineOf(shown, stations, approval.data && waiting ? approval.data.actions : null)
   const status = statusWords(decision.recorded, live)
 
+  if (waiting && approvalId !== null && !approval.data && !approval.isError) {
+    return (
+      <p className="muted" role="status">
+        Loading what will be written
+      </p>
+    )
+  }
   if (waiting && approval.data?.you_can_decide && openStep(approval.data) && decision.recorded === null) {
     return <ApprovalGate approval={approval.data} page={null} decision={decision} />
   }

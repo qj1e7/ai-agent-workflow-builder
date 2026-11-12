@@ -56,6 +56,8 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
   const cards = useRef(new Map<string, CardMemory>())
   const [shown, setShown] = useState<{ readonly user: string; readonly panel: OpenPanel } | null>(null)
   const panel = shown?.user === user ? shown.panel : null
+  const openPanel = useCallback((item: PanelItem, from: number) => setShown({ user, panel: { item, from } }), [user])
+  const closePanel = useCallback(() => setShown(null), [])
   const desk = deskOf(desks, user)
   const { thread } = desk
   const busy = isThinking(thread)
@@ -123,10 +125,10 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
       scroll,
       cardMemory,
       panel,
-      openPanel: (item, from) => setShown({ user, panel: { item, from } }),
-      closePanel: () => setShown(null),
+      openPanel,
+      closePanel,
     }
-  }, [act, busy, cardMemory, desk.note, desk.problem, desk.text, panel, scroll, send, thread, user])
+  }, [act, busy, cardMemory, closePanel, desk.note, desk.problem, desk.text, openPanel, panel, scroll, send, thread, user])
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>
 }
