@@ -1,4 +1,13 @@
 {
+  "parts": [
+    {
+      "text": "Make the morning new-ticket check run on Mondays only",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ],
   "answer": "edit",
   "use_case_id": "uc_01JB8",
   "name": "Morning new-ticket check",

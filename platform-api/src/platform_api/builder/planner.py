@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Annotated, Final, Literal, Protocol, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import ConfigDict, Field, StringConstraints, model_validator
 
 from platform_api.builder.models import (
     CardList,
@@ -49,11 +49,14 @@ from platform_api.orchestration import (
     NoModel,
     PartAnswer,
     PartCantDo,
+    PartMark,
+    PartReason,
     PlannerAnswer,
     PlannerFacts,
     PreviousTurn,
     QuestionAnswer,
     RefusedAnswer,
+    RequestPart,
     RowKind,
     RuntimeDown,
     SetupCardAnswer,
@@ -140,6 +143,53 @@ class CantRowView(WireModel):
     system: str | None
 
 
+class PartView(WireModel):
+    text: str = Field(
+        description="The request's own words: a whole clause, or, in a clause the Planner partly "
+        "read, only the words it didn't read."
+    )
+    mark: PartMark = Field(
+        description="will_do for a part the answer does, cant for one it doesn't, and question "
+        "for one it asks about."
+    )
+    reason: PartReason | None = Field(
+        description="Why, for a cant or a question: not_followed (no rule read it), cant_do (see "
+        "note), ask_on_its_own, one_day, one_time or one_frequency (a schedule with two, see "
+        "choices), own_time (a time on a watch request), skip_approval, with_a_yes, "
+        "needs_the_rest, how_many_days, only_schedule (a change to a workflow other than when it "
+        "runs) and how_often (a schedule it can't hold, such as monthly). Null for will_do."
+    )
+    note: str | None = Field(description="For cant_do, why, in the registry's words.")
+    choices: list[str] = Field(
+        description="For one_day, one_time and one_frequency, each the request named, in its own "
+        "words, for the person to choose one."
+    )
+
+
+def _part_view(part: RequestPart) -> PartView:
+    return PartView(
+        text=part.text,
+        mark=part.mark,
+        reason=part.reason,
+        note=part.note,
+        choices=list(part.choices),
+    )
+
+
+class Reply(WireModel):
+    """An answer on Home. The contract lists each field as always sent, defaults included, so
+    the Portal never reads one as optional."""
+
+    model_config = ConfigDict(extra="forbid", json_schema_serialization_defaults_required=True)
+
+    parts: list[PartView] = Field(
+        default_factory=list[PartView],
+        description="Every clause of what the person typed, in order, with what happened to it "
+        "(spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another "
+        "answer, and when no model read the request.",
+    )
+
+
 class SimilarWorkflow(WireModel):
     use_case_id: str
     name: str
@@ -150,7 +200,7 @@ class ListedSoftware(WireModel):
     name: str
 
 
-class SetupCardReply(WireModel):
+class SetupCardReply(Reply):
     answer: Literal["setup_card"] = "setup_card"
     name: str
     rows: list[UnderstoodRowView]
@@ -159,7 +209,7 @@ class SetupCardReply(WireModel):
     )
 
 
-class PartReply(WireModel):
+class PartReply(Reply):
     answer: Literal["part"] = "part"
     name: str
     rows: list[UnderstoodRowView]
@@ -167,7 +217,7 @@ class PartReply(WireModel):
     similar: SimilarWorkflow | None
 
 
-class WatchlistReply(WireModel):
+class WatchlistReply(Reply):
     answer: Literal["watchlist"] = "watchlist"
     word: str
     software: str | None
@@ -180,49 +230,49 @@ class WatchlistReply(WireModel):
     )
 
 
-class CantReply(WireModel):
+class CantReply(Reply):
     answer: Literal["cant"] = "cant"
     cant: list[CantRowView]
     alternative: Annotated[SetupCardReply | WatchlistReply, Field(discriminator="answer")] | None
 
 
-class WhichSoftwareReply(WireModel):
+class WhichSoftwareReply(Reply):
     answer: Literal["which_software"] = "which_software"
     word: str
 
 
-class RefusedReply(WireModel):
+class RefusedReply(Reply):
     answer: Literal["refused"] = "refused"
     reason: Literal["skip_approval"]
     said: str
     rest: str
 
 
-class AbilitiesReply(WireModel):
+class AbilitiesReply(Reply):
     answer: Literal["abilities"] = "abilities"
 
 
-class IdeasReply(WireModel):
+class IdeasReply(Reply):
     answer: Literal["ideas"] = "ideas"
 
 
-class CheckWorkflowsReply(WireModel):
+class CheckWorkflowsReply(Reply):
     answer: Literal["check_workflows"] = "check_workflows"
     use_case_id: str | None = Field(
         description="The workflow the request names, when one name matches. Null for all."
     )
 
 
-class WhyStoppedReply(WireModel):
+class WhyStoppedReply(Reply):
     answer: Literal["why_stopped"] = "why_stopped"
     use_case_id: str | None
 
 
-class NeedsMeReply(WireModel):
+class NeedsMeReply(Reply):
     answer: Literal["needs_me"] = "needs_me"
 
 
-class QuestionReply(WireModel):
+class QuestionReply(Reply):
     answer: Literal["question"] = "question"
     text: str = Field(
         description="The Planner's answer to a question about the person's own data, in its own "
@@ -255,7 +305,7 @@ class EditAfter(WireModel):
     )
 
 
-class EditReply(WireModel):
+class EditReply(Reply):
     """A change to a workflow the person has, proposed. Nothing changes until they save it: an
     Operator saves a workflow's schedule with PUT /api/v1/use-cases/{use_case_id}/schedule, with
     via set to chat, which publishes a version that POST .../versions/{version}/undo undoes. The
@@ -301,7 +351,7 @@ class EditReply(WireModel):
     )
 
 
-class OfflineReply(WireModel):
+class OfflineReply(Reply):
     answer: Literal["offline"] = "offline"
     why: FallbackWhy = Field(
         description="no_model: none is connected. too_slow: it took too long. trouble: it "
@@ -558,8 +608,9 @@ class PlannerFront:
             case ModelProblem(reason=reason):
                 log.warning("The Planner's answer fell back to the starters: %s", reason)
                 return offline("too_slow" if reason == "too_slow" else "trouble")
-            case Answered(answer=answer):
-                return await self._finish(answer)
+            case Answered(answer=answer, parts=parts):
+                reply = await self._finish(answer)
+                return reply.model_copy(update={"parts": [_part_view(p) for p in parts]})
 
     async def _finish(self, answer: PlannerAnswer) -> PlannerReply:
         match answer:

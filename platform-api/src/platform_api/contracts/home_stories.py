@@ -10,6 +10,7 @@ from platform_api.builder.home import (
     ComingUp,
     ConfirmationItem,
     ConnectionItem,
+    DeclinedItem,
     DraftItem,
     HomeOut,
     StoppedItem,
@@ -19,6 +20,7 @@ from platform_api.builder.team_requests import FollowingUpItem, ReplyView
 from platform_api.builder.templates import SOFTWARE_WATCHLIST
 from platform_api.contracts.stories import (
     ALICE,
+    BOB,
     FAILURE,
     SUCCESS,
     TICKET_TITLE,
@@ -29,6 +31,7 @@ from platform_api.contracts.stories import (
 )
 from platform_api.monitoring.troubleshooter import explain
 from platform_api.orchestration import ConfirmationKind
+from platform_api.shared import RunId
 from platform_api.wire import WireModel
 
 CONFIRMATIONS_ASKED = datetime(2026, 11, 9, 3, 41, tzinfo=UTC)
@@ -84,6 +87,8 @@ def home_for_bob() -> HomeOut:
         ],
         stopped=[],
         stopped_total=0,
+        declined=[],
+        declined_total=0,
         waiting_on_others=[],
         waiting_on_others_total=0,
         drafts=[],
@@ -134,6 +139,8 @@ def home_for_alice(failure: Timeline) -> HomeOut:
             )
         ],
         stopped_total=1,
+        declined=[],
+        declined_total=0,
         waiting_on_others=[
             WaitingItem(
                 run_id=SUCCESS.run_id,
@@ -209,6 +216,8 @@ DAY_ONE = HomeOut(
     confirmations=[],
     stopped=[],
     stopped_total=0,
+    declined=[],
+    declined_total=0,
     waiting_on_others=[],
     waiting_on_others_total=0,
     drafts=[],
@@ -222,9 +231,31 @@ DAY_ONE = HomeOut(
 )
 
 
+# Bob declined Alice's test run, and said why.
+DECLINED_TEST = DAY_ONE.model_copy(
+    update={
+        "declined": [
+            DeclinedItem(
+                run_id=RunId("run_01JD7TS"),
+                use_case_id="uc_01JD7TS",
+                use_case_name="Weekly closed-ticket summary",
+                started_at=datetime(2026, 11, 10, 1, 2, tzinfo=UTC),
+                declined_at=datetime(2026, 11, 10, 1, 10, tzinfo=UTC),
+                declined_by=BOB,
+                declined_by_name="Bob",
+                decline_reason="Something in it is wrong",
+            )
+        ],
+        "declined_total": 1,
+        "workflows": 1,
+    }
+)
+
+
 def home_fixtures() -> dict[str, WireModel]:
     return {
         "builder/home.bob.json": home_for_bob(),
         "builder/home.alice.json": home_for_alice(failure_events()),
+        "builder/home.alice.declined-test.json": DECLINED_TEST,
         "builder/home.day-one.json": DAY_ONE,
     }

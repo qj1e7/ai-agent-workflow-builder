@@ -1,6 +1,7 @@
 import { ApiError } from '../../api/client'
 import { failureReasonLabel } from '../../api/labels'
-import type { CapabilityView, Day, FailureReason, Refusal, ScheduleHold, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView } from '../../api/types'
+import type { CapabilityView, Day, FailureReason, Refusal, ScheduleHold, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView, WatchlistView } from '../../api/types'
+import type { NextRun } from '../run/words'
 import { dateAndClock, scheduleZoneName, timesZone } from '../workflows/times'
 
 /** The Software page and the side panel both refresh the watchlist this often. */
@@ -106,6 +107,13 @@ export function heldWords(held: ScheduleHold, ownerName: string, howToRunAgain: 
  * What the schedule does next. The view names no next check while the watchlist is paused or the schedule is held, and paused wins over held.
  * The next check is in the schedule's own zone, as on the Workflows list, and always names its zone, as this page always has.
  */
+/** When the next check runs, while the schedule will start one. Null while the watchlist is paused, held or has no schedule. */
+export function nextCheckOf(view: Pick<WatchlistView, 'state' | 'schedule'> | null): NextRun | null {
+  const schedule = view?.schedule
+  if (!schedule || view.state === 'paused' || schedule.held || schedule.next_at === null) return null
+  return { at: schedule.next_at, zone: schedule.time_zone }
+}
+
 export function nextCheckWords(schedule: ScheduleView, paused: boolean): string {
   if (schedule.held && !paused) return heldWords(schedule.held, schedule.owner_name, TAKE_OVER_WORDS)
   if (schedule.next_at === null) return PAUSED_WORDS
@@ -355,7 +363,7 @@ export function singaporeTime(iso: string): string {
   return dateAndClock(iso)
 }
 
-function clockWords(at: string): string {
+export function clockWords(at: string): string {
   return at.replace(/^0/, '')
 }
 

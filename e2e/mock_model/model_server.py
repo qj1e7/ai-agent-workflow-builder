@@ -74,12 +74,17 @@ SOFTWARE = (
     "Kubernetes",
     "React",
 )
+DAY_NAME = r"(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?"
+CLOCK = r"\d{1,2}(?::\d{2})?\s*(?:am|pm)?"
 SCHEDULE = re.compile(
-    r"\b(?:every|each)\s+(?:week ?day|day|morning|monday|tuesday|wednesday|thursday|friday|"
-    r"saturday|sunday|week|month)s?(?:\s+at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?"
+    rf"\b(?:every|each)\s+(?:week ?day|day|morning|{DAY_NAME}|week|month)s?"
+    rf"(?:\s+(?:and|or)\s+{DAY_NAME})?"
+    rf"(?:\s+at\s+{CLOCK}(?:\s+(?:and|or)\s+(?:at\s+)?{CLOCK})?)?"
     r"|\b(?:daily|weekly|monthly)\b",
     re.IGNORECASE,
 )
+"""A schedule as a real model reads it, two days or two times included, so the runtime sees the
+whole schedule and asks which one."""
 FIND = re.compile(r"(?:find|look for|list|search for)\s+(.+?)(?:\s+and\s+(.+))?$", re.IGNORECASE)
 FOUND = re.compile(r"\b(?:of|every|all)\s+(.+?tickets?)\b", re.IGNORECASE)
 IN_PROJECT = re.compile(r"\bin ([A-Z][A-Z0-9]{1,9})\b")

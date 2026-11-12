@@ -1,0 +1,48 @@
+{
+  "parts": [
+    {
+      "text": "Every Friday at 5pm",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    },
+    {
+      "text": "sum up the tickets we closed this week in MOCK",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    },
+    {
+      "text": "colour them by team",
+      "mark": "cant",
+      "reason": "not_followed",
+      "note": null,
+      "choices": []
+    }
+  ],
+  "answer": "setup_card",
+  "name": "Friday closed ticket summary",
+  "rows": [
+    {
+      "kind": "schedule",
+      "text": "Every Friday at 17:00",
+      "state": "understood",
+      "note": null
+    },
+    {
+      "kind": "look_for",
+      "text": "Tickets closed this week in MOCK",
+      "state": "understood",
+      "note": null
+    },
+    {
+      "kind": "do",
+      "text": "Sum them up in one new ticket",
+      "state": "understood",
+      "note": null
+    }
+  ],
+  "similar": null
+}

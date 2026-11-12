@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import agentUseCase from '../../../../contracts/fixtures/cards/use-case.json'
+import leftOutUseCase from '../../../../contracts/fixtures/cards/use-case.left-out.json'
 import watchlistUseCase from '../../../../contracts/fixtures/builder/use-case.json'
 import troubleshooting from '../../../../contracts/fixtures/troubleshooting/failure.json'
 import failed from '../../../../contracts/fixtures/views/failure.final.json'
@@ -29,7 +30,7 @@ const AGENTS = agentUseCase as UseCaseView
 const WATCHLIST = watchlistUseCase as UseCaseView
 const NOW = new Date('2026-11-04T15:00:00+08:00')
 
-const STOPPED: LastRun = { run_id: 'run_01JB9', state: 'failed', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: 'AgentError' }
+const STOPPED: LastRun = { run_id: 'run_01JB9', state: 'failed', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: 'AgentError' }
 
 interface Setup {
   /** The workflow's last run as the platform answers it, changed from a stopped run. */
@@ -98,6 +99,12 @@ describe('a workflow page', () => {
     expect(text(/<h1\b[^>]*>([\s\S]*?)<\/h1>/.exec(html)?.[1] ?? '')).toBe('LangGraph release check')
     expect(text(mainOf(html))).toContain('Check langchain-ai/langgraph for a new release and raise a ticket in MOCK.')
     expect(mainOf(html)).toMatch(/data-life="on"[^>]*>.*On<\/span>/)
+  })
+
+  it('keeps what it was set up without as a Left out line, and none when nothing was left out', () => {
+    const line = 'Left out: “colour them by team”. It was set up without that part.'
+    expect(text(mainOf(render({ useCase: leftOutUseCase as UseCaseView })))).toContain(line)
+    expect(text(mainOf(render()))).not.toContain('Left out')
   })
 
   it('says when it runs, when it runs next, and who may approve', () => {

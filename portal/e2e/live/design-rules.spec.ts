@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import { connectMockModel } from './support/settings'
 import { SettingsApi } from './support/settings'
 import type { Backend } from './support/stack'
@@ -42,6 +42,14 @@ async function noOverclaim(page: Page, state: string): Promise<void> {
 async function noDeadButtons(page: Page, state: string): Promise<void> {
   const dead = await main(page).locator('button[aria-disabled="true"]:not([aria-label="Send to the Planner"]), button:disabled:not(textarea)').count()
   expect(dead, `Principle 9 (the person stays in control): ${state} shows ${String(dead)} dead buttons`).toBe(0)
+}
+
+/** Principle 4: a clause the Planner didn't follow keeps its cross, and the card never says nothing is unclear while it does. */
+async function noPartDropped(page: Page, state: string): Promise<void> {
+  const card = main(page).locator('section[data-card]').last()
+  await expect(card.locator('[data-mark="no"]'), `Principle 4 (no part dropped): ${state} shows no cross`).not.toHaveCount(0)
+  await expect(card, `Principle 4: ${state} says nothing is unclear while a part has a cross`).not.toContainText('Nothing is unclear')
+  await expect(card.getByRole('button', { name: 'Set up the part I can' }), `Principle 4: ${state} offers to set up the whole request`).toBeVisible()
 }
 
 /** Principle 5: the "I can" lists name only what the platform's registry says is ready. */
@@ -102,6 +110,11 @@ test('Home keeps the design rules in each of its states', async ({ browser, back
   await ask(page, 'Every Friday, email me the list of tickets we closed this week')
   await expect(main(page).getByRole('heading', { name: 'What I can’t do yet' }).last()).toBeVisible()
   await allRules(page, capabilities, 'the can’t answer')
+
+  await ask(page, 'Every Friday at 5pm, find bug tickets in MOCK with no update for 10 days and create one ticket that lists them. Colour them by team.')
+  await expect(main(page).locator('section[data-card]').last()).toContainText('I didn’t follow this part.')
+  await noPartDropped(page, 'a set-up card with a clause it didn’t follow')
+  await allRules(page, capabilities, 'a set-up card with a cross')
   await repair()
   await context.close()
 })
@@ -169,5 +182,35 @@ test('with the AI model off, Home shows no dead button and still follows the rul
   } finally {
     await settings.dispose()
     await connectMockModel(String(baseURL))
+  }
+})
+
+/** Principles 5 and 7: a declined run never claims a write. No "created", no "Sent" and no ticket link. */
+async function noWriteClaimed(scope: Locator, state: string): Promise<void> {
+  await expect(scope.first(), `Principles 5 and 7 (a declined run never claims a write): ${state} is not there`).toBeVisible()
+  const words = (await scope.allInnerTexts()).join('\n')
+  expect(words, `Principles 5 and 7 (a declined run never claims a write): ${state} says "created"`).not.toMatch(/\bcreated\b/i)
+  expect(words, `Principle 5 (never claim more than the platform can do): ${state} says "Sent"`).not.toMatch(/\bSent\b/)
+  expect(await scope.locator('a[href*="/jira/"]').count(), `Principles 5 and 7: ${state} links a ticket`).toBe(0)
+}
+
+test('a declined run never claims a write, on its page, in its chat, on Workflows or on the watchlist', async ({ browser, backend }) => {
+  const { runId, approvalId } = await backend.waitingRun('alice')
+  const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
+  await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest, reason: 'Wrong version' }, undefined, [201])
+  await backend.waitForState(runId, ['rejected'])
+  for (const user of ['alice', 'bob']) {
+    const context = await devContext(browser, user)
+    const page = await context.newPage()
+    await page.goto(`/runs/${runId}`)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Declined, nothing was written')
+    await page.locator('summary', { hasText: /what each agent did$/ }).click()
+    await expect(page.getByRole('list', { name: 'What the agents said' })).toBeVisible()
+    await noWriteClaimed(main(page), `the declined run’s page and chat, as ${user}`)
+    await page.goto('/workflows')
+    await noWriteClaimed(main(page).locator('li[data-workflow-id]').filter({ hasText: 'Declined by Bob' }), `the declined run’s Workflows row, as ${user}`)
+    await page.goto('/software')
+    await noWriteClaimed(main(page).locator('li[data-status]').filter({ hasText: 'Declined by Bob.' }), `the watchlist row of the declined check, as ${user}`)
+    await context.close()
   }
 })

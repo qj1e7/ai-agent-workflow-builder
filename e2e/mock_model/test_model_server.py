@@ -380,6 +380,21 @@ class ReadTest(unittest.TestCase):
         )
         self.assertEqual(read["place"], {"project": "MOCK", "said": "in MOCK"})
 
+    def test_a_schedule_with_two_days_or_two_times_is_read_whole(self) -> None:
+        for task, said in [
+            (
+                "Every Monday and Friday at 9am, find bug tickets in MOCK",
+                "Every Monday and Friday at 9am",
+            ),
+            (
+                "Every Friday at 9am and 5pm, find bug tickets in MOCK",
+                "Every Friday at 9am and 5pm",
+            ),
+        ]:
+            read = server.reading(task)
+            self.assertEqual(read["schedule"], said)
+            self.assertEqual(read["search"]["said"], "bug tickets in MOCK")
+
     def test_a_detail_the_search_cannot_filter_by_is_left_out_of_the_structures(self) -> None:
         read = server.reading(
             "Every Monday, find P1 bugs in MOCK reported by Bob and create one ticket that "

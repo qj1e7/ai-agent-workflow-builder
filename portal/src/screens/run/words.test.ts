@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { PRODUCT } from '../../shell/product'
+import rejectedView from '@contracts/fixtures/views/rejected.final.json'
+import type { ApprovalStepView, RunViewOf } from '../../api/types'
 import type { LiveRun } from './liveRun'
-import { feedTroubleOf, speakerName } from './words'
+import type { ChatItem } from './runModel'
+import { declinedBy, declinedNext, declinedOfSteps, declinedRecord, declinedWithNext, declineTail, feedTroubleOf, lineOf, speakerName } from './words'
 
 describe('the run chat', () => {
   it('names the app by its full name', () => {
@@ -28,5 +31,57 @@ describe('a run page whose live feed has not brought the first events', () => {
   ] as const)('says why when the platform answers %i', (status, reason, signIn, trouble) => {
     const closed: LiveRun['connection'] = { is: 'closed', status, reason }
     expect(feedTroubleOf(closed, signIn)).toEqual(trouble)
+  })
+})
+
+describe('the declined record', () => {
+  const nameOf = (id: string) => ({ alice: 'Alice', bob: 'Bob' })[id] ?? id
+  const step = (index: number, change: Partial<ApprovalStepView>): ApprovalStepView => ({ index, label: `Step ${index}`, status: 'open', decided_by: null, decided_at: null, reason: null, ...change })
+
+  it('says who declined, that nothing was written, and why when there is a reason', () => {
+    expect(declinedRecord({ by: 'bob', approvedBy: [], reason: 'Wrong version' }, nameOf)).toBe('Declined by Bob. Nothing was written. Reason: Wrong version.')
+    expect(declinedRecord({ by: 'bob', approvedBy: [], reason: null }, nameOf)).toBe('Declined by Bob. Nothing was written.')
+  })
+
+  it('keeps a first yes, so the record says both', () => {
+    expect(declinedRecord({ by: 'alice', approvedBy: ['bob'], reason: 'Not this week' }, nameOf)).toBe('Approved by Bob, then declined by Alice. Nothing was written. Reason: Not this week.')
+  })
+
+  it('ends the reason with one full stop, whatever the Approver typed', () => {
+    expect(declineTail({ reason: 'Is it tested?' })).toBe('Nothing was written. Reason: Is it tested?')
+    expect(declineTail({ reason: 'Wrong version.' })).toBe('Nothing was written. Reason: Wrong version.')
+  })
+
+  it('has a short form for a line with room for only who declined', () => {
+    expect(declinedBy({ by: 'bob' }, nameOf)).toBe('Declined by Bob')
+  })
+
+  it('reads its facts from a request’s steps, the same as the run route gives them', () => {
+    const view = rejectedView as RunViewOf<'rejected'>
+    expect(declinedOfSteps(view.approval.steps)).toEqual({ by: 'bob', approvedBy: [], reason: 'Wrong version' })
+    const second = [step(0, { status: 'approved', decided_by: 'bob' }), step(1, { status: 'declined', decided_by: 'alice', reason: 'Needs testing first' })]
+    expect(declinedOfSteps(second)).toEqual({ by: 'alice', approvedBy: ['bob'], reason: 'Needs testing first' })
+    expect(declinedOfSteps([step(0, { status: 'approved', decided_by: 'bob' })])).toBeNull()
+  })
+
+  it('is the last word of a declined run’s chat, which never says Done', () => {
+    const declined: ChatItem = { kind: 'declined', seq: 1, at: 0 as ChatItem['at'], record: { by: 'bob', approvedBy: [], reason: 'Wrong version' } }
+    expect(lineOf(declined, nameOf, null).text).toBe('Declined by Bob. Nothing was written. Reason: Wrong version. The run ended.')
+    expect(lineOf(declined, nameOf, 'Change what it does, or run the test again.').text).toBe('Declined by Bob. Nothing was written. Reason: Wrong version. The run ended. Change what it does, or run the test again.')
+  })
+
+  it('says what happens next only when the platform will do it: a test waits for its owner, a schedule runs again', () => {
+    const now = new Date('2026-11-12T12:00:00+08:00')
+    const monday = { at: '2026-11-16T01:00:00Z', zone: 'Asia/Singapore' }
+    expect(declinedNext({ test: true, watchlist: false }, monday, now)).toBe('Change what it does, or run the test again.')
+    expect(declinedNext({ test: false, watchlist: true }, monday, now)).toBe('The tickets will be proposed again at the next check, Mon 16 Nov, 9:00.')
+    expect(declinedNext({ test: false, watchlist: false }, monday, now)).toBe('It runs again Mon 16 Nov, 9:00.')
+    expect(declinedNext({ test: false, watchlist: true }, null, now), 'nothing is due, so nothing is promised').toBeNull()
+  })
+
+  it('puts what happens next after the record, in one sentence each', () => {
+    const declined = { by: 'bob', approvedBy: [], reason: 'Wrong version' }
+    expect(declinedWithNext(declined, 'Change what it does, or run the test again.', nameOf)).toBe('Declined by Bob. Nothing was written. Reason: Wrong version. Change what it does, or run the test again.')
+    expect(declinedWithNext(declined, null, nameOf)).toBe('Declined by Bob. Nothing was written. Reason: Wrong version.')
   })
 })

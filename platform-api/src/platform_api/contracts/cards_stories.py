@@ -16,12 +16,14 @@ from platform_api.builder.cards import (
     tool_list,
 )
 from platform_api.builder.models import (
+    AgentChoice,
     CannotDo,
     CardApprovalView,
     CardBlock,
     CardDefinition,
     CardInput,
     CardList,
+    CreateAgentUseCase,
     MissingTool,
     NewAgent,
     PlannedAgent,
@@ -200,7 +202,9 @@ USE_CASE = UseCaseView(
         )
     ],
     last_run=None,
+    left_out=[],
 )
+LEFT_OUT = ["colour them by team"]
 
 
 def card_run_events() -> Timeline:
@@ -433,5 +437,12 @@ def card_fixtures() -> dict[str, WireModel | list[WireModel]]:
         "cards/plan.new-agent.json": plan_new_agent(),
         "cards/plan.cannot-do.json": plan_cannot_do(),
         "cards/use-case.json": USE_CASE,
+        "cards/use-case.left-out.json": USE_CASE.model_copy(update={"left_out": LEFT_OUT}),
+        "cards/agent-use-case.in.json": CreateAgentUseCase(
+            name=USE_CASE_NAME,
+            instruction=INSTRUCTION,
+            agents=[AgentChoice(card_id=VERSION_CHECKER.card_id, values=VALUES)],
+            left_out=LEFT_OUT,
+        ),
         "runs/card.json": list(card_run_events().events),
     }

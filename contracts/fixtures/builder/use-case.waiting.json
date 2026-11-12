@@ -45,11 +45,14 @@
     "at": "2026-11-05T02:14:00Z",
     "test": false,
     "declined_by": null,
+    "decline_reason": null,
+    "approved_by": [],
     "proposed": 1,
     "written": 0,
     "tickets": true,
     "you_can_decide": true,
     "retryable": false,
     "reason": null
-  }
+  },
+  "left_out": []
 }

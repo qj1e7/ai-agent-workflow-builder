@@ -1,12 +1,13 @@
 import { useId, useState, type ReactNode } from 'react'
 import { Link } from '../../ui/Link'
-import type { CantReply, OfflineReply, PartReply, PlannerReply, QuestionReply, SetupCardReply, WatchlistReply } from '../../api/types'
+import type { CantReply, OfflineReply, PartReply, PartView, PlannerReply, QuestionReply, SetupCardReply, WatchlistReply } from '../../api/types'
 import { useCapabilities } from '../../api/plannerQueries'
 import { Button, ButtonLink } from '../../ui/Button'
 import { OpenButton } from '../../ui/OpenItem'
 import { AskTheTeam } from './AskTheTeam'
 import { cantLines, refusalNext, SAY_ANOTHER_WAY, startingPoints, TAG_CANT, TAG_CHOICE } from './answers'
 import { cardFrom } from './card'
+import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard } from './parts'
 import { SetupCard, type CardStart } from './SetupCard'
 import { CapabilityLists } from './CapabilityLists'
 import { NewestAnswer, useMainButton } from './primary'
@@ -23,9 +24,19 @@ export interface Page {
 }
 
 
-/** A set-up card from the Planner’s rows. The person’s own words go with it, so a saved draft keeps them. */
+/** The parts of a reply, with each can’t row of a part answer kept as a cross even if no part names it, so none is dropped. */
+function partsOf(reply: SetupCardReply | PartReply): readonly PartView[] {
+  if (reply.answer !== 'part' || reply.parts.some((part) => part.reason === 'cant_do')) return reply.parts
+  const crosses = cantLines(reply.cant).map((line): PartView => ({ text: line.text, mark: 'cant', reason: 'cant_do', note: line.note || null, choices: [] }))
+  return [...reply.parts, ...crosses]
+}
+
+/** An answer inside another keeps the whole request’s crosses that `keep` picks, so its card still marks them and keeps them as left out. */
+const withCrosses = <T extends PlannerReply>(inner: T, outer: PlannerReply, keep: (part: PartView) => boolean): T => ({ ...inner, parts: outer.parts.filter(keep) })
+
+/** A set-up card from the Planner’s rows and parts. The person’s own words go with it, so a saved draft keeps them. */
 function startOf(reply: SetupCardReply | PartReply, typed: string): CardStart {
-  return { form: cardFrom(reply.name, reply.rows, typed), plan: null, draftId: null, similar: reply.similar }
+  return { form: cardFrom(reply.name, reply.rows, typed, partsOf(reply)), plan: null, draftId: null, similar: reply.similar }
 }
 
 function tagClass(tag: string): string {
@@ -45,37 +56,23 @@ function Card({ title, tag, children }: { title: string; tag?: string; children:
   )
 }
 
+/** A set-up card, and a part answer as one: what it can’t do is a cross on the card itself, with Ask the team. */
 export function SetupCardAnswer({ reply, typed }: { reply: SetupCardReply | PartReply; typed: string }) {
-  const left = reply.answer === 'part' ? cantLines(reply.cant) : []
-  return (
-    <>
-      <SetupCard start={startOf(reply, typed)} />
-      {left.length > 0 ? (
-        <Card title="What I can’t do yet">
-          <div className={styles['pcardPart']}>
-            <ul className={styles['lines']}>
-              {left.map((line) => (
-                <li key={line.text}>
-                  {line.text}
-                  {line.note ? <span className={styles['note']}>{line.note}</span> : null}
-                </li>
-              ))}
-            </ul>
-            {reply.answer === 'part' ? (
-              <div className={styles['buttons']}>
-                <AskTheTeam capability={reply.cant[0]?.system ?? left[0]?.text ?? 'part of a request'} starter={`I asked the Planner for: ${typed}\n\nWhat it can't do yet: ${left.map((line) => line.text).join('; ')}`} />
-              </div>
-            ) : null}
-          </div>
-        </Card>
-      ) : null}
-    </>
-  )
+  return <SetupCard start={startOf(reply, typed)} />
 }
 
+/**
+ * A can’t answer names only a place the platform can’t send to. Anything else it can’t do, or a clause it didn’t follow, is a
+ * cross on the card that sets up the part it can (spec 6.3 and 6.5).
+ */
 export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }) {
-  const rows = cantLines(reply.cant)
   const alternative = reply.alternative
+  if (cantOnCard(reply) && alternative?.answer === 'setup_card') return <SetupCard start={startOf(withCrosses(alternative, reply, crossesOnCard), typed)} />
+  const rows = cantLines(reply.cant.filter((row) => row.needs !== null))
+  const card = alternative?.answer === 'setup_card' ? <SetupCard start={startOf(withCrosses(alternative, reply, crossesInstead), typed)} /> : null
+  const watch = alternative?.answer === 'watchlist' ? <WatchlistAnswer reply={withCrosses(alternative, reply, asksOnCard)} typed={typed} /> : null
+  // With no can’t of its own, the card would be empty: the clauses it didn’t follow are drawn above it.
+  if (rows.length === 0) return card ?? watch
   return (
     <>
       <Card title="What I can’t do yet">
@@ -95,13 +92,13 @@ export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }
           />
         </div>
       </Card>
-      {alternative?.answer === 'setup_card' ? (
+      {card ? (
         <>
           <h3 className={styles['altHeading']}>What I can do instead</h3>
-          <SetupCard start={startOf(alternative, typed)} />
+          {card}
         </>
       ) : null}
-      {alternative?.answer === 'watchlist' ? <WatchlistAnswer reply={alternative} typed={typed} /> : null}
+      {watch}
     </>
   )
 }
@@ -137,7 +134,7 @@ export function WatchlistAnswer({ reply, typed }: { reply: WatchlistReply; typed
         <>
           <p>The rest of your request:</p>
           <NewestAnswer.Provider value={false}>
-            <Answer reply={reply.also} typed={typed} page={NO_PAGE} />
+            <Answer reply={withCrosses(reply.also, reply, asksOnCard)} typed={typed} page={NO_PAGE} />
           </NewestAnswer.Provider>
         </>
       ) : null}

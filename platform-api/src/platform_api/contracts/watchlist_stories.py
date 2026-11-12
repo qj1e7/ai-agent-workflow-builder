@@ -262,6 +262,7 @@ SCHEDULED_RUN = PendingView(
     use_case_version=7,
     started_by=ALICE,
     trigger="schedule",
+    test=False,
     started_at=CHECKED_AT,
     updated_at=CHECKED_AT,
     last_seq=2,

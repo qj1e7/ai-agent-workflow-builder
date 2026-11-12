@@ -1,4 +1,27 @@
 {
+  "parts": [
+    {
+      "text": "Every Friday",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    },
+    {
+      "text": "sum up the tickets we closed this week",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    },
+    {
+      "text": "email it to the team",
+      "mark": "cant",
+      "reason": "cant_do",
+      "note": "I can't email it to the team. I can only read Jira tickets, sum up what I find, check software for new releases, create a Jira ticket after a yes, and ask Approvers for a yes in Teams.",
+      "choices": []
+    }
+  ],
   "answer": "part",
   "name": "Weekly summary, to email",
   "rows": [

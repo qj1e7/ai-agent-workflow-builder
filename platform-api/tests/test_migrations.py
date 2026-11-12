@@ -435,6 +435,47 @@ def test_migration_0010_keeps_each_schedule_change_beside_its_version_and_a_down
         builder.rollback()
 
 
+def test_migration_0011_keeps_what_a_workflow_left_out_and_a_row_from_before_has_nothing(
+    postgres: PostgresUrls,
+):
+    def column(conn: psycopg.Connection) -> bool:
+        return (
+            conn.execute(
+                "SELECT 1 FROM information_schema.columns WHERE table_schema = 'builder'"
+                " AND table_name = 'use_cases' AND column_name = 'left_out'"
+            ).fetchone()
+            is not None
+        )
+
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        downgrade("builder", postgres.owner, "0010")
+        assert not column(conn)
+        conn.execute(
+            "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version)"
+            " VALUES ('uc_before', 'alice', now(), 1)"
+        )
+        upgrade("builder", postgres.owner)
+        assert column(conn)
+    with psycopg.connect(postgres.contexts.builder) as builder:
+        builder.execute(
+            "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version,"
+            " left_out) VALUES ('uc_after', 'alice', now(), 1, %s)",
+            (["colour them by team"],),
+        )
+        assert builder.execute(
+            "SELECT use_case_id, left_out FROM builder.use_cases"
+            " WHERE use_case_id IN ('uc_before', 'uc_after') ORDER BY use_case_id"
+        ).fetchall() == [("uc_after", ["colour them by team"]), ("uc_before", [])]
+        builder.commit()
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        downgrade("builder", postgres.owner, "0010")
+        assert not column(conn)
+        assert conn.execute(
+            "SELECT count(*) FROM builder.use_cases WHERE use_case_id IN ('uc_before', 'uc_after')"
+        ).fetchone() == (2,)
+        upgrade("builder", postgres.owner)
+
+
 def test_migration_0006_adds_the_people_tables_and_folds_the_model_history_into_them(
     postgres: PostgresUrls,
 ):
@@ -814,3 +855,65 @@ async def test_migration_0016_keeps_each_tickets_jira_site_and_a_row_from_before
             ).fetchone() == (2,)
         finally:
             upgrade("orchestration", postgres.owner)
+
+
+async def test_migration_0017_keeps_a_reason_only_on_a_decline_and_a_decision_from_before_has_none(
+    postgres: PostgresUrls, db: Database
+):
+    store = Store()
+    approval_id, run_id = ApprovalId("apr_reason"), RunId("run_reason")
+    two = ApprovalPolicy(
+        (ApprovalStep("First", AnyApprover()), ApprovalStep("Second", AnyApprover()))
+    )
+    async with db.transaction("orchestration") as uow:
+        pending = Pending(run_id, 1, None, NOW)
+        record = RunRecord(run_id, SPEC, SPEC.owner, NOW, NOW, 1, pending, (), None)
+        await store.insert_run(uow, record, "key-reason")
+        action = WriteAction("jira", "create_ticket", {"project": "MOCK"}, {"title": "t"})
+        proposal = Proposal(ProposalId("prp_reason"), run_id, (action,), digest((action,)))
+        await store.insert_proposal(uow, proposal)
+        await store.insert_approval(
+            uow,
+            ApprovalRequest(
+                approval_id, run_id, proposal.id, proposal.digest, two, frozenset({SPEC.owner})
+            ),
+        )
+    insert = (
+        "INSERT INTO orchestration.approval_decisions (approval_id, step_index, decided_by, "
+        "verdict, seen_digest, decided_at{}) VALUES (%s, %s, 'bob', %s, 'd', %s{})"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        downgrade("orchestration", postgres.owner, "0016")
+        conn.execute(insert.format("", ""), (approval_id, 0, "approve", NOW))
+        upgrade("orchestration", postgres.owner)
+        with_reason = insert.format(", reason", ", %s")
+        for verdict, reason in (
+            ("approve", "Wrong version"),
+            ("decline", ""),
+            ("decline", "x" * 201),
+        ):
+            with pytest.raises(psycopg.errors.CheckViolation):
+                conn.execute(with_reason, (approval_id, 1, verdict, NOW, reason))
+        conn.execute(with_reason, (approval_id, 1, "decline", NOW, "Wrong version"))
+        rows = conn.execute(
+            "SELECT step_index, verdict, reason FROM orchestration.approval_decisions "
+            "WHERE approval_id = %s ORDER BY step_index",
+            (approval_id,),
+        ).fetchall()
+        assert rows == [(0, "approve", None), (1, "decline", "Wrong version")]
+        downgrade("orchestration", postgres.owner, "0016")
+        try:
+            columns = conn.execute(
+                "SELECT column_name FROM information_schema.columns WHERE "
+                "table_schema = 'orchestration' AND table_name = 'approval_decisions'"
+            ).fetchall()
+            assert ("reason",) not in columns
+            assert conn.execute(
+                "SELECT count(*) FROM orchestration.approval_decisions WHERE approval_id = %s",
+                (approval_id,),
+            ).fetchone() == (2,), "a downgrade keeps the decisions"
+        finally:
+            upgrade("orchestration", postgres.owner)
+    async with db.transaction("orchestration") as uow:
+        loaded = await store.load_decisions(uow, approval_id)
+    assert [(d.step_index, d.reason) for d in loaded] == [(0, None), (1, None)]

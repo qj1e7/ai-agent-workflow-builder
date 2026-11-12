@@ -4,8 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { ApprovalView } from '../../api/types'
 import { MemoryRouter } from 'react-router'
-import { ApprovalGate, EXACT_WORDS } from './ApprovalGate'
-import { askedWords, decisionFor, foundOf, partyOf, yourPart, type Decision } from './decision'
+import { ApprovalGate, DeclineReasons, EXACT_WORDS } from './ApprovalGate'
+import { APPROVE, askedWords, declinedNow, declineReasons, decisionFor, foundOf, partyOf, requesterOf, yourPart, type Decision } from './decision'
 import { approvalTitle, lockWords, withCurrentNames, proposalTitle, type Party } from './words'
 
 const BOB = bob as ApprovalView
@@ -23,6 +23,7 @@ const NOBODY = { ownsIt: false, startedIt: false, retriedIt: false, schedule: fa
 const STARTER: Party = { ...NOBODY, ownsIt: true, startedIt: true }
 const OTHER: Party = NOBODY
 const idle: Pick<Decision, 'pending' | 'error' | 'decide'> = { pending: null, error: null, decide: () => undefined }
+const REASONS = declineReasons('software_watchlist')
 
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replaceAll('&amp;', '&').replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))
@@ -30,7 +31,13 @@ const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\
 function draw(approval: ApprovalView, party: Party | null, decision = idle, found = approval.found): string {
   return renderToStaticMarkup(
     <MemoryRouter>
-      <ApprovalGate approval={approval} page={{ found, part: yourPart(approval, party, nameOf), askedBy: askedWords(approval, nameOf) }} decision={decision} />
+      <ApprovalGate
+        approval={approval}
+        page={{ found, part: yourPart(approval, party, nameOf), askedBy: askedWords(approval, nameOf) }}
+        decision={decision}
+        reasons={REASONS}
+        requester="Alice"
+      />
     </MemoryRouter>,
   )
 }
@@ -39,7 +46,7 @@ describe('the approval gate', () => {
   it('in the side panel shows everything that will be written and the decision, and leaves Why, Who asked and Your part for the page', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <ApprovalGate approval={BOB} page={null} decision={idle} />
+        <ApprovalGate approval={BOB} page={null} decision={idle} reasons={REASONS} requester="Alice" />
       </MemoryRouter>,
     )
     expect(text(html)).toContain('What will change')
@@ -184,15 +191,68 @@ describe('how the person is tied to the run', () => {
 
 describe('what a decision posts', () => {
   it('sends the open step and the digest of the proposal bob is looking at', () => {
-    expect(decisionFor(BOB, 'approve')).toEqual({ step: 0, verdict: 'approve', digest: BOB.digest })
-    expect(decisionFor(BOB, 'decline')).toEqual({ step: 0, verdict: 'decline', digest: BOB.digest })
+    expect(decisionFor(BOB, APPROVE)).toEqual({ step: 0, verdict: 'approve', digest: BOB.digest })
+    expect(decisionFor(BOB, { verdict: 'decline', reason: null })).toEqual({ step: 0, verdict: 'decline', digest: BOB.digest })
+  })
+
+  it('sends a reason only with a decline, and none when none was picked', () => {
+    expect(decisionFor(BOB, { verdict: 'decline', reason: 'Wrong version' })).toEqual({ step: 0, verdict: 'decline', digest: BOB.digest, reason: 'Wrong version' })
+    expect(decisionFor(BOB, { verdict: 'decline', reason: null })).not.toHaveProperty('reason')
+    expect(decisionFor(BOB, APPROVE)).not.toHaveProperty('reason')
   })
 
   it('sends nothing for someone the platform says may not decide, or when no step is open', () => {
-    expect(decisionFor(ALICE, 'approve')).toBeNull()
-    expect(decisionFor(CAROL, 'approve')).toBeNull()
-    expect(decisionFor({ ...DECIDED, you_can_decide: true }, 'approve')).toBeNull()
-    expect(decisionFor(undefined, 'approve')).toBeNull()
+    expect(decisionFor(ALICE, APPROVE)).toBeNull()
+    expect(decisionFor(CAROL, APPROVE)).toBeNull()
+    expect(decisionFor({ ...DECIDED, you_can_decide: true }, APPROVE)).toBeNull()
+    expect(decisionFor(undefined, APPROVE)).toBeNull()
+  })
+
+  it('knows the record of a decline the platform just recorded, with whoever said yes first', () => {
+    const at = '2026-11-03T02:20:23Z'
+    expect(declinedNow(BOB.steps, { step: 0, by: 'bob', verdict: 'decline', at, reason: 'Wrong version' })).toEqual({ by: 'bob', approvedBy: [], reason: 'Wrong version' })
+    const steps: ApprovalView['steps'] = [
+      { index: 0, label: 'Team approver', status: 'approved', decided_by: 'bob', decided_at: at, reason: null },
+      { index: 1, label: 'Second approver', status: 'open', decided_by: null, decided_at: null, reason: null },
+    ]
+    expect(declinedNow(steps, { step: 1, by: 'alice', verdict: 'decline', at, reason: null })).toEqual({ by: 'alice', approvedBy: ['bob'], reason: null })
+  })
+})
+
+describe('declining', () => {
+  const reasons = (picked: string | null, pending = false) =>
+    renderToStaticMarkup(<DeclineReasons reasons={REASONS} requester="Carol" picked={picked} pending={pending} busy={pending} onPick={() => undefined} onDecline={() => undefined} onBack={() => undefined} />)
+
+  it('asks why, says it is optional and who sees it, and offers the quick reasons, Decline and Back', () => {
+    const html = reasons(null)
+    expect(text(html)).toMatch(/^Why are you declining\? Optional\. Carol sees it with the record\./)
+    expect(buttons(html)).toEqual(['Not this week', 'Wrong version', 'Needs testing first', 'Decline', 'Back'])
+    const label = html.match(/role="group" aria-labelledby="([^"]+)"/)?.[1] ?? 'none'
+    expect(html).toContain(`<p id="${label}"><b>Why are you declining?</b>`)
+    expect(html.match(/aria-pressed="false"/g)).toHaveLength(3)
+  })
+
+  it('marks the one reason picked, with words and not colour alone', () => {
+    const html = reasons('Wrong version')
+    expect(html.match(/aria-pressed="true"/g)).toHaveLength(1)
+    expect(html).toMatch(/aria-pressed="true"[^>]*>[\s\S]*?Wrong version<\/button>/)
+  })
+
+  it('holds Back while the decline is on its way', () => {
+    const html = reasons('Wrong version', true)
+    expect(html).toMatch(/<button[^>]*aria-busy="true"[^>]*>[\s\S]*?Decline<\/button>/)
+    expect(html).toMatch(/<button[^>]*aria-disabled="true"[^>]*>Back<\/button>/)
+  })
+
+  it('offers the software check its own reasons, and any other workflow two of its own', () => {
+    expect(declineReasons('software_watchlist')).toEqual(['Not this week', 'Wrong version', 'Needs testing first'])
+    expect(declineReasons('agents')).toEqual(['Not needed this time', 'Something in it is wrong'])
+    expect(declineReasons(undefined)).toEqual(['Not needed this time', 'Something in it is wrong'])
+  })
+
+  it('names whoever started the run as the one who sees the reason, or its owner when a schedule started it', () => {
+    expect(requesterOf(BOB)).toBe('alice')
+    expect(requesterOf({ ...BOB, trigger: 'schedule', owner: 'carol', started_by: 'carol' })).toBe('carol')
   })
 })
 

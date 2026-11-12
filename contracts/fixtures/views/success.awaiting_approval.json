@@ -5,6 +5,7 @@
   "use_case_version": 1,
   "started_by": "alice",
   "trigger": "person",
+  "test": false,
   "started_at": "2026-11-03T02:14:00Z",
   "updated_at": "2026-11-03T02:14:10.612000Z",
   "last_seq": 15,
@@ -37,7 +38,8 @@
         "label": "Team approver",
         "status": "open",
         "decided_by": null,
-        "decided_at": null
+        "decided_at": null,
+        "reason": null
       }
     ]
   },

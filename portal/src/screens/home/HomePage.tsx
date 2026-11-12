@@ -148,6 +148,8 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
   const wanted = params.get('draft')
   const drafts = useDrafts(wanted !== null)
   const reopened = useRef<string | null>(null)
+  /** The draft id the newest card wrote in the address, as opposed to one Resume brought here. */
+  const written = useRef<string | null>(null)
   const offline = model.data !== undefined && model.data.active === null
   const dayOne = home.workflows === 0
   const empty = thread.messages.length === 0
@@ -165,9 +167,20 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
   useEffect(() => {
     if (wanted === null) {
       reopened.current = null
+      written.current = null
       return
     }
-    if (reopened.current === wanted || newestDraft === wanted) return
+    if (newestDraft === wanted) {
+      written.current = wanted
+      return
+    }
+    if (reopened.current === wanted) return
+    // The card that wrote it is still shown above, now that a newer answer came, so the address goes back to the chat.
+    if (written.current === wanted) {
+      written.current = null
+      setParams({}, { replace: true })
+      return
+    }
     if (!drafts.data || (drafts.isStale && !drafts.isFetchedAfterMount)) return
     reopened.current = wanted
     setParams({}, { replace: true })

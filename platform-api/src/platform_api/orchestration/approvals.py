@@ -57,6 +57,9 @@ class Decision:
     verdict: Verdict
     seen_digest: Digest
     at: datetime
+    reason: str | None = None
+    """Why the Approver declined, when they gave a reason. Only a decline has one, and no rule
+    reads it."""
 
 
 @dataclass(frozen=True)

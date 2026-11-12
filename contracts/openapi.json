@@ -9,8 +9,20 @@
             "default": "abilities",
             "title": "Answer",
             "type": "string"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
           }
         },
+        "required": [
+          "parts",
+          "answer"
+        ],
         "title": "AbilitiesReply",
         "type": "object"
       },
@@ -109,6 +121,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -137,6 +154,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -1879,6 +1897,18 @@
             "title": "Label",
             "type": "string"
           },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the Approver declined this step, when they gave a reason. Null for any other step.",
+            "title": "Reason"
+          },
           "status": {
             "$ref": "#/components/schemas/ApprovalStepStatus"
           }
@@ -2023,6 +2053,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -2055,6 +2090,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -2204,9 +2240,19 @@
             },
             "title": "Cant",
             "type": "array"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
           }
         },
         "required": [
+          "parts",
+          "answer",
           "cant",
           "alternative"
         ],
@@ -2878,6 +2924,14 @@
             "title": "Answer",
             "type": "string"
           },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
           "use_case_id": {
             "anyOf": [
               {
@@ -2892,6 +2946,8 @@
           }
         },
         "required": [
+          "parts",
+          "answer",
           "use_case_id"
         ],
         "title": "CheckWorkflowsReply",
@@ -3515,6 +3571,17 @@
             "title": "Instruction",
             "type": "string"
           },
+          "left_out": {
+            "description": "The parts of the request the Planner marked with a cross, in the person's own words, so the workflow keeps what it was set up without (plan 4.6). Nothing runs from them.",
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Left Out",
+            "type": "array"
+          },
           "name": {
             "maxLength": 80,
             "minLength": 1,
@@ -3647,6 +3714,17 @@
             "title": "Digest",
             "type": "string"
           },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeclineReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the Approver declines, up to 200 characters. Optional, and only with \"verdict\": \"decline\". It is a note on the decline and decides nothing."
+          },
           "step": {
             "title": "Step",
             "type": "integer"
@@ -3698,6 +3776,18 @@
             "title": "By",
             "type": "string"
           },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the Approver declined, when they gave a reason.",
+            "title": "Reason"
+          },
           "step": {
             "title": "Step",
             "type": "integer"
@@ -3710,9 +3800,82 @@
           "step",
           "by",
           "verdict",
-          "at"
+          "at",
+          "reason"
         ],
         "title": "DecisionView",
+        "type": "object"
+      },
+      "DeclineReason": {
+        "maxLength": 200,
+        "minLength": 1,
+        "type": "string"
+      },
+      "DeclinedItem": {
+        "additionalProperties": false,
+        "properties": {
+          "decline_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the Approver declined, when they gave a reason.",
+            "title": "Decline Reason"
+          },
+          "declined_at": {
+            "format": "date-time",
+            "title": "Declined At",
+            "type": "string"
+          },
+          "declined_by": {
+            "title": "Declined By",
+            "type": "string"
+          },
+          "declined_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the Approver who declined is no longer on the list.",
+            "title": "Declined By Name"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "use_case_id",
+          "use_case_name",
+          "started_at",
+          "declined_at",
+          "declined_by",
+          "declined_by_name",
+          "decline_reason"
+        ],
+        "title": "DeclinedItem",
         "type": "object"
       },
       "DeniedReason": {
@@ -4093,6 +4256,14 @@
             "description": "Its name. Null with use_case_id.",
             "title": "Name"
           },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
           "software": {
             "anyOf": [
               {
@@ -4124,6 +4295,8 @@
           }
         },
         "required": [
+          "parts",
+          "answer",
           "use_case_id",
           "name",
           "watchlist",
@@ -4254,6 +4427,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -4282,6 +4460,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -4535,6 +4714,18 @@
             "title": "Connections",
             "type": "array"
           },
+          "declined": {
+            "description": "An Operator's own test runs that an Approver declined, while each is the newest run of its workflow, the newest decline first. They are part of Needs you, and one leaves when the workflow runs again. At most 10.",
+            "items": {
+              "$ref": "#/components/schemas/DeclinedItem"
+            },
+            "title": "Declined",
+            "type": "array"
+          },
+          "declined_total": {
+            "title": "Declined Total",
+            "type": "integer"
+          },
           "drafts": {
             "description": "An Operator's own drafts, the last saved first.",
             "items": {
@@ -4601,6 +4792,8 @@
           "stopped_total",
           "waiting_on_others",
           "waiting_on_others_total",
+          "declined",
+          "declined_total",
           "drafts",
           "following_up",
           "following_up_total",
@@ -4621,8 +4814,20 @@
             "default": "ideas",
             "title": "Answer",
             "type": "string"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
           }
         },
+        "required": [
+          "parts",
+          "answer"
+        ],
         "title": "IdeasReply",
         "type": "object"
       },
@@ -4704,11 +4909,31 @@
       "LastRunView": {
         "additionalProperties": false,
         "properties": {
+          "approved_by": {
+            "description": "Who said yes to its request, in step order. On a declined run, those who said yes before it was declined. Empty when nobody did.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Approved By",
+            "type": "array"
+          },
           "at": {
             "description": "When the run started.",
             "format": "date-time",
             "title": "At",
             "type": "string"
+          },
+          "decline_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it was declined, when the Approver gave a reason. Null otherwise.",
+            "title": "Decline Reason"
           },
           "declined_by": {
             "anyOf": [
@@ -4777,6 +5002,8 @@
           "at",
           "test",
           "declined_by",
+          "decline_reason",
+          "approved_by",
           "proposed",
           "written",
           "tickets",
@@ -5242,8 +5469,20 @@
             "default": "needs_me",
             "title": "Answer",
             "type": "string"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
           }
         },
+        "required": [
+          "parts",
+          "answer"
+        ],
         "title": "NeedsMeReply",
         "type": "object"
       },
@@ -5362,6 +5601,14 @@
             "title": "Message",
             "type": "string"
           },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
           "starters": {
             "items": {
               "$ref": "#/components/schemas/StarterView"
@@ -5375,6 +5622,8 @@
           }
         },
         "required": [
+          "parts",
+          "answer",
           "why",
           "message",
           "starters"
@@ -5516,6 +5765,32 @@
           }
         ]
       },
+      "PartMark": {
+        "enum": [
+          "will_do",
+          "cant",
+          "question"
+        ],
+        "type": "string"
+      },
+      "PartReason": {
+        "enum": [
+          "not_followed",
+          "cant_do",
+          "ask_on_its_own",
+          "one_day",
+          "one_time",
+          "one_frequency",
+          "own_time",
+          "skip_approval",
+          "with_a_yes",
+          "needs_the_rest",
+          "how_many_days",
+          "only_schedule",
+          "how_often"
+        ],
+        "type": "string"
+      },
       "PartReply": {
         "additionalProperties": false,
         "properties": {
@@ -5536,6 +5811,14 @@
             "title": "Name",
             "type": "string"
           },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
           "rows": {
             "items": {
               "$ref": "#/components/schemas/UnderstoodRowView"
@@ -5555,12 +5838,68 @@
           }
         },
         "required": [
+          "parts",
+          "answer",
           "name",
           "rows",
           "cant",
           "similar"
         ],
         "title": "PartReply",
+        "type": "object"
+      },
+      "PartView": {
+        "additionalProperties": false,
+        "properties": {
+          "choices": {
+            "description": "For one_day, one_time and one_frequency, each the request named, in its own words, for the person to choose one.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "mark": {
+            "$ref": "#/components/schemas/PartMark",
+            "description": "will_do for a part the answer does, cant for one it doesn't, and question for one it asks about."
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For cant_do, why, in the registry's words.",
+            "title": "Note"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PartReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why, for a cant or a question: not_followed (no rule read it), cant_do (see note), ask_on_its_own, one_day, one_time or one_frequency (a schedule with two, see choices), own_time (a time on a watch request), skip_approval, with_a_yes, needs_the_rest, how_many_days, only_schedule (a change to a workflow other than when it runs) and how_often (a schedule it can't hold, such as monthly). Null for will_do."
+          },
+          "text": {
+            "description": "The request's own words: a whole clause, or, in a clause the Planner partly read, only the words it didn't read.",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "mark",
+          "reason",
+          "note",
+          "choices"
+        ],
+        "title": "PartView",
         "type": "object"
       },
       "PendingApproverOut": {
@@ -5697,6 +6036,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -5725,6 +6069,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -6348,6 +6693,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -6376,6 +6726,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -6410,6 +6761,14 @@
             "title": "Looked At",
             "type": "array"
           },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
           "text": {
             "description": "The Planner's answer to a question about the person's own data, in its own words, from the facts read when the question arrived (ADR 0042).",
             "title": "Text",
@@ -6417,8 +6776,11 @@
           }
         },
         "required": [
+          "parts",
+          "answer",
           "text",
-          "looked_at"
+          "looked_at",
+          "about_software"
         ],
         "title": "QuestionReply",
         "type": "object"
@@ -6510,6 +6872,14 @@
             "title": "Answer",
             "type": "string"
           },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
           "reason": {
             "const": "skip_approval",
             "title": "Reason",
@@ -6525,6 +6895,8 @@
           }
         },
         "required": [
+          "parts",
+          "answer",
           "reason",
           "said",
           "rest"
@@ -6576,6 +6948,11 @@
             "title": "Step",
             "type": "integer"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -6604,6 +6981,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -7049,6 +7427,18 @@
           "by": {
             "title": "By",
             "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the Approver declined, when they gave a reason.",
+            "title": "Reason"
           },
           "step": {
             "title": "Step",
@@ -7606,6 +7996,14 @@
             "title": "Name",
             "type": "string"
           },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
           "rows": {
             "items": {
               "$ref": "#/components/schemas/UnderstoodRowView"
@@ -7626,6 +8024,8 @@
           }
         },
         "required": [
+          "parts",
+          "answer",
           "name",
           "rows",
           "similar"
@@ -8092,6 +8492,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -8127,6 +8532,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",
@@ -8965,6 +9371,14 @@
             ],
             "description": "The newest run of this workflow, whatever its state. Null when it has never run."
           },
+          "left_out": {
+            "description": "The parts of the request it was set up without, in the person's own words (plan 4.6). Text for people to read: nothing runs from it.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Left Out",
+            "type": "array"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -9043,7 +9457,8 @@
           "schedule",
           "plan",
           "agents",
-          "last_run"
+          "last_run",
+          "left_out"
         ],
         "title": "UseCaseView",
         "type": "object"
@@ -9599,6 +10014,14 @@
             "title": "Answer",
             "type": "string"
           },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
           "software": {
             "anyOf": [
               {
@@ -9616,6 +10039,8 @@
           }
         },
         "required": [
+          "parts",
+          "answer",
           "word",
           "software",
           "already_listed",
@@ -9701,12 +10126,22 @@
             "title": "Answer",
             "type": "string"
           },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
           "word": {
             "title": "Word",
             "type": "string"
           }
         },
         "required": [
+          "parts",
+          "answer",
           "word"
         ],
         "title": "WhichSoftwareReply",
@@ -9721,6 +10156,14 @@
             "title": "Answer",
             "type": "string"
           },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
           "use_case_id": {
             "anyOf": [
               {
@@ -9734,6 +10177,8 @@
           }
         },
         "required": [
+          "parts",
+          "answer",
           "use_case_id"
         ],
         "title": "WhyStoppedReply",
@@ -9818,6 +10263,11 @@
             "title": "State",
             "type": "string"
           },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/Trigger"
           },
@@ -9846,6 +10296,7 @@
           "use_case_version",
           "started_by",
           "trigger",
+          "test",
           "started_at",
           "updated_at",
           "last_seq",

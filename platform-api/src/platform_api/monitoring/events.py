@@ -140,6 +140,9 @@ class RunSucceededData(WireModel):
 class RunRejectedData(WireModel):
     by: UserId
     step: int
+    reason: str | None = Field(
+        default=None, description="Why the Approver declined, when they gave a reason."
+    )
 
 
 class RunFailedData(WireModel):

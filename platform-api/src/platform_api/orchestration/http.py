@@ -1,11 +1,11 @@
 import hmac
 import logging
 from datetime import datetime
-from typing import Annotated, Any, Literal, TypedDict
+from typing import Annotated, Any, Literal, Self, TypedDict
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
-from pydantic import Field, TypeAdapter
+from pydantic import Field, TypeAdapter, model_validator
 
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.orchestration.approvals import (
@@ -58,6 +58,7 @@ from platform_api.shared import (
 )
 from platform_api.wire import (
     ApprovalStepView,
+    DeclineReason,
     ErrorBody,
     FailureReason,
     FailureStage,
@@ -113,6 +114,7 @@ class _RunBase(WireModel):
     use_case_version: int
     started_by: UserId
     trigger: Trigger
+    test: bool = Field(description="True when a person started it with Do a test run.")
     started_at: datetime
     updated_at: datetime
     last_seq: int
@@ -221,6 +223,17 @@ class DecisionIn(WireIn):
     step: int
     verdict: Verdict
     digest: Digest
+    reason: DeclineReason | None = Field(
+        default=None,
+        description="Why the Approver declines, up to 200 characters. Optional, and only with "
+        '"verdict": "decline". It is a note on the decline and decides nothing.',
+    )
+
+    @model_validator(mode="after")
+    def _a_reason_only_with_a_decline(self) -> Self:
+        if self.reason is not None and self.verdict is not Verdict.DECLINE:
+            raise ValueError("A reason goes only with a decline.")
+        return self
 
 
 class DecisionView(WireModel):
@@ -228,6 +241,7 @@ class DecisionView(WireModel):
     by: UserId
     verdict: Verdict
     at: datetime
+    reason: str | None = Field(description="Why the Approver declined, when they gave a reason.")
 
 
 class DecisionOut(WireModel):
@@ -357,6 +371,7 @@ class RunBaseFields(TypedDict):
     use_case_version: int
     started_by: UserId
     trigger: Trigger
+    test: bool
     started_at: datetime
     updated_at: datetime
     last_seq: int
@@ -372,6 +387,7 @@ def run_view(detail: RunDetail, viewer: Principal) -> RunView:
         use_case_version=record.spec.use_case_version,
         started_by=record.started_by,
         trigger=record.spec.trigger,
+        test=record.spec.test,
         started_at=record.started_at,
         updated_at=record.updated_at,
         last_seq=detail.last_seq,
@@ -464,7 +480,10 @@ def _decision_out(decided: Decided) -> DecisionOut:
             status = "open"
     d = decided.decision
     return DecisionOut(
-        status=status, decision=DecisionView(step=d.step_index, by=d.by, verdict=d.verdict, at=d.at)
+        status=status,
+        decision=DecisionView(
+            step=d.step_index, by=d.by, verdict=d.verdict, at=d.at, reason=d.reason
+        ),
     )
 
 
@@ -567,7 +586,9 @@ async def decide(
     orchestrator: CurrentOrchestrator,
     response: Response,
 ) -> DecisionOut | JSONResponse:
-    result = await orchestrator.decide(approval_id, principal, body.step, body.verdict, body.digest)
+    result = await orchestrator.decide(
+        approval_id, principal, body.step, body.verdict, body.digest, body.reason
+    )
     match result:
         case Decided() as decided:
             if decided.repeated:
