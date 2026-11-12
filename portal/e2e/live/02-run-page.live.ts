@@ -698,6 +698,16 @@ test.describe('what a run didn’t check', () => {
     await connectMockModel(String(baseURL))
   })
 
+  /** The requests these tests leave waiting. Bob declines them, and the watchlist goes back to LangGraph, so later tests find Needs you as it was. */
+  const leftWaiting: string[] = []
+  test.afterAll(async ({ backend }) => {
+    for (const approvalId of leftWaiting.splice(0)) {
+      const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
+      await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest })
+    }
+    await backend.freshWatchlist('alice')
+  })
+
   const REDIS_UNREAD = 'Redis couldn’t be read, so no ticket is proposed for it.'
   const NO_REGISTRIES = 'The platform can’t yet check registries or security advisories.'
   const NO_DETAILS = 'The platform can’t yet see a ticket\'s component or priority.'
@@ -748,7 +758,9 @@ test.describe('what a run didn’t check', () => {
     )
     const runId = await backend.checkNow(user, made.use_case_id)
     await backend.waitForState(runId, ['awaiting_approval'])
-    return { runId, approvalId: await backend.approvalIdOf(runId) }
+    const approvalId = await backend.approvalIdOf(runId)
+    leftWaiting.push(approvalId)
+    return { runId, approvalId }
   }
 
   /** A Version checker run Carol set up and started, so Alice may decide it in the side panel. */
@@ -757,12 +769,15 @@ test.describe('what a run didn’t check', () => {
     const made = await backend.post<{ use_case_id: string }>('carol', '/api/v1/agent-use-cases', { name: `Carol’s check ${randomUUID().slice(0, 6)}`, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents }, undefined, [201])
     const runId = await backend.checkNow('carol', made.use_case_id)
     await backend.waitForState(runId, ['awaiting_approval'])
-    return { runId, approvalId: await backend.approvalIdOf(runId) }
+    const approvalId = await backend.approvalIdOf(runId)
+    leftWaiting.push(approvalId)
+    return { runId, approvalId }
   }
 
   test('APPR-not-checked: a check that couldn’t read Redis names it, then what the platform can’t check yet, after What will change, for bob and alice', async ({ browser, backend }, info) => {
     test.slow()
     const { runId, approvalId } = await backend.waitingRunWithUnread('alice')
+    leftWaiting.push(approvalId)
     const forBob = await backend.get<{ not_checked: string[]; actions: { fields: { title: string } }[] }>('bob', `/api/v1/approvals/${approvalId}`)
     expect(forBob.not_checked, 'the run names the software it couldn’t read').toEqual(['Redis'])
     expect(forBob.actions.map((action) => action.fields.title), 'and proposes no ticket for it').toEqual(['Upgrade LangGraph from 1.2.14 to 1.2.16'])
