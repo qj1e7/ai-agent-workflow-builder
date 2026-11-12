@@ -500,6 +500,12 @@
     "AnswerRequest": {
       "additionalProperties": false,
       "properties": {
+        "changes_workflows": {
+          "default": true,
+          "description": "False when the person asking can't change workflows, as an Approver who isn't an Operator: a change beside a question is crossed, and the question still gets its answer (plan 3.2).",
+          "title": "Changes Workflows",
+          "type": "boolean"
+        },
         "facts": {
           "anyOf": [
             {
@@ -2762,6 +2768,12 @@
           "default": null,
           "description": "An hour it names with no am or pm, as \"at 9\", which could be morning or evening, so the person picks one. Never guessed.",
           "title": "Hour"
+        },
+        "time_unclear": {
+          "default": false,
+          "description": "A time it names that the schedule can't read, as \"in the afternoon\" or \"an hour later\": the person picks one. Never guessed.",
+          "title": "Time Unclear",
+          "type": "boolean"
         },
         "weekly": {
           "default": false,

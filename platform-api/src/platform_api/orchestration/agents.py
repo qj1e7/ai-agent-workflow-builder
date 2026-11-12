@@ -490,6 +490,7 @@ class AnswerRequest(WireModel):
     model: ModelAccess
     facts: PlannerFacts | None = None
     previous: PreviousTurn | None = None
+    changes_workflows: bool = True
 
 
 type CantNeed = Literal["new_tool", "new_system"]
@@ -587,12 +588,12 @@ class ScheduleChange(WireModel):
     weekly: bool = False
     at: str | None = Field(default=None, pattern=AT_PATTERN)
     hour: int | None = Field(default=None, ge=1, le=12)
+    time_unclear: bool = False
 
     @model_validator(mode="after")
     def _one_of_each(self) -> Self:
-        if (self.day is not None and self.weekly) or (
-            self.at is not None and self.hour is not None
-        ):
+        times = (self.at is not None, self.hour is not None, self.time_unclear)
+        if (self.day is not None and self.weekly) or sum(times) > 1:
             raise ValueError("A day or a time is named once")
         return self
 

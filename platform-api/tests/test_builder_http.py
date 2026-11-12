@@ -253,13 +253,19 @@ class FakeAnswers:
     facts: list[PlannerFacts | None] = field(default_factory=list[PlannerFacts | None])
     previous: list[PreviousTurn | None] = field(default_factory=list[PreviousTurn | None])
     checked: list[tuple[str, str]] = field(default_factory=list[tuple[str, str]])
+    changes: list[bool] = field(default_factory=list[bool])
 
     async def answer(
-        self, task: str, facts: PlannerFacts | None = None, previous: PreviousTurn | None = None
+        self,
+        task: str,
+        facts: PlannerFacts | None = None,
+        previous: PreviousTurn | None = None,
+        changes_workflows: bool = True,
     ) -> AnswerResult | NoModel | RuntimeDown:
         self.asked.append(task)
         self.facts.append(facts)
         self.previous.append(previous)
+        self.changes.append(changes_workflows)
         await asyncio.sleep(self.wait)
         return self.result
 
@@ -1242,3 +1248,37 @@ async def test_it_alone_is_no_name_and_nothing_is_missing(front: Front):
     await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
     reply = await edit_reply(front, EditAnswer(workflow_words="it", schedule=ScheduleChange()))
     assert (reply["use_case_id"], reply["missing"], reply["choices"]) == (None, None, [])
+
+
+async def test_the_runtime_is_told_an_operator_can_change_workflows(front: Front):
+    front.answers.result = answered(AbilitiesAnswer())
+    await say(front, "what can you do?")
+    assert front.answers.changes == [True]
+
+
+async def test_a_match_holding_every_word_check_included_wins(front: Front):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    await make_workflow(front, "Morning status", FRIDAY_16)
+    edit = EditAnswer(workflow_words="morning check", schedule=ScheduleChange(day="monday"))
+    assert (await edit_reply(front, edit))["use_case_id"] == morning
+
+
+@pytest.mark.parametrize(
+    ("words", "found"),
+    [("this one", None), ("news check", None), ("statuses", "Morning status")],
+)
+async def test_little_words_go_before_plurals_are_made_one(
+    front: Front, words: str, found: str | None
+):
+    await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    await make_workflow(front, "Morning status", FRIDAY_16)
+    reply = await edit_reply(front, EditAnswer(workflow_words=words, schedule=ScheduleChange()))
+    assert reply["name"] == found
+    assert reply["missing"] == (None if words == "this one" or found else words)
+
+
+async def test_a_time_it_cant_read_leaves_the_time_to_pick(front: Front):
+    await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    unclear = ScheduleChange(time_unclear=True)
+    reply = await edit_reply(front, EditAnswer(workflow_words="morning check", schedule=unclear))
+    assert reply["after"] == {"day": "weekdays", "at": None}

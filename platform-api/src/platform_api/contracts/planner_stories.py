@@ -107,6 +107,7 @@ class _Answers:
         task: str,
         facts: PlannerFacts | None = None,
         previous: PreviousTurn | None = None,
+        changes_workflows: bool = True,
     ) -> NoModel:
         return NoModel()
 

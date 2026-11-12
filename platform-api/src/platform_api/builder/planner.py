@@ -62,7 +62,7 @@ from platform_api.orchestration import (
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
-from platform_api.shared import Principal
+from platform_api.shared import Principal, Role
 from platform_api.wire import WireIn, WireModel
 
 log = logging.getLogger(__name__)
@@ -251,7 +251,7 @@ class EditAfter(WireModel):
     )
     at: ClockTime | None = Field(
         description="Null when the person picks the time: the request named an hour with no am "
-        "or pm (hour)."
+        "or pm (hour), or a time the schedule can't read."
     )
 
 
@@ -386,7 +386,11 @@ class CapabilitiesView(WireModel):
 
 class Answering(Protocol):
     async def answer(
-        self, task: str, facts: PlannerFacts | None = None, previous: PreviousTurn | None = None
+        self,
+        task: str,
+        facts: PlannerFacts | None = None,
+        previous: PreviousTurn | None = None,
+        changes_workflows: bool = True,
     ) -> AnswerResult | NoModel | RuntimeDown: ...
 
     async def check_part(self, kind: RowKind, text: str) -> CheckPartResult | RuntimeDown: ...
@@ -440,6 +444,7 @@ def _norm(name: str) -> str:
 
 LITTLE_WORDS: Final = frozenset(
     {"the", "a", "an", "my", "our", "this", "that", "it", "its", "one", "workflow", "check"}
+    | {"checks", "workflows"}
 )
 """Words that name no workflow on their own, as in "the weekly one" or "the React check"."""
 WATCHLIST_WORDS: Final = frozenset({"software", "watchlist", "version", "versions"})
@@ -448,27 +453,37 @@ ONE_DAY: Final[frozenset[Day]] = frozenset(
 )
 
 
-def _own_words(text: str) -> frozenset[str]:
-    """The words that name a workflow, each as one of a kind, so "tickets" is "ticket"."""
-    found = re.findall(r"[^\W_]+", text.casefold())
-    return frozenset(_one(w) for w in found) - LITTLE_WORDS
+def _own_words(text: str, keep_check: bool = False) -> frozenset[str]:
+    """The words that name a workflow, little words aside, each as one of a kind, so "tickets"
+    is "ticket". With `keep_check`, "check" stays, so a name that holds it wins first."""
+    little = LITTLE_WORDS - {"check"} if keep_check else LITTLE_WORDS
+    return frozenset(_one(w) for w in re.findall(r"[^\W_]+", text.casefold()) if w not in little)
 
 
 def _one(word: str) -> str:
-    return word[:-1] if len(word) > 3 and word.endswith("s") and not word.endswith("ss") else word
+    """The word as one of a kind: "summaries" is "summary", "statuses" is "status" and
+    "tickets" is "ticket", while "status", "news" and "this" stay as they are."""
+    if len(word) > 4 and word.endswith("ies"):
+        return word[:-3] + "y"
+    if len(word) > 5 and word.endswith(("sses", "shes", "ches", "xes", "uses")):
+        return word[:-2]
+    if len(word) > 4 and word.endswith("s") and not word.endswith(("ss", "us", "is")):
+        return word[:-1]
+    return word
 
 
 def _after(before: EditBefore | None, edit: EditAnswer) -> EditAfter | None:
     """The saved schedule with the change made. A part the change leaves out stays as saved. A
     weekly change keeps the saved day when it is one day of the week, and an hour with no am or
-    pm leaves the time to pick. None when there is nothing to save."""
+    pm, or a time it can't read, leaves the time to pick. None when there is nothing to save."""
     change = edit.schedule
     if change is None:
         return None
     day = change.day or (before.day if before is not None else None)
     if change.weekly:
         day = before.day if before is not None and before.day in ONE_DAY else None
-    at = change.at or (before.at if before is not None and change.hour is None else None)
+    asked = change.hour is not None or change.time_unclear
+    at = change.at or (before.at if before is not None and not asked else None)
     return EditAfter(day=day, at=at)
 
 
@@ -525,7 +540,12 @@ class PlannerFront:
         earlier = None if previous is None else PreviousTurn(**previous.model_dump())
         try:
             async with asyncio.timeout(ANSWER_LIMIT_SECONDS):
-                result = await self._answers.answer(text, await self._facts.read(viewer), earlier)
+                result = await self._answers.answer(
+                    text,
+                    await self._facts.read(viewer),
+                    earlier,
+                    changes_workflows=Role.OPERATOR in viewer.roles,
+                )
         except TimeoutError:
             log.warning("The Planner's answer took longer than %g seconds", ANSWER_LIMIT_SECONDS)
             return offline("too_slow")
@@ -655,7 +675,13 @@ class PlannerFront:
         watched = await self._listed(software) if software is not None else None
         if not exact and watched is not None and own <= _own_words(software or ""):
             return watchlist
-        found = exact or held or [u for u in cases if own and own <= _own_words(u.name)]
+        every = _own_words(words, keep_check=True)
+        found = (
+            exact
+            or held
+            or [u for u in cases if every and every <= _own_words(u.name, keep_check=True)]
+            or [u for u in cases if own and own <= _own_words(u.name)]
+        )
         if found:
             return found
         if (own and own <= WATCHLIST_WORDS) or watched is not None:

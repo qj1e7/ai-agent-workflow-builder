@@ -3956,7 +3956,7 @@
                 "type": "null"
               }
             ],
-            "description": "Null when the person picks the time: the request named an hour with no am or pm (hour)."
+            "description": "Null when the person picks the time: the request named an hour with no am or pm (hour), or a time the schedule can't read."
           },
           "day": {
             "anyOf": [

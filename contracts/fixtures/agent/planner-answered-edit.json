@@ -8,7 +8,8 @@
       "day": "monday",
       "weekly": false,
       "at": null,
-      "hour": null
+      "hour": null,
+      "time_unclear": false
     },
     "cant": null,
     "holds_save": false
