@@ -23,14 +23,14 @@ const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;'
 const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))
 const links = (html: string) => [...html.matchAll(/<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g)].map((match) => [text(match[2] ?? ''), match[1]])
 
-function draw(item: PanelItem, { me = ALICE, narrow = false }: { me?: Me; narrow?: boolean } = {}): string {
+function draw(item: PanelItem, { me = ALICE, narrow = false, useCase = STOPPED }: { me?: Me; narrow?: boolean; useCase?: UseCaseView } = {}): string {
   const session = createDevSession({ getItem: () => me.id, setItem: () => undefined })
   const scope = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', scope], me)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB])
   queryClient.setQueryData(['watchlist', scope], WATCHLIST)
-  queryClient.setQueryData(['use-case', scope, STOPPED.use_case_id], STOPPED)
+  queryClient.setQueryData(['use-case', scope, useCase.use_case_id], useCase)
   queryClient.setQueryData(['troubleshoot', scope, STOPPED.last_run?.run_id, 0], advice)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
@@ -89,6 +89,13 @@ describe('the side panel', () => {
     expect(text(html)).toContain('Safe to retry')
     expect(text(html)).toContain('An Operator can retry the run.')
     expect(buttons(html)).toEqual(['Close'])
+  })
+
+  it('offers Resume on a paused workflow to an Operator only, as its page does', () => {
+    const paused: UseCaseView = { ...STOPPED, state: 'paused', last_run: null }
+    expect(buttons(draw({ kind: 'workflow', id: paused.use_case_id }, { useCase: paused }))).toEqual(['Close', 'Resume'])
+    expect(buttons(draw({ kind: 'workflow', id: paused.use_case_id }, { useCase: paused, me: BOB }))).toEqual(['Close'])
+    expect(text(draw({ kind: 'workflow', id: paused.use_case_id }, { useCase: paused, me: BOB }))).toContain('Next run Paused')
   })
 
   it('draws a run while its page’s parts load on demand, as the run page does', () => {
