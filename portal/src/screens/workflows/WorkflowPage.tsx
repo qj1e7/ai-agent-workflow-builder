@@ -15,6 +15,7 @@ import { AgentFace } from '../../ui/AgentFace'
 import { ActionMenu, type MenuItem } from '../../ui/ActionMenu'
 import { Button, ButtonLink } from '../../ui/Button'
 import { useFocusAfterReread } from '../../ui/focus'
+import { useFromChat } from '../../ui/fromChat'
 import { FROM_LIST, openedFromList } from '../../ui/fromList'
 import { IconAlert, IconCheck, IconChevronLeft, IconLock, IconPause, IconPencil, IconPlay, IconTrash, type Icon } from '../../ui/icons'
 import { Toast, type ToastMessage } from '../../ui/Toast'
@@ -57,11 +58,13 @@ export const WHO_APPROVES = 'Any Approver except the people who start or own it'
 function BackToList() {
   const location = useLocation()
   const navigate = useNavigate()
+  const fromChat = useFromChat()
   const goBack = (event: MouseEvent) => {
     if (!openedFromList(location.state)) return
     event.preventDefault()
     void navigate(-1)
   }
+  if (fromChat) return null
   return (
     <Link to="/workflows" className={styles['back']} onClick={goBack}>
       <IconChevronLeft size={16} />

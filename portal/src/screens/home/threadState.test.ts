@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PlannerReply } from '../../api/types'
+import { EMPTY_FORM } from './card'
 import { EMPTY, isThinking, previousOf, threadReducer } from './threadState'
 
 const REPLY: PlannerReply = { answer: 'abilities' }
@@ -43,5 +44,13 @@ describe('the thread', () => {
 
   it('does not hand over a request that has no answer yet', () => {
     expect(previousOf(threadReducer(EMPTY, { type: 'sent', text: 'a' }))).toBeNull()
+  })
+
+  it('opens a resumed draft as a card after the conversation, keeping every turn before it', () => {
+    const talked = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'a' }), { type: 'answered', reply: REPLY, typed: 'a' })
+    const resumed = threadReducer(talked, { type: 'resumed', start: { form: EMPTY_FORM, plan: null, draftId: 'drf-1', similar: null } })
+    expect(resumed.messages.map((m) => m.kind)).toEqual(['me', 'reply', 'card'])
+    expect(resumed.messages.at(-1)?.id).toBe(resumed.last)
+    expect(resumed.last).toBeGreaterThan(talked.last)
   })
 })

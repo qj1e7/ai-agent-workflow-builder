@@ -27,6 +27,24 @@ export default tseslint.config(
     },
   },
   {
+    files: ['src/screens/home/**/*.tsx', 'src/screens/workflows/WorkflowsPage.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'react-router',
+              importNames: ['Link'],
+              message: 'The chat draws these. Use Link from ui/Link, which passes FROM_CHAT inside the chat, so the page it opens offers Back to the chat.',
+            },
+          ],
+          patterns: [{ regex: '^(\\.\\.?/)+stream/', message: 'The stream is private to the run monitoring engine.' }],
+        },
+      ],
+    },
+  },
+  {
     files: ['src/screens/run/runModel{,.test}.ts', 'src/screens/run/liveRun{,.test}.ts'],
     rules: {
       'no-restricted-imports': [

@@ -82,7 +82,7 @@ describe('Home for an Approver with a run waiting for his yes', () => {
   })
 
   it('puts the waiting run first, as the card with the one main button, which opens the run at the decision', () => {
-    const first = /<ul[^>]*aria-label="Needs you"[^>]*>\s*<li[^>]*data-home-item="([^"]+)"/.exec(html)?.[1]
+    const first = /<ul[^>]*aria-label="Needs you"[^>]*>[\s\S]*?<li[^>]*data-home-item="([^"]+)"/.exec(html)?.[1]
     expect(first).toBe('approval:apr_01JB8')
     const card = itemOf(html, 'approval:apr_01JB8')
     expect(text(card)).toContain('1 ticket is waiting for your yes')
@@ -223,18 +223,27 @@ describe('Home with no working AI model', () => {
     expect(html).not.toContain('placeholder="Ask about')
   })
 
-  it('still shows the lists and Needs you, without the model’s own row and without Ask the team', () => {
+  it('still shows the lists and Needs you, and no Ask the team', () => {
     expect(text(html)).toContain('I can Check software for new releases on GitHub Create a Jira ticket after a yes')
     expect(buttonsIn(html)).not.toContain('Ask the team for something new')
     expect(html).toContain('data-home-item="stopped:run_01JB9"')
-    expect(html).not.toContain('data-home-item="connection:model"')
   })
 
-  it('keeps the count the platform gives, so the tab and the heading agree', () => {
-    const withModelRow: HomeOut = { ...ALICE_HOME, connections: [{ ...ALICE_HOME.connections[0]!, id: 'model', name: 'AI model' }] }
-    const offline = text(mainOf(render(ALICE, withModelRow, { model: 'none' })))
-    expect(offline).toContain(`Needs you ${needsTotal(withModelRow)}`)
-    expect(mainOf(render(ALICE, withModelRow, { model: 'none' }))).not.toContain('data-home-item="connection:model"')
+  const MODEL_ROW = { id: 'model', name: 'AI model', state: 'not_set_up', problem: 'No AI model is turned on.', fix: 'Add an AI model under Settings, AI model.', checked_at: null, last_ok_at: null, expires_at: null } as const
+  const withModelRow: HomeOut = { ...ALICE_HOME, connections: [...ALICE_HOME.connections, MODEL_ROW] }
+
+  it('lists the model’s own row, pointing to the button above it, so every row the count includes is listed (FIX-offline-count)', () => {
+    const page = mainOf(render(ALICE, withModelRow, { model: 'none' }))
+    expect(text(page)).toContain(`Needs you ${needsTotal(withModelRow)}`)
+    const row = itemOf(page, 'connection:model')
+    expect(text(row)).toContain('No AI model connected Connect one with the button above.')
+    expect(linksIn(row).map(([name]) => name)).not.toContain('Connect a model')
+    expect(linksIn(page).filter(([name]) => name === 'Connect a model')).toHaveLength(1)
+  })
+
+  it('offers Connect a model on the model row where the page has none above it', () => {
+    const connected = mainOf(render(ALICE, withModelRow, { model: 'connected' }))
+    expect(linksIn(itemOf(connected, 'connection:model'))[0]).toEqual(['Connect a model', '/settings?tab=model'])
   })
 })
 
@@ -303,6 +312,7 @@ describe('Home for an Operator with more than three things waiting', () => {
     const html = mainOf(render(ALICE, busy))
     const keys = [...html.matchAll(/data-home-item="([^"]+)"/g)].map((match) => match[1])
     expect(keys).toEqual(['stopped:run_01JB9', 'approval:apr_4', 'approval:apr_3'])
+    expect(text(html)).toContain('Do now')
     expect(text(html)).toContain(`Needs you ${total}`)
     expect(linksIn(html)).toContainEqual(['See all on Workflows', '/workflows'])
   })
@@ -311,5 +321,29 @@ describe('Home for an Operator with more than three things waiting', () => {
     const html = mainOf(render(BOB, { ...BOB_HOME, approvals, approvals_total: 5 }))
     expect([...html.matchAll(/data-home-item="/g)]).toHaveLength(5 + BOB_HOME.confirmations.length)
     expect(text(html)).not.toContain('on Workflows')
+  })
+})
+
+describe('Needs you in two groups on Home', () => {
+  const [jira] = ALICE_HOME.connections
+  const busy: HomeOut = { ...ALICE_HOME, connections: [jira!, { ...ALICE_HOME.connections[1]! }], approvals_total: 0 }
+  const groupsOf = (html: string) =>
+    [...html.matchAll(/<h3 id="[^"]*">(Do now|Set up)<\/h3><ul[^>]*>([\s\S]*?)<\/ul><\/li>/g)].map((m) => [m[1], [...(m[2] ?? '').matchAll(/data-home-item="([^"]+)"/g)].map((k) => k[1])] as const)
+
+  it('shows Home’s three from Do now first, so a Set up item never takes the place of one to do now', () => {
+    const html = mainOf(render(BOB, { ...BOB_HOME, approvals: [], approvals_total: 0 }))
+    expect(groupsOf(html)).toEqual([['Set up', ['confirmation:cfm_01JADDR', 'confirmation:cfm_01JD4VE']]])
+    const all = mainOf(render(ALICE, busy))
+    expect(groupsOf(all)).toEqual([['Do now', ['stopped:run_01JB9', 'connection:jira', 'reply:trq_01JD5RP']]])
+    expect(text(all)).toContain('See all on Workflows')
+  })
+
+  it('shows an Approver’s requests under Do now and his confirmations under Set up, and counts them once', () => {
+    const html = mainOf(render(BOB, BOB_HOME))
+    expect(groupsOf(html)).toEqual([
+      ['Do now', ['approval:apr_01JB8']],
+      ['Set up', ['confirmation:cfm_01JADDR', 'confirmation:cfm_01JD4VE']],
+    ])
+    expect(text(html)).toContain(`Needs you ${needsTotal(BOB_HOME)}`)
   })
 })

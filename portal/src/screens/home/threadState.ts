@@ -33,7 +33,7 @@ export function threadReducer(state: Thread, action: ThreadAction): Thread {
     case 'failed':
       return { ...state, messages: state.messages.slice(0, -2) }
     case 'resumed':
-      return { messages: [{ kind: 'card', id: state.last + 1, start: action.start }], last: state.last + 1 }
+      return { messages: [...state.messages, { kind: 'card', id: state.last + 1, start: action.start }], last: state.last + 1 }
     case 'new_chat':
       return EMPTY
   }

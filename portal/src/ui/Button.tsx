@@ -1,5 +1,6 @@
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, MouseEvent, ReactNode, Ref } from 'react'
-import { Link, type LinkProps } from 'react-router'
+import type { LinkProps } from 'react-router'
+import { Link } from './Link'
 import { IconExternal, type Icon } from './icons'
 import { cx } from './cx'
 import styles from './Button.module.css'

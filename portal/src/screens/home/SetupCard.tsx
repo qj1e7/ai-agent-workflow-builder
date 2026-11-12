@@ -1,7 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router'
-import { useErrorWords } from '../../api/context'
+import { useSearchParams } from 'react-router'
+import { Link } from '../../ui/Link'
+import { useChatNavigate } from '../../ui/fromChat'
+import { useErrorWords, useSession } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
 import { refusedWords, useCheckPart, useDeleteDraft, usePlanFor, useReadAgentCards, useSaveDraft } from '../../api/plannerQueries'
@@ -49,6 +51,7 @@ import {
   type Form,
 } from './card'
 import { DiscardDialog } from '../workflows/Sections'
+import { CardMemoryContext } from './cardMemory'
 import { CardLive, useMainButton } from './primary'
 import styles from './SetupCard.module.css'
 
@@ -338,7 +341,7 @@ function Done({ useCaseId, writes, draftKept, newAgents }: { useCaseId: string; 
   const useCase = useUseCase(useCaseId)
   const start = useStartRun()
   const latch = useLatch()
-  const navigate = useNavigate()
+  const navigate = useChatNavigate()
   const words = useErrorWords()
   const [key] = useState(newIdempotencyKey)
   const [now] = useState(() => new Date())
@@ -347,7 +350,7 @@ function Done({ useCaseId, writes, draftKept, newAgents }: { useCaseId: string; 
     latch.run((settled) =>
       start.mutate(
         { useCaseId, idempotencyKey: key, test: true },
-        { onSuccess: (started) => void navigate(`/runs/${started.run_id}`), onError: (error) => setProblem(words(error)), onSettled: settled },
+        { onSuccess: (started) => navigate(`/runs/${started.run_id}`), onError: (error) => setProblem(words(error)), onSettled: settled },
       ),
     )
   const name = useCase.data?.name
@@ -395,7 +398,7 @@ function firstRun(useCase: UseCaseView, now: Date): string {
   return `First run ${at.startsWith('Today, ') ? `today at ${at.slice('Today, '.length)}` : `on ${at}`}, ${timesZone(zone)}.`
 }
 
-type Phase = { readonly kind: 'open' } | { readonly kind: 'done'; readonly useCaseId: string; readonly draftKept: boolean; readonly newAgents: readonly string[] } | { readonly kind: 'never_mind' }
+export type Phase = { readonly kind: 'open' } | { readonly kind: 'done'; readonly useCaseId: string; readonly draftKept: boolean; readonly newAgents: readonly string[] } | { readonly kind: 'never_mind' }
 
 /**
  * The set-up card (spec 7). One state, the form, drives the sentence, the footer line and the reason Turn it on waits. Every
@@ -404,9 +407,14 @@ type Phase = { readonly kind: 'open' } | { readonly kind: 'done'; readonly useCa
 export function SetupCard({ start }: { start: CardStart }) {
   const main = useMainButton()
   const live = useContext(CardLive)
-  const [form, setForm] = useState(start.form)
-  const [draft, setDraft] = useState(start.draftId)
-  const [phase, setPhase] = useState<Phase>({ kind: 'open' })
+  const memory = useContext(CardMemoryContext)
+  const session = useSession()
+  // The person the card was drawn for. Its draft is theirs, so nothing is saved once someone else has signed in.
+  const [owner] = useState(session.cacheScope)
+  const [kept] = useState(memory.kept)
+  const [form, setForm] = useState(kept?.form ?? start.form)
+  const [draft, setDraft] = useState(kept ? kept.draft : start.draftId)
+  const [phase, setPhase] = useState<Phase>(kept?.phase ?? { kind: 'open' })
   const [editing, setEditing] = useState<number | 'dest' | 'when' | 'name' | null>(null)
   const [shown, setShown] = useState(false)
   const [refused, setRefused] = useState<readonly string[]>([])
@@ -447,21 +455,27 @@ export function SetupCard({ start }: { start: CardStart }) {
   const dirty = useRef(false)
   const turningOn = useRef(false)
   const alive = useRef(true)
-  const latest = useRef({ form, plan: null as Planned | null, draft, phase })
+  const latest = useRef({ form, plan: null as Planned | null, draft, phase, live })
   useEffect(() => {
-    latest.current = { form, plan: planQuery.data ? { task, answer: planQuery.data } : null, draft, phase }
+    latest.current = { form, plan: planQuery.data ? { task, answer: planQuery.data } : null, draft, phase, live }
   })
 
   const persist = (onDone?: (saved: string) => void) => {
     const now = latest.current
-    if (now.phase.kind !== 'open' || turningOn.current) return
+    if (now.phase.kind !== 'open' || turningOn.current || session.cacheScope() !== owner) return
     const saved = now.draft ?? newIdempotencyKey()
+    latest.current = { ...now, draft: saved }
+    memory.keep({ form: now.form, draft: saved, phase: now.phase })
     setDraft(saved)
     saveDraft.mutate(
       { draftId: saved, draft: { content: draftContent(now.form, now.plan) } },
       { onSuccess: () => onDone?.(saved), onError: (error) => setSaveProblem(words(error)) },
     )
   }
+
+  useEffect(() => {
+    memory.keep({ form, draft, phase })
+  })
 
   const watching = useRef(false)
   useEffect(() => {
@@ -485,16 +499,18 @@ export function SetupCard({ start }: { start: CardStart }) {
     return () => {
       alive.current = false
       setTimeout(() => {
-        if (!alive.current && latest.current.phase.kind === 'open') persist()
+        if (!alive.current && latest.current.live && latest.current.phase.kind === 'open') persist()
       }, 0)
     }
-    // Leaving the page keeps what is on the card as a draft.
+    // Leaving the page keeps what is on the card as a draft. A card a newer answer replaced was kept when it was replaced.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const wasLive = useRef(live)
   useEffect(() => {
-    if (!live) persist()
-    // A newer answer replaces this card, which is kept as a draft.
+    if (wasLive.current && !live) persist()
+    wasLive.current = live
+    // A newer answer replaces this card, which is kept as a draft. Drawn again after that, it has nothing new to keep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live])
 

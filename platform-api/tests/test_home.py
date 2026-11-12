@@ -21,6 +21,7 @@ from platform_api.orchestration import (
     ScheduleBook,
     TeamsPost,
 )
+from platform_api.orchestration.connections import Reading
 from platform_api.orchestration.people import Person
 from platform_api.orchestration.people_store import People, PersonRow
 from platform_api.orchestration.runs import AwaitingApproval, Failed, Leg, Pending, StepName
@@ -576,7 +577,7 @@ async def test_home_shows_an_operator_the_connections_that_do_not_work_and_start
     lab: Lab,
 ):
     assert (await lab.home("alice"))["connections"] == []
-    assert [p.calls for p in lab.rig.probes.values()] == [0, 0, 0, 0]
+    assert [lab.rig.probes[id].calls for id in ("jira", "github", "teams")] == [0, 0, 0]
 
     lab.rig.probes["jira"].reading = DOWN
     checked = await lab.rig.connections.check_now("jira")
@@ -594,7 +595,18 @@ async def test_home_shows_an_operator_the_connections_that_do_not_work_and_start
         "last_ok_at": None,
         "expires_at": None,
     }
-    assert [p.calls for p in lab.rig.probes.values()] == [1, 1, 0, 0]
+    assert [lab.rig.probes[id].calls for id in ("jira", "github", "teams")] == [1, 1, 0]
+
+
+async def test_home_lists_no_ai_model_for_an_operator_while_none_is_set_up(lab: Lab):
+    lab.rig.probes["model"].reading = Reading("not_set_up", "No AI model is turned on.")
+    (item,) = (await lab.home("alice"))["connections"]
+    assert (item["id"], item["state"], item["fix"]) == (
+        "model",
+        "not_set_up",
+        "Add an AI model under Settings, AI model.",
+    )
+    assert (await lab.home("bob"))["connections"] == []
 
 
 async def test_home_leaves_connections_to_the_operators(lab: Lab):

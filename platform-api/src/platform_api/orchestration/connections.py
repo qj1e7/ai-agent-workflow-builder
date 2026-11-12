@@ -318,16 +318,24 @@ class Connections:
         await asyncio.gather(*(self._check(e, probe, at_once=False) for e, probe in waiting))
 
     async def needing_attention(self) -> list[ConnectionCheck]:
-        """Connections that do not work, and keys that run out soon. Reads what was stored and
-        asks nobody, so a fresh stack shows none until a check found something."""
+        """Connections that do not work, and keys that run out soon. A checked connection is read
+        from what was stored and asks nobody, so a fresh stack shows none until a check found
+        something. The AI model is read from its own settings, as every view reads it, and is
+        listed while it is not set up, because nothing that needs it can run."""
         kept = await self._kept()
         now = self._db.clock()
-        found = [
-            self._present(self._entries[id], shown, now)
-            for id, shown in kept.items()
-            if not isinstance(self._entries[id].known, ReadFresh)
+        found: list[ConnectionCheck] = []
+        for id, entry in self._entries.items():
+            shown = (
+                await self._read_fresh(entry, entry.known.probe)
+                if isinstance(entry.known, ReadFresh)
+                else kept.get(id)
+            )
+            if shown is not None:
+                found.append(self._present(entry, shown, now))
+        trouble = [
+            c for c in found if c.state in ("needs_attention", "not_answering", "not_set_up")
         ]
-        trouble = [c for c in found if c.state in ("needs_attention", "not_answering")]
         ending = sorted(
             (c for c in found if c.runs_out_soon(now)),
             key=lambda c: c.expires_at or now,

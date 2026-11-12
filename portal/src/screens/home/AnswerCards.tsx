@@ -1,5 +1,5 @@
 import { useId, useState, type ReactNode } from 'react'
-import { Link } from 'react-router'
+import { Link } from '../../ui/Link'
 import type { CantReply, OfflineReply, PartReply, PlannerReply, QuestionReply, SetupCardReply, WatchlistReply } from '../../api/types'
 import { useCapabilities } from '../../api/plannerQueries'
 import { Button, ButtonLink } from '../../ui/Button'

@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { Link } from 'react-router'
+import { Link } from '../../ui/Link'
 import { useHome } from '../../api/homeQueries'
 import { useDisplayName } from '../../api/people'
 import { isOperator } from '../../api/me'
@@ -7,9 +7,10 @@ import { useMe, useModelOff, useTroubleshoot, useUseCases } from '../../api/quer
 import { ButtonLink } from '../../ui/Button'
 import { listClass, WorkflowRow } from '../workflows/WorkflowsPage'
 import { REFRESH_MS, rowsOf, viewerOf } from '../workflows/workflow'
-import { needsSay, workflowsSay } from './answers'
+import { useCapabilities } from '../../api/plannerQueries'
+import { ideasSay, needsSay, startingPoints, workflowsSay } from './answers'
 import { Troubleshooting } from '../run/Outcome'
-import { HOME_NEEDS_SHOWN, needsOf, needsTotal, SEE_ALL_WORDS } from './home'
+import { needsOf, needsTotal, SEE_ALL_WORDS } from './home'
 import { NeedsSection, useArrival } from './NeedsSection'
 import { useMainButton } from './primary'
 import styles from './Planner.module.css'
@@ -60,11 +61,19 @@ export function CheckWorkflowsAnswer({ useCaseId, now, say }: { useCaseId: strin
   )
 }
 
-/** What needs me: the same rows as Needs you, from the same list, so the number here and on the tab are one number. */
+/** The sentence over the starting points, counted from the same list the chips under it are drawn from. */
+export function IdeasSentence({ say }: { say: Say }) {
+  const capabilities = useCapabilities()
+  const sentence = capabilities.data ? ideasSay(startingPoints(capabilities.data).length) : null
+  useSaidOnce(sentence, say)
+  return sentence === null ? null : <p>{sentence}</p>
+}
+
+/** What needs me: every row of Needs you the platform returned, grouped, from the same list, so the number here and on the rail are one number. */
 export function NeedsMeAnswer({ now, say }: { now: Date; say: Say }) {
   const home = useHome()
   const main = useMainButton()
-  const needs = useMemo(() => (home.data ? needsOf(home.data, HOME_NEEDS_SHOWN) : null), [home.data])
+  const needs = useMemo(() => (home.data ? needsOf(home.data) : null), [home.data])
   const arrival = useArrival([])
   const total = home.data ? needsTotal(home.data) : null
   useSaidOnce(total === null ? null : needsSay(total), say)

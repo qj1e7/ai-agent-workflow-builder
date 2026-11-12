@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { Link, NavigationType, useLocation, useNavigate, useNavigationType, useSearchParams } from 'react-router'
+import { NavigationType, useLocation, useNavigate, useNavigationType, useSearchParams } from 'react-router'
+import { Link } from '../../ui/Link'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useHome } from '../../api/homeQueries'

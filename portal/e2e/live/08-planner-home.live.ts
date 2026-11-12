@@ -12,6 +12,8 @@ import { devContext, OUT, shot } from './support/ui'
 
 const GREETING = /^Good (morning|afternoon|evening)! Alice$/
 const OFFLINE = 'I can’t read new requests until an AI model is connected'
+/** A request the Planner answers with a set-up card. */
+const SUMMARY = 'Find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'
 
 const box = (page: Page) => page.getByLabel('Ask the Planner about software versions')
 const thread = (page: Page) => page.getByRole('list', { name: 'Conversation with the Planner' })
@@ -44,6 +46,52 @@ async function jiraDown(backend: Backend): Promise<() => Promise<void>> {
   }
 }
 
+/** The number every place shows for Needs you, read from the platform: each kind it counts, added up. */
+async function platformNeeds(backend: Backend, user: string): Promise<number> {
+  const home = await backend.get<{ approvals_total: number; stopped_total: number; confirmations: unknown[]; connections: unknown[]; addresses: unknown[]; replied: unknown[] }>(user, '/api/v1/home')
+  return home.approvals_total + home.stopped_total + home.confirmations.length + home.connections.length + home.addresses.length + home.replied.length
+}
+
+/** Alice asks the team for something and bob replies, so the reply sits in her Needs you until she opens it. */
+async function teamReplied(backend: Backend): Promise<void> {
+  const made = await backend.post<{ request_id: string }>('alice', '/api/v1/team-requests', { kind: 'ask_the_team', about: { capability: 'email.send' }, note: `Please add email ${randomUUID().slice(0, 6)}` }, { 'Idempotency-Key': randomUUID() }, [201])
+  await backend.post('bob', `/api/v1/team-requests/${made.request_id}/replies`, { text: 'Not on the plan yet, we will tell you.' }, undefined, [201])
+}
+
+/** A draft alice saved from a set-up card, which Resume reopens as that card. */
+async function cardDraft(backend: Backend, label: string): Promise<string> {
+  const id = randomUUID()
+  const content = {
+    name: `${label} ${id.slice(0, 6)}`,
+    form: {
+      step: 2,
+      text: `Every Monday, list the tickets closed last week ${id.slice(0, 6)}`,
+      name: '',
+      rows: [
+        { kind: 'schedule', text: 'Every Monday', state: 'understood', note: null },
+        { kind: 'look_for', text: 'tickets closed last week in MOCK', state: 'understood', note: null },
+        { kind: 'do', text: 'Create one ticket that lists them', state: 'understood', note: null },
+        { kind: 'where', text: 'Jira project MOCK', state: 'understood', note: null },
+      ],
+      typed: {},
+      when: { often: '', at: '' },
+    },
+    plan: null,
+  }
+  const saved = await backend.send('PUT', 'alice', `/api/v1/drafts/${id}`, { step: 2, content })
+  expect(saved.status, `alice saves a draft: ${JSON.stringify(saved.body)}`).toBe(200)
+  return id
+}
+
+/** Every draft saved from this page, with the person it was saved as. */
+function draftSaves(page: Page): string[] {
+  const saves: string[] = []
+  page.on('request', (request) => {
+    if (request.method() === 'PUT' && /\/api\/v1\/drafts\//.test(request.url())) saves.push(request.headers()['x-dev-user'] ?? 'unknown')
+  })
+  return saves
+}
+
 async function noSideways(page: Page): Promise<void> {
   const widths = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth])
   expect(widths[0], 'no sideways scroll').toBeLessThanOrEqual(widths[1] ?? 0)
@@ -63,7 +111,7 @@ test.describe('with no AI model', () => {
     await modelOff(String(baseURL))
   })
 
-  test('alice’s Home says it can’t read new requests, offers Connect a model, and keeps the lists and Needs you', async ({ browser, backend }, info) => {
+  test('alice’s Home says it can’t read new requests, offers Connect a model, and keeps the lists and Needs you, the model row first and counted (FIX-offline-count)', async ({ browser, backend }, info) => {
     await backend.waitingRun('alice')
     const repair = await jiraDown(backend)
     const context = await devContext(browser, 'alice')
@@ -75,8 +123,14 @@ test.describe('with no AI model', () => {
     await expect(main(page).getByRole('link', { name: 'Connect a model' })).toHaveAttribute('href', '/settings?tab=model')
     await expect(main(page).getByRole('heading', { name: 'I can', exact: true })).toBeVisible()
     await expect(main(page).getByRole('button', { name: 'Ask the team for something new' }), 'Home offers no request for the team').toHaveCount(0)
-    await expect(page.getByRole('list', { name: 'Needs you' })).toBeVisible()
-    await expect(page.locator('li[data-home-item="connection:model"]'), 'the hero already offers Connect a model').toHaveCount(0)
+    const needs = page.getByRole('list', { name: 'Needs you' })
+    await expect(needs.locator('li[data-home-item]').first(), 'FIX-offline-count: the first row is the model').toHaveAttribute('data-home-item', 'connection:model')
+    await expect(needs.locator('li[data-home-item="connection:model"]'), 'it points to the button above it').toHaveText(/No AI model connected\s*Connect one with the button above\./)
+    await expect(needs.locator('li[data-home-item="connection:model"]').getByRole('link'), 'it offers no second Connect a model').toHaveCount(0)
+    await expect(main(page).getByRole('link', { name: 'Connect a model' }), 'the hero has the only Connect a model').toHaveCount(1)
+    const counted = await platformNeeds(backend, 'alice')
+    expect(counted, 'the platform counts the model row with the rest').toBeGreaterThan(1)
+    await expect(page.getByRole('heading', { name: /^Needs you/, level: 2 }), 'FIX-offline-count: the number is the platform’s count, the model row included').toHaveText(new RegExp(`^Needs you\\s*${String(counted)}$`))
     await settled(page)
     await expectAccessible(page, path.join(OUT, 'axe'), 'planner-home-offline')
     await shot(page, info, 'n10-08-offline')
@@ -102,7 +156,6 @@ test.describe('with the AI model on', () => {
     await connectMockModel(String(baseURL))
   })
 
-  const SUMMARY = 'Find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'
   const card = (page: Page) => thread(page).locator('section[data-card]')
   const left = (page: Page) => card(page).locator('[id$="-left"]')
   const turnOn = (page: Page) => card(page).getByRole('button', { name: 'Turn it on', exact: true })
@@ -463,6 +516,8 @@ test.describe('with the AI model on', () => {
     const page = await context.newPage()
     await page.goto('/')
     await expect(box(page)).toBeVisible()
+    // The suggestions draw once the watchlist and the registry have loaded, so the walk waits for the ones it checks.
+    await expect(page.getByRole('group', { name: 'Suggestions' }).getByRole('button')).toHaveCount(3)
     const walk = await walkTabs(page)
     const labels = walk.stops.map((stop) => stop.label)
     for (const name of ['Ask the Planner about software versions', 'Send to the Planner', 'Which software has a newer version?']) {
@@ -541,33 +596,13 @@ test.describe('with the AI model on', () => {
   })
 
   test('the old address of a saved draft reopens that draft as a card on Home', async ({ browser, backend }) => {
-    const id = randomUUID()
-    const text = `Every Monday, list the tickets closed last week ${id.slice(0, 6)}`
-    const content = {
-      name: `Old address draft ${id.slice(0, 6)}`,
-      form: {
-        step: 2,
-        text,
-        name: '',
-        rows: [
-          { kind: 'schedule', text: 'Every Monday', state: 'understood', note: null },
-          { kind: 'look_for', text: 'tickets closed last week in MOCK', state: 'understood', note: null },
-          { kind: 'do', text: 'Create one ticket that lists them', state: 'understood', note: null },
-          { kind: 'where', text: 'Jira project MOCK', state: 'understood', note: null },
-        ],
-        typed: {},
-        when: { often: '', at: '' },
-      },
-      plan: null,
-    }
-    const saved = await backend.send('PUT', 'alice', `/api/v1/drafts/${id}`, { step: 2, content })
-    expect(saved.status, `alice saves a draft: ${JSON.stringify(saved.body)}`).toBe(200)
+    const id = await cardDraft(backend, 'Old address draft')
     const context = await devContext(browser, 'alice')
     try {
       const page = await context.newPage()
       await page.goto(`/new?draft=${id}`)
       await expect(thread(page).locator('section[data-card]')).toContainText('tickets closed last week')
-      await expect(page).toHaveURL(new RegExp(`/\\?draft=${id}$`))
+      await expect(page, 'once the card is open, the address no longer asks for the draft').toHaveURL(/\/$/)
     } finally {
       await context.close()
       await backend.send('DELETE', 'alice', `/api/v1/drafts/${id}`)
@@ -580,6 +615,223 @@ test.describe('with the AI model on', () => {
     await page.goto(`/new?draft=${randomUUID()}`)
     await expect(main(page)).toContainText('That draft is gone. Ask for it again below.')
     await expect(box(page)).toBeVisible()
+    await context.close()
+  })
+})
+
+test.describe('the chat after the first message', () => {
+  test.beforeAll(async ({ baseURL }) => {
+    await connectMockModel(String(baseURL))
+  })
+
+  const pinned = (page: Page) => page.getByRole('region', { name: 'Most urgent' })
+  const needsTotal = async (page: Page) =>
+    Number(((await page.getByRole('navigation', { name: 'Main' }).filter({ visible: true }).getByRole('link', { name: /^Workflows, \d+ need you$/ }).getAttribute('aria-label')) ?? '').replace(/\D/g, ''))
+
+  test('SHELL-pinned: the pinned line appears with the first message, the box docks, and N more plus one is the count everywhere', async ({ browser, backend }, info) => {
+    await backend.freshWatchlist('alice', [REDIS])
+    await teamReplied(backend)
+    const repair = await jiraDown(backend)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+    await expect(box(page)).toBeVisible()
+    await expect(pinned(page), 'no pinned line before the first message').toHaveCount(0)
+    await ask(page, 'What can you do?')
+    await expect(pinned(page)).toBeVisible()
+    await expect(box(page)).toHaveAttribute('placeholder', 'Ask for something else')
+    await expect(box(page), 'an answer with no card hands focus back to the box').toBeFocused()
+    await expect(main(page).getByRole('heading', { level: 2, name: /^Needs you/ }), 'Needs you gives way to the pinned line').toHaveCount(0)
+    const total = await needsTotal(page)
+    expect(total, 'a reply from the team and Jira not answering are two needs').toBeGreaterThan(1)
+    expect(total, 'the rail’s count is the platform’s').toBe(await platformNeeds(backend, 'alice'))
+    await expect(pinned(page).getByRole('link', { name: /^Open/ })).toHaveAttribute('href', /^\/(runs|settings|software|workflows)/)
+    await expect(pinned(page).getByRole('link', { name: `${String(total - 1)} more that need you` })).toHaveAttribute('href', '/workflows')
+    await pinned(page).getByRole('link', { name: /more that need you/ }).click()
+    await expect(page).toHaveURL(/\/workflows$/)
+    await expect(main(page).getByRole('heading', { level: 2, name: new RegExp(`^Needs you ${String(total)}`) })).toBeVisible()
+    await expect(main(page).getByRole('heading', { level: 3, name: 'Do now' })).toBeVisible()
+    await page.getByRole('link', { name: 'Back to the chat' }).click()
+    await expect(thread(page)).toContainText('What can you do?')
+    await expect(pinned(page)).toBeVisible()
+    await shot(page, info, 'r2-chat-pinned')
+    await repair()
+    await context.close()
+  })
+
+  test('SHELL-rail: the rail brings the chat back as it was, scroll position included', async ({ browser }) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.setViewportSize({ width: 1280, height: 520 })
+    await page.goto('/')
+    for (const words of ['What can you do?', 'Check my workflows', 'What needs me?']) await ask(page, words)
+    await expect(thread(page)).toContainText(/things? needs? you\./)
+    const conversation = page.getByRole('region', { name: 'Conversation' })
+    await expect(conversation, 'a conversation that overflows is a Tab stop, so the keyboard can scroll it').toHaveAttribute('tabindex', '0')
+    await conversation.evaluate((element) => {
+      element.scrollTop = 120
+    })
+    const before = await conversation.evaluate((element) => element.scrollTop)
+    expect(before).toBeGreaterThan(0)
+    const rail = page.getByRole('navigation', { name: 'Main' }).filter({ visible: true })
+    await rail.getByRole('link', { name: /^Workflows/ }).click()
+    await expect(thread(page)).toHaveCount(0)
+    await rail.getByRole('link', { name: /^Chat/ }).click()
+    await expect(thread(page)).toContainText('Check my workflows')
+    await expect.poll(() => conversation.evaluate((element) => element.scrollTop)).toBe(before)
+    await context.close()
+  })
+
+  test('ASK-needs: the answer counts what needs her, with one row each, and agrees with the rail', async ({ browser, backend }) => {
+    const repair = await jiraDown(backend)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+    await ask(page, 'What needs me?')
+    const total = await needsTotal(page)
+    await expect(thread(page)).toContainText(`${String(total)} ${total === 1 ? 'thing needs' : 'things need'} you.`)
+    await expect(thread(page).locator('li[data-home-item]')).toHaveCount(total)
+    await repair()
+    await context.close()
+  })
+
+  test('a short conversation is no Tab stop, because there is nothing to scroll', async ({ browser }) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.route('**/api/v1/planner/answer', (route) => route.fulfill({ json: { answer: 'which_software', word: 'version' } }))
+    await page.goto('/')
+    await ask(page, 'Is there a newer version?')
+    await expect(thread(page)).toContainText('Which software should I watch?')
+    await expect(page.getByRole('region', { name: 'Conversation' })).not.toHaveAttribute('tabindex')
+    await context.close()
+  })
+
+  test('Resume on Workflows with a conversation open adds the draft’s card after it, with focus on the card', async ({ browser, backend }) => {
+    const id = await cardDraft(backend, 'Resume in chat')
+    const context = await devContext(browser, 'alice')
+    try {
+      const page = await context.newPage()
+      await page.goto('/')
+      await ask(page, 'What can you do?')
+      await expect(thread(page).locator('li[data-answer]')).toHaveCount(1)
+      const rail = page.getByRole('navigation', { name: 'Main' }).filter({ visible: true })
+      await rail.getByRole('link', { name: /^Workflows/ }).click()
+      await page.locator(`li[data-draft="${id}"]`).getByRole('link', { name: /^Resume/ }).click()
+      const resumed = thread(page).locator('section[data-card]')
+      await expect(resumed).toContainText('tickets closed last week')
+      await expect(thread(page), 'the conversation before it stays').toContainText('What can you do?')
+      await expect(resumed.getByRole('heading', { level: 3 }).first(), 'focus goes to the card').toBeFocused()
+      await expect(page, 'the address no longer asks for the draft').toHaveURL(/\/$/)
+    } finally {
+      await context.close()
+      await backend.send('DELETE', 'alice', `/api/v1/drafts/${id}`)
+    }
+  })
+
+  test('a card keeps what she did on it across pages, and New chat saves it once as her draft and says so', async ({ browser, backend }) => {
+    const name = `Kept card ${randomUUID().slice(0, 6)}`
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const saves = draftSaves(page)
+    await page.goto('/')
+    await ask(page, SUMMARY)
+    const card = thread(page).locator('section[data-card]')
+    await expect(card.getByRole('heading', { level: 3 }).first(), 'a set-up card takes focus at its heading').toBeFocused()
+    await card.getByRole('button', { name: /^Rename/ }).click()
+    await card.getByLabel('Workflow name').fill(name)
+    await page.keyboard.press('Enter')
+    await expect(page, 'the card saves her change as a draft').toHaveURL(/\?draft=/)
+    const draftId = new URL(page.url()).searchParams.get('draft') ?? ''
+    const rail = page.getByRole('navigation', { name: 'Main' }).filter({ visible: true })
+    await rail.getByRole('link', { name: /^Workflows/ }).click()
+    await rail.getByRole('link', { name: /^Chat/ }).click()
+    await expect(card.getByRole('heading', { level: 3, name }), 'the card comes back as she left it').toBeVisible()
+    const before = saves.length
+    await page.getByRole('button', { name: 'New chat' }).click()
+    await expect(page.getByRole('status').filter({ hasText: 'Your draft is saved. Find it on Workflows.' })).toBeVisible()
+    await expect.poll(() => saves.length, { message: 'New chat saves the card' }).toBeGreaterThan(before)
+    await page.waitForTimeout(1_000)
+    expect(saves.slice(before), 'New chat saves the card once, as alice').toEqual(['alice'])
+    const drafts = await backend.get<{ drafts: { draft_id: string; content: unknown }[] }>('alice', '/api/v1/drafts')
+    expect(drafts.drafts.filter((draft) => JSON.stringify(draft.content).includes(name)).map((draft) => draft.draft_id), 'one draft, the card’s own').toEqual([draftId])
+    await context.close()
+    await backend.send('DELETE', 'alice', `/api/v1/drafts/${draftId}`)
+  })
+
+  test('a card she hadn’t finished is never saved as the next person who signs in', async ({ browser }) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const saves = draftSaves(page)
+    await page.goto('/')
+    await ask(page, 'Every Friday at 4pm, follow up on bug tickets in MOCK with no update for 41 days')
+    await expect(thread(page).locator('section[data-card]')).toBeVisible()
+    await page.getByRole('button', { name: /Test controls/ }).click()
+    await page.getByRole('button', { name: 'Bob', exact: true }).click()
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Bob')
+    await page.waitForTimeout(1_000)
+    expect(saves, 'no draft is saved as bob').not.toContain('bob')
+    await page.getByRole('button', { name: 'Alice', exact: true }).click()
+    await expect(thread(page).locator('section[data-card]'), 'her card is there when she comes back').toBeVisible()
+    await context.close()
+  })
+
+  test('a link in a chat card opens its page with Back to the chat, which puts focus back on the chat', async ({ browser }) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+    await ask(page, 'Check my workflows')
+    await thread(page).getByRole('list', { name: 'Your workflows' }).getByRole('link').first().click()
+    await expect(page.getByRole('link', { name: 'Back to the chat' })).toBeVisible()
+    await expect(main(page).getByRole('link', { name: 'Workflows', exact: true }), 'the page’s own Back gives way to Back to the chat').toHaveCount(0)
+    await page.getByRole('link', { name: 'Back to the chat' }).click()
+    await expect(thread(page)).toContainText('Check my workflows')
+    await expect(page.getByRole('heading', { level: 1, name: 'Planner' })).toBeFocused()
+    await context.close()
+  })
+
+  test('ROLE-own-chat: signing in as someone else never shows the last person’s chat, and hers is there when she comes back', async ({ browser }) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+    await ask(page, 'Check my workflows')
+    await expect(thread(page)).toContainText('Check my workflows')
+    await page.getByRole('button', { name: /Test controls/ }).click()
+    await page.getByRole('button', { name: 'Bob', exact: true }).click()
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Bob')
+    await expect(thread(page)).toHaveCount(0)
+    await expect(main(page)).not.toContainText('Check my workflows')
+    await page.getByRole('button', { name: 'Alice', exact: true }).click()
+    await expect(thread(page)).toContainText('Check my workflows')
+    await context.close()
+  })
+
+  test('FIX-starts-count: the sentence over the places to start counts the places it shows', async ({ browser }) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.route('**/api/v1/planner/answer', (route) => route.fulfill({ json: { answer: 'ideas' } }))
+    await page.goto('/')
+    await ask(page, 'set up another workflow')
+    const uses = thread(page).getByRole('button', { name: 'Use this' })
+    await expect(uses.first(), 'the places to start are drawn before they are counted').toBeVisible()
+    const places = await uses.count()
+    await expect(thread(page)).toContainText(places === 1 ? 'Here is a place to start. Pick it, or tell me something else.' : `Here are ${String(places)} places to start. Pick one, or tell me something else.`)
+    await context.close()
+  })
+
+  test('New chat clears the thread and brings back Needs you in place of the pinned line, and the keyboard reaches the box, New chat and the pinned line', async ({ browser, backend }) => {
+    const repair = await jiraDown(backend)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+    await ask(page, 'What can you do?')
+    await tabTo(page, pinned(page).getByRole('link', { name: /^Open/ }))
+    await tabTo(page, page.getByRole('button', { name: 'New chat' }))
+    await page.keyboard.press('Enter')
+    await expect(thread(page)).toHaveCount(0)
+    await expect(pinned(page)).toHaveCount(0)
+    await expect(main(page).getByRole('heading', { level: 2, name: /^Needs you/ })).toBeVisible()
+    await expect(box(page)).toBeFocused()
+    await repair()
     await context.close()
   })
 })

@@ -1,0 +1,50 @@
+.pinned {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+
+.text {
+  display: grid;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.text span {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.more {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .pinned {
+    grid-template-columns: 20px auto minmax(0, 1fr);
+  }
+
+  .text {
+    grid-column: 2 / -1;
+  }
+
+  .pinned > a:nth-of-type(1) {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .more {
+    grid-column: 3;
+    justify-self: start;
+  }
+}
