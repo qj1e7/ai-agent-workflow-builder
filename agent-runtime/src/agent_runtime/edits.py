@@ -125,8 +125,25 @@ REFERENCE: Final = re.compile(
 one"."""
 ARTICLE: Final = re.compile(r"^(?:the|my|our|that|this|a|an)\s+", re.IGNORECASE)
 PRONOUNS: Final = frozenset({"it", "this", "that", "them", "this one", "that one"})
+NEGATIONS: Final = words("not never no dont")
 PRONOUN: Final = re.compile(r"\b(?:it|them|this\s+one|that\s+one)\b", re.IGNORECASE)
 """A workflow named only as the one just talked about, as "make it daily"."""
+UNREAD_TIME: Final = re.compile(
+    r"\b(?:in\s+the\s+)?(?:morning|afternoon|evening|night)\b|\btonight\b|"
+    r"\b(?:(?:an?|one|two|three|\d+)\s+hours?\s+)?(?:later|earlier|sooner)\b|"
+    r"\bat\s+(?:\d{1,2}(?:\.\d{2})?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|"
+    r"twelve)\b(?!\s*(?:am|pm|:))",
+    re.IGNORECASE,
+)
+"""A time the schedule can't read, as "in the afternoon", "an hour later" or "at nine". The
+person picks one, and it is never guessed."""
+START: Final = re.compile(
+    r"\b(?:from|starting|beginning|as\s+of)\s+(?:next\s+\w+|tomorrow)\b|"
+    rf"\b(?:starting|beginning|as\s+of)\s+(?:on\s+)?(?:{DAY_NAMES})s?\b",
+    re.IGNORECASE,
+)
+"""When the change should start, as "from next week", which the chat can't set: a change starts
+when it is saved."""
 TIME: Final = re.compile(
     r"(?<![\d.:])\b\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b|(?<![\d.:])\b\d{1,2}:\d{2}\b|"
     r"\bat\s+\d{1,2}\b(?![:.]\d)|\b(?:noon|midday|midnight)\b",
@@ -207,6 +224,17 @@ def _names(read: TaskRead | None, text: str, facts: PlannerFacts | None) -> list
     for name in [w.name for w in (facts.watchlist if facts is not None else None) or []]:
         at = _whole(text, name)
         found += [at] if at is not None else []
+    return _merged(found)
+
+
+def _merged(spans: list[Span]) -> list[Span]:
+    """The spans, with each run of overlapping ones made one."""
+    found: list[Span] = []
+    for start, end in sorted(spans):
+        if found and start < found[-1][1]:
+            found[-1] = (found[-1][0], max(end, found[-1][1]))
+        else:
+            found.append((start, end))
     return found
 
 
@@ -279,9 +307,24 @@ def _edit_words(rest: str) -> bool:
     question with no such verb, as "every Friday sum up the closed tickets", is a new task."""
     tokens = [w for w, _, _ in _tokens(rest)]
     return any(
-        w in EDIT_VERBS and not (w == "make" and tokens[at + 1 : at + 2] == ["sure"])
+        w in EDIT_VERBS
+        and not (w == "make" and tokens[at + 1 : at + 2] == ["sure"])
+        and not _negated(tokens[:at])
         for at, w in enumerate(tokens)
     )
+
+
+def _negated(before: list[str]) -> bool:
+    """Whether the words before a verb say not to do it, as "don't" or "never"."""
+    return bool(before) and (
+        before[-1] in NEGATIONS or (before[-1] == "t" and before[-2:-1] in (["don"], ["doesn"]))
+    )
+
+
+def asks_for_a_change(read: TaskRead | None, text: str, facts: PlannerFacts | None) -> bool:
+    """Whether a verb that changes a workflow is left once the question's own words and the
+    names are out. A reading that calls a request a change is trusted only with one."""
+    return _edit_words(left_over(read, text, facts))
 
 
 def commanded(read: TaskRead | None, text: str, facts: PlannerFacts | None) -> bool:
@@ -303,11 +346,10 @@ def edit_of(read: TaskRead, text: str, facts: PlannerFacts | None) -> EditAnswer
     watch request goes to the Software watchlist's answers instead."""
     if read.belongs_on_watchlist and _watch_verb(text, _names(read, text, facts)):
         return None
-    if read.asks_about != "change":
-        if not _edit_words(left_over(read, text, facts)):
-            return None
-        if read.asks_about not in STATE_KINDS and not _orders_one(read, text, facts):
-            return None
+    if not asks_for_a_change(read, text, facts):
+        return None
+    if read.asks_about not in ("change", *STATE_KINDS) and not _orders_one(read, text, facts):
+        return None
     target = _target(read, text, facts)
     if target is None and not PRONOUN.search(text):
         # "delete every closed ticket" changes tickets, not a workflow: it is a task's can't.
@@ -368,12 +410,13 @@ def _target(read: TaskRead, text: str, facts: PlannerFacts | None) -> str | None
     else one of the person's workflow names or a run of its words, else a short form such as
     "the morning check", else the software the reading named. None for "make it daily"."""
     said = _said(read.workflow_words, text)
+    runs = [r for name in _workflow_names(facts) for r in _name_runs(text, name)]
     if said is not None:
-        return text[said[0] : said[1]]
-    for name in _workflow_names(facts):
-        runs = _name_runs(text, name)
-        if runs:
-            return text[runs[0][0] : runs[0][1]]
+        known = [r for r in runs if r[0] <= said[0] and said[1] <= r[1]]
+        start, end = max(known, key=lambda r: r[1] - r[0], default=said)
+        return text[start:end]
+    if runs:
+        return text[runs[0][0] : runs[0][1]]
     reference = REFERENCE.search(text)
     if reference is not None:
         return ARTICLE.sub("", reference.group(0))
@@ -455,14 +498,18 @@ def _rest(text: str, names: _Names) -> str:
     runs on now, and every clause that doesn't hold the change."""
     kept = change_clauses(text, names)
     others = [c for c in _split(text, clauses_of(text), names) if c not in kept]
-    return _blank(text, [*names.all, *_now(text, kept), *others])
+    start = [m.span() for m in START.finditer(text)]
+    return _blank(text, [*names.all, *_now(text, kept), *others, *start])
 
 
-def _other_changes(words_: str) -> set[str]:
-    """The changes other than when it runs, in the words: "pause it", or a write, as "open a
-    ticket"."""
-    tokens = {w for w, _, _ in _tokens(words_)}
-    return (tokens & OTHER_CHANGES) | (set(change_verbs_in(words_)) - SCHEDULE_VERBS)
+def _writes(words_: str) -> set[str]:
+    """The writes in the words, as "open a ticket" or "send it to Teams", which the chat can't
+    make. They are crossed, and the schedule beside them still changes."""
+    return set(change_verbs_in(words_)) - SCHEDULE_VERBS
+
+
+def _unclear(answer: EditAnswer) -> bool:
+    return answer.schedule is not None and answer.schedule.time_unclear
 
 
 def _schedule_of(
@@ -473,7 +520,7 @@ def _schedule_of(
     schedule it can't hold is a can't. Two days, two times or two frequencies are a clash, never
     the first."""
     rest = _rest(text, names)
-    if _other_changes(rest):
+    if OTHER_CHANGES & {w for w, _, _ in _tokens(rest)}:
         return None, "only_schedule", []
     if how_often(rest) is not None:
         return None, "how_often", []
@@ -486,9 +533,11 @@ def _schedule_of(
     hour = None
     if at is not None and at.isdigit():
         hour, at = _hour(int(at))
-    if day is None and at is None and hour is None and not weekly:
+    unclear = at is None and hour is None and UNREAD_TIME.search(rest) is not None
+    if day is None and at is None and hour is None and not weekly and not unclear:
         return None, "only_schedule", []
-    return ScheduleChange(day=_day(day), weekly=weekly, at=at, hour=hour), None, []
+    change = ScheduleChange(day=_day(day), weekly=weekly, at=at, hour=hour, time_unclear=unclear)
+    return change, None, []
 
 
 def _hour(hour: int) -> tuple[int | None, str | None]:
@@ -548,6 +597,7 @@ class _Edit:
     kept: list[Span]
     clashes: list[Clash]
     often: Span | None
+    unread: list[Span]
     read: list[Span]
 
 
@@ -572,6 +622,10 @@ def edit_marks(
         kept=kept,
         clashes=clashes_in(rest) if answer.holds_save else [],
         often=how_often(rest) if answer.cant == "how_often" else None,
+        unread=[
+            *(m.span() for m in START.finditer(text)),
+            *(m.span() for m in UNREAD_TIME.finditer(rest) if _unclear(answer)),
+        ],
         read=[*names.all, *_now(text, kept), *(m.span() for m in TIME.finditer(text))],
     )
     return [
@@ -590,7 +644,13 @@ def _clause_marks(text: str, clause: Span, edit: _Edit) -> list[EditMark]:
         not changes and not tokens & EDIT_VERBS and STATE_WORDS.search(words_)
     ):
         return [EditMark(start, end, "cant", "ask_on_its_own")]
-    if _other_changes(edit.unnamed[start:end]) or (edit.answer.cant == "only_schedule" and changes):
+    scheduled = SCHEDULE_SAID.search(edit.unnamed[start:end]) is not None
+    writes = _writes(edit.unnamed[start:end])
+    if (
+        tokens & OTHER_CHANGES
+        or (writes and not scheduled)
+        or (edit.answer.cant == "only_schedule" and changes)
+    ):
         return [EditMark(start, end, "cant", "only_schedule")]
     if not changes:
         task = NEW_WORKFLOW.match(words_) or SCHEDULE_SAID.search(words_) or tokens & EDIT_VERBS
@@ -604,10 +664,15 @@ def _clause_marks(text: str, clause: Span, edit: _Edit) -> list[EditMark]:
     if edit.often is not None and edit.often[0] < end and edit.often[1] > start:
         marks.append(EditMark(*edit.often, "cant", "how_often"))
     for other in edit.names.others(clause):
-        bare = ARTICLE.match(text, other[0], other[1])
-        marks.append(EditMark(bare.end() if bare else other[0], other[1], "cant", "ask_on_its_own"))
+        bare = ARTICLE.match(text[other[0] : other[1]])
+        at = other[0] + (bare.end() if bare else 0)
+        marks.append(EditMark(at, other[1], "cant", "ask_on_its_own"))
+    marks += [EditMark(a, b, "cant", "not_followed") for a, b in edit.unread if start <= a < end]
     reads = edit.read + [(m.start, m.end) for m in marks]
-    marks += [EditMark(*s, "cant", "not_followed") for s in unexplained(text, clause, reads)]
+    marks += [
+        EditMark(a, b, "cant", "only_schedule" if _writes(text[a:b]) else "not_followed")
+        for a, b in unexplained(text, clause, reads)
+    ]
     return sorted(marks, key=lambda m: m.start) or [EditMark(start, end, "will_do")]
 
 

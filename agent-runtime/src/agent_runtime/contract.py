@@ -870,6 +870,12 @@ class AnswerRequest(WireModel):
         description="Read by the platform when the request arrives. Only a question about the "
         "person's own data uses it. Without it, such a question gets the fixed fallback.",
     )
+    changes_workflows: bool = Field(
+        default=True,
+        description="False when the person asking can't change workflows, as an Approver who "
+        "isn't an Operator: a change beside a question is crossed, and the question still gets "
+        "its answer (plan 3.2).",
+    )
 
 
 type CantNeed = Literal["new_tool", "new_system"]
@@ -1045,13 +1051,18 @@ class ScheduleChange(WireModel):
         description='An hour it names with no am or pm, as "at 9", which could be morning or '
         "evening, so the person picks one. Never guessed.",
     )
+    time_unclear: bool = Field(
+        default=False,
+        description='A time it names that the schedule can\'t read, as "in the afternoon" or "an '
+        'hour later": the person picks one. Never guessed.',
+    )
 
     @model_validator(mode="after")
     def _one_of_each(self) -> ScheduleChange:
         if self.day is not None and self.weekly:
             raise ValueError("A day named is not weekly with no day")
-        if self.at is not None and self.hour is not None:
-            raise ValueError("A time named is not an hour with no am or pm")
+        if sum((self.at is not None, self.hour is not None, self.time_unclear)) > 1:
+            raise ValueError("A time is named once")
         return self
 
 

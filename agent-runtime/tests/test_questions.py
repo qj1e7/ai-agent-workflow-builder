@@ -26,6 +26,7 @@ from agent_runtime.contract import (
 from agent_runtime.contracts import answer_request
 from agent_runtime.parts import parts_of
 from agent_runtime.questions import COULD_NOT_ANSWER, QUESTION_SYSTEM, QuestionReply
+from agent_runtime.reading import TicketRead
 from tests.fakes import ScriptedChat
 from tests.test_answers import follow_up
 
@@ -491,3 +492,18 @@ def test_a_question_crossed_as_not_followed_stays_a_cant_without_watched_softwar
     first = reading("none", belongs_on_watchlist=True, watchlist_word="Which software is behind")
     task = "Which software is behind, and set up a weekly summary"
     assert not isinstance(decided(task, first, PlannerFacts(watchlist=[])), AskTheQuestionLane)
+
+
+def test_a_question_beside_a_new_workflow_read_as_a_ticket_still_reaches_the_lane():
+    """The golden run's own reading of r4-state-with-task, which read the summary as a ticket."""
+    task = "Which software is behind, and set up a weekly summary"
+    first = reading(
+        "none",
+        belongs_on_watchlist=True,
+        watchlist_word="Which software is behind",
+        name="Weekly summary",
+        schedule="Weekly",
+        ticket=TicketRead(creates=False, says="summary", said="set up a weekly summary"),
+    )
+    out = decided(task, first)
+    assert isinstance(out, AskTheQuestionLane) and out.first_on_reject

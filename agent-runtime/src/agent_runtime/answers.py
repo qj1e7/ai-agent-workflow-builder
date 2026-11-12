@@ -63,7 +63,14 @@ from agent_runtime.contract import (
     WhyStoppedAnswer,
 )
 from agent_runtime.drafting import ask_model
-from agent_runtime.edits import asks, commanded, edit_of, left_over
+from agent_runtime.edits import (
+    NEW_WORKFLOW,
+    asks,
+    asks_for_a_change,
+    commanded,
+    edit_of,
+    left_over,
+)
 from agent_runtime.follow_ups import follow_up_of, watch_offer_of
 from agent_runtime.parts import NOT_FOLLOWED, OWN_TIME, locate, parts_of
 from agent_runtime.planner import (
@@ -81,6 +88,7 @@ from agent_runtime.questions import answer_question, is_fallback, question_messa
 from agent_runtime.reading import (
     FILLER,
     SAID_LIMIT,
+    AsksAbout,
     SkipRead,
     Span,
     TaskRead,
@@ -732,7 +740,12 @@ def _about(read: TaskRead, request: str) -> PlannerAnswer:
             return AbilitiesAnswer()
 
 
-def answer_of(read: TaskRead, request: str, facts: PlannerFacts | None = None) -> PlannerAnswer:
+def answer_of(
+    read: TaskRead,
+    request: str,
+    facts: PlannerFacts | None = None,
+    changes_workflows: bool = True,
+) -> PlannerAnswer:
     """The answer code decides from the model's reading: refused, by the word rule, by the
     model's answer to the skip question, or by words naming a yes that nothing explains in a
     request that writes; then a change to a workflow the person has, then the watchlist, a
@@ -756,12 +769,12 @@ def answer_of(read: TaskRead, request: str, facts: PlannerFacts | None = None) -
     elsewhere = _other_source(read, text)
     if elsewhere is not None:
         return elsewhere
-    edit = edit_of(read, text, facts)
+    edit = edit_of(read, text, facts) if changes_workflows else None
     if edit is not None:
         return edit
     if read.asks_about == "change":
-        # A watch request the reading called a change is read as the task it is.
-        read = read.model_copy(update={"asks_about": "none"})
+        unchanged = _unchanged(read, text, facts, changes_workflows)
+        read = read.model_copy(update={"asks_about": unchanged})
     task = None
     covered = [skip.covered] if skip.covered is not None else []
     watched = _watch_clauses(read, text) if read.belongs_on_watchlist else []
@@ -826,7 +839,7 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     Every other answer stands. Only code routes: the reading itself is never changed. The lane
     fails closed: a change word left once the question's own words and the names are out keeps
     the first answer, whatever the shape of the sentence (spec 6.4)."""
-    answer = answer_of(read, request.task, request.facts)
+    answer = answer_of(read, request.task, request.facts, request.changes_workflows)
     if question_messages(request) is None or isinstance(answer, EditAnswer):
         return answer
     text = visible_words(request.task)
@@ -856,25 +869,50 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
         return AskTheQuestionLane(otherwise=answer, first_on_reject=True)
     if isinstance(answer, WhyStoppedAnswer) and _nothing_stopped(request):
         return AskTheQuestionLane(otherwise=answer, first_on_reject=True)
-    if _a_question_about_software_unfollowed(read, answer, text, request):
+    if _a_question_beside_a_new_workflow(answer, text, request):
         return AskTheQuestionLane(otherwise=answer, first_on_reject=True)
     return answer
 
 
-def _a_question_about_software_unfollowed(
-    read: TaskRead, answer: PlannerAnswer, text: str, request: AnswerRequest
-) -> bool:
-    """The reading put a question on the watchlist, as "which software is behind", but code found
-    no watch in it, so the answer crosses the question as not followed. While the watchlist holds
-    software, the lane answers it. The can't stands if the lane says no."""
-    if not (
-        read.belongs_on_watchlist and isinstance(answer, CantAnswer) and answer.alternative is None
+WHY: Final = re.compile(r"\bwhy\b|\bwent\s+wrong\b|\bwhat\s+happened\b", re.IGNORECASE)
+NEEDS_ME: Final = re.compile(
+    r"\b(?:waiting|needs?\s+(?:me|my)|for\s+me|on\s+me|my\s+yes|to\s+approve|attention)\b",
+    re.IGNORECASE,
+)
+
+
+def _unchanged(
+    read: TaskRead, text: str, facts: PlannerFacts | None, changes_workflows: bool
+) -> AsksAbout:
+    """What a request the reading called a change is, when it isn't an edit. A watch request or
+    a change to something else, as "delete every closed ticket", is read as a task. One with no
+    change word left, as "when does the morning check run?", is a question about the person's
+    workflows, and so is a question beside a change from someone who can't change workflows."""
+    asked = any(asks(text, c) for c in clauses_of(text))
+    if read.belongs_on_watchlist or (
+        asks_for_a_change(read, text, facts) and (changes_workflows or not asked)
     ):
+        return "none"
+    if WHY.search(text):
+        return "why_stopped"
+    return "needs_me" if NEEDS_ME.search(text) else "my_workflows"
+
+
+def _a_question_beside_a_new_workflow(
+    answer: PlannerAnswer, text: str, request: AnswerRequest
+) -> bool:
+    """A question, and beside it only a request for a new workflow, as "which software is
+    behind, and set up a weekly summary". A new workflow changes nothing that exists, so the
+    lane answers the question from the person's software or workflows, and the task is crossed
+    to ask on its own. The first answer stands if the lane says no."""
+    facts = request.facts
+    held = facts is not None and bool(_watched_names(request) or facts.workflows)
+    if not held or not isinstance(answer, CantAnswer | SetupCardAnswer | PartAnswer):
         return False
-    clauses = [c for c in clauses_of(text) if asks(text, c)]
-    return bool(_watched_names(request)) and any(
-        row.note == NOT_FOLLOWED and locate(text, row.text) in clauses for row in answer.cant
-    )
+    clauses = clauses_of(text)
+    questions = [c for c in clauses if asks(text, c)]
+    others = [c for c in clauses if c not in questions]
+    return bool(questions and others) and all(NEW_WORKFLOW.match(text[a:b]) for a, b in others)
 
 
 def _follows(answer: PlannerAnswer) -> bool:
