@@ -337,6 +337,8 @@ class FakeHome:
             connections=[],
             addresses=[],
             replied=[1],
+            declined_total=1,
+            questions_for_me_total=1,
         )
         return cast(HomeOut, counts)
 
@@ -587,7 +589,7 @@ async def test_the_runtime_gets_the_facts_the_screens_show_for_the_signed_in_per
     source = row["our_version_source"]
     assert fact.our_version_source == (None if source is None else source["kind"])
     assert fact.our_version_ticket == (None if source is None else source["ticket"])
-    assert facts.needs_you is not None and facts.needs_you.total == 4
+    assert facts.needs_you is not None and facts.needs_you.total == 6, "Home's whole count"
     assert [u.name for u in (await front.builder.list_use_cases()).use_cases] == [
         w.name for w in facts.workflows or []
     ]

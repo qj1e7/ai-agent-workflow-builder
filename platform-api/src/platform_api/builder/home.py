@@ -19,6 +19,7 @@ from platform_api.orchestration import (
     ConnectionState,
     DeclinedTest,
     PersonRuns,
+    QuestionForYou,
     Stopped,
     Waiting,
     confirmation_summary,
@@ -106,6 +107,20 @@ class DeclinedItem(WireModel):
     )
 
 
+class QuestionItem(WireModel):
+    question_id: str
+    approval_id: ApprovalId
+    run_id: RunId
+    use_case_id: str
+    use_case_name: str
+    asked_by: UserId
+    asked_by_name: str | None = Field(
+        description="Null when the Approver who asked is no longer on the list."
+    )
+    asked_at: datetime
+    text: str
+
+
 class DraftItem(WireModel):
     draft_id: str
     name: str | None = Field(description="The draft's `name`, when the Portal saved one.")
@@ -179,6 +194,12 @@ class HomeOut(WireModel):
         "one leaves when the workflow runs again. At most 10."
     )
     declined_total: int
+    questions_for_me: list[QuestionItem] = Field(
+        description="Questions Approvers asked this person on requests they started, or whose "
+        "schedule they own, while each request waits for a yes and the question has no answer. "
+        "The newest first. They are part of Needs you. At most 10."
+    )
+    questions_for_me_total: int
     drafts: list[DraftItem] = Field(description="An Operator's own drafts, the last saved first.")
     following_up: list[FollowingUpItem] = Field(
         description="This person's own requests to the team, Ask the team and Report to "
@@ -316,6 +337,21 @@ def _declined(test: DeclinedTest, names: dict[UserId, str]) -> DeclinedItem:
     )
 
 
+def _question(asked: QuestionForYou, names: dict[UserId, str]) -> QuestionItem:
+    run, question = asked.run, asked.question
+    return QuestionItem(
+        question_id=question.id,
+        approval_id=question.approval_id,
+        run_id=run.run_id,
+        use_case_id=run.use_case_id,
+        use_case_name=run.use_case_name,
+        asked_by=question.asked_by,
+        asked_by_name=names.get(question.asked_by),
+        asked_at=question.asked_at,
+        text=question.text,
+    )
+
+
 def _confirmation(row: ConfirmationRow) -> ConfirmationItem:
     c = row.confirmation
     return ConfirmationItem(
@@ -388,6 +424,7 @@ class Home:
             key=lambda d: d.declined_at,
             reverse=True,
         )
+        questions = sorted(runs.questions, key=lambda q: q.question.asked_at, reverse=True)
         drafts = (
             (await self._builder.list_drafts(viewer)).drafts
             if Role.OPERATOR in viewer.roles
@@ -406,6 +443,8 @@ class Home:
             stopped_total=len(stopped),
             declined=[_declined(d, names) for d in declined[:SHOWN]],
             declined_total=len(declined),
+            questions_for_me=[_question(q, names) for q in questions[:SHOWN]],
+            questions_for_me_total=len(questions),
             waiting_on_others=[_waiting(w) for w in runs.waiting[:LISTED]],
             waiting_on_others_total=len(runs.waiting),
             drafts=[_draft(d) for d in drafts],

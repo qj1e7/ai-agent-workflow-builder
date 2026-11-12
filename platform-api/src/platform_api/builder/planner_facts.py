@@ -99,6 +99,7 @@ def needs_you_fact(home: HomeOut) -> NeedsYouFact:
     connections = len(home.connections)
     addresses = len(home.addresses)
     replies = len(home.replied)
+    others = home.declined_total + home.questions_for_me_total
     return NeedsYouFact(
         approvals=approvals,
         confirmations=confirmations,
@@ -106,7 +107,7 @@ def needs_you_fact(home: HomeOut) -> NeedsYouFact:
         connections=connections,
         addresses=addresses,
         replies=replies,
-        total=approvals + confirmations + stopped + connections + addresses + replies,
+        total=approvals + confirmations + stopped + connections + addresses + replies + others,
     )
 
 

@@ -14,12 +14,13 @@ from platform_api.orchestration.approvals import (
     ApprovalStep,
 )
 from platform_api.orchestration.dispatch import PRACTICE, MessageRef
+from platform_api.orchestration.questions import insert_question, load_questions_for
 from platform_api.orchestration.runs import Pending
 from platform_api.orchestration.store import RunRecord, Store
 from platform_api.orchestration.teams import TeamsWorkflowsWebhook
 from platform_api.orchestration.write_actions import Proposal, WriteAction, digest
 from platform_api.practice_jira import PracticeJira
-from platform_api.shared import ApprovalId, ProposalId, RunId
+from platform_api.shared import ApprovalId, ProposalId, RunId, UserId
 from tests.conftest import PostgresUrls
 from tests.support import NOW, SPEC
 
@@ -876,3 +877,62 @@ async def test_migration_0017_keeps_a_reason_only_on_a_decline_and_a_decision_fr
     async with db.transaction("orchestration") as uow:
         loaded = await store.load_decisions(uow, approval_id)
     assert [(d.step_index, d.reason) for d in loaded] == [(0, None), (1, None)]
+
+
+async def test_migration_0018_keeps_questions_with_whole_answers_and_a_downgrade_drops_them(
+    postgres: PostgresUrls, db: Database
+):
+    store = Store()
+    approval_id, run_id = ApprovalId("apr_question"), RunId("run_question")
+    async with db.transaction("orchestration") as uow:
+        pending = Pending(run_id, 1, None, NOW)
+        record = RunRecord(run_id, SPEC, SPEC.owner, NOW, NOW, 1, pending, (), None)
+        await store.insert_run(uow, record, "key-question")
+        action = WriteAction("jira", "create_ticket", {"project": "MOCK"}, {"title": "t"})
+        proposal = Proposal(ProposalId("prp_question"), run_id, (action,), digest((action,)))
+        await store.insert_proposal(uow, proposal)
+        await store.insert_approval(
+            uow,
+            ApprovalRequest(
+                approval_id,
+                run_id,
+                proposal.id,
+                proposal.digest,
+                SPEC.approval_policy,
+                frozenset({SPEC.owner}),
+            ),
+        )
+        asked = await insert_question(uow, approval_id, UserId("bob"), "Is it urgent?", "k1")
+    insert = (
+        "INSERT INTO orchestration.approval_questions (question_id, approval_id, asked_by, "
+        "asked_at, text, idempotency_key, answer, answered_by, answered_at) "
+        "VALUES (%s, %s, 'bob', %s, %s, %s, %s, %s, %s)"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        for question_id, text, answer, by, at in (
+            ("q_empty", "", None, None, None),
+            ("q_long", "x" * 1001, None, None, None),
+            ("q_no_one_answered", "Is it?", "Yes", None, None),
+            ("q_no_time", "Is it?", "Yes", "alice", None),
+            ("q_no_words", "Is it?", None, "alice", NOW),
+        ):
+            with pytest.raises(psycopg.errors.CheckViolation):
+                conn.execute(
+                    insert, (question_id, approval_id, NOW, text, question_id, answer, by, at)
+                )
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            conn.execute(insert, ("q_again", approval_id, NOW, "Again?", "k1", None, None, None))
+        downgrade("orchestration", postgres.owner, "0017")
+        try:
+            assert conn.execute(
+                "SELECT to_regclass('orchestration.approval_questions')"
+            ).fetchone() == (None,)
+            assert conn.execute(
+                "SELECT count(*) FROM orchestration.approval_requests WHERE approval_id = %s",
+                (approval_id,),
+            ).fetchone() == (1,), "a downgrade keeps the request"
+        finally:
+            upgrade("orchestration", postgres.owner)
+    async with db.transaction("orchestration") as uow:
+        assert await load_questions_for(uow, [approval_id]) == {}, "the table starts empty again"
+    assert asked.answer is None

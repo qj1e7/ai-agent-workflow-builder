@@ -71,6 +71,20 @@ from platform_api.orchestration.dispatch import (
     without_addresses,
 )
 from platform_api.orchestration.person_runs import PersonRuns, runs_of
+from platform_api.orchestration.questions import (
+    Answer,
+    AnswerRefusal,
+    Question,
+    QuestionId,
+    answer_refusal,
+    asked_with,
+    insert_question,
+    load_question,
+    load_questions_for,
+    repeats,
+    requester_of,
+    save_answer,
+)
 from platform_api.orchestration.run_gist import RunGist, gist_of
 from platform_api.orchestration.runs import (
     PLANNER,
@@ -215,6 +229,8 @@ class ApprovalDetail:
     found: str
     site_names: tuple[str, ...]
     """Where each action writes, as people read it, in the order of the proposal's actions."""
+    questions: tuple[Question, ...]
+    requester: UserId
 
 
 @dataclass(frozen=True)
@@ -240,6 +256,34 @@ class NotFound:
 
 
 type DecisionResult = Decided | DecisionRefused | DecisionRace | NotFound
+
+
+@dataclass(frozen=True)
+class QuestionAsked:
+    question: Question
+    repeated: bool
+
+
+@dataclass(frozen=True)
+class QuestionRefused:
+    reason: Refusal
+
+
+type AskResult = QuestionAsked | QuestionRefused | NotFound
+
+
+@dataclass(frozen=True)
+class QuestionAnswered:
+    question: Question
+    repeated: bool
+
+
+@dataclass(frozen=True)
+class AnswerRefused:
+    reason: AnswerRefusal
+
+
+type AnswerResult = QuestionAnswered | AnswerRefused | NotFound
 
 
 @dataclass(frozen=True)
@@ -820,6 +864,7 @@ class Orchestrator:
             record = await self._store.load_run(uow, request.run_id)
             assert proposal is not None and record is not None
             decisions = await self._store.load_decisions(uow, approval_id)
+            asked = await load_questions_for(uow, [approval_id])
         match record.state:
             case AwaitingApproval(approval_id=waiting, summary=summary) if waiting == approval_id:
                 found = summary
@@ -833,6 +878,8 @@ class Orchestrator:
             record,
             found,
             tuple(site_name(action, self._gateway.sites) for action in proposal.actions),
+            asked.get(approval_id, ()),
+            requester_of(record.spec, record.started_by),
         )
 
     async def decide(
@@ -898,6 +945,60 @@ class Orchestrator:
         self.nudge()
         return Decided(status, decision, False)
 
+    async def ask(
+        self, approval_id: ApprovalId, principal: Principal, text: str, idempotency_key: str
+    ) -> AskResult:
+        """Only someone the gate would let decide the open step may ask. The question goes on the
+        request and nothing else: the run, the approval and its decisions stay as they were."""
+        async with self._db.transaction("orchestration") as uow:
+            request = await self._store.load_approval(uow, approval_id)
+            if request is None:
+                return NotFound()
+            await self._store.load_run(uow, request.run_id, lock=True)
+            kept = await asked_with(uow, approval_id, principal.user_id, idempotency_key)
+            if kept is not None:
+                return QuestionAsked(kept, repeated=True)
+            if self._people is not None:
+                roles = await self._people.roles_now(uow, principal.user_id)
+                principal = replace(principal, roles=roles or frozenset())
+            decisions = await self._store.load_decisions(uow, approval_id)
+            reason = approvals.why_not(request, decisions, principal)
+            if reason is not None:
+                return QuestionRefused(reason)
+            question = await insert_question(
+                uow, approval_id, principal.user_id, text, idempotency_key
+            )
+        return QuestionAsked(question, repeated=False)
+
+    async def answer(
+        self, approval_id: ApprovalId, question_id: QuestionId, principal: Principal, text: str
+    ) -> AnswerResult:
+        """Only the requester answers, once, while the request waits. The answer is kept on the
+        question and nothing else changes. The run's lock keeps it from landing after a
+        decision."""
+        async with self._db.transaction("orchestration") as uow:
+            request = await self._store.load_approval(uow, approval_id)
+            if request is None:
+                return NotFound()
+            record = await self._store.load_run(uow, request.run_id, lock=True)
+            assert record is not None
+            question = await load_question(uow, approval_id, question_id)
+            if question is None:
+                return NotFound()
+            if repeats(question, principal.user_id, text):
+                return QuestionAnswered(question, repeated=True)
+            decisions = await self._store.load_decisions(uow, approval_id)
+            refusal = answer_refusal(
+                question,
+                requester_of(record.spec, record.started_by),
+                approval_status(request, decisions),
+                principal.user_id,
+            )
+            if refusal is not None:
+                return AnswerRefused(refusal)
+            answered = await save_answer(uow, question, Answer(text, principal.user_id, uow.now))
+        return QuestionAnswered(answered, repeated=False)
+
     async def retry(self, run_id: RunId, principal: Principal) -> RetryResult:
         async with self._db.transaction("orchestration") as uow:
             record = await self._store.load_run(uow, run_id, lock=True)
@@ -941,7 +1042,13 @@ class Orchestrator:
     async def runs_for(self, viewer: Principal) -> PersonRuns:
         async with self._db.transaction("orchestration") as uow:
             details = await self._details(uow, await self._store.open_runs(uow, viewer.user_id))
-        return runs_of(details, viewer)
+            waiting = [
+                d.approval.id
+                for d in details
+                if d.approval is not None and isinstance(d.record.state, AwaitingApproval)
+            ]
+            asked = await load_questions_for(uow, waiting)
+        return runs_of(details, viewer, asked)
 
     async def _detail(self, uow: UnitOfWork, record: RunRecord) -> RunDetail:
         (detail,) = await self._details(uow, [record])

@@ -81,6 +81,7 @@ from platform_api.orchestration.person_runs import (
     Change,
     DeclinedTest,
     PersonRuns,
+    QuestionForYou,
     Stopped,
     Waiting,
 )
@@ -221,6 +222,7 @@ __all__ = [
     "ModelProblem",
     "NoModel",
     "PersonRuns",
+    "QuestionForYou",
     "RequestKind",
     "RequestNotice",
     "RowKind",

@@ -1,4 +1,4 @@
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, Protocol
@@ -12,6 +12,7 @@ from platform_api.orchestration.approvals import (
     approval_status,
     why_not,
 )
+from platform_api.orchestration.questions import Question, requester_of
 from platform_api.orchestration.runs import AwaitingApproval, Failed, Rejected
 from platform_api.orchestration.store import RunRecord
 from platform_api.orchestration.write_actions import Proposal
@@ -79,6 +80,12 @@ class DeclinedTest:
 
 
 @dataclass(frozen=True)
+class QuestionForYou:
+    run: RunFacts
+    question: Question
+
+
+@dataclass(frozen=True)
 class PersonRuns:
     asks: tuple[Ask, ...]
     waiting: tuple[Waiting, ...]
@@ -86,6 +93,9 @@ class PersonRuns:
     declined: tuple[DeclinedTest, ...]
     """An Operator's own test runs that an Approver declined, while each is the newest run of its
     workflow. A new run of the workflow takes it off the list."""
+    questions: tuple[QuestionForYou, ...]
+    """Questions on the requests this person made that wait for their answer, while each request
+    waits for a yes."""
 
 
 class OpenRun(Protocol):
@@ -186,14 +196,32 @@ def _declined_test(run: OpenRun, state: Rejected, viewer: Principal) -> Declined
     return DeclinedTest(_facts(record), decline.at, state.by, decline.reason)
 
 
-def runs_of(runs: Iterable[OpenRun], viewer: Principal) -> PersonRuns:
+def _questions_for(
+    run: OpenRun, viewer: Principal, asked: Iterable[Question]
+) -> list[QuestionForYou]:
+    record, request = run.record, run.approval
+    assert request is not None
+    if requester_of(record.spec, record.started_by) != viewer.user_id:
+        return []
+    if not isinstance(approval_status(request, run.decisions), Open):
+        return []
+    return [QuestionForYou(_facts(record), q) for q in asked if q.answer is None]
+
+
+def runs_of(
+    runs: Iterable[OpenRun],
+    viewer: Principal,
+    asked: Mapping[ApprovalId, tuple[Question, ...]],
+) -> PersonRuns:
     asks: list[Ask] = []
     waiting: list[Waiting] = []
     stopped: list[Stopped] = []
     declined: list[DeclinedTest] = []
+    questions: list[QuestionForYou] = []
     for run in runs:
         match run.record.state:
-            case AwaitingApproval():
+            case AwaitingApproval(approval_id=approval_id):
+                questions.extend(_questions_for(run, viewer, asked.get(approval_id, ())))
                 match _waiting_or_ask(run, viewer):
                     case Ask() as ask:
                         asks.append(ask)
@@ -209,4 +237,6 @@ def runs_of(runs: Iterable[OpenRun], viewer: Principal) -> PersonRuns:
                     declined.append(test)
             case _:
                 pass
-    return PersonRuns(tuple(asks), tuple(waiting), tuple(stopped), tuple(declined))
+    return PersonRuns(
+        tuple(asks), tuple(waiting), tuple(stopped), tuple(declined), tuple(questions)
+    )
