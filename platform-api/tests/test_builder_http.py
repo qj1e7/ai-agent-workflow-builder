@@ -1609,6 +1609,15 @@ async def test_the_runtime_is_told_an_operator_can_change_workflows(front: Front
     assert front.answers.changes == [True]
 
 
+async def test_the_runtime_is_told_an_approver_cannot_and_an_edit_answers_operators(front: Front):
+    front.answers.result = answered(
+        EditAnswer(workflow_words="morning check", schedule=ScheduleChange(day="monday"))
+    )
+    reply = await ask_as_bob(front, "Make the morning check run on Mondays only")
+    assert front.answers.changes == [False]
+    assert reply["answer"] == "operators"
+
+
 async def test_a_match_holding_every_word_check_included_wins(front: Front):
     morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
     await make_workflow(front, "Morning status", FRIDAY_16)
