@@ -257,8 +257,8 @@ class EditAfter(WireModel):
 
 class EditReply(WireModel):
     """A change to a workflow the person has, proposed. Nothing changes until they save it: an
-    Operator saves a workflow's schedule with PUT /api/v1/use-cases/{use_case_id}/schedule and
-    via chat, which publishes a version that POST .../versions/{version}/undo undoes. The
+    Operator saves a workflow's schedule with PUT /api/v1/use-cases/{use_case_id}/schedule, with
+    via set to chat, which publishes a version that POST .../versions/{version}/undo undoes. The
     Software watchlist's is saved with PUT /api/v1/watchlist/schedule and keeps no versions."""
 
     answer: Literal["edit"] = "edit"
@@ -439,7 +439,7 @@ def _norm(name: str) -> str:
 
 
 LITTLE_WORDS: Final = frozenset(
-    {"the", "a", "an", "my", "our", "this", "that", "its", "one", "workflow", "check", "checks"}
+    {"the", "a", "an", "my", "our", "this", "that", "it", "its", "one", "workflow", "check"}
 )
 """Words that name no workflow on their own, as in "the weekly one" or "the React check"."""
 WATCHLIST_WORDS: Final = frozenset({"software", "watchlist", "version", "versions"})
@@ -449,7 +449,13 @@ ONE_DAY: Final[frozenset[Day]] = frozenset(
 
 
 def _own_words(text: str) -> frozenset[str]:
-    return frozenset(re.findall(r"[^\W_]+", text.casefold())) - LITTLE_WORDS
+    """The words that name a workflow, each as one of a kind, so "tickets" is "ticket"."""
+    found = re.findall(r"[^\W_]+", text.casefold())
+    return frozenset(_one(w) for w in found) - LITTLE_WORDS
+
+
+def _one(word: str) -> str:
+    return word[:-1] if len(word) > 3 and word.endswith("s") and not word.endswith("ss") else word
 
 
 def _after(before: EditBefore | None, edit: EditAnswer) -> EditAfter | None:
@@ -636,21 +642,24 @@ class PlannerFront:
         return matched[0].use_case_id if len(matched) == 1 else None
 
     async def _matching(self, words: str, software: str | None) -> list[UseCaseView]:
-        """The workflows the words name, by whole words: the one called that, else each whose
-        whole name the words hold, else each that has every one of the words, little words and
-        "check" aside. A software on the Software watchlist, as "the React check", names the
-        watchlist, as do the watchlist's own words."""
+        """The workflows the words name, by whole words: the one called that, else the Software
+        watchlist for the check of a software on it, as "the React check", else each whose whole
+        name the words hold, else each that has every one of the words, little words and "check"
+        aside. The watchlist's own words name it too."""
         cases = await self._use_cases()
         wanted = _norm(words)
         exact = [u for u in cases if _norm(u.name) == wanted]
         held = [u for u in cases if re.search(rf"(?<!\w){re.escape(_norm(u.name))}(?!\w)", wanted)]
         own = _own_words(words)
+        watchlist = [u for u in cases if u.template == SOFTWARE_WATCHLIST.key]
+        watched = await self._listed(software) if software is not None else None
+        if not exact and watched is not None and own <= _own_words(software or ""):
+            return watchlist
         found = exact or held or [u for u in cases if own and own <= _own_words(u.name)]
         if found:
             return found
-        watched = await self._listed(software) if software is not None else None
         if (own and own <= WATCHLIST_WORDS) or watched is not None:
-            return [u for u in cases if u.template == SOFTWARE_WATCHLIST.key]
+            return watchlist
         return []
 
     async def _edit(self, edit: EditAnswer) -> EditReply:
@@ -665,7 +674,7 @@ class PlannerFront:
             use_case_id=None if one is None else one.use_case_id,
             name=None if one is None else one.name,
             watchlist=one is not None and one.template == SOFTWARE_WATCHLIST.key,
-            missing=words if words is not None and not matched else None,
+            missing=words if words is not None and not matched and _own_words(words) else None,
             software=edit.software,
             choices=[
                 SimilarWorkflow(use_case_id=u.use_case_id, name=u.name)

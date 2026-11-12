@@ -1219,3 +1219,26 @@ async def test_an_edit_saves_nothing(front: Front):
     assert [v["version"] for v in versions.json()["versions"]] == [1]
     shown = await front.client.get(f"/api/v1/use-cases/{morning}", headers=ALICE)
     assert shown.json()["schedule"]["day"] == "weekdays"
+
+
+async def test_words_in_the_plural_still_name_the_workflow(front: Front):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    edit = EditAnswer(workflow_words="new tickets check", schedule=ScheduleChange(day="monday"))
+    assert (await edit_reply(front, edit))["use_case_id"] == morning
+
+
+async def test_a_watched_softwares_check_is_the_watchlist_before_a_workflow_named_for_it(
+    front: Front,
+):
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
+    await front.watchlist.add(alice, AddSoftware.model_validate(LANGGRAPH))
+    await make_workflow(front, "LangGraph upgrade tickets", FRIDAY_16)
+    edit = EditAnswer(workflow_words="LangGraph check", software="LangGraph")
+    reply = await edit_reply(front, edit.model_copy(update={"schedule": ScheduleChange()}))
+    assert reply["watchlist"] is True
+
+
+async def test_it_alone_is_no_name_and_nothing_is_missing(front: Front):
+    await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    reply = await edit_reply(front, EditAnswer(workflow_words="it", schedule=ScheduleChange()))
+    assert (reply["use_case_id"], reply["missing"], reply["choices"]) == (None, None, [])

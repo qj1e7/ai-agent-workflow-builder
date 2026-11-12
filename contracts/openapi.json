@@ -4003,7 +4003,7 @@
       },
       "EditReply": {
         "additionalProperties": false,
-        "description": "A change to a workflow the person has, proposed. Nothing changes until they save it: an\nOperator saves a workflow's schedule with PUT /api/v1/use-cases/{use_case_id}/schedule and\nvia chat, which publishes a version that POST .../versions/{version}/undo undoes. The\nSoftware watchlist's is saved with PUT /api/v1/watchlist/schedule and keeps no versions.",
+        "description": "A change to a workflow the person has, proposed. Nothing changes until they save it: an\nOperator saves a workflow's schedule with PUT /api/v1/use-cases/{use_case_id}/schedule, with\nvia set to chat, which publishes a version that POST .../versions/{version}/undo undoes. The\nSoftware watchlist's is saved with PUT /api/v1/watchlist/schedule and keeps no versions.",
         "properties": {
           "after": {
             "anyOf": [
