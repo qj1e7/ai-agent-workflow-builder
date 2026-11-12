@@ -498,7 +498,10 @@ export function stationsOf(
   })
 }
 
-/** How far the line's fill reaches, from 0 at Started to 1 at Done. */
+/**
+ * How far the line's fill reaches, from 0 at Started to 1 at Done.
+ * @deprecated No screen uses it since the run line became flow (R11). Plan 7.1 keeps runModel.test.ts unchanged, so it goes with a plan change.
+ */
 export function reachOf(stations: readonly Station[]): number {
   if (stations.length < 2) return 0
   let reached = 0

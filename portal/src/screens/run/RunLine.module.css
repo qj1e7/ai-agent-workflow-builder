@@ -348,6 +348,8 @@
   flex-direction: row;
   align-items: flex-start;
   gap: 10px;
+  /* The narrow page's container query gives a station 64 px. A small line keeps its own height wherever it sits. */
+  height: auto;
   text-align: left;
 }
 

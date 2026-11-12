@@ -171,7 +171,7 @@ function Modal({ face, title, under, onClose, children }: ModalProps) {
     if (!element.open) element.showModal()
     topClose.current?.focus()
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !event.isComposing) {
         event.preventDefault()
         closeFromEffect()
         return
