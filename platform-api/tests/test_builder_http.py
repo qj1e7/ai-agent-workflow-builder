@@ -39,6 +39,7 @@ from platform_api.orchestration import (
     PreviousTurn,
     QuestionAnswer,
     RefusedAnswer,
+    RequestPart,
     RowKind,
     RunDetail,
     RunGist,
@@ -136,6 +137,57 @@ async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+
+
+AGENT_USE_CASE = {
+    "name": "Friday summary",
+    "instruction": "Sum up the tickets closed this week.",
+    "agents": [
+        {
+            "card_id": "crd_version_checker",
+            "values": {"GitHub repository": "a/b", "Jira project": "MOCK"},
+        }
+    ],
+}
+
+
+async def test_a_workflow_keeps_what_it_was_set_up_without_as_text_for_people(
+    client: httpx.AsyncClient,
+):
+    body = {**AGENT_USE_CASE, "left_out": ["colour them by team", "  Friday  "]}
+    made = await client.post("/api/v1/agent-use-cases", json=body, headers=ALICE)
+    assert made.status_code == 201, made.text
+    use_case_id = made.json()["use_case_id"]
+
+    read = await client.get(f"/api/v1/use-cases/{use_case_id}", headers=ALICE)
+    listed = (await client.get("/api/v1/use-cases", headers=ALICE)).json()["use_cases"]
+
+    assert read.json()["left_out"] == ["colour them by team", "Friday"]
+    assert [u["left_out"] for u in listed if u["use_case_id"] == use_case_id] == [
+        ["colour them by team", "Friday"]
+    ]
+    assert read.json()["instruction"] == AGENT_USE_CASE["instruction"]
+
+
+async def test_a_workflow_set_up_with_every_part_has_nothing_left_out(client: httpx.AsyncClient):
+    made = await client.post("/api/v1/agent-use-cases", json=AGENT_USE_CASE, headers=ALICE)
+    assert made.status_code == 201, made.text
+    read = await client.get(f"/api/v1/use-cases/{made.json()['use_case_id']}", headers=ALICE)
+    assert read.json()["left_out"] == []
+
+
+@pytest.mark.parametrize(
+    "left_out",
+    [[""], ["x" * 201], ["part"] * 11, "colour them by team"],
+    ids=["blank", "too long", "too many", "not a list"],
+)
+async def test_left_out_that_cannot_be_kept_is_refused_with_a_422(
+    client: httpx.AsyncClient, left_out: object
+):
+    body = {**AGENT_USE_CASE, "left_out": left_out}
+    r = await client.post("/api/v1/agent-use-cases", json=body, headers=ALICE)
+    assert r.status_code == 422, r.text
+    assert any("left_out" in e["loc"] for e in r.json()["detail"])
 
 
 async def save(client: httpx.AsyncClient) -> str:
@@ -504,6 +556,63 @@ async def test_a_set_up_card_comes_back_with_its_rows_and_a_similar_workflow(fro
     assert again["similar"] == {"use_case_id": existing, "name": "friday SUMMARY"}
 
 
+async def test_every_part_of_the_request_comes_back_with_its_mark_in_order(front: Front):
+    typed = "Every Monday and Friday at 9am, sum up the closed tickets and colour them by team"
+    parts = [
+        RequestPart(
+            text="Monday and Friday", mark="cant", reason="one_day", choices=["Monday", "Friday"]
+        ),
+        RequestPart(text="sum up the closed tickets", mark="will_do"),
+        RequestPart(text="colour them by team", mark="cant", reason="not_followed"),
+    ]
+    card = SetupCardAnswer(name="Friday summary", rows=FOUR_ROWS)
+    front.answers.result = Answered(answer=card, parts=parts)
+
+    reply = await say(front, typed)
+
+    assert reply["parts"] == [
+        {
+            "text": "Monday and Friday",
+            "mark": "cant",
+            "reason": "one_day",
+            "note": None,
+            "choices": ["Monday", "Friday"],
+        },
+        {
+            "text": "sum up the closed tickets",
+            "mark": "will_do",
+            "reason": None,
+            "note": None,
+            "choices": [],
+        },
+        {
+            "text": "colour them by team",
+            "mark": "cant",
+            "reason": "not_followed",
+            "note": None,
+            "choices": [],
+        },
+    ]
+
+
+async def test_parts_belong_to_the_whole_answer_never_to_the_rest_inside_it(front: Front):
+    rest = SetupCardAnswer(name="Friday summary", rows=FOUR_ROWS)
+    front.answers.result = Answered(
+        answer=WatchlistAnswer(word="release", software=None, also=rest),
+        parts=[RequestPart(text="Watch releases", mark="will_do")],
+    )
+    reply = await say(front, "Watch releases and every Friday sum up")
+    assert [p["text"] for p in cast(list[dict[str, object]], reply["parts"])] == ["Watch releases"]
+    assert cast(dict[str, object], reply["also"])["parts"] == []
+
+
+async def test_a_tapped_chip_and_the_offline_answer_mark_no_parts(front: Front):
+    r = await front.client.post(ANSWER, json={"intent": "needs_me"}, headers=ALICE)
+    assert r.json() == {"parts": [], "answer": "needs_me"}
+    front.answers.result = NoModel()
+    assert (await say(front))["parts"] == []
+
+
 async def test_a_part_keeps_the_part_the_platform_cannot_do(front: Front):
     front.answers.result = answered(PartAnswer(name="Friday", rows=FOUR_ROWS, cant=[EMAIL]))
     reply = await say(front)
@@ -545,6 +654,7 @@ async def test_a_question_answer_comes_back_with_the_sections_it_looked_at(front
         QuestionAnswer(text="Nothing is on the watchlist yet.", looked_at=["watchlist"])
     )
     assert await say(front, "how many software are on our watchlist") == {
+        "parts": [],
         "answer": "question",
         "text": "Nothing is on the watchlist yet.",
         "looked_at": ["watchlist"],
@@ -619,7 +729,7 @@ async def test_a_follow_up_passes_the_previous_turn_on_and_changes_nothing_else(
         ANSWER, json={"text": "and Redis?", "previous": previous}, headers=ALICE
     )
     assert r.status_code == 200, r.text
-    assert r.json() == {"answer": "which_software", "word": "version"}
+    assert r.json() == {"parts": [], "answer": "which_software", "word": "version"}
     (sent,) = front.answers.previous
     assert sent is not None and sent.model_dump() == previous
 
@@ -650,25 +760,26 @@ async def test_a_watchlist_row_carries_the_rest_of_a_mixed_request(front: Front)
 
 async def test_the_other_kinds_come_back_as_they_were_read(front: Front):
     front.answers.result = answered(WhichSoftwareAnswer(word="version"))
-    assert await say(front) == {"answer": "which_software", "word": "version"}
+    assert await say(front) == {"parts": [], "answer": "which_software", "word": "version"}
     front.answers.result = answered(RefusedAnswer(said="skip the yes", rest="close every ticket"))
     assert await say(front) == {
+        "parts": [],
         "answer": "refused",
         "reason": "skip_approval",
         "said": "skip the yes",
         "rest": "close every ticket",
     }
     front.answers.result = answered(AbilitiesAnswer())
-    assert await say(front) == {"answer": "abilities"}
+    assert await say(front) == {"parts": [], "answer": "abilities"}
     front.answers.result = answered(NeedsMeAnswer())
-    assert await say(front) == {"answer": "needs_me"}
+    assert await say(front) == {"parts": [], "answer": "needs_me"}
 
 
 async def test_a_workflow_named_in_a_question_is_matched_to_the_one_that_has_the_name(front: Front):
     first = await make_workflow(front, "Morning new-ticket check")
     await make_workflow(front, "Friday summary")
     front.answers.result = answered(CheckWorkflowsAnswer(workflow_words=None))
-    assert await say(front) == {"answer": "check_workflows", "use_case_id": None}
+    assert await say(front) == {"parts": [], "answer": "check_workflows", "use_case_id": None}
     front.answers.result = answered(CheckWorkflowsAnswer(workflow_words="morning new-ticket check"))
     assert (await say(front))["use_case_id"] == first
     front.answers.result = answered(WhyStoppedAnswer(workflow_words="the morning check"))
@@ -707,7 +818,7 @@ async def test_why_stopped_for_a_workflow_that_does_not_exist_is_a_404(front: Fr
     r = await front.client.post(
         ANSWER, json={"intent": "why_stopped", "use_case_id": made}, headers=ALICE
     )
-    assert r.json() == {"answer": "why_stopped", "use_case_id": made}
+    assert r.json() == {"parts": [], "answer": "why_stopped", "use_case_id": made}
 
 
 async def test_with_no_model_the_answer_is_the_plain_offline_one_and_the_starters(front: Front):
@@ -747,7 +858,7 @@ async def test_a_broken_answer_is_the_offline_answer_never_a_guess(
     front.answers.result = result
     reply = await say(front)
     assert (reply["answer"], reply["why"]) == ("offline", why)
-    assert set(reply) == {"answer", "why", "message", "starters"}
+    assert set(reply) == {"parts", "answer", "why", "message", "starters"}
 
 
 async def test_only_an_operator_is_answered_and_a_blank_or_double_request_is_refused(

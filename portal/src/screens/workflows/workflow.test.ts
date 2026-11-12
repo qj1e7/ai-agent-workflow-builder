@@ -56,6 +56,7 @@ import {
   versionWords,
   undoneWords,
   undoProblem,
+  leftOutWords,
   type ChangeOutcome,
   type LastRun,
   type RunNowOutcome,
@@ -760,5 +761,13 @@ describe('the Versions words', () => {
     expect(undoProblem(4, 'Nudge', later, words)).toBe('Could not undo version 4. Nudge changed again since, so Undo would throw that change away.')
     expect(undoProblem(1, 'Nudge', notAChange, words)).toBe('Could not undo version 1. Only a change of when Nudge runs can be undone.')
     expect(undoProblem(2, 'Nudge', new ApiError(404, { detail: 'No such workflow' }), words)).toBe('Could not undo version 2. It was deleted.')
+  })
+})
+
+describe('leftOutWords', () => {
+  it('quotes each part in her words, and says nothing when nothing was left out', () => {
+    expect(leftOutWords([])).toBeNull()
+    expect(leftOutWords(['Friday'])).toBe('Left out: “Friday”. It was set up without that part.')
+    expect(leftOutWords(['from GitLab', 'colour them by team'])).toBe('Left out: “from GitLab” and “colour them by team”. It was set up without those parts.')
   })
 })

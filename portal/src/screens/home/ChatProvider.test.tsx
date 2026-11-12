@@ -8,7 +8,7 @@ import { EMPTY_FORM } from './card'
 import { ChatProvider, useChat, type Chat } from './ChatProvider'
 import { desksReducer, type Desks } from './chatState'
 
-const REPLY: PlannerReply = { answer: 'abilities' }
+const REPLY: PlannerReply = { answer: 'abilities', parts: [] }
 const ALICES = desksReducer(
   desksReducer({}, { user: 'alice', action: { type: 'sent', text: 'Check my workflows' } }),
   { user: 'alice', action: { type: 'answered', reply: REPLY, typed: 'Check my workflows' } },
