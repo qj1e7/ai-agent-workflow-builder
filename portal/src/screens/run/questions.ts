@@ -17,7 +17,6 @@ export const STILL_WAITING = 'No answer yet. The request is still waiting for a 
 export const NOT_ANSWERED = 'Not answered before the request was decided.'
 
 export const askHelp = (requester: string) => `${requester} sees it on this request and can answer. It stays open, waiting for a yes.`
-export const sentWords = (to: string) => `Sent to ${to}. The request is still waiting for a yes.`
 
 const who = (id: string, me: string | undefined, nameOf: NameOf, first: boolean) => (id === me ? (first ? 'You' : 'you') : nameOf(id))
 
