@@ -42,6 +42,7 @@ export type EditView =
   | { readonly kind: 'same'; readonly target: EditChoice; readonly before: Schedule }
   | { readonly kind: 'held'; readonly target: EditChoice }
   | { readonly kind: 'stale'; readonly target: EditChoice; readonly now: Schedule | null }
+  | { readonly kind: 'unread'; readonly target: EditChoice }
   | { readonly kind: 'ask'; readonly target: EditChoice; readonly question: Question }
   | { readonly kind: 'ready'; readonly target: EditChoice; readonly after: Schedule }
 
@@ -95,16 +96,17 @@ const DAY_QUESTION: Question = {
   another: false,
 }
 
-/**
- * `now` is the workflow's schedule as the platform holds it, or undefined while it is read. A card whose Before is no longer
- * true would save an After worked out from the old schedule, so it asks to be asked again instead.
- */
-export function editView(reply: EditReply, picks: Picks, now?: Schedule | null): EditView {
+/** The workflow as read since the card was drawn: still being read, the read failed, or its schedule and version now. */
+export type Read = { readonly kind: 'reading' } | { readonly kind: 'failed' } | { readonly kind: 'read'; readonly schedule: Schedule | null; readonly version: number }
+
+/** A card whose Before is no longer true would save an After worked out from the old schedule, so it asks to be asked again instead. */
+export function editView(reply: EditReply, picks: Picks, read: Read): EditView {
   const target = targetOf(reply, picks)
   if (reply.cant !== null) return { kind: 'cant', target, cant: reply.cant }
   if (target === null) return reply.missing !== null ? { kind: 'missing', words: reply.missing, software: reply.software } : { kind: 'which', choices: reply.choices }
   if (reply.holds_save || target.after === null) return { kind: 'held', target }
-  if (now !== undefined && !sameSchedule(now, target.before)) return { kind: 'stale', target, now }
+  if (read.kind === 'failed') return { kind: 'unread', target }
+  if (read.kind === 'read' && !sameSchedule(read.schedule, target.before)) return { kind: 'stale', target, now: read.schedule }
   const day = target.after.day ?? picks.day
   const at = target.after.at ?? picks.at
   if (day === null) return { kind: 'ask', target, question: DAY_QUESTION }
@@ -136,6 +138,8 @@ export function openSay(reply: EditReply, view: EditView, every: Day | null): st
       const now = repeatWords(view.before)
       return view.target.watchlist && reply.software ? `${reply.software} is checked with all your software, which already runs ${now}.` : `${view.target.name} already runs ${now}.`
     }
+    case 'unread':
+      return `I couldn’t read ${view.target.name} just now, so I can’t save this change. Ask again in a moment.`
     case 'stale':
       return `${view.target.name} changed since I read it, and ${view.now ? `runs ${repeatWords(view.now)}` : 'has no schedule'} now. Ask again to change it.`
     case 'held':
@@ -202,5 +206,19 @@ export function doneLine(phase: Extract<Phase, { kind: 'saved' | 'undone' }>, no
 export function publishedVersion(target: EditChoice, saved: Pick<UseCaseView, 'version'>, newest: VersionView | undefined, me: string | undefined, known: number | undefined): number | null {
   if (target.watchlist || newest === undefined || me === undefined) return null
   if (newest.version !== saved.version || newest.by !== me || newest.via !== 'chat') return null
-  return known === undefined || saved.version > known ? saved.version : null
+  return known !== undefined && saved.version > known ? saved.version : null
+}
+
+/** What pressing Save does: send the change with the version it was read at, point at the question still open, wait for the read, or nothing. */
+export type Press =
+  | { readonly kind: 'send'; readonly target: EditChoice; readonly after: Schedule; readonly known: number }
+  | { readonly kind: 'ask' }
+  | { readonly kind: 'wait' }
+  | { readonly kind: 'none' }
+
+export function pressSave(view: EditView, read: Read): Press {
+  if (view.kind === 'ask') return { kind: 'ask' }
+  if (view.kind !== 'ready') return { kind: 'none' }
+  if (read.kind !== 'read') return { kind: read.kind === 'reading' ? 'wait' : 'none' }
+  return { kind: 'send', target: view.target, after: view.after, known: read.version }
 }

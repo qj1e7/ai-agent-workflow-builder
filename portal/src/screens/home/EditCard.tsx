@@ -18,12 +18,14 @@ import {
   firstPicks,
   targetOf,
   openSay,
+  pressSave,
   publishedVersion,
   scheduleText,
   type Now,
   type Phase,
   type Picks,
   type Question,
+  type Read,
   type Schedule,
 } from './edit'
 import { crossParts, PartsList, type Part } from './PartsList'
@@ -82,10 +84,14 @@ export function EditCard({ reply, typed, page, say, now, about }: EditCardProps)
   const picked = targetOf(reply, picks)
   const target: EditChoice | null = phase.kind === 'saved' || phase.kind === 'undone' ? phase.target : picked
   const live = useUseCase(target?.use_case_id ?? '', target !== null)
-  // Only a read made since the card was drawn can say its Before is out of date. An older read in the cache can't.
-  const fresh = live.isFetchedAfterMount ? live.data : undefined
-  const schedule = fresh ? (fresh.schedule ? { day: fresh.schedule.day, at: fresh.schedule.at } : null) : undefined
-  const view = editView(reply, picks, schedule)
+  // Only a read made since the card was drawn says whether its Before is still true. An older read in the cache can't.
+  const read: Read =
+    !live.isFetchedAfterMount || (!live.data && !live.isError)
+      ? { kind: 'reading' }
+      : live.isError || !live.data
+        ? { kind: 'failed' }
+        : { kind: 'read', schedule: live.data.schedule ? { day: live.data.schedule.day, at: live.data.schedule.at } : null, version: live.data.version }
+  const view = editView(reply, picks, read)
   const versions = useVersions(target?.use_case_id ?? '', live.data?.version ?? 0)
   const watchlist = useWatchlist({ enabled: target?.watchlist === true || (view.kind === 'missing' && view.software !== null) })
 
@@ -117,18 +123,15 @@ export function EditCard({ reply, typed, page, say, now, about }: EditCardProps)
   const saved = (after: Schedule, version: number | null, chosen: EditChoice) => settle({ kind: 'saved', target: chosen, after, version }, version === null ? 'heading' : 'undo')
 
   const save = () => {
-    if (view.kind === 'ask') {
-      document.getElementById(`${id}-question`)?.querySelector('button')?.focus()
-      return
-    }
-    if (view.kind !== 'ready') return
-    const { target: chosen, after } = view
+    const press = pressSave(view, read)
+    if (press.kind === 'ask') document.getElementById(`${id}-question`)?.querySelector('button')?.focus()
+    if (press.kind !== 'send') return
+    const { target: chosen, after, known } = press
     const failed = (error: unknown) => setProblem(`Could not save the change. ${words(error)}`)
     if (chosen.watchlist) {
       saveWatchlist.mutate({ useCaseId: chosen.use_case_id, schedule: after }, { onSuccess: () => saved(after, null, chosen), onError: failed })
       return
     }
-    const known = live.data?.version
     saveChange.mutate(
       { useCaseId: chosen.use_case_id, schedule: after },
       { onSuccess: ({ view: answer, newest }) => saved(after, publishedVersion(chosen, answer, newest, me.data?.id, known), chosen), onError: failed },
@@ -193,7 +196,7 @@ export function EditCard({ reply, typed, page, say, now, about }: EditCardProps)
     )
   }
 
-  if (phase.kind === 'open' && (view.kind === 'missing' || view.kind === 'cant' || view.kind === 'same' || view.kind === 'stale')) {
+  if (phase.kind === 'open' && (view.kind === 'missing' || view.kind === 'cant' || view.kind === 'same' || view.kind === 'stale' || view.kind === 'unread')) {
     const next =
       view.kind === 'missing' && view.software !== null ? (
         <Button variant={main} onClick={() => page.ask(`Keep track of the ${view.software ?? ''} version`)}>
@@ -300,7 +303,7 @@ export function EditCard({ reply, typed, page, say, now, about }: EditCardProps)
         </div>
         <div className={setup['foot']}>
           {done || held ? null : (
-            <Button id={`${id}-save`} variant={main} loading={saving} aria-describedby={question ? `${id}-q-when` : undefined} onClick={save}>
+            <Button id={`${id}-save`} variant={main} loading={saving || read.kind === 'reading'} aria-describedby={question ? `${id}-q-when` : undefined} onClick={save}>
               Save change
             </Button>
           )}

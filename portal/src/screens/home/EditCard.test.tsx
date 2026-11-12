@@ -21,7 +21,7 @@ import type { EditReply, Me, UseCaseView, VersionView, WatchlistView } from '../
 import { chatScheduleOptions, undoOptions } from '../../api/workflowQueries'
 import type { Page } from './AnswerCards'
 import { CardMemoryContext, newCardMemory, type EditKept } from './cardMemory'
-import { editView, NO_PICKS, openSay, publishedVersion } from './edit'
+import { editView, NO_PICKS, openSay, pressSave, publishedVersion, type Read, type Schedule } from './edit'
 import { EditCard } from './EditCard'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
@@ -35,6 +35,9 @@ const WATCHLIST = statuses as WatchlistView
 const SAVED: EditKept = { picks: { useCaseId: null, day: null, at: null }, phase: { kind: 'saved', target: { use_case_id: 'uc_01JB8', name: 'Morning new-ticket check', watchlist: false, before: { day: 'weekdays', at: '08:00' }, after: { day: 'monday', at: '08:00' } }, after: { day: 'monday', at: '08:00' }, version: 2 } }
 
 const version = (n: number, via: VersionView['via']): VersionView => ({ version: n, at: '2026-11-05T01:10:00Z', by: 'alice', via, change: null, undid: null, running: false })
+
+const WEEKDAYS: Schedule = { day: 'weekdays', at: '08:00' }
+const read = (schedule: Schedule | null, version = 2): Read => ({ kind: 'read', schedule, version })
 
 interface Drawn {
   readonly typed?: string
@@ -126,11 +129,26 @@ describe('the edit card while it proposes a change', () => {
   })
 
   it('asks again when a fresh read shows the workflow changed since the answer, so an older card never saves an After worked out from the old schedule', () => {
-    const stale = editView(EDIT, NO_PICKS, { day: 'monday', at: '09:00' })
+    const stale = editView(EDIT, NO_PICKS, read({ day: 'monday', at: '09:00' }))
     expect(stale.kind).toBe('stale')
     expect(openSay(EDIT, stale, null)).toBe('Morning new-ticket check changed since I read it, and runs every Monday at 9:00 now. Ask again to change it.')
-    expect(editView(EDIT, NO_PICKS, { day: 'weekdays', at: '08:00' }).kind, 'unchanged since').toBe('ready')
-    expect(editView(EDIT, NO_PICKS, undefined).kind, 'not read yet').toBe('ready')
+    expect(editView(EDIT, NO_PICKS, read({ day: 'weekdays', at: '08:00' })).kind, 'unchanged since').toBe('ready')
+  })
+
+  it('holds Save until the workflow is read, so a press before the read saves nothing', () => {
+    const reading = editView(EDIT, NO_PICKS, { kind: 'reading' })
+    expect(pressSave(reading, { kind: 'reading' })).toEqual({ kind: 'wait' })
+    const press = pressSave(editView(EDIT, NO_PICKS, read(WEEKDAYS)), read(WEEKDAYS, 2))
+    expect(press.kind === 'send' ? [press.target.use_case_id, press.after, press.known] : press, 'once read, it sends the change with the version it read').toEqual(['uc_01JB8', { day: 'monday', at: '08:00' }, 2])
+    const html = draw(EDIT)
+    expect(html, 'Save shows it is waiting while the workflow is read, which a drawing with no read yet is').toMatch(/aria-busy="true"[^>]*>[\s\S]*?Save change/)
+  })
+
+  it('says it couldn’t read the workflow, and offers no Save, when the read fails', () => {
+    const failed = editView(EDIT, NO_PICKS, { kind: 'failed' })
+    expect(failed.kind).toBe('unread')
+    expect(openSay(EDIT, failed, null)).toBe('I couldn’t read Morning new-ticket check just now, so I can’t save this change. Ask again in a moment.')
+    expect(pressSave(failed, { kind: 'failed' })).toEqual({ kind: 'none' })
   })
 
   it('names a check that doesn’t exist, says what the watchlist checks, and offers to watch it', () => {
@@ -257,9 +275,9 @@ describe('saving and undoing from the card', () => {
     const target = { use_case_id: 'uc_01JB8', name: 'Morning new-ticket check', watchlist: false, before: null, after: null }
     const mine = version(3, 'chat')
     expect(publishedVersion(target, { version: 3 }, mine, 'alice', 2)).toBe(3)
-    expect(publishedVersion(target, { version: 3 }, mine, 'alice', undefined), 'before the workflow was read, the newest version still says whose it is').toBe(3)
-    expect(publishedVersion(target, { version: 3 }, { ...mine, by: 'carol' }, 'alice', undefined), 'a teammate made the same change first, so nothing was published').toBeNull()
-    expect(publishedVersion(target, { version: 3 }, { ...mine, via: 'page' }, 'alice', undefined), 'her own change on the page is not this card’s').toBeNull()
+    expect(publishedVersion(target, { version: 3 }, mine, 'alice', undefined), 'with no read of the version before, nothing can be claimed').toBeNull()
+    expect(publishedVersion(target, { version: 3 }, { ...mine, by: 'carol' }, 'alice', 2), 'a teammate made the same change first, so nothing was published').toBeNull()
+    expect(publishedVersion(target, { version: 3 }, { ...mine, via: 'page' }, 'alice', 2), 'her own change on the page is not this card’s').toBeNull()
     expect(publishedVersion(target, { version: 1 }, version(1, null), 'alice', 1), 'the same schedule saved again, or a version lost after version 1').toBeNull()
     expect(publishedVersion(target, { version: 3 }, undefined, 'alice', 2), 'the versions could not be read').toBeNull()
     expect(publishedVersion({ ...target, watchlist: true }, { version: 4 }, mine, 'alice', 3), 'the watchlist keeps no versions').toBeNull()
