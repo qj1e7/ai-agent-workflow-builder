@@ -263,8 +263,11 @@ DAY_RANGE: Final = re.compile(
     re.IGNORECASE,
 )
 CLOCK: Final = re.compile(
-    r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b|\b(\d{1,2}):(\d{2})\b", re.IGNORECASE
+    r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b|\b(\d{1,2}):(\d{2})\b|"
+    r"\bat\s+(\d{1,2})\b(?![:.]\d)(?!\s*(?:am|pm)\b)",
+    re.IGNORECASE,
 )
+"""A time of day as the request writes it: "9am", "17:00", or a bare hour after "at"."""
 CLOCK_TOKEN: Final = re.compile(r"^\d{1,2}(?::\d{2})?(?:am|pm)$|^\d{1,2}(?:st|nd|rd|th)$")
 SEARCH_VOCAB: Final = words(
     "ticket tickets issue issues item items entry entries find finds finding found list lists "
@@ -954,7 +957,9 @@ class Clash:
 
 
 def _clock(match: re.Match[str]) -> str:
-    hour, minute, half, hour24, minute24 = match.groups()
+    hour, minute, half, hour24, minute24, bare = match.groups()
+    if bare is not None:
+        return bare
     if half is None:
         return f"{int(hour24):02d}:{minute24}"
     return f"{int(hour) % 12 + (12 if half.casefold() == 'pm' else 0):02d}:{minute or '00'}"
@@ -987,7 +992,8 @@ def _clash(
     was first said in."""
     named: dict[str, str] = {}
     for match in found:
-        named.setdefault(key(match), match.group(1) if reason == "one_day" else match.group(0))
+        said = match.group(1) if reason == "one_day" else match.group(0)
+        named.setdefault(key(match), re.sub(r"^at\s+", "", said, flags=re.IGNORECASE))
     if len(named) < 2:
         return []
     return [Clash(reason, tuple(named.values()), at + found[0].start(), at + found[-1].end())]

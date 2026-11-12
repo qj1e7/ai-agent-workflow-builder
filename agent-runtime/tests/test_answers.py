@@ -1886,6 +1886,7 @@ def clash_read(schedule: str) -> TaskRead:
             ["Monday", "Friday"],
         ),
         ("Every Friday at 9am and 5pm", "Every Friday at 9am", "one_time", ["9am", "5pm"]),
+        ("Every Friday at 9 and at 5", "Every Friday at 9", "one_time", ["9", "5"]),
         (
             "Every Monday at 9am and every Friday at 9am",
             "Every Monday at 9am",
