@@ -22,6 +22,7 @@ from agent_runtime.contract import (
     PartMark,
     PartReason,
     PlannerAnswer,
+    PlannerFacts,
     QuestionAnswer,
     RefusedAnswer,
     RequestPart,
@@ -88,9 +89,15 @@ class _Cross:
     quote: str | None = None
 
 
-def parts_of(read: TaskRead | None, request: str, answer: PlannerAnswer) -> list[RequestPart]:
+def parts_of(
+    read: TaskRead | None,
+    request: str,
+    answer: PlannerAnswer,
+    facts: PlannerFacts | None = None,
+) -> list[RequestPart]:
     """Each clause of the request, in order, marked by what `answer` does with it. `read` is the
-    model's reading, or None for a refusal made before any model call."""
+    model's reading, or None for a refusal made before any model call. `facts` name the person's
+    workflows, as the answer read them."""
     text = visible_words(request)
     clauses = [c for c in clauses_of(text) if not polite(text[c[0] : c[1]])]
     if isinstance(answer, STATE_ANSWERS):
@@ -101,7 +108,7 @@ def parts_of(read: TaskRead | None, request: str, answer: PlannerAnswer) -> list
     if isinstance(answer, EditAnswer):
         return [
             _part(text, trim(text, m.start, m.end), m.mark, m.reason, choices=m.choices)
-            for m in edit_marks(read, text, answer, clauses)
+            for m in edit_marks(read, text, answer, clauses, facts)
         ]
     crosses = _crosses(read, text, answer)
     found: list[RequestPart] = []

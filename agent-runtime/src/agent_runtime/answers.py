@@ -759,6 +759,9 @@ def answer_of(read: TaskRead, request: str, facts: PlannerFacts | None = None) -
     edit = edit_of(read, text, facts)
     if edit is not None:
         return edit
+    if read.asks_about == "change":
+        # A watch request the reading called a change is read as the task it is.
+        read = read.model_copy(update={"asks_about": "none"})
     task = None
     covered = [skip.covered] if skip.covered is not None else []
     watched = _watch_clauses(read, text) if read.belongs_on_watchlist else []
@@ -918,7 +921,7 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     if isinstance(read, ModelProblem):
         return read
     answer = _answer(read, request, chat_for)
-    return Answered(answer=answer, parts=parts_of(read, request.task, answer))
+    return Answered(answer=answer, parts=parts_of(read, request.task, answer, request.facts))
 
 
 def _answer(read: TaskRead, request: AnswerRequest, chat_for: ChatFor) -> PlannerAnswer:

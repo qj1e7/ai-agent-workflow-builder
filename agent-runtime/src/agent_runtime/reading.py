@@ -286,12 +286,12 @@ DAY_RANGE: Final = re.compile(
     re.IGNORECASE,
 )
 CLOCK: Final = re.compile(
-    r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b|\b(\d{1,2}):(\d{2})\b|"
+    r"(?<![\d.:])\b(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)\b|(?<![\d.:])\b(\d{1,2}):(\d{2})\b|"
     r"\b(?:at|or|and)\s+(\d{1,2})\b(?![:.]\d)(?!\s*(?:am|pm)\b)|\b(noon|midday|midnight)\b",
     re.IGNORECASE,
 )
-"""A time of day as the request writes it: "9am", "17:00", "noon", or a bare hour after "at",
-"or" or "and", as in "at 9 or 10"."""
+"""A time of day as the request writes it: "9am", "9.30am", "17:00", "noon", or a bare hour after
+"at", "or" or "and", as in "at 9 or 10"."""
 CLOCK_TOKEN: Final = re.compile(r"^\d{1,2}(?::\d{2})?(?:am|pm)$|^\d{1,2}(?:st|nd|rd|th)$")
 SEARCH_VOCAB: Final = words(
     "ticket tickets issue issues item items entry entries find finds finding found list lists "

@@ -357,9 +357,8 @@ def score(case: AnswerCase, answer: Answer) -> list[Check]:
     if shown is None:
         return [check("answered", []), check("right_kind", ["the reading does not hold together"])]
     text = " ".join(_texts(shown))
-    parts = _part_checks(
-        case, shown, parts_of(value if isinstance(value, TaskRead) else None, case.task, shown)
-    )
+    reading = value if isinstance(value, TaskRead) else None
+    parts = _part_checks(case, shown, parts_of(reading, case.task, shown, case.facts))
     if isinstance(shown, QuestionAnswer):
         # Its words quote the person's own software names, such as n8n, so the jargon check
         # does not apply. The model's text is still held to the themed-name rule.
