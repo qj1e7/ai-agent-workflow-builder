@@ -12,7 +12,7 @@ import { useLiveRun, type LiveRun } from './liveRun'
 import { Troubleshooting } from './Outcome'
 import { approvalIdOf, planOf, POLL_FAILED_MS, statusWords, useNameOf, useReconnectWhenBehind } from './RunPage'
 import { RunLine } from './RunLine'
-import { reachOf, stationsOf } from './runModel'
+import { stationsOf } from './runModel'
 import { feedTroubleOf, headlineOf, RUN_PROBLEM, shortTime, writeLabel } from './words'
 import styles from './RunPage.module.css'
 
@@ -114,7 +114,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
           {status}
         </p>
       ) : null}
-      <RunLine stations={stations} reach={reachOf(stations)} arrivedLive={null} startedAt={shortTime(run.started_at)} nameOf={nameOf} />
+      <RunLine stations={stations} arrivedLive={null} startedAt={shortTime(run.started_at)} nameOf={nameOf} small />
       {shown.phase.state === 'failed' ? (
         <Troubleshooting
           runId={run.run_id}

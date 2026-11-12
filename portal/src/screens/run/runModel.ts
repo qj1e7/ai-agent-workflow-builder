@@ -1,5 +1,5 @@
 import type { ApprovalStepStatus, BlockKind, FailureReason, FailureStage, RunOutcome, Trigger, Verdict } from '../../api/types'
-import { runId as asRunId } from '../../stream/brand'
+import { runId as asRunId, type RunTime } from '../../stream/brand'
 import { parseEvent, type EventOf, type RunEvent } from '../../stream/parse'
 
 export const PLANNER_ID = 'planner'
@@ -49,26 +49,27 @@ export interface Written {
   readonly url?: string | null
 }
 
-export type ChatItem =
-  | { readonly kind: 'started'; readonly seq: number; readonly by: string; readonly trigger: Trigger }
-  | { readonly kind: 'joined'; readonly seq: number; readonly agents: readonly AgentRef[] }
-  | { readonly kind: 'said'; readonly seq: number; readonly speaker: AgentRef; readonly text: string; readonly bad: boolean }
-  | { readonly kind: 'asked'; readonly seq: number; readonly channel: string | null; readonly posted: boolean | null }
-  | { readonly kind: 'decided'; readonly seq: number; readonly by: string; readonly verdict: Verdict; readonly step: string | null }
+/** One entry in the run's log, placed and timed by the event that made it. */
+export type ChatItem = { readonly seq: number; readonly at: RunTime } & (
+  | { readonly kind: 'started'; readonly by: string; readonly trigger: Trigger }
+  | { readonly kind: 'joined'; readonly agents: readonly AgentRef[] }
+  | { readonly kind: 'said'; readonly speaker: AgentRef; readonly text: string; readonly bad: boolean }
+  | { readonly kind: 'asked'; readonly channel: string | null; readonly posted: boolean | null }
+  | { readonly kind: 'decided'; readonly by: string; readonly verdict: Verdict; readonly step: string | null }
   | {
       readonly kind: 'written'
-      readonly seq: number
       readonly connector: string
       readonly operation: string
       readonly refs: readonly string[]
       readonly urls?: Readonly<Record<string, string>>
     }
-  | { readonly kind: 'denied'; readonly seq: number }
-  | { readonly kind: 'retried'; readonly seq: number; readonly by: string | null }
-  | { readonly kind: 'finished'; readonly seq: number; readonly outcome: RunOutcome; readonly count: number; readonly operation: string | null }
-  | { readonly kind: 'declined'; readonly seq: number }
-  | { readonly kind: 'stopped'; readonly seq: number; readonly stage: FailureStage }
-  | { readonly kind: 'reported'; readonly seq: number; readonly by: string; readonly requestId: string }
+  | { readonly kind: 'denied' }
+  | { readonly kind: 'retried'; readonly by: string | null }
+  | { readonly kind: 'finished'; readonly outcome: RunOutcome; readonly count: number; readonly operation: string | null }
+  | { readonly kind: 'declined' }
+  | { readonly kind: 'stopped'; readonly stage: FailureStage }
+  | { readonly kind: 'reported'; readonly by: string; readonly requestId: string }
+)
 
 export interface RunModel {
   /** The last event folded in. Events are taken only in order, so this is also how many there are. */
@@ -202,7 +203,7 @@ function joined(model: RunModel, event: EventOf<'agent_joined'>): RunModel {
     if (last.agents.some((known) => known.id === agent.id)) return placed
     return { ...placed, chat: [...placed.chat.slice(0, -1), { ...last, agents: [...last.agents, agent] }] }
   }
-  return say(placed, { kind: 'joined', seq: event.seq, agents: [agent] })
+  return say(placed, { kind: 'joined', seq: event.seq, at: event.at, agents: [agent] })
 }
 
 function decided(model: RunModel, event: EventOf<'approval_decided'>): RunModel {
@@ -211,7 +212,7 @@ function decided(model: RunModel, event: EventOf<'approval_decided'>): RunModel 
     s.index === step ? { ...s, status: verdict === 'approve' ? ('approved' as const) : ('declined' as const), by } : s,
   )
   const label = steps.length > 1 ? (steps.find((s) => s.index === step)?.label ?? null) : null
-  let next = say({ ...model, steps }, { kind: 'decided', seq: event.seq, by, verdict, step: label })
+  let next = say({ ...model, steps }, { kind: 'decided', seq: event.seq, at: event.at, by, verdict, step: label })
   if (verdict === 'approve') {
     next = { ...next, approvedBy: next.approvedBy.includes(by) ? next.approvedBy : [...next.approvedBy, by] }
     const allApproved = steps.length === 0 || steps.every((s) => s.status === 'approved')
@@ -230,7 +231,7 @@ function wrote(model: RunModel, event: EventOf<'write_action_done'>): RunModel {
   if (last?.kind === 'written' && last.connector === connector && last.operation === operation) {
     return { ...next, chat: [...next.chat.slice(0, -1), { ...last, refs: [...last.refs, ref], urls: { ...last.urls, ...linked } }] }
   }
-  return say(next, { kind: 'written', seq: event.seq, connector, operation, refs: [ref], urls: linked })
+  return say(next, { kind: 'written', seq: event.seq, at: event.at, connector, operation, refs: [ref], urls: linked })
 }
 
 function retried(model: RunModel, event: EventOf<'run_retried'>): RunModel {
@@ -246,7 +247,7 @@ function retried(model: RunModel, event: EventOf<'run_retried'>): RunModel {
     event.data.leg === 'work'
       ? { ...base, phase: { state: 'pending' }, spot: { at: 'started' }, agents: [], approvalId: null, steps: [], proposed: 0, written: [], found: '' }
       : { ...base, phase: { state: 'acting' }, spot: { at: 'write' } }
-  return say(next, { kind: 'retried', seq: event.seq, by })
+  return say(next, { kind: 'retried', seq: event.seq, at: event.at, by })
 }
 
 /** The outcomes of the agents' step that carry their summary. A failed step carries an error. */
@@ -255,7 +256,7 @@ const FOUND_OUTCOMES: ReadonlySet<string> = new Set(['proposed', 'nothing_to_wri
 function reported(model: RunModel, event: EventOf<'support_reported'>): RunModel {
   const { request_id: requestId, reported_by: by } = event.data
   if (model.reports.some((report) => report.requestId === requestId)) return model
-  return say({ ...model, reports: [...model.reports, { requestId, by }] }, { kind: 'reported', seq: event.seq, by, requestId })
+  return say({ ...model, reports: [...model.reports, { requestId, by }] }, { kind: 'reported', seq: event.seq, at: event.at, by, requestId })
 }
 
 function apply(model: RunModel, event: RunEvent): RunModel {
@@ -264,7 +265,7 @@ function apply(model: RunModel, event: RunEvent): RunModel {
       const { started_by: by, trigger, use_case_id: useCaseId } = event.data
       return say(
         { ...model, startedBy: by, trigger: trigger ?? 'person', useCaseId, phase: { state: 'pending' } },
-        { kind: 'started', seq: event.seq, by, trigger: trigger ?? 'person' },
+        { kind: 'started', seq: event.seq, at: event.at, by, trigger: trigger ?? 'person' },
       )
     }
     case 'agent_joined':
@@ -272,7 +273,7 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     case 'agent_message':
       return say(touch(model, event.data.speaker, event.seq), {
         kind: 'said',
-        seq: event.seq,
+        seq: event.seq, at: event.at,
         speaker: event.data.speaker,
         text: event.data.text,
         bad: false,
@@ -283,7 +284,7 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     case 'agent_failed': {
       const touched = touch(model, actorRef(event), event.seq)
       const failedAt = placeAgent(touched, actorRef(event)).spot
-      return say({ ...touched, failedAt }, { kind: 'said', seq: event.seq, speaker: actorRef(event), text: event.data.message, bad: true })
+      return say({ ...touched, failedAt }, { kind: 'said', seq: event.seq, at: event.at, speaker: actorRef(event), text: event.data.message, bad: true })
     }
     case 'write_action_proposed': {
       const phase = model.phase.state === 'pending' || model.phase.state === 'working' ? { state: 'proposed' as const } : model.phase
@@ -292,23 +293,23 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     case 'approval_requested': {
       const steps = event.data.steps.map((s) => ({ index: s.index, label: s.label, status: s.status, by: s.decided_by ?? null }))
       const next = advanceTo({ ...model, approvalId: event.data.approval_id, steps, phase: { state: 'awaiting_approval' } }, { at: 'gate' }, event.seq)
-      return say(next, { kind: 'asked', seq: event.seq, channel: null, posted: null })
+      return say(next, { kind: 'asked', seq: event.seq, at: event.at, channel: null, posted: null })
     }
     case 'approval_announced':
-      return amendLast(model, 'asked', (item) => ({ kind: 'asked', seq: item?.seq ?? event.seq, channel: event.data.channel, posted: true }))
+      return amendLast(model, 'asked', (item) => ({ kind: 'asked', seq: item?.seq ?? event.seq, at: item?.at ?? event.at, channel: event.data.channel, posted: true }))
     case 'approval_announce_failed':
-      return amendLast(model, 'asked', (item) => ({ kind: 'asked', seq: item?.seq ?? event.seq, channel: event.data.channel, posted: false }))
+      return amendLast(model, 'asked', (item) => ({ kind: 'asked', seq: item?.seq ?? event.seq, at: item?.at ?? event.at, channel: event.data.channel, posted: false }))
     case 'approval_decided':
       return decided(model, event)
     case 'write_action_denied':
-      return say(model, { kind: 'denied', seq: event.seq })
+      return say(model, { kind: 'denied', seq: event.seq, at: event.at })
     case 'write_action_done':
       return wrote(model, event)
     case 'run_succeeded': {
       const next = advanceTo({ ...model, phase: { state: 'succeeded', outcome: event.data.outcome } }, { at: 'done' }, event.seq)
       return say(next, {
         kind: 'finished',
-        seq: event.seq,
+        seq: event.seq, at: event.at,
         outcome: event.data.outcome,
         count: model.written.length,
         operation: model.written[0]?.operation ?? null,
@@ -316,13 +317,13 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     }
     case 'run_rejected': {
       const next = advanceTo({ ...model, phase: { state: 'rejected', by: event.data.by, step: event.data.step } }, { at: 'done' }, event.seq)
-      return say(next, { kind: 'declined', seq: event.seq })
+      return say(next, { kind: 'declined', seq: event.seq, at: event.at })
     }
     case 'run_failed': {
       const { stage, reason, retryable, message } = event.data
       return say(
         { ...model, failedAt: failedSpot(model, stage), phase: { state: 'failed', stage, reason, retryable, message } },
-        { kind: 'stopped', seq: event.seq, stage },
+        { kind: 'stopped', seq: event.seq, at: event.at, stage },
       )
     }
     case 'run_retried':
@@ -497,7 +498,10 @@ export function stationsOf(
   })
 }
 
-/** How far the line's fill reaches, from 0 at Started to 1 at Done. */
+/**
+ * How far the line's fill reaches, from 0 at Started to 1 at Done.
+ * @deprecated No screen uses it since the run line became flow (R11). Plan 7.1 keeps runModel.test.ts unchanged, so it goes with a plan change.
+ */
 export function reachOf(stations: readonly Station[]): number {
   if (stations.length < 2) return 0
   let reached = 0

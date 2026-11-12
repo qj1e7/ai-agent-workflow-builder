@@ -4,12 +4,12 @@ import rejected from '@contracts/fixtures/runs/rejected.json'
 import success from '@contracts/fixtures/runs/success.json'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BlockKind } from '../../api/types'
 import { Chat } from './Chat'
 import { Outcome } from './Outcome'
 import { RunLine } from './RunLine'
-import { emptyModel, foldWire, reachOf, stationsOf, type PlanBlock, type RunModel } from './runModel'
+import { emptyModel, foldWire, stationsOf, type ChatItem, type PlanBlock, type RunModel } from './runModel'
 import { headlineOf, writeLabel } from './words'
 
 interface Raw {
@@ -26,11 +26,23 @@ function replay(raw: readonly Raw[], upTo = Infinity): RunModel {
   return foldWire(emptyModel, kept, kept[0]?.run_id ?? '')
 }
 
+/** A time as the run's events carry it. */
+const at = (iso: string) => Date.parse(iso) as ChatItem['at']
+
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 
-function line(model: RunModel): string {
+function line(model: RunModel, { small = false, arrivedLive = null }: { small?: boolean; arrivedLive?: string | null } = {}): string {
   const stations = stationsOf(model, PLAN, writeLabel)
-  return renderToStaticMarkup(<RunLine stations={stations} reach={reachOf(stations)} arrivedLive={null} startedAt="Tue 10:14" nameOf={nameOf} />)
+  return renderToStaticMarkup(<RunLine stations={stations} arrivedLive={arrivedLive} startedAt="Tue 10:14" nameOf={nameOf} small={small} />)
+}
+
+/** Each link, in order, as the state it draws and whether it marches: "flow+" marches, "flow" holds still. */
+function links(html: string): string[] {
+  return [...html.matchAll(/<span class="[^"]*"( data-link="(\w+)")( data-march="true")?/g)].map((match) => `${match[2] ?? ''}${match[3] ? '+' : ''}`)
+}
+
+function withReducedMotion(reduce: boolean): void {
+  vi.stubGlobal('window', { matchMedia: (query: string) => ({ matches: reduce && query === '(prefers-reduced-motion: reduce)' }) })
 }
 
 function stepsSaid(html: string): string[] {
@@ -83,15 +95,64 @@ describe('the run line', () => {
   })
 
   it('lands the step reached while the page watched, and no other', () => {
-    const model = replay(success, 15)
-    const stations = stationsOf(model, PLAN, writeLabel)
-    const html = renderToStaticMarkup(<RunLine stations={stations} reach={reachOf(stations)} arrivedLive="gate" startedAt="" nameOf={nameOf} />)
+    const html = line(replay(success, 15), { arrivedLive: 'gate' })
     expect(html.match(/arrive/g)).toHaveLength(1)
     expect(html).toMatch(/class="[^"]*arrive[^"]*"[^>]*data-state="wait"/)
   })
+})
 
-  it('sets how far the line reaches through a style property, never a style attribute string from data', () => {
-    expect(line(replay(success, 15))).toContain('--f:0.6')
+describe('the links between the steps', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  // Started, Pick agents, Read every source, Approval gate, Create Jira tickets, Done: five links, each in the state of the step it leads into.
+  it('march into the step at work, and are solid into the steps done', () => {
+    withReducedMotion(false)
+    expect(links(line(replay(success, 6)))).toEqual(['solid', 'flow+', 'todo', 'todo', 'todo'])
+  })
+
+  it('march slower, in amber, into a yes that waits', () => {
+    withReducedMotion(false)
+    expect(links(line(replay(success, 15)))).toEqual(['solid', 'solid', 'wait+', 'todo', 'todo'])
+  })
+
+  it('lead red into the step where the run stopped, and stay plain after it', () => {
+    withReducedMotion(false)
+    expect(links(line(replay(failure)))).toEqual(['solid', 'stop', 'todo', 'todo', 'todo'])
+  })
+
+  it('are solid all the way once the run is done', () => {
+    withReducedMotion(false)
+    expect(links(line(replay(success)))).toEqual(['solid', 'solid', 'solid', 'solid', 'solid'])
+  })
+
+  it('fade into a step that was not needed, and stay solid into a decline', () => {
+    withReducedMotion(false)
+    expect(links(line(replay(rejected)))).toEqual(['solid', 'solid', 'solid', 'dead', 'solid'])
+  })
+
+  it('hold still with reduced motion, and keep the same look', () => {
+    withReducedMotion(true)
+    expect(links(line(replay(success, 6)))).toEqual(['solid', 'flow', 'todo', 'todo', 'todo'])
+    expect(links(line(replay(success, 15)))).toEqual(['solid', 'solid', 'wait', 'todo', 'todo'])
+  })
+
+  it('grow the solid link into the step just finished as the run reaches the next one, and no other', () => {
+    const html = line(replay(success, 15), { arrivedLive: 'gate' })
+    expect(html.match(/_grow_/g)).toHaveLength(1)
+    expect(html).toMatch(/data-state="done"><span class="[^"]*_grow_[^"]*" data-link="solid"[\s\S]*?Read every source/)
+  })
+
+  it('draw the same steps and links in the side panel, small and without faces', () => {
+    withReducedMotion(false)
+    for (const model of [replay(success, 6), replay(success, 15), replay(failure), replay(rejected), replay(success)]) {
+      const big = line(model)
+      const small = line(model, { small: true })
+      expect(links(small)).toEqual(links(big))
+      expect(stepsSaid(small)).toEqual(stepsSaid(big).map((said) => said.replace(/^A /, '')))
+      expect(small).not.toMatch(/_who_|<svg[^>]*role="img"/)
+    }
   })
 })
 
@@ -134,6 +195,47 @@ describe('the chat', () => {
     expect(animated(chat(model, 7))).toBe(2)
   })
 
+  it('gives each entry its time, the first with its day, and none to the line that says who joined', () => {
+    const entries = [...chat(replay(success)).matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)].map((match) => {
+      const html = match[1] ?? ''
+      return `${html.match(/<time[^>]*>([^<]*)<\/time>/)?.[1] ?? '-'} ${text(html.replace(/<time[\s\S]*?<\/time>/, ''))}`
+    })
+    expect(entries).toEqual([
+      'Tue 3 Nov, 10:14 Alice started the run.',
+      '- Version checker joined',
+      '10:14 Planner Please check LangGraph for new releases.',
+      '10:14 Version checker LangGraph has a new release: 1.2.16. I suggest one ticket.',
+      "10:14 Planner Agreed. I'll draft one ticket for an Approver to check.",
+      '10:14 Asked for a yes in Teams, in CODESparks Ops. Nothing is written until an Approver says yes.',
+      '10:20 Bob approved.',
+      '10:20 Created MOCK-142 in Jira.',
+      '10:20 Done. 1 ticket created.',
+    ])
+  })
+
+  it('says the day again on an entry from another day', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <Chat
+          items={[
+            { kind: 'started', seq: 1, at: at('2026-10-27T00:00:00Z'), by: 'alice', trigger: 'person' },
+            { kind: 'decided', seq: 2, at: at('2026-10-27T15:59:00Z'), by: 'bob', verdict: 'approve', step: null },
+            { kind: 'declined', seq: 3, at: at('2026-10-27T16:01:00Z') },
+          ]}
+          loadedUpTo={9}
+          nameOf={nameOf}
+          trigger="person"
+          last={null}
+        />
+      </MemoryRouter>,
+    )
+    expect([...html.matchAll(/<time[^>]*dateTime="([^"]+)"[^>]*>([^<]*)<\/time>/gi)].map((match) => `${match[1] ?? ''} ${match[2] ?? ''}`)).toEqual([
+      '2026-10-27T00:00:00.000Z Tue 27 Oct, 8:00',
+      '2026-10-27T15:59:00.000Z 23:59',
+      '2026-10-27T16:01:00.000Z Wed 28 Oct, 0:01',
+    ])
+  })
+
   it('lets the gate’s lines take focus after a decision', () => {
     expect(chat(replay(success))).toMatch(/tabindex="-1" data-gate-said="16"/)
   })
@@ -169,8 +271,8 @@ describe('ticket keys on the run page', () => {
 
   it('does not link a key in a write to some other system, or key-like words in what an agent said', () => {
     const html = chatHtml([
-      { kind: 'written', seq: 1, connector: 'confluence', operation: 'update_page', refs: ['OPS-9'] },
-      { kind: 'said', seq: 2, speaker: { id: 'version_checker', display: 'Version checker' }, text: 'UTF-8 and CVE-2024-1234 and OPS-9', bad: false },
+      { kind: 'written', seq: 1, at: at('2026-11-03T02:14:00Z'), connector: 'confluence', operation: 'update_page', refs: ['OPS-9'] },
+      { kind: 'said', seq: 2, at: at('2026-11-03T02:14:00Z'), speaker: { id: 'version_checker', display: 'Version checker' }, text: 'UTF-8 and CVE-2024-1234 and OPS-9', bad: false },
     ])
     expect(html).not.toContain('href="/jira/')
   })

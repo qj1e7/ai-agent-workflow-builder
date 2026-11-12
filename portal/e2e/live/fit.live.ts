@@ -3,6 +3,7 @@ import path from 'node:path'
 import type { Locator, Page } from '@playwright/test'
 import { expectAccessible } from '../support/axe'
 import { CONTROL_KINDS, coverProblems, describeProblems, fitProblems, measure, seedControl, toggleProblems } from './support/fit'
+import { holdRunAtWork, runLinks } from './support/runLine'
 import { connectMockModel } from './support/settings'
 import { setMockGithubMode, type Backend } from './support/stack'
 import { expect, test } from './support/test'
@@ -210,6 +211,141 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
     expect(found, found.join('\n')).toEqual([])
   })
 }
+
+/** Runs for each state the run line shows: one waiting for a yes, which is also held back to show it at work, one done and one stopped. */
+interface LineRuns {
+  readonly waiting: string
+  readonly done: string
+  readonly stopped: string
+}
+
+let lineRuns: LineRuns | undefined
+
+async function approve(backend: Backend, runId: string): Promise<void> {
+  const approvalId = await backend.approvalIdOf(runId)
+  const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
+  await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'approve', digest })
+}
+
+async function lineSetup(backend: Backend): Promise<LineRuns> {
+  const facts = (panelFacts ??= await panelSetup(backend))
+  const tag = randomUUID().slice(0, 6)
+  const waiting = await backend.checkNow('alice', await agentWorkflow(backend, 'alice', `Fit waits ${tag}`))
+  const done = await backend.checkNow('alice', await agentWorkflow(backend, 'alice', `Fit done ${tag}`))
+  await backend.waitForState(waiting, ['awaiting_approval'])
+  await backend.waitForState(done, ['awaiting_approval'])
+  await approve(backend, done)
+  await backend.waitForState(done, ['succeeded'])
+  return { waiting, done, stopped: facts.stopped.runId }
+}
+
+const LINE_STATES = {
+  'at-work': /^solid( solid)* flow( todo)+$/,
+  waiting: /^solid( solid)* wait( todo)+$/,
+  stopped: /^solid( solid)* stop( todo)*$/,
+  done: /^solid( solid)*$/,
+} as const
+
+const LINE_SHOT_WIDTHS: ReadonlySet<number> = new Set([1920, 1280, 900, 390])
+
+for (const width of WIDTHS) {
+  test(`the run line fits at work, waiting for a yes, stopped and done, with each link in its state, as an Operator at ${String(width)} px`, async ({ browser, backend }, info) => {
+    test.slow()
+    lineRuns ??= await lineSetup(backend)
+    const runs = lineRuns
+    const context = await devContext(browser, 'alice', { reducedMotion: true })
+    const page = await context.newPage()
+    await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
+    const found: string[] = []
+    try {
+      for (const [state, runId] of [['at-work', runs.waiting], ['waiting', runs.waiting], ['stopped', runs.stopped], ['done', runs.done]] as const) {
+        if (state === 'at-work') await holdRunAtWork(page, runId)
+        await page.goto(`/runs/${runId}`)
+        await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+        await expect.poll(async () => (await runLinks(page)).join(' '), { message: `the run line ${state} at ${String(width)} px` }).toMatch(LINE_STATES[state])
+        await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined)
+        if (LINE_SHOT_WIDTHS.has(width)) await shot(page, info, `r11-run-${state}-alice-${String(width)}`)
+        const problems = await fitProblems(page)
+        if (problems.length) found.push(`The run page ${state} at ${String(width)} px:\n${describeProblems(problems).replace(/^/gm, '    ')}`)
+        if (state === 'at-work') await page.unrouteAll({ behavior: 'ignoreErrors' })
+      }
+    } finally {
+      await context.close()
+    }
+    expect(found, found.join('\n')).toEqual([])
+  })
+}
+
+/**
+ * The side panel's run line is the run page's line, small and without faces (RUN-line-panel). It shows one run held back to
+ * when its agent was at work, then follows it from its stop, through a retry pressed in the panel, to its yes and to done, and
+ * matches the run page's links at each state.
+ */
+test('the side panel draws the same run line, small and without faces, at work, stopped, waiting for a yes and done, as an Operator at 1280 px', async ({ browser, backend }, info) => {
+  test.slow()
+  const name = `Fit line ${randomUUID().slice(0, 6)}`
+  const useCaseId = await agentWorkflow(backend, 'alice', name)
+  let runId = ''
+  try {
+    await setMockGithubMode('unavailable')
+    runId = await backend.checkNow('alice', useCaseId)
+    await backend.waitForState(runId, ['failed'], 150_000)
+  } finally {
+    await setMockGithubMode('ok')
+  }
+  const context = await devContext(browser, 'alice', { reducedMotion: true })
+  const page = await context.newPage()
+  await page.setViewportSize({ width: 1280, height: 1000 })
+  const runPage = await context.newPage()
+  const panel = page.locator('#side-panel')
+  const panelLine = panel.getByRole('list', { name: 'Steps of this run' })
+  const found: string[] = []
+  const reach = async (state: keyof typeof LINE_STATES) => {
+    await expect.poll(async () => (await runLinks(panel)).join(' '), { message: `the panel's run line ${state}`, intervals: [100], timeout: 90_000 }).toMatch(LINE_STATES[state])
+    await page.screenshot({ path: path.join(OUT, 'shots', `r11-panel-${state}-alice-1280.png`), caret: 'hide' })
+    info.annotations.push({ type: 'shot', description: `r11-panel-${state}-alice-1280` })
+    const problems = await fitProblems(page)
+    if (problems.length) found.push(`The side panel's run line ${state}:\n${describeProblems(problems).replace(/^/gm, '    ')}`)
+  }
+  const samePage = async (state: string) => {
+    await runPage.goto(`/runs/${runId}`)
+    await expect.poll(() => runLinks(runPage), { message: `the run page draws the panel's links ${state}` }).toEqual(await runLinks(panel))
+    await expect(runPage.getByRole('list', { name: 'Steps of this run' }).locator('[data-face]').first(), 'the run page has the faces').toBeVisible()
+  }
+  try {
+    await page.goto('/')
+    const box = page.getByLabel('Ask the Planner about software versions')
+    const newest = page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
+    await box.fill(`Why did ${name} stop?`)
+    await box.press('Enter')
+    await expect(newest).toHaveAttribute('data-answer', 'true')
+    const opener = newest.locator(`[data-opens="run:${runId}"]`)
+    await holdRunAtWork(page, runId)
+    await opener.click()
+    await reach('at-work')
+    await expect(panelLine.locator('[data-face]'), 'the panel draws no faces').toHaveCount(0)
+    await panel.getByRole('button', { name: 'Close' }).click()
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
+
+    await opener.click()
+    await reach('stopped')
+    await expect(panelLine, 'the stop is named in words too').toContainText('Stopped here')
+    await samePage('stopped')
+
+    await panel.getByRole('button', { name: 'Retry the run' }).click()
+    await expect
+      .poll(async () => (await runLinks(panel)).join(' '), { message: 'the panel follows the retry: dashes into the step at work, then into the yes', intervals: [100], timeout: 90_000 })
+      .toMatch(/^solid( solid)* (flow|wait)( todo)+$/)
+    await reach('waiting')
+    await samePage('waiting')
+    await approve(backend, runId)
+    await reach('done')
+    await samePage('done')
+  } finally {
+    await context.close()
+  }
+  expect(found, found.join('\n')).toEqual([])
+})
 
 test('the check can fail: a seeded overflow, a clipped label, an overlap, two unequal buttons, a part-covered button and a toggle on the product are all caught', async ({ browser }) => {
   const context = await devContext(browser, 'alice', { reducedMotion: true })

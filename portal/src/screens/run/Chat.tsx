@@ -8,7 +8,7 @@ import { IconShield } from '../../ui/icons'
 import { TicketKeys } from '../jira/TicketKeys'
 import { usePauseUnseen } from '../../ui/loops'
 import type { ChatItem } from './runModel'
-import { lineOf, speakerName, type NameOf, type Speaker } from './words'
+import { lineOf, logTimes, speakerName, type NameOf, type Speaker } from './words'
 import styles from './Chat.module.css'
 
 export function SpeakerAvatar({ speaker, state = 'idle' }: { speaker: Speaker | { kind: 'troubleshooter' }; state?: FaceState }) {
@@ -33,7 +33,23 @@ export function SpeakerAvatar({ speaker, state = 'idle' }: { speaker: Speaker | 
   }
 }
 
-function Item({ item, fresh, nameOf, trigger }: { item: ChatItem; fresh: boolean; nameOf: NameOf; trigger: Trigger }) {
+function When({ item, said }: { item: ChatItem; said: string | undefined }) {
+  return said ? (
+    <time className={styles['at']} dateTime={new Date(item.at).toISOString()}>
+      {said}
+    </time>
+  ) : null
+}
+
+interface ItemProps {
+  readonly item: ChatItem
+  readonly at: string | undefined
+  readonly fresh: boolean
+  readonly nameOf: NameOf
+  readonly trigger: Trigger
+}
+
+function Item({ item, at, fresh, nameOf, trigger }: ItemProps) {
   const line = lineOf(item, nameOf, trigger)
   const tone = line.tone === 'plain' ? undefined : styles[line.tone]
   if (line.speaker.kind === 'agent') {
@@ -46,6 +62,7 @@ function Item({ item, fresh, nameOf, trigger }: { item: ChatItem; fresh: boolean
         <div className={styles['body']}>
           <span className={styles['who']} style={{ color: agentIdentity(agent.id, agent.display).hue }}>
             {agent.display}
+            <When item={item} said={at} />
           </span>
           <div className={styles['bubble']}>{line.text}</div>
         </div>
@@ -56,6 +73,7 @@ function Item({ item, fresh, nameOf, trigger }: { item: ChatItem; fresh: boolean
     return (
       <li className={cx(styles['marker'], tone, fresh && styles['in'])} tabIndex={-1} data-gate-said={item.seq}>
         <span>
+          <When item={item} said={at} />
           <IconShield size={14} />
           {line.text}
         </span>
@@ -65,6 +83,7 @@ function Item({ item, fresh, nameOf, trigger }: { item: ChatItem; fresh: boolean
   return (
     <li className={cx(styles['marker'], tone, fresh && styles['in'])}>
       <span>
+        <When item={item} said={at} />
         {item.kind === 'joined' ? (
           <span className={styles['faces']}>
             {item.agents.map((agent) => (
@@ -93,11 +112,12 @@ interface ChatProps {
 
 export function Chat({ items, loadedUpTo, nameOf, trigger, last, ref }: ChatProps) {
   const pauseUnseen = usePauseUnseen()
+  const times = logTimes(items)
   return (
     <div ref={pauseUnseen}>
       <ol className={styles['chat']} aria-label="What the agents said" ref={ref}>
         {items.map((item) => (
-          <Item key={item.seq} item={item} fresh={item.seq > loadedUpTo} nameOf={nameOf} trigger={trigger} />
+          <Item key={item.seq} item={item} at={times.get(item.seq)} fresh={item.seq > loadedUpTo} nameOf={nameOf} trigger={trigger} />
         ))}
         {last}
       </ol>
