@@ -1,10 +1,12 @@
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
-import type { Browser, BrowserContext, Page, TestInfo } from '@playwright/test'
+import type { Browser, BrowserContext, Locator, Page, TestInfo } from '@playwright/test'
 import { expectAccessible } from '../support/axe'
 import { tabTo } from '../support/keyboard'
 import { assertClean, watchPage } from '../support/test'
 import { holdRunAtWork, linkAnimations, marchReadings, runLinks } from './support/runLine'
-import { setMockGithubMode, type Backend } from './support/stack'
+import { connectMockModel } from './support/settings'
+import { setMockGithubMode, type Backend, type WaitingRun } from './support/stack'
 import { expect, test } from './support/test'
 import { decline, declineReasons, devContext, OUT, shot } from './support/ui'
 
@@ -685,4 +687,169 @@ test('KEYS-APPR: Ask, the decline reasons and Decline with the keyboard only, ea
   await expect(heading(page)).toHaveText('Declined, nothing was written', { timeout: 60_000 })
   await expect(page.getByRole('main')).toContainText('Declined by Bob. Nothing was written. Reason: Wrong version.')
   await context.close()
+})
+
+/**
+ * Not checked (spec 10.4, ADR 0043): what the run couldn't check, from the run and the capability registry, after What will
+ * change on the page and in the side panel. Matches APPR-not-checked, APPR-not-checked-jira, C and KEYS-C in checks/paths-v4.cjs.
+ */
+test.describe('what a run didn’t check', () => {
+  test.beforeAll(async ({ baseURL }) => {
+    await connectMockModel(String(baseURL))
+  })
+
+  const REDIS_UNREAD = 'Redis couldn’t be read, so no ticket is proposed for it.'
+  const NO_REGISTRIES = 'The platform can’t yet check registries or security advisories.'
+  const NO_DETAILS = 'The platform can’t yet see a ticket\'s component or priority.'
+  const unchecked = (scope: Page | Locator) => scope.locator('dl', { has: scope.locator('dt', { hasText: /^Not checked$/ }) })
+  const box = (page: Page) => page.getByLabel('Ask the Planner about software versions')
+  const newest = (page: Page) => page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
+  const sidePanel = (page: Page) => page.locator('#side-panel')
+  const noSidewaysScroll = async (page: Page) => {
+    const widths = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth])
+    expect(widths[0], 'no sideways scroll').toBeLessThanOrEqual(widths[1] ?? 0)
+  }
+
+  /** A Jira summary agent like the one the Planner drafts for "sum up the tickets we finished": it reads Jira and proposes one ticket. */
+  async function summaryWaiting(backend: Backend, user: string): Promise<WaitingRun> {
+    const tag = randomUUID().slice(0, 6)
+    const card = await backend.post<{ card_id: string }>(
+      user,
+      '/api/v1/agent-cards',
+      {
+        name: `Finished tickets summary ${tag}`,
+        purpose: 'Looks at the tickets finished in one Jira project and proposes a summary ticket.',
+        good_for: ['Summarise what we finished this week'],
+        inputs: [{ name: 'Jira project', kind: 'jira_project', what: 'The project to summarise, and where the summary goes.', example: 'MOCK' }],
+        blocks: [
+          { say: 'Find the tickets finished since last Friday.', tool: 'jira.search' },
+          { say: 'Propose one ticket that lists them.', tool: 'jira.create_ticket' },
+        ],
+        approvals: [{ tool: 'jira.create_ticket', approvers: 1 }],
+      },
+      undefined,
+      [201],
+    )
+    const made = await backend.post<{ use_case_id: string }>(
+      user,
+      '/api/v1/agent-use-cases',
+      { name: `Weekly summary ${tag}`, instruction: 'Every Friday, sum up the tickets we closed this week in MOCK.', agents: [{ card_id: card.card_id, values: { 'Jira project': 'MOCK' } }] },
+      undefined,
+      [201],
+    )
+    const runId = await backend.checkNow(user, made.use_case_id)
+    await backend.waitForState(runId, ['awaiting_approval'])
+    return { runId, approvalId: await backend.approvalIdOf(runId) }
+  }
+
+  /** A Version checker run Carol set up and started, so Alice may decide it in the side panel. */
+  async function carolsCheck(backend: Backend): Promise<WaitingRun> {
+    const agents = [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }]
+    const made = await backend.post<{ use_case_id: string }>('carol', '/api/v1/agent-use-cases', { name: `Carol’s check ${randomUUID().slice(0, 6)}`, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents }, undefined, [201])
+    const runId = await backend.checkNow('carol', made.use_case_id)
+    await backend.waitForState(runId, ['awaiting_approval'])
+    return { runId, approvalId: await backend.approvalIdOf(runId) }
+  }
+
+  test('APPR-not-checked: a check that couldn’t read Redis names it, then what the platform can’t check yet, after What will change, for bob and alice', async ({ browser, backend }, info) => {
+    test.slow()
+    const { runId, approvalId } = await backend.waitingRunWithUnread('alice')
+    const forBob = await backend.get<{ not_checked: string[]; actions: { fields: { title: string } }[] }>('bob', `/api/v1/approvals/${approvalId}`)
+    expect(forBob.not_checked, 'the run names the software it couldn’t read').toEqual(['Redis'])
+    expect(forBob.actions.map((action) => action.fields.title), 'and proposes no ticket for it').toEqual(['Upgrade LangGraph from 1.2.14 to 1.2.16'])
+    for (const user of ['bob', 'alice'] as const) {
+      for (const width of WIDTHS) {
+        const { context, page } = await opened(browser, user, width)
+        const watch = watchPage(page)
+        await page.goto(`/runs/${runId}`)
+        await expect(heading(page)).toHaveText('1 ticket is waiting for a yes')
+        await expect(unchecked(page)).toContainText(inOrder('Not checked', REDIS_UNREAD, NO_REGISTRIES))
+        await expect(page.locator('#decision'), 'What will change, then Not checked, then Why').toContainText(/What will change[\s\S]*exactly what will be written, and nothing else\.\s*Not checked[\s\S]*Why/)
+        await expect(page.getByRole('button', { name: /^(Approve|Decline)/ }), user === 'bob' ? 'bob decides' : 'alice, whose run it is, has no button').toHaveCount(user === 'bob' ? 2 : 0)
+        await noSidewaysScroll(page)
+        if (width === 1280) await expectAccessible(page, path.join(OUT, 'axe'), `r14-not-checked-${user}-1280`)
+        await unchecked(page).scrollIntoViewIfNeeded()
+        await shot(page, info, `r14-not-checked-software-page-${user}-${String(width)}`)
+        assertClean(watch)
+        await context.close()
+      }
+    }
+  })
+
+  test('APPR-not-checked-jira: a ticket summary’s approval says what its agents can’t see of a ticket, as the registry says, for bob and alice', async ({ browser, backend }, info) => {
+    test.slow()
+    const { runId, approvalId } = await summaryWaiting(backend, 'carol')
+    expect((await backend.get<{ not_checked: string[] }>('bob', `/api/v1/approvals/${approvalId}`)).not_checked, 'a workflow of agents names no software').toEqual([])
+    const registry = (await backend.get<{ capabilities: { id: string; state: string }[] }>('bob', '/api/v1/capabilities')).capabilities
+    expect(registry.find((c) => c.id === 'jira.find_by_detail')?.state, 'the registry says the agents can’t see a component or priority').toBe('planned')
+    expect(registry.find((c) => c.id === 'jira.find_by_update')?.state, 'and that they can see when a ticket was updated, its type and its owner').toBe('ready')
+    for (const user of ['bob', 'alice'] as const) {
+      for (const width of WIDTHS) {
+        const { context, page } = await opened(browser, user, width)
+        const watch = watchPage(page)
+        await page.goto(`/runs/${runId}`)
+        await expect(heading(page)).toHaveText('1 ticket is waiting for a yes')
+        await expect(unchecked(page)).toHaveText(inOrder('Not checked', NO_DETAILS))
+        await expect(unchecked(page), 'nothing about software on a ticket summary').not.toContainText(/registries|couldn’t be read/)
+        await expect(page.getByRole('button', { name: /^(Approve|Decline)/ }), 'carol started it, so both may decide').toHaveCount(2)
+        await noSidewaysScroll(page)
+        await unchecked(page).scrollIntoViewIfNeeded()
+        await shot(page, info, `r14-not-checked-summary-page-${user}-${String(width)}`)
+        assertClean(watch)
+        await context.close()
+      }
+    }
+  })
+
+  test('APPR-not-checked in the side panel: alice sees Not checked beside everything that will be written, for a check and a ticket summary', async ({ browser, backend }, info) => {
+    test.slow()
+    const runs = [
+      { kind: 'software', run: await carolsCheck(backend), lines: [NO_REGISTRIES] },
+      { kind: 'summary', run: await summaryWaiting(backend, 'carol'), lines: [NO_DETAILS] },
+    ] as const
+    for (const { kind, run, lines } of runs) {
+      for (const width of WIDTHS) {
+        const { context, page } = await opened(browser, 'alice', width)
+        const watch = watchPage(page)
+        await page.goto('/')
+        await box(page).fill('What needs me?')
+        await box(page).press('Enter')
+        await expect(newest(page)).toHaveAttribute('data-answer', 'true')
+        await newest(page).locator(`[data-opens="run:${run.runId}"]`).click()
+        const panel = sidePanel(page)
+        await expect(unchecked(panel)).toHaveText(inOrder('Not checked', ...lines))
+        await expect(panel, 'it trims nothing that will be written').toContainText(/What will change[\s\S]*exactly what will be written, and nothing else\.\s*Not checked[\s\S]*What happens/)
+        await expect(panel, 'Why, Who asked and Your part wait for the page').not.toContainText(/Who asked|Your part|\bWhy\b/)
+        await noSidewaysScroll(page)
+        if (width === 1280) await expectAccessible(page, path.join(OUT, 'axe'), `r14-not-checked-panel-${kind}-1280`)
+        await unchecked(panel).scrollIntoViewIfNeeded()
+        await shot(page, info, `r14-not-checked-${kind}-panel-alice-${String(width)}`)
+        assertClean(watch)
+        await context.close()
+      }
+    }
+  })
+
+  test('KEYS-C: bob reviews a check with something not checked and approves it with the keyboard only', async ({ browser, backend }, info) => {
+    const { runId, approvalId } = await backend.waitingRunWithUnread('alice')
+    const { context, page } = await opened(browser, 'bob', 1280)
+    await page.goto('/')
+    await expect(heading(page)).toBeVisible()
+    await focusTop(page)
+    await page.keyboard.press('Tab')
+    await expect(page.getByRole('button', { name: 'Skip to main content' })).toBeFocused()
+    await page.keyboard.press('Enter')
+    await tabTo(page, page.locator(`li[data-home-item="approval:${approvalId}"]`).getByRole('link', { name: 'Review and decide' }))
+    expect(await ringShows(page), 'Review and decide has a visible focus').toBe(true)
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(new RegExp(`/runs/${runId}$`))
+    await expect(unchecked(page)).toContainText(inOrder('Not checked', REDIS_UNREAD, NO_REGISTRIES))
+    await tabTo(page, page.getByRole('button', { name: 'Approve 1 ticket' }), 30)
+    expect(await ringShows(page), 'Approve has a visible focus').toBe(true)
+    await shot(page, info, 'r14-keys-c-approve-focused-1280')
+    await page.keyboard.press('Enter')
+    await expect(heading(page)).toHaveText('1 ticket created in Jira', { timeout: 60_000 })
+    await expect(page.getByRole('main')).toContainText('Bob approved, and the platform created the ticket.')
+    await context.close()
+  })
 })

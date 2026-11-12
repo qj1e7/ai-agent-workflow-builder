@@ -142,6 +142,7 @@
 .unchecked {
   display: grid;
   gap: 4px;
+  font-size: 0.95rem;
 }
 
 .unchecked li {
