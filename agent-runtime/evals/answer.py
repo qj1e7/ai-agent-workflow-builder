@@ -16,6 +16,8 @@ from agent_runtime.contract import (
     AnswerRequest,
     CantAnswer,
     CantRow,
+    EditAnswer,
+    EditCant,
     ModelAccess,
     PartAnswer,
     PlannerAnswer,
@@ -24,6 +26,7 @@ from agent_runtime.contract import (
     QuestionAnswer,
     RequestPart,
     RowState,
+    ScheduleChange,
     SetupCardAnswer,
     UnderstoodRow,
     WatchlistAnswer,
@@ -85,6 +88,8 @@ class AnswerCase(Case):
     schedule: list[RowState] = []
     crossed: list[str] = []
     reasons: list[str] = []
+    change: ScheduleChange | None = None
+    edit_cant: EditCant | None = None
     facts: PlannerFacts | None = None
     previous: PreviousTurn | None = None
 
@@ -141,6 +146,10 @@ MACHINE_FIELDS = frozenset({"kind", "state", "status", "needs", "reason"})
 
 
 def _texts(shown: PlannerAnswer) -> list[str]:
+    if isinstance(shown, EditAnswer):
+        # Its other fields are the schedule's own terms, which the Portal words.
+        return [t for t in (shown.workflow_words, shown.software) if t]
+
     def strings(value: object) -> list[str]:
         if isinstance(value, str):
             return [value]
@@ -188,6 +197,15 @@ def _field_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
         also = getattr(shown, "also", None)
         kind = "none" if also is None else also.kind
         found.append(check("carries_the_rest", [] if kind == case.also else [kind]))
+    edit = shown if isinstance(shown, EditAnswer) else None
+    if case.change is not None:
+        read = None if edit is None else edit.schedule
+        found.append(check("reads_the_new_schedule", [] if read == case.change else [str(read)]))
+    if case.edit_cant is not None:
+        cant = None if edit is None else edit.cant
+        found.append(
+            check("names_the_change_it_cant_make", [] if cant == case.edit_cant else [str(cant)])
+        )
     return found
 
 
