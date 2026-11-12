@@ -538,8 +538,8 @@ describe('the schedule editor', () => {
 
 describe('the schedule note', () => {
   it('says no schedule is set and how a check starts then', () => {
-    expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} operator paused={false} />))).toBe('No schedule. Press Check now to check by hand.')
-    expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} operator={false} paused={false} />))).toBe('No schedule. An Operator can press Check now to check by hand.')
+    expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} operator paused={false} />))).toBe('No schedule. Press Check now to check by hand. One approval covers all the upgrade tickets.')
+    expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} operator={false} paused={false} />))).toBe('No schedule. An Operator can press Check now to check by hand. One approval covers all the upgrade tickets.')
   })
 })
 

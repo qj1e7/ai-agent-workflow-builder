@@ -171,6 +171,9 @@ export function checkedByWords(capabilities: readonly CapabilityView[] | undefin
   return all ? `The Version checker, on ${all}, which is not working right now.` : 'The Version checker. No place can be checked right now.'
 }
 
+/** How it's checked says this with or without a schedule. The side panel's When row leaves it out. */
+export const ONE_APPROVAL = 'One approval covers all the upgrade tickets.'
+
 export function noScheduleWords({ operator, paused }: { readonly operator: boolean; readonly paused: boolean }): string {
   if (paused) return `No schedule. ${PAUSED_WORDS}`
   return operator ? 'No schedule. Press Check now to check by hand.' : 'No schedule. An Operator can press Check now to check by hand.'

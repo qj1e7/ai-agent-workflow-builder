@@ -9,15 +9,15 @@ import { useFocusAfterReread } from '../../ui/focus'
 import { IconPlay } from '../../ui/icons'
 import { rereadWhenOutOfDate } from '../workflows/workflow'
 import { pressResume, SCHEDULE_PLACES_IN_PAGE_ORDER, schedulePlaces, type SchedulePlace } from './resume'
-import { checkClock, DAYS, dayOption, nextCheckWords, noScheduleWords, scheduleOwnerWords, scheduleWords } from './software'
+import { checkClock, DAYS, dayOption, nextCheckWords, noScheduleWords, ONE_APPROVAL, scheduleOwnerWords, scheduleWords } from './software'
 import styles from './Software.module.css'
 
 export function ScheduleNote({ schedule, operator, paused }: { schedule: ScheduleView | null; operator: boolean; paused: boolean }) {
-  if (schedule === null) return <p>{noScheduleWords({ operator, paused })}</p>
+  if (schedule === null) return <p>{`${noScheduleWords({ operator, paused })} ${ONE_APPROVAL}`}</p>
   return (
     <>
       <p>
-        <b>{scheduleWords(schedule)}</b> One approval covers all the upgrade tickets. {nextCheckWords(schedule, paused)}
+        <b>{scheduleWords(schedule)}</b> {ONE_APPROVAL} {nextCheckWords(schedule, paused)}
       </p>
       {schedule.held ? null : <p className="muted">{scheduleOwnerWords(schedule)}</p>}
     </>
