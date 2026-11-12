@@ -8,7 +8,9 @@ import pytest
 
 from platform_api.auth import DEV_PEOPLE
 from platform_api.oidc import identity_from_claims
-from platform_api.orchestration.runs import AwaitingApproval
+from platform_api.orchestration.approvals import AnyApprover, ApprovalPolicy, ApprovalStep
+from platform_api.orchestration.people_store import People
+from platform_api.orchestration.runs import AwaitingApproval, Rejected
 from platform_api.orchestration.service import Retried
 from platform_api.orchestration.spec import RunSpec
 from platform_api.shared import ApprovalId, N8nExecutionId, Principal, UserId
@@ -167,6 +169,129 @@ async def test_a_retry_after_the_yes_does_not_change_whom_the_approval_names(
     assert isinstance(await harness.orchestrator.retry(run_id, CAROL), Retried)
     view = (await client.get(f"/api/v1/approvals/{approval_id}", headers=bob)).json()
     assert (view["owner"], view["started_by"], view["retried_by"]) == ("alice", "alice", [])
+
+
+async def decline(
+    client: httpx.AsyncClient,
+    approval_id: str,
+    headers: dict[str, str],
+    digest: str,
+    reason: str | None,
+    step: int = 0,
+) -> httpx.Response:
+    body: dict[str, object] = {"step": step, "verdict": "decline", "digest": digest}
+    if reason is not None:
+        body["reason"] = reason
+    return await client.post(
+        f"/api/v1/approvals/{approval_id}/decisions", headers=headers, json=body
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("reason", "why"),
+    [
+        ("Wrong version", "a reason goes only with a decline"),
+        ("x" * 201, "a reason is at most 200 characters"),
+        ("   ", "a reason has words in it"),
+    ],
+)
+async def test_a_decision_with_a_reason_it_cannot_take_is_refused_and_decides_nothing(
+    harness: Harness, client: httpx.AsyncClient, reason: str, why: str
+):
+    _, _, approval_id = await work_leg_to_approval(harness, by=OIDC_ALICE)
+    bob = bearer(token(claims=BOB_CLAIMS))
+    digest = (await client.get(f"/api/v1/approvals/{approval_id}", headers=bob)).json()["digest"]
+    verdict = "approve" if why.startswith("a reason goes only") else "decline"
+    refused = await client.post(
+        f"/api/v1/approvals/{approval_id}/decisions",
+        headers=bob,
+        json={"step": 0, "verdict": verdict, "digest": digest, "reason": reason},
+    )
+    assert refused.status_code == 422, why
+    view = (await client.get(f"/api/v1/approvals/{approval_id}", headers=bob)).json()
+    assert [s["status"] for s in view["steps"]] == ["open"], "nothing was decided"
+    assert (view["you_can_decide"], view["why_not"]) == (True, None)
+
+
+@pytest.mark.anyio
+async def test_a_decline_keeps_its_reason_on_the_request_the_run_and_the_teams_card(
+    harness: Harness, client: httpx.AsyncClient
+):
+    run_id, _, approval_id = await work_leg_to_approval(harness, by=OIDC_ALICE)
+    bob = bearer(token(claims=BOB_CLAIMS))
+    digest = (await client.get(f"/api/v1/approvals/{approval_id}", headers=bob)).json()["digest"]
+    declined = await decline(client, approval_id, bob, digest, "  Wrong version ")
+    assert declined.status_code == 201
+    assert declined.json()["decision"]["reason"] == "Wrong version"
+    again = await decline(client, approval_id, bob, digest, "Not this week")
+    assert again.status_code == 200
+    assert again.json()["decision"]["reason"] == "Wrong version", "a repeat keeps the first note"
+    view = (await client.get(f"/api/v1/approvals/{approval_id}", headers=bob)).json()
+    [step] = view["steps"]
+    assert (step["status"], step["decided_by"], step["reason"]) == (
+        "declined",
+        "bob",
+        "Wrong version",
+    )
+    run = (await client.get(f"/api/v1/runs/{run_id}", headers=bob)).json()
+    assert run["approval"]["steps"][0]["reason"] == "Wrong version"
+    [rejected] = [e for e in await harness.log.read_after(run_id, 0) if e.kind == "run_rejected"]
+    assert rejected.data.model_dump() == {"by": "bob", "step": 0, "reason": "Wrong version"}
+    assert (
+        rejected.summary == "Bob declined the request. Nothing was written. Reason: Wrong version."
+    )
+    await harness.orchestrator.tick()
+    [message] = await harness.teams.messages()
+    assert message.card is not None
+    body = message.card.as_json()["body"]
+    assert [run["text"] for block in body[:2] for run in block["inlines"]] == [
+        "Declined by Bob",
+        "Nothing was written. Reason: Wrong version.",
+    ]
+
+
+@pytest.mark.anyio
+async def test_a_decline_with_no_reason_says_nothing_was_written_and_gives_no_reason(
+    harness: Harness, client: httpx.AsyncClient
+):
+    run_id, _, approval_id = await work_leg_to_approval(harness, by=OIDC_ALICE)
+    bob = bearer(token(claims=BOB_CLAIMS))
+    digest = (await client.get(f"/api/v1/approvals/{approval_id}", headers=bob)).json()["digest"]
+    declined = await decline(client, approval_id, bob, digest, None)
+    assert (declined.status_code, declined.json()["decision"]["reason"]) == (201, None)
+    assert isinstance(await harness.state(run_id), Rejected)
+    [rejected] = [e for e in await harness.log.read_after(run_id, 0) if e.kind == "run_rejected"]
+    assert rejected.data.model_dump() == {"by": "bob", "step": 0, "reason": None}
+    await harness.orchestrator.tick()
+    [message] = await harness.teams.messages()
+    assert message.card is not None
+    assert message.card.as_json()["body"][1]["inlines"][0]["text"] == "Nothing was written."
+
+
+@pytest.mark.anyio
+async def test_when_the_second_approver_declines_the_teams_card_says_who_said_yes_first(
+    harness: Harness, client: httpx.AsyncClient
+):
+    two = ApprovalPolicy(
+        (ApprovalStep("Team approver", AnyApprover()), ApprovalStep("Second", AnyApprover()))
+    )
+    spec = replace(SPEC, owner=UserId("carol"), approval_policy=two)
+    assert await People(harness.db).seed_dev(DEV_PEOPLE)
+    approval_id = await retried_to_approval(harness, spec, started_by=CAROL, retried_by=())
+    bob, alice = bearer(token(claims=BOB_CLAIMS)), bearer(token(claims=ALICE_CLAIMS))
+    digest = (await client.get(f"/api/v1/approvals/{approval_id}", headers=bob)).json()["digest"]
+    assert (await decide(client, approval_id, bob, digest)).status_code == 201
+    declined = await decline(client, approval_id, alice, digest, "Needs testing first", step=1)
+    assert declined.status_code == 201
+    await harness.orchestrator.tick()
+    [message] = await harness.teams.messages()
+    assert message.card is not None
+    body = message.card.as_json()["body"]
+    assert [run["text"] for block in body[:2] for run in block["inlines"]] == [
+        "Approved by Bob, then declined by Alice",
+        "Nothing was written. Reason: Needs testing first.",
+    ]
 
 
 def test_the_mock_identity_provider_issues_the_dev_people_and_two_more():

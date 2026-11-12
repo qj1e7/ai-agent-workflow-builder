@@ -99,6 +99,13 @@ class LastRunView(WireModel):
     declined_by: UserId | None = Field(
         description="Who declined it. Null unless the run was declined."
     )
+    decline_reason: str | None = Field(
+        description="Why it was declined, when the Approver gave a reason. Null otherwise."
+    )
+    approved_by: list[UserId] = Field(
+        description="Who said yes to its request, in step order. On a declined run, those who "
+        "said yes before it was declined. Empty when nobody did."
+    )
     proposed: int = Field(
         description="How many writes the run asked a yes for. Counted only while the run waits "
         "for a yes or after it was declined. 0 for a run that finished or stopped."

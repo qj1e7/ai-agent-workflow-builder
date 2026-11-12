@@ -17,6 +17,7 @@ from platform_api.orchestration import (
     ConnectionCheck,
     ConnectionId,
     ConnectionState,
+    DeclinedTest,
     PersonRuns,
     Stopped,
     Waiting,
@@ -90,6 +91,21 @@ class WaitingItem(WireModel):
     )
 
 
+class DeclinedItem(WireModel):
+    run_id: RunId
+    use_case_id: str
+    use_case_name: str
+    started_at: datetime
+    declined_at: datetime
+    declined_by: UserId
+    declined_by_name: str | None = Field(
+        description="Null when the Approver who declined is no longer on the list."
+    )
+    decline_reason: str | None = Field(
+        description="Why the Approver declined, when they gave a reason."
+    )
+
+
 class DraftItem(WireModel):
     draft_id: str
     name: str | None = Field(description="The draft's `name`, when the Portal saved one.")
@@ -157,6 +173,12 @@ class HomeOut(WireModel):
         description="Runs waiting for someone else's yes that this person is part of. At most 50."
     )
     waiting_on_others_total: int
+    declined: list[DeclinedItem] = Field(
+        description="This person's own test runs that an Approver declined, while each is the "
+        "newest run of its workflow, the newest decline first. They are part of Needs you, and "
+        "one leaves when the workflow runs again. At most 10."
+    )
+    declined_total: int
     drafts: list[DraftItem] = Field(description="An Operator's own drafts, the last saved first.")
     following_up: list[FollowingUpItem] = Field(
         description="This person's own requests to the team, Ask the team and Report to "
@@ -280,6 +302,20 @@ def _waiting(wait: Waiting) -> WaitingItem:
     )
 
 
+def _declined(test: DeclinedTest, names: dict[UserId, str]) -> DeclinedItem:
+    run = test.run
+    return DeclinedItem(
+        run_id=run.run_id,
+        use_case_id=run.use_case_id,
+        use_case_name=run.use_case_name,
+        started_at=run.started_at,
+        declined_at=test.declined_at,
+        declined_by=test.declined_by,
+        declined_by_name=names.get(test.declined_by),
+        decline_reason=test.reason,
+    )
+
+
 def _confirmation(row: ConfirmationRow) -> ConfirmationItem:
     c = row.confirmation
     return ConfirmationItem(
@@ -347,6 +383,11 @@ class Home:
         use_cases = (await self._builder.list_use_cases()).use_cases
         live = {u.use_case_id for u in use_cases}
         stopped = [s for s in runs.stopped if s.run.use_case_id in live]
+        declined = sorted(
+            (d for d in runs.declined if d.run.use_case_id in live),
+            key=lambda d: d.declined_at,
+            reverse=True,
+        )
         drafts = (
             (await self._builder.list_drafts(viewer)).drafts
             if Role.OPERATOR in viewer.roles
@@ -363,6 +404,8 @@ class Home:
             confirmations=[_confirmation(row) for row in confirmations],
             stopped=[_stopped(s) for s in stopped[:SHOWN]],
             stopped_total=len(stopped),
+            declined=[_declined(d, names) for d in declined[:SHOWN]],
+            declined_total=len(declined),
             waiting_on_others=[_waiting(w) for w in runs.waiting[:LISTED]],
             waiting_on_others_total=len(runs.waiting),
             drafts=[_draft(d) for d in drafts],

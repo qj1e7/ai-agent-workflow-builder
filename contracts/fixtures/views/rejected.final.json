@@ -37,7 +37,8 @@
         "label": "Team approver",
         "status": "declined",
         "decided_by": "bob",
-        "decided_at": "2026-11-05T02:18:11.903000Z"
+        "decided_at": "2026-11-05T02:18:11.903000Z",
+        "reason": "Wrong version"
       }
     ]
   },

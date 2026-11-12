@@ -255,7 +255,8 @@ class Store:
         rows = await (
             await uow.conn.execute(
                 f"SELECT {RUN_COLUMNS} FROM orchestration.runs r "
-                "WHERE r.state = 'AwaitingApproval' OR (r.state = 'Failed' AND NOT EXISTS ("
+                "WHERE r.state = 'AwaitingApproval' OR (r.state IN ('Failed', 'Rejected') "
+                "AND NOT EXISTS ("
                 "SELECT 1 FROM orchestration.runs newer WHERE newer.use_case_id = r.use_case_id "
                 "AND (newer.started_at, newer.run_id) > (r.started_at, r.run_id))) "
                 "ORDER BY r.started_at DESC, r.run_id DESC"
@@ -385,7 +386,8 @@ class Store:
         try:
             await uow.conn.execute(
                 "INSERT INTO orchestration.approval_decisions (approval_id, step_index, "
-                "decided_by, verdict, seen_digest, decided_at) VALUES (%s, %s, %s, %s, %s, %s)",
+                "decided_by, verdict, seen_digest, decided_at, reason) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
                 (
                     decision.approval_id,
                     decision.step_index,
@@ -393,6 +395,7 @@ class Store:
                     decision.verdict.value,
                     decision.seen_digest,
                     decision.at,
+                    decision.reason,
                 ),
             )
         except psycopg.errors.UniqueViolation as error:
@@ -411,8 +414,8 @@ class Store:
             return {}
         rows = await (
             await uow.conn.execute(
-                "SELECT approval_id, step_index, decided_by, verdict, seen_digest, decided_at "
-                "FROM orchestration.approval_decisions WHERE approval_id = ANY(%s) "
+                "SELECT approval_id, step_index, decided_by, verdict, seen_digest, decided_at, "
+                "reason FROM orchestration.approval_decisions WHERE approval_id = ANY(%s) "
                 "ORDER BY approval_id, step_index",
                 (list(approval_ids),),
             )
@@ -426,6 +429,7 @@ class Store:
                 Verdict(row["verdict"]),
                 Digest(row["seen_digest"]),
                 row["decided_at"],
+                row["reason"],
             )
             decisions[decision.approval_id] = (*decisions.get(decision.approval_id, ()), decision)
         return decisions

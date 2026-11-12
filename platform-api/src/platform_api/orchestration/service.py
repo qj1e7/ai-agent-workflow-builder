@@ -307,6 +307,7 @@ def steps_view(request: ApprovalRequest, decisions: Iterable[Decision]) -> list[
                     status=status,
                     decided_by=decision.by,
                     decided_at=decision.at,
+                    reason=decision.reason,
                 )
             )
             if status == "declined":
@@ -841,7 +842,9 @@ class Orchestrator:
         step_index: int,
         verdict: Verdict,
         seen_digest: Digest,
+        decline_reason: str | None = None,
     ) -> DecisionResult:
+        """The gate's rules decide alone. A reason only rides along on a decline it recorded."""
         async with self._db.transaction("orchestration") as uow:
             request = await self._store.load_approval(uow, approval_id)
             if request is None:
@@ -861,6 +864,8 @@ class Orchestrator:
                 case AlreadyRecorded(decision):
                     return Decided(approval_status(request, decisions), decision, True)
                 case Recorded(decision):
+                    if decline_reason is not None and verdict is Verdict.DECLINE:
+                        decision = replace(decision, reason=decline_reason)
                     try:
                         await self._store.insert_decision(uow, decision)
                     except DecisionConflict:
@@ -872,7 +877,9 @@ class Orchestrator:
                         await self._activity.append(uow, record.run_id, [decided])
                         return Decided(status, decision, False)
                     if isinstance(status, Approved | Declined):
-                        await self._enqueue_outcome(uow, record, request, status, principal)
+                        await self._enqueue_outcome(
+                            uow, record, request, all_decisions, status, principal
+                        )
                     match status:
                         case Approved():
                             moved = record.state.approve(uow.now).preceded_by(decided)
@@ -882,7 +889,9 @@ class Orchestrator:
                             )
                             await self._enqueue_leg(uow, record, Leg.ACT, uow.now)
                         case Declined(by, step):
-                            moved_r = record.state.reject(by, principal.display, step)
+                            moved_r = record.state.reject(
+                                by, principal.display, step, decision.reason
+                            )
                             await self._commit(uow, record, moved_r.preceded_by(decided))
                         case Open() | approvals.Invalid():
                             await self._activity.append(uow, record.run_id, [decided])
@@ -1093,17 +1102,26 @@ class Orchestrator:
         uow: UnitOfWork,
         record: RunRecord,
         request: ApprovalRequest,
+        decisions: tuple[Decision, ...],
         status: Approved | Declined,
         decider: Principal,
     ) -> None:
+        approved_first: tuple[UserId, ...] = ()
+        reason: str | None = None
         match status:
             case Approved(approvers):
                 verdict: OutcomeVerdict = "approved"
                 deciders = approvers
-            case Declined(by):
+            case Declined(by, step):
                 verdict = "declined"
                 deciders = (by,)
-        names = {**await self._store.names(uow, deciders), decider.user_id: decider.display}
+                steps = sorted(decisions, key=lambda d: d.step_index)
+                approved_first = tuple(d.by for d in steps if d.step_index < step)
+                reason = next(d.reason for d in steps if d.step_index == step)
+        names = {
+            **await self._store.names(uow, (*approved_first, *deciders)),
+            decider.user_id: decider.display,
+        }
         await self._store.enqueue(
             uow,
             record.run_id,
@@ -1112,6 +1130,8 @@ class Orchestrator:
                 "approval_id": request.id,
                 "verdict": verdict,
                 "by": [names[d] for d in deciders],
+                "approved_first": [names[d] for d in approved_first],
+                "reason": reason,
                 "use_case_name": record.spec.use_case_name,
             },
             uow.now,
@@ -1154,6 +1174,8 @@ class Orchestrator:
             by=tuple(row.payload["by"]),
             use_case_name=row.payload["use_case_name"],
             open_url=self.approval_url(approval_id),
+            approved_first=tuple(row.payload.get("approved_first", ())),
+            reason=row.payload.get("reason"),
         )
         await _through_channel(self._channel.update(ref, outcome))
         async with self._db.transaction("orchestration") as uow:

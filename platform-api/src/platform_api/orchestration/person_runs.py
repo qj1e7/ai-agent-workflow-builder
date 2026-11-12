@@ -8,10 +8,11 @@ from platform_api.orchestration.approvals import (
     Decision,
     Open,
     Refusal,
+    Verdict,
     approval_status,
     why_not,
 )
-from platform_api.orchestration.runs import AwaitingApproval, Failed
+from platform_api.orchestration.runs import AwaitingApproval, Failed, Rejected
 from platform_api.orchestration.store import RunRecord
 from platform_api.orchestration.write_actions import Proposal
 from platform_api.shared import ApprovalId, Principal, Role, RunId, UseCaseId, UserId
@@ -70,10 +71,21 @@ class Stopped:
 
 
 @dataclass(frozen=True)
+class DeclinedTest:
+    run: RunFacts
+    declined_at: datetime
+    declined_by: UserId
+    reason: str | None
+
+
+@dataclass(frozen=True)
 class PersonRuns:
     asks: tuple[Ask, ...]
     waiting: tuple[Waiting, ...]
     stopped: tuple[Stopped, ...]
+    declined: tuple[DeclinedTest, ...]
+    """The person's own test runs that an Approver declined, while each is the newest run of its
+    workflow. A new run of the workflow takes it off the list."""
 
 
 class OpenRun(Protocol):
@@ -160,10 +172,21 @@ def _stopped(record: RunRecord, state: Failed, viewer: Principal) -> Stopped | N
     )
 
 
+def _declined_test(run: OpenRun, state: Rejected, viewer: Principal) -> DeclinedTest | None:
+    record = run.record
+    if not record.spec.test or record.started_by != viewer.user_id:
+        return None
+    decline = next(
+        d for d in run.decisions if d.step_index == state.step and d.verdict is Verdict.DECLINE
+    )
+    return DeclinedTest(_facts(record), decline.at, state.by, decline.reason)
+
+
 def runs_of(runs: Iterable[OpenRun], viewer: Principal) -> PersonRuns:
     asks: list[Ask] = []
     waiting: list[Waiting] = []
     stopped: list[Stopped] = []
+    declined: list[DeclinedTest] = []
     for run in runs:
         match run.record.state:
             case AwaitingApproval():
@@ -177,6 +200,9 @@ def runs_of(runs: Iterable[OpenRun], viewer: Principal) -> PersonRuns:
             case Failed() as failed:
                 if (stop := _stopped(run.record, failed, viewer)) is not None:
                     stopped.append(stop)
+            case Rejected() as rejected:
+                if (test := _declined_test(run, rejected, viewer)) is not None:
+                    declined.append(test)
             case _:
                 pass
-    return PersonRuns(tuple(asks), tuple(waiting), tuple(stopped))
+    return PersonRuns(tuple(asks), tuple(waiting), tuple(stopped), tuple(declined))

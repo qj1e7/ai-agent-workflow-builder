@@ -240,7 +240,17 @@ def test_rejection_ends_the_run():
     moved = AWAITING.reject(UserId("bob"), "Bob", 0)
     assert moved.state == REJECTED
     assert kinds(moved.events) == ["run_rejected"]
-    assert moved.events[0].data.model_dump() == {"by": "bob", "step": 0}
+    assert moved.events[0].data.model_dump() == {"by": "bob", "step": 0, "reason": None}
+    assert moved.events[0].summary == "Bob declined the request. Nothing was written."
+
+
+def test_a_rejection_with_a_reason_carries_it_and_says_it():
+    moved = AWAITING.reject(UserId("bob"), "Bob", 0, "Wrong version")
+    assert moved.state == REJECTED
+    assert moved.events[0].data.model_dump() == {"by": "bob", "step": 0, "reason": "Wrong version"}
+    assert moved.events[0].summary == (
+        "Bob declined the request. Nothing was written. Reason: Wrong version."
+    )
 
 
 def test_acting_claims_the_act_leg_then_succeeds():

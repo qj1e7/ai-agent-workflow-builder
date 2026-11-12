@@ -61,6 +61,8 @@ EMPTY = {
     "confirmations": [],
     "stopped": [],
     "stopped_total": 0,
+    "declined": [],
+    "declined_total": 0,
     "waiting_on_others": [],
     "waiting_on_others_total": 0,
     "drafts": [],
@@ -165,8 +167,9 @@ async def workflow(lab: Lab, owner: str = "alice", name: str = "Watch LangGraph"
     return response.json()["use_case_id"]
 
 
-async def start(lab: Lab, use_case_id: str, by: str = "alice") -> RunId:
-    response = await lab.call(by, "POST", f"/api/v1/use-cases/{use_case_id}/runs")
+async def start(lab: Lab, use_case_id: str, by: str = "alice", test: bool = False) -> RunId:
+    path = f"/api/v1/use-cases/{use_case_id}/runs"
+    response = await lab.call(by, "POST", path, {"test": True} if test else None)
     assert response.status_code == 201, response.text
     return RunId(response.json()["run_id"])
 
@@ -370,6 +373,62 @@ async def test_a_deleted_workflow_s_stopped_run_is_not_shown(lab: Lab):
     ).status_code == 200
 
     assert (await lab.home("alice"))["stopped"] == []
+
+
+async def declined_run(
+    lab: Lab, use_case_id: str, by: str, test: bool, reason: str | None = None
+) -> RunId:
+    run_id = await start(lab, use_case_id, by, test=test)
+    await work(lab, run_id)
+    run = (await lab.call("bob", "GET", f"/api/v1/runs/{run_id}")).json()
+    seen = (
+        await lab.call("bob", "GET", f"/api/v1/approvals/{run['approval']['approval_id']}")
+    ).json()
+    body = {"step": 0, "verdict": "decline", "digest": seen["digest"]}
+    if reason is not None:
+        body["reason"] = reason
+    path = f"/api/v1/approvals/{seen['approval_id']}/decisions"
+    assert (await lab.call("bob", "POST", path, body)).status_code == 201
+    return run_id
+
+
+async def test_a_declined_test_run_is_in_its_starters_needs_you_with_who_declined_and_why(
+    lab: Lab,
+):
+    use_case_id = await workflow(lab, owner="carol")
+    run_id = await declined_run(lab, use_case_id, "alice", test=True, reason="Wrong version")
+
+    home = await lab.home("alice")
+    assert home["declined_total"] == 1
+    (item,) = home["declined"]
+    assert {k: item[k] for k in ("run_id", "use_case_id", "use_case_name")} == {
+        "run_id": run_id,
+        "use_case_id": use_case_id,
+        "use_case_name": "Watch LangGraph",
+    }
+    assert (item["declined_by"], item["declined_by_name"], item["decline_reason"]) == (
+        "bob",
+        "Bob",
+        "Wrong version",
+    )
+    for not_the_starter in ("carol", "bob", "dave"):
+        assert (await lab.home(not_the_starter))["declined"] == [], not_the_starter
+
+
+async def test_only_a_test_run_declined_counts_and_it_leaves_when_the_workflow_runs_again(
+    lab: Lab,
+):
+    run_now = await workflow(lab, name="Run now")
+    await declined_run(lab, run_now, "alice", test=False)
+    assert await lab.run_ids("alice", "declined") == []
+
+    tried = await workflow(lab, name="Tried")
+    first = await declined_run(lab, tried, "alice", test=True)
+    assert await lab.run_ids("alice", "declined") == [first]
+    assert (await lab.home("alice"))["declined"][0]["decline_reason"] is None
+
+    await start(lab, tried, test=True)
+    assert await lab.run_ids("alice", "declined") == []
 
 
 async def test_a_confirmation_shows_to_approvers_who_may_decide_it_and_not_to_the_asker(lab: Lab):

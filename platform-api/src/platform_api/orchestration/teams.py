@@ -46,6 +46,7 @@ LINES_SHOWN = 10
 LINE_LIMIT = 300
 SUMMARY_LIMIT = 300
 OUTCOME_ID = "outcome"
+OUTCOME_NOTE_ID = "outcome_note"
 
 type Weight = Literal["default", "bolder"]
 type Color = Literal["default", "good", "attention"]
@@ -247,32 +248,46 @@ def approval_card(notice: ApprovalNotice) -> AdaptiveCard:
 
 
 def _decided(outcome: ApprovalOutcome) -> str:
-    verb = "Approved" if outcome.verdict == "approved" else "Declined"
-    return f"{verb} by {listed(outcome.by)}"
+    if outcome.verdict == "approved":
+        return f"Approved by {listed(outcome.by)}"
+    by = listed(outcome.by)
+    if outcome.approved_first:
+        return f"Approved by {', then '.join(outcome.approved_first)}, then declined by {by}"
+    return f"Declined by {by}"
 
 
-def _outcome_block(outcome: ApprovalOutcome) -> RichTextBlock:
+def _declined_note(outcome: ApprovalOutcome) -> str:
+    """What the declined record says after who decided, the same words the Portal shows."""
+    reason = f" Reason: {sentence(outcome.reason)}" if outcome.reason else ""
+    return f"Nothing was written.{reason}"
+
+
+def _outcome_blocks(outcome: ApprovalOutcome) -> list[CardElement]:
     color: Color = "good" if outcome.verdict == "approved" else "attention"
-    return RichTextBlock(
+    decided = RichTextBlock(
         id=OUTCOME_ID,
         inlines=[_plain(_decided(outcome), weight="bolder", color=color)],
     )
+    if outcome.verdict == "approved":
+        return [decided]
+    return [decided, RichTextBlock(id=OUTCOME_NOTE_ID, inlines=[_plain(_declined_note(outcome))])]
 
 
 def with_outcome(card: AdaptiveCard, outcome: ApprovalOutcome) -> AdaptiveCard:
     """The card as a bot would edit it once the request is decided: the outcome on top."""
-    rest = [element for element in card.body if element.id != OUTCOME_ID]
-    return card.model_copy(update={"body": [_outcome_block(outcome), *rest]})
+    rest = [e for e in card.body if e.id not in (OUTCOME_ID, OUTCOME_NOTE_ID)]
+    return card.model_copy(update={"body": [*_outcome_blocks(outcome), *rest]})
 
 
 def outcome_card(outcome: ApprovalOutcome) -> AdaptiveCard:
     """A second card with the outcome, for a channel that cannot edit the card it posted."""
-    after = "." if outcome.verdict == "approved" else ". Nothing was written."
+    after = "." if outcome.verdict == "approved" else f". {_declined_note(outcome)}"
+    decided = _decided(outcome)
     return AdaptiveCard(
         body=[
             _runs(
                 _plain(outcome.use_case_name, weight="bolder"),
-                _plain(f": {_decided(outcome).lower()}{after}"),
+                _plain(f": {decided[0].lower()}{decided[1:]}{after}"),
             )
         ],
         actions=[OpenUrl(title=OPEN_IN, url=outcome.open_url)],
