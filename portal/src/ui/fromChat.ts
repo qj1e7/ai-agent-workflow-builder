@@ -19,9 +19,14 @@ export function useChatLinkState(): typeof FROM_CHAT | undefined {
   return useContext(InChat) ? FROM_CHAT : undefined
 }
 
-/** Opens a page as a link inside the conversation does, so a page a chat card's button opens also offers Back to the chat. */
+/**
+ * Opens a page as a link inside the conversation does, so a page a chat card's button opens also offers Back to the chat. A page
+ * the chat opened keeps offering it, as a run page does after Retry.
+ */
 export function useChatNavigate(): (to: string) => void {
   const navigate = useNavigate()
-  const state = useChatLinkState()
+  const inChat = useChatLinkState()
+  const fromChat = useFromChat()
+  const state = inChat ?? (fromChat ? FROM_CHAT : undefined)
   return (to) => void navigate(to, { state })
 }

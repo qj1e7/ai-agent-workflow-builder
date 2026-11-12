@@ -176,6 +176,11 @@
   margin-top: 6px;
 }
 
+/* Buttons that gave way to the side panel leave no gap behind them. */
+.buttons:empty {
+  display: none;
+}
+
 .row {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr) auto;

@@ -314,6 +314,11 @@
   gap: 8px 12px;
 }
 
+/* Buttons that gave way to the side panel leave no gap behind them. */
+.buttons:empty {
+  display: none;
+}
+
 .footer {
   display: flex;
   flex-wrap: wrap;
