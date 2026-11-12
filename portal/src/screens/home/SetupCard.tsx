@@ -320,7 +320,7 @@ function Done({ useCaseId, writes, draftKept, newAgents }: { useCaseId: string; 
       </span>
       <div>
         <p>
-          <b>{name ? `${name} is on.` : 'Your workflow is on.'}</b>
+          <b>{`${name ?? 'Your workflow'} ${useCase.data?.state === 'paused' ? 'is paused.' : 'is on.'}`}</b>
         </p>
         {useCase.data && useCase.data.left_out.length > 0 ? <p>Left out: {andList(useCase.data.left_out.map(quote))}.</p> : null}
         {useCase.data ? <p>{firstRun(useCase.data, now)}</p> : null}
@@ -351,7 +351,7 @@ function Done({ useCaseId, writes, draftKept, newAgents }: { useCaseId: string; 
 }
 
 function firstRun(useCase: UseCaseView, now: Date): string {
-  if (useCase.state === 'paused') return 'It is paused.'
+  if (useCase.state === 'paused') return 'It won’t run until you resume it.'
   if (!useCase.next_run_at) return 'It runs when an Operator starts it.'
   const zone = useCase.schedule?.time_zone
   const at = runWhen(useCase.next_run_at, now, zone)
@@ -445,7 +445,8 @@ export function SetupCard({ start }: { start: CardStart }) {
       () =>
         persist((saved) => {
           setSaveProblem(null)
-          if (live && params.get('draft') !== saved) setParams({ draft: saved }, { replace: true })
+          // Read when the save lands, not when it started: a newer answer may have replaced this card since, and its address is the chat's.
+          if (latest.current.live && params.get('draft') !== saved) setParams({ draft: saved }, { replace: true })
         }),
       SAVE_PAUSE_MS,
     )
