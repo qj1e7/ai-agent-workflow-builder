@@ -915,7 +915,8 @@ test.describe('what a run didn’t check', () => {
     /** Where Approve sits inside the decision, which scrolling the page does not change. */
     const place = () => approve.evaluate((el) => el.getBoundingClientRect().top - (el.closest('#decision')?.getBoundingClientRect().top ?? 0))
     const before = await place()
-    await page.waitForLoadState('networkidle')
+    // The run page polls while it waits, so the network never goes idle. The registry has answered by now, so a short wait is enough.
+    await page.waitForTimeout(1_500)
     expect(await place(), 'Approve stays where it first showed').toBe(before)
     await context.close()
   })
