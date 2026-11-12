@@ -9,7 +9,7 @@ import type { BlockKind } from '../../api/types'
 import { Chat } from './Chat'
 import { Outcome } from './Outcome'
 import { RunLine } from './RunLine'
-import { emptyModel, foldWire, stationsOf, type PlanBlock, type RunModel } from './runModel'
+import { emptyModel, foldWire, stationsOf, type ChatItem, type PlanBlock, type RunModel } from './runModel'
 import { headlineOf, writeLabel } from './words'
 
 interface Raw {
@@ -25,6 +25,9 @@ function replay(raw: readonly Raw[], upTo = Infinity): RunModel {
   const kept = raw.filter((item) => item.seq <= upTo)
   return foldWire(emptyModel, kept, kept[0]?.run_id ?? '')
 }
+
+/** A time as the run's events carry it. */
+const at = (iso: string) => Date.parse(iso) as ChatItem['at']
 
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 
@@ -192,6 +195,47 @@ describe('the chat', () => {
     expect(animated(chat(model, 7))).toBe(2)
   })
 
+  it('gives each entry its time, the first with its day, and none to the line that says who joined', () => {
+    const entries = [...chat(replay(success)).matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)].map((match) => {
+      const html = match[1] ?? ''
+      return `${html.match(/<time[^>]*>([^<]*)<\/time>/)?.[1] ?? '-'} ${text(html.replace(/<time[\s\S]*?<\/time>/, ''))}`
+    })
+    expect(entries).toEqual([
+      'Tue 3 Nov, 10:14 Alice started the run.',
+      '- Version checker joined',
+      '10:14 Planner Please check LangGraph for new releases.',
+      '10:14 Version checker LangGraph has a new release: 1.2.16. I suggest one ticket.',
+      "10:14 Planner Agreed. I'll draft one ticket for an Approver to check.",
+      '10:14 Asked for a yes in Teams, in CODESparks Ops. Nothing is written until an Approver says yes.',
+      '10:20 Bob approved.',
+      '10:20 Created MOCK-142 in Jira.',
+      '10:20 Done. 1 ticket created.',
+    ])
+  })
+
+  it('says the day again on an entry from another day', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <Chat
+          items={[
+            { kind: 'started', seq: 1, at: at('2026-10-27T00:00:00Z'), by: 'alice', trigger: 'person' },
+            { kind: 'decided', seq: 2, at: at('2026-10-27T15:59:00Z'), by: 'bob', verdict: 'approve', step: null },
+            { kind: 'declined', seq: 3, at: at('2026-10-27T16:01:00Z') },
+          ]}
+          loadedUpTo={9}
+          nameOf={nameOf}
+          trigger="person"
+          last={null}
+        />
+      </MemoryRouter>,
+    )
+    expect([...html.matchAll(/<time[^>]*dateTime="([^"]+)"[^>]*>([^<]*)<\/time>/gi)].map((match) => `${match[1] ?? ''} ${match[2] ?? ''}`)).toEqual([
+      '2026-10-27T00:00:00.000Z Tue 27 Oct, 8:00',
+      '2026-10-27T15:59:00.000Z 23:59',
+      '2026-10-27T16:01:00.000Z Wed 28 Oct, 0:01',
+    ])
+  })
+
   it('lets the gate’s lines take focus after a decision', () => {
     expect(chat(replay(success))).toMatch(/tabindex="-1" data-gate-said="16"/)
   })
@@ -227,8 +271,8 @@ describe('ticket keys on the run page', () => {
 
   it('does not link a key in a write to some other system, or key-like words in what an agent said', () => {
     const html = chatHtml([
-      { kind: 'written', seq: 1, connector: 'confluence', operation: 'update_page', refs: ['OPS-9'] },
-      { kind: 'said', seq: 2, speaker: { id: 'version_checker', display: 'Version checker' }, text: 'UTF-8 and CVE-2024-1234 and OPS-9', bad: false },
+      { kind: 'written', seq: 1, at: at('2026-11-03T02:14:00Z'), connector: 'confluence', operation: 'update_page', refs: ['OPS-9'] },
+      { kind: 'said', seq: 2, at: at('2026-11-03T02:14:00Z'), speaker: { id: 'version_checker', display: 'Version checker' }, text: 'UTF-8 and CVE-2024-1234 and OPS-9', bad: false },
     ])
     expect(html).not.toContain('href="/jira/')
   })

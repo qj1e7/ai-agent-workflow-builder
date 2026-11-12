@@ -32,6 +32,30 @@ export function shortTime(iso: string): string {
   return `${part('weekday')} ${Number(part('hour'))}:${part('minute')}`
 }
 
+const logParts = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hourCycle: 'h23', timeZone: TIME_ZONE })
+
+/** "Tue 27 Oct" and "8:00", built from their parts, because browsers differ on the commas and the leading zero. */
+function dayAndClock(at: number): { day: string; clock: string } {
+  const parts = logParts.formatToParts(at)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? ''
+  return { day: `${part('weekday')} ${part('day')} ${part('month')}`, clock: `${Number(part('hour'))}:${part('minute')}` }
+}
+
+/**
+ * When each entry in a run's log happened, in Singapore time (spec 10.2). The first says its day, "Tue 27 Oct, 8:00", and
+ * the rest only the time, unless the day changed. "X joined" marks where agents come in, so it has no time of its own.
+ */
+export function logTimes(items: readonly ChatItem[]): ReadonlyMap<number, string> {
+  const timed = items.filter((item) => item.kind !== 'joined')
+  const firstDay = timed[0] ? dayAndClock(timed[0].at).day : ''
+  return new Map(
+    timed.map((item, index) => {
+      const { day, clock } = dayAndClock(item.at)
+      return [item.seq, index === 0 || day !== firstDay ? `${day}, ${clock}` : clock]
+    }),
+  )
+}
+
 export type Speaker =
   | { readonly kind: 'app' }
   | { readonly kind: 'platform' }
