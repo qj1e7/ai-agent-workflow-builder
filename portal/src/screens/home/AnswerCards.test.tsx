@@ -346,6 +346,14 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     expect(html).not.toContain('aria-label="Your decisions"')
   })
 
+  it('says how many more wait for his yes, with no link to a page that lists no more', () => {
+    const [request] = HOME.approvals
+    const many = { ...HOME, approvals: Array.from({ length: 10 }, (_, n) => ({ ...request!, approval_id: `apr_${String(n)}`, run_id: `run_${String(n)}` })), approvals_total: 25, confirmations: [] }
+    const html = ask({ answer: 'needs_me', parts: [] }, { home: many })
+    expect(answerOf(html)).toContain('15 more runs are waiting for your yes. The next ones show here as you decide these.')
+    expect(answerOf(html)).not.toContain('See all on Workflows')
+  })
+
   it('sends an approve to the request to decide there, never a decision in the chat', () => {
     const html = ask(decideReply as PlannerReply)
     expect(answerOf(html)).toContain('I can’t approve or decline for you. Open the request to see exactly what it will write, and decide there.')

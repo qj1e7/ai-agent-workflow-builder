@@ -16,7 +16,7 @@ import { ideasSay, needsSay, startingPoints, workflowsSay } from './answers'
 import { Troubleshooting } from '../run/Outcome'
 import { useAsker } from './asker'
 import { decidedSay, decisionLine } from './decided'
-import { approvalsOf, approverLine, needsOf, needsTotal, SEE_ALL_WORDS, type Needs } from './home'
+import { approvalsOf, approverLine, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, type Needs } from './home'
 import { NeedsSection, useArrival } from './NeedsSection'
 import { useMainButton } from './primary'
 import styles from './Planner.module.css'
@@ -81,11 +81,16 @@ function needsSentence(home: HomeOut, operator: boolean): string {
   return operator ? needsSay(needsTotal(home)) : approverLine(home)
 }
 
-/** Needs you inside an answer, every row it holds, with the link to the rest when some aren’t shown. */
+/**
+ * Needs you inside an answer, every row it holds. When some aren’t shown, an Operator gets the link to Workflows. Workflows lists no
+ * more for someone who isn’t an Operator, so they are told how many are left instead, as their Home does.
+ */
 function NeedsInAnswer({ needs, now }: { needs: Needs; now: Date }) {
   const main = useMainButton()
   const arrival = useArrival([])
+  const asker = useAsker()
   const left = needs.total - needs.shown.length
+  const said = asker === 'approver' ? moreWords(needs.more) : null
   if (needs.shown.length === 0) return null
   return (
     <NeedsSection
@@ -94,7 +99,9 @@ function NeedsInAnswer({ needs, now }: { needs: Needs; now: Date }) {
       arrival={{ ...arrival, page: false }}
       quiet={main === 'secondary'}
       more={
-        left > 0 ? (
+        said !== null ? (
+          <p className={styles['more']}>{said}</p>
+        ) : left > 0 && asker === 'operator' ? (
           <p className={styles['more']}>
             <Link to="/workflows">{SEE_ALL_WORDS}</Link>
           </p>
