@@ -105,7 +105,7 @@ Each screen lists the files to change, what to reuse, what is new, and how state
   - A Versions list, once there is more than one, from `GET /api/v1/use-cases/{use_case_id}/versions` (3.2).
   - The banner words follow the spec, such as "On. Next run ..." and "... it's answering again now".
   - The approval line adds "Every Approver is asked in Teams. The request waits until one of them decides, and nothing changes before that."
-- **Change.** `ScheduleChangePanel` saves through the same route as today. That route now publishes a version (4.4), and the message after saving names it.
+- **Change.** `ScheduleChangePanel` saves through the same route as today. That route now publishes a version (4.4). The message after saving stays "Saved. Next run ...", as in the prototype and spec 9, and the Versions list names the version.
 - **Must match.** `H`, `T12`, `ANS-left-out`, `ANS-edit-save`, `DECLINED-test-run`.
 
 **n8n views.** Only someone with n8n access sees n8n, and only an Operator can hold it. The Portal has no n8n link today, and n8n views are Planned (ADR 0026, 0027), so this round builds none. R18 stores the access when the first n8n view is built (4.11).
@@ -297,7 +297,9 @@ The rest stays a fixed table, and it claims no cause it can't know.
 
 **Change.**
 
-- `Builder.save_schedule` writes a new row in `builder.use_case_versions` with the schedule, who saved it and where (`page` or `chat`), sets `current_version`, then saves the schedule as today. Both happen in one transaction, so a version never names a schedule that didn't save. The migration is `platform-api/src/platform_api/migrations/builder/versions/0010_use_case_version_changes.py` **(new)**.
+- `Builder.save_schedule` writes a new row in `builder.use_case_versions`, with who saved it, where (`page` or `chat`) and the schedule before and after in `builder.use_case_version_changes`, sets `current_version`, then saves the schedule as today. The builder can't write orchestration's schedules, so the schedule saves in its own transaction just before the version commits, and a version never names a schedule that didn't save. The migration is `platform-api/src/platform_api/migrations/builder/versions/0010_use_case_version_changes.py` **(new)**.
+- Saving the same schedule again publishes no version. A take-over, the same schedule saved by a new owner, isn't a version either: each run records who started it, and the Schedule row's "Set by" shows the current owner.
+- The watchlist's own `PUT /api/v1/watchlist/schedule` makes no version. Only its software changes do (`builder/watchlist.py`).
 - The versions route and the undo route of 3.2.
 - The edit card saves through the same route, with `via: "chat"`. There is one path for a schedule change.
 
@@ -598,7 +600,6 @@ Every PR merges as one squash commit, so `git revert <sha>` on `main` backs it o
 | Not confirmed | What would confirm it |
 |---|---|
 | Whether the run record keeps the software a check couldn't read in a form `ApprovalView` can return | Read the Version checker's run events for a `cant_check` finding, end to end, on a practice stack |
-| Whether the watchlist's own schedule route (`PUT /api/v1/watchlist/schedule`) makes a version | Read `save_schedule` in `platform-api/src/platform_api/builder/watchlist.py` |
 | That the demo model fills `updated_before` for every negated wording in 7.5 | The `answer` job in `scripts/evals.sh` on the ADR 0032 model |
 | That the demo model tells an edit from a new workflow reliably | The edit group in 7.5 |
 | How a requester is chosen for a scheduled run, when the owner has left the People list | The team decides. The prototype asks the person who set it up. |

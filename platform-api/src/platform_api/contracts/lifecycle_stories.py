@@ -1,12 +1,25 @@
-"""A workflow paused, held and deleted, the watchlist paused, and a set-up card draft, as the
-API answers them."""
+"""A workflow paused, held, deleted and changed, the watchlist paused, and a set-up card draft,
+as the API answers them."""
 
 from datetime import UTC, datetime, timedelta
 
 from platform_api.builder.lifecycle import RESTORE_WINDOW
-from platform_api.builder.models import DraftIn, DraftList, DraftView, LastRunView, UseCaseDeleted
+from platform_api.builder.models import (
+    DraftIn,
+    DraftList,
+    DraftView,
+    LastRunView,
+    ScheduleChangeView,
+    UndoIn,
+    UseCaseDeleted,
+    UseCaseScheduleIn,
+    VersionChange,
+    VersionList,
+    VersionSchedule,
+    VersionView,
+)
 from platform_api.contracts.cards_stories import USE_CASE as AGENT_USE_CASE
-from platform_api.contracts.stories import BOB, REJECTED, USE_CASE, USE_CASE_SCHEDULE
+from platform_api.contracts.stories import ALICE, BOB, REJECTED, USE_CASE, USE_CASE_SCHEDULE
 from platform_api.contracts.watchlist_stories import SCHEDULE, STATUSES
 from platform_api.wire import WireModel
 
@@ -93,6 +106,61 @@ DRAFTS = DraftList(
 )
 
 
+# Alice changed the agent workflow from every weekday at 8:00 to every Monday at 8:00 from the
+# chat, then undid it on its page, as in the prototype's scenario ANS-edit-save.
+WEEKDAYS = VersionSchedule(day="weekdays", at="08:00", time_zone="Asia/Singapore")
+MONDAYS = VersionSchedule(day="monday", at="08:00", time_zone="Asia/Singapore")
+CHANGED_AT = datetime(2026, 11, 4, 1, 10, tzinfo=UTC)
+FIRST = VersionView(
+    version=1,
+    at=AGENT_USE_CASE.created_at,
+    by=None,
+    via=None,
+    change=None,
+    undid=None,
+    running=False,
+)
+CHANGED = VersionView(
+    version=2,
+    at=CHANGED_AT,
+    by=ALICE,
+    via="chat",
+    change=VersionChange(schedule=ScheduleChangeView(before=WEEKDAYS, after=MONDAYS)),
+    undid=None,
+    running=True,
+)
+UNDONE = VersionView(
+    version=3,
+    at=CHANGED_AT + timedelta(minutes=2),
+    by=ALICE,
+    via="page",
+    change=VersionChange(schedule=ScheduleChangeView(before=MONDAYS, after=WEEKDAYS)),
+    undid=2,
+    running=True,
+)
+VERSIONS = VersionList(versions=[CHANGED, FIRST])
+VERSIONS_UNDONE = VersionList(
+    versions=[UNDONE, CHANGED.model_copy(update={"running": False}), FIRST]
+)
+SCHEDULED_BY_ALICE = USE_CASE_SCHEDULE.model_copy(
+    update={"day": "monday", "at": "08:00", "owner_name": "Alice", "held": None}
+)
+VERSIONED = AGENT_USE_CASE.model_copy(
+    update={
+        "version": 2,
+        "schedule": SCHEDULED_BY_ALICE,
+        "next_run_at": datetime(2026, 11, 9, 0, 0, tzinfo=UTC),
+    }
+)
+UNDONE_USE_CASE = AGENT_USE_CASE.model_copy(
+    update={
+        "version": 3,
+        "schedule": SCHEDULED_BY_ALICE.model_copy(update={"day": "weekdays"}),
+        "next_run_at": datetime(2026, 11, 5, 0, 0, tzinfo=UTC),
+    }
+)
+
+
 def lifecycle_fixtures() -> dict[str, WireModel | list[WireModel]]:
     return {
         "builder/use-case.paused.json": PAUSED,
@@ -104,4 +172,10 @@ def lifecycle_fixtures() -> dict[str, WireModel | list[WireModel]]:
         "builder/use-case.deleted.json": DELETED,
         "builder/draft.in.json": DRAFT_IN,
         "builder/drafts.json": DRAFTS,
+        "builder/schedule.in.json": UseCaseScheduleIn(day="monday", at="08:00", via="chat"),
+        "builder/undo.in.json": UndoIn(via="page"),
+        "builder/use-case.versioned.json": VERSIONED,
+        "builder/use-case.undone.json": UNDONE_USE_CASE,
+        "builder/versions.json": VERSIONS,
+        "builder/versions.undone.json": VERSIONS_UNDONE,
     }

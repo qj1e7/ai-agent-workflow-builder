@@ -47,7 +47,7 @@ describe('saving a workflow’s schedule', () => {
     const view = await options.mutationFn({ day: 'monday', at: '09:00' })
     options.onSuccess(view)
 
-    expect(sent).toEqual([['/api/v1/use-cases/{use_case_id}/schedule', { params: { path: { use_case_id: NEWER.use_case_id } }, body: { day: 'monday', at: '09:00' } }]])
+    expect(sent).toEqual([['/api/v1/use-cases/{use_case_id}/schedule', { params: { path: { use_case_id: NEWER.use_case_id } }, body: { day: 'monday', at: '09:00', via: 'page' } }]])
     expect(queryClient.getQueryData(keys.useCase('me', NEWER.use_case_id))).toEqual(saved)
   })
 })

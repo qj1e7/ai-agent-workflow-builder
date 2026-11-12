@@ -517,6 +517,25 @@ button.rowLink {
   font-weight: 700;
 }
 
+.versions {
+  border-top: 1px solid var(--rule);
+}
+
+.versions > li {
+  padding: 12px 6px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.versions b {
+  display: block;
+}
+
+.versions span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .runLink:hover {
     background: var(--sunk);

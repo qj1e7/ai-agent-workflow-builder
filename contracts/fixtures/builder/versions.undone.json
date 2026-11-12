@@ -1,0 +1,57 @@
+{
+  "versions": [
+    {
+      "version": 3,
+      "at": "2026-11-04T01:12:00Z",
+      "by": "alice",
+      "via": "page",
+      "change": {
+        "schedule": {
+          "before": {
+            "day": "monday",
+            "at": "08:00",
+            "time_zone": "Asia/Singapore"
+          },
+          "after": {
+            "day": "weekdays",
+            "at": "08:00",
+            "time_zone": "Asia/Singapore"
+          }
+        }
+      },
+      "undid": 2,
+      "running": true
+    },
+    {
+      "version": 2,
+      "at": "2026-11-04T01:10:00Z",
+      "by": "alice",
+      "via": "chat",
+      "change": {
+        "schedule": {
+          "before": {
+            "day": "weekdays",
+            "at": "08:00",
+            "time_zone": "Asia/Singapore"
+          },
+          "after": {
+            "day": "monday",
+            "at": "08:00",
+            "time_zone": "Asia/Singapore"
+          }
+        }
+      },
+      "undid": null,
+      "running": false
+    },
+    {
+      "version": 1,
+      "at": "2026-11-04T09:30:00Z",
+      "by": null,
+      "via": null,
+      "change": null,
+      "undid": null,
+      "running": false
+    }
+  ]
+}

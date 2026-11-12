@@ -42,15 +42,18 @@ from platform_api.builder.models import (
     DraftView,
     LastRunView,
     PlanOut,
-    ScheduleIn,
     SuggestOut,
     ToolList,
+    UndoIn,
     UseCaseAgentView,
     UseCaseCreated,
     UseCaseDeleted,
     UseCaseList,
     UseCaseSchedule,
+    UseCaseScheduleIn,
     UseCaseView,
+    VersionList,
+    Via,
 )
 from platform_api.builder.planning import (
     CardPlanner,
@@ -64,6 +67,20 @@ from platform_api.builder.templates import (
     SOFTWARE_WATCHLIST,
     TEMPLATES,
     suggest_template,
+)
+from platform_api.builder.versions import (
+    AlreadyUndone,
+    ChangedSince,
+    NoSuchVersion,
+    NotAScheduleChange,
+    Publish,
+    ScheduleChange,
+    Undo,
+    Version,
+    publish,
+    undo,
+    version_view,
+    versions_of,
 )
 from platform_api.builder.views import template_view
 from platform_api.builder.watchlist import Watchlist
@@ -91,6 +108,11 @@ _CURRENT_VERSION = """
     JOIN builder.use_case_versions v
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
 """
+
+_USE_CASE_ROW = (
+    "SELECT current_version, paused_at, paused_by, deleted_at, deleted_by"
+    " FROM builder.use_cases WHERE use_case_id = %s"
+)
 
 
 def _schedule_view(saved: SavedSchedule) -> UseCaseSchedule:
@@ -310,9 +332,10 @@ class Builder:
                 return await self.get_use_case(use_case_id, principal)
 
     async def save_schedule(
-        self, use_case_id: str, principal: Principal, body: ScheduleIn
+        self, use_case_id: str, principal: Principal, body: UseCaseScheduleIn
     ) -> UseCaseView | ScheduleOnSoftwarePage | None:
         """The same save as the watchlist's: the caller becomes the owner, which lifts a hold.
+        A new schedule publishes a new version. Saving the same one again publishes none.
         Saving is not a write to Jira or Confluence, so it needs no approval."""
         # Read the workflow before the lock, so the lock holds one connection and no more.
         view = await self.get_use_case(use_case_id, principal)
@@ -320,16 +343,79 @@ class Builder:
             return None
         if view.template == SOFTWARE_WATCHLIST.key:
             return ScheduleOnSoftwarePage()
+        after = Schedule(body.day, body.at)
+        if await self._publish(use_case_id, principal, body.via, lambda _: Publish(after)) is None:
+            return None
+        return await self.get_use_case(use_case_id, principal)
+
+    async def list_versions(self, use_case_id: str) -> VersionList | None:
+        async with self._db.connection("builder") as conn:
+            row = await (await conn.execute(_USE_CASE_ROW, (use_case_id,))).fetchone()
+            if row is None or not isinstance(lifecycle_of(row), On | Paused):
+                return None
+            versions = await versions_of(conn, use_case_id)
+        running = row["current_version"]
+        return VersionList(versions=[version_view(version, running) for version in versions])
+
+    async def undo_version(
+        self, use_case_id: str, version: int, principal: Principal, body: UndoIn
+    ) -> UseCaseView | NoSuchVersion | NotAScheduleChange | ChangedSince | None:
+        """Publishes the schedule of the version before `version` again, as a new version.
+        Asking again once it is undone answers the same."""
+        match await self._publish(use_case_id, principal, body.via, lambda vs: undo(vs, version)):
+            case None:
+                return None
+            case Publish() | AlreadyUndone():
+                return await self.get_use_case(use_case_id, principal)
+            case refused:
+                return refused
+
+    async def _publish(
+        self,
+        use_case_id: str,
+        principal: Principal,
+        via: Via,
+        decide: Callable[[Sequence[Version]], Undo],
+    ) -> Undo | None:
+        """Publishes what `decide` makes of the versions, and saves its schedule. The builder
+        cannot write orchestration's schedules, so the schedule is saved in its own transaction,
+        before the version's commits. A save that fails leaves no version naming it.
+
+        If the version's commit is lost after the schedule saved, the schedule runs on with no
+        version naming it until the change is made again. Whether anything changed is judged
+        against the schedule the newest version recorded, so that retry publishes the missing
+        version. Version 1 and the watchlist's versions record no schedule, so against them it
+        is judged on the live schedule, and the first change after version 1 stays without a
+        version if its commit is lost."""
         async with self._db.transaction("builder") as uow:
             # A delete holds this lock alone, so it waits until the schedule is stored, and a
-            # delete that came first is seen here. ScheduleBook.save takes no lock.
+            # delete that came first is seen here. The row lock puts changes in turn.
             await hold_workflow(uow.conn, use_case_id, alone=False)
-            if not isinstance(await _lifecycle_now(uow.conn, use_case_id), On | Paused):
+            row = await (
+                await uow.conn.execute(_USE_CASE_ROW + " FOR UPDATE", (use_case_id,))
+            ).fetchone()
+            if row is None or not isinstance(lifecycle_of(row), On | Paused):
                 return None
-            await self._schedules.save(
-                UseCaseId(use_case_id), Schedule(body.day, body.at), principal
-            )
-        return await self.get_use_case(use_case_id, principal)
+            versions = await versions_of(uow.conn, use_case_id)
+            decided = decide(versions)
+            if not isinstance(decided, Publish):
+                return decided
+            recorded = versions[0].change
+            if recorded is None:
+                saved = await self._schedules.get(UseCaseId(use_case_id))
+                before = None if saved is None else saved.schedule
+            else:
+                before = recorded.after
+            if decided.after != before or decided.undid is not None:
+                change = ScheduleChange(
+                    principal.user_id, via, before, decided.after, decided.undid
+                )
+                await publish(uow, use_case_id, row["current_version"], change)
+            if decided.after is None:
+                await self._schedules.delete(UseCaseId(use_case_id))
+            else:
+                await self._schedules.save(UseCaseId(use_case_id), decided.after, principal)
+        return decided
 
     async def _move(self, use_case_id: str, move: Move) -> Moved | None:
         async with self._db.transaction("builder") as uow:

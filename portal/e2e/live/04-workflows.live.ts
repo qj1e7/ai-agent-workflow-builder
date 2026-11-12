@@ -239,6 +239,74 @@ test('scenario H: alice changes the schedule, pauses and deletes through the pag
   await context.close()
 })
 
+const versionsList = (page: Page) => page.getByRole('list', { name: 'Versions, newest first' })
+
+async function saveSchedule(request: APIRequestContext, user: string, useCaseId: string, data: Record<string, string>): Promise<void> {
+  const response = await request.put(`/api/v1/use-cases/${useCaseId}/schedule`, { headers: { 'X-Dev-User': user }, data })
+  expect(response.status(), `${user} saves the schedule: ${await response.text()}`).toBe(200)
+}
+
+async function undo(request: APIRequestContext, user: string, useCaseId: string, version: number) {
+  return request.post(`/api/v1/use-cases/${useCaseId}/versions/${version}/undo`, { headers: { 'X-Dev-User': user }, data: { via: 'chat' } })
+}
+
+test('alice’s schedule changes publish versions the page lists read only, an Undo shows as a new version, a stale Undo is refused, and bob reads the same list', async ({ browser, request }, info) => {
+  const workflow = await agentWorkflow(request, 'versions')
+  const context = await devContext(browser, 'alice')
+  const page = await context.newPage()
+  await page.goto(`/workflows/${workflow.id}`)
+  await expect(heading(page)).toHaveText(workflow.name)
+  await expect(page.getByRole('heading', { name: 'Versions', exact: true }), 'one version shows no list').toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Set schedule' }).click()
+  await page.getByLabel('Day').selectOption('weekdays')
+  await page.getByLabel('Time, Singapore').fill('08:00')
+  await page.getByRole('button', { name: 'Save schedule' }).click()
+  const newest = versionsList(page).getByRole('listitem').first()
+  await expect(versionsList(page).getByRole('listitem')).toHaveCount(2)
+  await expect(newest).toContainText(/Version 2\s*Today, \d{1,2}:\d\d\. Alice set it to run every weekday at 8:00\. This is the version running now\./)
+  await expect(versionsList(page).getByRole('listitem').last()).toContainText('Version 1The version it was turned on with.')
+
+  await saveSchedule(request, 'alice', workflow.id, { day: 'monday', at: '08:00', via: 'chat' })
+  await page.reload()
+  await expect(newest).toContainText('Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00. This is the version running now.')
+
+  const undone = await undo(request, 'alice', workflow.id, 3)
+  expect(undone.status(), `alice undoes version 3 from the chat: ${await undone.text()}`).toBe(200)
+  await page.reload()
+  await expect(newest).toContainText('Alice undid version 3, so it runs every weekday at 8:00 again. This is the version running now.')
+  await expect(page.getByRole('main')).toContainText('Every weekday at 8:00')
+  await expect(page.getByRole('button', { name: /^Undo/ }), 'the page only reads: Undo is on the chat’s edit card').toHaveCount(0)
+
+  await saveSchedule(request, 'carol', workflow.id, { day: 'friday', at: '17:30' })
+  const stale = await undo(request, 'alice', workflow.id, 4)
+  expect(stale.status(), 'an Undo with a later version is refused').toBe(409)
+  expect(await stale.json()).toEqual({ detail: 'The workflow changed again since this version, so Undo would throw that change away.' })
+  await page.reload()
+  await expect(versionsList(page).getByRole('listitem'), 'the stale Undo published nothing').toHaveCount(5)
+  await expect(newest).toContainText('Carol changed when it runs from every weekday at 8:00 to every Friday at 17:30.')
+
+  const bobContext = await devContext(browser, 'bob')
+  const bob = await bobContext.newPage()
+  await bob.goto(`/workflows/${workflow.id}`)
+  await expect(versionsList(bob).getByRole('listitem')).toHaveCount(5)
+  await expect(bob.getByRole('button', { name: /^Undo/ })).toHaveCount(0)
+  await expectReadOnly(bob, 'this workflow')
+
+  for (const [who, reader] of [['alice', page], ['bob', bob]] as const) {
+    for (const width of [1920, 1280, 900, 390]) {
+      await reader.setViewportSize({ width, height: 900 })
+      await reader.getByRole('heading', { name: 'Versions', exact: true }).scrollIntoViewIfNeeded()
+      const widths = await reader.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth])
+      expect(widths[0], `${who}’s page does not scroll sideways at ${width} px`).toBeLessThanOrEqual(widths[1] ?? 0)
+      await shot(reader, info, `r6-versions-${who}-${width}`)
+    }
+  }
+  await expectAccessible(page, path.join(OUT, 'axe'), 'workflow-page-versions')
+  await bobContext.close()
+  await context.close()
+})
+
 for (const phone of [false, true]) {
   test(`the workflow page passes WCAG 2.2 AA, keeps reduced motion calm and does not scroll sideways at ${phone ? '390' : '1440'} px`, async ({ browser, request }, info) => {
     const workflow = await agentWorkflow(request, phone ? 'phone' : 'desktop')

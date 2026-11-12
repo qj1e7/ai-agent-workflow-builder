@@ -382,6 +382,59 @@ def test_migration_0008_adds_the_asker_seen_mark_and_a_downgrade_removes_it(
         builder.rollback()
 
 
+def test_migration_0010_keeps_each_schedule_change_beside_its_version_and_a_downgrade_drops_it(
+    postgres: PostgresUrls,
+):
+    def present(conn: psycopg.Connection) -> bool:
+        return (
+            conn.execute(
+                "SELECT 1 FROM information_schema.tables WHERE table_schema = 'builder'"
+                " AND table_name = 'use_case_version_changes'"
+            ).fetchone()
+            is not None
+        )
+
+    change = (
+        "INSERT INTO builder.use_case_version_changes (use_case_id, version, changed_by, via,"
+        " schedule_before, schedule_after, undid) VALUES ('uc_1', %s, 'alice', %s, NULL, '{}', %s)"
+    )
+
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        assert present(conn)
+        conn.execute(
+            "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version)"
+            " VALUES ('uc_1', 'alice', now(), 2)"
+        )
+        for version in (1, 2):
+            conn.execute(
+                "INSERT INTO builder.use_case_versions (use_case_id, version, template, name,"
+                " instruction, params, created_at) VALUES ('uc_1', %s, 'agent_cards', 'n', 'i',"
+                " '{}', now())",
+                (version,),
+            )
+        with pytest.raises(psycopg.errors.ForeignKeyViolation):
+            conn.execute(change, (3, "page", None))
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(change, (2, "teams", None))
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(change, (2, "page", 2))
+        downgrade("builder", postgres.owner, "0009")
+        assert not present(conn)
+        upgrade("builder", postgres.owner)
+        assert present(conn)
+    with psycopg.connect(postgres.contexts.builder) as builder:
+        builder.execute(change, (2, "chat", 1))
+        assert builder.execute(
+            "SELECT via, undid FROM builder.use_case_version_changes"
+        ).fetchall() == [("chat", 1)]
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            builder.execute("UPDATE builder.use_case_version_changes SET changed_by = 'bob'")
+        builder.rollback()
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            builder.execute("DELETE FROM builder.use_case_version_changes")
+        builder.rollback()
+
+
 def test_migration_0006_adds_the_people_tables_and_folds_the_model_history_into_them(
     postgres: PostgresUrls,
 ):

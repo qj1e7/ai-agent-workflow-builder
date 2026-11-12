@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { unwrap, type ApiClient } from './client'
 import { useApiClient, useCacheScope } from './context'
 import { keys } from './queries'
@@ -81,11 +81,11 @@ export function useDeleteWorkflow() {
   })
 }
 
-/** Saving makes the caller the schedule owner, which lifts a hold. The view that comes back says so. */
+/** Saving makes the caller the schedule owner, which lifts a hold, and a new schedule publishes a new version. The view that comes back says both. */
 export function saveScheduleOptions(client: ApiClient, queryClient: QueryClient, user: string, useCaseId: string) {
   return {
     mutationFn: async (body: ScheduleIn) =>
-      unwrap(await client.PUT('/api/v1/use-cases/{use_case_id}/schedule', { params: { path: { use_case_id: useCaseId } }, body })),
+      unwrap(await client.PUT('/api/v1/use-cases/{use_case_id}/schedule', { params: { path: { use_case_id: useCaseId } }, body: { ...body, via: 'page' } })),
     onSuccess: (view: UseCaseView) => applySavedView(queryClient, user, view),
   }
 }
@@ -95,4 +95,17 @@ export function useSaveWorkflowSchedule(useCaseId: string) {
   const queryClient = useQueryClient()
   const user = useCacheScope()
   return useMutation(saveScheduleOptions(client, queryClient, user, useCaseId))
+}
+
+/** The versions of the workflow as it is at `version`, so a new version reads them again. A workflow at version 1 has no list to show, so nothing is read. */
+export function useVersions(useCaseId: string, version: number) {
+  const client = useApiClient()
+  const user = useCacheScope()
+  return useQuery({
+    queryKey: keys.versions(user, useCaseId, version),
+    queryFn: async () =>
+      unwrap(await client.GET('/api/v1/use-cases/{use_case_id}/versions', { params: { path: { use_case_id: useCaseId } } })).versions,
+    enabled: version > 1,
+    placeholderData: (before) => before,
+  })
 }
