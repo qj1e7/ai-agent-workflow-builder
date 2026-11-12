@@ -1,9 +1,9 @@
 """What each clause of a request asks, for someone who can't change workflows (ADR 0043, spec 5.3).
 
-The agent runtime reads the request. These word rules only sort its clauses into what the builder
-answers for an Approver: their own decisions, an approve or decline that goes to the request, a
-question, or a change only an Operator makes. A clause they can't place is "other". Every rule
-fails closed: a change in any words is never answered as a question.
+The agent runtime reads the request. These word rules only sort the request's clauses into what
+builder answers for an Approver: their own decisions, an approve or decline that goes to the
+request, a question, or a change only an Operator makes. A clause they can't place is "other".
+They fail closed: a clause that asks for a change is never answered as a question.
 """
 
 import re
