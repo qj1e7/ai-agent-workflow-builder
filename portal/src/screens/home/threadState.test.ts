@@ -3,7 +3,7 @@ import type { PlannerReply } from '../../api/types'
 import { EMPTY_FORM } from './card'
 import { EMPTY, isThinking, previousOf, threadReducer } from './threadState'
 
-const REPLY: PlannerReply = { answer: 'abilities' }
+const REPLY: PlannerReply = { answer: 'abilities', parts: [] }
 
 describe('the thread', () => {
   it('shows the person’s words, then the Planner thinking, then its answer in the same place', () => {
@@ -35,11 +35,11 @@ describe('the thread', () => {
   it('hands the next typed request the turn before it: the words, the software it named, the text it answered with, and the kind of answer it was', () => {
     const ask = (reply: PlannerReply, typed: string) => threadReducer(threadReducer(EMPTY, { type: 'sent', text: typed }), { type: 'answered', reply, typed })
     expect(previousOf(EMPTY)).toBeNull()
-    const watch = ask({ answer: 'watchlist', word: 'version', software: 'FastAPI', already_listed: null, also: null }, 'Is there a newer FastAPI?')
+    const watch = ask({ answer: 'watchlist', word: 'version', software: 'FastAPI', already_listed: null, also: null, parts: [] }, 'Is there a newer FastAPI?')
     expect(previousOf(watch)).toEqual({ request: 'Is there a newer FastAPI?', software: 'FastAPI', answer: null, kind: 'watchlist' })
-    const said = ask({ answer: 'question', text: 'LangGraph is at 1.2.14.', looked_at: ['watchlist'] }, 'What is the newest version of LangGraph?')
+    const said = ask({ answer: 'question', text: 'LangGraph is at 1.2.14.', looked_at: ['watchlist'], about_software: [], parts: [] }, 'What is the newest version of LangGraph?')
     expect(previousOf(said)).toEqual({ request: 'What is the newest version of LangGraph?', software: null, answer: 'LangGraph is at 1.2.14.', kind: 'question' })
-    expect(previousOf(ask({ answer: 'offline', why: 'trouble', message: 'x', starters: [] }, 'x'))).toBeNull()
+    expect(previousOf(ask({ answer: 'offline', why: 'trouble', message: 'x', starters: [], parts: [] }, 'x'))).toBeNull()
   })
 
   it('does not hand over a request that has no answer yet', () => {

@@ -103,7 +103,7 @@ from platform_api.shared import Principal, UseCaseId, UserId, new_id
 
 _CURRENT_VERSION = """
     SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
-           v.version, v.template, v.name, v.instruction, v.params, v.created_at
+           u.left_out, v.version, v.template, v.name, v.instruction, v.params, v.created_at
     FROM builder.use_cases u
     JOIN builder.use_case_versions v
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
@@ -162,6 +162,7 @@ def _view(
             for a in agents
         ],
         last_run=last_run,
+        left_out=list(row["left_out"]),
     )
 
 
@@ -521,9 +522,9 @@ class Builder:
         use_case_id = new_id("uc")
         async with self._db.transaction("builder") as uow:
             await uow.conn.execute(
-                "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version)"
-                " VALUES (%s, %s, %s, 1)",
-                (use_case_id, principal.user_id, uow.now),
+                "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version,"
+                " left_out) VALUES (%s, %s, %s, 1, %s)",
+                (use_case_id, principal.user_id, uow.now, body.left_out),
             )
             await uow.conn.execute(
                 "INSERT INTO builder.use_case_versions (use_case_id, version, template, name,"
