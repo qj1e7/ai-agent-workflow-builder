@@ -101,7 +101,7 @@ export interface Decision {
  * It posts only when the platform said this person may decide. A second press before the first answer is dropped.
  * A dev user switch starts clean, because it remembers who sent it.
  */
-export function useDecision(approval: ApprovalView | undefined, party: Party | null, onRecorded?: (verdict: Verdict) => void): Decision {
+export function useDecision(approval: ApprovalView | undefined, party: Party | null, onRecorded?: (decision: DecisionView) => void): Decision {
   const mutation = useDecide(approval?.approval_id ?? '')
   const latch = useLatch()
   const user = useCacheScope()
@@ -116,7 +116,7 @@ export function useDecision(approval: ApprovalView | undefined, party: Party | n
     latch.run((settled) => {
       setSent({ by: user, verdict: choice.verdict, steps })
       mutation.mutate(body, {
-        onSuccess: () => onRecorded?.(choice.verdict),
+        onSuccess: (answer) => onRecorded?.(answer.decision),
         onSettled: settled,
       })
     })

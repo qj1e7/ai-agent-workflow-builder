@@ -6,15 +6,15 @@ import type { RunView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { useAfterPanelAction } from '../../ui/sidePanel'
+import { useChat } from '../home/ChatProvider'
 import { ApprovalGate } from './ApprovalGate'
-import { DeclinedToast } from './DeclinedToast'
 import { declineReasons, openStep, partyOf, requesterOf, useDecision } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { Troubleshooting } from './Outcome'
 import { approvalIdOf, declinedSoFarWords, planOf, POLL_FAILED_MS, statusWords, useNameOf, useReconnectWhenBehind } from './RunPage'
 import { RunLine } from './RunLine'
 import { declinedOf, stationsOf } from './runModel'
-import { declinedNext, declinedWithNext, feedTroubleOf, headlineOf, RUN_PROBLEM, shortTime, writeLabel } from './words'
+import { declinedNext, declinedNowWords, declinedWithNext, feedTroubleOf, headlineOf, RUN_PROBLEM, shortTime, writeLabel } from './words'
 import { nextRunOf } from '../workflows/workflow'
 import styles from './RunPage.module.css'
 
@@ -89,7 +89,11 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
   const approval = useApproval(approvalId ?? '', { poll: waiting, enabled: approvalId !== null && (waiting || head.phase.state === 'awaiting_approval') })
   const attempt = head.chat.filter((item) => item.kind === 'retried').length
   const troubleshoot = useTroubleshoot(run.run_id, shown.phase.state === 'failed' && head.phase.state === 'failed', attempt)
-  const decision = useDecision(approval.data, partyOf(approval.data, me?.id), () => backToTop?.())
+  const { say } = useChat()
+  const decision = useDecision(approval.data, partyOf(approval.data, me?.id), (recorded) => {
+    backToTop?.()
+    if (recorded.verdict === 'decline') say(declinedNowWords({ reason: recorded.reason ?? null }))
+  })
 
   const stations = stationsOf(shown, planOf(useCase.data), writeLabel)
   const headline = headlineOf(shown, stations, approval.data && waiting ? approval.data.actions : null)
@@ -128,7 +132,6 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
       ) : null}
       {declinedSoFar ? <p className="muted">{declinedSoFar}</p> : null}
       <RunLine stations={stations} arrivedLive={null} startedAt={shortTime(run.started_at)} nameOf={nameOf} small />
-      <DeclinedToast declined={decision.declined} />
       {shown.phase.state === 'failed' ? (
         <Troubleshooting
           runId={run.run_id}
