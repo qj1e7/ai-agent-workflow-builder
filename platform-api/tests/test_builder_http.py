@@ -1044,8 +1044,15 @@ async def test_a_change_beside_a_question_about_decisions_is_crossed_for_the_ope
 
 
 @pytest.mark.parametrize("text", ["approve the upgrade", "decline that request", "approve it"])
-async def test_an_approve_or_decline_goes_to_the_request_whatever_it_names(front: Front, text: str):
-    front.answers.result = answered(CantAnswer(cant=[EMAIL]))
+@pytest.mark.parametrize(
+    "read",
+    [answered(CantAnswer(cant=[EMAIL])), answered(RefusedAnswer(said="approve", rest=""))],
+    ids=["cant", "refused"],
+)
+async def test_an_approve_or_decline_goes_to_the_request_whatever_it_names_or_how_it_was_read(
+    front: Front, text: str, read: Answered
+):
+    front.answers.result = read
     reply = await ask_as_bob(front, text)
     assert reply["answer"] == "decide"
     assert marks(reply) == [(text, "will_do", None)]
@@ -1074,6 +1081,7 @@ async def test_an_approve_beside_a_change_is_refused_whole(front: Front):
 async def test_skipping_a_yes_and_no_model_answer_an_approver_as_anyone(front: Front):
     front.answers.result = answered(RefusedAnswer(said="automatically", rest=""))
     assert (await ask_as_bob(front, "Approve it automatically"))["answer"] == "refused"
+    assert (await ask_as_bob(front, "Set up the summary with no approval"))["answer"] == "refused"
     front.answers.result = NoModel()
     assert (await ask_as_bob(front, "What did I decide before?"))["answer"] == "offline"
 

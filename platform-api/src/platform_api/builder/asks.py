@@ -30,6 +30,12 @@ DECIDE: Final = re.compile(
 )
 """An approve or decline, whatever it names. Nobody decides in the chat, so it goes to the
 request."""
+SKIPPING: Final = re.compile(
+    r"\b(?:automatic\w*|always|from now on|skip\w*|without|by itself|pre-?approved|no need)\b",
+    re.IGNORECASE,
+)
+"""Words that ask for a yes to give itself, as "approve it automatically". That is the refusal's,
+not a decision to go and make on the request."""
 COURTESY: Final = re.compile(
     r"^(?:(?:please|ok(?:ay)?|so|now|hi|hey)\b[,\s]*)*"
     r"(?:(?:can|could|would|will) you\s+(?:please\s+)?)?",

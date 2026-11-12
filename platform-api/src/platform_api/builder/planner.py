@@ -458,8 +458,6 @@ QUESTIONS: Final = frozenset(
     {"needs_me", "check_workflows", "why_stopped", "question", "abilities", "decided"}
 )
 """The answers that change nothing, for someone who isn't an Operator (plan 3.2)."""
-LEFT_AS_IS: Final = frozenset({"offline", "refused"})
-"""No model read the request, or it asked to skip a yes: the answer stands for anyone."""
 
 
 def _cross(text: str, reason: ReplyReason) -> PartView:
@@ -496,11 +494,14 @@ def questions_only(reply: PlannerReply, text: str | None) -> PlannerReply:
     """The answer for someone who can't change workflows (ADR 0043, spec 5.3). Their own
     decisions and an approve or decline are read from their words here, clause by clause; any
     other question keeps the runtime's answer. A change gets "operators", alone or beside an
-    approve or decline. Beside a question, it is a cross that says the same."""
-    if reply.answer in LEFT_AS_IS:
+    approve or decline. Beside a question, it is a cross that says the same. A request to skip
+    a yes keeps the runtime's refusal, and so does the offline answer, since no model read it."""
+    if reply.answer == "offline":
         return reply
     clauses = asks.clauses_of(text or "")
     kinds = {c.ask for c in clauses}
+    if reply.answer == "refused" and ("decide" not in kinds or asks.SKIPPING.search(text or "")):
+        return reply
     if "decide" in kinds:
         if "change" in kinds:
             return OperatorsReply(parts=_parts(clauses, None))
