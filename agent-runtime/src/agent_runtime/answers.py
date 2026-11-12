@@ -223,6 +223,11 @@ ANSWER_SYSTEM: Final = (
 
 
 SKIP_PART_NOTE = "I can't skip the yes. Nothing is written without a yes."
+TOLD: Final = re.compile(
+    r"\blet\s+(?:me|us)\s+know\b|\bkeep\s+(?:me|us)\s+(?:posted|updated|informed)\b",
+    re.IGNORECASE,
+)
+"""Words that ask to be told, which a skip of the staff member's own attention never covers."""
 
 
 def word_rule_refusal(request: str) -> RefusedAnswer | None:
@@ -274,9 +279,11 @@ def _skip_verdict(skip: SkipRead, text: str) -> _Skip:
         return _Skip(refused=_refused(text, quote))
     if not speaks_only_of_self(text, at, end):
         return _Skip(unverified=quote)
-    if (change_verbs_in(quote) or other_systems(quote)) and not negated(quote):
-        # "Email me" names the staff member and a change too: nothing is covered, so the
-        # change comes back through the coverage check. "Don't ping me" asks for none.
+    if (change_verbs_in(quote) or other_systems(quote) or TOLD.search(quote)) and not negated(
+        quote
+    ):
+        # "Email me" or "let me know" names the staff member and a delivery too: nothing is
+        # covered, so it comes back through the coverage check. "Don't ping me" asks for none.
         return _Skip()
     return _Skip(covered=(at, end))
 

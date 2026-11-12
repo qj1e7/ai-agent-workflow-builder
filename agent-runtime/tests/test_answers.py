@@ -1727,6 +1727,22 @@ def test_a_clause_no_structure_reads_comes_back_whole_with_not_followed():
     assert ("Every Friday", "will_do", None) in parts(fields, task)
 
 
+def test_asking_to_be_told_is_never_covered_as_the_staff_members_own_attention():
+    task = "Every Friday, sum up the tickets we closed this week and let me know"
+    fields = read(
+        skips_the_yes=SkipRead(whose="only_me", said="let me know"),
+        schedule="Every Friday",
+        search=search(status="done", done=DaysRead(how="within", days=7), said="the tickets"),
+        ticket=TicketRead(creates=True, says="summary", said="sum up"),
+    )
+    assert crossed(fields, task) == [("let me know", "not_followed")]
+    dont = "Every Friday, sum up the tickets we closed this week, no need to let me know"
+    quiet = fields.model_copy(
+        update={"skips_the_yes": SkipRead(whose="only_me", said="no need to let me know")}
+    )
+    assert crossed(quiet, dont) == []
+
+
 def test_a_clause_of_little_words_still_comes_back():
     task = "Every Friday at 5pm, list the open tickets in MOCK, and for them"
     fields = read(
