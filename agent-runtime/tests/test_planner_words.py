@@ -170,3 +170,17 @@ def test_a_clause_ends_at_punctuation_or_a_joining_word_but_not_inside_a_schedul
     text: str, clauses: list[str]
 ):
     assert [text[a:b] for a, b in clauses_of(text)] == clauses
+
+
+@pytest.mark.parametrize(
+    ("text", "clauses"),
+    [
+        (
+            "Every Monday or Friday at 9am, list bugs",
+            ["Every Monday or Friday at 9am", "list bugs"],
+        ),
+        ("Mondays and Fridays at 9am, list bugs", ["Mondays and Fridays at 9am", "list bugs"]),
+    ],
+)
+def test_or_and_plural_days_stay_inside_their_schedule(text: str, clauses: list[str]):
+    assert [text[a:b] for a, b in clauses_of(text)] == clauses

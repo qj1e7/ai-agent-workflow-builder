@@ -794,6 +794,24 @@ class NeedsYouFact(WireModel):
     total: int = Field(ge=0, description="The count Home shows under Needs you.")
 
 
+type WatchDay = Literal[
+    "every_day",
+    "weekdays",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+]
+
+
+class WatchlistScheduleFact(WireModel):
+    day: WatchDay
+    at: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$", description="24-hour time, as 09:00.")
+
+
 class PlannerFacts(WireModel):
     """What the platform holds for the signed-in person at the moment of the question. A section
     that is None was not sent, and the answer may not claim to have looked at it."""
@@ -801,6 +819,11 @@ class PlannerFacts(WireModel):
     watchlist: list[WatchedFact] | None = Field(default=None, max_length=100)
     workflows: list[WorkflowFact] | None = Field(default=None, max_length=50)
     needs_you: NeedsYouFact | None = None
+    watchlist_schedule: WatchlistScheduleFact | None = Field(
+        default=None,
+        description="When the Software watchlist checks all its software. None when it is off "
+        "or was not read, so a time asked for one software is a cross.",
+    )
 
 
 class PreviousTurn(WireModel):
@@ -845,10 +868,12 @@ class CantRow(WireModel):
     kind: RowKind
     text: str = Field(max_length=200, description="The part the platform can't do, in plain words.")
     note: str = Field(max_length=300, description="Why it can't do it yet.")
-    needs: CantNeed = Field(
+    needs: CantNeed | None = Field(
+        default=None,
         description="new_tool when the part is in a system the platform already reaches, such "
         "as Jira or GitHub, so a tool would have to be built and the team decides. new_system "
-        "when it names a system or source the platform doesn't reach, or names none."
+        "when it names a system or source the platform doesn't reach. None for a part the "
+        "Planner didn't follow, which names nothing to build.",
     )
     system: str | None = Field(
         default=None,
@@ -1013,6 +1038,7 @@ type PartReason = Literal[
     "skip_approval",
     "with_a_yes",
     "needs_the_rest",
+    "how_many_days",
 ]
 
 
@@ -1035,7 +1061,8 @@ class RequestPart(WireModel):
         "one_day or one_time (a schedule with two, see choices), own_time (a time on a watch "
         "request), skip_approval (it asks to skip a yes), with_a_yes (it waits until the "
         "request is set up with a yes), needs_the_rest (it can't run without a part that "
-        "can't be done). None for will_do and question.",
+        "can't be done), how_many_days (a question: the words name a span of days but no "
+        "number). None for will_do.",
     )
     note: str | None = Field(
         default=None, max_length=300, description="For cant_do, why, in the registry's words."

@@ -31,9 +31,13 @@ from agent_runtime.contract import (
 )
 from agent_runtime.planner import NOTE_LIMIT, TEXT_LIMIT, plain, visible_words
 from agent_runtime.reading import (
+    FILLER,
+    KNOWN_WORDS,
     POLITE,
     TaskRead,
     clauses_of,
+    days_asked,
+    polite,
     schedule_clashes,
     trim,
 )
@@ -55,11 +59,23 @@ QUESTION_START: Final = re.compile(
     re.IGNORECASE,
 )
 STATE_WORDS: Final = re.compile(
-    r"\b(?:workflows?|running|stopped|paused|status|waiting|attention|approv\w*|decided|"
-    r"declined|behind|up\s+to\s+date|next\s+run|needs?\s+(?:me|my))\b",
+    r"\b(?:workflows?|running|runs?\s+next|next\s+run|stopped|stop|failed|fail|broke|broken|"
+    r"wrong|paused|status|doing|going|waiting|attention|approv\w*|decided|decisions?|"
+    r"declined?|behind|up\s+to\s+date|versions?|software|watchlist|watching|watched|latest|"
+    r"newest|releases?|needs?\s+(?:me|my)|for\s+me|on\s+me)\b",
     re.IGNORECASE,
 )
-"""Words that ask about the person's workflows, approvals or software."""
+"""Words that ask about the person's workflows, approvals or software. Only a clause with one
+of them, or with the workflow or the software the answer names, is the one a state answer
+answers."""
+COMMAND: Final = re.compile(
+    r"^(?:please\s+)?(?:pause|resume|stop|delete|remove|rename|disable|enable|cancel|restart|"
+    r"retry|turn|make|change|move|set|run|start|edit|update|add|open|close|create|raise|watch|"
+    r"track|monitor)\b",
+    re.IGNORECASE,
+)
+"""A clause that opens with an order, as "Pause the morning check", which no answer to a
+question carries out."""
 ABOUT_THE_PLANNER: Final = re.compile(
     r"\byou\b.*\b(?:do|help|able|offer)\b|\b(?:abilities|capabilities)\b", re.IGNORECASE
 )
@@ -72,25 +88,28 @@ type Span = tuple[int, int]
 
 @dataclass(frozen=True)
 class _Cross:
-    """A stretch of the request the answer doesn't do, with why."""
+    """A stretch of the request the answer doesn't do, with why, or the question it asks about
+    it. `quote` is the row's own words, kept when the row cut them at its limit."""
 
     start: int
     end: int
     reason: PartReason
     note: str | None = None
     choices: tuple[str, ...] = ()
+    mark: PartMark = "cant"
+    quote: str | None = None
 
 
 def parts_of(read: TaskRead | None, request: str, answer: PlannerAnswer) -> list[RequestPart]:
     """Each clause of the request, in order, marked by what `answer` does with it. `read` is the
     model's reading, or None for a refusal made before any model call."""
     text = visible_words(request)
-    clauses = [c for c in clauses_of(text) if not _polite(text, c)]
+    clauses = [c for c in clauses_of(text) if not polite(text[c[0] : c[1]])]
     if isinstance(answer, STATE_ANSWERS):
-        return _answered(text, clauses, _state_questions(text, clauses))
+        return _answered(text, clauses, _about_state(text, clauses, _names_of(answer)))
     if isinstance(answer, AbilitiesAnswer):
         about = [c for c in clauses if ABOUT_THE_PLANNER.search(text[c[0] : c[1]])]
-        return _answered(text, clauses, about, "ask_on_its_own" if about else "not_followed")
+        return _answered(text, clauses, about)
     crosses = _crosses(read, text, answer)
     found: list[RequestPart] = []
     for clause in clauses:
@@ -102,39 +121,62 @@ def parts_of(read: TaskRead | None, request: str, answer: PlannerAnswer) -> list
     return found
 
 
-def _polite(text: str, clause: Span) -> bool:
-    return all(w in POLITE for w in re.findall(r"[\w']+", text[clause[0] : clause[1]].casefold()))
-
-
 def _asks(text: str, clause: Span) -> bool:
     """Whether the clause is a question: it opens like one or ends at a question mark."""
     words = text[clause[0] : clause[1]]
     return bool(QUESTION_START.match(words) or re.match(r"\s*\?", text[clause[1] :]))
 
 
-def _state_questions(text: str, clauses: list[Span]) -> list[Span]:
-    """The clauses a state answer answers: the questions about workflows, approvals or
-    software that change nothing, else the first clause that changes nothing."""
-    asked = [
+def _names_of(answer: PlannerAnswer) -> list[str]:
+    """The workflow or the software a state answer is about, in the request's words."""
+    match answer:
+        case CheckWorkflowsAnswer() | WhyStoppedAnswer():
+            return [answer.workflow_words] if answer.workflow_words else []
+        case QuestionAnswer():
+            return answer.about_software
+        case _:
+            return []
+
+
+def _orders(clause: str) -> bool:
+    return commands_a_change(clause) or COMMAND.match(clause) is not None
+
+
+def _about_state(text: str, clauses: list[Span], names: list[str]) -> list[Span]:
+    """The clauses a state answer answers: each that asks about workflows, approvals or
+    software, or names the one the answer is about, and orders nothing. No other is ticked."""
+    return [
         c
         for c in clauses
-        if (_asks(text, c) or STATE_WORDS.search(text[c[0] : c[1]]))
-        and not commands_a_change(text[c[0] : c[1]])
+        if not _orders(text[c[0] : c[1]])
+        and (
+            STATE_WORDS.search(text[c[0] : c[1]])
+            or any(locate(text[c[0] : c[1]], n) for n in names)
+        )
     ]
-    if asked or not clauses:
-        return asked
-    return [next((c for c in clauses if not commands_a_change(text[c[0] : c[1]])), clauses[0])]
 
 
-def _answered(
-    text: str, clauses: list[Span], asked: list[Span], unasked: PartReason = "ask_on_its_own"
-) -> list[RequestPart]:
-    """An answer to a question sets nothing up: it answers the clauses it was asked, and every
-    other clause keeps a cross. Asked on its own, a request or a change gets its own answer."""
+def _answered(text: str, clauses: list[Span], asked: list[Span]) -> list[RequestPart]:
+    """An answer to a question sets nothing up: it ticks the clauses it answers. Every other
+    clause keeps a cross: a task or an order, asked on its own, gets its own answer, and
+    anything else was not followed."""
     return [
-        _part(text, c, "will_do") if c in asked else _part(text, c, "cant", unasked)
+        _part(text, c, "will_do")
+        if c in asked
+        else _part(
+            text, c, "cant", "ask_on_its_own" if _a_task(text[c[0] : c[1]]) else "not_followed"
+        )
         for c in clauses
     ]
+
+
+def _a_task(clause: str) -> bool:
+    """Whether the clause orders something or names part of a task, as "every Friday sum up the
+    closed tickets"."""
+    task_words = KNOWN_WORDS - FILLER - POLITE
+    return _orders(clause) or any(
+        w in task_words for w in re.findall(r"[\w'-]+", clause.casefold())
+    )
 
 
 def _part(
@@ -180,9 +222,10 @@ def _sets_up(answer: PlannerAnswer | None) -> bool:
 def _crosses(read: TaskRead | None, text: str, answer: PlannerAnswer) -> list[_Cross]:
     found: list[_Cross] = []
     if isinstance(answer, RefusedAnswer):
+        # The refusal names the clause that asks to skip the yes, as the person wrote it.
         at = locate(text, answer.said)
-        if at is not None:
-            found.append(_Cross(*at, "skip_approval"))
+        clauses = [c for c in clauses_of(text) if at and c[0] < at[1] and c[1] > at[0]]
+        found += [_Cross(*c, "skip_approval") for c in clauses]
     for row in _rows(answer):
         at = locate(text, row.text)
         if at is None:
@@ -190,12 +233,16 @@ def _crosses(read: TaskRead | None, text: str, answer: PlannerAnswer) -> list[_C
         if row.system is not None and row.text.casefold() == row.system.casefold():
             at = next((c for c in clauses_of(text) if c[0] <= at[0] < c[1]), at)
         reason = REASON_OF_NOTE.get(row.note, "cant_do")
-        found.append(_Cross(*at, reason, row.note if reason == "cant_do" else None))
+        note = row.note if reason == "cant_do" else None
+        found.append(_Cross(*at, reason, note, quote=row.text))
     if read is not None and _sets_up(answer):
         found += [
             _Cross(c.start, c.end, c.reason, choices=c.choices)
             for c in schedule_clashes(read.schedule, text)
         ]
+        asked = days_asked(read.search, text)
+        if asked is not None:
+            found.append(_Cross(*asked, "how_many_days", mark="question"))
     return found
 
 
@@ -215,7 +262,10 @@ def _crossed(text: str, clause: Span, cross: _Cross) -> RequestPart:
     if cross.reason in ("not_followed", "cant_do") and _asks(text, clause):
         return _part(text, clause, "cant", "ask_on_its_own")
     span = trim(text, max(cross.start, clause[0]), min(cross.end, clause[1]))
-    return _part(text, span, "cant", cross.reason, cross.note, cross.choices)
+    part = _part(text, span, cross.mark, cross.reason, cross.note, cross.choices)
+    if cross.quote is not None and cross.quote.endswith("…") and clause[0] <= cross.start:
+        return part.model_copy(update={"text": cross.quote})
+    return part
 
 
 def _unmarked(answer: PlannerAnswer, text: str, clause: Span) -> RequestPart:

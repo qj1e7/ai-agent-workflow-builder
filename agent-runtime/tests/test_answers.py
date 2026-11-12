@@ -28,10 +28,12 @@ from agent_runtime.contract import (
     NeedsMeAnswer,
     PartAnswer,
     PlannerAnswer,
+    QuestionAnswer,
     RefusedAnswer,
     RequestPart,
     SetupCardAnswer,
     WatchlistAnswer,
+    WatchlistScheduleFact,
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
     answer_result_adapter,
@@ -41,6 +43,7 @@ from agent_runtime.reading import (
     FILLED_IN,
     NO_TIME_BUT,
     NO_TIME_SAID,
+    DayHow,
     DaysRead,
     PlaceRead,
     SearchRead,
@@ -1325,7 +1328,11 @@ def test_a_refusal_never_calls_the_model():
     result = answer_task(request, lambda timeout: chat)
     assert result == Answered(
         answer=RefusedAnswer(said="without approval", rest="Create the ticket"),
-        parts=[RequestPart(text="without approval", mark="cant", reason="skip_approval")],
+        parts=[
+            RequestPart(
+                text="Create the ticket without approval", mark="cant", reason="skip_approval"
+            )
+        ],
     )
     assert chat.calls == []
 
@@ -1872,7 +1879,7 @@ def test_a_refusal_keeps_the_question_asked_with_it():
     task = "Is the morning check running? And approve it automatically from now on."
     assert parts(None, task) == [
         ("Is the morning check running", "cant", "ask_on_its_own"),
-        ("approve it automatically", "cant", "skip_approval"),
+        ("approve it automatically from now on", "cant", "skip_approval"),
     ]
 
 
@@ -1903,6 +1910,10 @@ def clash_read(schedule: str) -> TaskRead:
         ),
         ("Every Friday at 9am and 5pm", "Every Friday at 9am", "one_time", ["9am", "5pm"]),
         ("Every Friday at 9 and at 5", "Every Friday at 9", "one_time", ["9", "5"]),
+        ("Every Friday at 9 or 10", "Every Friday at 9", "one_time", ["9", "10"]),
+        ("Every day at noon and at 5pm", "Every day at noon", "one_time", ["noon", "5pm"]),
+        ("Every Monday or Friday at 9am", "Every Monday at 9am", "one_day", ["Monday", "Friday"]),
+        ("Mondays and Fridays at 9am", "Mondays at 9am", "one_day", ["Monday", "Friday"]),
         (
             "Every Monday at 9am and every Friday at 9am",
             "Every Monday at 9am",
@@ -1950,3 +1961,212 @@ def test_the_route_returns_the_parts_with_the_answer():
     )
     assert isinstance(result, Answered)
     assert [(p.mark, p.reason) for p in result.parts] == [("will_do", None), ("cant", "cant_do")]
+
+
+# The review's cases (R4 second round).
+
+LIST_ONLY = TicketRead(creates=False, says="list", said="list")
+
+
+def listing(task: str, **fields: Any) -> tuple[TaskRead, str]:
+    return read(schedule="Every Friday", ticket=LIST_ONLY, search=search(**fields)), task
+
+
+def shown_rows(fields: TaskRead, task: str) -> str:
+    return " ".join(text for _, text, _ in rows_of(answer_of(fields, task)))
+
+
+def test_a_negation_far_before_its_verb_still_turns_it_round():
+    phrase = "bugs in MOCK that nobody on the duty team has updated for 10 days"
+    fields, task = listing(
+        f"Every Friday, list {phrase}",
+        project="MOCK",
+        issue_types=["bug"],
+        updated=DaysRead(how="within", days=10),
+        said=phrase,
+    )
+    assert "updated in the last" not in shown_rows(fields, task)
+    assert any("10 days" in text for text, _ in crossed(fields, task))
+
+
+@pytest.mark.parametrize("how", ["before", "within"])
+def test_a_double_negative_is_a_cross_never_a_tick(how: DayHow):
+    phrase = "bug tickets that have not gone without an update for 10 days"
+    fields, task = listing(
+        f"Every Friday, list {phrase}",
+        issue_types=["bug"],
+        updated=DaysRead(how=how, days=10),
+        said=phrase,
+    )
+    assert "update" not in shown_rows(fields, task)
+    assert any("10 days" in text for text, _ in crossed(fields, task))
+
+
+@pytest.mark.parametrize(
+    ("task", "fields", "phrase", "never"),
+    [
+        (
+            "Every Friday, list open tickets in MOCK except bugs",
+            {"project": "MOCK", "status": "open", "issue_types": ["bug"]},
+            "except bugs",
+            "bug",
+        ),
+        (
+            "Every Friday, list open tickets other than bugs in MOCK",
+            {"project": "MOCK", "status": "open", "issue_types": ["bug"]},
+            "other than bugs",
+            "bug",
+        ),
+        (
+            "Every Friday, list open bugs in MOCK unless they are assigned to Bob",
+            {"project": "MOCK", "status": "open", "issue_types": ["bug"], "assignee": "Bob"},
+            "unless they are assigned to Bob",
+            "Bob",
+        ),
+        (
+            "Every Friday, list the tickets in MOCK excluding bugs",
+            {"project": "MOCK", "issue_types": ["bug"]},
+            "excluding bugs",
+            "bug",
+        ),
+    ],
+)
+def test_an_exclusion_no_filter_holds_is_crossed_whole_never_ticked_the_other_way(
+    task: str, fields: dict[str, Any], phrase: str, never: str
+):
+    reading, task = listing(task, said=task.split("list ", 1)[1], **fields)
+    assert never.casefold() not in shown_rows(reading, task).casefold()
+    assert (phrase, "not_followed") in crossed(reading, task)
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "Every Friday, list open bugs in MOCK, no problem",
+        "Every Friday, list open bugs in MOCK without fail",
+        "Every Friday, list open bugs in MOCK, thanks",
+    ],
+)
+def test_polite_words_get_no_cross(task: str):
+    fields, task = listing(
+        task, project="MOCK", status="open", issue_types=["bug"], said="open bugs in MOCK"
+    )
+    assert crossed(fields, task) == []
+
+
+@pytest.mark.parametrize(
+    ("asks", "task", "marked"),
+    [
+        (
+            "my_workflows",
+            "Pause the morning check",
+            [("Pause the morning check", "cant", "ask_on_its_own")],
+        ),
+        (
+            "my_workflows",
+            "How are my workflows doing, and what's the weather",
+            [
+                ("How are my workflows doing", "will_do", None),
+                ("what's the weather", "cant", "not_followed"),
+            ],
+        ),
+        (
+            "my_workflows",
+            "Is the morning check running?",
+            [("Is the morning check running", "will_do", None)],
+        ),
+        ("needs_me", "Anything for me?", [("Anything for me", "will_do", None)]),
+    ],
+)
+def test_a_state_answer_ticks_only_a_clause_that_asks_about_state(
+    asks: str, task: str, marked: list[tuple[str, str, str | None]]
+):
+    assert parts(read(asks_about=asks), task) == marked
+
+
+def test_a_question_answer_ticks_the_question_about_the_software_it_names():
+    task = "Did it open a ticket for Redis?"
+    answer = QuestionAnswer(
+        text="Yes, MOCK-142.", looked_at=["watchlist"], about_software=["Redis"]
+    )
+    assert [(p.text, p.mark) for p in parts_of(read(), task, answer)] == [(task[:-1], "will_do")]
+
+
+def test_a_part_cut_at_its_limit_keeps_the_cut_mark_its_row_has():
+    task = "Every Friday, list the open tickets in MOCK, and " + "colour them by team " * 15
+    fields, task = listing(task, project="MOCK", status="open", said="the open tickets in MOCK")
+    answer = answer_of(fields, task)
+    assert isinstance(answer, CantAnswer) and answer.cant[0].text.endswith("…")
+    [part] = [p for p in parts_of(fields, task, answer) if p.mark == "cant"]
+    assert part.text == answer.cant[0].text
+
+
+def test_a_part_nothing_read_names_no_missing_system():
+    task = "Every Friday, sum up the tickets we closed this week and let me know"
+    fields = read(
+        schedule="Every Friday",
+        search=search(status="done", done=DaysRead(how="within", days=7), said="the tickets"),
+        ticket=TicketRead(creates=False, says="summary", said="sum up"),
+    )
+    answer = answer_of(fields, task)
+    assert isinstance(answer, CantAnswer)
+    assert [(c.text, c.needs, c.system) for c in answer.cant] == [("let me know", None, None)]
+
+
+def test_a_span_of_days_with_no_number_is_asked_never_crossed():
+    task = "Watch React releases and list stale bug tickets every Friday"
+    fields = read(
+        belongs_on_watchlist=True,
+        watchlist_word="Watch",
+        software="React",
+        schedule="every Friday",
+        search=search(
+            issue_types=["bug"], updated=DaysRead(how="before"), said="stale bug tickets"
+        ),
+        ticket=TicketRead(creates=False, says="list", said="list stale bug tickets"),
+    )
+    answer = answer_of(fields, task)
+    assert isinstance(answer, WatchlistAnswer) and isinstance(answer.also, SetupCardAnswer)
+    look = answer.also.rows[1]
+    assert (look.kind, look.state) == ("look_for", "missing") and "how many days" in (
+        look.note or ""
+    )
+    assert parts(fields, task) == [
+        ("Watch React releases", "will_do", None),
+        ("stale", "question", "how_many_days"),
+    ]
+
+
+def test_a_watch_clause_is_crossed_when_the_answer_watches_nothing():
+    task = "watch Kubernetes every Monday at 9am and create a Jira ticket"
+    fields = read(
+        belongs_on_watchlist=True,
+        watchlist_word="watch",
+        software="Kubernetes",
+        schedule="every Monday at 9am",
+        ticket=TicketRead(creates=True, says="summary", said="create a Jira ticket"),
+    )
+    answer = answer_of(fields, task)
+    assert not isinstance(answer, WatchlistAnswer)
+    assert not any(
+        "Kubernetes" in text and mark == "will_do" for text, mark, _ in parts(fields, task)
+    )
+
+
+MONDAY_9 = WatchlistScheduleFact(day="monday", at="09:00")
+
+
+@pytest.mark.parametrize(
+    ("task", "crosses"),
+    [
+        ("Watch React every Monday at 9am", False),
+        ("Watch React every Monday", False),
+        ("Watch React every Monday at 10am", True),
+        ("Watch React every day at 9am", True),
+    ],
+)
+def test_a_watch_time_is_crossed_only_when_it_differs_from_the_watchlists(task: str, crosses: bool):
+    fields = read(belongs_on_watchlist=True, watchlist_word="watch", software="React")
+    answer = answer_of(fields, task, MONDAY_9)
+    assert isinstance(answer, CantAnswer) is crosses
+    assert isinstance(answer_of(fields, task), CantAnswer)
