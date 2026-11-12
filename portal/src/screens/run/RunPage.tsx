@@ -15,9 +15,11 @@ import { motionAllowed } from '../../ui/motion'
 import { nextRunOf } from '../workflows/workflow'
 import { ApprovalGate } from './ApprovalGate'
 import { Chat, DECISION_ID, LastWord, NeedsYou, Typing } from './Chat'
-import { askedWords, declineReasons, foundOf, partyOf, requesterOf, useDecision, yourPart, type Decision } from './decision'
+import { askedWords, declineReasons, foundOf, partyOf, useDecision, yourPart, type Decision } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { Outcome, Troubleshooting } from './Outcome'
+import { QuestionThread } from './QuestionThread'
+import { useQuestions, type Questions } from './questions'
 import { RunLine } from './RunLine'
 import { isFinished, PLANNER_ID, stationsOf, type PlanBlock, type RunModel } from './runModel'
 import { declinedNext, declinedRecord, feedTroubleOf, headlineOf, lineOf, RUN_MISSING, RUN_PROBLEM, shortTime, speakerName, writeLabel, type NameOf, type Speaker } from './words'
@@ -200,7 +202,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
 
   const approvalId = approvalIdOf(run, head)
   const waiting = shown.phase.state === 'awaiting_approval'
-  const approval = useApproval(approvalId ?? '', { poll: waiting, enabled: approvalId !== null && (waiting || head.phase.state === 'awaiting_approval') })
+  const approval = useApproval(approvalId ?? '', { poll: waiting, enabled: approvalId !== null })
   const attempt = head.chat.filter((item) => item.kind === 'retried').length
   const showFailure = shown.phase.state === 'failed' && head.phase.state === 'failed'
   const troubleshoot = useTroubleshoot(run.run_id, showFailure, attempt)
@@ -209,6 +211,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const saidByMe = me ? shown.chat.findLast((item) => item.kind === 'decided' && item.by === me.id) : undefined
   const open = detailOpen(detail.choice, shown)
   const decision = useDecision(approval.data, party)
+  const questions = useQuestions(approval.data, party)
   const answered = decision.recorded !== null && !waiting && !WORKING.has(shown.phase.state)
   const focused = useRef(false)
   useEffect(() => {
@@ -252,6 +255,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
       approval={approval.data}
       found={foundOf(head.found, approval.data?.found)}
       decision={decision}
+      questions={questions}
       troubleshoot={troubleshoot}
       nameOf={nameOf}
       me={me}
@@ -314,6 +318,7 @@ interface LastWordForProps {
   readonly approval: ApprovalView | undefined
   readonly found: string
   readonly decision: ReturnType<typeof useDecision>
+  readonly questions: Questions
   readonly troubleshoot: ReturnType<typeof useTroubleshoot>
   readonly nameOf: NameOf
   readonly me: Me | undefined
@@ -322,7 +327,7 @@ interface LastWordForProps {
   readonly declinedNext: string | null
 }
 
-function LastWordFor({ model, approval, found, decision, troubleshoot, nameOf, me, runId, reasons, declinedNext }: LastWordForProps) {
+function LastWordFor({ model, approval, found, decision, questions, troubleshoot, nameOf, me, runId, reasons, declinedNext }: LastWordForProps) {
   const modelOff = useModelOff()
   const { phase } = model
   switch (phase.state) {
@@ -335,7 +340,10 @@ function LastWordFor({ model, approval, found, decision, troubleshoot, nameOf, m
               page={{ found, part: yourPart(approval, partyOf(approval, me?.id), nameOf), askedBy: askedWords(approval, nameOf) }}
               decision={decision}
               reasons={reasons}
-              requester={nameOf(requesterOf(approval))}
+              requester={nameOf(approval.requester)}
+              questions={questions}
+              me={me?.id}
+              nameOf={nameOf}
             />
           ) : (
             <p className="muted" role="status">
@@ -364,6 +372,7 @@ function LastWordFor({ model, approval, found, decision, troubleshoot, nameOf, m
       return (
         <LastWord speaker={{ kind: 'app' }}>
           <Outcome model={model} nameOf={nameOf} declinedNext={declinedNext} />
+          {approval ? <QuestionThread approval={approval} me={me?.id} nameOf={nameOf} answer={questions.answer} /> : null}
         </LastWord>
       )
     default:
