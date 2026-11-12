@@ -29,6 +29,7 @@ import {
   lifeWords,
   lastRunLine,
   lastRunWords,
+  nextRunOf,
   lineWhen,
   meansOutOfDate,
   menuActionsOf,
@@ -105,6 +106,21 @@ describe('the status words', () => {
 
   it('say a run that is still going is running', () => {
     for (const view of [working, scheduled]) expect(runFact(run(view), nameOf)).toEqual({ tone: 'new', pill: 'Running', words: 'Running now.' })
+  })
+})
+
+describe('when a workflow runs next', () => {
+  const at = '2026-11-16T01:00:00Z'
+  const schedule = { ...(WATCHLIST.schedule as NonNullable<UseCaseView['schedule']>), held: null }
+  it('is its next run while its schedule will start one, in the schedule’s zone', () => {
+    expect(nextRunOf({ state: 'on', next_run_at: at, schedule })).toEqual({ at, zone: schedule.time_zone })
+  })
+
+  it('is nothing while it is paused, held or has no next run', () => {
+    expect(nextRunOf({ state: 'paused', next_run_at: at, schedule })).toBeNull()
+    expect(nextRunOf({ state: 'on', next_run_at: at, schedule: { ...schedule, held: 'owner_removed' } })).toBeNull()
+    expect(nextRunOf({ state: 'on', next_run_at: null, schedule: null })).toBeNull()
+    expect(nextRunOf(undefined)).toBeNull()
   })
 })
 

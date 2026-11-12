@@ -5,7 +5,7 @@ import { isConflict, refusalOf, useDecide } from '../../api/queries'
 import type { ApprovalStepView, ApprovalView, DecisionIn, DecisionView, Verdict } from '../../api/types'
 import { starterName } from '../../api/labels'
 import type { Declined } from './runModel'
-import { andList, CONFLICT_WORDS, lockWords, type NameOf, type Party } from './words'
+import { andList, CONFLICT_WORDS, declinedOfSteps, lockWords, type NameOf, type Party } from './words'
 
 export function openStep(approval: ApprovalView): ApprovalStepView | null {
   return approval.steps.find((step) => step.status === 'open') ?? null
@@ -81,10 +81,10 @@ export function decisionFor(approval: ApprovalView | undefined, choice: Choice):
   return choice.verdict === 'decline' && choice.reason ? { ...body, reason: choice.reason } : body
 }
 
-/** The record of a decline the platform just recorded, with whoever said yes to the steps before it, ahead of the run's own events. */
-export function declinedNow(steps: readonly ApprovalStepView[], decision: DecisionView): Declined {
-  const approvedBy = steps.filter((step) => step.index < decision.step && step.status === 'approved' && step.decided_by).map((step) => step.decided_by ?? '')
-  return { by: decision.by, approvedBy, reason: decision.reason ?? null }
+/** The record of a decline the platform just recorded, ahead of the run's own events: the steps as they were, with the decline in. */
+export function declinedNow(steps: readonly ApprovalStepView[], decision: DecisionView): Declined | null {
+  const decided = steps.map((step) => (step.index === decision.step ? { ...step, status: 'declined' as const, decided_by: decision.by, decided_at: decision.at, reason: decision.reason ?? null } : step))
+  return declinedOfSteps(decided)
 }
 
 export interface Decision {

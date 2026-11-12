@@ -12,6 +12,7 @@ import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { useFromChat } from '../../ui/fromChat'
 import { motionAllowed } from '../../ui/motion'
+import { nextRunOf } from '../workflows/workflow'
 import { ApprovalGate } from './ApprovalGate'
 import { Chat, DECISION_ID, LastWord, NeedsYou, Typing } from './Chat'
 import { askedWords, declineReasons, foundOf, partyOf, requesterOf, useDecision, yourPart, type Decision } from './decision'
@@ -19,7 +20,7 @@ import { useLiveRun, type LiveRun } from './liveRun'
 import { Outcome, Troubleshooting } from './Outcome'
 import { RunLine } from './RunLine'
 import { isFinished, PLANNER_ID, stationsOf, type PlanBlock, type RunModel } from './runModel'
-import { declinedRecord, feedTroubleOf, headlineOf, lineOf, RUN_MISSING, RUN_PROBLEM, shortTime, speakerName, writeLabel, type NameOf, type Speaker } from './words'
+import { declinedNext, declinedRecord, feedTroubleOf, headlineOf, lineOf, RUN_MISSING, RUN_PROBLEM, shortTime, speakerName, writeLabel, type NameOf, type Speaker } from './words'
 import styles from './RunPage.module.css'
 
 const LANDS_ON_DECISION = new Set(['awaiting_approval', 'failed', 'rejected'])
@@ -222,7 +223,8 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const headline = headlineOf(shown, stations, proposal)
   const arrivedLive = shown.spotSeq > loadedUpTo ? (stations.findLast((station) => station.state !== 'todo')?.key ?? null) : null
   const newest = shown.chat.at(-1)
-  const announce = newest && newest.seq > loadedUpTo ? lineOf(newest, nameOf, run.trigger) : null
+  const next = declinedNext({ test: run.test, watchlist: useCase?.template === 'software_watchlist' }, nextRunOf(useCase), new Date())
+  const announce = newest && newest.seq > loadedUpTo ? lineOf(newest, nameOf, next) : null
 
   useEffect(() => {
     document.title = `${headline.text} · ${PRODUCT}`
@@ -255,6 +257,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
       me={me}
       runId={run.run_id}
       reasons={declineReasons(useCase?.template)}
+      declinedNext={next}
     />
   )
 
@@ -287,7 +290,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
         >
           {open ? 'Hide what each agent did' : 'Show what each agent did'}
         </summary>
-        <Chat ref={chatList} items={shown.chat} loadedUpTo={loadedUpTo} nameOf={nameOf} trigger={run.trigger} last={resting} />
+        <Chat ref={chatList} items={shown.chat} loadedUpTo={loadedUpTo} nameOf={nameOf} declinedNext={next} last={resting} />
       </details>
       <div className="visually-hidden" aria-live="polite">
         {announce ? `${speakerName(announce.speaker)}: ${announce.text}` : ''}
@@ -316,9 +319,10 @@ interface LastWordForProps {
   readonly me: Me | undefined
   readonly runId: string
   readonly reasons: readonly string[]
+  readonly declinedNext: string | null
 }
 
-function LastWordFor({ model, approval, found, decision, troubleshoot, nameOf, me, runId, reasons }: LastWordForProps) {
+function LastWordFor({ model, approval, found, decision, troubleshoot, nameOf, me, runId, reasons, declinedNext }: LastWordForProps) {
   const modelOff = useModelOff()
   const { phase } = model
   switch (phase.state) {
@@ -359,7 +363,7 @@ function LastWordFor({ model, approval, found, decision, troubleshoot, nameOf, m
     case 'rejected':
       return (
         <LastWord speaker={{ kind: 'app' }}>
-          <Outcome model={model} nameOf={nameOf} />
+          <Outcome model={model} nameOf={nameOf} declinedNext={declinedNext} />
         </LastWord>
       )
     default:

@@ -9,7 +9,7 @@ import { TicketLink } from '../jira/TicketKeys'
 import { ReportToSupport } from './Report'
 import { declinedOf, type Phase, type RunModel } from './runModel'
 import { failureText } from './support'
-import { andList, declinedRecord, withCurrentNames, type NameOf } from './words'
+import { andList, declinedWithNext, withCurrentNames, type NameOf } from './words'
 import styles from './panels.module.css'
 
 function BackHome() {
@@ -20,13 +20,14 @@ function BackHome() {
   )
 }
 
-export function Outcome({ model, nameOf }: { model: RunModel; nameOf: NameOf }) {
+/** `declinedNext` is what happens after a decline, from declinedNext in words.ts. */
+export function Outcome({ model, nameOf, declinedNext = null }: { model: RunModel; nameOf: NameOf; declinedNext?: string | null }) {
   const declined = declinedOf(model)
   if (declined) {
     return (
       <div className={styles['panel']}>
         <h2>Declined</h2>
-        <p>{declinedRecord(declined, nameOf)}</p>
+        <p>{declinedWithNext(declined, declinedNext, nameOf)}</p>
         <BackHome />
       </div>
     )

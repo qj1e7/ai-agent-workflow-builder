@@ -1,21 +1,22 @@
-import { useId, type AnimationEvent, type CSSProperties } from 'react'
+import { useId, useState, type AnimationEvent, type CSSProperties } from 'react'
 import { Link } from '../../ui/Link'
 import { useChatNavigate } from '../../ui/fromChat'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
-import { useModelOff, useRetry } from '../../api/queries'
+import { newIdempotencyKey } from '../../api/idempotency'
+import { useModelOff, useRetry, useStartRun } from '../../api/queries'
 import type { DraftItem, WaitingItem } from '../../api/types'
 import { AgentFace } from '../../ui/AgentFace'
 import { Button, ButtonLink } from '../../ui/Button'
 import { cx } from '../../ui/cx'
-import { IconAlert, IconChevronRight, IconInfo, IconShield, type Icon } from '../../ui/icons'
+import { IconAlert, IconChevronRight, IconInfo, IconShield, IconX, type Icon } from '../../ui/icons'
 import { OpenButton } from '../../ui/OpenItem'
 import { useAfterPanelAction, useShownInPanel } from '../../ui/sidePanel'
 import { draftPath } from './card'
 import { actionsOf, CONNECT_ABOVE, draftWords, isModelNeed, NO_MODEL_TITLE, retryProblem, waitingWords, wordsOf, type Action, type Need, type Tone } from './home'
 import styles from './Home.module.css'
 
-export const TONE_ICON: Record<Tone, Icon> = { wait: IconShield, tool: IconShield, bad: IconAlert, info: IconInfo }
+export const TONE_ICON: Record<Tone, Icon> = { wait: IconShield, tool: IconShield, bad: IconAlert, info: IconInfo, off: IconX }
 
 export interface Motion {
   readonly glide: string
@@ -63,8 +64,34 @@ export function RetryButton({ runId, label, primary, describedBy }: { runId: str
   )
 }
 
+/** Starts a new test run of the workflow, as Do a test run does, and opens it so the person sees it go. */
+function TestAgainButton({ useCaseId, label, primary, describedBy }: { useCaseId: string; label: string; primary: boolean; describedBy: string }) {
+  const navigate = useChatNavigate()
+  const start = useStartRun()
+  const latch = useLatch()
+  const words = useErrorWords()
+  const [key] = useState(newIdempotencyKey)
+  const press = () =>
+    latch.run((settled) =>
+      start.mutate({ useCaseId, idempotencyKey: key, test: true }, { onSuccess: (started) => navigate(`/runs/${started.run_id}`), onSettled: settled }),
+    )
+  return (
+    <>
+      <Button variant={primary ? 'primary' : 'secondary'} loading={start.isPending} onClick={press} aria-describedby={describedBy}>
+        {label}
+      </Button>
+      {start.isError ? (
+        <p className={styles['problem']} role="alert">
+          {`Could not start the test run. ${words(start.error)}`}
+        </p>
+      ) : null}
+    </>
+  )
+}
+
 function ActionButton({ action, primary, describedBy }: { action: Action; primary: boolean; describedBy: string }) {
   if (action.kind === 'retry') return <RetryButton runId={action.runId} label={action.label} primary={primary} describedBy={describedBy} />
+  if (action.kind === 'test') return <TestAgainButton useCaseId={action.useCaseId} label={action.label} primary={primary} describedBy={describedBy} />
   if (action.item) {
     return (
       <OpenButton item={action.item} to={action.to} variant={primary ? 'primary' : 'secondary'} aria-describedby={describedBy}>

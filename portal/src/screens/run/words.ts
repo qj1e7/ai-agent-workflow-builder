@@ -1,7 +1,8 @@
 import { OPEN_RUN_AGAIN_WORDS } from '../../api/errors'
 import { connectorLabel, refusalLabel, starterName } from '../../api/labels'
+import { nextRunAt } from '../workflows/times'
 import type { SessionKind } from '../../api/session'
-import type { ApprovalActionView, ApprovalStepView, Refusal, Trigger, WriteActionView } from '../../api/types'
+import type { ApprovalActionView, ApprovalStepView, Refusal, WriteActionView } from '../../api/types'
 import { PRODUCT } from '../../shell/product'
 import type { LiveRun } from './liveRun'
 import type { AgentRef, ChatItem, Declined, RunModel, Station } from './runModel'
@@ -39,6 +40,29 @@ export function declineTail(declined: Pick<Declined, 'reason'>): string {
 export function declinedRecord(declined: Declined, nameOf: NameOf): string {
   const head = declined.approvedBy.length > 0 ? `Approved by ${declined.approvedBy.map(nameOf).join(', then ')}, then declined by ${nameOf(declined.by)}` : declinedBy(declined, nameOf)
   return `${head}. ${declineTail(declined)}`
+}
+
+/** When a declined run's workflow runs next, from its schedule. */
+export interface NextRun {
+  readonly at: string
+  readonly zone: string | undefined
+}
+
+/**
+ * What happens after a decline, said after the record wherever it shows (spec 10.5), and only what the platform will do: a test run
+ * waits for its owner, and a scheduled workflow runs again, the watchlist proposing its tickets again at its next check. Null when
+ * nothing is due, as for a paused workflow or one with no schedule.
+ */
+export function declinedNext(run: { readonly test: boolean; readonly watchlist: boolean }, next: NextRun | null, now: Date): string | null {
+  if (run.test) return 'Change what it does, or run the test again.'
+  if (!next) return null
+  const when = nextRunAt(next.at, now, next.zone)
+  return run.watchlist ? `The tickets will be proposed again at the next check, ${when}.` : `It runs again ${when}.`
+}
+
+/** The record with what happens next, as the run page, the side panel and the watchlist give it. */
+export function declinedWithNext(declined: Declined, next: string | null, nameOf: NameOf): string {
+  return next ? `${declinedRecord(declined, nameOf)} ${next}` : declinedRecord(declined, nameOf)
 }
 
 /** The record's facts from a request's steps, as the run and approval routes give them. Null unless a step was declined. */
@@ -124,7 +148,8 @@ function wroteWords(operation: string | null, connector: string, refs: readonly 
   return operation?.startsWith('create_') ? `Created ${andList(refs)} in ${where}.` : `Wrote ${andList(refs)} in ${where}.`
 }
 
-export function lineOf(item: ChatItem, nameOf: NameOf, trigger: Trigger): Line {
+/** A line of the run's chat. `declinedNext` is what happens after a decline, from declinedNext. */
+export function lineOf(item: ChatItem, nameOf: NameOf, declinedNext: string | null): Line {
   switch (item.kind) {
     case 'started':
       return { speaker: app, text: `${starterName(nameOf(item.by), item.trigger)} started the run.`, tone: 'plain' }
@@ -164,7 +189,7 @@ export function lineOf(item: ChatItem, nameOf: NameOf, trigger: Trigger): Line {
         tone: 'ok',
       }
     case 'declined':
-      return { speaker: app, text: `${declinedRecord(item.record, nameOf)} The run ended.${trigger === 'schedule' ? ' The next check asks again.' : ''}`, tone: 'plain' }
+      return { speaker: app, text: `${declinedRecord(item.record, nameOf)} The run ended.${declinedNext ? ` ${declinedNext}` : ''}`, tone: 'plain' }
     case 'stopped':
       return {
         speaker: platform,

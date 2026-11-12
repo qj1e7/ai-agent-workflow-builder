@@ -89,7 +89,8 @@
 }
 
 .tool,
-.info {
+.info,
+.off {
   color: var(--muted);
 }
 

@@ -146,7 +146,7 @@ export function moreWords({ approvals, others }: LeftOut): string | null {
   return `${left} more ${left === 1 ? 'thing needs' : 'things need'} you. The next ones show here as you finish these.`
 }
 
-export type Tone = 'wait' | 'bad' | 'tool' | 'info'
+export type Tone = 'wait' | 'bad' | 'tool' | 'info' | 'off'
 
 export interface ItemWords {
   readonly tone: Tone
@@ -247,13 +247,14 @@ function stoppedWords(item: StoppedItem, now: Date, modelOff: boolean): ItemWord
 }
 
 /** The person's own test run an Approver declined, with the rest of the declined record under it (spec 10.5). */
-function declinedWords(item: DeclinedItem, now: Date): ItemWords {
+function declinedWords(item: DeclinedItem, now: Date, modelOff: boolean): ItemWords {
+  const tail = declineTail({ reason: item.decline_reason })
   return {
-    tone: 'info',
+    tone: 'off',
     title: `${item.declined_by_name ?? 'An Approver'} declined your test run`,
     meta: `${item.use_case_name} · ${runWhen(item.declined_at, now)}`,
     lines: [],
-    note: declineTail({ reason: item.decline_reason }),
+    note: modelOff ? `${tail} ${CAN_TEST_AGAIN}` : tail,
     why: null,
   }
 }
@@ -286,7 +287,7 @@ export function wordsOf(need: Need, now: Date, modelOff = false): ItemWords {
     case 'stopped':
       return stoppedWords(need.item, now, modelOff)
     case 'declined':
-      return declinedWords(need.item, now)
+      return declinedWords(need.item, now, modelOff)
     case 'reply':
       return replyWords(need.item, now)
   }
@@ -296,6 +297,7 @@ export function wordsOf(need: Need, now: Date, modelOff = false): ItemWords {
 export type Action =
   | { readonly kind: 'open'; readonly label: string; readonly to: string; readonly item?: PanelItem }
   | { readonly kind: 'retry'; readonly label: string; readonly runId: string }
+  | { readonly kind: 'test'; readonly label: string; readonly useCaseId: string }
 
 const runItem = (runId: string): PanelItem => ({ kind: 'run', id: runId })
 
@@ -312,7 +314,7 @@ export function actionsOf(need: Need, modelOff = false): readonly Action[] {
     case 'stopped':
       return stoppedActions(need.item.run_id, need.item.retryable, modelOff)
     case 'declined':
-      return [{ kind: 'open', label: 'See the run', to: `/runs/${need.item.run_id}`, item: runItem(need.item.run_id) }]
+      return declinedActions(need.item, modelOff)
     case 'reply':
       return [{ kind: 'open', label: 'Read the reply', to: requestPath(need.item.request_id) }]
   }
@@ -356,6 +358,16 @@ export const NO_MODEL_TITLE = NO_MODEL.title
 export const isModelNeed = (need: Need): boolean => need.kind === 'connection' && need.item.id === 'model'
 
 export const CAN_RUN_AGAIN = 'Can run again once an AI model is connected.'
+export const CAN_TEST_AGAIN = 'A test run can start again once an AI model is connected.'
+
+/**
+ * A declined test run opens the run, and lets its owner, an Operator, try the workflow again as a new test run. With no AI model
+ * that run would stop at once, so only the reading stays, and the row says why.
+ */
+export function declinedActions(item: DeclinedItem, modelOff = false): readonly Action[] {
+  const open: Action = { kind: 'open', label: 'See the run', to: `/runs/${item.run_id}`, item: runItem(item.run_id) }
+  return modelOff ? [open] : [open, { kind: 'test', label: 'Do a test run again', useCaseId: item.use_case_id }]
+}
 
 /**
  * A stopped run offers Retry when the platform says it can be retried, and always a way to read why it stopped.

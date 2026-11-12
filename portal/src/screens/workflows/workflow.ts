@@ -3,7 +3,7 @@ import { failureReasonLabel } from '../../api/labels'
 import { pressOnce, type Latch, type Outcome } from '../../api/latch'
 import type { BlockKind, Me, RunView, ScheduleIn, UseCaseView, VersionSchedule, VersionView } from '../../api/types'
 import { agentIdentity } from '../../ui/agents'
-import { andList, count, declinedBy, declinedOfSteps, declinedRecord, type NameOf } from '../run/words'
+import { andList, count, declinedBy, declinedOfSteps, declinedRecord, type NameOf, type NextRun } from '../run/words'
 import { faceId, howItWorksPath } from '../agents/agents'
 import { heldWords, repeatWords, TAKE_OVER_WORDS } from '../software/software'
 import { lineWhen, nextRunAt, runWhen, scheduleZoneName, zoneWords } from './times'
@@ -130,6 +130,12 @@ export function lastRunWords({ last_run: last }: Pick<UseCaseView, 'last_run'>, 
 }
 
 export { formatterFactory, lineWhen, nextRunAt, runWhen, timesZone } from './times'
+
+/** When the workflow runs next, while its schedule will start a run. Null while it is paused, held or has no schedule. */
+export function nextRunOf(useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule'> | undefined): NextRun | null {
+  if (!useCase || useCase.state === 'paused' || useCase.schedule?.held || !useCase.next_run_at) return null
+  return { at: useCase.next_run_at, zone: useCase.schedule?.time_zone }
+}
 
 export function nextRunWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule'>, now: Date): string {
   if (useCase.state === 'paused') return 'Paused'

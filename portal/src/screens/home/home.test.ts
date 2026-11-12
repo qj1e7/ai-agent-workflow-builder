@@ -261,16 +261,25 @@ describe('a test run an Approver declined', () => {
     expect(stateLine(DECLINED_TEST, NOW)).toBe('Something needs you.')
   })
 
-  it('says who declined it and gives the rest of the declined record, with the reason', () => {
+  it('says who declined it and gives the rest of the declined record, with the reason, beside an X', () => {
     const words = wordsOf(need, NOW)
+    expect(words.tone).toBe('off')
     expect(words.title).toBe('Bob declined your test run')
     expect(words.meta).toMatch(/^Weekly closed-ticket summary · /)
     expect(words.note).toBe('Nothing was written. Reason: Something in it is wrong.')
   })
 
-  it('opens the run, in the side panel from the chat, and offers nothing that writes', () => {
-    expect(actionsOf(need)).toEqual([{ kind: 'open', label: 'See the run', to: '/runs/run_01JD7TS', item: { kind: 'run', id: 'run_01JD7TS' } }])
+  it('opens the run, in the side panel from the chat, and offers a new test run of its workflow', () => {
+    expect(actionsOf(need)).toEqual([
+      { kind: 'open', label: 'See the run', to: '/runs/run_01JD7TS', item: { kind: 'run', id: 'run_01JD7TS' } },
+      { kind: 'test', label: 'Do a test run again', useCaseId: 'uc_01JD7TS' },
+    ])
     expect(openPathOf(need)).toBe('/runs/run_01JD7TS')
+  })
+
+  it('with no AI model offers only the run, and says when a test can start again', () => {
+    expect(actionsOf(need, true).map((action) => action.label)).toEqual(['See the run'])
+    expect(wordsOf(need, NOW, true).note).toBe('Nothing was written. Reason: Something in it is wrong. A test run can start again once an AI model is connected.')
   })
 })
 

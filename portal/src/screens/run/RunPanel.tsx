@@ -13,7 +13,8 @@ import { Troubleshooting } from './Outcome'
 import { approvalIdOf, planOf, POLL_FAILED_MS, statusWords, useNameOf, useReconnectWhenBehind } from './RunPage'
 import { RunLine } from './RunLine'
 import { declinedOf, stationsOf } from './runModel'
-import { declinedRecord, feedTroubleOf, headlineOf, RUN_PROBLEM, shortTime, writeLabel } from './words'
+import { declinedNext, declinedWithNext, feedTroubleOf, headlineOf, RUN_PROBLEM, shortTime, writeLabel } from './words'
+import { nextRunOf } from '../workflows/workflow'
 import styles from './RunPage.module.css'
 
 function Loading() {
@@ -117,7 +118,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
       <div>
         <span className={cx(styles['pill'], styles[headline.pill.tone])}>{headline.pill.label}</span>
       </div>
-      <p>{declined ? declinedRecord(declined, nameOf) : headline.text}</p>
+      <p>{declined ? declinedWithNext(declined, declinedNext({ test: run.test, watchlist: useCase.data?.template === 'software_watchlist' }, nextRunOf(useCase.data), new Date()), nameOf) : headline.text}</p>
       {status ? (
         <p className="muted" role="status">
           {status}

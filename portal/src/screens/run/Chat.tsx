@@ -1,5 +1,4 @@
 import type { ReactNode, Ref } from 'react'
-import type { Trigger } from '../../api/types'
 import { Mark } from '../../shell/icons'
 import { AgentFace, type FaceState } from '../../ui/AgentFace'
 import { agentIdentity } from '../../ui/agents'
@@ -46,11 +45,11 @@ interface ItemProps {
   readonly at: string | undefined
   readonly fresh: boolean
   readonly nameOf: NameOf
-  readonly trigger: Trigger
+  readonly declinedNext: string | null
 }
 
-function Item({ item, at, fresh, nameOf, trigger }: ItemProps) {
-  const line = lineOf(item, nameOf, trigger)
+function Item({ item, at, fresh, nameOf, declinedNext }: ItemProps) {
+  const line = lineOf(item, nameOf, declinedNext)
   const tone = line.tone === 'plain' ? undefined : styles[line.tone]
   if (line.speaker.kind === 'agent') {
     const { agent } = line.speaker
@@ -105,19 +104,20 @@ interface ChatProps {
   readonly items: readonly ChatItem[]
   readonly loadedUpTo: number
   readonly nameOf: NameOf
-  readonly trigger: Trigger
+  /** What happens after a decline, from declinedNext in words.ts. */
+  readonly declinedNext: string | null
   readonly last: ReactNode
   readonly ref?: Ref<HTMLOListElement>
 }
 
-export function Chat({ items, loadedUpTo, nameOf, trigger, last, ref }: ChatProps) {
+export function Chat({ items, loadedUpTo, nameOf, declinedNext, last, ref }: ChatProps) {
   const pauseUnseen = usePauseUnseen()
   const times = logTimes(items)
   return (
     <div ref={pauseUnseen}>
       <ol className={styles['chat']} aria-label="What the agents said" ref={ref}>
         {items.map((item) => (
-          <Item key={item.seq} item={item} at={times.get(item.seq)} fresh={item.seq > loadedUpTo} nameOf={nameOf} trigger={trigger} />
+          <Item key={item.seq} item={item} at={times.get(item.seq)} fresh={item.seq > loadedUpTo} nameOf={nameOf} declinedNext={declinedNext} />
         ))}
         {last}
       </ol>

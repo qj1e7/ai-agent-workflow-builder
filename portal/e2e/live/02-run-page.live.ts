@@ -442,6 +442,21 @@ for (const phone of [false, true]) {
     const alice = await aliceContext.newPage()
     if (!phone) await alice.setViewportSize({ width, height: 900 })
     await expectDeclinedEverywhere(alice, runId, info, 'alice', width)
+    if (!phone) {
+      const saved = await backend.send('PUT', 'alice', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })
+      expect(saved.status, 'a weekly check is set').toBe(200)
+      try {
+        const next = /The tickets will be proposed again at the next check, Mon \d+ \w+, 9:00\./
+        await alice.goto('/software')
+        await expect(softwareRow(alice, 'LangGraph'), 'the row says when the tickets are proposed again').toContainText(next)
+        await softwareRow(alice, 'LangGraph').scrollIntoViewIfNeeded()
+        await shot(alice, info, `r12-watchlist-next-check-alice-${width}`)
+        await alice.goto(`/runs/${runId}`)
+        await expect(alice.getByRole('main'), 'the run page gives the same next step').toContainText(next)
+      } finally {
+        await backend.delete('alice', '/api/v1/watchlist/schedule', [200, 404])
+      }
+    }
     await aliceContext.close()
   })
 }

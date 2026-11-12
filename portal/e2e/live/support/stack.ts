@@ -12,6 +12,7 @@ export interface RunSnapshot {
   state: string
   use_case_name: string
   started_by: string
+  test: boolean
   reason?: string | null
   retryable?: boolean | null
   stage?: string | null
