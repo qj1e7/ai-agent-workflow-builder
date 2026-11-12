@@ -4306,6 +4306,56 @@
         ],
         "type": "string"
       },
+      "EditChoice": {
+        "additionalProperties": false,
+        "description": "One workflow the request could mean, with what the change would make of its schedule, so\npicking it needs no second reading.",
+        "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EditAfter"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it would run once saved. Null when nothing can be saved: a change the chat can't make, or a clash."
+          },
+          "before": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EditBefore"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it runs now. Null when it has no schedule."
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "watchlist": {
+            "description": "True when it is the Software watchlist.",
+            "title": "Watchlist",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "name",
+          "watchlist",
+          "before",
+          "after"
+        ],
+        "title": "EditChoice",
+        "type": "object"
+      },
       "EditReply": {
         "additionalProperties": false,
         "description": "A change to a workflow the person has, proposed. Nothing changes until they save it: an\nOperator saves a workflow's schedule with PUT /api/v1/use-cases/{use_case_id}/schedule, with\nvia set to chat, which publishes a version that POST .../versions/{version}/undo undoes. The\nSoftware watchlist's is saved with PUT /api/v1/watchlist/schedule and keeps no versions.",
@@ -4350,9 +4400,9 @@
             "description": "only_schedule: a change other than when it runs, which the chat can't make yet. how_often: a frequency the schedule can't hold, such as monthly."
           },
           "choices": {
-            "description": "The workflows the words could mean, when they match more than one.",
+            "description": "The workflows the request could mean, for the person to pick one: every one its words match when they match several, or every workflow for \"it\" and no name. Empty when one matched, and when the words name none.",
             "items": {
-              "$ref": "#/components/schemas/SimilarWorkflow"
+              "$ref": "#/components/schemas/EditChoice"
             },
             "title": "Choices",
             "type": "array"

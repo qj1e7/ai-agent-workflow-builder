@@ -310,6 +310,20 @@ class EditAfter(WireModel):
     )
 
 
+class EditChoice(WireModel):
+    """One workflow the request could mean, with what the change would make of its schedule, so
+    picking it needs no second reading."""
+
+    use_case_id: str
+    name: str
+    watchlist: bool = Field(description="True when it is the Software watchlist.")
+    before: EditBefore | None = Field(description="When it runs now. Null when it has no schedule.")
+    after: EditAfter | None = Field(
+        description="When it would run once saved. Null when nothing can be saved: a change the "
+        "chat can't make, or a clash."
+    )
+
+
 class EditReply(Reply):
     """A change to a workflow the person has, proposed. Nothing changes until they save it: an
     Operator saves a workflow's schedule with PUT /api/v1/use-cases/{use_case_id}/schedule, with
@@ -331,8 +345,10 @@ class EditReply(Reply):
         description='The software those words name, as React in "the React check". With missing '
         "set, it isn't on the Software watchlist."
     )
-    choices: list[SimilarWorkflow] = Field(
-        description="The workflows the words could mean, when they match more than one."
+    choices: list[EditChoice] = Field(
+        description="The workflows the request could mean, for the person to pick one: every one "
+        'its words match when they match several, or every workflow for "it" and no name. '
+        "Empty when one matched, and when the words name none."
     )
     before: EditBefore | None = Field(
         description="When it runs now. Null when no workflow matched, or it has no schedule."
@@ -567,6 +583,18 @@ def _after(before: EditBefore | None, edit: EditAnswer) -> EditAfter | None:
     asked = change.hour is not None or change.time_unclear
     at = change.at or (before.at if before is not None and not asked else None)
     return EditAfter(day=day, at=at)
+
+
+def _choice(use_case: UseCaseView, edit: EditAnswer) -> EditChoice:
+    saved = use_case.schedule
+    before = None if saved is None else EditBefore(day=saved.day, at=saved.at)
+    return EditChoice(
+        use_case_id=use_case.use_case_id,
+        name=use_case.name,
+        watchlist=use_case.template == SOFTWARE_WATCHLIST.key,
+        before=before,
+        after=_after(before, edit),
+    )
 
 
 def _rows(rows: Sequence[UnderstoodRow]) -> list[UnderstoodRowView]:
@@ -859,22 +887,21 @@ class PlannerFront:
         """The change proposed, for the workflow its words name. The after is the saved schedule
         with the change made. Nothing is saved here."""
         words = edit.workflow_words
-        matched = await self._matching(words, edit.software) if words is not None else []
-        one = matched[0] if len(matched) == 1 else None
-        saved = None if one is None else one.schedule
-        before = None if saved is None else EditBefore(day=saved.day, at=saved.at)
+        named = words if words is not None and _own_words(words, keep_check=True) else None
+        matched = [] if named is None else await self._matching(named, edit.software)
+        one = _choice(matched[0], edit) if len(matched) == 1 else None
+        missing = named if named is not None and not matched and _own_words(named) else None
+        # "it", or "the check" that fits none, names no workflow: she picks from every one.
+        several = matched if matched else [] if missing is not None else await self._use_cases()
         return EditReply(
             use_case_id=None if one is None else one.use_case_id,
             name=None if one is None else one.name,
-            watchlist=one is not None and one.template == SOFTWARE_WATCHLIST.key,
-            missing=words if words is not None and not matched and _own_words(words) else None,
+            watchlist=one is not None and one.watchlist,
+            missing=missing,
             software=edit.software,
-            choices=[
-                SimilarWorkflow(use_case_id=u.use_case_id, name=u.name)
-                for u in (matched if len(matched) > 1 else [])
-            ],
-            before=before,
-            after=_after(before, edit) if one is not None else None,
+            choices=[] if one is not None else [_choice(u, edit) for u in several],
+            before=None if one is None else one.before,
+            after=None if one is None else one.after,
             hour=None if edit.schedule is None else edit.schedule.hour,
             cant=edit.cant,
             holds_save=edit.holds_save,

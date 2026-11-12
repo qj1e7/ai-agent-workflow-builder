@@ -33,7 +33,7 @@ import { Leftovers } from './PartsList'
 import { Thread } from './Thread'
 import { EMPTY, threadReducer } from './threadState'
 
-const PAGE: Page = { ask: () => undefined, edit: () => undefined }
+const PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => undefined }
 
 function draw(reply: PlannerReply, { typed = 'Every Friday, sum up the tickets we closed this week', leftovers = false } = {}): string {
   const queryClient = new QueryClient()

@@ -77,7 +77,6 @@ export const SAY = {
   approverAbilities: 'Here’s what you can ask me.',
   approverUnknown: 'I can’t help with that here. I answer questions about your approvals and the workflows.',
   nothingNeeds: 'Nothing needs you right now.',
-  edit: 'I can’t change a workflow from the chat yet. Open it on the Workflows page to change it.',
 } as const
 
 /** Who is asking: an Operator sets up and changes workflows, and anyone else asks questions only (ADR 0043). */
@@ -104,8 +103,8 @@ export const ideasSay = (places: number): string =>
 export const needsSay = (total: number): string => (total === 0 ? SAY.nothingNeeds : `${count(total, 'thing')} ${total === 1 ? 'needs' : 'need'} you.`)
 
 /**
- * The sentence for an answer the Planner reply alone decides. The state answers, the person’s decisions, the requests to decide and
- * who makes changes are filled in from the platform’s own lists.
+ * The sentence for an answer the Planner reply alone decides. The state answers, the person’s decisions, the requests to decide,
+ * who makes changes and the edit card are filled in from the platform as it is now.
  */
 export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | null {
   switch (reply.answer) {
@@ -133,7 +132,6 @@ export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | 
     case 'question':
       return reply.text
     case 'edit':
-      return SAY.edit
     case 'check_workflows':
     case 'why_stopped':
     case 'needs_me':

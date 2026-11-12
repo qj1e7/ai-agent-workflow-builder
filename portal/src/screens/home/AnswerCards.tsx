@@ -23,6 +23,8 @@ export interface Page {
   readonly ask: (text: string) => void
   /** Puts words back in the box for the person to change. */
   readonly edit: (text: string) => void
+  /** Puts focus back in the box, as when she backs out of a card. */
+  readonly box: () => void
 }
 
 
@@ -144,7 +146,7 @@ export function WatchlistAnswer({ reply, typed }: { reply: WatchlistReply; typed
   )
 }
 
-const NO_PAGE: Page = { ask: () => undefined, edit: () => undefined }
+const NO_PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => undefined }
 
 function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { answer: 'refused' }>; typed: string; page: Page }) {
   // Someone who isn't an Operator sets nothing up, so the refusal offers them no set-up with a yes. Their main button is the request
@@ -299,7 +301,7 @@ interface AnswerProps {
   readonly page: Page
 }
 
-/** The body of one Planner answer, past its sentence. The three state answers are in StateAnswers. */
+/** The body of one Planner answer, past its sentence. The state answers are in StateAnswers, and the edit card draws its own sentence. */
 export function Answer({ reply, typed, page }: AnswerProps) {
   const asker = useAsker()
   switch (reply.answer) {

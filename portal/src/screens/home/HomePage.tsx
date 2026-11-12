@@ -70,7 +70,7 @@ const PHONE = '(max-width: 600px)'
 
 const DRAFT_GONE = 'That draft is gone. Ask for it again below.'
 /** Answers that are a card to work on. Focus goes to the card's heading; any other answer hands it back to the box. */
-const CARD_ANSWERS: ReadonlySet<PlannerReply['answer']> = new Set(['setup_card', 'part', 'watchlist'])
+const CARD_ANSWERS: ReadonlySet<PlannerReply['answer']> = new Set(['setup_card', 'part', 'watchlist', 'edit'])
 const DAY_ONE_HEADING = 'Which software should we keep up to date?'
 const DAY_ONE_LEAD = 'Ask about your watchlist, or tell me what software to watch.'
 const OFFLINE_HEADING = 'I can’t read new requests until an AI model is connected'
@@ -181,6 +181,7 @@ function PlannerHome({ heading, home, now, operator }: { heading: string; home: 
       chat.type(words)
       setTimeout(() => boxRef.current?.focus(), 0)
     },
+    box: () => setTimeout(() => boxRef.current?.focus(), 0),
   }
 
   const hero: BotState = offline ? 'sorry' : busy ? 'thinking' : text.trim() !== '' ? 'listening' : 'idle'

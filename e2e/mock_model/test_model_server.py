@@ -473,6 +473,8 @@ class ReadTest(unittest.TestCase):
                 read = server.reading(task)
                 self.assertEqual((read["asks_about"], read["workflow_words"]), ("change", words))
                 self.assertEqual((read["search"], read["ticket"]), (None, None))
+        self.assertEqual(server.reading("Change the React check to Tuesdays")["software"], "React")
+        self.assertIsNone(server.reading("Pause the weekly summary")["software"])
         self.assertEqual(server.reading("Set up a weekly summary")["asks_about"], "none")
 
     def test_a_vulnerability_check_fills_no_search(self) -> None:

@@ -525,9 +525,12 @@ def reading(task: str) -> dict[str, Any]:
             if named and named.group(1).lower() not in ("my", "my workflow", "it")
             else None
         )
+        # As the real model does: the software the words name, as React in "the React check".
+        software = next((s for s in SOFTWARE if words and s.lower() in words.lower()), None)
         return {
             "asks_about": about,
             "workflow_words": words,
+            "software": software,
             "belongs_on_watchlist": False,
             "skips_the_yes": skip_read(task),
             "schedule": None,

@@ -4,6 +4,7 @@ import { SettingsApi } from './support/settings'
 import type { Backend } from './support/stack'
 import { expect, test } from './support/test'
 import { devContext } from './support/ui'
+import { askAndWait, editCard, scheduledWorkflow, tag } from './support/edit'
 
 /**
  * The checkable parts of docs/design/ai-native-principles.md, run on each state of a screen. A failure names the principle it broke.
@@ -116,6 +117,53 @@ test('Home keeps the design rules in each of its states', async ({ browser, back
   await noPartDropped(page, 'a set-up card with a clause it didn’t follow')
   await allRules(page, capabilities, 'a set-up card with a cross')
   await repair()
+  await context.close()
+})
+
+/** Principle 4 on the edit card: a part it can't do keeps its cross, and the card never says the whole change is ready while one does. */
+async function editKeepsEveryPart(answer: Locator, state: string): Promise<void> {
+  await expect(answer.locator('[data-mark="no"]'), `Principle 4 (no part dropped): ${state} shows no cross`).not.toHaveCount(0)
+  await expect(answer, `Principle 4: ${state} says the whole change is ready while a part has a cross`).not.toContainText('Nothing changes until you save it.')
+}
+
+test('the edit card keeps the design rules in each of its states', async ({ browser, backend }) => {
+  const morning = await scheduledWorkflow(backend, `Morning check ${tag()}`, { day: 'weekdays', at: '08:00' })
+  const context = await devContext(browser, 'alice')
+  const page = await context.newPage()
+  await page.goto('/')
+  const rules = async (state: string) => {
+    await onePrimary(page, state)
+    await noOverclaim(page, state)
+    await noDeadButtons(page, state)
+  }
+
+  const hour = await askAndWait(page, `make the ${morning.name} run at 9`)
+  await expect(editCard(hour)).toContainText('At 9:00 or 21:00?')
+  await rules('the edit card asking for the time')
+
+  const days = await askAndWait(page, `make the ${morning.name} run on Mondays and Thursdays`)
+  await expect(editCard(days)).toContainText('I can only set one day.')
+  await editKeepsEveryPart(days, 'the edit card with two days')
+  await rules('the edit card holding Save for two days')
+
+  const unread = await askAndWait(page, `make the ${morning.name} run on Mondays in the afternoon`)
+  await expect(editCard(unread)).toBeVisible()
+  await editKeepsEveryPart(unread, 'the edit card with words it didn’t follow')
+  await rules('the edit card with a cross')
+
+  const rename = await askAndWait(page, `rename the ${morning.name} to Daily tickets`)
+  await expect(rename).toContainText('From the chat I can only change when')
+  await rules('the answer to a change the chat can’t make')
+
+  const ready = await askAndWait(page, `make the ${morning.name} run on Mondays only`)
+  await expect(editCard(ready)).toContainText('Every Monday at 8:00')
+  await rules('the edit card ready to save')
+  await editCard(ready).getByRole('button', { name: 'Save change' }).click()
+  await expect(editCard(ready)).toContainText('Saved as version 3.')
+  await rules('the edit card once saved')
+  await editCard(ready).getByRole('button', { name: /^Undo/ }).click()
+  await expect(editCard(ready)).toContainText('Undone, as version 4.')
+  await rules('the edit card once undone')
   await context.close()
 })
 

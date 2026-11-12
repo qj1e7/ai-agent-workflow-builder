@@ -23,6 +23,7 @@ from platform_api.builder.planner import (
     DecideReply,
     EditAfter,
     EditBefore,
+    EditChoice,
     EditReply,
     IdeasReply,
     ListedSoftware,
@@ -81,6 +82,21 @@ def does(text: str) -> PartView:
 def crossed(text: str, reason: ReplyReason, *choices: str, note: str | None = None) -> PartView:
     return PartView(text=text, mark="cant", reason=reason, note=note, choices=list(choices))
 
+
+EDIT = EditReply(
+    use_case_id="uc_01JB8",
+    name="Morning new-ticket check",
+    watchlist=False,
+    missing=None,
+    software=None,
+    choices=[],
+    before=EditBefore(day="weekdays", at="08:00"),
+    after=EditAfter(day="monday", at="08:00"),
+    hour=None,
+    cant=None,
+    holds_save=False,
+    parts=[does("Make the morning new-ticket check run on Mondays only")],
+)
 
 SETUP_CARD = SetupCardReply(
     name="Weekly summary of closed tickets",
@@ -322,20 +338,7 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
             looked_at=["watchlist"],
             about_software=["LangGraph"],
         ),
-        "planner/answer.edit.json": EditReply(
-            use_case_id="uc_01JB8",
-            name="Morning new-ticket check",
-            watchlist=False,
-            missing=None,
-            software=None,
-            choices=[],
-            before=EditBefore(day="weekdays", at="08:00"),
-            after=EditAfter(day="monday", at="08:00"),
-            hour=None,
-            cant=None,
-            holds_save=False,
-            parts=[does("Make the morning new-ticket check run on Mondays only")],
-        ),
+        "planner/answer.edit.json": EDIT,
         "planner/answer.edit.unclear.json": EditReply(
             use_case_id="uc_01JB8",
             name="Morning new-ticket check",
@@ -379,6 +382,68 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
                 crossed("What needs my attention", "ask_on_its_own"),
                 crossed("Pause the morning check", "only_schedule"),
             ],
+        ),
+        "planner/answer.edit.hour.json": EDIT.model_copy(
+            update={
+                "after": EditAfter(day="weekdays", at=None),
+                "hour": 9,
+                "parts": [does("make the morning check run at 9")],
+            }
+        ),
+        "planner/answer.edit.clash.json": EDIT.model_copy(
+            update={
+                "after": None,
+                "holds_save": True,
+                "parts": [
+                    does("make the morning new-ticket check run on"),
+                    crossed("Mondays and Thursdays", "one_day", "Mondays", "Thursdays"),
+                ],
+            }
+        ),
+        "planner/answer.edit.choices.json": EDIT.model_copy(
+            update={
+                "use_case_id": None,
+                "name": None,
+                "before": None,
+                "after": None,
+                "choices": [
+                    EditChoice(
+                        use_case_id="uc_01JB8",
+                        name="Morning new-ticket check",
+                        watchlist=False,
+                        before=EditBefore(day="weekdays", at="08:00"),
+                        after=EditAfter(day="every_day", at="08:00"),
+                    ),
+                    EditChoice(
+                        use_case_id="uc_01JC2",
+                        name="Weekly closed-ticket summary",
+                        watchlist=False,
+                        before=EditBefore(day="friday", at="16:00"),
+                        after=EditAfter(day="every_day", at="16:00"),
+                    ),
+                ],
+                "parts": [does("make it daily")],
+            }
+        ),
+        "planner/answer.edit.watchlist.json": EDIT.model_copy(
+            update={
+                "use_case_id": "uc_01WL",
+                "name": "Keep our software up to date",
+                "watchlist": True,
+                "before": EditBefore(day="monday", at="09:00"),
+                "after": EditAfter(day="every_day", at="09:00"),
+                "parts": [does("Run the software check every day instead of every Monday")],
+            }
+        ),
+        "planner/answer.edit.how_often.json": EDIT.model_copy(
+            update={
+                "after": None,
+                "cant": "how_often",
+                "parts": [
+                    does("make the morning check run every weekday"),
+                    crossed("except Friday", "how_often"),
+                ],
+            }
         ),
         "planner/answer.offline.json": offline("no_model"),
         "planner/answer.offline.too_slow.json": offline("too_slow"),

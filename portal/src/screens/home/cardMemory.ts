@@ -1,5 +1,6 @@
 import { createContext } from 'react'
 import type { Form } from './card'
+import type { Phase as EditPhase, Picks } from './edit'
 import type { Phase } from './SetupCard'
 
 /** Where a set-up card is when its page is left: what is on it, the draft it keeps, and whether it is still open. */
@@ -9,18 +10,19 @@ export interface CardKept {
   readonly phase: Phase
 }
 
-/**
- * The chat keeps its conversation across pages, but a card is drawn again when Home comes back. This hands the card what it
- * had, so it carries on with the same draft and never turns on twice. One message keeps the same memory for as long as the
- * chat does.
- */
-export interface CardMemory {
-  readonly kept: () => CardKept | undefined
-  readonly keep: (kept: CardKept) => void
+/** Where an edit card is when its page is left: what she picked, and whether she saved, undid or backed out. */
+export interface EditKept {
+  readonly picks: Picks
+  readonly phase: EditPhase
 }
 
-export function newCardMemory(): CardMemory {
-  let kept: CardKept | undefined
+interface Slot<T> {
+  readonly kept: () => T | undefined
+  readonly keep: (kept: T) => void
+}
+
+function slot<T>(): Slot<T> {
+  let kept: T | undefined
   return {
     kept: () => kept,
     keep: (next) => {
@@ -29,6 +31,21 @@ export function newCardMemory(): CardMemory {
   }
 }
 
-export const NO_MEMORY: CardMemory = { kept: () => undefined, keep: () => undefined }
+/**
+ * The chat keeps its conversation across pages, but a card is drawn again when Home comes back. This hands the card what it
+ * had, so it carries on with the same draft and never turns on twice, and an edit card keeps its Undo. One message keeps the
+ * same memory for as long as the chat does.
+ */
+export interface CardMemory extends Slot<CardKept> {
+  readonly edit: Slot<EditKept>
+}
+
+export function newCardMemory(): CardMemory {
+  return { ...slot<CardKept>(), edit: slot<EditKept>() }
+}
+
+const forgets = <T,>(): Slot<T> => ({ kept: () => undefined, keep: () => undefined })
+
+export const NO_MEMORY: CardMemory = { ...forgets<CardKept>(), edit: forgets<EditKept>() }
 
 export const CardMemoryContext = createContext<CardMemory>(NO_MEMORY)

@@ -1606,12 +1606,33 @@ async def test_a_word_inside_another_word_is_no_match(front: Front):
 
 async def test_words_that_match_several_workflows_offer_them_as_choices(front: Front):
     first = await make_workflow(front, "Friday summary", FRIDAY_16)
-    second = await make_workflow(front, "Friday follow-up", FRIDAY_16)
-    reply = await edit_reply(front, EditAnswer(workflow_words="Friday", schedule=ScheduleChange()))
-    assert (reply["use_case_id"], reply["missing"]) == (None, None)
-    assert sorted(c["use_case_id"] for c in cast(list[dict[str, str]], reply["choices"])) == sorted(
-        [first, second]
+    second = await make_workflow(front, "Friday follow-up", WEEKDAYS_8)
+    at_ten = ScheduleChange(at="10:00")
+    reply = await edit_reply(front, EditAnswer(workflow_words="Friday", schedule=at_ten))
+    assert (reply["use_case_id"], reply["missing"], reply["before"], reply["after"]) == (
+        None,
+        None,
+        None,
+        None,
     )
+    assert sorted(
+        cast(list[dict[str, object]], reply["choices"]), key=lambda c: str(c["name"])
+    ) == [
+        {
+            "use_case_id": second,
+            "name": "Friday follow-up",
+            "watchlist": False,
+            "before": WEEKDAYS_8,
+            "after": {"day": "weekdays", "at": "10:00"},
+        },
+        {
+            "use_case_id": first,
+            "name": "Friday summary",
+            "watchlist": False,
+            "before": FRIDAY_16,
+            "after": {"day": "friday", "at": "10:00"},
+        },
+    ]
 
 
 async def test_a_watched_softwares_check_is_the_watchlists_schedule(front: Front):
@@ -1685,10 +1706,26 @@ async def test_a_watched_softwares_check_is_the_watchlist_before_a_workflow_name
     assert reply["watchlist"] is True
 
 
-async def test_it_alone_is_no_name_and_nothing_is_missing(front: Front):
-    await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
-    reply = await edit_reply(front, EditAnswer(workflow_words="it", schedule=ScheduleChange()))
-    assert (reply["use_case_id"], reply["missing"], reply["choices"]) == (None, None, [])
+@pytest.mark.parametrize("words", ["it", None, "this one"])
+async def test_it_alone_names_no_workflow_and_offers_every_one(front: Front, words: str | None):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    weekly = await make_workflow(front, "Weekly closed-ticket summary", FRIDAY_16)
+    daily = ScheduleChange(day="every_day")
+    reply = await edit_reply(front, EditAnswer(workflow_words=words, schedule=daily))
+    assert (reply["use_case_id"], reply["missing"]) == (None, None)
+    choices = cast(list[dict[str, object]], reply["choices"])
+    assert {str(c["use_case_id"]): c["after"] for c in choices} == {
+        morning: {"day": "every_day", "at": "08:00"},
+        weekly: {"day": "every_day", "at": "16:00"},
+    }
+
+
+async def test_the_check_that_fits_no_workflow_offers_every_one_rather_than_none(front: Front):
+    summary = await make_workflow(front, "Weekly closed-ticket summary", FRIDAY_16)
+    edit = EditAnswer(workflow_words="the check", schedule=ScheduleChange(day="monday"))
+    reply = await edit_reply(front, edit)
+    assert (reply["use_case_id"], reply["missing"]) == (None, None)
+    assert [c["use_case_id"] for c in cast(list[dict[str, str]], reply["choices"])] == [summary]
 
 
 async def test_the_runtime_is_told_an_operator_can_change_workflows(front: Front):
