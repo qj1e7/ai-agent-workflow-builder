@@ -1,6 +1,6 @@
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, MouseEvent, ReactNode, Ref } from 'react'
-import { Link, type LinkProps } from 'react-router'
-import { useChatLinkState } from './fromChat'
+import type { LinkProps } from 'react-router'
+import { Link } from './Link'
 import { IconExternal, type Icon } from './icons'
 import { cx } from './cx'
 import styles from './Button.module.css'
@@ -57,9 +57,8 @@ interface ButtonLinkProps extends Omit<LinkProps, 'className'> {
 }
 
 export function ButtonLink({ variant = 'secondary', icon: Leading, children, ...rest }: ButtonLinkProps) {
-  const fromChat = useChatLinkState()
   return (
-    <Link state={fromChat} {...rest} className={buttonClassName(variant)}>
+    <Link {...rest} className={buttonClassName(variant)}>
       {Leading ? <Leading size={18} /> : null}
       {children}
     </Link>

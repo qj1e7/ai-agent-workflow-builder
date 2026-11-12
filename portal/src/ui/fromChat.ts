@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import { useLocation } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 
 /** Passed as a link's state when it leaves the chat, so the page it opens offers Back to the chat in place of its own Back. */
 export const FROM_CHAT = { fromChat: true }
@@ -12,9 +12,16 @@ export function useFromChat(): boolean {
   return openedFromChat(useLocation().state)
 }
 
-/** True inside the conversation, where every button that opens a page passes FROM_CHAT. */
+/** True inside the conversation, where every link and button that opens a page passes FROM_CHAT. */
 export const InChat = createContext(false)
 
 export function useChatLinkState(): typeof FROM_CHAT | undefined {
   return useContext(InChat) ? FROM_CHAT : undefined
+}
+
+/** Opens a page as a link inside the conversation does, so a page a chat card's button opens also offers Back to the chat. */
+export function useChatNavigate(): (to: string) => void {
+  const navigate = useNavigate()
+  const state = useChatLinkState()
+  return (to) => void navigate(to, { state })
 }

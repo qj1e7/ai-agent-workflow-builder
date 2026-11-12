@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { Link } from 'react-router'
+import { Link } from '../../ui/Link'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useAddSoftware, useFindSoftware } from '../../api/queries'

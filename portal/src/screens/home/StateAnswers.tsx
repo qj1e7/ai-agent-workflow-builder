@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { Link } from 'react-router'
+import { Link } from '../../ui/Link'
 import { useHome } from '../../api/homeQueries'
 import { useDisplayName } from '../../api/people'
 import { isOperator } from '../../api/me'

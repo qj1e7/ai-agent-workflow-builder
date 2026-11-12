@@ -1,8 +1,7 @@
-import { Link } from 'react-router'
+import { Link } from '../../ui/Link'
 import type { HomeOut } from '../../api/types'
 import { ButtonLink } from '../../ui/Button'
 import { cx } from '../../ui/cx'
-import { FROM_CHAT } from '../../ui/fromChat'
 import { firstSentence, openPathOf, pinnedOf, pinnedWhy, wordsOf } from './home'
 import { TONE_ICON } from './HomeItem'
 import homeStyles from './Home.module.css'
@@ -27,11 +26,11 @@ export function PinnedLine({ home, now }: { home: HomeOut; now: Date }) {
         <b>{words.title}</b>
         <span>{pinnedWhy(need, now)}</span>
       </div>
-      <ButtonLink to={openPathOf(need)} state={FROM_CHAT}>
+      <ButtonLink to={openPathOf(need)}>
         Open<span className="visually-hidden">: {firstSentence(words.title)}</span>
       </ButtonLink>
       {more > 0 ? (
-        <Link to="/workflows" state={FROM_CHAT} className={styles['more']}>
+        <Link to="/workflows" className={styles['more']}>
           {more} more<span className="visually-hidden"> that need you</span>
         </Link>
       ) : null}

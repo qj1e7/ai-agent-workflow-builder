@@ -1,10 +1,10 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
-import { useNavigate } from 'react-router'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useMe, useRemoveSoftware, useRestoreSoftware, useStartRun, useWatchlist } from '../../api/queries'
 import type { WatchedSoftwareView } from '../../api/types'
 import { Button, ButtonLink } from '../../ui/Button'
+import { useChatNavigate } from '../../ui/fromChat'
 import { pressCheckNow } from '../software/checkNow'
 import { changeFeedback, noticeWords, NO_FEEDBACK, pressRemove, pressUndo } from '../software/removal'
 import { scheduleRuns } from '../software/software'
@@ -48,12 +48,12 @@ function StopWatching({ row, confirming, busy, ask, keep, stop }: StopProps) {
 function CheckAllNow({ useCaseId }: { useCaseId: string }) {
   const start = useStartRun()
   const latch = useLatch()
-  const navigate = useNavigate()
+  const navigate = useChatNavigate()
   const words = useErrorWords()
   return (
     <>
       <div className={styles['buttons']}>
-        <Button loading={start.isPending} onClick={() => pressCheckNow(latch, start.mutate, useCaseId, (runId) => void navigate(`/runs/${runId}`))}>
+        <Button loading={start.isPending} onClick={() => pressCheckNow(latch, start.mutate, useCaseId, (runId) => navigate(`/runs/${runId}`))}>
           Check all software now
         </Button>
       </div>

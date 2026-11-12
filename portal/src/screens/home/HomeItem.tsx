@@ -1,5 +1,6 @@
 import { useId, type AnimationEvent, type CSSProperties } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link } from '../../ui/Link'
+import { useChatNavigate } from '../../ui/fromChat'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useModelOff, useRetry } from '../../api/queries'
@@ -34,8 +35,8 @@ function motionProps({ glide, arrive, stagger, leaving, onAnimationEnd }: Motion
 }
 
 export function RetryButton({ runId, label, primary, describedBy }: { runId: string; label: string; primary: boolean; describedBy: string }) {
-  const navigate = useNavigate()
-  const retry = useRetry(runId, () => void navigate(`/runs/${runId}`))
+  const navigate = useChatNavigate()
+  const retry = useRetry(runId, () => navigate(`/runs/${runId}`))
   const latch = useLatch()
   const words = useErrorWords()
   const press = () => latch.run((settled) => retry.mutate(undefined, { onSettled: settled }))
