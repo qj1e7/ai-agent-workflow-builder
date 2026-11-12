@@ -67,6 +67,12 @@ class RunRecord:
     carry_forward: str | None
 
 
+@dataclass(frozen=True)
+class DecidedPage:
+    decided: tuple[tuple[RunId, Decision], ...]
+    total: int
+
+
 class Stale(Exception): ...
 
 
@@ -437,6 +443,50 @@ class Store:
             )
             decisions[decision.approval_id] = (*decisions.get(decision.approval_id, ()), decision)
         return decisions
+
+    async def decided_by(
+        self, uow: UnitOfWork, person: UserId, verdict: Verdict | None, limit: int
+    ) -> DecidedPage:
+        """The person's decisions, newest first, each with the run it decided, and how many
+        there are in all."""
+        rows = await (
+            await uow.conn.execute(
+                "SELECT d.approval_id, d.step_index, d.decided_by, d.verdict, d.seen_digest, "
+                "d.decided_at, d.reason, a.run_id, count(*) OVER () AS total "
+                "FROM orchestration.approval_decisions d "
+                "JOIN orchestration.approval_requests a ON a.approval_id = d.approval_id "
+                "WHERE d.decided_by = %s AND (%s::text IS NULL OR d.verdict = %s) "
+                "ORDER BY d.decided_at DESC, d.approval_id DESC, d.step_index DESC LIMIT %s",
+                (person, *(2 * [None if verdict is None else verdict.value]), limit),
+            )
+        ).fetchall()
+        decided = tuple(
+            (
+                RunId(row["run_id"]),
+                Decision(
+                    ApprovalId(row["approval_id"]),
+                    int(row["step_index"]),
+                    UserId(row["decided_by"]),
+                    Verdict(row["verdict"]),
+                    Digest(row["seen_digest"]),
+                    row["decided_at"],
+                    row["reason"],
+                ),
+            )
+            for row in rows
+        )
+        return DecidedPage(decided, int(rows[0]["total"]) if rows else 0)
+
+    async def load_runs(self, uow: UnitOfWork, run_ids: Collection[RunId]) -> list[RunRecord]:
+        if not run_ids:
+            return []
+        rows = await (
+            await uow.conn.execute(
+                f"SELECT {RUN_COLUMNS} FROM orchestration.runs WHERE run_id = ANY(%s)",
+                (list(run_ids),),
+            )
+        ).fetchall()
+        return [_record(row) for row in rows]
 
     async def enqueue(
         self, uow: UnitOfWork, run_id: RunId, kind: str, payload: dict[str, Any], next_at: datetime

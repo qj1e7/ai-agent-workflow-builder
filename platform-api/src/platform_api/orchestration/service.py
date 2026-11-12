@@ -191,6 +191,28 @@ class RunDetail:
     decisions: tuple[Decision, ...]
 
 
+@dataclass(frozen=True)
+class PastDecision:
+    decision: Decision
+    run: RunDetail
+    gist: RunGist
+
+    @property
+    def connector(self) -> str | None:
+        """Where the run wrote, or would write: its first write, else its first proposed one."""
+        state = self.run.record.state
+        if isinstance(state, Succeeded) and state.written:
+            return state.written[0].connector
+        actions = self.run.proposal.actions if self.run.proposal is not None else ()
+        return actions[0].connector if actions else None
+
+
+@dataclass(frozen=True)
+class PastDecisions:
+    decisions: tuple[PastDecision, ...]
+    total: int
+
+
 def _links(state: RunState) -> tuple[ProposalId | None, ApprovalId | None]:
     match state:
         case Proposed(proposal_id=pid):
@@ -937,6 +959,23 @@ class Orchestrator:
             records = await self._store.newest_runs(uow, use_case_ids)
             details = await self._details(uow, records)
         return {d.record.spec.use_case_id: gist_of(d, viewer) for d in details}
+
+    async def decisions_of(
+        self, viewer: Principal, verdict: Verdict | None, limit: int
+    ) -> PastDecisions:
+        """The viewer's own decisions, newest first, each with the run it decided as it stands
+        now, so a line can say what the decision led to."""
+        async with self._db.transaction("orchestration") as uow:
+            page = await self._store.decided_by(uow, viewer.user_id, verdict, limit)
+            records = await self._store.load_runs(uow, {run_id for run_id, _ in page.decided})
+            details = {d.record.run_id: d for d in await self._details(uow, records)}
+        return PastDecisions(
+            tuple(
+                PastDecision(decision, details[run_id], gist_of(details[run_id], viewer))
+                for run_id, decision in page.decided
+            ),
+            page.total,
+        )
 
     async def runs_for(self, viewer: Principal) -> PersonRuns:
         async with self._db.transaction("orchestration") as uow:

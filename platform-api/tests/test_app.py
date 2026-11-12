@@ -68,6 +68,7 @@ ROUTES = {
     ("GET", "/api/v1/runs/{run_id}/troubleshoot"),
     ("GET", "/api/v1/approvals/{approval_id}"),
     ("POST", "/api/v1/approvals/{approval_id}/decisions"),
+    ("GET", "/api/v1/decisions"),
     ("GET", "/api/v1/teams-stub/messages"),
     ("GET", "/api/v1/mock-jira/tickets"),
     ("POST", "/api/v1/mock-jira/tickets/{key}/done"),
