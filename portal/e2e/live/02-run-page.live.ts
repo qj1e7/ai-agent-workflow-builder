@@ -414,6 +414,8 @@ for (const phone of [false, true]) {
     await expectAccessible(bob, path.join(OUT, 'axe'), `decline-reasons-${width}`)
     await shot(bob, info, `r12-decline-dialog-bob-${width}`)
     await why.getByRole('button', { name: 'Decline' }).click()
+    await expect(bob.getByRole('status').filter({ hasText: 'Declined. Nothing was written. Reason: Wrong version.' }), 'a message at the bottom tells Bob, said once').toHaveCount(1)
+    await shot(bob, info, `r15-declined-message-bob-${width}`)
 
     await expect(heading(bob)).toHaveText('Declined, nothing was written', { timeout: 60_000 })
     await expect(bob.getByRole('main')).toContainText(RECORD)

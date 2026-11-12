@@ -114,7 +114,7 @@ async function railCount(page: Page, label: string): Promise<number> {
   return Number(/, (\d+) need/.exec(name)?.[1] ?? 0)
 }
 
-test('the Needs you count is one number on Home, the rail and the Planner’s answer, and the Watchlist count is the page’s Needs attention', async ({ browser, backend }) => {
+test('the Needs you count is one number on Home, the rail and the Planner’s answer, the Watchlist count is the page’s Needs attention, and the count line is its rows', async ({ browser, backend }) => {
   await backend.waitingRun('alice')
   const repair = await jiraDown(backend)
   const context = await devContext(browser, 'alice')
@@ -138,6 +138,12 @@ test('the Needs you count is one number on Home, the rail and the Planner’s an
   const attention = main(page).locator('#needs-attention-heading')
   const onPage = (await attention.count()) === 0 ? 0 : Number((await attention.innerText()).replace(/\D/g, ''))
   expect(await railCount(page, 'Watchlist'), 'Principle 7: the rail’s Watchlist count is the page’s Needs attention').toBe(onPage)
+  const line = await main(page).locator('h1 + p').innerText()
+  const said = (part: RegExp) => Number(part.exec(line)?.[1] ?? 0)
+  const rowsWith = (...statuses: readonly string[]) => main(page).locator(statuses.map((status) => `li[data-status="${status}"]`).join(', ')).count()
+  expect(said(/(\d+) ha(?:s|ve) a newer version/), `Principle 7: the count line "${line}" counts every row with a newer version`).toBe(await rowsWith('behind', 'awaiting_approval', 'ticket_open'))
+  expect(said(/(\d+) can’t be checked/), `Principle 7: the count line "${line}" counts every row that can’t be checked`).toBe(await rowsWith('cant_check'))
+  expect(said(/(\d+) not checked yet/), `Principle 7: the count line "${line}" counts every row not checked yet`).toBe(await rowsWith('not_checked'))
   await repair()
   await context.close()
 })

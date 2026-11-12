@@ -208,6 +208,7 @@ test('APPR-panel: Alice declines in the side panel, focus goes to its heading, t
   await expectAccessible(page, path.join(OUT, 'axe'), 'side-panel-approval-1280')
   await shot(page, info, 'r3-side-panel-approval-1280')
   await decline(panel(page), 'Not needed this time')
+  await expect(page.getByRole('status').filter({ hasText: 'Declined. Nothing was written. Reason: Not needed this time.' }), 'a message at the bottom tells Alice').toHaveCount(1)
   await expect(heading(page), 'focus is on the panel’s heading').toBeFocused()
   await expect(panel(page), 'the panel gives the declined record').toContainText(/Declined\s*Declined by Alice\. Nothing was written\. Reason: Not needed this time\./, { timeout: 15_000 })
   await expect(panel(page), 'its line says nothing was written').toContainText('Nothing written')
