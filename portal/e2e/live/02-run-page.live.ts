@@ -1,11 +1,11 @@
 import path from 'node:path'
-import type { Page } from '@playwright/test'
+import type { Page, TestInfo } from '@playwright/test'
 import { expectAccessible } from '../support/axe'
 import { assertClean, watchPage } from '../support/test'
 import { holdRunAtWork, linkAnimations, marchReadings, runLinks } from './support/runLine'
 import { setMockGithubMode } from './support/stack'
 import { expect, test } from './support/test'
-import { devContext, OUT, shot } from './support/ui'
+import { decline, declineReasons, devContext, OUT, shot } from './support/ui'
 
 interface ApprovalAnswer {
   actions: { fields: { title: string } }[]
@@ -106,9 +106,9 @@ test('the link in a Teams message opens the run page at the decision', async ({ 
   await expect(page.locator('#decision')).toBeFocused()
   await expect(page.getByRole('button', { name: 'Approve 1 ticket' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Decline' }).click()
+  await decline(page)
   await expect(heading(page)).toHaveText('Declined, nothing was written', { timeout: 60_000 })
-  await expect(page.getByRole('main')).toContainText('Bob declined, so nothing was written.')
+  await expect(page.getByRole('main')).toContainText('Declined by Bob. Nothing was written.')
   expect(await runLinks(page), 'faint dots lead into the write that was not needed').toEqual(['solid', 'solid', 'solid', 'dead', 'solid'])
   expect((await backend.tickets()).filter((ticket) => ticket.run_id === runId)).toEqual([])
   assertClean(watch)
@@ -187,7 +187,7 @@ test('scenario C: once bob has decided, the panel and the run keep the agents’
   const page = await context.newPage()
   await page.goto(`/runs/${runId}`)
   await expect(answer(page, 'Why')).toContainText(found)
-  await page.getByRole('button', { name: 'Decline' }).click()
+  await decline(page)
   await expect(heading(page)).toHaveText('Declined, nothing was written', { timeout: 60_000 })
   expect((await backend.get<{ found: string }>('bob', `/api/v1/approvals/${approvalId}`)).found, 'the approval no longer carries it').toBe('')
   await expect(toggle(page), 'deciding does not open the agents’ chat').toHaveText('Show what each agent did')
@@ -203,7 +203,7 @@ test('scenario C: a bob who pressed Show what each agent did before deciding sti
   await expect(toggle(page)).toHaveText('Show what each agent did')
   await toggle(page).click()
   await expect(agentsSaid(page)).toBeVisible()
-  await page.getByRole('button', { name: 'Decline' }).click()
+  await decline(page)
   await expect(heading(page)).toHaveText('Declined, nothing was written', { timeout: 60_000 })
   await expect(toggle(page)).toHaveText('Hide what each agent did')
   await expect(agentsSaid(page), 'bob’s own press holds after he decides').toBeVisible()
@@ -367,3 +367,127 @@ for (const phone of [false, true]) {
     await context.close()
   })
 }
+
+const RECORD = 'Declined by Bob. Nothing was written. Reason: Wrong version.'
+const pill = (page: Page) => heading(page).locator('xpath=..').getByText('Declined', { exact: true })
+const softwareRow = (page: Page, name: string) => page.locator('li[data-status]').filter({ hasText: name })
+
+/** The run page, Workflows and the watchlist give the same declined record, and none of them a write. */
+async function expectDeclinedEverywhere(page: Page, runId: string, info: TestInfo, who: string, width: number): Promise<void> {
+  await page.goto(`/runs/${runId}`)
+  await expect(heading(page)).toHaveText('Declined, nothing was written')
+  await expect(pill(page), 'the pill says Declined in words').toBeVisible()
+  await expect(page.getByRole('main')).toContainText(RECORD)
+  await shot(page, info, `r12-run-page-${who}-${width}`)
+  await page.goto('/workflows')
+  const workflow = page.locator('li[data-workflow-id]').filter({ has: page.getByRole('heading', { name: 'Software watchlist', exact: true }) })
+  await expect(workflow.getByText(/^Last run .+ · Declined by Bob$/), 'the Workflows row names who declined, the record’s short form for its one line').toBeVisible()
+  await expect(workflow).not.toContainText(/created|Sent/)
+  await workflow.scrollIntoViewIfNeeded()
+  await shot(page, info, `r12-workflows-${who}-${width}`)
+  await page.goto('/software')
+  const row = softwareRow(page, 'LangGraph')
+  await expect(row).toContainText('New version')
+  await expect(row).toContainText(RECORD)
+  await row.scrollIntoViewIfNeeded()
+  await shot(page, info, `r12-watchlist-${who}-${width}`)
+}
+
+for (const phone of [false, true]) {
+  const width = phone ? 390 : 1280
+
+  test(`APPR-decline at ${width} px: Decline asks why with quick reasons, and the reason shows with the one declined record wherever the run shows`, async ({ browser, backend }, info) => {
+    const { runId, approvalId } = await backend.waitingRun('alice')
+    const bobContext = await devContext(browser, 'bob', { phone })
+    const bob = await bobContext.newPage()
+    if (!phone) await bob.setViewportSize({ width, height: 900 })
+    const watch = watchPage(bob)
+    await bob.goto(`/runs/${runId}`)
+    await bob.getByRole('button', { name: 'Decline' }).click()
+    const why = declineReasons(bob)
+    await expect(why).toContainText('Why are you declining? Optional. Alice sees it with the record.')
+    await expect(why.getByRole('button'), 'the quick reasons, then Decline and Back').toHaveText(['Not this week', 'Wrong version', 'Needs testing first', 'Decline', 'Back'])
+    await expect(why.getByRole('button', { name: 'Not this week' }), 'focus is on the first reason').toBeFocused()
+    await expect(heading(bob), 'nothing is declined yet').toHaveText('1 ticket is waiting for a yes')
+    await why.getByRole('button', { name: 'Wrong version' }).click()
+    await expect(why.locator('[aria-pressed="true"]'), 'one reason is picked').toHaveText('Wrong version')
+    await expectAccessible(bob, path.join(OUT, 'axe'), `decline-reasons-${width}`)
+    await shot(bob, info, `r12-decline-dialog-bob-${width}`)
+    await why.getByRole('button', { name: 'Decline' }).click()
+
+    await expect(heading(bob)).toHaveText('Declined, nothing was written', { timeout: 60_000 })
+    await expect(bob.getByRole('main')).toContainText(RECORD)
+    await expect(pill(bob)).toBeVisible()
+    await expect(steps(bob).filter({ hasText: 'Nothing written' }), 'the write step says nothing was written').toHaveCount(1)
+    await expect(steps(bob).last(), 'the last step is a plain Ended').toContainText('Ended')
+    await expect(steps(bob).last().locator('svg'), 'Ended has no tick').toHaveCount(0)
+    await toggle(bob).click()
+    await expect(agentsSaid(bob)).toContainText(`${RECORD} The run ended.`)
+    await expect(agentsSaid(bob), 'the agents never say they created anything').not.toContainText(/Done\.|created/)
+
+    const view = await backend.get<{ steps: { status: string; reason: string | null }[] }>('bob', `/api/v1/approvals/${approvalId}`)
+    expect(view.steps.map((step) => [step.status, step.reason])).toEqual([['declined', 'Wrong version']])
+    expect((await backend.tickets()).filter((ticket) => ticket.run_id === runId), 'nothing was written').toEqual([])
+    if (!phone) {
+      await bob.getByRole('button', { name: /^Teams, practice copy/ }).click()
+      const card = bob.getByRole('dialog', { name: 'Teams, practice copy' }).locator(`li[data-approval-id="${approvalId}"]`)
+      await expect(card, 'Teams gives the same record').toContainText(/Declined by Bob\s*Nothing was written\. Reason: Wrong version\./)
+      await bob.keyboard.press('Escape')
+    }
+    await expectDeclinedEverywhere(bob, runId, info, 'bob', width)
+    assertClean(watch)
+    await bobContext.close()
+
+    const aliceContext = await devContext(browser, 'alice', { phone })
+    const alice = await aliceContext.newPage()
+    if (!phone) await alice.setViewportSize({ width, height: 900 })
+    await expectDeclinedEverywhere(alice, runId, info, 'alice', width)
+    if (!phone) {
+      const saved = await backend.send('PUT', 'alice', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })
+      expect(saved.status, 'a weekly check is set').toBe(200)
+      try {
+        const next = /The tickets will be proposed again at the next check, Mon \d+ \w+, 9:00\./
+        await alice.goto('/software')
+        await expect(softwareRow(alice, 'LangGraph'), 'the row says when the tickets are proposed again').toContainText(next)
+        await softwareRow(alice, 'LangGraph').scrollIntoViewIfNeeded()
+        await shot(alice, info, `r12-watchlist-next-check-alice-${width}`)
+        await alice.goto(`/runs/${runId}`)
+        await expect(alice.getByRole('main'), 'the run page gives the same next step').toContainText(next)
+      } finally {
+        await backend.delete('alice', '/api/v1/watchlist/schedule', [200, 404])
+      }
+    }
+    await aliceContext.close()
+  })
+}
+
+test('APPR-decline-none: a decline needs no reason, and then the record gives none', async ({ browser, backend }) => {
+  const { runId, approvalId } = await backend.waitingRun('alice')
+  const context = await devContext(browser, 'bob')
+  const page = await context.newPage()
+  await page.goto(`/runs/${runId}`)
+  await decline(page)
+  await expect(heading(page)).toHaveText('Declined, nothing was written', { timeout: 60_000 })
+  await expect(page.getByRole('main')).toContainText('Declined by Bob. Nothing was written.')
+  await expect(page.getByRole('main')).not.toContainText('Reason:')
+  const view = await backend.get<{ steps: { reason: string | null }[] }>('bob', `/api/v1/approvals/${approvalId}`)
+  expect(view.steps.map((step) => step.reason)).toEqual([null])
+  await context.close()
+})
+
+test('APPR-decide-nav: a half-picked decline reason does not survive leaving the page', async ({ browser, backend }) => {
+  const { runId } = await backend.waitingRun('alice')
+  const context = await devContext(browser, 'bob')
+  const page = await context.newPage()
+  await page.goto(`/runs/${runId}`)
+  await page.getByRole('button', { name: 'Decline' }).click()
+  await declineReasons(page).getByRole('button', { name: 'Wrong version' }).click()
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /^Workflows/ }).click()
+  await expect(heading(page), 'the run page is left').toHaveText('Workflows')
+  await page.goBack()
+  await expect(heading(page)).toHaveText('1 ticket is waiting for a yes')
+  await expect(declineReasons(page), 'the reasons are closed').toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^(Approve 1 ticket|Decline)$/ }), 'Approve and Decline are back').toHaveCount(2)
+  expect((await backend.run(runId)).state, 'nothing was decided').toBe('awaiting_approval')
+  await context.close()
+})

@@ -19,7 +19,14 @@ from platform_api.builder.models import (
     VersionView,
 )
 from platform_api.contracts.cards_stories import USE_CASE as AGENT_USE_CASE
-from platform_api.contracts.stories import ALICE, BOB, REJECTED, USE_CASE, USE_CASE_SCHEDULE
+from platform_api.contracts.stories import (
+    ALICE,
+    BOB,
+    DECLINE_REASON,
+    REJECTED,
+    USE_CASE,
+    USE_CASE_SCHEDULE,
+)
 from platform_api.contracts.watchlist_stories import SCHEDULE, STATUSES
 from platform_api.wire import WireModel
 
@@ -30,6 +37,8 @@ LAST_RUN = LastRunView(
     at=REJECTED.t0,
     test=False,
     declined_by=BOB,
+    decline_reason=DECLINE_REASON,
+    approved_by=[],
     proposed=1,
     written=0,
     tickets=True,
@@ -37,14 +46,18 @@ LAST_RUN = LastRunView(
     retryable=False,
     reason=None,
 )
-# Bob declined the last check. Nothing was written. The decline reason is not part of the
-# record yet.
+# Bob declined the last check, giving a reason. Nothing was written.
 DECLINED = USE_CASE.model_copy(update={"last_run": LAST_RUN})
 # The last check waits for a yes that Bob may give.
 WAITING = USE_CASE.model_copy(
     update={
         "last_run": LAST_RUN.model_copy(
-            update={"state": "awaiting_approval", "declined_by": None, "you_can_decide": True}
+            update={
+                "state": "awaiting_approval",
+                "declined_by": None,
+                "decline_reason": None,
+                "you_can_decide": True,
+            }
         )
     }
 )
@@ -56,6 +69,7 @@ STOPPED = AGENT_USE_CASE.model_copy(
                 "state": "failed",
                 "test": True,
                 "declined_by": None,
+                "decline_reason": None,
                 "proposed": 0,
                 "tickets": False,
                 "retryable": True,

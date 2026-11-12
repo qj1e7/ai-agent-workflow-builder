@@ -316,12 +316,15 @@ class AwaitingApproval:
         )
         return Moved(state, (_leg_dispatched(Leg.ACT, 1),))
 
-    def reject(self, by: UserId, by_display: str, step: int) -> Moved[Rejected]:
+    def reject(
+        self, by: UserId, by_display: str, step: int, reason: str | None = None
+    ) -> Moved[Rejected]:
+        because = f" Reason: {sentence(reason)}" if reason else ""
         rejected = PendingEvent(
             PLATFORM,
             "run_rejected",
-            f"{by_display} declined the request. Nothing was written.",
-            RunRejectedData(by=by, step=step),
+            f"{by_display} declined the request. Nothing was written.{because}",
+            RunRejectedData(by=by, step=step, reason=reason),
         )
         return Moved(
             Rejected(self.run_id, self.proposal_id, self.approval_id, by, step), (rejected,)

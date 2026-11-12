@@ -1,0 +1,9 @@
+﻿backed up: 2026-11-12T14:09:11Z
+healthz: {"status":"ok"}
+image: docker.n8n.io/n8nio/n8n:latest
+n8n version: 2.46.6
+workflows: PI5CBumIHtf59dIm (Cert List expiry reminder (Teams)) active=False -> workflows\PI5CBumIHtf59dIm__Cert_List_expiry_reminder__Teams_.json
+credentials: 2 (metadata only, no secrets)
+NOTE: workflow files reference credential IDs but never contain secrets.
+NOTE: secrets are encrypted inside the n8n_data docker volume; the encryption key lives in that volume too.
+NOTE: a workflow export is useless without the n8n_data volume or re-created credentials.

@@ -459,7 +459,8 @@
           "label": "Team approver",
           "status": "open",
           "decided_by": null,
-          "decided_at": null
+          "decided_at": null,
+          "reason": null
         }
       ],
       "link": "/approvals/apr_01JBC"

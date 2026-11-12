@@ -106,6 +106,10 @@ class ApprovalOutcome:
     by: tuple[str, ...]
     use_case_name: str
     open_url: str
+    approved_first: tuple[str, ...] = ()
+    """On a decline, who said yes to the steps before it, in step order."""
+    reason: str | None = None
+    """On a decline, the reason the Approver gave, if any."""
 
 
 class ApprovalChannel(Protocol):

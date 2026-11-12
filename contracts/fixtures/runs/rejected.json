@@ -252,7 +252,8 @@
           "label": "Team approver",
           "status": "open",
           "decided_by": null,
-          "decided_at": null
+          "decided_at": null,
+          "reason": null
         }
       ],
       "link": "/approvals/apr_01JBA"
@@ -322,11 +323,12 @@
       "id": "platform",
       "display": "Platform"
     },
-    "summary": "Bob declined the request. Nothing was written.",
+    "summary": "Bob declined the request. Nothing was written. Reason: Wrong version.",
     "kind": "run_rejected",
     "data": {
       "by": "bob",
-      "step": 0
+      "step": 0,
+      "reason": "Wrong version"
     }
   }
 ]

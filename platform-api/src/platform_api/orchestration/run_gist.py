@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from platform_api.orchestration.approvals import why_not
+from platform_api.orchestration.approvals import Verdict, why_not
 from platform_api.orchestration.runs import (
     AwaitingApproval,
     Failed,
@@ -31,6 +31,10 @@ class RunGist:
     test: bool
     """A person started it with Do a test run."""
     declined_by: UserId | None
+    decline_reason: str | None
+    """Why it was declined, when the Approver gave a reason."""
+    approved_by: tuple[UserId, ...]
+    """Who said yes to its request, in step order. On a declined run, those before the decline."""
     written: int
     proposed: int
     tickets: bool
@@ -56,6 +60,8 @@ def gist_of(detail: RunDetail, viewer: Principal | None) -> RunGist:
         and why_not(detail.approval, detail.decisions, viewer) is None
     )
     failed = state if isinstance(state, Failed) else None
+    decisions = sorted(detail.decisions, key=lambda d: d.step_index)
+    reasons = (d.reason for d in decisions if d.reason)
     return RunGist(
         run_id=record.run_id,
         use_case_id=record.spec.use_case_id,
@@ -63,6 +69,8 @@ def gist_of(detail: RunDetail, viewer: Principal | None) -> RunGist:
         started_at=record.started_at,
         test=record.spec.test,
         declined_by=state.by if isinstance(state, Rejected) else None,
+        decline_reason=next(reasons, None) if isinstance(state, Rejected) else None,
+        approved_by=tuple(d.by for d in decisions if d.verdict is Verdict.APPROVE),
         written=len(written),
         proposed=len(proposed),
         tickets=len(counted) > 0 and all(w.operation == CREATE_TICKET for w in counted),

@@ -17,6 +17,7 @@ import {
   historyOf,
   matches,
   newestOf,
+  nextCheckOf,
   nextCheckWords,
   noScheduleWords,
   oursOf,
@@ -376,5 +377,20 @@ describe('the status of a row whose version is not known', () => {
     expect(statusWords({ status: 'up_to_date', our_version: null })).toBe('Nothing newer yet')
     expect(statusWords({ status: 'up_to_date', our_version: '1.2.16' })).toBe('Up to date')
     expect(statusWords({ status: 'behind', our_version: null })).toBe('New version')
+  })
+})
+
+describe('when the watchlist checks next, for what a declined check says happens next', () => {
+  const schedule: ScheduleView = { ...SCHEDULE, next_at: '2026-11-23T01:00:00Z', held: null }
+
+  it('is the schedule’s next check, in its zone', () => {
+    expect(nextCheckOf({ state: 'on', schedule })).toEqual({ at: '2026-11-23T01:00:00Z', zone: schedule.time_zone })
+  })
+
+  it('is nothing while the watchlist is paused, held or unscheduled', () => {
+    expect(nextCheckOf({ state: 'paused', schedule })).toBeNull()
+    expect(nextCheckOf({ state: 'on', schedule: { ...schedule, held: 'owner_removed' } })).toBeNull()
+    expect(nextCheckOf({ state: 'on', schedule: null })).toBeNull()
+    expect(nextCheckOf(null)).toBeNull()
   })
 })
