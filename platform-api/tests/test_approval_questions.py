@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import replace
 from typing import Any
 
@@ -112,10 +113,11 @@ async def test_the_same_key_sent_again_finds_the_question_it_asked(lab: Lab):
     approval_id = (await approval_of(lab, run_id))["approval_id"]
 
     first = await ask(lab, "bob", approval_id, "Is it urgent?", key="same")
-    again = await ask(lab, "bob", approval_id, "Is it urgent at all?", key="same")
+    again = await ask(lab, "bob", approval_id, "Is it urgent?", key="same")
+    edited = await ask(lab, "bob", approval_id, "Is it urgent at all?", key="same")
     other = await ask(lab, "bob", approval_id, "Who uses it?", key="other")
 
-    assert (first.status_code, again.status_code, other.status_code) == (201, 200, 201)
+    assert [r.status_code for r in (first, again, edited, other)] == [201, 200, 409, 201]
     assert again.json() == first.json()
     texts = [q["text"] for q in (await view(lab, approval_id, "bob"))["questions"]]
     assert texts == ["Is it urgent?", "Who uses it?"]
@@ -223,6 +225,22 @@ async def test_once_the_request_is_decided_its_questions_stay_and_take_no_answer
     assert decided["questions"] == [question], "the question stays, with no answer"
     assert [s["status"] for s in decided["steps"]] == ["declined"]
     assert (await lab.home("alice"))["questions_for_me"] == []
+
+
+async def test_two_answers_at_once_keep_one(lab: Lab):
+    run_id = await waiting_run(lab, await workflow(lab))
+    approval_id = (await approval_of(lab, run_id))["approval_id"]
+    question_id = (await ask(lab, "bob", approval_id, "Is it urgent?")).json()["question_id"]
+
+    first, second = await asyncio.gather(
+        answer(lab, "alice", approval_id, question_id, "Yes."),
+        answer(lab, "alice", approval_id, question_id, "No."),
+    )
+
+    assert sorted([first.status_code, second.status_code]) == [201, 409]
+    kept = next(r for r in (first, second) if r.status_code == 201).json()["answer"]["text"]
+    (question,) = (await view(lab, approval_id, "bob"))["questions"]
+    assert question["answer"]["text"] == kept
 
 
 async def test_on_a_scheduled_run_the_workflows_owner_answers_not_the_starter(lab: Lab):

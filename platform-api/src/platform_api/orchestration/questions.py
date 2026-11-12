@@ -123,16 +123,17 @@ async def load_question(
     return None if row is None else _question(row)
 
 
-async def save_answer(uow: UnitOfWork, question: Question, answer: Answer) -> Question:
+async def save_answer(uow: UnitOfWork, question: Question, answer: Answer) -> Question | None:
+    """The answered question, or None when it already has an answer."""
     row = await (
         await uow.conn.execute(
             "UPDATE orchestration.approval_questions SET answer = %s, answered_by = %s, "
-            f"answered_at = %s WHERE question_id = %s RETURNING {_COLUMNS}",
+            "answered_at = %s WHERE question_id = %s AND answer IS NULL "
+            f"RETURNING {_COLUMNS}",
             (answer.text, answer.by, answer.at, question.id),
         )
     ).fetchone()
-    assert row is not None
-    return _question(row)
+    return None if row is None else _question(row)
 
 
 async def load_questions_for(

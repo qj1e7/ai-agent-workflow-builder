@@ -11086,7 +11086,7 @@
     },
     "/api/v1/approvals/{approval_id}/questions": {
       "post": {
-        "description": "Asks the requester a question on a request that waits for a yes. Only someone who may decide the open step may ask. A question decides nothing: the request keeps waiting, and its steps and decisions stay as they were. The same Idempotency-Key from the same person answers the question it asked before.",
+        "description": "Asks the requester a question on a request that waits for a yes. Only someone who may decide the open step may ask. A question decides nothing: the request keeps waiting, and its steps and decisions stay as they were. The same Idempotency-Key from the same person, with the same words, answers the question it asked before.",
         "operationId": "ask_question_api_v1_approvals__approval_id__questions_post",
         "parameters": [
           {
@@ -11178,6 +11178,16 @@
               }
             },
             "description": "No such approval"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "This Idempotency-Key already asked a question with other words"
           },
           "422": {
             "content": {

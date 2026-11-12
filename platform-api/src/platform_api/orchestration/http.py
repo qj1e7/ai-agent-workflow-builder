@@ -36,6 +36,7 @@ from platform_api.orchestration.service import (
     Decided,
     DecisionRace,
     DecisionRefused,
+    KeyAskedAnother,
     NotFound,
     NotRetryable,
     Orchestrator,
@@ -673,7 +674,7 @@ async def decide(
         "Asks the requester a question on a request that waits for a yes. Only someone who may "
         "decide the open step may ask. A question decides nothing: the request keeps waiting, "
         "and its steps and decisions stay as they were. The same Idempotency-Key from the same "
-        "person answers the question it asked before."
+        "person, with the same words, answers the question it asked before."
     ),
     responses={
         **SIGNED_IN,
@@ -684,6 +685,7 @@ async def decide(
             "on the People list",
         },
         404: error_response("No such approval"),
+        409: error_response("This Idempotency-Key already asked a question with other words"),
     },
 )
 async def ask_question(
@@ -701,6 +703,10 @@ async def ask_question(
             return question_view(question)
         case QuestionRefused(reason):
             return _json(403, RefusalOut(refusal=reason, message=REFUSAL_MESSAGES[reason]))
+        case KeyAskedAnother():
+            raise HTTPException(
+                status_code=409, detail="This key already asked a question with other words."
+            )
         case NotFound():
             raise HTTPException(status_code=404, detail="No such approval")
 

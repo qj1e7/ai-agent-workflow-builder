@@ -269,7 +269,12 @@ class QuestionRefused:
     reason: Refusal
 
 
-type AskResult = QuestionAsked | QuestionRefused | NotFound
+@dataclass(frozen=True)
+class KeyAskedAnother:
+    """The Idempotency-Key already asked a question with other words, which is kept as it was."""
+
+
+type AskResult = QuestionAsked | QuestionRefused | KeyAskedAnother | NotFound
 
 
 @dataclass(frozen=True)
@@ -957,7 +962,7 @@ class Orchestrator:
             await self._store.load_run(uow, request.run_id, lock=True)
             kept = await asked_with(uow, approval_id, principal.user_id, idempotency_key)
             if kept is not None:
-                return QuestionAsked(kept, repeated=True)
+                return QuestionAsked(kept, True) if kept.text == text else KeyAskedAnother()
             if self._people is not None:
                 roles = await self._people.roles_now(uow, principal.user_id)
                 principal = replace(principal, roles=roles or frozenset())
@@ -997,6 +1002,8 @@ class Orchestrator:
             if refusal is not None:
                 return AnswerRefused(refusal)
             answered = await save_answer(uow, question, Answer(text, principal.user_id, uow.now))
+        if answered is None:
+            return AnswerRefused(AnswerRefusal.ANSWERED)
         return QuestionAnswered(answered, repeated=False)
 
     async def retry(self, run_id: RunId, principal: Principal) -> RetryResult:
