@@ -52,11 +52,11 @@ export function crossLabel(part: PartView, when?: When): string {
   return others.length > 0 ? andList(others.map(quote)) : quote(part.text)
 }
 
-/** A can’t answer’s crosses that its alternative set-up card keeps: all but the can’t itself and a watch request’s own time. */
-export const crossesInstead = (part: PartView): boolean => part.mark === 'cant' && part.reason !== 'cant_do' && part.reason !== 'needs_the_rest' && part.reason !== 'own_time'
+/** Every cross and question of a request, for the card that sets up the part the Planner can do. A watch request’s own time isn’t the card’s. */
+export const crossesOnCard = (part: PartView): boolean => part.mark !== 'will_do' && part.reason !== 'needs_the_rest' && part.reason !== 'own_time'
 
-/** Every cross of a request, for the card that sets up the part the Planner can do. */
-export const crossesOnCard = (part: PartView): boolean => part.mark === 'cant' && part.reason !== 'needs_the_rest' && part.reason !== 'own_time'
+/** What a can’t answer’s alternative set-up card keeps: every cross and question but the can’t, which its own card names. */
+export const crossesInstead = (part: PartView): boolean => crossesOnCard(part) && part.reason !== 'cant_do'
 
 /**
  * Whether a can’t answer is really the part the Planner can do (spec 6.3): a set-up card with a cross on each part it can’t do.

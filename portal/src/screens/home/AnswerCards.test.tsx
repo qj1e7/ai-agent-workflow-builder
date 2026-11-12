@@ -123,6 +123,28 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     expect(buttons(html)).toEqual(expect.arrayContaining(['Set up the part I can', 'Ask the team']))
   })
 
+  it('keeps the question of how many days on the card a can’t sets up, so it is asked and never “Nothing is unclear”', () => {
+    // “Every Friday, list the stale tickets in MOCK and email me”, as the runtime marks it.
+    const emailRow = { kind: 'do', text: 'email me', note: 'I can’t send email.', needs: 'new_system', system: 'email' } as const
+    const stale: CantReply = {
+      answer: 'cant',
+      cant: [emailRow],
+      alternative: { ...(setupCard as SetupCardReply), parts: [] },
+      parts: [
+        { text: 'Every Friday', mark: 'will_do', reason: null, note: null, choices: [] },
+        { text: 'list the stale tickets in MOCK', mark: 'question', reason: 'how_many_days', note: null, choices: [] },
+        { text: 'email me', mark: 'cant', reason: 'cant_do', note: 'I can’t send email.', choices: [] },
+      ],
+    }
+    const card = text(cardOf(draw(stale)))
+    expect(card).toContain('“list the stale tickets in MOCK”')
+    expect(card).toMatch(/choices left: .*how many days/)
+    expect(card).not.toContain('Nothing is unclear')
+    expect(card, 'the can’t stays on its own card').not.toContain('“email me”')
+    const onCard: CantReply = { ...stale, cant: [{ ...emailRow, needs: 'new_tool' }] }
+    expect(text(cardOf(draw(onCard)))).toMatch(/choices left: .*how many days/)
+  })
+
   it('still names a real can’t on its own card, with the clause crossed on the card it sets up instead', () => {
     const mixed: CantReply = { ...(cant as CantReply), parts: [...(cant as CantReply).parts, NOT_FOLLOWED] }
     const html = draw(mixed)
