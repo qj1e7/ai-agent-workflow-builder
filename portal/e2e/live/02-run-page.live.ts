@@ -495,6 +495,7 @@ test('APPR-decide-nav: a half-picked decline reason does not survive leaving the
 
 const WIDTHS = [1920, 1280, 900, 390] as const
 const questionsOf = (page: Page) => page.getByRole('region', { name: 'Questions' })
+const sentToast = (page: Page) => page.getByRole('status').filter({ hasText: /^Sent to / })
 const escaped = (words: string) => words.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** Lines of the thread in order, whatever space the page puts between them. */
 const inOrder = (...lines: string[]) => new RegExp(lines.map(escaped).join('\\s*'))
@@ -541,6 +542,8 @@ for (const width of WIDTHS) {
     const thread = questionsOf(bob)
     await expect(thread).toContainText(inOrder(`You asked Alice: ${question}`, 'No answer yet. The request is still waiting for a yes.'))
     await expect(thread.getByRole('heading', { name: 'Questions' }), 'focus is on the questions’ heading').toBeFocused()
+    await expect(sentToast(bob), 'a toast says it was sent').toHaveText('Sent to Alice. The request is still waiting for a yes.')
+    await expect(thread.getByRole('heading', { name: 'Questions' }), 'the toast leaves focus where it was').toBeFocused()
     await expect(heading(bob), 'the request is still waiting for a yes').toHaveText('1 ticket is waiting for a yes')
     await expect(bob.getByRole('button', { name: /^(Approve 1 ticket|Decline)$/ }), 'Approve and Decline are still there').toHaveCount(2)
     expect((await backend.run(runId)).state, 'nothing was decided').toBe('awaiting_approval')
@@ -594,6 +597,7 @@ for (const width of WIDTHS) {
     const thread = questionsOf(alice)
     await expect(thread).toContainText(inOrder(`Bob asked you: ${question}`, 'You answered: Yes, it was released on Friday.'))
     await expect(thread.getByRole('heading', { name: 'Questions' }), 'focus is on the questions’ heading').toBeFocused()
+    await expect(sentToast(alice), 'a toast says it was sent').toHaveText('Sent to Bob. The request is still waiting for a yes.')
     await expect(alice.getByRole('button', { name: /^Approve/ }), 'alice still can’t approve her own run').toHaveCount(0)
     expect((await backend.run(runId)).state, 'the answer decided nothing').toBe('awaiting_approval')
     await shot(alice, info, `r13-thread-answered-alice-${width}`)

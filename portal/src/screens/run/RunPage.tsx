@@ -10,6 +10,7 @@ import { PageHead } from '../../shell/PageHead'
 import { PRODUCT } from '../../shell/product'
 import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
+import { Toast } from '../../ui/Toast'
 import { useFromChat } from '../../ui/fromChat'
 import { motionAllowed } from '../../ui/motion'
 import { nextRunOf } from '../workflows/workflow'
@@ -211,7 +212,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const saidByMe = me ? shown.chat.findLast((item) => item.kind === 'decided' && item.by === me.id) : undefined
   const open = detailOpen(detail.choice, shown)
   const decision = useDecision(approval.data, party)
-  const questions = useQuestions(approval.data, party)
+  const questions = useQuestions(approval.data, nameOf)
   const answered = decision.recorded !== null && !waiting && !WORKING.has(shown.phase.state)
   const focused = useRef(false)
   useEffect(() => {
@@ -299,6 +300,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
       <div className="visually-hidden" aria-live="polite">
         {announce ? `${speakerName(announce.speaker)}: ${announce.text}` : ''}
       </div>
+      <Toast message={questions.said} onDismiss={questions.dismiss} focusAfter={() => document.querySelector<HTMLElement>('main h1')} />
     </div>
   )
 }

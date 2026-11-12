@@ -2,9 +2,10 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 import { useCacheScope, useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { refusalOf, useAnswerQuestion, useAskQuestion } from '../../api/queries'
-import type { AnswerView, ApprovalView, QuestionView } from '../../api/types'
+import type { AnswerView, ApprovalView, QuestionView, Refusal } from '../../api/types'
+import type { ToastMessage } from '../../ui/Toast'
 import { openStep } from './decision'
-import { lockWords, type NameOf, type Party } from './words'
+import type { NameOf } from './words'
 
 /**
  * Questions on a request (spec 10.4, ADR 0043). An Approver asks the requester, who answers on the request. Neither one
@@ -17,6 +18,26 @@ export const STILL_WAITING = 'No answer yet. The request is still waiting for a 
 export const NOT_ANSWERED = 'Not answered before the request was decided.'
 
 export const askHelp = (requester: string) => `${requester} sees it on this request and can answer. It stays open, waiting for a yes.`
+/** What a question or an answer says once the platform kept it, as the prototype's toast does. */
+export const sentWords = (to: string) => `Sent to ${to}. The request is still waiting for a yes.`
+
+/** Why the platform refused a question. Asking follows the rule for deciding, but a question is not a decision. */
+export function askRefusalWords(refusal: Refusal): string {
+  switch (refusal) {
+    case 'own_work':
+      return 'This is your own request, so another Approver asks about it.'
+    case 'not_an_approver':
+      return 'Only an Approver can ask about a request.'
+    case 'not_open':
+      return 'This request is already decided, so it takes no more questions.'
+    case 'decided_earlier_step':
+      return 'You decided an earlier step, so the Approver of this step asks.'
+    case 'not_eligible':
+      return 'Only the people who can decide this step can ask about it.'
+    default:
+      return 'You can’t ask about this request.'
+  }
+}
 
 const who = (id: string, me: string | undefined, nameOf: NameOf, first: boolean) => (id === me ? (first ? 'You' : 'you') : nameOf(id))
 
@@ -43,16 +64,21 @@ export interface Questions {
   readonly ask: QuestionSend & { send(this: void, text: string, idempotencyKey: string, onSent: () => void): void }
   /** `pending` and `error` belong to `questionId`, the question last answered on this page. */
   readonly answer: QuestionSend & { readonly questionId: string | null; send(this: void, questionId: string, text: string, onSent: () => void): void }
+  /** The toast after the platform kept this person's question or answer. Focus stays where the send put it. */
+  readonly said: ToastMessage | null
+  dismiss(this: void): void
 }
 
 /** Nothing sent and nothing to send, for a gate drawn with no platform behind it. */
 export const NO_QUESTIONS: Questions = {
   ask: { pending: false, error: null, send: () => undefined },
   answer: { pending: false, error: null, questionId: null, send: () => undefined },
+  said: null,
+  dismiss: () => undefined,
 }
 
 /** A dev user switch starts clean, because each send remembers who sent it. */
-export function useQuestions(approval: ApprovalView | undefined, party: Party | null): Questions {
+export function useQuestions(approval: ApprovalView | undefined, nameOf: NameOf): Questions {
   const approvalId = approval?.approval_id ?? ''
   const asking = useAskQuestion(approvalId)
   const answering = useAnswerQuestion(approvalId)
@@ -62,13 +88,15 @@ export function useQuestions(approval: ApprovalView | undefined, party: Party | 
   const errorWords = useErrorWords()
   const [askedBy, setAskedBy] = useState<string | null>(null)
   const [answered, setAnswered] = useState<{ by: string; questionId: string } | null>(null)
+  const [said, setSaid] = useState<{ by: string; message: ToastMessage } | null>(null)
   const askMine = askedBy === user
   const answerMine = answered !== null && answered.by === user
+  const sentTo = (to: string) => setSaid((before) => ({ by: user, message: { id: (before?.message.id ?? 0) + 1, text: sentWords(nameOf(to)) } }))
 
   function askError(): string | null {
     if (!askMine || !asking.isError) return null
     const refusal = refusalOf(asking.error)
-    return refusal ? lockWords(refusal.refusal, party) : errorWords(asking.error)
+    return refusal ? askRefusalWords(refusal.refusal) : errorWords(asking.error)
   }
 
   return {
@@ -79,7 +107,16 @@ export function useQuestions(approval: ApprovalView | undefined, party: Party | 
         if (!approval) return
         askLatch.run((settled) => {
           setAskedBy(user)
-          asking.mutate({ text, idempotencyKey }, { onSuccess: onSent, onSettled: settled })
+          asking.mutate(
+            { text, idempotencyKey },
+            {
+              onSuccess: () => {
+                sentTo(approval.requester)
+                onSent()
+              },
+              onSettled: settled,
+            },
+          )
         })
       },
     },
@@ -91,10 +128,21 @@ export function useQuestions(approval: ApprovalView | undefined, party: Party | 
         if (!approval) return
         answerLatch.run((settled) => {
           setAnswered({ by: user, questionId })
-          answering.mutate({ questionId, text }, { onSuccess: onSent, onSettled: settled })
+          answering.mutate(
+            { questionId, text },
+            {
+              onSuccess: (question) => {
+                sentTo(question.asked_by)
+                onSent()
+              },
+              onSettled: settled,
+            },
+          )
         })
       },
     },
+    said: said !== null && said.by === user ? said.message : null,
+    dismiss: () => setSaid(null),
   }
 }
 

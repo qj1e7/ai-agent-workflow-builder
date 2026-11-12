@@ -11,7 +11,7 @@ import { ApprovalGate, DeclineReasons, EXACT_WORDS } from './ApprovalGate'
 import { withQuestion } from '../../api/queries'
 import { APPROVE, askedWords, declinedNow, declineReasons, decisionFor, foundOf, partyOf, yourPart, type Decision } from './decision'
 import { AskBox } from './QuestionThread'
-import { ANSWER_HELP, NO_QUESTIONS, NOT_ANSWERED, STILL_WAITING, askHelp } from './questions'
+import { ANSWER_HELP, NO_QUESTIONS, NOT_ANSWERED, STILL_WAITING, askHelp, askRefusalWords, sentWords } from './questions'
 import { approvalTitle, lockWords, withCurrentNames, proposalTitle, type Party } from './words'
 
 const BOB = bob as ApprovalView
@@ -351,6 +351,16 @@ describe('questions on a request', () => {
       </MemoryRouter>,
     )
     expect(text(html)).toContain(`You asked Alice: ${QUESTION.text}`)
+  })
+
+  it('says a refused question in its own words, never as a decision', () => {
+    const refusals = ['own_work', 'not_an_approver', 'not_open', 'decided_earlier_step', 'not_eligible', 'stale_digest'] as const
+    for (const refusal of refusals) expect(askRefusalWords(refusal)).toMatch(/\bask|question/)
+    expect(askRefusalWords('own_work')).toBe('This is your own request, so another Approver asks about it.')
+  })
+
+  it('confirms a kept question or answer in the prototype’s words', () => {
+    expect(sentWords('Carol')).toBe('Sent to Carol. The request is still waiting for a yes.')
   })
 
   it('puts a sent question or answer in its place before the next read, once', () => {
