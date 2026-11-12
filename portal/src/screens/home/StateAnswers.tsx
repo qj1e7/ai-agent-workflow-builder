@@ -175,7 +175,7 @@ export function DecidedAnswer({ only, now, say }: { only: DecidedReply['only']; 
             <li key={`${decision.run_id}:${decision.at}`}>
               <div className={styles['decidedHead']}>
                 <h3>
-                  <OpenLink item={{ kind: 'run', id: decision.run_id }} to={`/runs/${decision.run_id}`}>
+                  <OpenLink item={{ kind: 'run', id: decision.run_id }} to={`/runs/${decision.run_id}`} className={styles['decidedLink']}>
                     {decision.use_case_name}
                   </OpenLink>
                 </h3>

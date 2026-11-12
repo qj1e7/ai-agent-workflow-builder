@@ -630,11 +630,25 @@
   font-size: 1rem;
 }
 
-/* A workflow's name is a line of text under WCAG 2.5.8's 24 px, so it gets a full target. */
-.decidedHead h3 a {
+/* A workflow's name is a line of text under WCAG 2.5.8's 24 px, so it gets a full target. In the chat it opens the run in the side panel, so it is a button drawn as the name. */
+.decidedLink {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--hair);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.decidedLink:hover {
+  text-decoration-color: currentColor;
 }
 
 .decided p {
