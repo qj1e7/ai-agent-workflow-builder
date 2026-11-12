@@ -19,7 +19,7 @@ import { Answer, type Page } from './AnswerCards'
 import { sayOf } from './answers'
 import { Leftovers } from './PartsList'
 
-const PAGE: Page = { ask: () => undefined, edit: () => undefined }
+const PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => undefined }
 
 function draw(reply: PlannerReply, { typed = 'Every Friday, sum up the tickets we closed this week', leftovers = false } = {}): string {
   const queryClient = new QueryClient()

@@ -9,7 +9,7 @@ import { createDevSession } from '../../api/session'
 import type { Me, QuestionReply, WatchlistView } from '../../api/types'
 import { Answer, type Page } from './AnswerCards'
 
-const PAGE: Page = { ask: () => undefined, edit: () => undefined }
+const PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => undefined }
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
 const LIST = statuses as WatchlistView

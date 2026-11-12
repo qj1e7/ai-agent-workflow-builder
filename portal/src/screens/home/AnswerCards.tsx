@@ -21,6 +21,8 @@ export interface Page {
   readonly ask: (text: string) => void
   /** Puts words back in the box for the person to change. */
   readonly edit: (text: string) => void
+  /** Puts focus back in the box, as when she backs out of a card. */
+  readonly box: () => void
 }
 
 
@@ -142,7 +144,7 @@ export function WatchlistAnswer({ reply, typed }: { reply: WatchlistReply; typed
   )
 }
 
-const NO_PAGE: Page = { ask: () => undefined, edit: () => undefined }
+const NO_PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => undefined }
 
 function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { answer: 'refused' }>; typed: string; page: Page }) {
   const { rest } = refusalNext(reply)

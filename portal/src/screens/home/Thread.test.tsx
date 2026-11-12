@@ -18,7 +18,7 @@ function draw(reply: PlannerReply, pending = false): string {
     <QueryClientProvider client={new QueryClient()}>
       <ApiProvider session={createDevSession(null)} platformFetch={fetch} origin="http://portal.test">
         <MemoryRouter>
-          <Thread thread={thread} now={new Date('2026-11-08T10:00:00+08:00')} page={{ ask: () => undefined, edit: () => undefined }} />
+          <Thread thread={thread} now={new Date('2026-11-08T10:00:00+08:00')} page={{ ask: () => undefined, edit: () => undefined, box: () => undefined }} />
         </MemoryRouter>
       </ApiProvider>
     </QueryClientProvider>,
@@ -48,7 +48,7 @@ describe('“it” in a request', () => {
       <QueryClientProvider client={new QueryClient()}>
         <ApiProvider session={createDevSession(null)} platformFetch={fetch} origin="http://portal.test">
           <MemoryRouter>
-            <Thread thread={thread} now={new Date('2026-11-08T10:00:00+08:00')} page={{ ask: () => undefined, edit: () => undefined }} memory={memory} />
+            <Thread thread={thread} now={new Date('2026-11-08T10:00:00+08:00')} page={{ ask: () => undefined, edit: () => undefined, box: () => undefined }} memory={memory} />
           </MemoryRouter>
         </ApiProvider>
       </QueryClientProvider>,

@@ -1144,6 +1144,7 @@ test.describe('the edit card (spec 6.7)', () => {
       await expect(editCard(never)).toHaveText(/Before\s*Every Monday at 9:00\s*After\s*Every day at 9:00[\s\S]*software on the watchlist are checked\. Saving makes you the owner of this schedule\./)
       await editCard(never).getByRole('button', { name: 'Never mind' }).click()
       await expect(sentenceOf(never)).toHaveText('No problem. Nothing changed.')
+      await expect(box(page), 'Never mind hands focus back to the box').toBeFocused()
       await expect(editCard(never)).toHaveCount(0)
       expect((await backend.get<{ watchlist: { schedule: { day: string } } }>('alice', '/api/v1/watchlist')).watchlist.schedule.day, 'Never mind changed nothing').toBe('monday')
 

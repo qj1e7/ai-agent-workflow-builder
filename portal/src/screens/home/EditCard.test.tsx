@@ -26,7 +26,7 @@ import { EditCard } from './EditCard'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const NOW = new Date('2026-11-05T15:00:00+08:00')
-const PAGE: Page = { ask: () => undefined, edit: () => undefined }
+const PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => undefined }
 const EDIT = edit as EditReply
 const MONDAY_8 = { day: 'monday', at: '08:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null } as const
 const WEEKDAYS_8 = { ...MONDAY_8, day: 'weekdays' } as const

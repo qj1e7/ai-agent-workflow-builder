@@ -225,6 +225,7 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
       chat.type(words)
       setTimeout(() => boxRef.current?.focus(), 0)
     },
+    box: () => setTimeout(() => boxRef.current?.focus(), 0),
   }
 
   const hero: BotState = offline ? 'sorry' : busy ? 'thinking' : text.trim() !== '' ? 'listening' : 'idle'

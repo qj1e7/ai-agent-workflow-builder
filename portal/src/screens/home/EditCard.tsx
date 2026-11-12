@@ -35,7 +35,7 @@ import styles from './EditCard.module.css'
 import partsStyles from './PartsList.module.css'
 import setup from './SetupCard.module.css'
 
-type Focus = 'heading' | 'save' | 'undo' | 'sentence'
+type Focus = 'heading' | 'save' | 'undo'
 
 interface EditCardProps {
   readonly reply: EditReply
@@ -151,11 +151,14 @@ export function EditCard({ reply, typed, page, say, now, about }: EditCardProps)
   }
 
   const neverMind = () => {
-    if (!saving) settle({ kind: 'kept' }, 'sentence')
+    if (saving) return
+    memory.keep({ picks, phase: { kind: 'kept' } })
+    setPhase({ kind: 'kept' })
+    page.box()
   }
 
   const said = (
-    <p id={`${id}-sentence`} tabIndex={-1} className={styles['sentence']}>
+    <p id={`${id}-sentence`} className={styles['sentence']}>
       {sentence}
     </p>
   )
