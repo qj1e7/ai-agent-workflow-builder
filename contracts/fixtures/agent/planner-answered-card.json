@@ -29,5 +29,28 @@
         "note": "Read from your words \"in MOCK\"."
       }
     ]
-  }
+  },
+  "parts": [
+    {
+      "text": "Every weekday at 3pm",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    },
+    {
+      "text": "find bug tickets in MOCK with no update for 10 days",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    },
+    {
+      "text": "create one follow-up ticket that lists them",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ]
 }

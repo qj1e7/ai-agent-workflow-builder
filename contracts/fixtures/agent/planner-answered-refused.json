@@ -5,5 +5,14 @@
     "reason": "skip_approval",
     "said": "without waiting for approval",
     "rest": "Create the ticket"
-  }
+  },
+  "parts": [
+    {
+      "text": "without waiting for approval",
+      "mark": "cant",
+      "reason": "skip_approval",
+      "note": null,
+      "choices": []
+    }
+  ]
 }

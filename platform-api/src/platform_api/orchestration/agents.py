@@ -585,9 +585,32 @@ type PlannerAnswer = Annotated[
 ]
 
 
+type PartMark = Literal["will_do", "cant", "question"]
+type PartReason = Literal[
+    "not_followed",
+    "cant_do",
+    "ask_on_its_own",
+    "one_day",
+    "one_time",
+    "own_time",
+    "skip_approval",
+    "with_a_yes",
+    "needs_the_rest",
+]
+
+
+class RequestPart(WireModel):
+    text: str = Field(max_length=200)
+    mark: PartMark
+    reason: PartReason | None = None
+    note: str | None = Field(default=None, max_length=300)
+    choices: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list[str])
+
+
 class Answered(WireModel):
     status: Literal["answered"] = "answered"
     answer: PlannerAnswer
+    parts: list[RequestPart] = Field(default_factory=list[RequestPart])
 
 
 type AnswerResult = Annotated[Answered | ModelProblem, Field(discriminator="status")]

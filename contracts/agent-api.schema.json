@@ -564,6 +564,14 @@
         "answer": {
           "$ref": "#/$defs/PlannerAnswer"
         },
+        "parts": {
+          "description": "Every clause of the request, in order, with what happened to it. None is dropped. Thanks and please get no part.",
+          "items": {
+            "$ref": "#/$defs/RequestPart"
+          },
+          "title": "Parts",
+          "type": "array"
+        },
         "status": {
           "const": "answered",
           "default": "answered",
@@ -2198,6 +2206,28 @@
       "title": "PartFits",
       "type": "object"
     },
+    "PartMark": {
+      "enum": [
+        "will_do",
+        "cant",
+        "question"
+      ],
+      "type": "string"
+    },
+    "PartReason": {
+      "enum": [
+        "not_followed",
+        "cant_do",
+        "ask_on_its_own",
+        "one_day",
+        "one_time",
+        "own_time",
+        "skip_approval",
+        "with_a_yes",
+        "needs_the_rest"
+      ],
+      "type": "string"
+    },
     "PlannerAnswer": {
       "discriminator": {
         "mapping": {
@@ -2494,6 +2524,63 @@
     "RepoName": {
       "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$",
       "type": "string"
+    },
+    "RequestPart": {
+      "additionalProperties": false,
+      "description": "One clause of the request and what the answer does with it (plan 4.1).",
+      "properties": {
+        "choices": {
+          "description": "For one_day and one_time, each day or time the request named, in its own words, for the person to choose one.",
+          "items": {
+            "maxLength": 40,
+            "type": "string"
+          },
+          "title": "Choices",
+          "type": "array"
+        },
+        "mark": {
+          "$ref": "#/$defs/PartMark",
+          "description": "will_do for a part the answer does, cant for one it doesn't, and question for the one thing the answer asks."
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For cant_do, why, in the registry's words.",
+          "title": "Note"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PartReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why, for a cant: not_followed (no rule read it), cant_do (see note), ask_on_its_own (a question asked beside a request, or a request beside a question), one_day or one_time (a schedule with two, see choices), own_time (a time on a watch request), skip_approval (it asks to skip a yes), with_a_yes (it waits until the request is set up with a yes), needs_the_rest (it can't run without a part that can't be done). None for will_do and question."
+        },
+        "text": {
+          "description": "The request's own words: the whole clause, or, in a clause the Planner partly read, only the words it didn't read.",
+          "maxLength": 200,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "mark"
+      ],
+      "title": "RequestPart",
+      "type": "object"
     },
     "RoomAddressee": {
       "additionalProperties": false,

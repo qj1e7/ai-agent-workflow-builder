@@ -41,5 +41,21 @@
         }
       ]
     }
-  }
+  },
+  "parts": [
+    {
+      "text": "Every Friday",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    },
+    {
+      "text": "email me the list of stale tickets in MOCK",
+      "mark": "cant",
+      "reason": "cant_do",
+      "note": "I can't email me the list of stale tickets in MOCK. I can only check software for new releases on GitHub, create a Jira ticket after a yes, and ask Approvers for a yes in Teams.",
+      "choices": []
+    }
+  ]
 }
