@@ -44,14 +44,14 @@ export const newestAnswer = (page: Page): Locator => said(page).last()
 /** The edit card in an answer. */
 export const editCard = (answer: Locator): Locator => answer.locator('section[data-card="edit"]')
 
-/** Asks the Planner and waits for its answer to land. */
+/** Asks the Planner and waits for its answer to land. The answer is held by its place, so it stays this answer after later ones. */
 export async function askAndWait(page: Page, text: string): Promise<Locator> {
   const box = page.getByLabel('Ask the Planner about software versions')
   const before = await said(page).count()
   await box.fill(text)
   await box.press('Enter')
   await expect(said(page)).toHaveCount(before + 2)
-  const answer = newestAnswer(page)
+  const answer = said(page).nth(before + 1)
   await expect(answer).toHaveAttribute('data-answer', 'true', { timeout: 30_000 })
   return answer
 }
