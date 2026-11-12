@@ -1,8 +1,11 @@
+import type { Page } from '@playwright/test'
 import { assertClean, watchPage } from '../support/test'
 import { expectAccessible } from '../support/axe'
 import { expect, test } from './support/test'
 import { decline, devContext, expectReadOnly, OUT, shot } from './support/ui'
 import path from 'node:path'
+
+const countLine = (page: Page) => page.locator('main h1 + p')
 
 // A moved or missing repository stays in Operators' Needs you on Home and Workflows, so these tests leave no software behind for the lanes after them.
 test.afterEach(async ({ backend }) => {
@@ -34,6 +37,7 @@ test('alice adds software by its name: Find it, a checked guess with where it ca
   const row = page.locator('li[data-status]').filter({ hasText: 'LangGraph' })
   await expect(row).toContainText('Not checked yet')
   await expect(row).toContainText(/Ours\s*Not known/)
+  await expect(countLine(page), 'the count line counts the new row').toHaveText('1 not checked yet')
   await expect(page.getByRole('status').filter({ hasText: 'Added LangGraph' })).toBeVisible()
   await shot(page, info, 'n21-03-added')
 
@@ -47,6 +51,7 @@ test('alice adds software by its name: Find it, a checked guess with where it ca
   await expect(row).toContainText('newer than 1.2.16, the newest the first check read')
   await expect(row).toContainText('Nothing newer yet')
   await expect(row).not.toContainText('Up to date')
+  await expect(countLine(page), 'with no version to be up to date with, the count line never says up to date').toHaveText('Nothing newer yet.')
   await shot(page, info, 'n21-03-checked')
   assertClean(watch)
   await context.close()
@@ -179,6 +184,53 @@ test('while a yes waits, one bar decides the check, every row stays in the list 
   await expect(bobPage.getByRole('heading', { level: 2, name: /^Software we watch/ })).toContainText('2')
   await shot(bobPage, info, 'n21-03-waiting-bob')
   await bob.close()
+})
+
+test('the count line and what checks each row hold through a decline, and the declined check’s record is on the row and in its History, as Alice and Bob', async ({ browser, backend }, info) => {
+  const { runId, approvalId } = await backend.waitingRun('alice', [
+    { name: 'LangGraph', repo: 'langchain-ai/langgraph', our_version: '1.2.14' },
+    { name: 'Redis', repo: 'redis/redis', our_version: '8.0.0' },
+    { name: 'LangServe', repo: 'langchain-ai/langserve', our_version: '0.3.1' },
+  ])
+  const LINE = '2 have a newer version · 1 can’t be checked'
+  const before = await devContext(browser, 'alice')
+  const waiting = await before.newPage()
+  await waiting.goto('/software')
+  await expect(waiting.locator('li[data-status="awaiting_approval"]'), 'both upgrades wait for a yes').toHaveCount(2)
+  await expect(countLine(waiting), 'a row whose ticket waits for a yes still has a newer version').toHaveText(LINE)
+  await before.close()
+
+  await backend.send('PUT', 'alice', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })
+  const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
+  await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest, reason: 'Wrong version' }, undefined, [201])
+  await backend.waitForState(runId, ['rejected'])
+  const record = 'Declined by Bob. Nothing was written. Reason: Wrong version. The tickets will be proposed again at the next check, '
+
+  for (const user of ['alice', 'bob']) {
+    for (const width of [1920, 1280, 900, 390]) {
+      const context = await devContext(browser, user, { phone: width === 390 })
+      const page = await context.newPage()
+      if (width !== 390) await page.setViewportSize({ width, height: 1000 })
+      const watch = watchPage(page)
+      await page.goto('/software')
+      await expect(countLine(page), 'the count line is the same after the decline').toHaveText(LINE)
+      const row = page.locator('li[data-status]').filter({ hasText: 'LangGraph' })
+      await expect(row, 'each row names what checks it').toContainText('Checked on GitHub · langchain-ai/langgraph')
+      await expect(row).toContainText('New version')
+      await expect(row).toContainText(record)
+      await row.getByRole('button', { name: 'History of LangGraph' }).click()
+      const history = page.getByRole('list', { name: 'History of LangGraph' })
+      await expect(history, 'LangGraph’s history gives the record').toContainText(`Found 1.2.16. ${record}`)
+      await expect(row.locator('a[href*="/jira/"]'), 'no ticket link on a declined row').toHaveCount(0)
+      await expect(page.locator('li[data-status]').filter({ hasText: 'LangServe' }), 'only a row with a new version gives the record').not.toContainText('Declined by')
+      await history.scrollIntoViewIfNeeded()
+      await shot(page, info, `r15-declined-history-${user}-${String(width)}`)
+      await page.evaluate(() => window.scrollTo(0, 0))
+      await shot(page, info, `r15-count-line-${user}-${String(width)}`)
+      assertClean(watch)
+      await context.close()
+    }
+  }
 })
 
 test('an Approver who is not an Operator sees the list but no way to add', async ({ browser, backend }) => {

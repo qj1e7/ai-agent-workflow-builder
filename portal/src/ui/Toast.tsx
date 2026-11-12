@@ -17,8 +17,8 @@ export const UNDO_ID = 'toast-undo'
 interface ToastProps {
   readonly message: ToastMessage | null
   readonly onDismiss: () => void
-  /** Where focus goes when the message leaves while focus is on it. */
-  readonly focusAfter: () => HTMLElement | null
+  /** Where focus goes when the message leaves while focus is on it. Only a message with Undo can hold focus. */
+  readonly focusAfter?: () => HTMLElement | null
 }
 
 /**
@@ -45,7 +45,7 @@ function useLatest<T>(value: T): { readonly current: T } {
   return latest
 }
 
-function Card({ message, onDismiss, focusAfter }: { message: ToastMessage; onDismiss: () => void; focusAfter: () => HTMLElement | null }) {
+function Card({ message, onDismiss, focusAfter }: { message: ToastMessage; onDismiss: () => void; focusAfter: (() => HTMLElement | null) | undefined }) {
   const card = useRef<HTMLDivElement>(null)
   const clock = useRef<ToastClock | null>(null)
   const textId = useId()
@@ -53,7 +53,7 @@ function Card({ message, onDismiss, focusAfter }: { message: ToastMessage; onDis
   const timed = message.undo === undefined
 
   const leave = () => {
-    if (card.current?.contains(document.activeElement)) focusAfter()?.focus()
+    if (card.current?.contains(document.activeElement)) focusAfter?.()?.focus()
     if (motionAllowed()) setLeaving(true)
     else onDismiss()
   }

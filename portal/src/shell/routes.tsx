@@ -5,6 +5,7 @@ import { SettingsPage } from '../screens/settings/SettingsPage'
 import type { Icon } from '../ui/icons'
 import { WorkflowRoute } from '../screens/workflows/WorkflowPage'
 import { WorkflowsPage } from '../screens/workflows/WorkflowsPage'
+import { WatchLine } from '../screens/software/WatchLine'
 import { howItWorksPath } from '../screens/agents/agents'
 import { JIRA_PATH } from '../screens/jira/tickets'
 import { BoxIcon, ChatIcon, GridIcon, SettingsIcon, TicketIcon } from './icons'
@@ -55,7 +56,7 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
     railLabel: 'Watchlist',
     icon: BoxIcon,
     heading: 'Software watchlist',
-    lead: 'Everything your team runs, in one list. Each check reads the newest release from GitHub, and its upgrade tickets go out in one approval.',
+    lead: 'Everything your team runs, in one list.',
     inRail: true,
   },
   jira: {
@@ -165,7 +166,7 @@ export function AppRoutes({ context }: { context: PageContext }) {
         path={PAGES.software.path}
         element={
           <>
-            <PageHead heading={wordsOf(PAGES.software.heading, context)} lead={wordsOf(PAGES.software.lead, context)}>
+            <PageHead heading={wordsOf(PAGES.software.heading, context)} lead={<WatchLine lead={wordsOf(PAGES.software.lead, context)} />}>
               {context.operator ? null : (
                 <PageNote>
                   <OperatorsNote what="the watchlist" />

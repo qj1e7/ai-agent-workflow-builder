@@ -4,7 +4,7 @@ import rejectedView from '@contracts/fixtures/views/rejected.final.json'
 import type { ApprovalStepView, RunViewOf } from '../../api/types'
 import type { LiveRun } from './liveRun'
 import type { ChatItem } from './runModel'
-import { declinedBy, declinedNext, declinedOfSteps, declinedRecord, declinedWithNext, declineTail, feedTroubleOf, lineOf, speakerName } from './words'
+import { declinedBy, declinedNext, declinedNowWords, declinedOfSteps, declinedRecord, declinedWithNext, declineTail, feedTroubleOf, lineOf, speakerName } from './words'
 
 describe('the run chat', () => {
   it('names the app by its full name', () => {
@@ -41,6 +41,11 @@ describe('the declined record', () => {
   it('says who declined, that nothing was written, and why when there is a reason', () => {
     expect(declinedRecord({ by: 'bob', approvedBy: [], reason: 'Wrong version' }, nameOf)).toBe('Declined by Bob. Nothing was written. Reason: Wrong version.')
     expect(declinedRecord({ by: 'bob', approvedBy: [], reason: null }, nameOf)).toBe('Declined by Bob. Nothing was written.')
+  })
+
+  it('tells the person who declined, right after, that nothing was written and why, as the prototype’s message does', () => {
+    expect(declinedNowWords({ reason: 'Wrong version' })).toBe('Declined. Nothing was written. Reason: Wrong version.')
+    expect(declinedNowWords({ reason: null })).toBe('Declined. Nothing was written.')
   })
 
   it('keeps a first yes, so the record says both', () => {
