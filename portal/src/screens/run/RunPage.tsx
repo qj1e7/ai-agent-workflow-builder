@@ -24,7 +24,7 @@ import styles from './RunPage.module.css'
 
 const LANDS_ON_DECISION = new Set(['awaiting_approval', 'failed', 'rejected'])
 
-const POLL_FAILED_MS = 10_000
+export const POLL_FAILED_MS = 10_000
 
 function notFound(error: unknown): boolean {
   return error instanceof ApiError && error.status === 404
@@ -115,23 +115,23 @@ function LiveRunPage({ run, fromApproval }: { run: RunView; fromApproval: boolea
 }
 
 /** After a failure the stream may close. When the run has moved on without it, as after a retry, reconnect now. */
-function useReconnectWhenBehind(behind: boolean, restart: () => void): void {
+export function useReconnectWhenBehind(behind: boolean, restart: () => void): void {
   useEffect(() => {
     if (behind) restart()
   }, [behind, restart])
 }
 
-function approvalIdOf(run: RunView, model: RunModel): string | null {
+export function approvalIdOf(run: RunView, model: RunModel): string | null {
   if (model.approvalId) return model.approvalId
   return 'approval' in run ? run.approval.approval_id : null
 }
 
-function useNameOf(model: RunModel): NameOf {
+export function useNameOf(model: RunModel): NameOf {
   const people = usePeople()
   return (id) => model.people[id] ?? displayName(people, id)
 }
 
-function planOf(useCase: UseCaseView | undefined): PlanBlock[] | null {
+export function planOf(useCase: UseCaseView | undefined): PlanBlock[] | null {
   return useCase ? useCase.plan.map((block) => ({ name: block.name, kind: block.kind })) : null
 }
 
@@ -285,7 +285,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   )
 }
 
-function statusWords(recorded: Verdict | null, live: LiveRun): string {
+export function statusWords(recorded: Verdict | null, live: LiveRun): string {
   if (live.connection.is === 'reconnecting') return 'Lost the live connection. Trying again.'
   if (live.connection.is === 'closed') return 'Stopped following this run. Reload the page to see what changed.'
   if (isFinished(live.shown.phase)) return ''
@@ -315,9 +315,7 @@ function LastWordFor({ model, approval, found, decision, troubleshoot, nameOf, m
           {approval ? (
             <ApprovalGate
               approval={approval}
-              found={found}
-              part={yourPart(approval, partyOf(approval, me?.id), nameOf)}
-              askedBy={askedWords(approval, nameOf)}
+              page={{ found, part: yourPart(approval, partyOf(approval, me?.id), nameOf), askedBy: askedWords(approval, nameOf) }}
               decision={decision}
             />
           ) : (

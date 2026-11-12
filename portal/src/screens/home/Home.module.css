@@ -3,7 +3,7 @@
   margin: 0 auto;
 }
 
-/* The chat and, later, its side panel share the page's column. */
+/* The chat and its side panel share the page’s column. */
 .home:has([data-chat]) {
   display: flex;
   flex: 1;

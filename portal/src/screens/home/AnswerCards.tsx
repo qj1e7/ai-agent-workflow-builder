@@ -3,6 +3,7 @@ import { Link } from '../../ui/Link'
 import type { CantReply, OfflineReply, PartReply, PlannerReply, QuestionReply, SetupCardReply, WatchlistReply } from '../../api/types'
 import { useCapabilities } from '../../api/plannerQueries'
 import { Button, ButtonLink } from '../../ui/Button'
+import { OpenButton } from '../../ui/OpenItem'
 import { AskTheTeam } from './AskTheTeam'
 import { cantLines, refusalNext, SAY_ANOTHER_WAY, startingPoints, TAG_CANT, TAG_CHOICE } from './answers'
 import { cardFrom } from './card'
@@ -116,9 +117,9 @@ export function WatchlistAnswer({ reply, typed }: { reply: WatchlistReply; typed
             <>
               <p>{listed.name} is on the Software watchlist.</p>
               <div className={styles['buttons']}>
-                <ButtonLink variant={main} to={`/software?row=${encodeURIComponent(listed.software_id)}`}>
+                <OpenButton variant={main} item={{ kind: 'software', id: listed.software_id }} to={`/software?row=${encodeURIComponent(listed.software_id)}`}>
                   Open it
-                </ButtonLink>
+                </OpenButton>
               </div>
             </>
           ) : reply.software ? (

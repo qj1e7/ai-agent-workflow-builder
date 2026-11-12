@@ -30,7 +30,7 @@ const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\
 function draw(approval: ApprovalView, party: Party | null, decision = idle, found = approval.found): string {
   return renderToStaticMarkup(
     <MemoryRouter>
-      <ApprovalGate approval={approval} found={found} part={yourPart(approval, party, nameOf)} askedBy={askedWords(approval, nameOf)} decision={decision} />
+      <ApprovalGate approval={approval} page={{ found, part: yourPart(approval, party, nameOf), askedBy: askedWords(approval, nameOf) }} decision={decision} />
     </MemoryRouter>,
   )
 }

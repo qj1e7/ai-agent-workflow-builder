@@ -178,6 +178,16 @@
   text-decoration: none;
 }
 
+/* In the chat the name opens the workflow in the side panel, so it is a button drawn as the name. */
+button.rowLink {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .rowLink::after {
   content: '';
   position: absolute;
@@ -842,4 +852,22 @@
 .head p.opsNote {
   margin-top: 8px;
   font-size: var(--text-14);
+}
+
+/* The side panel's links and buttons for a workflow: Open the run, then Pause or Resume. */
+.panelBtns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.panelBtns:empty {
+  display: none;
+}
+
+.panelBtns > p {
+  flex-basis: 100%;
+  margin: 0;
 }

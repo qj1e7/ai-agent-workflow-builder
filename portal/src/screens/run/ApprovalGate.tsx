@@ -31,13 +31,19 @@ function Row({ name, children }: { name: string; children: ReactNode }) {
   )
 }
 
-interface ApprovalGateProps {
-  readonly approval: ApprovalView
+/** What only the run page adds around the write: Why, Who asked and Your part (spec 10.4). */
+export interface PageDetails {
   /** What the agents found. The activity keeps it after the approval stops carrying it. */
   readonly found: string
   /** The reader's part, from yourPart in decision.ts. Null once no step is open. */
   readonly part: string | null
   readonly askedBy: string
+}
+
+interface ApprovalGateProps {
+  readonly approval: ApprovalView
+  /** Null in the side panel, which shows everything that will be written and the decision, and leaves the rest for the page. */
+  readonly page: PageDetails | null
   readonly decision: Pick<Decision, 'pending' | 'error' | 'decide'>
 }
 
@@ -45,7 +51,7 @@ interface ApprovalGateProps {
  * Exactly what will be written, from the approval route, so a slow stream never shows an old proposal. The summary around
  * it helps the reader. It is never the check: the platform checks the digest and the deciding person again at the write.
  */
-export function ApprovalGate({ approval, found, part, askedBy, decision }: ApprovalGateProps) {
+export function ApprovalGate({ approval, page, decision }: ApprovalGateProps) {
   const open = openStep(approval) !== null
   const canDecide = approval.you_can_decide && open
   const busy = decision.pending !== null
@@ -59,28 +65,32 @@ export function ApprovalGate({ approval, found, part, askedBy, decision }: Appro
         ))}
         <p className={styles['note']}>{EXACT_WORDS}</p>
       </Row>
-      <Row name="Why">
-        {found === '' ? (
-          <span>{NO_SUMMARY}</span>
-        ) : (
-          <>
-            <span className={styles['found']}>
-              <TicketKeys text={found} keys={ticketKeysIn(found, projects)} />
-            </span>
-            <p className={styles['note']}>{FOUND_NOTE}</p>
-          </>
-        )}
-      </Row>
-      <Row name="Who asked">{askedBy}</Row>
+      {page ? (
+        <>
+          <Row name="Why">
+            {page.found === '' ? (
+              <span>{NO_SUMMARY}</span>
+            ) : (
+              <>
+                <span className={styles['found']}>
+                  <TicketKeys text={page.found} keys={ticketKeysIn(page.found, projects)} />
+                </span>
+                <p className={styles['note']}>{FOUND_NOTE}</p>
+              </>
+            )}
+          </Row>
+          <Row name="Who asked">{page.askedBy}</Row>
+        </>
+      ) : null}
       {open ? <Row name="What happens">{happensWords(approval, canDecide)}</Row> : null}
-      {open && part ? (
+      {open && page?.part ? (
         <Row name="Your part">
           {canDecide ? (
-            part
+            page.part
           ) : (
             <span className={styles['lock']}>
               <IconLock size={20} />
-              <span>{part}</span>
+              <span>{page.part}</span>
             </span>
           )}
         </Row>

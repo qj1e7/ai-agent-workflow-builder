@@ -6,6 +6,7 @@ import { count, withCurrentNames } from '../run/words'
 import { requestKindWords, requestPath } from '../workflows/requests'
 import { movedHeadline, notFoundHeadline } from '../software/software'
 import { lineWhen, nextRunAt, runWhen, workflowPath } from '../workflows/workflow'
+import type { PanelItem } from '../../ui/sidePanel'
 
 /** Home for an Operator shows the most urgent few. Workflows, and Home for someone who is not an Operator, show everything the platform returned. */
 export const HOME_NEEDS_SHOWN = 3
@@ -273,14 +274,17 @@ export function wordsOf(need: Need, now: Date, modelOff = false): ItemWords {
   }
 }
 
+/** `item` is set when the chat opens it in the side panel. Anywhere else it opens `to`, its page. */
 export type Action =
-  | { readonly kind: 'open'; readonly label: string; readonly to: string }
+  | { readonly kind: 'open'; readonly label: string; readonly to: string; readonly item?: PanelItem }
   | { readonly kind: 'retry'; readonly label: string; readonly runId: string }
+
+const runItem = (runId: string): PanelItem => ({ kind: 'run', id: runId })
 
 export function actionsOf(need: Need, modelOff = false): readonly Action[] {
   switch (need.kind) {
     case 'approval':
-      return [{ kind: 'open', label: 'Review and decide', to: `/runs/${need.item.run_id}` }]
+      return [{ kind: 'open', label: 'Review and decide', to: `/runs/${need.item.run_id}`, item: runItem(need.item.run_id) }]
     case 'connection':
       return noModel(need.item) ? [{ kind: 'open', label: 'Connect a model', to: '/settings?tab=model' }] : [{ kind: 'open', label: 'See it in Settings', to: CONNECTIONS_PATH }]
     case 'address':
@@ -298,6 +302,11 @@ export function actionsOf(need: Need, modelOff = false): readonly Action[] {
 export function openPathOf(need: Need): string {
   const open = actionsOf(need).find((action) => action.kind === 'open')
   return open?.to ?? (need.kind === 'stopped' ? `/runs/${need.item.run_id}` : '/workflows')
+}
+
+/** A stop or a request opens its run in the side panel (spec 3.5). Anything else follows its own first action, to its page. */
+export function panelItemOf(need: Need): PanelItem | null {
+  return need.kind === 'stopped' || need.kind === 'approval' ? runItem(need.item.run_id) : null
 }
 
 export interface Pinned {
@@ -333,13 +342,14 @@ export const CAN_RUN_AGAIN = 'Can run again once an AI model is connected.'
  * With no AI model a retry would fail again, so the run waits and only the reading stays (spec 5.4).
  */
 export function stoppedActions(runId: string, retryable: boolean, modelOff = false): readonly Action[] {
-  if (retryable && modelOff) return [{ kind: 'open', label: 'See the run', to: `/runs/${runId}` }]
+  const item = runItem(runId)
+  if (retryable && modelOff) return [{ kind: 'open', label: 'See the run', to: `/runs/${runId}`, item }]
   return retryable
     ? [
         { kind: 'retry', label: 'Retry the run', runId },
-        { kind: 'open', label: 'See the run', to: `/runs/${runId}` },
+        { kind: 'open', label: 'See the run', to: `/runs/${runId}`, item },
       ]
-    : [{ kind: 'open', label: 'See why it stopped', to: `/runs/${runId}` }]
+    : [{ kind: 'open', label: 'See why it stopped', to: `/runs/${runId}`, item }]
 }
 
 const noLongerStopped = (error: unknown) => error instanceof ApiError && error.status === 409

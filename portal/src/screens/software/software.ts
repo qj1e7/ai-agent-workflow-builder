@@ -1,6 +1,6 @@
 import { ApiError } from '../../api/client'
 import { failureReasonLabel } from '../../api/labels'
-import type { CapabilityView, Day, FailureReason, Refusal, ScheduleHold, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView } from '../../api/types'
+import type { CapabilityView, Day, FailureReason, Refusal, ScheduleHold, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView, WatchlistView } from '../../api/types'
 import { dateAndClock, scheduleZoneName, timesZone } from '../workflows/times'
 
 /** Where releases are read from, said from the capability registry so this page never claims more than How it works does. Null while the registry is not there. */
@@ -102,6 +102,13 @@ export function nextCheckWords(schedule: ScheduleView, paused: boolean): string 
   if (schedule.held && !paused) return heldWords(schedule.held, schedule.owner_name, TAKE_OVER_WORDS)
   if (schedule.next_at === null) return PAUSED_WORDS
   return `Next check ${dateAndClock(schedule.next_at, schedule.time_zone)}, ${timesZone(schedule.time_zone)}.`
+}
+
+/** Who checks it and when, in the watchlist's own words. A paused watchlist or a held schedule checks nothing by itself. */
+export function checkedByWords(view: Pick<WatchlistView, 'schedule' | 'state'>): string {
+  if (view.state === 'paused') return `The Version checker, on GitHub. ${PAUSED_WORDS}`
+  if (view.schedule && scheduleRuns(view.schedule)) return `The Version checker, ${repeatWords(view.schedule)}, on GitHub`
+  return 'The Version checker, on GitHub, when an Operator presses Check now'
 }
 
 export function noScheduleWords({ operator, paused }: { readonly operator: boolean; readonly paused: boolean }): string {

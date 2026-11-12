@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { Link } from '../../ui/Link'
 import { useCacheScope } from '../../api/context'
@@ -10,6 +10,7 @@ import type { HomeOut, PlannerReply } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
 import { Button, ButtonLink } from '../../ui/Button'
 import { IconClock } from '../../ui/icons'
+import { useMediaQuery } from '../../ui/media'
 import { Toast } from '../../ui/Toast'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
 import { restoreDraft } from './card'
@@ -119,19 +120,6 @@ function ApproverHome({ heading, home, now }: { heading: string; home: HomeOut; 
 
 const PHONE = '(max-width: 600px)'
 
-function usePhone(): boolean {
-  return useSyncExternalStore(
-    (notify) => {
-      if (typeof window.matchMedia !== 'function') return () => undefined
-      const query = window.matchMedia(PHONE)
-      query.addEventListener('change', notify)
-      return () => query.removeEventListener('change', notify)
-    },
-    () => typeof window.matchMedia === 'function' && window.matchMedia(PHONE).matches,
-    () => false,
-  )
-}
-
 const DRAFT_GONE = 'That draft is gone. Ask for it again below.'
 /** Answers that are a card to work on. Focus goes to the card's heading; any other answer hands it back to the box. */
 const CARD_ANSWERS: ReadonlySet<PlannerReply['answer']> = new Set(['setup_card', 'part', 'watchlist'])
@@ -155,7 +143,7 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
   const [lists, setLists] = useState(false)
   const boxRef = useRef<HTMLTextAreaElement>(null)
   const focusOn = useRef<number | null>(null)
-  const phone = usePhone()
+  const phone = useMediaQuery(PHONE)
   const [params, setParams] = useSearchParams()
   const wanted = params.get('draft')
   const drafts = useDrafts(wanted !== null)

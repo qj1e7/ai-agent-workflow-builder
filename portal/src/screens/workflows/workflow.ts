@@ -110,10 +110,17 @@ function lastRunWhat(last: LastRun, nameOf: NameOf): string {
  * chat's check card both read it, so they cannot disagree. A test run says so after the day.
  */
 export function lastRunLine(useCase: Pick<UseCaseView, 'last_run'>, now: Date, nameOf: NameOf): string {
-  const last = useCase.last_run
-  if (!last) return 'No runs yet'
+  const words = lastRunWords(useCase, now, nameOf)
+  return words === null ? NO_RUNS : `Last run ${words}`
+}
+
+export const NO_RUNS = 'No runs yet'
+
+/** The same line without its label, "Mon 26 Oct · Declined by Bob", for the side panel's Last run. Null before the first run. */
+export function lastRunWords({ last_run: last }: Pick<UseCaseView, 'last_run'>, now: Date, nameOf: NameOf): string | null {
+  if (!last) return null
   const when = lineWhen(last.at, now)
-  return `Last run ${last.test ? `${when}, test` : when} · ${lastRunWhat(last, nameOf)}`
+  return `${last.test ? `${when}, test` : when} · ${lastRunWhat(last, nameOf)}`
 }
 
 export { formatterFactory, lineWhen, nextRunAt, runWhen, timesZone } from './times'
