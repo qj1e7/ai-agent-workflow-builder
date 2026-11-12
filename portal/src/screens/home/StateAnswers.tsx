@@ -14,6 +14,7 @@ import { REFRESH_MS, rowsOf, viewerOf } from '../workflows/workflow'
 import { useCapabilities } from '../../api/plannerQueries'
 import { ideasSay, needsSay, startingPoints, workflowsSay } from './answers'
 import { Troubleshooting } from '../run/Outcome'
+import { useAsker } from './asker'
 import { decidedSay, decisionLine } from './decided'
 import { approvalsOf, approverLine, needsOf, needsTotal, SEE_ALL_WORDS, type Needs } from './home'
 import { NeedsSection, useArrival } from './NeedsSection'
@@ -41,7 +42,8 @@ export function CheckWorkflowsAnswer({ useCaseId, now, say }: { useCaseId: strin
     const all = rowsOf(useCases.data, viewerOf(me.data), 'all', '', NOTHING)
     return useCaseId === null ? all : all.filter((row) => row.useCase.use_case_id === useCaseId)
   }, [me.data, useCases.data, useCaseId])
-  const sentence = rows ? workflowsSay(rows, isOperator(me.data) ? 'operator' : 'approver') : null
+  const asker = useAsker()
+  const sentence = rows ? workflowsSay(rows, asker) : null
   useSaidOnce(sentence, say)
   if (!rows) {
     return (
@@ -106,7 +108,7 @@ function NeedsInAnswer({ needs, now }: { needs: Needs; now: Date }) {
 /** What needs me: every row of Needs you the platform returned, grouped, from the same list, so the number here and on the rail are one number. */
 export function NeedsMeAnswer({ now, say }: { now: Date; say: Say }) {
   const home = useHome()
-  const operator = isOperator(useMe().data)
+  const operator = useAsker() === 'operator'
   const needs = useMemo(() => (home.data ? needsOf(home.data) : null), [home.data])
   const sentence = home.data ? needsSentence(home.data, operator) : null
   useSaidOnce(sentence, say)

@@ -1,6 +1,4 @@
 import { useState } from 'react'
-import { isOperator } from '../../api/me'
-import { useMe } from '../../api/queries'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
 import { Answer, type Page } from './AnswerCards'
 import { CardMemoryContext, NO_MEMORY, type CardMemory } from './cardMemory'
@@ -8,6 +6,7 @@ import { Leftovers } from './PartsList'
 import { CardLive, NewestAnswer } from './primary'
 import { SetupCard } from './SetupCard'
 import { sayOf } from './answers'
+import { useAsker } from './asker'
 import { CheckWorkflowsAnswer, DecideAnswer, DecidedAnswer, IdeasSentence, NeedsMeAnswer, OperatorsAnswer, useSaidOnce, WhyStoppedAnswer, type Say } from './StateAnswers'
 import type { Message, Thread as ThreadState } from './threadState'
 import { Waiting } from './Waiting'
@@ -26,7 +25,7 @@ interface ThreadProps {
 
 function ReplyBody({ message, now, page, say }: { message: Extract<Message, { kind: 'reply' }>; now: Date; page: Page; say: Say }) {
   const { reply } = message
-  const sentence = sayOf(reply, isOperator(useMe().data) ? 'operator' : 'approver')
+  const sentence = sayOf(reply, useAsker())
   useSaidOnce(sentence, say)
   return (
     <div className={styles['reply']}>

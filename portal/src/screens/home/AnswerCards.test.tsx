@@ -12,12 +12,26 @@ import refused from '../../../../contracts/fixtures/planner/answer.refused.json'
 import setupCard from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import setupClash from '../../../../contracts/fixtures/planner/answer.setup_card.clash.json'
 import setupCross from '../../../../contracts/fixtures/planner/answer.setup_card.cross.json'
+import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
+import stoppedUseCase from '../../../../contracts/fixtures/builder/use-case.stopped.json'
+import decisionsOfBob from '../../../../contracts/fixtures/approvals/decisions.bob.json'
+import noDecisions from '../../../../contracts/fixtures/approvals/decisions.none.json'
+import people from '../../../../contracts/fixtures/people/list.json'
+import troubleshooting from '../../../../contracts/fixtures/troubleshooting/failure.json'
+import operatorsReply from '../../../../contracts/fixtures/planner/answer.operators.json'
+import needsMeOperators from '../../../../contracts/fixtures/planner/answer.needs_me.operators.json'
+import decidedReply from '../../../../contracts/fixtures/planner/answer.decided.json'
+import decidedDeclines from '../../../../contracts/fixtures/planner/answer.decided.declines.json'
+import decideReply from '../../../../contracts/fixtures/planner/answer.decide.json'
+import decideQuestion from '../../../../contracts/fixtures/planner/answer.decide.question.json'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { CantReply, OfflineReply, PartReply, PartView, PlannerReply, QuestionReply, SetupCardReply, WatchlistReply } from '../../api/types'
+import type { CantReply, DecisionsView, HomeOut, Me, OfflineReply, PartReply, PartView, PlannerReply, QuestionReply, SetupCardReply, UseCaseView, WatchlistReply } from '../../api/types'
 import { Answer, type Page } from './AnswerCards'
 import { sayOf } from './answers'
 import { Leftovers } from './PartsList'
+import { Thread } from './Thread'
+import { EMPTY, threadReducer } from './threadState'
 
 const PAGE: Page = { ask: () => undefined, edit: () => undefined }
 
@@ -270,5 +284,101 @@ describe('the answer to a question about the person’s own data', () => {
     expect(html).not.toContain('tabindex')
     expect(html).not.toContain('aria-hidden')
     expect(html).not.toContain('animation')
+  })
+})
+
+describe('an Approver’s answers in the chat (spec 5.3)', () => {
+  const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
+  const HOME = bobHome as HomeOut
+  const NOW = new Date('2026-11-13T15:00:00+08:00')
+  const OPS = 'Operators set up workflows. Ask Alice, Carol or Dave.'
+
+  function ask(reply: PlannerReply, seed: { home?: HomeOut; decisions?: DecisionsView; useCases?: readonly UseCaseView[] } = {}): string {
+    const session = createDevSession(null)
+    const scope = session.cacheScope()
+    const client = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
+    client.setQueryData(['me', scope], BOB)
+    client.setQueryData(['dev-users'], [BOB])
+    client.setQueryData(['home', scope], seed.home ?? HOME)
+    client.setQueryData(['people', scope], people.people)
+    client.setQueryData(['use-cases', scope], seed.useCases ?? [])
+    for (const useCase of seed.useCases ?? []) if (useCase.last_run) client.setQueryData(['troubleshoot', scope, useCase.last_run.run_id, 0], troubleshooting)
+    client.setQueryData(['decisions', scope, reply.answer === 'decided' ? reply.only : null], seed.decisions ?? (decisionsOfBob as DecisionsView))
+    const thread = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'asked' }), { type: 'answered', reply, typed: 'asked' })
+    return renderToStaticMarkup(
+      <QueryClientProvider client={client}>
+        <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
+          <MemoryRouter>
+            <Thread thread={thread} now={NOW} page={PAGE} />
+          </MemoryRouter>
+        </ApiProvider>
+      </QueryClientProvider>,
+    )
+  }
+
+  const answerOf = (html: string) => text(/<li[^>]*data-answer="true"[^>]*>([\s\S]*)<\/li>/.exec(html)?.[1] ?? '').replace(/^Planner /, '')
+
+  it('answers a change with who makes changes, naming the Operators, and nothing to press (ROLE-refuse)', () => {
+    const html = ask(operatorsReply as PlannerReply)
+    expect(answerOf(html)).toBe(OPS)
+    expect(buttons(html)).toEqual([])
+  })
+
+  it('answers a question asked beside a change as it would alone, and crosses the change with the same words (FOLLOW-bob-mixed)', () => {
+    const html = ask(needsMeOperators as PlannerReply)
+    expect(answerOf(html)).toContain(`Can’t do: “pause the morning new-ticket check” ${OPS}`)
+    expect(answerOf(html)).toContain('3 things need you.')
+    expect(answerOf(html)).not.toContain('What is waiting for my yes')
+  })
+
+  it('lists his own decisions newest first, each with its workflow, Approved or Declined, when and what it led to (ROLE-asks)', () => {
+    const said = answerOf(ask(decidedReply as PlannerReply))
+    expect(said).toContain('Here are your 3 decisions.')
+    expect(said).toContain('Keep our software up to date Declined Declined by Bob at 9:10 today. Nothing was written. Reason: Wrong version.')
+    expect(said).toContain('Morning new-ticket check Approved Approved by Bob, Mon 26 Oct, 8:00. 1 ticket created in Jira.')
+    expect(said).toContain('Weekly closed-ticket summary Approved Approved by Bob, Fri 16 Oct, 16:00. Then declined by Alice. Nothing was written.')
+    expect(said.indexOf('9:10 today')).toBeLessThan(said.indexOf('Mon 26 Oct'))
+  })
+
+  it('says plainly when he has declined nothing, with no rows (FIX-decisions-detail)', () => {
+    const html = ask(decidedDeclines as PlannerReply, { decisions: noDecisions })
+    expect(answerOf(html)).toBe('You haven’t declined any requests yet.')
+    expect(html).not.toContain('aria-label="Your decisions"')
+  })
+
+  it('sends an approve to the request to decide there, never a decision in the chat', () => {
+    const html = ask(decideReply as PlannerReply)
+    expect(answerOf(html)).toContain('I can’t approve or decline for you. Open the request to see exactly what it will write, and decide there.')
+    expect(buttons(html)).toContain('Review and decide')
+    expect(buttons(html).filter((name) => /^(Approve|Decline)$/.test(name))).toEqual([])
+  })
+
+  it('keeps a question asked with an approve, to ask on its own', () => {
+    expect(answerOf(ask(decideQuestion as PlannerReply))).toContain('Can’t do: “is LangGraph up to date” Ask this on its own, and I’ll answer it.')
+  })
+
+  it('says there is nothing to decide when nothing waits for his yes', () => {
+    const quiet = { ...HOME, approvals: [], approvals_total: 0 }
+    expect(answerOf(ask(decideReply as PlannerReply, { home: quiet }))).toContain('Nothing is waiting for your yes, so there’s nothing to decide.')
+  })
+
+  it('answers what he can ask, ending with who sets up workflows', () => {
+    const html = ask({ answer: 'abilities', parts: [{ text: 'What can you do', mark: 'will_do', reason: null, note: null, choices: [] }] })
+    expect(answerOf(html)).toBe(
+      `Here’s what you can ask me. I can What is waiting for your yes, and exactly what each request will write What you decided before, with when, and any reason you gave How the workflows and the software are doing ${OPS}`,
+    )
+  })
+
+  it('gives a refusal with no set-up offered', () => {
+    expect(buttons(ask(refused as PlannerReply))).toEqual(['Say it another way'])
+  })
+
+  it('speaks of the team’s workflows, and of why one stopped with who can retry, from his Workflows page’s rows', () => {
+    const stopped = stoppedUseCase as UseCaseView
+    expect(answerOf(ask({ answer: 'check_workflows', use_case_id: null, parts: [] }, { useCases: [stopped] }))).toMatch(/^The team has 1 workflow\. 1 stopped\./)
+    const why = ask({ answer: 'why_stopped', use_case_id: null, parts: [] }, { useCases: [stopped] })
+    expect(answerOf(why)).toMatch(/^LangGraph release check stopped What happened/)
+    expect(answerOf(why)).toContain('An Operator can retry the run.')
+    expect(buttons(why)).toEqual(['See the run'])
   })
 })

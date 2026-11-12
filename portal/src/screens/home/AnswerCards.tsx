@@ -2,12 +2,11 @@ import { useId, useState, type ReactNode } from 'react'
 import { Link } from '../../ui/Link'
 import type { CantReply, OfflineReply, PartReply, PartView, PlannerReply, QuestionReply, SetupCardReply, WatchlistReply } from '../../api/types'
 import { useCapabilities } from '../../api/plannerQueries'
-import { isOperator } from '../../api/me'
-import { useMe } from '../../api/queries'
 import { useOperatorsSay } from '../../shell/OperatorsNote'
 import { Button, ButtonLink } from '../../ui/Button'
 import { OpenButton } from '../../ui/OpenItem'
 import { AskTheTeam } from './AskTheTeam'
+import { useAsker } from './asker'
 import { cantLines, refusalNext, SAY_ANOTHER_WAY, startingPoints, TAG_CANT, TAG_CHOICE } from './answers'
 import { cardFrom } from './card'
 import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard } from './parts'
@@ -149,7 +148,7 @@ const NO_PAGE: Page = { ask: () => undefined, edit: () => undefined }
 
 function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { answer: 'refused' }>; typed: string; page: Page }) {
   // Someone who isn't an Operator sets nothing up, so the refusal offers them no set-up with a yes.
-  const { rest } = isOperator(useMe().data) ? refusalNext(reply) : { rest: null }
+  const { rest } = useAsker() === 'operator' ? refusalNext(reply) : { rest: null }
   const main = useMainButton()
   return (
     <Card title="How approvals work">
@@ -198,7 +197,7 @@ function ApproverAbilities() {
 }
 
 function AbilitiesAnswer() {
-  const operator = isOperator(useMe().data)
+  const operator = useAsker() === 'operator'
   const capabilities = useCapabilities({ enabled: operator })
   if (!operator) return <ApproverAbilities />
   return (
