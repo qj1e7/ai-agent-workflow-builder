@@ -6,9 +6,8 @@ import { useApproval, useRun, useUseCase } from '../../api/queries'
 import type { RunView, UseCaseView } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
 import { PRODUCT } from '../../shell/product'
-import { AgentFace, type FaceState } from '../../ui/AgentFace'
+import { AgentFace } from '../../ui/AgentFace'
 import { Button } from '../../ui/Button'
-import { cx } from '../../ui/cx'
 import { Toast, type ToastMessage } from '../../ui/Toast'
 import { useFromChat } from '../../ui/fromChat'
 import { motionAllowed } from '../../ui/motion'
@@ -21,7 +20,9 @@ import { AnswerList, Outcome, Troubleshooting } from './Outcome'
 import { QuestionThread } from './QuestionThread'
 import { useQuestions } from './questions'
 import { RunLine } from './RunLine'
+import { RunPill } from './RunPill'
 import { isFinished, type RunModel } from './runModel'
+import { TROUBLE_FACE } from './troubleFace'
 import { useRunStory } from './useRunStory'
 import { declinedNext, declinedNowWords, declinedRecord, feedTroubleOf, lineOf, logRowsOf, RUN_MISSING, RUN_PROBLEM, speakerName, type NameOf, type RunStage } from './words'
 import styles from './RunPage.module.css'
@@ -180,17 +181,6 @@ function TroubleshooterBlock({ stage, children }: { stage: RunStage; children: R
   )
 }
 
-export const TROUBLE_FACE: Readonly<Record<RunStage, FaceState>> = {
-  stopped: 'idle',
-  retrying: 'working',
-  working: 'working',
-  waiting: 'success',
-  writing: 'success',
-  done: 'success',
-  declined: 'idle',
-  skipped: 'idle',
-}
-
 function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const { shown, head, loadedUpTo } = live
   const story = useRunStory(run, live)
@@ -309,7 +299,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
             {run.use_case_name}
           </h1>
         </div>
-        <span className={cx(styles['pill'], styles[headline.pill.tone])}>{headline.pill.label}</span>
+        <RunPill pill={headline.pill} />
       </div>
       <p className={styles['status']}>
         <span role="status">{statusWords(decision, live)}</span>

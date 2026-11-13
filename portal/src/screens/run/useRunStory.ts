@@ -43,50 +43,65 @@ export interface RunStory {
   readonly kind: string
 }
 
-/**
- * Everything the card, the panel and the page say about one run, read once from the run's own events and its workflow, so the
- * three never disagree (principle 7). The stage is the run's state in the words every screen shares.
- */
-export function useRunStory(run: RunView, live: LiveRun): RunStory {
+export interface StoryInputs {
+  readonly run: Pick<RunView, 'run_id' | 'started_at'>
+  readonly live: Pick<LiveRun, 'shown' | 'head' | 'loadedUpTo'>
+  readonly me: Me | undefined
+  readonly nameOf: NameOf
+  readonly useCase: UseCaseView | undefined
+  readonly approval: ApprovalView | undefined
+  readonly advice: TroubleshootingProps['advice']
+  readonly adviceLoading: boolean
+  readonly modelOff: boolean
+  readonly now: Date
+}
+
+/** The run's story from what was read: the pure part of useRunStory, so a card can be drawn from fixture events. */
+export function storyOf({ run, live, me, nameOf, useCase, approval, advice, adviceLoading, modelOff, now }: StoryInputs): Omit<RunStory, 'useCase' | 'approvalId'> {
   const { shown, head, loadedUpTo } = live
-  const me = useMe().data
-  const modelOff = useModelOff()
-  const nameOf = useNameOf(head)
-  const useCase = useUseCase(run.use_case_id)
-  const approvalId = approvalIdOf(run, head)
   const waiting = shown.phase.state === 'awaiting_approval'
-  const approval = useApproval(approvalId ?? '', { poll: waiting, enabled: approvalId !== null })
-  const attempt = head.chat.filter((item) => item.kind === 'retried').length
-  const troubleshoot = useTroubleshoot(run.run_id, shown.phase.state === 'failed' && head.phase.state === 'failed', attempt)
-  const quick = declineReasons(useCase.data?.template)
-  const plan: PlanBlock[] | null = planOf(useCase.data)
-  const stations = stationsOf(shown, plan, triggerWords(shown, useCase.data?.schedule ?? null, nameOf, run.started_at))
-  const settled = settledOf(shown, nameOf, new Date(), quick)
-  const headline = headlineOf(shown, stations, approval.data && waiting ? approval.data.actions : null)
-  const found = foundOf(head.found, approval.data?.found)
+  const quick = declineReasons(useCase?.template)
+  const stations = stationsOf(shown, planOf(useCase), triggerWords(shown, useCase?.schedule ?? null, nameOf, run.started_at))
+  const found = foundOf(head.found, approval?.found)
   return {
     model: shown,
     me,
     nameOf,
-    useCase,
-    approvalId,
-    approval: approval.data,
+    approval,
     stage: stageOf(shown),
     stations,
-    settled,
-    headline,
+    settled: settledOf(shown, nameOf, now, quick),
+    headline: headlineOf(shown, stations, approval && waiting ? approval.actions : null),
     arrivedLive: shown.spotSeq > loadedUpTo ? (stations.findLast((station) => station.state !== 'todo')?.key ?? null) : null,
     found,
     quick,
     answers: stageAnswers(shown, found, nameOf),
     stopped: {
-      advice: troubleshoot.data,
-      loading: troubleshoot.isPending,
+      advice,
+      loading: adviceLoading,
       me: me ? { id: me.id, name: me.display, operator: isOperator(me) } : undefined,
       reports: shown.reports,
       nameOf,
       modelOff,
     },
-    kind: runKind(run.started_at, new Date()),
+    kind: runKind(run.started_at, now),
   }
+}
+
+/**
+ * Everything the card, the panel and the page say about one run, read once from the run's own events and its workflow, so the
+ * three never disagree (principle 7). The stage is the run's state in the words every screen shares.
+ */
+export function useRunStory(run: RunView, live: LiveRun): RunStory {
+  const me = useMe().data
+  const modelOff = useModelOff()
+  const nameOf = useNameOf(live.head)
+  const useCase = useUseCase(run.use_case_id)
+  const approvalId = approvalIdOf(run, live.head)
+  const waiting = live.shown.phase.state === 'awaiting_approval'
+  const approval = useApproval(approvalId ?? '', { poll: waiting, enabled: approvalId !== null })
+  const attempt = live.head.chat.filter((item) => item.kind === 'retried').length
+  const troubleshoot = useTroubleshoot(run.run_id, live.shown.phase.state === 'failed' && live.head.phase.state === 'failed', attempt)
+  const story = storyOf({ run, live, me, nameOf, useCase: useCase.data, approval: approval.data, advice: troubleshoot.data, adviceLoading: troubleshoot.isPending, modelOff, now: new Date() })
+  return { ...story, useCase, approvalId }
 }

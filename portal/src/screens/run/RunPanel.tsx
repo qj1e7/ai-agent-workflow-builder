@@ -3,7 +3,6 @@ import { useSession } from '../../api/context'
 import { useRun } from '../../api/queries'
 import type { RunView } from '../../api/types'
 import { Button } from '../../ui/Button'
-import { cx } from '../../ui/cx'
 import { useAfterPanelAction } from '../../ui/sidePanel'
 import { useChat } from '../home/ChatProvider'
 import { ApprovalGate, NotChecked } from './ApprovalGate'
@@ -14,6 +13,7 @@ import { QuestionThread } from './QuestionThread'
 import { useQuestions } from './questions'
 import { declinedSoFarWords, POLL_FAILED_MS, statusWords, useReconnectWhenBehind } from './RunPage'
 import { RunLine, SettledLine } from './RunLine'
+import { RunPill } from './RunPill'
 import { useRunStory } from './useRunStory'
 import { declinedNowWords, feedTroubleOf, RUN_PROBLEM } from './words'
 import styles from './RunPage.module.css'
@@ -121,7 +121,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
     <div className={styles['panelView']}>
       <div className={styles['head']}>
         <p className={styles['kind']}>{story.kind}</p>
-        <span className={cx(styles['pill'], styles[headline.pill.tone])}>{headline.pill.label}</span>
+        <RunPill pill={headline.pill} />
       </div>
       {status ? (
         <p className="muted" role="status">
