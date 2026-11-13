@@ -72,6 +72,14 @@ PRACTICE_JIRA_PROJECT = "MOCK"
 
 
 @dataclass(frozen=True)
+class N8nOwner:
+    """n8n's owner account, which the platform signs in as to lay out and publish workflows."""
+
+    email: str
+    password: str
+
+
+@dataclass(frozen=True)
 class Settings:
     auth: AuthConfig
     public_base_url: str
@@ -98,6 +106,9 @@ class Settings:
     """WAB_NODE_KEY, which our n8n node pack sends. Without it no node call is taken."""
     start_secret: str | None = None
     """WAB_START_SECRET, which signs each start the Portal sends to Start from the Portal."""
+    n8n_owner: N8nOwner | None = None
+    """N8N_OWNER_EMAIL and N8N_OWNER_PASSWORD. Without them the platform lays no workflow out
+    in n8n, and new use cases run on the shared n8n workflow."""
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -302,7 +313,18 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         team_time_zone=team_time_zone_from_env(env),
         node_key=env.get("WAB_NODE_KEY", "").strip() or None,
         start_secret=env.get("WAB_START_SECRET", "").strip() or None,
+        n8n_owner=n8n_owner_from_env(env),
     )
+
+
+def n8n_owner_from_env(env: Mapping[str, str]) -> N8nOwner | None:
+    email = env.get("N8N_OWNER_EMAIL", "").strip()
+    password = env.get("N8N_OWNER_PASSWORD", "")
+    if not email and not password:
+        return None
+    if not email or not password:
+        raise ConfigError("N8N_OWNER_EMAIL and N8N_OWNER_PASSWORD go together.")
+    return N8nOwner(email, password)
 
 
 @dataclass(frozen=True)

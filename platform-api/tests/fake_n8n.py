@@ -91,7 +91,8 @@ class FakeN8n:
                 return httpx.Response(200, json={"data": answer})
             case "POST", ["workflows", workflow_id, "activate"]:
                 workflow = self.workflows[workflow_id]
-                if body.get("expectedChecksum") != workflow["checksum"]:
+                expected = body.get("expectedChecksum", workflow["checksum"])
+                if expected != workflow["checksum"]:
                     return httpx.Response(409, json={"code": 409, "message": "Your most recent"})
                 self._activate(workflow_id, body["versionId"])
                 return httpx.Response(200, json={"data": {"versionId": body["versionId"]}})
@@ -141,7 +142,7 @@ class FakeN8n:
                 if "versionId" in body:
                     return httpx.Response(400, json={"message": "versionId is read-only"})
                 workflow = self.workflows[workflow_id]
-                workflow.update(json.loads(json.dumps(body)))
+                workflow.update(self.keeps(json.loads(json.dumps(body))))
                 workflow["versionId"] = _new_version()
                 workflow["checksum"] = _new_version()
                 if request.url.params.get("publishIfActive") != "false" and workflow["active"]:

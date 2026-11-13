@@ -25,6 +25,7 @@ from platform_api.builder.n8n_draft import (
     EVERY_WRITE,
     FIT,
     Checked,
+    DraftRefused,
     check_draft,
 )
 from platform_api.orchestration import ASK_EXITS, Schedule, grade
@@ -164,3 +165,24 @@ def test_the_same_use_case_always_gets_the_same_document() -> None:
 def test_a_layout_on_its_own_would_be_refused_its_writes(plan: LayoutPlan) -> None:
     """The yes is the checker's: without it the layout grades writes_refused."""
     assert grade(lay_out(plan), ERROR_WORKFLOW).grade == "writes_refused"
+
+
+def test_a_layout_with_a_block_that_is_not_on_is_never_saved() -> None:
+    laid = lay_out(RELEASE_CHECK)
+    laid["nodes"].append({"id": "h", "name": "Post it", "type": "n8n-nodes-base.httpRequest"})
+    refused = check_draft(laid, RELEASE_CHECK.use_case_id, ERROR_WORKFLOW)
+    assert isinstance(refused, DraftRefused)
+    assert [f.block for f in refused.findings] == ["Post it"]
+
+
+def test_a_write_the_checker_cannot_put_behind_one_yes_is_never_saved() -> None:
+    """A write after an Ask for a yes's No exit gets a second yes in front of it, and two yeses on
+    one path need a fix."""
+    laid = drafted(lay_out(RELEASE_CHECK), RELEASE_CHECK).document
+    no = ASK_EXITS.index("No")
+    laid["connections"]["Ask for a yes"]["main"][no] = [
+        {"node": CREATE_TICKET, "type": "main", "index": 0}
+    ]
+    refused = check_draft(laid, RELEASE_CHECK.use_case_id, ERROR_WORKFLOW)
+    assert isinstance(refused, DraftRefused)
+    assert {f.grade for f in refused.findings} == {"needs_a_fix"}

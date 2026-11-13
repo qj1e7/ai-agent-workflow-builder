@@ -10,13 +10,13 @@ from platform_api.orchestration.n8n import (
     N8nApi,
     N8nError,
     N8nExecutions,
-    N8nOwner,
     PublishEvent,
     Written,
     publisher_of,
     same_as_sent,
 )
 from platform_api.orchestration.n8n_calls import Publisher
+from platform_api.settings import N8nOwner
 from platform_api.shared import N8nExecutionId, UserId
 from tests.fake_n8n import OWNER_EMAIL, OWNER_ID, OWNER_PASSWORD, FakeN8n
 
@@ -147,6 +147,17 @@ async def test_write_refuses_when_an_editor_saves_just_before_the_publish() -> N
     current = n8n.workflows[workflow_id]["versionId"]
     assert await api.write(workflow_id, current, renamed) == ChangedInN8n()
     assert n8n.workflows[workflow_id]["activeVersionId"] == live, "n8n refused the publish"
+
+
+async def test_write_refuses_when_n8n_keeps_something_other_than_what_was_put() -> None:
+    n8n = FakeN8n()
+    api = api_for(n8n)
+    workflow_id = await published_workflow(n8n, api)
+    live = n8n.workflows[workflow_id]["activeVersionId"]
+    n8n.keeps = lambda document: {**document, "nodes": document["nodes"][:1]}
+    current = n8n.workflows[workflow_id]["versionId"]
+    assert await api.write(workflow_id, current, renamed) == ChangedInN8n()
+    assert n8n.workflows[workflow_id]["activeVersionId"] == live, "nothing was published"
 
 
 async def test_waiting_for_a_publish_ends_only_once_every_trigger_is_activated() -> None:

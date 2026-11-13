@@ -41,6 +41,7 @@ from platform_api.orchestration.n8n_calls import (
     CANNOT_SEAL,
     CHANGED_CALL,
     DENIED,
+    GITHUB_RELEASES,
     NO_EXECUTION,
     NOT_OURS,
     READ_LIMIT,
@@ -48,6 +49,7 @@ from platform_api.orchestration.n8n_calls import (
     START_USED,
     TEST_RUN_STOPS,
     AgentCall,
+    AgentToRun,
     Answer,
     Answered,
     AskAnswer,
@@ -55,6 +57,7 @@ from platform_api.orchestration.n8n_calls import (
     ByRetry,
     ByStart,
     CallResult,
+    CannotRun,
     Carry,
     IssuedStart,
     N8nReads,
@@ -495,9 +498,16 @@ class NodeCalls:
                 return Done(Answer(()), _recorded(at_sites((proposed,), self._sites), subject))
 
     async def _run_agent(self, admitted: Admitted, agent: str, inputs: Mapping[str, str]) -> Work:
-        card_run = await self._workflows.agent_run(agent, inputs)
-        if card_run is None:
-            return unknown("agent", agent)
+        match await self._workflows.agent_run(agent, inputs):
+            case None:
+                return unknown("agent", agent)
+            case CannotRun(detail):
+                return Refused(422, detail)
+            case AgentToRun(card_run, release_of):
+                pass
+        release = None if release_of is None else await self._newest_release(release_of)
+        if isinstance(release, TryLater):
+            return release
         model = None
         if self._models is not None:
             async with self._db.transaction("orchestration") as uow:
@@ -540,12 +550,24 @@ class NodeCalls:
                     detail = f"No connector is bound for {', '.join(bound.kinds)}"
                     failure = Failure(FailureReason.UNBOUND_INTENT, detail, retryable=False)
                     return Stopped(failure, tuple(events))
-                found = {
+                found: dict[str, Any] = {
                     "summary": output.summary,
                     "findings": [f.model_dump(mode="json") for f in output.findings],
                 }
-                actions = _recorded(at_sites(bound, self._sites), None)
+                subject = None if release is None else f"{release_of}@{release}"
+                actions = _recorded(at_sites(bound, self._sites), subject)
+                if release_of is not None:
+                    found |= {"newer": bool(actions), "version": release}
                 return Done(Answer((found,)), actions, tuple(events))
+
+    async def _newest_release(self, repo: str) -> str | None | TryLater:
+        """Read by our API, not taken from the agent's words, so it can key the change across
+        runs. None when the repository has no release the tag rule counts."""
+        read = await self._sources.read(GITHUB_RELEASES, repo, None)
+        if isinstance(read, ReadFailed):
+            return TryLater(read.detail)
+        newest = read[0].get("id") if read else None
+        return newest if isinstance(newest, str) else None
 
     async def _finish(
         self, uow: UnitOfWork, admitted: Admitted, call: NodeCall, work: Work

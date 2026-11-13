@@ -11,13 +11,14 @@ import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Literal, cast
+from typing import Any, Literal, Protocol, cast
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, ValidationError
 
 from platform_api.db import Database
 from platform_api.orchestration.n8n_calls import ExecutionFacts, Publisher
+from platform_api.settings import N8nOwner
 from platform_api.shared import N8nExecutionId, UserId
 
 log = logging.getLogger(__name__)
@@ -147,18 +148,22 @@ class N8nClient:
         if response.status_code != 200:
             raise N8nError(f"could not sign in as {email}: HTTP {response.status_code}")
 
-    def fresh_api_key(self, label: str) -> int:
+    def remove_api_keys(self, label: str) -> int:
         listed = self._rest("GET", "/rest/api-keys")
         stale = [item for item in listed["data"]["items"] if item["label"] == label]
         for item in stale:
             self._rest("DELETE", f"/rest/api-keys/{item['id']}")
+        return len(stale)
+
+    def fresh_api_key(self, label: str) -> int:
+        removed = self.remove_api_keys(label)
         created = self._rest(
             "POST",
             "/rest/api-keys",
             json={"label": label, "expiresAt": None, "scopes": list(API_KEY_SCOPES)},
         )
         self._api_key = str(created["data"]["rawApiKey"])
-        return len(stale)
+        return removed
 
     def create_header_credential(self, name: str, header: str, value: str) -> str:
         created = self._public(
@@ -286,12 +291,6 @@ or finished: the earlier try resumed it, and only its answer was lost."""
 DOCUMENT_KEYS = ("name", "nodes", "connections", "settings")
 """What the public API's PUT takes, and so what the platform keeps of each version."""
 PUBLISH_WAIT_SECONDS = 20.0
-
-
-@dataclass(frozen=True)
-class N8nOwner:
-    email: str
-    password: str
 
 
 @dataclass(frozen=True)
@@ -760,7 +759,7 @@ class N8nApi:
         )
         ours = _parse(_WorkflowOut, _expect(put)).version_id
         after = await self.workflow(workflow_id)
-        if after is None or after.version_id != ours or not same_as_sent(wanted, after.document):
+        if after is None or not same_as_sent(wanted, after.document):
             return ChangedInN8n()
         draft = _parse(
             _Rest[_RestWorkflow], _expect(await self._rest("GET", f"/workflows/{workflow_id}"))
@@ -827,6 +826,16 @@ class SavedDraft:
     version_id: str
     document: dict[str, Any]
     """What n8n holds, which is what the platform keeps as this version's record."""
+
+
+class N8nDrafts(Protocol):
+    async def error_workflow(self) -> str | None: ...
+
+    async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft:
+        """Raises N8nError or httpx.HTTPError when n8n did not keep it."""
+        ...
+
+    async def remove(self, workflow_id: str) -> None: ...
 
 
 class N8nWorkflows:

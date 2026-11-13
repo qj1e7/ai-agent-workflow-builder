@@ -4,6 +4,8 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, Literal
 
+import httpx
+
 from platform_api.builder.card_store import CardLibrary, NoSuchCard, PinnedAgent, StarterCard
 from platform_api.builder.cards import (
     LIBRARY_LIMIT,
@@ -15,6 +17,7 @@ from platform_api.builder.cards import (
 )
 from platform_api.builder.drafts import Drafts, TooManyDrafts
 from platform_api.builder.last_run import RunHistory, last_run_view
+from platform_api.builder.layout import LayoutPlan, PlannedAgent, lay_out
 from platform_api.builder.lifecycle import (
     AlreadyDeleted,
     Deleted,
@@ -33,6 +36,7 @@ from platform_api.builder.lifecycle import (
     turn_on,
 )
 from platform_api.builder.models import (
+    BuildLineView,
     CardChecked,
     CardDefinition,
     CardList,
@@ -58,6 +62,7 @@ from platform_api.builder.models import (
     VersionList,
     Via,
 )
+from platform_api.builder.n8n_draft import ADDING, SAVED, DraftRefused, blocks_of, check_draft
 from platform_api.builder.planning import (
     CardPlanner,
     NoModelConnected,
@@ -91,16 +96,22 @@ from platform_api.db import Connection, Database, UnitOfWork, hold_workflow, jso
 from platform_api.orchestration import (
     CardRun,
     CardsTask,
+    Graded,
+    N8nDrafts,
+    N8nError,
     NotOn,
     RunSpec,
     RunStarted,
     RunStarter,
+    SavedDraft,
     SavedSchedule,
     Schedule,
     ScheduleBook,
     Task,
     card_bindings,
     cards_policy,
+    tools_used,
+    write_tools_used,
 )
 from platform_api.shared import Principal, UseCaseId, UserId, new_id
 
@@ -109,7 +120,7 @@ log = logging.getLogger(__name__)
 _CURRENT_VERSION = """
     SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
            u.draft, u.left_out, v.version, v.template, v.name, v.instruction, v.params,
-           v.created_at
+           v.created_at, v.document
     FROM builder.use_cases u
     JOIN builder.use_case_versions v
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
@@ -180,6 +191,7 @@ def _view(
         ],
         last_run=last_run,
         left_out=list(row["left_out"]),
+        blocks=[] if row["document"] is None else blocks_of(row["document"]),
     )
 
 
@@ -198,6 +210,22 @@ class AgentUseCaseRefused:
     """What is wrong with a new agent use case, as (place in the body, message)."""
 
     errors: tuple[tuple[tuple[str | int, ...], str], ...]
+
+
+@dataclass(frozen=True)
+class N8nNotReady:
+    """n8n could not take the draft, so nothing was set up."""
+
+    detail: str
+
+
+@dataclass(frozen=True)
+class InN8n:
+    """The draft saved in n8n, and what happened while it was laid out."""
+
+    saved: SavedDraft
+    graded: Graded
+    log: tuple[BuildLineView, ...]
 
 
 @dataclass(frozen=True)
@@ -250,6 +278,16 @@ async def _record(uow: UnitOfWork, use_case_id: str, recorded: Recorded) -> None
 type Move = Callable[[Lifecycle, str, datetime], Moved]
 
 
+def _planned(card: CardView, values: Mapping[str, str]) -> PlannedAgent:
+    spec = card_spec(card)
+    return PlannedAgent(
+        card.card_id,
+        card.name,
+        tuple((item.name, values[item.name]) for item in spec.inputs if item.name in values),
+        bool(write_tools_used(tools_used(spec))),
+    )
+
+
 class Builder:
     def __init__(
         self,
@@ -260,6 +298,7 @@ class Builder:
         planner: CardPlanner | None = None,
         schedules: ScheduleBook | None = None,
         history: RunHistory | None = None,
+        n8n: N8nDrafts | None = None,
     ) -> None:
         self._db = db
         self._runs = runs
@@ -269,6 +308,7 @@ class Builder:
         self._drafts = Drafts(db)
         self._planner = planner or NoPlanner()
         self._history = history
+        self._n8n = n8n
         self.public_base_url = public_base_url
 
     async def list_use_cases(self, viewer: Principal | None = None) -> UseCaseList:
@@ -579,7 +619,10 @@ class Builder:
 
     async def create_agent_use_case(
         self, principal: Principal, body: CreateAgentUseCase
-    ) -> UseCaseCreated | AgentUseCaseRefused:
+    ) -> UseCaseCreated | AgentUseCaseRefused | DraftRefused | N8nNotReady:
+        """Where this platform lays workflows out in n8n, a new use case is born on its own n8n
+        workflow, saved there as a draft (ENGINE-PLAN 2.5). The draft is saved before any row
+        here, so a failure in n8n sets nothing up."""
         errors: list[tuple[tuple[str | int, ...], str]] = []
         chosen: list[tuple[CardView, dict[str, str]]] = []
         for index, agent in enumerate(body.agents):
@@ -597,23 +640,17 @@ class Builder:
         if errors:
             return AgentUseCaseRefused(tuple(errors))
         use_case_id = new_id("uc")
-        async with self._db.transaction("builder") as uow:
-            await uow.conn.execute(
-                "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version,"
-                " left_out, draft) VALUES (%s, %s, %s, 1, %s, %s)",
-                (use_case_id, principal.user_id, uow.now, body.left_out, not body.on),
-            )
-            await uow.conn.execute(
-                "INSERT INTO builder.use_case_versions (use_case_id, version, template, name,"
-                " instruction, params, created_at) VALUES (%s, 1, %s, %s, %s, %s, %s)",
-                (use_case_id, AGENT_CARDS.key, body.name, body.instruction, json({}), uow.now),
-            )
-            for position, (card, values) in enumerate(chosen):
-                await uow.conn.execute(
-                    "INSERT INTO builder.use_case_cards (use_case_id, version, position,"
-                    ' card_id, card_version, "values") VALUES (%s, 1, %s, %s, %s, %s)',
-                    (use_case_id, position, card.card_id, card.version, json(values)),
-                )
+        drafted = None
+        if self._n8n is not None:
+            drafted = await self._draft_in_n8n(self._n8n, use_case_id, body, chosen)
+            if isinstance(drafted, DraftRefused | N8nNotReady):
+                return drafted
+        try:
+            await self._insert_agent_use_case(use_case_id, principal, body, chosen, drafted)
+        except Exception:
+            if self._n8n is not None and drafted is not None:
+                await self._n8n.remove(drafted.saved.workflow_id)
+            raise
         if body.schedule is not None:
             try:
                 await self._schedules.save(
@@ -624,7 +661,98 @@ class Builder:
             except Exception:
                 await self.delete_use_case(use_case_id, principal)
                 raise
-        return UseCaseCreated(use_case_id=use_case_id, version=1)
+        if drafted is None:
+            return UseCaseCreated(use_case_id=use_case_id, version=1)
+        return UseCaseCreated(
+            use_case_id=use_case_id,
+            version=1,
+            n8n_workflow_id=drafted.saved.workflow_id,
+            grade=drafted.graded.grade,
+            build_log=list(drafted.log),
+            blocks=blocks_of(drafted.saved.document),
+        )
+
+    async def _draft_in_n8n(
+        self,
+        n8n: N8nDrafts,
+        use_case_id: str,
+        body: CreateAgentUseCase,
+        chosen: Sequence[tuple[CardView, Mapping[str, str]]],
+    ) -> InN8n | DraftRefused | N8nNotReady:
+        clock = self._db.clock
+        started = BuildLineView(at=clock(), kind="status", text=ADDING)
+        error_workflow = await n8n.error_workflow()
+        if error_workflow is None:
+            return N8nNotReady("n8n is not ready yet: its error workflow is not loaded.")
+        schedule = None if body.schedule is None else Schedule(body.schedule.day, body.schedule.at)
+        plan = LayoutPlan(
+            use_case_id,
+            body.name,
+            f"{self.public_base_url}/workflows/{use_case_id}",
+            schedule,
+            tuple(_planned(card, values) for card, values in chosen),
+            error_workflow,
+        )
+        checked = check_draft(lay_out(plan), use_case_id, error_workflow)
+        if isinstance(checked, DraftRefused):
+            log.error("the safety checker refused the layout of %s: %s", use_case_id, checked)
+            return checked
+        at = clock()
+        lines = [BuildLineView(at=at, kind=kind, text=text) for kind, text in checked.lines]
+        try:
+            saved = await n8n.save_draft(checked.document)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("n8n did not take the draft of %s: %s", use_case_id, error)
+            return N8nNotReady("n8n did not take the draft. Try again in a minute.")
+        done = BuildLineView(at=clock(), kind="status", text=SAVED)
+        return InN8n(saved, checked.graded, (started, *lines, done))
+
+    async def _insert_agent_use_case(
+        self,
+        use_case_id: str,
+        principal: Principal,
+        body: CreateAgentUseCase,
+        chosen: Sequence[tuple[CardView, Mapping[str, str]]],
+        drafted: InN8n | None,
+    ) -> None:
+        engine = "shared_run" if drafted is None else "own"
+        workflow_id = None if drafted is None else drafted.saved.workflow_id
+        async with self._db.transaction("builder") as uow:
+            await uow.conn.execute(
+                "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version,"
+                " left_out, draft, engine, n8n_workflow_id) VALUES (%s, %s, %s, 1, %s, %s, %s, %s)",
+                (
+                    use_case_id,
+                    principal.user_id,
+                    uow.now,
+                    body.left_out,
+                    not body.on,
+                    engine,
+                    workflow_id,
+                ),
+            )
+            await uow.conn.execute(
+                "INSERT INTO builder.use_case_versions (use_case_id, version, template, name,"
+                " instruction, params, created_at, n8n_version_id, grade, document)"
+                " VALUES (%s, 1, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (
+                    use_case_id,
+                    AGENT_CARDS.key,
+                    body.name,
+                    body.instruction,
+                    json({}),
+                    uow.now,
+                    None if drafted is None else drafted.saved.version_id,
+                    None if drafted is None else drafted.graded.grade,
+                    None if drafted is None else json(drafted.saved.document),
+                ),
+            )
+            for position, (card, values) in enumerate(chosen):
+                await uow.conn.execute(
+                    "INSERT INTO builder.use_case_cards (use_case_id, version, position,"
+                    ' card_id, card_version, "values") VALUES (%s, 1, %s, %s, %s, %s)',
+                    (use_case_id, position, card.card_id, card.version, json(dict(values))),
+                )
 
     @staticmethod
     def suggest(text: str) -> SuggestOut:

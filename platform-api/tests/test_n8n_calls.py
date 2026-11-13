@@ -30,7 +30,9 @@ from platform_api.orchestration.n8n_calls import (
     UNKNOWN_START,
     VERSION_FAILED,
     AgentCall,
+    AgentToRun,
     Answer,
+    CannotRun,
     ExecutionFacts,
     IssuedStart,
     NodeCall,
@@ -109,6 +111,7 @@ class FakeN8n:
 class FakeWorkflows:
     holder: UserId | None = None
     versions: dict[str, RanVersion] = field(default_factory=lambda: {"v1": SAFE_BY_ALICE})
+    release_of: str | None = None
 
     async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | None:
         if n8n_workflow_id not in (WORKFLOW, OTHER_WORKFLOW):
@@ -124,8 +127,16 @@ class FakeWorkflows:
     async def agent_inputs(self, agent_id: str) -> Sequence[CardInput]:
         return CARD.inputs if agent_id == CARD.id else []
 
-    async def agent_run(self, agent_id: str, values: Mapping[str, str]) -> CardRun | None:
-        return CARD_RUN if agent_id == CARD.id else None
+    async def agent_run(
+        self, agent_id: str, values: Mapping[str, str]
+    ) -> AgentToRun | CannotRun | None:
+        if agent_id != CARD.id:
+            return None
+        if "Project" not in values:
+            return CannotRun(
+                '"Compare" needs "Project", so our platform knows where its change goes.'
+            )
+        return AgentToRun(CARD_RUN, self.release_of)
 
 
 @dataclass
@@ -594,11 +605,12 @@ async def test_an_agent_block_runs_its_card_and_keeps_the_changes_it_proposes(t:
 async def test_an_agent_that_fails_stops_the_run_and_its_repeat_gets_the_same_words(t: Calls):
     t.h.agent.mode = "failed"
     t.started("101")
-    stopped = await t.call("101", AgentCall(CARD.id, {}), node="Compare")
+    stopped = await t.call("101", AgentCall(CARD.id, {"Project": "MOCK"}), node="Compare")
     assert isinstance(stopped, Refused) and stopped.status == 409
     run = await t.only_run()
     assert isinstance(run.state, Failed) and run.state.failure.reason is FailureReason.AGENT_ERROR
-    assert await t.call("101", AgentCall(CARD.id, {}), node="Compare") == stopped
+    again = await t.call("101", AgentCall(CARD.id, {"Project": "MOCK"}), node="Compare")
+    assert again == stopped
     assert len(t.h.agent.requests) == 1
 
 
@@ -656,3 +668,67 @@ async def test_the_options_list_only_what_the_portal_allows(t: Calls):
         NodeOption("jira.create_ticket", "Create a Jira ticket")
     ]
     assert await t.calls.options("places", {"action": "http.request"}) == []
+
+
+PROPOSED_TICKET = TaskOutput(
+    summary="LangGraph 1.2.16 is out.",
+    new_tags=[],
+    proposed=[
+        ProposedIntentIn(
+            kind="jira.create_ticket",
+            fields={"title": "Upgrade LangGraph", "body": "1.2.16 is out."},
+            reason="newer",
+            subject=CARD.id,
+        )
+    ],
+    carry_forward=CarryForward(),
+)
+
+
+async def test_the_version_checker_s_change_is_about_the_release_our_api_read(t: Calls):
+    """The subject comes from our own read of the repository, never from the agent's words, so
+    E2d's subject key stops the same ticket in a later run."""
+    t.workflows.release_of = REPO
+    t.sources.items = [RELEASE, {"kind": "release", "id": "1.2.15"}]
+    t.h.agent.output = PROPOSED_TICKET
+    t.started("101")
+    answer = await t.call("101", AgentCall(CARD.id, {"Project": "MOCK"}), node="Compare")
+    assert answer == Answer(
+        (
+            {
+                "summary": "LangGraph 1.2.16 is out.",
+                "findings": [],
+                "newer": True,
+                "version": "1.2.16",
+            },
+        )
+    )
+    [row] = await t.node_calls()
+    assert [a["subject"] for a in row["actions"]] == [f"{REPO}@1.2.16"]
+
+
+async def test_nothing_proposed_means_not_newer_and_no_ticket(t: Calls):
+    t.workflows.release_of = REPO
+    t.h.agent.output = PROPOSED_TICKET.model_copy(update={"proposed": []})
+    t.started("101")
+    answer = await t.call("101", AgentCall(CARD.id, {"Project": "MOCK"}), node="Compare")
+    assert isinstance(answer, Answer)
+    assert (answer.items[0]["newer"], answer.items[0]["version"]) == (False, "1.2.16")
+
+
+async def test_when_our_api_cannot_read_the_release_the_agent_does_not_run(t: Calls):
+    t.workflows.release_of = REPO
+    t.sources.down = True
+    t.started("101")
+    answer = await t.call("101", AgentCall(CARD.id, {"Project": "MOCK"}), node="Compare")
+    assert answer == TryLater("GitHub did not answer")
+    assert t.h.agent.requests == []
+
+
+async def test_an_agent_whose_write_target_is_left_out_is_refused_not_defaulted(t: Calls):
+    t.started("101")
+    refused = await t.call("101", AgentCall(CARD.id, {}), node="Compare")
+    assert refused == Refused(
+        422, '"Compare" needs "Project", so our platform knows where its change goes.'
+    )
+    assert t.h.agent.requests == []

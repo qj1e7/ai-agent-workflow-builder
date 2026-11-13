@@ -30,11 +30,13 @@ from platform_api.builder.models import (
     UseCaseList,
     UseCaseView,
 )
+from platform_api.builder.n8n_draft import DraftRefused
 from platform_api.builder.planning import NoModelConnected, RuntimeNotAnswering
 from platform_api.builder.service import (
     AgentUseCaseRefused,
     Builder,
     CardsRefused,
+    N8nNotReady,
     NoModelToRun,
     NothingToCheck,
     NotOnYet,
@@ -330,3 +332,9 @@ async def create_agent_use_case(
             raise HTTPException(
                 422, [{"loc": list(where), "msg": message} for where, message in errors]
             )
+        case DraftRefused(findings):
+            raise HTTPException(
+                422, [{"loc": ["body"], "msg": finding.text} for finding in findings]
+            )
+        case N8nNotReady(detail):
+            raise HTTPException(503, detail)

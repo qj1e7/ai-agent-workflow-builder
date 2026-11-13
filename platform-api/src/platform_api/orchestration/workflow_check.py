@@ -404,7 +404,7 @@ def add_yes(document: Mapping[str, Any], key: str) -> WithYes:
         nodes.insert(
             nodes.index(node),
             {
-                "id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"wab:{key}/{ask}")),
+                "id": block_id(key, ask),
                 "name": ask,
                 "type": TYPE_OF["ask"],
                 "typeVersion": ASK_TYPE_VERSION,
@@ -427,6 +427,11 @@ def add_yes(document: Mapping[str, Any], key: str) -> WithYes:
 
 def _edge_to(name: str) -> dict[str, Any]:
     return {"node": name, "type": "main", "index": 0}
+
+
+def block_id(key: str, name: str) -> str:
+    """A block's id, the same every time for the same workflow and name."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"wab:{key}/{name}"))
 
 
 def free_name(wanted: str, taken: set[str]) -> str:

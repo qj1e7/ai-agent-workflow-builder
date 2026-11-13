@@ -61,6 +61,7 @@ from tests.test_n8n_wait import (
     READ,
     TWO_STEPS,
     TWO_WORKING_DAYS_LATER,
+    FakeLanding,
     FakeN8nWaits,
     SpecWorkflows,
     Wait,
@@ -168,7 +169,7 @@ async def w(postgres: PostgresUrls) -> AsyncIterator[Writes]:
             public_base_url=PUBLIC_BASE_URL,
             waker=N8nWaker(N8N, NODE_KEY, box, client),
         )
-        writes = Writes(h, n8n, workflows, calls, waits, orchestrator)
+        writes = Writes(h, n8n, workflows, calls, waits, orchestrator, FakeLanding())
         writes.flaky = flaky
         yield writes
 

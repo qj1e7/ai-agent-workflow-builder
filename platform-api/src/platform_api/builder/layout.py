@@ -9,7 +9,6 @@ of the write, which is what the build panel shows ("Added a yes before the ticke
 Pure. Ids come from the use case's id, so the same use case always gets the same document.
 """
 
-import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -24,6 +23,7 @@ from platform_api.orchestration import (
     Day,
     Document,
     Schedule,
+    block_id,
     free_name,
 )
 
@@ -154,10 +154,6 @@ class _Canvas:
             "connections": self.connections,
             "settings": {**SETTINGS, "errorWorkflow": plan.error_workflow},
         }
-
-
-def block_id(key: str, name: str) -> str:
-    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"wab:{key}/{name}"))
 
 
 def _starts(canvas: _Canvas, plan: LayoutPlan) -> list[str]:

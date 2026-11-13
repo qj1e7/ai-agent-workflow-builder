@@ -1,5 +1,4 @@
 import asyncio
-from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -8,10 +7,11 @@ from fastapi import FastAPI
 
 from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
 from platform_api.builder import Builder, Home, PlannerFront, TeamRequests, Watchlist
+from platform_api.builder.n8n_facts import BuilderWorkflowFacts
 from platform_api.builder.planner_facts import PlannerFactsReader
 from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
-from platform_api.orchestration.agents import CardInput, HttpAgentRuntime
+from platform_api.orchestration.agents import HttpAgentRuntime
 from platform_api.orchestration.connections import (
     TEAMS_NOT_CHECKED,
     Checked,
@@ -39,15 +39,13 @@ from platform_api.orchestration.dispatch import (
 from platform_api.orchestration.jira import JiraWriteConnector, jira_site
 from platform_api.orchestration.jira_rest import JiraAuth, JiraRestAdapter
 from platform_api.orchestration.model_settings import KeyBox, ModelSettings
+from platform_api.orchestration.n8n import N8nApi, N8nExecutions, N8nWorkflows
 from platform_api.orchestration.n8n_call_service import NodeCalls
 from platform_api.orchestration.n8n_calls import (
     ExecutionFacts,
+    N8nReads,
     NodeCatalog,
     NodeOption,
-    OwnWorkflow,
-    RanVersion,
-    ReadFailed,
-    ReadItems,
     WriteEntry,
 )
 from platform_api.orchestration.people_store import People
@@ -60,7 +58,6 @@ from platform_api.orchestration.planning import (
 from platform_api.orchestration.runs import Leg
 from platform_api.orchestration.schedule_store import ScheduleBook, ScheduleTicker
 from platform_api.orchestration.service import Orchestrator
-from platform_api.orchestration.spec import CardRun
 from platform_api.orchestration.team_request_card import TeamsRequestChannel
 from platform_api.orchestration.teams import TeamsStub, TeamsWorkflowsWebhook
 from platform_api.orchestration.watch_store import WatchFacts
@@ -96,6 +93,7 @@ class Services:
     teams_webhook: TeamsWorkflowsWebhook | None = None
     waker: N8nWaker | None = None
     practice_jira: PracticeJira | None = None
+    n8n: N8nApi | None = None
 
 
 JIRA_TIMEOUT_SECONDS = 10.0
@@ -152,34 +150,28 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.people = services.people
 
 
-class NoOwnWorkflowsYet:
-    """Until the Planner lays use cases out as n8n workflows of their own (E4), no n8n workflow
-    is ours, so every node call is refused, and no agent or place can be named."""
-
-    async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | None:
-        return None
-
-    async def version(self, n8n_workflow_id: str, version_id: str) -> RanVersion | None:
-        return None
-
-    async def agents(self) -> Sequence[NodeOption]:
-        return []
-
-    async def agent_inputs(self, agent_id: str) -> Sequence[CardInput]:
-        return []
-
-    async def agent_run(self, agent_id: str, values: Mapping[str, str]) -> CardRun | None:
-        return None
+class NoN8nReads:
+    """Without n8n's owner sign-in the platform cannot read n8n, so it vouches for no execution
+    and no node call is taken."""
 
     async def execution(self, execution_id: N8nExecutionId) -> ExecutionFacts | None:
-        """n8n's records are not read yet (E4), so every execution is of no workflow of ours."""
-        return ExecutionFacts("", "", None, None, None)
+        return None
 
-    async def places(self, source: str) -> Sequence[NodeOption]:
-        return []
 
-    async def read(self, source: str, place: str, query: str | None) -> ReadItems | ReadFailed:
-        return ReadFailed("No Read source is set up yet.")
+@dataclass(frozen=True)
+class N8nParts:
+    api: N8nApi | None
+    reads: N8nReads
+    drafts: N8nWorkflows | None
+    landing: N8nExecutions | None
+
+
+def n8n_parts(settings: Settings, db: Database) -> N8nParts:
+    if settings.n8n_owner is None:
+        return N8nParts(None, NoN8nReads(), None, None)
+    api = N8nApi(settings.n8n_base_url, settings.n8n_owner)
+    executions = N8nExecutions(api)
+    return N8nParts(api, executions, N8nWorkflows(api, db), executions)
 
 
 def node_writes(settings: Settings) -> list[WriteEntry]:
@@ -309,6 +301,7 @@ async def build(settings: Settings) -> Services:
         waker = N8nWaker(settings.n8n_base_url, settings.node_key, box)
     connections, channel = connections_for(settings, db, jira, channel, agents, model_settings)
     gateway = WriteGateway(db, [JiraWriteConnector(jira, db, site)])
+    n8n = n8n_parts(settings, db)
     orchestrator = Orchestrator(
         db,
         activity,
@@ -322,23 +315,7 @@ async def build(settings: Settings) -> Services:
         public_base_url=settings.public_base_url,
         time_zone=settings.team_time_zone,
         waker=waker,
-    )
-    not_yet = NoOwnWorkflowsYet()
-    node_calls = NodeCalls(
-        db,
-        activity,
-        agents,
-        mint,
-        NodeCatalog(not_yet, not_yet, node_writes(settings)),
-        not_yet,
-        not_yet,
-        not_yet,
-        gateway.sites,
-        model_settings,
-        start_secret=settings.start_secret,
-        box=box,
-        time_zone=settings.team_time_zone,
-        gateway=gateway,
+        landing=n8n.landing,
     )
     schedules = ScheduleBook(db)
     watchlist = Watchlist(
@@ -357,6 +334,24 @@ async def build(settings: Settings) -> Services:
         CardPlanning(db, model_settings, agents),
         schedules,
         orchestrator,
+        n8n=n8n.drafts,
+    )
+    facts = BuilderWorkflowFacts(db, builder, agents)
+    node_calls = NodeCalls(
+        db,
+        activity,
+        agents,
+        mint,
+        NodeCatalog(facts, facts, node_writes(settings)),
+        facts,
+        n8n.reads,
+        facts,
+        gateway.sites,
+        model_settings,
+        start_secret=settings.start_secret,
+        box=box,
+        time_zone=settings.team_time_zone,
+        gateway=gateway,
     )
     request_channel = request_channel_for(settings)
     team_requests = TeamRequests(
@@ -394,6 +389,7 @@ async def build(settings: Settings) -> Services:
         cosmos=cosmos,
         teams_webhook=webhook,
         waker=waker,
+        n8n=n8n.api,
     )
 
 
@@ -415,6 +411,8 @@ class Runner:
             await self._services.teams_webhook.close()
         if self._services.waker is not None:
             await self._services.waker.close()
+        if self._services.n8n is not None:
+            await self._services.n8n.close()
         await self._services.request_channel.close()
         if self._services.copier is not None:
             await self._services.copier.stop()
