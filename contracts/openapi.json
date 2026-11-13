@@ -826,6 +826,71 @@
         "title": "AgentFailedEvent",
         "type": "object"
       },
+      "AgentIn": {
+        "additionalProperties": false,
+        "properties": {
+          "agent": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Agent",
+            "type": "string"
+          },
+          "execution_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Execution Id",
+            "type": "string"
+          },
+          "inputs": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "propertyNames": {
+              "maxLength": 200
+            },
+            "title": "Inputs",
+            "type": "object"
+          },
+          "mode": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Mode",
+            "type": "string"
+          },
+          "node_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Node Name",
+            "type": "string"
+          },
+          "workflow_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Id"
+          }
+        },
+        "required": [
+          "execution_id",
+          "workflow_id",
+          "node_name",
+          "mode",
+          "agent",
+          "inputs"
+        ],
+        "title": "AgentIn",
+        "type": "object"
+      },
       "AgentJoined": {
         "additionalProperties": false,
         "properties": {
@@ -1313,6 +1378,37 @@
           }
         },
         "title": "AnswerIn",
+        "type": "object"
+      },
+      "AnswerOut": {
+        "additionalProperties": false,
+        "properties": {
+          "cut_off": {
+            "description": "True when a Read stopped at its cap of items.",
+            "title": "Cut Off",
+            "type": "boolean"
+          },
+          "items": {
+            "description": "Each becomes one n8n item.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "replayed": {
+            "description": "True when this is the answer the block already had, so nothing ran again.",
+            "title": "Replayed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "replayed",
+          "cut_off"
+        ],
+        "title": "AnswerOut",
         "type": "object"
       },
       "AnswerView": {
@@ -5982,6 +6078,42 @@
         "title": "OperatorsReply",
         "type": "object"
       },
+      "OptionOut": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "OptionOut",
+        "type": "object"
+      },
+      "OptionsOut": {
+        "additionalProperties": false,
+        "properties": {
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/OptionOut"
+            },
+            "title": "Options",
+            "type": "array"
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "title": "OptionsOut",
+        "type": "object"
+      },
       "ParamSpec": {
         "additionalProperties": false,
         "properties": {
@@ -7090,6 +7222,85 @@
         "title": "ProposalView",
         "type": "object"
       },
+      "ProposeIn": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Action",
+            "type": "string"
+          },
+          "body": {
+            "maxLength": 5000,
+            "title": "Body",
+            "type": "string"
+          },
+          "execution_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Execution Id",
+            "type": "string"
+          },
+          "mode": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Mode",
+            "type": "string"
+          },
+          "node_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Node Name",
+            "type": "string"
+          },
+          "place": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Place",
+            "type": "string"
+          },
+          "subject": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Subject",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "workflow_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Id"
+          }
+        },
+        "required": [
+          "execution_id",
+          "workflow_id",
+          "node_name",
+          "mode",
+          "action",
+          "place",
+          "title",
+          "body"
+        ],
+        "title": "ProposeIn",
+        "type": "object"
+      },
       "ProposedView": {
         "additionalProperties": false,
         "properties": {
@@ -7351,6 +7562,78 @@
           "answer"
         ],
         "title": "QuestionView",
+        "type": "object"
+      },
+      "ReadIn": {
+        "additionalProperties": false,
+        "properties": {
+          "execution_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Execution Id",
+            "type": "string"
+          },
+          "mode": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Mode",
+            "type": "string"
+          },
+          "node_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Node Name",
+            "type": "string"
+          },
+          "place": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Place",
+            "type": "string"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
+          },
+          "source": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "workflow_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Id"
+          }
+        },
+        "required": [
+          "execution_id",
+          "workflow_id",
+          "node_name",
+          "mode",
+          "source",
+          "place"
+        ],
+        "title": "ReadIn",
         "type": "object"
       },
       "Readiness": {
@@ -7711,6 +7994,26 @@
           "detail"
         ],
         "title": "RetryLater",
+        "type": "object"
+      },
+      "RetryOut": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "retryable": {
+            "const": true,
+            "default": true,
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "RetryOut",
         "type": "object"
       },
       "RichTextBlock": {
@@ -17828,6 +18131,432 @@
         "summary": "Ready",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/internal/v1/n8n/calls/agent": {
+      "post": {
+        "description": "Runs one of the team's agents. What it proposes joins the run's proposal.",
+        "operationId": "agent_internal_v1_n8n_calls_agent_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Wab-Node-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Wab-Node-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad node key, or this platform takes no node calls"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Refused by a safety rule, such as a start or a version that fails"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The run has stopped, or another execution carries it"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The block names something our platform does not allow"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryOut"
+                }
+              }
+            },
+            "description": "Try the same call again soon"
+          }
+        },
+        "summary": "Agent",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/n8n/calls/propose": {
+      "post": {
+        "description": "Adds one change at an allowed place to the run's proposal. Nothing is written until an Approver says yes.",
+        "operationId": "propose_internal_v1_n8n_calls_propose_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Wab-Node-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Wab-Node-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad node key, or this platform takes no node calls"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Refused by a safety rule, such as a start or a version that fails"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The run has stopped, or another execution carries it"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The block names something our platform does not allow"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryOut"
+                }
+              }
+            },
+            "description": "Try the same call again soon"
+          }
+        },
+        "summary": "Propose",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/n8n/calls/read": {
+      "post": {
+        "description": "Reads one allowed place. The first answer is kept and given again.",
+        "operationId": "read_internal_v1_n8n_calls_read_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Wab-Node-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Wab-Node-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad node key, or this platform takes no node calls"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Refused by a safety rule, such as a start or a version that fails"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The run has stopped, or another execution carries it"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The block names something our platform does not allow"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryOut"
+                }
+              }
+            },
+            "description": "Try the same call again soon"
+          }
+        },
+        "summary": "Read",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/n8n/options": {
+      "get": {
+        "description": "The editor's lists for our blocks: names and ids from the Portal's settings, never run data.",
+        "operationId": "options_internal_v1_n8n_options_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "places",
+                "agents",
+                "agent_inputs",
+                "write_actions"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Agent"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Wab-Node-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Wab-Node-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad node key, or this platform takes no node calls"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Options",
+        "tags": [
+          "internal"
         ]
       }
     },

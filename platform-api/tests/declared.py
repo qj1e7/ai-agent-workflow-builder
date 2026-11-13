@@ -17,12 +17,21 @@ from platform_api.builder.watchlist import (
     RepoAlreadyWatched,
     WatchlistFull,
 )
+from platform_api.orchestration.n8n_calls import (
+    Answer,
+    CallResult,
+    NodeCall,
+    NodeOption,
+    OptionKind,
+)
 from platform_api.shared import SoftwareId
 from tests.support import LOCAL_ENV
 
 ALICE = {"X-Dev-User": "alice"}
 BOB = {"X-Dev-User": "bob"}
 STEP_KEY = {"X-Step-Key": LOCAL_ENV["STEP_KEY"]}
+NODE_KEY_ENV = {"WAB_NODE_KEY": "test-node-key"}
+NODE_KEY = {"X-Wab-Node-Key": NODE_KEY_ENV["WAB_NODE_KEY"]}
 
 
 class FakeOrchestrator:
@@ -44,6 +53,21 @@ class FakeOrchestrator:
 
     async def decide(self, *args: object) -> object:
         return self._decide
+
+
+class FakeNodeCalls:
+    """Answers every node call with one result, and records the calls."""
+
+    def __init__(self, result: CallResult | None = None) -> None:
+        self._result = result or Answer(({"id": "1.2.16"},))
+        self.calls: list[NodeCall] = []
+
+    async def call(self, call: NodeCall) -> CallResult:
+        self.calls.append(call)
+        return self._result
+
+    async def options(self, kind: OptionKind, of: Mapping[str, str]) -> list[NodeOption]:
+        return [NodeOption("MOCK", "MOCK")] if kind == "places" else []
 
 
 class FakeBuilder:
@@ -181,6 +205,7 @@ def app_with(
     planner_front: object = None,
     log: object = None,
     env: Mapping[str, str] | None = None,
+    node_calls: object = None,
 ) -> FastAPI:
     app = create_app({**LOCAL_ENV, **(env or {})})
     app.state.orchestrator = orchestrator or FakeOrchestrator()
@@ -192,6 +217,7 @@ def app_with(
     app.state.team_requests = FakeTeamRequests()
     app.state.schedule_ticker = FakeTicker()
     app.state.connections = FakeConnections()
+    app.state.node_calls = node_calls or FakeNodeCalls()
     return app
 
 

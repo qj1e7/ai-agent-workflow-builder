@@ -4,8 +4,9 @@
 The node pack's blocks call our API, and our API alone reads, runs agents and proposes. An
 execution joins a run on its first call, in the order 2.3 states: a retry joins its original's
 run, then a start our API issued links the run it was issued for, then a run started by hand is
-the holder's, then a trigger's is a new run of the version's publisher. The version the
-execution ran must have passed the safety check first.
+the holder's, then a webhook with no start is refused, and only the Schedule Trigger's is a new
+run of the version's publisher. The version the execution ran must have passed the safety check
+first.
 
 Pure, apart from the ports. The service that runs the calls is in n8n_call_service.py.
 """
@@ -63,7 +64,8 @@ class ExecutionFacts:
     start_nonce: str | None
     """The nonce in the Start from the Portal item, when the execution has one."""
     version_id: str | None
-    """The workflow version the execution runs: the published one, or a draft run by hand."""
+    """n8n's workflowVersionId: the published version, or a draft run by hand. A retry has none
+    and runs its original's."""
 
 
 class N8nReads(Protocol):

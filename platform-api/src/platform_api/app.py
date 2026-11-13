@@ -26,6 +26,7 @@ from platform_api.nul_guard import RefuseNul
 from platform_api.orchestration import (
     decisions_http,
     jira_reads_http,
+    n8n_calls_http,
     people_http,
     settings_http,
 )
@@ -111,6 +112,7 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     app.include_router(team_requests_http.router)
     app.include_router(orchestration_http.router)
     app.include_router(decisions_http.router)
+    app.include_router(n8n_calls_http.router)
     # The practice Jira, its REST API and its own pages, only while it is the Jira in use.
     if settings.practice_systems and settings.jira.practice:
         app.include_router(practice_jira_router)
