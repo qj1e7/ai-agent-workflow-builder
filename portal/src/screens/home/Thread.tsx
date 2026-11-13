@@ -96,7 +96,9 @@ export function Thread({ thread, now, page, memory }: ThreadProps) {
           if (message.kind === 'reply' && whoOf(message.reply) === 'troubleshooter' && message.reply.answer === 'why_stopped') {
             return (
               <li key={message.id} className={styles['said']} tabIndex={-1} data-answer data-who="troubleshooter">
-                <RunCardMessage useCaseId={message.reply.use_case_id} say={message.id === newest ? sayFor(message.id) : () => undefined} leftovers={<Leftovers reply={message.reply} />} />
+                <CardMemoryContext.Provider value={memory?.(message.id) ?? NO_MEMORY}>
+                  <RunCardMessage useCaseId={message.reply.use_case_id} say={message.id === newest ? sayFor(message.id) : () => undefined} leftovers={<Leftovers reply={message.reply} />} />
+                </CardMemoryContext.Provider>
               </li>
             )
           }

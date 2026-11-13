@@ -169,6 +169,8 @@ test('a stopped run: SHELL-more, RUN-retry-from-chat and RUN-retry-panel, at 128
   await page.getByRole('link', { name: 'Back to the chat' }).click()
   await expect(panel(page), 'the panel is still there on return').toBeVisible()
   await expect(panel(page).getByRole('button', { name: 'Retry', exact: true }), 'the panel shows the retried run').toHaveCount(0, { timeout: 15_000 })
+  await expect(card, 'the card drawn again keeps its run, though the retry took it off the stopped list').toContainText(names[0] ?? '')
+  await expect(card).not.toContainText('Nothing has stopped right now.')
   await panel(page).getByRole('button', { name: 'Close' }).click()
 
   await page.setViewportSize({ width: 900, height: 844 })
@@ -183,6 +185,59 @@ test('a stopped run: SHELL-more, RUN-retry-from-chat and RUN-retry-panel, at 128
   await expect(panel(page), 'the panel stays open on what changed').toBeVisible()
   await expect(heading(page), 'focus is on the panel’s heading').toBeFocused()
   expect(await pageScroll(page), '#app has not scrolled').toEqual([0, 0, 0])
+  assertClean(watch)
+  await context.close()
+})
+
+test('the run card moves in place from the stream: stopped, retrying, waiting for a yes, then done, as one element', async ({ browser, backend }, info) => {
+  const name = `Moves in place ${randomUUID().slice(0, 6)}`
+  const [runId] = await stoppedRuns(backend, [name])
+  if (!runId) throw new Error('a stopped run')
+  const context = await devContext(browser, 'alice', { reducedMotion: true })
+  const page = await context.newPage()
+  const watch = watchPage(page)
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto('/')
+  await ask(page, `Why did ${name} stop?`)
+  const card = newest(page).locator('section').filter({ has: page.getByRole('heading', { name, exact: true }) })
+  const pill = card.locator('[data-run-pill]')
+  await expect(pill).toHaveText('Stopped', { timeout: 15_000 })
+  await card.evaluate((element) => {
+    const seen: string[] = []
+    const note = () => {
+      const said = [element.querySelector('[data-run-pill]')?.textContent ?? '', ...Array.from(element.querySelectorAll('dd'), (dd) => dd.textContent ?? '')].join(' | ')
+      if (seen.at(-1) !== said) seen.push(said)
+    }
+    note()
+    new MutationObserver(note).observe(element, { subtree: true, childList: true, characterData: true })
+    Object.assign(window, { runCard: { element, seen } })
+  })
+
+  await card.getByRole('button', { name: 'Retry', exact: true }).click()
+  await expect(pill, 'the same card waits for a yes after the retry').toHaveText('Waiting for a yes', { timeout: 90_000 })
+  const approvalId = await backend.approvalIdOf(runId)
+  const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
+  await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'approve', digest }, undefined, [201])
+  await expect(pill, '…and is done once Bob said yes').toHaveText('Done', { timeout: 60_000 })
+  await shot(page, info, 'c3-run-card-done-1280')
+
+  const { same, seen } = await page.evaluate(() => {
+    const { element, seen } = (window as unknown as { runCard: { element: Element; seen: string[] } }).runCard
+    return { same: element.isConnected && element.querySelector('[data-run-pill]')?.textContent === 'Done', seen }
+  })
+  expect(same, 'the card that stopped is the element that is done: it moved in place, with no remount').toBe(true)
+  const STAGES: readonly (readonly [string, RegExp])[] = [
+    ['stopped', /^Stopped/],
+    ['retrying', /Retrying after a short wait/],
+    ['waiting', /^Waiting for a yes/],
+    ['writing', /said yes\. Creating the ticket/],
+    ['done', /^Done/],
+  ]
+  const order = seen
+    .flatMap((said) => STAGES.filter(([, words]) => words.test(said)).map(([stage]) => stage))
+    .filter((stage, index, all) => stage !== all[index - 1])
+  // The write can land in the same moment as the yes, so the card may never draw "Creating the ticket" on its own.
+  expect([['stopped', 'retrying', 'waiting', 'done'], ['stopped', 'retrying', 'waiting', 'writing', 'done']], `the card went through each stage in order: ${seen.join(' / ')}`).toContainEqual(order)
   assertClean(watch)
   await context.close()
 })

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useContext, useEffect, useState, type ReactNode } from 'react'
 import { useHome } from '../../api/homeQueries'
 import { useRun, useMe, useUseCases } from '../../api/queries'
 import { isOperator } from '../../api/me'
@@ -16,6 +16,7 @@ import { useLiveRun } from '../run/liveRun'
 import { TROUBLE_FACE } from '../run/troubleFace'
 import { type RunStory, useRunStory } from '../run/useRunStory'
 import { sentence, stageFactsOf, stageWords, type RunStage } from '../run/words'
+import { CardMemoryContext } from './cardMemory'
 import styles from './Planner.module.css'
 
 type Say = (text: string) => void
@@ -61,7 +62,7 @@ export function RunCardView({ runId, name, story, beside }: { runId: string; nam
       }
       actions={failure ? <StopNext runId={runId} failure={failure} {...story.stopped} safeId={safeId} /> : undefined}
     >
-      {ended ? <SettledLine settled={settled} /> : beside ? null : <RunLine stations={story.stations} arrivedLive={story.arrivedLive} settled={null} small />}
+      {beside ? null : ended ? <SettledLine settled={settled} /> : <RunLine stations={story.stations} arrivedLive={story.arrivedLive} settled={null} small />}
       {failure ? <StopAnswers failure={failure} {...story.stopped} safeId={safeId} /> : story.answers.length > 0 ? <AnswerList answers={story.answers} /> : null}
     </Card>
   )
@@ -74,7 +75,7 @@ function LiveRunCard({ run, say, onStage }: { run: RunView; say: Say; onStage: (
   useReconnectWhenBehind(failed && live.loaded && latest.last_seq > live.head.seq, restart)
   const story = useRunStory(latest, live)
   const beside = useShownInPanel({ kind: 'run', id: run.run_id })
-  const ready = live.loaded
+  const ready = live.loaded && !story.useCase.isLoading
   const phrase = ready ? sayStage(story, run.use_case_name) : null
   useEffect(() => {
     if (phrase !== null) say(phrase)
@@ -95,15 +96,20 @@ function LiveRunCard({ run, say, onStage }: { run: RunView; say: Say; onStage: (
 /**
  * Why it stopped, as the run card: fronted by the AI troubleshooter, the run’s line, then its three answers and Open, Report to
  * support and Retry. It follows the run’s stream, so after a retry the same card moves in place through retrying, waiting, done or
- * declined. The run is kept once found, because it leaves the stopped list the moment it is retried.
+ * declined. The run is kept with the message once found, because it leaves the stopped list the moment it is retried, and the card
+ * is drawn again whenever the chat comes back.
  */
 function RunCardBody({ useCaseId, say, onStage }: { useCaseId: string | null; say: Say; onStage: (stage: RunStage) => void }) {
   const home = useHome()
   const me = useMe().data
   const useCases = useUseCases()
+  const memory = useContext(CardMemoryContext).run
   const stopped = me === undefined ? undefined : stopOf(useCaseId, isOperator(me), home.data, useCases.data)
-  const [pinned, setPinned] = useState<string | null>(null)
+  const [pinned, setPinned] = useState<string | null>(() => memory.kept() ?? null)
   if (pinned === null && stopped) setPinned(stopped.run_id)
+  useEffect(() => {
+    if (pinned !== null) memory.keep(pinned)
+  }, [pinned, memory])
   const runId = pinned ?? stopped?.run_id ?? null
   const run = useRun(runId ?? '')
   const nothing = stopped === null && pinned === null

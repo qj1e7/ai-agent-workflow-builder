@@ -1,7 +1,7 @@
 import { useId, type ReactNode } from 'react'
 import { failureReasonLabel } from '../../api/labels'
 import type { TroubleshootingOut } from '../../api/types'
-import { ButtonLink } from '../../ui/Button'
+import { useShownInPanel } from '../../ui/sidePanel'
 import { RetryButton } from '../home/HomeItem'
 import { stoppedActions } from '../home/home'
 import { ReportToSupport } from './Report'
@@ -11,25 +11,16 @@ import { failureText } from './support'
 import { withCurrentNames, type NameOf } from './words'
 import styles from './panels.module.css'
 
-function BackHome() {
-  return (
-    <div className={styles['buttons']}>
-      <ButtonLink to="/">Back to Home</ButtonLink>
-    </div>
-  )
-}
-
 /**
  * What stays on a finished run's page past its settled line: what the run didn’t check and the questions, read only (spec 10.4),
  * and what happens next after a decline. The ticket and the decline reason are in the settled line, so they are not said again here.
  */
 export function Outcome({ declinedNext = null, record = null }: { declinedNext?: string | null; record?: ReactNode }) {
-  if (declinedNext === null && record === null) return <BackHome />
+  if (declinedNext === null && record === null) return null
   return (
     <div className={styles['panel']}>
       {declinedNext ? <p>{declinedNext}</p> : null}
       {record}
-      <BackHome />
     </div>
   )
 }
@@ -121,14 +112,16 @@ export function StopAnswers({ failure, advice, loading, modelOff = false, safeId
 
 /**
  * Under the answers, the one next step: Retry when the platform says the run can run again, or Report to support when it can't.
- * Both ask stoppedActions, the same rule Home uses. With no AI model a retry would fail again, so there is neither.
+ * Both ask stoppedActions, the same rule Home uses. With no AI model a retry would fail again, so there is neither. While the side
+ * panel shows the run, the chat's copy has neither, because the panel has them (a flow shows once).
  */
 export function StopNext({ runId, failure, advice, me, reports, nameOf, modelOff = false, quiet = false, safeId }: Omit<TroubleshootingProps, 'loading'> & { safeId: string }) {
+  const beside = useShownInPanel({ kind: 'run', id: runId })
   const [first] = stoppedActions(runId, failure.retryable, modelOff)
   const retry = first?.kind === 'retry'
   const waitsForModel = failure.retryable && modelOff
   const found = [advice ? withCurrentNames(advice.answers.what_happened) : `${failureReasonLabel[failure.reason] ?? failure.reason}.`, failureText(failure.message)].filter((part) => part !== '').join(' ')
-  if (waitsForModel) return null
+  if (waitsForModel || beside) return null
   if (retry) {
     return me?.operator ? <RetryButton runId={runId} label="Retry" primary={!quiet} describedBy={safeId} stay /> : <p className={styles['note']}>{OPERATORS_RETRY}</p>
   }
