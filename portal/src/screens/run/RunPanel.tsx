@@ -16,7 +16,7 @@ import { useQuestions } from './questions'
 import { approvalIdOf, declinedSoFarWords, planOf, POLL_FAILED_MS, statusWords, useNameOf, useReconnectWhenBehind } from './RunPage'
 import { RunLine } from './RunLine'
 import { declinedOf, stationsOf } from './runModel'
-import { declinedNext, declinedNowWords, declinedWithNext, feedTroubleOf, headlineOf, RUN_PROBLEM, shortTime, writeLabel } from './words'
+import { declinedNext, declinedNowWords, declinedWithNext, feedTroubleOf, headlineOf, RUN_PROBLEM, settledOf, triggerWords } from './words'
 import { nextRunOf } from '../workflows/workflow'
 import styles from './RunPage.module.css'
 
@@ -100,7 +100,8 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
   const questions = useQuestions(approval.data, nameOf, say)
   const notChecked = useNotChecked(approval.data, useCase.data)
 
-  const stations = stationsOf(shown, planOf(useCase.data), writeLabel)
+  const stations = stationsOf(shown, planOf(useCase.data), triggerWords(shown, useCase.data?.schedule ?? null, nameOf))
+  const settled = settledOf(shown, nameOf, new Date(), declineReasons(useCase.data?.template))
   const headline = headlineOf(shown, stations, approval.data && waiting ? approval.data.actions : null)
   const status = statusWords(decision, live)
   const declinedSoFar = declinedSoFarWords(decision, live, nameOf)
@@ -140,7 +141,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
         </p>
       ) : null}
       {declinedSoFar ? <p className="muted">{declinedSoFar}</p> : null}
-      <RunLine stations={stations} arrivedLive={null} startedAt={shortTime(run.started_at)} nameOf={nameOf} small />
+      <RunLine stations={stations} arrivedLive={null} settled={settled} small />
       {shown.phase.state === 'failed' ? (
         <Troubleshooting
           runId={run.run_id}

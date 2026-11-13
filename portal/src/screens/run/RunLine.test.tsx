@@ -10,16 +10,17 @@ import { Chat } from './Chat'
 import { Outcome } from './Outcome'
 import { RunLine } from './RunLine'
 import { emptyModel, foldWire, stationsOf, type ChatItem, type PlanBlock, type RunModel } from './runModel'
-import { headlineOf, writeLabel } from './words'
+import { headlineOf, settledOf, triggerWords, workingWords } from './words'
 
 interface Raw {
   readonly run_id: string
   readonly seq: number
 }
 
-const PLAN: PlanBlock[] = useCase.plan.map((block) => ({ name: block.name, kind: block.kind as BlockKind }))
-const NAMES: Record<string, string> = { alice: 'Alice', bob: 'Bob' }
+const PLAN: PlanBlock[] = useCase.plan.map((block) => ({ key: block.key, name: block.name, kind: block.kind as BlockKind }))
+const NAMES: Record<string, string> = { alice: 'Alice', bob: 'Bob', carol: 'Carol' }
 const nameOf = (id: string) => NAMES[id] ?? id
+const QUICK = ['Not this week', 'Wrong version', 'Needs testing first']
 
 function replay(raw: readonly Raw[], upTo = Infinity): RunModel {
   const kept = raw.filter((item) => item.seq <= upTo)
@@ -31,9 +32,16 @@ const at = (iso: string) => Date.parse(iso) as ChatItem['at']
 
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 
+const SAME_DAY = new Date('2026-11-05T09:00:00Z')
+
 function line(model: RunModel, { small = false, arrivedLive = null }: { small?: boolean; arrivedLive?: string | null } = {}): string {
-  const stations = stationsOf(model, PLAN, writeLabel)
-  return renderToStaticMarkup(<RunLine stations={stations} arrivedLive={arrivedLive} startedAt="Tue 10:14" nameOf={nameOf} small={small} />)
+  const stations = stationsOf(model, PLAN, 'Started by Alice')
+  const settled = settledOf(model, nameOf, new Date((model.chat.at(-1)?.at ?? 0) + 3_600_000), QUICK)
+  return renderToStaticMarkup(
+    <MemoryRouter>
+      <RunLine stations={stations} arrivedLive={arrivedLive} settled={settled} small={small} />
+    </MemoryRouter>,
+  )
 }
 
 /** Each link, in order, as the state it draws and whether it marches: "flow+" marches, "flow" holds still. */
@@ -45,62 +53,92 @@ function withReducedMotion(reduce: boolean): void {
   vi.stubGlobal('window', { matchMedia: (query: string) => ({ matches: reduce && query === '(prefers-reduced-motion: reduce)' }) })
 }
 
+function stepItems(html: string): string[] {
+  return [...html.matchAll(/<li class="[^"]*step[^"]*"[^>]*>[\s\S]*?<\/li>(?=<li class="[^"]*step|<\/ol>)/g)].map((match) => match[0])
+}
+
 function stepsSaid(html: string): string[] {
-  return [...html.matchAll(/<li class="[^"]*station[^"]*"[^>]*>([\s\S]*?)<\/li>/g)].map((match) => text(match[1] ?? ''))
+  return stepItems(html).map(text)
+}
+
+/** The run after its last event, a moment later: the line is drawn as the page first shows it. */
+function shownAt(iso: string): void {
+  vi.useFakeTimers({ now: new Date(iso) })
 }
 
 describe('the run line', () => {
-  it('says each step’s state in words while the run waits for a yes, and marks the gate as the current step', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('draws only the workflow’s blocks, says each step’s state in words, and marks the gate as the current step while it waits', () => {
     const html = line(replay(success, 15))
-    expect(stepsSaid(html)).toEqual([
-      'A Done: Started Tue 10:14',
-      'Done: Pick agents',
-      'Done: Read every source Version checker',
-      'Approval gate Waiting for a yes',
-      'Not reached yet: Create Jira tickets',
-      'Not reached yet: Done',
-    ])
+    expect(stepsSaid(html)).toEqual(['Done: Started by Alice', 'Done: Read every source', 'Waiting for a yes: Ask for a yes', 'Not reached yet: Create Jira tickets'])
     expect(html.match(/aria-current="step"/g)).toHaveLength(1)
     expect(html).toMatch(/aria-current="step"[^>]*data-state="wait"/)
   })
 
-  it('marks the step running now', () => {
-    const html = line(replay(success, 6))
-    expect(stepsSaid(html)[2]).toBe('Now: Read every source Version checker')
-    expect(html).toMatch(/aria-current="step"[^>]*data-state="now"/)
+  it('says how long the step at work has been working, once a second has passed', () => {
+    shownAt('2026-11-03T02:14:00.400Z')
+    expect(stepsSaid(line(replay(success, 6)))[1]).toBe('Now: Read every source Working…')
+    expect(stepsSaid(line(replay(success, 6), { small: true }))[1]).toBe('Now: Read every source …')
+    shownAt('2026-11-03T02:14:12.900Z')
+    expect(stepsSaid(line(replay(success, 6)))[1]).toBe('Now: Read every source Working, 12 s')
+    expect(stepsSaid(line(replay(success, 6), { small: true }))[1]).toBe('Now: Read every source 12 s')
+    expect(line(replay(success, 6))).toMatch(/aria-current="step"[^>]*data-state="now"/)
   })
 
-  it('reads all done once the ticket is written', () => {
-    expect(stepsSaid(line(replay(success)))).toEqual([
-      'A Done: Started Tue 10:14',
-      'Done: Pick agents',
-      'Done: Read every source Version checker',
-      'Done: Approval gate Approved',
-      'Done: Create Jira tickets',
-      'Done: Done',
-    ])
+  it('reads all done once the ticket is written, puts the ticket under its step as a link, and says how the run settled', () => {
+    const html = line(replay(success))
+    expect(stepsSaid(html)).toEqual(['Done: Started by Alice', 'Done: Read every source', 'Done: Ask for a yes', 'Done: Create Jira tickets MOCK-142'])
+    expect(stepItems(html)[3]).toMatch(/<a\b[^>]*href="\/jira\/MOCK-142"[^>]*>MOCK-142<\/a>/)
+    expect(text(html)).toContain('Done at 10:20 · MOCK-142 created after Bob’s yes')
   })
 
-  it('shows a declined gate, a write that says nothing was written, and a run that ended without a tick', () => {
+  it('gives every step done a tick, the stopped step a stop mark, and no other step a mark', () => {
+    const marks = (html: string) => stepItems(html).map((item) => item.match(/_(tick|stopMark)_/)?.[1] ?? '-')
+    expect(marks(line(replay(success)))).toEqual(['tick', 'tick', 'tick', 'tick'])
+    expect(marks(line(replay(success, 15)))).toEqual(['tick', 'tick', '-', '-'])
+    expect(marks(line(replay(failure)))).toEqual(['tick', 'stopMark', '-', '-'])
+    expect(marks(line(replay(rejected)))).toEqual(['tick', 'tick', '-', '-'])
+  })
+
+  it('shows a declined gate, a skipped write that says nothing was written, no step after them, and the settled line', () => {
     const html = line(replay(rejected))
-    expect(stepsSaid(html).slice(3)).toEqual(['Approval gate Declined', 'Create Jira tickets Nothing written', 'Done: Ended'])
-    const ended = [...html.matchAll(/<li\b[\s\S]*?<\/li>/g)].map((match) => match[0]).at(-1) ?? ''
-    expect(ended).not.toContain('<svg')
+    expect(stepsSaid(html)).toEqual(['Done: Started by Alice', 'Done: Read every source', 'Declined: Ask for a yes', 'Skipped: Create Jira tickets Nothing written'])
+    expect(text(html)).toContain('Ended at 10:18 · Bob declined: wrong version. Nothing was written.')
+    expect(html).not.toMatch(/created|href="\/jira\//)
   })
 
-  it('marks where a failed run stopped', () => {
-    expect(stepsSaid(line(replay(failure))).slice(2)).toEqual([
-      'Read every source Stopped here',
-      'Not reached yet: Approval gate',
-      'Not reached yet: Create Jira tickets',
-      'Not reached yet: Done',
-    ])
+  it('marks where a failed run stopped, with no settled line', () => {
+    const html = line(replay(failure))
+    expect(stepsSaid(html)).toEqual(['Done: Started by Alice', 'Stopped here: Read every source', 'Not reached yet: Ask for a yes', 'Not reached yet: Create Jira tickets'])
+    expect(html).not.toMatch(/Done at|Ended at/)
+  })
+
+  it('replays the work flowing into a stopped step when it first shows, and not with reduced motion', () => {
+    withReducedMotion(false)
+    const moving = line(replay(failure))
+    expect(moving.match(/data-replay/g), 'the stopped step and the link into it').toHaveLength(2)
+    expect(moving, 'the step still says it stopped').toMatch(/data-state="err" data-replay="true"/)
+    expect(links(moving), 'the link still says it stopped').toEqual(['stop', 'todo', 'todo'])
+    withReducedMotion(true)
+    expect(line(replay(failure))).not.toContain('data-replay')
+    withReducedMotion(false)
+    expect(line(replay(success, 15)), 'a run that did not stop replays nothing').not.toContain('data-replay')
   })
 
   it('lands the step reached while the page watched, and no other', () => {
     const html = line(replay(success, 15), { arrivedLive: 'gate' })
-    expect(html.match(/arrive/g)).toHaveLength(1)
-    expect(html).toMatch(/class="[^"]*arrive[^"]*"[^>]*data-state="wait"/)
+    expect(html.match(/_arrive_/g)).toHaveLength(1)
+    expect(html).toMatch(/class="[^"]*_arrive_[^"]*"[^>]*data-state="wait"/)
+  })
+
+  it('puts the agent’s face above its step on the page, and no face in the side panel', () => {
+    const faces = (html: string) => (html.match(/data-face=/g) ?? []).length
+    expect(faces(line(replay(success)))).toBe(1)
+    expect(faces(line(replay(success), { small: true }))).toBe(0)
   })
 })
 
@@ -109,53 +147,112 @@ describe('the links between the steps', () => {
     vi.unstubAllGlobals()
   })
 
-  // Started, Pick agents, Read every source, Approval gate, Create Jira tickets, Done: five links, each in the state of the step it leads into.
-  it('march into the step at work, and are solid into the steps done', () => {
+  // Started by Alice, Read every source, Ask for a yes, Create Jira tickets: three links, each in the state of the step it leads into.
+  it('march into the step at work', () => {
     withReducedMotion(false)
-    expect(links(line(replay(success, 6)))).toEqual(['solid', 'flow+', 'todo', 'todo', 'todo'])
+    expect(links(line(replay(success, 6)))).toEqual(['flow+', 'todo', 'todo'])
   })
 
-  it('march slower, in amber, into a yes that waits', () => {
+  it('march slower, in amber, into a yes that waits, and are solid into the steps done', () => {
     withReducedMotion(false)
-    expect(links(line(replay(success, 15)))).toEqual(['solid', 'solid', 'wait+', 'todo', 'todo'])
+    expect(links(line(replay(success, 15)))).toEqual(['solid', 'wait+', 'todo'])
   })
 
   it('lead red into the step where the run stopped, and stay plain after it', () => {
-    withReducedMotion(false)
-    expect(links(line(replay(failure)))).toEqual(['solid', 'stop', 'todo', 'todo', 'todo'])
+    withReducedMotion(true)
+    expect(links(line(replay(failure)))).toEqual(['stop', 'todo', 'todo'])
   })
 
   it('are solid all the way once the run is done', () => {
     withReducedMotion(false)
-    expect(links(line(replay(success)))).toEqual(['solid', 'solid', 'solid', 'solid', 'solid'])
+    expect(links(line(replay(success)))).toEqual(['solid', 'solid', 'solid'])
   })
 
-  it('fade into a step that was not needed, and stay solid into a decline', () => {
+  it('stay solid into a decline, and fade into the write it skipped', () => {
     withReducedMotion(false)
-    expect(links(line(replay(rejected)))).toEqual(['solid', 'solid', 'solid', 'dead', 'solid'])
+    expect(links(line(replay(rejected)))).toEqual(['solid', 'solid', 'dead'])
   })
 
   it('hold still with reduced motion, and keep the same look', () => {
     withReducedMotion(true)
-    expect(links(line(replay(success, 6)))).toEqual(['solid', 'flow', 'todo', 'todo', 'todo'])
-    expect(links(line(replay(success, 15)))).toEqual(['solid', 'solid', 'wait', 'todo', 'todo'])
+    expect(links(line(replay(success, 6)))).toEqual(['flow', 'todo', 'todo'])
+    expect(links(line(replay(success, 15)))).toEqual(['solid', 'wait', 'todo'])
   })
 
   it('grow the solid link into the step just finished as the run reaches the next one, and no other', () => {
     const html = line(replay(success, 15), { arrivedLive: 'gate' })
     expect(html.match(/_grow_/g)).toHaveLength(1)
-    expect(html).toMatch(/data-state="done"><span class="[^"]*_grow_[^"]*" data-link="solid"[\s\S]*?Read every source/)
+    expect(stepItems(html)[0]).toMatch(/<span class="[^"]*_grow_[^"]*" data-link="solid"/)
   })
 
-  it('draw the same steps and links in the side panel, small and without faces', () => {
+  it('draw the same steps and links in the side panel, small', () => {
     withReducedMotion(false)
     for (const model of [replay(success, 6), replay(success, 15), replay(failure), replay(rejected), replay(success)]) {
       const big = line(model)
       const small = line(model, { small: true })
       expect(links(small)).toEqual(links(big))
-      expect(stepsSaid(small)).toEqual(stepsSaid(big).map((said) => said.replace(/^A /, '')))
-      expect(small).not.toMatch(/_who_|<svg[^>]*role="img"/)
+      expect(stepsSaid(small)).toEqual(stepsSaid(big).map((said) => said.replace('Working…', '…').replace('Working, ', '')))
     }
+  })
+})
+
+describe('the words on the line', () => {
+  const run = (trigger: 'person' | 'schedule') => ({ trigger, startedBy: 'alice' })
+
+  it('start with who started the run, or with the schedule that did', () => {
+    expect(triggerWords(run('person'), null, nameOf)).toBe('Started by Alice')
+    expect(triggerWords(run('schedule'), { day: 'every_day', at: '08:00' }, nameOf)).toBe('Daily 8:00')
+    expect(triggerWords(run('schedule'), { day: 'monday', at: '09:00' }, nameOf)).toBe('Mon 9:00')
+    expect(triggerWords(run('schedule'), { day: 'weekdays', at: '07:30' }, nameOf)).toBe('Weekdays 7:30')
+    expect(triggerWords(run('schedule'), null, nameOf), 'a schedule that is gone is not guessed').toBe('On schedule')
+  })
+
+  it('count the seconds a step has worked, then the minutes, then the hours', () => {
+    const since = at('2026-11-03T02:14:00Z')
+    const after = (ms: number) => since + ms
+    expect([0, 999, 1000, 12_400, 59_999, 60_000, 185_000, 3_599_999, 7_300_000].map((ms) => workingWords(since, after(ms), false))).toEqual([
+      'Working…',
+      'Working…',
+      'Working, 1 s',
+      'Working, 12 s',
+      'Working, 59 s',
+      'Working, 1 min',
+      'Working, 3 min',
+      'Working, 59 min',
+      'Working, 2 h',
+    ])
+    expect([0, 12_400, 185_000].map((ms) => workingWords(since, after(ms), true))).toEqual(['…', '12 s', '3 min'])
+  })
+
+  it('settle a done run on its time, its tickets and who said yes', () => {
+    expect(settledOf(replay(success), nameOf, new Date('2026-11-03T09:00:00Z'), QUICK)).toEqual({ tone: 'ok', text: 'Done at 10:20 · MOCK-142 created after Bob’s yes' })
+    expect(settledOf(replay(success), nameOf, new Date('2026-11-04T09:00:00Z'), QUICK), 'another day says its day').toEqual({
+      tone: 'ok',
+      text: 'Done on Tue 3 Nov at 10:20 · MOCK-142 created after Bob’s yes',
+    })
+    const twoYeses = { ...replay(success), approvedBy: ['carol', 'bob'] }
+    expect(settledOf(twoYeses, nameOf, new Date('2026-11-03T09:00:00Z'), QUICK)?.text).toBe('Done at 10:20 · MOCK-142 created after Carol and Bob said yes')
+    const page = { ...replay(success), written: [{ connector: 'confluence', operation: 'update_page', ref: 'PAGE-9' }] }
+    expect(settledOf(page, nameOf, new Date('2026-11-03T09:00:00Z'), QUICK)?.text).toBe('Done at 10:20 · PAGE-9 written after Bob’s yes')
+  })
+
+  it('settle a run with nothing to write as nothing new', () => {
+    const done = { ...(success.at(-1) ?? {}), seq: 9, data: { outcome: 'nothing_to_write' } }
+    const model = foldWire(replay(success, 8), [done], success[0]?.run_id ?? '')
+    expect(settledOf(model, nameOf, new Date('2026-11-03T09:00:00Z'), QUICK)).toEqual({ tone: 'ok', text: 'Done at 10:20 · Nothing new' })
+  })
+
+  it('settle a declined run on who declined and why, keeping a reason the Approver typed as they typed it', () => {
+    const declined = replay(rejected)
+    const said = (model: RunModel) => settledOf(model, nameOf, SAME_DAY, QUICK)?.text
+    expect(settledOf(declined, nameOf, SAME_DAY, QUICK)).toEqual({ tone: 'off', text: 'Ended at 10:18 · Bob declined: wrong version. Nothing was written.' })
+    expect(said({ ...declined, declineReason: 'FastAPI 0.121 breaks our build.' })).toBe('Ended at 10:18 · Bob declined: FastAPI 0.121 breaks our build. Nothing was written.')
+    expect(said({ ...declined, declineReason: null })).toBe('Ended at 10:18 · Bob declined. Nothing was written.')
+    expect(said({ ...declined, approvedBy: ['carol'] })).toBe('Ended at 10:18 · Carol said yes, then Bob declined: wrong version. Nothing was written.')
+  })
+
+  it('leave a run that is still going, or stopped, unsettled', () => {
+    for (const model of [replay(success, 6), replay(success, 15), replay(success, 16), replay(failure)]) expect(settledOf(model, nameOf, SAME_DAY, QUICK)).toBeNull()
   })
 })
 
@@ -257,7 +354,7 @@ describe('the chat', () => {
 
 describe('the heading', () => {
   it('says what the run needs or did', () => {
-    const head = (model: RunModel) => headlineOf(model, stationsOf(model, PLAN, writeLabel), null)
+    const head = (model: RunModel) => headlineOf(model, stationsOf(model, PLAN, 'Started by Alice'), null)
     expect(head(replay(success, 6))).toMatchObject({ text: 'The agents are working', pill: { label: 'Working' } })
     expect(head(replay(success, 15))).toMatchObject({ text: 'Waiting for a yes', pill: { label: 'Waiting for a yes', tone: 'wait' } })
     expect(head(replay(success))).toMatchObject({ text: '1 ticket created in Jira', pill: { label: 'Done', tone: 'ok' } })
