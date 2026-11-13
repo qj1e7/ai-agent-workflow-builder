@@ -35,21 +35,6 @@ async function draftFor(backend: Backend, label: string): Promise<{ id: string; 
   return { id, name }
 }
 
-/**
- * Presses Enter on the Discard button until the question is open. The page re-reads on its polls, and a press that lands while
- * the button is not the focused element does nothing, so each try looks first and presses only while the button holds focus
- * and no question is open. Once the question is open, focus is in it, so a later try never presses inside it.
- */
-async function openDiscardQuestion(page: Page, discard: Locator, dialog: Locator): Promise<void> {
-  await expect(async () => {
-    if ((await dialog.count()) === 0) {
-      await discard.focus()
-      if (await discard.evaluate((el) => el === document.activeElement)) await page.keyboard.press('Enter')
-    }
-    await expect(dialog).toBeVisible({ timeout: 2_000 })
-  }).toPass({ timeout: 20_000 })
-}
-
 async function homeOf(backend: Backend, user: string) {
   return backend.get<{ replied: { request_id: string }[]; following_up: { request_id: string }[]; waiting_on_others: { run_id: string }[] }>(user, '/api/v1/home')
 }
@@ -195,50 +180,24 @@ test('a connection that does not answer sends Alice to the Connections tab, wher
   }
 })
 
-test('alice discards a draft by keyboard, after a question that says what is lost, and Undo puts it back', async ({ browser, backend }, info) => {
-  const draft = await draftFor(backend, 'keys')
+test('a draft is a row under All workflows with the pill Draft, never in Needs you, and its one link opens it in the chat', async ({ browser, backend }, info) => {
+  const draft = await draftFor(backend, 'row')
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
-  await page.goto('/workflows')
-  const row = draftRow(page, draft.id)
-  await expect(row).toContainText(`${draft.name} is a draft`)
-  const kept = (await backend.get<{ drafts: { draft_id: string; created_at: string; saved_at: string }[] }>('alice', '/api/v1/drafts')).drafts.find((item) => item.draft_id === draft.id)
-  expect(kept, 'the draft is saved before it is discarded').toBeDefined()
-  await row.getByRole('link').focus()
-  await page.keyboard.press('Tab')
-  const discard = row.getByRole('button', { name: `Discard ${draft.name}` })
-  await expect(discard).toBeFocused()
-  const dialog = page.getByRole('alertdialog', { name: `Discard ${draft.name}?` })
-  await openDiscardQuestion(page, discard, dialog)
-  await expect(dialog).toContainText('Nothing has run, and nothing changes in Jira or Teams')
-  await expect(dialog.getByRole('button', { name: 'Keep the draft' })).toBeFocused()
-  await shot(page, info, 'n9b-discard-asks')
-
-  await page.keyboard.press('Escape')
-  await expect(dialog).toHaveCount(0)
-  await expect(row, 'asking and then backing out keeps the draft').toBeVisible()
-
-  await openDiscardQuestion(page, discard, dialog)
-  await page.keyboard.press('Tab')
-  await expect(dialog.getByRole('button', { name: 'Discard draft' })).toBeFocused()
-  await page.keyboard.press('Enter')
-  await expect(page.getByText(`Discarded ${draft.name}.`).last()).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Undo' })).toBeFocused()
-  await expect(row).toHaveCount(0)
-  const gone = await backend.get<{ drafts: { draft_id: string }[] }>('alice', '/api/v1/drafts')
-  expect(gone.drafts.map((item) => item.draft_id)).not.toContain(draft.id)
-  await shot(page, info, 'n9b-discarded')
-
-  await page.keyboard.press('Enter')
-  await expect(row).toBeVisible()
-  await expect(page.getByText('Put back.').last()).toBeVisible()
-  await expect(row.getByRole('link'), 'focus moves to the restored draft').toBeFocused()
-  const back = await backend.get<{ drafts: { draft_id: string; created_at: string; saved_at: string; content: { name?: string } }[] }>('alice', '/api/v1/drafts')
-  const again = back.drafts.find((item) => item.draft_id === draft.id)
-  expect(again?.content.name, 'Undo saved the same draft').toBe(draft.name)
-  expect([again?.created_at, again?.saved_at], 'Undo keeps the times, so Last saved stays true').toEqual([kept?.created_at, kept?.saved_at])
-  await backend.delete('alice', `/api/v1/drafts/${draft.id}`)
-  await context.close()
+  try {
+    await page.goto('/workflows')
+    const row = draftRow(page, draft.id)
+    await expect(row).toContainText(draft.name)
+    await expect(row).toContainText('Only your words are saved.')
+    await expect(row.locator('span[class*="pill"]')).toHaveText('Draft')
+    await expect(row.getByRole('button'), 'the row is one link, and Discard is on the draft’s card in the chat').toHaveCount(0)
+    await expect(page.getByRole('region', { name: 'Needs you' }).locator('li[data-draft]'), 'the strip does not count a draft, so Needs you does not list one').toHaveCount(0)
+    await expect(row.getByRole('link')).toHaveAttribute('href', `/?draft=${draft.id}`)
+    await shot(page, info, 'n9b-draft-row')
+  } finally {
+    await backend.delete('alice', `/api/v1/drafts/${draft.id}`)
+    await context.close()
+  }
 })
 
 test('the search and the filters show once there are more than ten workflows, and narrow the list', async ({ browser, backend, request }, info) => {

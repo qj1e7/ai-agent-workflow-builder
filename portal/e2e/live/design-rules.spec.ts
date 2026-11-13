@@ -175,15 +175,15 @@ async function railCount(page: Page, label: string): Promise<number> {
   return Number(/, (\d+) in all/.exec(name)?.[1] ?? 0)
 }
 
-test('the Needs you count is one number on Workflows, the Planner’s answer and the strip, the rail shows totals, and the count line is its rows', async ({ browser, backend }) => {
+test('the Needs you rows on Workflows are the number the Planner’s answer and the strip say, the rail shows totals, and the count line is its rows', async ({ browser, backend }) => {
   await backend.waitingRun('alice')
   const repair = await jiraDown(backend)
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
   await page.goto('/workflows')
-  const heading = main(page).getByRole('heading', { level: 2, name: /^Needs you/ })
-  await expect(heading).toBeVisible()
-  const total = Number((await heading.innerText()).replace(/\D/g, ''))
+  const needsYou = main(page).getByRole('region', { name: 'Needs you' })
+  await expect(needsYou.locator('li[data-home-item]').first()).toBeVisible()
+  const total = await needsYou.locator('li[data-home-item]').count()
   const { workflows } = await backend.get<{ workflows: number }>('alice', '/api/v1/home')
   expect(await railCount(page, 'Workflows'), 'Principle 7 (one source per fact): the rail’s Workflows count is how many workflows the team has').toBe(workflows)
   expect(await railCount(page, 'Chat'), 'Principle 7: the rail never repeats what needs her').toBe(0)
@@ -199,8 +199,8 @@ test('the Needs you count is one number on Workflows, the Planner’s answer and
   await rail(page).getByRole('link', { name: /^Watchlist/ }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Watchlist' })).toBeVisible()
   await expect(main(page).getByRole('status').filter({ hasText: /^Loading/ })).toHaveCount(0)
-  const watched = Number((await main(page).locator('#software-we-watch-heading').innerText()).replace(/\D/g, ''))
-  expect(await railCount(page, 'Watchlist'), 'Principle 7: the rail’s Watchlist count is the page’s Software we watch').toBe(watched)
+  const watched = await main(page).locator('li[data-status]').count()
+  expect(await railCount(page, 'Watchlist'), 'Principle 7: the rail’s Watchlist count is the page’s rows').toBe(watched)
   const line = await main(page).locator('h1 + p').innerText()
   const said = (part: RegExp) => Number(part.exec(line)?.[1] ?? 0)
   const withPill = (...words: readonly string[]) => main(page).locator('li[data-status]').filter({ has: page.locator('span[class*="pill"]').filter({ hasText: new RegExp(`^(${words.join('|')})$`) }) }).count()
@@ -223,7 +223,7 @@ test('an Approver who is not an Operator has his Needs you count in his heading,
   expect(await railCount(page, 'Chat'), 'Principle 7: Chat carries no count').toBe(0)
   expect(await railCount(page, 'Workflows'), 'Principle 7: the rail shows the team’s workflows').toBeGreaterThan(0)
   await rail(page).getByRole('link', { name: /^Workflows/ }).click()
-  await expect(main(page).getByRole('heading', { level: 2, name: /^Needs you/ }), 'Principle 7: his heading and Workflows agree').toContainText(String(onHome))
+  await expect(main(page).getByRole('region', { name: 'Needs you' }).locator('li[data-home-item]'), 'Principle 7: his heading and the rows on Workflows agree').toHaveCount(onHome)
   await context.close()
 })
 

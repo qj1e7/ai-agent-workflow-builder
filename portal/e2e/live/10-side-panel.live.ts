@@ -299,7 +299,7 @@ test('FIX-open-software: a software already on the watchlist opens in the side p
   await ask(page, 'Monitor LangGraph releases')
   await newest(page).getByRole('button', { name: 'Open it' }).click()
   await expect(heading(page)).toHaveText('LangGraph')
-  await expect(panel(page)).toContainText(/Watching[\s\S]*Checked by\s*The Version checker/)
+  await expect(panel(page), 'with no schedule, nothing checks it on its own').toContainText(/Watching[\s\S]*Checked by\s*Not checked automatically/)
   await expectAccessible(page, path.join(OUT, 'axe'), 'side-panel-software-1280')
   await shot(page, info, 'r3-side-panel-software-1280')
   await panel(page).getByRole('link', { name: 'More details' }).click()

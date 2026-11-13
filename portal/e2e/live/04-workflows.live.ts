@@ -166,7 +166,9 @@ test('bob sees who may approve and the recent runs, with no Run now, Pause or De
   const page = await context.newPage()
   await page.goto(`/workflows/${workflow.id}`)
   await expect(heading(page)).toHaveText(workflow.name)
-  await expect(page.getByRole('main')).toContainText('Any Approver except the people who start or own it')
+  await expect(page.getByRole('region', { name: 'Who says yes' })).toContainText('Any Approver but Alice, in Teams.')
+  await page.getByText('Who can’t say yes').click()
+  await expect(page.getByRole('region', { name: 'Who says yes' }), 'the whole own-work rule is one tap away').toContainText('The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.')
   await expect(page.getByRole('region', { name: 'Recent runs' }).getByRole('link').first()).toBeVisible()
   for (const name of ['Run now', 'Pause', 'Resume', 'Delete', 'More actions', 'Change when it runs', 'Set when it runs']) await expect(page.getByRole('button', { name })).toHaveCount(0)
   await expectReadOnly(page, 'this workflow')
@@ -204,10 +206,11 @@ test('scenario H: alice changes the schedule, pauses and deletes through the pag
 
   const order = await page.evaluate(() => {
     const at = (needle: string) => document.body.innerText.indexOf(needle)
-    return ['On. It has no schedule', 'Who says yes', 'Recent runs', 'Agents'].map(at)
+    return ['On. It has no schedule', 'Who says yes', 'Recent runs', 'Pause'].map(at)
   })
   expect(order.every((place) => place >= 0), 'every section is on the page').toBe(true)
-  expect(order, 'banner, who says yes, recent runs, then the agents').toEqual([...order].sort((a, b) => a - b))
+  expect(order, 'banner, who says yes, recent runs, then the buttons, as the sketch orders them').toEqual([...order].sort((a, b) => a - b))
+  await expect(page.getByRole('main').getByText('Agents', { exact: true }), 'the agents are on the step line, with no section of their own').toHaveCount(0)
 
   await moreActions(page).focus()
   await expect(moreActions(page)).toHaveAttribute('aria-haspopup', 'menu')
