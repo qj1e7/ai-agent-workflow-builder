@@ -65,6 +65,8 @@ expect accepted - "other inside ranges for n8n" -var n8n_internal_allowed_cidrs=
 expect accepted - "a Teams webhook and channel" \
   -var 'teams_webhook_url=https://prod.example.logic.azure.com/workflows/a/triggers/manual/run?sig=x' \
   -var 'teams_channel=CODESparks Support'
+expect accepted - "a Tell flow" \
+  -var 'teams_tell_webhook_url=https://prod.example.logic.azure.com/workflows/b/triggers/manual/run?sig=x'
 
 expect accepted - "a Data Center Jira" -var jira_base_url=https://jira.example.test -var jira_api_token=pat
 expect accepted - "a Cloud Jira with its email" -var jira_base_url=https://example.atlassian.net \
@@ -87,6 +89,7 @@ expect refused oidc_jwks_url "keys URL with a query" -var 'oidc_jwks_url=https:/
 expect refused oidc_audience "audience not set" -var oidc_audience=
 
 expect refused teams_webhook_url "Teams webhook over http" -var teams_webhook_url=http://hook.example.test/run
+expect refused teams_tell_webhook_url "Tell flow over http" -var teams_tell_webhook_url=http://hook.example.test/run
 expect refused teams_channel "Teams channel on two lines" -var "teams_channel=Ops${nl}Other"
 expect refused oidc_audience "audience as the api:// URI" -var "oidc_audience=api://$AUDIENCE"
 
