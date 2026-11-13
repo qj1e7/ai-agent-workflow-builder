@@ -90,14 +90,21 @@ function needsHere(home: HomeOut): Needs {
 
 /**
  * The first message folds the hero into the chat: the box and its chips glide to the bottom, as a view transition, unless motion
- * is reduced or the browser has none.
+ * is reduced or the browser has none. The browser runs the change a frame later, so `hold` keeps the box and chips still until then,
+ * and a second message can't slip in ahead of the first.
  */
-function fold(change: () => void): void {
+function fold(change: () => void, hold: (on: boolean) => void): void {
   if (typeof document.startViewTransition !== 'function' || !motionAllowed()) {
     change()
     return
   }
-  document.startViewTransition(() => flushSync(change))
+  flushSync(() => hold(true))
+  document.startViewTransition(() =>
+    flushSync(() => {
+      hold(false)
+      change()
+    }),
+  )
 }
 
 /**
@@ -109,7 +116,9 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
   const model = useModelSettings()
   const capabilities = useCapabilities({ enabled: operator })
   const chat = useChat()
-  const { thread, text, problem, busy } = chat
+  const { thread, text, problem } = chat
+  const [folding, setFolding] = useState(false)
+  const busy = chat.busy || folding
   const [keys, setKeys] = useState(0)
   const boxRef = useRef<HTMLTextAreaElement>(null)
   const focusOn = useRef<number | null>(null)
@@ -236,7 +245,7 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
     )
   }
 
-  const send = (go: () => void) => (empty ? fold(go) : go())
+  const send = (go: () => void) => (empty ? fold(go, setFolding) : go())
   const box = (
     <PlannerBox
       text={text}
