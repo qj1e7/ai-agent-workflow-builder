@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { useSearchParams } from 'react-router'
 import { Link } from '../../ui/Link'
@@ -17,9 +17,10 @@ import { PlannerBot, type BotState } from '../../ui/PlannerBot'
 import { restoreDraft } from './card'
 import { NEEDS_YOU_ANCHOR, type Page } from './AnswerCards'
 import { CapabilityLists } from './CapabilityLists'
-import { APPROVER_SUGGESTIONS, approverLine, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, suggestionsOf, type Needs } from './home'
+import { APPROVER_SUGGESTIONS, approverHeading, approverLine, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, suggestionsOf, type Needs } from './home'
 import { NeedRows, NeedsSection, useArrival } from './NeedsSection'
 import { ChatView, NEWEST } from './ChatView'
+import { foldSender, type Transition } from './fold'
 import { useChat } from './ChatProvider'
 import { PlannerBox } from './PlannerBox'
 import homeStyles from './Home.module.css'
@@ -88,23 +89,10 @@ function needsHere(home: HomeOut): Needs {
   return { ...needsOf(home, HOME_NEEDS_SHOWN), total: needsTotal(home) }
 }
 
-/**
- * The first message folds the hero into the chat: the box and its chips glide to the bottom, as a view transition, unless motion
- * is reduced or the browser has none. The browser runs the change a frame later, so `hold` keeps the box and chips still until then,
- * and a second message can't slip in ahead of the first.
- */
-function fold(change: () => void, hold: (on: boolean) => void): void {
-  if (typeof document.startViewTransition !== 'function' || !motionAllowed()) {
-    change()
-    return
-  }
-  flushSync(() => hold(true))
-  document.startViewTransition(() =>
-    flushSync(() => {
-      hold(false)
-      change()
-    }),
-  )
+/** The fold's view transition: the box and its chips glide to the bottom. None when motion is reduced or the browser has none. */
+function viewTransition(): Transition | null {
+  if (typeof document.startViewTransition !== 'function' || !motionAllowed()) return null
+  return (update) => void document.startViewTransition(() => flushSync(update))
 }
 
 /**
@@ -118,6 +106,7 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
   const chat = useChat()
   const { thread, text, problem } = chat
   const [folding, setFolding] = useState(false)
+  const [sendOne] = useState(() => foldSender(setFolding))
   const busy = chat.busy || folding
   const [keys, setKeys] = useState(0)
   const boxRef = useRef<HTMLTextAreaElement>(null)
@@ -176,8 +165,15 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
     }, 0)
   }, [wanted, newestDraft, drafts.data, drafts.isStale, drafts.isFetchedAfterMount, thread.last, setParams, resume, type, setProblem])
 
-  // The box is off while the Planner answers, so focus would fall to the page. A card takes it at its heading, and any other
-  // answer, or a send that failed, hands it back to the box.
+  // The fold draws the box anew at the bottom of the chat, so focus goes with it.
+  const wasEmpty = useRef(empty)
+  useLayoutEffect(() => {
+    if (wasEmpty.current && !empty) boxRef.current?.focus({ preventScroll: true })
+    wasEmpty.current = empty
+  }, [empty])
+
+  // The box stays focused, read-only, while the Planner answers. A card then takes focus at its heading, and any other answer, or a
+  // send that failed, leaves it in the box.
   useEffect(() => {
     if (newest === undefined) return
     if (newest.kind === 'thinking') {
@@ -245,7 +241,7 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
     )
   }
 
-  const send = (go: () => void) => (empty ? fold(go, setFolding) : go())
+  const send = (go: () => void) => sendOne(go, empty ? viewTransition() : null)
   const box = (
     <PlannerBox
       text={text}
@@ -269,7 +265,9 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
           className={styles['chip']}
           aria-disabled={busy || undefined}
           onClick={() => {
-            if (!busy) send(() => chat.send(suggestion.ask, suggestion.label, null))
+            if (busy) return
+            send(() => chat.send(suggestion.ask, suggestion.label, null))
+            boxRef.current?.focus()
           }}
         >
           {suggestion.label}
@@ -299,16 +297,15 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
   }
 
   return (
-    <div className={styles['hero']}>
+    <div className={styles['hero']} data-hero>
       <PlannerBot state={hero} size={96} keys={keys} look={look} />
       <p className={styles['hi']}>{greeting}</p>
-      <h1 tabIndex={-1}>{operator ? OPERATOR_HEADING : approverLine(home)}</h1>
+      <h1 tabIndex={-1}>{operator ? OPERATOR_HEADING : approverHeading(home)}</h1>
       <div className={styles['dock']}>
         {box}
         {chips}
       </div>
       <NeedRows needs={needs.shown} now={now} more={<More needs={needs} full={!operator} />} />
-      {operator ? null : <p className="muted">{APPROVER_NOTE}</p>}
       {toast}
     </div>
   )
@@ -320,9 +317,12 @@ function More({ needs, full }: { needs: Needs; full: boolean }) {
     const said = moreWords(needs.more)
     return said === null ? null : <p className={homeStyles['more']}>{said}</p>
   }
-  return needs.total > needs.shown.length ? (
+  const left = needs.total - needs.shown.length
+  return left > 0 ? (
     <p className={homeStyles['more']}>
-      <Link to="/workflows">{SEE_ALL_WORDS}</Link>
+      <Link to="/workflows">
+        {left} more<span className="visually-hidden"> that need you</span>
+      </Link>
     </p>
   ) : null
 }

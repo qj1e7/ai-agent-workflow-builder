@@ -343,8 +343,8 @@ describe('when the platform is down', () => {
 
   it('does not say so for a refusal below 500', () => {
     const html = render({ meError: new ApiError(403, null), home: BOB_HOME })
-    expect(headings(html)).toEqual(['3 things need you.'])
-    expect(text(mainOf(html))).toContain('Good morning 3 things need you.')
+    expect(headings(html)).toEqual(['3 things need you'])
+    expect(text(mainOf(html))).toContain('Good morning 3 things need you')
   })
 
   it('keeps the test controls, so a stale person can be swapped', () => {

@@ -17,7 +17,7 @@ import { ideasSay, needsSay, startingPoints, workflowsSay } from './answers'
 import { Troubleshooting } from '../run/Outcome'
 import { useAsker } from './asker'
 import { decidedSay, decisionLine } from './decided'
-import { approvalsOf, approverLine, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, wordsOf, type Needs } from './home'
+import { approvalsOf, approverLine, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, wordsOf, type Needs } from './home'
 import { NeedsSection, useArrival } from './NeedsSection'
 import { useMainButton } from './primary'
 import styles from './Planner.module.css'
@@ -138,8 +138,11 @@ export function NeedsMeAnswer({ now, say }: { now: Date; say: Say }) {
 export const DECIDE_SAY = 'I can’t approve or decline for you. Open the request to see exactly what it will write, and decide there.'
 export const NOTHING_TO_DECIDE = 'Nothing is waiting for your yes, so there’s nothing to decide.'
 
+/** The newest few requests an answer offers to open. */
+const REQUESTS_SHOWN = 3
+
 /**
- * The requests waiting for this person’s yes, each with Review and decide, the newest few as Home shows them and how many more. It is
+ * The requests waiting for this person’s yes, each with Review and decide, the newest few and how many more. It is
  * what an approve, a decline or a refused way around the gate offers instead: the request, where they decide.
  */
 export function RequestsToOpen({ now }: { now: Date }) {
@@ -147,7 +150,7 @@ export function RequestsToOpen({ now }: { now: Date }) {
   const main = useMainButton()
   const needs = useMemo(() => (home.data ? approvalsOf(home.data) : null), [home.data])
   if (!needs) return null
-  const shown = needs.shown.slice(0, HOME_NEEDS_SHOWN)
+  const shown = needs.shown.slice(0, REQUESTS_SHOWN)
   const left = needs.total - shown.length
   return (
     <>

@@ -8,8 +8,8 @@ import { movedHeadline, notFoundHeadline } from '../software/software'
 import { lineWhen, runWhen } from '../workflows/workflow'
 import type { PanelItem } from '../../ui/sidePanel'
 
-/** Home for an Operator shows the most urgent few. Workflows, and Home for someone who is not an Operator, show everything the platform returned. */
-export const HOME_NEEDS_SHOWN = 3
+/** Home for an Operator shows the most urgent five, then “N more”. Workflows, and Home for someone who is not an Operator, show everything the platform returned. */
+export const HOME_NEEDS_SHOWN = 5
 
 const CONNECTIONS_PATH = '/settings?tab=connections'
 
@@ -111,24 +111,27 @@ export function approvalsOf(home: HomeOut): Needs {
   return { shown, total: home.approvals_total, more: { approvals: home.approvals_total - shown.length, others: 0 } }
 }
 
-/** What waits for the yes of someone who isn’t an Operator, in the same words as their Home’s heading and the chat’s answer. */
+/** What waits for the yes of someone who isn’t an Operator, in the sketch’s words, for the chat’s answer and, with no full stop, his Home’s heading. */
 export function approverLine(home: HomeOut): string {
   const total = needsTotal(home)
-  if (total === 0) return 'Nothing needs you right now.'
-  if (total === home.approvals_total) return `${count(total, 'request')} ${total === 1 ? 'is' : 'are'} waiting for your yes.`
+  if (total === 0) return 'Nothing waits for your yes.'
+  if (total === home.approvals_total) return `${count(total, 'change')} ${total === 1 ? 'waits' : 'wait'} for your yes.`
   return total === 1 ? '1 thing needs you.' : `${total} things need you.`
 }
+
+/** His Home’s heading: the same words as his answer, as a heading. */
+export const approverHeading = (home: HomeOut): string => approverLine(home).replace(/\.$/, '')
 
 export interface Suggestion {
   readonly label: string
   readonly ask: PlannerAnswerIn
 }
 
-/** The three questions Home suggests to someone who isn’t an Operator (spec 5.3). Each is a chip that never asks the model. */
+/** The sketch’s three chips for someone who isn’t an Operator. Each is an intent, so none asks the model. */
 export const APPROVER_SUGGESTIONS: readonly Suggestion[] = [
-  { label: 'What is waiting for my yes?', ask: { intent: 'needs_me' } },
-  { label: 'What did I decide before?', ask: { intent: 'decided' } },
-  { label: 'How are the workflows doing?', ask: { intent: 'check_workflows' } },
+  { label: 'What waits for me?', ask: { intent: 'needs_me' } },
+  { label: 'What did I decide?', ask: { intent: 'decided' } },
+  { label: 'What can you do?', ask: { intent: 'abilities' } },
 ]
 
 /** The sketch’s three once software is on the watchlist. Two are intents the platform answers without the model, and the question lane reads the middle one in the words it knows. */

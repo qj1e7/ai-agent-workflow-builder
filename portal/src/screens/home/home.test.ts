@@ -8,7 +8,7 @@ import type { AddressItem, ApprovalItem, ConnectionItem, FollowingUpItem, HomeOu
 import { ApiError } from '../../api/client'
 import capabilities from '../../../../contracts/fixtures/planner/capabilities.json'
 import type { CapabilitiesView } from '../../api/types'
-import { actionsOf, approverLine, draftWords, groupOf, HOME_NEEDS_SHOWN, lineOf, moreWords, needsOf, needsTotal, openPathOf, panelItemOf, pinnedOf, retryProblem, suggestionsOf, waitingWords, wordsOf, type Need } from './home'
+import { actionsOf, approverHeading, approverLine, draftWords, groupOf, HOME_NEEDS_SHOWN, lineOf, moreWords, needsOf, needsTotal, openPathOf, panelItemOf, pinnedOf, retryProblem, suggestionsOf, waitingWords, wordsOf, type Need } from './home'
 
 const BOB = bobHome as HomeOut
 const ALICE = aliceHome as HomeOut
@@ -127,11 +127,11 @@ describe('the order of what needs you', () => {
   })
 
   it(`shows ${HOME_NEEDS_SHOWN} on Home with the most urgent first, and counts the same total`, () => {
-    const approvals = Array.from({ length: 5 }, (_, n) => ask(`run_${n}`, `2026-11-03T01:0${n}:00Z`))
-    const home: HomeOut = { ...BOB, approvals, approvals_total: 5, stopped: [STOP], stopped_total: 1 }
+    const approvals = Array.from({ length: 7 }, (_, n) => ask(`run_${n}`, `2026-11-03T01:0${n}:00Z`))
+    const home: HomeOut = { ...BOB, approvals, approvals_total: 7, stopped: [STOP], stopped_total: 1 }
     const onHome = needsOf(home, HOME_NEEDS_SHOWN)
-    expect(HOME_NEEDS_SHOWN).toBe(3)
-    expect(keys(onHome.shown)).toEqual(['stopped:run_01JB9', 'approval:apr_run_4', 'approval:apr_run_3'])
+    expect(HOME_NEEDS_SHOWN, 'Home shows up to five rows, then “N more”').toBe(5)
+    expect(keys(onHome.shown)).toEqual(['stopped:run_01JB9', 'approval:apr_run_6', 'approval:apr_run_5', 'approval:apr_run_4', 'approval:apr_run_3'])
     expect(onHome.total).toBe(needsOf(home).total)
     expect(onHome.total).toBe(needsTotal(home))
   })
@@ -316,10 +316,13 @@ describe('what you wait on, and your drafts', () => {
 })
 
 describe('the Approver’s heading', () => {
-  it('tells an Approver how many requests wait for a yes', () => {
-    expect(approverLine({ ...BOB, confirmations: [], approvals_total: 1 })).toBe('1 request is waiting for your yes.')
-    expect(approverLine({ ...BOB, confirmations: [], approvals_total: 5 })).toBe('5 requests are waiting for your yes.')
-    expect(approverLine({ ...BOB, approvals: [], approvals_total: 0, confirmations: [] })).toBe('Nothing needs you right now.')
+  it('tells an Approver how many changes wait for his yes, in the sketch’s words, and his heading says the same with no full stop', () => {
+    expect(approverLine({ ...BOB, confirmations: [], approvals_total: 1 })).toBe('1 change waits for your yes.')
+    expect(approverLine({ ...BOB, confirmations: [], approvals_total: 5 })).toBe('5 changes wait for your yes.')
+    expect(approverLine({ ...BOB, approvals: [], approvals_total: 0, confirmations: [] })).toBe('Nothing waits for your yes.')
+    expect(approverLine(BOB), 'a request and two confirmations').toBe('3 things need you.')
+    expect(approverHeading({ ...BOB, confirmations: [], approvals_total: 1 })).toBe('1 change waits for your yes')
+    expect(approverHeading({ ...BOB, approvals: [], approvals_total: 0, confirmations: [] })).toBe('Nothing waits for your yes')
   })
 })
 
@@ -386,9 +389,9 @@ describe('Needs you in two groups', () => {
     ])
   })
 
-  it('cuts Home’s three from the grouped list, so a Set up item never takes a place from a Do now item', () => {
+  it('cuts Home’s five from the grouped list, so a Set up item never takes a place from a Do now item', () => {
     const home: HomeOut = { ...everything, approvals: [ask('run_a', '2026-11-03T01:00:00Z'), ask('run_b', '2026-11-03T02:00:00Z')], approvals_total: 2 }
-    expect(keys(needsOf(home, HOME_NEEDS_SHOWN).shown)).toEqual(['stopped:run_01JB9', 'approval:apr_run_b', 'approval:apr_run_a'])
+    expect(keys(needsOf(home, HOME_NEEDS_SHOWN).shown)).toEqual(['stopped:run_01JB9', 'approval:apr_run_b', 'approval:apr_run_a', 'connection:jira', 'reply:trq_01JD5RP'])
   })
 })
 

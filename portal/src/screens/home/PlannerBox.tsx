@@ -36,7 +36,6 @@ export function PlannerBox({ text, busy, empty, problem, boxRef, onChange, onSen
   }
   return (
     <form
-      className={styles['boxForm']}
       onSubmit={(event) => {
         event.preventDefault()
         send()
@@ -51,7 +50,8 @@ export function PlannerBox({ text, busy, empty, problem, boxRef, onChange, onSen
           ref={boxRef}
           rows={1}
           value={text}
-          disabled={busy}
+          readOnly={busy}
+          aria-busy={busy || undefined}
           maxLength={2000}
           placeholder={BOX_WORDS}
           enterKeyHint="send"
