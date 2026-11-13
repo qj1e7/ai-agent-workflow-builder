@@ -486,6 +486,30 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
+  test('a new answer comes into view, from its top when it is taller than the conversation', async ({ browser }, info) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    const inView = (answer: Locator) =>
+      answer.evaluate((item) => {
+        const region = item.closest('[role="region"]')!.getBoundingClientRect()
+        const box = item.getBoundingClientRect()
+        const top = box.top >= region.top - 1
+        return box.height > region.height ? top && box.top <= region.top + 1 : top && box.bottom <= region.bottom + 1
+      })
+    await page.goto('/')
+    // Enough answers first that a new one would land below the fold if the conversation didn't follow it.
+    for (const text of ['What can you do?', 'What needs me?', 'What can you do?']) {
+      const answer = await askAndWait(page, text)
+      await expect.poll(() => inView(answer), { message: `the answer to “${text}” is in view` }).toBe(true)
+    }
+    const tall = await askAndWait(page, 'watch Kubernetes but only the major releases')
+    await expect.poll(() => inView(tall), { message: 'the watch card is in view' }).toBe(true)
+    await shot(page, info, 'answer-in-view')
+    assertClean(watch)
+    await context.close()
+  })
+
   test('FIX-never-mind: the add-software card has Never mind, which changes nothing', async ({ browser, backend }) => {
     await backend.freshWatchlist('alice', [])
     const context = await devContext(browser, 'alice')
