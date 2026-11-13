@@ -87,7 +87,7 @@ describe('a run that was approved and wrote its ticket', () => {
   })
 
   it('tells the run as a chat, with no workflow plumbing in it', () => {
-    expect(model.chat.map((item) => item.kind)).toEqual(['started', 'joined', 'said', 'said', 'said', 'asked', 'decided', 'written', 'finished'])
+    expect(model.chat.map((item) => item.kind)).toEqual(['started', 'joined', 'said', 'said', 'said', 'found', 'asked', 'decided', 'written', 'finished'])
     const asked = model.chat.find((item) => item.kind === 'asked')
     expect(asked).toMatchObject({ channel: 'CODESparks Ops', posted: true })
     expect(model.chat.find((item) => item.kind === 'decided')).toMatchObject({ by: 'bob', verdict: 'approve', step: null })

@@ -78,6 +78,7 @@ export type ChatItem = { readonly seq: number; readonly at: RunTime } & (
   | { readonly kind: 'declined'; readonly record: Declined }
   | { readonly kind: 'stopped'; readonly stage: FailureStage }
   | { readonly kind: 'reported'; readonly by: string; readonly requestId: string }
+  | { readonly kind: 'found'; readonly text: string }
 )
 
 /** A spot the run reached, and when. */
@@ -361,8 +362,11 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     }
     case 'run_retried':
       return retried(model, event)
-    case 'step_finished':
-      return event.data.step === 'run_agents' && FOUND_OUTCOMES.has(event.data.outcome) && event.data.detail ? { ...model, found: event.data.detail } : model
+    case 'step_finished': {
+      const { step, outcome, detail } = event.data
+      if (step !== 'run_agents' || !FOUND_OUTCOMES.has(outcome) || !detail) return model
+      return say({ ...model, found: detail }, { kind: 'found', seq: event.seq, at: event.at, text: detail })
+    }
     case 'support_reported':
       return reported(model, event)
     case 'run_skipped':

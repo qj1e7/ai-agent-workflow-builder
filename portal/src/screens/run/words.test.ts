@@ -194,6 +194,15 @@ describe('the Step by step log', () => {
     expect(told.join(' ')).not.toMatch(/joined|Done\./)
   })
 
+  it('keeps what the agents found as its own row, after they spoke and before the ask, once the run is decided too', () => {
+    for (const told of [rows(replay(success)), rows(replay(rejected))]) {
+      const found = told.indexOf('10:14:05 LangGraph has a new release: 1.2.16.')
+      expect(found).toBeGreaterThan(0)
+      expect(found).toBeLessThan(told.indexOf('10:14:08 Asked an Approver for a yes in Teams.'))
+    }
+    expect(rows(replay(failure)).join(' '), 'a run that stopped before the agents finished found nothing').not.toMatch(/new release: 1\.2\.16\.$/)
+  })
+
   it('ends a declined run on the one row that says who declined and that nothing was written', () => {
     const told = rows(replay(rejected))
     expect(told.at(-1)).toBe('10:18:11 Bob declined: wrong version. Nothing was written.')

@@ -294,6 +294,7 @@ describe('the Step by step', () => {
       '10:14:02 Planner Please check LangGraph for new releases.',
       '10:14:05 Version checker LangGraph has a new release: 1.2.16. I suggest one ticket.',
       "10:14:05 Planner Agreed. I'll draft one ticket for an Approver to check.",
+      '10:14:05 LangGraph has a new release: 1.2.16.',
       '10:14:08 Asked an Approver for a yes in Teams.',
       '10:20:23 Bob said yes.',
       '10:20:26 Created MOCK-142 in Jira.',
