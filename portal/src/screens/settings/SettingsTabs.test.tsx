@@ -194,6 +194,19 @@ describe('the Connections tab', () => {
     expect(text(forBob)).toContain(ONLY_OPERATORS_WORDS)
   })
 
+  it('shows where every Tell goes, read only, with the flow as set or not and never its address', () => {
+    const set = text(cardOf(html, 'tell'))
+    expect(set).toContain('Tell flow Set')
+    expect(set).toContain('Posts in CODESparks Ops')
+    expect(set).toContain('Emails ops-lead@codesparks.example, support@codesparks.example')
+    expect(set).toContain('Who changes these Whoever set up the platform, in its settings. The chat can’t change them.')
+    const unset = text(cardOf(render({ tab: 'connections', connections: { ...ALL, tell: { flow_set: false, channel: 'CODESparks Ops', email_to: [] } } }), 'tell'))
+    expect(unset).toContain('Tell flow Not set The Tell flow is not set up yet, so a Tell block sends nothing.')
+    expect(unset).toContain('Emails Nobody yet')
+    expect(buttonsIn(cardOf(html, 'tell'))).toEqual([])
+    expect(html).not.toMatch(/sig=|logic\.azure/)
+  })
+
   it('marks the tab when a connection needs someone, and not when all is well', () => {
     expect(render({ tab: 'people', connections: ALL })).toMatch(/Connections[^<]*<span class="[^"]*dot[^"]*"/)
     expect(render({ tab: 'people' })).not.toMatch(/Connections[^<]*<span class="[^"]*dot[^"]*"/)

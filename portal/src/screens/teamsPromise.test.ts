@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { TEAMS_DOES_WORDS } from './settings/connections'
 
-// The platform has no "post a message in Teams" ability: Teams carries approval requests only (inconsistency I1).
+// Teams carries approval requests (inconsistency I1), and a Tell block's notice only while the Tell flow is set, which the
+// Tell flow card says from the platform's own flag.
 const PROMISE = /\b(post|posts|send|sends|sent|message|messages)\b[^.]{0,30}\bTeams\b/i
 const SCREENS = ['agents', 'settings']
 
@@ -20,7 +21,7 @@ describe('what a screen says about Teams', () => {
 
   it('never promises a Teams message on How it works or Settings', () => {
     const promises = SCREENS.flatMap(sourcesOf).flatMap(({ name, text }) =>
-      text.split('\n').filter((line) => PROMISE.test(line) && !/approval request/i.test(line)).map((line) => `${name}: ${line.trim()}`),
+      text.split('\n').filter((line) => PROMISE.test(line) && !/approval request|\bTell block\b/i.test(line)).map((line) => `${name}: ${line.trim()}`),
     )
     expect(promises).toEqual([])
   })

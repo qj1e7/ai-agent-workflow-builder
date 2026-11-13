@@ -34,6 +34,17 @@ describe('a run page whose live feed has not brought the first events', () => {
   })
 })
 
+describe('a Tell in the run\'s chat', () => {
+  const nameOf = (id: string) => id
+  const told = (line: string, bad: boolean): ChatItem => ({ kind: 'told', seq: 1, at: 0 as ChatItem['at'], line, bad })
+
+  it('is the platform saying what it sent, or why nothing was, in its own words', () => {
+    const would = 'Would have posted to CODESparks Ops and emailed the team\'s list. Nothing was sent in a test run.'
+    expect(lineOf(told(would, false), nameOf, null)).toEqual({ speaker: { kind: 'platform' }, text: would, tone: 'plain' })
+    expect(lineOf(told('Not confirmed: the Tell flow answered 502. It is not sent again.', true), nameOf, null).tone).toBe('bad')
+  })
+})
+
 describe('the declined record', () => {
   const nameOf = (id: string) => ({ alice: 'Alice', bob: 'Bob' })[id] ?? id
   const step = (index: number, change: Partial<ApprovalStepView>): ApprovalStepView => ({ index, label: `Step ${index}`, status: 'open', decided_by: null, decided_at: null, reason: null, ...change })

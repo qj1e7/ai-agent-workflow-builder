@@ -203,6 +203,8 @@ export function lineOf(item: ChatItem, nameOf: NameOf, declinedNext: string | nu
       }
     case 'reported':
       return { speaker: app, text: `${nameOf(item.by)} reported this run to support.`, tone: 'plain' }
+    case 'told':
+      return { speaker: platform, text: item.line, tone: item.bad ? 'bad' : 'plain' }
   }
 }
 

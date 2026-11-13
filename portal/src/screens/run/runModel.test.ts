@@ -213,6 +213,24 @@ describe('a report to support', () => {
   })
 })
 
+describe('a Tell block', () => {
+  const done = replay(success)
+  const next = done.seq + 1
+  const posted = 'Posted to CODESparks Ops and emailed the team\'s list.'
+
+  it('says in the activity what it sent, in the platform\'s words, and leaves the run as it was', () => {
+    const told = fold(done, event(next, 'told', { block: 'Tell the team', status: 'sent', line: posted }))
+    expect(told.chat.at(-1)).toMatchObject({ kind: 'told', line: posted, bad: false })
+    expect(told.phase).toEqual(done.phase)
+  })
+
+  it('marks a notice the flow did not confirm', () => {
+    const line = 'Not confirmed: the Tell flow answered 502. It is not sent again.'
+    const told = fold(done, event(next, 'told', { block: 'Tell the team', status: 'not_confirmed', line }))
+    expect(told.chat.at(-1)).toMatchObject({ kind: 'told', line, bad: true })
+  })
+})
+
 describe('what the agents found', () => {
   it('is read from the step that closed their work, and stays after the run is decided', () => {
     expect(replay(success).found).toBe('LangGraph has a new release: 1.2.16.')

@@ -1,4 +1,4 @@
-import type { CapabilityView, ConnectionId, ConnectionOut } from '../../api/types'
+import type { CapabilityView, ConnectionId, ConnectionOut, TellSetupOut } from '../../api/types'
 import { runWhen } from '../workflows/times'
 
 export type Health = 'ok' | 'warn' | 'off'
@@ -64,6 +64,19 @@ export function usedBy(id: ConnectionId, capabilities: readonly CapabilityView[]
 }
 
 export const CHECK_DOWN_WORDS = 'Could not check.'
+
+/** Where every Tell goes. The platform's settings fix it, so it is only read here, and the flow's address is never shown. */
+export function tellWords(tell: TellSetupOut): { readonly label: string; readonly text: string; readonly emails: string } {
+  return {
+    label: tell.flow_set ? 'Set' : 'Not set',
+    text: tell.flow_set
+      ? 'A Tell block posts what a run found in Teams and emails it to the list below. It changes nothing, so it needs no yes.'
+      : 'The Tell flow is not set up yet, so a Tell block sends nothing.',
+    emails: tell.email_to.length > 0 ? tell.email_to.join(', ') : 'Nobody yet',
+  }
+}
+
+export const TELL_CHANGED_BY_WORDS = 'Whoever set up the platform, in its settings. The chat can’t change them.'
 
 /** A connection that wants someone, shown as a dot on the tab. A key that runs out soon counts. */
 export function connectionNeedsYou(connections: readonly ConnectionOut[] | undefined): boolean {
