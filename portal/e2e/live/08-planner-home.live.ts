@@ -8,7 +8,7 @@ import { connectMockModel } from './support/settings'
 import { SettingsApi } from './support/settings'
 import { REDIS, type Backend } from './support/stack'
 import { expect, test } from './support/test'
-import { devContext, OUT, shot } from './support/ui'
+import { devContext, needsOnWorkflows, OUT, shot } from './support/ui'
 import { askAndWait, editCard, newestAnswer, rereadOf, scheduledWorkflow, shown, tag, versionsOf } from './support/edit'
 
 /** The sketch's question, Alice's Home heading; her greeting is the line above it. */
@@ -356,7 +356,7 @@ test.describe('with the AI model on', () => {
     await page.goto('/workflows')
     const row = page.locator(`li[data-draft="${id}"]`)
     await expect(row, 'the draft shows on Workflows with the card’s own reason').toContainText(/Needs |Nothing is unclear/)
-    await row.getByRole('link', { name: /^Resume/ }).click()
+    await row.getByRole('link').click()
     await expect(page, 'Resume reopens the card on Home').toHaveURL(new RegExp(`/\\?draft=${id}`))
     await expect(card(page)).toContainText('bug tickets in OPS, with no update for 10 days')
     await expect(card(page)).toContainText('Every weekday')
@@ -558,8 +558,8 @@ test.describe('with the AI model on', () => {
     await thread(page).getByRole('link', { name: 'Open the Software watchlist' }).click()
     await expect(page).toHaveURL(/\/software$/)
     const row = page.locator('li[data-status]').filter({ hasText: 'Redis' })
-    await expect(row, 'the row says it is not checked yet, and what checks it').toContainText(/Redis\s*Checked on GitHub · redis\/redis[\s\S]*Not checked yet/)
-    await expect(page.locator('main h1 + p'), 'the count line counts it').toHaveText('1 not checked yet')
+    await expect(row, 'the row says it is only watched so far, and what checks it').toContainText(/Redis\s*Added today · (?:checked by Software watchlist|not checked automatically)[\s\S]*Watching/)
+    await expect(page.locator('main h1 + p'), 'the count line counts it').toHaveText('1 watching')
     assertClean(watch)
     await context.close()
   })
@@ -692,7 +692,7 @@ test.describe('with the AI model on', () => {
       await open.click()
       await expect(page.locator('#side-panel-h'), 'Redis opens in the side panel').toHaveText('Redis')
       await page.locator('#side-panel').getByRole('link', { name: 'More details' }).click()
-      await expect(page).toHaveURL(/\/software\?row=/)
+      await expect(page).toHaveURL(/\/software\/[^/?]+$/)
       await context.close()
     })
   }
@@ -889,7 +889,7 @@ test.describe('the chat after the first message', () => {
     await expect(pinned(page).getByRole('link', { name: `${String(total - 1)} more that need you` })).toHaveAttribute('href', '/workflows')
     await pinned(page).getByRole('link', { name: /more that need you/ }).click()
     await expect(page).toHaveURL(/\/workflows$/)
-    await expect(main(page).getByRole('heading', { level: 2, name: new RegExp(`^Needs you ${String(total)}`) })).toBeVisible()
+    expect(await needsOnWorkflows(page), 'N more plus one is the Needs you rows on Workflows').toBe(total)
     await expect(main(page).getByRole('heading', { name: 'Do now' })).toBeVisible()
     await page.getByRole('link', { name: 'Back to the chat', exact: true }).click()
     await expect(thread(page)).toContainText('What can you do?')
@@ -956,7 +956,7 @@ test.describe('the chat after the first message', () => {
       await expect(thread(page).locator('li[data-answer]')).toHaveCount(1)
       const rail = page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
       await rail.getByRole('link', { name: /^Workflows/ }).click()
-      await page.locator(`li[data-draft="${id}"]`).getByRole('link', { name: /^Resume/ }).click()
+      await page.locator(`li[data-draft="${id}"]`).getByRole('link').click()
       const resumed = thread(page).locator('section[data-card]')
       await expect(resumed).toContainText('tickets closed last week')
       await expect(thread(page), 'the conversation before it stays').toContainText('What can you do?')
@@ -1114,7 +1114,8 @@ test.describe('the edit card (spec 6.7)', () => {
     await rail.getByRole('link', { name: /^Workflows/ }).click()
     await main(page).getByRole('link', { name: morning.name, exact: true }).click()
     await expect(page).toHaveURL(new RegExp(`/workflows/${morning.id}$`))
-    await expect(page.getByRole('list', { name: 'Versions, newest first' }).getByRole('listitem').first()).toContainText('Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00. This is the version running now.')
+    await page.locator('summary', { hasText: 'Versions' }).click()
+    await expect(page.getByRole('list', { name: 'Versions, newest first' }).getByRole('listitem').first()).toContainText(/Version 3, in use\s*Today, \d{1,2}:\d\d\. Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00\./)
     await rail.getByRole('link', { name: /^Chat/ }).click()
     const kept = newestAnswer(page)
     await expect(editCard(kept), 'the card keeps its Undo across pages').toContainText('Saved as version 3.')

@@ -22,6 +22,8 @@ export const runStateLabel: Record<RunState, string> = {
   rejected: 'Declined',
   failed: 'Stopped',
   skipped: 'Skipped',
+  expired: 'No answer',
+  lost: 'Lost',
 }
 
 /** Who started a run, as people say it: "Alice", or "Alice's schedule" for a scheduled check. */
@@ -63,6 +65,8 @@ export const approvalStepStatusLabel: Record<ApprovalStepStatus, string> = {
   open: 'Waiting for an Approver',
   approved: 'Approved',
   declined: 'Declined',
+  expired: 'No answer',
+  cancelled: 'Deleted before an answer',
 }
 
 export const verdictLabel: Record<Verdict, string> = {

@@ -1,14 +1,16 @@
 import useCase from '@contracts/fixtures/builder/use-case.json'
 import cardUseCase from '@contracts/fixtures/builder/use-case.versioned.json'
 import card from '@contracts/fixtures/runs/card.json'
+import expired from '@contracts/fixtures/runs/expired.json'
 import failure from '@contracts/fixtures/runs/failure.json'
+import lost from '@contracts/fixtures/runs/lost.json'
 import rejected from '@contracts/fixtures/runs/rejected.json'
 import success from '@contracts/fixtures/runs/success.json'
 import { describe, expect, it } from 'vitest'
 import type { BlockKind } from '../../api/types'
 import { runId } from '../../stream/brand'
 import { parseEvent, type RunEvent } from '../../stream/parse'
-import { emptyModel, fold, foldAll, stationsOf, type PlanBlock, type RunModel, type Station } from './runModel'
+import { emptyModel, fold, foldAll, isFinished, stationsOf, type PlanBlock, type RunModel, type Station } from './runModel'
 
 interface Raw {
   readonly run_id: string
@@ -323,5 +325,23 @@ describe('a run n8n skipped because an earlier run still waits for a yes', () =>
     expect(trigger?.state).toBe('done')
     expect(steps.length).toBeGreaterThan(0)
     expect(steps.every((station) => station.state === 'skip')).toBe(true)
+  })
+})
+
+describe('a run n8n waits on that ends with no answer, or that n8n lost after the yes', () => {
+  const ended = (model: RunModel, key: string) => line(model).find((station) => station.key === key)?.state
+
+  it('ends expired, with the gate and the write skipped', () => {
+    const model = replay(expired)
+    expect(model.phase).toEqual({ state: 'expired' })
+    expect(isFinished(model.phase)).toBe(true)
+    expect([ended(model, 'gate'), ended(model, 'write')]).toEqual(['skip', 'skip'])
+  })
+
+  it('ends lost after the yes, with nothing written', () => {
+    const model = replay(lost)
+    expect(model.phase).toEqual({ state: 'lost' })
+    expect(isFinished(model.phase)).toBe(true)
+    expect([ended(model, 'gate'), ended(model, 'write')]).toEqual(['done', 'skip'])
   })
 })

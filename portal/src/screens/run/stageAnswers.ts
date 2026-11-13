@@ -1,4 +1,4 @@
-import { andList, stageFactsOf, stageOf, stageWords, type NameOf } from './words'
+import { andList, sentence, stageFactsOf, stageWords, type NameOf } from './words'
 import type { RunModel } from './runModel'
 
 export interface Answer {
@@ -13,25 +13,27 @@ export interface Answer {
  */
 export function stageAnswers(model: RunModel, found: string, nameOf: NameOf): readonly Answer[] {
   const foundRow: Answer[] = found === '' ? [] : [{ label: 'Found', text: found }]
-  const stage = stageOf(model)
-  const words = stageWords(stage, stageFactsOf(model))
+  const facts = stageFactsOf(model)
+  const words = stageWords(facts, nameOf)
   const now = (text: string): Answer => ({ label: 'Now', text })
-  switch (stage) {
-    case 'stopped':
-    case 'done':
-    case 'declined':
+  switch (facts.state) {
+    case 'failed':
+    case 'succeeded':
+    case 'rejected':
+    case 'expired':
+    case 'lost':
       return []
-    case 'retrying':
-      return [now(`${words} after a short wait…`)]
+    case 'pending':
     case 'working':
-      return [now(`${words}…`)]
-    case 'waiting':
-      return [...foundRow, now(`${words}.`)]
-    case 'writing': {
-      const yes = model.approvedBy.length > 0 ? `${andList(model.approvedBy.map(nameOf))} said yes` : 'It was approved'
+    case 'proposed':
+      return [now(facts.retried ? `${words} after a short wait…` : `${words}…`)]
+    case 'awaiting_approval':
+      return [...foundRow, now(sentence(words))]
+    case 'acting': {
+      const yes = facts.approvedBy.length > 0 ? `${andList(facts.approvedBy.map(nameOf))} said yes` : 'It was approved'
       return [...foundRow, now(`${yes}. ${words}…`)]
     }
     case 'skipped':
-      return [now(`${words}.`)]
+      return [now(sentence(words))]
   }
 }

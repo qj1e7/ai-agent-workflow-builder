@@ -6,7 +6,7 @@ import { declineReasons, foundOf } from './decision'
 import type { LiveRun } from './liveRun'
 import { stationsOf, type PlanBlock, type RunModel, type Station } from './runModel'
 import { stageAnswers, type Answer } from './stageAnswers'
-import { headlineOf, runKind, settledOf, stageOf, triggerWords, type Headline, type NameOf, type RunStage, type Settled } from './words'
+import { runKind, settledOf, stageFactsOf, triggerWords, type NameOf, type Settled, type StageFacts } from './words'
 import type { TroubleshootingProps } from './Outcome'
 
 export function approvalIdOf(run: RunView, model: RunModel): string | null {
@@ -30,10 +30,10 @@ export interface RunStory {
   readonly useCase: { readonly data: UseCaseView | undefined; readonly isLoading: boolean }
   readonly approvalId: string | null
   readonly approval: ApprovalView | undefined
-  readonly stage: RunStage
+  /** Where the run stands, for its pill and every word about its state. */
+  readonly facts: StageFacts
   readonly stations: readonly Station[]
   readonly settled: Settled | null
-  readonly headline: Headline
   readonly arrivedLive: string | null
   readonly found: string
   readonly quick: readonly string[]
@@ -59,7 +59,6 @@ export interface StoryInputs {
 /** The run's story from what was read: the pure part of useRunStory, so a card can be drawn from fixture events. */
 export function storyOf({ run, live, me, nameOf, useCase, approval, advice, adviceLoading, modelOff, now }: StoryInputs): Omit<RunStory, 'useCase' | 'approvalId'> {
   const { shown, head, loadedUpTo } = live
-  const waiting = shown.phase.state === 'awaiting_approval'
   const quick = declineReasons(useCase?.template)
   const stations = stationsOf(shown, planOf(useCase), triggerWords(shown, useCase?.schedule ?? null, nameOf, run.started_at))
   const found = foundOf(head.found, approval?.found)
@@ -68,10 +67,9 @@ export function storyOf({ run, live, me, nameOf, useCase, approval, advice, advi
     me,
     nameOf,
     approval,
-    stage: stageOf(shown),
+    facts: stageFactsOf(shown),
     stations,
     settled: settledOf(shown, nameOf, now, quick),
-    headline: headlineOf(shown, stations, approval && waiting ? approval.actions : null),
     arrivedLive: shown.spotSeq > loadedUpTo ? (stations.findLast((station) => station.state !== 'todo')?.key ?? null) : null,
     found,
     quick,

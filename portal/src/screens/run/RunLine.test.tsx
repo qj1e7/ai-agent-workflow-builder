@@ -10,7 +10,7 @@ import { StepLog } from './Chat'
 import { Outcome } from './Outcome'
 import { RunLine } from './RunLine'
 import { emptyModel, foldWire, stationsOf, type ChatItem, type PlanBlock, type RunModel } from './runModel'
-import { headlineOf, logRowsOf, settledOf, triggerWords, workingWords, type Schedule } from './words'
+import { logRowsOf, runPill, settledOf, stageFactsOf, triggerWords, workingWords, type Schedule } from './words'
 
 interface Raw {
   readonly run_id: string
@@ -257,7 +257,7 @@ describe('the words on the line', () => {
   it('settle a run with nothing to write as nothing new', () => {
     const done = { ...(success.at(-1) ?? {}), seq: 9, data: { outcome: 'nothing_to_write' } }
     const model = foldWire(replay(success, 8), [done], success[0]?.run_id ?? '')
-    expect(settledOf(model, nameOf, new Date('2026-11-03T09:00:00Z'), QUICK)).toEqual({ tone: 'ok', text: 'Done at 10:20 · Nothing new' })
+    expect(settledOf(model, nameOf, new Date('2026-11-03T09:00:00Z'), QUICK)).toEqual({ tone: 'ok', text: 'Done at 10:20 · Nothing new to write' })
   })
 
   it('settle a declined run on who declined and why, keeping a reason the Approver typed as they typed it', () => {
@@ -352,16 +352,14 @@ describe('what stays after a finished run', () => {
   })
 })
 
-describe('the heading', () => {
-  it('says what the run needs or did', () => {
-    const head = (model: RunModel) => headlineOf(model, stationsOf(model, PLAN, 'Started by Alice'), null)
-    expect(head(replay(success, 6))).toMatchObject({ text: 'The agents are working', pill: { label: 'Running' } })
-    expect(head(replay(success, 15))).toMatchObject({ text: 'Waiting for a yes', pill: { label: 'Waiting for a yes', tone: 'wait' } })
-    expect(head(replay(success))).toMatchObject({ text: '1 ticket created in Jira', pill: { label: 'Done', tone: 'ok' } })
-    expect(head(replay(rejected))).toMatchObject({ text: 'Declined, nothing was written', pill: { label: 'Declined' } })
-    expect(head(replay(failure))).toMatchObject({ text: 'Stopped at Read every source', pill: { label: 'Stopped', tone: 'bad' } })
-    const early = { ...replay(failure, 2), failedAt: { at: 'planner' }, phase: { state: 'failed', stage: 'pending', reason: 'DispatchFailed', retryable: true, message: '' } } as const
-    expect(head(early), 'a stop before any agent began names the step it never reached').toMatchObject({ text: 'Stopped before Read every source' })
+describe('the pill', () => {
+  it('says where the run stands, in the same words as a list’s row', () => {
+    const pill = (model: RunModel) => runPill(stageFactsOf(model))
+    expect(pill(replay(success, 6))).toEqual({ label: 'Running', tone: 'new' })
+    expect(pill(replay(success, 15))).toEqual({ label: 'Waiting for a yes', tone: 'wait' })
+    expect(pill(replay(success))).toEqual({ label: 'Done', tone: 'ok' })
+    expect(pill(replay(rejected))).toEqual({ label: 'Declined', tone: 'quiet' })
+    expect(pill(replay(failure))).toEqual({ label: 'Stopped', tone: 'bad' })
   })
 })
 

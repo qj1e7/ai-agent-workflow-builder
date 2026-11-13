@@ -15,7 +15,7 @@ import { POLL_FAILED_MS, useReconnectWhenBehind } from '../run/follow'
 import { useLiveRun } from '../run/liveRun'
 import { TROUBLE_FACE } from '../run/troubleFace'
 import { type RunStory, useRunStory } from '../run/useRunStory'
-import { sentence, stageFactsOf, stageWords, type RunStage } from '../run/words'
+import { sentence, stageWords, type NameOf, type RunState } from '../run/words'
 import { CardMemoryContext } from './cardMemory'
 import styles from './Planner.module.css'
 
@@ -41,7 +41,7 @@ function stopOf(useCaseId: string | null, operator: boolean, home: HomeOut | und
 }
 
 /** What a card says about the run, read aloud once as the run moves: the name and where it is. */
-const sayStage = (story: Pick<RunStory, 'stage' | 'model'>, name: string): string => sentence(`${name}: ${stageWords(story.stage, stageFactsOf(story.model))}`)
+const sayStage = (story: Pick<RunStory, 'facts'>, name: string, nameOf: NameOf): string => sentence(`${name}: ${stageWords(story.facts, nameOf)}`)
 
 /** The card's body for one story. Pure, so it can be drawn from a run's fixture events. */
 export function RunCardView({ runId, name, story, beside }: { runId: string; name: string; story: RunStory | Omit<RunStory, 'useCase' | 'approvalId'>; beside: boolean }) {
@@ -52,7 +52,7 @@ export function RunCardView({ runId, name, story, beside }: { runId: string; nam
   return (
     <Card
       title={name}
-      pill={<RunPill pill={story.headline.pill} />}
+      pill={<RunPill facts={story.facts} />}
       status={
         beside ? undefined : (
           <OpenButton variant="secondary" item={{ kind: 'run', id: runId }} to={`/runs/${runId}`}>
@@ -68,7 +68,7 @@ export function RunCardView({ runId, name, story, beside }: { runId: string; nam
   )
 }
 
-function LiveRunCard({ run, say, onStage }: { run: RunView; say: Say; onStage: (stage: RunStage) => void }) {
+function LiveRunCard({ run, say, onState }: { run: RunView; say: Say; onState: (state: RunState) => void }) {
   const { live, restart } = useLiveRun(run.run_id)
   const failed = live.head.phase.state === 'failed'
   const latest = useRun(run.run_id, { poll: failed ? POLL_FAILED_MS : false }).data ?? run
@@ -76,13 +76,13 @@ function LiveRunCard({ run, say, onStage }: { run: RunView; say: Say; onStage: (
   const story = useRunStory(latest, live)
   const beside = useShownInPanel({ kind: 'run', id: run.run_id })
   const ready = live.loaded && !story.useCase.isLoading
-  const phrase = ready ? sayStage(story, run.use_case_name) : null
+  const phrase = ready ? sayStage(story, run.use_case_name, story.nameOf) : null
   useEffect(() => {
     if (phrase !== null) say(phrase)
   }, [phrase, say])
   useEffect(() => {
-    if (ready) onStage(story.stage)
-  }, [ready, story.stage, onStage])
+    if (ready) onState(story.facts.state)
+  }, [ready, story.facts.state, onState])
   if (!ready) {
     return (
       <p className="muted" role="status">
@@ -99,7 +99,7 @@ function LiveRunCard({ run, say, onStage }: { run: RunView; say: Say; onStage: (
  * declined. The run is kept with the message once found, because it leaves the stopped list the moment it is retried, and the card
  * is drawn again whenever the chat comes back.
  */
-function RunCardBody({ useCaseId, say, onStage }: { useCaseId: string | null; say: Say; onStage: (stage: RunStage) => void }) {
+function RunCardBody({ useCaseId, say, onState }: { useCaseId: string | null; say: Say; onState: (state: RunState) => void }) {
   const home = useHome()
   const me = useMe().data
   const useCases = useUseCases()
@@ -138,19 +138,19 @@ function RunCardBody({ useCaseId, say, onStage }: { useCaseId: string | null; sa
       </p>
     )
   }
-  return <LiveRunCard run={run.data} say={say} onStage={onStage} />
+  return <LiveRunCard run={run.data} say={say} onState={onState} />
 }
 
 /** The whole message: the AI troubleshooter’s face, whose mood follows the run, and the card column beside it. */
 export function RunCardMessage({ useCaseId, say, leftovers }: { useCaseId: string | null; say: Say; leftovers: ReactNode }) {
-  const [stage, setStage] = useState<RunStage>('stopped')
+  const [state, setState] = useState<RunState>('failed')
   return (
     <>
-      <AgentFace id="troubleshooter" size={30} state={TROUBLE_FACE[stage]} />
+      <AgentFace id="troubleshooter" size={30} state={TROUBLE_FACE[state]} />
       <div className={styles['cards']}>
         <span className="visually-hidden">AI troubleshooter: </span>
         {leftovers}
-        <RunCardBody useCaseId={useCaseId} say={say} onStage={setStage} />
+        <RunCardBody useCaseId={useCaseId} say={say} onState={setState} />
       </div>
     </>
   )

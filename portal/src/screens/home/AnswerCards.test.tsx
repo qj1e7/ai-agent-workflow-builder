@@ -436,8 +436,8 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     const said = answerOf(ask(decidedReply as PlannerReply))
     expect(said).toContain('Here are your 3 decisions.')
     expect(said).toContain('Keep our software up to date Declined Declined by Bob at 9:10 today. Nothing was written. Reason: Wrong version.')
-    expect(said).toContain('Morning new-ticket check Approved Approved by Bob, Mon 26 Oct, 8:00. 1 ticket created in Jira.')
-    expect(said).toContain('Weekly closed-ticket summary Approved Approved by Bob, Fri 16 Oct, 16:00. Then declined by Alice. Nothing was written.')
+    expect(said).toContain('Morning new-ticket check Approved Approved by Bob, Mon 26 Oct, 8:00. 1 ticket created.')
+    expect(said).toContain('Weekly closed-ticket summary Approved Approved by Bob, Fri 16 Oct, 16:00. Declined by Alice. Nothing was written.')
     expect(said.indexOf('9:10 today')).toBeLessThan(said.indexOf('Mon 26 Oct'))
   })
 

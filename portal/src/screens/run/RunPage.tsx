@@ -25,7 +25,7 @@ import { RunPill } from './RunPill'
 import { isFinished, type RunModel } from './runModel'
 import { TROUBLE_FACE } from './troubleFace'
 import { useRunStory } from './useRunStory'
-import { declinedNext, declinedNowWords, declinedRecord, feedTroubleOf, lineOf, logRowsOf, RUN_MISSING, RUN_PROBLEM, speakerName, type NameOf, type RunStage } from './words'
+import { declinedNext, declinedNowWords, declinedRecord, feedTroubleOf, lineOf, logRowsOf, RUN_MISSING, RUN_PROBLEM, speakerName, stageWords, type NameOf, type RunState } from './words'
 import styles from './RunPage.module.css'
 
 const LANDS_ON_DECISION = new Set(['awaiting_approval', 'failed', 'rejected'])
@@ -164,10 +164,10 @@ function logOpen(choice: boolean | null, model: RunModel): boolean {
 }
 
 /** The troubleshooter's face beside its words, as the sketch's `tr big`. Its mood follows the run. */
-function TroubleshooterBlock({ stage, children }: { stage: RunStage; children: ReactNode }) {
+function TroubleshooterBlock({ state, children }: { state: RunState; children: ReactNode }) {
   return (
     <div className={styles['trouble']}>
-      <AgentFace id="troubleshooter" size={34} state={TROUBLE_FACE[stage]} />
+      <AgentFace id="troubleshooter" size={34} state={TROUBLE_FACE[state]} />
       <div className={styles['troubleBody']}>{children}</div>
     </div>
   )
@@ -176,7 +176,7 @@ function TroubleshooterBlock({ stage, children }: { stage: RunStage; children: R
 function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const { shown, head, loadedUpTo } = live
   const story = useRunStory(run, live)
-  const { me, nameOf, approval, stage, stations, settled, headline, arrivedLive } = story
+  const { me, nameOf, approval, facts, stations, settled, arrivedLive } = story
   const fromChat = useFromChat()
   const [lands] = useState(() => fromApproval || LANDS_ON_DECISION.has(shown.phase.state))
   const logList = useRef<HTMLOListElement>(null)
@@ -207,9 +207,10 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const next = declinedNext({ test: run.test, watchlist: useCase?.template === 'software_watchlist' }, nextRunOf(useCase), new Date())
   const announce = newest && newest.seq > loadedUpTo ? lineOf(newest, nameOf, next) : null
 
+  const title = `${run.use_case_name}: ${stageWords(facts, nameOf)}`
   useEffect(() => {
-    document.title = `${headline.text} · ${PRODUCT}`
-  }, [headline.text])
+    document.title = `${title} · ${PRODUCT}`
+  }, [title])
 
   useEffect(() => {
     if (!lands) return
@@ -252,12 +253,12 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const trouble =
     failure ? (
       <DecisionArea label="Why it stopped">
-        <TroubleshooterBlock stage={stage}>
+        <TroubleshooterBlock state={facts.state}>
           <StopAnswers failure={failure} {...story.stopped} safeId={safeId} />
         </TroubleshooterBlock>
       </DecisionArea>
     ) : story.answers.length > 0 && !waiting ? (
-      <TroubleshooterBlock stage={stage}>
+      <TroubleshooterBlock state={facts.state}>
         <AnswerList answers={story.answers} />
       </TroubleshooterBlock>
     ) : null
@@ -293,7 +294,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
             {run.use_case_name}
           </h1>
         </div>
-        <RunPill pill={headline.pill} />
+        <RunPill facts={facts} />
       </div>
       <p className={styles['status']}>
         <span role="status">{statusWords(decision, live)}</span>

@@ -80,7 +80,7 @@
   color: var(--green-ink);
 }
 
-.off {
+.quiet {
   border-color: var(--hair);
   background: var(--sunk);
   color: var(--muted);

@@ -10,10 +10,8 @@ import { devContext, OUT, shot } from './support/ui'
 const replyItem = (page: Page, requestId: string) => page.locator(`li[data-home-item="reply:${requestId}"]`)
 const followingRow = (page: Page, requestId: string) => page.locator(`li[data-request="${requestId}"]`)
 const draftRow = (page: Page, draftId: string) => page.locator(`li[data-draft="${draftId}"]`)
-const countInHeading = async (page: Page): Promise<number> => {
-  const heading = page.getByRole('main').getByRole('heading', { level: 2, name: /^Needs you/ })
-  return (await heading.count()) === 0 ? 0 : Number((await heading.innerText()).replace(/\D/g, ''))
-}
+/** The rows in Needs you. The page shows every one of them, so this is the number the tab counts. */
+const countInHeading = (page: Page): Promise<number> => page.getByRole('main').locator('li[data-home-item]').count()
 
 interface Made {
   readonly requestId: string
@@ -37,21 +35,6 @@ async function draftFor(backend: Backend, label: string): Promise<{ id: string; 
   return { id, name }
 }
 
-/**
- * Presses Enter on the Discard button until the question is open. The page re-reads on its polls, and a press that lands while
- * the button is not the focused element does nothing, so each try looks first and presses only while the button holds focus
- * and no question is open. Once the question is open, focus is in it, so a later try never presses inside it.
- */
-async function openDiscardQuestion(page: Page, discard: Locator, dialog: Locator): Promise<void> {
-  await expect(async () => {
-    if ((await dialog.count()) === 0) {
-      await discard.focus()
-      if (await discard.evaluate((el) => el === document.activeElement)) await page.keyboard.press('Enter')
-    }
-    await expect(dialog).toBeVisible({ timeout: 2_000 })
-  }).toPass({ timeout: 20_000 })
-}
-
 async function homeOf(backend: Backend, user: string) {
   return backend.get<{ replied: { request_id: string }[]; following_up: { request_id: string }[]; waiting_on_others: { run_id: string }[] }>(user, '/api/v1/home')
 }
@@ -64,12 +47,12 @@ test('a reply is in the asker’s Needs you until they open it, then it stays un
   await page.goto('/workflows')
   await expect(replyItem(page, requestId)).toBeVisible()
   await expect(replyItem(page, requestId)).toContainText('Bob replied to your request')
-  await expect(replyItem(page, requestId)).toContainText('Not on the plan yet')
+  await expect(followingRow(page, requestId)).toContainText('Not on the plan yet')
   const before = await countInHeading(page)
   await expect(followingRow(page, requestId)).toContainText(note)
   await shot(page, info, 'n9b-asker-needs-you')
 
-  await replyItem(page, requestId).getByRole('link', { name: 'Read the reply' }).click()
+  await replyItem(page, requestId).getByRole('link').click()
   await expect(page).toHaveURL(new RegExp(`/workflows\\?request=${requestId}$`))
   await expect(page.getByRole('article')).toContainText(note)
   await expect(page.getByRole('article')).toContainText('You asked the team')
@@ -151,15 +134,16 @@ test('a link to a request that does not exist says so plainly', async ({ browser
   await context.close()
 })
 
-test('alice sees the run she started under Waiting on others on Workflows, and not on Home', async ({ browser, backend }) => {
+test('alice sees the run she started as Waiting for a yes on its workflow’s row, whose banner opens the run, and Workflows has no Waiting on others', async ({ browser, backend }) => {
   const { runId } = await backend.waitingRun('alice')
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
   await page.goto('/workflows')
-  await expect(page.getByRole('region', { name: 'Waiting on others' }).locator(`a[href="/runs/${runId}"]`)).toContainText('You started it')
+  const row = page.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })
+  await expect(row).toContainText('Waiting for a yes')
+  await expect(page.getByRole('region', { name: 'Waiting on others' })).toHaveCount(0)
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-  await expect(page.getByRole('region', { name: 'Waiting on others' })).toHaveCount(0)
   await expect(page.locator(`[data-waiting="${runId}"]`)).toHaveCount(0)
   await context.close()
 })
@@ -176,7 +160,7 @@ test('a connection that does not answer sends Alice to the Connections tab, wher
     await expect(item).toBeVisible()
     await expect(item.getByRole('button')).toHaveCount(0)
     const before = await countInHeading(page)
-    await item.getByRole('link', { name: 'See it in Settings' }).click()
+    await item.getByRole('link').click()
     await expect(page).toHaveURL(/\/settings$|\/settings\?tab=connections$/)
     const card = page.locator('[data-connection="jira"]')
     await card.getByRole('button', { name: 'Check now for Jira' }).click()
@@ -196,70 +180,44 @@ test('a connection that does not answer sends Alice to the Connections tab, wher
   }
 })
 
-test('alice discards a draft by keyboard, after a question that says what is lost, and Undo puts it back', async ({ browser, backend }, info) => {
-  const draft = await draftFor(backend, 'keys')
+test('a draft is a row under All workflows with the pill Draft, never in Needs you, and its one link opens it in the chat', async ({ browser, backend }, info) => {
+  const draft = await draftFor(backend, 'row')
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
-  await page.goto('/workflows')
-  const row = draftRow(page, draft.id)
-  await expect(row).toContainText(draft.name)
-  const kept = (await backend.get<{ drafts: { draft_id: string; created_at: string; saved_at: string }[] }>('alice', '/api/v1/drafts')).drafts.find((item) => item.draft_id === draft.id)
-  expect(kept, 'the draft is saved before it is discarded').toBeDefined()
-  await row.getByRole('link', { name: `Resume ${draft.name}` }).focus()
-  await page.keyboard.press('Tab')
-  const discard = row.getByRole('button', { name: `Discard ${draft.name}` })
-  await expect(discard).toBeFocused()
-  const dialog = page.getByRole('alertdialog', { name: `Discard ${draft.name}?` })
-  await openDiscardQuestion(page, discard, dialog)
-  await expect(dialog).toContainText('Nothing has run, and nothing changes in Jira or Teams')
-  await expect(dialog.getByRole('button', { name: 'Keep the draft' })).toBeFocused()
-  await shot(page, info, 'n9b-discard-asks')
-
-  await page.keyboard.press('Escape')
-  await expect(dialog).toHaveCount(0)
-  await expect(row, 'asking and then backing out keeps the draft').toBeVisible()
-
-  await openDiscardQuestion(page, discard, dialog)
-  await page.keyboard.press('Tab')
-  await expect(dialog.getByRole('button', { name: 'Discard draft' })).toBeFocused()
-  await page.keyboard.press('Enter')
-  await expect(page.getByText(`Discarded ${draft.name}.`).last()).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Undo' })).toBeFocused()
-  await expect(row).toHaveCount(0)
-  const gone = await backend.get<{ drafts: { draft_id: string }[] }>('alice', '/api/v1/drafts')
-  expect(gone.drafts.map((item) => item.draft_id)).not.toContain(draft.id)
-  await shot(page, info, 'n9b-discarded')
-
-  await page.keyboard.press('Enter')
-  await expect(row).toBeVisible()
-  await expect(page.getByText('Put back.').last()).toBeVisible()
-  await expect(row.getByRole('link', { name: `Resume ${draft.name}` }), 'focus moves to the restored draft').toBeFocused()
-  const back = await backend.get<{ drafts: { draft_id: string; created_at: string; saved_at: string; content: { name?: string } }[] }>('alice', '/api/v1/drafts')
-  const again = back.drafts.find((item) => item.draft_id === draft.id)
-  expect(again?.content.name, 'Undo saved the same draft').toBe(draft.name)
-  expect([again?.created_at, again?.saved_at], 'Undo keeps the times, so Last saved stays true').toEqual([kept?.created_at, kept?.saved_at])
-  await backend.delete('alice', `/api/v1/drafts/${draft.id}`)
-  await context.close()
+  try {
+    await page.goto('/workflows')
+    const row = draftRow(page, draft.id)
+    await expect(row).toContainText(draft.name)
+    await expect(row).toContainText('Only your words are saved.')
+    await expect(row.getByText('Draft', { exact: true }), 'the row has one pill, Draft').toHaveCount(1)
+    await expect(row.getByRole('button'), 'the row is one link, and Discard is on the draft’s card in the chat').toHaveCount(0)
+    await expect(page.getByRole('region', { name: 'Needs you' }).locator('li[data-draft]'), 'the strip does not count a draft, so Needs you does not list one').toHaveCount(0)
+    await expect(row.getByRole('link')).toHaveAttribute('href', `/?draft=${draft.id}`)
+    await shot(page, info, 'n9b-draft-row')
+  } finally {
+    await backend.delete('alice', `/api/v1/drafts/${draft.id}`)
+    await context.close()
+  }
 })
 
-test('the search and the filters stay hidden until the search button is pressed', async ({ browser, backend }, info) => {
+test('the search and the filters show once there are more than ten workflows, and narrow the list', async ({ browser, backend, request }, info) => {
   await backend.waitingRun('alice')
+  const listed = async () => ((await (await request.get('/api/v1/use-cases', { headers: { 'X-Dev-User': 'alice' } })).json()) as { use_cases: unknown[] }).use_cases.length
+  for (let have = await listed(); have <= 10; have += 1) {
+    await backend.post('alice', '/api/v1/agent-use-cases', { name: `Search lane ${randomUUID().slice(0, 6)}`, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents: [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }] }, undefined, [201])
+  }
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
   await page.goto('/workflows')
-  const search = page.getByRole('button', { name: 'Search workflows' })
-  await expect(page.getByRole('searchbox', { name: 'Find a workflow' })).toHaveCount(0)
-  await expect(page.getByRole('group', { name: 'Show' })).toHaveCount(0)
+  const search = page.getByRole('searchbox', { name: 'Find a workflow' })
+  await expect(search).toBeVisible()
+  await expect(page.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'Stopped', exact: true })).toBeVisible()
   await expect(page.getByRole('main').locator('li[data-workflow-id] [data-state]')).toHaveCount(0)
-  await search.scrollIntoViewIfNeeded()
-  await shot(page, info, 'n9b-search-hidden')
-  await search.focus()
-  await page.keyboard.press('Enter')
-  await expect(page.getByRole('searchbox', { name: 'Find a workflow' })).toBeFocused()
-  await expect(page.getByRole('button', { name: 'Stopped', exact: true })).toBeVisible()
   await shot(page, info, 'n9b-search-open')
-  await page.getByRole('button', { name: 'Hide search' }).click()
-  await expect(page.getByRole('searchbox', { name: 'Find a workflow' })).toHaveCount(0)
+  await search.fill('Software watchlist')
+  await expect(page.getByRole('main').locator('li[data-workflow-id]')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Paused', exact: true }).click()
+  await expect(page.getByText('No workflows match')).toBeVisible()
   await context.close()
 })
 
@@ -278,7 +236,6 @@ for (const phone of [false, true]) {
     await page.goto('/workflows')
     await expect(replyItem(page, requestId)).toBeVisible()
     await expect(draftRow(page, draft.id)).toBeVisible()
-    await expect(page.getByRole('region', { name: 'Waiting on others' })).toBeVisible()
     await expect(followingRow(page, requestId)).toBeVisible()
     await page.waitForFunction(() => document.getAnimations().length === 0)
     await expectAccessible(page, path.join(OUT, 'axe'), `workflows-sections-${name}`)
@@ -314,18 +271,17 @@ for (const phone of [false, true]) {
   })
 }
 
-const LAST_RUN = /^Last run (Today \d{1,2}:\d{2}|[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}(?: \d{4})?)(, test)? · (.+)$/
+const LAST_RUN = /^(?:Daily|Weekdays|Mon|Tue|Wed|Thu|Fri|Sat|Sun|No schedule)(?: \d{1,2}:\d{2})? · (?:no runs yet|last run (?:today|[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}(?: \d{4})?), .+)$/
 
-/** Every last-run line is whole: none is cut with an ellipsis. It also sits on one line (its height is its line height), unless it may wrap. */
-async function lineFits(lines: Locator, { mayWrap = false } = {}): Promise<{ rows: number; broken: string[] }> {
+/** Every second line is whole: none is cut with an ellipsis or runs past its row. It may wrap, as the sketch's rows do. */
+async function lineFits(lines: Locator): Promise<{ rows: number; broken: string[] }> {
   const found = await lines.evaluateAll((els) =>
-    els.map((el) => ({
-      text: el.textContent ?? '',
-      count: Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)),
-      cut: el.scrollWidth > el.clientWidth,
-    })),
+    els.map((el) => {
+      const row = el.closest('li')?.getBoundingClientRect()
+      return { text: el.textContent ?? '', cut: el.scrollWidth > el.clientWidth, out: row ? el.getBoundingClientRect().right > row.right : false }
+    }),
   )
-  return { rows: found.length, broken: found.filter((line) => (!mayWrap && line.count !== 1) || line.cut).map((line) => line.text) }
+  return { rows: found.length, broken: found.filter((line) => line.cut || line.out).map((line) => line.text) }
 }
 
 for (const user of ['alice', 'bob']) {
@@ -337,28 +293,19 @@ for (const user of ['alice', 'bob']) {
     const page = await context.newPage()
     const rows = page.getByRole('list', { name: 'Workflows' }).locator('li[data-workflow-id]')
     const watchlist = rows.filter({ hasText: 'Software watchlist' })
-    const lastLine = (row: Locator) => row.locator('p[class*="last"]')
+    const lastLine = (row: Locator) => row.locator('span[class*="sub"]')
     for (const width of [1920, 1280, 1050, 900, 390]) {
       await page.setViewportSize({ width, height: 900 })
       await page.goto('/workflows')
       await expect(watchlist).toBeVisible()
-      await expect(lastLine(watchlist), 'a waiting check says what it proposed, and is not a test run').toHaveText(/^Last run [^,]+ · 1 ticket proposed$/)
+      await expect(lastLine(watchlist), 'a waiting check says it waits for a yes, and is not a test run').toHaveText(/^(?:No schedule|Mon \d+:\d\d|Daily \d+:\d\d|Weekdays \d+:\d\d) · last run today, waiting for a yes$/)
       await expect(watchlist.getByText('Waiting for a yes', { exact: true })).toBeVisible()
       await expect(watchlist.getByText('Test run', { exact: true }), 'Check now is not a test run').toHaveCount(0)
       const fit = await lineFits(lastLine(rows))
       expect(fit.rows, 'every row has a last-run line').toBe(await rows.count())
-      expect(fit.broken, `each last-run line is whole and on one line at ${width} px`).toEqual([])
-      for (const text of await lastLine(rows).allInnerTexts()) expect(text === 'No runs yet' || LAST_RUN.test(text), `"${text}" is a last-run line`).toBe(true)
+      expect(fit.broken, `each row’s line is whole and inside its row at ${width} px`).toEqual([])
+      for (const text of await lastLine(rows).allInnerTexts()) expect(LAST_RUN.test(text), `"${text}" is a row’s line`).toBe(true)
       await expectAccessible(page, path.join(OUT, 'axe'), `workflows-last-run-${user}-${width}`)
-      await page.getByRole('button', { name: 'Search workflows' }).click()
-      await page.getByRole('searchbox', { name: 'Find a workflow' }).fill(quietName)
-      const quiet = rows.filter({ hasNotText: /Review and decide|See why it stopped/ })
-      await expect(quiet.first(), 'with no action in any row, the list gives its width to the descriptions').toBeVisible()
-      expect(await rows.count(), 'only rows with no action are left').toBe(await quiet.count())
-      const wide = await quiet.first().locator('div[class*="main"]').evaluate((el) => el.getBoundingClientRect().width)
-      if (width >= 900) expect(wide, `a row with no action keeps its description wide at ${width} px`).toBeGreaterThan(300)
-      const noAction = await lineFits(lastLine(rows))
-      expect(noAction.broken, `each last-run line is whole and on one line at ${width} px with no action in any row`).toEqual([])
       await shot(page, info, `r9-workflows-${user}-${width}`)
     }
 
@@ -373,9 +320,9 @@ for (const user of ['alice', 'bob']) {
         const card = page.getByRole('main').getByRole('list', { name: 'Your workflows' })
         await expect(card).toBeVisible()
         await expect(lastLine(card.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })), 'the check card says what the row says').toHaveText(before)
-        const fit = await lineFits(lastLine(card.locator('li[data-workflow-id]')), { mayWrap: width < 900 })
+        const fit = await lineFits(lastLine(card.locator('li[data-workflow-id]')))
         expect(fit.rows, 'the card has a line for each workflow').toBeGreaterThan(0)
-        expect(fit.broken, `each last-run line in the check card is whole at ${width} px, and on one line from 900 px`).toEqual([])
+        expect(fit.broken, `each line in the check card is whole at ${width} px`).toEqual([])
         await shot(page, info, `r9-check-card-alice-${width}`)
       }
     }
@@ -387,7 +334,7 @@ for (const user of ['alice', 'bob']) {
       const declined = await again.newPage()
       await declined.goto('/workflows')
       const row = declined.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })
-      await expect(lastLine(row), 'a declined run names who declined').toHaveText(/^Last run [^,]+ · Declined by Bob$/)
+      await expect(lastLine(row), 'a declined run names who declined, and writes no ticket').toHaveText(/ · last run [^,]+, declined by Bob\. Nothing was written\.$/)
       await expect(row.getByText('On', { exact: true }), 'a declined run has no pill, so the workflow reads On').toBeVisible()
       expect((await lineFits(lastLine(row))).broken).toEqual([])
       await shot(declined, info, 'r9-workflows-declined')

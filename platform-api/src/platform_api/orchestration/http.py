@@ -22,7 +22,9 @@ from platform_api.orchestration.questions import AnswerRefusal, Question, Questi
 from platform_api.orchestration.runs import (
     Acting,
     AwaitingApproval,
+    Expired,
     Failed,
+    Lost,
     Pending,
     Proposed,
     Rejected,
@@ -186,6 +188,18 @@ class SkippedView(_RunBase):
     )
 
 
+class ExpiredView(_RunBase):
+    state: Literal["expired"] = "expired"
+    proposal: ProposalView
+    approval: ApprovalRef
+
+
+class LostView(_RunBase):
+    state: Literal["lost"] = "lost"
+    proposal: ProposalView
+    approval: ApprovalRef
+
+
 type RunView = Annotated[
     PendingView
     | WorkingView
@@ -195,7 +209,9 @@ type RunView = Annotated[
     | SucceededView
     | RejectedView
     | FailedView
-    | SkippedView,
+    | SkippedView
+    | ExpiredView
+    | LostView,
     Field(discriminator="state"),
 ]
 
@@ -507,6 +523,14 @@ def run_view(detail: RunDetail, viewer: Principal) -> RunView:
             )
         case Skipped():
             return SkippedView(**base, waiting_run_id=state.waiting)
+        case Expired() | Lost():
+            assert detail.proposal is not None and detail.approval is not None
+            view = ExpiredView if isinstance(state, Expired) else LostView
+            return view(
+                **base,
+                proposal=proposal_view(detail.proposal),
+                approval=approval_ref(detail.approval, detail.decisions),
+            )
 
 
 REFUSAL_MESSAGES: dict[Refusal, str] = {

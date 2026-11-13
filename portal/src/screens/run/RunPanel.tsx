@@ -82,7 +82,7 @@ function LiveRunPanel({ run }: { run: RunView }) {
 
 function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
   const story = useRunStory(run, live)
-  const { me, nameOf, approval, stations, settled, headline, arrivedLive, useCase } = story
+  const { me, nameOf, approval, stations, settled, arrivedLive, useCase } = story
   const backToTop = useAfterPanelAction()
   const waiting = story.model.phase.state === 'awaiting_approval'
   const { say } = useChat()
@@ -125,7 +125,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
     <div className={styles['panelView']}>
       <div className={styles['head']}>
         <p className={styles['kind']}>{story.kind}</p>
-        <RunPill pill={headline.pill} />
+        <RunPill facts={story.facts} />
       </div>
       {status ? (
         <p className="muted" role="status">

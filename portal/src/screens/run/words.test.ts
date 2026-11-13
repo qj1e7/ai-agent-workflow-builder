@@ -8,7 +8,7 @@ import rejected from '@contracts/fixtures/runs/rejected.json'
 import success from '@contracts/fixtures/runs/success.json'
 import { emptyModel, foldWire, type ChatItem, type RunModel } from './runModel'
 import { stageAnswers } from './stageAnswers'
-import { declinedBy, declinedNext, declinedNowWords, declinedOfSteps, declinedRecord, declinedWithNext, declineTail, feedTroubleOf, lineOf, logRowsOf, runKind, speakerName, stageFactsOf, stageOf, stageWords } from './words'
+import { declinedBy, declinedNext, declinedNowWords, declinedOfSteps, declinedRecord, declinedWithNext, declineTail, feedTroubleOf, lineOf, logRowsOf, runKind, runPill, scheduleShort, speakerName, stageFactsOf, stageWords, type StageFacts } from './words'
 
 describe('the run chat', () => {
   it('names the app by its full name', () => {
@@ -126,34 +126,24 @@ const twoYeses = (raw: readonly Wire[]): Wire[] =>
     })
     .map((item, index) => ({ ...item, seq: index + 1 }))
 
-describe('a run’s state in one set of words', () => {
-  it('reads the stage of a run from its events, and calls a run retried after a stop Retrying', () => {
-    expect(stageOf(replay(failure))).toBe('stopped')
-    expect(stageOf(replay(success, 6))).toBe('working')
-    expect(stageOf(replay(success, 15))).toBe('waiting')
-    expect(stageOf(replay(success, 18))).toBe('writing')
-    expect(stageOf(replay(success))).toBe('done')
-    expect(stageOf(replay(rejected))).toBe('declined')
-    const retried = { ...replay(failure), phase: { state: 'pending' }, chat: [...replay(failure).chat, { kind: 'retried', by: 'alice', seq: 15, at: 0 as ChatItem['at'] }] } as RunModel
-    expect(stageOf(retried)).toBe('retrying')
-  })
+describe('a run followed from its own events, in the same stage words', () => {
+  const words = (model: RunModel) => stageWords(stageFactsOf(model), named)
 
-  it('says each stage the way the sketch’s rows, banners and strip do', () => {
-    expect(stageWords('stopped', { reason: 'TimedOut' })).toBe('A step took too long')
-    expect(stageWords('stopped')).toBe('Stopped')
-    expect(stageWords('retrying')).toBe('Retrying')
-    expect(stageWords('working')).toBe('Running')
-    expect(stageWords('waiting')).toBe('Waiting for a yes')
-    expect(stageWords('writing', { tickets: true })).toBe('Creating the ticket')
-    expect(stageWords('done', stageFactsOf(replay(success)))).toBe('MOCK-142 created')
-    expect(stageWords('done', {})).toBe('Nothing new')
-    expect(stageWords('declined')).toBe('Declined. Nothing was written.')
+  it('reads where a run stands from its events, and calls a run retried after a stop Retrying', () => {
+    expect(words(replay(failure))).toBe('An agent could not finish its work')
+    expect(words(replay(success, 6))).toBe('Running')
+    expect(words(replay(success, 15))).toBe('Waiting for a yes')
+    expect(words(replay(success, 18))).toBe('Creating the ticket')
+    expect(words(replay(success))).toBe('MOCK-142 created, approved by Bob')
+    expect(words(replay(rejected))).toBe('Declined by Bob. Nothing was written.')
+    const retried = { ...replay(failure), phase: { state: 'pending' }, chat: [...replay(failure).chat, { kind: 'retried', by: 'alice', seq: 15, at: 0 as ChatItem['at'] }] } as RunModel
+    expect(words(retried)).toBe('Retrying')
+    expect(runPill(stageFactsOf(retried)), 'a retry runs, as any run at work does').toEqual({ label: 'Running', tone: 'new' })
   })
 
   it('says what a run writes from what it does, before and after the write lands', () => {
-    expect(stageWords('writing', stageFactsOf(replay(success, 18)))).toBe('Creating the ticket')
-    expect(stageWords('writing', stageFactsOf(replay(pageUpdate(success), 18)))).toBe('Writing the changes')
-    expect(stageWords('done', stageFactsOf(replay(pageUpdate(success))))).toBe('PAGE-7 written')
+    expect(words(replay(pageUpdate(success), 18))).toBe('Writing the changes')
+    expect(words(replay(pageUpdate(success)))).toBe('PAGE-7 written, approved by Bob')
   })
 
   it('gives the troubleshooter’s Now row in the same words, naming every Approver who said yes', () => {
@@ -168,8 +158,8 @@ describe('a run’s state in one set of words', () => {
 
   it('never says a declined run wrote anything', () => {
     const facts = stageFactsOf(replay(rejected))
-    expect(facts.written).toEqual([])
-    expect(stageWords('declined', facts)).not.toMatch(/created|written$/)
+    expect(facts.refs).toEqual([])
+    expect(stageWords(facts, named)).not.toMatch(/created|written$/)
   })
 })
 
@@ -212,5 +202,56 @@ describe('the Step by step log', () => {
 
   it('says a stopped run stopped before anything was written', () => {
     expect(rows(replay(failure)).at(-1)).toMatch(/The run stopped\. Nothing was written\.$/)
+  })
+})
+
+describe('the stage words, one function for the row, the banner, the strip and Recent runs', () => {
+  const base: StageFacts = { state: 'succeeded', count: 0, tickets: true, approvedBy: [], declinedBy: null, reason: null }
+  const nameOf = (id: string) => ({ bob: 'Bob', alice: 'Alice' })[id] ?? id
+  const stage = (change: Partial<StageFacts>) => stageWords({ ...base, ...change }, nameOf)
+
+  it('says why a run stopped, in the failure’s own plain words', () => {
+    expect(stage({ state: 'failed', reason: 'AgentError' })).toBe('An agent could not finish its work')
+    expect(stage({ state: 'failed' })).toBe('Stopped')
+  })
+
+  it('says a run that waits needs a yes, and a run in progress is running', () => {
+    expect(stage({ state: 'awaiting_approval', count: 1 })).toBe('Waiting for a yes')
+    for (const state of ['pending', 'working', 'proposed'] as const) expect(stage({ state })).toBe('Running')
+  })
+
+  it('says what a run that is writing creates', () => {
+    expect(stage({ state: 'acting', count: 1 })).toBe('Creating the ticket')
+    expect(stage({ state: 'acting', count: 2 })).toBe('Creating the tickets')
+    expect(stage({ state: 'acting', count: 2, tickets: false })).toBe('Writing the changes')
+  })
+
+  it('says what a finished run wrote and who said yes, and says so when nothing was new', () => {
+    expect(stage({ count: 1, approvedBy: ['bob'] })).toBe('1 ticket created, approved by Bob')
+    expect(stage({ count: 2, approvedBy: ['bob', 'alice'] })).toBe('2 tickets created, approved by Bob and Alice')
+    expect(stage({ count: 1, tickets: false })).toBe('1 change written')
+    expect(stage({ count: 0 })).toBe('Nothing new to write')
+  })
+
+  it('says a declined run wrote nothing, and never says created', () => {
+    expect(stage({ state: 'rejected', declinedBy: 'bob' })).toBe('Declined by Bob. Nothing was written.')
+    expect(stage({ state: 'rejected' })).toBe('Declined. Nothing was written.')
+  })
+
+  it('has one pill for each run state, in the sketch’s words', () => {
+    expect(runPill({ ...base, state: 'failed' })).toEqual({ label: 'Stopped', tone: 'bad' })
+    expect(runPill({ ...base, state: 'working' })).toEqual({ label: 'Running', tone: 'new' })
+    expect(runPill({ ...base, state: 'awaiting_approval' })).toEqual({ label: 'Waiting for a yes', tone: 'wait' })
+    expect(runPill({ ...base, count: 1 })).toEqual({ label: 'Done', tone: 'ok' })
+    expect(runPill(base)).toEqual({ label: 'Nothing new', tone: 'quiet' })
+    expect(runPill({ ...base, state: 'rejected' })).toEqual({ label: 'Declined', tone: 'quiet' })
+  })
+})
+
+describe('a schedule in few words', () => {
+  it('reads Daily 8:00, Weekdays 9:30 or Mon 13:00', () => {
+    expect(scheduleShort({ day: 'every_day', at: '08:00' })).toBe('Daily 8:00')
+    expect(scheduleShort({ day: 'weekdays', at: '09:30' })).toBe('Weekdays 9:30')
+    expect(scheduleShort({ day: 'monday', at: '13:00' })).toBe('Mon 13:00')
   })
 })

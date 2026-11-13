@@ -15,30 +15,64 @@ import hashlib
 import hmac
 import json
 from collections.abc import Awaitable, Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timedelta
 from typing import Literal, Protocol
 
 from platform_api.orchestration.agents import CardInput, InputKind
+from platform_api.orchestration.approvals import (
+    ApprovalRequest,
+    Approved,
+    Decision,
+    approval_status,
+)
 from platform_api.orchestration.cards import TOOL_RULES
 from platform_api.orchestration.runs import (
+    NO_ANSWER,
+    TEST_PASSED,
+    Acting,
+    AwaitingApproval,
+    Expired,
     Failed,
+    Failure,
+    FailureReason,
+    Lost,
     Moved,
+    Outcome,
     Pending,
+    Proposed,
+    Rejected,
+    ResumeAct,
     ResumeWork,
     RunState,
+    Skipped,
+    Succeeded,
     Working,
+    deadline,
     execution_linked,
+    holder_of,
     sentence,
     state_name,
     working_on,
+    write_done,
 )
 from platform_api.orchestration.spec import CardRun, RunSpec
-from platform_api.orchestration.write_actions import Json
-from platform_api.shared import N8nExecutionId, RunId, UserId
+from platform_api.orchestration.tell import TellWhat, TellWhere, Told
+from platform_api.orchestration.write_actions import (
+    ActionResult,
+    Carried,
+    DenyReason,
+    Json,
+    Made,
+    MadeBefore,
+    NotMade,
+    describe,
+    one_line,
+)
+from platform_api.shared import JIRA_SITE_CHANGED, ApprovalId, N8nExecutionId, RunId, UserId
 from platform_api.wire import Trigger
 
-type NodeKind = Literal["read", "agent", "propose"]
+type NodeKind = Literal["read", "agent", "propose", "ask", "write", "tell"]
 type StartKind = Literal["run_now", "test", "retry"]
 type OptionKind = Literal["places", "agents", "agent_inputs", "write_actions"]
 type Grade = Literal["safe", "writes_refused", "needs_a_fix"]
@@ -162,12 +196,36 @@ class ProposeCall:
     subject: str | None
 
 
-type Work = ReadCall | AgentCall | ProposeCall
+@dataclass(frozen=True)
+class AskCall:
+    resume_url: str
+    """$execution.resumeUrl, which n8n signs. It is kept sealed and never shown."""
+
+
+@dataclass(frozen=True)
+class WriteCall:
+    """Make the approved changes. It names nothing: the gateway makes the run's own approved
+    proposal, from our records alone."""
+
+
+@dataclass(frozen=True)
+class TellCall:
+    """A choice of the fixed recipients and of when to tell. It carries no address and no text:
+    our API composes the notice from what the run read (the Tell rule)."""
+
+    where: TellWhere
+    what: TellWhat
+
+
+type Work = ReadCall | AgentCall | ProposeCall | AskCall | WriteCall | TellCall
 
 KIND_OF: Mapping[type[Work], NodeKind] = {
     ReadCall: "read",
     AgentCall: "agent",
     ProposeCall: "propose",
+    AskCall: "ask",
+    WriteCall: "write",
+    TellCall: "tell",
 }
 
 
@@ -198,6 +256,45 @@ class Answer:
 
 
 @dataclass(frozen=True)
+class Waiting:
+    """Ask for a yes waits in n8n for this request of ours."""
+
+    request_id: ApprovalId
+
+
+@dataclass(frozen=True)
+class NothingToChange:
+    pass
+
+
+type AskAnswer = Waiting | NothingToChange
+
+type ChangeStatus = Literal["made", "already_made", "not_made"]
+
+
+@dataclass(frozen=True)
+class ChangeResult:
+    """One change of the proposal, as Make the approved changes passes it on."""
+
+    change: str
+    status: ChangeStatus
+    reference: str | None = None
+    url: str | None = None
+    made_in: RunId | None = None
+    """The run that made it first, when that was another run."""
+    detail: str | None = None
+
+
+@dataclass(frozen=True)
+class WriteAnswer:
+    """`made < of` fails the block with "2 of 3 made", so the error workflow reports the run."""
+
+    made: int
+    of: int
+    results: tuple[ChangeResult, ...]
+
+
+@dataclass(frozen=True)
 class Refused:
     """A call our API will not do. n8n repeats a refused call with retryOnFail, so a repeat
     from the same execution and block gets this same answer and nothing else happens."""
@@ -211,7 +308,7 @@ class TryLater:
     detail: str
 
 
-type CallResult = Answer | Refused | TryLater
+type CallResult = Answer | AskAnswer | WriteAnswer | Told | Refused | TryLater
 
 NOT_OURS = Refused(403, "This workflow is not one our platform runs.")
 NOBODY_HOLDS = Refused(403, "Nobody holds this workflow, so nobody may run it by hand.")
@@ -227,6 +324,29 @@ NO_EXECUTION = TryLater("n8n has no record of this execution yet.")
 ANOTHER_EXECUTION = Refused(409, "Another execution of this run is live.")
 CHANGED_CALL = Refused(409, "This block already called with other content in this execution.")
 BUSY = TryLater("Our platform is still answering this block.")
+TEST_RUN_STOPS = Refused(409, TEST_PASSED)
+"""A test run ends at Ask for a yes, with no exit taken (ENGINE-PLAN 2.3.3)."""
+NO_YES = Refused(403, "No yes for this run.")
+TEST_RUN_WRITES_NOTHING = Refused(403, "A test run never writes.")
+DENIED: Mapping[DenyReason, str] = {
+    DenyReason.RUN_MISMATCH: "This run's records do not match its request.",
+    DenyReason.NOT_APPROVED: NO_YES.detail,
+    DenyReason.INVALID_DECISIONS: "The decisions on this run's request break the approval rules.",
+    DenyReason.DIGEST_MISMATCH: "These are not the changes the Approvers said yes to.",
+    DenyReason.UNREGISTERED_ACTION: "A change is not one our platform can make.",
+    DenyReason.TARGET_CHANGED: JIRA_SITE_CHANGED,
+    DenyReason.EXPIRED: "The request expired before its yes.",
+    DenyReason.TEST_RUN: TEST_RUN_WRITES_NOTHING.detail,
+}
+"""What the safety checker's refusal says on the block, and in the run's failure."""
+NOT_OUR_ERROR_WORKFLOW = Refused(403, "Only our error workflow may report a failure.")
+NOT_FAILED = Refused(409, "n8n does not say this execution failed.")
+NOTHING_READ = Refused(403, "A Tell reports only what this run read, and it has read nothing yet.")
+NO_TELL_FLOW = Refused(409, "This platform has no Tell flow, so it sends no notice.")
+CANNOT_SEAL = (
+    "This platform cannot keep n8n's resume address safe, because SETTINGS_ENCRYPTION_KEY is not "
+    "set."
+)
 
 
 def run_stopped(why: str) -> Refused:
@@ -352,9 +472,10 @@ def decide_link(
 
 def rejoin(
     state: RunState, execution: N8nExecutionId, mode: str, now: datetime
-) -> Moved[Working] | Refused:
+) -> Moved[Working] | Moved[Acting] | Refused:
     """A retry of one of the run's executions carries the run on. A stop that cannot be retried
-    stays stopped, so a retry never skips the check that stopped it."""
+    stays stopped, so a retry never skips the check that stopped it. A retry after a part-done
+    write carries the same approved proposal, and makes only what is still to make."""
     match state:
         case Pending() as pending:
             return pending.link(execution, mode, now)
@@ -364,10 +485,78 @@ def rejoin(
         case Failed(failure=failure, resume=ResumeWork(attempt)) if failure.retryable:
             working = working_on(state.run_id, execution, attempt, now)
             return Moved(working, (execution_linked(execution, mode),))
+        case Failed(failure=failure, resume=ResumeAct() as act) if failure.retryable:
+            acting = Acting(
+                state.run_id,
+                act.proposal_id,
+                act.approval_id,
+                act.attempt,
+                execution,
+                deadline(Acting, now),
+                act.unread,
+            )
+            return Moved(acting, (execution_linked(execution, mode),))
         case Failed(failure=failure):
             return run_stopped(f"{sentence(failure.message)} It cannot be retried.")
         case _:
             return Refused(409, f"This run cannot take a retry while it is {state_name(state)}.")
+
+
+MESSAGE_LIMIT = 500
+
+
+@dataclass(frozen=True)
+class FailedExecution:
+    """An execution that ended in an error, as Report a failure sends it or the sweep reads it
+    from n8n (ENGINE-PLAN 2.8)."""
+
+    execution_id: N8nExecutionId
+    node: str | None
+    message: str | None
+
+
+class N8nFailures(Protocol):
+    """n8n's record of failed executions. A report is checked against it, and the sweep reads it
+    for any report that never came: from a workflow held in a member's project, or a run by
+    hand, which reaches no error workflow (P7 Q13 and Q22)."""
+
+    async def error_workflow_id(self) -> str | None:
+        """The platform's own error workflow, the only one whose executions may report."""
+        ...
+
+    async def failed_executions(self, workflow_id: str) -> Sequence[N8nExecutionId]:
+        """GET /api/v1/executions?status=error&workflowId=…"""
+        ...
+
+    async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
+        """The node that failed and its error text, from the execution's data. None unless n8n
+        has the execution and it ended in an error."""
+        ...
+
+
+def failure_words(failed: FailedExecution, read_anything: bool) -> str:
+    node = f'"{failed.node}"' if failed.node else "A block"
+    said = one_line(failed.message or "n8n gave no reason", MESSAGE_LIMIT)
+    words = f"{node} failed in n8n: {sentence(said)}"
+    return words if read_anything else f"Stopped before it read anything. {words}"
+
+
+def fail_by_report(
+    state: RunState, execution: N8nExecutionId, failure: Failure, writing: bool
+) -> Moved[Failed] | None:
+    """A failed execution fails the run only while it carries the run. A run that has ended
+    stays as it ended, so a test run that passed up to the yes is not failed by its stop at the
+    gate. A run that moved on, to another execution or to an attempt nobody carries yet, is not
+    failed by an earlier attempt's execution. An execution linked in the same call carries the
+    run, so a run that stopped before reading is still failed. While the run's changes are being
+    made, the write's own outcome decides, so the run never reads failed and retryable then."""
+    match state:
+        case Acting() if writing:
+            return None
+        case Pending() | Working() | Proposed() | Acting() if holder_of(state) == execution:
+            return state.fail(failure)
+        case _:
+            return None
 
 
 WRITE_TARGETS: Mapping[InputKind, str] = {
@@ -427,6 +616,8 @@ class NodeCatalog:
                     return unknown("change", action)
                 if place not in {option.id for option in entry.places}:
                     return unknown("place", place)
+            case AskCall() | WriteCall() | TellCall():
+                pass
         return None
 
     def _places_for(self, connector: str) -> set[str]:
@@ -443,3 +634,122 @@ class NodeCatalog:
     @staticmethod
     async def _listed(listing: Awaitable[Sequence[NodeOption]], wanted: str) -> bool:
         return wanted in {option.id for option in await listing}
+
+
+@dataclass(frozen=True)
+class TheRequest:
+    """Our records of the run's request, which the write reads and never n8n's."""
+
+    request: ApprovalRequest
+    decisions: tuple[Decision, ...]
+    waiting: N8nExecutionId | None
+    """The execution n8n holds the wait in, when n8n holds it."""
+
+    def woke(self, execution: N8nExecutionId) -> bool:
+        """This is the execution our records would wake with a yes."""
+        approved = isinstance(approval_status(self.request, self.decisions), Approved)
+        return approved and self.waiting == execution
+
+
+@dataclass(frozen=True)
+class Carry:
+    """The run may make its approved changes now, from this execution."""
+
+    acting: Acting
+    took_yes: Moved[Acting] | None
+    """How the run takes the yes here, when our record of n8n taking it is missing."""
+
+
+@dataclass(frozen=True)
+class StopRun:
+    """A write with no yes in a run that never asked: the run stops (ENGINE-PLAN 2.3.11)."""
+
+    refused: Refused
+    moved: Moved[Failed]
+
+
+@dataclass(frozen=True)
+class Answered:
+    answer: WriteAnswer
+
+
+type WriteAdmission = Carry | StopRun | Answered | Refused
+
+
+def admit_write(
+    state: RunState, execution: N8nExecutionId, held: TheRequest | None, now: datetime
+) -> WriteAdmission:
+    """What a call to make the approved changes may do in this state of its run.
+
+    Only the run's own execution writes: the one the run acts in, or the one our records wait to
+    wake with a yes. The second is how a lost wake heals. n8n took the yes, but our record of it
+    was lost, or the wake met a 409 and marked the run lost. It holds for a lost run only until
+    its request would have expired, because after that a person may already have redone the
+    work. Every write still passes check() against the same records.
+    """
+    match state:
+        case Acting(claimant=claimant) as acting if claimant == execution:
+            return Carry(acting, None)
+        case Acting():
+            return ANOTHER_EXECUTION
+        case AwaitingApproval() as waiting if held is not None and held.woke(execution):
+            took = waiting.woken(execution, now)
+            return Carry(took.state, took)
+        case Lost() as lost if (
+            held is not None
+            and held.woke(execution)
+            and (held.request.expires_at is None or now <= held.request.expires_at)
+        ):
+            took = lost.taken(execution, now)
+            return Carry(took.state, took)
+        case Working() as working:
+            failure = Failure(FailureReason.SAFETY_DENIED, NO_YES.detail, retryable=False)
+            return StopRun(NO_YES, working.fail(failure))
+        case Succeeded(outcome=Outcome.TEST_PASSED):
+            return TEST_RUN_WRITES_NOTHING
+        case Succeeded(written=written):
+            results = tuple(
+                ChangeResult(f"{w.operation} on {w.connector}", "made", w.external_reference, w.url)
+                for w in written
+            )
+            return Answered(WriteAnswer(len(results), len(results), results))
+        case Failed(failure=failure):
+            return run_stopped(failure.message)
+        case Rejected():
+            return Refused(403, "An Approver said no. Nothing was written.")
+        case Expired():
+            return Refused(403, NO_ANSWER)
+        case Lost():
+            return run_stopped("n8n lost it after the yes, and nothing was written.")
+        case AwaitingApproval() | Pending() | Proposed() | Skipped():
+            return NO_YES
+
+
+def _change(result: ActionResult) -> ChangeResult:
+    match result:
+        case Made(action, done):
+            return ChangeResult(describe(action).line, "made", done.external_reference, done.url)
+        case MadeBefore(action, reference, url, run_id):
+            detail = f"Already made in run {run_id}."
+            return ChangeResult(
+                describe(action).line, "already_made", reference, url, run_id, detail
+            )
+        case NotMade(action, why):
+            return ChangeResult(describe(action).line, "not_made", detail=why)
+
+
+def write_answer(carried: Carried) -> WriteAnswer:
+    return WriteAnswer(
+        carried.made, len(carried.results), tuple(_change(r) for r in carried.results)
+    )
+
+
+def after_write(acting: Acting, carried: Carried) -> Moved[Succeeded] | Moved[Failed]:
+    """The run once the gateway is done. A part-done write fails the run, retryable when the
+    failure was, and says how many were made. What this try made is logged either way."""
+    if carried.failure is None:
+        return acting.made(carried.written, carried.fresh)
+    of = len(carried.results)
+    message = f"{carried.made} of {of} made. {sentence(carried.failure.message)}"
+    failed = acting.fail(replace(carried.failure, message=message))
+    return failed.preceded_by(*(write_done(w) for w in carried.fresh))
