@@ -61,7 +61,7 @@ class Drafts(N8nWorkflows):
         super().__init__(N8nApi("http://n8n", owner, n8n.client()), db)
         self._error_workflow = error_workflow
 
-    async def error_workflow(self) -> str | None:
+    async def error_workflow_id(self) -> str | None:
         return self._error_workflow
 
 

@@ -17,7 +17,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, ValidationError
 
 from platform_api.db import Database
-from platform_api.orchestration.n8n_calls import ExecutionFacts, Publisher
+from platform_api.orchestration.n8n_calls import ExecutionFacts, FailedExecution, Publisher
 from platform_api.settings import N8nOwner
 from platform_api.shared import N8nExecutionId, UserId
 
@@ -377,6 +377,10 @@ class ExecutionRecord:
     retry_of: str | None
     version_id: str | None
     start_nonce: str | None
+    failed_node: str | None = None
+    """The block whose error ended the execution, or the last block n8n ran."""
+    error: str | None = None
+    """n8n's error text, when the execution ended in an error."""
 
 
 @dataclass(frozen=True)
@@ -545,6 +549,11 @@ def _at(value: object, *path: str | int) -> object:
 
 
 def _record_of(execution: _ExecutionOut) -> ExecutionRecord:
+    result = ("resultData",)
+    node = _at(execution.data, *result, "error", "node", "name") or _at(
+        execution.data, *result, "lastNodeExecuted"
+    )
+    error = _at(execution.data, *result, "error", "message")
     return ExecutionRecord(
         str(execution.id),
         str(execution.workflow_id),
@@ -553,6 +562,8 @@ def _record_of(execution: _ExecutionOut) -> ExecutionRecord:
         None if execution.retry_of is None else str(execution.retry_of),
         execution.workflow_version_id,
         _start_nonce(execution),
+        node if isinstance(node, str) else None,
+        error if isinstance(error, str) else None,
     )
 
 
@@ -829,7 +840,7 @@ class SavedDraft:
 
 
 class N8nDrafts(Protocol):
-    async def error_workflow(self) -> str | None: ...
+    async def error_workflow_id(self) -> str | None: ...
 
     async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft:
         """Raises N8nError or httpx.HTTPError when n8n did not keep it."""
@@ -839,13 +850,14 @@ class N8nDrafts(Protocol):
 
 
 class N8nWorkflows:
-    """Where the builder saves the Planner's layouts, as drafts nobody has published."""
+    """Where the builder saves the Planner's layouts, as drafts nobody has published, and where
+    failure reports and the sweep read n8n's record of failed executions (ENGINE-PLAN 2.8)."""
 
     def __init__(self, api: N8nApi, db: Database) -> None:
         self._api = api
         self._db = db
 
-    async def error_workflow(self) -> str | None:
+    async def error_workflow_id(self) -> str | None:
         """The platform's error workflow, as bootstrap last loaded it."""
         async with self._db.connection("orchestration") as conn:
             row = await (
@@ -869,3 +881,21 @@ class N8nWorkflows:
             await self._api.delete(workflow_id)
         except (N8nError, httpx.HTTPError) as error:
             log.warning("could not remove n8n draft %s: %s", workflow_id, error)
+
+    async def failed_executions(self, workflow_id: str) -> Sequence[N8nExecutionId]:
+        """The newest hundred executions of the workflow that ended in an error. Raises when n8n
+        cannot be read, so the sweep tries again next time."""
+        records = await self._api.executions(workflow_id, status="error")
+        return [N8nExecutionId(record.id) for record in records if record.status == "error"]
+
+    async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
+        """The block that failed and n8n's words for it, from n8n's own record. None unless n8n
+        has the execution and it ended in an error."""
+        try:
+            record = await self._api.execution(execution_id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not read n8n execution %s: %s", execution_id, error)
+            return None
+        if record is None or record.status != "error":
+            return None
+        return FailedExecution(execution_id, record.failed_node, record.error)

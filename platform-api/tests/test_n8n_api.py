@@ -10,12 +10,13 @@ from platform_api.orchestration.n8n import (
     N8nApi,
     N8nError,
     N8nExecutions,
+    N8nWorkflows,
     PublishEvent,
     Written,
     publisher_of,
     same_as_sent,
 )
-from platform_api.orchestration.n8n_calls import Publisher
+from platform_api.orchestration.n8n_calls import FailedExecution, Publisher
 from platform_api.settings import N8nOwner
 from platform_api.shared import N8nExecutionId, UserId
 from tests.fake_n8n import OWNER_EMAIL, OWNER_ID, OWNER_PASSWORD, FakeN8n
@@ -252,3 +253,37 @@ async def test_a_wake_landed_when_n8n_shows_the_execution_running_or_finished() 
         "canceled": False,
     }
     assert not await executions.landed(N8nExecutionId("gone"))
+
+
+def failures_for(n8n: FakeN8n) -> N8nWorkflows:
+    return N8nWorkflows(api_for(n8n), None)  # type: ignore[arg-type]
+
+
+async def test_the_sweep_lists_only_the_workflow_s_executions_that_ended_in_an_error() -> None:
+    n8n = FakeN8n()
+    n8n.execution("45", "error", failed=("Read release", "GitHub answered 503."))
+    n8n.execution("46", "success")
+    n8n.execution("47", "error", workflow_id="wf2")
+    assert await failures_for(n8n).failed_executions("wf1") == ["45"]
+
+
+async def test_a_failure_is_the_block_and_the_words_from_n8n_s_own_record() -> None:
+    n8n = FakeN8n()
+    n8n.execution("45", "error", failed=("Read release", "GitHub answered 503."))
+    n8n.execution("46", "error", last_node="Compare")
+    failures = failures_for(n8n)
+    assert await failures.failure(N8nExecutionId("45")) == FailedExecution(
+        N8nExecutionId("45"), "Read release", "GitHub answered 503."
+    )
+    assert await failures.failure(N8nExecutionId("46")) == FailedExecution(
+        N8nExecutionId("46"), "Compare", None
+    )
+
+
+async def test_an_execution_that_did_not_end_in_an_error_is_no_failure() -> None:
+    n8n = FakeN8n()
+    for status in ("success", "running", "waiting", "canceled"):
+        n8n.execution(status, status, failed=("Read release", "words"))
+    failures = failures_for(n8n)
+    for status in ("success", "running", "waiting", "canceled", "gone"):
+        assert await failures.failure(N8nExecutionId(status)) is None, status

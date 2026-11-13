@@ -681,7 +681,7 @@ class Builder:
     ) -> InN8n | DraftRefused | N8nNotReady:
         clock = self._db.clock
         started = BuildLineView(at=clock(), kind="status", text=ADDING)
-        error_workflow = await n8n.error_workflow()
+        error_workflow = await n8n.error_workflow_id()
         if error_workflow is None:
             return N8nNotReady("n8n is not ready yet: its error workflow is not loaded.")
         schedule = None if body.schedule is None else Schedule(body.schedule.day, body.schedule.at)

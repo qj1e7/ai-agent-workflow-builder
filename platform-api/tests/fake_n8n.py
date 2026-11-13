@@ -181,6 +181,8 @@ class FakeN8n:
         nonce: str | None = None,
         version_id: str | None = "v1",
         retry_of: str | None = None,
+        failed: tuple[str, str] | None = None,
+        last_node: str | None = None,
     ) -> None:
         run_data = (
             {}
@@ -200,3 +202,9 @@ class FakeN8n:
             "workflowVersionId": version_id,
             "data": {"resultData": {"runData": run_data}},
         }
+        result = self.executions[execution_id]["data"]["resultData"]
+        if last_node is not None:
+            result["lastNodeExecuted"] = last_node
+        if failed is not None:
+            node, message = failed
+            result["error"] = {"message": message, "node": {"name": node, "type": "CUSTOM.wabRead"}}

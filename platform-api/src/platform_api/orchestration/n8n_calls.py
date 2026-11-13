@@ -50,12 +50,14 @@ from platform_api.orchestration.runs import (
     Working,
     deadline,
     execution_linked,
+    holder_of,
     sentence,
     state_name,
     working_on,
     write_done,
 )
 from platform_api.orchestration.spec import CardRun, RunSpec
+from platform_api.orchestration.tell import TellWhat, TellWhere, Told
 from platform_api.orchestration.write_actions import (
     ActionResult,
     Carried,
@@ -65,11 +67,12 @@ from platform_api.orchestration.write_actions import (
     MadeBefore,
     NotMade,
     describe,
+    one_line,
 )
 from platform_api.shared import JIRA_SITE_CHANGED, ApprovalId, N8nExecutionId, RunId, UserId
 from platform_api.wire import Trigger
 
-type NodeKind = Literal["read", "agent", "propose", "ask", "write"]
+type NodeKind = Literal["read", "agent", "propose", "ask", "write", "tell"]
 type StartKind = Literal["run_now", "test", "retry"]
 type OptionKind = Literal["places", "agents", "agent_inputs", "write_actions"]
 type Grade = Literal["safe", "writes_refused", "needs_a_fix"]
@@ -225,7 +228,16 @@ class WriteCall:
     proposal, from our records alone."""
 
 
-type Work = ReadCall | AgentCall | ProposeCall | AskCall | WriteCall
+@dataclass(frozen=True)
+class TellCall:
+    """A choice of the fixed recipients and of when to tell. It carries no address and no text:
+    our API composes the notice from what the run read (the Tell rule)."""
+
+    where: TellWhere
+    what: TellWhat
+
+
+type Work = ReadCall | AgentCall | ProposeCall | AskCall | WriteCall | TellCall
 
 KIND_OF: Mapping[type[Work], NodeKind] = {
     ReadCall: "read",
@@ -233,6 +245,7 @@ KIND_OF: Mapping[type[Work], NodeKind] = {
     ProposeCall: "propose",
     AskCall: "ask",
     WriteCall: "write",
+    TellCall: "tell",
 }
 
 
@@ -315,7 +328,7 @@ class TryLater:
     detail: str
 
 
-type CallResult = Answer | AskAnswer | WriteAnswer | Refused | TryLater
+type CallResult = Answer | AskAnswer | WriteAnswer | Told | Refused | TryLater
 
 NOT_OURS = Refused(403, "This workflow is not one our platform runs.")
 NOBODY_HOLDS = Refused(403, "Nobody holds this workflow, so nobody may run it by hand.")
@@ -346,6 +359,10 @@ DENIED: Mapping[DenyReason, str] = {
     DenyReason.TEST_RUN: TEST_RUN_WRITES_NOTHING.detail,
 }
 """What the safety checker's refusal says on the block, and in the run's failure."""
+NOT_OUR_ERROR_WORKFLOW = Refused(403, "Only our error workflow may report a failure.")
+NOT_FAILED = Refused(409, "n8n does not say this execution failed.")
+NOTHING_READ = Refused(403, "A Tell reports only what this run read, and it has read nothing yet.")
+NO_TELL_FLOW = Refused(409, "This platform has no Tell flow, so it sends no notice.")
 CANNOT_SEAL = (
     "This platform cannot keep n8n's resume address safe, because SETTINGS_ENCRYPTION_KEY is not "
     "set."
@@ -505,6 +522,63 @@ def rejoin(
             return Refused(409, f"This run cannot take a retry while it is {state_name(state)}.")
 
 
+MESSAGE_LIMIT = 500
+
+
+@dataclass(frozen=True)
+class FailedExecution:
+    """An execution that ended in an error, as Report a failure sends it or the sweep reads it
+    from n8n (ENGINE-PLAN 2.8)."""
+
+    execution_id: N8nExecutionId
+    node: str | None
+    message: str | None
+
+
+class N8nFailures(Protocol):
+    """n8n's record of failed executions. A report is checked against it, and the sweep reads it
+    for any report that never came: from a workflow held in a member's project, or a run by
+    hand, which reaches no error workflow (P7 Q13 and Q22)."""
+
+    async def error_workflow_id(self) -> str | None:
+        """The platform's own error workflow, the only one whose executions may report."""
+        ...
+
+    async def failed_executions(self, workflow_id: str) -> Sequence[N8nExecutionId]:
+        """GET /api/v1/executions?status=error&workflowId=…"""
+        ...
+
+    async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
+        """The node that failed and its error text, from the execution's data. None unless n8n
+        has the execution and it ended in an error."""
+        ...
+
+
+def failure_words(failed: FailedExecution, read_anything: bool) -> str:
+    node = f'"{failed.node}"' if failed.node else "A block"
+    said = one_line(failed.message or "n8n gave no reason", MESSAGE_LIMIT)
+    words = f"{node} failed in n8n: {sentence(said)}"
+    return words if read_anything else f"Stopped before it read anything. {words}"
+
+
+def fail_by_report(
+    state: RunState, execution: N8nExecutionId, failure: Failure, writing: bool
+) -> Moved[Failed] | None:
+    """A failed execution fails the run only while it carries the run. A run that has ended
+    stays as it ended, so a test run that passed up to the yes is not failed by its stop at the
+    gate. A run that moved on, to another execution or to an attempt nobody carries yet, is not
+    failed by an earlier attempt's execution. An execution linked in the same call carries the
+    run, so a run that stopped before reading is still failed. While the run's changes are being
+    made, the write's own outcome decides, so the run never reads failed and retryable then."""
+    match state:
+        case Acting() if writing:
+            return None
+        case Pending() | Working() | Proposed() | Acting() if holder_of(state) == execution:
+            return state.fail(failure)
+        case _:
+            return None
+
+
 WRITE_TARGETS: Mapping[InputKind, str] = {
     rule.target_input: rule.connector
     for rule in TOOL_RULES
@@ -562,7 +636,7 @@ class NodeCatalog:
                     return unknown("change", action)
                 if place not in {option.id for option in entry.places}:
                     return unknown("place", place)
-            case AskCall() | WriteCall():
+            case AskCall() | WriteCall() | TellCall():
                 pass
         return None
 

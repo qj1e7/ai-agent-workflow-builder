@@ -10,11 +10,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, R
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from platform_api.orchestration.cards import BODY_LIMIT, TITLE_LIMIT
 from platform_api.orchestration.dispatch import resume_path
-from platform_api.orchestration.n8n_call_service import NodeCalls
+from platform_api.orchestration.n8n_call_service import FailedRun, LeftAsIs, NodeCalls
 from platform_api.orchestration.n8n_calls import (
     AgentCall,
     Answer,
@@ -26,12 +26,14 @@ from platform_api.orchestration.n8n_calls import (
     ProposeCall,
     ReadCall,
     Refused,
+    TellCall,
     TryLater,
     Waiting,
     Work,
     WriteAnswer,
     WriteCall,
 )
+from platform_api.orchestration.tell import TellStatus, TellWhat, TellWhere, Told
 from platform_api.shared import N8nExecutionId
 from platform_api.wire import WireIn, WireModel, error_response
 
@@ -139,6 +141,35 @@ class AskIn(_From):
         return self
 
 
+class TellIn(_From):
+    """Only the block's two choices. A body with an address or any text of its own is refused,
+    so a notice goes only to the fixed recipients, with only what the run read."""
+
+    where: TellWhere
+    what: TellWhat
+
+
+class TellOut(WireModel):
+    status: TellStatus
+    line: str = Field(description="What the block did, in the words the Portal shows.")
+
+
+class FailureIn(_From):
+    """Which execution failed. The block also sends what the Error Trigger said about it, and
+    our API drops all of that here: it checks that the block's own execution is one of our error
+    workflow, and reads the failed block and its words from n8n's own record."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    failed_execution_id: Token | None = None
+
+
+class FailureOut(WireModel):
+    status: Literal["failed", "left_as_is"]
+    run_id: str | None = Field(default=None, description="The run the report failed.")
+    detail: str
+
+
 class AskOut(WireModel):
     status: Literal["waiting", "nothing_to_change"]
     request_id: str | None = Field(
@@ -198,7 +229,7 @@ REFUSALS: dict[int | str, dict[str, Any]] = {
 }
 
 
-def _answered(result: CallResult) -> AnswerOut | AskOut | WriteOut | JSONResponse:
+def _answered(result: CallResult) -> AnswerOut | AskOut | WriteOut | TellOut | JSONResponse:
     match result:
         case WriteAnswer(made, of, results):
             changes = [ChangeOut.model_validate(change, from_attributes=True) for change in results]
@@ -211,6 +242,8 @@ def _answered(result: CallResult) -> AnswerOut | AskOut | WriteOut | JSONRespons
             return AskOut(status="waiting", request_id=request_id)
         case NothingToChange():
             return AskOut(status="nothing_to_change")
+        case Told(status, line):
+            return TellOut(status=status, line=line)
         case Refused(status, detail):
             return JSONResponse(status_code=status, content={"detail": detail})
         case TryLater(detail):
@@ -220,7 +253,7 @@ def _answered(result: CallResult) -> AnswerOut | AskOut | WriteOut | JSONRespons
 async def _call(calls: NodeCalls, body: _From, work: Work) -> AnswerOut | JSONResponse:
     call = NodeCall(N8nExecutionId(body.execution_id), body.node_name, work)
     answer = _answered(await calls.call(call))
-    assert not isinstance(answer, AskOut | WriteOut)
+    assert not isinstance(answer, AskOut | WriteOut | TellOut)
     return answer
 
 
@@ -286,7 +319,7 @@ async def propose(body: ProposeIn, calls: CurrentNodeCalls) -> AnswerOut | JSONR
 async def ask(body: AskIn, calls: CurrentNodeCalls) -> AskOut | JSONResponse:
     call = NodeCall(N8nExecutionId(body.execution_id), body.node_name, AskCall(body.resume_url))
     answer = _answered(await calls.call(call))
-    assert not isinstance(answer, AnswerOut | WriteOut)
+    assert not isinstance(answer, AnswerOut | WriteOut | TellOut)
     return answer
 
 
@@ -301,5 +334,49 @@ async def ask(body: AskIn, calls: CurrentNodeCalls) -> AskOut | JSONResponse:
 async def write(body: WriteIn, calls: CurrentNodeCalls) -> WriteOut | JSONResponse:
     call = NodeCall(N8nExecutionId(body.execution_id), body.node_name, WriteCall())
     answer = _answered(await calls.call(call))
-    assert not isinstance(answer, AnswerOut | AskOut)
+    assert not isinstance(answer, AnswerOut | AskOut | TellOut)
     return answer
+
+
+@router.post(
+    "/calls/tell",
+    response_model=TellOut,
+    description="Tells the team what the run read, in its fixed Teams channel, by its fixed email "
+    "list or both, with no yes (the Tell rule). Sent at most once, and never in a test run.",
+    responses=REFUSALS,
+)
+async def tell(body: TellIn, calls: CurrentNodeCalls) -> TellOut | JSONResponse:
+    call = NodeCall(
+        N8nExecutionId(body.execution_id), body.node_name, TellCall(body.where, body.what)
+    )
+    answer = _answered(await calls.call(call))
+    assert not isinstance(answer, AnswerOut | AskOut | WriteOut)
+    return answer
+
+
+@router.post(
+    "/failures",
+    response_model=FailureOut,
+    description="Report a failure, from our error workflow only. When n8n's own record says the "
+    "execution failed, fails the run it carries with n8n's words for the block. A run that has "
+    "ended, or that another attempt carries now, stays as it is.",
+    responses={
+        401: REFUSALS[401],
+        403: error_response("The report did not come from our error workflow"),
+        409: error_response("n8n does not say this execution failed"),
+        503: REFUSALS[503],
+    },
+)
+async def failures(body: FailureIn, calls: CurrentNodeCalls) -> FailureOut | JSONResponse:
+    if body.failed_execution_id is None:
+        return FailureOut(status="left_as_is", detail="The report names no execution.")
+    reporter = N8nExecutionId(body.execution_id)
+    match await calls.report(reporter, N8nExecutionId(body.failed_execution_id)):
+        case FailedRun(run_id):
+            return FailureOut(status="failed", run_id=run_id, detail="The run failed.")
+        case LeftAsIs(detail):
+            return FailureOut(status="left_as_is", detail=detail)
+        case Refused(status, detail):
+            return JSONResponse(status_code=status, content={"detail": detail})
+        case TryLater(detail):
+            return JSONResponse(status_code=503, content=RetryOut(detail=detail).model_dump())

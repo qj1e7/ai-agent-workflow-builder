@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -43,6 +44,8 @@ from platform_api.orchestration.n8n import N8nApi, N8nExecutions, N8nWorkflows
 from platform_api.orchestration.n8n_call_service import NodeCalls
 from platform_api.orchestration.n8n_calls import (
     ExecutionFacts,
+    FailedExecution,
+    N8nFailures,
     N8nReads,
     NodeCatalog,
     NodeOption,
@@ -60,6 +63,7 @@ from platform_api.orchestration.schedule_store import ScheduleBook, ScheduleTick
 from platform_api.orchestration.service import Orchestrator
 from platform_api.orchestration.team_request_card import TeamsRequestChannel
 from platform_api.orchestration.teams import TeamsStub, TeamsWorkflowsWebhook
+from platform_api.orchestration.tell import TellFlow, TellOutlet, TellPractice
 from platform_api.orchestration.watch_store import WatchFacts
 from platform_api.orchestration.workflows import load_all
 from platform_api.orchestration.write_actions import WriteGateway
@@ -94,6 +98,7 @@ class Services:
     waker: N8nWaker | None = None
     practice_jira: PracticeJira | None = None
     n8n: N8nApi | None = None
+    tell_flow: TellFlow | None = None
 
 
 JIRA_TIMEOUT_SECONDS = 10.0
@@ -151,10 +156,19 @@ def install(app: FastAPI, services: Services) -> None:
 
 
 class NoN8nReads:
-    """Without n8n's owner sign-in the platform cannot read n8n, so it vouches for no execution
-    and no node call is taken."""
+    """Without n8n's owner sign-in the platform cannot read n8n, so it vouches for no execution,
+    no node call is taken, and every failure report is refused."""
 
     async def execution(self, execution_id: N8nExecutionId) -> ExecutionFacts | None:
+        return None
+
+    async def error_workflow_id(self) -> str | None:
+        return None
+
+    async def failed_executions(self, workflow_id: str) -> Sequence[N8nExecutionId]:
+        return []
+
+    async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
         return None
 
 
@@ -164,14 +178,16 @@ class N8nParts:
     reads: N8nReads
     drafts: N8nWorkflows | None
     landing: N8nExecutions | None
+    failures: N8nFailures
 
 
 def n8n_parts(settings: Settings, db: Database) -> N8nParts:
     if settings.n8n_owner is None:
-        return N8nParts(None, NoN8nReads(), None, None)
+        return N8nParts(None, NoN8nReads(), None, None, NoN8nReads())
     api = N8nApi(settings.n8n_base_url, settings.n8n_owner)
     executions = N8nExecutions(api)
-    return N8nParts(api, executions, N8nWorkflows(api, db), executions)
+    workflows = N8nWorkflows(api, db)
+    return N8nParts(api, executions, workflows, executions, workflows)
 
 
 def node_writes(settings: Settings) -> list[WriteEntry]:
@@ -205,6 +221,16 @@ def approval_channel(
         return practice, None
     webhook = TeamsWorkflowsWebhook(settings.teams_webhook_url, settings.teams_channel, client)
     return webhook, webhook
+
+
+def tell_outlet(settings: Settings, db: Database) -> tuple[TellOutlet, TellFlow | None]:
+    """Where a Tell goes: the practice copy, or the team's Tell flow when TEAMS_TELL_WEBHOOK_URL
+    is set. E13 sets it, with the registry's "Posts in Teams and emails" made ready. Returns the
+    outlet, and the flow to close on shutdown."""
+    if settings.teams_tell_webhook_url is None:
+        return TellPractice(db, settings.teams_channel), None
+    flow = TellFlow(settings.teams_tell_webhook_url, settings.teams_channel)
+    return flow, flow
 
 
 def connections_for(
@@ -337,6 +363,7 @@ async def build(settings: Settings) -> Services:
         n8n=n8n.drafts,
     )
     facts = BuilderWorkflowFacts(db, builder, agents)
+    tells, tell_flow = tell_outlet(settings, db)
     node_calls = NodeCalls(
         db,
         activity,
@@ -352,6 +379,8 @@ async def build(settings: Settings) -> Services:
         box=box,
         time_zone=settings.team_time_zone,
         gateway=gateway,
+        tells=tells,
+        failures=n8n.failures,
     )
     request_channel = request_channel_for(settings)
     team_requests = TeamRequests(
@@ -390,6 +419,7 @@ async def build(settings: Settings) -> Services:
         teams_webhook=webhook,
         waker=waker,
         n8n=n8n.api,
+        tell_flow=tell_flow,
     )
 
 
@@ -397,16 +427,21 @@ class Runner:
     def __init__(self, services: Services) -> None:
         self._services = services
         self._stop = asyncio.Event()
-        self._task: asyncio.Task[None] | None = None
+        self._tasks: list[asyncio.Task[None]] = []
 
     def start(self) -> None:
-        self._task = asyncio.create_task(self._services.orchestrator.run_forever(self._stop))
+        self._tasks = [
+            asyncio.create_task(self._services.orchestrator.run_forever(self._stop)),
+            asyncio.create_task(self._services.node_calls.sweep_forever(self._stop)),
+        ]
 
     async def stop(self) -> None:
         self._stop.set()
         self._services.orchestrator.nudge()
-        if self._task is not None:
-            await self._task
+        for task in self._tasks:
+            await task
+        if self._services.tell_flow is not None:
+            await self._services.tell_flow.close()
         if self._services.teams_webhook is not None:
             await self._services.teams_webhook.close()
         if self._services.waker is not None:

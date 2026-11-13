@@ -22,6 +22,7 @@ from platform_api.orchestration.n8n_calls import (
     Waiting,
     WriteAnswer,
 )
+from platform_api.orchestration.tell import BlockResult, Told
 from platform_api.orchestration.write_actions import WriteAction
 from platform_api.shared import N8nExecutionId, RunId, new_id
 
@@ -46,20 +47,27 @@ class CallRow:
     status: int | None
     answer: dict[str, Any] | None
 
-    def result(self) -> Answer | AskAnswer | WriteAnswer | Refused:
+    def result(self) -> Answer | AskAnswer | WriteAnswer | Told | Refused:
         assert self.answer is not None
         if self.outcome == "refused":
             assert self.status is not None
             return Refused(self.status, str(self.answer["detail"]))
-        if self.kind == "ask":
-            return _ask_answer(self.answer)
-        if self.kind == "write":
-            return _write_adapter.validate_python(self.answer)
-        return answer_of(self.answer, replayed=True)
+        return replayed(self.kind, self.answer)
 
 
 def answer_of(stored: Mapping[str, Any], replayed: bool = False) -> Answer:
     return Answer(tuple(stored["items"]), replayed, bool(stored.get("cut_off", False)))
+
+
+def replayed(kind: str, stored: Mapping[str, Any]) -> Answer | AskAnswer | WriteAnswer | Told:
+    """A block's first answer, given again to a repeat or to a retry of the run."""
+    if kind == "ask":
+        return _ask_answer(stored)
+    if kind == "write":
+        return _write_adapter.validate_python(stored)
+    if kind == "tell":
+        return Told(stored["status"], stored["line"])
+    return answer_of(stored, replayed=True)
 
 
 def _ask_answer(stored: Mapping[str, Any]) -> AskAnswer:
@@ -68,7 +76,7 @@ def _ask_answer(stored: Mapping[str, Any]) -> AskAnswer:
     return NothingToChange()
 
 
-def _stored(answer: Answer | AskAnswer | WriteAnswer) -> dict[str, Any]:
+def _stored(answer: Answer | AskAnswer | WriteAnswer | Told) -> dict[str, Any]:
     match answer:
         case Answer(items, _, cut_off):
             return {"items": [dict(item) for item in items], "cut_off": cut_off}
@@ -78,6 +86,8 @@ def _stored(answer: Answer | AskAnswer | WriteAnswer) -> dict[str, Any]:
             return {"status": "waiting", "request_id": request_id}
         case NothingToChange():
             return {"status": "nothing_to_change"}
+        case Told(status, line):
+            return {"status": status, "line": line}
 
 
 class CallBook:
@@ -144,14 +154,14 @@ class CallBook:
         uow: UnitOfWork,
         call: NodeCall,
         run_id: RunId | None,
-        result: Answer | AskAnswer | WriteAnswer | Refused,
+        result: Answer | AskAnswer | WriteAnswer | Told | Refused,
         actions: Sequence[Mapping[str, Any]] = (),
         call_id: str | None = None,
     ) -> bool:
         """Keeps a block's one answer or refusal. With call_id, only that claim may keep it: a
         claim that was taken over meanwhile keeps nothing, and False says so."""
         match result:
-            case Answer() | Waiting() | NothingToChange() | WriteAnswer():
+            case Answer() | Waiting() | NothingToChange() | WriteAnswer() | Told():
                 outcome, status, stored = "answered", None, _stored(result)
             case Refused(status, detail):
                 outcome, stored = "refused", {"detail": detail}
@@ -196,6 +206,76 @@ class CallBook:
             "WHERE call_id = %s AND outcome = 'working'",
             (datetime.fromtimestamp(0, UTC), call_id),
         )
+
+    async def settle(self, uow: UnitOfWork, call_id: str, told: Told) -> None:
+        """Replaces a Tell's sending with what the flow answered. Its sending, kept before the
+        post, is all a repeat of the call ever sees until then, so nothing is sent twice."""
+        await uow.conn.execute(
+            "UPDATE orchestration.node_calls SET answer = %s, answered_at = %s "
+            "WHERE call_id = %s AND outcome = 'answered' AND answer ->> 'status' = 'sending'",
+            (json(_stored(told)), uow.now, call_id),
+        )
+
+    async def writing(self, uow: UnitOfWork, execution: N8nExecutionId) -> bool:
+        """Whether a Make the approved changes block of this execution is still making its
+        changes."""
+        row = await (
+            await uow.conn.execute(
+                "SELECT 1 FROM orchestration.node_calls WHERE execution_id = %s "
+                "AND kind = 'write' AND outcome = 'working' LIMIT 1",
+                (execution,),
+            )
+        ).fetchone()
+        return row is not None
+
+    async def carried_last(self, uow: UnitOfWork, run_id: RunId, execution: N8nExecutionId) -> bool:
+        """Whether the run's newest execution is this one, so the one that carried it to its
+        end. Only it may still call once the run has succeeded."""
+        row = await (
+            await uow.conn.execute(
+                "SELECT execution_id FROM orchestration.executions WHERE run_id = %s "
+                "ORDER BY linked_at DESC LIMIT 1",
+                (run_id,),
+            )
+        ).fetchone()
+        return row is not None and row["execution_id"] == execution
+
+    async def results_in_run(self, uow: UnitOfWork, run_id: RunId) -> tuple[BlockResult, ...]:
+        """What the run's Read and Agent blocks answered, each block once, in the order they
+        first answered. A retry's replayed answer is the same answer again."""
+        rows = await (
+            await uow.conn.execute(
+                "SELECT * FROM (SELECT DISTINCT ON (node_name) node_name, kind, answer, "
+                "answered_at FROM orchestration.node_calls WHERE run_id = %s "
+                "AND kind IN ('read', 'agent') AND outcome = 'answered' "
+                "ORDER BY node_name, answered_at) firsts ORDER BY answered_at, node_name",
+                (run_id,),
+            )
+        ).fetchall()
+        return tuple(
+            BlockResult(
+                row["node_name"],
+                row["kind"],
+                tuple(row["answer"]["items"]),
+                bool(row["answer"].get("cut_off", False)),
+            )
+            for row in rows
+        )
+
+    async def open_executions(self, uow: UnitOfWork) -> dict[str, set[N8nExecutionId]]:
+        """The executions that carry a run our API has not closed, by workflow."""
+        rows = await (
+            await uow.conn.execute(
+                "SELECT e.execution_id, e.n8n_workflow_id FROM orchestration.executions e "
+                "JOIN orchestration.runs r ON r.run_id = e.run_id "
+                "WHERE (r.state = 'Working' AND r.state_data ->> 'execution' = e.execution_id) "
+                "OR (r.state = 'Acting' AND r.state_data ->> 'claimant' = e.execution_id)"
+            )
+        ).fetchall()
+        open_: dict[str, set[N8nExecutionId]] = {}
+        for row in rows:
+            open_.setdefault(row["n8n_workflow_id"], set()).add(N8nExecutionId(row["execution_id"]))
+        return open_
 
     async def answered_in_run(
         self, uow: UnitOfWork, run_id: RunId, call: NodeCall

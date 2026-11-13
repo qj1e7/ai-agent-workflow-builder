@@ -93,6 +93,9 @@ class Settings:
     teams_channel: str
     teams_webhook_url: str | None = None
     teams_requests_webhook_url: str | None = None
+    teams_tell_webhook_url: str | None = None
+    """The Tell flow, which posts a notice to the team's channel and emails the team's list (D1).
+    Unset keeps the practice copy."""
     settings_encryption_key: str | None = None
     first_people: FirstPeople | None = None
     activity_reader: ActivityReader = "postgres"
@@ -303,6 +306,7 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         teams_channel=env.get("TEAMS_CHANNEL") or "CODESparks Ops",
         teams_webhook_url=teams_webhook_from_env(env),
         teams_requests_webhook_url=teams_webhook_from_env(env, "TEAMS_REQUESTS_WEBHOOK_URL"),
+        teams_tell_webhook_url=teams_webhook_from_env(env, "TEAMS_TELL_WEBHOOK_URL"),
         settings_encryption_key=env.get("SETTINGS_ENCRYPTION_KEY") or None,
         activity_reader=activity_reader_from_env(env, cosmos),
         cosmos=cosmos,
