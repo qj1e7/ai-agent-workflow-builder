@@ -49,7 +49,7 @@ def retry(label, eid, load_workflow):
 
 stub_post("/control", {"plan": {"Compare": [500]}})
 first = start_and_fail("1. Compare answers 500 once")
-retried = retry("1. retry", first, False)
+retry("1. retry", first, False)
 
 in_n8n("touch", "/tmp/p7-fail-compare")
 second = start_and_fail("2. Compare throws before calling our API")

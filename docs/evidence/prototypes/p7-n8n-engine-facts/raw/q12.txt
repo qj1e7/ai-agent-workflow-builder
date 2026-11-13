@@ -1,0 +1,15 @@
+001 cron library version, timezone, reference time, node key: ["4.4.0", "Asia/Singapore", "2026-11-13T00:30:00.000Z", "wfP7example:4f2b7f0e-0000-4000-8000-000000000001"]
+002 daily 8:00: {"expression": "43 0 8 * * *", "next_utc": ["2026-11-14T00:00:43.000Z", "2026-11-15T00:00:43.000Z", "2026-11-16T00:00:43.000Z"], "recurrence_filter": false}
+003 daily 9:00, minute left out: {"expression": "43 51 9 * * *", "next_utc": ["2026-11-13T01:51:43.000Z", "2026-11-14T01:51:43.000Z", "2026-11-15T01:51:43.000Z"], "recurrence_filter": false}
+004 daily, hour and minute left out: {"expression": "43 51 21 * * *", "next_utc": ["2026-11-13T13:51:43.000Z", "2026-11-14T13:51:43.000Z", "2026-11-15T13:51:43.000Z"], "recurrence_filter": false}
+005 weekly Monday 9:00: {"expression": "43 0 9 * * 1", "next_utc": ["2026-11-16T01:00:43.000Z", "2026-11-23T01:00:43.000Z", "2026-11-30T01:00:43.000Z"], "recurrence_filter": false}
+006 weekdays 7:30: {"expression": "43 30 7 * * 1,2,3,4,5", "next_utc": ["2026-11-15T23:30:43.000Z", "2026-11-16T23:30:43.000Z", "2026-11-17T23:30:43.000Z"], "recurrence_filter": false}
+007 every hour at :15: {"expression": "43 15 */1 * * *", "next_utc": ["2026-11-13T01:15:43.000Z", "2026-11-13T02:15:43.000Z", "2026-11-13T03:15:43.000Z"], "recurrence_filter": false}
+008 every 5 hours at :00 (does not divide 24): {"expression": "43 0 * * * *", "next_utc": ["2026-11-13T01:00:43.000Z", "2026-11-13T02:00:43.000Z", "2026-11-13T03:00:43.000Z"], "recurrence_filter": true}
+009 every 2 days at 8:00: {"expression": "43 0 8 * * *", "next_utc": ["2026-11-14T00:00:43.000Z", "2026-11-15T00:00:43.000Z", "2026-11-16T00:00:43.000Z"], "recurrence_filter": true}
+010 every 15 minutes: {"expression": "43 */15 * * * *", "next_utc": ["2026-11-13T00:30:43.000Z", "2026-11-13T00:45:43.000Z", "2026-11-13T01:00:43.000Z"], "recurrence_filter": false}
+011 monthly on the 1st at 9:00: {"expression": "43 0 9 1 */1 *", "next_utc": ["2026-12-01T01:00:43.000Z", "2027-01-01T01:00:43.000Z", "2027-02-01T01:00:43.000Z"], "recurrence_filter": false}
+012 cron 0 30 7 * * 1-5: {"expression": "0 30 7 * * 1-5", "next_utc": ["2026-11-15T23:30:00.000Z", "2026-11-16T23:30:00.000Z", "2026-11-17T23:30:00.000Z"], "recurrence_filter": false}
+013 Python stableInt for this node key: {"second": 43, "minute": 51, "hour": 21}
+014 n8n's expression for 'daily, hour and minute left out': ["43", "51", "21", "*", "*", "*"]
+015 Python matches n8n (second, minute, hour): [true, true, true]

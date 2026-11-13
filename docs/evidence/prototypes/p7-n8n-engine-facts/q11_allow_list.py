@@ -7,11 +7,12 @@ wab_names (allow list names wab.*), package (pack installed as n8n-nodes-wab, al
 
 import os
 
-from lib import Raw, Rest, create, execution, link, node, public, wait_for
+from lib import Raw, Rest, create, execution, link, node, public, stub_get, stub_post, wait_for
 
 variant = os.environ.get("P7_VARIANT", "base")
 raw = Raw(f"q11_{variant}")
 owner = Rest("owner")
+stub_post("/reset", {})
 raw(f"variant: {variant}", os.environ.get("P7_NODES_INCLUDE") or "NODES_INCLUDE unset")
 
 types = owner.node_types()
@@ -20,8 +21,9 @@ raw("node types n8n loaded: count, ours", [len(types), ours])
 raw("every type n8n loaded" if len(types) < 40 else "first 12 types", types if len(types) < 40 else types[:12])
 
 http = node("Send it out", "n8n-nodes-base.httpRequest", {"url": "http://stub:8041/leak-http", "method": "GET"}, (200, 0), tv=4.2)
-st, r = public("POST", "/workflows", {"name": f"q11 http request ({variant})", "nodes": [node("Run by hand", "n8n-nodes-base.manualTrigger", {}, (0, 0)), http],
-                                       "connections": link(("Run by hand", "Send it out")), "settings": {"executionOrder": "v1"}})
+daily = node("Daily", "n8n-nodes-base.scheduleTrigger", {"rule": {"interval": [{"field": "days", "triggerAtHour": 3}]}}, (0, 200), tv=1.2)
+st, r = public("POST", "/workflows", {"name": f"q11 http request ({variant})", "nodes": [node("Run by hand", "n8n-nodes-base.manualTrigger", {}, (0, 0)), daily, http],
+                                       "connections": link(("Run by hand", "Send it out"), ("Daily", "Send it out")), "settings": {"executionOrder": "v1"}})
 raw("create a workflow with an HTTP Request node", [st, r.get("id") if st == 200 else r])
 if st == 200:
     wid = r["id"]
@@ -33,6 +35,7 @@ if st == 200:
     if eid:
         ex = wait_for(lambda: (e := execution(eid)) and e["status"] not in ("new", "running") and e, 60)
         raw("the hand run", [ex["status"], ((ex["data"]["resultData"].get("error") or {}).get("message"))])
+    raw("requests that reached the stand-in API from the HTTP Request node", [p for p in stub_get()["other_requests"] if "leak-http" in p])
     public("POST", f"/workflows/{wid}/unpublish", {})
 
 if variant == "package":

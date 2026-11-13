@@ -39,9 +39,9 @@ def wake(label, body, target=None):
     st, r = post_url(target or url, body)
     time.sleep(3)
     e = execution(eid)
-    writes = [c["node_name"] for c in stub_get()["calls"] if str(c["execution_id"]) == str(eid) and c["kind"] in ("write", "tell")]
+    writes = [(c["node_name"], c["mode"]) for c in stub_get()["calls"] if str(c["execution_id"]) == str(eid) and c["kind"] in ("write", "tell")]
     raw(f"{label}: answer", [st, r])
-    raw(f"{label}: execution after", {**slim(e), "blocks after the yes that called our API": writes})
+    raw(f"{label}: execution after", {**slim(e), "blocks after the yes that called our API (name, mode)": writes})
     return e
 
 

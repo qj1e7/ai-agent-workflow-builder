@@ -7,7 +7,7 @@ import json
 import time
 
 from lib import (SETTINGS, Raw, Rest, call_node, create, execution, executions, finished, link, node, public, signed_start, slim,
-                 start_node, stub_get, stub_post, wait_for)
+                 start_node, stub_get, stub_post)
 
 raw = Raw("q03")
 owner = Rest("owner")

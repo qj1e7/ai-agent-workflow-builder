@@ -62,7 +62,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, {"ok": True})
         if self.path == "/reset":
             with LOCK:
-                STATE.update(plan={}, ask="wait", calls=[], failures=[], first_reads={})
+                STATE.update(plan={}, ask="wait", calls=[], failures=[], first_reads={}, other_requests=[])
             return self.reply(200, {"ok": True})
         if self.headers.get("x-wab-node-key") != KEY:
             return self.reply(401, {"detail": "Bad node key."})
