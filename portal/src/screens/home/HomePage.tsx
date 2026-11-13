@@ -305,7 +305,7 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
   )
 }
 
-/** What Needs you has past the rows on Home: a link to the rest on Workflows, or, where Home lists all the platform returned, how many are left. */
+/** What Needs you has past its rows on Home: a link to the rest on Workflows, or, where Home lists all the platform returned, how many are left. */
 function More({ needs, full }: { needs: Needs; full: boolean }) {
   if (full) {
     const said = moreWords(needs.more)
@@ -323,8 +323,6 @@ function More({ needs, full }: { needs: Needs; full: boolean }) {
  * someone who isn’t an Operator, so what is left is said, not linked to Workflows, which lists no more.
  */
 function NeedsHere({ needs, now, arrival, quiet = false, connectAbove = false, full = false }: { needs: Needs; now: Date; arrival: ReturnType<typeof useArrival>; quiet?: boolean; connectAbove?: boolean; full?: boolean }) {
-  const left = needs.total - needs.shown.length
-  const said = full ? moreWords(needs.more) : null
   return (
     <NeedsSection
       needs={needs}
@@ -333,15 +331,7 @@ function NeedsHere({ needs, now, arrival, quiet = false, connectAbove = false, f
       quiet={quiet}
       connectAbove={connectAbove}
       anchor={NEEDS_YOU_ANCHOR}
-      more={
-        said !== null ? (
-          <p className={homeStyles['more']}>{said}</p>
-        ) : left > 0 && !full ? (
-          <p className={homeStyles['more']}>
-            <Link to="/workflows">{SEE_ALL_WORDS}</Link>
-          </p>
-        ) : null
-      }
+      more={<More needs={needs} full={full} />}
       whenNone={null}
     />
   )

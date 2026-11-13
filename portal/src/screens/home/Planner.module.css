@@ -280,7 +280,7 @@
 }
 
 /* The sentence an answer leads its cards with: the sketch's lead line. */
-.cards > p:first-child {
+.cards > p:first-of-type {
   font-weight: 600;
 }
 
