@@ -3594,11 +3594,6 @@
             "title": "Id",
             "type": "string"
           },
-          "storage": {
-            "description": "The page's body in Confluence's storage format, its HTML.",
-            "title": "Storage",
-            "type": "string"
-          },
           "text": {
             "description": "The page as plain lines, each table row on one line.",
             "title": "Text",
@@ -3623,7 +3618,6 @@
           "title",
           "version",
           "url",
-          "storage",
           "text"
         ],
         "title": "ConfluencePageOut",
@@ -11046,7 +11040,6 @@
           "jira.search",
           "jira.read_ticket",
           "confluence.read_page",
-          "confluence.parse_cert_list",
           "jira.create_ticket"
         ],
         "type": "string"

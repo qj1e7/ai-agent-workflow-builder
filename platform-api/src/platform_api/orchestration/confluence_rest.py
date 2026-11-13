@@ -74,18 +74,25 @@ class PageRead:
 
 
 _TIME: Final = re.compile(r'<time[^>]*datetime="([^"]+)"[^>]*>', re.IGNORECASE)
-_CELL_END: Final = re.compile(r"</t[hd]\s*>", re.IGNORECASE)
-_LINE_END: Final = re.compile(r"<br\s*/?>|</(?:tr|p|h[1-6]|li|div)\s*>", re.IGNORECASE)
+_ROW: Final = re.compile(r"<tr[^>]*>([\s\S]*?)</tr\s*>", re.IGNORECASE)
+_CELL: Final = re.compile(r"<t[hd][^>]*>([\s\S]*?)</t[hd]\s*>", re.IGNORECASE)
+_LINE_END: Final = re.compile(r"<br\s*/?>|</(?:p|h[1-6]|li|div)\s*>", re.IGNORECASE)
 _TAG: Final = re.compile(r"<[^>]+>")
 _SPACES: Final = re.compile(r"[^\S\n]+")
+
+
+def _row_line(row: re.Match[str]) -> str:
+    """A table row on a line of its own, with its cells split by |, whatever a cell holds."""
+    cells = (_SPACES.sub(" ", _TAG.sub(" ", cell[1])).strip() for cell in _CELL.finditer(row[1]))
+    return "\n" + " | ".join(cells) + "\n"
 
 
 def page_text(storage: str) -> str:
     """A page as plain lines: a table row on one line with its cells split by |, and a date
     macro as its date."""
-    marked = _LINE_END.sub("\n", _CELL_END.sub(" | ", _TIME.sub(r" \1 ", storage)))
-    plain = html.unescape(_TAG.sub(" ", marked))
-    lines = (_SPACES.sub(" ", line).strip(" |") for line in plain.splitlines())
+    rows = _ROW.sub(_row_line, _TIME.sub(r" \1 ", storage))
+    plain = html.unescape(_TAG.sub(" ", _LINE_END.sub("\n", rows)))
+    lines = (_SPACES.sub(" ", line).strip() for line in plain.splitlines())
     return "\n".join(line for line in lines if line)
 
 

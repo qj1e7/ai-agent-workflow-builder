@@ -13,14 +13,13 @@ from agent_runtime.tools import (
 )
 
 
-def test_the_tool_list_is_the_six_tools_in_order():
+def test_the_tool_list_is_the_five_tools_in_order():
     listed = tool_list()
     assert [(t.id, t.kind) for t in listed.tools] == [
         ("github.read_releases", "read"),
         ("jira.search", "read"),
         ("jira.read_ticket", "read"),
         ("confluence.read_page", "read"),
-        ("confluence.parse_cert_list", "read"),
         ("jira.create_ticket", "write"),
     ]
 
@@ -31,7 +30,6 @@ def test_the_model_sees_the_id_with_underscores():
         "jira_search",
         "jira_read_ticket",
         "confluence_read_page",
-        "confluence_parse_cert_list",
         "jira_create_ticket",
     }
     assert all(name.replace("_", "").isalnum() for name in BY_MODEL_NAME)

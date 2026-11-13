@@ -12,8 +12,8 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from agent_runtime.contract import TaskRequest
 from agent_runtime.jira import MAX_ANSWER_BYTES, REFUSED_STATUS, TIMEOUT_SECONDS, TOKEN_HEADER
 
-PAGE_ANSWER_BYTES: Final = 3 * MAX_ANSWER_BYTES
-"""A page of 1 MB comes back as its storage and its text, both escaped as JSON."""
+PAGE_ANSWER_BYTES: Final = 2 * MAX_ANSWER_BYTES
+"""A page of 1 MB comes back as its text, escaped as JSON."""
 NO_ANSWER: Final = "Confluence could not answer."
 NOT_READABLE: Final = "Confluence gave a page that could not be read."
 
@@ -25,8 +25,6 @@ class ConfluencePage(BaseModel):
     title: str
     version: int
     url: str
-    storage: str
-    """The page's body in Confluence's storage format."""
     text: str
     """The page as plain lines, each table row on one line."""
 

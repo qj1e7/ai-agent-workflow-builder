@@ -120,7 +120,7 @@ Prototype P7 will test the new trigger and the data nodes before they are built.
 
 **The Software watchlist and the existing use cases move** by a bootstrap step that lays out each one from its template with its schedule copied into the Schedule Trigger; run history keeps its use case id, and a use case with a request still waiting moves on the next deploy.
 
-**The cert list expiry reminder** is the first non-Jira workflow, rebuilt from our nodes: Read Confluence, an agent with the parser as a tool, and Tell to Teams and email; its original stays in `docs/evidence/n8n/cert-reminder/` as the record.
+**The cert list expiry reminder** is the first non-Jira workflow, rebuilt from our nodes: Read Confluence, an agent with the parser as a tool, and Tell to Teams and email; its original stays in `docs/evidence/n8n/cert-reminder/` as the record. (14 Nov 2026: the team lead dropped the cert reminder. Only the Confluence read was built, ENGINE-PLAN E12.)
 
 This ADR supersedes ADR 0012 and ADR 0020. It amends ADR 0023's "one generic n8n workflow carries every card's runs" (each use case now has its own) and ADR 0034's list of what dropping the address allow list would take (the webhooks are replaced and the Webhook node is off the list; sign-in in front of n8n remains). ADR 0024 stands unchanged: our API keeps the clock.
 

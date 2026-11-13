@@ -52,11 +52,8 @@ VULNERABILITY_ROOTS: Final = dict.fromkeys(
 VULNERABILITIES: Final = frozenset(VULNERABILITY_ROOTS) | words("cve cves nvd advisory advisories")
 SECURITY_PHRASE_ENDS: Final = words("fix fixes patch patches alert alerts bulletin bulletins")
 CVE_ID: Final = re.compile(r"cve-\d{4}-\d+")
-CERTIFICATES: Final = words(
-    "cert certs certificate certificates expiry expiries expire expires expiring expired"
-)
-"""Only a cert list is read from Confluence on a request in words: any other page is read only
-by an agent or a block an Operator set up with it."""
+ONE_PAGE: Final = words("page")
+"""A request in words reads one named Confluence page, never a search across pages."""
 VULNERABILITIES_PLANNED: Final = "I can't check for known vulnerabilities yet. It's planned."
 
 
@@ -91,9 +88,9 @@ ABILITIES: Final = (
         reaches=frozenset({"github"}),
     ),
     Ability(
-        "check the cert list in Confluence",
-        words("read check scan look find review watch track monitor"),
-        about=CERTIFICATES,
+        "read a Confluence page the team allows",
+        words("read check scan look review"),
+        about=ONE_PAGE,
         reaches=frozenset({"confluence"}),
     ),
     Ability(
@@ -108,7 +105,7 @@ ABILITY_OF: Final = {
     "jira.find_by_update": "read Jira tickets",
     "summarise": "sum up what I find",
     "github.releases": "check software for new releases",
-    "confluence.read": "check the cert list in Confluence",
+    "confluence.read": "read a Confluence page the team allows",
     "jira.create": "create a Jira ticket after a yes",
 }
 
@@ -226,7 +223,7 @@ CAPABILITIES: Final = (
         "read",
         "Confluence",
         "confluence",
-        ["confluence.read_page", "confluence.parse_cert_list"],
+        ["confluence.read_page"],
         needs_model=True,
     ),
     _ready(
@@ -878,7 +875,7 @@ def _fits(
         named = prep == "for" and all(w.system or w.low in DETERMINERS for w in phrase)
         if (prep in IN_PLACE | TO_PLACE or named) and _elsewhere(phrase, ability.reaches):
             return False
-    known = ability.reaches | read
+    known = ability.reaches | (read - READ_ONLY)
     return not any(_another_systems_place(prep, phrase, known) for prep, phrase in around)
 
 

@@ -36,7 +36,6 @@ type ToolId = Literal[
     "jira.search",
     "jira.read_ticket",
     "confluence.read_page",
-    "confluence.parse_cert_list",
     "jira.create_ticket",
 ]
 type ToolKind = Literal["read", "write"]

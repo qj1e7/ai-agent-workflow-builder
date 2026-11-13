@@ -5,14 +5,13 @@ import threading
 import unittest
 from collections.abc import Generator
 from contextlib import contextmanager
-from datetime import date
 from http.server import ThreadingHTTPServer
 from typing import Any
 
 import confluence_server as server
 
 BOT = "Basic " + base64.b64encode(f"{server.EMAIL}:{server.TOKEN}".encode()).decode()
-CERT_LIST = f"/wiki/rest/api/content/{server.CERT_LIST}?expand=body.storage,version"
+INVENTORY = f"/wiki/rest/api/content/{server.INVENTORY}?expand=body.storage,version"
 
 
 @contextmanager
@@ -54,43 +53,36 @@ class MockConfluenceTest(unittest.TestCase):
             )
             self.assertEqual(call(host, "/wiki/rest/api/user/current", auth="Basic eDp5")[0], 401)
 
-    def test_the_cert_list_is_a_page_in_storage_format_with_its_version(self) -> None:
+    def test_the_inventory_is_a_page_in_storage_format_with_its_version(self) -> None:
         with running() as host:
-            status, page = call(host, CERT_LIST)
+            status, page = call(host, INVENTORY)
             self.assertEqual(status, 200)
-            self.assertEqual((page["title"], page["version"]["number"]), ("Cert List", 7))
+            self.assertEqual((page["title"], page["version"]["number"]), ("Software inventory", 7))
             storage = page["body"]["storage"]["value"]
-            self.assertIn("<th><p><strong>VALIDITY END</strong></p></th>", storage)
-            self.assertEqual(storage.count("<tr>"), 8)
-
-    def test_the_dates_follow_today_so_the_split_never_drifts(self) -> None:
-        rows = server.cert_rows(date(2026, 12, 28))
-        self.assertEqual(rows[0][2], '<time datetime="2027-01-07" />')
-        self.assertEqual(rows[1][2], "11 Feb 2027")
-        self.assertEqual(rows[2][2], "23/12/2026")
-        self.assertEqual([env for env, _, _ in rows].count(""), 1)
+            self.assertIn("<td><p>LangGraph</p></td><td><p>1.2.14</p></td>", storage)
+            self.assertEqual(storage.count("<tr>"), 4)
 
     def test_a_page_needs_the_bot_and_an_unknown_page_is_404(self) -> None:
         with running() as host:
-            self.assertEqual(call(host, CERT_LIST, auth=None)[0], 401)
+            self.assertEqual(call(host, INVENTORY, auth=None)[0], 401)
             self.assertEqual(call(host, "/wiki/rest/api/content/1")[0], 404)
             self.assertEqual(call(host, f"/wiki/rest/api/content/{server.BOARD_SALARIES}")[0], 200)
 
     def test_the_reads_are_listed_and_cleared(self) -> None:
         with running() as host:
-            call(host, CERT_LIST)
-            self.assertEqual(call(host, "/_admin/reads")[1], {"reads": [server.CERT_LIST]})
+            call(host, INVENTORY)
+            self.assertEqual(call(host, "/_admin/reads")[1], {"reads": [server.INVENTORY]})
             call(host, "/_admin/reads", body={})
             self.assertEqual(call(host, "/_admin/reads")[1], {"reads": []})
 
     def test_an_outage_answers_503_until_it_is_over(self) -> None:
         with running() as host:
             self.assertEqual(call(host, "/_admin/mode", body={"mode": "unavailable"})[0], 200)
-            self.assertEqual(call(host, CERT_LIST)[0], 503)
+            self.assertEqual(call(host, INVENTORY)[0], 503)
             self.assertEqual(call(host, "/wiki/rest/api/user/current")[0], 503)
             self.assertEqual(call(host, "/_admin/mode", body={"mode": "down"})[0], 400)
             call(host, "/_admin/mode", body={"mode": "ok"})
-            self.assertEqual(call(host, CERT_LIST)[0], 200)
+            self.assertEqual(call(host, INVENTORY)[0], 200)
 
 
 if __name__ == "__main__":

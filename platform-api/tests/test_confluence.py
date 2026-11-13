@@ -33,18 +33,18 @@ from tests.test_settings_http import ACTIVE
 pytestmark = pytest.mark.anyio
 
 WIKI = "https://ncs-test.atlassian.net/wiki"
-CERT_LIST = ConfluencePage("123456", "Cert List")
+INVENTORY = ConfluencePage("123456", "Software inventory")
 PATCHES = ConfluencePage("777", "Patch housekeeping")
 TABLE = (
-    "<table><tbody><tr><th>ENV</th><th>NAME</th><th>VALIDITY END</th></tr>"
-    '<tr><td>PRD</td><td>a.example</td><td><time datetime="2026-12-04" /></td></tr>'
-    "<tr><td>UAT</td><td>b &amp; c</td><td><p>15 Dec 2026</p></td></tr></tbody></table>"
+    "<table><tbody><tr><th>Software</th><th>Ours</th><th>Checked</th></tr>"
+    '<tr><td>LangGraph</td><td>1.2.14</td><td><time datetime="2026-11-04" /></td></tr>'
+    "<tr><td>Redis &amp; Sentinel</td><td><p>8.0.2</p></td><td>never</td></tr></tbody></table>"
 )
 CONFLUENCE_ENV = {
     "CONFLUENCE_BASE_URL": WIKI,
     "CONFLUENCE_EMAIL": "bot@example.com",
     "CONFLUENCE_API_TOKEN": "confluence-token-1234",
-    "CONFLUENCE_PAGES": "123456=Cert List; 777 = Patch housekeeping",
+    "CONFLUENCE_PAGES": "123456=Software inventory; 777 = Patch housekeeping",
 }
 
 type Mode = Literal["ok", "refusing", "down", "anonymous"]
@@ -56,7 +56,7 @@ class FakeWiki:
 
     pages: dict[str, tuple[str, int, str]] = field(
         default_factory=lambda: {
-            "123456": ("Cert List", 4, TABLE),
+            "123456": ("Software inventory", 4, TABLE),
             "777": ("Patch housekeeping", 1, "<p>Nothing yet.</p>"),
             "999": ("Board salaries", 2, "<p>Private.</p>"),
         }
@@ -93,7 +93,7 @@ class FakeWiki:
         return ConfluenceRest(WIKI, "Bearer t", client, sleep=no_wait)
 
     def pages_allowed(self, *allowed: ConfluencePage) -> ConfluencePages:
-        return ConfluencePages(allowed or (CERT_LIST, PATCHES), self.rest())
+        return ConfluencePages(allowed or (INVENTORY, PATCHES), self.rest())
 
 
 @pytest.fixture
@@ -109,16 +109,16 @@ def test_the_settings_name_the_wiki_the_key_and_the_pages_it_may_read():
     confluence = settings_from_env({**LOCAL_ENV, **CONFLUENCE_ENV}).confluence
     assert confluence.base_url == WIKI
     assert (confluence.email, confluence.token) == ("bot@example.com", "confluence-token-1234")
-    assert confluence.pages == (CERT_LIST, PATCHES)
+    assert confluence.pages == (INVENTORY, PATCHES)
 
 
 @pytest.mark.parametrize(
     ("changes", "said"),
     [
         ({"CONFLUENCE_PAGES": ""}, "CONFLUENCE_PAGES must list the pages"),
-        ({"CONFLUENCE_PAGES": "Cert List"}, "id=title"),
-        ({"CONFLUENCE_PAGES": "12a=Cert List"}, "id=title"),
-        ({"CONFLUENCE_PAGES": "1=Cert List;2=cert  list"}, "same title"),
+        ({"CONFLUENCE_PAGES": "Software inventory"}, "id=title"),
+        ({"CONFLUENCE_PAGES": "12a=Software inventory"}, "id=title"),
+        ({"CONFLUENCE_PAGES": "1=Software inventory;2=software  INVENTORY"}, "same title"),
         ({"CONFLUENCE_PAGES": "1=A;1=B"}, "same id"),
         ({"CONFLUENCE_API_TOKEN": ""}, "CONFLUENCE_API_TOKEN is not"),
         ({"CONFLUENCE_BASE_URL": "http://ncs-test.atlassian.net/wiki"}, "https address"),
@@ -151,9 +151,9 @@ def test_on_the_same_site_as_jira_it_signs_in_with_jiras_key():
 
 
 def test_cloud_signs_in_with_the_email_and_data_center_with_the_token_alone():
-    cloud = ConfluenceSettings(WIKI, "bot@example.com", "tok", (CERT_LIST,))
+    cloud = ConfluenceSettings(WIKI, "bot@example.com", "tok", (INVENTORY,))
     assert auth_header(cloud) == "Basic " + base64.b64encode(b"bot@example.com:tok").decode()
-    assert auth_header(ConfluenceSettings(WIKI, None, "tok", (CERT_LIST,))) == "Bearer tok"
+    assert auth_header(ConfluenceSettings(WIKI, None, "tok", (INVENTORY,))) == "Bearer tok"
 
 
 @pytest.mark.parametrize(
@@ -174,16 +174,21 @@ async def test_the_check_asks_confluence_who_the_key_is_and_reads_no_page(
 
 
 async def test_a_page_is_read_with_its_body_version_and_link(wiki: FakeWiki):
-    read = await wiki.pages_allowed().read_page(CERT_LIST)
+    read = await wiki.pages_allowed().read_page(INVENTORY)
     assert read is not None
-    assert (read.id, read.title, read.version, read.storage) == ("123456", "Cert List", 4, TABLE)
+    assert (read.id, read.title, read.version, read.storage) == (
+        "123456",
+        "Software inventory",
+        4,
+        TABLE,
+    )
     assert read.url == f"{WIKI}/pages/viewpage.action?pageId=123456"
 
 
 async def test_a_page_is_found_by_its_id_or_by_its_title_in_any_case_and_spacing(wiki: FakeWiki):
     pages = wiki.pages_allowed()
-    assert pages.find("123456") == CERT_LIST
-    assert pages.find("  cert   LIST ") == CERT_LIST
+    assert pages.find("123456") == INVENTORY
+    assert pages.find("  software   INVENTORY ") == INVENTORY
     assert pages.find("999") is None
     assert pages.find("Board salaries") is None
 
@@ -203,7 +208,7 @@ async def test_a_page_confluence_no_longer_has_reads_as_none(wiki: FakeWiki):
 async def test_a_refused_key_is_not_an_outage_and_says_which_key_to_replace(wiki: FakeWiki):
     wiki.mode = "refusing"
     with pytest.raises(ConfluenceRefused, match="CONFLUENCE_API_TOKEN") as refused:
-        await wiki.pages_allowed().read_page(CERT_LIST)
+        await wiki.pages_allowed().read_page(INVENTORY)
     assert refused.value.status == 401
     assert len(wiki.seen) == 1
 
@@ -211,20 +216,22 @@ async def test_a_refused_key_is_not_an_outage_and_says_which_key_to_replace(wiki
 async def test_a_confluence_that_is_down_is_tried_three_times(wiki: FakeWiki):
     wiki.mode = "down"
     with pytest.raises(ConfluenceUnavailable):
-        await wiki.pages_allowed().read_page(CERT_LIST)
+        await wiki.pages_allowed().read_page(INVENTORY)
     assert len(wiki.seen) == 3
 
 
 async def test_not_connected_it_lists_no_page_and_reads_none():
-    pages = ConfluencePages((CERT_LIST,), None)
-    assert (pages.connected, pages.allowed, pages.find("Cert List")) == (False, (), None)
+    pages = ConfluencePages((INVENTORY,), None)
+    assert (pages.connected, pages.allowed, pages.find("Software inventory")) == (False, (), None)
     assert await pages.places(CONFLUENCE_PAGE) == []
 
 
 def test_a_page_reads_as_plain_lines_with_a_table_row_on_each():
-    assert page_text(TABLE) == "ENV | NAME | VALIDITY END\nPRD | a.example | 2026-12-04\n" + (
-        "UAT | b & c | 15 Dec 2026"
-    )
+    assert page_text(TABLE).splitlines() == [
+        "Software | Ours | Checked",
+        "LangGraph | 1.2.14 | 2026-11-04",
+        "Redis & Sentinel | 8.0.2 | never",
+    ]
 
 
 class NoFacts:
@@ -236,7 +243,10 @@ async def test_a_read_block_is_offered_and_may_name_only_the_allowed_pages(wiki:
     pages = wiki.pages_allowed()
     catalog = NodeCatalog(NoFacts(), pages, [])  # type: ignore[arg-type]
     offered = await catalog.options("places", {"source": CONFLUENCE_PAGE})
-    assert offered == [NodeOption("123456", "Cert List"), NodeOption("777", "Patch housekeeping")]
+    assert offered == [
+        NodeOption("123456", "Software inventory"),
+        NodeOption("777", "Patch housekeeping"),
+    ]
     assert await catalog.options("places", {"source": "github_releases"}) == []
     assert await catalog.unknown_in(ReadCall(CONFLUENCE_PAGE, "123456", None)) is None
     refused = await catalog.unknown_in(ReadCall(CONFLUENCE_PAGE, "999", None))
@@ -249,10 +259,10 @@ async def test_a_read_block_gets_the_page_as_one_item_with_its_text(wiki: FakeWi
     assert {k: item[k] for k in ("kind", "id", "title", "version")} == {
         "kind": "page",
         "id": "123456",
-        "title": "Cert List",
+        "title": "Software inventory",
         "version": 4,
     }
-    assert "PRD | a.example | 2026-12-04" in str(item["text"])
+    assert "LangGraph | 1.2.14 | 2026-11-04" in str(item["text"])
     json.dumps(item)
 
 

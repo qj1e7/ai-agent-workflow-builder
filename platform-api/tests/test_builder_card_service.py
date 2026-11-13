@@ -135,8 +135,8 @@ async def test_the_library_lists_starters_first_then_saved_cards_by_name(builder
     await builder.create_card(ALICE, reader("Zed"))
     await builder.create_card(ALICE, reader("Alpha"))
     listed = await builder.list_cards()
-    assert [c.name for c in listed.cards] == ["Version checker", "Cert list parser", "Alpha", "Zed"]
-    assert [c.starter for c in listed.cards] == [True, True, False, False]
+    assert [c.name for c in listed.cards] == ["Version checker", "Alpha", "Zed"]
+    assert [c.starter for c in listed.cards] == [True, False, False]
 
 
 async def test_a_saved_card_reads_back_and_a_card_with_problems_is_not_saved(builder: Builder):

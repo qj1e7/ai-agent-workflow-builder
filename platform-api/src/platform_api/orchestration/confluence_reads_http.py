@@ -35,7 +35,6 @@ class ConfluencePageOut(WireModel):
     title: str
     version: int
     url: str = Field(description="Where people open the page.")
-    storage: str = Field(description="The page's body in Confluence's storage format, its HTML.")
     text: str = Field(description="The page as plain lines, each table row on one line.")
 
 
@@ -102,6 +101,5 @@ async def read_page(
         title=read.title,
         version=read.version,
         url=read.url,
-        storage=read.storage,
         text=read.text,
     )

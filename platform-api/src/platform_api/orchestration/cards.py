@@ -95,15 +95,6 @@ TOOL_RULES: tuple[ToolRule, ...] = (
         "Reads one Confluence page that the team allows, as plain lines.",
     ),
     ToolRule(
-        "confluence.parse_cert_list",
-        "read",
-        "Find expiring certificates",
-        (
-            "Reads the certificate list on a Confluence page the team allows, and finds the "
-            "certificates that expire within 60 days and the rows a person must check."
-        ),
-    ),
-    ToolRule(
         "jira.create_ticket",
         "write",
         "Create a Jira ticket",

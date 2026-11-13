@@ -1,4 +1,4 @@
-"""The tools an agent card can use. Six, all built and tested by us. A card names tools by id,
+"""The tools an agent card can use. Five, all built and tested by us. A card names tools by id,
 and a running agent is offered exactly the tools its card names (ADR 0023)."""
 
 import re
@@ -84,12 +84,8 @@ class JiraReadArguments(_Arguments):
 
 class ConfluencePageArguments(_Arguments):
     page: Annotated[str, StringConstraints(min_length=1, max_length=255)] = Field(
-        description="The Confluence page, by its title, such as Cert List, or by its id."
+        description="The Confluence page, by its title, such as Software inventory, or by its id."
     )
-
-
-class CertListArguments(ConfluencePageArguments):
-    pass
 
 
 class JiraCreateArguments(_Arguments):
@@ -199,16 +195,6 @@ TOOLS: Final = (
         "Read one Confluence page as plain lines, each table row on one line. Only the pages "
         "the team allows can be read.",
         ConfluencePageArguments,
-    ),
-    Tool(
-        "confluence.parse_cert_list",
-        "read",
-        "Find expiring certificates",
-        "Read the certificate list on a Confluence page and sort its rows: the certificates "
-        "that expire within 60 days or have expired, and the rows a person must check because "
-        "the environment is missing, the date cannot be read, the row is stale or repeated. "
-        "Every date is worked out by the tool, so never work one out yourself.",
-        CertListArguments,
     ),
     Tool(
         "jira.create_ticket",

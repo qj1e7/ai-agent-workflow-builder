@@ -14,7 +14,7 @@ from platform_api.orchestration.runs import Pending
 from platform_api.orchestration.store import RunRecord, Store
 from platform_api.shared import RunId
 from tests.support import ALICE, LOCAL_ENV, NOW, SPEC
-from tests.test_confluence import CERT_LIST, TABLE, FakeWiki
+from tests.test_confluence import INVENTORY, FakeWiki
 from tests.test_jira_reads_http import CARD_RUN, OTHER_RUN, TASK, card_spec, header, token_for
 
 pytestmark = pytest.mark.anyio
@@ -57,22 +57,18 @@ def read(client: httpx.AsyncClient, page: str, run: RunId = CARD_RUN, token: str
     )
 
 
-async def test_a_page_is_read_by_its_id_with_its_body_and_its_text(client: httpx.AsyncClient):
+async def test_a_page_is_read_by_its_id_as_its_plain_lines(client: httpx.AsyncClient):
     r = await read(client, "123456")
     assert r.status_code == 200
     page = r.json()
-    assert (page["id"], page["title"], page["version"], page["storage"]) == (
-        "123456",
-        "Cert List",
-        4,
-        TABLE,
-    )
-    assert page["text"].splitlines()[1] == "PRD | a.example | 2026-12-04"
+    assert (page["id"], page["title"], page["version"]) == ("123456", "Software inventory", 4)
+    assert page["text"].splitlines()[1] == "LangGraph | 1.2.14 | 2026-11-04"
+    assert "storage" not in page, "only the page's lines go to the agents"
 
 
 async def test_a_page_is_read_by_its_title(client: httpx.AsyncClient):
-    r = await read(client, "cert%20list")
-    assert (r.status_code, r.json()["id"]) == (200, CERT_LIST.id)
+    r = await read(client, "software%20INVENTORY")
+    assert (r.status_code, r.json()["id"]) == (200, INVENTORY.id)
 
 
 @pytest.mark.parametrize("page", ["999", "Board salaries", "..%2F..%2Fuser%2Fcurrent"])
@@ -103,7 +99,7 @@ async def test_not_connected_every_page_is_refused_in_plain_words(
     app_and_client: tuple[object, httpx.AsyncClient],
 ):
     app, client = app_and_client
-    app.state.confluence = ConfluencePages((CERT_LIST,), None)  # type: ignore[attr-defined]
+    app.state.confluence = ConfluencePages((INVENTORY,), None)  # type: ignore[attr-defined]
     r = await read(client, "123456")
     assert (r.status_code, r.json()["detail"]) == (424, NOT_CONNECTED)
 

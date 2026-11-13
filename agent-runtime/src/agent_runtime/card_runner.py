@@ -7,7 +7,7 @@ import logging
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import date
 from typing import Any, Final, cast
 
 from langchain_core.messages import (
@@ -21,7 +21,6 @@ from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from pydantic import ValidationError
 
-from agent_runtime.cert_list import CertListError, CertReport, Where, parse_cert_list
 from agent_runtime.confluence import (
     ConfluencePage,
     ConfluenceReader,
@@ -62,7 +61,6 @@ from agent_runtime.release_source import (
 from agent_runtime.summary import ChatFor
 from agent_runtime.tools import (
     BY_ID,
-    CertListArguments,
     ConfluencePageArguments,
     JiraCreateArguments,
     JiraReadArguments,
@@ -104,7 +102,6 @@ CONFLUENCE_OFF: Final = TaskError(
 )
 NO_SUCH_PAGE = "Confluence has no such page."
 PAGE_SHOWN: Final = 6000
-ROWS_SHOWN: Final = 40
 
 
 def _only_projects(projects: Sequence[str]) -> str:
@@ -225,7 +222,6 @@ class CardRunner:
         retry: RetryPolicy = DEFAULT_RETRY,
         now: Callable[[], float] = time.monotonic,
         confluence_for: ConfluenceReaderFor = no_confluence,
-        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self._releases = releases
         self._jira_for = jira_for
@@ -233,7 +229,6 @@ class CardRunner:
         self._retry = retry
         self._now = now
         self._confluence_for = confluence_for
-        self._clock = clock
 
     def start(self, request: TaskRequest, chat_for: ChatFor, today: date) -> CardTask:
         return CardTask(self, request, chat_for, today, Budget(TASK_BUDGET_SECONDS, self._now))
@@ -255,10 +250,6 @@ class CardRunner:
 
     def confluence_for(self, request: TaskRequest) -> ConfluenceReader | None:
         return self._confluence_for(request)
-
-    @property
-    def clock(self) -> Callable[[], datetime]:
-        return self._clock
 
 
 class CardTask:
@@ -461,8 +452,6 @@ class _AgentRun:
                 return self._jira_read(tool, arguments, write)
             case JiraCreateArguments():
                 return self._propose(tool, arguments, write)
-            case CertListArguments():
-                return self._cert_list(tool, arguments, write)
             case ConfluencePageArguments():
                 return self._confluence_read(tool, arguments, write)
             case _:
@@ -612,12 +601,11 @@ class _AgentRun:
             }
         )
 
-    def _page(
-        self, tool: Tool, page: str, doing: str, write: Emit
-    ) -> ConfluencePage | str | TaskError:
-        """The page from the platform, a note for the model when Confluence has no such page,
-        or what stops the agent."""
-        write(self._started(tool, f"{doing} {page}."))
+    def _confluence_read(
+        self, tool: Tool, args: ConfluencePageArguments, write: Emit
+    ) -> str | TaskError:
+        page = args.page
+        write(self._started(tool, f"reads the Confluence page {page}."))
         read = _from_confluence(self._task.confluence, page)
         if isinstance(read, TaskError):
             return self._read_failed(
@@ -631,14 +619,6 @@ class _AgentRun:
         if read is None:
             write(self._finished(tool, f"found no Confluence page {page}.", {"page": page}))
             return _error(NO_SUCH_PAGE)
-        return read
-
-    def _confluence_read(
-        self, tool: Tool, args: ConfluencePageArguments, write: Emit
-    ) -> str | TaskError:
-        read = self._page(tool, args.page, "reads the Confluence page", write)
-        if not isinstance(read, ConfluencePage):
-            return read
         write(
             self._finished(
                 tool,
@@ -655,33 +635,6 @@ class _AgentRun:
                 "text": cut(read.text, PAGE_SHOWN),
             }
         )
-
-    def _cert_list(self, tool: Tool, args: CertListArguments, write: Emit) -> str | TaskError:
-        read = self._page(tool, args.page, "reads the cert list on", write)
-        if not isinstance(read, ConfluencePage):
-            return read
-        try:
-            report = parse_cert_list(read.storage, self._task.runner.clock(), Where(read.url))
-        except CertListError as unreadable:
-            failure = TaskError(type="CertListUnreadable", message=str(unreadable), retryable=False)
-            return self._read_failed(
-                tool,
-                f"could not find a cert list on {read.title}.",
-                failure,
-                f"Could not read the cert list on {read.title}: {failure.message}",
-                f"the cert list on {read.title} could not be read.",
-                write,
-            )
-        confirmed, to_check = len(report.confirmed), report.needs_confirm_count
-        write(
-            self._finished(
-                tool,
-                f"found {_certificates(confirmed)} to act on and {_rows(to_check)} to check "
-                f"on {read.title}.",
-                {"page": read.title, "confirmed": confirmed, "to_check": to_check},
-            )
-        )
-        return _result(_cert_findings(read, report))
 
     def _propose(self, tool: Tool, args: JiraCreateArguments, write: Emit) -> str:
         if self._needs_reading and not self._seen_reading:
@@ -797,41 +750,6 @@ def _from_confluence(
         return TaskError(type="ConfluenceRefused", message=str(refused), retryable=False)
     except ConfluenceUnavailable as unavailable:
         return TaskError(type="UpstreamUnavailable", message=str(unavailable), retryable=True)
-
-
-def _cert_findings(page: ConfluencePage, report: CertReport) -> dict[str, object]:
-    """What the model gets from the cert list: the rows to act on and the rows to check, with
-    the days the tool worked out, so it never works out a date itself."""
-    return {
-        "page": page.title,
-        "rows_read": report.rows_read,
-        "anything_to_report": report.has_alerts,
-        "overdue": report.expired_count,
-        "due_within_30_days": report.soon_count,
-        "due_in_31_to_60_days": report.later_count,
-        "not_tracked": report.not_tracked_count,
-        "to_act_on": [
-            {
-                "environment": c.env,
-                "certificate": c.name,
-                "validity_end": c.validity_end,
-                "days_left": c.days_left,
-            }
-            for c in report.confirmed[:ROWS_SHOWN]
-        ],
-        "to_check": [
-            {"why": r.bucket, "environment": r.env, "certificate": r.name, "cell": r.cell}
-            for r in report.needs_rows[:ROWS_SHOWN]
-        ],
-    }
-
-
-def _certificates(count: int) -> str:
-    return "1 certificate" if count == 1 else f"{count} certificates"
-
-
-def _rows(count: int) -> str:
-    return "1 row" if count == 1 else f"{count} rows"
 
 
 def _wants_tools(reply: AIMessage) -> bool:

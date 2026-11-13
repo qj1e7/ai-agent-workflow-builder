@@ -1,9 +1,7 @@
 """A tiny stand-in for Confluence's REST API, for the end to end tests.
 
-It holds two pages. The Cert List (424242) is a certificate table in Confluence's storage format,
-its dates worked out from today in Singapore, so what the parser finds never drifts: three
-certificates to act on, one row with no environment, one date that cannot be read, a key that
-never expires and one certificate outside the window. Board salaries (434343) is a page Confluence
+It holds two pages. Software inventory (424242) is a plain table in Confluence's storage format,
+with a paragraph in each cell as Confluence writes it. Board salaries (434343) is a page Confluence
 has and the platform may not read.
 
 It takes the platform's bot as Atlassian Cloud does, by email and API token. Anyone else is the
@@ -16,52 +14,27 @@ import base64
 import json
 import re
 import threading
-from datetime import UTC, date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import urlparse
 
 EMAIL = "bot@codesparks.test"
 TOKEN = "mock-confluence-token"
-CERT_LIST = "424242"
+INVENTORY = "424242"
 BOARD_SALARIES = "434343"
 MODES = ("ok", "unavailable")
-SINGAPORE_HOURS = 8
 CONTENT_PATH = re.compile(r"^/wiki/rest/api/content/([^/]+)$")
+SOFTWARE = (("LangGraph", "1.2.14"), ("Redis", "8.0.2"), ("FastAPI", "0.115.4"))
 
 
-def today_in_singapore() -> date:
-    return (datetime.now(UTC) + timedelta(hours=SINGAPORE_HOURS)).date()
-
-
-def cell(text: str) -> str:
-    return f"<td><p>{text}</p></td>" if text else "<td><p /></td>"
-
-
-def cert_rows(today: date) -> list[tuple[str, str, str]]:
-    def day(days: int) -> date:
-        return today + timedelta(days=days)
-
-    return [
-        ("PRD", "portal.codesparks.test", f'<time datetime="{day(10).isoformat()}" />'),
-        ("UAT", "uat-portal.codesparks.test", f"{day(45):%d %b %Y}"),
-        ("DEV", "dev-portal.codesparks.test", f"{day(-5):%d/%m/%Y}"),
-        ("", "Signing API client certificate", f"{day(20):%d %b %Y}"),
-        ("SIT", "sit-portal.codesparks.test", "renewed yearly"),
-        ("PRD", "jwt-signing-key", "static public key, never expires"),
-        ("PRD", "long-lived.codesparks.test", day(200).isoformat()),
-    ]
-
-
-def cert_list_storage(today: date) -> str:
-    names = ("ENV", "NAME", "VALIDITY END")
-    heads = "".join(f"<th><p><strong>{name}</strong></p></th>" for name in names)
+def inventory_storage() -> str:
+    heads = "".join(f"<th><p><strong>{name}</strong></p></th>" for name in ("Software", "Ours"))
     rows = "".join(
-        f"<tr>{cell(env)}{cell(name)}{cell(end)}</tr>" for env, name, end in cert_rows(today)
+        f"<tr><td><p>{name}</p></td><td><p>{ours}</p></td></tr>" for name, ours in SOFTWARE
     )
     return (
-        "<p>Certificates we track. Write a real date in VALIDITY END.</p>"
-        '<table data-layout="default"><colgroup><col /><col /><col /></colgroup>'
+        "<p>The software we run, and our versions.</p>"
+        '<table data-layout="default"><colgroup><col /><col /></colgroup>'
         f"<tbody><tr>{heads}</tr>{rows}</tbody></table>"
     )
 
@@ -78,9 +51,9 @@ def page_body(page_id: str, title: str, version: int, storage: str) -> dict[str,
     }
 
 
-def pages(today: date) -> dict[str, dict[str, Any]]:
+def pages() -> dict[str, dict[str, Any]]:
     return {
-        CERT_LIST: page_body(CERT_LIST, "Cert List", 7, cert_list_storage(today)),
+        INVENTORY: page_body(INVENTORY, "Software inventory", 7, inventory_storage()),
         BOARD_SALARIES: page_body(BOARD_SALARIES, "Board salaries", 2, "<p>Private.</p>"),
     }
 
@@ -146,7 +119,7 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
                 return
             with state.lock:
                 state.reads.append(found.group(1))
-            page = pages(today_in_singapore()).get(found.group(1))
+            page = pages().get(found.group(1))
             if page is None:
                 self.send_json(404, {"message": "No content found with id"})
             else:

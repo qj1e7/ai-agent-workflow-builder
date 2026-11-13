@@ -133,10 +133,10 @@ expect refused n8n_internal_allowed_cidrs "an inside range wider than /16" -var 
 expect refused n8n_internal_allowed_cidrs "an inside range that starts mid-range" -var n8n_internal_allowed_cidrs=100.100.0.51/17
 expect refused jira_base_url "a Jira over http" -var jira_base_url=http://jira.example.test -var jira_api_token=pat
 expect accepted - "a Confluence with its token and pages" -var confluence_base_url=https://example.atlassian.net/wiki \
-  -var confluence_api_token=t -var confluence_email=bot@example.test -var 'confluence_pages=123456=Cert List; 7=Patches'
+  -var confluence_api_token=t -var confluence_email=bot@example.test -var 'confluence_pages=123456=Software inventory; 7=Patches'
 expect accepted - "a Confluence that borrows Jira's token" -var jira_base_url=https://example.atlassian.net \
   -var jira_api_flavor=cloud -var jira_api_token=t -var jira_email=bot@example.test \
-  -var confluence_base_url=https://example.atlassian.net/wiki -var 'confluence_pages=123456=Cert List'
+  -var confluence_base_url=https://example.atlassian.net/wiki -var 'confluence_pages=123456=Software inventory'
 expect refused confluence_base_url "a Confluence over http" -var confluence_base_url=http://wiki.example.test \
   -var confluence_api_token=t -var 'confluence_pages=1=A'
 expect refused confluence_api_token "a Confluence with no token" -var confluence_base_url=https://wiki.example.test \
@@ -144,7 +144,7 @@ expect refused confluence_api_token "a Confluence with no token" -var confluence
 expect refused confluence_pages "a Confluence with no pages" -var confluence_base_url=https://wiki.example.test \
   -var confluence_api_token=t
 expect refused confluence_pages "a Confluence page with no id" -var confluence_base_url=https://wiki.example.test \
-  -var confluence_api_token=t -var 'confluence_pages=Cert List'
+  -var confluence_api_token=t -var 'confluence_pages=Software inventory'
 expect refused jira_api_token "a Jira with no token" -var jira_base_url=https://jira.example.test
 expect refused jira_api_flavor "a Jira flavor that is not one" -var jira_api_flavor=server
 expect refused jira_email "a Cloud Jira with no email" -var jira_base_url=https://example.atlassian.net \

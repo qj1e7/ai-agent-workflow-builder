@@ -241,13 +241,13 @@ variable "confluence_email" {
 }
 
 variable "confluence_pages" {
-  description = "The only Confluence pages the platform reads (CONFLUENCE_PAGES), as id=title, separated by a semicolon, such as 123456=Cert List."
+  description = "The only Confluence pages the platform reads (CONFLUENCE_PAGES), as id=title, separated by a semicolon, such as 123456=Software inventory."
   type        = string
   default     = ""
 
   validation {
     condition     = var.confluence_base_url == "" || can(regex("^ *[0-9]{1,20} *=[^;=]+(; *[0-9]{1,20} *=[^;=]+)* *;? *$", var.confluence_pages))
-    error_message = "confluence_pages must list the pages as id=title, separated by a semicolon, such as 123456=Cert List, when confluence_base_url is set."
+    error_message = "confluence_pages must list the pages as id=title, separated by a semicolon, such as 123456=Software inventory, when confluence_base_url is set."
   }
 }
 

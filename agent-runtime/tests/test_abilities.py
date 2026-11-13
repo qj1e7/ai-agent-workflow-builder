@@ -568,8 +568,8 @@ def test_a_new_tool_is_one_more_line_in_the_table():
     assert why_not("where", "Teams", more) is None
     assert why_not("do", "Delete them", more) == (
         "I can't delete them. I can only read Jira tickets, sum up what I find, check "
-        "software for new releases, check the cert list in Confluence, create a Jira ticket "
-        "after a yes, and post a message in Teams."
+        "software for new releases, read a Confluence page the team allows, create a Jira "
+        "ticket after a yes, and post a message in Teams."
     )
 
 
@@ -925,24 +925,16 @@ def test_the_reactive_can_lists_only_the_focus_abilities():
     assert why_not("do", "Delete them") == f"I can't delete them. {CAN}"
 
 
-@pytest.mark.parametrize(
-    ("kind", "text"),
-    [
-        ("do", "Check the cert list in Confluence for expiring certificates"),
-        ("look_for", "Certificates in the Cert List page in Confluence that expire within 60 days"),
-        ("look_for", "Certificates in Confluence that expire soon"),
-    ],
-)
-def test_the_cert_list_in_confluence_is_read_on_a_request_in_words(kind: RowKind, text: str):
-    assert why_no_tool(kind, text) is None
+def test_one_named_confluence_page_is_read_on_a_request_in_words():
+    assert why_no_tool("look_for", "Software in the Software inventory page in Confluence") is None
 
 
 @pytest.mark.parametrize(
     ("kind", "text"),
     [
         ("look_for", "Pages in Confluence changed this week"),
-        ("do", "Read the Software inventory page in Confluence"),
-        ("do", "Update the Cert List page in Confluence"),
+        ("do", "Update the Software inventory page in Confluence"),
+        ("do", "Draft a report for the Confluence page"),
         ("where", "The Weekly summary page in Confluence"),
     ],
 )

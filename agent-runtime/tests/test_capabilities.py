@@ -213,6 +213,6 @@ def test_reading_confluence_is_ready_only_through_the_confluence_connection():
         "read",
         True,
     )
-    assert entry.tools == ["confluence.read_page", "confluence.parse_cert_list"]
+    assert entry.tools == ["confluence.read_page"]
     assert (entry.focus, entry.short) == (False, None)
     assert BY_ID["confluence.change"].state == "planned"

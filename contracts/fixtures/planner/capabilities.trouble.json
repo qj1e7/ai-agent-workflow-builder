@@ -144,8 +144,7 @@
       "platform": false,
       "focus": false,
       "tools": [
-        "confluence.read_page",
-        "confluence.parse_cert_list"
+        "confluence.read_page"
       ],
       "agents": []
     },

@@ -318,7 +318,7 @@ def confluence_pages_from_env(raw: str) -> tuple[ConfluencePage, ...]:
         if not equals or CONFLUENCE_PAGE_ID.fullmatch(page_id) is None:
             raise ConfigError(
                 "CONFLUENCE_PAGES lists pages as id=title, separated by a semicolon, such as "
-                f"123456=Cert List. {entry!r} is not one."
+                f"123456=Software inventory. {entry!r} is not one."
             )
         if not 1 <= len(title) <= CONFLUENCE_TITLE_LIMIT or not title.isprintable():
             raise ConfigError(f"The title of page {page_id} in CONFLUENCE_PAGES is not one line.")
@@ -357,7 +357,7 @@ def confluence_from_env(env: Mapping[str, str], jira: JiraSettings) -> Confluenc
     if not pages:
         raise ConfigError(
             "CONFLUENCE_BASE_URL is set, so CONFLUENCE_PAGES must list the pages the platform "
-            "may read, such as 123456=Cert List."
+            "may read, such as 123456=Software inventory."
         )
     return ConfluenceSettings(base_url, email, token, pages)
 
