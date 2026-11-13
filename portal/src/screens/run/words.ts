@@ -563,8 +563,8 @@ export function stageWords(stage: RunStage, facts: StageFacts = {}): string {
       return tickets ? `Creating the ${(facts.count ?? 1) > 1 ? 'tickets' : 'ticket'}` : 'Writing the changes'
     case 'done': {
       const written = facts.written ?? []
-      const n = facts.count ?? written.length
-      if (n === 0 && written.length === 0) return 'Nothing new'
+      const n = Math.max(facts.count ?? 0, written.length)
+      if (n === 0) return 'Nothing new'
       return `${written.length > 0 ? andList(written) : count(n, tickets ? 'ticket' : 'change')} ${tickets ? 'created' : 'written'}`
     }
     case 'declined':
