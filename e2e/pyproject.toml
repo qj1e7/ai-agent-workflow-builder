@@ -23,7 +23,7 @@ testpaths = ["tests"]
 addopts = "-ra"
 
 [tool.pyright]
-include = ["tests", "mock_github", "mock_model"]
-strict = ["tests", "mock_github", "mock_model"]
-extraPaths = ["tests", "mock_github", "mock_model"]
+include = ["tests", "mock_github", "mock_model", "mock_confluence"]
+strict = ["tests", "mock_github", "mock_model", "mock_confluence"]
+extraPaths = ["tests", "mock_github", "mock_model", "mock_confluence"]
 pythonVersion = "3.14"

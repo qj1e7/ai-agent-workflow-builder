@@ -72,6 +72,17 @@ class MockModelTest(unittest.TestCase):
         done = run(READ, SEARCH, ("jira_create_ticket", arguments, "Proposed."))
         self.assertIn("proposed one ticket", post(done)["content"][0]["text"])
 
+    def test_the_cert_list_card_parses_its_page_then_reports(self) -> None:
+        system = (
+            "Agent card: Cert list parser\nInputs for this run:\n- Confluence page: Cert List\n"
+        )
+        tools = [{"name": "confluence_parse_cert_list"}]
+        asked = ("confluence_parse_cert_list", {"page": "Cert List"})
+        self.assertEqual(tool_use(post({**run(), "system": system, "tools": tools})), asked)
+        parsed = (*asked, '{"data": {}}')
+        done = {**run(parsed), "system": system, "tools": tools}
+        self.assertEqual(post(done)["content"][0]["text"], "I read the cert list on Cert List.")
+
     def test_a_card_without_the_github_tool_never_reads_releases(self) -> None:
         body = {**run(), "tools": TOOLS[1:]}
         self.assertEqual(tool_use(post(body)), SEARCH[:2])

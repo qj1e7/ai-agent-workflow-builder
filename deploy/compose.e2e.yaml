@@ -17,6 +17,22 @@ services:
       timeout: 3s
       retries: 15
 
+  # Confluence's REST API with the Cert List page and one page the platform may not read.
+  mock-confluence:
+    image: wab/mock-confluence:${WAB_IMAGE_TAG:-dev}
+    build:
+      context: ../e2e/mock_confluence
+      target: runtime
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8400/healthz', timeout=2)
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
   # An Anthropic-style model that answers by what the request asks for, so the card tests run
   # the real runtime without a real model. The runtime may reach it because it is listed below.
   mock-model:
@@ -39,6 +55,17 @@ services:
       timeout: 3s
       retries: 15
 
+  # The mock Confluence's own bot and test token, not a secret. Only the Cert List may be read.
+  platform-api:
+    environment:
+      CONFLUENCE_BASE_URL: http://mock-confluence:8400/wiki
+      CONFLUENCE_EMAIL: bot@codesparks.test
+      CONFLUENCE_API_TOKEN: mock-confluence-token
+      CONFLUENCE_PAGES: 424242=Cert List
+    depends_on:
+      mock-confluence:
+        condition: service_healthy
+
   agent-runtime:
     environment:
       GITHUB_API_BASE: http://mock-github:8200
@@ -60,6 +87,7 @@ services:
       PLATFORM_API_URL: http://platform-api:8000
       MOCK_GITHUB_URL: http://mock-github:8200
       MOCK_MODEL_URL: http://mock-model:8300
+      MOCK_CONFLUENCE_URL: http://mock-confluence:8400
       E2E_WAIT_SECONDS: ${E2E_WAIT_SECONDS:-90}
       STEP_KEY: ${STEP_KEY:?run deploy/make-env.sh}
       # Only to seed practice Jira tickets that were last updated long ago, which no API call can
@@ -71,4 +99,6 @@ services:
       mock-github:
         condition: service_healthy
       mock-model:
+        condition: service_healthy
+      mock-confluence:
         condition: service_healthy

@@ -19,6 +19,7 @@ can be tested without a real model:
   that part alone, the others missing.
 - A request with tools and no forced tool is a card run. The mock calls github_read_releases,
   then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
+  A card that finds expiring certificates calls confluence_parse_cert_list on its page instead.
   The ticket's title follows the card: a release, a follow-up or a summary. The follow-up card
   searches for bug tickets with no update for the days its plan names, working the day out from
   the date in the prompt, and its ticket body lists the tickets the search returned.
@@ -655,6 +656,11 @@ def run_step(body: dict[str, Any]) -> dict[str, Any]:
     number = sum(calls.values())
     if "github_read_releases" in offered and "github_read_releases" not in calls:
         return call("github_read_releases", {"repo": repo}, number)
+    if "confluence_parse_cert_list" in offered:
+        page = next((v for v in values if not REPO.fullmatch(v)), "Cert List")
+        if "confluence_parse_cert_list" not in calls:
+            return call("confluence_parse_cert_list", {"page": page}, number)
+        return say(f"I read the cert list on {page}.")
     card = CARD_NAME.search(system)
     follow_up = card is not None and FOLLOW_UP.search(card.group(1)) is not None
     if "jira_search" in offered and "jira_search" not in calls:

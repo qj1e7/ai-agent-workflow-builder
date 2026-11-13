@@ -16,6 +16,7 @@ type Json = dict[str, Any]
 PLATFORM_API_URL = os.environ.get("PLATFORM_API_URL", "http://platform-api:8000")
 MOCK_GITHUB_URL = os.environ.get("MOCK_GITHUB_URL", "http://mock-github:8200")
 MOCK_MODEL_URL = os.environ.get("MOCK_MODEL_URL", "http://mock-model:8300")
+MOCK_CONFLUENCE_URL = os.environ.get("MOCK_CONFLUENCE_URL", "http://mock-confluence:8400")
 STEP_KEY = os.environ.get("STEP_KEY", "")
 DATABASE_URL = os.environ.get("E2E_DATABASE_URL", "")
 WAIT_SECONDS = float(os.environ.get("E2E_WAIT_SECONDS", "90"))
@@ -306,6 +307,28 @@ class MockGithub:
             fail(f"mock-github at {MOCK_GITHUB_URL} is unreachable ({error!r})")
         if response.status_code != 200:
             fail(f"mock-github refused mode {mode!r}: {response.status_code} {response.text[:200]}")
+
+
+class MockConfluence:
+    """The mock Confluence's switches, and the pages the platform asked it for."""
+
+    def _post(self, path: str, body: Json) -> Json:
+        try:
+            response = httpx.post(f"{MOCK_CONFLUENCE_URL}{path}", json=body, timeout=5)
+        except httpx.HTTPError as error:
+            fail(f"mock-confluence at {MOCK_CONFLUENCE_URL} is unreachable ({error!r})")
+        if response.status_code != 200:
+            fail(f"mock-confluence refused {path}: {response.status_code} {response.text[:200]}")
+        return response.json()
+
+    def set_mode(self, mode: str) -> None:
+        self._post("/_admin/mode", {"mode": mode})
+
+    def forget_reads(self) -> None:
+        self._post("/_admin/reads", {})
+
+    def reads(self) -> list[str]:
+        return httpx.get(f"{MOCK_CONFLUENCE_URL}/_admin/reads", timeout=5).json()["reads"]
 
 
 def assert_gapless(events: list[Json], run_id: str, start: int = 1) -> None:
