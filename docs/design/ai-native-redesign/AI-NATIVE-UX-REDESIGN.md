@@ -100,7 +100,7 @@ The main layout changes at one width, a window 900 px wide or narrower:
 
 Smaller steps at other widths only reflow one part, such as a row's button moving under its text.
 
-On a wide screen, up to 1920 px and more, the content keeps one column at most 1180 px wide. The header lines up with it, the chat and its side panel share it, and a Workflows list with no actions drops its empty action column.
+On a wide screen, up to 1920 px and more, the content keeps one column at most 1180 px wide. The header spans the window, as the rail and the sheet do: the brand sits top left above the rail, and the tools at the right edge. The chat and its side panel share the column, and a Workflows list with no actions drops its empty action column.
 
 ### 3.5 Needs you, pinned and grouped
 
