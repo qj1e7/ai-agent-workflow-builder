@@ -209,6 +209,13 @@ What the sketch would remove, and the decision:
 | The run page's Done card | the settled line and the ticket chip | Replace (G7, G8) |
 | Uncapped workflow list in the chat | two rows | Cap at 5 (C3) |
 
+Where the app departs from the sketch on purpose:
+
+| Sketch | App | Why |
+|---|---|---|
+| Anything opened from inside the side panel goes full page (the note on `renderPanel`). | A row in the panel's Needs you, Workflows or Watchlist list opens beside the chat, in the same panel, with Back to the list (`home/panels/Opens.tsx`). Anything opened from that item, and More details, still goes full page. | A row is a summary of one item. Going full page for it would leave the chat to read a summary, and Back to the list keeps the person's place (D1, D2). |
+| Card and panel rows carry a short line: `Daily 8:00`, `0.115.2 → 0.121.0`, in the order the list holds them. | They are the Workflows and Watchlist pages' rows: `Mon 9:00 · last run today, …`, `1.2.14 → 1.2.16 · checked by Software watchlist`, the same pills, and the Watchlist's urgent-first order (`rowLine`, `softwareLine`, `stateOf`, `watchRank`). | A row says the same words everywhere, so a card, the panel and the page never disagree (principle 7). The cost is a longer line in a 380 px panel, which wraps (C3, C4). |
+
 ## 3. Blocked or risky items
 
 **3.1 The n8n views and n8n access (K1 to K3).** Blocked. ADR 0026 (writes checked when made, so n8n may hold the wait) and ADR 0027 (staff maintain each workflow in n8n, the Portal keeps every published version, the `NODES_INCLUDE` allow list) are still `proposed`; ADR 0034's note says the allow list is not built. Without them: there is no per-person flag, the API does not read a workflow's nodes from n8n, nothing watches for a publish in n8n, and the safety checker cannot grade a version that lacks the gate. Recommendation: build everything else first; raise the two ADRs for acceptance now with the sketch as the picture of what they enable; then land the n8n PRs in section 6. Until then the Planner's reply to "show me X in n8n" is the sketch's `Only people with n8n access can open n8n.` only for people without the flag, and for everyone while the flag doesn't exist, which is honest.
