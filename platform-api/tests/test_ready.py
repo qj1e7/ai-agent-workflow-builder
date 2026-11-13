@@ -88,6 +88,17 @@ async def read_from_cosmos(settings: CosmosSettings, run_id: RunId) -> list[int]
         await events.close()
 
 
+async def copied_to_cosmos(
+    settings: CosmosSettings, run_id: RunId, *, within: float = 30.0
+) -> list[int]:
+    """The copy to Cosmos runs in the background, so a read just after the post can be early."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + within
+    while not (seqs := await read_from_cosmos(settings, run_id)) and loop.time() < deadline:
+        await asyncio.sleep(0.5)
+    return seqs
+
+
 @pytest.mark.cosmos
 def test_with_activity_reader_cosmos_the_api_copies_each_event_and_reads_it_back(
     postgres: PostgresUrls,
@@ -130,4 +141,4 @@ def test_with_activity_reader_cosmos_the_api_copies_each_event_and_reads_it_back
 
     assert posted.status_code == 202
     assert [e["kind"] for e in page.json()["events"]] == ["agent_joined"]
-    assert asyncio.run(read_from_cosmos(settings, run_id)) == [1]
+    assert asyncio.run(copied_to_cosmos(settings, run_id)) == [1]
