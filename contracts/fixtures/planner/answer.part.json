@@ -18,7 +18,7 @@
       "text": "email it to the team",
       "mark": "cant",
       "reason": "cant_do",
-      "note": "I can\u2019t send email yet.",
+      "note": "I can't send email yet.",
       "choices": []
     }
   ],
@@ -54,7 +54,7 @@
     {
       "kind": "do",
       "text": "email it to the team",
-      "note": "I can\u2019t send email yet.",
+      "note": "I can't send email yet.",
       "needs": "new_system",
       "system": "email",
       "instead": "Run results show here, in the chat.",

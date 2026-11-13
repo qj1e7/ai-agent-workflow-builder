@@ -61,7 +61,7 @@ describe('a can’t row', () => {
   it('keeps its text and its note apart', () => {
     const line = cantLine(CANT.cant[0]!)
     expect(line.text).toBe('email it to the team')
-    expect(line.note).toBe('I can’t send email yet.')
+    expect(line.note).toBe('I can\'t send email yet.')
   })
 
   it('shows the note in place of empty text, and a plain line when it has neither', () => {

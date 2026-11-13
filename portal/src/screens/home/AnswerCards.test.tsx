@@ -79,13 +79,13 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
     expect(sayOf(reply)).toBeNull()
   })
 
-  const TEAMS: CantRowView = { kind: 'do', text: 'Post the FastAPI news in our Teams channel', note: 'I can’t post in Teams channels yet.', needs: 'new_system', system: 'Teams', instead: 'Run results show here, in the chat.', unsupported: false }
-  const DELETE: CantRowView = { kind: 'do', text: 'delete the MOCK ticket', note: 'I don’t delete anything in Jira.', needs: 'new_tool', system: 'Jira', instead: 'A Jira admin can do that.', unsupported: true }
+  const TEAMS: CantRowView = { kind: 'do', text: 'Post the FastAPI news in our Teams channel', note: 'I can\'t post in Teams channels yet.', needs: 'new_system', system: 'Teams', instead: 'Run results show here, in the chat.', unsupported: false }
+  const DELETE: CantRowView = { kind: 'do', text: 'delete the MOCK ticket', note: 'I don\'t delete anything in Jira.', needs: 'new_tool', system: 'Jira', instead: 'A Jira admin can do that.', unsupported: true }
   const cantOf = (row: CantRowView): CantReply => ({ answer: 'cant', cant: [row], alternative: null, parts: [{ text: row.text, mark: 'cant', reason: 'cant_do', note: row.note, choices: [] }] })
 
   it('gives a can’t the registry names one card: the line, what she has instead, and Ask the team', () => {
     const html = draw(cantOf(TEAMS))
-    expect(text(html)).toBe('I can’t post in Teams channels yet Run results show here, in the chat. Ask the team')
+    expect(text(html)).toBe('I can\'t post in Teams channels yet Run results show here, in the chat. Ask the team')
     expect(buttons(html)).toEqual(['Ask the team'])
     expect(sayOf(cantOf(TEAMS))).toBeNull()
     expect(draw(cantOf(TEAMS), { leftovers: true }), 'the card already says it').toBe('')
@@ -93,7 +93,7 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
 
   it('offers no Ask the team for what the platform won’t do', () => {
     const html = draw(cantOf(DELETE))
-    expect(text(html)).toBe('I don’t delete anything in Jira A Jira admin can do that.')
+    expect(text(html)).toBe('I don\'t delete anything in Jira A Jira admin can do that.')
     expect(buttons(html)).toEqual([])
   })
 
@@ -238,7 +238,7 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
   it('still names a real can’t on its own card, with the clause crossed on the card it sets up instead', () => {
     const mixed: CantReply = { ...(cant as CantReply), parts: [...(cant as CantReply).parts, NOT_FOLLOWED] }
     const html = draw(mixed)
-    expect(text(html)).toContain('I can’t send email yet Run results show here, in the chat.')
+    expect(text(html)).toContain('I can\'t send email yet Run results show here, in the chat.')
     expect(text(html)).toContain('What I can do instead')
     expect(text(cardOf(html))).toContain('“Colour them by team” I didn’t follow this part.')
     expect(text(cardOf(html))).not.toMatch(/email/i)
@@ -286,7 +286,7 @@ describe('the clauses an answer didn’t read', () => {
 describe('an answer that is partly a can’t', () => {
   it('crosses what it can’t do on the card, with the registry’s reason and Ask the team, and sets up the part it can', () => {
     const html = draw(part as PartReply)
-    expect(text(cardOf(html))).toContain('Can’t do: “email it to the team” I can’t send email yet.')
+    expect(text(cardOf(html))).toContain('Can’t do: “email it to the team” I can\'t send email yet.')
     expect(buttons(html)).toEqual(expect.arrayContaining(['Set up the part I can', 'Ask the team']))
     const rows = text(cardOf(html)).split('Can’t do:')[0]?.split('Question: When')[1] ?? ''
     expect(rows, 'the ticked rows hold only the part it can do').toContain('sum them up')

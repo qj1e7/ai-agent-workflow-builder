@@ -232,7 +232,7 @@ test.describe('with the AI model on', () => {
     await expect(box(page), 'the box waits while the Planner answers').toBeDisabled()
     await expect(box(page)).toHaveAttribute('placeholder', 'The Planner is answering')
     await expect(thread(page).getByText('I can’t do all of that, but I can set up something close.')).toBeVisible()
-    await expect(thread(page).getByRole('heading', { name: 'I can’t send email yet' })).toBeVisible()
+    await expect(thread(page).getByRole('heading', { name: 'I can\'t send email yet' })).toBeVisible()
     await expect(thread(page)).toContainText('Run results show here, in the chat.')
     await expect(thread(page).getByRole('heading', { name: 'What I can do instead' })).toBeVisible()
     await expect(thread(page)).toContainText('email')
@@ -720,7 +720,7 @@ test.describe('with the AI model on', () => {
       for (const [text, shown] of [
         ['Check my workflows', thread(page).getByRole('list', { name: 'Your workflows' })],
         ['What can you do?', thread(page).getByRole('heading', { name: 'What I can do', exact: true })],
-        ['Every Friday, email me the list of tickets we closed this week', thread(page).getByRole('heading', { name: 'I can’t send email yet' })],
+        ['Every Friday, email me the list of tickets we closed this week', thread(page).getByRole('heading', { name: 'I can\'t send email yet' })],
         [`Every Monday and Friday at 9am, ${STALE}. Colour them by team.`, thread(page).getByRole('list', { name: 'Each part of your request' }).locator('[data-mark="no"]')],
       ] as const) {
         await ask(page, text)

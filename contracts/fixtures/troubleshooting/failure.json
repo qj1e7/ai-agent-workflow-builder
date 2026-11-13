@@ -13,7 +13,7 @@
     "suggestion": "Retry the run. If it fails again, check whether that service is up."
   },
   "answers": {
-    "what_happened": "GitHub didn\u2019t answer at 10:14.",
+    "what_happened": "GitHub didn't answer at 10:14.",
     "what_affected": "Nothing. No ticket was written.",
     "safe_to_retry": "Yes. Nothing was written, so a retry is safe.",
     "retry": {

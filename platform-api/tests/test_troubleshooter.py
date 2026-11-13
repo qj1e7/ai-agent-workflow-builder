@@ -65,7 +65,7 @@ STOPS: list[tuple[FailureStage, FailureReason, bool, str, str]] = [
         True,
         "UpstreamUnavailable: Could not check LangGraph: GitHub returned 503 Service "
         "Unavailable three times",
-        "GitHub didn’t answer.",
+        "GitHub didn't answer.",
     ),
     (
         "working",
@@ -251,7 +251,7 @@ def test_what_happened_is_the_advice_explanation_unless_github_didnt_answer():
 def test_github_not_answering_is_one_sentence_with_the_time_it_stopped(said: str):
     stop = failure("AgentError", True, message=f"UpstreamUnavailable: {said}")
     at = datetime(2026, 11, 13, 8, 0, 31, tzinfo=TEAM_TIME_ZONE)
-    assert answers(stop, at).what_happened == "GitHub didn’t answer at 8:00."
+    assert answers(stop, at).what_happened == "GitHub didn't answer at 8:00."
 
 
 def test_a_github_refusal_is_not_github_not_answering():

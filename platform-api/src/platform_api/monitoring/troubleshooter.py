@@ -234,7 +234,7 @@ def _what_happened(failure: RunFailedData, at: datetime | None) -> str:
         and DIDNT_ANSWER.search(failure.message)
     ):
         when = "" if at is None else f" at {at.hour}:{at.minute:02d}"
-        return f"GitHub didn’t answer{when}."
+        return f"GitHub didn't answer{when}."
     return explain_failure(failure).explanation
 
 
