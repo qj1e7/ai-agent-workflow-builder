@@ -5124,7 +5124,7 @@
       },
       "FailureIn": {
         "additionalProperties": false,
-        "description": "What the Error Trigger said about the execution that failed. The fields of the block's own\nexecution, the error workflow's, say who reports. Our API takes the failed execution's mode,\nretry and workflow from n8n's own record, as its first call would.",
+        "description": "What the Error Trigger said about the execution that failed. Our API takes none of it as\nsaid: it checks that the block's own execution is one of our error workflow, and reads the\nfailed execution, its block and its words from n8n's own record.",
         "properties": {
           "error_message": {
             "anyOf": [
@@ -19601,7 +19601,7 @@
     },
     "/internal/v1/n8n/failures": {
       "post": {
-        "description": "Report a failure, from the error workflow: fails the run the failed execution carried with the block's words. A run that has ended stays as it is.",
+        "description": "Report a failure, from our error workflow only. When n8n's own record says the execution failed, fails the run it carries with n8n's words for the block. A run that has ended, or that another attempt carries now, stays as it is.",
         "operationId": "failures_internal_v1_n8n_failures_post",
         "parameters": [
           {
@@ -19651,6 +19651,26 @@
               }
             },
             "description": "Bad node key, or this platform takes no node calls"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The report did not come from our error workflow"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "n8n does not say this execution failed"
           },
           "422": {
             "content": {

@@ -267,6 +267,8 @@ CHANGED_CALL = Refused(409, "This block already called with other content in thi
 BUSY = TryLater("Our platform is still answering this block.")
 TEST_RUN_STOPS = Refused(409, TEST_PASSED)
 """A test run ends at Ask for a yes, with no exit taken (ENGINE-PLAN 2.3.3)."""
+NOT_OUR_ERROR_WORKFLOW = Refused(403, "Only our error workflow may report a failure.")
+NOT_FAILED = Refused(409, "n8n does not say this execution failed.")
 NOTHING_READ = Refused(403, "A Tell reports only what this run read, and it has read nothing yet.")
 NO_TELL_FLOW = Refused(409, "This platform has no Tell flow, so it sends no notice.")
 CANNOT_SEAL = (
@@ -430,16 +432,21 @@ class FailedExecution:
 
 
 class N8nFailures(Protocol):
-    """n8n's record of failed executions, the sweep's fallback for any report that never came:
-    from a workflow held in a member's project, or a run by hand, which reaches no error
-    workflow (P7 Q13 and Q22)."""
+    """n8n's record of failed executions. A report is checked against it, and the sweep reads it
+    for any report that never came: from a workflow held in a member's project, or a run by
+    hand, which reaches no error workflow (P7 Q13 and Q22)."""
+
+    async def error_workflow_id(self) -> str | None:
+        """The platform's own error workflow, the only one whose executions may report."""
+        ...
 
     async def failed_executions(self, workflow_id: str) -> Sequence[N8nExecutionId]:
         """GET /api/v1/executions?status=error&workflowId=…"""
         ...
 
     async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
-        """The node that failed and its error text, from the execution's data."""
+        """The node that failed and its error text, from the execution's data. None unless n8n
+        has the execution and it ended in an error."""
         ...
 
 
@@ -453,14 +460,13 @@ def failure_words(failed: FailedExecution, read_anything: bool) -> str:
 def fail_by_report(
     state: RunState, execution: N8nExecutionId, failure: Failure
 ) -> Moved[Failed] | None:
-    """A failed execution fails the run it carries. A run that has ended stays as it ended, so
-    a test run that passed up to the yes is not failed by its stop at the gate, and neither is a
-    run another execution carries now."""
+    """A failed execution fails the run only while it carries the run. A run that has ended
+    stays as it ended, so a test run that passed up to the yes is not failed by its stop at the
+    gate. A run that moved on, to another execution or to an attempt nobody carries yet, is not
+    failed by an earlier attempt's execution. An execution linked in the same call carries the
+    run, so a run that stopped before reading is still failed."""
     match state:
-        case Pending() | Working() | Proposed() | Acting():
-            holder = holder_of(state)
-            if holder is not None and holder != execution:
-                return None
+        case Pending() | Working() | Proposed() | Acting() if holder_of(state) == execution:
             return state.fail(failure)
         case _:
             return None

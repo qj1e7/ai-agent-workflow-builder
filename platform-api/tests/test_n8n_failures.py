@@ -16,6 +16,8 @@ from platform_api.orchestration.n8n_call_service import (
     NodeCalls,
 )
 from platform_api.orchestration.n8n_calls import (
+    NOT_FAILED,
+    NOT_OUR_ERROR_WORKFLOW,
     AskCall,
     ExecutionFacts,
     FailedExecution,
@@ -26,6 +28,7 @@ from platform_api.orchestration.n8n_calls import (
     TryLater,
 )
 from platform_api.orchestration.runs import (
+    Acting,
     Failed,
     FailureReason,
     Outcome,
@@ -34,7 +37,7 @@ from platform_api.orchestration.runs import (
     Succeeded,
 )
 from platform_api.orchestration.store import RunRecord, Store
-from platform_api.shared import N8nExecutionId, RunId
+from platform_api.shared import ApprovalId, N8nExecutionId, ProposalId, RunId
 from tests.conftest import PostgresUrls
 from tests.declared import NODE_KEY, NODE_KEY_ENV, FakeNodeCalls, app_with, declared_status
 from tests.support import NOW, SPEC
@@ -46,25 +49,32 @@ pytestmark = pytest.mark.anyio
 READ = ReadCall("github_releases", REPO, None)
 PROPOSE = ProposeCall("jira.create_ticket", "MOCK", "Upgrade LangGraph", "1.2.16 is out.", None)
 ASK = AskCall("http://n8n:5678/webhook-waiting/101?signature=abc")
-
-
-def failed_at(execution: str, node: str = "Compare", message: str = "The agent is down") -> Any:
-    return FailedExecution(N8nExecutionId(execution), node, message)
+ERROR_WORKFLOW = "wf_errors"
+REPORTER = N8nExecutionId("900")
 
 
 @dataclass
 class FakeFailures:
-    """n8n's failed executions, as the public API lists them, and what each one's data says."""
+    """n8n's failed executions, as the public API lists them, what each one's data says, and
+    which workflow is the platform's error workflow."""
 
     errored: dict[str, list[str]] = field(default_factory=dict[str, list[str]])
+    words: dict[str, tuple[str, str]] = field(default_factory=dict[str, tuple[str, str]])
+    error_workflow: str | None = ERROR_WORKFLOW
     read: list[str] = field(default_factory=list[str])
+
+    async def error_workflow_id(self) -> str | None:
+        return self.error_workflow
 
     async def failed_executions(self, workflow_id: str) -> Sequence[N8nExecutionId]:
         return [N8nExecutionId(e) for e in self.errored.get(workflow_id, [])]
 
     async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
         self.read.append(execution_id)
-        return failed_at(execution_id, "Read release", "GitHub did not answer")
+        if not any(execution_id in listed for listed in self.errored.values()):
+            return None
+        node, message = self.words.get(execution_id, ("Read release", "GitHub did not answer"))
+        return FailedExecution(execution_id, node, message)
 
 
 @dataclass
@@ -81,8 +91,18 @@ class Reports:
     async def call(self, execution: str, work: Any, node: str) -> object:
         return await self.calls.call(NodeCall(N8nExecutionId(execution), node, work))
 
+    def errored(
+        self, execution: str = "101", node: str = "Compare", message: str = "The agent is down"
+    ) -> None:
+        """n8n's record: the execution ended in an error at this block, with these words."""
+        self.failures.errored.setdefault(WORKFLOW, []).append(execution)
+        self.failures.words[execution] = (node, message)
+
     async def report(self, execution: str = "101", **said: str) -> FailureResult:
-        return await self.calls.failed(failed_at(execution, **said))
+        """Report a failure, run by our error workflow's execution 900."""
+        self.errored(execution, **said)
+        self.n8n.executions[REPORTER] = ExecutionFacts(ERROR_WORKFLOW, "error", None, None, None)
+        return await self.calls.report(REPORTER, N8nExecutionId(execution))
 
     async def runs(self) -> list[RunRecord]:
         async with self.h.db.transaction("orchestration") as uow:
@@ -203,8 +223,97 @@ async def test_a_report_for_a_workflow_that_is_not_ours_makes_no_run(r: Reports)
 
 
 async def test_a_report_for_an_execution_n8n_does_not_know_yet_is_asked_again(r: Reports):
-    assert isinstance(await r.report(), TryLater)
+    r.n8n.executions[REPORTER] = ExecutionFacts(ERROR_WORKFLOW, "error", None, None, None)
+    r.errored("101")
+    assert isinstance(await r.calls.report(REPORTER, N8nExecutionId("101")), TryLater)
     assert await r.runs() == []
+
+
+async def test_a_report_takes_the_block_and_its_words_from_n8n_never_from_the_body(r: Reports):
+    """The body's block and words never reach the run: only n8n's own record does."""
+    r.started("101")
+    await r.call("101", READ, "Read release")
+    await r.report(node="Read release", message="GitHub answered 503")
+    state = await r.state()
+    assert isinstance(state, Failed)
+    assert state.failure.message == '"Read release" failed in n8n: GitHub answered 503.'
+
+
+@pytest.mark.parametrize(
+    "reporter_workflow",
+    [WORKFLOW, "wf_someone_elses", ""],
+    ids=["a-workflow-of-ours", "another-workflow", "n8n-not-read-yet"],
+)
+async def test_a_report_from_anything_but_our_error_workflow_is_refused(
+    r: Reports, reporter_workflow: str
+):
+    """The node key alone is not enough to fail a run: the reporter must be our error workflow."""
+    r.started("101")
+    await r.call("101", READ, "Read release")
+    r.errored("101")
+    r.n8n.executions[REPORTER] = ExecutionFacts(reporter_workflow, "error", None, None, None)
+    before = await r.state()
+    assert await r.calls.report(REPORTER, N8nExecutionId("101")) == NOT_OUR_ERROR_WORKFLOW
+    assert await r.state() == before
+
+
+async def test_a_report_is_refused_while_our_error_workflow_is_not_known(r: Reports):
+    """Until n8n's records are read (E3, E4), no report is trusted."""
+    r.started("101")
+    await r.call("101", READ, "Read release")
+    r.failures.error_workflow = None
+    r.errored("101")
+    r.n8n.executions[REPORTER] = ExecutionFacts("", "", None, None, None)
+    before = await r.state()
+    assert await r.calls.report(REPORTER, N8nExecutionId("101")) == NOT_OUR_ERROR_WORKFLOW
+    assert await r.state() == before
+
+
+async def test_a_report_for_an_execution_n8n_does_not_say_failed_is_refused(r: Reports):
+    r.started("101")
+    await r.call("101", READ, "Read release")
+    r.n8n.executions[REPORTER] = ExecutionFacts(ERROR_WORKFLOW, "error", None, None, None)
+    before = await r.state()
+    assert await r.calls.report(REPORTER, N8nExecutionId("101")) == NOT_FAILED
+    assert await r.state() == before
+
+
+async def test_a_platform_with_no_failure_reads_refuses_every_report(r: Reports):
+    r.calls = NodeCalls(
+        r.h.db,
+        r.h.log,
+        r.h.agent,
+        mint,
+        NodeCatalog(r.workflows, FakeSources(), [JIRA]),
+        r.workflows,
+        r.n8n,
+        FakeSources(),
+        {},
+    )
+    r.started("101")
+    await r.call("101", READ, "Read release")
+    before = await r.state()
+    assert await r.report() == NOT_OUR_ERROR_WORKFLOW
+    assert await r.state() == before
+
+
+@pytest.mark.parametrize("now", ["pending", "acting"])
+async def test_a_failure_of_an_earlier_attempt_never_fails_the_next_one(r: Reports, now: str):
+    """Once 101's run moved on to an attempt nobody carries yet, a late failure of 101, from a
+    report or the sweep, leaves it alone."""
+    r.started("101")
+    await r.call("101", READ, "Read release")
+    [run] = await r.runs()
+    next_attempt: RunState = (
+        Pending(run.run_id, 2, None, NOW)
+        if now == "pending"
+        else Acting(run.run_id, ProposalId("prp_1"), ApprovalId("apr_1"), 1, None, NOW)
+    )
+    async with r.h.db.transaction("orchestration") as uow:
+        await Store().save_run(uow, run, next_attempt)
+    assert isinstance(await r.report(), LeftAsIs)
+    assert await r.calls.sweep() == []
+    assert await r.state() == next_attempt
 
 
 async def test_the_sweep_fails_an_open_run_from_its_error_execution(r: Reports):
@@ -213,6 +322,7 @@ async def test_the_sweep_fails_an_open_run_from_its_error_execution(r: Reports):
     r.started("101")
     await r.call("101", READ, "Read release")
     r.failures.errored[WORKFLOW] = ["99", "101"]
+    r.failures.words["101"] = ("Read release", "GitHub did not answer")
     [run] = await r.runs()
     assert await r.calls.sweep() == [run.run_id]
     state = await r.state()
@@ -255,8 +365,10 @@ REPORT = {
         ),
         (LeftAsIs("The run is succeeded."), 200, {"status": "left_as_is", "run_id": None}),
         (TryLater("n8n has no record of this execution yet."), 503, {"retryable": True}),
+        (NOT_OUR_ERROR_WORKFLOW, 403, {"detail": NOT_OUR_ERROR_WORKFLOW.detail}),
+        (NOT_FAILED, 409, {"detail": NOT_FAILED.detail}),
     ],
-    ids=["failed", "left-as-is", "try-later"],
+    ids=["failed", "left-as-is", "try-later", "not-our-error-workflow", "not-failed"],
 )
 def test_the_failure_route_maps_the_error_triggers_item(
     result: FailureResult, status: int, answer: dict[str, Any]
@@ -267,16 +379,14 @@ def test_the_failure_route_maps_the_error_triggers_item(
     assert response.status_code == status
     assert answer.items() <= response.json().items()
     declared_status(app, "POST", "/internal/v1/n8n/failures", response)
-    assert calls.failures == [
-        FailedExecution(N8nExecutionId("101"), "Compare", "The agent is down")
-    ]
+    assert calls.reports == [(REPORTER, N8nExecutionId("101"))], "only ids, never the words"
 
 
 def test_the_failure_route_takes_reports_only_with_the_node_key():
     calls = FakeNodeCalls()
     client = TestClient(app_with(env=NODE_KEY_ENV, node_calls=calls))
     assert client.post("/internal/v1/n8n/failures", json=REPORT).status_code == 401
-    assert calls.failures == []
+    assert calls.reports == []
 
 
 def test_a_report_with_no_failed_execution_changes_nothing():
@@ -285,4 +395,4 @@ def test_a_report_with_no_failed_execution_changes_nothing():
     body = {**REPORT, "failed_execution_id": None}
     response = client.post("/internal/v1/n8n/failures", headers=NODE_KEY, json=body)
     assert response.json()["status"] == "left_as_is"
-    assert calls.failures == []
+    assert calls.reports == []

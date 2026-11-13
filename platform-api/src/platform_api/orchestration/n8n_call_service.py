@@ -42,6 +42,8 @@ from platform_api.orchestration.n8n_calls import (
     CHANGED_CALL,
     NO_EXECUTION,
     NO_TELL_FLOW,
+    NOT_FAILED,
+    NOT_OUR_ERROR_WORKFLOW,
     NOT_OURS,
     NOTHING_READ,
     READ_LIMIT,
@@ -229,7 +231,7 @@ class LeftAsIs:
     detail: str
 
 
-type FailureResult = FailedRun | LeftAsIs | TryLater
+type FailureResult = FailedRun | LeftAsIs | Refused | TryLater
 
 type Work = Done | Stopped | Asking | Told | Refused | TryLater
 
@@ -647,7 +649,23 @@ class NodeCalls:
         )
         return SignedStart({"nonce": start.nonce, "kind": kind, "expires": expires}, signature)
 
-    async def failed(self, failed: FailedExecution) -> FailureResult:
+    async def report(self, reporter: N8nExecutionId, failed: N8nExecutionId) -> FailureResult:
+        """Report a failure, from the error workflow (ENGINE-PLAN 2.8). Nothing in the report is
+        taken as said: the reporter must be an execution of our error workflow, and the failed
+        block and its words come from n8n's own record of a failed execution. While n8n cannot
+        be read, every report is refused."""
+        if self._failures is None:
+            return NOT_OUR_ERROR_WORKFLOW
+        ours = await self._failures.error_workflow_id()
+        facts = await self._n8n.execution(reporter)
+        if not ours or facts is None or facts.workflow_id != ours:
+            return NOT_OUR_ERROR_WORKFLOW
+        found = await self._failures.failure(failed)
+        if found is None:
+            return NOT_FAILED
+        return await self._fail_run(found)
+
+    async def _fail_run(self, failed: FailedExecution) -> FailureResult:
         """Fails the run a failed execution carried, with the node's words (ENGINE-PLAN 2.3.9 and
         2.8). An execution none of whose blocks had called is linked first, as its first call
         would have linked it, so the Portal shows the run that stopped."""
@@ -689,7 +707,7 @@ class NodeCalls:
                 found = await self._failures.failure(execution)
                 if found is None:
                     continue
-                if isinstance(result := await self.failed(found), FailedRun):
+                if isinstance(result := await self._fail_run(found), FailedRun):
                     failed.append(result.run_id)
         return failed
 

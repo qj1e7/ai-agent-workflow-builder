@@ -178,6 +178,10 @@ class NoOwnWorkflowsYet:
         """n8n's records are not read yet (E4), so every execution is of no workflow of ours."""
         return ExecutionFacts("", "", None, None, None)
 
+    async def error_workflow_id(self) -> str | None:
+        """Not known until n8n's records are read (E3, E4), so every failure report is refused."""
+        return None
+
     async def failed_executions(self, workflow_id: str) -> Sequence[N8nExecutionId]:
         return []
 

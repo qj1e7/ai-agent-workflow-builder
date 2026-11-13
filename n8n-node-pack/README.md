@@ -52,5 +52,5 @@ execution id \n request id \n decision
 - Ask for a yes: `{"status": "waiting", "request_id": "..."}`, or `{"status": "nothing_to_change"}`.
 - Make the approved changes: `{"made", "of", "results"}`. `made < of` fails the node with "2 of 3 made".
 - Tell: `{"status", "line"}`, where `status` is `sent`, `sending`, `not_confirmed`, `would_have_sent` (a test run) or `nothing_to_report`. Tell sends only `where` and `what`. Our API composes the notice from what the run read, and sends it at most once.
-- Report a failure: `{"status": "failed" | "left_as_is", "run_id", "detail"}`. A run that has ended is left as it is.
+- Report a failure: `{"status": "failed" | "left_as_is", "run_id", "detail"}`. A run that has ended is left as it is. Our API takes nothing in the report as said. It answers 403 unless the block runs in our error workflow, and 409 unless n8n's own record says the execution failed. It takes the failed block and its words from that record.
 - The editor's lists, `GET .../options?kind=places|agents|agent_inputs|write_actions`: `{"options": [{"id", "name"}]}`.
