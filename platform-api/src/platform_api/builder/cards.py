@@ -353,7 +353,44 @@ VERSION_CHECKER = card_view(
         approvals=[CardApprovalView(tool="jira.create_ticket", approvers=1)],
     ),
 )
-STARTER_CARDS: tuple[CardView, ...] = (VERSION_CHECKER,)
+CERT_LIST_PARSER_ID = "crd_cert_list_parser"
+
+CERT_LIST_PARSER = card_view(
+    card_id=CERT_LIST_PARSER_ID,
+    version=1,
+    starter=True,
+    owner=PLATFORM_OWNER,
+    created_at=STARTER_CREATED_AT,
+    definition=CardDefinition(
+        name="Cert list parser",
+        purpose="Reads the certificate list on a Confluence page and finds the certificates "
+        "that expire soon, and the rows someone must check.",
+        good_for=[
+            "Check the Cert List page for certificates that expire soon",
+            "Tell us which certificates need renewing",
+        ],
+        inputs=[
+            CardInput(
+                name="Confluence page",
+                kind="text",
+                what="The page that holds the certificate list, by its title or its id.",
+                example="Cert List",
+            ),
+        ],
+        blocks=[
+            CardBlock(
+                say="Read the certificate list on the page, and find the certificates that "
+                "expire within 60 days and the rows someone must check.",
+                tool="confluence.parse_cert_list",
+            ),
+            CardBlock(
+                say="Report what to renew first, and which rows to fix on the page.", tool=None
+            ),
+        ],
+        approvals=[],
+    ),
+)
+STARTER_CARDS: tuple[CardView, ...] = (VERSION_CHECKER, CERT_LIST_PARSER)
 STARTERS: Mapping[tuple[str, int], CardView] = {(c.card_id, c.version): c for c in STARTER_CARDS}
 
 

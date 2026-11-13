@@ -3,6 +3,8 @@
 import pytest
 
 from platform_api.builder.cards import (
+    CERT_LIST_PARSER,
+    STARTER_CARDS,
     VERSION_CHECKER,
     card_spec,
     check_card,
@@ -16,6 +18,7 @@ from platform_api.builder.models import (
     CardBlock,
     CardDefinition,
     CardInput,
+    CardView,
 )
 from platform_api.orchestration import TOOL_RULES
 
@@ -49,15 +52,22 @@ def test_a_good_card_has_no_problems_and_gets_the_rules_approval():
     assert checked.card.approvals == checked.approvals
 
 
-def test_the_starter_card_passes_its_own_check_unchanged():
+@pytest.mark.parametrize("starter", STARTER_CARDS, ids=lambda card: card.card_id)
+def test_each_starter_card_passes_its_own_check_unchanged(starter: CardView):
     definition_of_starter = CardDefinition.model_validate(
-        VERSION_CHECKER.model_dump(
-            include={"name", "purpose", "good_for", "inputs", "blocks", "approvals"}
-        )
+        starter.model_dump(include={"name", "purpose", "good_for", "inputs", "blocks", "approvals"})
     )
     checked = check_card(definition_of_starter)
     assert checked.problems == []
     assert checked.card == definition_of_starter
+
+
+def test_the_cert_list_parser_only_reads_a_page_so_it_asks_nobody_for_a_yes():
+    assert (CERT_LIST_PARSER.card_id, CERT_LIST_PARSER.starter) == ("crd_cert_list_parser", True)
+    assert CERT_LIST_PARSER.tools == ["confluence.parse_cert_list"]
+    assert [(i.name, i.kind) for i in CERT_LIST_PARSER.inputs] == [("Confluence page", "text")]
+    assert CERT_LIST_PARSER.approvals == []
+    assert [b.kind for b in plan_for_cards([CERT_LIST_PARSER])] == ["agent"]
 
 
 def test_the_starter_card_reads_as_the_spec_says():

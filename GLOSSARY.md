@@ -211,6 +211,9 @@ An agent, defined by an agent card, that the Planner brings in to do one part of
 The specialist agent that reads each watched software's releases at its source, compares the newest version with our version, and suggests an upgrade ticket for each one that is behind. It ships as a template.
 _Avoid_: Release checker (the old name), scanner
 
+**Cert list parser**:
+The specialist agent that reads the certificate list on a Confluence page and finds the certificates that expire within 60 days, and the rows someone must check first: no environment, a date it cannot read, a row expired more than a year ago, or a row written twice. Its rules are the team's cert reminder's. It ships as a starter card and only reads, so it asks nobody for a yes.
+
 **Leg**:
 Retired on 13 Nov 2026 (ADR 0026). It was the part of a run that n8n carried in one execution, a work leg and an act leg with our platform owning the pause between them. Each workflow is now its own n8n workflow, and n8n holds the wait for a yes.
 
@@ -316,7 +319,7 @@ _Avoid_: Pod, node
 ### Setting up
 
 **Connection**:
-The platform's account in another system, such as GitHub, Jira or Teams, with its key. Agents read through it. Only the write gateway holds a key that writes.
+The platform's account in another system, such as GitHub, Jira, Teams or Confluence, with its key. Agents read through it. Only the write gateway holds a key that writes. Confluence's connection also lists the only pages the platform may read, its allowed pages.
 _Avoid_: Integration, credential
 
 **Practice copy**:
