@@ -15,6 +15,7 @@ import { nextRunOf } from '../workflows/workflow'
 import { ApprovalGate, NotChecked } from './ApprovalGate'
 import { DECISION_ID, DecisionArea, LONG_LOG, StepLog } from './Chat'
 import { askedWords, foundOf, partyOf, useDecision, useNotChecked, yourPart, type Decision } from './decision'
+import { POLL_FAILED_MS, useReconnectWhenBehind } from './follow'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { AnswerList, Outcome, StopAnswers, StopNext } from './Outcome'
 import { QuestionThread } from './QuestionThread'
@@ -28,8 +29,6 @@ import { declinedNext, declinedNowWords, declinedRecord, feedTroubleOf, lineOf, 
 import styles from './RunPage.module.css'
 
 const LANDS_ON_DECISION = new Set(['awaiting_approval', 'failed', 'rejected'])
-
-export const POLL_FAILED_MS = 10_000
 
 function notFound(error: unknown): boolean {
   return error instanceof ApiError && error.status === 404
@@ -118,13 +117,6 @@ function LiveRunPage({ run, fromApproval }: { run: RunView; fromApproval: boolea
   if (!ready) return <FeedNotReady connection={live.connection} onRetry={tryAgain} />
   if (useCase.isLoading) return <Loading />
   return <RunView run={latest} useCase={useCase.data} live={live} fromApproval={fromApproval} detail={{ choice: detail, choose: setDetail }} />
-}
-
-/** After a failure the stream may close. When the run has moved on without it, as after a retry, reconnect now. */
-export function useReconnectWhenBehind(behind: boolean, restart: () => void): void {
-  useEffect(() => {
-    if (behind) restart()
-  }, [behind, restart])
 }
 
 function backTo(useCase: UseCaseView | undefined): string {

@@ -130,7 +130,7 @@ export function StopNext({ runId, failure, advice, me, reports, nameOf, modelOff
   const found = [advice ? withCurrentNames(advice.answers.what_happened) : `${failureReasonLabel[failure.reason] ?? failure.reason}.`, failureText(failure.message)].filter((part) => part !== '').join(' ')
   if (waitsForModel) return null
   if (retry) {
-    return me?.operator ? <RetryButton runId={runId} label="Retry" primary={!quiet} describedBy={safeId} /> : <p className={styles['note']}>{OPERATORS_RETRY}</p>
+    return me?.operator ? <RetryButton runId={runId} label="Retry" primary={!quiet} describedBy={safeId} stay /> : <p className={styles['note']}>{OPERATORS_RETRY}</p>
   }
   return me?.operator || reports.length > 0 ? (
     <ReportToSupport runId={runId} found={found} me={me?.id} meName={me?.name ?? 'A teammate'} reports={reports} nameOf={nameOf} quiet={quiet} />

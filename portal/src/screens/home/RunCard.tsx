@@ -11,6 +11,7 @@ import { useShownInPanel } from '../../ui/sidePanel'
 import { AnswerList, StopAnswers, StopNext } from '../run/Outcome'
 import { RunLine, SettledLine } from '../run/RunLine'
 import { RunPill } from '../run/RunPill'
+import { POLL_FAILED_MS, useReconnectWhenBehind } from '../run/follow'
 import { useLiveRun } from '../run/liveRun'
 import { TROUBLE_FACE } from '../run/troubleFace'
 import { type RunStory, useRunStory } from '../run/useRunStory'
@@ -67,8 +68,11 @@ export function RunCardView({ runId, name, story, beside }: { runId: string; nam
 }
 
 function LiveRunCard({ run, say, onStage }: { run: RunView; say: Say; onStage: (stage: RunStage) => void }) {
-  const { live } = useLiveRun(run.run_id)
-  const story = useRunStory(run, live)
+  const { live, restart } = useLiveRun(run.run_id)
+  const failed = live.head.phase.state === 'failed'
+  const latest = useRun(run.run_id, { poll: failed ? POLL_FAILED_MS : false }).data ?? run
+  useReconnectWhenBehind(failed && live.loaded && latest.last_seq > live.head.seq, restart)
+  const story = useRunStory(latest, live)
   const beside = useShownInPanel({ kind: 'run', id: run.run_id })
   const ready = live.loaded
   const phrase = ready ? sayStage(story, run.use_case_name) : null
