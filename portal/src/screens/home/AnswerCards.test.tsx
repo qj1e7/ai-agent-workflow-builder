@@ -124,8 +124,8 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
   })
 
   it('reads a can’t row from an older platform, with no one-line fields, as a row on the What I can’t do yet card', () => {
-    const { instead: _instead, unsupported: _unsupported, ...older } = TEAMS
-    const html = text(draw(cantOf(older as CantRowView)))
+    const older = Object.fromEntries(Object.entries(TEAMS).filter(([field]) => field !== 'instead' && field !== 'unsupported'))
+    const html = text(draw(cantOf(older as unknown as CantRowView)))
     expect(html).toContain('What I can’t do yet')
     expect(html).toContain('Post the FastAPI news in our Teams channel')
   })
