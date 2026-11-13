@@ -38,7 +38,7 @@ const withAnswers = (over: Partial<TroubleshootingOut['answers']>, retry: Troubl
 describe('the three answers', () => {
   it('names them in order, answers Safe to retry, and has no fourth answer', () => {
     const html = text(draw(failed(), ADVICE))
-    const at = ['What happened', 'What was affected', 'Safe to retry'].map((name) => html.indexOf(name))
+    const at = ['What happened', 'Affected', 'Safe to retry'].map((name) => html.indexOf(name))
     expect(at.every((index) => index >= 0)).toBe(true)
     expect(at).toEqual([...at].sort((a, b) => a - b))
     expect(html).toContain(ADVICE.answers.what_affected)
@@ -50,20 +50,31 @@ describe('the three answers', () => {
 
   it('puts the next step under the answers', () => {
     const html = text(draw(failed(), ADVICE))
-    expect(html.indexOf('Retry the run')).toBeGreaterThan(html.indexOf(ADVICE.answers.safe_to_retry))
+    expect(html.indexOf('Retry')).toBeGreaterThan(html.indexOf(ADVICE.answers.safe_to_retry))
   })
 
-  it('shows the failure text in plain words, without the error type, and every sentence the platform wrote', () => {
-    const html = text(draw(failed({ message: 'UpstreamUnavailable: GitHub returned 503 three times. Start a new run.' }), ADVICE))
-    expect(html).toContain('The failure text: GitHub returned 503 three times. Start a new run.')
+  it('keeps the failure text behind Details, in plain words without the error type, and every sentence the platform wrote', () => {
+    const html = draw(failed({ message: 'UpstreamUnavailable: GitHub returned 503 three times. Start a new run.' }), ADVICE)
+    const details = /<details[^>]*>([\s\S]*?)<\/details>/.exec(html)?.[1] ?? ''
+    expect(text(details)).toContain('Details')
+    expect(text(details)).toContain('GitHub returned 503 three times. Start a new run.')
+    expect(html.replace(details, '')).not.toContain('GitHub returned 503')
     expect(html).not.toContain('UpstreamUnavailable')
+  })
+
+  it('answers What happened in the one sentence the troubleshooter wrote, and keeps the likely cause for Details', () => {
+    const html = draw(failed(), ADVICE)
+    const details = /<details[^>]*>([\s\S]*?)<\/details>/.exec(html)?.[1] ?? ''
+    const answer = /<dt>What happened<\/dt><dd[^>]*>([\s\S]*?)<\/dd>/.exec(html)?.[1] ?? ''
+    expect(text(answer)).toBe(ADVICE.answers.what_happened)
+    expect(text(details)).toContain(ADVICE.advice.likely_cause)
   })
 })
 
 describe('the next step', () => {
   it('offers Retry the run to an Operator when the platform says the run can run again', () => {
     const html = draw(failed(), withAnswers({}, { possible: true, asks_again: true }))
-    expect(html).toContain('Retry the run')
+    expect(html).toContain('>Retry<')
     expect(html).not.toContain('data-report')
   })
 
@@ -98,7 +109,7 @@ describe('the next step', () => {
   })
 
   it('decides the same way when the troubleshooter has not answered yet', () => {
-    expect(draw(failed({ retryable: true }), undefined, OPERATOR, true)).toContain('Retry the run')
+    expect(draw(failed({ retryable: true }), undefined, OPERATOR, true)).toContain('>Retry<')
     expect(draw(failed({ retryable: false }), undefined, OPERATOR, true)).toContain('data-report')
     expect(text(draw(failed(), undefined, OPERATOR, true))).toContain('The AI troubleshooter is looking at what happened.')
   })

@@ -40,14 +40,16 @@ export interface CardMemory extends Slot<CardKept> {
   readonly edit: Slot<EditKept>
   /** Whether this answer has already shown its item beside the chat, so coming back to the chat never opens it again. */
   readonly beside: Slot<true>
+  /** The run a run card follows, so it keeps following it after a retry takes the run off the stopped list. */
+  readonly run: Slot<string>
 }
 
 export function newCardMemory(): CardMemory {
-  return { ...slot<CardKept>(), edit: slot<EditKept>(), beside: slot<true>() }
+  return { ...slot<CardKept>(), edit: slot<EditKept>(), beside: slot<true>(), run: slot<string>() }
 }
 
 const forgets = <T,>(): Slot<T> => ({ kept: () => undefined, keep: () => undefined })
 
-export const NO_MEMORY: CardMemory = { ...forgets<CardKept>(), edit: forgets<EditKept>(), beside: forgets<true>() }
+export const NO_MEMORY: CardMemory = { ...forgets<CardKept>(), edit: forgets<EditKept>(), beside: forgets<true>(), run: forgets<string>() }
 
 export const CardMemoryContext = createContext<CardMemory>(NO_MEMORY)

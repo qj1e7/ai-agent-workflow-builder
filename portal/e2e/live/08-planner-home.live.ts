@@ -1487,7 +1487,7 @@ test.describe('bob asks the Planner questions only', () => {
     await shot(page, info, 'r16-bob-panel')
     await panel(page).getByRole('button', { name: /^Approve/ }).click()
     await expect(panel(page).getByRole('button', { name: /^Approve/ }), 'the decision is made in the panel').toHaveCount(0, { timeout: 30_000 })
-    await expect(panel(page), 'the panel shows the run done').toContainText(/Done\s*\d+ tickets? created in Jira/, { timeout: 30_000 })
+    await expect(panel(page), 'the panel shows the run done, in its settled line').toContainText(/(Done at|Done on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2} · MOCK-\d+ created after Bob’s yes/, { timeout: 30_000 })
     await panel(page).getByRole('button', { name: 'Close' }).click()
     await expect(newest(page).locator(`[data-opens="approval:${runId}"]`), 'his card no longer offers the request').toHaveCount(0, { timeout: 20_000 })
     await context.close()

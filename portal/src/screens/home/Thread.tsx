@@ -6,9 +6,10 @@ import { CardMemoryContext, NO_MEMORY, type CardMemory } from './cardMemory'
 import { Leftovers } from './PartsList'
 import { CardLive, NewestAnswer } from './primary'
 import { SetupCard } from './SetupCard'
-import { sayOf, wordsOnly } from './answers'
+import { sayOf, whoOf, wordsOnly } from './answers'
 import { useAsker } from './asker'
-import { BehindAnswer, CheckWorkflowsAnswer, DecideAnswer, DecidedAnswer, IdeasSentence, NeedsMeAnswer, OperatorsAnswer, RequestsToOpen, useSaidOnce, WhyStoppedAnswer, type Say } from './StateAnswers'
+import { RunCardMessage } from './RunCard'
+import { BehindAnswer, CheckWorkflowsAnswer, DecideAnswer, DecidedAnswer, IdeasSentence, NeedsMeAnswer, OperatorsAnswer, RequestsToOpen, useSaidOnce, type Say } from './StateAnswers'
 import { isAnswer, type Message, type Thread as ThreadState } from './threadState'
 import { Waiting } from './Waiting'
 import styles from './Planner.module.css'
@@ -55,7 +56,6 @@ function ReplyBody({ message, now, page, say, about }: { message: Extract<Messag
       {sentence !== null ? <p>{sentence}</p> : null}
       <Leftovers reply={reply} />
       {reply.answer === 'check_workflows' ? <CheckWorkflowsAnswer useCaseId={reply.use_case_id} now={now} say={say} /> : null}
-      {reply.answer === 'why_stopped' ? <WhyStoppedAnswer useCaseId={reply.use_case_id} say={say} /> : null}
       {reply.answer === 'ideas' ? <IdeasSentence say={say} /> : null}
       {reply.answer === 'needs_me' ? <NeedsMeAnswer now={now} say={say} /> : null}
       {reply.answer === 'edit' ? <EditCard reply={reply} typed={message.typed} page={page} say={say} now={now} about={about} /> : null}
@@ -90,6 +90,17 @@ export function Thread({ thread, now, page, memory }: ThreadProps) {
                   <span className="visually-hidden">You: </span>
                   {message.text}
                 </div>
+              </li>
+            )
+          }
+          if (message.kind === 'reply' && whoOf(message.reply) === 'troubleshooter' && message.reply.answer === 'why_stopped') {
+            return (
+              <li key={message.id} className={styles['said']} tabIndex={-1} data-answer data-who="troubleshooter">
+                <CardMemoryContext.Provider value={memory?.(message.id) ?? NO_MEMORY}>
+                  <CardLive.Provider value={message.id === newest}>
+                    <RunCardMessage useCaseId={message.reply.use_case_id} say={message.id === newest ? sayFor(message.id) : () => undefined} leftovers={<Leftovers reply={message.reply} />} />
+                  </CardLive.Provider>
+                </CardMemoryContext.Provider>
               </li>
             )
           }

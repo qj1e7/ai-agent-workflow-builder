@@ -72,7 +72,7 @@ test('bob approves on the run page, and the item has left Home when he comes bac
   await markThisPage(page)
   await itemOf(page, approvalId).getByRole('link').click()
   await page.getByRole('button', { name: 'Approve 1 ticket' }).click()
-  await expect(page.getByText('Approved. The platform is writing now.').or(page.getByRole('heading', { level: 1, name: /created in Jira/ }))).toBeVisible()
+  await expect(page.getByText('Approved. The platform is writing now.').or(page.locator('[data-run-pill]', { hasText: /^Done$/ }))).toBeVisible()
   await page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true }).getByRole('link', { name: 'Chat' }).click()
   await expect(page.locator('#planner-box')).toBeVisible()
   await expect(itemOf(page, approvalId)).toHaveCount(0)
