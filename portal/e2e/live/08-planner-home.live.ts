@@ -637,13 +637,13 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
-  test('the chip Which software is behind? is answered from the watchlist, with its Looked at line', async ({ browser, backend }) => {
+  test('the chip Which software is behind? is answered from the watchlist at once, plainly when nothing is behind', async ({ browser, backend }) => {
     await backend.freshWatchlist('alice', [REDIS])
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     await page.goto('/')
     await page.getByRole('group', { name: 'Suggestions' }).getByRole('button', { name: 'Which software is behind?' }).click()
-    await expect(thread(page), 'it is answered from the watchlist at once, with no card when nothing is behind').toContainText(/Everything is up to date\.|Nothing newer yet\.|not checked yet/)
+    await expect(thread(page), 'Redis has no version of ours, so nothing is known to be behind, and the count says it is watched').toContainText('Nothing has a newer version. 1 watching.')
     await context.close()
   })
 

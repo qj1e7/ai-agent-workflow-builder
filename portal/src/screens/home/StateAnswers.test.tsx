@@ -105,11 +105,14 @@ describe('the behind card (Which software is behind?)', () => {
     expect(draw(behind)).toMatch(/<button[^>]*data-opens="watchlist:"[^>]*>See the watchlist/)
   })
 
-  it('says so, with no card, when nothing has a newer version', () => {
+  it('answers plainly, with no card, when nothing has a newer version, before the Watchlist’s count of what it can’t yet tell', () => {
     const current: WatchlistView = { ...WATCHLIST, software: WATCHLIST.software.filter((row) => row.status === 'up_to_date') }
     const html = draw(behind, { watchlist: current })
     expect(html).not.toContain('<section')
-    expect(text(html)).toContain(`${countLine(current.software) ?? 'a count line'}.`)
+    expect(text(html)).toContain('Planner: Everything is up to date.')
+    const unknown: WatchlistView = { ...WATCHLIST, software: WATCHLIST.software.filter((row) => row.status === 'up_to_date' || row.status === 'not_checked') }
+    expect(text(draw(behind, { watchlist: unknown }))).toContain(`Planner: Nothing has a newer version. ${countLine(unknown.software) ?? 'a count line'}.`)
+    expect(text(draw(behind, { watchlist: { ...WATCHLIST, software: [] } }))).toContain('Planner: Nothing is on the Software watchlist yet.')
   })
 
   it('is an answer of its own: marked as one, and the person’s words come first', () => {

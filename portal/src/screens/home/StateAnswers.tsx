@@ -9,7 +9,7 @@ import { ButtonLink } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { OpenButton, OpenLink } from '../../ui/OpenItem'
 import { REFRESH_MS, rowsOf, viewerOf } from '../workflows/workflow'
-import { countLine, hasNewer, REFRESH_MS as WATCH_REFRESH } from '../software/software'
+import { behindWords, hasNewer, REFRESH_MS as WATCH_REFRESH } from '../software/software'
 import { useCapabilities } from '../../api/plannerQueries'
 import { ideasSay, needsSay, startingPoints, workflowsSay } from './answers'
 import { useAsker } from './asker'
@@ -129,7 +129,7 @@ export function BehindAnswer({ now, say }: { now: Date; say: Say }) {
   const view = watchlist.data
   const rows = view?.software
   const behind = useMemo(() => rows?.filter(hasNewer) ?? [], [rows])
-  const sentence = !rows ? null : behind.length > 0 ? `${behind.length} ${behind.length === 1 ? 'has' : 'have'} a newer version.` : `${countLine(rows) ?? 'Nothing is on the Software watchlist yet'}.`
+  const sentence = rows ? behindWords(rows) : null
   useSaidOnce(sentence, say)
   if (!view || sentence === null) {
     return (
