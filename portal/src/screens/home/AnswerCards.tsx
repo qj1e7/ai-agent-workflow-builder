@@ -1,13 +1,14 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from '../../ui/Link'
 import type { CantReply, OfflineReply, PartReply, PartView, PlannerReply, QuestionReply, SetupCardReply, WatchlistReply } from '../../api/types'
 import { useCapabilities } from '../../api/plannerQueries'
 import { useOperatorsSay } from '../../shell/OperatorsNote'
 import { Button, ButtonLink } from '../../ui/Button'
+import { Card } from '../../ui/Card'
 import { OpenButton } from '../../ui/OpenItem'
 import { AskTheTeam } from './AskTheTeam'
 import { useAsker } from './asker'
-import { cantLines, refusalNext, SAY_ANOTHER_WAY, startingPoints, TAG_CANT, TAG_CHOICE } from './answers'
+import { cantLines, refusalNext, SAY_ANOTHER_WAY, startingPoints } from './answers'
 import { cardFrom } from './card'
 import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard } from './parts'
 import { SetupCard, type CardStart } from './SetupCard'
@@ -43,23 +44,6 @@ function startOf(reply: SetupCardReply | PartReply, typed: string): CardStart {
   return { form: cardFrom(reply.name, reply.rows, typed, partsOf(reply)), plan: null, draftId: null, similar: reply.similar }
 }
 
-function tagClass(tag: string): string {
-  return [styles['tag'], tag === TAG_CHOICE ? styles['tagChoice'] : undefined, tag === TAG_CANT ? styles['tagCant'] : undefined].filter(Boolean).join(' ')
-}
-
-function Card({ title, tag, children }: { title: string; tag?: string; children: ReactNode }) {
-  const id = useId()
-  return (
-    <section className={styles['pcard']} aria-labelledby={id}>
-      <div className={styles['pcardHead']}>
-        <h3 id={id}>{title}</h3>
-        {tag ? <span className={tagClass(tag)}>{tag}</span> : null}
-      </div>
-      {children}
-    </section>
-  )
-}
-
 /** A set-up card, and a part answer as one: what it can’t do is a cross on the card itself, with Ask the team. */
 export function SetupCardAnswer({ reply, typed }: { reply: SetupCardReply | PartReply; typed: string }) {
   return <SetupCard start={startOf(reply, typed)} />
@@ -79,7 +63,16 @@ export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }
   if (rows.length === 0) return card ?? watch
   return (
     <>
-      <Card title="What I can’t do yet">
+      <Card
+        title="What I can’t do yet"
+        actions={
+          <AskTheTeam
+            capability={reply.cant.find((row) => row.system)?.system ?? rows[0]?.text ?? 'something new'}
+            starter={`I asked the Planner for: ${typed}\n\nIt can't do this yet: ${rows.map((line) => line.text).join('; ')}`}
+            secondary={alternative !== null}
+          />
+        }
+      >
         <ul className={styles['lines']}>
           {rows.map((line) => (
             <li key={line.text}>
@@ -88,13 +81,6 @@ export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }
             </li>
           ))}
         </ul>
-        <div className={styles['footer']}>
-          <AskTheTeam
-            capability={reply.cant.find((row) => row.system)?.system ?? rows[0]?.text ?? 'something new'}
-            starter={`I asked the Planner for: ${typed}\n\nIt can't do this yet: ${rows.map((line) => line.text).join('; ')}`}
-            secondary={alternative !== null}
-          />
-        </div>
       </Card>
       {card ? (
         <>
@@ -113,26 +99,24 @@ export function WatchlistAnswer({ reply, typed }: { reply: WatchlistReply; typed
   return (
     <>
       <Card title={listed ? 'Already on the watchlist' : 'The Software watchlist'}>
-        <div className={styles['pcardPart']}>
-          {listed ? (
-            <>
-              <p>{listed.name} is on the Software watchlist.</p>
-              <div className={styles['buttons']}>
-                <OpenButton variant={main} item={{ kind: 'software', id: listed.software_id }} to={`/software?row=${encodeURIComponent(listed.software_id)}`}>
-                  Open it
-                </OpenButton>
-              </div>
-            </>
-          ) : reply.software ? (
-            <AddToWatchlist name={reply.software} />
-          ) : (
+        {listed ? (
+          <>
+            <p>{listed.name} is on the Software watchlist.</p>
             <div className={styles['buttons']}>
-              <ButtonLink variant={main} to="/software">
-                Open the Software watchlist
-              </ButtonLink>
+              <OpenButton variant={main} item={{ kind: 'software', id: listed.software_id }} to={`/software?row=${encodeURIComponent(listed.software_id)}`}>
+                Open it
+              </OpenButton>
             </div>
-          )}
-        </div>
+          </>
+        ) : reply.software ? (
+          <AddToWatchlist name={reply.software} />
+        ) : (
+          <div className={styles['buttons']}>
+            <ButtonLink variant={main} to="/software">
+              Open the Software watchlist
+            </ButtonLink>
+          </div>
+        )}
       </Card>
       {reply.also ? (
         <>
@@ -156,13 +140,10 @@ function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { 
   const newest = useMainButton()
   const main = operator ? newest : 'secondary'
   return (
-    <Card title="How approvals work">
-      <div className={styles['pcardPart']}>
-        <p>
-          You asked me to skip a yes: <q>{reply.said}</q>. Any Approver on your team except you decides on your requests, in Teams. Nobody approves their own work, and nothing approves itself.
-        </p>
-        <p className="muted">{SAY_ANOTHER_WAY}</p>
-        <div className={styles['buttons']}>
+    <Card
+      title="How approvals work"
+      actions={
+        <>
           {rest ? (
             <Button variant={main} onClick={() => page.ask(rest)}>
               Set it up with a yes
@@ -171,8 +152,13 @@ function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { 
           <Button variant={rest ? 'secondary' : main} onClick={() => page.edit(typed)}>
             Say it another way
           </Button>
-        </div>
-      </div>
+        </>
+      }
+    >
+      <p>
+        You asked me to skip a yes: <q>{reply.said}</q>. Any Approver on your team except you decides on your requests, in Teams. Nobody approves their own work, and nothing approves itself.
+      </p>
+      <p className="muted">{SAY_ANOTHER_WAY}</p>
     </Card>
   )
 }

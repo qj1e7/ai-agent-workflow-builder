@@ -8,6 +8,7 @@ import { usePeopleList } from '../../api/settingsQueries'
 import type { DecidedReply, FailureReason, HomeOut, UseCaseView } from '../../api/types'
 import { operatorsSay } from '../../shell/OperatorsNote'
 import { ButtonLink } from '../../ui/Button'
+import { Card } from '../../ui/Card'
 import { OpenButton, OpenLink } from '../../ui/OpenItem'
 import { listClass, WorkflowRow } from '../workflows/WorkflowsPage'
 import { REFRESH_MS, rowsOf, viewerOf } from '../workflows/workflow'
@@ -295,13 +296,16 @@ export function WhyStoppedAnswer({ useCaseId, say }: { useCaseId: string | null;
       </>
     )
   }
-  const titleId = `why-${stopped.run_id}`
   const failure = { state: 'failed', stage: 'working', reason: stopped.reason, retryable: stopped.retryable, message: '' } as const
   return (
-    <section className={styles['pcard']} aria-labelledby={titleId}>
-      <div className={styles['pcardHead']}>
-        <h3 id={titleId}>{stopped.use_case_name} stopped</h3>
-      </div>
+    <Card
+      title={`${stopped.use_case_name} stopped`}
+      actions={
+        <OpenButton item={{ kind: 'run', id: stopped.run_id }} to={`/runs/${stopped.run_id}`}>
+          See the run
+        </OpenButton>
+      }
+    >
       <Troubleshooting
         runId={stopped.run_id}
         failure={failure}
@@ -313,11 +317,6 @@ export function WhyStoppedAnswer({ useCaseId, say }: { useCaseId: string | null;
         modelOff={modelOff}
         quiet={main !== 'primary'}
       />
-      <div className={styles['footer']}>
-        <OpenButton item={{ kind: 'run', id: stopped.run_id }} to={`/runs/${stopped.run_id}`}>
-          See the run
-        </OpenButton>
-      </div>
-    </section>
+    </Card>
   )
 }
