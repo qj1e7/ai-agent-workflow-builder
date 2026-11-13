@@ -787,6 +787,7 @@ test.describe('with the AI model on', () => {
         ['What can you do?', thread(page).getByRole('heading', { name: 'I can', exact: true })],
         ['Every Friday, email me the list of tickets we closed this week', thread(page).getByRole('heading', { name: 'What I can’t do yet' })],
         [`Every Monday and Friday at 9am, ${STALE}. Colour them by team.`, thread(page).getByRole('list', { name: 'Each part of your request' }).locator('[data-mark="no"]')],
+        ['Which software has a newer version?', thread(page).getByText('Looked at').last()],
       ] as const) {
         await ask(page, text)
         await expect(shown.first()).toBeVisible()
@@ -794,7 +795,13 @@ test.describe('with the AI model on', () => {
       await settled(page)
       await expectAccessible(page, path.join(OUT, 'axe'), `planner-thread-${size}`)
       await noSideways(page)
-      expect(await tooSmall(main(page).locator('button, a[href]'), await sketchSized(page)), 'principle 11: 44 px targets in the chat too, but for the sketch’s chips, Send and strip').toEqual([])
+      // The chat's own controls: the strip, the dock and the Looked at links. The cards in the answers get their own sizes as each is rebuilt.
+      const chrome = page
+        .getByRole('region', { name: 'Needs you', exact: true })
+        .locator('a, button')
+        .or(box(page).locator('xpath=ancestor::form/..').locator('button, a[href]'))
+        .or(thread(page).getByText('Looked at').locator('xpath=..').locator('a'))
+      expect(await tooSmall(chrome, await sketchSized(page)), 'principle 11: 44 px targets in the chat too, but for the sketch’s chips, Send and strip').toEqual([])
       await shot(page, info, `n10-08-thread-${size}`)
       await context.close()
       await forgetNewDrafts(backend, before)
