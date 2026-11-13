@@ -55,7 +55,7 @@ describe('the side panel', () => {
     const html = draw({ kind: 'software', id: REDIS })
     expect(html.match(/id="side-panel"/g)).toHaveLength(1)
     expect(html).toMatch(/<h2[^>]*id="side-panel-h"[^>]*tabindex="-1"[^>]*>Redis<\/h2>/)
-    expect(links(html)).toEqual([['More details', `/software?row=${REDIS}`]])
+    expect(links(html)).toEqual([['More details', `/software/${REDIS}`]])
     expect(buttons(html)).toEqual(['Close'])
   })
 

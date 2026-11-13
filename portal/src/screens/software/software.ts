@@ -4,6 +4,11 @@ import type { CapabilityView, Day, FailureReason, Refusal, ScheduleHold, Schedul
 import type { NextRun } from '../run/words'
 import { dateAndClock, lineWhen, scheduleZoneName, timesZone } from '../workflows/times'
 
+export const WATCHLIST_PATH = '/software'
+
+/** A watched software's own page. Every link to one comes here, never through the old `?row=` address. */
+export const softwarePath = (id: string): string => `${WATCHLIST_PATH}/${encodeURIComponent(id)}`
+
 /** The Software page and the side panel both refresh the watchlist this often. */
 export const REFRESH_MS = 15_000
 

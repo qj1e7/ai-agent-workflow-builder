@@ -31,7 +31,7 @@ import {
   type Moved,
 } from './removal'
 import { declinedNext, declinedOfSteps, declinedWithNext } from '../run/words'
-import { BackToWatchlist, SoftwareItem, softwarePath } from './SoftwareItem'
+import { BackToWatchlist, SoftwareItem } from './SoftwareItem'
 import {
   addressAttentionOf,
   decisionsOf,
@@ -44,6 +44,7 @@ import {
   scheduleRuns,
   singaporeTime,
   softwareLine,
+  softwarePath,
   sourcesNote,
   stateOf,
   stoppedWords,

@@ -6,13 +6,9 @@ import { TicketKeys } from '../jira/TicketKeys'
 import { MovedNote, NotFoundNote } from './NewAddress'
 import { removeButtonId } from './removal'
 import { SoftwareHistory } from './SoftwareHistory'
-import { cantCheckWords, checkedByWords, newestOf, oursOf, rowDomId, sentenceFor, singaporeTime, stateOf, ticketFact, ticketsOf } from './software'
+import { cantCheckWords, checkedByWords, newestOf, oursOf, rowDomId, sentenceFor, singaporeTime, stateOf, ticketFact, ticketsOf, WATCHLIST_PATH } from './software'
 import workflowStyles from '../workflows/Workflows.module.css'
 import styles from './Software.module.css'
-
-export const WATCHLIST_PATH = '/software'
-
-export const softwarePath = (id: string): string => `${WATCHLIST_PATH}/${encodeURIComponent(id)}`
 
 export function BackToWatchlist() {
   return (
