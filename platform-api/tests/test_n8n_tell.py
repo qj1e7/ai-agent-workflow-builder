@@ -4,6 +4,7 @@ reads only, nothing in a test run, and never twice."""
 import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Any
 
 import httpx
@@ -13,6 +14,7 @@ from fastapi.testclient import TestClient
 from platform_api.orchestration.agents import CarryForward, Finding, TaskOutput
 from platform_api.orchestration.n8n_call_service import CLAIM_LEASE, CallBook, NodeCalls
 from platform_api.orchestration.n8n_calls import (
+    ANOTHER_EXECUTION,
     NOTHING_READ,
     AgentCall,
     ExecutionFacts,
@@ -20,9 +22,10 @@ from platform_api.orchestration.n8n_calls import (
     NodeCatalog,
     ProposeCall,
     ReadCall,
+    Refused,
     TellCall,
 )
-from platform_api.orchestration.runs import Pending
+from platform_api.orchestration.runs import Outcome, Pending, Succeeded, WriteDone
 from platform_api.orchestration.store import RunRecord, Store
 from platform_api.orchestration.tell import (
     REACH,
@@ -33,7 +36,7 @@ from platform_api.orchestration.tell import (
     Told,
     compose,
 )
-from platform_api.shared import N8nExecutionId, RunId
+from platform_api.shared import N8nExecutionId, RunId, UserId
 from tests.conftest import PostgresUrls
 from tests.declared import NODE_KEY, NODE_KEY_ENV, FakeNodeCalls, app_with, declared_status
 from tests.support import NOW, SPEC
@@ -55,6 +58,7 @@ CHANNEL = "CODESparks Ops"
 BOTH = TellCall("both", "result")
 READ = ReadCall("github_releases", REPO, None)
 COMPARE = AgentCall(CARD.id, {"Project": "MOCK"})
+MADE = (WriteDone("jira", "create_ticket", "MOCK-142", (UserId("bob"),)),)
 
 
 @dataclass
@@ -79,6 +83,7 @@ class Tells:
     n8n: FakeN8n
     workflows: FakeWorkflows
     flow: Flow
+    sources: FakeSources
     calls: NodeCalls
 
     def started(self, execution: str, mode: str = "trigger", nonce: str | None = None) -> None:
@@ -110,18 +115,26 @@ class Tells:
         await self.call(execution, READ, "Read release")
         await self.call(execution, COMPARE, "Compare")
 
+    async def made(self) -> None:
+        """What E2d's write does: the gateway made the changes and the run succeeded."""
+        async with self.h.db.transaction("orchestration") as uow:
+            [run] = await Store().list_runs(uow)
+            await Store().save_run(uow, run, Succeeded(run.run_id, Outcome.WRITTEN, MADE))
 
-def tell_platform(h: Harness, flow: Flow, n8n: FakeN8n, workflows: FakeWorkflows) -> NodeCalls:
+
+def tell_platform(
+    h: Harness, flow: Flow, n8n: FakeN8n, workflows: FakeWorkflows, sources: FakeSources
+) -> NodeCalls:
     client = httpx.AsyncClient(transport=httpx.MockTransport(flow.handle))
     return NodeCalls(
         h.db,
         h.log,
         h.agent,
         mint,
-        NodeCatalog(workflows, FakeSources(), [JIRA]),
+        NodeCatalog(workflows, sources, [JIRA]),
         workflows,
         n8n,
-        FakeSources(),
+        sources,
         {},
         start_secret="test-start-secret",
         tells=TellFlow(FLOW_URL, CHANNEL, client),
@@ -131,8 +144,9 @@ def tell_platform(h: Harness, flow: Flow, n8n: FakeN8n, workflows: FakeWorkflows
 @pytest.fixture
 async def t(postgres: PostgresUrls) -> AsyncIterator[Tells]:
     async with open_harness(postgres) as h:
-        n8n, workflows, flow = FakeN8n(), FakeWorkflows(), Flow()
-        yield Tells(h, n8n, workflows, flow, tell_platform(h, flow, n8n, workflows))
+        n8n, workflows, flow, sources = FakeN8n(), FakeWorkflows(), Flow(), FakeSources()
+        calls = tell_platform(h, flow, n8n, workflows, sources)
+        yield Tells(h, n8n, workflows, flow, sources, calls)
 
 
 async def test_a_tell_posts_what_the_run_read_to_the_one_fixed_flow(t: Tells):
@@ -158,6 +172,43 @@ async def test_a_tell_claims_no_change_and_names_no_proposal(t: Tells):
     assert "Upgrade LangGraph" not in json.dumps(post)
     assert "Propose a change" not in json.dumps(post)
     assert "It asks for nothing." in post["emailHtml"]
+
+
+async def test_a_tell_after_the_write_also_reports_what_the_gateway_made(t: Tells):
+    """A Tell placed after Make the approved changes runs once the run has succeeded."""
+    t.started("101")
+    await t.read_and_compare("101")
+    await t.made()
+    assert await t.tell() == Told("sent", "Posted to CODESparks Ops and emailed the team's list.")
+    [post] = t.flow.posts
+    card = json.dumps(post["attachments"])
+    assert "Made after a yes" in card and "MOCK-142" in card and "MOCK-142" in post["emailHtml"]
+
+
+async def test_after_the_run_succeeded_only_a_tell_may_call(t: Tells):
+    t.started("101")
+    await t.read_and_compare("101")
+    await t.made()
+    reads = len(t.sources.reads)
+    refused = await t.call("101", ReadCall("github_releases", REPO, None), "Read again")
+    assert isinstance(refused, Refused) and refused.status == 409
+    assert len(t.sources.reads) == reads, "nothing is read once the run has ended"
+
+
+async def test_a_tell_after_success_comes_only_from_the_execution_that_carried_the_run(
+    t: Tells,
+):
+    t.started("101")
+    await t.read_and_compare("101")
+    t.h.advance(timedelta(minutes=1))
+    t.n8n.executions["102"] = ExecutionFacts(WORKFLOW, "retry", N8nExecutionId("101"), None, None)
+    await t.call("102", READ, "Read release")
+    await t.made()
+    assert await t.tell("101") == ANOTHER_EXECUTION
+    assert t.flow.posts == []
+    assert await t.tell("102") == Told(
+        "sent", "Posted to CODESparks Ops and emailed the team's list."
+    )
 
 
 async def test_a_tell_with_nothing_read_is_refused_and_sends_nothing(t: Tells):

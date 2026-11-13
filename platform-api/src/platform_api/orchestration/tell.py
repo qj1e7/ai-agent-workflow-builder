@@ -22,6 +22,7 @@ from typing import Any, Literal, Protocol, cast
 import httpx
 
 from platform_api.db import Database, json
+from platform_api.orchestration.runs import WriteDone
 from platform_api.orchestration.teams import (
     LINES_SHOWN,
     SUMMARY_LIMIT,
@@ -48,6 +49,7 @@ SIGN_OFF = "A notice from AI Workflow Builder. It asks for nothing."
 SUBJECT_LIMIT = 200
 LABEL_LIMIT = 200
 THE_LIST = "the team's list"
+MADE = "Made after a yes"
 
 
 @dataclass(frozen=True)
@@ -108,8 +110,19 @@ def notice_parts(results: Sequence[BlockResult]) -> tuple[NoticePart, ...]:
     return tuple(parts)
 
 
-def something_to_report(results: Sequence[BlockResult]) -> bool:
-    """An agent's findings, or what was read when no agent ran."""
+def made_parts(made: Sequence[WriteDone]) -> tuple[NoticePart, ...]:
+    """What the write gateway made after a yes, from its own records. A Tell names no other
+    change, so it never claims one the gateway did not make."""
+    if not made:
+        return ()
+    lead = "1 change" if len(made) == 1 else f"{len(made)} changes"
+    return (NoticePart(MADE, lead, tuple(done.external_reference for done in made)),)
+
+
+def something_to_report(results: Sequence[BlockResult], made: Sequence[WriteDone] = ()) -> bool:
+    """A change made after a yes, an agent's findings, or what was read when no agent ran."""
+    if made:
+        return True
     agents = [r for r in results if r.kind == "agent"]
     if agents:
         return any(_findings(item) for r in agents for item in r.items)
@@ -170,9 +183,14 @@ def _email(use_case_name: str, parts: Sequence[NoticePart]) -> Email:
     return Email(subject, "".join(sections))
 
 
-def compose(use_case_name: str, results: Sequence[BlockResult], reach: Reach) -> TellMessage:
-    """The notice, from the run's stored results only."""
-    parts = notice_parts(results)
+def compose(
+    use_case_name: str,
+    results: Sequence[BlockResult],
+    reach: Reach,
+    made: Sequence[WriteDone] = (),
+) -> TellMessage:
+    """The notice, from the run's stored results and the gateway's records only."""
+    parts = notice_parts(results) + made_parts(made)
     return TellMessage(
         _card(use_case_name, parts) if reach.card else None,
         _email(use_case_name, parts) if reach.email else None,

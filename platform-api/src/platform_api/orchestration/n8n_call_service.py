@@ -97,6 +97,7 @@ from platform_api.orchestration.runs import (
     Pending,
     RunState,
     Skipped,
+    Succeeded,
     Working,
     linked_events,
     run_created,
@@ -233,7 +234,15 @@ class LeftAsIs:
 
 type FailureResult = FailedRun | LeftAsIs | Refused | TryLater
 
-type Work = Done | Stopped | Asking | Told | Refused | TryLater
+
+@dataclass(frozen=True)
+class Kept:
+    """An answer the block's own work already kept, as a Tell keeps each of its answers."""
+
+    answer: Told | Refused
+
+
+type Work = Done | Stopped | Asking | Kept | Refused | TryLater
 
 
 def _answer(stored: Mapping[str, Any], replayed: bool = False) -> Answer:
@@ -392,6 +401,18 @@ class CallBook:
             "WHERE call_id = %s AND outcome = 'answered' AND answer ->> 'status' = 'sending'",
             (json(_stored(told)), uow.now, call_id),
         )
+
+    async def carried_last(self, uow: UnitOfWork, run_id: RunId, execution: N8nExecutionId) -> bool:
+        """Whether the run's newest execution is this one, so the one that carried it to its
+        end. Only it may still call once the run has succeeded."""
+        row = await (
+            await uow.conn.execute(
+                "SELECT execution_id FROM orchestration.executions WHERE run_id = %s "
+                "ORDER BY linked_at DESC LIMIT 1",
+                (run_id,),
+            )
+        ).fetchone()
+        return row is not None and row["execution_id"] == execution
 
     async def results_in_run(self, uow: UnitOfWork, run_id: RunId) -> tuple[BlockResult, ...]:
         """What the run's Read and Agent blocks answered, each block once, in the order they
@@ -761,7 +782,10 @@ class NodeCalls:
                 await self._book.keep(uow, call, run_id, skipped)
                 return skipped
             case Working(execution=live) if live == call.execution_id:
-                pass
+                record = await self._touch_record(uow, record)
+            case Succeeded() if call.kind == "tell":
+                if not await self._book.carried_last(uow, run_id, call.execution_id):
+                    return await self._refuse(uow, call, run_id, ANOTHER_EXECUTION)
             case Working():
                 return await self._refuse(uow, call, run_id, ANOTHER_EXECUTION)
             case Failed(failure=failure):
@@ -769,7 +793,6 @@ class NodeCalls:
             case _:
                 why = f"it is {state_name(record.state)}, not working."
                 return await self._refuse(uow, call, run_id, run_stopped(why))
-        record = await self._touch_record(uow, record)
         earlier = await self._book.answered_in_run(uow, run_id, call)
         if earlier is not None:
             answer = _replayed(call.kind, earlier)
@@ -1001,30 +1024,38 @@ class NodeCalls:
                 actions = _recorded(at_sites(bound, self._sites), None)
                 return Done(Answer((found,)), actions, tuple(events))
 
-    async def _tell(
-        self, admitted: Admitted, call: NodeCall, tell: TellCall
-    ) -> Told | Refused | TryLater:
-        """A notice under the Tell rule (ENGINE-PLAN 2.3.12): composed from what the run read,
-        and sent nowhere in a test run. Each answer but a refusal is kept here."""
+    async def _tell(self, admitted: Admitted, call: NodeCall, tell: TellCall) -> Kept | TryLater:
+        """A notice under the Tell rule (ENGINE-PLAN 2.3.12, D19): composed from what the run
+        read, with what the gateway made after a yes once the run has succeeded, and sent
+        nowhere in a test run. A Tell keeps each of its answers here, a refusal too."""
         record = admitted.record
+        made = record.state.written if isinstance(record.state, Succeeded) else ()
         async with self._db.transaction("orchestration") as uow:
             results = await self._book.results_in_run(uow, record.run_id)
             test = record.spec.stops_at_gate or await self._book.started_as_test(uow, record.run_id)
         if not results:
-            return NOTHING_READ
+            return await self._keep_tell(admitted, call, NOTHING_READ)
         if self._tells is None:
-            return NO_TELL_FLOW
+            return await self._keep_tell(admitted, call, NO_TELL_FLOW)
         reach = REACH[tell.where]
-        if tell.what == "only_when_something_to_report" and not something_to_report(results):
-            told = Told("nothing_to_report", NOTHING_TO_REPORT)
-        elif test:
-            told = Told("would_have_sent", would_have_line(reach, self._tells.channel))
-        else:
-            message = compose(record.spec.use_case_name, results, reach)
-            return await self._send(admitted, call, self._tells, message, reach)
+        if tell.what == "only_when_something_to_report" and not something_to_report(results, made):
+            return await self._keep_tell(
+                admitted, call, Told("nothing_to_report", NOTHING_TO_REPORT)
+            )
+        if test:
+            line = would_have_line(reach, self._tells.channel)
+            return await self._keep_tell(admitted, call, Told("would_have_sent", line))
+        message = compose(record.spec.use_case_name, results, reach, made)
+        return await self._send(admitted, call, self._tells, message, reach)
+
+    async def _keep_tell(
+        self, admitted: Admitted, call: NodeCall, answer: Told | Refused
+    ) -> Kept | TryLater:
         async with self._db.transaction("orchestration") as uow:
-            kept = await self._book.keep(uow, call, record.run_id, told, call_id=admitted.call_id)
-        return told if kept else BUSY
+            kept = await self._book.keep(
+                uow, call, admitted.run_id, answer, call_id=admitted.call_id
+            )
+        return Kept(answer) if kept else BUSY
 
     async def _send(
         self,
@@ -1033,7 +1064,7 @@ class NodeCalls:
         outlet: TellOutlet,
         message: TellMessage,
         reach: Reach,
-    ) -> Told | TryLater:
+    ) -> Kept | TryLater:
         """Keeps the Tell as sending before the post, so a flow that posted and then answered 5xx,
         or a stop mid-post, is never posted again: a repeat gets "sending, not confirmed"."""
         sending = Told("sending", SENDING_LINE)
@@ -1050,7 +1081,7 @@ class NodeCalls:
             told = Told("not_confirmed", not_confirmed_line(str(why)))
         async with self._db.transaction("orchestration") as uow:
             await self._book.settle(uow, admitted.call_id, told)
-        return told
+        return Kept(told)
 
     async def _finish(
         self, uow: UnitOfWork, admitted: Admitted, call: NodeCall, work: Work
@@ -1060,8 +1091,8 @@ class NodeCalls:
         if isinstance(work, TryLater):
             await self._book.release(uow, admitted.call_id)
             return work
-        if isinstance(work, Told):
-            return work
+        if isinstance(work, Kept):
+            return work.answer
         events = work.events if isinstance(work, Done | Stopped) else ()
         if events:
             await self._activity.ingest_agent_events(uow, admitted.run_id, admitted.task_id, events)
