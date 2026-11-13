@@ -1,0 +1,206 @@
+{
+  "name": "Software watchlist",
+  "nodes": [
+    {
+      "id": "966d16d5-54fe-59e3-84fd-0860e554e259",
+      "name": "About this workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -400
+      ],
+      "parameters": {
+        "content": "## Software watchlist\nChecks every watched software and raises upgrade tickets in MOCK.\n\nSet up in the Portal: https://portal.example/workflows/uc_01JB8RELEASE\n\nSafe to change here: when it runs, and the words in a block. Every change to Jira waits for a yes in Teams before it is made.",
+        "height": 260,
+        "width": 460
+      }
+    },
+    {
+      "id": "8b471566-842f-541e-8724-dfa4d9011d90",
+      "name": "Mon 9:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 9,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "80a606a9-4fe8-5c59-96ee-0d9ec526258d",
+      "name": "Start from the Portal",
+      "type": "CUSTOM.wabStartFromPortal",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {},
+      "webhookId": "7a7576d2-75be-5220-b9bd-13a55d2e9af3"
+    },
+    {
+      "id": "2e0e375b-c49d-574f-99ea-9bbf80bd8746",
+      "name": "Read the watchlist",
+      "type": "CUSTOM.wabRead",
+      "typeVersion": 1,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "source": "github_releases",
+        "place": "watchlist"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "91a2051f-51aa-52a5-be24-3d0880dd43d9",
+      "name": "Check the watchlist",
+      "type": "CUSTOM.wabAgent",
+      "typeVersion": 1,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "agent": "watchlist_checker",
+        "inputs": {
+          "input": [
+            {
+              "name": "Jira project",
+              "value": "MOCK"
+            }
+          ]
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "54622895-bfa6-5c6a-8204-037eea6b2e5c",
+      "name": "Ask for a yes",
+      "type": "CUSTOM.wabAskForYes",
+      "typeVersion": 1,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "46e60741-5a05-5342-a9ae-63a38f671868",
+      "name": "Create tickets",
+      "type": "CUSTOM.wabMakeApprovedChanges",
+      "typeVersion": 1,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {},
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "b0fa41e2-6bb6-53a0-912b-b9d87a1bff23",
+      "name": "Nothing to change",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        660,
+        200
+      ],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Mon 9:00": {
+      "main": [
+        [
+          {
+            "node": "Read the watchlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start from the Portal": {
+      "main": [
+        [
+          {
+            "node": "Read the watchlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read the watchlist": {
+      "main": [
+        [
+          {
+            "node": "Check the watchlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check the watchlist": {
+      "main": [
+        [
+          {
+            "node": "Ask for a yes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask for a yes": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Create tickets",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [],
+        [
+          {
+            "node": "Nothing to change",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Asia/Singapore",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "executionOrder": "v1",
+    "errorWorkflow": "wfErrorReporter01"
+  }
+}

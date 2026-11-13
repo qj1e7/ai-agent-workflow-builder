@@ -757,6 +757,35 @@ type FindSoftwareResult = Annotated[
 ]
 
 
+class ReadReleasesRequest(WireModel):
+    repo: RepoName = Field(description="The public GitHub repository, as owner/name.")
+    tag_pattern: TagPattern
+
+
+class ReleaseRead(WireModel):
+    tag: str
+    name: str | None
+    published_at: str | None
+
+
+class ReleasesRead(WireModel):
+    status: Literal["read"] = "read"
+    releases: list[ReleaseRead] = Field(
+        max_length=30,
+        description="The repository's stable releases that the tag rule counts, newest first, "
+        "as GitHub lists them. Empty when it has none.",
+    )
+
+
+class ReleasesNotRead(WireModel):
+    status: Literal["not_read"] = "not_read"
+    message: str = Field(max_length=300, description="What went wrong with GitHub, in plain words.")
+    retryable: bool = Field(description="True when trying again later may work.")
+
+
+type ReadReleasesResult = Annotated[ReleasesRead | ReleasesNotRead, Field(discriminator="status")]
+
+
 type FactSection = Literal["watchlist", "workflows", "needs_you"]
 
 
@@ -1304,6 +1333,8 @@ class AgentApiSchema(WireModel):
     planner_choose_result: ChooseResult
     software_find_request: FindSoftwareRequest
     software_find_result: FindSoftwareResult
+    releases_read_request: ReadReleasesRequest
+    releases_read_result: ReadReleasesResult
     planner_answer_request: AnswerRequest
     planner_answer_result: AnswerResult
     planner_check_part_request: CheckPartRequest

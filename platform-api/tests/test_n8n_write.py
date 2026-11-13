@@ -12,7 +12,8 @@ from platform_api.orchestration.approvals import Decision, Ended, Refusal, Verdi
 from platform_api.orchestration.dispatch import N8nWaker
 from platform_api.orchestration.jira import PRACTICE_SITE
 from platform_api.orchestration.model_settings import KeyBox
-from platform_api.orchestration.n8n_call_service import CallBook, NodeCalls
+from platform_api.orchestration.n8n_call_book import CallBook
+from platform_api.orchestration.n8n_call_service import NodeCalls
 from platform_api.orchestration.n8n_calls import (
     ANOTHER_EXECUTION,
     DENIED,
@@ -60,6 +61,7 @@ from tests.test_n8n_wait import (
     READ,
     TWO_STEPS,
     TWO_WORKING_DAYS_LATER,
+    FakeLanding,
     FakeN8nWaits,
     SpecWorkflows,
     Wait,
@@ -167,7 +169,7 @@ async def w(postgres: PostgresUrls) -> AsyncIterator[Writes]:
             public_base_url=PUBLIC_BASE_URL,
             waker=N8nWaker(N8N, NODE_KEY, box, client),
         )
-        writes = Writes(h, n8n, workflows, calls, waits, orchestrator)
+        writes = Writes(h, n8n, workflows, calls, waits, orchestrator, FakeLanding())
         writes.flaky = flaky
         yield writes
 

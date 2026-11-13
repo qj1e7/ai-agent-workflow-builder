@@ -1088,7 +1088,8 @@ def test_builder_migration_0014_puts_every_use_case_on_the_shared_run_and_back(
         upgrade("builder", postgres.owner)
         conn.execute(insert, ("uc_engine_own", NOW))
         conn.execute(
-            "UPDATE builder.use_cases SET engine = 'own' WHERE use_case_id = 'uc_engine_own'"
+            "UPDATE builder.use_cases SET engine = 'own', n8n_workflow_id = 'wf_own'"
+            " WHERE use_case_id = 'uc_engine_own'"
         )
         assert conn.execute(
             "SELECT use_case_id, engine FROM builder.use_cases"
@@ -1199,6 +1200,52 @@ async def test_migration_0020_keeps_a_request_from_before_without_expiry_and_a_w
         before = await store.load_approval(uow, ApprovalId("apr_before"))
         assert await store.held_wait(uow, ApprovalId("apr_before")) is None
     assert before is not None and (before.expires_at, before.ended) == (None, None)
+
+
+def test_builder_migration_0015_keeps_each_own_workflow_and_each_version_s_n8n_record(
+    postgres: PostgresUrls,
+):
+    insert = (
+        "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version)"
+        " VALUES (%s, 'alice', %s, 1)"
+    )
+    version = (
+        "INSERT INTO builder.use_case_versions (use_case_id, version, template, name,"
+        " instruction, params, created_at, n8n_version_id, grade, document)"
+        " VALUES (%s, 1, 'agent_cards', 'n', 'i', '{}', %s, %s, %s, %s)"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        downgrade("builder", postgres.owner, "0014")
+        conn.execute(insert, ("uc_n8n_before", NOW))
+        upgrade("builder", postgres.owner)
+        try:
+            with pytest.raises(psycopg.errors.CheckViolation):
+                conn.execute(
+                    "UPDATE builder.use_cases SET engine = 'own'"
+                    " WHERE use_case_id = 'uc_n8n_before'"
+                )
+            conn.execute(insert, ("uc_n8n_own", NOW))
+            conn.execute(
+                "UPDATE builder.use_cases SET engine = 'own', n8n_workflow_id = 'wf1'"
+                " WHERE use_case_id = 'uc_n8n_own'"
+            )
+            conn.execute(version, ("uc_n8n_own", NOW, "v1", "safe", '{"nodes": []}'))
+            with pytest.raises(psycopg.errors.CheckViolation):
+                conn.execute(version, ("uc_n8n_before", NOW, "v1", None, None))
+            with pytest.raises(psycopg.errors.UniqueViolation):
+                conn.execute(
+                    "UPDATE builder.use_cases SET n8n_workflow_id = 'wf1'"
+                    " WHERE use_case_id = 'uc_n8n_before'"
+                )
+            downgrade("builder", postgres.owner, "0014")
+            assert conn.execute(
+                "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'builder'"
+                " AND column_name IN ('n8n_workflow_id', 'n8n_version_id', 'document')"
+            ).fetchone() == (0,)
+        finally:
+            conn.execute("DELETE FROM builder.use_case_versions WHERE use_case_id LIKE 'uc_n8n_%'")
+            conn.execute("DELETE FROM builder.use_cases WHERE use_case_id LIKE 'uc_n8n_%'")
+            upgrade("builder", postgres.owner)
 
 
 async def test_migration_0021_keeps_one_practice_notice_per_block_of_a_run_and_goes_back(

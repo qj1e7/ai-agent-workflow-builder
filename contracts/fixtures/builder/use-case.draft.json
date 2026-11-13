@@ -48,5 +48,85 @@
     }
   ],
   "last_run": null,
-  "left_out": []
+  "left_out": [],
+  "blocks": [
+    {
+      "name": "Mon 8:00",
+      "kind": "schedule",
+      "next": [
+        {
+          "exit": null,
+          "to": "Read release"
+        }
+      ]
+    },
+    {
+      "name": "Start from the Portal",
+      "kind": "start",
+      "next": [
+        {
+          "exit": null,
+          "to": "Read release"
+        }
+      ]
+    },
+    {
+      "name": "Read release",
+      "kind": "read",
+      "next": [
+        {
+          "exit": null,
+          "to": "Compare"
+        }
+      ]
+    },
+    {
+      "name": "Compare",
+      "kind": "agent",
+      "next": [
+        {
+          "exit": null,
+          "to": "Newer?"
+        }
+      ]
+    },
+    {
+      "name": "Newer?",
+      "kind": "branch",
+      "next": [
+        {
+          "exit": "true",
+          "to": "Ask for a yes"
+        },
+        {
+          "exit": "false",
+          "to": "Nothing to change"
+        }
+      ]
+    },
+    {
+      "name": "Ask for a yes",
+      "kind": "ask",
+      "next": [
+        {
+          "exit": "Yes",
+          "to": "Create ticket"
+        },
+        {
+          "exit": "Nothing to change",
+          "to": "Nothing to change"
+        }
+      ]
+    },
+    {
+      "name": "Create ticket",
+      "kind": "write",
+      "next": []
+    },
+    {
+      "name": "Nothing to change",
+      "kind": "end",
+      "next": []
+    }
+  ]
 }

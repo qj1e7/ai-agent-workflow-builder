@@ -26,7 +26,8 @@ from platform_api.orchestration.approvals import (
 from platform_api.orchestration.dispatch import N8nWaker
 from platform_api.orchestration.jira import PRACTICE_SITE
 from platform_api.orchestration.model_settings import KeyBox
-from platform_api.orchestration.n8n_call_service import CallBook, NodeCalls
+from platform_api.orchestration.n8n_call_book import CallBook
+from platform_api.orchestration.n8n_call_service import NodeCalls
 from platform_api.orchestration.n8n_calls import (
     TEST_RUN_STOPS,
     AskCall,
@@ -107,11 +108,23 @@ class FakeN8nWaits:
         if self.answer == "down":
             raise httpx.ConnectError(f"cannot reach {request.url}")
         self.posts.append((str(request.url), json.loads(request.content)))
+        if self.answer == "took it, answer lost":
+            raise httpx.ReadTimeout(f"no answer from {request.url}")
         return httpx.Response(409 if self.answer == "gone" else 200, json={})
 
     @property
     def decisions(self) -> list[str]:
         return [body["decision"] for _, body in self.posts]
+
+
+@dataclass
+class FakeLanding:
+    """What n8n's record of each execution says after a wake met a 409."""
+
+    ran: set[str] = field(default_factory=set[str])
+
+    async def landed(self, execution_id: N8nExecutionId) -> bool:
+        return execution_id in self.ran
 
 
 @dataclass
@@ -131,6 +144,7 @@ class Wait:
     calls: NodeCalls
     waits: FakeN8nWaits
     orchestrator: Orchestrator
+    landing: FakeLanding
 
     def started(self, execution: str, mode: str = "trigger", nonce: str | None = None) -> None:
         self.n8n.executions[execution] = ExecutionFacts(WORKFLOW, mode, None, nonce, "v1")
@@ -220,8 +234,9 @@ async def w(postgres: PostgresUrls) -> AsyncIterator[Wait]:
             mint,
             public_base_url=PUBLIC_BASE_URL,
             waker=N8nWaker(N8N, NODE_KEY, box, client),
+            landing=(landing := FakeLanding()),
         )
-        yield Wait(h, n8n, workflows, calls, waits, orchestrator)
+        yield Wait(h, n8n, workflows, calls, waits, orchestrator, landing)
 
 
 async def test_the_ask_makes_one_request_for_what_the_blocks_proposed(w: Wait):
@@ -357,7 +372,10 @@ async def test_a_no_ends_the_run_declined_and_wakes_n8n_with_no(w: Wait):
 
 
 async def test_a_409_on_the_wake_loses_the_run_at_once(w: Wait):
+    """On a first try a 409 means something else resumed the execution, even when n8n shows it
+    running, so the run is lost."""
     await w.ask()
+    w.landing.ran.add("101")
     w.waits.answer = "gone"
     await w.decide(BOB)
     await w.tick()
@@ -366,6 +384,34 @@ async def test_a_409_on_the_wake_loses_the_run_at_once(w: Wait):
     assert (await w.h.kinds(run.run_id))[-1] == "run_lost"
     [row] = await w.wake_rows()
     assert row["status"] == "given_up"
+
+
+async def test_a_409_after_an_earlier_try_that_n8n_took_is_delivered_not_lost(w: Wait):
+    """E2b's lost answer: the first try resumed the execution but its answer never came back, so
+    the retry meets a 409. n8n shows the execution running, so the yes was delivered."""
+    await w.ask()
+    w.landing.ran.add("101")
+    w.waits.answer = "took it, answer lost"
+    await w.decide(BOB)
+    await w.tick()
+    assert isinstance((await w.run()).state, AwaitingApproval)
+    w.waits.answer = "gone"
+    await w.tick(timedelta(minutes=1))
+    run = await w.run()
+    assert isinstance(run.state, Acting)
+    assert (await w.h.kinds(run.run_id))[-1] == "execution_resumed"
+    [row] = await w.wake_rows()
+    assert row["status"] == "sent"
+
+
+async def test_a_409_after_an_earlier_try_is_lost_when_n8n_shows_no_run(w: Wait):
+    await w.ask()
+    w.waits.answer = "took it, answer lost"
+    await w.decide(BOB)
+    await w.tick()
+    w.waits.answer = "gone"
+    await w.tick(timedelta(minutes=1))
+    assert isinstance((await w.run()).state, Lost)
 
 
 async def test_a_wake_n8n_cannot_take_for_a_day_loses_the_run(w: Wait):

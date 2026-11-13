@@ -37,4 +37,10 @@ describe('the pack', () => {
     const file: unknown = JSON.parse(readFileSync(join(__dirname, '..', 'node-types.json'), 'utf8'));
     expect(file, 'node-types.json is out of date. Run npm run manifest in n8n-node-pack.').toEqual(manifest());
   });
+
+  it('keeps the copy in contracts/, which the safety checker in platform-api reads, the same', () => {
+    const ours = readFileSync(join(__dirname, '..', 'node-types.json'), 'utf8');
+    const copy = readFileSync(join(__dirname, '..', '..', 'contracts', 'n8n', 'node-types.json'), 'utf8');
+    expect(copy, 'contracts/n8n/node-types.json differs. Run npm run manifest in n8n-node-pack.').toBe(ours);
+  });
 });

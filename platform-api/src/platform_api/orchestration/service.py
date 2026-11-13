@@ -70,10 +70,12 @@ from platform_api.orchestration.dispatch import (
     Delivered,
     DispatchFailure,
     Gone,
+    HeldWait,
     MessageRef,
     OutcomeVerdict,
     RetryPolicy,
     WakeDecision,
+    WakeLanding,
     WakePolicy,
     Waker,
     WorkflowEngine,
@@ -556,6 +558,7 @@ class Orchestrator:
         time_zone: ZoneInfo = TEAM_TIME_ZONE,
         waker: Waker | None = None,
         wake_policy: WakePolicy = WAKE_POLICY,
+        landing: WakeLanding | None = None,
     ) -> None:
         self._db = db
         self._public_base_url = public_base_url.rstrip("/")
@@ -573,6 +576,7 @@ class Orchestrator:
         self._retry = retry_policy
         self._waker = waker
         self._wake_policy = wake_policy
+        self._landing = landing
         self._wake = asyncio.Event()
 
     async def start_run(
@@ -1469,6 +1473,8 @@ class Orchestrator:
         if self._waker is None:
             raise DispatchFailure("this platform has no WAB_NODE_KEY to sign a wake")
         answer = await self._waker.wake(held, request.id, decision)
+        if isinstance(answer, Gone) and await self._earlier_wake_landed(row, held):
+            answer = Delivered()
         async with self._db.transaction("orchestration") as uow:
             record = await self._store.load_run(uow, row.run_id, lock=True)
             assert record is not None
@@ -1488,6 +1494,14 @@ class Orchestrator:
                     await self._store.outbox_give_up(uow, row.id, "n8n answered 409")
                     why = "the waiting execution was resumed by something else, or has finished"
                     await self._lose(uow, record, approval_id, decision, why)
+
+    async def _earlier_wake_landed(self, row: OutboxRow, held: HeldWait) -> bool:
+        """A 409 after an earlier try may only mean that try's answer was lost: n8n took the
+        wake and resumed the execution, and then the line dropped. n8n's own record decides, and
+        only one of a running or finished execution counts as delivered."""
+        if row.attempt == 0 or self._landing is None:
+            return False
+        return await self._landing.landed(held.execution_id)
 
     async def _lose(
         self,
