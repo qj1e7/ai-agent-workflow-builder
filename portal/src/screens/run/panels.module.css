@@ -388,13 +388,15 @@
   }
 }
 
-/* The AI troubleshooter's answers (the sketch's .qa): a label and its words, side by side where there is room. */
+/* The AI troubleshooter's answers (the sketch's .qa): a label and its words, side by side while the list itself has room. The
+   list's own width decides, so the side panel and a card stack them when they are narrow, whatever the window's width. */
 .answers {
   display: grid;
   flex: 1;
   gap: 8px;
   min-width: 0;
   margin: 0;
+  container: answers / inline-size;
 }
 
 .answers > div {
@@ -415,7 +417,7 @@
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 520px) {
+@container answers (max-width: 320px) {
   .answers > div {
     grid-template-columns: minmax(0, 1fr);
     gap: 2px;
