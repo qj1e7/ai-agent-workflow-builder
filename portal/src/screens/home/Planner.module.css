@@ -141,8 +141,8 @@
   flex: none;
   place-items: center;
   align-self: flex-end;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border: 0;
   border-radius: var(--r-ctl);
   background: var(--ink);
@@ -541,10 +541,12 @@
   font-size: 0.875rem;
 }
 
+/* A 44 px target that takes the line's own height. */
 .lookedAt a {
   display: inline-flex;
   align-items: center;
-  min-height: 32px;
+  min-height: 44px;
+  margin-block: -6px;
 }
 
 .actions {
@@ -634,9 +636,13 @@
   gap: 6px 12px;
 }
 
+/* New chat: a 44 px target that takes no more room than its line. */
 .dockRow .linkButton {
-  margin-left: auto;
-  padding: 6px 4px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin: -6px 0 -6px auto;
+  padding: 0 4px;
   color: var(--muted);
   font-size: 0.88rem;
 }

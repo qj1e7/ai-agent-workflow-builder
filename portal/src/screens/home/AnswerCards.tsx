@@ -9,7 +9,7 @@ import { OpenButton } from '../../ui/OpenItem'
 import { AskTheTeam } from './AskTheTeam'
 import { useAsker } from './asker'
 import { cantLines, questionActions, refusalNext, SAY_ANOTHER_WAY, startingPoints } from './answers'
-import { andList, cardFrom } from './card'
+import { cardFrom } from './card'
 import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard } from './parts'
 import { SetupCard, type CardStart } from './SetupCard'
 import { CapabilityLists } from './CapabilityLists'
@@ -312,9 +312,9 @@ export function Answer({ reply, typed, page }: AnswerProps) {
       const names = questionActions(reply, asker)
       if (names.length === 0) return <LookedAt sections={reply.looked_at} />
       return (
-        <Card title={andList(names)}>
+        <Card title={names.length === 1 ? names[0] : 'On your watchlist'}>
           <LookedAt sections={reply.looked_at} />
-          <SoftwareActions names={names} />
+          <SoftwareActions names={names} named={names.length > 1} />
         </Card>
       )
     }

@@ -107,7 +107,7 @@ async function noSideways(page: Page): Promise<void> {
   expect(widths[0], 'no sideways scroll').toBeLessThanOrEqual(widths[1] ?? 0)
 }
 
-/** The controls under 44 px tall. The sketch's chips (36 px) and the needs strip's Open and “N more” (32 px) are drawn smaller on purpose, so they are left out by name. */
+/** The controls under 44 px tall. The sketch's chips (36 px), Send (40 px) and the needs strip's Open and “N more” (32 px) are drawn smaller on purpose, so they are left out by name. */
 async function tooSmall(controls: Locator, sketchSized: readonly string[] = []): Promise<string[]> {
   const small: string[] = []
   for (const control of await controls.all()) {
@@ -118,11 +118,11 @@ async function tooSmall(controls: Locator, sketchSized: readonly string[] = []):
   return small
 }
 
-/** The names of the controls the sketch draws under 44 px: the chips, and the strip's Open and “N more”. */
+/** The names of the controls the sketch draws under 44 px: the chips, Send, and the strip's Open and “N more”. */
 async function sketchSized(page: Page): Promise<string[]> {
   const chips = await page.getByRole('group', { name: /^(Suggestions|Starting points)$/ }).getByRole('button').allInnerTexts()
   const strip = await page.getByRole('region', { name: 'Needs you', exact: true }).locator('a, button').allInnerTexts()
-  return [...chips, ...strip].map((name) => name.trim())
+  return [...chips, ...strip, 'Send'].map((name) => name.trim())
 }
 
 test.describe('with no AI model', () => {
@@ -794,6 +794,7 @@ test.describe('with the AI model on', () => {
       await settled(page)
       await expectAccessible(page, path.join(OUT, 'axe'), `planner-thread-${size}`)
       await noSideways(page)
+      expect(await tooSmall(main(page).locator('button, a[href]'), await sketchSized(page)), 'principle 11: 44 px targets in the chat too, but for the sketch’s chips, Send and strip').toEqual([])
       await shot(page, info, `n10-08-thread-${size}`)
       await context.close()
       await forgetNewDrafts(backend, before)
