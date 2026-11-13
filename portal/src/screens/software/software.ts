@@ -28,7 +28,7 @@ export function cantCheckWords(problem: string | null, checking: Checking): stri
 
 /** GitHub told the check the saved repository has no home: the row says so, with no way to fix it by button. */
 export function notFoundWords(row: Pick<WatchedSoftwareView, 'name' | 'source'>, { operator, scheduled, paused }: Checking & { readonly operator: boolean }): string {
-  const skipped = `GitHub can’t find ${row.source.ref}. It may have moved to another repository. ${row.name} stays Can’t check until GitHub finds that address.`
+  const skipped = `GitHub can’t find ${row.source.ref}, and doesn’t say where it moved.`
   if (!operator) return `${skipped} An Operator can fix this.`
   return `${skipped} Remove it and add it again at its new address. ${checkedAgain({ scheduled, paused })}`
 }

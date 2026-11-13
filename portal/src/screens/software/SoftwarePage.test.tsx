@@ -727,7 +727,7 @@ describe('a repository GitHub moved', () => {
     const html = pageOf(ALICE, 'LangServe')
     const row = text(html)
     expect(row).toContain('Can’t find')
-    expect(row).toContain('GitHub can’t find langchain-ai/langserve. It may have moved to another repository. LangServe stays Can’t check until GitHub finds that address. Remove it and add it again at its new address.')
+    expect(row).toContain('GitHub can’t find langchain-ai/langserve, and doesn’t say where it moved. Remove it and add it again at its new address.')
     expect(row).not.toContain('Use the new address')
     expect(row).not.toContain('GitHub answered 404')
     expect(buttons(html).at(-1)).toMatch(/^Remove from watchlist/)

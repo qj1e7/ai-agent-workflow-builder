@@ -415,7 +415,7 @@ for (const phone of [false, true]) {
     await page.keyboard.press('Enter')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('LangServe')
     const item = page.getByRole('main')
-    await expect(item).toContainText('GitHub can’t find langchain-ai/langserve. It may have moved to another repository. LangServe stays Can’t check until GitHub finds that address. Remove it and add it again at its new address.')
+    await expect(item).toContainText('GitHub can’t find langchain-ai/langserve, and doesn’t say where it moved. Remove it and add it again at its new address.')
     await expect(item).not.toContainText('GitHub answered 404')
     await expect(page.getByRole('button', { name: /^Use the new address/ })).toHaveCount(0)
     await expect(page.getByRole('button', { name: /^Remove from watchlist/ })).toBeVisible()
