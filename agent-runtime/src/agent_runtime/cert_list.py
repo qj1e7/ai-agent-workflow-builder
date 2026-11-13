@@ -6,18 +6,31 @@ and what a person must check first. It builds the Teams card and the email of th
 The rules, the words, the knobs and the row caps are his. Only what the n8n Code node took from
 its own settings is a parameter here: the page's address, who is emailed and the channel's name.
 
-His rules are kept as he wrote them, quirks included, so a list reads the same before and after
-the move. One example: a cell that has "na" anywhere in it, as in "pending finance", reads as a
-certificate that never expires. `tests/test_cert_list.py` holds his test and compares this port
-with his script's own output.
+His rules are kept as he wrote them, so a list reads the same before and after the move, apart
+from three deliberate changes, where his rule could leave a certificate with no reminder:
+
+- "No expiry". His line 83 took any cell with "na" in it as never expiring, so "31 Jan 2027 (DNS
+  name)", "internal", "maintenance" or "signature" hid a real date. Here a cell never expires only
+  when it is just "n/a", "na", "n.a." or "not applicable", or when it holds a no-expiry phrase and
+  no date. A cell with both a date and such a phrase is held back for a person ("conflicting").
+- Guessed dates. JavaScript's Date.UTC rolls 31 February on to 3 March and reads the year 26 as
+  1926. Here a day or month past its end, or a year not written with four digits, is a date to
+  check ("unreadable-date"). A numeric date is still read day first, as Singapore writes it, so
+  03/04/2027 is 3 April.
+- Links. A name, an environment or a cell from the page goes into the card and the email through
+  `inert`, as every Teams card of ours does, so it is never a link.
+
+`tests/test_cert_list.py` holds his test and compares this port with his script's own output.
 """
 
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Any, Final, Literal
 from zoneinfo import ZoneInfo
+
+from agent_runtime.inert import inert
 
 WARN_DAYS: Final = 60
 """The "needs action" window, in days."""
@@ -45,9 +58,12 @@ ACTION_STEPS: Final = (
     "Fill in ENV and remove duplicate rows so the next run can post them as confirmed.",
 )
 
-type Bucket = Literal["no-environment", "unreadable-date", "expired-long-ago", "duplicate-row"]
+type Bucket = Literal[
+    "no-environment", "unreadable-date", "conflicting", "expired-long-ago", "duplicate-row"
+]
 type Basis = Literal["renewal date", "last date in cell", "as written"]
-type Undated = Literal["empty", "no-expiry", "stored-elsewhere", "unreadable"]
+type Undated = Literal["empty", "no-expiry", "stored-elsewhere", "unreadable", "conflicting"]
+type Guess = Literal["guess"]
 
 
 class CertListError(Exception):
@@ -130,20 +146,15 @@ def _month(name: str) -> int | None:
     return found if found is not None else MONTHS.get(name[:3].lower())
 
 
-def _full_year(year: int) -> int:
-    return 2000 + year if year < 100 else year
-
-
-def utc_day(year: int, month: int, day: int) -> date | None:
-    """A day as JavaScript's Date.UTC makes it: a year from 0 to 99 is in the 1900s, and a month
-    or a day past its end runs on into the next one, so 31 February is 3 March."""
-    if 0 <= year <= 99:
-        year += 1900
-    year += month // 12
+def calendar_day(year: str, month: int, day: int) -> date | Guess:
+    """The day exactly as written, with the month counted from 0. A year not written with four
+    digits, or a day or month past its end, would need a guess."""
+    if len(year) != 4:
+        return "guess"
     try:
-        return date(year, month % 12 + 1, 1) + timedelta(days=day - 1)
-    except ValueError, OverflowError:
-        return None
+        return date(int(year), month + 1, day)
+    except ValueError:
+        return "guess"
 
 
 _DATE_ALT: Final = "|".join(
@@ -165,9 +176,11 @@ _DAY_MONTH: Final = re.compile(
     r"([0-9]{1,2})\s*[/.-]?\s*([A-Za-z]{3,9})\.?\s*[/.-]?\s*([0-9]{2,4})"
 )
 _MONTH_DAY: Final = re.compile(r"([A-Za-z]{3,9})\.?\s+([0-9]{1,2}),?\s*([0-9]{4})")
+BARE_NO_EXPIRY: Final = frozenset({"n/a", "na", "n.a.", "not applicable"})
+"""A whole cell that says the certificate does not expire."""
 _NO_EXPIRY: Final = re.compile(
-    r"never\s*expir|no\s*expir|not\s*using\s*cert|no\s*cert|n/?a|not\s+applicable|permanent|"
-    r"static\s*key|public\s*key",
+    r"\b(?:never\s*expir|no\s*expir|not\s*using\s*cert|no\s*cert|n/a\b|not\s+applicable|"
+    r"permanent|static\s*key|public\s*key)",
     re.IGNORECASE,
 )
 _ELSEWHERE: Final = re.compile(
@@ -181,16 +194,16 @@ def _one_spaced(text: str) -> str:
     return _SPACES.sub(" ", text)
 
 
-def parse_one(raw: str) -> date | None:
+def parse_one(raw: str) -> date | Guess | None:
     text = _one_spaced(raw).strip()
     if m := _ISO.fullmatch(text):
-        return utc_day(int(m[1]), int(m[2]) - 1, int(m[3]))
+        return calendar_day(m[1], int(m[2]) - 1, int(m[3]))
     if m := _DAY_FIRST.fullmatch(text):
-        return utc_day(_full_year(int(m[3])), int(m[2]) - 1, int(m[1]))
+        return calendar_day(m[3], int(m[2]) - 1, int(m[1]))
     if (m := _DAY_MONTH.fullmatch(text)) and (month := _month(m[2])) is not None:
-        return utc_day(_full_year(int(m[3])), month, int(m[1]))
+        return calendar_day(m[3], month, int(m[1]))
     if (m := _MONTH_DAY.fullmatch(text)) and (month := _month(m[1])) is not None:
-        return utc_day(int(m[3]), month, int(m[2]))
+        return calendar_day(m[3], month, int(m[2]))
     return None
 
 
@@ -202,25 +215,35 @@ class Dated:
 
 
 def read_validity_end(cell: str) -> Dated | Undated:
-    """Reads the cell like a human: "renewed on X" wins, otherwise the last date written."""
+    """Reads the cell like a human: "renewed on X" wins, otherwise the last date written. A date
+    that would need a guess, or one beside a no-expiry phrase, is left for a person."""
     text = cell.strip()
     if not text:
         return "empty"
-    if _NO_EXPIRY.search(text):
+    if " ".join(text.split()).casefold() in BARE_NO_EXPIRY:
         return "no-expiry"
     dates = [
         (day, _one_spaced(m[0]).strip())
         for m in _DATE.finditer(text)
         if (day := parse_one(_one_spaced(m[0]))) is not None
     ]
+    says_no_expiry = _NO_EXPIRY.search(text) is not None
     if not dates:
+        if says_no_expiry:
+            return "no-expiry"
         return "stored-elsewhere" if _ELSEWHERE.search(text) else "unreadable"
+    if says_no_expiry:
+        return "conflicting"
     renewed = _RENEWED.search(text)
     if renewed and renewed[1]:
         day = parse_one(_one_spaced(renewed[1]))
         if day is not None:
+            if not isinstance(day, date):
+                return "unreadable"
             return Dated(day, "renewal date", _one_spaced(renewed[1]).strip())
     last_day, last_raw = dates[-1]
+    if not isinstance(last_day, date):
+        return "unreadable"
     return Dated(last_day, "last date in cell" if len(dates) > 1 else "as written", last_raw)
 
 
@@ -319,8 +342,13 @@ def _esc(text: object) -> str:
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def _cut(text: object, length: int) -> str:
-    return _esc(str(text)[:length])
+def _shown(text: str) -> str:
+    """Text from the page, for the email: never a link, and escaped."""
+    return _esc(inert(text))
+
+
+def _said(cell: str) -> str:
+    return f"&quot;{_esc(inert(cell)[:90])}&quot;"
 
 
 def _color_of(days: int) -> str:
@@ -372,7 +400,7 @@ def _row_set(item: Cert) -> dict[str, Any]:
                 "items": [
                     {
                         "type": "TextBlock",
-                        "text": f"{item.marker} {item.name}",
+                        "text": f"{item.marker} {inert(item.name)}",
                         "wrap": True,
                         "size": "Small",
                     }
@@ -455,11 +483,13 @@ class CertReport:
     duplicates: list[Cert]
     no_expiry: list[Untracked]
     stored_elsewhere: list[Untracked]
+    conflicting: list[Untracked]
     needs_rows: list[NeedsRow] = field(default_factory=list[NeedsRow])
 
     @property
     def needs_confirm_count(self) -> int:
-        return len(self.missing_env) + len(self.unreadable) + len(self.stale) + len(self.duplicates)
+        held = (self.missing_env, self.unreadable, self.conflicting, self.stale, self.duplicates)
+        return sum(len(rows) for rows in held)
 
     @property
     def has_alerts(self) -> bool:
@@ -509,6 +539,7 @@ class CertReport:
         parts = [
             f"{len(self.missing_env)} without ENV" if self.missing_env else "",
             f"{len(self.unreadable)} unreadable date" if self.unreadable else "",
+            f"{len(self.conflicting)} with a date and no expiry" if self.conflicting else "",
             f"{len(self.stale)} stale row(s)" if self.stale else "",
             f"{len(self.duplicates)} duplicate(s)" if self.duplicates else "",
         ]
@@ -526,7 +557,7 @@ class CertReport:
             env_blocks.append(
                 {
                     "type": "TextBlock",
-                    "text": f"{env} ({len(items)})",
+                    "text": f"{inert(env)} ({len(items)})",
                     "size": "Small",
                     "weight": "Bolder",
                     "separator": True,
@@ -537,7 +568,7 @@ class CertReport:
                 env_blocks.append(
                     {
                         "type": "TextBlock",
-                        "text": f"… and {len(items) - MAX_LIST_PER_ENV} more in {env}",
+                        "text": f"… and {len(items) - MAX_LIST_PER_ENV} more in {inert(env)}",
                         "size": "Small",
                         "isSubtle": True,
                     }
@@ -624,7 +655,7 @@ class CertReport:
                     _table_of(
                         ["Certificate", "Validity end", "Status"],
                         self.missing_env[:MAX_ROWS_PER_SECTION],
-                        lambda r: [_esc(r.name), r.validity_end, _status(r)],
+                        lambda r: [_shown(r.name), r.validity_end, _status(r)],
                     ),
                 )
             )
@@ -637,7 +668,20 @@ class CertReport:
                     _table_of(
                         ["Environment", "Certificate", "Cell says"],
                         self.unreadable[:MAX_ROWS_PER_SECTION],
-                        lambda r: [_esc(r.env), _esc(r.name), f"&quot;{_cut(r.raw_end, 90)}&quot;"],
+                        lambda r: [_shown(r.env), _shown(r.name), _said(r.raw_end)],
+                    ),
+                )
+            )
+        if self.conflicting:
+            blocks.append(
+                _block(
+                    f"A date and &quot;no expiry&quot; in one cell ({len(self.conflicting)})",
+                    "The cell gives a date and also says the certificate does not expire, so it is "
+                    "not posted to Teams. Keep the one that is true.",
+                    _table_of(
+                        ["Environment", "Certificate", "Cell says"],
+                        self.conflicting[:MAX_ROWS_PER_SECTION],
+                        lambda r: [_shown(r.env), _shown(r.name), _said(r.raw_end)],
                     ),
                 )
             )
@@ -651,7 +695,7 @@ class CertReport:
                     _table_of(
                         ["Environment", "Certificate", "Validity end"],
                         self.stale[:MAX_ROWS_PER_SECTION],
-                        lambda r: [_esc(r.env), _esc(r.name), r.validity_end],
+                        lambda r: [_shown(r.env), _shown(r.name), r.validity_end],
                     ),
                 )
             )
@@ -664,7 +708,7 @@ class CertReport:
                     _table_of(
                         ["Environment", "Certificate", "Validity end"],
                         self.duplicates[:MAX_ROWS_PER_SECTION],
-                        lambda r: [_esc(r.env), _esc(r.name), r.validity_end],
+                        lambda r: [_shown(r.env), _shown(r.name), r.validity_end],
                     ),
                 )
             )
@@ -732,6 +776,7 @@ class CertReport:
             "later_count": self.later_count,
             "missing_env_count": len(self.missing_env),
             "unreadable_count": len(self.unreadable),
+            "conflicting_count": len(self.conflicting),
             "stale_count": len(self.stale),
             "duplicate_count": len(self.duplicates),
             "not_tracked_count": self.not_tracked_count,
@@ -739,6 +784,7 @@ class CertReport:
             "confirmed": [_plain(i) for i in self.confirmed],
             "missing_env": [_plain(i) for i in self.missing_env],
             "unreadable": [_plain(i) for i in self.unreadable],
+            "conflicting": [_plain(i) for i in self.conflicting],
             "stale": [_plain(i) for i in self.stale[:STALE_KEPT]],
             "duplicates": [_plain(i) for i in self.duplicates],
             "needs_rows": [vars(row) for row in self.needs_rows],
@@ -787,10 +833,12 @@ def parse_cert_list(storage: str, now: datetime, where: Where) -> CertReport:
     no_expiry: list[Untracked] = []
     stored_elsewhere: list[Untracked] = []
     unreadable: list[Untracked] = []
+    conflicting: list[Untracked] = []
     undated: Mapping[str, list[Untracked]] = {
         "no-expiry": no_expiry,
         "stored-elsewhere": stored_elsewhere,
         "unreadable": unreadable,
+        "conflicting": conflicting,
     }
     for number, row in enumerate(rows, start=1):
         raw_end = _at(row, end_column).strip()
@@ -816,6 +864,7 @@ def parse_cert_list(storage: str, now: datetime, where: Where) -> CertReport:
     buckets: tuple[tuple[Bucket, Sequence[Cert | Untracked]], ...] = (
         ("no-environment", missing_env),
         ("unreadable-date", unreadable),
+        ("conflicting", conflicting),
         ("expired-long-ago", stale),
         ("duplicate-row", duplicates),
     )
@@ -836,5 +885,6 @@ def parse_cert_list(storage: str, now: datetime, where: Where) -> CertReport:
         duplicates=duplicates,
         no_expiry=no_expiry,
         stored_elsewhere=stored_elsewhere,
+        conflicting=conflicting,
         needs_rows=needs,
     )

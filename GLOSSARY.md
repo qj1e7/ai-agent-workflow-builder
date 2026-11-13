@@ -212,7 +212,7 @@ The specialist agent that reads each watched software's releases at its source, 
 _Avoid_: Release checker (the old name), scanner
 
 **Cert list parser**:
-The specialist agent that reads the certificate list on a Confluence page and finds the certificates that expire within 60 days, and the rows someone must check first: no environment, a date it cannot read, a row expired more than a year ago, or a row written twice. Its rules are the team's cert reminder's. It ships as a starter card and only reads, so it asks nobody for a yes.
+The specialist agent that reads the certificate list on a Confluence page and finds the certificates that expire within 60 days, and the rows someone must check first: no environment, a date it cannot read or would have to guess, a date beside "no expiry", a row expired more than a year ago, or a row written twice. Its rules are the team's cert reminder's. It ships as a starter card and only reads, so it asks nobody for a yes.
 
 **Leg**:
 Retired on 13 Nov 2026 (ADR 0026). It was the part of a run that n8n carried in one execution, a work leg and an act leg with our platform owning the pause between them. Each workflow is now its own n8n workflow, and n8n holds the wait for a yes.

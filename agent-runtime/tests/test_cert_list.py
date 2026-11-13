@@ -11,7 +11,7 @@ import json
 import re
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -143,9 +143,16 @@ def test_the_split_reads_like_his_printout(out: CertReport):
     [
         ("renewed on 14 May 2026, was 01 Jan 2026", date(2026, 5, 14), "renewal date"),
         ("01 Jan 2026 then 05/03/2027", date(2027, 3, 5), "last date in cell"),
-        ("2026-02-31", date(2026, 3, 3), "as written"),
-        ("4 Sept 26", date(2026, 9, 4), "as written"),
+        ("4 Sept 2026", date(2026, 9, 4), "as written"),
         ("Dec 31, 2026", date(2026, 12, 31), "as written"),
+        ("03/04/2027", date(2027, 4, 3), "as written"),
+        ("31 Jan 2027 (DNS name)", date(2027, 1, 31), "as written"),
+        ("15 Mar 2027, internal", date(2027, 3, 15), "as written"),
+        ("01 Feb 2027 after maintenance", date(2027, 2, 1), "as written"),
+        ("01 Feb 2027 final", date(2027, 2, 1), "as written"),
+        ("01 Feb 2027, signature cert", date(2027, 2, 1), "as written"),
+        ("01 Feb 2027 tenant", date(2027, 2, 1), "as written"),
+        ("15 Dec 2026, pending finance", date(2026, 12, 15), "as written"),
     ],
 )
 def test_a_cell_is_read_like_a_person_reads_it(cell: str, day: date, basis: str):
@@ -159,13 +166,80 @@ def test_a_cell_is_read_like_a_person_reads_it(cell: str, day: date, basis: str)
     [
         ("", "empty"),
         ("never expires", "no-expiry"),
-        ("15 Dec 2026, pending finance", "no-expiry"),
+        ("static public key", "no-expiry"),
+        ("N/A", "no-expiry"),
+        (" na ", "no-expiry"),
+        ("n.a.", "no-expiry"),
+        ("Not applicable", "no-expiry"),
+        ("N/A, kept in Imperva", "no-expiry"),
+        ("15 Dec 2026, never expires", "conflicting"),
+        ("N/A until 15 Dec 2026", "conflicting"),
         ("kept in Keycloak", "stored-elsewhere"),
         ("renewed yearly", "unreadable"),
+        ("internal", "unreadable"),
     ],
 )
 def test_a_cell_with_no_date_to_track_says_why(cell: str, kind: str):
     assert read_validity_end(cell) == kind
+
+
+@pytest.mark.parametrize(
+    "cell",
+    [
+        "31 Feb 2027",
+        "2027-02-30",
+        "00/01/2027",
+        "2027-13-01",
+        "05/01/27",
+        "4 Sept 26",
+        "04-Dec-26",
+        "renewed on 14 May 26, was 01 Jan 2026",
+    ],
+)
+def test_a_date_that_would_need_a_guess_is_a_date_to_check(cell: str):
+    assert read_validity_end(cell) == "unreadable"
+
+
+def test_a_date_with_no_expiry_beside_it_is_held_back_for_a_person_with_the_cell():
+    html = HTML.replace("<td>15 Dec 2026</td>", "<td>15 Dec 2026, never expires</td>")
+    report = parse_cert_list(html, NOW, WHERE)
+    assert [c.name for c in report.confirmed] == [
+        "gccdev-intra.example-certs.internal",
+        "intranet.example-certs.internal",
+        "gccuat-intra.example-certs.internal",
+    ]
+    [held] = [r for r in report.needs_rows if r.bucket == "conflicting"]
+    assert (held.name, held.cell) == ("gccuat.example-certs.internal", "15 Dec 2026, never expires")
+    assert report.needs_confirm_count == 6 and report.not_tracked_count == 2
+    assert "A date and &quot;no expiry&quot; in one cell (1)" in report.email_html
+    assert "1 with a date and no expiry" in report.needs_note
+
+
+def text_blocks(node: object) -> list[str]:
+    """Every TextBlock's text in a card, which is where Teams reads markdown."""
+    if isinstance(node, list):
+        return [text for item in cast(list[object], node) for text in text_blocks(item)]
+    if not isinstance(node, dict):
+        return []
+    block = cast(dict[str, object], node)
+    found = [str(block["text"])] if block.get("type") == "TextBlock" else []
+    return found + [text for value in block.values() for text in text_blocks(value)]
+
+
+UNTRUSTED = "[renew](https://evil.example) www.evil.example mailto:bob@evil.example"
+
+
+def test_what_the_page_says_is_never_a_link_in_the_card_or_the_email():
+    html = HTML.replace("intranet.example-certs.internal", UNTRUSTED).replace(
+        "<td>PRD</td>", "<td>see http://evil.example</td>", 1
+    )
+    report = parse_cert_list(html, NOW, WHERE)
+    texts = " ".join(text_blocks(report.card)).lower()
+    assert "](" not in texts and "www.evil" not in texts and "mailto:" not in texts
+    assert "://" not in texts
+    assert "🟠 [renew] (https[:]//evil[.]example) www[.]evil[.]example mailto[:]bob" in texts
+    email = report.email_html.lower()
+    assert "https://evil" not in email and "http://evil" not in email and "](" not in email
 
 
 def test_september_is_written_as_javascript_writes_it():
