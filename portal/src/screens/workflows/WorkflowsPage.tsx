@@ -20,7 +20,7 @@ import { IconChevronRight, IconSearch } from '../../ui/icons'
 import { OpenLink } from '../../ui/OpenItem'
 import { Toast, UNDO_ID, type ToastMessage } from '../../ui/Toast'
 import { draftPath, savedLeft } from '../home/card'
-import { draftWords, moreWords, NEED_GROUPS, needsOf, type NeedGroup } from '../home/home'
+import { draftWords, moreWords, NEED_GROUPS, needsOf } from '../home/home'
 import { useArrivalScroll } from './arrival'
 import { StatusPills } from './Status'
 import { RequestView } from './RequestView'
@@ -151,8 +151,6 @@ interface NeedsYouProps extends DraftRowsProps {
   readonly now: Date
 }
 
-const GROUP_ROWS: Record<NeedGroup, number> = { now: 0, set: 1 }
-
 /**
  * Needs you, as the sketch draws it: a heading, Do now and Set up, and one plain row for each thing, with its dot and a chevron.
  * A saved draft is a Set up row too, with Resume as the row and Discard beside it. Nothing shows while nothing needs the person.
@@ -173,7 +171,7 @@ function NeedsYou({ drafts, now, onDiscard }: NeedsYouProps) {
         if (inGroup.length === 0 && inDrafts.length === 0) return null
         const labelId = `${headingId}-${group}`
         return (
-          <div key={group} className={styles['group']} data-order={GROUP_ROWS[group]}>
+          <div key={group} className={styles['group']}>
             <h3 id={labelId}>{label}</h3>
             <ul className={styles['needs']} aria-labelledby={labelId}>
               {inGroup.map((row) => (
@@ -325,7 +323,14 @@ function Loaded({ handedOver, now, me, useCases }: LoadedProps) {
           {problem}
         </p>
       ) : null}
-      {viewer.operator || home ? <NeedsYou drafts={viewer.operator ? (drafts ?? []) : []} now={now} onDiscard={(draft) => { setDiscardProblem(null); setDiscarding(draft) }} /> : null}
+      <NeedsYou
+        drafts={viewer.operator ? (drafts ?? []) : []}
+        now={now}
+        onDiscard={(draft) => {
+          setDiscardProblem(null)
+          setDiscarding(draft)
+        }}
+      />
       <section className={styles['block']} aria-labelledby="all-workflows-h">
         <h2 id="all-workflows-h">All workflows</h2>
         {searchable ? <FindBar query={query} filter={filter} onQuery={setQuery} onFilter={setFilter} /> : null}
