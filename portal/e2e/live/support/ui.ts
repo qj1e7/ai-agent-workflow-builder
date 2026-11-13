@@ -61,3 +61,12 @@ export async function decline(scope: Page | Locator, reason?: string): Promise<v
   if (reason !== undefined) await why.getByRole('button', { name: reason }).click()
   await why.getByRole('button', { name: 'Decline' }).click()
 }
+
+/**
+ * An answer about one run shows it beside the chat by itself on a wide screen, and offers Open on a narrow one (the sketch's
+ * auto-open). Waits for the first, presses the second.
+ */
+export async function showRun(page: Page, opener: Locator): Promise<void> {
+  if ((page.viewportSize()?.width ?? 0) > 900) await expect(page.locator('#side-panel'), 'on a wide screen the run opens beside the chat by itself').toBeVisible({ timeout: 20_000 })
+  else await opener.click()
+}

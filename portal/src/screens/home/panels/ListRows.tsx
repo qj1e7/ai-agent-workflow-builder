@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import type { UseCaseView, WatchedSoftwareView } from '../../../api/types'
 import { OpenLink } from '../../../ui/OpenItem'
 import { lifeWords, pillOf, SOFTWARE_PAGE, whenWords, workflowPath } from '../../workflows/workflow'
@@ -31,15 +31,21 @@ function Pill({ words, tone }: { words: string; tone: Tone }) {
   )
 }
 
-function Row({ item, to, name, line, state }: { item: Parameters<typeof OpenLink>[0]['item']; to: string; name: string; line: string; state: { words: string; tone: Tone } }) {
+/** The row is one button. Its name is the workflow or software, and its line and state are read after it as its description. */
+function Row({ item, to, name, line, state, data }: { item: Parameters<typeof OpenLink>[0]['item']; to: string; name: string; line: string; state: { words: string; tone: Tone }; data: Record<string, string> }) {
+  const id = useId()
   return (
-    <li>
-      <OpenLink item={item} to={to} className={styles['row']}>
+    <li {...data}>
+      <OpenLink item={item} to={to} className={styles['row']} aria-labelledby={`${id}n`} aria-describedby={`${id}l ${id}s`}>
         <span>
-          <b>{name}</b>
-          <span className={styles['small']}>{line}</span>
+          <b id={`${id}n`}>{name}</b>
+          <span id={`${id}l`} className={styles['small']}>
+            {line}
+          </span>
         </span>
-        <Pill words={state.words} tone={state.tone} />
+        <span id={`${id}s`}>
+          <Pill words={state.words} tone={state.tone} />
+        </span>
       </OpenLink>
     </li>
   )
@@ -57,6 +63,7 @@ export function WorkflowRows({ useCases, label }: { useCases: readonly UseCaseVi
           name={useCase.name}
           line={whenWords(useCase).words}
           state={workflowState(useCase)}
+          data={{ 'data-workflow-id': useCase.use_case_id }}
         />
       ))}
     </ul>
@@ -70,7 +77,7 @@ export function SoftwareRows({ rows, label }: { rows: readonly WatchedSoftwareVi
   return (
     <ul className={styles['wl']} aria-label={label}>
       {rows.map((row) => (
-        <Row key={row.id} item={{ kind: 'software', id: row.id }} to={softwareTo(row)} name={row.name} line={softwareLine(row)} state={{ words: statusWords(row), tone: toneOf(row) }} />
+        <Row key={row.id} item={{ kind: 'software', id: row.id }} to={softwareTo(row)} name={row.name} line={softwareLine(row)} state={{ words: statusWords(row), tone: toneOf(row) }} data={{ 'data-software-id': row.id }} />
       ))}
     </ul>
   )

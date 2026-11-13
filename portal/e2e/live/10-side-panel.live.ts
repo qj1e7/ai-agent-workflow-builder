@@ -6,7 +6,7 @@ import { assertClean, watchPage } from '../support/test'
 import { connectMockModel } from './support/settings'
 import { setMockGithubMode, type Backend } from './support/stack'
 import { expect, test } from './support/test'
-import { decline, devContext, OUT, shot } from './support/ui'
+import { decline, devContext, OUT, shot, showRun } from './support/ui'
 
 /**
  * The side panel (spec 3.3, 3.4, ADR 0043): an item opened from a card in the chat shows beside it, one at a time, with More
@@ -85,7 +85,7 @@ for (const width of [1280, 900]) {
     const watch = watchPage(page)
     await page.setViewportSize({ width, height: width > 900 ? 900 : 844 })
     await page.goto('/')
-    await ask(page, 'Check my workflows')
+    await ask(page, `Check ${name}`)
     const opener = newest(page).getByRole('button', { name, exact: true })
     await opener.click()
 
@@ -125,7 +125,7 @@ test('FIX-wide: on a wide screen the chat sits next to its side panel', async ({
   for (const width of [1920, 1440]) {
     await page.setViewportSize({ width, height: 1000 })
     await page.goto('/')
-    await ask(page, 'Check my workflows')
+    await ask(page, `Check ${name}`)
     await newest(page).getByRole('button', { name, exact: true }).click()
     const gap = await page.evaluate(() => {
       const chat = document.querySelector('[aria-label="Conversation"] > div')?.getBoundingClientRect()
@@ -152,9 +152,8 @@ test('a stopped run: SHELL-more, RUN-retry-from-chat and RUN-retry-panel, at 128
 
   await ask(page, `Why did ${names[0] ?? ''} stop?`)
   const card = newest(page)
-  await card.locator(`[data-opens="run:${first}"]`).click()
+  await showRun(page, card.locator(`[data-opens="run:${first}"]`))
   await expect(panel(page)).toContainText(/What happened[\s\S]*What was affected[\s\S]*Safe to retry[\s\S]*Retry the run/)
-  await expect(heading(page), 'focus is on the heading once the run has loaded').toBeFocused()
   await expect(card.getByRole('button', { name: 'Retry the run' }), 'a flow shows once: the card gives its Retry to the panel').toHaveCount(0)
   await expect(card.locator(`[data-opens="run:${first}"]`), '…and its See the run').toHaveCount(0)
   await shot(page, info, 'r3-side-panel-run-1280')
@@ -173,7 +172,7 @@ test('a stopped run: SHELL-more, RUN-retry-from-chat and RUN-retry-panel, at 128
 
   await page.setViewportSize({ width: 900, height: 844 })
   await ask(page, `Why did ${names[1] ?? ''} stop?`)
-  await newest(page).locator(`[data-opens="run:${second}"]`).click()
+  await showRun(page, newest(page).locator(`[data-opens="run:${second}"]`))
   await expectBesideOrCovering(page, 900)
   await expect(panel(page).getByRole('button', { name: 'Retry the run' })).toBeVisible()
   await expect(heading(page), 'focus is on the heading in the dialog').toBeFocused()
@@ -189,7 +188,7 @@ test('a stopped run: SHELL-more, RUN-retry-from-chat and RUN-retry-panel, at 128
 
 async function openRequest(page: Page, runId: string): Promise<Locator> {
   await ask(page, 'What needs me?')
-  const opener = newest(page).locator(`[data-opens="run:${runId}"]`)
+  const opener = newest(page).locator(`[data-opens="approval:${runId}"]`)
   await opener.click()
   return opener
 }
@@ -215,7 +214,7 @@ test('APPR-panel: Alice declines in the side panel, focus goes to its heading, t
   await shot(page, info, 'r12-panel-declined-by-alice-1280')
   expect(await pageScroll(page), '#app has not scrolled').toEqual([0, 0, 0])
   await panel(page).getByRole('button', { name: 'Close' }).click()
-  await expect(newest(page).locator(`[data-opens="run:${runId}"]`), 'the card in the chat no longer waits for a yes').toHaveCount(0, { timeout: 20_000 })
+  await expect(newest(page).locator(`[data-opens="approval:${runId}"]`), 'the card in the chat no longer waits for a yes').toHaveCount(0, { timeout: 20_000 })
   assertClean(watch)
   await context.close()
 })
@@ -314,7 +313,7 @@ test('one Escape closes one thing: an editor in a card beside the panel first, t
   const page = await context.newPage()
   await page.setViewportSize({ width: 1280, height: 900 })
   await page.goto('/')
-  await ask(page, 'Check my workflows')
+  await ask(page, `Check ${name}`)
   await newest(page).getByRole('button', { name, exact: true }).click()
   await ask(page, 'Find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them')
   await newest(page).getByRole('button', { name: 'Every weekday', exact: true }).click()
@@ -335,11 +334,125 @@ test('narrowing the window to 900 px with the panel open moves focus from the ch
   const page = await context.newPage()
   await page.setViewportSize({ width: 1280, height: 900 })
   await page.goto('/')
-  await ask(page, 'Check my workflows')
+  await ask(page, `Check ${name}`)
   await newest(page).getByRole('button', { name, exact: true }).click()
   await box(page).focus()
   await page.setViewportSize({ width: 900, height: 844 })
   await expect(panel(page)).toHaveAttribute('role', 'dialog')
   await expect(heading(page), 'the chat behind the dialog waits, so focus moves to the panel').toBeFocused()
+  await context.close()
+})
+
+/** Jira stops answering, so a connection needs Alice. The returned function puts it right again. */
+async function jiraDown(backend: Backend): Promise<() => Promise<void>> {
+  const answering = (on: boolean) => backend.post('alice', '/api/v1/dev/practice-jira/answering', { answering: on })
+  await answering(false)
+  await backend.post('alice', '/api/v1/settings/connections/jira/check')
+  return async () => {
+    await answering(true)
+    await backend.post('alice', '/api/v1/settings/connections/jira/check')
+  }
+}
+
+async function platformNeeds(backend: Backend, user: string): Promise<number> {
+  const home = await backend.get<{ approvals_total: number; stopped_total: number; declined_total: number; questions_for_me_total: number; confirmations: unknown[]; connections: unknown[]; addresses: unknown[]; replied: unknown[] }>(user, '/api/v1/home')
+  return home.approvals_total + home.stopped_total + home.declined_total + home.questions_for_me_total + home.confirmations.length + home.connections.length + home.addresses.length + home.replied.length
+}
+
+const strip = (page: Page) => page.getByRole('region', { name: 'Needs you', exact: true })
+
+for (const width of [1440, 390]) {
+  test(`PANEL-needs at ${String(width)} px: N more opens Needs you beside the chat, a row opens beside it with Back, More details is the full page, and Escape puts focus on N more`, async ({ browser, backend }, info) => {
+    const tag = randomUUID().slice(0, 6)
+    const [stop] = await stoppedRuns(backend, [`Needs panel ${tag}`])
+    if (!stop) throw new Error('a stopped run')
+    const repair = await jiraDown(backend)
+    const context = await devContext(browser, 'alice', { reducedMotion: true })
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await page.setViewportSize({ width, height: width > 900 ? 900 : 844 })
+    await page.goto('/')
+    await ask(page, 'What can you do?')
+    const total = await platformNeeds(backend, 'alice')
+    expect(total).toBeGreaterThan(1)
+    const more = strip(page).getByRole('button', { name: `${String(total - 1)} more that need you` })
+    await expect(more, 'the strip’s N more is a button that opens the panel').toBeVisible()
+
+    await more.click()
+    await expect(heading(page)).toHaveText('Needs you')
+    await expect(heading(page), 'focus goes to the panel’s heading').toBeFocused()
+    await expect(panel(page).locator('li[data-home-item]'), 'the panel lists every need: N more plus one').toHaveCount(total)
+    await expect(panel(page).getByRole('heading', { name: 'Do now' })).toBeVisible()
+    await expect(panel(page).getByRole('link', { name: 'More details' })).toHaveAttribute('href', '/workflows')
+    await expectBesideOrCovering(page, width)
+    await expectAccessible(page, path.join(OUT, 'axe'), `side-panel-needs-${String(width)}`)
+    await shot(page, info, `c4-needs-${String(width)}`)
+
+    await panel(page).locator(`li[data-home-item="stopped:${stop}"] button`).click()
+    await expect(panel(page)).toContainText(/Safe to retry/)
+    const back = panel(page).getByRole('button', { name: 'Needs you', exact: true })
+    await expect(back, 'Back names the list it returns to').toBeVisible()
+    await back.click()
+    await expect(heading(page)).toHaveText('Needs you')
+    await expect(panel(page).locator('li[data-home-item]')).toHaveCount(total)
+
+    await panel(page).locator(`li[data-home-item="stopped:${stop}"] button`).click()
+    await panel(page).getByRole('link', { name: 'More details' }).click()
+    await expect(page).toHaveURL(new RegExp(`/runs/${stop}$`))
+    await expect(thread(page), 'the second click is the full page, with the chat gone').toHaveCount(0)
+    await page.getByRole('link', { name: 'Back to the chat' }).click()
+    await expect(panel(page), 'the panel is as it was on return').toBeVisible()
+
+    await page.keyboard.press('Escape')
+    await expect(panel(page)).toHaveCount(0)
+    await expect(strip(page).getByRole('button', { name: /more that need you$/ }), 'Escape puts focus back on what opened the panel').toBeFocused()
+    expect(await pageScroll(page), '#app has not scrolled').toEqual([0, 0, 0])
+    assertClean(watch)
+    await repair()
+    await context.close()
+  })
+}
+
+test('PANEL-connection: a connection that needs Alice opens beside the chat in the platform’s words, and sends her to Settings', async ({ browser, backend }, info) => {
+  const repair = await jiraDown(backend)
+  const context = await devContext(browser, 'alice', { reducedMotion: true })
+  const page = await context.newPage()
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  await ask(page, 'What needs me?')
+  await newest(page).locator('[data-opens="connection:jira"]').click()
+  await expect(heading(page)).toHaveText('Jira')
+  await expect(panel(page)).toContainText('Connection')
+  await expect(panel(page)).toContainText('Jira is not answering.')
+  await expect(panel(page).getByRole('link', { name: 'See it in Settings' })).toHaveAttribute('href', '/settings?tab=connections')
+  await expect(panel(page)).not.toContainText('Asked the admin')
+  await shot(page, info, 'c4-connection-1440')
+  await repair()
+  await context.close()
+})
+
+test('AUTO-open: on a wide screen an answer about one stopped run shows it beside the chat by itself, without moving focus, and on a narrow one it waits for Open', async ({ browser, backend }, info) => {
+  const tag = randomUUID().slice(0, 6)
+  const names = [`Auto wide ${tag}`, `Auto narrow ${tag}`]
+  const [wide, narrow] = await stoppedRuns(backend, names)
+  if (!wide || !narrow) throw new Error('two stopped runs')
+  const context = await devContext(browser, 'alice', { reducedMotion: true })
+  const page = await context.newPage()
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  await ask(page, `Why did ${names[0] ?? ''} stop?`)
+  await expect(panel(page), 'the run opened beside the chat at once').toBeVisible({ timeout: 20_000 })
+  await expect(panel(page)).toContainText(/Safe to retry/)
+  await expect(heading(page), 'it did not take focus').not.toBeFocused()
+  await shot(page, info, 'c4-auto-open-1440')
+  await panel(page).getByRole('button', { name: 'Close' }).click()
+  await expect(panel(page)).toHaveCount(0)
+  await ask(page, 'What can you do?')
+  await expect(panel(page), 'a closed panel is not opened again by a later answer').toHaveCount(0)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await ask(page, `Why did ${names[1] ?? ''} stop?`)
+  await expect(panel(page), 'on a narrow screen only the card shows').toHaveCount(0)
+  await newest(page).locator(`[data-opens="run:${narrow}"]`).click()
+  await expect(panel(page)).toHaveAttribute('role', 'dialog')
   await context.close()
 })

@@ -364,7 +364,6 @@ for (const user of ['alice', 'bob']) {
 
     if (user === 'alice') {
       await page.goto('/workflows')
-      const before = await lastLine(watchlist).innerText()
       for (const width of [1920, 1280, 1050, 900, 390]) {
         await page.setViewportSize({ width, height: 900 })
         await page.goto('/')
@@ -372,10 +371,11 @@ for (const user of ['alice', 'bob']) {
         await page.keyboard.press('Enter')
         const card = page.getByRole('main').getByRole('list', { name: 'Your workflows' })
         await expect(card).toBeVisible()
-        await expect(lastLine(card.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })), 'the check card says what the row says').toHaveText(before)
-        const fit = await lineFits(lastLine(card.locator('li[data-workflow-id]')), { mayWrap: width < 900 })
-        expect(fit.rows, 'the card has a line for each workflow').toBeGreaterThan(0)
-        expect(fit.broken, `each last-run line in the check card is whole at ${width} px, and on one line from 900 px`).toEqual([])
+        const shown = await card.locator('li[data-workflow-id]').count()
+        expect(shown, 'the check card shows a few workflows, at most five').toBeGreaterThan(0)
+        expect(shown).toBeLessThanOrEqual(5)
+        if (shown === 5) await expect(page.getByRole('main').getByRole('link', { name: 'See all workflows' }), 'with more left out, it ends with a way to the whole list').toBeVisible()
+        for (const row of await card.locator('li[data-workflow-id]').all()) await expect(row.locator('span[class*="pill"]'), 'each row says its state').toHaveText(/\S/)
         await shot(page, info, `r9-check-card-alice-${width}`)
       }
     }
