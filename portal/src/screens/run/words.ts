@@ -2,10 +2,10 @@ import { OPEN_RUN_AGAIN_WORDS } from '../../api/errors'
 import { connectorLabel, refusalLabel, starterName } from '../../api/labels'
 import { nextRunAt } from '../workflows/times'
 import type { SessionKind } from '../../api/session'
-import type { ApprovalActionView, ApprovalStepView, Refusal, WriteActionView } from '../../api/types'
+import type { ApprovalActionView, ApprovalStepView, Day, Refusal, UseCaseView, WriteActionView } from '../../api/types'
 import { PRODUCT } from '../../shell/product'
 import type { LiveRun } from './liveRun'
-import type { AgentRef, ChatItem, Declined, RunModel, Station } from './runModel'
+import type { AgentRef, ChatItem, Declined, PlanBlock, RunModel, Station } from './runModel'
 
 export type NameOf = (id: string) => string
 
@@ -241,8 +241,9 @@ export function headlineOf(model: RunModel, stations: readonly Station[], propos
     case 'rejected':
       return { text: 'Declined, nothing was written', pill: { label: 'Declined', tone: 'off' } }
     case 'failed': {
-      const failed = stations.find((station) => station.state === 'fail')
-      return { text: failed ? `Stopped at ${failed.label}` : 'The run stopped', pill: { label: 'Stopped', tone: 'bad' } }
+      const failed = stations.find((station) => station.state === 'err')
+      const before = failed?.spot.at === 'agent' && model.agents.length === 0
+      return { text: failed ? `Stopped ${before ? 'before' : 'at'} ${failed.label}` : 'The run stopped', pill: { label: 'Stopped', tone: 'bad' } }
     }
   }
 }
@@ -391,4 +392,103 @@ export function withCurrentNames(text: string): string {
       }),
     text,
   )
+}
+
+/** The gate's step on the run line, whatever the plan calls its block. */
+export const GATE_STEP = 'Ask for a yes'
+
+/** The sketch's words for the agent steps of the platform's own plans. A step the team named keeps its name. */
+const STEP_WORDS: Readonly<Record<string, string>> = {
+  crd_version_checker: 'Check release',
+}
+
+export function stepWords(block: PlanBlock): string {
+  return STEP_WORDS[block.key] ?? block.name
+}
+
+const DAY_SHORT: Readonly<Record<Day, string>> = {
+  every_day: 'Daily',
+  weekdays: 'Weekdays',
+  monday: 'Mon',
+  tuesday: 'Tue',
+  wednesday: 'Wed',
+  thursday: 'Thu',
+  friday: 'Fri',
+  saturday: 'Sat',
+  sunday: 'Sun',
+}
+
+export type Schedule = Pick<NonNullable<UseCaseView['schedule']>, 'day' | 'at' | 'time_zone'>
+
+const WEEKDAYS: ReadonlySet<string> = new Set(['monday', 'tuesday', 'wednesday', 'thursday', 'friday'])
+/** How late after its time a scheduled run may start and still be that schedule's run. */
+const LATE_MINUTES = 10
+
+function scheduleStarted(schedule: Schedule, startedAt: string): boolean {
+  const at = new Date(startedAt)
+  if (Number.isNaN(at.getTime())) return false
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: schedule.time_zone || TIME_ZONE, weekday: 'long', hour: 'numeric', minute: '2-digit', hourCycle: 'h23' }).formatToParts(at)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? ''
+  const day = part('weekday').toLowerCase()
+  const [hour = NaN, minute = NaN] = schedule.at.split(':').map(Number)
+  const late = Number(part('hour')) * 60 + Number(part('minute')) - (hour * 60 + minute)
+  const onDay = schedule.day === 'every_day' || (schedule.day === 'weekdays' ? WEEKDAYS.has(day) : schedule.day === day)
+  return onDay && late >= 0 && late <= LATE_MINUTES
+}
+
+/**
+ * The run line's first step: the schedule that started the run, "Daily 8:00", or the person who did, "Started by Alice".
+ * A schedule changed since the run is not shown on it, so the run reads "On schedule".
+ */
+export function triggerWords(run: Pick<RunModel, 'trigger' | 'startedBy'>, schedule: Schedule | null, nameOf: NameOf, startedAt: string): string {
+  if (run.trigger === 'schedule') return schedule && scheduleStarted(schedule, startedAt) ? `${DAY_SHORT[schedule.day]} ${schedule.at.replace(/^0/, '')}` : 'On schedule'
+  return run.startedBy ? `Started by ${nameOf(run.startedBy)}` : 'Started'
+}
+
+/** Under the step at work: "Working…", then "Working, 12 s" once a second has passed, then minutes and hours. Small lines say only "…" and "12 s". */
+export function workingWords(since: number, now: number, small: boolean): string {
+  const seconds = Math.floor((now - since) / 1000)
+  if (seconds < 1) return small ? '…' : 'Working…'
+  const took = seconds < 60 ? `${seconds} s` : seconds < 3600 ? `${Math.floor(seconds / 60)} min` : `${Math.floor(seconds / 3600)} h`
+  return small ? took : `Working, ${took}`
+}
+
+/** How a finished run ended, said once under its line. */
+export interface Settled {
+  readonly tone: 'ok' | 'off'
+  readonly text: string
+}
+
+function settledWhen(at: number, now: Date): string {
+  const { day, clock } = dayAndClock(at)
+  return day === dayAndClock(now.getTime()).day ? `at ${clock}` : `on ${day} at ${clock}`
+}
+
+function afterYeses(approvedBy: readonly string[], nameOf: NameOf): string {
+  const names = approvedBy.map(nameOf)
+  if (names.length === 0) return ''
+  return names.length === 1 ? ` after ${names.join('')}’s yes` : ` after ${andList(names)} said yes`
+}
+
+/**
+ * "Done at 9:04 · MOCK-22 created after Bob’s yes", or "Ended at 9:04 · Bob declined: not this week. Nothing was written.".
+ * A quick reason reads on in the sentence. A reason the Approver typed is kept as they typed it. Null while the run goes on or after a stop.
+ */
+export function settledOf(model: RunModel, nameOf: NameOf, now: Date, quick: readonly string[]): Settled | null {
+  const { phase } = model
+  if (phase.state !== 'succeeded' && phase.state !== 'rejected') return null
+  const end = model.chat.findLast((item) => item.kind === 'finished' || item.kind === 'declined')
+  if (!end) return null
+  const when = settledWhen(end.at, now)
+  if (phase.state === 'rejected') {
+    const reason = model.declineReason
+    const why = reason ? `: ${sentence(quick.includes(reason) ? reason.charAt(0).toLowerCase() + reason.slice(1) : reason)}` : '.'
+    const first = model.approvedBy.length > 0 ? `${andList(model.approvedBy.map(nameOf))} said yes, then ` : ''
+    return { tone: 'off', text: `Ended ${when} · ${first}${nameOf(phase.by)} declined${why} Nothing was written.` }
+  }
+  if (model.written.length === 0) return { tone: 'ok', text: `Done ${when} · Nothing new` }
+  const created = model.written.every((written) => written.operation.startsWith('create_'))
+  const refs = model.written.map((written) => written.ref).filter((ref) => ref !== '')
+  const what = refs.length > 0 ? andList(refs) : changesOf(model.written, model.written.length).noun
+  return { tone: 'ok', text: `Done ${when} · ${what} ${created ? 'created' : 'written'}${afterYeses(model.approvedBy, nameOf)}` }
 }

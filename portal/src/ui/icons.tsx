@@ -60,6 +60,25 @@ export const IconLock = drawn(
   2.2,
 )
 
+/** The run line's gate. Its shackle is marked so the line can open it once the yes is given. */
+export const IconGate = drawn(
+  'IconGate',
+  <>
+    <path data-shackle="" d="M7.95 10.8V8.1a4.05 4.05 0 0 1 8.1 0v2.7" />
+    <rect x="5.1" y="10.8" width="13.8" height="9.9" rx="2.4" fill="currentColor" />
+  </>,
+  2.7,
+)
+
+export const IconTicket = drawn(
+  'IconTicket',
+  <>
+    <rect x="3.9" y="4.5" width="16.2" height="15" rx="2.4" />
+    <path d="M7.8 9.9h8.4M7.8 14.1h5.4" />
+  </>,
+  2.7,
+)
+
 export const IconPause = drawn('IconPause', <path d="M9 6v12M15 6v12" />, 3)
 
 export const IconPlay = drawn('IconPlay', <path d="M8 5.5v13l10.5-6.5z" />, 2.2)
