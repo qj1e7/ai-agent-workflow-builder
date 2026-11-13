@@ -22,6 +22,8 @@ export const runStateLabel: Record<RunState, string> = {
   rejected: 'Declined',
   failed: 'Stopped',
   skipped: 'Skipped',
+  expired: 'No answer',
+  lost: 'Lost',
 }
 
 /** Who started a run, as people say it: "Alice", or "Alice's schedule" for a scheduled check. */

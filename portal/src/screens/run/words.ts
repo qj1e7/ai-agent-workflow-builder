@@ -242,6 +242,10 @@ export function headlineOf(model: RunModel, stations: readonly Station[], propos
       return { text: 'Declined, nothing was written', pill: { label: 'Declined', tone: 'off' } }
     case 'skipped':
       return { text: 'An earlier run is still waiting for a yes', pill: { label: 'Skipped', tone: 'off' } }
+    case 'expired':
+      return { text: 'No answer, nothing was written', pill: { label: 'No answer', tone: 'off' } }
+    case 'lost':
+      return { text: 'Approved, but n8n lost the run', pill: { label: 'Lost', tone: 'bad' } }
     case 'failed': {
       const failed = stations.find((station) => station.state === 'fail')
       return { text: failed ? `Stopped at ${failed.label}` : 'The run stopped', pill: { label: 'Stopped', tone: 'bad' } }
