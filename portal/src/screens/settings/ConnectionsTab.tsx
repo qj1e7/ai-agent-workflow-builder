@@ -80,7 +80,7 @@ function ConnectionCard({ connection, capabilities, canCheck, now }: CardProps) 
           </>
         ) : null}
       </dl>
-      {canCheck ? <CheckNow connection={connection} describedBy={textId} /> : null}
+      {canCheck && connection.state !== 'not_set_up' ? <CheckNow connection={connection} describedBy={textId} /> : null}
     </article>
   )
 }

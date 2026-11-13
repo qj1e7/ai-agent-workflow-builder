@@ -18,6 +18,7 @@ from agent_runtime.abilities import CAPABILITY_LIST
 from agent_runtime.addresses import AddressPolicy
 from agent_runtime.answers import answer_task, check_one_part
 from agent_runtime.card_runner import CardRunner
+from agent_runtime.confluence import ConfluenceReaderFor, PlatformConfluenceFor, no_confluence
 from agent_runtime.contract import (
     AgentCard,
     AgentCards,
@@ -126,8 +127,8 @@ def _required(env: Mapping[str, str], name: str) -> str:
 
 
 def _platform_jira_url(env: Mapping[str, str], origins: frozenset[Origin]) -> str | None:
-    """Where the Jira tools read, through the platform (ADR 0035). Each read carries the task's
-    callback token, so the address must be one the callbacks may go to."""
+    """Where the Jira and Confluence tools read, through the platform (ADR 0035). Each read
+    carries the task's callback token, so the address must be one the callbacks may go to."""
     if env.get("PRACTICE_JIRA_URL", "").strip():
         raise SettingsError("PRACTICE_JIRA_URL is now PLATFORM_JIRA_URL. Rename the setting.")
     url = env.get("PLATFORM_JIRA_URL", "").strip()
@@ -295,8 +296,10 @@ def build_runtime(settings: Settings) -> Runtime:
             return from_settings
         return None
 
-    jira_for: JiraReaderFor = (
-        PlatformJiraFor(settings.platform_jira_url) if settings.platform_jira_url else no_jira
+    platform = settings.platform_jira_url
+    jira_for: JiraReaderFor = PlatformJiraFor(platform) if platform else no_jira
+    confluence_for: ConfluenceReaderFor = (
+        PlatformConfluenceFor(platform) if platform else no_confluence
     )
     return Runtime(
         checker=VersionChecker(source, build_summarizer(settings), sleep=time.sleep),
@@ -304,7 +307,7 @@ def build_runtime(settings: Settings) -> Runtime:
         clock=utc_now,
         callbacks=HttpCallbacks(),
         summarizer_for=summarizer_under_policy,
-        cards=CardRunner(source, jira_for, sleep=time.sleep),
+        cards=CardRunner(source, jira_for, sleep=time.sleep, confluence_for=confluence_for),
         chat_source=chat_source,
         github=GitHubConnection(settings.github_api_base, token=settings.github_token),
         finder=SoftwareFinder(source),

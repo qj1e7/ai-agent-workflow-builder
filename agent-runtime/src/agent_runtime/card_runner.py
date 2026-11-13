@@ -21,6 +21,14 @@ from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from pydantic import ValidationError
 
+from agent_runtime.confluence import (
+    ConfluencePage,
+    ConfluenceReader,
+    ConfluenceReaderFor,
+    ConfluenceRefused,
+    ConfluenceUnavailable,
+    no_confluence,
+)
 from agent_runtime.contract import (
     AgentFailedData,
     AgentMessageData,
@@ -53,6 +61,7 @@ from agent_runtime.release_source import (
 from agent_runtime.summary import ChatFor
 from agent_runtime.tools import (
     BY_ID,
+    ConfluencePageArguments,
     JiraCreateArguments,
     JiraReadArguments,
     JiraSearchArguments,
@@ -88,6 +97,11 @@ CUT_OFF_NOTE = (
 )
 EARLIEST_DAY: Final = date(2000, 1, 1)
 NO_PROJECT = "This agent has no Jira project, so it cannot read Jira."
+CONFLUENCE_OFF: Final = TaskError(
+    type="ConfluenceNotConnected", message="Confluence is not connected.", retryable=False
+)
+NO_SUCH_PAGE = "Confluence has no such page."
+PAGE_SHOWN: Final = 6000
 
 
 def _only_projects(projects: Sequence[str]) -> str:
@@ -207,12 +221,14 @@ class CardRunner:
         sleep: Callable[[float], None],
         retry: RetryPolicy = DEFAULT_RETRY,
         now: Callable[[], float] = time.monotonic,
+        confluence_for: ConfluenceReaderFor = no_confluence,
     ) -> None:
         self._releases = releases
         self._jira_for = jira_for
         self._sleep = sleep
         self._retry = retry
         self._now = now
+        self._confluence_for = confluence_for
 
     def start(self, request: TaskRequest, chat_for: ChatFor, today: date) -> CardTask:
         return CardTask(self, request, chat_for, today, Budget(TASK_BUDGET_SECONDS, self._now))
@@ -232,6 +248,9 @@ class CardRunner:
     def jira_for(self, request: TaskRequest) -> JiraReader | None:
         return self._jira_for(request)
 
+    def confluence_for(self, request: TaskRequest) -> ConfluenceReader | None:
+        return self._confluence_for(request)
+
 
 class CardTask:
     """One task: its agents run one after another within one time budget."""
@@ -250,6 +269,7 @@ class CardTask:
         self._today = today
         self._budget = budget
         self._jira = runner.jira_for(request)
+        self._confluence = runner.confluence_for(request)
         self.proposed: list[ProposedIntent] = []
 
     def run_agent(
@@ -290,6 +310,10 @@ class CardTask:
     @property
     def jira(self) -> JiraReader | None:
         return self._jira
+
+    @property
+    def confluence(self) -> ConfluenceReader | None:
+        return self._confluence
 
 
 class _AgentRun:
@@ -428,6 +452,8 @@ class _AgentRun:
                 return self._jira_read(tool, arguments, write)
             case JiraCreateArguments():
                 return self._propose(tool, arguments, write)
+            case ConfluencePageArguments():
+                return self._confluence_read(tool, arguments, write)
             case _:
                 return _error("That tool cannot be used.")
 
@@ -575,6 +601,41 @@ class _AgentRun:
             }
         )
 
+    def _confluence_read(
+        self, tool: Tool, args: ConfluencePageArguments, write: Emit
+    ) -> str | TaskError:
+        page = args.page
+        write(self._started(tool, f"reads the Confluence page {page}."))
+        read = _from_confluence(self._task.confluence, page)
+        if isinstance(read, TaskError):
+            return self._read_failed(
+                tool,
+                f"could not read the Confluence page {page}.",
+                read,
+                f"Could not read the Confluence page {page}: {read.message}",
+                f"the Confluence page {page} could not be read.",
+                write,
+            )
+        if read is None:
+            write(self._finished(tool, f"found no Confluence page {page}.", {"page": page}))
+            return _error(NO_SUCH_PAGE)
+        write(
+            self._finished(
+                tool,
+                f"read the Confluence page {read.title}.",
+                {"page": read.title, "version": read.version},
+            )
+        )
+        return _result(
+            {
+                "id": read.id,
+                "title": read.title,
+                "version": read.version,
+                "url": read.url,
+                "text": cut(read.text, PAGE_SHOWN),
+            }
+        )
+
     def _propose(self, tool: Tool, args: JiraCreateArguments, write: Emit) -> str:
         if self._needs_reading and not self._seen_reading:
             return _error(READ_FIRST)
@@ -675,6 +736,19 @@ def _from_jira[T](jira: JiraReader | None, ask: Callable[[JiraReader], T]) -> T 
     except JiraRefused as refused:
         return TaskError(type="JiraRefused", message=str(refused), retryable=False)
     except JiraUnavailable as unavailable:
+        return TaskError(type="UpstreamUnavailable", message=str(unavailable), retryable=True)
+
+
+def _from_confluence(
+    confluence: ConfluenceReader | None, page: str
+) -> ConfluencePage | None | TaskError:
+    if confluence is None:
+        return CONFLUENCE_OFF
+    try:
+        return confluence.read(page)
+    except ConfluenceRefused as refused:
+        return TaskError(type="ConfluenceRefused", message=str(refused), retryable=False)
+    except ConfluenceUnavailable as unavailable:
         return TaskError(type="UpstreamUnavailable", message=str(unavailable), retryable=True)
 
 

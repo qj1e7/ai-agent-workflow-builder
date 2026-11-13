@@ -568,8 +568,8 @@ def test_a_new_tool_is_one_more_line_in_the_table():
     assert why_not("where", "Teams", more) is None
     assert why_not("do", "Delete them", more) == (
         "I can't delete them. I can only read Jira tickets, sum up what I find, check "
-        "software for new releases, create a Jira ticket after a yes, and post a message in "
-        "Teams."
+        "software for new releases, read a Confluence page the team allows, create a Jira "
+        "ticket after a yes, and post a message in Teams."
     )
 
 
@@ -923,3 +923,21 @@ def test_a_jira_change_that_uses_a_release_word_still_asks_for_a_change():
 def test_the_reactive_can_lists_only_the_focus_abilities():
     assert "read Jira tickets" not in CAN
     assert why_not("do", "Delete them") == f"I can't delete them. {CAN}"
+
+
+def test_one_named_confluence_page_is_read_on_a_request_in_words():
+    assert why_no_tool("look_for", "Software in the Software inventory page in Confluence") is None
+
+
+@pytest.mark.parametrize(
+    ("kind", "text"),
+    [
+        ("look_for", "Pages in Confluence changed this week"),
+        ("do", "Update the Software inventory page in Confluence"),
+        ("do", "Draft a report for the Confluence page"),
+        ("where", "The Weekly summary page in Confluence"),
+    ],
+)
+def test_any_other_confluence_part_is_still_a_cant_that_names_confluence(kind: RowKind, text: str):
+    assert why_no_tool(kind, text) is not None
+    assert need_of(kind, text) == Need("new_system", "Confluence")

@@ -37,6 +37,18 @@
       "fix": "Ask whoever set up the Teams address to check that it still works."
     },
     {
+      "id": "confluence",
+      "name": "Confluence",
+      "practice": false,
+      "state": "not_set_up",
+      "checked_at": null,
+      "last_ok_at": null,
+      "problem": "Confluence is not connected.",
+      "key_ends_in": null,
+      "expires_at": null,
+      "fix": "Ask whoever set up the platform to connect Confluence."
+    },
+    {
       "id": "model",
       "name": "AI model",
       "practice": false,

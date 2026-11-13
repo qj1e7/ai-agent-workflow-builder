@@ -205,7 +205,11 @@ class WatchlistInputs(WireModel):
 
 
 type ToolId = Literal[
-    "github.read_releases", "jira.search", "jira.read_ticket", "jira.create_ticket"
+    "github.read_releases",
+    "jira.search",
+    "jira.read_ticket",
+    "confluence.read_page",
+    "jira.create_ticket",
 ]
 type ToolKind = Literal["read", "write"]
 type InputKind = Literal["github_repo", "jira_project", "text"]
@@ -519,7 +523,7 @@ class ToolList(WireModel):
 
 type CapabilityKind = Literal["read", "write", "notify", "none"]
 type CapabilityState = Literal["ready", "planned", "unsupported"]
-type ConnectionId = Literal["jira", "github", "teams"]
+type ConnectionId = Literal["jira", "github", "teams", "confluence"]
 type ExampleKind = Literal["automate", "monitor", "learn"]
 
 

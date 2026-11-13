@@ -181,6 +181,21 @@ class SourceReads(Protocol):
     async def read(self, source: str, place: str, query: str | None) -> ReadItems | ReadFailed: ...
 
 
+class ReadSources:
+    """The Read block's sources: each named one answered by its own reader, any other by the
+    rest, so the editor's options and the check at run time ask the same reader."""
+
+    def __init__(self, own: Mapping[str, SourceReads], rest: SourceReads) -> None:
+        self._own = dict(own)
+        self._rest = rest
+
+    async def places(self, source: str) -> Sequence[NodeOption]:
+        return await self._own.get(source, self._rest).places(source)
+
+    async def read(self, source: str, place: str, query: str | None) -> ReadItems | ReadFailed:
+        return await self._own.get(source, self._rest).read(source, place, query)
+
+
 @dataclass(frozen=True)
 class WriteEntry:
     """A write a Propose a change block may name: the registry's connector and operation, and

@@ -24,6 +24,7 @@ from platform_api.monitoring import Copier
 from platform_api.monitoring import http as monitoring_http
 from platform_api.nul_guard import RefuseNul
 from platform_api.orchestration import (
+    confluence_reads_http,
     decisions_http,
     jira_reads_http,
     n8n_calls_http,
@@ -121,6 +122,7 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     if settings.practice_systems and settings.jira.practice:
         app.include_router(practice_jira_router)
     app.include_router(jira_reads_http.router)
+    app.include_router(confluence_reads_http.router)
     app.include_router(settings_http.router)
     app.include_router(people_http.router)
     app.include_router(monitoring_http.router)

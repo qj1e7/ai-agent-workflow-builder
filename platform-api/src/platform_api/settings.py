@@ -1,3 +1,4 @@
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Literal
@@ -67,6 +68,28 @@ class JiraSettings:
         return self.base_url is None
 
 
+@dataclass(frozen=True)
+class ConfluencePage:
+    """A page the platform may read: its id, and its title as people name it."""
+
+    id: str
+    title: str
+
+
+@dataclass(frozen=True)
+class ConfluenceSettings:
+    """Which Confluence the platform reads, and the only pages it may read (ENGINE-PLAN D2). No
+    address means Confluence is not connected. base_url is the wiki's own address, such as
+    https://your-site.atlassian.net/wiki. With an email the platform signs in as Atlassian Cloud
+    does, with the email and an API token. Without one it sends the token as Data Center's
+    personal access token."""
+
+    base_url: str | None = None
+    email: str | None = None
+    token: str | None = None
+    pages: tuple[ConfluencePage, ...] = ()
+
+
 PRACTICE_JIRA_PROJECT = "MOCK"
 """The practice Jira's project, where the watchlist raises tickets unless told otherwise."""
 
@@ -106,6 +129,7 @@ class Settings:
     practice_systems: bool = True
     watchlist_jira_project: str = PRACTICE_JIRA_PROJECT
     jira: JiraSettings = JiraSettings()
+    confluence: ConfluenceSettings = ConfluenceSettings()
     team_time_zone: ZoneInfo = TEAM_TIME_ZONE
     node_key: str | None = field(default=None, repr=False)
     """WAB_NODE_KEY, which our n8n node pack sends. Without it no node call is taken."""
@@ -298,11 +322,78 @@ def jira_from_env(
     return JiraSettings(base_url, flavor, token, email, issue_type, browse_url)
 
 
+CONFLUENCE_PAGE_ID = re.compile(r"[0-9]{1,20}")
+CONFLUENCE_TITLE_LIMIT = 255
+
+
+def _confluence_address(value: str) -> str:
+    """The token goes to this address with every call, so it is https, or plain http only to a
+    host with no dot in its name, which is a service on the stack's own network."""
+    parts = urlsplit(value)
+    if parts.scheme == "http" and parts.hostname and "." not in parts.hostname:
+        return _web_address("CONFLUENCE_BASE_URL", value, https_only=False)
+    return _web_address("CONFLUENCE_BASE_URL", value, https_only=True)
+
+
+def confluence_pages_from_env(raw: str) -> tuple[ConfluencePage, ...]:
+    pages: list[ConfluencePage] = []
+    for entry in (part.strip() for part in raw.split(";")):
+        if not entry:
+            continue
+        page_id, equals, title = (part.strip() for part in entry.partition("="))
+        if not equals or CONFLUENCE_PAGE_ID.fullmatch(page_id) is None:
+            raise ConfigError(
+                "CONFLUENCE_PAGES lists pages as id=title, separated by a semicolon, such as "
+                f"123456=Software inventory. {entry!r} is not one."
+            )
+        if not 1 <= len(title) <= CONFLUENCE_TITLE_LIMIT or not title.isprintable():
+            raise ConfigError(f"The title of page {page_id} in CONFLUENCE_PAGES is not one line.")
+        pages.append(ConfluencePage(page_id, title))
+    for name, values in (
+        ("id", [p.id for p in pages]),
+        ("title", [" ".join(p.title.split()).casefold() for p in pages]),
+    ):
+        if len(set(values)) < len(values):
+            raise ConfigError(f"Two pages in CONFLUENCE_PAGES have the same {name}.")
+    return tuple(pages)
+
+
+def confluence_from_env(env: Mapping[str, str], jira: JiraSettings) -> ConfluenceSettings:
+    """Unset keeps Confluence not connected. Without a token of its own it signs in with Jira's,
+    when Jira is on the same site, as Atlassian Cloud allows."""
+    raw_base = env.get("CONFLUENCE_BASE_URL", "").strip()
+    if not raw_base:
+        return ConfluenceSettings()
+    base_url = _confluence_address(raw_base)
+    email = env.get("CONFLUENCE_EMAIL", "").strip() or None
+    token = env.get("CONFLUENCE_API_TOKEN", "").strip() or None
+    same_site = jira.base_url is not None and (
+        urlsplit(jira.base_url).hostname == urlsplit(base_url).hostname
+    )
+    if token is None and same_site:
+        email, token = email or jira.email, jira.token
+    if token is None:
+        raise ConfigError("CONFLUENCE_BASE_URL is set but CONFLUENCE_API_TOKEN is not.")
+    if not all(33 <= ord(character) < 127 for character in token):
+        raise ConfigError(
+            "CONFLUENCE_API_TOKEN holds a space, a line break or a character that is not a plain "
+            "letter, digit or symbol. Paste the token again."
+        )
+    pages = confluence_pages_from_env(env.get("CONFLUENCE_PAGES", ""))
+    if not pages:
+        raise ConfigError(
+            "CONFLUENCE_BASE_URL is set, so CONFLUENCE_PAGES must list the pages the platform "
+            "may read, such as 123456=Software inventory."
+        )
+    return ConfluenceSettings(base_url, email, token, pages)
+
+
 def settings_from_env(env: Mapping[str, str]) -> Settings:
     auth = auth_config(env)
     cosmos = cosmos_from_env(env)
     public_base_url = auth.public_base_url.rstrip("/")
     practice_systems = practice_systems_from_env(env)
+    jira = jira_from_env(env, public_base_url, practice_systems)
     tell_flow = teams_webhook_from_env(env, "TEAMS_TELL_WEBHOOK_URL")
     return Settings(
         auth=auth,
@@ -330,7 +421,8 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         max_body_bytes=max_body_bytes_from_env(env),
         practice_systems=practice_systems,
         watchlist_jira_project=watchlist_jira_project_from_env(env),
-        jira=jira_from_env(env, public_base_url, practice_systems),
+        jira=jira,
+        confluence=confluence_from_env(env, jira),
         team_time_zone=team_time_zone_from_env(env),
         node_key=env.get("WAB_NODE_KEY", "").strip() or None,
         start_secret=env.get("WAB_START_SECRET", "").strip() or None,

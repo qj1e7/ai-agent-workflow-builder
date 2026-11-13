@@ -25,6 +25,14 @@
       "min_approvers": null
     },
     {
+      "id": "confluence.read_page",
+      "kind": "read",
+      "name": "Read a Confluence page",
+      "description": "Reads one Confluence page that the team allows, as plain lines.",
+      "target_input": null,
+      "min_approvers": null
+    },
+    {
       "id": "jira.create_ticket",
       "kind": "write",
       "name": "Create a Jira ticket",

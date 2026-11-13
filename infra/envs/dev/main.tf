@@ -48,6 +48,18 @@ locals {
     } : name => value if value != ""
   }
 
+  # Confluence (ENGINE-PLAN E12, D2), set the same way. Unset keeps it not connected, and only the
+  # pages in CONFLUENCE_PAGES are ever read. With no token of its own, platform-api signs in with
+  # Jira's when both are on one Atlassian site.
+  confluence_token_set = nonsensitive(var.confluence_api_token != "")
+  confluence_settings = {
+    for name, value in {
+      CONFLUENCE_BASE_URL = var.confluence_base_url
+      CONFLUENCE_EMAIL    = trimspace(var.confluence_email)
+      CONFLUENCE_PAGES    = var.confluence_pages
+    } : name => value if value != ""
+  }
+
   # The same for the Teams Workflows webhook (ADR 0036). Unset keeps the practice Teams copy.
   teams_webhook_set = nonsensitive(var.teams_webhook_url != "")
   # And for the Tell flow, which posts a run's notice and emails it (ENGINE-PLAN D1). Unset keeps
@@ -213,6 +225,7 @@ module "key_vault" {
     { "cosmos-key" = module.cosmos.primary_key },
     local.github_token_set ? { "github-token" = var.github_token } : {},
     local.jira_token_set ? { "jira-api-token" = var.jira_api_token } : {},
+    local.confluence_token_set ? { "confluence-api-token" = var.confluence_api_token } : {},
     local.teams_webhook_set ? { "teams-webhook-url" = var.teams_webhook_url } : {},
     local.teams_tell_webhook_set ? { "teams-tell-webhook-url" = var.teams_tell_webhook_url } : {},
   )
@@ -253,6 +266,7 @@ locals {
         local.tell_email_to == "" ? {} : { TELL_EMAIL_TO = local.tell_email_to },
         local.first_people,
         local.jira_settings,
+        local.confluence_settings,
       )
       secrets = merge(
         {
@@ -269,6 +283,9 @@ locals {
           COSMOS_KEY                 = local.secret["cosmos-key"]
         },
         local.jira_token_set ? { JIRA_API_TOKEN = local.secret["jira-api-token"] } : {},
+        local.confluence_token_set ? {
+          CONFLUENCE_API_TOKEN = local.secret["confluence-api-token"]
+        } : {},
         local.teams_webhook_set ? { TEAMS_WEBHOOK_URL = local.secret["teams-webhook-url"] } : {},
         local.teams_tell_webhook_set ? {
           TEAMS_TELL_WEBHOOK_URL = local.secret["teams-tell-webhook-url"]

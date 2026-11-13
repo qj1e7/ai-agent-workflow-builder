@@ -9,7 +9,7 @@ import pytest
 from platform_api.app import create_app
 from platform_api.auth import DEV_PEOPLE
 from platform_api.builder import Builder, Watchlist
-from platform_api.builder.cards import VERSION_CHECKER
+from platform_api.builder.cards import STARTER_CARDS, VERSION_CHECKER
 from platform_api.builder.models import (
     CardApprovalView,
     CardBlock,
@@ -147,7 +147,7 @@ async def test_a_saved_card_reads_back_and_a_card_with_problems_is_not_saved(bui
     assert card.tools == ["jira.create_ticket"]
     refused = await builder.create_card(ALICE, reader().model_copy(update={"inputs": []}))
     assert hasattr(refused, "refused")
-    assert len((await builder.list_cards()).cards) == 2
+    assert len((await builder.list_cards()).cards) == len(STARTER_CARDS) + 1
 
 
 async def test_the_rules_raise_the_saved_approvals(builder: Builder):
@@ -397,7 +397,8 @@ async def test_check_answers_problems_without_saving(client: httpx.AsyncClient):
     assert r.status_code == 200
     assert [p["field"] for p in r.json()["problems"]] == ["inputs"]
     assert r.json()["approvals"] == [{"tool": "jira.create_ticket", "approvers": 1}]
-    assert len((await client.get("/api/v1/agent-cards", headers=AS_BOB)).json()["cards"]) == 1
+    listed = (await client.get("/api/v1/agent-cards", headers=AS_BOB)).json()["cards"]
+    assert len(listed) == len(STARTER_CARDS)
 
 
 async def test_saving_needs_an_operator_and_no_problems(client: httpx.AsyncClient):

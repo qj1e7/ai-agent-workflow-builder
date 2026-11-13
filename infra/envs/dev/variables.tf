@@ -227,6 +227,49 @@ variable "tell_email_to" {
   }
 }
 
+# Confluence (ENGINE-PLAN E12, D2). Leave confluence_base_url empty to keep Confluence not
+# connected. The rules match platform-api's startup check, so plan refuses what would stop it.
+
+variable "confluence_base_url" {
+  description = "The wiki's address (CONFLUENCE_BASE_URL), such as https://your-site.atlassian.net/wiki. Empty keeps Confluence not connected. The token goes there with every call, so it must be https."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.confluence_base_url == "" || can(regex("^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~:/%-]*)?$", var.confluence_base_url))
+    error_message = "confluence_base_url must be empty, or an https URL: a host of letters, digits, . and -, an optional port, and a path of letters, digits and . _ ~ : / % -, with no query or fragment."
+  }
+}
+
+variable "confluence_api_token" {
+  description = "The Confluence token (CONFLUENCE_API_TOKEN), kept in Key Vault as confluence-api-token: an API token for Cloud with confluence_email, or a personal access token for Data Center. Empty signs in with jira_api_token when Jira is on the same site."
+  type        = string
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition     = var.confluence_base_url == "" || var.confluence_api_token != "" || var.jira_api_token != ""
+    error_message = "confluence_api_token must be set when confluence_base_url is, unless Jira on the same site lends its token."
+  }
+}
+
+variable "confluence_email" {
+  description = "The Confluence account's email (CONFLUENCE_EMAIL). It names the account and is not secret. Cloud signs in with it and the token. Empty sends the token alone, as Data Center takes it."
+  type        = string
+  default     = ""
+}
+
+variable "confluence_pages" {
+  description = "The only Confluence pages the platform reads (CONFLUENCE_PAGES), as id=title, separated by a semicolon, such as 123456=Software inventory."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.confluence_base_url == "" || can(regex("^ *[0-9]{1,20} *=[^;=]+(; *[0-9]{1,20} *=[^;=]+)* *;? *$", var.confluence_pages))
+    error_message = "confluence_pages must list the pages as id=title, separated by a semicolon, such as 123456=Software inventory, when confluence_base_url is set."
+  }
+}
+
 variable "github_api_base" {
   description = "GitHub API that the release checker reads."
   type        = string

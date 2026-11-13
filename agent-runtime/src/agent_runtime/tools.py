@@ -1,4 +1,4 @@
-"""The tools an agent card can use. Four, all built and tested by us. A card names tools by id,
+"""The tools an agent card can use. Five, all built and tested by us. A card names tools by id,
 and a running agent is offered exactly the tools its card names (ADR 0023)."""
 
 import re
@@ -80,6 +80,12 @@ class JiraSearchArguments(_Arguments):
 
 class JiraReadArguments(_Arguments):
     key: JiraKey = Field(description="The ticket key, such as MOCK-7.")
+
+
+class ConfluencePageArguments(_Arguments):
+    page: Annotated[str, StringConstraints(min_length=1, max_length=255)] = Field(
+        description="The Confluence page, by its title, such as Software inventory, or by its id."
+    )
 
 
 class JiraCreateArguments(_Arguments):
@@ -181,6 +187,14 @@ TOOLS: Final = (
         "Read a Jira ticket",
         "Read one Jira ticket with its body.",
         JiraReadArguments,
+    ),
+    Tool(
+        "confluence.read_page",
+        "read",
+        "Read a Confluence page",
+        "Read one Confluence page as plain lines, each table row on one line. Only the pages "
+        "the team allows can be read.",
+        ConfluencePageArguments,
     ),
     Tool(
         "jira.create_ticket",

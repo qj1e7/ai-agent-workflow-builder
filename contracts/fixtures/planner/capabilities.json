@@ -128,6 +128,27 @@
       ]
     },
     {
+      "id": "confluence.read",
+      "plain": "Read the Confluence pages the team allows",
+      "kind": "read",
+      "system": "Confluence",
+      "state": "ready",
+      "cant": null,
+      "short": null,
+      "instead": null,
+      "why": null,
+      "fix": null,
+      "connection": "confluence",
+      "last_ok_at": "2026-11-09T01:00:00Z",
+      "needs_model": true,
+      "platform": false,
+      "focus": false,
+      "tools": [
+        "confluence.read_page"
+      ],
+      "agents": []
+    },
+    {
       "id": "jira.create",
       "plain": "Create a Jira ticket after a yes",
       "kind": "write",

@@ -319,7 +319,7 @@ _Avoid_: Pod, node
 ### Setting up
 
 **Connection**:
-The platform's account in another system, such as GitHub, Jira or Teams, with its key. Agents read through it. Only the write gateway holds a key that writes.
+The platform's account in another system, such as GitHub, Jira, Teams or Confluence, with its key. Agents read through it. Only the write gateway holds a key that writes. Confluence's connection also lists the only pages the platform may read, its allowed pages.
 _Avoid_: Integration, credential
 
 **Practice copy**:
