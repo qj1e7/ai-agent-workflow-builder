@@ -13,7 +13,7 @@ import { QuestionThread } from './QuestionThread'
 import { useQuestions } from './questions'
 import { POLL_FAILED_MS, useReconnectWhenBehind } from './follow'
 import { declinedSoFarWords, statusWords } from './RunPage'
-import { RunLine, SettledLine } from './RunLine'
+import { RunLine } from './RunLine'
 import { RunPill } from './RunPill'
 import { useRunStory } from './useRunStory'
 import { nextRunOf } from '../workflows/workflow'
@@ -56,9 +56,10 @@ function FeedNotReady({ connection, onRetry }: { connection: LiveRun['connection
 }
 
 /**
- * A run in the side panel (spec 3.3): its state, its headline and the run line, with a stop's three answers and Retry. While
- * it waits for a yes the reader may give, it is the approval instead, from the run page's own gate (spec 10.4). Someone who
- * can't decide sees the summary, as in the prototype.
+ * A run in the side panel (spec 3.3): its state, its headline and the run line, with a stop's three answers and Retry. A finished
+ * run keeps its line with the settled line under it, as the sketch's panel does. Only the chat's card folds. While it waits for a
+ * yes the reader may give, it is the approval instead, from the run page's own gate (spec 10.4). Someone who can't decide sees the
+ * summary, as in the prototype.
  */
 export function RunPanel({ id }: { id: string }) {
   const run = useRun(id)
@@ -132,7 +133,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
         </p>
       ) : null}
       {declinedSoFar ? <p className="muted">{declinedSoFar}</p> : null}
-      {settled ? <SettledLine settled={settled} /> : <RunLine stations={stations} arrivedLive={arrivedLive} settled={null} small />}
+      <RunLine stations={stations} arrivedLive={arrivedLive} settled={settled} small />
       {story.model.phase.state === 'rejected' && next ? <p>{next}</p> : null}
       {failure ? (
         <>
