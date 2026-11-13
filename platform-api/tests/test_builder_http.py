@@ -36,11 +36,13 @@ from platform_api.orchestration import (
     PartAnswer,
     PartCantDo,
     PartFits,
+    PauseAnswer,
     PlannerFacts,
     PreviousTurn,
     QuestionAnswer,
     RefusedAnswer,
     RequestPart,
+    ResumeAnswer,
     RowKind,
     RunDetail,
     RunGist,
@@ -291,9 +293,10 @@ FOUR_ROWS = [
 EMAIL = CantRow(
     kind="do",
     text="email it",
-    note="I can't email it. I can only read Jira tickets.",
+    note="I can't send email yet.",
     needs="new_system",
     system="email",
+    instead="Run results show here, in the chat.",
 )
 
 
@@ -634,6 +637,8 @@ async def test_a_part_keeps_the_part_the_platform_cannot_do(front: Front):
         "note": EMAIL.note,
         "needs": "new_system",
         "system": "email",
+        "instead": "Run results show here, in the chat.",
+        "unsupported": False,
     }
 
 
@@ -1741,6 +1746,149 @@ async def test_the_runtime_is_told_an_approver_cannot_and_an_edit_answers_operat
     reply = await ask_as_bob(front, "Make the morning check run on Mondays only")
     assert front.answers.changes == [False]
     assert reply["answer"] == "operators"
+
+
+async def switch_reply(
+    front: Front, answer: PauseAnswer | ResumeAnswer, text: str = "pause the morning check"
+) -> dict[str, object]:
+    front.answers.result = answered(answer)
+    return await say(front, text)
+
+
+async def state_of(front: Front, use_case_id: str) -> str:
+    shown = await front.client.get(f"/api/v1/use-cases/{use_case_id}", headers=ALICE)
+    return str(shown.json()["state"])
+
+
+async def test_a_pause_pauses_the_one_workflow_its_words_name(front: Front):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    weekly = await make_workflow(front, "Weekly closed-ticket summary", FRIDAY_16)
+    reply = await switch_reply(front, PauseAnswer(workflow_words="morning check"))
+    assert reply == {
+        "answer": "pause",
+        "use_case_id": morning,
+        "name": "Morning new-ticket check",
+        "already": False,
+        "missing": None,
+        "choices": [],
+        "parts": [],
+    }
+    assert (await state_of(front, morning), await state_of(front, weekly)) == ("paused", "on")
+
+
+async def test_a_second_pause_says_it_was_already_paused_and_a_resume_turns_it_on(front: Front):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    await switch_reply(front, PauseAnswer(workflow_words="morning check"))
+    again = await switch_reply(front, PauseAnswer(workflow_words="morning check"))
+    assert (again["use_case_id"], again["already"]) == (morning, True)
+    on = await switch_reply(front, ResumeAnswer(workflow_words="morning check"), "resume it")
+    assert (on["answer"], on["use_case_id"], on["already"]) == ("resume", morning, False)
+    assert await state_of(front, morning) == "on"
+    on_again = await switch_reply(front, ResumeAnswer(workflow_words="morning check"), "resume")
+    assert on_again["already"] is True
+
+
+@pytest.mark.parametrize("words", [None, "check"])
+async def test_it_or_words_that_fit_several_pause_nothing_and_offer_each_one(
+    front: Front, words: str | None
+):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    weekly = await make_workflow(front, "Weekly ticket check", FRIDAY_16)
+    reply = await switch_reply(front, PauseAnswer(workflow_words=words), "pause it")
+    assert (reply["use_case_id"], reply["missing"]) == (None, None)
+    choices = cast(list[dict[str, str]], reply["choices"])
+    assert sorted(choices, key=lambda c: c["name"]) == [
+        {
+            "use_case_id": morning,
+            "name": "Morning new-ticket check",
+            "state": "on",
+            "watchlist": False,
+        },
+        {"use_case_id": weekly, "name": "Weekly ticket check", "state": "on", "watchlist": False},
+    ]
+    assert (await state_of(front, morning), await state_of(front, weekly)) == ("on", "on")
+
+
+async def test_words_that_name_no_workflow_are_missing_and_pause_nothing(front: Front):
+    weekly = await make_workflow(front, "Weekly closed-ticket summary", FRIDAY_16)
+    reply = await switch_reply(front, PauseAnswer(workflow_words="morning check"))
+    assert (reply["use_case_id"], reply["missing"], reply["choices"]) == (
+        None,
+        "morning check",
+        [],
+    )
+    assert await state_of(front, weekly) == "on"
+
+
+async def test_a_watched_softwares_check_is_offered_as_the_watchlist_and_nothing_is_paused(
+    front: Front,
+):
+    """The Software watchlist checks every software on it, so pausing it for "the LangGraph
+    check" would stop more than she asked. She picks it herself."""
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
+    await front.watchlist.add(alice, AddSoftware.model_validate(LANGGRAPH))
+    pause = PauseAnswer(workflow_words="LangGraph check", software="LangGraph")
+    reply = await switch_reply(front, pause, "pause the LangGraph check")
+    [choice] = cast(list[dict[str, str]], reply["choices"])
+    assert reply["use_case_id"] is None
+    assert await state_of(front, choice["use_case_id"]) == "on"
+
+
+async def test_a_workflow_named_for_a_watched_software_and_the_watchlist_are_both_offered(
+    front: Front,
+):
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
+    await front.watchlist.add(alice, AddSoftware.model_validate(LANGGRAPH))
+    check = await make_workflow(front, "LangGraph release check", FRIDAY_16)
+    pause = PauseAnswer(workflow_words="LangGraph check", software="LangGraph")
+    reply = await switch_reply(front, pause, "pause the LangGraph check")
+    choices = cast(list[dict[str, object]], reply["choices"])
+    assert reply["use_case_id"] is None
+    assert [(c["name"], c["watchlist"]) for c in choices] == [
+        ("LangGraph release check", False),
+        ("Software watchlist", True),
+    ]
+    assert await state_of(front, check) == "on"
+
+
+async def test_a_workflow_named_for_software_nobody_watches_is_paused(front: Front):
+    check = await make_workflow(front, "React release check", FRIDAY_16)
+    pause = PauseAnswer(workflow_words="React check", software="React")
+    reply = await switch_reply(front, pause, "pause the React check")
+    assert (reply["use_case_id"], reply["name"]) == (check, "React release check")
+    assert await state_of(front, check) == "paused"
+
+
+async def test_who_paused_and_resumed_from_the_chat_is_kept_after_the_resume(
+    front: Front, db: Database, caplog: pytest.LogCaptureFixture
+):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    caplog.set_level("INFO", logger="platform_api.builder.service")
+    await switch_reply(front, PauseAnswer(workflow_words="morning check"))
+    await switch_reply(front, PauseAnswer(workflow_words="morning check"))
+    await front.client.post(f"/api/v1/use-cases/{morning}/resume", headers=ALICE)
+    async with db.connection("builder") as conn:
+        rows = await (
+            await conn.execute(
+                "SELECT move, moved_by, via FROM builder.use_case_moves"
+                " WHERE use_case_id = %s ORDER BY moved_at",
+                (morning,),
+            )
+        ).fetchall()
+    assert [(r["move"], r["moved_by"], r["via"]) for r in rows] == [
+        ("pause", "alice", "chat"),
+        ("resume", "alice", "page"),
+    ]
+    said = [r.getMessage() for r in caplog.records if morning in r.getMessage()]
+    assert said == [f"alice paused {morning} via chat", f"alice resumed {morning} via page"]
+
+
+async def test_an_approver_pauses_nothing(front: Front):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    front.answers.result = answered(PauseAnswer(workflow_words="morning check"))
+    reply = await ask_as_bob(front, "pause the morning check")
+    assert reply["answer"] == "operators"
+    assert await state_of(front, morning) == "on"
 
 
 async def test_a_match_holding_every_word_check_included_wins(front: Front):

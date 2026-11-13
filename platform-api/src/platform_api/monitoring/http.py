@@ -161,7 +161,9 @@ async def _frames(
         409: error_response("The run has not failed, or it was retried since"),
     },
 )
-async def troubleshoot(run_id: RunId, principal: CurrentPrincipal, log: Log) -> TroubleshootingOut:
+async def troubleshoot(
+    run_id: RunId, principal: CurrentPrincipal, log: Log, settings: AppSettings
+) -> TroubleshootingOut:
     events = await log.read_after(run_id, 0)
     if not events:
         raise HTTPException(status_code=404, detail="No such run")
@@ -172,7 +174,7 @@ async def troubleshoot(run_id: RunId, principal: CurrentPrincipal, log: Log) -> 
         run_id=run_id,
         failure=failure.data,
         advice=explain_failure(failure.data),
-        answers=answers(failure.data),
+        answers=answers(failure.data, failure.ts.astimezone(settings.team_time_zone)),
     )
 
 

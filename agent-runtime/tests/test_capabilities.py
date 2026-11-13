@@ -68,7 +68,11 @@ def test_only_the_platform_duty_is_ready_without_an_ability_line():
     assert [c.id for c in READY if c.id not in ABILITY_OF] == [
         c.id for c in CAPABILITIES if c.platform
     ]
-    assert [c.id for c in CAPABILITIES if c.platform] == ["teams.ask"]
+    assert [c.id for c in CAPABILITIES if c.platform] == [
+        "teams.ask",
+        "runs.explain",
+        "workflows.change",
+    ]
 
 
 def test_a_ready_entry_needs_the_model_when_a_tool_only_the_card_runner_calls_is_its_tool():
@@ -137,7 +141,12 @@ def test_a_request_for_email_is_still_refused_in_words_though_it_is_not_a_focus_
     assert not BY_ID["email.send"].focus
     refusal = why_not("do", "Send email to the team")
     assert refusal is not None
-    assert refusal.startswith("I can't send email to the team.")
+    assert refusal.startswith("I can't send email to the team yet.")
+
+
+def test_a_request_for_slack_is_refused_without_a_yet():
+    refusal = why_not("do", "Send a Slack message to the team")
+    assert refusal is not None
     assert "yet" not in refusal.split(".")[0]
 
 

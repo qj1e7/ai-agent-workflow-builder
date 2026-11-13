@@ -1,4 +1,6 @@
 import useCase from '@contracts/fixtures/builder/use-case.json'
+import cardUseCase from '@contracts/fixtures/builder/use-case.versioned.json'
+import card from '@contracts/fixtures/runs/card.json'
 import failure from '@contracts/fixtures/runs/failure.json'
 import rejected from '@contracts/fixtures/runs/rejected.json'
 import success from '@contracts/fixtures/runs/success.json'
@@ -6,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 import type { BlockKind } from '../../api/types'
 import { runId } from '../../stream/brand'
 import { parseEvent, type RunEvent } from '../../stream/parse'
-import { emptyModel, fold, foldAll, reachOf, stationsOf, type PlanBlock, type RunModel, type Station } from './runModel'
+import { emptyModel, fold, foldAll, stationsOf, type PlanBlock, type RunModel, type Station } from './runModel'
 
 interface Raw {
   readonly run_id: string
@@ -23,13 +25,18 @@ function parsed(raw: readonly Raw[]): RunEvent[] {
 
 const replay = (raw: readonly Raw[], upTo = Infinity): RunModel => foldAll(emptyModel, parsed(raw.filter((item) => item.seq <= upTo)))
 
-const PLAN: PlanBlock[] = useCase.plan.map((block) => ({ name: block.name, kind: block.kind as BlockKind }))
-const writeLabel = () => 'Write in Jira'
+const planOf = (blocks: readonly { key: string; name: string; kind: string }[]): PlanBlock[] => blocks.map((block) => ({ key: block.key, name: block.name, kind: block.kind as BlockKind }))
+const PLAN = planOf(useCase.plan)
+const STARTED = 'Started by Alice'
+const line = (model: RunModel, plan: readonly PlanBlock[] | null = PLAN) => stationsOf(model, plan, STARTED)
 
 const shape = (stations: readonly Station[]) => stations.map((s) => `${s.key}:${s.state}:${s.face}`)
+const at = (iso: string) => Date.parse(iso)
+/** When the step's timer counts from: only the step at work has one. */
+const since = (station: Station | undefined) => (station?.under?.kind === 'timer' ? station.under.since : null)
 
-function event(seq: number, kind: string, data: Record<string, unknown>, actor = { kind: 'platform', id: 'platform', display: 'Platform' }): RunEvent {
-  const result = parseEvent({ run_id: 'run_01JB9', seq, ts: '2026-11-04T02:20:00Z', actor, summary: '', kind, data }, runId('run_01JB9'))
+function event(seq: number, kind: string, data: Record<string, unknown>, actor = { kind: 'platform', id: 'platform', display: 'Platform' }, ts = '2026-11-04T02:20:00Z'): RunEvent {
+  const result = parseEvent({ run_id: 'run_01JB9', seq, ts, actor, summary: '', kind, data }, runId('run_01JB9'))
   if (!result.ok) throw new Error(result.problem)
   return result.event
 }
@@ -49,29 +56,34 @@ describe('a run that was approved and wrote its ticket', () => {
     expect(model.approvalId).toBe('apr_01JB8')
   })
 
-  it('marks every step done and the agent that did the work happy', () => {
-    expect(shape(stationsOf(model, PLAN, writeLabel))).toEqual([
-      'started:done:idle',
-      'planner:done:idle',
-      'agent:0:done:success',
-      'gate:done:idle',
-      'write:done:idle',
-      'done:done:idle',
-    ])
-    expect(reachOf(stationsOf(model, PLAN, writeLabel))).toBe(1)
+  it('draws only the workflow’s blocks, every one done, with the agent that did the work happy', () => {
+    expect(shape(line(model))).toEqual(['trigger:done:idle', 'agent:0:done:success', 'gate:done:idle', 'write:done:idle'])
   })
 
-  it('names the steps from the plan and the agent under its step', () => {
-    const stations = stationsOf(model, PLAN, writeLabel)
-    expect(stations.map((s) => s.label)).toEqual(['Started', 'Pick agents', 'Read every source', 'Approval gate', 'Create Jira tickets', 'Done'])
-    expect(stations[2]?.sub).toBe('Version checker')
-    expect(stations[2]?.who).toEqual({ kind: 'agent', agent: { id: 'version_checker', display: 'Version checker' } })
-    expect(stations[0]?.who).toEqual({ kind: 'person', id: 'alice' })
+  it('puts the ticket it wrote under the write, and nothing under any other step', () => {
+    expect(line(model).map((s) => s.under)).toEqual([null, null, null, { kind: 'tickets', written: [{ connector: 'jira', operation: 'create_ticket', ref: 'MOCK-142', url: '/jira/MOCK-142' }] }])
+  })
+
+  it('names the steps from the plan, the gate as asking for a yes, and puts the agent above its step', () => {
+    const stations = line(model)
+    expect(stations.map((s) => s.label)).toEqual(['Started by Alice', 'Read every source', 'Ask for a yes', 'Create Jira tickets'])
+    expect(stations.map((s) => s.icon)).toEqual(['person', 'read', 'gate', 'write'])
+    expect(stations.map((s) => s.agent)).toEqual([null, { id: 'version_checker', display: 'Version checker' }, null, null])
+  })
+
+  it('says the version checker’s step in the sketch’s words, and the write in the plan’s', () => {
+    const cardRun = replay(card)
+    expect(line(cardRun, planOf(cardUseCase.plan)).map((s) => s.label)).toEqual(['Started by Alice', 'Check release', 'Ask for a yes', 'Create Jira tickets'])
   })
 
   it('draws the same line without a plan, naming steps after their agents', () => {
-    const stations = stationsOf(model, null, writeLabel)
-    expect(stations.map((s) => s.label)).toEqual(['Started', 'Pick agents', 'Version checker', 'Approval gate', 'Write in Jira', 'Done'])
+    expect(line(model, null).map((s) => s.label)).toEqual(['Started by Alice', 'Version checker', 'Ask for a yes', 'Write in Jira'])
+  })
+
+  it('starts with the schedule’s clock when the schedule started the run', () => {
+    const scheduled = foldAll(emptyModel, [event(1, 'run_created', { use_case_id: 'uc_1', use_case_version: 1, started_by: 'alice', trigger: 'schedule' })])
+    const first = stationsOf(scheduled, PLAN, 'Daily 8:00')[0]
+    expect(first).toMatchObject({ label: 'Daily 8:00', icon: 'schedule', state: 'done' })
   })
 
   it('tells the run as a chat, with no workflow plumbing in it', () => {
@@ -85,45 +97,43 @@ describe('a run that was approved and wrote its ticket', () => {
 })
 
 describe('the same run part way', () => {
-  it('while the Version checker reads, has the Planner done and the checker working', () => {
+  it('while the Version checker reads, has the checker’s step at work and the rest not reached', () => {
     const model = replay(success, 6)
     expect(model.phase.state).toBe('working')
-    expect(shape(stationsOf(model, PLAN, writeLabel))).toEqual([
-      'started:done:idle',
-      'planner:done:idle',
-      'agent:0:now:working',
-      'gate:todo:idle',
-      'write:todo:idle',
-      'done:todo:idle',
-    ])
+    expect(shape(line(model))).toEqual(['trigger:done:idle', 'agent:0:now:working', 'gate:todo:idle', 'write:todo:idle'])
   })
 
-  it('before anyone joins, keeps the plan’s agent step in place with nobody in it yet', () => {
+  it('while the Planner picks the agents, has the first step at work with the Planner above it', () => {
     const model = replay(success, 3)
-    const stations = stationsOf(model, PLAN, writeLabel)
-    expect(stations).toHaveLength(6)
-    expect(stations[2]?.who).toEqual({ kind: 'agent', agent: null })
-    expect(shape(stations)[0]).toBe('started:now:idle')
+    const stations = line(model)
+    expect(stations).toHaveLength(4)
+    expect(shape(stations)).toEqual(['trigger:done:idle', 'agent:0:now:thinking', 'gate:todo:idle', 'write:todo:idle'])
+    expect(stations[1]?.agent).toEqual({ id: 'planner', display: 'Planner' })
   })
 
-  it('at the gate, waits for a yes with the agent before it waiting too', () => {
+  it('without a plan, keeps one agent step for the Planner’s pick, so the gate is never the step at work', () => {
+    const model = replay(success, 1)
+    expect(shape(line(model, null))).toEqual(['trigger:done:idle', 'agent:0:now:thinking', 'gate:todo:idle', 'write:todo:idle'])
+  })
+
+  it('times the first step from the start of the run, through the Planner’s pick, and no other step', () => {
+    const started = at(success[0]?.ts ?? '')
+    for (const upTo of [1, 3, 4, 6]) expect(line(replay(success, upTo)).map(since)).toEqual([null, started, null, null])
+  })
+
+  it('at the gate, waits for a yes with the agent’s step done', () => {
     const model = replay(success, 15)
     expect(model.phase.state).toBe('awaiting_approval')
-    expect(shape(stationsOf(model, PLAN, writeLabel))).toEqual([
-      'started:done:idle',
-      'planner:done:idle',
-      'agent:0:done:waiting',
-      'gate:wait:idle',
-      'write:todo:idle',
-      'done:todo:idle',
-    ])
-    expect(reachOf(stationsOf(model, PLAN, writeLabel))).toBe(3 / 5)
+    expect(shape(line(model))).toEqual(['trigger:done:idle', 'agent:0:done:success', 'gate:wait:idle', 'write:todo:idle'])
+    expect(line(model).map(since)).toEqual([null, null, null, null])
   })
 
-  it('after the yes, writes while the gate shows done', () => {
+  it('after the yes, writes while the gate shows done, timing the write from the yes', () => {
     const model = replay(success, 16)
     expect(model.phase.state).toBe('acting')
-    expect(shape(stationsOf(model, PLAN, writeLabel)).slice(3)).toEqual(['gate:done:idle', 'write:now:idle', 'done:todo:idle'])
+    const stations = line(model)
+    expect(shape(stations).slice(2)).toEqual(['gate:done:idle', 'write:now:idle'])
+    expect(since(stations[3])).toBe(at(success[15]?.ts ?? ''))
   })
 })
 
@@ -135,15 +145,9 @@ describe('a run that was declined', () => {
     expect(model.written).toEqual([])
   })
 
-  it('shows the gate as declined and the write as not needed', () => {
-    expect(shape(stationsOf(model, PLAN, writeLabel))).toEqual([
-      'started:done:idle',
-      'planner:done:idle',
-      'agent:0:done:idle',
-      'gate:declined:idle',
-      'write:skip:idle',
-      'done:done:idle',
-    ])
+  it('shows the gate as declined and the write as skipped, with no step after them', () => {
+    expect(shape(line(model))).toEqual(['trigger:done:idle', 'agent:0:done:success', 'gate:no:idle', 'write:skip:idle'])
+    expect(line(model)[3]?.under).toEqual({ kind: 'note', text: 'Nothing written' })
   })
 
   it('says who declined in the chat', () => {
@@ -162,15 +166,7 @@ describe('a run that failed', () => {
   })
 
   it('marks the agent that stopped and leaves the rest not reached', () => {
-    expect(shape(stationsOf(model, PLAN, writeLabel))).toEqual([
-      'started:done:idle',
-      'planner:done:idle',
-      'agent:0:fail:error',
-      'gate:todo:idle',
-      'write:todo:idle',
-      'done:todo:idle',
-    ])
-    expect(reachOf(stationsOf(model, PLAN, writeLabel))).toBe(2 / 5)
+    expect(shape(line(model))).toEqual(['trigger:done:idle', 'agent:0:err:error', 'gate:todo:idle', 'write:todo:idle'])
   })
 
   it('lets the agent say what went wrong, and ends the chat with the stop', () => {
@@ -180,12 +176,14 @@ describe('a run that failed', () => {
     expect(model.chat.at(-1)).toMatchObject({ kind: 'stopped', stage: 'working' })
   })
 
-  it('marks the Planner when a run fails before any agent starts', () => {
+  it('marks the first step, under the Planner, when a run fails before any agent starts', () => {
     const early = foldAll(emptyModel, [
       ...parsed(failure.slice(0, 2)),
       event(3, 'run_failed', { stage: 'pending', reason: 'DispatchFailed', retryable: true, message: 'n8n is down' }),
     ])
-    expect(shape(stationsOf(early, PLAN, writeLabel)).slice(0, 3)).toEqual(['started:done:idle', 'planner:fail:error', 'agent:0:todo:idle'])
+    expect(shape(line(early))).toEqual(['trigger:done:idle', 'agent:0:err:error', 'gate:todo:idle', 'write:todo:idle'])
+    expect(line(early)[1]?.agent).toEqual({ id: 'planner', display: 'Planner' })
+    expect(shape(line(early, null)), 'and without a plan, never the gate').toEqual(['trigger:done:idle', 'agent:0:err:error', 'gate:todo:idle', 'write:todo:idle'])
   })
 })
 
@@ -238,16 +236,21 @@ describe('a retry', () => {
     expect(retried.agents).toEqual([])
     expect(retried.retriedBy).toEqual(['alice'])
     expect(retried.chat.at(-1)).toMatchObject({ kind: 'retried', by: 'alice' })
-    expect(shape(stationsOf(retried, PLAN, writeLabel)).slice(0, 3)).toEqual(['started:now:idle', 'planner:todo:idle', 'agent:0:todo:idle'])
+    expect(shape(line(retried))).toEqual(['trigger:done:idle', 'agent:0:now:thinking', 'gate:todo:idle', 'write:todo:idle'])
+  })
+
+  it('times the step at work again from the retry', () => {
+    expect(since(line(retried)[1])).toBe(at('2026-11-04T02:20:00Z'))
   })
 
   it('draws the second attempt as it goes', () => {
     const again = foldAll(retried, [
-      event(16, 'agent_joined', { agent: { id: 'version_checker', display: 'Version checker' }, reason: 'again' }, { kind: 'agent', id: 'planner', display: 'Planner' }),
-      event(17, 'agent_step_started', { step: 'read_source' }, { kind: 'agent', id: 'version_checker', display: 'Version checker' }),
+      event(16, 'agent_joined', { agent: { id: 'version_checker', display: 'Version checker' }, reason: 'again' }, { kind: 'agent', id: 'planner', display: 'Planner' }, '2026-11-04T02:20:04Z'),
+      event(17, 'agent_step_started', { step: 'read_source' }, { kind: 'agent', id: 'version_checker', display: 'Version checker' }, '2026-11-04T02:20:05Z'),
     ])
     expect(again.phase.state).toBe('working')
-    expect(shape(stationsOf(again, PLAN, writeLabel)).slice(0, 3)).toEqual(['started:done:idle', 'planner:done:idle', 'agent:0:now:working'])
+    expect(shape(line(again)).slice(0, 2)).toEqual(['trigger:done:idle', 'agent:0:now:working'])
+    expect(since(line(again)[1]), 'the step began at the retry, not when its agent came in').toBe(at('2026-11-04T02:20:00Z'))
   })
 
   it('after a failed write, carries on at the write without asking again', () => {
@@ -255,6 +258,7 @@ describe('a retry', () => {
     const again = fold({ ...writeFailed, failedAt: { at: 'write' } }, event(15, 'run_retried', { leg: 'act', attempt: 2 }, alice))
     expect(again.phase).toEqual({ state: 'acting' })
     expect(again.spot).toEqual({ at: 'write' })
+    expect(shape(line(again)).slice(2)).toEqual(['gate:done:idle', 'write:now:idle'])
   })
 })
 
@@ -301,16 +305,9 @@ describe('kinds the page does not draw', () => {
 })
 
 describe('a check with nothing to write', () => {
-  it('shows the gate and the write as not needed', () => {
+  it('shows the gate and the write as skipped', () => {
     const model = foldAll(replay(success, 8), [event(9, 'run_succeeded', { outcome: 'nothing_to_write' })])
-    expect(shape(stationsOf(model, PLAN, writeLabel))).toEqual([
-      'started:done:idle',
-      'planner:done:idle',
-      'agent:0:done:success',
-      'gate:skip:idle',
-      'write:skip:idle',
-      'done:done:idle',
-    ])
+    expect(shape(line(model))).toEqual(['trigger:done:idle', 'agent:0:done:success', 'gate:skip:idle', 'write:skip:idle'])
   })
 })
 
@@ -319,9 +316,12 @@ describe('a run n8n skipped because an earlier run still waits for a yes', () =>
   const linked = fold(started, event(2, 'execution_linked', { execution_id: '41', mode: 'trigger' }, { kind: 'workflow', id: 'n8n', display: 'Workflow engine' }))
   const model = fold(linked, event(3, 'run_skipped', { waiting_run_id: 'run_00' }))
 
-  it('ends skipped, with every step skipped', () => {
+  it('ends skipped: its trigger fired, and every step after it was skipped', () => {
     expect(linked.phase).toEqual({ state: 'pending' })
     expect(model.phase).toEqual({ state: 'skipped' })
-    expect(stationsOf(model, PLAN, writeLabel).every((station) => station.state === 'skip')).toBe(true)
+    const [trigger, ...steps] = line(model)
+    expect(trigger?.state).toBe('done')
+    expect(steps.length).toBeGreaterThan(0)
+    expect(steps.every((station) => station.state === 'skip')).toBe(true)
   })
 })

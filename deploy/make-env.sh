@@ -11,11 +11,6 @@ case "${1-}" in
   *) echo "usage: make-env.sh [--force]" >&2; exit 2 ;;
 esac
 
-if [ -e "$target" ] && [ "$force" -ne 1 ]; then
-  echo "$target exists. Not overwriting. Pass --force to replace it (this also needs 'docker compose down -v')." >&2
-  exit 1
-fi
-
 secret() {
   if command -v openssl >/dev/null 2>&1; then
     openssl rand -hex 32
@@ -38,6 +33,8 @@ N8N_ENCRYPTION_KEY=$(secret)
 N8N_OWNER_EMAIL=owner@example.com
 N8N_OWNER_PASSWORD=Aa1$(secret | head -c 20)
 STEP_KEY=$(secret)
+WAB_NODE_KEY=$(secret)
+WAB_START_SECRET=$(secret)
 AGENT_API_KEY=$(secret)
 CALLBACK_SIGNING_KEY=$(secret)
 SETTINGS_ENCRYPTION_KEY=$(secret)
@@ -54,6 +51,26 @@ PLATFORM_API_HOST_PORT=8000
 N8N_HOST_PORT=5678
 ENV
 chmod 600 "$tmp"
+
+# An existing .env keeps every value it has, because N8N_ENCRYPTION_KEY must not change while the
+# volumes exist. It only gains the keys added since it was written.
+if [ -e "$target" ] && [ "$force" -ne 1 ]; then
+  added=""
+  while IFS= read -r line; do
+    name=${line%%=*}
+    if ! grep -q "^$name=" "$target"; then
+      printf '%s\n' "$line" >>"$target"
+      added="$added $name"
+    fi
+  done <"$tmp"
+  if [ -n "$added" ]; then
+    echo "added to $target:$added"
+  else
+    echo "$target has every key. To replace it, run 'docker compose down -v', then make-env.sh --force."
+  fi
+  exit 0
+fi
+
 mv "$tmp" "$target"
 trap - EXIT
 echo "wrote $target"

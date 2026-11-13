@@ -104,12 +104,37 @@ The web app where Operators build use cases and start runs, watch the live activ
 _Avoid_: Frontend, dashboard
 
 **Node pack**:
-Our own n8n nodes. With them, an n8n workflow can run an agent card, read from another system, add write actions to a proposal, ask for approval and carry out an approved proposal. They are the only way an n8n workflow reaches another system.
+Our own n8n nodes, built into our n8n image: Start from the Portal, Read, Agent, Propose a change, Ask for a yes, Make the approved changes, Tell and Report a failure. With them, an n8n workflow can run an agent card, read from another system, add write actions to a proposal, ask for approval, carry out an approved proposal and tell the team. They are the only way an n8n workflow reaches another system. Each one calls only our API, at the address and with the key in n8n's environment, and has no field for either.
 _Avoid_: Plugin, integration, custom nodes
+
+**Start from the Portal**:
+The node pack's trigger. It starts a workflow when someone presses Run now, Test run or Retry in the Portal, and only for a start our API signed for that workflow, within five minutes and once.
+_Avoid_: Webhook
+
+**Made in n8n**:
+A workflow someone built in n8n from our nodes and then registered in the Portal, rather than one the Planner laid out. Until an Operator names its Approvers, any Approver on the team decides its requests (ADR 0027). Planned.
+
+**Holder**:
+The person who has a workflow open in n8n, in their own n8n project. A run they start by hand in n8n is their work, so they cannot approve it. Take back ends the hold. Planned (ADR 0027).
+
+**Version compare**:
+The check around every change our platform makes to a workflow in n8n. The workflow must still be the version the Portal last stored, and the change must read back as sent. When someone changed it in n8n since, the platform shows "Changed again since, in n8n." (ADR 0027). Planned.
 
 **Published version**:
 The version of a use case's n8n workflow that runs. Staff change the n8n draft, and publishing the n8n draft makes it the published version.
 _Avoid_: Live version, active version
+
+**Version compare**:
+The check the platform makes around every change it makes to a workflow's n8n workflow. It reads the n8n version first and stops if someone changed it since the Portal last saw it, then reads the workflow back after the change. If an edit in n8n got there first, the Portal says `Changed again since, in n8n.` n8n's free edition offers no lock the platform could hold instead (spike P7).
+_Avoid_: Lock
+
+**Made in n8n**:
+A workflow someone built in n8n rather than in the Portal. It runs on the platform only after an Operator with n8n access registers it on Workflows and names an Approver for its yes.
+_Avoid_: External workflow, imported workflow
+
+**Holder**:
+The Operator with n8n access who has a workflow open in n8n. Open in n8n moves the workflow into their own space in n8n, because n8n's free edition lets only one person's space hold it. While someone holds a workflow, the platform changes it only to undo or to add the yes back, and Take it back returns it.
+_Avoid_: Owner (the platform's n8n account), editor
 
 ### Keeping software up to date
 
@@ -192,6 +217,14 @@ Retired on 13 Nov 2026 (ADR 0026). It was the part of a run that n8n carried in 
 **Write action**:
 Any action that changes data in an external system, such as Jira, Confluence or GitLab.
 
+**Start from the Portal**:
+The block of ours that starts a run when the Portal asks, for Run now. It accepts only a start our API signed for that one run, and it has no setting anyone can change. A test run of a draft hands n8n the same signed start directly.
+_Avoid_: Webhook (n8n's Webhook block is off)
+
+**Tell**:
+A block that posts a run's result in the team's Teams channel and emails the team's fixed list. Our API writes the message from what the run read and found, never from text in the workflow. It changes no system of record, so it needs no yes, and in a test run it sends nothing.
+_Avoid_: Notify, message
+
 **Jira site**:
 The Jira that tickets live in: the practice Jira, or one Jira address. Each Jira write action names the site it was approved for, and the safety checker refuses it in any other (ADR 0041). A ticket key means a ticket only together with its site. Changing the token keeps the site.
 _Avoid_: Jira instance, Jira server
@@ -202,6 +235,10 @@ _Avoid_: Plan, draft (a Draft is a set-up card not yet turned on)
 
 **Approval gate**:
 The step that pauses a run before a write action until an Approver approves it in Teams.
+
+**Tell**:
+A Teams card or an email that only reports what a run read or found. It may go out without a yes, because it changes no data, under the Tell rule: its recipients are the ones fixed in the Portal, our API writes its words from the run's own reads and agent results, and a test run sends nothing (ADR 0026). The node pack's Tell node sends one.
+_Avoid_: Notification, alert
 
 **Approval card**:
 The Adaptive Card the platform posts in Teams for each approval request: what would be written, what the agents found, and who can decide. Its one button, Open in AI Workflow Builder, opens the approval page, where the Approver decides. Once decided, it shows who approved or declined. The practice copy shows the same card.

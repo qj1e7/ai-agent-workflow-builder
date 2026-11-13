@@ -16,7 +16,7 @@ variable "location" {
 }
 
 variable "image_tag" {
-  description = "Tag of our three images in the registry. The deploy workflow uses the commit SHA."
+  description = "Tag of our four images in the registry. The deploy workflow uses the commit SHA."
   type        = string
 }
 

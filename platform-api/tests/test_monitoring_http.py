@@ -352,10 +352,10 @@ async def test_troubleshoot_answers_the_three_questions_for_a_failed_work_leg(
     assert r.status_code == 200
     answers = r.json()["answers"]
     assert answers["what_happened"] == r.json()["advice"]["explanation"]
-    assert answers["what_affected"] == "Nothing was written."
+    assert answers["what_affected"] == "Nothing. No ticket was written."
     assert answers["retry"] == {"possible": True, "asks_again": True}
     assert answers["next"] == "retry"
-    assert answers["safe_to_retry"].startswith("Yes. A retry runs the work again")
+    assert answers["safe_to_retry"] == "Yes. Nothing was written, so a retry is safe."
     assert "can_fix" not in answers
 
 
@@ -528,7 +528,7 @@ async def test_troubleshoot_says_only_what_the_agents_stop_carries(
     assert (got["failure"]["stage"], got["failure"]["retryable"]) == ("working", False)
     answers = got["answers"]
     assert answers["what_happened"] == said
-    assert answers["what_affected"] == "Nothing was written."
+    assert answers["what_affected"] == "Nothing. No ticket was written."
     assert answers["retry"] == {"possible": False, "asks_again": False}
     assert answers["next"] == "report"
     assert answers["safe_to_retry"].startswith("No. ")

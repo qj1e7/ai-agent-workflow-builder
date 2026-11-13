@@ -1,0 +1,3 @@
+001 created q17 start guard (respond): {"id": "7TlVsA1qedeJWXS1", "versionId": "057ef480-a740-47be-a065-9945b471ee40", "activeVersionId": null}
+002 respond: start with a bad signature: [401, {"detail": "Bad signature."}]
+003 respond: executions it made: []

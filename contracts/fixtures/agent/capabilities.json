@@ -15,7 +15,9 @@
       "tools": [
         "jira.search",
         "jira.read_ticket"
-      ]
+      ],
+      "short": null,
+      "instead": null
     },
     {
       "id": "jira.find_by_update",
@@ -31,7 +33,9 @@
       "focus": false,
       "tools": [
         "jira.search"
-      ]
+      ],
+      "short": null,
+      "instead": null
     },
     {
       "id": "jira.find_by_detail",
@@ -45,7 +49,9 @@
       "needs_model": false,
       "platform": false,
       "focus": false,
-      "tools": []
+      "tools": [],
+      "short": null,
+      "instead": null
     },
     {
       "id": "jira.find_older",
@@ -59,7 +65,9 @@
       "needs_model": false,
       "platform": false,
       "focus": false,
-      "tools": []
+      "tools": [],
+      "short": null,
+      "instead": null
     },
     {
       "id": "summarise",
@@ -73,7 +81,9 @@
       "needs_model": true,
       "platform": false,
       "focus": false,
-      "tools": []
+      "tools": [],
+      "short": null,
+      "instead": null
     },
     {
       "id": "github.releases",
@@ -89,7 +99,9 @@
       "focus": true,
       "tools": [
         "github.read_releases"
-      ]
+      ],
+      "short": "Watch software for new releases",
+      "instead": null
     },
     {
       "id": "jira.create",
@@ -105,7 +117,9 @@
       "focus": true,
       "tools": [
         "jira.create_ticket"
-      ]
+      ],
+      "short": "Create Jira tickets, after a yes",
+      "instead": null
     },
     {
       "id": "teams.ask",
@@ -119,21 +133,73 @@
       "needs_model": false,
       "platform": true,
       "focus": true,
-      "tools": []
+      "tools": [],
+      "short": null,
+      "instead": null
+    },
+    {
+      "id": "runs.explain",
+      "plain": "Explain a stopped run, and retry it",
+      "kind": "none",
+      "system": null,
+      "state": "ready",
+      "cant": null,
+      "why": null,
+      "connection": null,
+      "needs_model": false,
+      "platform": true,
+      "focus": false,
+      "tools": [],
+      "short": "Explain a stopped run, and retry it",
+      "instead": null
+    },
+    {
+      "id": "workflows.change",
+      "plain": "Change when a workflow runs, or pause it",
+      "kind": "none",
+      "system": null,
+      "state": "ready",
+      "cant": null,
+      "why": null,
+      "connection": null,
+      "needs_model": false,
+      "platform": true,
+      "focus": false,
+      "tools": [],
+      "short": "Change or pause your workflows",
+      "instead": null
     },
     {
       "id": "teams.post",
-      "plain": "Post messages in Teams",
+      "plain": "Post messages in Teams channels",
       "kind": "write",
       "system": "Teams",
       "state": "planned",
-      "cant": "post messages in Teams",
+      "cant": "post in Teams channels",
       "why": "Teams carries approval requests, run outcomes and requests for the team. It posts nothing else.",
       "connection": "teams",
       "needs_model": false,
       "platform": false,
       "focus": false,
-      "tools": []
+      "tools": [],
+      "short": "Teams channels",
+      "instead": "Run results show here, in the chat."
+    },
+    {
+      "id": "email.send",
+      "plain": "Send email",
+      "kind": "write",
+      "system": null,
+      "state": "planned",
+      "cant": "send email",
+      "why": "Email isn't connected to the platform.",
+      "connection": null,
+      "needs_model": false,
+      "platform": false,
+      "focus": false,
+      "tools": [],
+      "short": "email",
+      "instead": "Run results show here, in the chat."
     },
     {
       "id": "confluence.change",
@@ -141,13 +207,15 @@
       "kind": "write",
       "system": "Confluence",
       "state": "planned",
-      "cant": "change Confluence pages",
+      "cant": "update Confluence",
       "why": "Confluence isn't connected to the platform.",
       "connection": null,
       "needs_model": false,
       "platform": false,
       "focus": false,
-      "tools": []
+      "tools": [],
+      "short": "Confluence",
+      "instead": "I can create a Jira ticket, after a yes."
     },
     {
       "id": "github.issues",
@@ -161,7 +229,9 @@
       "needs_model": false,
       "platform": false,
       "focus": false,
-      "tools": []
+      "tools": [],
+      "short": null,
+      "instead": null
     },
     {
       "id": "access.check",
@@ -175,7 +245,9 @@
       "needs_model": false,
       "platform": false,
       "focus": false,
-      "tools": []
+      "tools": [],
+      "short": null,
+      "instead": null
     },
     {
       "id": "registries.check",
@@ -189,7 +261,9 @@
       "needs_model": false,
       "platform": false,
       "focus": false,
-      "tools": []
+      "tools": [],
+      "short": null,
+      "instead": null
     },
     {
       "id": "jira.set_field",
@@ -203,35 +277,57 @@
       "needs_model": false,
       "platform": false,
       "focus": false,
-      "tools": []
+      "tools": [],
+      "short": null,
+      "instead": null
     },
     {
-      "id": "email.send",
-      "plain": "Send email or Slack messages",
+      "id": "slack.send",
+      "plain": "Send Slack or text messages",
       "kind": "write",
       "system": null,
       "state": "unsupported",
-      "cant": "send email or Slack messages",
-      "why": "Email and Slack aren't on the team's plan. Ask the team if you need them.",
+      "cant": "send Slack or text messages",
+      "why": "Slack and text messages aren't on the team's plan.",
       "connection": null,
       "needs_model": false,
       "platform": false,
       "focus": false,
-      "tools": []
+      "tools": [],
+      "short": null,
+      "instead": null
     },
     {
-      "id": "jira.change_tickets",
-      "plain": "Close, edit, move or delete tickets",
+      "id": "jira.delete",
+      "plain": "Delete Jira tickets",
       "kind": "write",
       "system": "Jira",
       "state": "unsupported",
-      "cant": "close, edit, move or delete tickets",
+      "cant": "delete anything in Jira",
       "why": "Only people do that here.",
       "connection": "jira",
       "needs_model": false,
       "platform": false,
       "focus": false,
-      "tools": []
+      "tools": [],
+      "short": null,
+      "instead": "A Jira admin can do that."
+    },
+    {
+      "id": "jira.change_tickets",
+      "plain": "Close, edit or move tickets",
+      "kind": "write",
+      "system": "Jira",
+      "state": "unsupported",
+      "cant": "close, edit or move tickets",
+      "why": "Only people do that here.",
+      "connection": "jira",
+      "needs_model": false,
+      "platform": false,
+      "focus": false,
+      "tools": [],
+      "short": null,
+      "instead": null
     }
   ],
   "examples": [

@@ -18,7 +18,7 @@
       "text": "email it to the team",
       "mark": "cant",
       "reason": "cant_do",
-      "note": "I can't email it to the team. I can only read Jira tickets, sum up what I find, check software for new releases, create a Jira ticket after a yes, and ask Approvers for a yes in Teams.",
+      "note": "I can't send email yet.",
       "choices": []
     }
   ],
@@ -27,9 +27,11 @@
     {
       "kind": "do",
       "text": "email it to the team",
-      "note": "I can't email it to the team. I can only read Jira tickets, sum up what I find, check software for new releases, create a Jira ticket after a yes, and ask Approvers for a yes in Teams.",
+      "note": "I can't send email yet.",
       "needs": "new_system",
-      "system": "email"
+      "system": "email",
+      "instead": "Run results show here, in the chat.",
+      "unsupported": false
     }
   ],
   "alternative": {

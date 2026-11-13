@@ -1073,7 +1073,7 @@ async def test_migration_0019_keeps_starts_links_and_node_calls_whole_and_a_down
     assert kept is not None and kept.joined_by == (), "the joined people go with the downgrade"
 
 
-def test_builder_migration_0013_puts_every_use_case_on_the_shared_run_and_back(
+def test_builder_migration_0014_puts_every_use_case_on_the_shared_run_and_back(
     postgres: PostgresUrls,
 ):
     insert = (
@@ -1081,7 +1081,7 @@ def test_builder_migration_0013_puts_every_use_case_on_the_shared_run_and_back(
         " VALUES (%s, 'alice', %s, 1)"
     )
     with psycopg.connect(postgres.owner, autocommit=True) as conn:
-        downgrade("builder", postgres.owner, "0012")
+        downgrade("builder", postgres.owner, "0013")
         conn.execute(insert, ("uc_engine_before", NOW))
         upgrade("builder", postgres.owner)
         conn.execute(insert, ("uc_engine_own", NOW))
@@ -1096,7 +1096,7 @@ def test_builder_migration_0013_puts_every_use_case_on_the_shared_run_and_back(
             conn.execute(
                 "UPDATE builder.use_cases SET engine = 'n8n' WHERE use_case_id = 'uc_engine_own'"
             )
-        downgrade("builder", postgres.owner, "0012")
+        downgrade("builder", postgres.owner, "0013")
         try:
             assert conn.execute(
                 "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'builder'"
@@ -1104,3 +1104,43 @@ def test_builder_migration_0013_puts_every_use_case_on_the_shared_run_and_back(
             ).fetchone() == (0,)
         finally:
             upgrade("builder", postgres.owner)
+
+
+def test_migration_0013_keeps_who_paused_or_resumed_a_workflow_and_from_where(
+    postgres: PostgresUrls,
+):
+    def present(conn: psycopg.Connection) -> bool:
+        return (
+            conn.execute(
+                "SELECT 1 FROM information_schema.tables WHERE table_schema = 'builder'"
+                " AND table_name = 'use_case_moves'"
+            ).fetchone()
+            is not None
+        )
+
+    moved = (
+        "INSERT INTO builder.use_case_moves (use_case_id, move, moved_by, via, moved_at)"
+        " VALUES ('uc_moved', %s, 'alice', %s, now())"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        assert present(conn)
+        conn.execute(
+            "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version)"
+            " VALUES ('uc_moved', 'alice', now(), 1)"
+        )
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(moved, ("delete", "chat"))
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(moved, ("pause", "teams"))
+        downgrade("builder", postgres.owner, "0012")
+        assert not present(conn)
+        upgrade("builder", postgres.owner)
+        assert present(conn)
+    with psycopg.connect(postgres.contexts.builder) as builder:
+        builder.execute(moved, ("pause", "chat"))
+        assert builder.execute(
+            "SELECT move, moved_by, via FROM builder.use_case_moves"
+        ).fetchall() == [("pause", "alice", "chat")]
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            builder.execute("DELETE FROM builder.use_case_moves")
+        builder.rollback()
