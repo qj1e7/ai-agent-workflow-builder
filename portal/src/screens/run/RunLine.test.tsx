@@ -136,6 +136,10 @@ describe('the run line', () => {
     expect(html).toMatch(/class="[^"]*_arrive_[^"]*"[^>]*data-state="wait"/)
   })
 
+  it('lets the keyboard reach the steps, so a line too long for its space can be scrolled', () => {
+    for (const small of [false, true]) expect(line(replay(success), { small })).toMatch(/<div class="[^"]*_scroll_[^"]*" tabindex="0" role="group" aria-label="Steps">/)
+  })
+
   it('puts the agent’s face above its step on the page, and no face in the side panel', () => {
     const faces = (html: string) => (html.match(/data-face=/g) ?? []).length
     expect(faces(line(replay(success)))).toBe(1)

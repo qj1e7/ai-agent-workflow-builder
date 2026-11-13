@@ -92,7 +92,9 @@ export function RunLine({ stations, arrivedLive, settled, small = false }: RunLi
   const arrived = stations.findIndex((station) => station.key === arrivedLive)
   return (
     <div className={cx(styles['line'], small ? styles['small'] : styles['large'])}>
-      <div className={styles['scroll']}>
+      {/* The steps scroll sideways when the line is too long for its space, so the keyboard can reach them (axe: scrollable-region-focusable). */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+      <div className={styles['scroll']} tabIndex={0} role="group" aria-label="Steps">
         <ol className={styles['track']} style={{ '--n': stations.length } as CSSProperties} aria-label="Steps of this run" ref={pauseUnseen}>
           {stations.map((station, index) => {
             const next = stations[index + 1]
