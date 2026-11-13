@@ -21,7 +21,6 @@ import type { Me, PersonOut, RunView, TroubleshootingOut, UseCaseView, VersionVi
 import type { LastRun } from './workflow'
 import { formatterFactory } from './workflow'
 import { WhenEditor } from './When'
-import { WHO_APPROVES } from './WorkflowPage'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
@@ -132,8 +131,13 @@ describe('a workflow page', () => {
     const html = render()
     expect(whenOf(html)).toBe('No schedule An Operator starts it with Run now.')
     expect(nextOf(html)).toBe('Not scheduled')
-    expect(sectionText(html, 'Who says yes')).toBe(`${WHO_APPROVES}. Owned by Alice.`)
-    expect(WHO_APPROVES).toBe('Any Approver except the people who start or own it')
+    expect(sectionText(html, 'Who says yes')).toBe('Any Approver but you, in Teams. Who can’t say yes Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.')
+  })
+
+  it('keeps the sketch’s short Who says yes line, with the whole own-work rule folded one tap away', () => {
+    const rule = /<details[^>]*>\s*<summary>Who can’t say yes<\/summary>([\s\S]*?)<\/details>/.exec(mainOf(render({ useCase: SCHEDULED })))
+    expect(text(rule?.[1] ?? '')).toBe('Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run. A scheduled run starts as Carol.')
+    expect(rule?.[0]).not.toMatch(/<details[^>]*\bopen\b/)
   })
 
   it('gives its schedule’s day and time, and its next run', () => {
@@ -194,21 +198,6 @@ describe('a workflow page', () => {
     expect(text(mainOf(html))).not.toContain('Not running')
   })
 
-  it('names its agents, each opening its card in How it works', () => {
-    const agents = /<summary>Agents<\/summary>([\s\S]*?)<\/details>/.exec(render())?.[1] ?? ''
-    expect([...agents.matchAll(/<a[^>]*href="([^"]+)"/g)].map((m) => m[1])).toEqual([
-      '/settings?tab=how&amp;show=agents&amp;agent=planner',
-      '/settings?tab=how&amp;show=agents&amp;agent=crd_version_checker',
-    ])
-    expect(text(agents)).toBe('Planner Version checker')
-  })
-
-  it('names its agents without a link for an Approver, who is not offered How it works', () => {
-    const agents = /<summary>Agents<\/summary>([\s\S]*?)<\/details>/.exec(render({ me: BOB }))?.[1] ?? ''
-    expect(agents).not.toContain('<a')
-    expect(text(agents)).toBe('Planner Version checker')
-  })
-
   it('gives an Operator Pause and a More actions button, last on the page, and keeps Run now and Delete inside the closed menu', () => {
     const html = render()
     expect(buttons(html)).toEqual(expect.arrayContaining(['Pause', 'More actions']))
@@ -217,16 +206,13 @@ describe('a workflow page', () => {
     expect(mainOf(html)).toMatch(/<button[^>]*aria-haspopup="menu"[^>]*aria-expanded="false"[^>]*>More actions/)
   })
 
-  it('orders the page as the sketch does: the sentence, the banner, the line, When, Who says yes, Recent runs, Agents, then the buttons', () => {
+  it('orders the page as the sketch does: the sentence, the banner, the line, When, Who says yes, Recent runs, Versions, then the buttons, with no Agents section', () => {
     const html = mainOf(render({ runs: [{ ...(done as RunView), use_case_id: 'uc_01JD0' }] }))
     const at = (needle: string) => html.indexOf(needle)
-    const order = [at('<h1'), at('sentence'), at('data-tone='), at('Check release'), at('>When</h2>'), at('>Who says yes</h2>'), at('>Recent runs</h2>'), at('<summary>Agents'), at('>Pause<')]
+    const order = [at('<h1'), at('sentence'), at('data-tone='), at('Check release'), at('>When</h2>'), at('>Who says yes</h2>'), at('>Recent runs</h2>'), at('>Pause<')]
     expect(order.every((place) => place >= 0)).toBe(true)
     expect(order).toEqual([...order].sort((a, b) => a - b))
-  })
-
-  it('keeps the agents folded', () => {
-    expect(mainOf(render())).not.toMatch(/<details[^>]*\bopen\b/)
+    expect(html).not.toContain('Agents')
   })
 
   const SCHEDULED: UseCaseView = { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: null } }
@@ -267,7 +253,7 @@ describe('a workflow page', () => {
 
   it('gives an Approver who may approve and the recent runs, but no manage buttons', () => {
     const html = render({ me: BOB, runs: [{ ...(done as RunView), use_case_id: 'uc_01JD0' }] })
-    expect(sectionText(html, 'Who says yes')).toContain(WHO_APPROVES)
+    expect(sectionText(html, 'Who says yes')).toMatch(/^Any Approver but Alice, in Teams\. Who can’t say yes /)
     expect(text(mainOf(html))).toContain('Recent runs')
     expect(mainOf(html)).toContain('href="/runs/run_01JB8"')
     expect(buttons(html).filter((label) => /Run now|Pause|Resume|Delete|More actions/.test(label))).toEqual([])
@@ -309,18 +295,20 @@ describe('a workflow page', () => {
 
   const bannerOfHtml = (html: string) => /<div[^>]*data-tone="bad"[\s\S]*?<\/(?:a|button)><\/div>/.exec(mainOf(html))?.[0] ?? ''
 
-  it('for a retryable stop, the banner’s one action is Retry the run', () => {
-    const banner = bannerOfHtml(render({ last: { retryable: true } }))
-    expect(text(banner)).toBe('Stopped today at 10:14. An agent could not finish its work. Retry the run')
-    expect(banner).toMatch(/<button[^>]*>Retry the run<\/button>/)
-    expect(text(mainOf(render({ last: { retryable: true } })))).not.toContain('See why it stopped')
+  it('for a stop, retryable or not, the banner’s one action is Open the run, as in the sketch', () => {
+    for (const retryable of [true, false]) {
+      const html = render({ last: { retryable } })
+      expect(text(bannerOfHtml(html))).toBe('Stopped today at 10:14. An agent could not finish its work. Open the run')
+      expect(bannerOfHtml(html)).toMatch(/<a[^>]*href="\/runs\/run_01JB9"[^>]*>Open the run<\/a>/)
+      expect(text(mainOf(html))).not.toMatch(/Retry the run|See why it stopped/)
+    }
   })
 
-  it('for a stop that cannot be retried, the banner’s one action is See why it stopped', () => {
-    const html = render({ last: { retryable: false } })
-    expect(text(bannerOfHtml(html))).toBe('Stopped today at 10:14. An agent could not finish its work. See why it stopped')
-    expect(mainOf(html)).toMatch(/<a[^>]*href="\/runs\/run_01JB9"[^>]*>See why it stopped<\/a>/)
-    expect(text(mainOf(html))).not.toContain('Retry the run')
+  it('for a run n8n lost, says Lost in the pill and in the banner, never On', () => {
+    const html = render({ last: { state: 'lost', reason: null } })
+    expect(mainOf(html)).toMatch(/data-tone="bad"[^>]*>.*Lost<\/span>/)
+    expect(text(bannerOfHtml(html))).toBe('Lost today at 10:14. Approved, but n8n lost the run. Nothing was written. Open the run')
+    expect(text(mainOf(html))).not.toContain('On. Next run')
   })
 
   it('says the same words as the Workflows list, whatever the AI troubleshooter says', () => {
@@ -331,9 +319,9 @@ describe('a workflow page', () => {
     expect(text(mainOf(html))).not.toMatch(/write key/i)
   })
 
-  it('gives an Approver the stop in words, with no action', () => {
+  it('gives an Approver the stop in the same words, and lets them open the run', () => {
     const html = render({ me: BOB, last: {}, runs: [{ ...(failed as RunView), use_case_id: 'uc_01JD0' }] })
-    expect(mainOf(html)).toMatch(/data-tone="bad"/)
+    expect(text(bannerOfHtml(html))).toBe('Stopped today at 10:14. An agent could not finish its work. Open the run')
     expect(text(mainOf(html))).not.toMatch(/See why it stopped|Retry the run/)
   })
 
@@ -384,9 +372,9 @@ describe('the Versions list', () => {
     }
   })
 
-  it('sits after Recent runs and before Agents, as the sketch orders the page', () => {
+  it('sits after Recent runs and before the buttons, as the sketch orders the page', () => {
     const html = mainOf(render(CHANGED))
-    const order = ['Recent runs', '>Versions<', '<summary>Agents'].map((needle) => html.indexOf(needle))
+    const order = ['Recent runs', '>Versions<', '>Pause<'].map((needle) => html.indexOf(needle))
     expect(order.every((place) => place >= 0)).toBe(true)
     expect(order).toEqual([...order].sort((a, b) => a - b))
   })

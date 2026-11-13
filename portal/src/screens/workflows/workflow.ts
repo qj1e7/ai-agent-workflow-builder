@@ -1,10 +1,9 @@
 import { ApiError } from '../../api/client'
-import { failureReasonLabel } from '../../api/labels'
 import { pressOnce, type Latch, type Outcome } from '../../api/latch'
 import type { BlockKind, Me, RunView, ScheduleIn, UseCaseView, VersionSchedule, VersionView } from '../../api/types'
 import { agentIdentity } from '../../ui/agents'
-import { andList, count, declinedOfSteps, declinedRecord, scheduleShort, stageWords, type NameOf, type NextRun, type StageFacts } from '../run/words'
-import { faceId, howItWorksPath } from '../agents/agents'
+import { andList, declinedOfSteps, declinedRecord, runPill, scheduleShort, stageWords, type NameOf, type NextRun, type StageFacts } from '../run/words'
+import { faceId } from '../agents/agents'
 import { heldWords, repeatWords, TAKE_OVER_WORDS } from '../software/software'
 import { lineWhen, nextRunAt, runWhen, scheduleZoneName, zoneWords } from './times'
 
@@ -42,24 +41,22 @@ export interface Pill {
 }
 
 /**
- * The workflow's own pill, from its newest run: Waiting for a yes, Stopped, or none, and none reads On. A run in progress reads On,
- * as in the sketch, and Running is the run's own pill in Recent runs. The tone stays, because the banner says Running now.
+ * The workflow's own pill, read from its newest run's pill, so the two can't disagree: a run's Stopped, Lost or Waiting for a yes stays,
+ * and any other run reads On, as in the sketch. Running is the run's own pill in Recent runs. The tone stays, because the banner says it.
  */
-const PILLS: Record<RunState, Pill> = {
-  awaiting_approval: { tone: 'wait', pill: 'Waiting for a yes' },
-  failed: { tone: 'bad', pill: 'Stopped' },
-  succeeded: { tone: 'ok', pill: null },
-  rejected: { tone: 'ok', pill: null },
-  skipped: { tone: 'ok', pill: null },
-  expired: { tone: 'ok', pill: null },
-  lost: { tone: 'bad', pill: 'Lost' },
-  pending: { tone: 'new', pill: null },
-  working: { tone: 'new', pill: null },
-  proposed: { tone: 'new', pill: null },
-  acting: { tone: 'new', pill: null },
+export function pillOf(last: LastRun): Pill {
+  const { label, tone } = runPill(stageOfLast(last))
+  switch (tone) {
+    case 'bad':
+    case 'wait':
+      return { tone, pill: label }
+    case 'new':
+      return { tone: 'new', pill: null }
+    case 'ok':
+    case 'quiet':
+      return { tone: 'ok', pill: null }
+  }
 }
-
-export const pillOf = (run: { readonly state: RunState }): Pill => PILLS[run.state]
 
 /** A newest run, as the list gives it, in the facts the stage words read. */
 export function stageOfLast(last: LastRun): StageFacts {
@@ -184,13 +181,6 @@ export function runsOf(runs: readonly RunView[], useCaseId: string): RunView[] {
   return runs.filter((run) => run.use_case_id === useCaseId).sort(newestFirst)
 }
 
-export interface AgentLink {
-  readonly face: string
-  readonly name: string
-  readonly to: string
-}
-
-const PLANNER: AgentLink = { face: 'planner', name: agentIdentity('planner').name, to: howItWorksPath({ show: 'agents', agent: 'planner' }) }
 const VERSION_CHECKER_CARD = 'crd_version_checker'
 const WATCHLIST_TEMPLATE = 'software_watchlist'
 export const SOFTWARE_PAGE = '/software'
@@ -340,12 +330,6 @@ export function cardsOf(useCase: Pick<UseCaseView, 'template' | 'agents'>): read
     : useCase.agents
 }
 
-export function agentsOf(useCase: Pick<UseCaseView, 'template' | 'agents'>): AgentLink[] {
-  const cards = cardsOf(useCase)
-  const unique = cards.filter((card, index) => cards.findIndex((other) => other.card_id === card.card_id) === index)
-  return [PLANNER, ...unique.map((card) => ({ face: faceId(card), name: card.name, to: howItWorksPath({ show: 'agents', agent: card.card_id }) }))]
-}
-
 export type RowAction = { readonly kind: 'decide' | 'why'; readonly runId: string }
 
 /** The platform says whether the person can decide a waiting run. Only it knows who retried a run or is named on a step. */
@@ -464,10 +448,7 @@ export function changeProblem(change: Change, name: string, error: unknown, word
 
 export type BannerTone = 'ok' | 'wait' | 'bad' | 'off' | 'new'
 
-export type BannerAction =
-  | { readonly kind: 'decide' | 'open'; readonly runId: string }
-  | { readonly kind: 'stopped'; readonly runId: string; readonly retryable: boolean }
-  | { readonly kind: 'resume' }
+export type BannerAction = { readonly kind: 'decide' | 'open'; readonly runId: string } | { readonly kind: 'resume' }
 
 export interface Banner {
   readonly tone: BannerTone
@@ -479,40 +460,61 @@ interface BannerFacts {
   readonly useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule' | 'last_run'>
   readonly viewer: Viewer
   readonly now: Date
+  readonly nameOf: NameOf
 }
 
 const atWords = (when: string) => when.replace(/^Today, /, 'today at ').replace(/^(.+), (\d+:\d+)$/, '$1 at $2')
 
-function waitingWords(last: LastRun): string {
-  if (last.proposed === 0) return 'Waiting for a yes.'
-  const noun = count(last.proposed, last.tickets ? 'ticket' : 'change')
-  return `${noun} ${last.proposed === 1 ? 'is' : 'are'} waiting for a yes.`
-}
+const sentence = (words: string): string => (/[.!?]$/.test(words) ? words : `${words}.`)
 
-/** One sentence on the state, and the one action that moves it on. Pause wins over the last run, because a paused workflow starts nothing. */
-export function bannerOf({ useCase, viewer, now }: BannerFacts): Banner {
+/**
+ * One sentence on the state, and the one action that moves it on. Pause wins over the last run, because a paused workflow starts nothing.
+ * Otherwise the newest run's pill decides, and its stage words say the rest, so the banner, the pill, the row and Recent runs never disagree:
+ * "Stopped today at 8:00. An agent could not finish its work.", "Lost today at 8:00. Approved, but n8n lost the run. Nothing was written.",
+ * "Waiting for a yes.", "Running now.". A run that settled, declined, got no answer or was skipped leaves the workflow On.
+ */
+export function bannerOf({ useCase, viewer, now, nameOf }: BannerFacts): Banner {
   const last = useCase.last_run
   if (useCase.state === 'paused') {
     return viewer.operator
       ? { tone: 'off', text: 'Paused. It won’t run until you resume it.', action: { kind: 'resume' } }
       : { tone: 'off', text: 'Paused. It won’t run until an Operator resumes it.', action: null }
   }
-  if (last?.state === 'awaiting_approval') {
-    return { tone: 'wait', text: waitingWords(last), action: { kind: last.you_can_decide ? 'decide' : 'open', runId: last.run_id } }
-  }
-  if (last?.state === 'failed') {
-    const why = last.reason ? ` ${failureReasonLabel[last.reason]}.` : ''
-    return {
-      tone: 'bad',
-      text: `Stopped ${atWords(runWhen(last.at, now))}.${why}`,
-      action: viewer.operator ? { kind: 'stopped', runId: last.run_id, retryable: last.retryable } : null,
+  if (last) {
+    const stage = stageOfLast(last)
+    const pill = runPill(stage)
+    const words = stageWords(stage, nameOf)
+    const open: BannerAction = { kind: 'open', runId: last.run_id }
+    switch (pill.tone) {
+      case 'bad':
+        return { tone: 'bad', text: `${pill.label} ${atWords(runWhen(last.at, now))}.${words === pill.label ? '' : ` ${sentence(words)}`}`, action: open }
+      case 'wait':
+        return { tone: 'wait', text: sentence(words), action: last.you_can_decide ? { kind: 'decide', runId: last.run_id } : open }
+      case 'new':
+        return { tone: 'new', text: `${words} now.`, action: open }
+      case 'ok':
+      case 'quiet':
+        break
     }
   }
-  if (last && pillOf(last).tone === 'new') return { tone: 'new', text: 'Running now.', action: null }
   const held = heldNote(useCase)
   if (held) return { tone: 'ok', text: held, action: null }
   if (!useCase.schedule) return { tone: 'ok', text: 'On. It has no schedule, so it runs when an Operator presses Run now.', action: null }
   return { tone: 'ok', text: `On. Next run ${nextRunWords(useCase, now)}.`, action: null }
+}
+
+/**
+ * Who says yes, as the sketch has it: "Any Approver but you, in Teams." Nobody says yes to their own work, so the owner is named,
+ * as "you" when it is the person reading. The whole rule is one tap away, in `OWN_WORK_RULE`.
+ */
+export function whoSaysYes(owner: string, viewer: Pick<Viewer, 'id'>, nameOf: NameOf): string {
+  return `Any Approver but ${owner === viewer.id ? 'you' : nameOf(owner)}, in Teams.`
+}
+
+/** The rule the approval gate keeps, in full: the people on a run can't approve it. A scheduled run starts as the schedule's owner. */
+export function ownWorkRule(schedule: Pick<NonNullable<UseCaseView['schedule']>, 'owner_name'> | null): string {
+  const started = schedule ? ` A scheduled run starts as ${schedule.owner_name}.` : ''
+  return `Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.${started}`
 }
 
 /** What Delete takes away, said before the person confirms. */

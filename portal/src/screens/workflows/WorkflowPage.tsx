@@ -10,12 +10,11 @@ import type { Me, UseCaseView } from '../../api/types'
 import { useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
 import { OperatorsNote } from '../../shell/OperatorsNote'
 import { PageHead } from '../../shell/PageHead'
-import { AgentFace } from '../../ui/AgentFace'
 import { ActionMenu, type MenuItem } from '../../ui/ActionMenu'
 import { Button } from '../../ui/Button'
 import { useFocusAfterReread } from '../../ui/focus'
 import { useFromChat } from '../../ui/fromChat'
-import { FROM_LIST, openedFromList } from '../../ui/fromList'
+import { openedFromList } from '../../ui/fromList'
 import { IconChevronLeft, IconPause, IconPlay, IconTrash } from '../../ui/icons'
 import { Toast, type ToastMessage } from '../../ui/Toast'
 import { RunLine } from '../run/RunLine'
@@ -27,7 +26,6 @@ import { StatusPills } from './Status'
 import { Versions } from './Versions'
 import { When } from './When'
 import {
-  agentsOf,
   bannerOf,
   changeProblem,
   changeWords,
@@ -37,6 +35,7 @@ import {
   mayChangeSchedule,
   menuActionsOf,
   nextRunWords,
+  ownWorkRule,
   placeOf,
   PLACES_IN_PAGE_ORDER,
   pressChange,
@@ -48,12 +47,11 @@ import {
   sentenceOf,
   SOFTWARE_PAGE,
   viewerOf,
+  whoSaysYes,
   workflowPath,
   type Place,
 } from './workflow'
 import styles from './Workflows.module.css'
-
-export const WHO_APPROVES = 'Any Approver except the people who start or own it'
 
 function BackToList() {
   const location = useLocation()
@@ -70,31 +68,6 @@ function BackToList() {
       <IconChevronLeft size={16} />
       Workflows
     </Link>
-  )
-}
-
-/** An agent's page is in How it works, which only an Operator is offered, so anyone else sees the name without a link. */
-function Technical({ useCase, paused, operator }: { useCase: UseCaseView; paused: boolean; operator: boolean }) {
-  return (
-    <details className={styles['more']}>
-      <summary>Agents</summary>
-      <span className={styles['chips']}>
-        {agentsOf(useCase).map((agent) => {
-          const face = <AgentFace id={agent.face} display={agent.name} size={28} state={paused ? 'stopped' : 'idle'} />
-          return operator ? (
-            <Link key={agent.to} to={agent.to} state={FROM_LIST} className={styles['chip']}>
-              {face}
-              {agent.name}
-            </Link>
-          ) : (
-            <span key={agent.to} className={styles['chipPlain']}>
-              {face}
-              {agent.name}
-            </span>
-          )
-        })}
-      </span>
-    </details>
   )
 }
 
@@ -205,7 +178,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const controls = controlsOf(useCase, viewer)
   const menuActions = menuActionsOf(useCase, viewer)
   const mayPause = controls.includes('pause')
-  const banner = bannerOf({ useCase, viewer, now })
+  const banner = bannerOf({ useCase, viewer, now, nameOf })
   const gate = useCase.plan.some((block) => block.kind === 'approval')
 
   // The control that took the press leaves the page, so focus follows to its replacement: Resume in the banner, or Pause below.
@@ -297,8 +270,11 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
         {gate ? (
           <section className={styles['section']} aria-labelledby="who-says-yes">
             <h2 id="who-says-yes">Who says yes</h2>
-            <p>{WHO_APPROVES}.</p>
-            <p className={styles['small']}>Owned by {nameOf(useCase.owner)}.</p>
+            <p>{whoSaysYes(useCase.owner, viewer, nameOf)}</p>
+            <details className={styles['rule']}>
+              <summary>Who can’t say yes</summary>
+              <p>{ownWorkRule(useCase.schedule)}</p>
+            </details>
           </section>
         ) : null}
       </div>
@@ -319,7 +295,6 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
         </section>
       )}
       <Versions useCase={useCase} now={now} nameOf={nameOf} />
-      <Technical useCase={useCase} paused={paused} operator={viewer.operator} />
       {mayPause || items.length > 0 ? (
         <div className={styles['actions']}>
           {mayPause ? (

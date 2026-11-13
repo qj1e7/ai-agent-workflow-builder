@@ -18,7 +18,6 @@ import type { RunView, ScheduleHold, ScheduleView, UseCaseView, VersionSchedule,
 import { placeAfterRedraw } from '../../ui/focus'
 import { nextCheckWords, TAKE_OVER_WORDS } from '../software/software'
 import {
-  agentsOf,
   bannerOf,
   changeProblem,
   controlsOf,
@@ -34,6 +33,7 @@ import {
   menuActionsOf,
   nextRunAt,
   nextRunWords,
+  ownWorkRule,
   placeOf,
   PLACES_IN_PAGE_ORDER,
   pillOf,
@@ -53,6 +53,7 @@ import {
   stepTag,
   timesZone,
   whenWords,
+  whoSaysYes,
   workflowPath,
   versionWords,
   undoneWords,
@@ -176,12 +177,13 @@ describe('a workflow row’s line', () => {
     expect(words({ state: 'failed', declined_by: null, at: '2026-11-04T00:00:00Z', reason: 'AgentError' })).toBe('Today 8:00: An agent could not finish its work')
   })
 
-  it('gives a workflow’s own pill only to a run that needs a yes or has stopped, and a running one reads On', () => {
-    expect(pillOf({ state: 'awaiting_approval' })).toEqual({ tone: 'wait', pill: 'Waiting for a yes' })
-    expect(pillOf({ state: 'failed' })).toEqual({ tone: 'bad', pill: 'Stopped' })
-    expect(pillOf({ state: 'working' })).toEqual({ tone: 'new', pill: null })
-    expect(pillOf({ state: 'rejected' }).pill).toBeNull()
-    expect(pillOf({ state: 'succeeded' }).pill).toBeNull()
+  it('gives a workflow’s own pill only to a run that needs a yes, stopped or was lost, and a running one reads On', () => {
+    const pill = (state: LastRun['state']) => pillOf({ ...LAST, state })
+    expect(pill('awaiting_approval')).toEqual({ tone: 'wait', pill: 'Waiting for a yes' })
+    expect(pill('failed')).toEqual({ tone: 'bad', pill: 'Stopped' })
+    expect(pill('lost')).toEqual({ tone: 'bad', pill: 'Lost' })
+    expect(pill('working')).toEqual({ tone: 'new', pill: null })
+    for (const state of ['rejected', 'succeeded', 'skipped', 'expired'] as const) expect(pill(state)).toEqual({ tone: 'ok', pill: null })
   })
 })
 
@@ -339,19 +341,6 @@ describe('the runs of a workflow', () => {
 
   it('keep only that workflow’s runs, newest first', () => {
     expect(runsOf(runs, 'uc_01JB7').map((r) => r.run_id)).toEqual(['run_01JBA', 'run_01JB9', 'run_01JB8'])
-  })
-})
-
-describe('the agents on a workflow', () => {
-  it('start with the Planner, then each agent card, each linking to its card', () => {
-    expect(agentsOf(AGENTS)).toEqual([
-      { face: 'planner', name: 'Planner', to: '/settings?tab=how&show=agents&agent=planner' },
-      { face: 'version_checker', name: 'Version checker', to: '/settings?tab=how&show=agents&agent=crd_version_checker' },
-    ])
-  })
-
-  it('name the Version checker for the Software watchlist, which keeps no cards of its own', () => {
-    expect(agentsOf(WATCHLIST).map((agent) => agent.name)).toEqual(['Planner', 'Version checker'])
   })
 })
 
@@ -656,7 +645,7 @@ describe('the status banner', () => {
   const NOW = new Date('2026-11-04T15:00:00+08:00')
   const on = { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null } } as UseCaseView
   const last = (change: Partial<LastRun>): LastRun => ({ ...LAST, declined_by: null, ...change })
-  const facts = (change: object) => ({ useCase: on, viewer: ALICE, now: NOW, ...change })
+  const facts = (change: object) => ({ useCase: on, viewer: ALICE, now: NOW, nameOf, ...change })
   const withLast = (change: Partial<LastRun>) => ({ ...on, last_run: last(change) }) as UseCaseView
   const stoppedAt = (change: Partial<LastRun> = {}) => withLast({ run_id: 'run_stop', state: 'failed', at: '2026-11-04T00:00:00Z', reason: 'AgentError', ...change })
 
@@ -678,22 +667,16 @@ describe('the status banner', () => {
     expect(bannerOf(facts({ useCase: { ...stoppedAt(), state: 'paused' } })).tone).toBe('off')
   })
 
-  it('for a stopped run, says when it stopped and why, as one sentence', () => {
-    expect(bannerOf(facts({ useCase: stoppedAt() }))).toEqual({ tone: 'bad', text: 'Stopped today at 8:00. An agent could not finish its work.', action: { kind: 'stopped', runId: 'run_stop', retryable: false } })
+  it('for a stopped run, says when it stopped and why, as one sentence, and opens the run, as the sketch does', () => {
+    expect(bannerOf(facts({ useCase: stoppedAt() }))).toEqual({ tone: 'bad', text: 'Stopped today at 8:00. An agent could not finish its work.', action: { kind: 'open', runId: 'run_stop' } })
+    expect(bannerOf(facts({ useCase: stoppedAt({ retryable: true }) })).action, 'Retry is on the run, never in the banner').toEqual({ kind: 'open', runId: 'run_stop' })
+    expect(bannerOf(facts({ useCase: stoppedAt({ reason: null }) })).text).toBe('Stopped today at 8:00.')
   })
 
-  it('names the stop from the run’s reason, as the Workflows list does', () => {
+  it('names the stop from the run’s reason, as the Workflows list does, and an Approver reads it and opens the run too', () => {
     const useCase = stoppedAt({ reason: 'TimedOut' })
     expect(bannerOf(facts({ useCase })).text).toMatch(/^Stopped .+\. A step took too long\.$/)
-    expect(bannerOf(facts({ useCase, viewer: BOB })).text).toBe(bannerOf(facts({ useCase })).text)
-  })
-
-  it('carries whether the platform says a stopped run can be retried', () => {
-    expect(bannerOf(facts({ useCase: stoppedAt({ retryable: true }) })).action).toEqual({ kind: 'stopped', runId: 'run_stop', retryable: true })
-  })
-
-  it('gives an Approver the stop without an action', () => {
-    expect(bannerOf(facts({ useCase: stoppedAt(), viewer: BOB })).action).toBeNull()
+    expect(bannerOf(facts({ useCase, viewer: BOB }))).toEqual(bannerOf(facts({ useCase })))
   })
 
   it('for a run waiting for a yes, offers Review and decide only when the platform says the person may decide', () => {
@@ -701,13 +684,49 @@ describe('the status banner', () => {
     const mayNot = withLast({ state: 'awaiting_approval', you_can_decide: false })
     expect(bannerOf(facts({ useCase: mayDecide })).action).toEqual({ kind: 'decide', runId: 'run_07' })
     expect(bannerOf(facts({ useCase: mayNot })).action, 'someone who may not decide can still open the run, as in the sketch').toEqual({ kind: 'open', runId: 'run_07' })
-    expect(bannerOf(facts({ useCase: mayNot })).tone).toBe('wait')
-    expect(bannerOf(facts({ useCase: mayNot })).text).toBe('3 tickets are waiting for a yes.')
+    expect(bannerOf(facts({ useCase: mayNot }))).toMatchObject({ tone: 'wait', text: 'Waiting for a yes.' })
   })
 
   it('says a held schedule is not running, and why', () => {
     const held = { ...on, next_run_at: null, schedule: { ...on.schedule, held: 'owner_removed' } } as UseCaseView
     expect(bannerOf(facts({ useCase: held })).text).toContain('Not running')
+  })
+
+  /** Every state a run can end its stage in, with the workflow's pill and banner the page draws for it. They must say the same state. */
+  const EVERY_STATE: Record<LastRun['state'], { readonly pill: string; readonly banner: string; readonly tone: string; readonly opens: boolean }> = {
+    awaiting_approval: { pill: 'Waiting for a yes', banner: 'Waiting for a yes.', tone: 'wait', opens: true },
+    failed: { pill: 'Stopped', banner: 'Stopped today at 8:00. An agent could not finish its work.', tone: 'bad', opens: true },
+    lost: { pill: 'Lost', banner: 'Lost today at 8:00. Approved, but n8n lost the run. Nothing was written.', tone: 'bad', opens: true },
+    expired: { pill: 'On', banner: 'On. Next run Mon 9 Nov, 9:00.', tone: 'ok', opens: false },
+    skipped: { pill: 'On', banner: 'On. Next run Mon 9 Nov, 9:00.', tone: 'ok', opens: false },
+    rejected: { pill: 'On', banner: 'On. Next run Mon 9 Nov, 9:00.', tone: 'ok', opens: false },
+    succeeded: { pill: 'On', banner: 'On. Next run Mon 9 Nov, 9:00.', tone: 'ok', opens: false },
+    pending: { pill: 'On', banner: 'Running now.', tone: 'new', opens: true },
+    working: { pill: 'On', banner: 'Running now.', tone: 'new', opens: true },
+    proposed: { pill: 'On', banner: 'Running now.', tone: 'new', opens: true },
+    acting: { pill: 'On', banner: 'Creating the tickets now.', tone: 'new', opens: true },
+  }
+
+  it.each(Object.entries(EVERY_STATE))('gives a %s run the pill and the banner that say the same state', (state, want) => {
+    const useCase = withLast({ state: state as LastRun['state'], at: '2026-11-04T00:00:00Z', reason: state === 'failed' ? 'AgentError' : null })
+    const run = useCase.last_run as LastRun
+    const pill = pillOf(run).pill ?? lifeWords(useCase.state)
+    const banner = bannerOf(facts({ useCase }))
+    expect({ pill, banner: banner.text, tone: banner.tone, opens: banner.action?.kind === 'open' }).toEqual(want)
+    expect(banner.text.startsWith(pill) || (pill === 'On' && banner.tone === 'new'), 'the banner leads with the pill’s words, or says what the run does while the workflow is On').toBe(true)
+    if (pill !== 'On') expect(runPill({ state: run.state, count: 3, tickets: true, approvedBy: [], declinedBy: null, reason: run.reason }).label, 'the workflow’s pill is its run’s pill').toBe(pill)
+  })
+})
+
+describe('who says yes', () => {
+  it('says the sketch’s line to the owner, and names the owner to anyone else', () => {
+    expect(whoSaysYes('alice', ALICE, nameOf)).toBe('Any Approver but you, in Teams.')
+    expect(whoSaysYes('alice', BOB, nameOf)).toBe('Any Approver but Alice, in Teams.')
+  })
+
+  it('keeps the whole rule one tap away: the owner, a run’s starter and whoever retries it can’t say yes to it', () => {
+    expect(ownWorkRule(null)).toBe('Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.')
+    expect(ownWorkRule({ owner_name: 'Carol' })).toMatch(/ A scheduled run starts as Carol\.$/)
   })
 })
 

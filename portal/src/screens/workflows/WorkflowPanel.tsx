@@ -13,7 +13,7 @@ import { useAfterPanelAction } from '../../ui/sidePanel'
 import { Troubleshooting } from '../run/Outcome'
 import { StatusBanner } from './Banner'
 import { StatusPills } from './Status'
-import { bannerOf, changeProblem, changeWords, controlsOf, lastRunWords, leftOutWords, NO_RUNS, nextRunWords, pillOf, pressChange, REFRESH_MS, rereadWhenOutOfDate, sentenceOf, viewerOf, type LastRun } from './workflow'
+import { bannerOf, changeProblem, changeWords, controlsOf, lastRunWords, leftOutWords, NO_RUNS, nextRunWords, pillOf, pressChange, REFRESH_MS, rereadWhenOutOfDate, sentenceOf, viewerOf, type Banner, type LastRun } from './workflow'
 import styles from './Workflows.module.css'
 
 /** A workflow in the side panel (spec 3.3): its status, its sentence, a stop's three answers with Retry, its last and next run, Open the run, and Pause or Resume. */
@@ -38,10 +38,10 @@ export function WorkflowPanel({ id, now }: { id: string; now: Date }) {
   return <Summary useCase={useCase.data} me={me.data} now={now} />
 }
 
-/** The page's banner decides whether the workflow is stopped, so a paused one offers Resume here, never Retry, as on its page and row. */
-function stopOf(useCase: UseCaseView, me: Me, now: Date): (LastRun & { readonly reason: FailureReason }) | null {
+/** The banner decides whether the workflow is stopped, so a paused one offers Resume here, never Retry, as on its page and row. */
+function stopOf(useCase: UseCaseView, banner: Banner): (LastRun & { readonly reason: FailureReason }) | null {
   const last = useCase.last_run
-  if (bannerOf({ useCase, viewer: viewerOf(me), now }).tone !== 'bad' || last?.state !== 'failed' || last.reason === null) return null
+  if (banner.tone !== 'bad' || last?.state !== 'failed' || last.reason === null) return null
   return { ...last, reason: last.reason }
 }
 
@@ -49,11 +49,11 @@ function Summary({ useCase, me, now }: { useCase: UseCaseView; me: Me; now: Date
   const nameOf = useDisplayName()
   const modelOff = useModelOff()
   const last = useCase.last_run
-  const stopped = stopOf(useCase, me, now)
+  const whole = bannerOf({ useCase, viewer: viewerOf(me), now, nameOf })
+  const stopped = stopOf(useCase, whole)
   const troubleshoot = useTroubleshoot(stopped?.run_id ?? '', stopped !== null, 0)
-  const whole = bannerOf({ useCase, viewer: viewerOf(me), now })
-  // A stop's Retry is in the answers below it, so its banner only opens the run. Resume is beside Pause. One primary action for the state.
-  const banner = whole.action?.kind === 'stopped' ? { ...whole, action: { kind: 'open' as const, runId: whole.action.runId } } : whole.action?.kind === 'resume' ? { ...whole, action: null } : whole
+  // Resume is beside Pause, so the banner leaves it out. One primary action for the state.
+  const banner = whole.action?.kind === 'resume' ? { ...whole, action: null } : whole
   return (
     <>
       <div>

@@ -1,9 +1,5 @@
-import { useId } from 'react'
-import { useModelOff } from '../../api/queries'
 import { Button, ButtonLink } from '../../ui/Button'
 import { IconAlert, IconCheck, IconLock, IconPause, IconPlay, type Icon } from '../../ui/icons'
-import { stoppedActions } from '../home/home'
-import { RetryButton } from '../home/HomeItem'
 import type { Banner } from './workflow'
 import styles from './Workflows.module.css'
 
@@ -19,11 +15,10 @@ interface ButtonProps {
   readonly action: NonNullable<Banner['action']>
   readonly resuming: boolean
   readonly onResume: () => void
-  readonly describedBy: string
 }
 
-function BannerButton({ action, resuming, onResume, describedBy }: ButtonProps) {
-  const modelOff = useModelOff()
+/** A stop opens its run, as in the sketch. Retry and the troubleshooter's answers are on the run. */
+function BannerButton({ action, resuming, onResume }: ButtonProps) {
   switch (action.kind) {
     case 'resume':
       return (
@@ -39,15 +34,6 @@ function BannerButton({ action, resuming, onResume, describedBy }: ButtonProps) 
       )
     case 'open':
       return <ButtonLink to={`/runs/${action.runId}`}>Open the run</ButtonLink>
-    case 'stopped': {
-      const [first] = stoppedActions(action.runId, action.retryable, modelOff)
-      if (first?.kind === 'retry') return <RetryButton runId={first.runId} label={first.label} primary describedBy={describedBy} />
-      return (
-        <ButtonLink to={`/runs/${action.runId}`} variant="primary">
-          {first?.kind === 'open' ? first.label : 'See why it stopped'}
-        </ButtonLink>
-      )
-    }
   }
 }
 
@@ -55,13 +41,11 @@ function BannerButton({ action, resuming, onResume, describedBy }: ButtonProps) 
 export function StatusBanner({ banner, resuming, onResume }: BannerViewProps) {
   const Mark = BANNER_ICON[banner.tone]
   const { action } = banner
-  const textId = useId()
   return (
     <div className={styles['banner']} data-tone={banner.tone}>
       <span className={styles['bannerMark']}>{Mark ? <Mark size={20} /> : null}</span>
-      <p id={textId}>{banner.text}</p>
-      {action ? <BannerButton action={action} resuming={resuming} onResume={onResume} describedBy={textId} /> : null}
+      <p>{banner.text}</p>
+      {action ? <BannerButton action={action} resuming={resuming} onResume={onResume} /> : null}
     </div>
   )
 }
-

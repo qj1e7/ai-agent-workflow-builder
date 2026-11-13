@@ -206,53 +206,6 @@
   gap: 8px;
 }
 
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 4px 14px 4px 4px;
-  border: 1px solid var(--rail);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--ink);
-  font-weight: 600;
-  text-decoration: none;
-  transition:
-    border-color var(--dur-press) ease,
-    transform var(--dur-press) var(--ease-out);
-}
-
-.chipPlain {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 4px 14px 4px 4px;
-  border: 1px solid var(--hair);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.chip:active {
-  transform: scale(0.97);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .chip:hover {
-    border-color: var(--ink);
-  }
-}
-
 .dialog {
   width: min(480px, calc(100% - 32px));
   padding: var(--space-5);
@@ -816,7 +769,7 @@
   }
 }
 
-/* A details such as Versions or Agents: a summary that is a 44 px target, and what it opens. */
+/* A details such as Versions: a summary that is a 44 px target, and what it opens. */
 details.more {
   display: grid;
   gap: 8px;
@@ -831,6 +784,22 @@ details.more > summary {
   font-size: 0.95rem;
   font-weight: 800;
   cursor: pointer;
+}
+
+/* Who can't say yes: the whole rule, one tap from the sketch's short line. */
+details.rule > summary {
+  display: flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 44px;
+  color: var(--muted);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+details.rule > p {
+  color: var(--muted);
+  font-size: 0.875rem;
 }
 
 .actions {
