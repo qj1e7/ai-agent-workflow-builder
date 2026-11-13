@@ -22,12 +22,13 @@ const draw = (home: HomeOut) =>
 const inChat = (home: HomeOut, shown: PanelItem | null) =>
   renderToStaticMarkup(
     <MemoryRouter>
-      <OpensInPanel.Provider value={{ shown, open: () => undefined }}>
+      <OpensInPanel.Provider value={{ shown, open: () => undefined, show: () => undefined }}>
         <PinnedLine home={home} now={NOW} />
       </OpensInPanel.Provider>
     </MemoryRouter>,
   )
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+const buttonsOf = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((m) => text(m[1] ?? ''))
 const links = (html: string) => [...html.matchAll(/<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g)].map((m) => [text(m[2] ?? ''), m[1]])
 
 describe('the needs strip', () => {
@@ -74,8 +75,21 @@ describe('the needs strip', () => {
 
   it('in the chat opens a stop in the side panel, and gives way while the panel shows it', () => {
     expect(inChat(ALICE, null)).toMatch(/<button[^>]*data-opens="run:run_01JB9"[^>]*>Open/)
-    expect(links(inChat(ALICE, null)).map(([words]) => words)).toEqual([`${String(needsTotal(ALICE) - 1)} more that need you`])
+    expect(links(inChat(ALICE, null))).toEqual([])
     expect(text(inChat(ALICE, { kind: 'run', id: 'run_01JB9' }))).not.toContain('Open')
     expect(inChat(ALICE, { kind: 'run', id: 'run_other' })).toContain('data-opens="run:run_01JB9"')
+  })
+
+  it('in the chat opens the rest of Needs you in the side panel, and keeps its words while the panel shows them', () => {
+    const more = `${String(needsTotal(ALICE) - 1)} more that need you`
+    for (const shown of [null, { kind: 'needs' } as const]) {
+      const html = inChat(ALICE, shown)
+      expect(html).toMatch(/<button[^>]*data-opens="needs:"[^>]*>/)
+      expect(buttonsOf(html)).toContain(more)
+    }
+  })
+
+  it('opens a request as an approval in the side panel', () => {
+    expect(inChat(BOB, null)).toMatch(/<button[^>]*data-opens="approval:run_01JB8"[^>]*>Open/)
   })
 })

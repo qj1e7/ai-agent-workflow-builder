@@ -855,7 +855,7 @@ test.describe('what a run didn’t check', () => {
         await box(page).fill('What needs me?')
         await box(page).press('Enter')
         await expect(newest(page)).toHaveAttribute('data-answer', 'true')
-        await newest(page).locator(`[data-opens="run:${run.runId}"]`).click()
+        await newest(page).locator(`[data-opens="approval:${run.runId}"]`).click()
         const panel = sidePanel(page)
         await expect(unchecked(panel)).toHaveText(inOrder('Not checked', ...lines))
         await expect(panel, 'it trims nothing that will be written').toContainText(/What will change[\s\S]*exactly what will be written, and nothing else\.\s*Not checked[\s\S]*What happens/)

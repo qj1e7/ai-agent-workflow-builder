@@ -428,7 +428,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
   it('answers a question asked beside a change as it would alone, and crosses the change with the same words (FOLLOW-bob-mixed)', () => {
     const html = ask(needsMeOperators as PlannerReply)
     expect(answerOf(html)).toContain(`Can’t do: “pause the morning new-ticket check” ${OPS}`)
-    expect(answerOf(html)).toContain('3 things need you.')
+    expect(answerOf(html)).toContain('3 things need you')
     expect(answerOf(html)).not.toContain('What is waiting for my yes')
   })
 
@@ -537,7 +537,7 @@ describe('the run card: the AI troubleshooter’s answer that moves with the run
       modelOff: false,
       now: new Date((model.chat.at(-1)?.at ?? 0) + 3_600_000),
     })
-    const opener = { shown: shownInPanel ? { kind: 'run' as const, id: 'run_01JB9' } : null, open: () => undefined }
+    const opener = { shown: shownInPanel ? { kind: 'run' as const, id: 'run_01JB9' } : null, open: () => undefined, show: () => undefined }
     return renderToStaticMarkup(
       <QueryClientProvider client={new QueryClient()}>
         <ApiProvider session={createDevSession(null)} platformFetch={fetch} origin="http://portal.test">

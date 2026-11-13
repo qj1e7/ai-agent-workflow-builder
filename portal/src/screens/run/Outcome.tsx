@@ -2,12 +2,13 @@ import { useId, type ReactNode } from 'react'
 import { failureReasonLabel } from '../../api/labels'
 import type { TroubleshootingOut } from '../../api/types'
 import { useShownInPanel } from '../../ui/sidePanel'
-import { RetryButton } from '../home/HomeItem'
+import { RetryButton, TestAgainButton } from '../home/HomeItem'
 import { stoppedActions } from '../home/home'
 import { ReportToSupport } from './Report'
 import type { Phase, RunModel } from './runModel'
 import type { Answer } from './stageAnswers'
 import { failureText } from './support'
+import { TEST_AGAIN } from './testAgain'
 import { withCurrentNames, type NameOf } from './words'
 import styles from './panels.module.css'
 
@@ -15,13 +16,28 @@ import styles from './panels.module.css'
  * What stays on a finished run's page past its settled line: what the run didn’t check and the questions, read only (spec 10.4),
  * and what happens next after a decline. The ticket and the decline reason are in the settled line, so they are not said again here.
  */
-export function Outcome({ declinedNext = null, record = null }: { declinedNext?: string | null; record?: ReactNode }) {
+export function Outcome({ declinedNext = null, testAgain = null, record = null }: { declinedNext?: string | null; testAgain?: string | null; record?: ReactNode }) {
   if (declinedNext === null && record === null) return null
   return (
     <div className={styles['panel']}>
-      {declinedNext ? <p>{declinedNext}</p> : null}
+      {declinedNext ? <DeclinedNext words={declinedNext} testAgain={testAgain} /> : null}
       {record}
     </div>
+  )
+}
+
+/** What happens after a decline, and for a declined test run the way to do it: Do a test run again, one step from wherever the run is open. */
+export function DeclinedNext({ words, testAgain }: { words: string; testAgain: string | null }) {
+  const id = useId()
+  return (
+    <>
+      <p id={id}>{words}</p>
+      {testAgain ? (
+        <div className={styles['buttons']}>
+          <TestAgainButton useCaseId={testAgain} label={TEST_AGAIN} primary describedBy={id} />
+        </div>
+      ) : null}
+    </>
   )
 }
 

@@ -9,8 +9,8 @@ import { SetupCard } from './SetupCard'
 import { sayOf, whoOf, wordsOnly } from './answers'
 import { useAsker } from './asker'
 import { RunCardMessage } from './RunCard'
-import { CheckWorkflowsAnswer, DecideAnswer, DecidedAnswer, IdeasSentence, NeedsMeAnswer, OperatorsAnswer, RequestsToOpen, useSaidOnce, type Say } from './StateAnswers'
-import type { Message, Thread as ThreadState } from './threadState'
+import { BehindAnswer, CheckWorkflowsAnswer, DecideAnswer, DecidedAnswer, IdeasSentence, NeedsMeAnswer, OperatorsAnswer, RequestsToOpen, useSaidOnce, type Say } from './StateAnswers'
+import { isAnswer, type Message, type Thread as ThreadState } from './threadState'
 import { Waiting } from './Waiting'
 import styles from './Planner.module.css'
 
@@ -97,14 +97,16 @@ export function Thread({ thread, now, page, memory }: ThreadProps) {
             return (
               <li key={message.id} className={styles['said']} tabIndex={-1} data-answer data-who="troubleshooter">
                 <CardMemoryContext.Provider value={memory?.(message.id) ?? NO_MEMORY}>
-                  <RunCardMessage useCaseId={message.reply.use_case_id} say={message.id === newest ? sayFor(message.id) : () => undefined} leftovers={<Leftovers reply={message.reply} />} />
+                  <CardLive.Provider value={message.id === newest}>
+                    <RunCardMessage useCaseId={message.reply.use_case_id} say={message.id === newest ? sayFor(message.id) : () => undefined} leftovers={<Leftovers reply={message.reply} />} />
+                  </CardLive.Provider>
                 </CardMemoryContext.Provider>
               </li>
             )
           }
           const state: BotState = message.kind === 'thinking' ? 'thinking' : message.kind === 'reply' && SORRY.has(message.reply.answer) ? 'sorry' : 'idle'
           return (
-            <li key={message.id} className={styles['said']} tabIndex={-1} data-answer={message.kind === 'reply' || undefined}>
+            <li key={message.id} className={styles['said']} tabIndex={-1} data-answer={isAnswer(message) || undefined}>
               <PlannerBot state={state} size={FACE} />
               <CardMemoryContext.Provider value={memory?.(message.id) ?? NO_MEMORY}>
                 {message.kind === 'card' ? (
@@ -116,6 +118,13 @@ export function Thread({ thread, now, page, memory }: ThreadProps) {
                         <SetupCard start={message.start} />
                       </>
                     </CardLive.Provider>
+                  </div>
+                ) : message.kind === 'behind' ? (
+                  <div className={styles['cards']}>
+                    <span className="visually-hidden">Planner: </span>
+                    <NewestAnswer.Provider value={message.id === newest}>
+                      <BehindAnswer now={now} say={message.id === newest ? sayFor(message.id) : () => undefined} />
+                    </NewestAnswer.Provider>
                   </div>
                 ) : message.kind === 'thinking' ? (
                   <div className={styles['thinking']}>

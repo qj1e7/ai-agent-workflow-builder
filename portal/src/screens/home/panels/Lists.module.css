@@ -1,0 +1,133 @@
+/* The sketch's `.wl`: one row per workflow or software, its name over a small line, and a state pill at the end. */
+.wl {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wl li + li {
+  border-top: 1px solid var(--rule);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.row b {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 0.92rem;
+}
+
+.row .sub {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 10px;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  background: var(--sunk);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pill[data-tone='bad'] {
+  border-color: var(--red-line);
+  background: var(--red-soft);
+  color: var(--red-ink);
+}
+
+.pill[data-tone='wait'] {
+  border-color: var(--amber-line);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+
+.pill[data-tone='good'] {
+  border-color: var(--green-line);
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .row:hover {
+    background: var(--sunk);
+  }
+}
+
+.count {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.stack {
+  display: grid;
+  gap: 14px;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.head h3 {
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.calm {
+  margin: 0;
+  color: var(--muted);
+}
+
+.facts {
+  display: grid;
+  gap: 8px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+
+.sent {
+  max-width: 68ch;
+  margin: 0;
+  font-size: 1.02rem;
+  line-height: 1.6;
+}
+
+.kind {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+}

@@ -7,7 +7,7 @@ import { holdRunAtWork, runLinks } from './support/runLine'
 import { connectMockModel } from './support/settings'
 import { setMockGithubMode, type Backend } from './support/stack'
 import { expect, test } from './support/test'
-import { devContext, OUT, shot } from './support/ui'
+import { devContext, OUT, shot, showRun } from './support/ui'
 import { askAndWait, editCard, rereadOf, scheduledWorkflow, tag } from './support/edit'
 
 /**
@@ -200,11 +200,11 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
     const newest = page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
     const panel = page.locator('#side-panel')
     const views: readonly (readonly [string, string, () => Locator, () => readonly Locator[]])[] = [
-      ['workflow', 'Check my workflows', () => newest.getByRole('button', { name: facts.workflow, exact: true }), () => [panel.getByText('Next run')]],
+      ['workflow', `Is ${facts.workflow} running?`, () => newest.getByRole('button', { name: facts.workflow, exact: true }), () => [panel.getByText('Next run')]],
       [
         'approval',
         'What needs me?',
-        () => newest.locator(`[data-opens="run:${facts.request}"]`),
+        () => newest.locator(`[data-opens="approval:${facts.request}"]`),
         () => [panel.getByRole('button', { name: 'Decline' }), panel.getByText('The platform can’t yet check registries or security advisories.')],
       ],
       ['run', `Why did ${facts.stopped.name} stop?`, () => newest.locator(`[data-opens="run:${facts.stopped.runId}"]`), () => [panel.getByText('Safe to retry')]],
@@ -217,7 +217,8 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
         await box.fill(words)
         await box.press('Enter')
         await expect(newest).toHaveAttribute('data-answer', 'true')
-        await opener().click()
+        if (view === 'run') await showRun(page, opener())
+        else await opener().click()
         for (const shown of ready()) await expect(shown).toBeVisible({ timeout: 20_000 })
         await expect(panel).toHaveAttribute('role', width > 900 ? 'complementary' : 'dialog')
         await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined)
@@ -242,12 +243,12 @@ let bobsDecision: string | undefined
 /** Bob's chat (R16): his Home with the box, what waits for his yes, his decisions, a refusal, a question beside a change, and his request in the side panel. */
 for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
   test(`bob’s chat, his answers and his request in the side panel fit, as an Approver at ${String(width)} px`, async ({ browser, backend }, info) => {
-    test.slow()
-    runId ??= (await backend.waitingRun('alice')).runId
     if (bobsDecision === undefined) {
       bobsDecision = (await backend.waitingRun('alice')).runId
       await approve(backend, bobsDecision)
     }
+    // His own request, the newest waiting for his yes, so the answer's few newest requests hold it however many earlier specs left.
+    const { runId: request } = await backend.waitingRun('alice')
     const context = await devContext(browser, 'bob', { reducedMotion: true })
     const page = await context.newPage()
     await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
@@ -278,7 +279,9 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
         await expect(newest).toHaveAttribute('data-answer', 'true')
         await check(state)
       }
-      await newest.locator(`[data-opens="run:${String(runId)}"]`).click()
+      const opener = newest.locator(`[data-opens="approval:${request}"]`)
+      await expect(opener, 'the answer offers his own request, as the approval it is').toBeVisible()
+      await opener.click({ timeout: 5_000 })
       await expect(panel.getByRole('button', { name: 'Decline' })).toBeVisible({ timeout: 20_000 })
       await expect(panel).toHaveAttribute('role', width > 900 ? 'complementary' : 'dialog')
       await check('panel')
@@ -394,12 +397,12 @@ test('the side panel draws the same run line, small and without faces, at work, 
     await page.goto('/')
     const box = page.getByLabel('Ask, or describe a task')
     const newest = page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
+    await holdRunAtWork(page, runId)
     await box.fill(`Why did ${name} stop?`)
     await box.press('Enter')
     await expect(newest).toHaveAttribute('data-answer', 'true')
     const opener = newest.locator(`[data-opens="run:${runId}"]`)
-    await holdRunAtWork(page, runId)
-    await opener.click()
+    await showRun(page, opener)
     await reach('at-work')
     await expect(panelLine.locator('[data-face]'), 'the panel draws no faces').toHaveCount(0)
     await panel.getByRole('button', { name: 'Close' }).click()

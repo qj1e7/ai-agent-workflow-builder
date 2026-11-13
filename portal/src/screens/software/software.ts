@@ -94,6 +94,21 @@ const RANK: Record<LinePart, number> = { gone: 0, cant: 0, newer: 1, watching: 2
 /** The Watchlist lists what needs a person first: Can’t find, Newer out, Watching, then Up to date. */
 export const watchRank = (row: Pick<WatchedSoftwareView, 'status' | 'our_version' | 'not_found'>): number => RANK[stateOf(row).part]
 
+/** The behind card's rows: every software whose pill says Newer out, so the card, its count and the Watchlist never disagree. */
+export const hasNewer = (row: Pick<WatchedSoftwareView, 'status' | 'our_version' | 'not_found'>): boolean => stateOf(row).part === 'newer'
+
+/**
+ * The answer to "Which software is behind?": how many have a newer version, or plainly that none has. When some can't yet be told,
+ * the Watchlist's own count line follows, so "nothing newer" never hides software whose version nobody knows.
+ */
+export function behindWords(rows: readonly WatchedSoftwareView[]): string {
+  const behind = rows.filter(hasNewer).length
+  if (behind > 0) return `${behind} ${behind === 1 ? 'has' : 'have'} a newer version.`
+  if (rows.length === 0) return 'Nothing is on the Software watchlist yet.'
+  if (rows.every((row) => stateOf(row).part === 'current')) return 'Everything is up to date.'
+  return `Nothing has a newer version. ${countLine(rows) ?? ''}.`
+}
+
 const lineWords: Record<LinePart, (count: number) => string> = {
   newer: (count) => `${count} ${count === 1 ? 'has' : 'have'} a newer version`,
   gone: (count) => `${count} can’t be found`,

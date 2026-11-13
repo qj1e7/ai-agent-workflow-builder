@@ -7,6 +7,7 @@ import { requestKindWords, requestPath } from '../workflows/requests'
 import { movedHeadline, notFoundHeadline, softwarePath } from '../software/software'
 import { lineWhen, runWhen } from '../workflows/workflow'
 import type { PanelItem } from '../../ui/sidePanel'
+import { TEST_AGAIN } from '../run/testAgain'
 
 /** Home for an Operator shows the most urgent five, then “N more”. Workflows, and Home for someone who is not an Operator, show everything the platform returned. */
 export const HOME_NEEDS_SHOWN = 5
@@ -125,6 +126,8 @@ export const approverHeading = (home: HomeOut): string => approverLine(home).rep
 export interface Suggestion {
   readonly label: string
   readonly ask: PlannerAnswerIn
+  /** Answered on the page from the watchlist, with no model, instead of going to the Planner. */
+  readonly local?: 'behind'
 }
 
 /** The sketch’s three chips for someone who isn’t an Operator. Each is an intent, so none asks the model. */
@@ -134,10 +137,10 @@ export const APPROVER_SUGGESTIONS: readonly Suggestion[] = [
   { label: 'What can you do?', ask: { intent: 'abilities' } },
 ]
 
-/** The sketch’s three once software is on the watchlist. Two are intents the platform answers without the model, and the question lane reads the middle one in the words it knows. */
+/** The sketch’s three once software is on the watchlist. None asks the model: two are intents the platform answers, and the middle one is read from the watchlist itself. */
 const WATCHED_CHIPS: readonly Suggestion[] = [
   { label: 'What needs me?', ask: { intent: 'needs_me' } },
-  { label: 'Which software is behind?', ask: { text: 'Which software has a newer version?' } },
+  { label: 'Which software is behind?', ask: { text: 'Which software has a newer version?' }, local: 'behind' },
   { label: 'What can you do?', ask: { intent: 'abilities' } },
 ]
 
@@ -348,7 +351,7 @@ const CONNECTION_STATE: Record<ConnectionItem['state'], string> = {
 const atWhen = (iso: string, now: Date): string => runWhen(iso, now).replace(/^Today, /, 'at ').replace(/^(.+), (\d+:\d+)$/, '$1 at $2')
 
 /** "today", else the day, such as "Wed 18 Nov". */
-const onDay = (iso: string, now: Date): string => {
+export const onDay = (iso: string, now: Date): string => {
   const day = lineWhen(iso, now)
   return day.startsWith('Today') ? 'today' : day
 }
@@ -397,15 +400,18 @@ export type Action =
   | { readonly kind: 'test'; readonly label: string; readonly useCaseId: string }
 
 const runItem = (runId: string): PanelItem => ({ kind: 'run', id: runId })
+export const approvalItem = (runId: string): PanelItem => ({ kind: 'approval', id: runId })
 
 export function actionsOf(need: Need, modelOff = false): readonly Action[] {
   switch (need.kind) {
     case 'approval':
-      return [{ kind: 'open', label: 'Review and decide', to: `/runs/${need.item.run_id}`, item: runItem(need.item.run_id) }]
+      return [{ kind: 'open', label: 'Review and decide', to: `/runs/${need.item.run_id}`, item: approvalItem(need.item.run_id) }]
     case 'connection':
-      return noModel(need.item) ? [{ kind: 'open', label: 'Connect a model', to: '/settings?tab=model' }] : [{ kind: 'open', label: 'See it in Settings', to: CONNECTIONS_PATH }]
+      return noModel(need.item)
+        ? [{ kind: 'open', label: 'Connect a model', to: '/settings?tab=model' }]
+        : [{ kind: 'open', label: 'See it in Settings', to: CONNECTIONS_PATH, item: { kind: 'connection', id: need.item.id } }]
     case 'address':
-      return [{ kind: 'open', label: 'Show it on the watchlist', to: softwarePath(need.item.software_id) }]
+      return [{ kind: 'open', label: 'Show it on the watchlist', to: softwarePath(need.item.software_id), item: { kind: 'software', id: need.item.software_id } }]
     case 'confirmation':
       return [{ kind: 'open', label: 'Review in Settings', to: need.item.kind === 'approver' ? '/settings?tab=people' : '/settings?tab=model' }]
     case 'stopped':
@@ -425,9 +431,26 @@ export function openPathOf(need: Need): string {
   return open?.to ?? (need.kind === 'stopped' ? `/runs/${need.item.run_id}` : '/workflows')
 }
 
-/** A stop or a request opens its run in the side panel (spec 3.5). Anything else follows its own first action, to its page. */
+/**
+ * What opens in the side panel (spec 3.5): a stop, a declined test run or a question opens its run, a request its approval, a
+ * software that can't be found its row, and a connection that needs attention its state. Anything else follows its own first action, to its page.
+ */
 export function panelItemOf(need: Need): PanelItem | null {
-  return need.kind === 'stopped' || need.kind === 'approval' || need.kind === 'declined' || need.kind === 'question' ? runItem(need.item.run_id) : null
+  switch (need.kind) {
+    case 'approval':
+      return approvalItem(need.item.run_id)
+    case 'stopped':
+    case 'declined':
+    case 'question':
+      return runItem(need.item.run_id)
+    case 'address':
+      return { kind: 'software', id: need.item.software_id }
+    case 'connection':
+      return noModel(need.item) ? null : { kind: 'connection', id: need.item.id }
+    case 'confirmation':
+    case 'reply':
+      return null
+  }
 }
 
 export interface Pinned {
@@ -456,7 +479,7 @@ export const CAN_TEST_AGAIN = 'A test run can start again once an AI model is co
  */
 export function declinedActions(item: DeclinedItem, modelOff = false): readonly Action[] {
   const open: Action = { kind: 'open', label: 'See the run', to: `/runs/${item.run_id}`, item: runItem(item.run_id) }
-  return modelOff ? [open] : [open, { kind: 'test', label: 'Do a test run again', useCaseId: item.use_case_id }]
+  return modelOff ? [open] : [open, { kind: 'test', label: TEST_AGAIN, useCaseId: item.use_case_id }]
 }
 
 /**

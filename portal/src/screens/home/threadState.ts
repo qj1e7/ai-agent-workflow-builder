@@ -6,6 +6,8 @@ export type Message =
   | { readonly kind: 'thinking'; readonly id: number }
   | { readonly kind: 'reply'; readonly id: number; readonly reply: PlannerReply; /** What the person typed, or the chip’s words. */ readonly typed: string }
   | { readonly kind: 'card'; readonly id: number; readonly start: CardStart }
+  /** The watchlist’s newer versions, drawn from the watchlist itself with no model, so it needs no Planner reply. */
+  | { readonly kind: 'behind'; readonly id: number }
 
 export interface Thread {
   readonly messages: readonly Message[]
@@ -19,6 +21,7 @@ export type ThreadAction =
   | { readonly type: 'answered'; readonly reply: PlannerReply; readonly typed: string }
   | { readonly type: 'failed' }
   | { readonly type: 'resumed'; readonly start: CardStart }
+  | { readonly type: 'asked_behind'; readonly text: string }
   | { readonly type: 'new_chat' }
 
 /** The thread lives only on the page. It is never saved: the chat is not the record. */
@@ -30,6 +33,10 @@ export function threadReducer(state: Thread, action: ThreadAction): Thread {
     }
     case 'answered':
       return { ...state, messages: state.messages.map((m) => (m.kind === 'thinking' ? { kind: 'reply', id: m.id, reply: action.reply, typed: action.typed } : m)) }
+    case 'asked_behind': {
+      const me = state.last + 1
+      return { messages: [...state.messages, { kind: 'me', id: me, text: action.text }, { kind: 'behind', id: me + 1 }], last: me + 1 }
+    }
     case 'failed':
       return { ...state, messages: state.messages.slice(0, -2) }
     case 'resumed':
@@ -38,6 +45,9 @@ export function threadReducer(state: Thread, action: ThreadAction): Thread {
       return EMPTY
   }
 }
+
+/** A message the Planner answered, however it was made. */
+export const isAnswer = (message: Message): boolean => message.kind === 'reply' || message.kind === 'behind'
 
 export const isThinking = (thread: Thread): boolean => thread.messages.some((m) => m.kind === 'thinking')
 

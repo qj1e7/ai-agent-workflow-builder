@@ -1,14 +1,15 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { HomeOut } from '../../api/types'
 import { cx } from '../../ui/cx'
 import { InChat } from '../../ui/fromChat'
 import { NARROW, useMediaQuery } from '../../ui/media'
-import { openerAfterClose, OpensInPanel, panelKey, type PanelItem, type PanelOpener } from '../../ui/sidePanel'
+import { focusAfterClose, isWide, OpensInPanel, panelKey, type PanelItem, type PanelOpener } from '../../ui/sidePanel'
 import type { Page } from './AnswerCards'
 import { useChat, type OpenPanel } from './ChatProvider'
 import { PinnedLine } from './PinnedLine'
-import { PANEL_HEADING, SidePanel } from './SidePanel'
+import { PANEL_HEADING, PANEL_ID, SidePanel } from './SidePanel'
 import { Thread } from './Thread'
+import { isAnswer } from './threadState'
 import styles from './Planner.module.css'
 
 interface ChatViewProps {
@@ -61,7 +62,7 @@ export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewPro
   // land below the fold. It is brought into view from its top. An answer already there when the chat comes back keeps the
   // restored position.
   const newest = chat.thread.messages.at(-1)
-  const answered = newest?.kind === 'reply' ? newest.id : null
+  const answered = newest && isAnswer(newest) ? newest.id : null
   const shownAnswer = useRef(answered)
   useLayoutEffect(() => {
     if (answered === null || answered === shownAnswer.current) return
@@ -106,9 +107,9 @@ export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewPro
   }, [])
 
   const narrow = useMediaQuery(NARROW)
-  const { panel, openPanel, closePanel } = chat
+  const { panel, openPanel, pushPanel, backPanel, closePanel } = chat
   const opened = useRef(false)
-  const closed = useRef<OpenPanel | null>(null)
+  const closed = useRef<{ readonly panel: OpenPanel; readonly lost: boolean } | null>(null)
 
   const shown = panel?.item ?? null
   const opener = useMemo<PanelOpener>(
@@ -118,11 +119,25 @@ export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewPro
         opened.current = true
         openPanel(item, Math.max(0, openersOf(column.current, item).indexOf(from)))
       },
+      show: (item) => openPanel(item, null),
     }),
     [openPanel, shown],
   )
 
-  // Opening moves focus to the panel's heading. Closing hands it back to what opened the panel, which shows again now.
+  // An item opened from inside the panel, or Back to the one before it, moves focus to the new heading, as opening does.
+  const push = useCallback(
+    (item: PanelItem) => {
+      opened.current = true
+      pushPanel(item)
+    },
+    [pushPanel],
+  )
+  const back = useCallback(() => {
+    opened.current = true
+    backPanel()
+  }, [backPanel])
+
+  // Opening moves focus to the panel's heading. Closing hands it back to what the person pressed to open the panel, if anything.
   useEffect(() => {
     if (opened.current && panel) {
       opened.current = false
@@ -131,18 +146,20 @@ export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewPro
     const was = closed.current
     if (!was || panel) return
     closed.current = null
-    const back = openerAfterClose(openersOf(column.current, was.item), was.from) ?? document.getElementById('planner-box')
-    back?.focus({ preventScroll: true })
+    const box = document.getElementById('planner-box')
+    focusAfterClose({ openers: openersOf(column.current, was.panel.root), from: was.panel.from, lost: was.lost, box })?.focus({ preventScroll: true })
   }, [panel])
 
   const close = () => {
-    closed.current = panel
+    if (!panel) return
+    const active = document.activeElement
+    closed.current = { panel, lost: active === null || active === document.body || Boolean(document.getElementById(PANEL_ID)?.contains(active)) }
     closePanel()
   }
 
   return (
     <InChat.Provider value>
-      <div className={cx(styles['chatLayout'], panel !== null && styles['beside'])} data-chat>
+      <div className={cx(styles['chatLayout'], panel !== null && styles['beside'], panel !== null && isWide(panel.item) && styles['wideSplit'])} data-chat>
         <div ref={column} className={styles['chat']} inert={(narrow && panel !== null) || undefined}>
           <OpensInPanel.Provider value={opener}>
             <h1 className="visually-hidden" tabIndex={-1}>
@@ -169,7 +186,7 @@ export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewPro
             </div>
           </div>
         </div>
-        {panel ? <SidePanel key={panelKey(panel.item)} item={panel.item} now={now} narrow={narrow} onClose={close} /> : null}
+        {panel ? <SidePanel key={panelKey(panel.item)} item={panel.item} back={panel.previous} now={now} narrow={narrow} onClose={close} onBack={back} onOpen={push} /> : null}
       </div>
     </InChat.Provider>
   )

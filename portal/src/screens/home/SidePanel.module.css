@@ -1,11 +1,27 @@
-/* Beside the chat it is 400 px wide, or 40% of the column when that is less, and the chat keeps the rest (spec 3.3). */
+/* Beside the chat it is a summary: 38% of the window, between 380 and 460 px as in the sketch's minmax(380px, 460px), and the chat keeps the rest. */
 .panel {
   display: flex;
-  flex: 0 0 min(400px, 40%);
+  flex: 0 0 clamp(380px, 38%, 460px);
   flex-direction: column;
   min-width: 0;
   border-left: 1px solid var(--hair);
   background: var(--bg);
+}
+
+/* Only the build view needs room: the chat narrows to a column and the panel takes the rest (the sketch's `.split.wide`). */
+.wide {
+  flex: 1 1 0;
+}
+
+.panel {
+  animation: panelIn var(--dur-panel) var(--ease-out, ease-out);
+}
+
+@keyframes panelIn {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
 }
 
 .bar {
@@ -25,7 +41,14 @@
 .btns {
   display: flex;
   order: -1;
+  flex-wrap: wrap;
   justify-content: space-between;
+  gap: 8px;
+}
+
+.lefts {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 

@@ -311,7 +311,9 @@ for (const user of ['alice', 'bob']) {
 
     if (user === 'alice') {
       await page.goto('/workflows')
-      const before = await lastLine(watchlist).innerText()
+      await expect(watchlist).toBeVisible()
+      const pageLines = new Map<string, string>()
+      for (const row of await rows.all()) pageLines.set((await row.getAttribute('data-workflow-id')) ?? '', await lastLine(row).innerText())
       for (const width of [1920, 1280, 1050, 900, 390]) {
         await page.setViewportSize({ width, height: 900 })
         await page.goto('/')
@@ -319,9 +321,16 @@ for (const user of ['alice', 'bob']) {
         await page.keyboard.press('Enter')
         const card = page.getByRole('main').getByRole('list', { name: 'Your workflows' })
         await expect(card).toBeVisible()
-        await expect(lastLine(card.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })), 'the check card says what the row says').toHaveText(before)
+        const shown = await card.locator('li[data-workflow-id]').count()
+        expect(shown, 'the check card shows a few workflows, at most five').toBeGreaterThan(0)
+        expect(shown).toBeLessThanOrEqual(5)
+        if (shown === 5) await expect(page.getByRole('main').getByRole('button', { name: 'See all workflows' }), 'with more left out, it ends with a way to the whole list').toBeVisible()
+        for (const row of await card.locator('li[data-workflow-id]').all()) {
+          const id = (await row.getAttribute('data-workflow-id')) ?? ''
+          await expect(lastLine(row), `the check card says what the Workflows row of ${id} says`).toHaveText(pageLines.get(id) ?? 'a row on the Workflows page')
+        }
         const fit = await lineFits(lastLine(card.locator('li[data-workflow-id]')))
-        expect(fit.rows, 'the card has a line for each workflow').toBeGreaterThan(0)
+        expect(fit.rows, 'the card has a line for each workflow').toBe(shown)
         expect(fit.broken, `each line in the check card is whole at ${width} px`).toEqual([])
         await shot(page, info, `r9-check-card-alice-${width}`)
       }

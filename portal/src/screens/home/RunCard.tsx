@@ -16,6 +16,7 @@ import { useLiveRun } from '../run/liveRun'
 import { TROUBLE_FACE } from '../run/troubleFace'
 import { type RunStory, useRunStory } from '../run/useRunStory'
 import { sentence, stageWords, type NameOf, type RunState } from '../run/words'
+import { useShowBesideOnWide } from './autoOpen'
 import { CardMemoryContext } from './cardMemory'
 import styles from './Planner.module.css'
 
@@ -111,6 +112,7 @@ function RunCardBody({ useCaseId, say, onState }: { useCaseId: string | null; sa
     if (pinned !== null) memory.keep(pinned)
   }, [pinned, memory])
   const runId = pinned ?? stopped?.run_id ?? null
+  useShowBesideOnWide(runId === null ? null : { kind: 'run', id: runId })
   const run = useRun(runId ?? '')
   const nothing = stopped === null && pinned === null
   useEffect(() => {

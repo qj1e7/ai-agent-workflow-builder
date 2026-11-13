@@ -1,9 +1,9 @@
-import { createContext, useCallback, useContext, useMemo, useReducer, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useMemo, useReducer, useRef, type ReactNode } from 'react'
 import { useCacheScope } from '../../api/context'
 import { usePlannerAnswer } from '../../api/plannerQueries'
 import type { PlannerAnswerIn } from '../../api/types'
 import type { PanelItem } from '../../ui/sidePanel'
-import { deskOf, desksReducer, type DeskAction, type Desks, type Note } from './chatState'
+import { deskOf, desksReducer, panelOf, type DeskAction, type Desks, type Note } from './chatState'
 import { newCardMemory, type CardMemory } from './cardMemory'
 import type { CardStart } from './SetupCard'
 import { isThinking, previousOf, type Thread } from './threadState'
@@ -13,8 +13,12 @@ export const DRAFT_SAVED = 'Your draft is saved. Find it on Workflows.'
 
 export interface OpenPanel {
   readonly item: PanelItem
-  /** Which of the chat's ways to open the item was pressed, counted in page order, so Close hands focus back to it. */
-  readonly from: number
+  /** Which of the chat's ways to open the item was pressed, counted in page order, so Close hands focus back to it. Null when an answer showed it. */
+  readonly from: number | null
+  /** The item Back returns to, when the panel was opened from inside another, such as an item from its list. */
+  readonly previous: PanelItem | null
+  /** The first item, which the chat's control opened, so Close hands focus back to that control. */
+  readonly root: PanelItem
 }
 
 export interface Chat {
@@ -27,6 +31,8 @@ export interface Chat {
   readonly setProblem: (problem: string | null) => void
   /** Sends words, or an intent, to the Planner. `restore` is put back in the box when the send fails. */
   readonly send: (ask: PlannerAnswerIn, shown: string, restore: string | null) => void
+  /** Asks which software is behind. The watchlist answers it, with no model, so nothing goes to the Planner. */
+  readonly askBehind: (shown: string) => void
   /** Sends what is in the box, following on from the last answer. */
   readonly sendText: () => void
   readonly resume: (start: CardStart) => void
@@ -39,7 +45,10 @@ export interface Chat {
   readonly cardMemory: (messageId: number) => CardMemory
   /** What the side panel shows beside the chat. It is kept across pages, so a page opened from the panel comes back to it. */
   readonly panel: OpenPanel | null
-  readonly openPanel: (item: PanelItem, from: number) => void
+  readonly openPanel: (item: PanelItem, from: number | null) => void
+  /** Opens an item from inside the panel, keeping the panel's current item behind it for Back. */
+  readonly pushPanel: (item: PanelItem) => void
+  readonly backPanel: () => void
   readonly closePanel: () => void
 }
 
@@ -56,15 +65,16 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
   const [desks, dispatch] = useReducer(desksReducer, initial)
   const scrolls = useRef(new Map<string, number>())
   const cards = useRef(new Map<string, CardMemory>())
-  const [shown, setShown] = useState<{ readonly user: string; readonly panel: OpenPanel } | null>(null)
-  const panel = shown?.user === user ? shown.panel : null
-  const openPanel = useCallback((item: PanelItem, from: number) => setShown({ user, panel: { item, from } }), [user])
-  const closePanel = useCallback(() => setShown(null), [])
   const desk = deskOf(desks, user)
+  const panel = useMemo(() => panelOf(desk.panel), [desk.panel])
   const { thread } = desk
   const busy = isThinking(thread)
 
   const act = useCallback((owner: string) => (action: DeskAction) => dispatch({ user: owner, action }), [])
+  const openPanel = useCallback((item: PanelItem, from: number | null) => act(user)({ type: 'panel_open', item, from }), [act, user])
+  const pushPanel = useCallback((item: PanelItem) => act(user)({ type: 'panel_push', item }), [act, user])
+  const backPanel = useCallback(() => act(user)({ type: 'panel_back' }), [act, user])
+  const closePanel = useCallback(() => act(user)({ type: 'panel_close' }), [act, user])
 
   const send = useCallback(
     (ask: PlannerAnswerIn, shown: string, restore: string | null) => {
@@ -107,6 +117,7 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
       type: (text) => here({ type: 'typed', text }),
       setProblem: (problem) => here({ type: 'problem', problem }),
       send,
+      askBehind: (shown) => here({ type: 'asked_behind', text: shown }),
       sendText: () => {
         const typed = desk.text.trim()
         if (typed === '' || busy) return
@@ -119,7 +130,6 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
         const unfinished = thread.messages.some((message) => cards.current.get(`${user}:${String(message.id)}`)?.kept()?.phase.kind === 'open')
         for (const key of [...cards.current.keys()]) if (key.startsWith(`${user}:`)) cards.current.delete(key)
         scrolls.current.delete(user)
-        setShown(null)
         here({ type: 'new_chat' })
         if (unfinished) here({ type: 'note', text: DRAFT_SAVED })
       },
@@ -129,9 +139,11 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
       cardMemory,
       panel,
       openPanel,
+      pushPanel,
+      backPanel,
       closePanel,
     }
-  }, [act, busy, cardMemory, closePanel, desk.note, desk.problem, desk.text, openPanel, panel, scroll, send, thread, user])
+  }, [act, backPanel, busy, cardMemory, closePanel, desk.note, desk.problem, desk.text, openPanel, panel, pushPanel, scroll, send, thread, user])
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>
 }
