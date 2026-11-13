@@ -16,9 +16,11 @@ from platform_api.orchestration import (
     add_yes,
     grade,
 )
+from tests.support import FIXTURES
 
 GOLDEN = Path(__file__).parent / "golden" / "n8n"
-PACK = Path(__file__).parents[2] / "n8n-node-pack" / "node-types.json"
+PACK = FIXTURES.parent / "n8n" / "node-types.json"
+"""The node pack's types, as the pack's own test keeps contracts/ in step with it."""
 ERROR_WORKFLOW = "wfErrorReporter01"
 
 type Doc = dict[str, Any]
