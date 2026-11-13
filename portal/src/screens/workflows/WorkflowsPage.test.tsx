@@ -11,13 +11,16 @@ import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import aliceHome from '../../../../contracts/fixtures/builder/home.alice.json'
 import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
+import questionHome from '../../../../contracts/fixtures/builder/home.alice.question.json'
+import declinedHome from '../../../../contracts/fixtures/builder/home.alice.declined-test.json'
+import capabilities from '../../../../contracts/fixtures/planner/capabilities.json'
 import setupCardFixture from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import { cardFrom, draftContent } from '../home/card'
 import draftsFixture from '../../../../contracts/fixtures/builder/drafts.json'
 import peopleList from '../../../../contracts/fixtures/people/list.json'
 import type { DraftView, HomeOut, Me, PersonOut, ReplyView, TeamRequestView, UnderstoodRowView, UseCaseView } from '../../api/types'
 import type { LastRun } from './workflow'
-import { needsTotal } from '../home/home'
+import { needsTotal, pinnedOf } from '../home/home'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
@@ -41,19 +44,23 @@ interface Setup {
   readonly home?: HomeOut
   readonly drafts?: DraftView[]
   readonly request?: { readonly id: string; readonly data?: TeamRequestView | Error }
+  /** The page to open. Home reads the same Needs you, so a test can compare the two. */
+  readonly path?: string
 }
 
 /** The platform answers for the person asking. In these tests only Bob may decide the waiting run. */
 const asSeenBy = (me: Me, useCase: UseCaseView): UseCaseView =>
   useCase.last_run?.state === 'awaiting_approval' ? { ...useCase, last_run: { ...useCase.last_run, you_can_decide: me.id === 'bob' } } : useCase
 
-function render({ me = ALICE, useCases = [STOPPED_BUGS, WAITING_WATCHLIST, LANGGRAPH], state, home, drafts, request }: Setup = {}): string {
+function render({ me = ALICE, useCases = [STOPPED_BUGS, WAITING_WATCHLIST, LANGGRAPH], state, home, drafts, request, path = '/workflows' }: Setup = {}): string {
   const session = createDevSession(null)
   const scope = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', scope], me)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB, CAROL])
   queryClient.setQueryData(['people', scope], TEAM)
+  queryClient.setQueryData(['capabilities', scope], capabilities)
+  queryClient.setQueryData(['watchlist', scope], { software: [] })
   if (home) queryClient.setQueryData(['home', scope], home)
   if (drafts) queryClient.setQueryData(['drafts', scope], drafts)
   if (request?.data instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: ['team-request', scope, request.id] }).setState({ status: 'error', error: request.data, fetchStatus: 'idle' })
@@ -63,7 +70,7 @@ function render({ me = ALICE, useCases = [STOPPED_BUGS, WAITING_WATCHLIST, LANGG
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
-        <MemoryRouter initialEntries={[{ pathname: '/workflows', search: request ? `?request=${request.id}` : '', state }]}>
+        <MemoryRouter initialEntries={[{ pathname: path, search: request ? `?request=${request.id}` : '', state }]}>
           <App now={() => NOW} />
         </MemoryRouter>
       </ApiProvider>
@@ -285,6 +292,44 @@ describe('Needs you at the top of Workflows', () => {
     expect(render({ home: quiet })).not.toContain('>Needs you</h2>')
     expect(render()).not.toContain('>Needs you</h2>')
   })
+
+  /** Every kind of need at once: Alice's stop, connections, addresses and reply, Bob's approval and confirmations, a question and a declined test run. */
+  const EVERY_KIND: HomeOut = {
+    ...HOME,
+    approvals: (bobHome as HomeOut).approvals,
+    approvals_total: (bobHome as HomeOut).approvals_total,
+    confirmations: (bobHome as HomeOut).confirmations,
+    questions_for_me: (questionHome as HomeOut).questions_for_me,
+    questions_for_me_total: (questionHome as HomeOut).questions_for_me_total,
+    declined: (declinedHome as HomeOut).declined,
+    declined_total: (declinedHome as HomeOut).declined_total,
+  }
+  const rowsOfNeeds = (html: string) =>
+    Object.fromEntries(
+      [...mainOf(html).matchAll(/<li data-home-item="([^"]+)" data-kind="([^"]+)" data-tone="([^"]+)">([\s\S]*?)<\/li>/g)].map((m) => [m[1] ?? '', { kind: m[2] ?? '', tone: m[3] ?? '', words: text(m[4] ?? '') }]),
+    )
+
+  it('says every kind of need in the same words and tone as Home', () => {
+    const onWorkflows = rowsOfNeeds(render({ me: BOB, home: EVERY_KIND }))
+    const onHome = rowsOfNeeds(render({ me: BOB, home: EVERY_KIND, path: '/' }))
+    expect(new Set(Object.values(onWorkflows).map((row) => row.kind))).toEqual(new Set(['stopped', 'approval', 'connection', 'address', 'confirmation', 'declined', 'question', 'reply']))
+    expect(Object.keys(onWorkflows)).toHaveLength(needsTotal(EVERY_KIND))
+    expect(onWorkflows).toEqual(onHome)
+  })
+
+  it('says the rows the review found in two words in Home’s words, and colours an address amber, as Home and the sketch do', () => {
+    const rows = Object.values(rowsOfNeeds(render({ home: EVERY_KIND })))
+    const words = rows.map((row) => row.words)
+    expect(words).toEqual(expect.arrayContaining(['Jira isn’t answering', 'GitHub key expires Wed 18 Nov', 'FastAPI moved to fastapi/fastapi on GitHub', 'Dave waits to be confirmed as an Approver', 'LangServe can’t be found on GitHub']))
+    expect(rows.filter((row) => row.kind === 'address').map((row) => row.tone)).toEqual(['wait', 'wait'])
+  })
+
+  it('lists the same needs the strip counts, so the strip’s “N more” plus its one row is the number of rows here', () => {
+    const html = mainOf(render({ home: HOME, drafts: draftsFixture.drafts }))
+    const needsYou = /<section[^>]*>\s*<h2[^>]*>Needs you<\/h2>[\s\S]*?<\/section>/.exec(html)?.[0] ?? ''
+    expect([...needsYou.matchAll(/data-home-item="/g)]).toHaveLength((pinnedOf(HOME)?.more ?? -1) + 1)
+    expect(needsYou, 'a draft is listed under All workflows, which the strip does not count').not.toContain('data-draft=')
+  })
 })
 
 
@@ -308,9 +353,9 @@ describe('the rest of the page under Needs you', () => {
   const HOME = aliceHome as HomeOut
   const DRAFTS = draftsFixture.drafts as DraftView[]
 
-  it('come in order: Needs you with its drafts, All workflows, Following up', () => {
+  it('come in order: Needs you, All workflows with its drafts after the workflows, Following up', () => {
     const html = mainOf(render({ home: HOME, drafts: DRAFTS }))
-    const at = ['>Needs you</h2>', 'data-draft="', 'aria-labelledby="all-workflows-h"', 'data-section="following"'].map((marker) => html.indexOf(marker))
+    const at = ['>Needs you</h2>', 'aria-labelledby="all-workflows-h"', 'data-workflow-id="', 'data-draft="', 'data-section="following"'].map((marker) => html.indexOf(marker))
     expect(at.every((index) => index >= 0)).toBe(true)
     expect(at).toEqual([...at].sort((a, b) => a - b))
   })
@@ -319,15 +364,15 @@ describe('the rest of the page under Needs you', () => {
     expect(mainOf(render({ home: HOME }))).not.toContain('Waiting on others')
   })
 
-  it('lists a draft under Set up as “{name} is a draft”, with Resume to Home as the row and Discard beside it, each named for the draft', () => {
+  it('lists a draft under All workflows as a row like a workflow’s, with the pill Draft, one link that opens it in the chat, where its card has Discard', () => {
     const html = mainOf(render({ home: HOME, drafts: DRAFTS }))
     const draft = /<li[^>]*data-draft="drf-7f3a2c"[\s\S]*?<\/li>/.exec(html)?.[0] ?? ''
-    expect(text(draft)).toContain('Nudge stale tickets is a draft Only your words are saved. Last saved Today, 14:24.')
+    expect(text(draft)).toBe('Nudge stale tickets Only your words are saved. Last saved Today, 14:24. Draft')
     expect(draft).toMatch(/<a[^>]*href="\/\?draft=drf-7f3a2c"/)
-    expect(draft).toMatch(/<button[^>]*>Discard<span[^>]*> Nudge stale tickets<\/span><\/button>/)
-    const names = [...html.matchAll(/<h3 id="[^"]*">(Do now|Set up)<\/h3>/g)].map((m) => m[1])
-    expect(names.at(-1)).toBe('Set up')
+    expect(draft).not.toContain('<button')
+    expect(html.indexOf('data-draft=')).toBeGreaterThan(html.indexOf('aria-label="Workflows"'))
   })
+
 
   it('gives a saved card’s draft the reason setupLeft gives, the same words as the card’s footer', () => {
     const card = cardFrom('Weekly summary', setupCardFixture.rows as UnderstoodRowView[], 'Every Friday, sum up the closed tickets')

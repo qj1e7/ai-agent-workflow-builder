@@ -349,22 +349,6 @@
   font-weight: 400;
 }
 
-.draftRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-  padding: 12px 6px;
-  border-bottom: 1px solid var(--rule);
-}
-
-.draftText {
-  display: grid;
-  min-width: 0;
-  flex: 1 1 240px;
-}
-
 .request {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -516,83 +500,8 @@
   font-weight: 800;
 }
 
-.group {
-  display: grid;
-  gap: 8px;
-}
-
-.group h3 {
-  color: var(--muted);
-  font-size: 0.88rem;
-  font-weight: 700;
-}
-
-.needs {
-  display: grid;
-  gap: 8px;
-}
-
-.need {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 46px;
-  padding: 10px 12px 10px 14px;
-  border: 1px solid var(--hair);
-  border-radius: var(--r-card);
-  background: var(--surface);
-  color: inherit;
-  text-decoration: none;
-  transition:
-    border-color var(--dur-press) ease,
-    transform var(--dur-press) var(--ease-out);
-}
-
-.need:active {
-  transform: scale(0.99);
-}
-
-.needText {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.needText .sub {
-  display: block;
-}
-
-.dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--amber);
-}
-
-.need[data-tone='err'] .dot {
-  background: var(--red);
-}
-
-.need svg {
-  flex: none;
-  color: var(--muted);
-}
-
 .moreNote {
   color: var(--muted);
-}
-
-/* A saved draft is a Needs you row with Discard beside it. */
-.draftRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.draftRow > .need {
-  flex: 1 1 260px;
 }
 
 /* The rows of All workflows, and of the Watchlist, are one bordered list. */
@@ -814,9 +723,5 @@ details.rule > p {
   .rowLink:hover,
   .runLink:hover {
     background: var(--sunk);
-  }
-
-  .need:hover {
-    border-color: var(--ink);
   }
 }
