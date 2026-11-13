@@ -84,8 +84,8 @@ describe('the Workflows card (show my workflows)', () => {
     expect(text(html)).toContain(`Workflows ${String(WORKFLOWS_SHOWN + 3)}`)
   })
 
-  it('ends with a way to the whole list only when rows are left out', () => {
-    expect(text(draw(answered(reply), { useCases: many(WORKFLOWS_SHOWN + 1) }))).toContain('See all workflows')
+  it('ends with a way to the whole list, opened beside the chat, only when rows are left out', () => {
+    expect(draw(answered(reply), { useCases: many(WORKFLOWS_SHOWN + 1) })).toMatch(/<button[^>]*data-opens="workflows:"[^>]*>See all workflows/)
     expect(text(draw(answered(reply), { useCases: many(WORKFLOWS_SHOWN) }))).not.toContain('See all workflows')
   })
 })

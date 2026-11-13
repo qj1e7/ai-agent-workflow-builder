@@ -374,7 +374,7 @@ for (const user of ['alice', 'bob']) {
         const shown = await card.locator('li[data-workflow-id]').count()
         expect(shown, 'the check card shows a few workflows, at most five').toBeGreaterThan(0)
         expect(shown).toBeLessThanOrEqual(5)
-        if (shown === 5) await expect(page.getByRole('main').getByRole('link', { name: 'See all workflows' }), 'with more left out, it ends with a way to the whole list').toBeVisible()
+        if (shown === 5) await expect(page.getByRole('main').getByRole('button', { name: 'See all workflows' }), 'with more left out, it ends with a way to the whole list').toBeVisible()
         for (const row of await card.locator('li[data-workflow-id]').all()) await expect(row.locator('span[class*="pill"]'), 'each row says its state').toHaveText(/\S/)
         await shot(page, info, `r9-check-card-alice-${width}`)
       }

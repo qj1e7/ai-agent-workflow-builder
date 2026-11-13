@@ -73,7 +73,15 @@ export function CheckWorkflowsAnswer({ useCaseId, say }: { useCaseId: string | n
       <Card
         title="Workflows"
         pill={<span className={lists['count']}>{rows.length}</span>}
-        {...(rows.length > WORKFLOWS_SHOWN ? { actions: <ButtonLink to="/workflows">See all workflows</ButtonLink> } : {})}
+        {...(rows.length > WORKFLOWS_SHOWN
+          ? {
+              actions: (
+                <OpenButton item={{ kind: 'workflows' }} to="/workflows">
+                  See all workflows
+                </OpenButton>
+              ),
+            }
+          : {})}
       >
         <WorkflowRows useCases={rows.slice(0, WORKFLOWS_SHOWN).map((row) => row.useCase)} label="Your workflows" />
       </Card>
