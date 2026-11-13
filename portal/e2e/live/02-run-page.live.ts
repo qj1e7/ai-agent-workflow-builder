@@ -23,6 +23,8 @@ const answer = (page: Page, name: string) => page.locator('dl', { has: page.loca
 /** Every animation that ends has ended. The dashes marching into a yes that waits loop, as they should. */
 const settled = (page: Page) => page.waitForFunction(() => document.getAnimations().every((animation) => animation.effect?.getComputedTiming().iterations === Infinity))
 const steps = (page: Page) => page.getByRole('list', { name: 'Steps of this run' }).locator('li[data-state]')
+/** How visible the green tick on the face above a step is, 0 to 1. */
+const faceTick = (step: Locator) => step.locator('[data-face] circle[fill="var(--green)"]').evaluate((circle) => getComputedStyle(circle.parentElement ?? circle).opacity)
 /** The one line under a finished run's steps: "Done at 10:20 · …" or "Ended at 10:18 · …", with the day when it was not today. */
 const settledLine = (page: Page, rest: string) => page.getByText(new RegExp(`^(Done|Ended) (at|on \\w{3} \\d{1,2} \\w{3} at) \\d{1,2}:\\d{2} · ${rest.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`))
 
@@ -59,6 +61,7 @@ test('alice starts a check; bob opens the waiting run, sees the ticket it will c
   await expect(bob.locator('li[aria-current="step"]')).toContainText('Waiting for a yes')
   expect(await runLinks(bob), 'slow amber dashes march into the yes that waits, and the links into the steps done are solid').toEqual(['solid', 'wait+', 'todo'])
   await expect(steps(bob), 'the line is the workflow’s blocks and nothing else').toHaveText([/Started by Alice$/, /Read every source$/, /Ask for a yes$/, /Create Jira tickets$/])
+  expect(await faceTick(steps(bob).nth(1)), 'the agent that finished looks done when the page opens').toBe('1')
   await shot(bob, info, 'p5-02-bob-waiting')
 
   const ticketsBefore = (await backend.tickets()).filter((ticket) => ticket.run_id === runId)
@@ -69,6 +72,7 @@ test('alice starts a check; bob opens the waiting run, sees the ticket it will c
   await expect(steps(bob)).toHaveCount(4)
   for (const step of await steps(bob).all()) await expect(step).toHaveAttribute('data-state', 'done')
   await expect.poll(() => runLinks(bob), { message: 'every link is solid once the run is done' }).toEqual(['solid', 'solid', 'solid'])
+  await expect.poll(() => faceTick(steps(bob).nth(1)), { message: 'and still looks done after the run moved on' }).toBe('1')
   await expect(heading(bob), 'the agents’ chat stays folded, so after the yes focus moves to the heading').toBeFocused()
   await expect(toggle(bob)).toHaveText('Show what each agent did')
   await toggle(bob).click()
