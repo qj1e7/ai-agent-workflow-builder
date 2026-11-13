@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -11,7 +12,7 @@ from platform_api.builder import Builder, Home, PlannerFront, TeamRequests, Watc
 from platform_api.builder.planner_facts import PlannerFactsReader
 from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
-from platform_api.orchestration.agents import HttpAgentRuntime
+from platform_api.orchestration.agents import CardInput, HttpAgentRuntime
 from platform_api.orchestration.connections import (
     TEAMS_NOT_CHECKED,
     Checked,
@@ -38,6 +39,17 @@ from platform_api.orchestration.dispatch import (
 from platform_api.orchestration.jira import JiraWriteConnector, jira_site
 from platform_api.orchestration.jira_rest import JiraAuth, JiraRestAdapter
 from platform_api.orchestration.model_settings import KeyBox, ModelSettings
+from platform_api.orchestration.n8n_call_service import NodeCalls
+from platform_api.orchestration.n8n_calls import (
+    ExecutionFacts,
+    NodeCatalog,
+    NodeOption,
+    OwnWorkflow,
+    RanVersion,
+    ReadFailed,
+    ReadItems,
+    WriteEntry,
+)
 from platform_api.orchestration.people_store import People
 from platform_api.orchestration.planning import (
     CapabilityRegistry,
@@ -48,6 +60,7 @@ from platform_api.orchestration.planning import (
 from platform_api.orchestration.runs import Leg
 from platform_api.orchestration.schedule_store import ScheduleBook, ScheduleTicker
 from platform_api.orchestration.service import Orchestrator
+from platform_api.orchestration.spec import CardRun
 from platform_api.orchestration.team_request_card import TeamsRequestChannel
 from platform_api.orchestration.teams import TeamsStub, TeamsWorkflowsWebhook
 from platform_api.orchestration.watch_store import WatchFacts
@@ -55,7 +68,7 @@ from platform_api.orchestration.workflows import load_all
 from platform_api.orchestration.write_actions import WriteGateway
 from platform_api.practice_jira import PRACTICE_EMAIL, PracticeJira, practice_token
 from platform_api.settings import Settings
-from platform_api.shared import RunId, TaskId
+from platform_api.shared import N8nExecutionId, RunId, TaskId
 
 
 @dataclass(frozen=True)
@@ -64,6 +77,7 @@ class Services:
     db: Database
     activity_log: ActivityLog
     orchestrator: Orchestrator
+    node_calls: NodeCalls
     builder: Builder
     planner_front: PlannerFront
     home: Home
@@ -121,6 +135,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.activity_log = services.activity_log
     app.state.copier = services.copier
     app.state.orchestrator = services.orchestrator
+    app.state.node_calls = services.node_calls
     app.state.builder = services.builder
     app.state.planner_front = services.planner_front
     app.state.home = services.home
@@ -134,6 +149,52 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.model_settings = services.model_settings
     app.state.connections = services.connections
     app.state.people = services.people
+
+
+class NoOwnWorkflowsYet:
+    """Until the Planner lays use cases out as n8n workflows of their own (E4), no n8n workflow
+    is ours, so every node call is refused, and no agent or place can be named."""
+
+    async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | None:
+        return None
+
+    async def version(self, n8n_workflow_id: str, version_id: str) -> RanVersion | None:
+        return None
+
+    async def agents(self) -> Sequence[NodeOption]:
+        return []
+
+    async def agent_inputs(self, agent_id: str) -> Sequence[CardInput]:
+        return []
+
+    async def agent_run(self, agent_id: str, values: Mapping[str, str]) -> CardRun | None:
+        return None
+
+    async def execution(self, execution_id: N8nExecutionId) -> ExecutionFacts | None:
+        """n8n's records are not read yet (E4), so every execution is of no workflow of ours."""
+        return ExecutionFacts("", "", None, None, None)
+
+    async def places(self, source: str) -> Sequence[NodeOption]:
+        return []
+
+    async def read(self, source: str, place: str, query: str | None) -> ReadItems | ReadFailed:
+        return ReadFailed("No Read source is set up yet.")
+
+
+def node_writes(settings: Settings) -> list[WriteEntry]:
+    """The writes a Propose a change block may name: the registry's one ready write, in the
+    Jira project the platform writes to."""
+    project = NodeOption(settings.watchlist_jira_project, settings.watchlist_jira_project)
+    return [
+        WriteEntry(
+            "jira.create_ticket",
+            "Create a Jira ticket",
+            "jira",
+            "create_ticket",
+            "project",
+            (project,),
+        )
+    ]
 
 
 def quiet_http_logs() -> None:
@@ -254,17 +315,33 @@ async def build(settings: Settings) -> Services:
     secret = settings.settings_encryption_key
     model_settings = ModelSettings(db, agents, KeyBox(secret) if secret else None, people=people)
     connections, channel = connections_for(settings, db, jira, channel, agents, model_settings)
+    gateway = WriteGateway(db, [JiraWriteConnector(jira, db, site)])
     orchestrator = Orchestrator(
         db,
         activity,
         N8nWebhooks(settings.n8n_base_url, path_for),
         channel,
         agents,
-        WriteGateway(db, [JiraWriteConnector(jira, db, site)]),
+        gateway,
         mint,
         models=model_settings,
         people=people,
         public_base_url=settings.public_base_url,
+        time_zone=settings.team_time_zone,
+    )
+    not_yet = NoOwnWorkflowsYet()
+    node_calls = NodeCalls(
+        db,
+        activity,
+        agents,
+        mint,
+        NodeCatalog(not_yet, not_yet, node_writes(settings)),
+        not_yet,
+        not_yet,
+        not_yet,
+        gateway.sites,
+        model_settings,
+        start_secret=settings.start_secret,
         time_zone=settings.team_time_zone,
     )
     schedules = ScheduleBook(db)
@@ -295,6 +372,7 @@ async def build(settings: Settings) -> Services:
         db=db,
         activity_log=activity,
         orchestrator=orchestrator,
+        node_calls=node_calls,
         builder=builder,
         planner_front=PlannerFront(
             PlannerAnswers(db, model_settings, agents),

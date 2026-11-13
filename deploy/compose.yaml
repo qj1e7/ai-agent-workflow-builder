@@ -162,6 +162,9 @@ services:
       STEP_KEY: ${STEP_KEY:?run deploy/make-env.sh}
       PLATFORM_INTERNAL_URL: http://platform-api:8000
       CALLBACK_SIGNING_KEY: ${CALLBACK_SIGNING_KEY:?run deploy/make-env.sh}
+      # The same two values n8n has: our API checks the node pack's key and signs each start.
+      WAB_NODE_KEY: ${WAB_NODE_KEY:?run deploy/make-env.sh}
+      WAB_START_SECRET: ${WAB_START_SECRET:?run deploy/make-env.sh}
       # Optional: without it the Portal's AI model settings are off (ADR 0022).
       SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:-}
       # The Teams channel the approval card names. With TEAMS_WEBHOOK_URL set, the card goes to

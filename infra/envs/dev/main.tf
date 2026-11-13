@@ -254,6 +254,8 @@ locals {
           DATABASE_URL_MONITORING    = local.secret["database-url-monitoring"]
           AGENT_API_KEY              = local.secret["agent-api-key"]
           STEP_KEY                   = local.secret["step-key"]
+          WAB_NODE_KEY               = local.secret["wab-node-key"]
+          WAB_START_SECRET           = local.secret["wab-start-secret"]
           CALLBACK_SIGNING_KEY       = local.secret["callback-signing-key"]
           SETTINGS_ENCRYPTION_KEY    = local.secret["settings-encryption-key"]
           COSMOS_KEY                 = local.secret["cosmos-key"]

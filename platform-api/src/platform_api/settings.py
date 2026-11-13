@@ -94,6 +94,10 @@ class Settings:
     watchlist_jira_project: str = PRACTICE_JIRA_PROJECT
     jira: JiraSettings = JiraSettings()
     team_time_zone: ZoneInfo = TEAM_TIME_ZONE
+    node_key: str | None = None
+    """WAB_NODE_KEY, which our n8n node pack sends. Without it no node call is taken."""
+    start_secret: str | None = None
+    """WAB_START_SECRET, which signs each start the Portal sends to Start from the Portal."""
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -296,6 +300,8 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         watchlist_jira_project=watchlist_jira_project_from_env(env),
         jira=jira_from_env(env, public_base_url, practice_systems),
         team_time_zone=team_time_zone_from_env(env),
+        node_key=env.get("WAB_NODE_KEY", "").strip() or None,
+        start_secret=env.get("WAB_START_SECRET", "").strip() or None,
     )
 
 

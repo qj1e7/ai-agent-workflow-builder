@@ -66,6 +66,7 @@ const PILLS: Record<RunState, Pill> = {
   failed: { tone: 'bad', pill: 'Stopped' },
   succeeded: { tone: 'ok', pill: null },
   rejected: { tone: 'ok', pill: null },
+  skipped: { tone: 'ok', pill: null },
   pending: { tone: 'new', pill: 'Running' },
   working: { tone: 'new', pill: 'Running' },
   proposed: { tone: 'new', pill: 'Running' },
@@ -84,6 +85,8 @@ export function runFact(run: RunView, nameOf: NameOf): RunFact {
       return { ...PILLS[run.state], words: doneWords(run, nameOf) }
     case 'rejected':
       return { ...PILLS[run.state], words: declinedRecord(declinedOfSteps(run.approval.steps) ?? { by: run.rejected_by, approvedBy: [], reason: null }, nameOf) }
+    case 'skipped':
+      return { ...PILLS[run.state], words: `Skipped. An earlier run is still waiting for a yes.` }
     case 'pending':
     case 'working':
     case 'proposed':
@@ -109,6 +112,8 @@ function lastRunWhat(last: LastRun, nameOf: NameOf, room: Room): string {
     }
     case 'failed':
       return 'Stopped'
+    case 'skipped':
+      return 'Skipped'
     case 'pending':
     case 'working':
     case 'proposed':

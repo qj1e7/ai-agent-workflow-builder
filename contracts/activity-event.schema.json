@@ -894,6 +894,71 @@
       ],
       "type": "string"
     },
+    "ExecutionLinked": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/ExecutionLinkedData"
+        },
+        "kind": {
+          "const": "execution_linked",
+          "default": "execution_linked",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "ExecutionLinked",
+      "type": "object"
+    },
+    "ExecutionLinkedData": {
+      "additionalProperties": false,
+      "properties": {
+        "execution_id": {
+          "title": "Execution Id",
+          "type": "string"
+        },
+        "mode": {
+          "description": "How n8n says the execution started, such as trigger or retry.",
+          "title": "Mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "execution_id",
+        "mode"
+      ],
+      "title": "ExecutionLinkedData",
+      "type": "object"
+    },
     "FailureReason": {
       "enum": [
         "AgentError",
@@ -1290,6 +1355,66 @@
         "attempt"
       ],
       "title": "RunRetriedData",
+      "type": "object"
+    },
+    "RunSkipped": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/RunSkippedData"
+        },
+        "kind": {
+          "const": "run_skipped",
+          "default": "run_skipped",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "RunSkipped",
+      "type": "object"
+    },
+    "RunSkippedData": {
+      "additionalProperties": false,
+      "properties": {
+        "waiting_run_id": {
+          "description": "The earlier run of the same workflow that is still waiting for a yes.",
+          "title": "Waiting Run Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "waiting_run_id"
+      ],
+      "title": "RunSkippedData",
       "type": "object"
     },
     "RunSucceeded": {
@@ -1900,11 +2025,13 @@
       "approval_decided": "#/$defs/ApprovalDecided",
       "approval_outcome_not_posted": "#/$defs/ApprovalOutcomeNotPosted",
       "approval_requested": "#/$defs/ApprovalRequested",
+      "execution_linked": "#/$defs/ExecutionLinked",
       "leg_dispatched": "#/$defs/LegDispatched",
       "run_created": "#/$defs/RunCreated",
       "run_failed": "#/$defs/RunFailed",
       "run_rejected": "#/$defs/RunRejected",
       "run_retried": "#/$defs/RunRetried",
+      "run_skipped": "#/$defs/RunSkipped",
       "run_succeeded": "#/$defs/RunSucceeded",
       "step_finished": "#/$defs/StepFinished",
       "step_retried": "#/$defs/StepRetried",
@@ -1982,6 +2109,12 @@
     },
     {
       "$ref": "#/$defs/RunRetried"
+    },
+    {
+      "$ref": "#/$defs/ExecutionLinked"
+    },
+    {
+      "$ref": "#/$defs/RunSkipped"
     },
     {
       "$ref": "#/$defs/SupportReported"

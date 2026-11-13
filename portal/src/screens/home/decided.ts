@@ -41,6 +41,8 @@ function afterYes(decision: PastDecisionView, nameOf: NameOf): string {
       return decision.declined_by ? `Then declined by ${nameOf(decision.declined_by)}. ${declineTail({ reason: null })}` : declineTail({ reason: null })
     case 'failed':
       return 'The run stopped.'
+    case 'skipped':
+      return 'An earlier run is still waiting for a yes.'
     case 'acting':
       return 'Writing what was approved.'
     case 'pending':

@@ -9,12 +9,14 @@ from platform_api.monitoring import (
     ActionLine,
     Actor,
     ApprovalRequestedData,
+    ExecutionLinkedData,
     LegDispatchedData,
     PendingEvent,
     RunCreatedData,
     RunFailedData,
     RunRejectedData,
     RunRetriedData,
+    RunSkippedData,
     RunSucceededData,
     StepFinishedData,
     StepRetriedData,
@@ -80,6 +82,7 @@ class Outcome(Enum):
 
 
 TEST_PASSED = "Test run passed up to the yes. Nothing was written."
+SKIPPED = "An earlier run is still waiting for a yes."
 
 
 @dataclass(frozen=True)
@@ -237,6 +240,15 @@ def _retried(by: Actor, leg: Leg, attempt: int) -> tuple[PendingEvent, ...]:
         RunRetriedData(leg=leg.value, attempt=attempt),
     )
     return (retried, _leg_dispatched(leg, attempt))
+
+
+@dataclass(frozen=True)
+class Skipped:
+    """A run n8n started while an earlier run of the same workflow waited for a yes. It ends at
+    its first call, so the Approvers never see two requests for one change."""
+
+    run_id: RunId
+    waiting: RunId
 
 
 @dataclass(frozen=True)
@@ -433,6 +445,10 @@ class Working:
     def task_id(self) -> TaskId:
         return TaskId(f"{self.run_id}/work/{self.attempt}")
 
+    def touch(self, now: datetime) -> Working:
+        """A run n8n carries stays alive while its nodes keep calling."""
+        return replace(self, deadline_at=deadline(Working, now))
+
     def retry_step(self) -> Moved[Working]:
         next_try = self.try_number + 1
         retried = PendingEvent(
@@ -523,6 +539,15 @@ class Pending:
     def claim(self, execution: N8nExecutionId) -> Pending:
         return replace(self, claimant=execution)
 
+    def link(self, execution: N8nExecutionId, mode: str, now: datetime) -> Moved[Working]:
+        working = working_on(self.run_id, execution, self.attempt, now)
+        return Moved(working, (execution_linked(execution, mode),))
+
+    def skip(self, execution: N8nExecutionId, mode: str, waiting: RunId) -> Moved[Skipped]:
+        return Moved(
+            Skipped(self.run_id, waiting), (execution_linked(execution, mode), run_skipped(waiting))
+        )
+
     def begin_work(self, execution: N8nExecutionId, now: datetime) -> Moved[Working]:
         working = Working(
             self.run_id,
@@ -542,7 +567,15 @@ class Pending:
 
 
 type RunState = (
-    Pending | Working | Proposed | AwaitingApproval | Acting | Succeeded | Rejected | Failed
+    Pending
+    | Working
+    | Proposed
+    | AwaitingApproval
+    | Acting
+    | Succeeded
+    | Rejected
+    | Failed
+    | Skipped
 )
 type ActiveState = Pending | Working | Proposed | Acting
 
@@ -573,6 +606,7 @@ STATE_NAMES: Mapping[type[RunState], RunStateName] = {
     Succeeded: "succeeded",
     Rejected: "rejected",
     Failed: "failed",
+    Skipped: "skipped",
 }
 
 
@@ -598,20 +632,19 @@ def fail(state: ActiveState, failure: Failure) -> Moved[Failed]:
     return state.fail(failure)
 
 
-def created_events(
+def run_created(
     use_case_id: str,
     use_case_version: int,
     use_case_name: str,
     by: Actor,
-    attempt: int,
     trigger: Trigger = "person",
-) -> tuple[PendingEvent, ...]:
+) -> PendingEvent:
     summary = (
         f"{by.display} started a run of the {use_case_name}."
         if trigger == "person"
         else f"{by.display}'s schedule started a check of the {use_case_name}."
     )
-    created = PendingEvent(
+    return PendingEvent(
         by,
         "run_created",
         summary,
@@ -622,7 +655,48 @@ def created_events(
             trigger=trigger,
         ),
     )
+
+
+def created_events(
+    use_case_id: str,
+    use_case_version: int,
+    use_case_name: str,
+    by: Actor,
+    attempt: int,
+    trigger: Trigger = "person",
+) -> tuple[PendingEvent, ...]:
+    created = run_created(use_case_id, use_case_version, use_case_name, by, trigger)
     return (created, _leg_dispatched(Leg.WORK, attempt))
+
+
+def execution_linked(execution: N8nExecutionId, mode: str) -> PendingEvent:
+    return PendingEvent(
+        WORKFLOW,
+        "execution_linked",
+        f"n8n execution {execution} is carrying the run ({mode}).",
+        ExecutionLinkedData(execution_id=execution, mode=mode),
+    )
+
+
+def run_skipped(waiting: RunId) -> PendingEvent:
+    return PendingEvent(PLATFORM, "run_skipped", SKIPPED, RunSkippedData(waiting_run_id=waiting))
+
+
+def working_on(run_id: RunId, execution: N8nExecutionId, attempt: int, now: datetime) -> Working:
+    return Working(run_id, execution, attempt, 1, deadline(Working, now), now + CALLBACK_LIFETIME)
+
+
+def linked_events(
+    created: PendingEvent, execution: N8nExecutionId, mode: str
+) -> tuple[PendingEvent, ...]:
+    """A run n8n started itself: on a schedule, or by hand in the editor."""
+    return (created, execution_linked(execution, mode))
+
+
+def skipped_events(
+    created: PendingEvent, execution: N8nExecutionId, mode: str, waiting: RunId
+) -> tuple[PendingEvent, ...]:
+    return (*linked_events(created, execution, mode), run_skipped(waiting))
 
 
 PLANNER = agent_actor("planner", "Planner")
@@ -642,7 +716,7 @@ def caller_of(state: RunState, execution: N8nExecutionId) -> Caller:
             return Caller.CLAIMANT if holder == execution else Caller.OTHER
         case Working(execution=holder) | Proposed(execution=holder):
             return Caller.CLAIMANT if holder == execution else Caller.OTHER
-        case AwaitingApproval() | Succeeded() | Rejected() | Failed():
+        case AwaitingApproval() | Succeeded() | Rejected() | Failed() | Skipped():
             return Caller.OTHER
 
 
@@ -652,7 +726,7 @@ def holder_of(state: RunState) -> N8nExecutionId | None:
             return holder
         case Working(execution=holder) | Proposed(execution=holder):
             return holder
-        case AwaitingApproval() | Succeeded() | Rejected() | Failed():
+        case AwaitingApproval() | Succeeded() | Rejected() | Failed() | Skipped():
             return None
 
 
@@ -723,7 +797,9 @@ ASK_APPROVAL = frozenset({StepName.ASK_APPROVAL})
 WRITE_ACTION = frozenset({StepName.WRITE_ACTION})
 
 REFEREE_TABLE: tuple[RefereeRow, ...] = (
-    RefereeRow(frozenset(StepName), (Failed, Rejected), ANY_CALLER, RowVerdict.REPLAY_FALSE),
+    RefereeRow(
+        frozenset(StepName), (Failed, Rejected, Skipped), ANY_CALLER, RowVerdict.REPLAY_FALSE
+    ),
     RefereeRow(RUN_AGENTS, (Pending,), CLAIM_OR_UNCLAIMED, RowVerdict.BEGIN),
     RefereeRow(RUN_AGENTS, (Pending,), OTHER, RowVerdict.SUPERSEDE),
     RefereeRow(RUN_AGENTS, (Working,), CLAIMANT, RowVerdict.BEGIN),

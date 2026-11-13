@@ -23,7 +23,10 @@ from platform_api.orchestration.approvals import (
     decide,
     why_not,
 )
+from platform_api.orchestration.runs import Pending
+from platform_api.orchestration.store import RunRecord
 from platform_api.shared import ApprovalId, Digest, Principal, ProposalId, Role, RunId, UserId
+from tests.support import SPEC
 
 ALICE = UserId("alice")
 BOB = UserId("bob")
@@ -394,3 +397,17 @@ def test_decide_stamps_the_time_it_was_given():
 
 def test_own_work_serializes_as_the_http_refusal():
     assert Refusal.OWN_WORK.value == "own_work"
+
+
+def test_whoever_joined_a_run_in_n8n_is_a_party_and_cannot_approve_it():
+    """The holder of a run started by hand in n8n, or the publisher whose version a trigger
+    ran, joins the run. The request's parties come from the run, so their yes is own work."""
+    dave = UserId("dave")
+    pending = Pending(RunId("run_1"), 1, None, NOW)
+    record = RunRecord(RunId("run_1"), SPEC, BOB, NOW, NOW, 1, pending, (), None, (dave,))
+    assert record.parties == {BOB, SPEC.owner, dave}
+    joined = ApprovalRequest(
+        APPROVAL, RunId("run_1"), ProposalId("prp_1"), DIGEST, ONE_STEP, record.parties
+    )
+    assert approval_status(joined, [decision(0, dave)]) == Invalid(DecisionFault.OWN_WORK)
+    assert approval_status(joined, [decision(0, CAROL)]) == Approved((CAROL,))

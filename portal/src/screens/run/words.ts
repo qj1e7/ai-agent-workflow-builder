@@ -240,6 +240,8 @@ export function headlineOf(model: RunModel, stations: readonly Station[], propos
     }
     case 'rejected':
       return { text: 'Declined, nothing was written', pill: { label: 'Declined', tone: 'off' } }
+    case 'skipped':
+      return { text: 'An earlier run is still waiting for a yes', pill: { label: 'Skipped', tone: 'off' } }
     case 'failed': {
       const failed = stations.find((station) => station.state === 'err')
       const before = failed?.spot.at === 'agent' && model.agents.length === 0

@@ -26,6 +26,7 @@ from platform_api.orchestration.runs import (
     Pending,
     Proposed,
     Rejected,
+    Skipped,
     Succeeded,
     Working,
 )
@@ -178,6 +179,13 @@ class FailedView(_RunBase):
     message: str
 
 
+class SkippedView(_RunBase):
+    state: Literal["skipped"] = "skipped"
+    waiting_run_id: RunId = Field(
+        description="The earlier run of the same workflow that was still waiting for a yes."
+    )
+
+
 type RunView = Annotated[
     PendingView
     | WorkingView
@@ -186,7 +194,8 @@ type RunView = Annotated[
     | ActingView
     | SucceededView
     | RejectedView
-    | FailedView,
+    | FailedView
+    | SkippedView,
     Field(discriminator="state"),
 ]
 
@@ -496,6 +505,8 @@ def run_view(detail: RunDetail, viewer: Principal) -> RunView:
                 retryable=state.failure.retryable,
                 message=state.failure.message,
             )
+        case Skipped():
+            return SkippedView(**base, waiting_run_id=state.waiting)
 
 
 REFUSAL_MESSAGES: dict[Refusal, str] = {
