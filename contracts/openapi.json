@@ -4280,7 +4280,9 @@
           "digest_mismatch",
           "unregistered_action",
           "target_changed",
-          "out_of_order"
+          "out_of_order",
+          "expired",
+          "test_run"
         ],
         "type": "string"
       },

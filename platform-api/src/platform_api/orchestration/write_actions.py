@@ -1,7 +1,7 @@
 import asyncio
 import hashlib
 import json
-from collections.abc import Iterable, Mapping, Sequence, Set
+from collections.abc import Collection, Iterable, Mapping, Sequence, Set
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from enum import Enum
@@ -9,18 +9,21 @@ from typing import Protocol
 
 import psycopg
 
-from platform_api.db import Database
+from platform_api.db import Database, UnitOfWork
 from platform_api.monitoring import ActionLine
 from platform_api.orchestration.approvals import (
     ApprovalRequest,
+    ApprovalStatus,
     Approved,
+    Closed,
     Decision,
+    Ended,
     Invalid,
     approval_status,
 )
 from platform_api.orchestration.dispatch import Identity
-from platform_api.orchestration.runs import Acting, WriteDone
-from platform_api.shared import ApprovalId, Digest, ProposalId, RunId, UserId
+from platform_api.orchestration.runs import Acting, Failure, FailureReason, WriteDone
+from platform_api.shared import ApprovalId, Digest, ProposalId, RunId, UseCaseId, UserId
 
 type Json = str | int | float | bool | None | Mapping[str, Json] | Sequence[Json]
 
@@ -38,6 +41,10 @@ class WriteAction:
     operation: str
     target: Mapping[str, Json]
     fields: Mapping[str, Json]
+    subject: str | None = None
+    """What the change is about, such as the release a ticket is for, when the block that
+    proposed it names it. A use case makes each subject once across all its runs (ADR 0026). The
+    digest leaves it out: the Approver says yes to the change, and the subject only keys it."""
 
 
 @dataclass(frozen=True)
@@ -138,6 +145,8 @@ class DenyReason(Enum):
     DIGEST_MISMATCH = "digest_mismatch"
     UNREGISTERED_ACTION = "unregistered_action"
     TARGET_CHANGED = "target_changed"
+    EXPIRED = "expired"
+    TEST_RUN = "test_run"
 
 
 @dataclass(frozen=True)
@@ -145,28 +154,59 @@ class Deny:
     reason: DenyReason
 
 
+@dataclass(frozen=True)
+class WritingRun:
+    """What the safety checker reads from the run beside its state: the use case, which keys
+    each subject's write, and whether it is a test run, which never writes."""
+
+    use_case_id: UseCaseId
+    test: bool
+
+
 @dataclass(frozen=True, init=False)
 class AuthorizedWrite:
     proposal: Proposal
     approval_id: ApprovalId
     approvers: tuple[UserId, ...]
+    use_case_id: UseCaseId
 
     def __init__(self) -> None:
         raise TypeError("only check() issues an AuthorizedWrite")
 
 
 def _issue(
-    proposal: Proposal, approval_id: ApprovalId, approvers: tuple[UserId, ...]
+    proposal: Proposal,
+    approval_id: ApprovalId,
+    approvers: tuple[UserId, ...],
+    use_case_id: UseCaseId,
 ) -> AuthorizedWrite:
     write = object.__new__(AuthorizedWrite)
     object.__setattr__(write, "proposal", proposal)
     object.__setattr__(write, "approval_id", approval_id)
     object.__setattr__(write, "approvers", approvers)
+    object.__setattr__(write, "use_case_id", use_case_id)
     return write
+
+
+def _expired(
+    request: ApprovalRequest, decisions: Iterable[Decision], status: ApprovalStatus
+) -> bool:
+    """The request reached its expiry without its yes: it ended unanswered, or its last yes came
+    after the expiry, before the tick ended it. A yes given in time stays good after the expiry,
+    so a wake n8n takes late, or a lost run carried on, still writes."""
+    match status:
+        case Closed(ended=Ended.EXPIRED):
+            return True
+        case Approved() if request.expires_at is not None:
+            yeses = (d.at for d in decisions if d.approval_id == request.id)
+            return any(at > request.expires_at for at in yeses)
+        case _:
+            return False
 
 
 def check(
     acting: Acting,
+    run: WritingRun,
     proposal: Proposal,
     request: ApprovalRequest,
     decisions: Iterable[Decision],
@@ -180,9 +220,14 @@ def check(
     )
     if not same_run:
         return Deny(DenyReason.RUN_MISMATCH)
+    if run.test:
+        return Deny(DenyReason.TEST_RUN)
+    decisions = tuple(decisions)
     status = approval_status(request, decisions)
     if isinstance(status, Invalid):
         return Deny(DenyReason.INVALID_DECISIONS)
+    if _expired(request, decisions, status):
+        return Deny(DenyReason.EXPIRED)
     if not isinstance(status, Approved):
         return Deny(DenyReason.NOT_APPROVED)
     if digest(proposal.actions) != request.digest:
@@ -193,7 +238,7 @@ def check(
         now = sites.get(action.connector)
         if now is None or action.target.get("site") != now.identity:
             return Deny(DenyReason.TARGET_CHANGED)
-    return _issue(proposal, request.id, status.approvers)
+    return _issue(proposal, request.id, status.approvers, run.use_case_id)
 
 
 def one_line(text: str, limit: int) -> str:
@@ -307,10 +352,64 @@ class WriteKey:
     run_id: RunId
     proposal_id: ProposalId
     index: int
+    subject: str | None = None
+    """The subject's key across every run of the use case, when the action names a subject."""
 
     @property
     def text(self) -> str:
-        return f"{self.run_id}/{self.proposal_id}/{self.index}"
+        """What the write is made under: its subject's key, else this action of this proposal."""
+        return self.subject or f"{self.run_id}/{self.proposal_id}/{self.index}"
+
+
+def subject_key(use_case_id: str, subject: str) -> str:
+    """One key per use case and subject, of fixed length and safe as a Jira label."""
+    hashed = hashlib.sha256(f"{use_case_id}\n{subject}".encode()).hexdigest()[:40]
+    return f"subject/{hashed}"
+
+
+def write_key(use_case_id: str, proposal: Proposal, index: int) -> WriteKey:
+    subject = proposal.actions[index].subject
+    across = None if subject is None else subject_key(use_case_id, subject)
+    return WriteKey(proposal.run_id, proposal.id, index, across)
+
+
+async def made_subjects(uow: UnitOfWork, keys: Collection[str]) -> dict[str, RunId]:
+    """Which of these subject keys are made, each with the run whose write made it."""
+    if not keys:
+        return {}
+    rows = await (
+        await uow.conn.execute(
+            "SELECT idempotency_key, run_id FROM orchestration.write_executions "
+            "WHERE status = 'done' AND idempotency_key = ANY(%s)",
+            (list(keys),),
+        )
+    ).fetchall()
+    return {row["idempotency_key"]: RunId(row["run_id"]) for row in rows}
+
+
+def still_to_make(
+    use_case_id: str, actions: Sequence[WriteAction], made: Mapping[str, RunId]
+) -> tuple[tuple[WriteAction, ...], tuple[str, ...]]:
+    """The actions to ask a yes for, and a sentence for each one left out: an earlier run made
+    its subject, or an action before it here has the same subject. Approvers see only what will
+    be made, and the run's log says what was left out."""
+    kept: list[WriteAction] = []
+    left_out: list[str] = []
+    seen: set[str] = set()
+    for action in actions:
+        if action.subject is None:
+            kept.append(action)
+            continue
+        key = subject_key(use_case_id, action.subject)
+        line = describe(action).line
+        if key in made:
+            left_out.append(f"Left out, already made in run {made[key]}: {line}.")
+        elif key in seen:
+            left_out.append(f"Left out, proposed twice: {line}.")
+        else:
+            seen.add(key)
+            kept.append(action)
+    return tuple(kept), tuple(left_out)
 
 
 class WriteConnector(Protocol):
@@ -344,11 +443,65 @@ CONNECTOR_TIMEOUT = timedelta(seconds=30)
 @dataclass(frozen=True)
 class Done:
     external_reference: str
+    run_id: RunId
 
 
 @dataclass(frozen=True)
 class InFlight:
     started_at: datetime
+
+
+@dataclass(frozen=True)
+class Made:
+    """A change this run made, by this try or an earlier one."""
+
+    done: WriteDone
+    now: bool
+    """This try made it, so it is logged now. An earlier try logged its own."""
+
+
+@dataclass(frozen=True)
+class MadeBefore:
+    """A change whose subject another run of the use case made first, so this run skips it."""
+
+    action: WriteAction
+    external_reference: str
+    url: str | None
+    run_id: RunId
+
+
+@dataclass(frozen=True)
+class NotMade:
+    action: WriteAction
+    why: str
+
+
+type ActionResult = Made | MadeBefore | NotMade
+
+NOT_TRIED = "Not tried, because a change before it failed."
+
+
+@dataclass(frozen=True)
+class Carried:
+    """What the gateway did with an approved proposal, change by change, in order. It stops at
+    the first change that fails, so a retry makes only the changes still to make."""
+
+    results: tuple[ActionResult, ...]
+    failure: Failure | None
+
+    @property
+    def made(self) -> int:
+        """The changes that exist now, whichever run made them."""
+        return sum(1 for result in self.results if not isinstance(result, NotMade))
+
+    @property
+    def written(self) -> tuple[WriteDone, ...]:
+        return tuple(result.done for result in self.results if isinstance(result, Made))
+
+    @property
+    def fresh(self) -> tuple[WriteDone, ...]:
+        """What this try wrote, which is what it logs."""
+        return tuple(r.done for r in self.results if isinstance(r, Made) and r.now)
 
 
 class WriteGateway:
@@ -372,22 +525,36 @@ class WriteGateway:
     def sites(self) -> Sites:
         return sites_of(self._connectors.values())
 
-    async def execute(self, write: AuthorizedWrite) -> tuple[WriteDone, ...]:
-        done: list[WriteDone] = []
-        for index, action in enumerate(write.proposal.actions):
-            reference = await self._execute_one(write.proposal, index, action)
+    async def execute(self, write: AuthorizedWrite) -> Carried:
+        proposal = write.proposal
+        results: list[ActionResult] = []
+        failure: Failure | None = None
+        for index, action in enumerate(proposal.actions):
+            if failure is not None:
+                results.append(NotMade(action, NOT_TRIED))
+                continue
+            try:
+                reference, run_id, now = await self._execute_one(
+                    write_key(write.use_case_id, proposal, index), action
+                )
+            except WriteFailed as error:
+                failure = Failure(FailureReason.WRITE_FAILED, str(error), error.retryable)
+                results.append(NotMade(action, str(error)))
+                continue
             link = self._connectors[action.connector].link(reference)
-            done.append(
-                WriteDone(action.connector, action.operation, reference, write.approvers, link)
-            )
-        return tuple(done)
+            if run_id != proposal.run_id:
+                results.append(MadeBefore(action, reference, link, run_id))
+                continue
+            done = WriteDone(action.connector, action.operation, reference, write.approvers, link)
+            results.append(Made(done, now))
+        return Carried(tuple(results), failure)
 
-    async def _execute_one(self, proposal: Proposal, index: int, action: WriteAction) -> str:
-        key = WriteKey(proposal.run_id, proposal.id, index)
+    async def _execute_one(self, key: WriteKey, action: WriteAction) -> tuple[str, RunId, bool]:
+        """What the key's write made, the run whose write made it, and whether this try did."""
         while True:
             match await self._record(key):
-                case Done(reference):
-                    return reference
+                case Done(reference, run_id):
+                    return reference, run_id, False
                 case InFlight(started_at) if self._db.clock() - started_at < self._timeout:
                     await asyncio.sleep(self._poll)
                     continue
@@ -408,13 +575,13 @@ class WriteGateway:
                     f"{action.connector} {action.operation} failed: {error}"
                 ) from error
             await self._mark_done(key, reference)
-            return reference
+            return reference, key.run_id, True
 
     async def _record(self, key: WriteKey) -> Done | InFlight | None:
         async with self._db.transaction("orchestration") as uow:
             row = await (
                 await uow.conn.execute(
-                    "SELECT status, started_at, external_reference "
+                    "SELECT status, started_at, external_reference, run_id "
                     "FROM orchestration.write_executions WHERE idempotency_key = %s",
                     (key.text,),
                 )
@@ -422,7 +589,7 @@ class WriteGateway:
         if row is None:
             return None
         if row["status"] == "done":
-            return Done(str(row["external_reference"]))
+            return Done(str(row["external_reference"]), RunId(row["run_id"]))
         return InFlight(row["started_at"])
 
     async def _claim(self, key: WriteKey) -> bool:

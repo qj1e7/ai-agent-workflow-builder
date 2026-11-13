@@ -33,6 +33,8 @@ type DeniedReason = Literal[
     "unregistered_action",
     "target_changed",
     "out_of_order",
+    "expired",
+    "test_run",
 ]
 type WireVerdict = Literal["approve", "decline"]
 
