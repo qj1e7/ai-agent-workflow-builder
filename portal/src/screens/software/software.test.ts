@@ -30,8 +30,11 @@ import {
   scheduleRuns,
   scheduleWords,
   singaporeTime,
-  statusLabel,
-  statusWords,
+  sentenceFor,
+  softwareLine,
+  stateOf,
+  ticketFact,
+  watchRank,
   versionSourceWords,
   waitingWords,
   watchAttention,
@@ -121,16 +124,29 @@ describe('the other field checks', () => {
   })
 })
 
-describe('status labels', () => {
-  it('has plain words for every status the platform sends', () => {
-    expect(statusLabel).toEqual({
-      cant_check: 'Can’t check',
-      behind: 'New version',
-      awaiting_approval: 'Ticket waiting for a yes',
-      ticket_open: 'Ticket open',
-      up_to_date: 'Up to date',
-      not_checked: 'Not checked yet',
-    })
+describe('the state words, one source for the rows, the pill and the panel', () => {
+  const row = (change: Partial<WatchedSoftwareView>): WatchedSoftwareView => ({ ...ROWS[0]!, not_found: false, moved_to: null, ...change })
+
+  it('says Newer out for a row whose version is behind, whatever its upgrade ticket is doing', () => {
+    for (const status of ['behind', 'awaiting_approval', 'ticket_open'] as const) expect(stateOf(row({ status, our_version: '1.0.0' })).words, status).toBe('Newer out')
+  })
+
+  it('says Can’t find when GitHub says the address is gone, and Can’t check when the check just failed', () => {
+    expect(stateOf(row({ status: 'cant_check', not_found: true }))).toMatchObject({ words: 'Can’t find', tone: 'bad' })
+    expect(stateOf(row({ status: 'cant_check' }))).toMatchObject({ words: 'Can’t check', tone: 'bad' })
+  })
+
+  it('says Up to date only when there is a version to be up to date with, and Watching otherwise', () => {
+    expect(stateOf(row({ status: 'up_to_date', our_version: '1.2.16' })).words).toBe('Up to date')
+    expect(stateOf(row({ status: 'up_to_date', our_version: null })).words).toBe('Watching')
+    expect(stateOf(row({ status: 'not_checked', our_version: null })).words).toBe('Watching')
+  })
+
+  it('puts what needs a person first: Can’t find, Newer out, Watching, Up to date', () => {
+    const order = ['Can’t find', 'Newer out', 'Watching', 'Up to date']
+    const by = (change: Partial<WatchedSoftwareView>) => watchRank(row(change))
+    expect([by({ status: 'cant_check', not_found: true }), by({ status: 'behind' }), by({ status: 'not_checked', our_version: null }), by({ status: 'up_to_date', our_version: '1.0.0' })]).toEqual([0, 1, 2, 3])
+    expect(order).toHaveLength(4)
   })
 
   it('says where our version came from', () => {
@@ -172,33 +188,33 @@ describe('the list', () => {
 
 describe('the count line under the title', () => {
   const rowsOf = (...states: readonly (readonly [SoftwareStatus, string | null])[]) =>
-    states.map(([status, ours], index): WatchedSoftwareView => ({ ...ROWS[0]!, id: `r${String(index)}`, status, our_version: ours }))
+    states.map(([status, ours], index): WatchedSoftwareView => ({ ...ROWS[0]!, id: `r${String(index)}`, status, our_version: ours, not_found: false }))
 
-  it('counts what has a newer version, what can’t be checked and what isn’t checked yet, from every row', () => {
-    expect(countLine(ROWS)).toBe('3 have a newer version · 1 can’t be checked · 1 not checked yet')
+  it('counts what has a newer version, what can’t be checked, what is up to date and what is only watched, from every row', () => {
+    expect(countLine(ROWS)).toBe('3 have a newer version · 1 can’t be checked · 1 is up to date · 1 watching')
   })
 
   it('counts a row whose upgrade ticket waits for a yes, or is open, as having a newer version', () => {
     expect(countLine(rowsOf(['awaiting_approval', '1.0.0'], ['ticket_open', '1.0.0']))).toBe('2 have a newer version')
-    expect(countLine(rowsOf(['behind', '1.0.0'], ['up_to_date', '1.0.0']))).toBe('1 has a newer version')
+    expect(countLine(rowsOf(['behind', '1.0.0'], ['up_to_date', '1.0.0']))).toBe('1 has a newer version · 1 is up to date')
   })
 
-  it('leaves out a part with nothing in it', () => {
-    expect(countLine(rowsOf(['cant_check', '1.0.0'], ['cant_check', '1.0.0'], ['up_to_date', '1.0.0']))).toBe('2 can’t be checked')
-    expect(countLine(rowsOf(['not_checked', null]))).toBe('1 not checked yet')
+  it('says a row GitHub can’t find is not found, apart from one that just failed to check', () => {
+    const rows = [...rowsOf(['cant_check', '1.0.0'], ['cant_check', '1.0.0']), { ...ROWS[0]!, id: 'gone', status: 'cant_check', not_found: true } as WatchedSoftwareView]
+    expect(countLine(rows)).toBe('1 can’t be found · 2 can’t be checked')
   })
 
-  it('says everything is up to date only when every row has a version to be up to date with', () => {
-    expect(countLine(rowsOf(['up_to_date', '1.0.0'], ['up_to_date', '2.0.0']))).toBe('Everything is up to date.')
-    expect(countLine(rowsOf(['up_to_date', '1.0.0'], ['up_to_date', null]))).toBe('Nothing newer yet.')
+  it('says it in the sketch’s order, with the singular forms', () => {
+    expect(countLine(rowsOf(['up_to_date', '1.0.0'], ['up_to_date', '2.0.0']))).toBe('2 are up to date')
+    expect(countLine(rowsOf(['behind', '1.0.0'], ['not_checked', null]))).toBe('1 has a newer version · 1 watching')
   })
 
   it('has no count for an empty list', () => {
     expect(countLine([])).toBeNull()
   })
 
-  it('never claims a row is up to date while the list has one not checked yet', () => {
-    expect(countLine(rowsOf(['up_to_date', '1.0.0'], ['not_checked', null]))).not.toMatch(/up to date|Nothing newer/i)
+  it('never claims a row is up to date while it has no version to compare', () => {
+    expect(countLine(rowsOf(['up_to_date', null], ['not_checked', null]))).toBe('2 watching')
   })
 })
 
@@ -432,14 +448,6 @@ describe('what the team runs', () => {
   })
 })
 
-describe('the status of a row whose version is not known', () => {
-  it('does not claim Up to date when nothing is known to be up to date with', () => {
-    expect(statusWords({ status: 'up_to_date', our_version: null })).toBe('Nothing newer yet')
-    expect(statusWords({ status: 'up_to_date', our_version: '1.2.16' })).toBe('Up to date')
-    expect(statusWords({ status: 'behind', our_version: null })).toBe('New version')
-  })
-})
-
 describe('when the watchlist checks next, for what a declined check says happens next', () => {
   const schedule: ScheduleView = { ...SCHEDULE, next_at: '2026-11-23T01:00:00Z', held: null }
 
@@ -452,5 +460,69 @@ describe('when the watchlist checks next, for what a declined check says happens
     expect(nextCheckOf({ state: 'on', schedule: { ...schedule, held: 'owner_removed' } })).toBeNull()
     expect(nextCheckOf({ state: 'on', schedule: null })).toBeNull()
     expect(nextCheckOf(null)).toBeNull()
+  })
+})
+
+describe('a Watchlist row’s second line', () => {
+  const NOW = new Date('2026-11-16T12:00:00+08:00')
+  const row = (change: Partial<WatchedSoftwareView>): WatchedSoftwareView => ({ ...ROWS[1]!, not_found: false, moved_to: null, problem: null, ...change })
+  const line = (change: Partial<WatchedSoftwareView>, checkedBy: string | null = 'Software watchlist') => softwareLine(row(change), NOW, checkedBy)
+
+  it('shows the version you run and the newest, then what checks it', () => {
+    expect(line({})).toBe('1.2.14 → 1.2.16 · checked by Software watchlist')
+    expect(line({ status: 'up_to_date', our_version: '1.2.16' })).toBe('1.2.16, the newest · checked by Software watchlist')
+  })
+
+  it('says not checked automatically while nothing checks it', () => {
+    expect(line({}, null)).toBe('1.2.14 → 1.2.16 · not checked automatically')
+  })
+
+  it('says GitHub can’t find it, and that a check just failed, in different words', () => {
+    expect(line({ status: 'cant_check', not_found: true })).toBe('GitHub can’t find it · checked by Software watchlist')
+    expect(line({ status: 'cant_check' })).toBe('Can’t check right now · checked by Software watchlist')
+  })
+
+  it('says when it was added while there is no version to compare, and never claims one', () => {
+    expect(line({ status: 'not_checked', our_version: null, newest_version: null, added_at: '2026-11-16T01:00:00Z' })).toBe('Added today · checked by Software watchlist')
+    expect(line({ status: 'not_checked', our_version: null, newest_version: null, added_at: '2026-11-12T01:00:00Z' })).toBe('Added Thu 12 Nov · checked by Software watchlist')
+    expect(line({ status: 'up_to_date', our_version: null })).toBe('Newest is 1.2.16 · checked by Software watchlist')
+  })
+})
+
+describe('the one sentence in the side panel', () => {
+  const row = (change: Partial<WatchedSoftwareView>): WatchedSoftwareView => ({ ...ROWS[1]!, not_found: false, moved_to: null, ...change })
+
+  it('says what you run and what is newest', () => {
+    expect(sentenceFor(row({}))).toBe('You run 1.2.14. Newest is 1.2.16.')
+    expect(sentenceFor(row({ status: 'up_to_date', our_version: '1.2.16' }))).toBe('You run 1.2.16, the newest.')
+  })
+
+  it('says what it can’t know, without guessing', () => {
+    expect(sentenceFor(row({ status: 'not_checked', our_version: null, newest_version: null }))).toBe('Not checked yet. The first check reads the newest release.')
+    expect(sentenceFor(row({ status: 'up_to_date', our_version: null }))).toBe('Newest is 1.2.16. The version you run isn’t known yet.')
+  })
+
+  it('says GitHub can’t find it', () => {
+    expect(sentenceFor(row({ status: 'cant_check', not_found: true }))).toBe('GitHub can’t find langchain-ai/langgraph, and doesn’t say where it moved.')
+    expect(sentenceFor(row({ status: 'cant_check', not_found: true, moved_to: 'owner/new' }))).toBe('GitHub now calls this project owner/new.')
+  })
+})
+
+describe('the upgrade ticket fact on the software page', () => {
+  const row = (change: Partial<WatchedSoftwareView>): WatchedSoftwareView => ({ ...ROWS[1]!, not_found: false, moved_to: null, ...change })
+
+  it('says none yet while a newer version has no ticket, and not needed while up to date', () => {
+    expect(ticketFact(row({}), null)).toBe('None yet')
+    expect(ticketFact(row({ status: 'up_to_date', our_version: '1.2.16' }), null)).toBe('Not needed')
+  })
+
+  it('says a ticket waits for a yes, is open, or that the yes was a no', () => {
+    expect(ticketFact(row({ status: 'awaiting_approval' }), null)).toBe('Waiting for a yes')
+    expect(ticketFact(row({ status: 'ticket_open', open_ticket: 'MOCK-9' }), null)).toBe('MOCK-9, open in Jira')
+    expect(ticketFact(row({}), 'Declined by Bob. Nothing was written.')).toBe('Declined by Bob. Nothing was written.')
+  })
+
+  it('says the last check stopped before it could tell', () => {
+    expect(ticketFact(row({ status: 'cant_check' }), null)).toBe('None yet. The last check stopped before it could tell.')
   })
 })

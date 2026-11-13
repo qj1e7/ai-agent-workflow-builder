@@ -27,7 +27,6 @@ import {
   changeWords,
   heldNote,
   lifeWords,
-  lastRunLine,
   lastRunWords,
   nextRunOf,
   lineWhen,
@@ -46,7 +45,9 @@ import {
   scheduleSaver,
   scheduleSavedWords,
   rowsOf,
-  runFact,
+  rowLine,
+  sentenceOf,
+  stageOfRun,
   runWhen,
   runsOf,
   stepTag,
@@ -62,6 +63,7 @@ import {
   type RunNowOutcome,
   type Viewer,
 } from './workflow'
+import { stageWords } from '../run/words'
 
 const WATCHLIST = watchlistUseCase as UseCaseView
 const PAUSED = pausedWatchlist as UseCaseView
@@ -87,26 +89,23 @@ describe('the status words', () => {
     expect(lifeWords('paused')).toBe('Paused')
   })
 
-  it('say a run that waits needs a yes, and how many changes wait', () => {
-    expect(runFact(run(waiting), nameOf)).toEqual({ tone: 'wait', pill: 'Waiting for a yes', words: '1 ticket is waiting for a yes.' })
-    expect(runFact(run(threeWaiting), nameOf).words).toBe('3 tickets are waiting for a yes.')
+  it('read a run as the same stage words the row and the banner use', () => {
+    expect(stageOfRun(run(waiting))).toMatchObject({ state: 'awaiting_approval', count: 1, tickets: true })
+    expect(stageWords(stageOfRun(run(threeWaiting)), nameOf)).toBe('Waiting for a yes')
+    expect(stageWords(stageOfRun(run(failed)), nameOf)).toBe('An agent could not finish its work')
   })
 
-  it('say a run that failed stopped, and why in plain words', () => {
-    expect(runFact(run(failed), nameOf)).toEqual({ tone: 'bad', pill: 'Stopped', words: 'Stopped. An agent could not finish its work.' })
+  it('say what a finished run wrote and who said yes, and that nothing was new', () => {
+    expect(stageWords(stageOfRun(run(done)), nameOf)).toBe('1 ticket created, approved by Bob')
+    expect(stageWords(stageOfRun(run(done, { outcome: 'nothing_to_write', written: [] })), nameOf)).toBe('Nothing new to write')
   })
 
-  it('say a run that finished is done, with what it wrote and who said yes', () => {
-    expect(runFact(run(done), nameOf)).toEqual({ tone: 'ok', pill: null, words: 'Done. 1 ticket created, approved by Bob.' })
-    expect(runFact(run(done, { outcome: 'nothing_to_write', written: [] }), nameOf).words).toBe('Done. Nothing to write.')
-  })
-
-  it('say a declined run wrote nothing, with no pill, because nobody needs to act, in the declined record’s words', () => {
-    expect(runFact(run(declined), nameOf)).toEqual({ tone: 'ok', pill: null, words: 'Declined by Bob. Nothing was written. Reason: Wrong version.' })
+  it('say a declined run wrote nothing, with who declined', () => {
+    expect(stageWords(stageOfRun(run(declined)), nameOf)).toBe('Declined by Bob. Nothing was written.')
   })
 
   it('say a run that is still going is running', () => {
-    for (const view of [working, scheduled]) expect(runFact(run(view), nameOf)).toEqual({ tone: 'new', pill: 'Running', words: 'Running now.' })
+    for (const view of [working, scheduled]) expect(stageWords(stageOfRun(run(view)), nameOf)).toBe('Running')
   })
 })
 
@@ -125,51 +124,49 @@ describe('when a workflow runs next', () => {
   })
 })
 
-describe('the last run line', () => {
-  const line = (change: Partial<LastRun>) => lastRunLine(lastOf(change), NOW, nameOf)
+describe('a workflow row’s line', () => {
+  const line = (change: Partial<LastRun>, schedule: UseCaseView['schedule'] = { day: 'every_day', at: '08:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null }) =>
+    rowLine({ schedule, ...lastOf(change) }, NOW, nameOf)
 
   it('says no runs yet for a workflow that never ran', () => {
-    expect(lastRunLine({ last_run: null }, NOW, nameOf)).toBe('No runs yet')
+    expect(rowLine({ schedule: null, last_run: null }, NOW, nameOf)).toBe('No schedule · no runs yet')
+    expect(rowLine({ schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null }, last_run: null }, NOW, nameOf)).toBe('Mon 9:00 · no runs yet')
   })
 
-  it('names who declined, on the day it started, short enough for one line', () => {
-    expect(line({ decline_reason: 'Wrong version' })).toBe('Last run Mon 26 Oct · Declined by Bob')
-    expect(line({ declined_by: null })).toBe('Last run Mon 26 Oct · Declined')
+  it('gives its schedule, then the day of the last run and where it stands', () => {
+    expect(line({ state: 'failed', declined_by: null, reason: 'AgentError', at: '2026-11-04T00:00:00Z' })).toBe('Daily 8:00 · last run today, an agent could not finish its work')
+    expect(line({ state: 'awaiting_approval', declined_by: null })).toBe('Daily 8:00 · last run Mon 26 Oct, waiting for a yes')
+  })
+
+  it('names who declined, and never says a ticket was created', () => {
+    expect(line({ decline_reason: 'Wrong version' })).toBe('Daily 8:00 · last run Mon 26 Oct, declined by Bob. Nothing was written.')
+    expect(line({ declined_by: null })).toBe('Daily 8:00 · last run Mon 26 Oct, declined. Nothing was written.')
+  })
+
+  it('counts what a finished run wrote, as tickets or changes, and says when nothing was new', () => {
+    expect(line({ state: 'succeeded', declined_by: null, proposed: 3, written: 3, approved_by: ['bob'] })).toBe('Daily 8:00 · last run Mon 26 Oct, 3 tickets created, approved by Bob')
+    expect(line({ state: 'succeeded', declined_by: null, proposed: 2, written: 2, tickets: false })).toBe('Daily 8:00 · last run Mon 26 Oct, 2 changes written')
+    expect(line({ state: 'succeeded', declined_by: null, proposed: 0, tickets: false })).toBe('Daily 8:00 · last run Mon 26 Oct, nothing new to write')
+  })
+
+  it('says what a run that is writing creates, and that one in progress is running', () => {
+    expect(line({ state: 'acting', declined_by: null, proposed: 1 })).toBe('Daily 8:00 · last run Mon 26 Oct, creating the ticket')
+    for (const state of ['pending', 'working', 'proposed'] as const) expect(line({ state, declined_by: null })).toBe('Daily 8:00 · last run Mon 26 Oct, running')
   })
 
   it('gives the side panel the whole declined record, with the reason and any first yes', () => {
     const words = (change: Partial<LastRun>) => lastRunWords(lastOf(change), NOW, nameOf)
-    expect(words({})).toBe('Mon 26 Oct · Declined by Bob. Nothing was written.')
-    expect(words({ decline_reason: 'Wrong version' })).toBe('Mon 26 Oct · Declined by Bob. Nothing was written. Reason: Wrong version.')
-    expect(words({ declined_by: 'alice', approved_by: ['bob'] })).toBe('Mon 26 Oct · Approved by Bob, then declined by Alice. Nothing was written.')
-    expect(words({ state: 'failed', declined_by: null })).toBe('Mon 26 Oct · Stopped')
+    expect(words({})).toBe('Mon 26 Oct: Declined by Bob. Nothing was written.')
+    expect(words({ decline_reason: 'Wrong version' })).toBe('Mon 26 Oct: Declined by Bob. Nothing was written. Reason: Wrong version.')
+    expect(words({ declined_by: 'alice', approved_by: ['bob'] })).toBe('Mon 26 Oct: Approved by Bob, then declined by Alice. Nothing was written.')
+    expect(words({ state: 'failed', declined_by: null, reason: null })).toBe('Mon 26 Oct: Stopped')
+    expect(words({ state: 'failed', declined_by: null, at: '2026-11-04T00:00:00Z', reason: 'AgentError' })).toBe('Today 8:00: An agent could not finish its work')
   })
 
-  it('says Today with the time for a run that started today', () => {
-    expect(line({ state: 'failed', declined_by: null, at: '2026-11-04T00:00:00Z' })).toBe('Last run Today 8:00 · Stopped')
-  })
-
-  it('counts what a waiting run proposed and what a finished run wrote, as tickets or changes', () => {
-    expect(line({ state: 'awaiting_approval', declined_by: null })).toBe('Last run Mon 26 Oct · 3 tickets proposed')
-    expect(line({ state: 'awaiting_approval', declined_by: null, proposed: 1, tickets: false })).toBe('Last run Mon 26 Oct · 1 change proposed')
-    expect(line({ state: 'awaiting_approval', declined_by: null, proposed: 0 })).toBe('Last run Mon 26 Oct · Waiting for a yes')
-    expect(line({ state: 'succeeded', declined_by: null, proposed: 3, written: 3 })).toBe('Last run Mon 26 Oct · 3 tickets created')
-    expect(line({ state: 'succeeded', declined_by: null, proposed: 2, written: 2, tickets: false })).toBe('Last run Mon 26 Oct · 2 changes written')
-    expect(line({ state: 'succeeded', declined_by: null, proposed: 0, tickets: false })).toBe('Last run Mon 26 Oct · Nothing new to write')
-  })
-
-  it('says a run in progress is running now', () => {
-    for (const state of ['pending', 'working', 'proposed', 'acting'] as const) expect(line({ state, declined_by: null })).toBe('Last run Mon 26 Oct · Running now')
-  })
-
-  it('says so when the run was a test run', () => {
-    expect(line({ test: true })).toBe('Last run Mon 26 Oct, test · Declined by Bob')
-  })
-
-  it('gives a pill only to a run that needs a yes, has stopped or is running', () => {
+  it('gives a workflow’s own pill only to a run that needs a yes or has stopped, and a running one reads On', () => {
     expect(pillOf({ state: 'awaiting_approval' })).toEqual({ tone: 'wait', pill: 'Waiting for a yes' })
     expect(pillOf({ state: 'failed' })).toEqual({ tone: 'bad', pill: 'Stopped' })
-    expect(pillOf({ state: 'working' })).toEqual({ tone: 'new', pill: 'Running' })
+    expect(pillOf({ state: 'working' })).toEqual({ tone: 'new', pill: null })
     expect(pillOf({ state: 'rejected' }).pill).toBeNull()
     expect(pillOf({ state: 'succeeded' }).pill).toBeNull()
   })
@@ -690,7 +687,7 @@ describe('the status banner', () => {
     const mayDecide = withLast({ state: 'awaiting_approval', you_can_decide: true })
     const mayNot = withLast({ state: 'awaiting_approval', you_can_decide: false })
     expect(bannerOf(facts({ useCase: mayDecide })).action).toEqual({ kind: 'decide', runId: 'run_07' })
-    expect(bannerOf(facts({ useCase: mayNot })).action).toBeNull()
+    expect(bannerOf(facts({ useCase: mayNot })).action, 'someone who may not decide can still open the run, as in the sketch').toEqual({ kind: 'open', runId: 'run_07' })
     expect(bannerOf(facts({ useCase: mayNot })).tone).toBe('wait')
     expect(bannerOf(facts({ useCase: mayNot })).text).toBe('3 tickets are waiting for a yes.')
   })
@@ -769,5 +766,33 @@ describe('leftOutWords', () => {
     expect(leftOutWords([])).toBeNull()
     expect(leftOutWords(['Friday'])).toBe('Left out: “Friday”. It was set up without that part.')
     expect(leftOutWords(['from GitLab', 'colour them by team'])).toBe('Left out: “from GitLab” and “colour them by team”. It was set up without those parts.')
+  })
+})
+
+describe('the sentence on the workflow page', () => {
+  const every = { day: 'every_day', at: '08:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null } as const
+  const scheduledAt = (schedule: UseCaseView['schedule']) => ({ ...AGENTS, schedule })
+
+  it('says when it runs, what it checks, and that a ticket is made only after a yes', () => {
+    expect(sentenceOf(scheduledAt(every))).toBe('Every day at 8:00, check langchain-ai/langgraph on GitHub for a new release. If there is one, create an upgrade ticket in Jira project MOCK, after a yes.')
+  })
+
+  it('names a zone that is not Singapore, and a weekday', () => {
+    expect(sentenceOf(scheduledAt({ ...every, day: 'monday', time_zone: 'Europe/London' })).startsWith('Every Monday at 8:00 London time, check')).toBe(true)
+  })
+
+  it('says it runs when an Operator presses Run now while it has no schedule, and never guesses a time', () => {
+    expect(sentenceOf(AGENTS)).toBe('Check langchain-ai/langgraph on GitHub for a new release when an Operator presses Run now. If there is one, create an upgrade ticket in Jira project MOCK, after a yes.')
+  })
+
+  it('says it tells you here when the workflow writes nothing', () => {
+    const readOnly = { ...scheduledAt(every), plan: AGENTS.plan.filter((block) => block.kind !== 'write_action') }
+    expect(sentenceOf(readOnly)).toBe('Every day at 8:00, check langchain-ai/langgraph on GitHub for a new release. If there is one, tell me here.')
+  })
+
+  it('falls back to what the Operator wrote when the workflow is not a release check', () => {
+    const other = { ...AGENTS, agents: [{ card_id: 'crd_other', card_version: 1, name: 'Other', values: {} }] }
+    expect(sentenceOf(other)).toBe(AGENTS.instruction)
+    expect(sentenceOf({ ...AGENTS, agents: [{ ...AGENTS.agents[0]!, values: {} }] })).toBe(AGENTS.instruction)
   })
 })

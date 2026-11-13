@@ -9,11 +9,11 @@ import type { FailureReason, Me, UseCaseView } from '../../api/types'
 import { useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
 import { Button } from '../../ui/Button'
 import { IconPause, IconPlay } from '../../ui/icons'
-import { Link } from '../../ui/Link'
 import { useAfterPanelAction } from '../../ui/sidePanel'
 import { Troubleshooting } from '../run/Outcome'
+import { StatusBanner } from './Banner'
 import { StatusPills } from './Status'
-import { bannerOf, changeProblem, changeWords, controlsOf, lastRunWords, leftOutWords, NO_RUNS, nextRunWords, pillOf, pressChange, REFRESH_MS, rereadWhenOutOfDate, viewerOf, type LastRun } from './workflow'
+import { bannerOf, changeProblem, changeWords, controlsOf, lastRunWords, leftOutWords, NO_RUNS, nextRunWords, pillOf, pressChange, REFRESH_MS, rereadWhenOutOfDate, sentenceOf, viewerOf, type LastRun } from './workflow'
 import styles from './Workflows.module.css'
 
 /** A workflow in the side panel (spec 3.3): its status, its sentence, a stop's three answers with Retry, its last and next run, Open the run, and Pause or Resume. */
@@ -51,13 +51,17 @@ function Summary({ useCase, me, now }: { useCase: UseCaseView; me: Me; now: Date
   const last = useCase.last_run
   const stopped = stopOf(useCase, me, now)
   const troubleshoot = useTroubleshoot(stopped?.run_id ?? '', stopped !== null, 0)
+  const whole = bannerOf({ useCase, viewer: viewerOf(me), now })
+  // A stop's Retry is in the answers below it, and Resume is beside Pause, so the banner keeps one primary action for the state.
+  const banner = whole.action?.kind === 'stopped' || whole.action?.kind === 'resume' ? { ...whole, action: null } : whole
   return (
     <>
       <div>
         <StatusPills state={useCase.state} fact={last ? pillOf(last) : null} test={last?.test === true} />
       </div>
-      <p>{useCase.instruction}</p>
+      <p>{sentenceOf(useCase)}</p>
       {leftOutWords(useCase.left_out) ? <p className="muted">{leftOutWords(useCase.left_out)}</p> : null}
+      <StatusBanner banner={banner} resuming={false} onResume={() => undefined} />
       {stopped ? (
         <Troubleshooting
           runId={stopped.run_id}
@@ -81,7 +85,6 @@ function Summary({ useCase, me, now }: { useCase: UseCaseView; me: Me; now: Date
         </div>
       </dl>
       <div className={styles['panelBtns']}>
-        {last ? <Link to={`/runs/${last.run_id}`}>Open the run</Link> : null}
         <PauseOrResume useCase={useCase} me={me} now={now} />
       </div>
     </>

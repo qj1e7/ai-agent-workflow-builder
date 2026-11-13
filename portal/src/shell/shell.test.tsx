@@ -131,7 +131,7 @@ describe('the rail', () => {
     expect(html).toContain(`href="${path}"`)
     const heading = headings(html)
     expect(heading).toHaveLength(1)
-    expect(heading[0]).toBe(id === 'home' ? 'Good morning! Alice' : id === 'software' ? 'Software watchlist' : railLabel)
+    expect(heading[0]).toBe(id === 'home' ? 'Good morning! Alice' : railLabel)
     expect(new Set(currentLinks(html))).toEqual(new Set([path]))
   })
 

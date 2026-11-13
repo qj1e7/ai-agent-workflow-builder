@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useId, useMemo, useState, type CSSProperties } from 'react'
 import { NavigationType, useLocation, useNavigate, useNavigationType, useSearchParams } from 'react-router'
 import { Link } from '../../ui/Link'
 import { useErrorWords } from '../../api/context'
@@ -9,26 +9,25 @@ import { useHome } from '../../api/homeQueries'
 import { useDeleteDraft, useDrafts, useSaveDraft } from '../../api/plannerQueries'
 import { useDisplayName } from '../../api/people'
 import { useMe, useUseCases } from '../../api/queries'
-import type { DraftView, HomeOut, Me, UseCaseView } from '../../api/types'
+import type { DraftView, Me, UseCaseView } from '../../api/types'
 import { useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
 import { OperatorsNote } from '../../shell/OperatorsNote'
 import { PageHead, PageNote } from '../../shell/PageHead'
 import { Button } from '../../ui/Button'
 import { useFocusWhenReady } from '../../ui/focus'
 import { FROM_LIST } from '../../ui/fromList'
-import { IconSearch, IconX } from '../../ui/icons'
-import { OpenButton, OpenLink } from '../../ui/OpenItem'
-import { useShownInPanel } from '../../ui/sidePanel'
+import { IconChevronRight, IconSearch } from '../../ui/icons'
+import { OpenLink } from '../../ui/OpenItem'
 import { Toast, UNDO_ID, type ToastMessage } from '../../ui/Toast'
-import { moreWords, needsOf, needsTotal, runsInNeeds } from '../home/home'
-import { NeedsSection, useArrival } from '../home/NeedsSection'
-import homeStyles from '../home/Home.module.css'
+import { draftPath, savedLeft } from '../home/card'
+import { draftWords, moreWords, NEED_GROUPS, needsOf, type NeedGroup } from '../home/home'
 import { useArrivalScroll } from './arrival'
 import { StatusPills } from './Status'
 import { RequestView } from './RequestView'
 import { REQUEST_PARAM } from './requests'
-import { DiscardDialog, DraftsSection, draftItem, FollowingSection, WaitingSection } from './Sections'
-import { changeProblem, changeWords, FILTERS, lastRunLine, meansOutOfDate, nextRunWords, pillOf, pressChange, REFRESH_MS, rowsOf, SOFTWARE_PAGE, viewerOf, workflowPath, type Filter, type Row } from './workflow'
+import { DiscardDialog, draftItem, FollowingSection } from './Sections'
+import { needRow } from './needs'
+import { changeProblem, changeWords, FILTERS, meansOutOfDate, pillOf, pressChange, REFRESH_MS, rowLine, rowsOf, SOFTWARE_PAGE, viewerOf, workflowPath, type Filter, type Row } from './workflow'
 import styles from './Workflows.module.css'
 
 export const rowLinkId = (useCaseId: string) => `workflow-${useCaseId}`
@@ -49,42 +48,39 @@ type Note =
   | { readonly kind: 'discarded'; readonly id: number; readonly draft: DraftView }
   | { readonly kind: 'said'; readonly id: number; readonly text: string }
 
-const PURPOSE_SHOWN = 110
-
-function purposeOf(useCase: UseCaseView): string {
-  const flat = useCase.instruction.replace(/\s+/g, ' ').trim()
-  return flat.length > PURPOSE_SHOWN ? `${flat.slice(0, PURPOSE_SHOWN - 1).trimEnd()}…` : flat
-}
-
-function nextLine(useCase: UseCaseView, now: Date): string {
-  const words = nextRunWords(useCase, now)
-  const unscheduled = useCase.state === 'on' && useCase.next_run_at === null
-  return unscheduled ? words : `Next: ${words}`
-}
+/** More rows than this and the list gets its search box and filters. */
+export const SEARCH_AFTER = 10
 
 interface RowProps {
   readonly row: Row
   readonly index: number
-  readonly primary: boolean
+  /** Unused: a row is one link and carries no button. The chat's check card still passes it. */
+  readonly primary?: boolean
   readonly arrive: boolean
   readonly now: Date
   readonly nameOf: (id: string) => string
 }
 
-/** The list's class: it gives the action column to the descriptions when no row has an action. */
-export const listClass = (rows: readonly Row[], extra = ''): string =>
-  [styles['list'], rows.some((row) => row.action !== null) ? null : styles['noAct'], extra].filter(Boolean).join(' ')
+/** The list's class. */
+export const listClass = (_rows: readonly Row[], extra = ''): string => [styles['list'], extra].filter(Boolean).join(' ')
 
 /**
- * One workflow: its state, what it does, its last and next run, and at most one action. In the chat its name and its action open
- * in the side panel, and the action gives way while the panel shows the workflow. The Software watchlist always opens its page.
+ * One workflow, as the sketch draws it: its name, "Daily 8:00 · last run today, {where it stands}", and one pill. The whole row is one link of 44 px or more.
+ * In the chat it opens the workflow in the side panel. The Software watchlist always opens its page.
  */
-export function WorkflowRow({ row, index, primary, arrive, now, nameOf }: RowProps) {
-  const { useCase, action } = row
-  const last = lastRunLine(useCase, now, nameOf)
+export function WorkflowRow({ row, index, arrive, now, nameOf }: RowProps) {
+  const { useCase } = row
   const path = workflowPath(useCase)
   const item = { kind: 'workflow', id: useCase.use_case_id } as const
-  const flowShown = useShownInPanel(item)
+  const inside = (
+    <>
+      <span className={styles['main']}>
+        <b>{useCase.name}</b>
+        <span className={styles['sub']}>{rowLine(useCase, now, nameOf)}</span>
+      </span>
+      <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} test={useCase.last_run?.test === true} />
+    </>
+  )
   return (
     <li
       className={arrive ? `${styles['row']} ${styles['arrive']}` : styles['row']}
@@ -92,34 +88,15 @@ export function WorkflowRow({ row, index, primary, arrive, now, nameOf }: RowPro
       data-workflow-id={useCase.use_case_id}
       data-paused={useCase.state === 'paused' || undefined}
     >
-      <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} test={useCase.last_run?.test === true} />
-      <div className={styles['main']}>
-        <h3>
-          {path === SOFTWARE_PAGE ? (
-            <Link id={rowLinkId(useCase.use_case_id)} to={path} state={FROM_LIST} className={styles['rowLink']}>
-              {useCase.name}
-            </Link>
-          ) : (
-            <OpenLink item={item} id={rowLinkId(useCase.use_case_id)} to={path} state={FROM_LIST} className={styles['rowLink']}>
-              {useCase.name}
-            </OpenLink>
-          )}
-        </h3>
-        <p>{purposeOf(useCase)}</p>
-        <p className={styles['last']} title={last}>
-          {last}
-        </p>
-      </div>
-      <div className={styles['foot']}>
-        <span className={styles['next']}>{nextLine(useCase, now)}</span>
-        <span className={styles['act']}>
-          {action && !flowShown ? (
-            <OpenButton item={{ kind: 'run', id: action.runId }} to={`/runs/${action.runId}`} variant={primary ? 'primary' : 'secondary'}>
-              {action.kind === 'decide' ? 'Review and decide' : 'See why it stopped'}
-            </OpenButton>
-          ) : null}
-        </span>
-      </div>
+      {path === SOFTWARE_PAGE ? (
+        <Link id={rowLinkId(useCase.use_case_id)} to={path} state={FROM_LIST} className={styles['rowLink']}>
+          {inside}
+        </Link>
+      ) : (
+        <OpenLink item={item} id={rowLinkId(useCase.use_case_id)} to={path} state={FROM_LIST} className={styles['rowLink']}>
+          {inside}
+        </OpenLink>
+      )}
     </li>
   )
 }
@@ -149,7 +126,7 @@ function Empty({ operator }: { operator: boolean }) {
   return (
     <p className={styles['quiet']}>
       <b>Nothing here yet</b>
-      {operator ? 'Watch software on the Software page, or ask the Planner on Home. Its checks show up here.' : 'Operators set up workflows, and you approve their changes.'}
+      {operator ? 'Watch software on the Watchlist, or ask the Planner in the chat. Its checks show up here.' : 'Operators set up workflows, and you approve their changes.'}
     </p>
   )
 }
@@ -162,6 +139,80 @@ function useDeletedHandedOverOnce(): Deleted | null {
     if (deletedIn(location.state)) void navigate(`${location.pathname}${location.search}`, { replace: true, state: null })
   }, [location.state, location.pathname, location.search, navigate])
   return deleted
+}
+
+interface DraftRowsProps {
+  readonly drafts: readonly DraftView[]
+  readonly now: Date
+  readonly onDiscard: (draft: DraftView) => void
+}
+
+interface NeedsYouProps extends DraftRowsProps {
+  readonly now: Date
+}
+
+const GROUP_ROWS: Record<NeedGroup, number> = { now: 0, set: 1 }
+
+/**
+ * Needs you, as the sketch draws it: a heading, Do now and Set up, and one plain row for each thing, with its dot and a chevron.
+ * A saved draft is a Set up row too, with Resume as the row and Discard beside it. Nothing shows while nothing needs the person.
+ */
+function NeedsYou({ drafts, now, onDiscard }: NeedsYouProps) {
+  const home = useHome().data
+  const headingId = useId()
+  const needs = useMemo(() => (home ? needsOf(home) : null), [home])
+  const rows = useMemo(() => (needs ? needs.shown.map((need) => needRow(need, now)) : []), [needs, now])
+  const more = needs ? moreWords(needs.more) : null
+  if (rows.length === 0 && drafts.length === 0) return null
+  return (
+    <section className={styles['block']} aria-labelledby={headingId}>
+      <h2 id={headingId}>Needs you</h2>
+      {NEED_GROUPS.map(([group, label]) => {
+        const inGroup = rows.filter((row) => row.group === group)
+        const inDrafts = group === 'set' ? drafts : []
+        if (inGroup.length === 0 && inDrafts.length === 0) return null
+        const labelId = `${headingId}-${group}`
+        return (
+          <div key={group} className={styles['group']} data-order={GROUP_ROWS[group]}>
+            <h3 id={labelId}>{label}</h3>
+            <ul className={styles['needs']} aria-labelledby={labelId}>
+              {inGroup.map((row) => (
+                <li key={row.key} data-home-item={row.key}>
+                  <Link to={row.to} className={styles['need']} data-tone={row.tone}>
+                    <span className={styles['dot']} aria-hidden="true" />
+                    <span className={styles['needText']}>
+                      {row.subject ? <b>{row.subject}</b> : null} {row.rest}
+                    </span>
+                    <IconChevronRight size={16} />
+                  </Link>
+                </li>
+              ))}
+              {inDrafts.map((draft) => {
+                const words = draftWords(draftItem(draft), now, savedLeft(draft))
+                return (
+                  <li key={draft.draft_id} data-draft={draft.draft_id} className={styles['draftRow']}>
+                    <Link to={draftPath(draft.draft_id)} className={styles['need']} data-tone="wait">
+                      <span className={styles['dot']} aria-hidden="true" />
+                      <span className={styles['needText']}>
+                        <b>{words.name}</b> is a draft
+                        <span className={styles['sub']}>{words.sub}</span>
+                      </span>
+                      <span className="visually-hidden">Resume</span>
+                      <IconChevronRight size={16} />
+                    </Link>
+                    <Button onClick={() => onDiscard(draft)}>
+                      Discard<span className="visually-hidden"> {words.name}</span>
+                    </Button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )
+      })}
+      {more ? <p className={styles['moreNote']}>{more}</p> : null}
+    </section>
+  )
 }
 
 interface LoadedProps {
@@ -177,7 +228,6 @@ function Loaded({ handedOver, now, me, useCases }: LoadedProps) {
   const [problem, setProblem] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
-  const [finding, setFinding] = useState(false)
   const [restored, setRestored] = useState<string | null>(null)
   const [restoredDraft, setRestoredDraft] = useState<string | null>(null)
   const [discarding, setDiscarding] = useState<DraftView | null>(null)
@@ -207,20 +257,14 @@ function Loaded({ handedOver, now, me, useCases }: LoadedProps) {
     if (handedOver) document.getElementById(UNDO_ID)?.focus()
   }, [handedOver])
 
-  useEffect(() => {
-    if (finding) document.getElementById('find-workflows')?.focus()
-  }, [finding])
-
   const noteKind = note?.kind
   const noteId = note?.id
   useEffect(() => {
     if (noteKind === 'discarded') document.getElementById(UNDO_ID)?.focus()
   }, [noteKind, noteId])
 
-  const inNeeds = useMemo(() => (home ? runsInNeeds(home) : undefined), [home])
-  const needsCard = home !== undefined && needsTotal(home) > 0
-  const rows = rowsOf(useCases, viewer, filter, query, inNeeds)
-  const firstAction = needsCard ? -1 : rows.findIndex((row) => row.action !== null)
+  const rows = rowsOf(useCases, viewer, filter, query)
+  const searchable = useCases.length > SEARCH_AFTER
 
   function undo(row: Deleted) {
     pressChange(changes, (outcome) => move.mutate({ move: 'restore', useCaseId: row.id }, outcome), {
@@ -274,15 +318,6 @@ function Loaded({ handedOver, now, me, useCases }: LoadedProps) {
           : null
 
   const searching = query.trim() !== '' || filter !== 'all'
-  const showFind = finding || searching
-
-  function toggleFind() {
-    if (showFind) {
-      setFinding(false)
-      setQuery('')
-      setFilter('all')
-    } else setFinding(true)
-  }
   return (
     <>
       {problem ? (
@@ -290,19 +325,10 @@ function Loaded({ handedOver, now, me, useCases }: LoadedProps) {
           {problem}
         </p>
       ) : null}
-      {viewer.operator && drafts ? <DraftsSection drafts={drafts} now={now} onDiscard={(draft) => { setDiscardProblem(null); setDiscarding(draft) }} /> : null}
-      {home ? <WaitingSection items={home.waiting_on_others} total={home.waiting_on_others_total} now={now} /> : null}
-      {home ? <FollowingSection items={home.following_up} total={home.following_up_total} now={now} meId={me.id} /> : null}
-      <section className={homeStyles['section']} aria-labelledby="all-workflows-h">
-        <h2 id="all-workflows-h">
-          All workflows <span className={homeStyles['count']}>{useCases.length}</span>
-          {useCases.length > 0 ? (
-            <button type="button" className={styles['searchButton']} aria-expanded={showFind} aria-controls="findbar-workflows" aria-label={showFind ? 'Hide search' : 'Search workflows'} onClick={toggleFind}>
-              {showFind ? <IconX size={18} /> : <IconSearch size={18} />}
-            </button>
-          ) : null}
-        </h2>
-        {useCases.length > 0 && showFind ? <FindBar query={query} filter={filter} onQuery={setQuery} onFilter={setFilter} /> : null}
+      {viewer.operator || home ? <NeedsYou drafts={viewer.operator ? (drafts ?? []) : []} now={now} onDiscard={(draft) => { setDiscardProblem(null); setDiscarding(draft) }} /> : null}
+      <section className={styles['block']} aria-labelledby="all-workflows-h">
+        <h2 id="all-workflows-h">All workflows</h2>
+        {searchable ? <FindBar query={query} filter={filter} onQuery={setQuery} onFilter={setFilter} /> : null}
         {useCases.length === 0 ? <Empty operator={viewer.operator} /> : null}
         {useCases.length > 0 && rows.length === 0 && searching ? (
           <div className={styles['quiet']}>
@@ -324,11 +350,12 @@ function Loaded({ handedOver, now, me, useCases }: LoadedProps) {
         {rows.length > 0 ? (
           <ul className={listClass(rows)} aria-label="Workflows">
             {rows.map((row, index) => (
-              <WorkflowRow key={row.useCase.use_case_id} row={row} index={index} primary={index === firstAction} arrive={!back} now={now} nameOf={nameOf} />
+              <WorkflowRow key={row.useCase.use_case_id} row={row} index={index} arrive={!back} now={now} nameOf={nameOf} />
             ))}
           </ul>
         ) : null}
       </section>
+      {home ? <FollowingSection items={home.following_up} total={home.following_up_total} now={now} meId={me.id} /> : null}
       {discarding ? (
         <DiscardDialog
           name={draftItem(discarding).name ?? 'New workflow'}
@@ -341,28 +368,8 @@ function Loaded({ handedOver, now, me, useCases }: LoadedProps) {
           onConfirm={() => confirmDiscard(discarding)}
         />
       ) : null}
-      <Toast
-        message={message}
-        onDismiss={() => setNote(null)}
-        focusAfter={() => document.getElementById('find-workflows') ?? document.querySelector<HTMLElement>('main h1')}
-      />
+      <Toast message={message} onDismiss={() => setNote(null)} focusAfter={() => document.getElementById('find-workflows') ?? document.querySelector<HTMLElement>('main h1')} />
     </>
-  )
-}
-
-function NeedsYou({ now }: { now: Date }) {
-  const home = useHome()
-  return home.data ? <NeedsYouLoaded home={home.data} now={now} /> : null
-}
-
-function NeedsYouLoaded({ home, now }: { home: HomeOut; now: Date }) {
-  const needs = useMemo(() => needsOf(home), [home])
-  const arrival = useArrival(needs.shown.map((need) => need.key))
-  const more = moreWords(needs.more)
-  return (
-    <div className={styles['needsYou']}>
-      <NeedsSection needs={needs} now={now} arrival={arrival} more={more ? <p className={homeStyles['more']}>{more}</p> : null} whenNone={null} />
-    </div>
   )
 }
 
@@ -376,22 +383,15 @@ function ReadOnlyNote() {
   ) : null
 }
 
-export function WorkflowsPage({ heading, lead, now }: { heading: string; lead: string; now: Date }) {
+export function WorkflowsPage({ heading, now }: { heading: string; now: Date }) {
   const handedOver = useDeletedHandedOverOnce()
   const requestId = useSearchParams()[0].get(REQUEST_PARAM)
   return (
     <>
-      <PageHead heading={heading} lead={lead} movesFocus={handedOver !== null}>
+      <PageHead heading={heading} lead="" movesFocus={handedOver !== null}>
         {requestId === null ? <ReadOnlyNote /> : null}
       </PageHead>
-      {requestId !== null ? (
-        <RequestView key={requestId} requestId={requestId} now={now} />
-      ) : (
-        <>
-          <NeedsYou now={now} />
-          <WorkflowsBody handedOver={handedOver} now={now} />
-        </>
-      )}
+      {requestId !== null ? <RequestView key={requestId} requestId={requestId} now={now} /> : <WorkflowsBody handedOver={handedOver} now={now} />}
     </>
   )
 }

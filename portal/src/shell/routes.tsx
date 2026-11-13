@@ -48,14 +48,14 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
     railLabel: 'Workflows',
     icon: GridIcon,
     heading: 'Workflows',
-    lead: 'The jobs that run by themselves, such as the Software watchlist, and what needs you.',
+    lead: '',
     inRail: true,
   },
   software: {
     path: '/software',
     railLabel: 'Watchlist',
     icon: BoxIcon,
-    heading: 'Software watchlist',
+    heading: 'Watchlist',
     lead: 'Everything your team runs, in one list.',
     inRail: true,
   },
@@ -158,7 +158,7 @@ export function AppRoutes({ context }: { context: PageContext }) {
       <Route path={`${OLD_AGENTS_PATH}/:agentId?`} element={<OldAgentsAddress operator={context.operator} />} />
       <Route
         path={PAGES.workflows.path}
-        element={<WorkflowsPage heading={wordsOf(PAGES.workflows.heading, context)} lead={wordsOf(PAGES.workflows.lead, context)} now={context.now} />}
+        element={<WorkflowsPage heading={wordsOf(PAGES.workflows.heading, context)} now={context.now} />}
       />
       <Route path={`${PAGES.workflows.path}/:useCaseId`} element={<WorkflowRoute now={context.now} />} />
       <Route path={PAGES.home.path} element={<HomePage heading={wordsOf(PAGES.home.heading, context)} today={wordsOf(PAGES.home.lead, context)} now={context.now} />} />
@@ -174,9 +174,17 @@ export function AppRoutes({ context }: { context: PageContext }) {
               )}
             </PageHead>
             <Lazy>
-              <SoftwareRoute />
+              <SoftwareRoute now={context.now} />
             </Lazy>
           </>
+        }
+      />
+      <Route
+        path={`${PAGES.software.path}/:softwareId`}
+        element={
+          <Lazy>
+            <SoftwareRoute now={context.now} />
+          </Lazy>
         }
       />
       <Route

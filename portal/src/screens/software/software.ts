@@ -1,8 +1,8 @@
 import { ApiError } from '../../api/client'
 import { failureReasonLabel } from '../../api/labels'
-import type { CapabilityView, Day, FailureReason, Refusal, ScheduleHold, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView, WatchlistView } from '../../api/types'
+import type { CapabilityView, Day, FailureReason, Refusal, ScheduleHold, ScheduleView, VersionSourceView, WatchedSoftwareView, WatchlistView } from '../../api/types'
 import type { NextRun } from '../run/words'
-import { dateAndClock, scheduleZoneName, timesZone } from '../workflows/times'
+import { dateAndClock, lineWhen, scheduleZoneName, timesZone } from '../workflows/times'
 
 /** The Software page and the side panel both refresh the watchlist this often. */
 export const REFRESH_MS = 15_000
@@ -83,38 +83,120 @@ export function watchAttention(rows: readonly WatchedSoftwareView[]): number {
   return decisionsOf(rows).length + addressAttentionOf(rows).length
 }
 
-type LinePart = 'newer' | 'cant' | 'unchecked'
+export type StatusTone = 'bad' | 'wait' | 'good' | 'quiet'
 
-/** The part of the count line each status counts in. A row whose upgrade ticket waits for a yes or is open still runs an older version. */
-const linePart: Record<SoftwareStatus, LinePart | null> = {
-  behind: 'newer',
-  awaiting_approval: 'newer',
-  ticket_open: 'newer',
-  cant_check: 'cant',
-  not_checked: 'unchecked',
-  up_to_date: null,
+export interface SoftwareState {
+  /** The pill's words, the same on the Watchlist rows, the panel and the software page. */
+  readonly words: string
+  readonly tone: StatusTone
+  /** Which part of the count line the row counts in. */
+  readonly part: LinePart
 }
+
+type LinePart = 'newer' | 'gone' | 'cant' | 'current' | 'watching'
+
+/**
+ * The state of a watched software in the sketch's words: Can’t find, Newer out, Watching, Up to date. Everything that says a state reads this,
+ * so a pill and a count never disagree. A row whose check just failed says Can’t check, because GitHub has not said the address is gone.
+ * A row with no version to compare says Watching, never Up to date. The upgrade ticket is a fact on the software page, not a state.
+ */
+export function stateOf(row: Pick<WatchedSoftwareView, 'status' | 'our_version' | 'not_found'>): SoftwareState {
+  switch (row.status) {
+    case 'cant_check':
+      return row.not_found ? { words: 'Can’t find', tone: 'bad', part: 'gone' } : { words: 'Can’t check', tone: 'bad', part: 'cant' }
+    case 'behind':
+    case 'awaiting_approval':
+    case 'ticket_open':
+      return { words: 'Newer out', tone: 'wait', part: 'newer' }
+    case 'not_checked':
+      return { words: 'Watching', tone: 'quiet', part: 'watching' }
+    case 'up_to_date':
+      return row.our_version === null ? { words: 'Watching', tone: 'quiet', part: 'watching' } : { words: 'Up to date', tone: 'good', part: 'current' }
+  }
+}
+
+const RANK: Record<LinePart, number> = { gone: 0, cant: 0, newer: 1, watching: 2, current: 3 }
+
+/** The Watchlist lists what needs a person first: Can’t find, Newer out, Watching, then Up to date. */
+export const watchRank = (row: Pick<WatchedSoftwareView, 'status' | 'our_version' | 'not_found'>): number => RANK[stateOf(row).part]
 
 const lineWords: Record<LinePart, (count: number) => string> = {
   newer: (count) => `${count} ${count === 1 ? 'has' : 'have'} a newer version`,
+  gone: (count) => `${count} can’t be found`,
   cant: (count) => `${count} can’t be checked`,
-  unchecked: (count) => `${count} not checked yet`,
+  current: (count) => `${count} ${count === 1 ? 'is' : 'are'} up to date`,
+  watching: (count) => `${count} watching`,
 }
 
-const LINE_ORDER: readonly LinePart[] = ['newer', 'cant', 'unchecked']
+const LINE_ORDER: readonly LinePart[] = ['newer', 'gone', 'cant', 'current', 'watching']
 
 /**
- * The line under the page's title, such as "3 have a newer version · 4 can’t be checked", from every row on the list, so a search
- * never changes it. Null for an empty list. Up to date needs a version to be up to date with, as on the rows.
+ * The line under the page's title, such as "3 have a newer version · 1 can’t be found · 2 are up to date", from every row on the list, so a
+ * search never changes it. Null for an empty list. Every row counts once, in the part its pill names.
  */
 export function countLine(rows: readonly WatchedSoftwareView[]): string | null {
   if (rows.length === 0) return null
-  const parts = LINE_ORDER.flatMap((part) => {
-    const count = rows.filter((row) => linePart[row.status] === part).length
+  return LINE_ORDER.flatMap((part) => {
+    const count = rows.filter((row) => stateOf(row).part === part).length
     return count > 0 ? [lineWords[part](count)] : []
-  })
-  if (parts.length > 0) return parts.join(' · ')
-  return rows.every((row) => row.our_version !== null) ? 'Everything is up to date.' : 'Nothing newer yet.'
+  }).join(' · ')
+}
+
+/** "today", or the day's date such as "Thu 12 Nov". */
+function dayOf(iso: string, now: Date): string {
+  const when = lineWhen(iso, now)
+  return when.startsWith('Today') ? 'today' : when
+}
+
+/**
+ * A Watchlist row's second line, as the sketch has it: "1.2.14 → 1.2.16 · checked by Software watchlist". The sketch's "out 5 Nov" is left out,
+ * because the platform doesn't keep a release's date. `checkedBy` is null while nothing checks the list: it is paused or has no schedule.
+ */
+export function softwareLine(row: WatchedSoftwareView, now: Date, checkedBy: string | null): string {
+  const { part } = stateOf(row)
+  const version =
+    part === 'gone'
+      ? 'GitHub can’t find it'
+      : part === 'cant'
+        ? 'Can’t check right now'
+        : part === 'newer'
+          ? row.our_version !== null && row.newest_version !== null
+            ? `${row.our_version} → ${row.newest_version}`
+            : `Newest is ${row.newest_version ?? 'not known'}`
+          : part === 'current'
+            ? `${row.our_version ?? ''}, the newest`
+            : row.newest_version !== null
+              ? `Newest is ${row.newest_version}`
+              : `Added ${dayOf(row.added_at, now)}`
+  return `${version} · ${checkedBy ? `checked by ${checkedBy}` : 'not checked automatically'}`
+}
+
+/** The side panel's one sentence on where the software stands. Nothing here is guessed: a version nobody knows is said to be unknown. */
+export function sentenceFor(row: WatchedSoftwareView): string {
+  const { part } = stateOf(row)
+  if (part === 'gone') return row.moved_to ? `GitHub now calls this project ${row.moved_to}.` : `GitHub can’t find ${row.source.ref}, and doesn’t say where it moved.`
+  if (part === 'cant') return row.newest_version !== null ? `The last check stopped. The newest version it read was ${row.newest_version}.` : 'The last check stopped before it read the newest version.'
+  if (row.newest_version === null) return 'Not checked yet. The first check reads the newest release.'
+  if (row.our_version === null) return `Newest is ${row.newest_version}. The version you run isn’t known yet.`
+  return part === 'current' ? `You run ${row.our_version}, the newest.` : `You run ${row.our_version}. Newest is ${row.newest_version}.`
+}
+
+/** The software page's Upgrade ticket fact. `declined` is the latest check's declined record, when an Approver said no to this row's ticket. */
+export function ticketFact(row: Pick<WatchedSoftwareView, 'status' | 'open_ticket' | 'our_version' | 'not_found'>, declined: string | null): string {
+  if (declined) return declined
+  switch (row.status) {
+    case 'awaiting_approval':
+      return 'Waiting for a yes'
+    case 'ticket_open':
+      return row.open_ticket ? `${row.open_ticket}, open in Jira` : 'Open in Jira'
+    case 'cant_check':
+      return 'None yet. The last check stopped before it could tell.'
+    case 'up_to_date':
+      return row.our_version === null ? 'None yet' : 'Not needed'
+    case 'behind':
+    case 'not_checked':
+      return 'None yet'
+  }
 }
 
 const SOURCE_NAME: Record<WatchedSoftwareView['source']['kind'], string> = { github: 'GitHub' }
@@ -183,31 +265,6 @@ export function emptyWords({ operator, scheduled, paused }: { readonly operator:
   if (!operator) return 'An Operator can add the tools your team runs.'
   if (paused) return 'Add the tools your team runs. They can be checked once an Operator resumes the watchlist.'
   return scheduled ? 'Add the tools your team runs. Each one is checked at the next check.' : 'Add the tools your team runs, then press Check now to check them.'
-}
-
-export const statusLabel: Record<SoftwareStatus, string> = {
-  cant_check: 'Can’t check',
-  behind: 'New version',
-  awaiting_approval: 'Ticket waiting for a yes',
-  ticket_open: 'Ticket open',
-  up_to_date: 'Up to date',
-  not_checked: 'Not checked yet',
-}
-
-/** Up to date needs a version to be up to date with. With none known, the row says what the check can truthfully say. */
-export function statusWords(row: Pick<WatchedSoftwareView, 'status' | 'our_version'>): string {
-  return row.status === 'up_to_date' && row.our_version === null ? 'Nothing newer yet' : statusLabel[row.status]
-}
-
-type StatusTone = 'bad' | 'wait' | 'open' | 'good' | 'quiet'
-
-export const statusTone: Record<SoftwareStatus, StatusTone> = {
-  cant_check: 'bad',
-  behind: 'wait',
-  awaiting_approval: 'wait',
-  ticket_open: 'open',
-  up_to_date: 'good',
-  not_checked: 'quiet',
 }
 
 const dayLabel: Record<Day, string> = {

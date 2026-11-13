@@ -2,7 +2,7 @@ import { isOperator } from '../../api/me'
 import { useCapabilities } from '../../api/plannerQueries'
 import { useMe, useWatchlist } from '../../api/queries'
 import { Button } from '../../ui/Button'
-import { checkedByWords, newestOf, nextCheckWords, noScheduleWords, oursOf, REFRESH_MS, scheduleWords, statusTone, statusWords } from './software'
+import { checkedByWords, nextCheckWords, noScheduleWords, REFRESH_MS, scheduleWords, sentenceFor, stateOf } from './software'
 import workflowStyles from '../workflows/Workflows.module.css'
 import styles from './Software.module.css'
 
@@ -34,22 +34,16 @@ export function SoftwarePanel({ id }: { id: string }) {
   if (!view || !row) return <p className="muted">That software isn’t on the Software watchlist any more.</p>
   const paused = view.state === 'paused'
   const checkedBy = checkedByWords(capabilities.data?.capabilities)
+  const state = stateOf(row)
   return (
     <>
       <div>
-        <span className={styles['pill']} data-tone={statusTone[row.status]}>
-          {statusWords(row)}
+        <span className={styles['pill']} data-tone={state.tone}>
+          {state.words}
         </span>
       </div>
+      <p>{sentenceFor(row)}</p>
       <dl className={workflowStyles['factrows']}>
-        <div>
-          <dt>You run</dt>
-          <dd>{oursOf(row).version}</dd>
-        </div>
-        <div>
-          <dt>Newest</dt>
-          <dd>{newestOf(row).version}</dd>
-        </div>
         {checkedBy ? (
           <div>
             <dt>Checked by</dt>
