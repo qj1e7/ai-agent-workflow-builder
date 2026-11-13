@@ -95,6 +95,9 @@ const linePart: Record<SoftwareStatus, LinePart | null> = {
   up_to_date: null,
 }
 
+/** True for a software with a newer version out, even while its upgrade ticket waits for a yes or is open: the count line, the behind card and the panel all use this. */
+export const hasNewer = (row: Pick<WatchedSoftwareView, 'status'>): boolean => linePart[row.status] === 'newer'
+
 const lineWords: Record<LinePart, (count: number) => string> = {
   newer: (count) => `${count} ${count === 1 ? 'has' : 'have'} a newer version`,
   cant: (count) => `${count} can’t be checked`,

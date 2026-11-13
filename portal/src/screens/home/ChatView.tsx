@@ -1,9 +1,9 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { HomeOut } from '../../api/types'
 import { cx } from '../../ui/cx'
 import { InChat } from '../../ui/fromChat'
 import { NARROW, useMediaQuery } from '../../ui/media'
-import { openerAfterClose, OpensInPanel, panelKey, type PanelItem, type PanelOpener } from '../../ui/sidePanel'
+import { isWide, openerAfterClose, OpensInPanel, panelKey, type PanelItem, type PanelOpener } from '../../ui/sidePanel'
 import type { Page } from './AnswerCards'
 import { useChat, type OpenPanel } from './ChatProvider'
 import { PinnedLine } from './PinnedLine'
@@ -106,7 +106,7 @@ export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewPro
   }, [])
 
   const narrow = useMediaQuery(NARROW)
-  const { panel, openPanel, closePanel } = chat
+  const { panel, openPanel, pushPanel, backPanel, closePanel } = chat
   const opened = useRef(false)
   const closed = useRef<OpenPanel | null>(null)
 
@@ -118,9 +118,23 @@ export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewPro
         opened.current = true
         openPanel(item, Math.max(0, openersOf(column.current, item).indexOf(from)))
       },
+      show: (item) => openPanel(item, 0),
     }),
     [openPanel, shown],
   )
+
+  // An item opened from inside the panel, or Back to the one before it, moves focus to the new heading, as opening does.
+  const push = useCallback(
+    (item: PanelItem) => {
+      opened.current = true
+      pushPanel(item)
+    },
+    [pushPanel],
+  )
+  const back = useCallback(() => {
+    opened.current = true
+    backPanel()
+  }, [backPanel])
 
   // Opening moves focus to the panel's heading. Closing hands it back to what opened the panel, which shows again now.
   useEffect(() => {
@@ -142,7 +156,7 @@ export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewPro
 
   return (
     <InChat.Provider value>
-      <div className={cx(styles['chatLayout'], panel !== null && styles['beside'])} data-chat>
+      <div className={cx(styles['chatLayout'], panel !== null && styles['beside'], panel !== null && isWide(panel.item) && styles['wideSplit'])} data-chat>
         <div ref={column} className={styles['chat']} inert={(narrow && panel !== null) || undefined}>
           <OpensInPanel.Provider value={opener}>
             <h1 className="visually-hidden" tabIndex={-1}>
@@ -169,7 +183,7 @@ export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewPro
             </div>
           </div>
         </div>
-        {panel ? <SidePanel key={panelKey(panel.item)} item={panel.item} now={now} narrow={narrow} onClose={close} /> : null}
+        {panel ? <SidePanel key={panelKey(panel.item)} item={panel.item} back={panel.previous} now={now} narrow={narrow} onClose={close} onBack={back} onOpen={push} /> : null}
       </div>
     </InChat.Provider>
   )

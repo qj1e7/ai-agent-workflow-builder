@@ -606,6 +606,11 @@
   min-height: 0;
 }
 
+/* Beside the build view the chat is a column and the panel takes the rest (the sketch's `.split.wide`). */
+.wideSplit > .chat {
+  flex: 0 0 clamp(360px, 30%, 440px);
+}
+
 .chat {
   display: flex;
   flex: 1 1 0;

@@ -348,7 +348,7 @@ const CONNECTION_STATE: Record<ConnectionItem['state'], string> = {
 const atWhen = (iso: string, now: Date): string => runWhen(iso, now).replace(/^Today, /, 'at ').replace(/^(.+), (\d+:\d+)$/, '$1 at $2')
 
 /** "today", else the day, such as "Wed 18 Nov". */
-const onDay = (iso: string, now: Date): string => {
+export const onDay = (iso: string, now: Date): string => {
   const day = lineWhen(iso, now)
   return day.startsWith('Today') ? 'today' : day
 }
@@ -392,15 +392,18 @@ export type Action =
   | { readonly kind: 'test'; readonly label: string; readonly useCaseId: string }
 
 const runItem = (runId: string): PanelItem => ({ kind: 'run', id: runId })
+const approvalItem = (runId: string): PanelItem => ({ kind: 'approval', id: runId })
 
 export function actionsOf(need: Need, modelOff = false): readonly Action[] {
   switch (need.kind) {
     case 'approval':
-      return [{ kind: 'open', label: 'Review and decide', to: `/runs/${need.item.run_id}`, item: runItem(need.item.run_id) }]
+      return [{ kind: 'open', label: 'Review and decide', to: `/runs/${need.item.run_id}`, item: approvalItem(need.item.run_id) }]
     case 'connection':
-      return noModel(need.item) ? [{ kind: 'open', label: 'Connect a model', to: '/settings?tab=model' }] : [{ kind: 'open', label: 'See it in Settings', to: CONNECTIONS_PATH }]
+      return noModel(need.item)
+        ? [{ kind: 'open', label: 'Connect a model', to: '/settings?tab=model' }]
+        : [{ kind: 'open', label: 'See it in Settings', to: CONNECTIONS_PATH, item: { kind: 'connection', id: need.item.id } }]
     case 'address':
-      return [{ kind: 'open', label: 'Show it on the watchlist', to: `/software?row=${encodeURIComponent(need.item.software_id)}` }]
+      return [{ kind: 'open', label: 'Show it on the watchlist', to: `/software?row=${encodeURIComponent(need.item.software_id)}`, item: { kind: 'software', id: need.item.software_id } }]
     case 'confirmation':
       return [{ kind: 'open', label: 'Review in Settings', to: need.item.kind === 'approver' ? '/settings?tab=people' : '/settings?tab=model' }]
     case 'stopped':
@@ -420,9 +423,26 @@ export function openPathOf(need: Need): string {
   return open?.to ?? (need.kind === 'stopped' ? `/runs/${need.item.run_id}` : '/workflows')
 }
 
-/** A stop or a request opens its run in the side panel (spec 3.5). Anything else follows its own first action, to its page. */
+/**
+ * What opens in the side panel (spec 3.5): a stop, a declined test run or a question opens its run, a request its approval, a
+ * software that can't be found its row, and a connection that needs attention its state. Anything else follows its own first action, to its page.
+ */
 export function panelItemOf(need: Need): PanelItem | null {
-  return need.kind === 'stopped' || need.kind === 'approval' || need.kind === 'declined' || need.kind === 'question' ? runItem(need.item.run_id) : null
+  switch (need.kind) {
+    case 'approval':
+      return approvalItem(need.item.run_id)
+    case 'stopped':
+    case 'declined':
+    case 'question':
+      return runItem(need.item.run_id)
+    case 'address':
+      return { kind: 'software', id: need.item.software_id }
+    case 'connection':
+      return noModel(need.item) ? null : { kind: 'connection', id: need.item.id }
+    case 'confirmation':
+    case 'reply':
+      return null
+  }
 }
 
 export interface Pinned {

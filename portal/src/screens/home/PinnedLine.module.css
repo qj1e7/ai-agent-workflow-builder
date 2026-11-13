@@ -54,8 +54,18 @@
   color: var(--muted);
   font-weight: 600;
   white-space: nowrap;
+  text-decoration: underline;
   text-decoration-color: var(--rail);
   text-underline-offset: 3px;
+}
+
+/* In the chat "N more" is a button that opens the Needs you panel, drawn as the link it is anywhere else. */
+button.more {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 @media (hover: hover) and (pointer: fine) {

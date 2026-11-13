@@ -4,14 +4,17 @@ import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import stopped from '../../../../contracts/fixtures/builder/use-case.stopped.json'
 import advice from '../../../../contracts/fixtures/troubleshooting/failure.json'
+import aliceHome from '../../../../contracts/fixtures/builder/home.alice.json'
+import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
 import capabilities from '../../../../contracts/fixtures/planner/capabilities.json'
 import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { CapabilitiesView, Me, UseCaseView, WatchlistView } from '../../api/types'
+import type { CapabilitiesView, HomeOut, Me, UseCaseView, WatchlistView } from '../../api/types'
 import { InChat } from '../../ui/fromChat'
 import { escapeIsFree } from '../../ui/escape'
 import { openerAfterClose, wrapTab, type PanelItem } from '../../ui/sidePanel'
+import { needsTotal } from './home'
 import { SidePanel } from './SidePanel'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
@@ -23,11 +26,29 @@ const REDIS = 'sw_01JBW00000000000000000003'
 const REGISTRY = capabilities as CapabilitiesView
 const GITHUB_DOWN: CapabilitiesView = { ...REGISTRY, capabilities: REGISTRY.capabilities.map((c) => (c.id === 'github.releases' ? { ...c, state: 'down' as const } : c)) }
 
+const ALICE_HOME = aliceHome as HomeOut
+const BOB_HOME = bobHome as HomeOut
+const OPEN_BESIDE = () => undefined
+
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))
 const links = (html: string) => [...html.matchAll(/<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g)].map((match) => [text(match[2] ?? ''), match[1]])
 
-function draw(item: PanelItem, { me = ALICE, narrow = false, useCase = STOPPED, registry = REGISTRY }: { me?: Me; narrow?: boolean; useCase?: UseCaseView; registry?: CapabilitiesView } = {}): string {
+interface Options {
+  me?: Me
+  narrow?: boolean
+  useCase?: UseCaseView
+  registry?: CapabilitiesView
+  home?: HomeOut
+  useCases?: UseCaseView[]
+  back?: PanelItem | null
+  onOpen?: (item: PanelItem) => void
+}
+
+function draw(
+  item: PanelItem,
+  { me = ALICE, narrow = false, useCase = STOPPED, registry = REGISTRY, home = me.id === 'bob' ? BOB_HOME : ALICE_HOME, useCases = [STOPPED], back = null, onOpen }: Options = {},
+): string {
   const session = createDevSession({ getItem: () => me.id, setItem: () => undefined })
   const scope = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
@@ -35,6 +56,8 @@ function draw(item: PanelItem, { me = ALICE, narrow = false, useCase = STOPPED, 
   queryClient.setQueryData(['dev-users'], [ALICE, BOB])
   queryClient.setQueryData(['watchlist', scope], WATCHLIST)
   queryClient.setQueryData(['capabilities', scope], registry)
+  queryClient.setQueryData(['home', scope], home)
+  queryClient.setQueryData(['use-cases', scope], useCases)
   queryClient.setQueryData(['use-case', scope, useCase.use_case_id], useCase)
   queryClient.setQueryData(['troubleshoot', scope, STOPPED.last_run?.run_id, 0], advice)
   return renderToStaticMarkup(
@@ -42,7 +65,7 @@ function draw(item: PanelItem, { me = ALICE, narrow = false, useCase = STOPPED, 
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
         <MemoryRouter>
           <InChat.Provider value>
-            <SidePanel item={item} now={NOW} narrow={narrow} onClose={() => undefined} />
+            <SidePanel item={item} back={back} now={NOW} narrow={narrow} onClose={() => undefined} onBack={() => undefined} {...(onOpen ? { onOpen } : {})} />
           </InChat.Provider>
         </MemoryRouter>
       </ApiProvider>
@@ -114,6 +137,83 @@ describe('the side panel', () => {
     const html = draw({ kind: 'run', id: 'run_01JBA' })
     expect(html).toMatch(/<h2[^>]*>Run<\/h2>/)
     expect(text(html)).toContain('Loading the run')
+  })
+})
+
+describe('the side panel’s views', () => {
+  it('shows Needs you as the sketch’s rows under Do now and Set up, every one the platform returned, with More details to Workflows', () => {
+    const html = draw({ kind: 'needs' })
+    expect(html).toMatch(/<h2[^>]*id="side-panel-h"[^>]*>Needs you<\/h2>/)
+    expect(links(html)[0]).toEqual(['More details', '/workflows'])
+    expect(text(html)).toMatch(/Do now[\s\S]*Software watchlist stopped[\s\S]*Set up/)
+    expect(html.match(/data-home-item=/g)).toHaveLength(needsTotal(ALICE_HOME))
+  })
+
+  it('opens a row of Needs you in the panel, with a button that the chat’s Back can undo, and a page link where there is no panel item', () => {
+    const html = draw({ kind: 'needs' }, { onOpen: OPEN_BESIDE })
+    expect(html).toMatch(/<button[^>]*data-opens="run:run_01JB9"/)
+    expect(html).toMatch(/<button[^>]*data-opens="software:sw_01JC2A3B4C5D6E7F8G9H0J1K2N"/)
+    expect(html).toMatch(/<button[^>]*data-opens="connection:github"/)
+  })
+
+  it('shows Back, with the title of the item it returns to, only when there is one', () => {
+    expect(buttons(draw({ kind: 'workflow', id: STOPPED.use_case_id }))).not.toContain('Needs you')
+    const html = draw({ kind: 'workflow', id: STOPPED.use_case_id }, { back: { kind: 'needs' } })
+    expect(buttons(html)).toEqual(['Needs you', 'Close', 'Retry the run', 'Pause'])
+    expect(html.indexOf('Needs you')).toBeLessThan(html.indexOf('More details'))
+  })
+
+  it('lists every workflow, with its state and when it runs, each opening the workflow in the panel', () => {
+    const html = draw({ kind: 'workflows' }, { onOpen: OPEN_BESIDE })
+    expect(links(html)).toEqual([['More details', '/workflows']])
+    expect(text(html)).toContain('1 workflow')
+    expect(text(html)).toContain(`${STOPPED.name} `)
+    expect(text(html)).toContain('Stopped')
+    expect(html).toMatch(new RegExp(`<button[^>]*data-opens="workflow:${STOPPED.use_case_id}"`))
+  })
+
+  it('lists the watchlist with the Software page’s count line, each software’s versions and state', () => {
+    const html = draw({ kind: 'watchlist' }, { onOpen: OPEN_BESIDE })
+    const shown = text(html)
+    expect(links(html)).toEqual([['More details', '/software']])
+    expect(shown).toContain('3 have a newer version · 1 can’t be checked · 1 not checked yet')
+    expect(shown).toContain('LangGraph 1.2.14 → 1.2.16 New version')
+    expect(shown).toContain('n8n 2.42.6 Up to date')
+    expect(html.match(/data-opens="software:/g)).toHaveLength(WATCHLIST.software.length)
+  })
+
+  it('shows a connection’s real state in the platform’s words, with the key’s expiry in the pill, and sends the person to Settings', () => {
+    const html = draw({ kind: 'connection', id: 'github' })
+    expect(html).toMatch(/<h2[^>]*>GitHub key<\/h2>/)
+    expect(text(html)).toContain('Connection')
+    expect(text(html)).toContain('Expires Wed 18 Nov')
+    expect(text(html)).toContain('The key runs out soon.')
+    expect(text(html)).not.toContain('Asked the admin')
+    expect(links(html)).toEqual([
+      ['More details', '/settings?tab=connections'],
+      ['See it in Settings', '/settings?tab=connections'],
+    ])
+  })
+
+  it('says a connection that works again needs nothing, rather than showing what no longer holds', () => {
+    const fixed: HomeOut = { ...ALICE_HOME, connections: [] }
+    expect(text(draw({ kind: 'connection', id: 'github' }, { home: fixed }))).toContain('That connection doesn’t need anything from you now.')
+  })
+
+  it('keeps today’s run content for an approval, titled Approval until its run is read, with no page until then', () => {
+    const html = draw({ kind: 'approval', id: 'run_01JBA' })
+    expect(html).toMatch(/<h2[^>]*>Approval<\/h2>/)
+    expect(html).toContain('data-panel="approval"')
+    expect(text(html)).toContain('Loading the run')
+    expect(links(html)).toEqual([])
+  })
+
+  it('gives the build view the wide mode and no page, and shows nothing it can’t do', () => {
+    const html = draw({ kind: 'build', id: 'draft_1' })
+    expect(html).toContain('data-wide="true"')
+    expect(links(html)).toEqual([])
+    expect(buttons(html)).toEqual(['Close'])
+    expect(draw({ kind: 'needs' })).not.toContain('data-wide')
   })
 })
 

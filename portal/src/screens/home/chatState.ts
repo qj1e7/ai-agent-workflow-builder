@@ -42,11 +42,10 @@ export type DeskAction =
   | { readonly type: 'panel_close' }
 
 /** What the side panel shows, and the item Back returns to, or null when it is closed. */
-export function panelOf(desk: Desk): { readonly item: PanelItem; readonly from: number; readonly previous: PanelItem | null } | null {
-  const stack = desk.panel?.stack
-  const item = stack?.at(-1)
-  if (!desk.panel || !stack || !item) return null
-  return { item, from: desk.panel.from, previous: stack.at(-2) ?? null }
+export function panelOf(panel: PanelState | null): { readonly item: PanelItem; readonly from: number; readonly previous: PanelItem | null } | null {
+  const item = panel?.stack.at(-1)
+  if (!panel || !item) return null
+  return { item, from: panel.from, previous: panel.stack.at(-2) ?? null }
 }
 
 function pushed(panel: PanelState | null, item: PanelItem): PanelState {

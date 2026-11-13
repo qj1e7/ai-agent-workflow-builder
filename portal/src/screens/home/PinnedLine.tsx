@@ -1,7 +1,6 @@
-import { Link } from '../../ui/Link'
 import type { HomeOut } from '../../api/types'
 import { ButtonLink } from '../../ui/Button'
-import { OpenButton } from '../../ui/OpenItem'
+import { OpenButton, OpenLink } from '../../ui/OpenItem'
 import { lineOf, openPathOf, panelItemOf, pinnedOf } from './home'
 import styles from './PinnedLine.module.css'
 
@@ -35,9 +34,9 @@ export function PinnedLine({ home, now }: { home: HomeOut; now: Date }) {
         <b>{subject}</b> {short}
       </span>
       {more > 0 ? (
-        <Link to="/workflows" className={styles['more']}>
+        <OpenLink item={{ kind: 'needs' }} to="/workflows" className={styles['more']}>
           {more} more<span className="visually-hidden"> that need you</span>
-        </Link>
+        </OpenLink>
       ) : null}
       {item ? (
         <OpenButton item={item} to={openPathOf(need)}>

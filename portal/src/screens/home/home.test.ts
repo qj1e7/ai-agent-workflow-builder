@@ -44,7 +44,7 @@ describe('the order of what needs you', () => {
     expect(needs.shown.map((need) => need.kind)).toEqual(['stopped', 'approval', 'connection', 'reply', 'confirmation', 'confirmation'])
     expect(needs.total).toBe(needsTotal(home))
     const need = needs.shown.find((item) => item.kind === 'connection') as Need
-    expect(actionsOf(need)).toEqual([{ kind: 'open', label: 'See it in Settings', to: '/settings?tab=connections' }])
+    expect(actionsOf(need)).toEqual([{ kind: 'open', label: 'See it in Settings', to: '/settings?tab=connections', item: { kind: 'connection', id: 'jira' } }])
     expect(wordsOf(need, NOW).title).toBe('Jira is not answering.')
   })
 
@@ -69,7 +69,7 @@ describe('the order of what needs you', () => {
     expect(needs.shown.map((need) => need.kind)).toEqual(['stopped', 'approval', 'connection', 'address', 'address', 'confirmation', 'confirmation'])
     expect(needs.total).toBe(needsTotal(home))
     const [first, second] = needs.shown.filter((need) => need.kind === 'address') as [Need, Need]
-    expect(actionsOf(first)).toEqual([{ kind: 'open', label: 'Show it on the watchlist', to: `/software?row=${moved.software_id}` }])
+    expect(actionsOf(first)).toEqual([{ kind: 'open', label: 'Show it on the watchlist', to: `/software?row=${moved.software_id}`, item: { kind: 'software', id: moved.software_id } }])
     expect(wordsOf(first, NOW).title).toBe('GitHub moved FastAPI from tiangolo/fastapi to fastapi/fastapi.')
     expect(wordsOf(second, NOW).title).toBe('GitHub can’t find langchain-ai/langserve, the address saved for LangServe.')
   })
@@ -226,7 +226,7 @@ describe('what each item lets you do', () => {
   const [stopped] = needsOf(ALICE).shown as [Need]
 
   it('opens the run at the decision, and never decides on Home', () => {
-    expect(actionsOf(approval)).toEqual([{ kind: 'open', label: 'Review and decide', to: '/runs/run_01JB8', item: { kind: 'run', id: 'run_01JB8' } }])
+    expect(actionsOf(approval)).toEqual([{ kind: 'open', label: 'Review and decide', to: '/runs/run_01JB8', item: { kind: 'approval', id: 'run_01JB8' } }])
   })
 
   it('sends a confirmation to its Settings tab', () => {
@@ -444,6 +444,22 @@ describe('a question an Approver asked on a request this person made', () => {
     const run = QUESTION_FOR_ALICE.questions_for_me[0]!.run_id
     expect(actionsOf(need)).toEqual([{ kind: 'open', label: 'Answer Bob', to: `/runs/${run}`, item: { kind: 'run', id: run } }])
     expect(panelItemOf(need)).toEqual({ kind: 'run', id: run })
+  })
+})
+
+describe('what opens in the side panel', () => {
+  const kinds = (home: HomeOut) => needsOf(home).shown.map((need) => [need.kind, panelItemOf(need)?.kind ?? null])
+
+  it('opens a request as an approval, a stop as its run, a missing software as its row, and a connection as its state', () => {
+    expect(kinds(BOB)).toContainEqual(['approval', 'approval'])
+    expect(kinds(ALICE)).toEqual(expect.arrayContaining([['stopped', 'run'], ['address', 'software'], ['connection', 'connection']]))
+  })
+
+  it('leaves a person to be confirmed, a reply, and the missing AI model to their own pages', () => {
+    expect(kinds(BOB)).toContainEqual(['confirmation', null])
+    expect(kinds(ALICE)).toContainEqual(['reply', null])
+    const model: HomeOut = { ...ALICE, connections: [{ ...ALICE.connections[0]!, id: 'model' }] }
+    expect(kinds(model)).toContainEqual(['connection', null])
   })
 })
 

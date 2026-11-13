@@ -90,7 +90,7 @@ describe('the chat each person keeps', () => {
 const NEEDS: PanelItem = { kind: 'needs' }
 const WORKFLOWS: PanelItem = { kind: 'workflows' }
 const flow = (id: string): PanelItem => ({ kind: 'workflow', id })
-const shownBy = (desks: Desks, user = 'alice') => panelOf(deskOf(desks, user))
+const shownBy = (desks: Desks, user = 'alice') => panelOf(deskOf(desks, user).panel)
 
 describe('the side panel’s short history', () => {
   it('starts closed, with nothing to go back to', () => {
@@ -128,7 +128,7 @@ describe('the side panel’s short history', () => {
 
   it('has nothing to go back to at the first item, and Back there changes nothing', () => {
     const desks = run([['alice', { type: 'panel_open', item: NEEDS, from: 0 }]])
-    expect(run([['alice', { type: 'panel_back' }]], desks)).toBe(desks)
+    expect(shownBy(run([['alice', { type: 'panel_back' }]], desks))).toEqual(shownBy(desks))
   })
 
   it('keeps only the last few, so it stays short', () => {

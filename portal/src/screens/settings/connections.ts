@@ -1,4 +1,4 @@
-import type { CapabilityView, ConnectionId, ConnectionOut } from '../../api/types'
+import type { CapabilityView, ConnectionId, ConnectionItem, ConnectionOut } from '../../api/types'
 import { runWhen } from '../workflows/times'
 
 export type Health = 'ok' | 'warn' | 'off'
@@ -26,7 +26,7 @@ const when = (iso: string, now: Date) => runWhen(iso, now).replace(/^Today/, 'to
 const dot = (words: string) => (/[.!?]$/.test(words) ? words : `${words}.`)
 
 /** Words for a connection from the state the platform found. The text is the platform's own plain words, not a guess. */
-export function connectionWords(connection: ConnectionOut, now: Date): ConnectionWords {
+export function connectionWords(connection: ConnectionItem, now: Date): ConnectionWords {
   const checked = connection.checked_at ? `Checked ${when(connection.checked_at, now)}` : null
   const fix = connection.fix ? ` ${dot(connection.fix)}` : ''
   const problem = dot(connection.problem ?? `${connection.name} needs attention.`)
