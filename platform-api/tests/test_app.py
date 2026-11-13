@@ -79,6 +79,7 @@ ROUTES = {
     ("POST", "/internal/v1/runs/{run_id}/agent-events"),
     ("GET", "/internal/v1/runs/{run_id}/jira/tickets"),
     ("GET", "/internal/v1/runs/{run_id}/jira/tickets/{key}"),
+    ("GET", "/internal/v1/runs/{run_id}/confluence/pages/{page}"),
     ("POST", "/internal/v1/schedules/tick"),
     ("POST", "/internal/v1/workflow-failures"),
     ("GET", "/internal/v1/n8n/options"),

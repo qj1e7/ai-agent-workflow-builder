@@ -203,3 +203,16 @@ def test_teams_also_gets_outcomes_and_requests_for_the_team_so_post_is_not_appro
     why = BY_ID["teams.post"].why or ""
     assert "approval requests only" not in why
     assert "outcome" in why and "team" in why
+
+
+def test_reading_confluence_is_ready_only_through_the_confluence_connection():
+    entry = BY_ID["confluence.read"]
+    assert (entry.state, entry.connection, entry.kind, entry.needs_model) == (
+        "ready",
+        "confluence",
+        "read",
+        True,
+    )
+    assert entry.tools == ["confluence.read_page", "confluence.parse_cert_list"]
+    assert (entry.focus, entry.short) == (False, None)
+    assert BY_ID["confluence.change"].state == "planned"

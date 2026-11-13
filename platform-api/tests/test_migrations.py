@@ -704,6 +704,30 @@ def test_migration_0013_adds_the_connection_checks_and_a_downgrade_drops_them(
         builder.execute("SELECT * FROM orchestration.connection_checks")
 
 
+def test_migration_0022_keeps_confluences_checks_and_a_downgrade_drops_only_those(
+    postgres: PostgresUrls,
+):
+    insert = (
+        "INSERT INTO orchestration.connection_checks (connection, identity, state, checked_at) "
+        "VALUES (%s, %s, %s, %s)"
+    )
+    count = "SELECT connection, count(*) FROM orchestration.connection_checks GROUP BY 1"
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute("DELETE FROM orchestration.connection_checks")
+        conn.execute(insert, ("jira", "practice", "working", NOW))
+        conn.execute(insert, ("confluence", "confluence:0123456789abcdef", "working", NOW))
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(insert, ("sharepoint", "sharepoint", "working", NOW))
+        downgrade("orchestration", postgres.owner, "0021")
+        try:
+            assert dict(conn.execute(count).fetchall()) == {"jira": 1}
+            with pytest.raises(psycopg.errors.CheckViolation):
+                conn.execute(insert, ("confluence", "confluence:0", "working", NOW))
+        finally:
+            upgrade("orchestration", postgres.owner)
+        conn.execute("DELETE FROM orchestration.connection_checks")
+
+
 async def test_migration_0014_keeps_each_posts_channel_and_a_webhook_post_from_before_matches_none(
     postgres: PostgresUrls, db: Database
 ):

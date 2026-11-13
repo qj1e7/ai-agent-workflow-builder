@@ -1455,7 +1455,8 @@
       "enum": [
         "jira",
         "github",
-        "teams"
+        "teams",
+        "confluence"
       ],
       "type": "string"
     },
@@ -3366,6 +3367,8 @@
         "github.read_releases",
         "jira.search",
         "jira.read_ticket",
+        "confluence.read_page",
+        "confluence.parse_cert_list",
         "jira.create_ticket"
       ],
       "type": "string"

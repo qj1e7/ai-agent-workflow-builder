@@ -104,6 +104,25 @@
       "instead": null
     },
     {
+      "id": "confluence.read",
+      "plain": "Read the Confluence pages the team allows",
+      "kind": "read",
+      "system": "Confluence",
+      "state": "ready",
+      "cant": null,
+      "why": null,
+      "connection": "confluence",
+      "needs_model": true,
+      "platform": false,
+      "focus": false,
+      "tools": [
+        "confluence.read_page",
+        "confluence.parse_cert_list"
+      ],
+      "short": null,
+      "instead": null
+    },
+    {
       "id": "jira.create",
       "plain": "Create a Jira ticket after a yes",
       "kind": "write",

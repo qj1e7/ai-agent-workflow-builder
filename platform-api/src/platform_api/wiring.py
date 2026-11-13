@@ -12,9 +12,15 @@ from platform_api.builder.planner_facts import PlannerFactsReader
 from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
 from platform_api.orchestration.agents import CardInput, HttpAgentRuntime
+from platform_api.orchestration.confluence_rest import (
+    ConfluencePages,
+    confluence_identity,
+    confluence_pages,
+)
 from platform_api.orchestration.connections import (
     TEAMS_NOT_CHECKED,
     Checked,
+    ConfluenceChecker,
     Connections,
     Entry,
     GitHubChecker,
@@ -22,7 +28,9 @@ from platform_api.orchestration.connections import (
     ModelView,
     Observed,
     ReadFresh,
+    Unset,
     WatchedChannel,
+    confluence_probe,
     github_probe,
     jira_probe,
     model_probe,
@@ -93,6 +101,7 @@ class Services:
     model_settings: ModelSettings
     connections: Connections
     people: People
+    confluence: ConfluencePages
     copier: Copier | None = None
     cosmos: CosmosEvents | None = None
     teams_webhook: TeamsWorkflowsWebhook | None = None
@@ -153,6 +162,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.model_settings = services.model_settings
     app.state.connections = services.connections
     app.state.people = services.people
+    app.state.confluence = services.confluence
 
 
 class NoOwnWorkflowsYet:
@@ -238,6 +248,23 @@ def tell_outlet(settings: Settings, db: Database) -> tuple[TellOutlet, TellFlow 
     return flow, flow
 
 
+CONFLUENCE_UNSET = "Confluence is not connected."
+
+
+def confluence_entry(settings: Settings, confluence: ConfluenceChecker | None) -> Entry:
+    """Confluence is optional: the platform runs without it, and only the reads that need it say
+    so."""
+    if settings.confluence.base_url is None or confluence is None:
+        return Entry("confluence", "Confluence", Identity("confluence"), Unset(CONFLUENCE_UNSET))
+    key = key_hint(settings.confluence.token)
+    return Entry(
+        "confluence",
+        "Confluence",
+        confluence_identity(settings.confluence),
+        Checked(confluence_probe(confluence, key)),
+    )
+
+
 def connections_for(
     settings: Settings,
     db: Database,
@@ -245,6 +272,7 @@ def connections_for(
     channel: ApprovalChannel,
     agents: GitHubChecker,
     models: ModelView,
+    confluence: ConfluenceChecker | None = None,
 ) -> tuple[Connections, ApprovalChannel]:
     jira_settings = settings.jira
     jira_identity = (
@@ -276,6 +304,7 @@ def connections_for(
             # see, so a change there is found by the next check, not here.
             Entry("github", "GitHub", Identity("github"), Checked(github_probe(agents))),
             teams,
+            confluence_entry(settings, confluence),
             Entry("model", "AI model", Identity("model"), ReadFresh(model_probe(models))),
         ],
     )
@@ -330,7 +359,10 @@ async def build(settings: Settings) -> Services:
     waker = None
     if settings.node_key is not None and box is not None:
         waker = N8nWaker(settings.n8n_base_url, settings.node_key, box)
-    connections, channel = connections_for(settings, db, jira, channel, agents, model_settings)
+    confluence = confluence_pages(settings.confluence)
+    connections, channel = connections_for(
+        settings, db, jira, channel, agents, model_settings, confluence
+    )
     gateway = WriteGateway(db, [JiraWriteConnector(jira, db, site)])
     orchestrator = Orchestrator(
         db,
@@ -416,6 +448,7 @@ async def build(settings: Settings) -> Services:
         model_settings=model_settings,
         connections=connections,
         people=people,
+        confluence=confluence,
         copier=copier,
         cosmos=cosmos,
         teams_webhook=webhook,
@@ -452,6 +485,7 @@ class Runner:
             await self._services.copier.stop()
         await self._services.activity_log.stop()
         await self._services.jira_client.aclose()
+        await self._services.confluence.close()
         if self._services.cosmos is not None:
             await self._services.cosmos.close()
         await self._services.db.close()

@@ -75,7 +75,7 @@ def card_body(with_model: bool = True) -> dict[str, Any]:
     return body
 
 
-def test_the_tool_list_needs_the_key_and_is_the_four_tools():
+def test_the_tool_list_needs_the_key_and_is_the_six_tools():
     client = make_app(None)
     assert client.get("/v1/tools", headers={"X-Agent-Key": "wrong"}).status_code == 401
     tools = client.get("/v1/tools").json()["tools"]
@@ -83,6 +83,8 @@ def test_the_tool_list_needs_the_key_and_is_the_four_tools():
         "github.read_releases",
         "jira.search",
         "jira.read_ticket",
+        "confluence.read_page",
+        "confluence.parse_cert_list",
         "jira.create_ticket",
     ]
 

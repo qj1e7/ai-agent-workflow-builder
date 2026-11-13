@@ -497,7 +497,12 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
         ),
         "planner/check-part.fits.json": PartCheckFits(),
         "planner/capabilities.json": _capabilities(
-            root, check("jira"), check("github"), check("teams"), check("model")
+            root,
+            check("jira"),
+            check("github"),
+            check("teams"),
+            check("confluence"),
+            check("model"),
         ),
         "planner/capabilities.trouble.json": _capabilities(
             root,
@@ -509,6 +514,14 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
             ),
             check("github"),
             check("teams", state="not_checked", checked_at=None, last_ok_at=None),
+            check(
+                "confluence",
+                state="not_set_up",
+                problem="Confluence is not connected.",
+                fix="Ask whoever set up the platform to connect Confluence.",
+                checked_at=None,
+                last_ok_at=None,
+            ),
             check(
                 "model",
                 state="not_set_up",

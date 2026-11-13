@@ -104,6 +104,18 @@ def connections_view() -> ConnectionsView:
                 fix="Ask whoever set up the Teams address to check that it still works.",
             ),
             ConnectionOut(
+                id="confluence",
+                name="Confluence",
+                practice=False,
+                state="not_set_up",
+                checked_at=None,
+                last_ok_at=None,
+                problem="Confluence is not connected.",
+                key_ends_in=None,
+                expires_at=None,
+                fix="Ask whoever set up the platform to connect Confluence.",
+            ),
+            ConnectionOut(
                 id="model",
                 name="AI model",
                 practice=False,

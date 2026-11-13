@@ -193,6 +193,12 @@ services:
       JIRA_BROWSE_URL: ${JIRA_BROWSE_URL:-}
       # The Jira project the watchlist raises tickets in. MOCK is the practice Jira's.
       WATCHLIST_JIRA_PROJECT: ${WATCHLIST_JIRA_PROJECT:-MOCK}
+      # Confluence (ENGINE-PLAN E12). Unset keeps it not connected. The wiki's address, such as
+      # https://your-site.atlassian.net/wiki, and the only pages read, as id=title separated by ;.
+      CONFLUENCE_BASE_URL: ${CONFLUENCE_BASE_URL:-}
+      CONFLUENCE_EMAIL: ${CONFLUENCE_EMAIL:-}
+      CONFLUENCE_API_TOKEN: ${CONFLUENCE_API_TOKEN:-}
+      CONFLUENCE_PAGES: ${CONFLUENCE_PAGES:-}
     ports:
       - "${PLATFORM_API_HOST_PORT:-8000}:8000"
     healthcheck:

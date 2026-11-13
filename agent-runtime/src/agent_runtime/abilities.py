@@ -52,6 +52,11 @@ VULNERABILITY_ROOTS: Final = dict.fromkeys(
 VULNERABILITIES: Final = frozenset(VULNERABILITY_ROOTS) | words("cve cves nvd advisory advisories")
 SECURITY_PHRASE_ENDS: Final = words("fix fixes patch patches alert alerts bulletin bulletins")
 CVE_ID: Final = re.compile(r"cve-\d{4}-\d+")
+CERTIFICATES: Final = words(
+    "cert certs certificate certificates expiry expiries expire expires expiring expired"
+)
+"""Only a cert list is read from Confluence on a request in words: any other page is read only
+by an agent or a block an Operator set up with it."""
 VULNERABILITIES_PLANNED: Final = "I can't check for known vulnerabilities yet. It's planned."
 
 
@@ -86,6 +91,12 @@ ABILITIES: Final = (
         reaches=frozenset({"github"}),
     ),
     Ability(
+        "check the cert list in Confluence",
+        words("read check scan look find review watch track monitor"),
+        about=CERTIFICATES,
+        reaches=frozenset({"confluence"}),
+    ),
+    Ability(
         "create a Jira ticket after a yes",
         words("create add file raise open make log propose draft write submit put generate"),
         makes=TICKETS,
@@ -97,6 +108,7 @@ ABILITY_OF: Final = {
     "jira.find_by_update": "read Jira tickets",
     "summarise": "sum up what I find",
     "github.releases": "check software for new releases",
+    "confluence.read": "check the cert list in Confluence",
     "jira.create": "create a Jira ticket after a yes",
 }
 
@@ -207,6 +219,15 @@ CAPABILITIES: Final = (
         ["github.read_releases"],
         focus=True,
         short="Watch software for new releases",
+    ),
+    _ready(
+        "confluence.read",
+        "Read the Confluence pages the team allows",
+        "read",
+        "Confluence",
+        "confluence",
+        ["confluence.read_page", "confluence.parse_cert_list"],
+        needs_model=True,
     ),
     _ready(
         "jira.create",
@@ -1305,6 +1326,9 @@ def _sets_on_a_new_ticket(row: Clause, reader: _Reader) -> bool:
 
 
 REACHED: Final = frozenset(place for ability in ABILITIES for place in ability.reaches)
+READ_ONLY: Final = frozenset({"confluence"})
+"""Systems the platform reads and never changes. A part that changes one, or puts results in it,
+needs a new system there, so its can't still names it."""
 NOTIFIES: Final = words(
     "post send share forward publish message text email mail notify remind ping nudge chase "
     "tell ask alert warn inform contact invite dm broadcast announce upload export print call"
@@ -1736,7 +1760,7 @@ def need_of(kind: RowKind, text: str, unreached_source: str | None = None) -> Ne
     own = _own_requests(row)
     if own is not None:
         named.append(own)
-    other = next((s for s in named if s not in REACHED), None)
+    other = next((s for s in named if s not in REACHED or s in READ_ONLY), None)
     if other is not None:
         return Need("new_system", SYSTEMS[other])
     if _asks_for_vulnerabilities(row, reader) or any(w.low in PLACES or w.product for w in row):

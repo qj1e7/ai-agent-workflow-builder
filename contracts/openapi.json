@@ -3587,6 +3587,48 @@
         "title": "ConfirmationsOut",
         "type": "object"
       },
+      "ConfluencePageOut": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "storage": {
+            "description": "The page's body in Confluence's storage format, its HTML.",
+            "title": "Storage",
+            "type": "string"
+          },
+          "text": {
+            "description": "The page as plain lines, each table row on one line.",
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "description": "Where people open the page.",
+            "title": "Url",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "version",
+          "url",
+          "storage",
+          "text"
+        ],
+        "title": "ConfluencePageOut",
+        "type": "object"
+      },
       "ConnectIn": {
         "additionalProperties": false,
         "properties": {
@@ -3688,6 +3730,7 @@
           "jira",
           "github",
           "teams",
+          "confluence",
           "model"
         ],
         "type": "string"
@@ -11002,6 +11045,8 @@
           "github.read_releases",
           "jira.search",
           "jira.read_ticket",
+          "confluence.read_page",
+          "confluence.parse_cert_list",
           "jira.create_ticket"
         ],
         "type": "string"
@@ -20065,6 +20110,126 @@
           }
         },
         "summary": "Ingest Agent Event",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/runs/{run_id}/confluence/pages/{page}": {
+      "get": {
+        "description": "One page by its id or its title, from the pages the platform may read. Anything else is\nrefused before Confluence is asked.",
+        "operationId": "read_page_internal_v1_runs__run_id__confluence_pages__page__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "page",
+            "required": true,
+            "schema": {
+              "title": "Page",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "task",
+            "required": true,
+            "schema": {
+              "title": "Task",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Callback-Token",
+            "required": true,
+            "schema": {
+              "title": "X-Callback-Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfluencePageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The callback token is not valid for this run and task"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The run does not read Confluence, or the page is not allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such run, or Confluence has no such page"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Confluence is not connected, or refused the read"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Confluence could not answer"
+          }
+        },
+        "summary": "Read Page",
         "tags": [
           "internal"
         ]

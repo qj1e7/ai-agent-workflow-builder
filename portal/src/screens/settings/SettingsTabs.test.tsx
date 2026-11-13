@@ -198,6 +198,16 @@ describe('the Connections tab', () => {
     expect(render({ tab: 'people', connections: ALL })).toMatch(/Connections[^<]*<span class="[^"]*dot[^"]*"/)
     expect(render({ tab: 'people' })).not.toMatch(/Connections[^<]*<span class="[^"]*dot[^"]*"/)
   })
+
+  it('shows Confluence not set up on its card, and marks no tab for it', () => {
+    const unset = { ...CALM, connections: CALM.connections.map((c) => (c.id === 'confluence' ? (ALL.connections.find((a) => a.id === 'confluence') as ConnectionOut) : c)) }
+    expect(render({ tab: 'people', connections: unset })).not.toMatch(/Connections[^<]*<span class="[^"]*dot[^"]*"/)
+    const card = text(render({ tab: 'connections', connections: unset }))
+    expect(card).toContain('Confluence')
+    expect(card).toContain('Not set up')
+    expect(card).toContain('Confluence is not connected. Ask whoever set up the platform to connect Confluence.')
+    expect(buttonsIn(render({ tab: 'connections', connections: unset }))).not.toContain('Check now for Confluence')
+  })
 })
 
 describe('what a Check now found', () => {
