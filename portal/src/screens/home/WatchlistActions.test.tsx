@@ -41,6 +41,16 @@ describe('the Software-page actions under an answer about watched software', () 
     expect(html).toContain(`href="/software?row=${LIST.software[0]?.id}"`)
   })
 
+  it('names one software once, as the card’s title, and several by row under “On your watchlist”', () => {
+    const one = draw(ALICE, ['FastAPI'])
+    expect(one).toMatch(/<h3 id="[^"]*">FastAPI<\/h3>/)
+    expect(one).not.toContain('<b>FastAPI</b>')
+    const two = draw(ALICE, ['FastAPI', 'Redis'])
+    expect(two).toMatch(/<h3 id="[^"]*">On your watchlist<\/h3>/)
+    expect(two).toContain('<b>FastAPI</b>')
+    expect(two).toContain('<b>Redis</b>')
+  })
+
   it('asks before it stops watching, so the first press removes nothing', () => {
     const html = draw(ALICE, ['FastAPI'])
     expect(text(html)).not.toContain('Yes, stop watching')

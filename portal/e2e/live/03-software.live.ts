@@ -281,8 +281,8 @@ for (const phone of [false, true]) {
     const fastapiId = (await backend.get<{ watchlist: { software: { id: string }[] } }>('alice', '/api/v1/watchlist')).watchlist.software[0]?.id ?? ''
     await page.goto('/')
     const onHome = page.locator(`[data-home-item="address:${fastapiId}"]`)
-    await expect(onHome).toContainText('GitHub moved FastAPI from tiangolo/fastapi to fastapi/fastapi.')
-    await onHome.getByRole('link', { name: 'Show it on the watchlist' }).click()
+    await expect(onHome).toContainText('FastAPI moved to fastapi/fastapi on GitHub')
+    await onHome.getByRole('link').click()
     await expect(page).toHaveURL(new RegExp(`/software\\?row=${fastapiId}`))
     await expect(row).toBeFocused()
     await page.goto('/workflows')

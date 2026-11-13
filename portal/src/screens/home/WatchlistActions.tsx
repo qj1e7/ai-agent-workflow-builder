@@ -72,7 +72,8 @@ function CheckAllNow({ useCaseId }: { useCaseId: string }) {
  * check the watchlist now, and stop watching it. An Approver sees nothing here, as on the Software page. A name the
  * watchlist no longer holds gets no action.
  */
-export function SoftwareActions({ names }: { names: readonly string[] }) {
+/** `named`: each row says its software's name. Leave it off when the card's title already names the one software. */
+export function SoftwareActions({ names, named = true }: { names: readonly string[]; named?: boolean }) {
   const me = useMe()
   const watchlist = useWatchlist()
   const removal = useRemoveSoftware()
@@ -97,7 +98,7 @@ export function SoftwareActions({ names }: { names: readonly string[] }) {
         <ul>
           {held.map((row) => (
             <li key={row.id}>
-              <b>{row.name}</b>
+              {named ? <b>{row.name}</b> : null}
               <OpenButton item={{ kind: 'software', id: row.id }} to={`/software?row=${encodeURIComponent(row.id)}`}>
                 Open<span className="visually-hidden"> {row.name}</span> on the Software page
               </OpenButton>

@@ -8,7 +8,7 @@ import { WorkflowsPage } from '../screens/workflows/WorkflowsPage'
 import { WatchLine } from '../screens/software/WatchLine'
 import { howItWorksPath } from '../screens/agents/agents'
 import { JIRA_PATH } from '../screens/jira/tickets'
-import { BoxIcon, ChatIcon, GridIcon, SettingsIcon, TicketIcon } from './icons'
+import { ChatIcon, NodesIcon, SettingsIcon, StackIcon, TicketIcon } from './icons'
 import { NotFoundPage } from './NotFoundPage'
 import { OperatorsNote } from './OperatorsNote'
 import { PageHead, PageNote } from './PageHead'
@@ -39,14 +39,14 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
     path: '/',
     railLabel: 'Chat',
     icon: ChatIcon,
-    heading: ({ name, now }) => (name ? `${greeting(now)}! ${name}` : greeting(now)),
+    heading: ({ name, now }) => (name ? `${greeting(now)}, ${name}` : greeting(now)),
     lead: ({ now }) => `${today(now)}.`,
     inRail: true,
   },
   workflows: {
     path: '/workflows',
     railLabel: 'Workflows',
-    icon: GridIcon,
+    icon: NodesIcon,
     heading: 'Workflows',
     lead: 'The jobs that run by themselves, such as the Software watchlist, and what needs you.',
     inRail: true,
@@ -54,7 +54,7 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
   software: {
     path: '/software',
     railLabel: 'Watchlist',
-    icon: BoxIcon,
+    icon: StackIcon,
     heading: 'Software watchlist',
     lead: 'Everything your team runs, in one list.',
     inRail: true,
@@ -109,22 +109,13 @@ export function railCurrent(pathname: string, ofRun: PageId): PageId | null {
   return null
 }
 
-export interface RailCount {
-  readonly total: number
-  readonly says: 'need you' | 'need action'
-}
-
 /**
- * Each rail item's count. Workflows holds what needs an Operator, Chat holds it for anyone else, and Watchlist holds what
- * needs action on the list, for someone who can act on it. An Approver who is not an Operator gets no Watchlist count.
+ * Each rail item's count, the same for everyone: the totals the sketch shows, how many workflows the team has and how much
+ * software is watched. What needs the person is the needs strip's and Workflows' number, so the rail never says it too.
  */
-export function railCountFor(id: PageId, operator: boolean, needs: number, watch: number): RailCount | null {
-  const count: RailCount | null =
-    id === 'workflows' && operator ? { total: needs, says: 'need you' }
-    : id === 'home' && !operator ? { total: needs, says: 'need you' }
-    : id === 'software' && operator ? { total: watch, says: 'need action' }
-    : null
-  return count !== null && count.total > 0 ? count : null
+export function railCountFor(id: PageId, workflows: number | undefined, software: number | undefined): number | null {
+  const total = id === 'workflows' ? workflows : id === 'software' ? software : undefined
+  return total !== undefined && total > 0 ? total : null
 }
 
 export function wordsOf(words: Words, context: PageContext): string {
@@ -161,7 +152,7 @@ export function AppRoutes({ context }: { context: PageContext }) {
         element={<WorkflowsPage heading={wordsOf(PAGES.workflows.heading, context)} lead={wordsOf(PAGES.workflows.lead, context)} now={context.now} />}
       />
       <Route path={`${PAGES.workflows.path}/:useCaseId`} element={<WorkflowRoute now={context.now} />} />
-      <Route path={PAGES.home.path} element={<HomePage heading={wordsOf(PAGES.home.heading, context)} today={wordsOf(PAGES.home.lead, context)} now={context.now} />} />
+      <Route path={PAGES.home.path} element={<HomePage greeting={wordsOf(PAGES.home.heading, context)} today={wordsOf(PAGES.home.lead, context)} now={context.now} />} />
       <Route
         path={PAGES.software.path}
         element={

@@ -8,7 +8,7 @@ import type { AddressItem, ApprovalItem, ConnectionItem, FollowingUpItem, HomeOu
 import { ApiError } from '../../api/client'
 import capabilities from '../../../../contracts/fixtures/planner/capabilities.json'
 import type { CapabilitiesView } from '../../api/types'
-import { actionsOf, approverLine, comingUpOf, draftWords, firstSentence, groupOf, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, openPathOf, panelItemOf, pinnedOf, pinnedWhy, retryProblem, stateLine, suggestionsOf, waitingWords, wordsOf, type Need } from './home'
+import { actionsOf, approverHeading, approverLine, draftWords, groupOf, HOME_NEEDS_SHOWN, lineOf, moreWords, needsOf, needsTotal, openPathOf, panelItemOf, pinnedOf, retryProblem, suggestionsOf, waitingWords, wordsOf, type Need } from './home'
 
 const BOB = bobHome as HomeOut
 const ALICE = aliceHome as HomeOut
@@ -127,11 +127,11 @@ describe('the order of what needs you', () => {
   })
 
   it(`shows ${HOME_NEEDS_SHOWN} on Home with the most urgent first, and counts the same total`, () => {
-    const approvals = Array.from({ length: 5 }, (_, n) => ask(`run_${n}`, `2026-11-03T01:0${n}:00Z`))
-    const home: HomeOut = { ...BOB, approvals, approvals_total: 5, stopped: [STOP], stopped_total: 1 }
+    const approvals = Array.from({ length: 7 }, (_, n) => ask(`run_${n}`, `2026-11-03T01:0${n}:00Z`))
+    const home: HomeOut = { ...BOB, approvals, approvals_total: 7, stopped: [STOP], stopped_total: 1 }
     const onHome = needsOf(home, HOME_NEEDS_SHOWN)
-    expect(HOME_NEEDS_SHOWN).toBe(3)
-    expect(keys(onHome.shown)).toEqual(['stopped:run_01JB9', 'approval:apr_run_4', 'approval:apr_run_3'])
+    expect(HOME_NEEDS_SHOWN, 'Home shows up to five rows, then “N more”').toBe(5)
+    expect(keys(onHome.shown)).toEqual(['stopped:run_01JB9', 'approval:apr_run_6', 'approval:apr_run_5', 'approval:apr_run_4', 'approval:apr_run_3'])
     expect(onHome.total).toBe(needsOf(home).total)
     expect(onHome.total).toBe(needsTotal(home))
   })
@@ -260,7 +260,6 @@ describe('a test run an Approver declined', () => {
     expect(need.kind).toBe('declined')
     expect(groupOf(need)).toBe('now')
     expect(needsTotal(DECLINED_TEST)).toBe(1)
-    expect(stateLine(DECLINED_TEST, NOW)).toBe('Something needs you.')
   })
 
   it('says who declined it and gives the rest of the declined record, with the reason, beside an X', () => {
@@ -297,7 +296,7 @@ describe('a retry the platform refused', () => {
   })
 })
 
-describe('what you wait on, your drafts and what runs next', () => {
+describe('what you wait on, and your drafts', () => {
   it('says whose yes a run waits for and why it is not yours', () => {
     expect(waitingWords(WAIT, NOW)).toEqual({ name: 'An Approver’s yes on Software watchlist', sub: 'You started it · Today 10:14', to: '/runs/run_01JB8' })
     expect(waitingWords({ ...WAIT, trigger: 'schedule' }, NOW).sub).toBe('Your schedule started it · Today 10:14')
@@ -314,37 +313,16 @@ describe('what you wait on, your drafts and what runs next', () => {
     expect(draftWords(draft!, NOW)).toEqual({ name: 'Nudge stale tickets', sub: 'Step 2 of 4. Last saved Wed 4 Nov, 14:24.' })
     expect(draftWords({ ...draft!, name: null }, NOW).name).toBe('New workflow')
   })
-
-  it('names what runs next and where it opens, and how many more are scheduled', () => {
-    expect(comingUpOf(BOB, NOW)).toEqual({ name: 'Software watchlist', to: '/software', when: 'Mon 9 Nov, 9:00', more: 0 })
-    expect(comingUpOf({ ...BOB, coming_up: { ...BOB.coming_up!, template: 'agent_cards', more: 2 } }, NOW)).toMatchObject({ to: '/workflows/uc_01JB7', more: 2 })
-    expect(comingUpOf(DAY_ONE, NOW)).toBeNull()
-  })
-
-  it('gives what runs next in its schedule’s own zone, named when it is not Singapore, as the workflow page does', () => {
-    const at = (time_zone: string) => comingUpOf({ ...BOB, coming_up: { ...BOB.coming_up!, next_run_at: '2026-11-03T09:00:00Z', time_zone } }, NOW)?.when
-    expect(at('Europe/London')).toBe('Today, 9:00 London time')
-    expect(at('Asia/Singapore')).toBe('Today, 17:00')
-    expect(at('Factory'), 'a zone the browser cannot read').toBe('Today, 17:00 Singapore time')
-  })
 })
 
-describe('the line under the Operator’s greeting', () => {
-  it('names what needs her without repeating the count', () => {
-    expect(stateLine({ ...ALICE, approvals: [], approvals_total: 0, confirmations: [], connections: [], addresses: [], replied: [], stopped: [STOP], stopped_total: 1 }, NOW)).toBe('Something needs you.')
-    expect(stateLine(ALICE, NOW)).toBe('Some things need you.')
-  })
-
-  it('gives the next run when nothing needs her, and says so when nothing is scheduled', () => {
-    const quiet: HomeOut = { ...BOB, approvals: [], approvals_total: 0, confirmations: [] }
-    expect(stateLine(quiet, NOW)).toBe('Nothing needs you. Next up: Software watchlist, Mon 9 Nov, 9:00.')
-    expect(stateLine({ ...quiet, coming_up: null }, NOW)).toBe('Nothing needs you. Nothing is scheduled yet.')
-  })
-
-  it('tells an Approver how many requests wait for a yes', () => {
-    expect(approverLine({ ...BOB, confirmations: [], approvals_total: 1 })).toBe('1 request is waiting for your yes.')
-    expect(approverLine({ ...BOB, confirmations: [], approvals_total: 5 })).toBe('5 requests are waiting for your yes.')
-    expect(approverLine({ ...BOB, approvals: [], approvals_total: 0, confirmations: [] })).toBe('Nothing needs you right now.')
+describe('the Approver’s heading', () => {
+  it('tells an Approver how many changes wait for his yes, in the sketch’s words, and his heading says the same with no full stop', () => {
+    expect(approverLine({ ...BOB, confirmations: [], approvals_total: 1 })).toBe('1 change waits for your yes.')
+    expect(approverLine({ ...BOB, confirmations: [], approvals_total: 5 })).toBe('5 changes wait for your yes.')
+    expect(approverLine({ ...BOB, approvals: [], approvals_total: 0, confirmations: [] })).toBe('Nothing waits for your yes.')
+    expect(approverLine(BOB), 'a request and two confirmations').toBe('3 things need you.')
+    expect(approverHeading({ ...BOB, confirmations: [], approvals_total: 1 })).toBe('1 change waits for your yes')
+    expect(approverHeading({ ...BOB, approvals: [], approvals_total: 0, confirmations: [] })).toBe('Nothing waits for your yes')
   })
 })
 
@@ -359,10 +337,10 @@ describe('the three suggestions under the box', () => {
     expect(suggestionsOf(0, undefined)).toEqual([])
   })
 
-  it('with software watched are three typed words the question lane and the watchlist answer already read', () => {
+  it('with software watched are the sketch’s three: what needs me and what it can do never ask the model, and the question lane reads the middle one', () => {
     const chips = suggestionsOf(3, CAPS)
-    expect(chips.map((chip) => chip.label)).toEqual(['Which software has a newer version?', 'Watch another software for new versions', 'What can you do?'])
-    expect(chips.every((chip) => chip.ask.text === chip.label)).toBe(true)
+    expect(chips.map((chip) => chip.label)).toEqual(['What needs me?', 'Which software is behind?', 'What can you do?'])
+    expect(chips.map((chip) => chip.ask)).toEqual([{ intent: 'needs_me' }, { text: 'Which software has a newer version?' }, { intent: 'abilities' }])
   })
 
   it('shows none until the watchlist has loaded, so the set never flips', () => {
@@ -411,9 +389,9 @@ describe('Needs you in two groups', () => {
     ])
   })
 
-  it('cuts Home’s three from the grouped list, so a Set up item never takes a place from a Do now item', () => {
+  it('cuts Home’s five from the grouped list, so a Set up item never takes a place from a Do now item', () => {
     const home: HomeOut = { ...everything, approvals: [ask('run_a', '2026-11-03T01:00:00Z'), ask('run_b', '2026-11-03T02:00:00Z')], approvals_total: 2 }
-    expect(keys(needsOf(home, HOME_NEEDS_SHOWN).shown)).toEqual(['stopped:run_01JB9', 'approval:apr_run_b', 'approval:apr_run_a'])
+    expect(keys(needsOf(home, HOME_NEEDS_SHOWN).shown)).toEqual(['stopped:run_01JB9', 'approval:apr_run_b', 'approval:apr_run_a', 'connection:jira', 'reply:trq_01JD5RP'])
   })
 })
 
@@ -442,14 +420,6 @@ describe('the pinned line', () => {
     expect(open(ALICE, 'connection:jira')).toBe('/settings?tab=connections')
     expect(open(ALICE, `address:${(ALICE.addresses[0] as AddressItem).software_id}`)).toContain('/software?row=')
   })
-
-  it('says why in one sentence, and where it came from when there is no why', () => {
-    const stopped = pinnedOf(ALICE)?.need as Need
-    expect(pinnedWhy(stopped, NOW)).toBe(firstSentence(wordsOf(stopped, NOW).why ?? ''))
-    expect(pinnedWhy(stopped, NOW)).not.toContain('Retry the run.')
-    const approval = pinnedOf(BOB)?.need as Need
-    expect(pinnedWhy(approval, NOW)).toBe('Software watchlist · Started by Alice, Today, 10:14')
-  })
 })
 
 describe('a question an Approver asked on a request this person made', () => {
@@ -474,5 +444,51 @@ describe('a question an Approver asked on a request this person made', () => {
     const run = QUESTION_FOR_ALICE.questions_for_me[0]!.run_id
     expect(actionsOf(need)).toEqual([{ kind: 'open', label: 'Answer Bob', to: `/runs/${run}`, item: { kind: 'run', id: run } }])
     expect(panelItemOf(need)).toEqual({ kind: 'run', id: run })
+  })
+})
+
+describe('each row of Needs you in a few words', () => {
+  const [approval, modelAddress, approver] = needsOf(BOB).shown as [Need, Need, Need]
+  const [jira, github] = ALICE.connections as [ConnectionItem, ConnectionItem]
+  const [moved, lost] = ALICE.addresses as [AddressItem, AddressItem]
+  const need = (home: Partial<HomeOut>): Need => needsOf({ ...DAY_ONE, ...home }).shown[0] as Need
+  const SAME_DAY = new Date('2026-11-04T15:00:00+08:00')
+
+  it('leads with what the row is about, then says what happened: a stop with its time, red', () => {
+    const stopped = need({ stopped: [STOP], stopped_total: 1 })
+    expect(lineOf(stopped, SAME_DAY)).toEqual({ tone: 'err', subject: 'Software watchlist', rest: 'stopped at 10:14', short: 'stopped' })
+    expect(lineOf(stopped, NOW).rest).toBe('stopped Wed 4 Nov at 10:14')
+  })
+
+  it('says a request needs your yes, amber, as the Approver’s row does in the sketch', () => {
+    expect(lineOf(approval, NOW)).toEqual({ tone: 'wait', subject: 'Software watchlist', rest: 'needs your yes', short: 'needs your yes' })
+  })
+
+  it('names a connection that doesn’t work in red, and a key that runs out with its day, amber', () => {
+    expect(jira.state).toBe('not_answering')
+    expect(lineOf(need({ connections: [jira] }), NOW)).toEqual({ tone: 'err', subject: 'Jira', rest: 'isn’t answering', short: 'isn’t answering' })
+    expect(lineOf(need({ connections: [github] }), NOW)).toEqual({ tone: 'wait', subject: 'GitHub key', rest: 'expires Wed 18 Nov', short: 'expires Wed 18 Nov' })
+    expect(lineOf(need({ connections: [{ ...github, expires_at: '2026-11-03T12:00:00Z' }] }), NOW).rest).toBe('expires today')
+    const model = { id: 'model', name: 'AI model', state: 'not_set_up', problem: null, fix: null, checked_at: null, last_ok_at: null, expires_at: null } as const
+    expect(lineOf(need({ connections: [model] }), NOW)).toMatchObject({ tone: 'err', subject: 'AI model', rest: 'isn’t set up' })
+  })
+
+  it('says software can’t be found on GitHub, or where it moved, amber, under Set up', () => {
+    expect(lineOf(need({ addresses: [lost] }), NOW)).toEqual({ tone: 'wait', subject: 'LangServe', rest: 'can’t be found on GitHub', short: 'not found' })
+    expect(lineOf(need({ addresses: [moved] }), NOW)).toEqual({ tone: 'wait', subject: 'FastAPI', rest: 'moved to fastapi/fastapi on GitHub', short: 'moved' })
+  })
+
+  it('names who waits to be confirmed, and a new AI model address', () => {
+    expect(lineOf(approver, NOW)).toEqual({ tone: 'wait', subject: 'Dave', rest: 'waits to be confirmed as an Approver', short: 'waits to be confirmed' })
+    expect(lineOf(modelAddress, NOW)).toEqual({ tone: 'wait', subject: 'A new AI model address', rest: 'waits to be confirmed', short: 'waits to be confirmed' })
+  })
+
+  it('names who declined a test run, who asked a question and who replied, never claiming a write', () => {
+    const [declined] = needsOf(DECLINED_TEST).shown as [Need]
+    expect(lineOf(declined, NOW)).toEqual({ tone: 'wait', subject: 'Bob', rest: 'declined your test run of Weekly closed-ticket summary', short: 'declined your test run' })
+    const [question] = needsOf(QUESTION_FOR_ALICE).shown as [Need]
+    expect(lineOf(question, NOW)).toEqual({ tone: 'wait', subject: 'Bob', rest: 'asked you about Software watchlist', short: 'asked you a question' })
+    const reply = need({ replied: ALICE.replied })
+    expect(lineOf(reply, NOW)).toEqual({ tone: 'wait', subject: 'Bob', rest: 'replied to your report', short: 'replied' })
   })
 })

@@ -3,9 +3,9 @@ import { notOnTheList } from '../api/me'
 import { useJiraBrowseUrl } from '../api/ticketLinks'
 import type { Me } from '../api/types'
 import { cx } from '../ui/cx'
-import { Mark, SettingsIcon, TicketIcon } from './icons'
+import { TicketIcon } from './icons'
 import { PersonChip } from './PersonChip'
-import { PRODUCT, PRODUCT_PREFIX } from './product'
+import { PRODUCT } from './product'
 import { PAGES } from './routes'
 import { TeamsButton } from './TeamsPanel'
 import iconButton from './IconButton.module.css'
@@ -20,11 +20,10 @@ export function Header({ person }: { person: Me | null }) {
     <header className={styles['header']}>
       <div className={styles['inner']}>
         <Link to={PAGES.home.path} className={cx(styles['brand'])}>
-          <Mark />
-          <span className={styles['brandText']}>
-            <span className={styles['brandAi']}>{PRODUCT_PREFIX}</span>
-            {PRODUCT.slice(PRODUCT_PREFIX.length)}
+          <span className={styles['mark']} aria-hidden="true">
+            AI
           </span>
+          <span className={styles['brandText']}>{PRODUCT}</span>
         </Link>
         <div className={styles['tools']}>
           {/* Its badge polls runs and Teams messages, which the platform refuses to someone not on the People list. */}
@@ -36,8 +35,8 @@ export function Header({ person }: { person: Me | null }) {
               <span className={iconButton['label']}>Jira</span>
             </NavLink>
           ) : null}
-          <NavLink to={PAGES.settings.path} className={cx(iconButton['button'])} aria-label="Settings" title="Settings">
-            <SettingsIcon />
+          <NavLink to={PAGES.settings.path} className={cx(styles['settings'])}>
+            Settings
           </NavLink>
           {person ? <PersonChip person={person} /> : null}
         </div>

@@ -23,21 +23,19 @@ function Who({ person }: { person: Me }) {
       <span className={styles['initial']} style={{ background: tone.bg, color: tone.ink }} aria-hidden="true">
         {person.display.charAt(0)}
       </span>
-      <span>
-        <span className={styles['name']}>{person.display}</span>
-        <span className={styles['role']}>{rolesLabel(person.roles) || 'No role'}</span>
-      </span>
+      <span className={styles['who']}>{titleOf(person)}</span>
     </>
   )
+}
+
+/** "Alice, Operator", as the sketch's top bar names the person. */
+function titleOf(person: Me): string {
+  return `${person.display}, ${rolesLabel(person.roles) || 'No role'}`
 }
 
 // Safari does not focus a button on click, so a press on "Sign out" blurs with no related target. Only a move to a real element elsewhere counts as leaving.
 export function focusMovedOutside(root: Pick<Node, 'contains'> | null, next: EventTarget | null): boolean {
   return next !== null && !root?.contains(next as Node)
-}
-
-function titleOf(person: Me): string {
-  return `${person.display}, ${rolesLabel(person.roles) || 'No role'}`
 }
 
 export function PersonChip({ person }: { person: Me }) {

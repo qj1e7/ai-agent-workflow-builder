@@ -1,4 +1,4 @@
-import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PauseReply, PlannerReply, ResumeReply, RowKind, UnderstoodRowView } from '../../api/types'
+import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PauseReply, PlannerReply, QuestionReply, ResumeReply, RowKind, UnderstoodRowView } from '../../api/types'
 import { count } from '../run/words'
 import { isRunning, type Row } from '../workflows/workflow'
 import { cantOnCard } from './parts'
@@ -78,6 +78,19 @@ export const SAY = {
 
 /** Who is asking: an Operator sets up and changes workflows, and anyone else asks questions only (ADR 0043). */
 export type Asker = 'operator' | 'approver'
+
+/** The software a question answer offers actions on, which only an Operator gets. With some, the answer leads a card. */
+export const questionActions = (reply: QuestionReply, asker: Asker): readonly string[] => (asker === 'operator' ? (reply.about_software ?? []) : [])
+
+/**
+ * Answers that are only words, drawn as a message with the Planner's name on it (the sketch's `.mb`). Every other answer leads its
+ * cards with its sentence and no name (`.mcard`), a question answer with actions included.
+ */
+export function wordsOnly(reply: PlannerReply, asker: Asker): boolean {
+  if (reply.answer === 'question') return questionActions(reply, asker).length === 0
+  if (reply.answer === 'pause' || reply.answer === 'resume') return reply.choices.length === 0
+  return reply.answer === 'operators' || (reply.answer === 'offline' && asker === 'approver')
+}
 
 /** The offline answer to someone who isn’t an Operator: one line, with no place to start and nothing only an Operator can do. */
 const APPROVER_OFFLINE: Readonly<Record<OfflineReply['why'], string>> = {

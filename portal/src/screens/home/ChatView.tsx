@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { HomeOut } from '../../api/types'
+import { cx } from '../../ui/cx'
 import { InChat } from '../../ui/fromChat'
 import { NARROW, useMediaQuery } from '../../ui/media'
 import { openerAfterClose, OpensInPanel, panelKey, type PanelItem, type PanelOpener } from '../../ui/sidePanel'
@@ -14,8 +15,9 @@ interface ChatViewProps {
   readonly home: HomeOut
   readonly now: Date
   readonly page: Page
-  /** The Planner's box, docked at the bottom. */
+  /** The Planner's box and the chips that stay under it, docked at the bottom. */
   readonly box: ReactNode
+  readonly chips: ReactNode
   readonly onNewChat: () => void
 }
 
@@ -24,11 +26,11 @@ export const NEWEST = '#thread-h + ol > li:last-child'
 const openersOf = (root: HTMLElement | null, item: PanelItem): HTMLElement[] => [...(root?.querySelectorAll<HTMLElement>(`[data-opens="${panelKey(item)}"]`) ?? [])]
 
 /**
- * Home once the first message is sent (spec 5.1): the pinned Needs you line and New chat on top, the conversation scrolling
- * in the middle, and the box docked at the bottom. The scroll position is kept by the chat, so coming back from another page
+ * Home once the first message is sent (the sketch's chat): the needs strip on top, the conversation scrolling in the middle, and
+ * the box with its chips and New chat docked at the bottom. The scroll position is kept by the chat, so coming back from another page
  * finds the conversation where it was left. An item opened from a card shows in the side panel beside it (spec 3.3).
  */
-export function ChatView({ home, now, page, box, onNewChat }: ChatViewProps) {
+export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewProps) {
   const chat = useChat()
   const column = useRef<HTMLDivElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
@@ -140,20 +142,13 @@ export function ChatView({ home, now, page, box, onNewChat }: ChatViewProps) {
 
   return (
     <InChat.Provider value>
-      <div className={styles['chatLayout']} data-chat>
+      <div className={cx(styles['chatLayout'], panel !== null && styles['beside'])} data-chat>
         <div ref={column} className={styles['chat']} inert={(narrow && panel !== null) || undefined}>
           <OpensInPanel.Provider value={opener}>
-            <div className={styles['chatBar']}>
-              <h1 className="visually-hidden" tabIndex={-1}>
-                Planner
-              </h1>
-              <PinnedLine home={home} now={now} />
-              <div className={styles['chatNew']}>
-                <button type="button" className={styles['linkButton']} onClick={onNewChat}>
-                  New chat
-                </button>
-              </div>
-            </div>
+            <h1 className="visually-hidden" tabIndex={-1}>
+              Planner
+            </h1>
+            <PinnedLine home={home} now={now} />
             {/* While the conversation overflows, its region takes a Tab stop, so the keyboard can scroll it (axe: scrollable-region-focusable). */}
             {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
             <div ref={scroller} className={styles['chatScroll']} role="region" aria-label="Conversation" tabIndex={overflows ? 0 : undefined} onScroll={(event) => restored.current && scroll.set(event.currentTarget.scrollTop)}>
@@ -162,7 +157,17 @@ export function ChatView({ home, now, page, box, onNewChat }: ChatViewProps) {
               </div>
             </div>
           </OpensInPanel.Provider>
-          <div className={styles['chatDock']}>{box}</div>
+          <div className={styles['chatDock']}>
+            <div className={styles['dock']}>
+              {box}
+              <div className={styles['dockRow']}>
+                {chips}
+                <button type="button" className={styles['linkButton']} onClick={onNewChat}>
+                  New chat
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
         {panel ? <SidePanel key={panelKey(panel.item)} item={panel.item} now={now} narrow={narrow} onClose={close} /> : null}
       </div>

@@ -252,7 +252,7 @@ describe('after a delete', () => {
 })
 
 const navNames = (html: string) =>
-  [...html.matchAll(/<nav\b[^>]*aria-label="Main"[^>]*>([\s\S]*?)<\/nav>/g)].flatMap((nav) => [...(nav[1] ?? '').matchAll(/<a\b([^>]*)>/g)].map((a) => /aria-label="([^"]*)"/.exec(a[1] ?? '')?.[1] ?? ''))
+  [...html.matchAll(/<nav\b[^>]*aria-label="Browse"[^>]*>([\s\S]*?)<\/nav>/g)].flatMap((nav) => [...(nav[1] ?? '').matchAll(/<a\b([^>]*)>/g)].map((a) => /aria-label="([^"]*)"/.exec(a[1] ?? '')?.[1] ?? ''))
 const primaries = (html: string) => (html.match(/<(?:a|button)\b[^>]*class="[^"]*_primary_[^"]*"[^>]*>/g) ?? []).length
 const labelsOf = (html: string, ...label: string[]) => label.flatMap((words) => [...html.matchAll(new RegExp(`>${words}<`, 'g'))])
 
@@ -281,13 +281,13 @@ describe('one action per workflow on Workflows', () => {
 describe('Needs you at the top of Workflows', () => {
   const HOME = aliceHome as HomeOut
 
-  it('lists what needs the person in full, with the same total as the tab', () => {
+  it('lists what needs the person in full, while the tab shows how many workflows there are', () => {
     const html = render({ home: HOME })
     const total = needsTotal(HOME)
     const section = /<section[^>]*aria-labelledby="[^"]*"[\s\S]*?<\/section>/.exec(html)?.[0] ?? ''
     expect(text(section)).toContain(`Needs you ${total}`)
     expect(section).toContain('data-home-item="stopped:run_01JB9"')
-    expect(navNames(html).filter((name) => name.startsWith('Workflows'))).toEqual([`Workflows, ${total} need you`])
+    expect(navNames(html).filter((name) => name.startsWith('Workflows'))).toEqual([`Workflows, ${String(HOME.workflows)} in all`])
     expect(html.indexOf('aria-label="Needs you"')).toBeLessThan(html.indexOf('aria-label="Workflows"'))
   })
 
@@ -378,13 +378,12 @@ describe('the sections under Needs you', () => {
     expect(text(sectionOf(mainOf(render({ home: HOME })), 'following'))).not.toContain('Showing the newest')
   })
 
-  it('shows a reply the person has not opened in Needs you, with the same count as the tab', () => {
+  it('shows a reply the person has not opened in Needs you', () => {
     const html = render({ home: HOME })
     expect(mainOf(html)).toContain('data-home-item="reply:trq_01JD5RP"')
     expect(text(mainOf(html))).toContain('Bob replied to your report')
     expect(text(mainOf(html))).toContain('Looking into it.')
     expect(mainOf(html)).toMatch(/<a[^>]*href="\/workflows\?request=trq_01JD5RP"[^>]*>Read the reply<\/a>/)
-    expect(navNames(html).filter((name) => name.startsWith('Workflows'))).toEqual([`Workflows, ${needsTotal(HOME)} need you`])
   })
 
   it('leaves a request in Following up but not in Needs you once the person has opened it', () => {
