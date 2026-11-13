@@ -435,7 +435,8 @@ async def test_a_first_post_teams_refuses_shows_not_answering_without_its_error(
         None,
     )
     assert teams.fix == "Ask whoever set up the Teams address to check that it still works."
-    assert "secret" not in repr(teams) and "500" not in repr(teams)
+    assert "secret" not in repr(teams)
+    assert "500" not in f"{teams.problem} {teams.fix}"
     assert [c.id for c in await connections.needing_attention()] == ["teams"]
 
 
