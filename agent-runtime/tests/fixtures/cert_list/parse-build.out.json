@@ -1,0 +1,479 @@
+{
+  "now": "2026-11-13T01:00:00Z",
+  "hasAlerts": true,
+  "subject": "⚠️ 4 certificates need action",
+  "emailSubject": "Cert List · 5 item(s) to confirm · 4 posted to Teams",
+  "checkedAt": "13 Nov 2026, 09:00",
+  "pageUrl": "https://YOUR-TENANT.atlassian.net/wiki/spaces/OMJ/pages/PAGE_ID/Cert+List",
+  "emailTo": "the team's list",
+  "rowsRead": 12,
+  "confirmedCount": 4,
+  "needsConfirmCount": 5,
+  "expiredCount": 1,
+  "soonCount": 2,
+  "laterCount": 1,
+  "missingEnvCount": 2,
+  "unreadableCount": 1,
+  "staleCount": 1,
+  "duplicateCount": 1,
+  "notTrackedCount": 2,
+  "byEnvCounts": {
+    "DEV": 1,
+    "PRD": 1,
+    "UAT": 2
+  },
+  "confirmed": [
+    {
+      "env": "DEV",
+      "name": "gccdev-intra.example-certs.internal",
+      "validityEnd": "24 Mar 2026",
+      "daysLeft": -234,
+      "basis": "as written",
+      "rawEnd": "24/03/2026",
+      "marker": "🔴"
+    },
+    {
+      "env": "PRD",
+      "name": "intranet.example-certs.internal",
+      "validityEnd": "04 Dec 2026",
+      "daysLeft": 21,
+      "basis": "as written",
+      "rawEnd": "2026-12-04",
+      "marker": "🟠"
+    },
+    {
+      "env": "UAT",
+      "name": "gccuat-intra.example-certs.internal",
+      "validityEnd": "04 Dec 2026",
+      "daysLeft": 21,
+      "basis": "as written",
+      "rawEnd": "04 Dec 2026",
+      "marker": "🟠"
+    },
+    {
+      "env": "UAT",
+      "name": "gccuat.example-certs.internal",
+      "validityEnd": "15 Dec 2026",
+      "daysLeft": 32,
+      "basis": "as written",
+      "rawEnd": "15 Dec 2026",
+      "marker": "🟡"
+    }
+  ],
+  "missingEnv": [
+    {
+      "env": "(no env)",
+      "name": "Digital Sign API - for Client Cert via mTLS call",
+      "validityEnd": "05 Jan 2026",
+      "daysLeft": -312,
+      "basis": "as written",
+      "rawEnd": "05/01/2026",
+      "marker": "🔴"
+    },
+    {
+      "env": "(no env)",
+      "name": "API Gateway",
+      "validityEnd": "14 May 2026",
+      "daysLeft": -183,
+      "basis": "renewal date",
+      "rawEnd": "renewed on 14 May 2026",
+      "marker": "🔴"
+    }
+  ],
+  "unreadable": [
+    {
+      "env": "SIT",
+      "name": "gccsit-intra.example-certs.internal",
+      "rawEnd": "renewed yearly"
+    }
+  ],
+  "stale": [
+    {
+      "env": "SIT",
+      "name": "legacy-thing",
+      "validityEnd": "03 Feb 2019",
+      "daysLeft": -2840,
+      "basis": "as written",
+      "rawEnd": "03 Feb 2019",
+      "marker": "🔴"
+    }
+  ],
+  "duplicates": [
+    {
+      "env": "DEV",
+      "name": "gccdev-intra.example-certs.internal",
+      "validityEnd": "24 Mar 2026",
+      "daysLeft": -234,
+      "basis": "as written",
+      "rawEnd": "24/03/2026",
+      "marker": "🔴"
+    }
+  ],
+  "needsRows": [
+    {
+      "id": "n1",
+      "bucket": "no-environment",
+      "env": "(no env)",
+      "name": "Digital Sign API - for Client Cert via mTLS call",
+      "cell": "05/01/2026"
+    },
+    {
+      "id": "n2",
+      "bucket": "no-environment",
+      "env": "(no env)",
+      "name": "API Gateway",
+      "cell": "renewed on 14 May 2026"
+    },
+    {
+      "id": "n3",
+      "bucket": "unreadable-date",
+      "env": "SIT",
+      "name": "gccsit-intra.example-certs.internal",
+      "cell": "renewed yearly"
+    },
+    {
+      "id": "n4",
+      "bucket": "expired-long-ago",
+      "env": "SIT",
+      "name": "legacy-thing",
+      "cell": "03 Feb 2019"
+    },
+    {
+      "id": "n5",
+      "bucket": "duplicate-row",
+      "env": "DEV",
+      "name": "gccdev-intra.example-certs.internal",
+      "cell": "24/03/2026"
+    }
+  ],
+  "teamsText": "⚠️ 4 certificates need action\nCert List · checked 13 Nov 2026, 09:00 (Asia/Singapore)\n\nDEV (1):\n🔴 gccdev-intra.example-certs.internal - ends 24 Mar 2026, 234d overdue\n\nPRD (1):\n🟠 intranet.example-certs.internal - ends 04 Dec 2026, in 21d\n\nUAT (2):\n🟠 gccuat-intra.example-certs.internal - ends 04 Dec 2026, in 21d\n🟡 gccuat.example-certs.internal - ends 15 Dec 2026, in 32d\n\n5 item(s) need a human look and were emailed to the team's list: 2 without ENV, 1 unreadable date, 1 stale row(s), 1 duplicate(s).\n\nEmail copy: Cert List · 5 item(s) to confirm · 4 posted to Teams\nhttps://YOUR-TENANT.atlassian.net/wiki/spaces/OMJ/pages/PAGE_ID/Cert+List",
+  "teamsHtml": "<h3>⚠️ 4 certificates need action</h3><p>Cert List · checked 13 Nov 2026, 09:00 (Asia/Singapore)</p><p><strong>DEV (1)</strong></p><ul><li>🔴 <strong>gccdev-intra.example-certs.internal</strong> - ends <strong>24 Mar 2026</strong>, 234d overdue</li></ul><p><strong>PRD (1)</strong></p><ul><li>🟠 <strong>intranet.example-certs.internal</strong> - ends <strong>04 Dec 2026</strong>, in 21d</li></ul><p><strong>UAT (2)</strong></p><ul><li>🟠 <strong>gccuat-intra.example-certs.internal</strong> - ends <strong>04 Dec 2026</strong>, in 21d</li><li>🟡 <strong>gccuat.example-certs.internal</strong> - ends <strong>15 Dec 2026</strong>, in 32d</li></ul><p>5 item(s) need a human look and were emailed to the team's list: 2 without ENV, 1 unreadable date, 1 stale row(s), 1 duplicate(s).</p>",
+  "teamsCard": {
+    "type": "AdaptiveCard",
+    "version": "1.4",
+    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+    "msteams": {
+      "width": "Full"
+    },
+    "body": [
+      {
+        "type": "Container",
+        "style": "Attention",
+        "bleed": true,
+        "items": [
+          {
+            "type": "TextBlock",
+            "text": "⚠️ 4 certificates need action",
+            "size": "Medium",
+            "weight": "Bolder",
+            "wrap": true
+          },
+          {
+            "type": "TextBlock",
+            "text": "Cert List · 12 rows read · checked 13 Nov 2026, 09:00 (Asia/Singapore)",
+            "size": "Small",
+            "isSubtle": true,
+            "wrap": true
+          }
+        ]
+      },
+      {
+        "type": "ColumnSet",
+        "spacing": "Small",
+        "separator": true,
+        "columns": [
+          {
+            "type": "Column",
+            "width": 1,
+            "horizontalAlignment": "Center",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "1",
+                "size": "Large",
+                "weight": "Bolder",
+                "color": "Attention",
+                "horizontalAlignment": "Center"
+              },
+              {
+                "type": "TextBlock",
+                "text": "OVERDUE",
+                "size": "Micro",
+                "isSubtle": true,
+                "horizontalAlignment": "Center",
+                "wrap": true
+              }
+            ]
+          },
+          {
+            "type": "Column",
+            "width": 1,
+            "horizontalAlignment": "Center",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "2",
+                "size": "Large",
+                "weight": "Bolder",
+                "color": "Warning",
+                "horizontalAlignment": "Center"
+              },
+              {
+                "type": "TextBlock",
+                "text": "DUE ≤ 30D",
+                "size": "Micro",
+                "isSubtle": true,
+                "horizontalAlignment": "Center",
+                "wrap": true
+              }
+            ]
+          },
+          {
+            "type": "Column",
+            "width": 1,
+            "horizontalAlignment": "Center",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "1",
+                "size": "Large",
+                "weight": "Bolder",
+                "color": "Default",
+                "horizontalAlignment": "Center"
+              },
+              {
+                "type": "TextBlock",
+                "text": "DUE ≤ 60D",
+                "size": "Micro",
+                "isSubtle": true,
+                "horizontalAlignment": "Center",
+                "wrap": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "TextBlock",
+        "text": "DEV (1)",
+        "size": "Small",
+        "weight": "Bolder",
+        "separator": true
+      },
+      {
+        "type": "ColumnSet",
+        "spacing": "Small",
+        "columns": [
+          {
+            "type": "Column",
+            "width": "stretch",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "🔴 gccdev-intra.example-certs.internal",
+                "wrap": true,
+                "size": "Small"
+              }
+            ]
+          },
+          {
+            "type": "Column",
+            "width": "auto",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "24 Mar 2026",
+                "size": "Small",
+                "isSubtle": true,
+                "horizontalAlignment": "Right"
+              }
+            ]
+          },
+          {
+            "type": "Column",
+            "width": "auto",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "234d overdue",
+                "size": "Small",
+                "weight": "Bolder",
+                "color": "Attention",
+                "horizontalAlignment": "Right"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "TextBlock",
+        "text": "PRD (1)",
+        "size": "Small",
+        "weight": "Bolder",
+        "separator": true
+      },
+      {
+        "type": "ColumnSet",
+        "spacing": "Small",
+        "columns": [
+          {
+            "type": "Column",
+            "width": "stretch",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "🟠 intranet.example-certs.internal",
+                "wrap": true,
+                "size": "Small"
+              }
+            ]
+          },
+          {
+            "type": "Column",
+            "width": "auto",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "04 Dec 2026",
+                "size": "Small",
+                "isSubtle": true,
+                "horizontalAlignment": "Right"
+              }
+            ]
+          },
+          {
+            "type": "Column",
+            "width": "auto",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "in 21d",
+                "size": "Small",
+                "weight": "Bolder",
+                "color": "Warning",
+                "horizontalAlignment": "Right"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "TextBlock",
+        "text": "UAT (2)",
+        "size": "Small",
+        "weight": "Bolder",
+        "separator": true
+      },
+      {
+        "type": "ColumnSet",
+        "spacing": "Small",
+        "columns": [
+          {
+            "type": "Column",
+            "width": "stretch",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "🟠 gccuat-intra.example-certs.internal",
+                "wrap": true,
+                "size": "Small"
+              }
+            ]
+          },
+          {
+            "type": "Column",
+            "width": "auto",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "04 Dec 2026",
+                "size": "Small",
+                "isSubtle": true,
+                "horizontalAlignment": "Right"
+              }
+            ]
+          },
+          {
+            "type": "Column",
+            "width": "auto",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "in 21d",
+                "size": "Small",
+                "weight": "Bolder",
+                "color": "Warning",
+                "horizontalAlignment": "Right"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "ColumnSet",
+        "spacing": "Small",
+        "columns": [
+          {
+            "type": "Column",
+            "width": "stretch",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "🟡 gccuat.example-certs.internal",
+                "wrap": true,
+                "size": "Small"
+              }
+            ]
+          },
+          {
+            "type": "Column",
+            "width": "auto",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "15 Dec 2026",
+                "size": "Small",
+                "isSubtle": true,
+                "horizontalAlignment": "Right"
+              }
+            ]
+          },
+          {
+            "type": "Column",
+            "width": "auto",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "in 32d",
+                "size": "Small",
+                "weight": "Bolder",
+                "color": "Default",
+                "horizontalAlignment": "Right"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "TextBlock",
+        "text": "5 item(s) need a human look and were emailed to the team's list: 2 without ENV, 1 unreadable date, 1 stale row(s), 1 duplicate(s).",
+        "size": "Small",
+        "isSubtle": true,
+        "wrap": true,
+        "separator": true
+      },
+      {
+        "type": "ActionSet",
+        "actions": [
+          {
+            "type": "Action.OpenUrl",
+            "title": "Open Cert List",
+            "url": "https://YOUR-TENANT.atlassian.net/wiki/spaces/OMJ/pages/PAGE_ID/Cert+List"
+          }
+        ]
+      }
+    ]
+  },
+  "emailHtml": "<div style=\"font-family:'Segoe UI',Arial,sans-serif;color:#242424;max-width:820px\"><h2 style=\"margin:0 0 2px;font-size:18px\">Cert List · 5 item(s) to confirm · 4 posted to Teams</h2><p style=\"margin:0 0 16px;color:#605e5c;font-size:13px\">Teams channel <em>cert-expiry-reminder</em> gets only confirmed items (4). The 5 below need a decision or a page fix before they can be posted.</p><!--AI--><h3 style=\"margin:18px 0 4px;font-size:14px\">No environment filled in (2)</h3><p style=\"margin:0 0 8px;color:#605e5c;font-size:13px\">These look actionable but the page does not say where the certificate lives, so they are not posted to Teams.</p><table style=\"border-collapse:collapse;width:100%;margin-bottom:4px\"><thead><tr><th style=\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\">Certificate</th><th style=\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\">Validity end</th><th style=\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\">Status</th></tr></thead><tbody><tr><td style=\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\">Digital Sign API - for Client Cert via mTLS call</td><td style=\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\">05 Jan 2026</td><td style=\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\">overdue 312 days</td></tr><tr><td style=\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\">API Gateway</td><td style=\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\">14 May 2026</td><td style=\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\">overdue 183 days</td></tr></tbody></table><h3 style=\"margin:18px 0 4px;font-size:14px\">Cannot read a date (1)</h3><p style=\"margin:0 0 8px;color:#605e5c;font-size:13px\">Write a real date in the VALIDITY END cell (e.g. 04 Dec 2026) - prose like \"renewed yearly\" is not parseable.</p><table style=\"border-collapse:collapse;width:100%;margin-bottom:4px\"><thead><tr><th style=\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\">Environment</th><th style=\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\">Certificate</th><th style=\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\">Cell says</th></tr></thead><tbody><tr><td style=\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\">SIT</td><td style=\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\">gccsit-intra.example-certs.internal</td><td style=\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\">&quot;renewed yearly&quot;</td></tr></tbody></table><h3 style=\"margin:18px 0 4px;font-size:14px\">Expired more than 12 months ago (1)</h3><p style=\"margin:0 0 8px;color:#605e5c;font-size:13px\">Almost certainly stale rows rather than renewal tasks - update the date or mark the row retired.</p><table style=\"border-collapse:collapse;width:100%;margin-bottom:4px\"><thead><tr><th style=\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\">Environment</th><th style=\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\">Certificate</th><th style=\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\">Validity end</th></tr></thead><tbody><tr><td style=\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\">SIT</td><td style=\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\">legacy-thing</td><td style=\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\">03 Feb 2019</td></tr></tbody></table><h3 style=\"margin:18px 0 4px;font-size:14px\">Duplicate rows on the page (1)</h3><p style=\"margin:0 0 8px;color:#605e5c;font-size:13px\">The same environment + certificate + date appears more than once; merged for this report.</p><table style=\"border-collapse:collapse;width:100%;margin-bottom:4px\"><thead><tr><th style=\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\">Environment</th><th style=\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\">Certificate</th><th style=\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\">Validity end</th></tr></thead><tbody><tr><td style=\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\">DEV</td><td style=\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\">gccdev-intra.example-certs.internal</td><td style=\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\">24 Mar 2026</td></tr></tbody></table><h3 style=\"margin:18px 0 4px;font-size:14px\">What to do</h3><ol style=\"margin:0;padding-left:20px;font-size:13px\"><li style=\"margin-bottom:4px\">Book the renewal / re-certification before the validity end date.</li><li style=\"margin-bottom:4px\">Once renewed, update the VALIDITY END cell on the Cert List page (write the new date, not just \"renewed\").</li><li style=\"margin-bottom:4px\">If you cannot renew in time, reply in the Teams thread with the reason and a committed target date.</li><li style=\"margin-bottom:4px\">Fill in ENV and remove duplicate rows so the next run can post them as confirmed.</li></ol><p style=\"margin-top:14px;color:#605e5c;font-size:12px\">2 row(s) keep the key elsewhere (SSM / Keycloak / Imperva / non-expiring keys) - no expiry tracked on this page.</p><p style=\"margin-top:16px;font-size:12px\"><a href=\"https://YOUR-TENANT.atlassian.net/wiki/spaces/OMJ/pages/PAGE_ID/Cert+List\">Open Cert List</a> · checked 13 Nov 2026, 09:00 (Asia/Singapore)</p></div>",
+  "teamsWebhookPayload": "{\"type\":\"message\",\"emailSubject\":\"Cert List · 5 item(s) to confirm · 4 posted to Teams\",\"emailHtml\":\"<div style=\\\"font-family:'Segoe UI',Arial,sans-serif;color:#242424;max-width:820px\\\"><h2 style=\\\"margin:0 0 2px;font-size:18px\\\">Cert List · 5 item(s) to confirm · 4 posted to Teams</h2><p style=\\\"margin:0 0 16px;color:#605e5c;font-size:13px\\\">Teams channel <em>cert-expiry-reminder</em> gets only confirmed items (4). The 5 below need a decision or a page fix before they can be posted.</p><!--AI--><h3 style=\\\"margin:18px 0 4px;font-size:14px\\\">No environment filled in (2)</h3><p style=\\\"margin:0 0 8px;color:#605e5c;font-size:13px\\\">These look actionable but the page does not say where the certificate lives, so they are not posted to Teams.</p><table style=\\\"border-collapse:collapse;width:100%;margin-bottom:4px\\\"><thead><tr><th style=\\\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\\\">Certificate</th><th style=\\\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\\\">Validity end</th><th style=\\\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\\\">Status</th></tr></thead><tbody><tr><td style=\\\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\\\">Digital Sign API - for Client Cert via mTLS call</td><td style=\\\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\\\">05 Jan 2026</td><td style=\\\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\\\">overdue 312 days</td></tr><tr><td style=\\\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\\\">API Gateway</td><td style=\\\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\\\">14 May 2026</td><td style=\\\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\\\">overdue 183 days</td></tr></tbody></table><h3 style=\\\"margin:18px 0 4px;font-size:14px\\\">Cannot read a date (1)</h3><p style=\\\"margin:0 0 8px;color:#605e5c;font-size:13px\\\">Write a real date in the VALIDITY END cell (e.g. 04 Dec 2026) - prose like \\\"renewed yearly\\\" is not parseable.</p><table style=\\\"border-collapse:collapse;width:100%;margin-bottom:4px\\\"><thead><tr><th style=\\\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\\\">Environment</th><th style=\\\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\\\">Certificate</th><th style=\\\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\\\">Cell says</th></tr></thead><tbody><tr><td style=\\\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\\\">SIT</td><td style=\\\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\\\">gccsit-intra.example-certs.internal</td><td style=\\\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\\\">&quot;renewed yearly&quot;</td></tr></tbody></table><h3 style=\\\"margin:18px 0 4px;font-size:14px\\\">Expired more than 12 months ago (1)</h3><p style=\\\"margin:0 0 8px;color:#605e5c;font-size:13px\\\">Almost certainly stale rows rather than renewal tasks - update the date or mark the row retired.</p><table style=\\\"border-collapse:collapse;width:100%;margin-bottom:4px\\\"><thead><tr><th style=\\\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\\\">Environment</th><th style=\\\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\\\">Certificate</th><th style=\\\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\\\">Validity end</th></tr></thead><tbody><tr><td style=\\\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\\\">SIT</td><td style=\\\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\\\">legacy-thing</td><td style=\\\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\\\">03 Feb 2019</td></tr></tbody></table><h3 style=\\\"margin:18px 0 4px;font-size:14px\\\">Duplicate rows on the page (1)</h3><p style=\\\"margin:0 0 8px;color:#605e5c;font-size:13px\\\">The same environment + certificate + date appears more than once; merged for this report.</p><table style=\\\"border-collapse:collapse;width:100%;margin-bottom:4px\\\"><thead><tr><th style=\\\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\\\">Environment</th><th style=\\\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\\\">Certificate</th><th style=\\\"text-align:left;padding:6px 10px;border-bottom:2px solid #d2d0ce;background:#f3f2f1;font-size:12px\\\">Validity end</th></tr></thead><tbody><tr><td style=\\\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\\\">DEV</td><td style=\\\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\\\">gccdev-intra.example-certs.internal</td><td style=\\\"padding:6px 10px;border-bottom:1px solid #edebe9;font-size:13px\\\">24 Mar 2026</td></tr></tbody></table><h3 style=\\\"margin:18px 0 4px;font-size:14px\\\">What to do</h3><ol style=\\\"margin:0;padding-left:20px;font-size:13px\\\"><li style=\\\"margin-bottom:4px\\\">Book the renewal / re-certification before the validity end date.</li><li style=\\\"margin-bottom:4px\\\">Once renewed, update the VALIDITY END cell on the Cert List page (write the new date, not just \\\"renewed\\\").</li><li style=\\\"margin-bottom:4px\\\">If you cannot renew in time, reply in the Teams thread with the reason and a committed target date.</li><li style=\\\"margin-bottom:4px\\\">Fill in ENV and remove duplicate rows so the next run can post them as confirmed.</li></ol><p style=\\\"margin-top:14px;color:#605e5c;font-size:12px\\\">2 row(s) keep the key elsewhere (SSM / Keycloak / Imperva / non-expiring keys) - no expiry tracked on this page.</p><p style=\\\"margin-top:16px;font-size:12px\\\"><a href=\\\"https://YOUR-TENANT.atlassian.net/wiki/spaces/OMJ/pages/PAGE_ID/Cert+List\\\">Open Cert List</a> · checked 13 Nov 2026, 09:00 (Asia/Singapore)</p></div>\",\"attachments\":[{\"contentType\":\"application/vnd.microsoft.card.adaptive\",\"content\":{\"type\":\"AdaptiveCard\",\"version\":\"1.4\",\"$schema\":\"http://adaptivecards.io/schemas/adaptive-card.json\",\"msteams\":{\"width\":\"Full\"},\"body\":[{\"type\":\"Container\",\"style\":\"Attention\",\"bleed\":true,\"items\":[{\"type\":\"TextBlock\",\"text\":\"⚠️ 4 certificates need action\",\"size\":\"Medium\",\"weight\":\"Bolder\",\"wrap\":true},{\"type\":\"TextBlock\",\"text\":\"Cert List · 12 rows read · checked 13 Nov 2026, 09:00 (Asia/Singapore)\",\"size\":\"Small\",\"isSubtle\":true,\"wrap\":true}]},{\"type\":\"ColumnSet\",\"spacing\":\"Small\",\"separator\":true,\"columns\":[{\"type\":\"Column\",\"width\":1,\"horizontalAlignment\":\"Center\",\"items\":[{\"type\":\"TextBlock\",\"text\":\"1\",\"size\":\"Large\",\"weight\":\"Bolder\",\"color\":\"Attention\",\"horizontalAlignment\":\"Center\"},{\"type\":\"TextBlock\",\"text\":\"OVERDUE\",\"size\":\"Micro\",\"isSubtle\":true,\"horizontalAlignment\":\"Center\",\"wrap\":true}]},{\"type\":\"Column\",\"width\":1,\"horizontalAlignment\":\"Center\",\"items\":[{\"type\":\"TextBlock\",\"text\":\"2\",\"size\":\"Large\",\"weight\":\"Bolder\",\"color\":\"Warning\",\"horizontalAlignment\":\"Center\"},{\"type\":\"TextBlock\",\"text\":\"DUE ≤ 30D\",\"size\":\"Micro\",\"isSubtle\":true,\"horizontalAlignment\":\"Center\",\"wrap\":true}]},{\"type\":\"Column\",\"width\":1,\"horizontalAlignment\":\"Center\",\"items\":[{\"type\":\"TextBlock\",\"text\":\"1\",\"size\":\"Large\",\"weight\":\"Bolder\",\"color\":\"Default\",\"horizontalAlignment\":\"Center\"},{\"type\":\"TextBlock\",\"text\":\"DUE ≤ 60D\",\"size\":\"Micro\",\"isSubtle\":true,\"horizontalAlignment\":\"Center\",\"wrap\":true}]}]},{\"type\":\"TextBlock\",\"text\":\"DEV (1)\",\"size\":\"Small\",\"weight\":\"Bolder\",\"separator\":true},{\"type\":\"ColumnSet\",\"spacing\":\"Small\",\"columns\":[{\"type\":\"Column\",\"width\":\"stretch\",\"items\":[{\"type\":\"TextBlock\",\"text\":\"🔴 gccdev-intra.example-certs.internal\",\"wrap\":true,\"size\":\"Small\"}]},{\"type\":\"Column\",\"width\":\"auto\",\"items\":[{\"type\":\"TextBlock\",\"text\":\"24 Mar 2026\",\"size\":\"Small\",\"isSubtle\":true,\"horizontalAlignment\":\"Right\"}]},{\"type\":\"Column\",\"width\":\"auto\",\"items\":[{\"type\":\"TextBlock\",\"text\":\"234d overdue\",\"size\":\"Small\",\"weight\":\"Bolder\",\"color\":\"Attention\",\"horizontalAlignment\":\"Right\"}]}]},{\"type\":\"TextBlock\",\"text\":\"PRD (1)\",\"size\":\"Small\",\"weight\":\"Bolder\",\"separator\":true},{\"type\":\"ColumnSet\",\"spacing\":\"Small\",\"columns\":[{\"type\":\"Column\",\"width\":\"stretch\",\"items\":[{\"type\":\"TextBlock\",\"text\":\"🟠 intranet.example-certs.internal\",\"wrap\":true,\"size\":\"Small\"}]},{\"type\":\"Column\",\"width\":\"auto\",\"items\":[{\"type\":\"TextBlock\",\"text\":\"04 Dec 2026\",\"size\":\"Small\",\"isSubtle\":true,\"horizontalAlignment\":\"Right\"}]},{\"type\":\"Column\",\"width\":\"auto\",\"items\":[{\"type\":\"TextBlock\",\"text\":\"in 21d\",\"size\":\"Small\",\"weight\":\"Bolder\",\"color\":\"Warning\",\"horizontalAlignment\":\"Right\"}]}]},{\"type\":\"TextBlock\",\"text\":\"UAT (2)\",\"size\":\"Small\",\"weight\":\"Bolder\",\"separator\":true},{\"type\":\"ColumnSet\",\"spacing\":\"Small\",\"columns\":[{\"type\":\"Column\",\"width\":\"stretch\",\"items\":[{\"type\":\"TextBlock\",\"text\":\"🟠 gccuat-intra.example-certs.internal\",\"wrap\":true,\"size\":\"Small\"}]},{\"type\":\"Column\",\"width\":\"auto\",\"items\":[{\"type\":\"TextBlock\",\"text\":\"04 Dec 2026\",\"size\":\"Small\",\"isSubtle\":true,\"horizontalAlignment\":\"Right\"}]},{\"type\":\"Column\",\"width\":\"auto\",\"items\":[{\"type\":\"TextBlock\",\"text\":\"in 21d\",\"size\":\"Small\",\"weight\":\"Bolder\",\"color\":\"Warning\",\"horizontalAlignment\":\"Right\"}]}]},{\"type\":\"ColumnSet\",\"spacing\":\"Small\",\"columns\":[{\"type\":\"Column\",\"width\":\"stretch\",\"items\":[{\"type\":\"TextBlock\",\"text\":\"🟡 gccuat.example-certs.internal\",\"wrap\":true,\"size\":\"Small\"}]},{\"type\":\"Column\",\"width\":\"auto\",\"items\":[{\"type\":\"TextBlock\",\"text\":\"15 Dec 2026\",\"size\":\"Small\",\"isSubtle\":true,\"horizontalAlignment\":\"Right\"}]},{\"type\":\"Column\",\"width\":\"auto\",\"items\":[{\"type\":\"TextBlock\",\"text\":\"in 32d\",\"size\":\"Small\",\"weight\":\"Bolder\",\"color\":\"Default\",\"horizontalAlignment\":\"Right\"}]}]},{\"type\":\"TextBlock\",\"text\":\"5 item(s) need a human look and were emailed to the team's list: 2 without ENV, 1 unreadable date, 1 stale row(s), 1 duplicate(s).\",\"size\":\"Small\",\"isSubtle\":true,\"wrap\":true,\"separator\":true},{\"type\":\"ActionSet\",\"actions\":[{\"type\":\"Action.OpenUrl\",\"title\":\"Open Cert List\",\"url\":\"https://YOUR-TENANT.atlassian.net/wiki/spaces/OMJ/pages/PAGE_ID/Cert+List\"}]}]}}]}"
+}
