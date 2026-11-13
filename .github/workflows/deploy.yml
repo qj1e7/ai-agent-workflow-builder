@@ -71,7 +71,7 @@ jobs:
       TF_VAR_confluence_base_url: ${{ vars.CONFLUENCE_BASE_URL }}
       TF_VAR_confluence_pages: ${{ vars.CONFLUENCE_PAGES }}
       TF_VAR_confluence_api_token: ${{ secrets.CONFLUENCE_API_TOKEN }}
-      TF_VAR_confluence_email: ${{ secrets.CONFLUENCE_EMAIL }}
+      TF_VAR_confluence_email: ${{ vars.CONFLUENCE_EMAIL }}
       # Optional (ADR 0036). Unset keeps the practice Teams copy and its channel name.
       TF_VAR_teams_webhook_url: ${{ secrets.TEAMS_WEBHOOK_URL }}
       TF_VAR_teams_channel: ${{ vars.TEAMS_CHANNEL }}

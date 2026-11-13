@@ -55,7 +55,7 @@ locals {
   confluence_settings = {
     for name, value in {
       CONFLUENCE_BASE_URL = var.confluence_base_url
-      CONFLUENCE_EMAIL    = trimspace(nonsensitive(var.confluence_email))
+      CONFLUENCE_EMAIL    = trimspace(var.confluence_email)
       CONFLUENCE_PAGES    = var.confluence_pages
     } : name => value if value != ""
   }

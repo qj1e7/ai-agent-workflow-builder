@@ -235,10 +235,9 @@ variable "confluence_api_token" {
 }
 
 variable "confluence_email" {
-  description = "The Confluence account's email (CONFLUENCE_EMAIL). Cloud signs in with it and the token. Empty sends the token alone, as Data Center takes it."
+  description = "The Confluence account's email (CONFLUENCE_EMAIL). It names the account and is not secret. Cloud signs in with it and the token. Empty sends the token alone, as Data Center takes it."
   type        = string
   default     = ""
-  sensitive   = true
 }
 
 variable "confluence_pages" {

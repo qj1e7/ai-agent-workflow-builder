@@ -85,7 +85,7 @@ infra/
 | `PLATFORM_JIRA_URL` (agent-runtime) | `http://platform-api:8000` | platform-api's HTTPS URL. It must be one of `CALLBACK_ALLOWED_ORIGINS` (ADR 0035) |
 | `JIRA_BASE_URL`, `JIRA_API_FLAVOR`, `JIRA_EMAIL`, `JIRA_ISSUE_TYPE`, `JIRA_BROWSE_URL`, `WATCHLIST_JIRA_PROJECT` | `.env`, unset by default: the practice Jira, `datacenter`, `Task`, `MOCK` | the `JIRA_*` and `WATCHLIST_JIRA_PROJECT` variables, unset by default ([A real Jira](#a-real-jira)) |
 | `JIRA_API_TOKEN` | `.env`, empty | a Key Vault secret, `jira-api-token`, from `JIRA_API_TOKEN`, only when that secret is set |
-| `CONFLUENCE_BASE_URL`, `CONFLUENCE_EMAIL`, `CONFLUENCE_PAGES` | `.env`, unset by default, so Confluence is not connected | the `CONFLUENCE_BASE_URL` and `CONFLUENCE_PAGES` variables and the `CONFLUENCE_EMAIL` secret, unset by default. `CONFLUENCE_PAGES` lists the only pages platform-api reads, as `id=title` separated by `;` |
+| `CONFLUENCE_BASE_URL`, `CONFLUENCE_EMAIL`, `CONFLUENCE_PAGES` | `.env`, unset by default, so Confluence is not connected | the `CONFLUENCE_BASE_URL`, `CONFLUENCE_EMAIL` and `CONFLUENCE_PAGES` variables, unset by default. The email names the account and is not secret. `CONFLUENCE_PAGES` lists the only pages platform-api reads, as `id=title` separated by `;` |
 | `CONFLUENCE_API_TOKEN` | `.env`, empty | a Key Vault secret, `confluence-api-token`, from `CONFLUENCE_API_TOKEN`, only when that secret is set. With none, platform-api signs in with Jira's token when Jira is on the same site |
 | `COSMOS_ENDPOINT` | `http://cosmos:8081`, the emulator | the account's endpoint |
 | `COSMOS_KEY` | the emulator's published key | a Key Vault secret, copied from the account |
