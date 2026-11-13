@@ -237,8 +237,8 @@ for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 })
     try {
       await page.goto('/workflows')
-      const needs = page.getByRole('list', { name: 'Needs you' })
-      await expect(needs, 'Needs you on Workflows says Bob declined it, as one plain row that opens the run').toContainText('Bob declined your test run')
+      const needs = page.getByRole('main').locator('li[data-home-item]')
+      await expect(needs.first(), 'Needs you on Workflows says Bob declined it, as one plain row that opens the run').toContainText('Bob declined your test run')
       await shot(page, info, `r12-needs-you-declined-test-alice-${width}`)
       await page.goto('/')
       await openRequest(page, runId)

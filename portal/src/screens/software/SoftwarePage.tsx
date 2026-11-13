@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState, type RefObject } from 'react'
-import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router'
+import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useCapabilities } from '../../api/capabilityQueries'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
@@ -230,6 +230,7 @@ function Loaded({ view, operator, answeredAt, now, rowId }: LoadedProps) {
   const [confirming, setConfirming] = useState<string | null>(null)
   const changes = useLatch()
   const navigate = useNavigate()
+  const location = useLocation()
   const noticeBox = useRef<HTMLDivElement>(null)
   useFocusOnceRendered(feedback)
 
@@ -262,7 +263,7 @@ function Loaded({ view, operator, answeredAt, now, rowId }: LoadedProps) {
   const checkedBy = scheduled && !paused ? 'Software watchlist' : null
 
   const landOn = useSearchParams()[0].get('row')
-  if (rowId === null && landOn !== null && software.some((row) => row.id === landOn)) return <Navigate to={softwarePath(landOn)} replace />
+  if (rowId === null && landOn !== null && software.some((row) => row.id === landOn)) return <Navigate to={softwarePath(landOn)} replace state={location.state} />
 
   const notice = (
     <Notice

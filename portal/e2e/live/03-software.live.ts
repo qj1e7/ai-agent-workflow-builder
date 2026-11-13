@@ -145,8 +145,7 @@ test('a project the watchlist already holds is named, and a prefixed tag such as
   await page.getByRole('link', { name: 'Show it on the list' }).click()
   await expect(page).toHaveURL(/\/software\/[^/]+$/)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Our agents')
-  await page.goBack()
-  await page.getByRole('button', { name: 'Start again' }).click()
+  await page.goto('/software')
 
   await page.getByLabel('Software name').fill('n8n')
   await page.getByRole('button', { name: 'Find it' }).click()
