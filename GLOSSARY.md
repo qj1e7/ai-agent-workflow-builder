@@ -241,7 +241,7 @@ A Teams card or an email that only reports what a run read or found. It may go o
 _Avoid_: Notification, alert
 
 **Tell flow**:
-The team's one Power Automate flow that posts a Tell's card in the team's channel and emails the team's list. Its address is a secret, kept in Key Vault and never shown. Until it is set, a Tell goes to the practice copy and "Posts in Teams and emails" shows as not yet.
+The team's one Power Automate flow that posts a Tell's card in the team's channel and emails the team's list. Its address is a secret, kept in Key Vault and never shown. Until it is set, a Tell goes to the practice copy. Setting it alone does not make "Posts in Teams and emails" ready. That waits for E14, when the Planner can lay out a Tell block.
 
 **Approval card**:
 The Adaptive Card the platform posts in Teams for each approval request: what would be written, what the agents found, and who can decide. Its one button, Open in AI Workflow Builder, opens the approval page, where the Approver decides. Once decided, it shows who approved or declined. The practice copy shows the same card.

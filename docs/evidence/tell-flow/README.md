@@ -4,6 +4,8 @@ ENGINE-PLAN E13 asks for a manual proof against the sponsor's Power Automate flo
 
 Never save the flow's address here. Its `sig=` part is the key. Crop it out of every screenshot.
 
+Setting the flow does not make "Posts in Teams and emails" ready. The capability stays planned on every screen, and in the agent runtime's registry, until E14 lets the Planner lay out a Tell block. E14 flips it to ready. Until then the flow is only a connection fact on Settings, Connections.
+
 ## What the platform sends
 
 The platform sends one `POST` with a JSON body, in the shape the team's cert reminder flow already takes. `sample-body.json` is a real body, made by `platform_api.orchestration.tell.compose`.
@@ -71,8 +73,9 @@ These change cloud settings, so the team lead does them.
 3. Run the deploy. Terraform keeps the address in Key Vault as `teams-tell-webhook-url`.
 4. In the Portal, check:
    - [ ] **Settings, Connections** shows **Tell flow** as **Set**, with the channel and the list, and not the address.
-   - [ ] **What can you do?** in the chat lists **Posts in Teams and emails**, and the Not yet note no longer names Teams channels or email.
-5. Once a workflow can hold a Tell block (E14, the cert reminder), check:
+   - [ ] **What can you do?** in the chat still names Teams channels and email in its Not yet note.
+5. Once E14 lands, it makes "Posts in Teams and emails" ready. Then check:
+   - [ ] **What can you do?** lists **Posts in Teams and emails**, and the Not yet note no longer names Teams channels or email.
    - [ ] A test run of a workflow with a Tell block says `Would have posted to … and emailed the team's list. Nothing was sent in a test run.`, and nothing arrives.
    - [ ] A real run's activity says `Posted to … and emailed the team's list.`, and the card and email arrive once.
 

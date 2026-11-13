@@ -230,8 +230,7 @@ def approval_channel(
 
 def tell_outlet(settings: Settings, db: Database) -> tuple[TellOutlet, TellFlow | None]:
     """Where a Tell goes: the practice copy, or the team's Tell flow when TEAMS_TELL_WEBHOOK_URL
-    is set, which also makes the registry's "Posts in Teams and emails" ready. Returns the outlet,
-    and the flow to close on shutdown."""
+    is set. Returns the outlet, and the flow to close on shutdown."""
     setup = TellSetup(settings.teams_channel, settings.tell_email_to, settings.public_base_url)
     if settings.teams_tell_webhook_url is None:
         return TellPractice(db, setup), None
@@ -401,7 +400,7 @@ async def build(settings: Settings) -> Services:
             PlannerAnswers(db, model_settings, agents),
             builder,
             watchlist,
-            CapabilityRegistry(agents, tell_flow_set=tell_flow is not None),
+            CapabilityRegistry(agents),
             connections,
             PlannerFactsReader(watchlist, builder, home),
         ),

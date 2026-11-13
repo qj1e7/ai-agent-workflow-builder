@@ -8,8 +8,8 @@ A Tell goes out only when all three parts of the rule hold:
   TELL_EMAIL_TO, sent to the flow with each notice.
 - Its content is composed here from the run's own stored reads and agent results, never from text
   a block sends. It lists no write, so it never claims a change.
-- The Portal says what it does: the registry's "Posts in Teams and emails", ready only while the
-  flow is set.
+- The Portal says what it does: the registry's "Posts in Teams and emails". It stays planned
+  until E14 lets the Planner lay out a Tell block, whether or not the flow is set.
 
 The flow takes one body, the Teams message with the card plus the email's subject, HTML and list,
 as the team's cert reminder already posts it. Text we did not write goes through teams.inert, so
@@ -25,7 +25,6 @@ import httpx
 
 from platform_api.db import Database, json
 from platform_api.monitoring import PLATFORM, PendingEvent, ToldData, ToldStatus
-from platform_api.orchestration.agents import CapabilityList
 from platform_api.orchestration.runs import (
     NO_ANSWER,
     Expired,
@@ -63,9 +62,6 @@ THE_LIST = "the team's list"
 MADE = "Made after a yes"
 DECLINED = "Declined. Nothing was written."
 OPEN_THE_RUN = "Open the run in AI Workflow Builder"
-TELL_CAPABILITY = "teams.post"
-"""The registry's "Posts in Teams and emails". The agent runtime keeps it planned, because it
-cannot see the flow. It is ready here exactly while the flow is set."""
 
 
 @dataclass(frozen=True)
@@ -315,21 +311,6 @@ def told_event(block: str, told: Told) -> PendingEvent | None:
     return PendingEvent(
         PLATFORM, "told", told.line, ToldData(block=block, status=status, line=told.line)
     )
-
-
-def ready_when_set(listed: CapabilityList, flow_set: bool) -> CapabilityList:
-    """The registry, with "Posts in Teams and emails" ready while the Tell flow is set. Once ready,
-    the chat's card names it by its plain words, and nothing says what it can't do."""
-    if not flow_set:
-        return listed
-    ready = {"state": "ready", "cant": None, "why": None, "instead": None}
-    specs = [
-        spec.model_copy(update={**ready, "short": spec.plain})
-        if spec.id == TELL_CAPABILITY
-        else spec
-        for spec in listed.capabilities
-    ]
-    return listed.model_copy(update={"capabilities": specs})
 
 
 class NotConfirmed(Exception):

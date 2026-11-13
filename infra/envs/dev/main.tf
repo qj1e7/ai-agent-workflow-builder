@@ -51,8 +51,7 @@ locals {
   # The same for the Teams Workflows webhook (ADR 0036). Unset keeps the practice Teams copy.
   teams_webhook_set = nonsensitive(var.teams_webhook_url != "")
   # And for the Tell flow, which posts a run's notice and emails it (ENGINE-PLAN D1). Unset keeps
-  # the practice copy. Set, it makes the registry's "Posts in Teams and emails" ready, and the
-  # team's email list must be set with it.
+  # the practice copy. The team's email list must be set with it.
   teams_tell_webhook_set = nonsensitive(var.teams_tell_webhook_url != "")
   tell_email_to          = trimspace(nonsensitive(var.tell_email_to))
 

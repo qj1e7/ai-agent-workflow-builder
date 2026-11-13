@@ -258,8 +258,8 @@ CAPABILITIES: Final = (
         "post in Teams or send email",
         "The team's Tell flow isn't connected yet. Until it is, Teams carries approval requests, "
         "run outcomes and requests for the team, and nothing is emailed.",
-        # Two names in the chat's Not yet note, as the sketch lists them. Once the flow is set,
-        # platform-api makes the entry ready and names it by its plain words.
+        # Two names in the chat's Not yet note, as the sketch lists them. It stays planned, with
+        # these words, until E14 lets the Planner lay out a Tell block, set flow or not.
         short="Teams channels, email",
         instead="Run results show here, in the chat.",
     ),

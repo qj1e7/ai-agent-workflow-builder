@@ -13,10 +13,8 @@ from fastapi.testclient import TestClient
 
 from platform_api.monitoring.events import Told as ToldEvent
 from platform_api.orchestration.agents import (
-    CapabilityList,
     CarryForward,
     Finding,
-    HttpAgentRuntime,
     TaskOutput,
 )
 from platform_api.orchestration.n8n_call_service import CLAIM_LEASE, CallBook, NodeCalls
@@ -32,7 +30,6 @@ from platform_api.orchestration.n8n_calls import (
     Refused,
     TellCall,
 )
-from platform_api.orchestration.planning import CapabilityRegistry
 from platform_api.orchestration.runs import (
     Expired,
     Failed,
@@ -62,7 +59,7 @@ from platform_api.orchestration.tell import (
 from platform_api.shared import ApprovalId, N8nExecutionId, ProposalId, RunId, UserId
 from tests.conftest import PostgresUrls
 from tests.declared import NODE_KEY, NODE_KEY_ENV, FakeNodeCalls, app_with, declared_status
-from tests.support import FIXTURES, NOW, SPEC
+from tests.support import NOW, SPEC
 from tests.test_n8n_calls import (
     CARD,
     JIRA,
@@ -511,25 +508,3 @@ def test_a_refused_tell_answers_403_with_its_words():
     assert response.status_code == 403
     assert response.json() == {"detail": NOTHING_READ.detail}
     declared_status(app, "POST", "/internal/v1/n8n/calls/tell", response)
-
-
-async def test_posts_in_teams_and_emails_is_ready_only_while_the_tell_flow_is_set():
-    """The runtime's own registry keeps it planned, because the runtime cannot see the flow."""
-    runtime_registry = json.loads((FIXTURES / "agent" / "capabilities.json").read_text())
-
-    def handle(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=runtime_registry)
-
-    async def tell_entry(flow_set: bool) -> dict[str, Any]:
-        client = httpx.AsyncClient(transport=httpx.MockTransport(handle))
-        agents = HttpAgentRuntime("http://agent-runtime:8100", "agent-key-not-real", client=client)
-        listed = await CapabilityRegistry(agents, tell_flow_set=flow_set).get()
-        assert isinstance(listed, CapabilityList)
-        [entry] = [c for c in listed.capabilities if c.plain == "Posts in Teams and emails"]
-        return entry.model_dump()
-
-    planned = await tell_entry(flow_set=False)
-    assert (planned["state"], planned["short"]) == ("planned", "Teams channels, email")
-    ready = await tell_entry(flow_set=True)
-    assert (ready["state"], ready["short"]) == ("ready", "Posts in Teams and emails")
-    assert (ready["cant"], ready["why"], ready["instead"]) == (None, None, None)

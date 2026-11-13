@@ -65,13 +65,16 @@ export function usedBy(id: ConnectionId, capabilities: readonly CapabilityView[]
 
 export const CHECK_DOWN_WORDS = 'Could not check.'
 
-/** Where every Tell goes. The platform's settings fix it, so it is only read here, and the flow's address is never shown. */
+/**
+ * Where every Tell goes, as a connection fact. The platform's settings fix it, so it is only read here, and the flow's address
+ * is never shown. The registry's Tell entry stays planned until the Planner can lay out a Tell block (E14), so these words claim nothing yet.
+ */
 export function tellWords(tell: TellSetupOut): { readonly label: string; readonly text: string; readonly emails: string } {
   return {
     label: tell.flow_set ? 'Set' : 'Not set',
     text: tell.flow_set
-      ? 'A Tell block posts what a run found in Teams and emails it to the list below. It changes nothing, so it needs no yes.'
-      : 'The Tell flow is not set up yet, so a Tell block sends nothing.',
+      ? 'Workflows can post and email with it once Tell blocks arrive.'
+      : 'Not set up yet. Workflows can post and email with it once it is set and Tell blocks arrive.',
     emails: tell.email_to.length > 0 ? tell.email_to.join(', ') : 'Nobody yet',
   }
 }

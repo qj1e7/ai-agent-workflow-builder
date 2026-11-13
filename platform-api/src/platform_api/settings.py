@@ -173,7 +173,7 @@ def teams_webhook_from_env(env: Mapping[str, str], name: str = "TEAMS_WEBHOOK_UR
 
 def tell_email_from_env(env: Mapping[str, str], flow_set: bool) -> tuple[str, ...]:
     """The team's email list, separated by commas. With the Tell flow set it may not be empty,
-    because the registry then says the platform emails."""
+    because the flow sends every Tell's email to this list."""
     emails = tuple(e.strip() for e in env.get("TELL_EMAIL_TO", "").split(",") if e.strip())
     for email in emails:
         local, at, domain = email.partition("@")
