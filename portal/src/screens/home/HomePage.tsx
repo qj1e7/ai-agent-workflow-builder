@@ -266,7 +266,7 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
           aria-disabled={busy || undefined}
           onClick={() => {
             if (busy) return
-            send(() => chat.send(suggestion.ask, suggestion.label, null))
+            send(() => (suggestion.local === 'behind' ? chat.askBehind(suggestion.label) : chat.send(suggestion.ask, suggestion.label, null)))
             boxRef.current?.focus()
           }}
         >

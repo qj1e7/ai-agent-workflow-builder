@@ -53,4 +53,13 @@ describe('the thread', () => {
     expect(resumed.messages.at(-1)?.id).toBe(resumed.last)
     expect(resumed.last).toBeGreaterThan(talked.last)
   })
+
+  it('answers Which software is behind? at once from the watchlist, never thinking, and never as the turn the next request follows on from', () => {
+    const talked = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'a' }), { type: 'answered', reply: REPLY, typed: 'a' })
+    const asked = threadReducer(talked, { type: 'asked_behind', text: 'Which software is behind?' })
+    expect(asked.messages.map((m) => m.kind)).toEqual(['me', 'reply', 'me', 'behind'])
+    expect(isThinking(asked)).toBe(false)
+    expect(asked.messages.at(-1)?.id).toBe(asked.last)
+    expect(previousOf(asked)).toEqual(previousOf(talked))
+  })
 })

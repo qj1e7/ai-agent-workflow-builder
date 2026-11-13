@@ -29,6 +29,8 @@ export interface Chat {
   readonly setProblem: (problem: string | null) => void
   /** Sends words, or an intent, to the Planner. `restore` is put back in the box when the send fails. */
   readonly send: (ask: PlannerAnswerIn, shown: string, restore: string | null) => void
+  /** Asks which software is behind. The watchlist answers it, with no model, so nothing goes to the Planner. */
+  readonly askBehind: (shown: string) => void
   /** Sends what is in the box, following on from the last answer. */
   readonly sendText: () => void
   readonly resume: (start: CardStart) => void
@@ -113,6 +115,7 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
       type: (text) => here({ type: 'typed', text }),
       setProblem: (problem) => here({ type: 'problem', problem }),
       send,
+      askBehind: (shown) => here({ type: 'asked_behind', text: shown }),
       sendText: () => {
         const typed = desk.text.trim()
         if (typed === '' || busy) return

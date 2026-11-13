@@ -125,6 +125,8 @@ export const approverHeading = (home: HomeOut): string => approverLine(home).rep
 export interface Suggestion {
   readonly label: string
   readonly ask: PlannerAnswerIn
+  /** Answered on the page from the watchlist, with no model, instead of going to the Planner. */
+  readonly local?: 'behind'
 }
 
 /** The sketch’s three chips for someone who isn’t an Operator. Each is an intent, so none asks the model. */
@@ -134,10 +136,10 @@ export const APPROVER_SUGGESTIONS: readonly Suggestion[] = [
   { label: 'What can you do?', ask: { intent: 'abilities' } },
 ]
 
-/** The sketch’s three once software is on the watchlist. Two are intents the platform answers without the model, and the question lane reads the middle one in the words it knows. */
+/** The sketch’s three once software is on the watchlist. None asks the model: two are intents the platform answers, and the middle one is read from the watchlist itself. */
 const WATCHED_CHIPS: readonly Suggestion[] = [
   { label: 'What needs me?', ask: { intent: 'needs_me' } },
-  { label: 'Which software is behind?', ask: { text: 'Which software has a newer version?' } },
+  { label: 'Which software is behind?', ask: { text: 'Which software has a newer version?' }, local: 'behind' },
   { label: 'What can you do?', ask: { intent: 'abilities' } },
 ]
 

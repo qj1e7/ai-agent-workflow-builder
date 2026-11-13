@@ -458,7 +458,7 @@ describe('what opens in the side panel', () => {
   it('leaves a person to be confirmed, a reply, and the missing AI model to their own pages', () => {
     expect(kinds(BOB)).toContainEqual(['confirmation', null])
     expect(kinds(ALICE)).toContainEqual(['reply', null])
-    const model: HomeOut = { ...ALICE, connections: [{ ...ALICE.connections[0]!, id: 'model' }] }
+    const model: HomeOut = { ...ALICE, connections: [{ ...ALICE.connections[0]!, id: 'model', state: 'not_set_up' }] }
     expect(kinds(model)).toContainEqual(['connection', null])
   })
 })

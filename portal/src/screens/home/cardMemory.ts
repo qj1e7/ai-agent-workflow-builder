@@ -38,14 +38,16 @@ function slot<T>(): Slot<T> {
  */
 export interface CardMemory extends Slot<CardKept> {
   readonly edit: Slot<EditKept>
+  /** Whether this answer has already shown its item beside the chat, so coming back to the chat never opens it again. */
+  readonly beside: Slot<true>
 }
 
 export function newCardMemory(): CardMemory {
-  return { ...slot<CardKept>(), edit: slot<EditKept>() }
+  return { ...slot<CardKept>(), edit: slot<EditKept>(), beside: slot<true>() }
 }
 
 const forgets = <T,>(): Slot<T> => ({ kept: () => undefined, keep: () => undefined })
 
-export const NO_MEMORY: CardMemory = { ...forgets<CardKept>(), edit: forgets<EditKept>() }
+export const NO_MEMORY: CardMemory = { ...forgets<CardKept>(), edit: forgets<EditKept>(), beside: forgets<true>() }
 
 export const CardMemoryContext = createContext<CardMemory>(NO_MEMORY)

@@ -419,7 +419,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
   it('answers a question asked beside a change as it would alone, and crosses the change with the same words (FOLLOW-bob-mixed)', () => {
     const html = ask(needsMeOperators as PlannerReply)
     expect(answerOf(html)).toContain(`Can’t do: “pause the morning new-ticket check” ${OPS}`)
-    expect(answerOf(html)).toContain('3 things need you.')
+    expect(answerOf(html)).toContain('3 things need you')
     expect(answerOf(html)).not.toContain('What is waiting for my yes')
   })
 

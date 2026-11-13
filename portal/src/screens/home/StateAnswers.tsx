@@ -1,5 +1,4 @@
 import { useEffect, useMemo } from 'react'
-import { Link } from '../../ui/Link'
 import { useDecisions, useHome } from '../../api/homeQueries'
 import { useDisplayName } from '../../api/people'
 import { isOperator } from '../../api/me'
@@ -9,16 +8,21 @@ import type { DecidedReply, FailureReason, HomeOut, UseCaseView } from '../../ap
 import { operatorsSay } from '../../shell/OperatorsNote'
 import { ButtonLink } from '../../ui/Button'
 import { Card } from '../../ui/Card'
+import { useWatchlist } from '../../api/queries'
 import { OpenButton, OpenLink } from '../../ui/OpenItem'
-import { listClass, WorkflowRow } from '../workflows/WorkflowsPage'
 import { REFRESH_MS, rowsOf, viewerOf } from '../workflows/workflow'
+import { countLine, hasNewer, REFRESH_MS as WATCH_REFRESH } from '../software/software'
 import { useCapabilities } from '../../api/plannerQueries'
 import { ideasSay, needsSay, startingPoints, workflowsSay } from './answers'
 import { Troubleshooting } from '../run/Outcome'
 import { useAsker } from './asker'
 import { decidedSay, decisionLine } from './decided'
-import { approvalsOf, approverLine, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, wordsOf, type Needs } from './home'
-import { NeedsSection, useArrival } from './NeedsSection'
+import { approvalsOf, approverLine, moreWords, needsOf, needsTotal, wordsOf } from './home'
+import { useShowBesideOnWide } from './autoOpen'
+import { NeedRows } from './NeedsSection'
+import { SoftwareRows, WorkflowRows } from './panels/ListRows'
+import { NeedsMore } from './panels/NeedsMore'
+import lists from './panels/Lists.module.css'
 import { useMainButton } from './primary'
 import styles from './Planner.module.css'
 
@@ -33,11 +37,13 @@ export function useSaidOnce(text: string | null, say: Say) {
   }, [text, say])
 }
 
-/** Check my workflows: the rows of the Workflows list, from the same functions, for one workflow or all of them. */
-export function CheckWorkflowsAnswer({ useCaseId, now, say }: { useCaseId: string | null; now: Date; say: Say }) {
+/** The Workflows card shows this many rows, then a way to the whole list. */
+export const WORKFLOWS_SHOWN = 5
+
+/** Check my workflows: the sketch's Workflows card, a few rows from the same list as the Workflows page, for one workflow or all of them. */
+export function CheckWorkflowsAnswer({ useCaseId, say }: { useCaseId: string | null; now: Date; say: Say }) {
   const me = useMe()
   const useCases = useUseCases({ poll: REFRESH_MS })
-  const nameOf = useDisplayName()
   const rows = useMemo(() => {
     if (!me.data || !useCases.data) return null
     const all = rowsOf(useCases.data, viewerOf(me.data), 'all', '', NOTHING)
@@ -53,18 +59,24 @@ export function CheckWorkflowsAnswer({ useCaseId, now, say }: { useCaseId: strin
       </p>
     )
   }
+  if (rows.length === 0) {
+    return (
+      <>
+        <p>{sentence}</p>
+        <ButtonLink to="/workflows">Open Workflows</ButtonLink>
+      </>
+    )
+  }
   return (
     <>
       <p>{sentence}</p>
-      {rows.length > 0 ? (
-        <ul className={listClass(rows, styles['wfcheck'])} aria-label="Your workflows">
-          {rows.map((row, index) => (
-            <WorkflowRow key={row.useCase.use_case_id} row={row} index={index} primary={false} arrive={false} now={now} nameOf={nameOf} />
-          ))}
-        </ul>
-      ) : (
-        <ButtonLink to="/workflows">Open Workflows</ButtonLink>
-      )}
+      <Card
+        title="Workflows"
+        pill={<span className={lists['count']}>{rows.length}</span>}
+        {...(rows.length > WORKFLOWS_SHOWN ? { actions: <ButtonLink to="/workflows">See all workflows</ButtonLink> } : {})}
+      >
+        <WorkflowRows useCases={rows.slice(0, WORKFLOWS_SHOWN).map((row) => row.useCase)} label="Your workflows" />
+      </Card>
     </>
   )
 }
@@ -82,44 +94,15 @@ function needsSentence(home: HomeOut, operator: boolean): string {
   return operator ? needsSay(needsTotal(home)) : approverLine(home)
 }
 
-/**
- * Needs you inside an answer, every row it holds. When some aren’t shown, an Operator gets the link to Workflows. Workflows lists no
- * more for someone who isn’t an Operator, so they are told how many are left instead, as their Home does.
- */
-function NeedsInAnswer({ needs, now }: { needs: Needs; now: Date }) {
-  const main = useMainButton()
-  const arrival = useArrival([])
-  const asker = useAsker()
-  const left = needs.total - needs.shown.length
-  const said = asker === 'approver' ? moreWords(needs.more) : null
-  if (needs.shown.length === 0) return null
-  return (
-    <NeedsSection
-      needs={needs}
-      now={now}
-      arrival={{ ...arrival, page: false }}
-      quiet={main === 'secondary'}
-      more={
-        said !== null ? (
-          <p className={styles['more']}>{said}</p>
-        ) : left > 0 && asker === 'operator' ? (
-          <p className={styles['more']}>
-            <Link to="/workflows">{SEE_ALL_WORDS}</Link>
-          </p>
-        ) : null
-      }
-      whenNone={null}
-    />
-  )
-}
-
-/** What needs me: every row of Needs you the platform returned, grouped, from the same list, so the number here and on the rail are one number. */
+/** What needs me: the sketch's Needs card. Its head is the sentence, and its body the same Do now and Set up rows as on Home, from the same list as the strip, the panel and the rail. */
 export function NeedsMeAnswer({ now, say }: { now: Date; say: Say }) {
   const home = useHome()
   const operator = useAsker() === 'operator'
   const needs = useMemo(() => (home.data ? needsOf(home.data) : null), [home.data])
   const sentence = home.data ? needsSentence(home.data, operator) : null
   useSaidOnce(sentence, say)
+  const only = needs?.total === 1 ? needs.shown[0] : undefined
+  useShowBesideOnWide(!operator && only?.kind === 'approval' ? { kind: 'approval', id: only.item.run_id } : null)
   if (!needs || sentence === null) {
     return (
       <p className="muted" role="status">
@@ -127,11 +110,40 @@ export function NeedsMeAnswer({ now, say }: { now: Date; say: Say }) {
       </p>
     )
   }
+  if (needs.shown.length === 0) return <p>{sentence}</p>
   return (
-    <>
-      <p>{sentence}</p>
-      <NeedsInAnswer needs={needs} now={now} />
-    </>
+    <Card title={sentence.replace(/\.$/, '')}>
+      <NeedRows needs={needs.shown} now={now} more={<NeedsMore needs={needs} />} />
+    </Card>
+  )
+}
+
+/** Which software is behind: the sketch's behind card, read from the watchlist with no model. Each row opens the software beside the chat. */
+export function BehindAnswer({ say }: { say: Say }) {
+  const watchlist = useWatchlist({ poll: WATCH_REFRESH })
+  const rows = watchlist.data?.software
+  const behind = useMemo(() => rows?.filter(hasNewer) ?? [], [rows])
+  const sentence = !rows ? null : behind.length > 0 ? `${behind.length} ${behind.length === 1 ? 'has' : 'have'} a newer version.` : (countLine(rows) ?? 'Nothing is on the Software watchlist yet.')
+  useSaidOnce(sentence, say)
+  if (!rows || sentence === null) {
+    return (
+      <p className="muted" role="status">
+        {watchlist.isError ? 'I couldn’t read the watchlist just now.' : 'Checking the watchlist'}
+      </p>
+    )
+  }
+  if (behind.length === 0) return <p>{sentence}</p>
+  return (
+    <Card
+      title={sentence.replace(/\.$/, '')}
+      actions={
+        <OpenButton item={{ kind: 'watchlist' }} to="/software">
+          See the watchlist
+        </OpenButton>
+      }
+    >
+      <SoftwareRows rows={behind} label="Software with a newer version" />
+    </Card>
   )
 }
 
@@ -282,6 +294,7 @@ export function WhyStoppedAnswer({ useCaseId, say }: { useCaseId: string | null;
   const main = useMainButton()
   const stopped = me === undefined ? undefined : stopOf(useCaseId, operator, home.data, useCases.data)
   const troubleshoot = useTroubleshoot(stopped?.run_id ?? '', Boolean(stopped), 0)
+  useShowBesideOnWide(stopped ? { kind: 'run', id: stopped.run_id } : null)
   const sentence = stopped === undefined ? null : stopped ? `${stopped.use_case_name} stopped.` : 'Nothing has stopped right now.'
   useSaidOnce(sentence, say)
   if (stopped === undefined) {

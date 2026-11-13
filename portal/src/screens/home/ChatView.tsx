@@ -9,6 +9,7 @@ import { useChat, type OpenPanel } from './ChatProvider'
 import { PinnedLine } from './PinnedLine'
 import { PANEL_HEADING, SidePanel } from './SidePanel'
 import { Thread } from './Thread'
+import { isAnswer } from './threadState'
 import styles from './Planner.module.css'
 
 interface ChatViewProps {
@@ -61,7 +62,7 @@ export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewPro
   // land below the fold. It is brought into view from its top. An answer already there when the chat comes back keeps the
   // restored position.
   const newest = chat.thread.messages.at(-1)
-  const answered = newest?.kind === 'reply' ? newest.id : null
+  const answered = newest && isAnswer(newest) ? newest.id : null
   const shownAnswer = useRef(answered)
   useLayoutEffect(() => {
     if (answered === null || answered === shownAnswer.current) return
