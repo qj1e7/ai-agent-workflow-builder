@@ -7,6 +7,7 @@ import httpx
 import pytest
 from jsonschema import Draft6Validator
 
+from platform_api.app import create_app
 from platform_api.db import Database
 from platform_api.orchestration.dispatch import (
     ApprovalNotice,
@@ -413,9 +414,9 @@ def test_building_the_webhook_adapter_leaves_the_process_logging_alone():
 async def test_the_webhook_address_never_reaches_a_log_line(
     status: int, caplog: pytest.LogCaptureFixture
 ):
-    # The wiring quiets httpx on purpose when it builds the webhook adapter.
     for name in ("httpx", "httpcore"):
         logging.getLogger(name).setLevel(logging.NOTSET)
+    create_app(LOCAL_ENV)
     caplog.set_level(logging.DEBUG)
     settings = settings_from_env({**LOCAL_ENV, "TEAMS_WEBHOOK_URL": WEBHOOK})
     practice = TeamsStub(Database(settings.database), settings.teams_channel)

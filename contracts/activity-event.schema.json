@@ -817,7 +817,9 @@
         "waiting",
         "open",
         "approved",
-        "declined"
+        "declined",
+        "expired",
+        "cancelled"
       ],
       "type": "string"
     },

@@ -128,7 +128,7 @@ type FailureReason = Literal[
     "OutOfOrderStep",
 ]
 type Trigger = Literal["person", "schedule"]
-type ApprovalStepStatus = Literal["waiting", "open", "approved", "declined"]
+type ApprovalStepStatus = Literal["waiting", "open", "approved", "declined", "expired", "cancelled"]
 
 
 DECLINE_REASON_MAX = 200

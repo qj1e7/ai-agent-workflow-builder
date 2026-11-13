@@ -1,6 +1,7 @@
 """Ask for a yes held in n8n (ENGINE-PLAN 2.3.4 to 2.3.7 and 2.3.13): the ask, the wake with its
 mac, expiry and the lost run, through our API's own records and a fake n8n at the HTTP edge."""
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -13,6 +14,7 @@ from typing import Any, LiteralString
 import httpx
 import pytest
 
+from platform_api.app import create_app
 from platform_api.orchestration.approvals import (
     AnyApprover,
     ApprovalPolicy,
@@ -51,13 +53,13 @@ from platform_api.orchestration.runs import (
     StepName,
     Succeeded,
 )
-from platform_api.orchestration.service import Decided, DecisionRefused, Orchestrator
+from platform_api.orchestration.service import Decided, DecisionRefused, Orchestrator, steps_view
 from platform_api.orchestration.spec import RunSpec
 from platform_api.orchestration.store import WAKE, RunRecord, Store
 from platform_api.orchestration.write_actions import WriteGateway
 from platform_api.shared import ApprovalId, N8nExecutionId, Principal, Role, RunId, UserId
 from tests.conftest import PostgresUrls
-from tests.support import ALICE, BOB, NOW, SPEC
+from tests.support import ALICE, BOB, LOCAL_ENV, NOW, SPEC
 from tests.test_n8n_calls import JIRA, REPO, WORKFLOW, FakeN8n, FakeSources, FakeWorkflows
 from tests.test_orchestrator import PUBLIC_BASE_URL, Harness, mint, open_harness
 
@@ -145,9 +147,12 @@ class Wait:
         return await self.call(execution, AskCall(resume_url(execution)), "Ask for a yes")
 
     async def run(self) -> RunRecord:
-        async with self.h.db.transaction("orchestration") as uow:
-            [record] = await Store().list_runs(uow)
+        [record] = await self.runs()
         return record
+
+    async def runs(self) -> list[RunRecord]:
+        async with self.h.db.transaction("orchestration") as uow:
+            return await Store().list_runs(uow)
 
     async def approval_id(self) -> ApprovalId:
         [row] = await self.rows("SELECT approval_id FROM orchestration.approval_requests")
@@ -274,6 +279,42 @@ async def test_a_test_run_stops_at_the_gate_and_asks_nobody(w: Wait):
     assert await w.rows("SELECT 1 FROM orchestration.approval_requests") == []
     assert await w.rows("SELECT 1 FROM orchestration.outbox WHERE run_id = %s", run_id) == []
     assert (await w.h.kinds(run_id))[-2:] == ["write_action_proposed", "run_succeeded"]
+
+
+async def test_two_runs_that_reach_the_ask_together_make_one_request(w: Wait):
+    """ADR 0026: one waiting run per workflow. Both runs started before either waited, so both
+    passed the first call's check."""
+    for execution in ("101", "102"):
+        w.started(execution)
+        await w.call(execution, READ, "Read release")
+        await w.call(execution, PROPOSE, "Propose a change")
+    asks = [w.call(e, AskCall(resume_url(e)), "Ask for a yes") for e in ("101", "102")]
+    answers = await asyncio.gather(*asks)
+    states = sorted(type(run.state).__name__ for run in await w.runs())
+    assert states == ["AwaitingApproval", "Skipped"]
+    assert len(await w.rows("SELECT 1 FROM orchestration.approval_requests")) == 1
+    assert NothingToChange() in answers
+    await w.tick()
+    assert len(await w.h.teams.messages()) == 1
+
+
+async def test_a_skipped_run_that_reaches_the_ask_leaves_by_nothing_to_change(w: Wait):
+    await w.ask("101")
+    w.started("102")
+    answer = await w.call("102", AskCall(resume_url("102")), "Ask for a yes")
+    assert answer == NothingToChange()
+
+
+async def test_an_expired_requests_undecided_steps_read_expired_in_every_view(w: Wait):
+    w.workflows.spec = replace(SPEC, approval_policy=TWO_STEPS)
+    await w.ask()
+    approval_id = await w.approval_id()
+    await w.decide(BOB, step=0)
+    await w.tick(TWO_WORKING_DAYS_LATER - NOW)
+    detail = await w.orchestrator.get_approval(approval_id, ERIN)
+    assert detail is not None
+    statuses = [step.status for step in steps_view(detail.request, detail.decisions)]
+    assert statuses == ["approved", "expired"]
 
 
 async def test_a_yes_wakes_n8n_and_the_run_acts_only_once_n8n_takes_it(w: Wait):
@@ -491,6 +532,9 @@ async def test_safety_the_wake_keys_off_our_request_id_not_n8ns_execution_id(w: 
 async def test_safety_nothing_logs_or_returns_the_node_key_or_the_resume_signature(
     w: Wait, caplog: pytest.LogCaptureFixture
 ):
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.NOTSET)
+    create_app(LOCAL_ENV)
     caplog.set_level(logging.DEBUG)
     answer = await w.ask()
     w.waits.answer = "down"

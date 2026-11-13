@@ -65,6 +65,8 @@ export const approvalStepStatusLabel: Record<ApprovalStepStatus, string> = {
   open: 'Waiting for an Approver',
   approved: 'Approved',
   declined: 'Declined',
+  expired: 'No answer',
+  cancelled: 'Deleted before an answer',
 }
 
 export const verdictLabel: Record<Verdict, string> = {

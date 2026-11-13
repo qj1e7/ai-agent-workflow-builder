@@ -159,3 +159,23 @@ def test_an_ask_answers_the_request_the_execution_waits_for():
     assert response.json() == {"status": "waiting", "request_id": "apr_01"}
     [call] = calls.calls
     assert call.work == AskCall(ASK["resume_url"])
+
+
+@pytest.mark.parametrize(
+    "resume_url",
+    [
+        "https://evil.example/webhook-waiting/102?signature=sig-7f3a",
+        "http://n8n:5678/webhook-waiting/101?signature=sig-7f3a" + "x" * 2048,
+    ],
+    ids=["another-execution", "too-long"],
+)
+def test_a_refused_resume_address_is_never_echoed(resume_url: str):
+    """n8n shows a refusal in the execution's error, which anyone who holds the workflow reads."""
+    calls = FakeNodeCalls(WAITING)
+    response = TestClient(app_with(env=NODE_KEY_ENV, node_calls=calls)).post(
+        "/internal/v1/n8n/calls/ask", headers=NODE_KEY, json={**ASK, "resume_url": resume_url}
+    )
+    assert response.status_code == 422
+    for part in ("sig-7f3a", "signature", "evil.example", "n8n:5678", "webhook-waiting"):
+        assert part not in response.text
+    assert calls.calls == []

@@ -480,7 +480,12 @@ class CallBook:
 
     async def waiting_run(self, uow: UnitOfWork, use_case_id: str) -> RunId | None:
         """The run of this use case that waits for a yes, if one does (one waiting run per
-        workflow, ADR 0026)."""
+        workflow, ADR 0026). The lock holds to the end of the transaction, so two runs that ask
+        at once see each other."""
+        await uow.conn.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended('use-case:' || %s, 0))",
+            (use_case_id,),
+        )
         row = await (
             await uow.conn.execute(
                 "SELECT run_id FROM orchestration.runs WHERE use_case_id = %s "
@@ -580,8 +585,9 @@ class NodeCalls:
         assert record is not None
         match record.state:
             case Skipped():
-                await self._book.keep(uow, call, run_id, Answer(()))
-                return Answer(())
+                skipped = NothingToChange() if call.kind == "ask" else Answer(())
+                await self._book.keep(uow, call, run_id, skipped)
+                return skipped
             case Working(execution=live) if live == call.execution_id:
                 pass
             case Working():
@@ -884,6 +890,8 @@ class NodeCalls:
         elif self._box is None:
             failure = Failure(FailureReason.SAFETY_DENIED, CANNOT_SEAL, retryable=False)
             result, moved = run_stopped(CANNOT_SEAL), working.fail(failure)
+        elif (waiting := await self._book.waiting_run(uow, record.spec.use_case_id)) is not None:
+            result, moved = NothingToChange(), working.skip(waiting)
         else:
             request = request_for(record, proposal, uow.now, self._time_zone)
             summary = await self._book.found(uow, record.run_id)

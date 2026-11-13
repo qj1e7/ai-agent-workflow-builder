@@ -576,6 +576,10 @@ class Working:
             (_workflow_proposed(*proposal), _test_passed()),
         )
 
+    def skip(self, waiting: RunId) -> Moved[Skipped]:
+        """Another run of the workflow already waits for a yes (ADR 0026)."""
+        return Moved(Skipped(self.run_id, waiting), (run_skipped(waiting),))
+
     def nothing_to_change(self) -> Moved[Succeeded]:
         succeeded = PendingEvent(
             PLATFORM,

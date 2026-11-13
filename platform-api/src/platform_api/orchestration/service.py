@@ -188,7 +188,7 @@ from platform_api.shared import (
     UserId,
     new_id,
 )
-from platform_api.wire import ApprovalStepView, StepOutcome
+from platform_api.wire import ApprovalStepStatus, ApprovalStepView, StepOutcome
 
 log = logging.getLogger(__name__)
 
@@ -453,6 +453,13 @@ async def enqueue_announcement(
     )
 
 
+ENDED_STEPS: Mapping[Ended, ApprovalStepStatus] = {
+    Ended.EXPIRED: "expired",
+    Ended.CANCELLED: "cancelled",
+}
+"""What a step nobody decided reads once its request ended."""
+
+
 def steps_view(request: ApprovalRequest, decisions: Iterable[Decision]) -> list[ApprovalStepView]:
     by_step = {d.step_index: d for d in decisions if d.approval_id == request.id}
     views: list[ApprovalStepView] = []
@@ -475,6 +482,8 @@ def steps_view(request: ApprovalRequest, decisions: Iterable[Decision]) -> list[
                 open_seen = True
             continue
         status = "waiting" if open_seen else "open"
+        if request.ended is not None:
+            status = ENDED_STEPS[request.ended]
         open_seen = True
         views.append(ApprovalStepView(index=index, label=step.label, status=status))
     return views

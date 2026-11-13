@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -199,21 +198,10 @@ def node_writes(settings: Settings) -> list[WriteEntry]:
     ]
 
 
-def quiet_http_logs() -> None:
-    """httpx and httpcore log every request's full address at INFO, and a webhook's address
-    carries its own signature. So with a webhook set, they log only warnings, for every client
-    in this process, n8n's and the agent runtime's too. Their warnings and errors still show."""
-    for name in ("httpx", "httpcore"):
-        logging.getLogger(name).setLevel(logging.WARNING)
-
-
 def request_channel_for(settings: Settings) -> TeamsRequestChannel:
     """Where new team requests are announced (ADR 0038): TEAMS_REQUESTS_WEBHOOK_URL, else the
     approvals channel's webhook, else nowhere. The request is kept either way."""
-    url = settings.teams_requests_webhook_url or settings.teams_webhook_url
-    if url is not None:
-        quiet_http_logs()
-    return TeamsRequestChannel(url)
+    return TeamsRequestChannel(settings.teams_requests_webhook_url or settings.teams_webhook_url)
 
 
 def approval_channel(
@@ -223,7 +211,6 @@ def approval_channel(
     TEAMS_WEBHOOK_URL is set. Returns the channel, and the webhook adapter to close on shutdown."""
     if settings.teams_webhook_url is None:
         return practice, None
-    quiet_http_logs()
     webhook = TeamsWorkflowsWebhook(settings.teams_webhook_url, settings.teams_channel, client)
     return webhook, webhook
 

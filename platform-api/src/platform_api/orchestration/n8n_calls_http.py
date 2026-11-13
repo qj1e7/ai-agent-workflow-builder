@@ -3,10 +3,13 @@
 503 asks n8n to try the same call again."""
 
 import hmac
+from collections.abc import Callable, Coroutine
 from typing import Annotated, Any, Literal, Self
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 from pydantic import Field, model_validator
 
 from platform_api.orchestration.cards import BODY_LIMIT, TITLE_LIMIT
@@ -52,8 +55,31 @@ def check_node_key(request: Request, node_key: NodeKey = None) -> None:
         raise HTTPException(status_code=401, detail="Bad node key")
 
 
+class _NoEcho(APIRoute):
+    """A refused body is never echoed. n8n shows the refusal on the execution, where anyone who
+    holds the workflow reads it, and a resume address carries n8n's signature."""
+
+    def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
+        handle = super().get_route_handler()
+
+        async def without_input(request: Request) -> Response:
+            try:
+                return await handle(request)
+            except RequestValidationError as error:
+                problems = [
+                    {"type": e["type"], "loc": list(e["loc"]), "msg": e["msg"]}
+                    for e in error.errors()
+                ]
+                return JSONResponse(status_code=422, content={"detail": problems})
+
+        return without_input
+
+
 router = APIRouter(
-    prefix="/internal/v1/n8n", tags=["internal"], dependencies=[Depends(check_node_key)]
+    prefix="/internal/v1/n8n",
+    tags=["internal"],
+    dependencies=[Depends(check_node_key)],
+    route_class=_NoEcho,
 )
 
 

@@ -1,6 +1,5 @@
 import hashlib
 import hmac
-import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -261,9 +260,6 @@ class N8nWaker:
         self._node_key = node_key
         self._box = box
         self._client = client or httpx.AsyncClient(timeout=10.0, follow_redirects=False)
-        # httpx logs each request's full address at INFO, and this one carries n8n's signature.
-        for name in ("httpx", "httpcore"):
-            logging.getLogger(name).setLevel(logging.WARNING)
 
     async def wake(
         self, held: HeldWait, request_id: ApprovalId, decision: WakeDecision
