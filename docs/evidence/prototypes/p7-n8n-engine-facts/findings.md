@@ -11,7 +11,7 @@ This answers every "P7" item in [ENGINE-PLAN.md](../../../design/chat-first/ENGI
 - On the first node call of each execution, the stub reads `GET /api/v1/executions/{id}?includeData=true`, the way our API would link the execution to a run, and records what it saw.
 - Users. `platform@example.com` is n8n's owner, which stands in for the platform's account. Alice and Bob are ordinary members.
 - The host was shared and heavily loaded (load average near 200 during development). `compose.yaml` raises three timeouts so the load did not fail runs. They change no answer.
-- The final pass ran `./run.sh` and then `variants.py` on a fresh stack. `q06.txt` was run once more at the end, on the last variant's stack with the allow list on, after its output gained the mode of each call. The allow list does not touch that question.
+- The final pass ran `./run.sh` and then `variants.py` on a fresh stack. `q06.txt` was run once more at the end, after its output gained the mode of each call, and `q19.txt` was added then. Both ran on the last variant's stack with the allow list on, which neither question depends on.
 
 **Run it again.** `./run.sh` makes `p7.env` with fresh keys (git ignores it), boots the stack, makes the owner and an API key (`setup.py`), and runs the questions that need no restart. `python3 variants.py` restarts n8n once per setting and runs the rest. `./run.sh q99` checks history pruning an hour after the last restart; this run did not reach it. `./run.sh down` removes the containers and volumes. Each script writes `raw/<name>.txt`. Every line passes through `lib.mask()`, so no key, password, token or resume signature is in `raw/`. `q01:7` below means line 7 of `raw/q01.txt`.
 
