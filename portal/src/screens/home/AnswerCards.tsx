@@ -1,21 +1,22 @@
 import { useId, useState, type ReactNode } from 'react'
 import { Link } from '../../ui/Link'
-import type { CantReply, OfflineReply, PartReply, PartView, PlannerReply, QuestionReply, SetupCardReply, WatchlistReply } from '../../api/types'
+import type { CantReply, CantRowView, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, SwitchChoice, WatchlistReply } from '../../api/types'
+import { useErrorWords } from '../../api/context'
 import { useCapabilities } from '../../api/plannerQueries'
-import { useOperatorsSay } from '../../shell/OperatorsNote'
+import { useMoveWorkflow } from '../../api/workflowQueries'
 import { Button, ButtonLink } from '../../ui/Button'
 import { OpenButton } from '../../ui/OpenItem'
 import { AskTheTeam } from './AskTheTeam'
 import { useAsker } from './asker'
-import { cantLines, refusalNext, SAY_ANOTHER_WAY, startingPoints, TAG_CANT, TAG_CHOICE } from './answers'
+import { cantLines, capabilityCard, oneLine, refusalNext, SAY_ANOTHER_WAY, startingPoints, stateWords, switchedSay, TAG_CANT, TAG_CHOICE, type Asker } from './answers'
 import { cardFrom } from './card'
-import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard } from './parts'
+import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard, followedNothing } from './parts'
 import { SetupCard, type CardStart } from './SetupCard'
-import { CapabilityLists } from './CapabilityLists'
 import { NewestAnswer, useMainButton } from './primary'
 import { AddToWatchlist, WhichSoftware } from './WatchlistCard'
 import { SoftwareActions } from './WatchlistActions'
 import styles from './Planner.module.css'
+import setup from './SetupCard.module.css'
 
 /** What a card can ask the page to do. Both go through the Planner or the box, so nothing here reaches a set-up on its own. */
 export interface Page {
@@ -65,37 +66,59 @@ export function SetupCardAnswer({ reply, typed }: { reply: SetupCardReply | Part
   return <SetupCard start={startOf(reply, typed)} />
 }
 
+/** A can’t the registry says in one line: the line as the head, what she has instead under it, and Ask the team unless the platform won’t do it. */
+function OneLineCant({ row, typed, secondary }: { row: CantRowView; typed: string; secondary: boolean }) {
+  return (
+    <Card title={row.note.replace(/\.$/, '')}>
+      <div className={styles['pcardPart']}>
+        <p className="muted">{row.instead}</p>
+      </div>
+      {row.unsupported ? null : (
+        <div className={styles['footer']}>
+          <AskTheTeam capability={row.system ?? row.text} starter={`I asked the Planner for: ${typed}\n\nIt can't do this yet: ${row.text}`} secondary={secondary} />
+        </div>
+      )}
+    </Card>
+  )
+}
+
 /**
  * A can’t answer names only a place the platform can’t send to. Anything else it can’t do, or a clause it didn’t follow, is a
- * cross on the card that sets up the part it can (spec 6.3 and 6.5).
+ * cross on the card that sets up the part it can (spec 6.3 and 6.5). A can’t the registry says in one line gets a card of its own.
  */
 export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }) {
   const alternative = reply.alternative
   if (cantOnCard(reply) && alternative?.answer === 'setup_card') return <SetupCard start={startOf(withCrosses(alternative, reply, crossesOnCard), typed)} />
-  const rows = cantLines(reply.cant.filter((row) => row.needs !== null))
+  const named = reply.cant.filter((row) => row.needs !== null)
+  const rows = cantLines(named.filter((row) => !oneLine(row)))
   const card = alternative?.answer === 'setup_card' ? <SetupCard start={startOf(withCrosses(alternative, reply, crossesInstead), typed)} /> : null
   const watch = alternative?.answer === 'watchlist' ? <WatchlistAnswer reply={withCrosses(alternative, reply, asksOnCard)} typed={typed} /> : null
   // With no can’t of its own, the card would be empty: the clauses it didn’t follow are drawn above it.
-  if (rows.length === 0) return card ?? watch
+  if (named.length === 0) return card ?? watch
   return (
     <>
-      <Card title="What I can’t do yet">
-        <ul className={styles['lines']}>
-          {rows.map((line) => (
-            <li key={line.text}>
-              <b>{line.text}</b>
-              {line.note ? <span className={styles['note']}>{line.note}</span> : null}
-            </li>
-          ))}
-        </ul>
-        <div className={styles['footer']}>
-          <AskTheTeam
-            capability={reply.cant.find((row) => row.system)?.system ?? rows[0]?.text ?? 'something new'}
-            starter={`I asked the Planner for: ${typed}\n\nIt can't do this yet: ${rows.map((line) => line.text).join('; ')}`}
-            secondary={alternative !== null}
-          />
-        </div>
-      </Card>
+      {named.filter(oneLine).map((row) => (
+        <OneLineCant key={row.text} row={row} typed={typed} secondary={alternative !== null} />
+      ))}
+      {rows.length > 0 ? (
+        <Card title="What I can’t do yet">
+          <ul className={styles['lines']}>
+            {rows.map((line) => (
+              <li key={line.text}>
+                <b>{line.text}</b>
+                {line.note ? <span className={styles['note']}>{line.note}</span> : null}
+              </li>
+            ))}
+          </ul>
+          <div className={styles['footer']}>
+            <AskTheTeam
+              capability={reply.cant.find((row) => row.system && !oneLine(row))?.system ?? rows[0]?.text ?? 'something new'}
+              starter={`I asked the Planner for: ${typed}\n\nIt can't do this yet: ${rows.map((line) => line.text).join('; ')}`}
+              secondary={alternative !== null}
+            />
+          </div>
+        </Card>
+      ) : null}
       {card ? (
         <>
           <h3 className={styles['altHeading']}>What I can do instead</h3>
@@ -177,43 +200,91 @@ function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { 
   )
 }
 
-/** What someone who isn't an Operator can ask, each a question the Planner answers, and who sets up workflows (ADR 0043). */
-export const APPROVER_CAN = [
-  'What is waiting for your yes, and exactly what each request will write',
-  'What you decided before, with when, and any reason you gave',
-  'How the workflows and the software are doing',
-] as const
+/** What someone who isn't an Operator can ask, each a question the Planner answers (ADR 0043). */
+export const APPROVER_CAN = ['Show what waits for your yes', 'Show exactly what a change will write', 'Show your past decisions'] as const
 
-function ApproverAbilities() {
-  const operators = useOperatorsSay()
+const FOLLOWED_NOTHING: Readonly<Record<Asker, string>> = {
+  operator: 'I can watch software releases, fix stopped runs and change your workflows.',
+  approver: 'I can show what waits for your yes, and your past decisions.',
+}
+
+function WhatICanDo({ lines, notYet = [] }: { lines: readonly { key: string; text: string; state: string | null }[]; notYet?: readonly string[] }) {
   return (
-    <div className={`${styles['abilities']} ${styles['abilitiesOne']}`}>
-      <div>
-        <h3>I can</h3>
-        <ul>
-          {APPROVER_CAN.map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ul>
-      </div>
-      <p className={styles['abilitiesFoot']}>{operators}</p>
-    </div>
+    <Card title="What I can do">
+      <ul className={styles['lines']}>
+        {lines.map((line) => (
+          <li key={line.key}>
+            {line.text}
+            {line.state ? <span className={styles['note']}>{line.state}</span> : null}
+          </li>
+        ))}
+      </ul>
+      {notYet.length > 0 ? (
+        <div className={styles['footer']}>
+          <p>Not yet: {notYet.join(', ')}.</p>
+        </div>
+      ) : null}
+    </Card>
   )
 }
 
-function AbilitiesAnswer() {
-  const operator = useAsker() === 'operator'
-  const capabilities = useCapabilities({ enabled: operator })
-  if (!operator) return <ApproverAbilities />
+/** What I can do, in the registry’s short words with the platform’s state of each, or that it followed none of the request. */
+function AbilitiesAnswer({ reply }: { reply: PlannerReply }) {
+  const asker = useAsker()
+  const nothing = followedNothing(reply)
+  const capabilities = useCapabilities({ enabled: asker === 'operator' && !nothing })
+  if (nothing) {
+    return (
+      <Card title="I didn’t follow that">
+        <div className={styles['pcardPart']}>
+          <p className="muted">{FOLLOWED_NOTHING[asker]}</p>
+        </div>
+      </Card>
+    )
+  }
+  if (asker === 'approver') return <WhatICanDo lines={APPROVER_CAN.map((text) => ({ key: text, text, state: null }))} />
+  if (!capabilities.data) {
+    return (
+      <p className="muted" role="status">
+        {capabilities.isError ? 'I couldn’t load what I can do just now.' : 'Loading what I can do'}
+      </p>
+    )
+  }
+  const { can, notYet } = capabilityCard(capabilities.data)
+  return <WhatICanDo lines={can.map((entry) => ({ key: entry.id, text: entry.short, state: stateWords(entry) }))} notYet={notYet} />
+}
+
+/**
+ * Which workflow a pause or a resume means, when the words fit several, none, or a watched software’s check, which is the whole
+ * Software watchlist. Nothing changed yet: the one she picks is paused or resumed through its own route, and the line says so.
+ */
+function SwitchChoices({ reply }: { reply: PauseReply | ResumeReply }) {
+  const move = useMoveWorkflow()
+  const errorWords = useErrorWords()
+  const [picked, setPicked] = useState<SwitchChoice | null>(null)
+  if (reply.choices.length === 0) return null
+  if (picked && move.isSuccess) {
+    const wanted = reply.answer === 'pause' ? 'paused' : 'on'
+    return <p role="status">{switchedSay(reply.answer, picked.name, picked.state === wanted)}</p>
+  }
+  const pick = (choice: SwitchChoice) => {
+    setPicked(choice)
+    move.mutate({ move: reply.answer, useCaseId: choice.use_case_id })
+  }
   return (
     <>
-      {capabilities.data ? (
-        <CapabilityLists view={capabilities.data} />
-      ) : (
-        <p className="muted" role="status">
-          {capabilities.isError ? 'I couldn’t load what I can do just now.' : 'Loading what I can do'}
+      <div className={styles['buttons']}>
+        {reply.choices.map((choice) => (
+          <button key={choice.use_case_id} type="button" className={setup['choice']} disabled={move.isPending} onClick={() => pick(choice)}>
+            {choice.name}
+          </button>
+        ))}
+      </div>
+      {move.isError ? (
+        <p className={styles['problem']} role="alert">
+          {errorWords(move.error)}
         </p>
-      )}
+      ) : null}
     </>
   )
 }
@@ -317,7 +388,10 @@ export function Answer({ reply, typed, page }: AnswerProps) {
     case 'refused':
       return <RefusedAnswer reply={reply} typed={typed} page={page} />
     case 'abilities':
-      return <AbilitiesAnswer />
+      return <AbilitiesAnswer reply={reply} />
+    case 'pause':
+    case 'resume':
+      return <SwitchChoices reply={reply} />
     case 'ideas':
       return <IdeasAnswer page={page} />
     case 'offline':

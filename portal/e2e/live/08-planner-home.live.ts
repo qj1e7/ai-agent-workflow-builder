@@ -232,7 +232,8 @@ test.describe('with the AI model on', () => {
     await expect(box(page), 'the box waits while the Planner answers').toBeDisabled()
     await expect(box(page)).toHaveAttribute('placeholder', 'The Planner is answering')
     await expect(thread(page).getByText('I can’t do all of that, but I can set up something close.')).toBeVisible()
-    await expect(thread(page).getByRole('heading', { name: 'What I can’t do yet' })).toBeVisible()
+    await expect(thread(page).getByRole('heading', { name: 'I can’t send email yet' })).toBeVisible()
+    await expect(thread(page)).toContainText('Run results show here, in the chat.')
     await expect(thread(page).getByRole('heading', { name: 'What I can do instead' })).toBeVisible()
     await expect(thread(page)).toContainText('email')
     await expect(polite(page), 'the sentence is read once, in the polite region').toContainText('I can’t do all of that, but I can set up something close.')
@@ -589,8 +590,8 @@ test.describe('with the AI model on', () => {
     await box(page).focus()
     await page.keyboard.type('What can you do?')
     await page.keyboard.press('Enter')
-    await expect(thread(page).getByText('Here is what I can do, and what I can’t do yet.')).toBeVisible()
-    await expect(thread(page).getByRole('heading', { name: 'I can', exact: true })).toBeVisible()
+    await expect(thread(page).getByRole('heading', { name: 'What I can do', exact: true })).toBeVisible()
+    await expect(thread(page)).toContainText('Not yet: Teams channels, email, Confluence.')
     await page.getByRole('button', { name: 'New chat' }).focus()
     await page.keyboard.press('Enter')
     await expect(thread(page)).toHaveCount(0)
@@ -718,8 +719,8 @@ test.describe('with the AI model on', () => {
 
       for (const [text, shown] of [
         ['Check my workflows', thread(page).getByRole('list', { name: 'Your workflows' })],
-        ['What can you do?', thread(page).getByRole('heading', { name: 'I can', exact: true })],
-        ['Every Friday, email me the list of tickets we closed this week', thread(page).getByRole('heading', { name: 'What I can’t do yet' })],
+        ['What can you do?', thread(page).getByRole('heading', { name: 'What I can do', exact: true })],
+        ['Every Friday, email me the list of tickets we closed this week', thread(page).getByRole('heading', { name: 'I can’t send email yet' })],
         [`Every Monday and Friday at 9am, ${STALE}. Colour them by team.`, thread(page).getByRole('list', { name: 'Each part of your request' }).locator('[data-mark="no"]')],
       ] as const) {
         await ask(page, text)
@@ -1125,8 +1126,12 @@ test.describe('the edit card (spec 6.7)', () => {
     await page.goto('/')
 
     const pause = await askAndWait(page, `what needs my attention? pause the ${morning.name}`)
-    await expect(sentenceOf(pause)).toHaveText(`From the chat I can only change when ${morning.name} runs.`)
+    await expect(pause).toContainText(`Paused ${morning.name}. It won’t run until you resume it.`)
     await expect(pause).toHaveText(/“what needs my attention”\s*Ask this on its own, and I’ll answer it\./)
+    expect((await shown(backend, morning.id)).state, 'C13: the pause reached the platform').toBe('paused')
+    const resume = await askAndWait(page, `resume the ${morning.name}`)
+    await expect(resume).toContainText(`${morning.name} is on again.`)
+    expect((await shown(backend, morning.id)).state).toBe('on')
     const both = await askAndWait(page, `how are my workflows doing? make the ${morning.name} run at 10am`)
     await expect(editCard(both)).toHaveText(/Before\s*Every weekday at 8:00\s*After\s*Every weekday at 10:00/)
 

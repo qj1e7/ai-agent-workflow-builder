@@ -61,7 +61,7 @@ describe('a can’t row', () => {
   it('keeps its text and its note apart', () => {
     const line = cantLine(CANT.cant[0]!)
     expect(line.text).toBe('email it to the team')
-    expect(line.note).toContain('I can\'t email it to the team.')
+    expect(line.note).toBe('I can’t send email yet.')
   })
 
   it('shows the note in place of empty text, and a plain line when it has neither', () => {
@@ -81,7 +81,9 @@ describe('the sentence for each answer', () => {
     expect(sayOf(answers['card']!)).toBe('Here’s what I understood. I filled in what I could.')
     expect(sayOf(answers['part']!)).toContain('I can do part of that.')
     expect(sayOf(answers['cant']!)).toBe('I can’t do all of that, but I can set up something close.')
-    expect(sayOf({ ...CANT, alternative: null })).toBe('I can’t do that yet.')
+    expect(sayOf({ ...CANT, alternative: null }), 'its one-line card says it').toBeNull()
+    const own = { ...CANT, alternative: null, cant: CANT.cant.map((row) => ({ ...row, instead: null })) }
+    expect(sayOf(own)).toBe('I can’t do that yet.')
     expect(sayOf(answers['refused']!)).toBe('I can’t set that up. Anything that changes data waits for a yes, every time.')
   })
 

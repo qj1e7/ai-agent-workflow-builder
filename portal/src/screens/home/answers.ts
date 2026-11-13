@@ -1,4 +1,4 @@
-import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PlannerReply, RowKind, UnderstoodRowView } from '../../api/types'
+import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PauseReply, PlannerReply, ResumeReply, RowKind, UnderstoodRowView } from '../../api/types'
 import { count } from '../run/words'
 import { isRunning, type Row } from '../workflows/workflow'
 import { cantOnCard } from './parts'
@@ -73,9 +73,6 @@ export const SAY = {
   cantWithAlternative: 'I can’t do all of that, but I can set up something close.',
   which_software: 'Which software should I watch?',
   refused: 'I can’t set that up. Anything that changes data waits for a yes, every time.',
-  abilities: 'Here is what I can do, and what I can’t do yet.',
-  approverAbilities: 'Here’s what you can ask me.',
-  approverUnknown: 'I can’t help with that here. I answer questions about your approvals and the workflows.',
   nothingNeeds: 'Nothing needs you right now.',
 } as const
 
@@ -88,6 +85,23 @@ const APPROVER_OFFLINE: Readonly<Record<OfflineReply['why'], string>> = {
   too_slow: 'The Planner took too long to read your question. Try again in a moment.',
   trouble: 'The Planner couldn’t read your question just now. Try again in a moment.',
 }
+
+/** A pause or a resume the platform carried out, or that found the workflow already that way. */
+export const switchedSay = (answer: 'pause' | 'resume', name: string, already: boolean): string => {
+  if (answer === 'pause') return already ? `${name} is already paused.` : `Paused ${name}. It won’t run until you resume it.`
+  return already ? `${name} is already on.` : `${name} is on again.`
+}
+
+const withoutArticle = (words: string): string => words.replace(/^(?:the|my|our|that|this)\s+/i, '')
+
+function switchSay(reply: PauseReply | ResumeReply): string {
+  if (reply.use_case_id !== null && reply.name !== null) return switchedSay(reply.answer, reply.name, reply.already)
+  if (reply.missing !== null) return `You don’t have a workflow called “${withoutArticle(reply.missing)}”.`
+  return reply.choices.length > 0 ? 'Which workflow?' : 'You have no workflows yet.'
+}
+
+/** A can’t its registry entry says in one line, drawn as its own card. Any other can’t is a row on the What I can’t do yet card. */
+export const oneLine = (row: CantRowView): boolean => row.needs !== null && row.instead !== null
 
 export const watchlistSay = (software: string | null, listed: boolean): string => {
   if (software === null) return 'That belongs on the Software watchlist, which checks the software on it for new releases.'
@@ -115,16 +129,18 @@ export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | 
     case 'cant':
       if (cantOnCard(reply)) return SAY.setupCrossed
       if (reply.alternative && reply.cant.every((row) => row.needs === null)) return sayOf(reply.alternative)
-      return reply.alternative ? SAY.cantWithAlternative : SAY.cant
+      if (reply.alternative) return SAY.cantWithAlternative
+      return reply.cant.filter((row) => row.needs !== null).every(oneLine) ? null : SAY.cant
     case 'watchlist':
       return watchlistSay(reply.software, reply.already_listed !== null)
     case 'which_software':
       return SAY.which_software
     case 'refused':
       return SAY.refused
+    case 'pause':
+    case 'resume':
+      return switchSay(reply)
     case 'abilities':
-      if (asker === 'operator') return SAY.abilities
-      return reply.parts.some((part) => part.mark !== 'will_do') ? SAY.approverUnknown : SAY.approverAbilities
     case 'ideas':
       return null
     case 'offline':
@@ -186,6 +202,22 @@ export function capabilityGroups(view: CapabilitiesView): CapabilityGroups {
     can: all.filter((entry) => entry.state === 'ready'),
     setup: all.filter((entry) => entry.state === 'needs_setup' || entry.state === 'down'),
   }
+}
+
+export interface CapabilityLine extends CapabilityView {
+  readonly short: string
+}
+
+export interface CapabilityCard {
+  readonly can: readonly CapabilityLine[]
+  readonly notYet: readonly string[]
+}
+
+/** The chat’s What I can do card, from the registry’s short words: the entries built, with their state, and the names of those that aren’t. */
+export function capabilityCard(view: CapabilitiesView): CapabilityCard {
+  const named = view.capabilities.filter((entry): entry is CapabilityLine => entry.short !== null)
+  const built = (entry: CapabilityLine) => entry.state !== 'planned' && entry.state !== 'unsupported'
+  return { can: named.filter(built), notYet: named.filter((entry) => !built(entry)).map((entry) => entry.short) }
 }
 
 export function stateWords(entry: Pick<CapabilityView, 'state'>): string | null {
