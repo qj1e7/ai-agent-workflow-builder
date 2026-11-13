@@ -104,8 +104,21 @@ The web app where Operators build use cases and start runs, watch the live activ
 _Avoid_: Frontend, dashboard
 
 **Node pack**:
-Our own n8n nodes. With them, an n8n workflow can run an agent card, read from another system, add write actions to a proposal, ask for approval and carry out an approved proposal. They are the only way an n8n workflow reaches another system.
+Our own n8n nodes, built into our n8n image: Start from the Portal, Read, Agent, Propose a change, Ask for a yes, Make the approved changes, Tell and Report a failure. With them, an n8n workflow can run an agent card, read from another system, add write actions to a proposal, ask for approval, carry out an approved proposal and tell the team. They are the only way an n8n workflow reaches another system. Each one calls only our API, at the address and with the key in n8n's environment, and has no field for either.
 _Avoid_: Plugin, integration, custom nodes
+
+**Start from the Portal**:
+The node pack's trigger. It starts a workflow when someone presses Run now, Test run or Retry in the Portal, and only for a start our API signed, within five minutes and once.
+_Avoid_: Webhook
+
+**Made in n8n**:
+A workflow someone built in n8n from our nodes and then registered in the Portal, rather than one the Planner laid out. Until an Operator names its Approvers, any Approver on the team decides its requests (ADR 0027). Planned.
+
+**Holder**:
+The person who has a workflow open in n8n, in their own n8n project. A run they start by hand in n8n is their work, so they cannot approve it. Take back ends the hold. Planned (ADR 0027).
+
+**Version compare**:
+The check around every change our platform makes to a workflow in n8n. The workflow must still be the version the Portal last stored, and the change must read back as sent. When someone changed it in n8n since, the platform shows "Changed again since, in n8n." (ADR 0027). Planned.
 
 **Published version**:
 The version of a use case's n8n workflow that runs. Staff change the n8n draft, and publishing the n8n draft makes it the published version.
@@ -195,6 +208,10 @@ _Avoid_: Plan, draft (a Draft is a set-up card not yet turned on)
 
 **Approval gate**:
 The step that pauses a run before a write action until an Approver approves it in Teams.
+
+**Tell**:
+A Teams card or an email that only reports what a run read or found. It may go out without a yes, because it changes no data, under the Tell rule: its recipients are the ones fixed in the Portal, our API writes its words from the run's own reads and agent results, and a test run sends nothing (ADR 0026). The node pack's Tell node sends one.
+_Avoid_: Notification, alert
 
 **Approval card**:
 The Adaptive Card the platform posts in Teams for each approval request: what would be written, what the agents found, and who can decide. Its one button, Open in AI Workflow Builder, opens the approval page, where the Approver decides. Once decided, it shows who approved or declined. The practice copy shows the same card.
