@@ -50,8 +50,8 @@ async function jiraDown(backend: Backend): Promise<() => Promise<void>> {
 
 /** The number every place shows for Needs you, read from the platform: each kind it counts, added up. */
 async function platformNeeds(backend: Backend, user: string): Promise<number> {
-  const home = await backend.get<{ approvals_total: number; stopped_total: number; confirmations: unknown[]; connections: unknown[]; addresses: unknown[]; replied: unknown[] }>(user, '/api/v1/home')
-  return home.approvals_total + home.stopped_total + home.confirmations.length + home.connections.length + home.addresses.length + home.replied.length
+  const home = await backend.get<{ approvals_total: number; stopped_total: number; declined_total: number; questions_for_me_total: number; confirmations: unknown[]; connections: unknown[]; addresses: unknown[]; replied: unknown[] }>(user, '/api/v1/home')
+  return home.approvals_total + home.stopped_total + home.declined_total + home.questions_for_me_total + home.confirmations.length + home.connections.length + home.addresses.length + home.replied.length
 }
 
 /** Alice asks the team for something and bob replies, so the reply sits in her Needs you until she opens it. */
@@ -842,7 +842,7 @@ test.describe('the chat after the first message', () => {
     await expect(page).toHaveURL(/\/workflows$/)
     await expect(main(page).getByRole('heading', { level: 2, name: new RegExp(`^Needs you ${String(total)}`) })).toBeVisible()
     await expect(main(page).getByRole('heading', { name: 'Do now' })).toBeVisible()
-    await page.getByRole('link', { name: 'Back to the chat' }).click()
+    await page.getByRole('link', { name: 'Back to the chat', exact: true }).click()
     await expect(thread(page)).toContainText('What can you do?')
     await expect(pinned(page)).toBeVisible()
     await shot(page, info, 'r2-chat-pinned')
@@ -975,9 +975,9 @@ test.describe('the chat after the first message', () => {
     await ask(page, 'Check my workflows')
     await thread(page).getByRole('list', { name: 'Your workflows' }).getByRole('button', { name, exact: true }).click()
     await page.locator('#side-panel').getByRole('link', { name: 'More details' }).click()
-    await expect(page.getByRole('link', { name: 'Back to the chat' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Back to the chat', exact: true })).toBeVisible()
     await expect(main(page).getByRole('link', { name: 'Workflows', exact: true }), 'the page’s own Back gives way to Back to the chat').toHaveCount(0)
-    await page.getByRole('link', { name: 'Back to the chat' }).click()
+    await page.getByRole('link', { name: 'Back to the chat', exact: true }).click()
     await expect(thread(page)).toContainText('Check my workflows')
     await expect(page.getByRole('heading', { level: 1, name: 'Planner' })).toBeFocused()
     await expect(page.locator('#side-panel'), 'the panel is still there on return').toBeVisible()
