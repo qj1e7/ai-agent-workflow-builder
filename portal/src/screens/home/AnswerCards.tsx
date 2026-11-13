@@ -254,6 +254,8 @@ function AbilitiesAnswer({ reply }: { reply: PlannerReply }) {
   return <WhatICanDo lines={can.map((entry) => ({ key: entry.id, text: entry.short, state: stateWords(entry) }))} notYet={notYet} />
 }
 
+const MOST_CHOICES = 5
+
 /**
  * Which workflow a pause or a resume means, when the words fit several, none, or a watched software’s check, which is the whole
  * Software watchlist. Nothing changed yet: the one she picks is paused or resumed through its own route, and the line says so.
@@ -271,14 +273,17 @@ function SwitchChoices({ reply }: { reply: PauseReply | ResumeReply }) {
     setPicked(choice)
     move.mutate({ move: reply.answer, useCaseId: choice.use_case_id })
   }
+  const shown = reply.choices.slice(0, MOST_CHOICES)
+  const more = reply.choices.length - shown.length
   return (
     <>
       <div className={styles['buttons']}>
-        {reply.choices.map((choice) => (
+        {shown.map((choice) => (
           <button key={choice.use_case_id} type="button" className={setup['choice']} disabled={move.isPending} onClick={() => pick(choice)}>
             {choice.name}
           </button>
         ))}
+        {more > 0 ? <Link to="/workflows">and {more} more</Link> : null}
       </div>
       {reply.choices.some((choice) => choice.watchlist) ? <p className={styles['note']}>{watchlistSwitchNote(reply.answer)}</p> : null}
       {move.isError ? (

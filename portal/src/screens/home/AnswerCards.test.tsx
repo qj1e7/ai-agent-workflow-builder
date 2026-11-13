@@ -98,7 +98,7 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
   })
 
   it('says a pause or a resume in one plain line, and when nothing changed', () => {
-    expect(sayOf(pauseReply as PauseReply)).toBe('Paused React release check. It won’t run until you resume it.')
+    expect(sayOf(pauseReply as PauseReply)).toBe('Paused React release check. It won’t start a new run until you resume it.')
     expect(sayOf(resumeReply as ResumeReply)).toBe('React release check is on again.')
     expect(sayOf({ ...(pauseReply as PauseReply), already: true })).toBe('React release check is already paused.')
     expect(sayOf({ ...(resumeReply as ResumeReply), already: true })).toBe('React release check is already on.')
@@ -112,7 +112,22 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
     expect(text(draw(reply))).toContain('Pausing the Software watchlist stops the checks of every software on it.')
     const workflowsOnly: PauseReply = { ...reply, choices: reply.choices.filter((choice) => !choice.watchlist) }
     expect(text(draw(workflowsOnly))).not.toContain('Software watchlist')
-    expect(switchedSay('pause', 'FastAPI release check', false)).toBe('Paused FastAPI release check. It won’t run until you resume it.')
+    expect(switchedSay('pause', 'FastAPI release check', false)).toBe('Paused FastAPI release check. It won’t start a new run until you resume it.')
+  })
+
+  it('offers five workflows for “pause it”, and links to the rest', () => {
+    const many: PauseReply = {
+      ...(pauseChoices as PauseReply),
+      choices: Array.from({ length: 7 }, (_, at) => ({ use_case_id: `uc_${at}`, name: `Check ${at + 1}`, state: 'on' as const, watchlist: false })),
+    }
+    expect(buttons(draw(many))).toEqual(['Check 1', 'Check 2', 'Check 3', 'Check 4', 'Check 5', 'and 2 more'])
+  })
+
+  it('reads a can’t row from an older platform, with no one-line fields, as a row on the What I can’t do yet card', () => {
+    const { instead: _instead, unsupported: _unsupported, ...older } = TEAMS
+    const html = text(draw(cantOf(older as CantRowView)))
+    expect(html).toContain('What I can’t do yet')
+    expect(html).toContain('Post the FastAPI news in our Teams channel')
   })
 
   it('keeps a question asked beside the pause above it, to ask on its own', () => {

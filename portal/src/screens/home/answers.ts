@@ -88,7 +88,7 @@ const APPROVER_OFFLINE: Readonly<Record<OfflineReply['why'], string>> = {
 
 /** A pause or a resume the platform carried out, or that found the workflow already that way. */
 export const switchedSay = (answer: 'pause' | 'resume', name: string, already: boolean): string => {
-  if (answer === 'pause') return already ? `${name} is already paused.` : `Paused ${name}. It won’t run until you resume it.`
+  if (answer === 'pause') return already ? `${name} is already paused.` : `Paused ${name}. It won’t start a new run until you resume it.`
   return already ? `${name} is already on.` : `${name} is on again.`
 }
 
@@ -105,7 +105,7 @@ function switchSay(reply: PauseReply | ResumeReply): string {
 }
 
 /** A can’t its registry entry says in one line, drawn as its own card. Any other can’t is a row on the What I can’t do yet card. */
-export const oneLine = (row: CantRowView): boolean => row.needs !== null && row.instead !== null
+export const oneLine = (row: CantRowView): boolean => row.needs !== null && (row.instead ?? null) !== null
 
 export const watchlistSay = (software: string | null, listed: boolean): string => {
   if (software === null) return 'That belongs on the Software watchlist, which checks the software on it for new releases.'
