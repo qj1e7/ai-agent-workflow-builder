@@ -15914,7 +15914,7 @@
     },
     "/api/v1/use-cases/{use_case_id}/pause": {
       "post": {
-        "description": "Stops the workflow starting runs, on its schedule or by hand, until an Operator resumes it. A run that has started carries on. Pausing a paused workflow changes nothing.",
+        "description": "Stops the workflow starting runs, on its schedule or by hand, until an Operator resumes it. A run that has started carries on. Pausing a paused workflow, or a draft, changes nothing.",
         "operationId": "pause_use_case_api_v1_use_cases__use_case_id__pause_post",
         "parameters": [
           {
@@ -16106,7 +16106,7 @@
     },
     "/api/v1/use-cases/{use_case_id}/resume": {
       "post": {
-        "description": "Turns a paused workflow back on. Its next run is the next slot of its schedule. Resuming a workflow that is on changes nothing.",
+        "description": "Turns a paused workflow back on. Its next run is the next slot of its schedule. Resuming a workflow that is on changes nothing, and a draft stays a draft until it is turned on.",
         "operationId": "resume_use_case_api_v1_use_cases__use_case_id__resume_post",
         "parameters": [
           {
