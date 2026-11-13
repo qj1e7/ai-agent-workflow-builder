@@ -380,18 +380,43 @@ def edit_of(read: TaskRead, text: str, facts: PlannerFacts | None) -> EditAnswer
     )
 
 
-def _deletes_tickets(text: str, facts: PlannerFacts | None) -> bool:
-    """A delete of tickets, as "delete the MOCK ticket", changes Jira, never a workflow, whatever
-    the reading named. A ticket inside one of the person's workflow names is that workflow's."""
-    names = [r for name in _workflow_names(facts) for r in _name_runs(text, name)]
-    said = {w for w, _, _ in _tokens(_blank(text, names))}
+def _deletes_tickets_in(words_: str) -> bool:
+    said = {w for w, _, _ in _tokens(words_)}
     return bool(said & DELETES) and bool(said & TICKETS)
 
 
+def _deletes_tickets(text: str, facts: PlannerFacts | None) -> bool:
+    """A delete of tickets, as "delete the MOCK ticket", changes Jira, never a workflow, whatever
+    the reading named. A ticket inside one of the person's workflow names is that workflow's. A
+    pause beside it is still a pause, with the delete crossed."""
+    names = [r for name in _workflow_names(facts) for r in _name_runs(text, name)]
+    unnamed = _blank(text, names)
+    return _deletes_tickets_in(unnamed) and not _orders_switch(unnamed)
+
+
+def _orders_switch(words_: str) -> bool:
+    return bool({w for w, _, _ in _tokens(words_)} & (PAUSES | RESUMES | {"turn"}))
+
+
+def _writes_beside(words_: str) -> bool:
+    """A write in the words that changes no workflow, as "email me" or "delete the MOCK ticket".
+    "rename it" is a change to one."""
+    tokens = {w for w, _, _ in _tokens(words_)}
+    plain = bool(_writes(words_) - EDIT_VERBS) and not tokens & EDIT_VERBS
+    return plain or _deletes_tickets_in(words_)
+
+
 def _switch_of(text: str, names: _Names) -> type[Switch] | None:
-    """Pause or resume, when the change holds nothing else: no schedule, no write and no word
-    beyond the order itself, so "pause it for a week" stays a change the chat can't make."""
-    rest = _rest(text, names)
+    """Pause or resume, when the order holds nothing else: no schedule and no word beyond the
+    order itself, so "pause it for a week" stays a change the chat can't make. A write in a clause
+    of its own, as "and email me", is no part of the order and keeps its own cross."""
+    unnamed = _blank(text, names.all)
+    beside = [
+        c
+        for c in change_clauses(text, names)
+        if _writes_beside(unnamed[c[0] : c[1]]) and not _orders_switch(unnamed[c[0] : c[1]])
+    ]
+    rest = _blank(_rest(text, names), beside)
     said = {w for w, _, _ in _tokens(rest) if w not in FILLER}
     if not said or not said <= SWITCH_WORDS:
         return None
@@ -405,6 +430,38 @@ def _switch_of(text: str, names: _Names) -> type[Switch] | None:
     return PauseAnswer if pauses else ResumeAnswer
 
 
+EDGE_WORDS: Final = re.compile(
+    r"^(?:[\s,;]|\b(?:and|then|also|plus|the|my|our|this|that)\b)+"
+    r"|(?:[\s,;]|\b(?:and|then|also|plus|the|my|our|this|that)\b)+$",
+    re.IGNORECASE,
+)
+"""The joining words and articles at either end of the order, once another workflow's name is
+cut out of its clause."""
+
+
+def _order_marks(text: str, clause: Span, names: _Names) -> list[EditMark]:
+    """The clause that gives the order: the order ticked, and each other workflow it names
+    crossed to ask on its own, so a pause of one never reads as a pause of both."""
+    others = sorted(names.others(clause))
+    cuts = [clause[0], *(edge for other in others for edge in other), clause[1]]
+    marks: list[EditMark] = []
+    for start, end in zip(cuts[::2], cuts[1::2], strict=True):
+        piece = text[start:end]
+        if not _orders_switch(piece):
+            continue
+        lead = EDGE_WORDS.match(piece)
+        a = start + (lead.end() if lead and lead.start() == 0 else 0)
+        tail = EDGE_WORDS.search(text[a:end])
+        b = end - (len(tail.group(0)) if tail and tail.end() == end - a else 0)
+        marks.append(EditMark(a, b, "will_do"))
+    for other in others:
+        bare = ARTICLE.match(text[other[0] : other[1]])
+        marks.append(
+            EditMark(other[0] + (bare.end() if bare else 0), other[1], "cant", "ask_on_its_own")
+        )
+    return sorted(marks, key=lambda m: m.start)
+
+
 def switch_marks(
     read: TaskRead | None,
     text: str,
@@ -412,15 +469,25 @@ def switch_marks(
     clauses: list[Span],
     facts: PlannerFacts | None = None,
 ) -> list[EditMark]:
-    """The marks of a pause or a resume: the edit's own, with the order it carries out ticked
-    where an edit would cross it as a change the chat can't make."""
+    """The marks of a pause or a resume. Only the clause that gives the order is ticked, up to any
+    other workflow it names. Every other clause keeps the cross an edit gives it, and a write or a
+    change beside the order, which an edit crosses as a change the chat can't make, is asked on
+    its own: the chat did carry out the order."""
+    target = _said(answer.workflow_words, text)
+    names = _Names(_names(read, text, facts) + ([target] if target else []), target)
+    unnamed = _blank(text, names.all)
     edit = EditAnswer(
         workflow_words=answer.workflow_words, software=answer.software, cant="only_schedule"
     )
-    return [
-        replace(m, mark="will_do", reason=None) if m.reason == "only_schedule" else m
-        for m in edit_marks(read, text, edit, clauses, facts)
-    ]
+    marks: list[EditMark] = []
+    for mark in edit_marks(read, text, edit, clauses, facts):
+        if mark.reason != "only_schedule":
+            marks.append(mark)
+        elif _orders_switch(unnamed[mark.start : mark.end]):
+            marks += _order_marks(text, (mark.start, mark.end), names)
+        else:
+            marks.append(replace(mark, reason="ask_on_its_own"))
+    return marks
 
 
 WATCH_VERB: Final = re.compile(

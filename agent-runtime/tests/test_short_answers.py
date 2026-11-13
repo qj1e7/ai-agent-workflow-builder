@@ -132,6 +132,44 @@ def test_pause_and_resume_name_the_workflow_and_tick_the_order(
     assert [(p.text, p.mark) for p in parts] == [(task, "will_do")]
 
 
+@pytest.mark.parametrize(
+    ("task", "beside"),
+    [
+        ("pause the React check and create a Jira ticket", "create a Jira ticket"),
+        ("pause the React check and email me", "email me"),
+        ("pause the React check and post in Teams", "post in Teams"),
+        ("Pause the React check and send it to Teams", "send it to Teams"),
+        ("Pause the React check and delete the MOCK ticket", "delete the MOCK ticket"),
+    ],
+)
+def test_a_write_beside_a_pause_keeps_its_cross_and_only_the_order_is_ticked(
+    task: str, beside: str
+):
+    answer = answer_of(read(**CHANGE), task, WORKFLOWS)
+    assert isinstance(answer, PauseAnswer)
+    parts = [(p.text, p.mark, p.reason) for p in parts_of(read(**CHANGE), task, answer, WORKFLOWS)]
+    assert parts == [(task.split(" and ")[0], "will_do", None), (beside, "cant", "ask_on_its_own")]
+
+
+def test_a_second_workflow_named_beside_the_pause_is_crossed_not_ticked():
+    task = "Pause the Morning new-ticket check and the Weekly closed-ticket summary"
+    fields = read(asks_about="change", workflow_words="Morning new-ticket check")
+    answer = answer_of(fields, task, WORKFLOWS)
+    assert isinstance(answer, PauseAnswer)
+    assert answer.workflow_words == "Morning new-ticket check"
+    assert [(p.text, p.mark, p.reason) for p in parts_of(fields, task, answer, WORKFLOWS)] == [
+        ("Pause the Morning new-ticket check", "will_do", None),
+        ("Weekly closed-ticket summary", "cant", "ask_on_its_own"),
+    ]
+
+
+def test_disable_is_a_pause_not_a_write_beside_it():
+    task = "disable the React check"
+    answer = answer_of(read(**CHANGE), task, WORKFLOWS)
+    assert isinstance(answer, PauseAnswer)
+    assert [p.mark for p in parts_of(read(**CHANGE), task, answer, WORKFLOWS)] == ["will_do"]
+
+
 def test_it_names_no_workflow_so_she_picks_one():
     answer = answer_of(read(asks_about="change"), "pause it", WORKFLOWS)
     assert isinstance(answer, PauseAnswer) and answer.workflow_words is None
