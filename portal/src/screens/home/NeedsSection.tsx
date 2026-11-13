@@ -3,7 +3,7 @@ import { NavigationType, useNavigationType } from 'react-router'
 import { cx } from '../../ui/cx'
 import { useGlide, usePresence } from '../../ui/presence'
 import { groupOf, NEED_GROUPS, type Need, type Needs } from './home'
-import { NeedItem } from './HomeItem'
+import { NeedItem, NeedRow } from './HomeItem'
 import styles from './Home.module.css'
 
 export interface Arrival {
@@ -106,5 +106,35 @@ export function NeedsSection({ needs, now, arrival, more, whenNone, quiet = fals
       {needs.shown.length > 0 ? <NeedsList needs={needs.shown} now={now} arrival={arrival} quiet={quiet} connectAbove={connectAbove} /> : whenNone}
       {more}
     </section>
+  )
+}
+
+function RowGroup({ label, needs, now }: { label: string; needs: readonly Need[]; now: Date }) {
+  const headingId = useId()
+  return (
+    <li className={styles['group']}>
+      <h2 id={headingId}>{label}</h2>
+      <ul className={styles['needRows']} aria-labelledby={headingId}>
+        {needs.map((need) => (
+          <NeedRow key={need.key} need={need} now={now} />
+        ))}
+      </ul>
+    </li>
+  )
+}
+
+/** Needs you as plain rows under Do now and Set up, with no heading, count or buttons (the sketch’s Home). `more` follows the rows. */
+export function NeedRows({ needs, now, more }: { needs: readonly Need[]; now: Date; more: ReactNode }) {
+  if (needs.length === 0) return null
+  return (
+    <div className={styles['plain']}>
+      <ul className={styles['groups']} aria-label="Needs you">
+        {NEED_GROUPS.map(([group, label]) => {
+          const rows = needs.filter((need) => groupOf(need) === group)
+          return rows.length > 0 ? <RowGroup key={group} label={label} needs={rows} now={now} /> : null
+        })}
+      </ul>
+      {more}
+    </div>
   )
 }

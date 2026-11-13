@@ -38,27 +38,89 @@
   }
 }
 
+/* The sketch's hero: the face, a small greeting, the one question, then the box and chips, and Needs you under them. */
+.hero {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 720px;
+  min-height: calc(100dvh - 190px);
+  margin: 0 auto;
+  padding-block: 8px 24px;
+  text-align: center;
+}
+
+.hi {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.hero h1 {
+  font-size: clamp(1.6rem, 1.3rem + 1.2vw, 2.3rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.hero > .plain {
+  margin-top: 8px;
+}
+
+/* The box and the chips under it: in the hero first, then docked at the bottom of the chat. The fold glides it between the two. */
+.dock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  view-transition-name: planner-dock;
+}
+
+.hero .chips {
+  justify-content: center;
+}
+
+:global(::view-transition-group(planner-dock)) {
+  animation-duration: 360ms;
+  animation-timing-function: var(--ease-out);
+}
+
 .composer {
-  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 14px;
+  border: 1.5px solid var(--rail);
+  border-radius: 12px;
+  background: var(--surface);
+  transition: border-color var(--dur-small) ease;
+}
+
+.composer.fresh {
+  min-height: 60px;
+  border-radius: 14px;
+}
+
+.composer:focus-within {
+  border-color: var(--ink);
 }
 
 .composer textarea {
-  display: block;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   max-height: 160px;
-  padding: 19px 68px 19px 16px;
-  border: 1px solid var(--edge);
-  border-radius: 12px;
-  background: var(--surface);
+  padding: 8px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
   font: inherit;
-  font-size: 1.0625rem;
+  font-size: 1rem;
   line-height: 1.45;
+  text-align: left;
   resize: none;
-}
-
-.composer textarea:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
 }
 
 .composer textarea:disabled {
@@ -72,20 +134,24 @@
 }
 
 .send {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  display: inline-grid;
+  display: grid;
   flex: none;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  align-self: flex-end;
+  width: 40px;
+  height: 40px;
   border: 0;
   border-radius: var(--r-ctl);
-  background: var(--primary);
+  background: var(--ink);
   color: var(--on-ink);
   cursor: pointer;
-  transition: transform var(--dur-press) var(--ease-out);
+  transition:
+    background-color var(--dur-press) ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+.composer.fresh .send {
+  align-self: center;
 }
 
 .send:active:not([aria-disabled='true']) {
@@ -98,26 +164,33 @@
   cursor: default;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .send:hover:not([aria-disabled='true']) {
+    background: var(--primary-hover);
+  }
+}
+
 .problem {
   color: var(--red);
   font-size: 0.9375rem;
+  text-align: left;
 }
 
 .chips {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .chip {
-  min-height: 44px;
-  padding: 6px 16px;
+  min-height: 36px;
+  padding: 5px 13px;
   border: 1px solid var(--rail);
   border-radius: 999px;
   background: var(--surface);
   color: var(--ink);
   font: inherit;
+  font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -146,74 +219,112 @@
 }
 
 .thread {
-  display: grid;
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   width: 100%;
   list-style: none;
 }
 
+/* The person's message: black, on the right. */
 .me {
   display: flex;
   justify-content: flex-end;
 }
 
 .bubble {
-  max-width: min(560px, 90%);
-  padding: 10px 14px;
-  border-radius: var(--r-card) var(--r-card) 4px var(--r-card);
-  background: var(--sunk);
+  max-width: 80%;
+  padding: 9px 14px;
+  border-radius: 14px 14px 4px 14px;
+  background: var(--ink);
+  color: var(--on-ink);
   overflow-wrap: anywhere;
 }
 
+/* An agent's answer: its 30 px face, then either words in a bubble with its name, or the cards it leads. */
 .said {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.said:focus {
+  outline: none;
+}
+
+.words {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
+  gap: 8px;
+  min-width: 0;
+  max-width: 88%;
+  padding: 9px 13px;
+  border: 1px solid var(--hair);
+  border-radius: 4px 14px 14px 14px;
+  background: var(--surface);
 }
 
 .who {
+  display: block;
+  margin-bottom: -6px;
   color: var(--lead);
-  font-size: 0.875rem;
+  font-size: 0.78rem;
   font-weight: 700;
 }
 
-.reply {
+.cards {
   display: grid;
-  gap: 12px;
+  flex: 1;
+  gap: 8px;
   min-width: 0;
+  max-width: 580px;
+}
+
+/* The sentence an answer leads its cards with: the sketch's lead line. */
+.cards > p:first-child {
+  font-weight: 600;
 }
 
 .dots {
   display: inline-flex;
   gap: 4px;
-  padding: 10px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--hair);
+  border-radius: 4px 14px 14px 14px;
+  background: var(--surface);
 }
 
 .dots i {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--muted);
-  animation: dot 1.5s ease-in-out infinite;
+  animation: think 1.2s ease-in-out infinite;
 }
 
 .dots i:nth-child(2) {
-  animation-delay: 0.2s;
+  animation-delay: 0.15s;
 }
 
 .dots i:nth-child(3) {
-  animation-delay: 0.4s;
+  animation-delay: 0.3s;
 }
 
-@keyframes dot {
+@keyframes think {
   0%,
   100% {
-    opacity: 0.25;
+    opacity: 0.3;
+    transform: translateY(0);
   }
-  40% {
+  50% {
     opacity: 1;
+    transform: translateY(-1.5px);
   }
+}
+
+.thinking {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
 }
 
 .waiting {
@@ -222,83 +333,14 @@
   font-size: 0.875rem;
 }
 
-.pcard {
-  border: 1px solid var(--hair);
-  border-radius: var(--r-card);
-  background: var(--surface);
-  overflow: hidden;
-}
-
-.pcardHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 16px 10px;
-}
-
-.pcardHead h3 {
-  min-width: 0;
-  font-size: 1.05rem;
-}
-
-.pcardPart {
-  display: grid;
-  gap: 10px;
-  padding: 12px 16px 14px;
-  border-top: 1px solid var(--rule);
-}
-
-.pcardPart p {
-  margin: 0;
+.waiting:empty {
+  display: none;
 }
 
 .lines {
   display: grid;
   gap: 8px;
-  padding: 0 16px 12px;
   list-style: none;
-}
-
-.line {
-  display: grid;
-  grid-template-columns: 7rem minmax(0, 1fr);
-  gap: 4px 12px;
-  align-items: start;
-}
-
-@media (max-width: 600px) {
-  .line {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.label {
-  color: var(--muted);
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.tag {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 1px 10px;
-  border-radius: 999px;
-  background: var(--active);
-  color: var(--ink);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.tagChoice {
-  background: var(--amber-soft);
-  color: var(--amber-ink);
-}
-
-.tagCant {
-  background: var(--fail-tint, var(--sunk));
-  color: var(--fail, var(--red));
 }
 
 .note {
@@ -317,26 +359,6 @@
 /* Buttons that gave way to the side panel leave no gap behind them. */
 .buttons:empty {
   display: none;
-}
-
-.footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  padding: 12px 16px 14px;
-  border-top: 1px solid var(--rule);
-}
-
-/* A footer whose buttons gave way to the side panel goes with them. */
-.footer:empty {
-  display: none;
-}
-
-.footer p {
-  flex: 1 1 14rem;
-  margin: 0;
-  color: var(--muted);
 }
 
 .linkButton {
@@ -550,8 +572,8 @@
   gap: 8px 12px;
 }
 
-/* Once the conversation starts, Home is the chat: the pinned line on top, the conversation scrolling, the box docked at the bottom.
-   The chat and its side panel share the page's column, so on a wide screen they sit together. */
+/* Once the conversation starts, Home is the chat (the sketch's chat column): the needs strip across the top, the conversation
+   scrolling on the chat grey, and the box with its chips docked at the bottom. The chat and its side panel share the page. */
 .chatLayout {
   display: flex;
   flex: 1;
@@ -567,33 +589,12 @@
   min-height: 0;
 }
 
-.chatBar,
-.chatIn,
-.chatDock {
-  width: 100%;
-  max-width: 820px;
-  margin: 0 auto;
-  padding-inline: 16px;
-}
-
-.chatBar {
-  display: grid;
-  flex: none;
-  gap: 4px;
-  padding-top: 12px;
-}
-
-.chatNew {
-  display: flex;
-  justify-content: flex-end;
-}
-
 .chatScroll {
   flex: 1 1 0;
   min-height: 0;
-  padding-block: 8px 16px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  background: var(--chat);
 }
 
 .chatScroll:focus-visible {
@@ -601,9 +602,49 @@
   outline-offset: -3px;
 }
 
+.chatIn,
+.chatDock .dock {
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+}
+
+.chatIn {
+  padding: 20px 24px;
+}
+
 .chatDock {
   flex: none;
-  padding-block: 8px 16px;
+  border-top: 1px solid var(--hair);
+  background: var(--surface);
+}
+
+.chatDock .dock {
+  padding: 10px 24px 14px;
+}
+
+.dockRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.dockRow .linkButton {
+  margin-left: auto;
+  padding: 6px 4px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+@media (max-width: 900px) {
+  .chatIn {
+    padding: 14px;
+  }
+
+  .chatDock .dock {
+    padding: 10px 14px 12px;
+  }
 }
 
 .decided {

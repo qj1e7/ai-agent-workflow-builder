@@ -16,17 +16,17 @@
   top: 12px;
 }
 
+/* The sketch's frame: the white top bar over a 76 px rail and the page, with a hairline between the rail and the page. */
 .shell {
   display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
+  grid-template-columns: 76px minmax(0, 1fr);
   align-items: start;
+  background: var(--surface);
 }
 
 .sheet {
-  min-height: calc(100dvh - 68px);
-  margin: 0 8px 8px;
-  border: 1px solid var(--hair);
-  border-radius: var(--r-sheet);
+  min-height: calc(100dvh - 53px);
+  border-left: 1px solid var(--hair);
   background: var(--bg);
 }
 
@@ -45,9 +45,7 @@
 
   .sheet {
     min-height: calc(100dvh - 106px);
-    margin: 0;
-    border-width: 0;
-    border-radius: 0;
+    border-left: 0;
   }
 }
 

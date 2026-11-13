@@ -316,7 +316,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     )
   }
 
-  const answerOf = (html: string) => text(/<li[^>]*data-answer="true"[^>]*>([\s\S]*)<\/li>/.exec(html)?.[1] ?? '').replace(/^Planner /, '')
+  const answerOf = (html: string) => text(/<li[^>]*data-answer="true"[^>]*>([\s\S]*)<\/li>/.exec(html)?.[1] ?? '').replace(/^Planner:? /, '')
 
   it('answers a change with who makes changes, naming the Operators, and nothing to press (ROLE-refuse)', () => {
     const html = ask(operatorsReply as PlannerReply)

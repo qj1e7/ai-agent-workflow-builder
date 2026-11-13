@@ -30,20 +30,20 @@ const inChat = (home: HomeOut, shown: PanelItem | null) =>
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
 const links = (html: string) => [...html.matchAll(/<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g)].map((m) => [text(m[2] ?? ''), m[1]])
 
-describe('the pinned line', () => {
-  it('is the region “Most urgent”, and names the first of the grouped needs with the first sentence of why', () => {
+describe('the needs strip', () => {
+  it('is the region “Needs you”, tinted by the most urgent need, and names it in its short form', () => {
     const html = draw(ALICE)
-    expect(html).toContain('aria-label="Most urgent"')
-    expect(text(html)).toContain('Software watchlist stopped')
-    expect(text(html)).toContain('An agent could not finish its work.')
-    expect(text(html)).not.toContain('Retry the run.')
+    expect(html).toMatch(/<section[^>]*aria-label="Needs you"[^>]*data-tone="err"/)
+    expect(html).toContain('<b>Software watchlist</b> stopped')
+    expect(text(html)).not.toContain('An agent could not finish its work.')
+    expect(draw(BOB)).toMatch(/data-tone="wait"/)
   })
 
   it('offers Open, to the item’s own page, and “N more” to Workflows, the two with Back to the chat', () => {
     const html = draw(ALICE)
     expect(links(html)).toEqual([
-      ['Open : Software watchlist stopped', '/runs/run_01JB9'],
       [`${String(needsTotal(ALICE) - 1)} more that need you`, '/workflows'],
+      ['Open : Software watchlist stopped', '/runs/run_01JB9'],
     ])
   })
 
@@ -58,11 +58,14 @@ describe('the pinned line', () => {
     const one: HomeOut = { ...BOB, confirmations: [] }
     expect(needsTotal(one)).toBe(1)
     expect(text(draw(one))).not.toContain('more')
-    expect(links(draw(one))).toEqual([['Open : 1 ticket is waiting for your yes', '/runs/run_01JB8']])
+    expect(links(draw(one))).toEqual([['Open : Software watchlist needs your yes', '/runs/run_01JB8']])
   })
 
-  it('is not drawn when nothing needs the person, whatever the last answer was', () => {
-    expect(draw(dayOne as HomeOut)).toBe('')
+  it('stays when nothing needs the person, calm, and says so with nothing to open', () => {
+    const html = draw(dayOne)
+    expect(html).toMatch(/<section[^>]*aria-label="Needs you"[^>]*data-tone="calm"/)
+    expect(text(html)).toBe('Nothing needs you')
+    expect(links(html)).toEqual([])
   })
 
   it('has one button, and it is not the main one, because the newest answer has that', () => {
