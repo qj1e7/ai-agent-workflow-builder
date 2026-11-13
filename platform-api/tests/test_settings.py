@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from platform_api.auth import ConfigError
-from platform_api.settings import CosmosSettings, settings_from_env
+from platform_api.settings import CosmosSettings, bootstrap_settings_from_env, settings_from_env
 from tests.support import LOCAL_ENV
 
 COSMOS = {"COSMOS_ENDPOINT": "http://cosmos:8081", "COSMOS_KEY": "a2V5"}
@@ -182,3 +182,46 @@ def test_the_node_key_and_start_secret_are_read_and_no_node_call_is_taken_withou
     assert (unset.node_key, unset.start_secret) == (None, None)
     both = settings_from_env({**LOCAL_ENV, "WAB_NODE_KEY": " nk ", "WAB_START_SECRET": "ss"})
     assert (both.node_key, both.start_secret) == ("nk", "ss")
+
+
+SECRETS = {
+    "DATABASE_URL_BUILDER": "postgresql://wab_builder:db-secret-1@db/platform",
+    "DATABASE_URL_ORCHESTRATION": "postgresql://wab_orchestration:db-secret-2@db/platform",
+    "DATABASE_URL_MONITORING": "postgresql://wab_monitoring:db-secret-3@db/platform",
+    "AGENT_API_KEY": "agent-secret",
+    "STEP_KEY": "step-secret",
+    "CALLBACK_SIGNING_KEY": "callback-secret",
+    "TEAMS_WEBHOOK_URL": "https://teams.example/hook?sig=teams-secret",
+    "TEAMS_REQUESTS_WEBHOOK_URL": "https://teams.example/hook?sig=requests-secret",
+    "TEAMS_TELL_WEBHOOK_URL": "https://teams.example/hook?sig=tell-secret",
+    "SETTINGS_ENCRYPTION_KEY": "encryption-secret",
+    "COSMOS_ENDPOINT": "https://cosmos.example:8081",
+    "COSMOS_KEY": "cosmos-secret",
+    "JIRA_BASE_URL": "https://jira.example",
+    "JIRA_API_TOKEN": "jira-secret",
+    "WAB_NODE_KEY": "node-secret",
+    "WAB_START_SECRET": "start-secret",
+    "N8N_OWNER_EMAIL": "owner@example.com",
+    "N8N_OWNER_PASSWORD": "n8n-owner-secret",
+}
+
+
+def test_no_secret_shows_in_the_settings_repr():
+    settings = settings_from_env({**LOCAL_ENV, **SECRETS})
+    shown = repr(settings)
+    secrets = ["db-secret", "-secret", "sig="]
+    leaked = [word for word in secrets if word in shown]
+    assert leaked == [], shown
+    assert settings.n8n_owner is not None and settings.n8n_owner.password == "n8n-owner-secret"
+
+
+def test_no_secret_shows_in_the_bootstrap_settings_repr():
+    env = {
+        "DATABASE_URL_OWNER": "postgresql://wab_owner:db-secret-0@db/platform",
+        "N8N_BASE_URL": "http://n8n:5678",
+        "N8N_OWNER_EMAIL": "owner@example.com",
+        "N8N_OWNER_PASSWORD": "n8n-owner-secret",
+        "STEP_KEY": "step-secret",
+        "PLATFORM_INTERNAL_URL": "http://platform-api:8000",
+    }
+    assert "-secret" not in repr(bootstrap_settings_from_env(env))

@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -16,9 +16,9 @@ CONTEXTS: tuple[Context, ...] = ("builder", "orchestration", "monitoring")
 
 @dataclass(frozen=True)
 class DatabaseUrls:
-    builder: str
-    orchestration: str
-    monitoring: str
+    builder: str = field(repr=False)
+    orchestration: str = field(repr=False)
+    monitoring: str = field(repr=False)
 
     def for_context(self, context: Context) -> str:
         match context:
@@ -33,7 +33,7 @@ class DatabaseUrls:
 @dataclass(frozen=True)
 class CosmosSettings:
     endpoint: str
-    key: str
+    key: str = field(repr=False)
 
 
 @dataclass(frozen=True)
@@ -57,7 +57,7 @@ class JiraSettings:
 
     base_url: str | None = None
     flavor: JiraFlavor = "datacenter"
-    token: str | None = None
+    token: str | None = field(default=None, repr=False)
     email: str | None = None
     issue_type: str = "Task"
     browse_url: str = "/jira/{key}"
@@ -76,7 +76,7 @@ class N8nOwner:
     """n8n's owner account, which the platform signs in as to lay out and publish workflows."""
 
     email: str
-    password: str
+    password: str = field(repr=False)
 
 
 @dataclass(frozen=True)
@@ -85,18 +85,18 @@ class Settings:
     public_base_url: str
     database: DatabaseUrls
     agent_runtime_url: str
-    agent_api_key: str
+    agent_api_key: str = field(repr=False)
     n8n_base_url: str
-    step_key: str
+    step_key: str = field(repr=False)
     platform_internal_url: str
-    callback_signing_key: str
+    callback_signing_key: str = field(repr=False)
     teams_channel: str
-    teams_webhook_url: str | None = None
-    teams_requests_webhook_url: str | None = None
-    teams_tell_webhook_url: str | None = None
+    teams_webhook_url: str | None = field(default=None, repr=False)
+    teams_requests_webhook_url: str | None = field(default=None, repr=False)
+    teams_tell_webhook_url: str | None = field(default=None, repr=False)
     """The Tell flow, which posts a notice to the team's channel and emails the team's list (D1).
     Unset keeps the practice copy."""
-    settings_encryption_key: str | None = None
+    settings_encryption_key: str | None = field(default=None, repr=False)
     first_people: FirstPeople | None = None
     activity_reader: ActivityReader = "postgres"
     cosmos: CosmosSettings | None = None
@@ -105,9 +105,9 @@ class Settings:
     watchlist_jira_project: str = PRACTICE_JIRA_PROJECT
     jira: JiraSettings = JiraSettings()
     team_time_zone: ZoneInfo = TEAM_TIME_ZONE
-    node_key: str | None = None
+    node_key: str | None = field(default=None, repr=False)
     """WAB_NODE_KEY, which our n8n node pack sends. Without it no node call is taken."""
-    start_secret: str | None = None
+    start_secret: str | None = field(default=None, repr=False)
     """WAB_START_SECRET, which signs each start the Portal sends to Start from the Portal."""
     n8n_owner: N8nOwner | None = None
     """N8N_OWNER_EMAIL and N8N_OWNER_PASSWORD. Without them the platform lays no workflow out
@@ -333,11 +333,11 @@ def n8n_owner_from_env(env: Mapping[str, str]) -> N8nOwner | None:
 
 @dataclass(frozen=True)
 class BootstrapSettings:
-    owner_database_url: str
+    owner_database_url: str = field(repr=False)
     n8n_base_url: str
     n8n_owner_email: str
-    n8n_owner_password: str
-    step_key: str
+    n8n_owner_password: str = field(repr=False)
+    step_key: str = field(repr=False)
     platform_internal_url: str
 
 
