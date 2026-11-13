@@ -10,13 +10,13 @@ import { AgentFace } from '../../ui/AgentFace'
 import { Button, ButtonLink } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { IconAlert, IconChevronRight, IconInfo, IconShield, IconX, type Icon } from '../../ui/icons'
-import { OpenButton } from '../../ui/OpenItem'
+import { OpenButton, OpenLink } from '../../ui/OpenItem'
 import { useAfterPanelAction, useShownInPanel } from '../../ui/sidePanel'
 import { draftPath } from './card'
-import { actionsOf, CONNECT_ABOVE, draftWords, isModelNeed, NO_MODEL_TITLE, retryProblem, waitingWords, wordsOf, type Action, type Need, type Tone } from './home'
+import { actionsOf, CONNECT_ABOVE, draftWords, isModelNeed, lineOf, NO_MODEL_TITLE, openPathOf, panelItemOf, retryProblem, waitingWords, wordsOf, type Action, type Need, type Tone } from './home'
 import styles from './Home.module.css'
 
-export const TONE_ICON: Record<Tone, Icon> = { wait: IconShield, tool: IconShield, bad: IconAlert, info: IconInfo, off: IconX }
+const TONE_ICON: Record<Tone, Icon> = { wait: IconShield, tool: IconShield, bad: IconAlert, info: IconInfo, off: IconX }
 
 export interface Motion {
   readonly glide: string
@@ -180,6 +180,38 @@ export function NeedItem({ need, card, quiet = false, connectAbove = false, now,
           ))}
         </div>
       </div>
+    </li>
+  )
+}
+
+/**
+ * One row of Needs you as the sketch draws it: a dot in the row’s tone, what it is about in bold, what happened, and a chevron. The
+ * whole row opens the item, beside the chat when the chat drew it and as its page anywhere else.
+ */
+export function NeedRow({ need, now }: { need: Need; now: Date }) {
+  const { tone, subject, rest } = lineOf(need, now)
+  const item = panelItemOf(need)
+  const to = openPathOf(need)
+  const words = (
+    <>
+      <span className={styles['dot']} aria-hidden="true" />
+      <span className={styles['needText']}>
+        <b>{subject}</b> {rest}
+      </span>
+      <IconChevronRight size={16} aria-hidden="true" />
+    </>
+  )
+  return (
+    <li data-home-item={need.key} data-kind={need.kind} data-tone={tone}>
+      {item ? (
+        <OpenLink item={item} to={to} className={styles['need']}>
+          {words}
+        </OpenLink>
+      ) : (
+        <Link to={to} className={styles['need']}>
+          {words}
+        </Link>
+      )}
     </li>
   )
 }

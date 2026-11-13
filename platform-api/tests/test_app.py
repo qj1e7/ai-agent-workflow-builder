@@ -86,6 +86,7 @@ ROUTES = {
     ("POST", "/internal/v1/n8n/calls/agent"),
     ("POST", "/internal/v1/n8n/calls/propose"),
     ("POST", "/internal/v1/n8n/calls/ask"),
+    ("POST", "/internal/v1/n8n/calls/write"),
     ("POST", "/internal/v1/n8n/calls/tell"),
     ("POST", "/internal/v1/n8n/failures"),
     ("GET", "/api/v1/settings/model"),

@@ -135,6 +135,43 @@ class ResumeAct:
     unread: tuple[str, ...] = ()
 
 
+def _resumed(execution: N8nExecutionId, how: str) -> PendingEvent:
+    return PendingEvent(
+        WORKFLOW,
+        "execution_resumed",
+        f"n8n execution {execution} {how}.",
+        ExecutionResumedData(execution_id=execution),
+    )
+
+
+def write_done(written: WriteDone) -> PendingEvent:
+    """One change made, with who approved it (AGENTS.md: log every agent action)."""
+    return PendingEvent(
+        PLATFORM,
+        "write_action_done",
+        f"{written.connector} {written.operation} done: {written.external_reference}, approved "
+        f"by {', '.join(written.approved_by)}.",
+        WriteActionDoneData(
+            connector=written.connector,
+            operation=written.operation,
+            external_reference=written.external_reference,
+            approved_by=list(written.approved_by),
+            url=written.url,
+        ),
+    )
+
+
+def _run_written(count: int) -> PendingEvent:
+    return PendingEvent(
+        PLATFORM,
+        "run_succeeded",
+        f"The run succeeded. {count} write action was done."
+        if count == 1
+        else f"The run succeeded. {count} write actions were done.",
+        RunSucceededData(outcome=Outcome.WRITTEN.value),
+    )
+
+
 def _step_started(step: StepName, execution: N8nExecutionId, try_number: int) -> PendingEvent:
     return PendingEvent(
         WORKFLOW,
@@ -275,6 +312,21 @@ class Lost:
     approval_id: ApprovalId
     unread: tuple[str, ...] = ()
 
+    def taken(self, execution: N8nExecutionId, now: datetime) -> Moved[Acting]:
+        """n8n took the yes after all: the execution that waited for it asks to make the
+        changes. Our record of the wake was lost, or the wake met the 409 of a resume already
+        done."""
+        acting = Acting(
+            self.run_id,
+            self.proposal_id,
+            self.approval_id,
+            1,
+            execution,
+            deadline(Acting, now),
+            self.unread,
+        )
+        return Moved(acting, (_resumed(execution, "took the yes after all and carries on"),))
+
 
 @dataclass(frozen=True)
 class Succeeded:
@@ -313,37 +365,34 @@ class Acting:
     def succeed(
         self, execution: N8nExecutionId, written: tuple[WriteDone, ...], detail: str
     ) -> Moved[Succeeded]:
-        done = tuple(
-            PendingEvent(
-                PLATFORM,
-                "write_action_done",
-                f"{w.connector} {w.operation} done: {w.external_reference}, approved by "
-                f"{', '.join(w.approved_by)}.",
-                WriteActionDoneData(
-                    connector=w.connector,
-                    operation=w.operation,
-                    external_reference=w.external_reference,
-                    approved_by=list(w.approved_by),
-                    url=w.url,
-                ),
-            )
-            for w in written
-        )
-        succeeded = PendingEvent(
-            PLATFORM,
-            "run_succeeded",
-            f"The run succeeded. {len(written)} write action was done."
-            if len(written) == 1
-            else f"The run succeeded. {len(written)} write actions were done.",
-            RunSucceededData(outcome=Outcome.WRITTEN.value),
-        )
         return Moved(
             Succeeded(self.run_id, Outcome.WRITTEN, written, self.unread),
             (
-                *done,
+                *(write_done(w) for w in written),
                 step_finished(StepName.WRITE_ACTION, execution, 1, "written", detail),
-                succeeded,
+                _run_written(len(written)),
             ),
+        )
+
+    def made(
+        self, written: tuple[WriteDone, ...], fresh: tuple[WriteDone, ...]
+    ) -> Moved[Succeeded]:
+        """Make the approved changes made the last of the run's changes in n8n. It logs only
+        what this try made: an earlier try logged its own, and a change another run made first
+        is in that run's log."""
+        if not written:
+            already = PendingEvent(
+                PLATFORM,
+                "run_succeeded",
+                "The run succeeded. Another run had already made its changes.",
+                RunSucceededData(outcome=Outcome.NOTHING_TO_WRITE.value),
+            )
+            return Moved(
+                Succeeded(self.run_id, Outcome.NOTHING_TO_WRITE, (), self.unread), (already,)
+            )
+        return Moved(
+            Succeeded(self.run_id, Outcome.WRITTEN, written, self.unread),
+            (*(write_done(w) for w in fresh), _run_written(len(written))),
         )
 
     def fail(self, failure: Failure) -> Moved[Failed]:
@@ -386,13 +435,7 @@ class AwaitingApproval:
             deadline(Acting, now),
             self.unread,
         )
-        resumed = PendingEvent(
-            WORKFLOW,
-            "execution_resumed",
-            f"n8n execution {execution} took the yes and carries on.",
-            ExecutionResumedData(execution_id=execution),
-        )
-        return Moved(acting, (resumed,))
+        return Moved(acting, (_resumed(execution, "took the yes and carries on"),))
 
     def lose(self, why: str) -> Moved[Lost]:
         lost = PendingEvent(
@@ -560,31 +603,38 @@ class Working:
         steps: list[ApprovalStepView],
         link: str,
         summary: str,
+        left_out: tuple[str, ...] = (),
     ) -> Moved[AwaitingApproval]:
-        """Ask for a yes in n8n: the run's proposal is what its blocks proposed."""
+        """Ask for a yes in n8n: the run's proposal is what its blocks proposed, less what was
+        already made."""
         return Moved(
             AwaitingApproval(self.run_id, proposal[0], approval_id, summary),
-            (_workflow_proposed(*proposal), _approval_requested(approval_id, steps, link)),
+            (
+                _workflow_proposed(*proposal, left_out),
+                _approval_requested(approval_id, steps, link),
+            ),
         )
 
     def stop_at_gate(
-        self, proposal: tuple[ProposalId, Digest, tuple[ActionLine, ...]]
+        self,
+        proposal: tuple[ProposalId, Digest, tuple[ActionLine, ...]],
+        left_out: tuple[str, ...] = (),
     ) -> Moved[Succeeded]:
         """A test run shows what it would ask, asks nobody and writes nothing."""
         return Moved(
             Succeeded(self.run_id, Outcome.TEST_PASSED, ()),
-            (_workflow_proposed(*proposal), _test_passed()),
+            (_workflow_proposed(*proposal, left_out), _test_passed()),
         )
 
     def skip(self, waiting: RunId) -> Moved[Skipped]:
         """Another run of the workflow already waits for a yes (ADR 0026)."""
         return Moved(Skipped(self.run_id, waiting), (run_skipped(waiting),))
 
-    def nothing_to_change(self) -> Moved[Succeeded]:
+    def nothing_to_change(self, left_out: tuple[str, ...] = ()) -> Moved[Succeeded]:
         succeeded = PendingEvent(
             PLATFORM,
             "run_succeeded",
-            "The run succeeded. There was nothing to change.",
+            " ".join(("The run succeeded. There was nothing to change.", *left_out)),
             RunSucceededData(outcome=Outcome.NOTHING_TO_WRITE.value),
         )
         return Moved(Succeeded(self.run_id, Outcome.NOTHING_TO_WRITE, ()), (succeeded,))
@@ -784,15 +834,21 @@ def _approval_requested(
 
 
 def _workflow_proposed(
-    proposal_id: ProposalId, digest: Digest, lines: tuple[ActionLine, ...]
+    proposal_id: ProposalId,
+    digest: Digest,
+    lines: tuple[ActionLine, ...],
+    left_out: tuple[str, ...] = (),
 ) -> PendingEvent:
     count = len(lines)
+    proposed = (
+        f"The workflow proposed {count} change{'' if count == 1 else 's'}: "
+        + "; ".join(line.line for line in lines)
+        + "."
+    )
     return PendingEvent(
         WORKFLOW,
         "write_action_proposed",
-        f"The workflow proposed {count} change{'' if count == 1 else 's'}: "
-        + "; ".join(line.line for line in lines)
-        + ".",
+        " ".join((proposed, *left_out)),
         WriteActionProposedData(proposal_id=proposal_id, digest=digest, actions=list(lines)),
     )
 

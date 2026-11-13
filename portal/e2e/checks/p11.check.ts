@@ -58,7 +58,7 @@ const h1 = (page: Page) => page.getByRole('heading', { level: 1 })
 const needsYou = (page: Page) => page.getByRole('list', { name: 'Needs you' })
 const approvalItem = (page: Page, approvalId: string) => page.locator(`li[data-home-item="approval:${approvalId}"]`)
 const waitingOnOthers = (page: Page) => page.getByRole('region', { name: 'Waiting on others' })
-const mainMenu = (page: Page) => page.getByRole('navigation', { name: 'Main' }).filter({ visible: true })
+const mainMenu = (page: Page) => page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
 
 async function withBackend<T>(act: (backend: Backend, api: APIRequestContext) => Promise<T>): Promise<T> {
   const backend = await Backend.connect(BASE_URL)

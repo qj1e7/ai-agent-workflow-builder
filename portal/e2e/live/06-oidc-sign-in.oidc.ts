@@ -66,7 +66,7 @@ test('alice signs in and sees her name, bob signs in at a deep link, and signing
   const header = alice.page.getByRole('banner')
   await expect(header, 'the header names the person the token belongs to').toContainText('Alice')
   await expect(header, 'the header shows her roles from the People list').toContainText('Operator and Approver')
-  await expect(alice.page.getByRole('heading', { level: 1 })).toContainText('Alice')
+  await expect(alice.page.getByRole('main').getByText(/^Good (morning|afternoon|evening), Alice$/)).toBeVisible()
   await expect(alice.page.getByRole('button', { name: /Test controls/ }), 'real sign-in has no test controls').toHaveCount(0)
   await expect(alice.page.getByText('Act as'), 'real sign-in has no way to act as someone else').toHaveCount(0)
   await shot(alice.page, info, 'oidc-02-signed-in-alice')
@@ -82,7 +82,7 @@ test('alice signs in and sees her name, bob signs in at a deep link, and signing
   ])
 
   for (const label of ['Workflows', 'Watchlist', 'Chat']) {
-    await alice.page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: new RegExp(`^${label}(\\s*, \\d+ need (you|action))?$`) }).click()
+    await alice.page.getByRole('navigation', { name: 'Browse' }).getByRole('link', { name: new RegExp(`^${label}(\\s*, \\d+ need (you|action))?$`) }).click()
     await expect(alice.page.getByRole('heading', { level: 1 })).toBeVisible()
   }
   await alice.page.reload()

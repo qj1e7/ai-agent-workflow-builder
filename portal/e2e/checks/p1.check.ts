@@ -54,7 +54,7 @@ async function devContext(browser: Browser, user: string, { phone = false, mobil
 }
 
 const h1 = (page: Page) => page.locator('main h1')
-const mainMenu = (page: Page) => page.getByRole('navigation', { name: 'Main' }).filter({ visible: true })
+const mainMenu = (page: Page) => page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
 
 /** Waits until no animation is running, or 3 s, whichever is first. */
 async function settle(page: Page): Promise<void> {

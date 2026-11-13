@@ -30,6 +30,8 @@ from platform_api.orchestration.n8n_calls import (
     TryLater,
     Waiting,
     Work,
+    WriteAnswer,
+    WriteCall,
 )
 from platform_api.orchestration.tell import TellStatus, TellWhat, TellWhere, Told
 from platform_api.shared import N8nExecutionId
@@ -183,6 +185,27 @@ class AnswerOut(WireModel):
     cut_off: bool = Field(description="True when a Read stopped at its cap of items.")
 
 
+class WriteIn(_From):
+    """Only the fields every block sends. Nothing in the call says what to write."""
+
+
+class ChangeOut(WireModel):
+    change: str = Field(description="The change, in the words of the run's log.")
+    status: Literal["made", "already_made", "not_made"]
+    reference: str | None = Field(default=None, description="What it made, such as a ticket key.")
+    url: str | None = None
+    made_in: str | None = Field(
+        default=None, description="The run that made it first, when that was another run."
+    )
+    detail: str | None = Field(default=None, description="Why it was not made, or where it was.")
+
+
+class WriteOut(WireModel):
+    made: int = Field(description="Changes that exist now. Fewer than `of` fails the block.")
+    of: int
+    results: list[ChangeOut]
+
+
 class RetryOut(WireModel):
     retryable: Literal[True] = True
     detail: str
@@ -206,8 +229,11 @@ REFUSALS: dict[int | str, dict[str, Any]] = {
 }
 
 
-def _answered(result: CallResult) -> AnswerOut | AskOut | TellOut | JSONResponse:
+def _answered(result: CallResult) -> AnswerOut | AskOut | WriteOut | TellOut | JSONResponse:
     match result:
+        case WriteAnswer(made, of, results):
+            changes = [ChangeOut.model_validate(change, from_attributes=True) for change in results]
+            return WriteOut(made=made, of=of, results=changes)
         case Answer(items, replayed, cut_off):
             return AnswerOut(
                 items=[dict(item) for item in items], replayed=replayed, cut_off=cut_off
@@ -227,7 +253,7 @@ def _answered(result: CallResult) -> AnswerOut | AskOut | TellOut | JSONResponse
 async def _call(calls: NodeCalls, body: _From, work: Work) -> AnswerOut | JSONResponse:
     call = NodeCall(N8nExecutionId(body.execution_id), body.node_name, work)
     answer = _answered(await calls.call(call))
-    assert not isinstance(answer, AskOut | TellOut)
+    assert not isinstance(answer, AskOut | WriteOut | TellOut)
     return answer
 
 
@@ -293,7 +319,22 @@ async def propose(body: ProposeIn, calls: CurrentNodeCalls) -> AnswerOut | JSONR
 async def ask(body: AskIn, calls: CurrentNodeCalls) -> AskOut | JSONResponse:
     call = NodeCall(N8nExecutionId(body.execution_id), body.node_name, AskCall(body.resume_url))
     answer = _answered(await calls.call(call))
-    assert not isinstance(answer, AnswerOut | TellOut)
+    assert not isinstance(answer, AnswerOut | WriteOut | TellOut)
+    return answer
+
+
+@router.post(
+    "/calls/write",
+    response_model=WriteOut,
+    description="Makes the run's own approved changes. The write gateway checks the yes in our "
+    "records as it writes each one, and makes each subject once across runs. A retry makes only "
+    "the changes still to make.",
+    responses=REFUSALS,
+)
+async def write(body: WriteIn, calls: CurrentNodeCalls) -> WriteOut | JSONResponse:
+    call = NodeCall(N8nExecutionId(body.execution_id), body.node_name, WriteCall())
+    answer = _answered(await calls.call(call))
+    assert not isinstance(answer, AnswerOut | AskOut | TellOut)
     return answer
 
 
@@ -309,7 +350,7 @@ async def tell(body: TellIn, calls: CurrentNodeCalls) -> TellOut | JSONResponse:
         N8nExecutionId(body.execution_id), body.node_name, TellCall(body.where, body.what)
     )
     answer = _answered(await calls.call(call))
-    assert not isinstance(answer, AnswerOut | AskOut)
+    assert not isinstance(answer, AnswerOut | AskOut | WriteOut)
     return answer
 
 

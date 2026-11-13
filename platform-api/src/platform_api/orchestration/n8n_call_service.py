@@ -40,6 +40,7 @@ from platform_api.orchestration.n8n_calls import (
     BUSY,
     CANNOT_SEAL,
     CHANGED_CALL,
+    DENIED,
     NO_EXECUTION,
     NO_TELL_FLOW,
     NOT_FAILED,
@@ -53,11 +54,13 @@ from platform_api.orchestration.n8n_calls import (
     TEST_RUN_STOPS,
     AgentCall,
     Answer,
+    Answered,
     AskAnswer,
     AskCall,
     ByRetry,
     ByStart,
     CallResult,
+    Carry,
     FailedExecution,
     IssuedStart,
     N8nFailures,
@@ -75,11 +78,17 @@ from platform_api.orchestration.n8n_calls import (
     Refused,
     SourceReads,
     StartKind,
+    StopRun,
     StopStart,
     TellCall,
+    TheRequest,
     TryLater,
     Waiting,
     WorkflowFacts,
+    WriteAnswer,
+    WriteCall,
+    admit_write,
+    after_write,
     decide_link,
     fail_by_report,
     failure_words,
@@ -87,6 +96,7 @@ from platform_api.orchestration.n8n_calls import (
     run_stopped,
     start_signature,
     unknown,
+    write_answer,
 )
 from platform_api.orchestration.runs import (
     Acting,
@@ -95,6 +105,7 @@ from platform_api.orchestration.runs import (
     Failed,
     Failure,
     FailureReason,
+    Lost,
     Moved,
     Pending,
     Rejected,
@@ -107,8 +118,10 @@ from platform_api.orchestration.runs import (
     skipped_events,
     state_name,
     working_on,
+    write_done,
 )
 from platform_api.orchestration.service import (
+    DENIED_ON_THE_WIRE,
     ActiveModel,
     ActivityLogPort,
     CallbackMinter,
@@ -116,6 +129,7 @@ from platform_api.orchestration.service import (
     enqueue_announcement,
     request_for,
     steps_view,
+    write_denied,
 )
 from platform_api.orchestration.spec import CardsTask
 from platform_api.orchestration.store import RunRecord, Store
@@ -139,13 +153,22 @@ from platform_api.orchestration.tell import (
 from platform_api.orchestration.watch import Unusable
 from platform_api.orchestration.watch_store import WatchStore
 from platform_api.orchestration.write_actions import (
+    AuthorizedWrite,
+    Carried,
+    Deny,
     Proposal,
     Sites,
     UnboundIntent,
     WriteAction,
+    WriteGateway,
+    WritingRun,
     at_sites,
+    check,
     describe,
     digest,
+    made_subjects,
+    still_to_make,
+    subject_key,
 )
 from platform_api.shared import (
     TEAM_TIME_ZONE,
@@ -169,6 +192,7 @@ a minute at most (ENGINE-PLAN 2.8)."""
 type Outcome = Literal["working", "answered", "refused"]
 
 _actions_adapter: TypeAdapter[tuple[WriteAction, ...]] = TypeAdapter(tuple[WriteAction, ...])
+_write_adapter: TypeAdapter[WriteAnswer] = TypeAdapter(WriteAnswer)
 
 
 @dataclass(frozen=True)
@@ -182,7 +206,7 @@ class CallRow:
     status: int | None
     answer: dict[str, Any] | None
 
-    def result(self) -> Answer | AskAnswer | Told | Refused:
+    def result(self) -> Answer | AskAnswer | WriteAnswer | Told | Refused:
         assert self.answer is not None
         if self.outcome == "refused":
             assert self.status is not None
@@ -204,6 +228,15 @@ class Admitted:
     call_id: str
     task_id: TaskId
     record: RunRecord
+
+
+@dataclass(frozen=True)
+class Writing:
+    """A write the safety checker allowed, claimed by this call."""
+
+    run_id: RunId
+    call_id: str
+    write: AuthorizedWrite
 
 
 @dataclass(frozen=True)
@@ -253,10 +286,12 @@ def _answer(stored: Mapping[str, Any], replayed: bool = False) -> Answer:
     return Answer(tuple(stored["items"]), replayed, bool(stored.get("cut_off", False)))
 
 
-def _replayed(kind: str, stored: Mapping[str, Any]) -> Answer | AskAnswer | Told:
+def _replayed(kind: str, stored: Mapping[str, Any]) -> Answer | AskAnswer | WriteAnswer | Told:
     """A block's first answer, given again to a repeat or to a retry of the run."""
     if kind == "ask":
         return _ask_answer(stored)
+    if kind == "write":
+        return _write_adapter.validate_python(stored)
     if kind == "tell":
         return Told(stored["status"], stored["line"])
     return _answer(stored, replayed=True)
@@ -268,10 +303,12 @@ def _ask_answer(stored: Mapping[str, Any]) -> AskAnswer:
     return NothingToChange()
 
 
-def _stored(answer: Answer | AskAnswer | Told) -> dict[str, Any]:
+def _stored(answer: Answer | AskAnswer | WriteAnswer | Told) -> dict[str, Any]:
     match answer:
         case Answer(items, _, cut_off):
             return {"items": [dict(item) for item in items], "cut_off": cut_off}
+        case WriteAnswer():
+            return _write_adapter.dump_python(answer, mode="json")
         case Waiting(request_id):
             return {"status": "waiting", "request_id": request_id}
         case NothingToChange():
@@ -344,14 +381,14 @@ class CallBook:
         uow: UnitOfWork,
         call: NodeCall,
         run_id: RunId | None,
-        result: Answer | AskAnswer | Told | Refused,
+        result: Answer | AskAnswer | WriteAnswer | Told | Refused,
         actions: Sequence[Mapping[str, Any]] = (),
         call_id: str | None = None,
     ) -> bool:
         """Keeps a block's one answer or refusal. With call_id, only that claim may keep it: a
         claim that was taken over meanwhile keeps nothing, and False says so."""
         match result:
-            case Answer() | Waiting() | NothingToChange() | Told():
+            case Answer() | Waiting() | NothingToChange() | WriteAnswer() | Told():
                 outcome, status, stored = "answered", None, _stored(result)
             case Refused(status, detail):
                 outcome, stored = "refused", {"detail": detail}
@@ -584,12 +621,9 @@ class CallBook:
                 (run_id,),
             )
         ).fetchall()
-        dumped = [
-            {key: value for key, value in action.items() if key != "subject"}
-            for row in rows
-            for action in row["actions"]
-        ]
-        return _actions_adapter.validate_python(dumped)
+        return _actions_adapter.validate_python(
+            [action for row in rows for action in row["actions"]]
+        )
 
     async def found(self, uow: UnitOfWork, run_id: RunId) -> str:
         """What the run's last agent found, for the Approvers."""
@@ -647,6 +681,7 @@ class NodeCalls:
         start_secret: str | None = None,
         box: Sealer | None = None,
         time_zone: ZoneInfo = TEAM_TIME_ZONE,
+        gateway: WriteGateway | None = None,
         tells: TellOutlet | None = None,
         failures: N8nFailures | None = None,
     ) -> None:
@@ -663,6 +698,7 @@ class NodeCalls:
         self._start_secret = start_secret
         self._box = box
         self._time_zone = time_zone
+        self._gateway = gateway
         self._tells = tells
         self._failures = failures
         self._store = Store()
@@ -761,6 +797,8 @@ class NodeCalls:
                 await asyncio.wait_for(stop.wait(), every.total_seconds())
 
     async def call(self, call: NodeCall) -> CallResult:
+        if isinstance(call.work, WriteCall):
+            return await self._write(call)
         async with self._db.transaction("orchestration") as uow:
             admitted = await self._admit(uow, call)
         if not isinstance(admitted, Admitted):
@@ -770,29 +808,10 @@ class NodeCalls:
             return await self._finish(uow, admitted, call, work)
 
     async def _admit(self, uow: UnitOfWork, call: NodeCall) -> Admitted | CallResult:
-        await self._book.hold_execution(uow, call.execution_id)
-        row = await self._book.call(uow, call)
-        if row is not None and (row.kind, row.content_hash) != (call.kind, call.content_hash):
-            return CHANGED_CALL
-        if row is not None:
-            await self._book.count_again(uow, call)
-        if row is not None and row.outcome != "working":
-            if row.run_id is not None:
-                await self._touch(uow, row.run_id, call.execution_id)
-            return row.result()
-        if row is not None and row.claimed_at > uow.now - CLAIM_LEASE:
-            return BUSY
-        run_id = await self._book.linked_run(uow, call.execution_id)
-        if run_id is None:
-            linked = await self._link(uow, call.execution_id)
-            if isinstance(linked, TryLater):
-                return linked
-            if isinstance(linked, Refused):
-                run_id = await self._book.linked_run(uow, call.execution_id)
-                return await self._refuse(uow, call, run_id, linked)
-            run_id = linked
-        if (refused := await self._catalog.unknown_in(call.work)) is not None:
-            return await self._refuse(uow, call, run_id, refused)
+        linked = await self._linked_run(uow, call)
+        if not isinstance(linked, str):
+            return linked
+        run_id = linked
         record = await self._store.load_run(uow, run_id, lock=True)
         assert record is not None
         match record.state:
@@ -821,6 +840,34 @@ class NodeCalls:
             return BUSY
         call_id = await self._book.claim(uow, call, run_id)
         return Admitted(run_id, call_id, TaskId(f"{run_id}/{call_id}"), record)
+
+    async def _linked_run(self, uow: UnitOfWork, call: NodeCall) -> RunId | CallResult:
+        """The run a block's call is for, linking its execution on the first call. A call this
+        block already had an answer or a refusal for gets that same one again."""
+        await self._book.hold_execution(uow, call.execution_id)
+        row = await self._book.call(uow, call)
+        if row is not None and (row.kind, row.content_hash) != (call.kind, call.content_hash):
+            return CHANGED_CALL
+        if row is not None:
+            await self._book.count_again(uow, call)
+        if row is not None and row.outcome != "working":
+            if row.run_id is not None:
+                await self._touch(uow, row.run_id, call.execution_id)
+            return row.result()
+        if row is not None and row.claimed_at > uow.now - CLAIM_LEASE:
+            return BUSY
+        run_id = await self._book.linked_run(uow, call.execution_id)
+        if run_id is None:
+            linked = await self._link(uow, call.execution_id)
+            if isinstance(linked, TryLater):
+                return linked
+            if isinstance(linked, Refused):
+                run_id = await self._book.linked_run(uow, call.execution_id)
+                return await self._refuse(uow, call, run_id, linked)
+            run_id = linked
+        if (refused := await self._catalog.unknown_in(call.work)) is not None:
+            return await self._refuse(uow, call, run_id, refused)
+        return run_id
 
     async def _refuse(
         self, uow: UnitOfWork, call: NodeCall, run_id: RunId | None, refused: Refused
@@ -978,6 +1025,8 @@ class NodeCalls:
                 return await self._run_agent(admitted, agent, inputs)
             case AskCall(resume_url):
                 return Asking(resume_url)
+            case WriteCall():
+                raise AssertionError("a write is carried by _write, never by _work")
             case TellCall() as tell:
                 return await self._tell(admitted, call, tell)
             case ProposeCall(action, place, title, body, subject):
@@ -1154,7 +1203,7 @@ class NodeCalls:
         proposed, the block leaves by Nothing to change. A test run stops here and asks nobody."""
         working = record.state
         assert isinstance(working, Working)
-        actions = await self._book.proposed(uow, record.run_id)
+        actions, left_out = await self._still_to_make(uow, record)
         proposal = Proposal(ProposalId(new_id("prp")), record.run_id, actions, digest(actions))
         shown = (proposal.id, proposal.digest, tuple(describe(action) for action in actions))
         test = record.spec.stops_at_gate or await self._book.started_as_test(uow, record.run_id)
@@ -1162,9 +1211,9 @@ class NodeCalls:
         result: AskAnswer | Refused
         moved: Moved[Any]
         if not actions:
-            result, moved = NothingToChange(), working.nothing_to_change()
+            result, moved = NothingToChange(), working.nothing_to_change(left_out)
         elif test:
-            result, moved = TEST_RUN_STOPS, working.stop_at_gate(shown)
+            result, moved = TEST_RUN_STOPS, working.stop_at_gate(shown, left_out)
         elif self._box is None:
             failure = Failure(FailureReason.SAFETY_DENIED, CANNOT_SEAL, retryable=False)
             result, moved = run_stopped(CANNOT_SEAL), working.fail(failure)
@@ -1175,7 +1224,8 @@ class NodeCalls:
             summary = await self._book.found(uow, record.run_id)
             steps = steps_view(request, ())
             result = Waiting(request.id)
-            moved = working.ask(shown, request.id, steps, approval_link(request.id), summary)
+            link = approval_link(request.id)
+            moved = working.ask(shown, request.id, steps, link, summary, left_out)
         if not await self._book.keep(uow, call, record.run_id, result, call_id=admitted.call_id):
             return BUSY
         if actions:
@@ -1189,6 +1239,114 @@ class NodeCalls:
                 uow, self._store, record, request, proposal, moved.state.summary, self._sites
             )
         return result
+
+    async def _still_to_make(
+        self, uow: UnitOfWork, record: RunRecord
+    ) -> tuple[tuple[WriteAction, ...], tuple[str, ...]]:
+        """What the run's blocks proposed, less each change whose subject is made already, so the
+        Approvers see only what will be made (ENGINE-PLAN 2.3.8)."""
+        proposed = await self._book.proposed(uow, record.run_id)
+        use_case = record.spec.use_case_id
+        subjects = {subject_key(use_case, a.subject) for a in proposed if a.subject is not None}
+        return still_to_make(use_case, proposed, await made_subjects(uow, subjects))
+
+    async def _write(self, call: NodeCall) -> CallResult:
+        """Make the approved changes (ENGINE-PLAN 2.3.8). The gateway makes the run's own approved
+        proposal, checked against our records as it is made. The call says nothing about what."""
+        if self._gateway is None:
+            return TryLater("This platform has no write gateway, so it makes no changes.")
+        async with self._db.transaction("orchestration") as uow:
+            admitted = await self._admit_write(uow, call, self._gateway)
+        if not isinstance(admitted, Writing):
+            return admitted
+        carried = await self._gateway.execute(admitted.write)
+        async with self._db.transaction("orchestration") as uow:
+            return await self._finish_write(uow, admitted, call, carried)
+
+    async def _admit_write(
+        self, uow: UnitOfWork, call: NodeCall, gateway: WriteGateway
+    ) -> Writing | CallResult:
+        linked = await self._linked_run(uow, call)
+        if not isinstance(linked, str):
+            return linked
+        run_id = linked
+        record = await self._store.load_run(uow, run_id, lock=True)
+        assert record is not None
+        held = await self._the_request(uow, record.state)
+        match admit_write(record.state, call.execution_id, held, uow.now):
+            case Refused() as refused:
+                return await self._refuse(uow, call, run_id, refused)
+            case StopRun(refused, moved):
+                await self._commit(uow, record, moved)
+                await self._store.cancel_outbox(uow, run_id)
+                return await self._refuse(uow, call, run_id, refused)
+            case Answered(answer):
+                await self._book.keep(uow, call, run_id, answer)
+                return answer
+            case Carry(acting, took_yes):
+                if took_yes is not None:
+                    record = await self._commit(uow, record, took_yes)
+        assert held is not None
+        proposal = await self._store.load_proposal(uow, acting.proposal_id)
+        assert proposal is not None
+        test = record.spec.stops_at_gate or await self._book.started_as_test(uow, run_id)
+        verdict = check(
+            acting,
+            WritingRun(record.spec.use_case_id, test),
+            proposal,
+            held.request,
+            held.decisions,
+            gateway.registry,
+            gateway.sites,
+        )
+        match verdict:
+            case Deny(reason):
+                words = DENIED[reason]
+                failure = Failure(FailureReason.SAFETY_DENIED, words, retryable=False)
+                denied = write_denied(DENIED_ON_THE_WIRE[reason], words)
+                await self._commit(uow, record, acting.fail(failure).preceded_by(denied))
+                await self._store.cancel_outbox(uow, run_id)
+                return await self._refuse(uow, call, run_id, Refused(403, words))
+            case AuthorizedWrite() as write:
+                return Writing(run_id, await self._book.claim(uow, call, run_id), write)
+
+    async def _the_request(self, uow: UnitOfWork, state: RunState) -> TheRequest | None:
+        match state:
+            case (
+                AwaitingApproval(approval_id=approval_id)
+                | Acting(approval_id=approval_id)
+                | Lost(approval_id=approval_id)
+            ):
+                pass
+            case _:
+                return None
+        request = await self._store.load_approval(uow, approval_id)
+        assert request is not None
+        decisions = tuple(await self._store.load_decisions(uow, approval_id))
+        held = await self._store.held_wait(uow, approval_id)
+        return TheRequest(request, decisions, None if held is None else held.execution_id)
+
+    async def _finish_write(
+        self, uow: UnitOfWork, writing: Writing, call: NodeCall, carried: Carried
+    ) -> CallResult:
+        """Keeps the answer and moves the run. What this try made is logged even when the run
+        moved on meanwhile, such as past its deadline."""
+        record = await self._store.load_run(uow, writing.run_id, lock=True)
+        assert record is not None
+        answer = write_answer(carried)
+        if not await self._book.keep(uow, call, writing.run_id, answer, call_id=writing.call_id):
+            await self._activity.append(uow, writing.run_id, [write_done(w) for w in carried.fresh])
+            return BUSY
+        match record.state:
+            case Acting(claimant=claimant) as acting if claimant == call.execution_id:
+                await self._commit(uow, record, after_write(acting, carried))
+                if carried.failure is not None:
+                    await self._store.cancel_outbox(uow, writing.run_id)
+            case _:
+                await self._activity.append(
+                    uow, writing.run_id, [write_done(w) for w in carried.fresh]
+                )
+        return answer
 
     async def _commit(
         self,
@@ -1207,5 +1365,5 @@ class NodeCalls:
 def _recorded(actions: Sequence[WriteAction], subject: str | None) -> tuple[Mapping[str, Any], ...]:
     """The actions a block adds to the run's proposal, each with what it is about, so a later
     change is never made twice for one subject (ENGINE-PLAN 2.3.8)."""
-    dumped = _actions_adapter.dump_python(tuple(actions), mode="json")
-    return tuple({**action, "subject": subject} for action in dumped)
+    about = tuple(replace(action, subject=subject) for action in actions)
+    return tuple(_actions_adapter.dump_python(about, mode="json"))

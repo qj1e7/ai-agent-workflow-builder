@@ -1,4 +1,5 @@
-from datetime import UTC, datetime
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -387,6 +388,27 @@ def test_why_not_is_none_exactly_when_a_yes_on_the_open_step_would_be_recorded()
             assert (why_not(request(TWO_STEPS), decisions, principal) is None) == isinstance(
                 outcome, Recorded
             )
+
+
+@pytest.mark.parametrize(
+    ("decided", "step", "by"),
+    [
+        pytest.param((), 0, BOB, id="the first approver"),
+        pytest.param((decision(0, BOB),), 1, CAROL, id="the second approver"),
+    ],
+)
+def test_safety_a_decision_at_or_after_the_expiry_is_refused(
+    decided: tuple[Decision, ...], step: int, by: UserId
+):
+    """Before the tick ends the request, a late yes is still refused, so the records never hold
+    a yes the expiry outran, and a first yes never pulls the second Approver into a dead walk."""
+    expiring = replace(request(TWO_STEPS), expires_at=LATER)
+    for at in (LATER, LATER + timedelta(seconds=1)):
+        for verdict in Verdict:
+            refused = decide(expiring, decided, approver(by), step, verdict, DIGEST, at)
+            assert refused == Refused(Refusal.NOT_OPEN)
+    in_time = decide(expiring, decided, approver(by), step, Verdict.APPROVE, DIGEST, NOW)
+    assert isinstance(in_time, Recorded)
 
 
 def test_decide_stamps_the_time_it_was_given():

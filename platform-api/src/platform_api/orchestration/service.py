@@ -162,8 +162,8 @@ from platform_api.orchestration.write_actions import (
     ProposedIntent,
     Sites,
     UnboundIntent,
-    WriteFailed,
     WriteGateway,
+    WritingRun,
     at_sites,
     bind,
     check,
@@ -496,10 +496,12 @@ DENIED_ON_THE_WIRE: Mapping[DenyReason, DeniedReason] = {
     DenyReason.DIGEST_MISMATCH: "digest_mismatch",
     DenyReason.UNREGISTERED_ACTION: "unregistered_action",
     DenyReason.TARGET_CHANGED: "target_changed",
+    DenyReason.EXPIRED: "expired",
+    DenyReason.TEST_RUN: "test_run",
 }
 
 
-def _denied(reason: DeniedReason, detail: str) -> PendingEvent:
+def write_denied(reason: DeniedReason, detail: str) -> PendingEvent:
     return PendingEvent(
         SAFETY_CHECKER,
         "write_action_denied",
@@ -646,7 +648,7 @@ class Orchestrator:
         detail = f"{step.value} is not allowed while the run is {state_name(record.state)}"
         events: list[PendingEvent] = []
         if step is StepName.WRITE_ACTION:
-            events.append(_denied("out_of_order", detail))
+            events.append(write_denied("out_of_order", detail))
         events.append(step_finished(step, execution, 1, "refused", detail))
         if fails_run:
             # The referee refuses only before the work is approved, so nothing can be written yet.
@@ -890,6 +892,7 @@ class Orchestrator:
             decisions = await self._store.load_decisions(uow, request.id)
             verdict = check(
                 acting,
+                WritingRun(record.spec.use_case_id, record.spec.stops_at_gate),
                 proposal,
                 request,
                 decisions,
@@ -903,7 +906,7 @@ class Orchestrator:
                     moved2 = acting.fail(
                         Failure(FailureReason.SAFETY_DENIED, why, retryable=False)
                     ).preceded_by(
-                        _denied(DENIED_ON_THE_WIRE[reason], detail),
+                        write_denied(DENIED_ON_THE_WIRE[reason], detail),
                         step_finished(StepName.WRITE_ACTION, execution, 1, "refused", detail),
                     )
                     await self._commit(uow, record, moved2)
@@ -911,21 +914,21 @@ class Orchestrator:
                     return StepReply(False, "refused", detail)
                 case AuthorizedWrite() as authorized:
                     pass
-        try:
-            written = await self._gateway.execute(authorized)
-        except WriteFailed as error:
+        carried = await self._gateway.execute(authorized)
+        if carried.failure is not None:
             async with self._db.transaction("orchestration") as uow:
                 current = await self._store.load_run(uow, run_id, lock=True)
                 if current is None or current.version != record.version:
                     return StepReply(False, "superseded", "The run moved on during the write")
-                detail = str(error)
-                moved2 = acting.fail(
-                    Failure(FailureReason.WRITE_FAILED, detail, retryable=error.retryable)
-                ).preceded_by(step_finished(StepName.WRITE_ACTION, execution, 1, "failed", detail))
+                detail = carried.failure.message
+                moved2 = acting.fail(carried.failure).preceded_by(
+                    step_finished(StepName.WRITE_ACTION, execution, 1, "failed", detail)
+                )
                 await self._commit(uow, current, moved2)
                 await self._store.cancel_outbox(uow, run_id)
             return StepReply(False, "failed", detail)
 
+        written = carried.written
         async with self._db.transaction("orchestration") as uow:
             current = await self._store.load_run(uow, run_id, lock=True)
             if current is None or current.version != record.version:

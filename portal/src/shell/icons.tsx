@@ -38,21 +38,24 @@ export const SettingsIcon = drawn(
   </>,
 )
 
-export const GridIcon = drawn(
-  'GridIcon',
+/** Workflows on the rail: three linked nodes, as in the sketch. */
+export const NodesIcon = drawn(
+  'NodesIcon',
   <>
-    <rect x="4" y="4" width="7" height="7" rx="1.5" />
-    <rect x="13" y="4" width="7" height="7" rx="1.5" />
-    <rect x="4" y="13" width="7" height="7" rx="1.5" />
-    <rect x="13" y="13" width="7" height="7" rx="1.5" />
+    <circle cx="5.4" cy="12" r="2.6" />
+    <circle cx="18.6" cy="6" r="2.6" />
+    <circle cx="18.6" cy="18" r="2.6" />
+    <path d="M7.9 10.9l8.2-3.8M7.9 13.1l8.2 3.8" />
   </>,
 )
 
-export const BoxIcon = drawn(
-  'BoxIcon',
+/** The Watchlist on the rail: a stack of rows, as in the sketch. */
+export const StackIcon = drawn(
+  'StackIcon',
   <>
-    <path d="M4 7.5L12 3.5l8 4v9l-8 4-8-4z" />
-    <path d="M4 7.5l8 4 8-4M12 11.5v9" />
+    <rect x="3.6" y="4.2" width="16.8" height="4.8" rx="1.4" />
+    <rect x="3.6" y="9.6" width="16.8" height="4.8" rx="1.4" />
+    <rect x="3.6" y="15" width="16.8" height="4.8" rx="1.4" />
   </>,
 )
 
