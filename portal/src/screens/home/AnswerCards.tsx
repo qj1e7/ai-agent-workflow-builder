@@ -8,8 +8,8 @@ import { Card } from '../../ui/Card'
 import { OpenButton } from '../../ui/OpenItem'
 import { AskTheTeam } from './AskTheTeam'
 import { useAsker } from './asker'
-import { cantLines, refusalNext, SAY_ANOTHER_WAY, startingPoints } from './answers'
-import { cardFrom } from './card'
+import { cantLines, questionActions, refusalNext, SAY_ANOTHER_WAY, startingPoints } from './answers'
+import { andList, cardFrom } from './card'
 import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard } from './parts'
 import { SetupCard, type CardStart } from './SetupCard'
 import { CapabilityLists } from './CapabilityLists'
@@ -308,13 +308,16 @@ export function Answer({ reply, typed, page }: AnswerProps) {
       return <IdeasAnswer page={page} />
     case 'offline':
       return asker === 'operator' ? <OfflineAnswer reply={reply} /> : null
-    case 'question':
+    case 'question': {
+      const names = questionActions(reply, asker)
+      if (names.length === 0) return <LookedAt sections={reply.looked_at} />
       return (
-        <>
+        <Card title={andList(names)}>
           <LookedAt sections={reply.looked_at} />
-          {(reply.about_software ?? []).length > 0 ? <SoftwareActions names={reply.about_software ?? []} /> : null}
-        </>
+          <SoftwareActions names={names} />
+        </Card>
       )
+    }
     case 'edit':
     case 'check_workflows':
     case 'why_stopped':

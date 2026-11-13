@@ -7,17 +7,22 @@ import question from '../../../../contracts/fixtures/planner/answer.question.jso
 import refused from '../../../../contracts/fixtures/planner/answer.refused.json'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { PlannerReply } from '../../api/types'
+import type { Me, PlannerReply } from '../../api/types'
 import { newCardMemory, type CardMemory } from './cardMemory'
 import { Thread } from './Thread'
 import { EMPTY, threadReducer } from './threadState'
 
-function draw(reply: PlannerReply, pending = false): string {
+const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
+
+function draw(reply: PlannerReply, pending = false, me?: Me): string {
   let thread = threadReducer(EMPTY, { type: 'sent', text: 'what about Redis?' })
   if (!pending) thread = threadReducer(thread, { type: 'answered', reply, typed: 'what about Redis?' })
+  const session = createDevSession(null)
+  const client = new QueryClient()
+  if (me) client.setQueryData(['me', session.cacheScope()], me)
   return renderToStaticMarkup(
-    <QueryClientProvider client={new QueryClient()}>
-      <ApiProvider session={createDevSession(null)} platformFetch={fetch} origin="http://portal.test">
+    <QueryClientProvider client={client}>
+      <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
         <MemoryRouter>
           <Thread thread={thread} now={new Date('2026-11-08T10:00:00+08:00')} page={{ ask: () => undefined, edit: () => undefined, box: () => undefined }} />
         </MemoryRouter>
@@ -47,10 +52,18 @@ describe('the thread', () => {
     expect(draw(question as PlannerReply)).toMatch(/<span class="visually-hidden">You: <\/span>what about Redis\?/)
   })
 
-  it('names the Planner on an answer that is only words, beside its 30 px face', () => {
-    const answer = said(draw(question as PlannerReply))
+  it('names the Planner on an answer that is only words, beside its 30 px face, with a colon only a screen reader hears', () => {
+    const answer = said(draw({ ...(question as PlannerReply), about_software: [] } as PlannerReply, false, ALICE))
     expect(answer).toMatch(/<svg[^>]*width="30"/)
-    expect(text(answer)).toMatch(/^Planner LangGraph is behind\./)
+    expect(answer).toMatch(/>Planner<span class="visually-hidden">:<\/span><\/span>/)
+    expect(text(answer)).toMatch(/^Planner : LangGraph is behind\./)
+  })
+
+  it('leads a card with the sentence when a question answer offers an Operator actions, not a bubble with buttons in it', () => {
+    const answer = said(draw(question as PlannerReply, false, ALICE))
+    expect(answer).not.toMatch(/>Planner</)
+    expect(answer).toMatch(/<p>LangGraph is behind\.[^<]*<\/p><section[^>]*>/)
+    expect(answer).toMatch(/<h3 id="[^"]*">LangGraph<\/h3>/)
   })
 
   it('leads a card with its sentence and no name on screen, which only a screen reader hears', () => {

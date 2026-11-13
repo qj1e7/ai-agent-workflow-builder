@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import type { PlannerReply } from '../../api/types'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
 import { Answer, type Page } from './AnswerCards'
 import { EditCard } from './EditCard'
@@ -7,7 +6,7 @@ import { CardMemoryContext, NO_MEMORY, type CardMemory } from './cardMemory'
 import { Leftovers } from './PartsList'
 import { CardLive, NewestAnswer } from './primary'
 import { SetupCard } from './SetupCard'
-import { sayOf, type Asker } from './answers'
+import { sayOf, wordsOnly } from './answers'
 import { useAsker } from './asker'
 import { CheckWorkflowsAnswer, DecideAnswer, DecidedAnswer, IdeasSentence, NeedsMeAnswer, OperatorsAnswer, RequestsToOpen, useSaidOnce, WhyStoppedAnswer, type Say } from './StateAnswers'
 import type { Message, Thread as ThreadState } from './threadState'
@@ -17,14 +16,6 @@ import styles from './Planner.module.css'
 const SORRY = new Set(['cant', 'refused', 'offline', 'operators'])
 const RESUMED = 'Here’s your draft. Pick up where you left off.'
 const FACE = 30
-
-/**
- * Answers that are only words. They are drawn as a message with the Planner's name on it (the sketch's `.mb`), and every other
- * answer leads its cards with its sentence and no name (`.mcard`).
- */
-function wordsOnly(reply: PlannerReply, asker: Asker): boolean {
-  return reply.answer === 'question' || reply.answer === 'operators' || (reply.answer === 'offline' && asker === 'approver')
-}
 
 interface ThreadProps {
   readonly thread: ThreadState
@@ -55,7 +46,9 @@ function ReplyBody({ message, now, page, say, about }: { message: Extract<Messag
   return (
     <div className={words ? styles['words'] : styles['cards']}>
       {words ? (
-        <span className={styles['who']}>Planner</span>
+        <span className={styles['who']}>
+          Planner<span className="visually-hidden">:</span>
+        </span>
       ) : (
         <span className="visually-hidden">Planner: </span>
       )}

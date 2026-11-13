@@ -258,16 +258,17 @@ describe('the offline answer', () => {
 describe('the answer to a question about the person’s own data', () => {
   const links = (html: string) => [...html.matchAll(/<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g)].map((m) => [m[1], text(m[2] ?? '')])
 
-  it('shows the sections it looked at as links, and nothing else to click', () => {
+  it('leads a card named for the software it is about, with the sections it looked at as links', () => {
     const html = draw(question as QuestionReply)
-    expect(text(html)).toBe('Looked at Software')
+    expect(html).toMatch(/<h3 id="[^"]*">LangGraph<\/h3>/)
+    expect(text(html)).toBe('LangGraph Looked at Software')
     expect(links(html)).toEqual([['/software', 'Software']])
     expect(buttons(html)).toEqual(['Software'])
   })
 
   it('links each section to the screen it was read from, Needs you to the Workflows page, where Needs you leads', () => {
     const html = draw({ ...(question as QuestionReply), looked_at: ['watchlist', 'workflows', 'needs_you'] })
-    expect(text(html)).toBe('Looked at Software Workflows Needs you')
+    expect(text(html)).toBe('LangGraph Looked at Software Workflows Needs you')
     expect(links(html)).toEqual([
       ['/software', 'Software'],
       ['/workflows', 'Workflows'],
@@ -275,8 +276,8 @@ describe('the answer to a question about the person’s own data', () => {
     ])
   })
 
-  it('has no Looked at line for the fixed fallback, which looked at nothing', () => {
-    expect(draw({ ...(question as QuestionReply), looked_at: [] })).toBe('')
+  it('has no Looked at line, and no card, for the fixed fallback, which looked at nothing and names no software', () => {
+    expect(draw({ ...(question as QuestionReply), looked_at: [], about_software: [] })).toBe('')
   })
 
   it('draws plain links, so the keyboard reaches each one, with no tab stop removed and no motion', () => {
@@ -316,7 +317,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     )
   }
 
-  const answerOf = (html: string) => text(/<li[^>]*data-answer="true"[^>]*>([\s\S]*)<\/li>/.exec(html)?.[1] ?? '').replace(/^Planner:? /, '')
+  const answerOf = (html: string) => text(/<li[^>]*data-answer="true"[^>]*>([\s\S]*)<\/li>/.exec(html)?.[1] ?? '').replace(/^Planner ?:? /, '')
 
   it('answers a change with who makes changes, naming the Operators, and nothing to press (ROLE-refuse)', () => {
     const html = ask(operatorsReply as PlannerReply)
