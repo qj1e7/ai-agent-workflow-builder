@@ -115,10 +115,10 @@ for (const width of WIDTHS) {
     await page.setViewportSize({ width, height })
     try {
       await page.goto('/')
-      const box = page.getByLabel('Ask the Planner about software versions')
+      const box = page.getByLabel('Ask, or describe a task')
       await box.fill('Check my workflows')
       await box.press('Enter')
-      await expect(page.getByRole('region', { name: 'Most urgent' })).toBeVisible()
+      await expect(page.getByRole('region', { name: 'Needs you', exact: true })).toBeVisible()
       await expect(page.getByRole('list', { name: 'Your workflows' }).first()).toBeVisible()
       await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined)
       const problems = await fitProblems(page)
@@ -183,7 +183,7 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
     const context = await devContext(browser, 'alice', { reducedMotion: true })
     const page = await context.newPage()
     await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
-    const box = page.getByLabel('Ask the Planner about software versions')
+    const box = page.getByLabel('Ask, or describe a task')
     const newest = page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
     const panel = page.locator('#side-panel')
     const views: readonly (readonly [string, string, () => Locator, () => readonly Locator[]])[] = [
@@ -238,7 +238,7 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
     const context = await devContext(browser, 'bob', { reducedMotion: true })
     const page = await context.newPage()
     await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
-    const box = page.getByLabel('Ask the Planner about your approvals and the workflows')
+    const box = page.getByLabel('Ask, or describe a task')
     const newest = page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
     const panel = page.locator('#side-panel')
     const found: string[] = []
@@ -379,7 +379,7 @@ test('the side panel draws the same run line, small and without faces, at work, 
   }
   try {
     await page.goto('/')
-    const box = page.getByLabel('Ask the Planner about software versions')
+    const box = page.getByLabel('Ask, or describe a task')
     const newest = page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
     await box.fill(`Why did ${name} stop?`)
     await box.press('Enter')
@@ -435,7 +435,7 @@ for (const width of WIDTHS) {
     const context = await devContext(browser, 'alice', { reducedMotion: true })
     const page = await context.newPage()
     await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
-    const box = page.getByLabel('Ask the Planner about software versions')
+    const box = page.getByLabel('Ask, or describe a task')
     const newest = page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
     const found: string[] = []
     const check = async (state: string, name: string, part: Locator) => {

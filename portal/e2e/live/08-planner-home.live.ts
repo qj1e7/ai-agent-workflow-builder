@@ -11,12 +11,13 @@ import { expect, test } from './support/test'
 import { devContext, OUT, shot } from './support/ui'
 import { askAndWait, editCard, newestAnswer, rereadOf, scheduledWorkflow, shown, tag, versionsOf } from './support/edit'
 
-const GREETING = /^Good (morning|afternoon|evening)! Alice$/
+/** The sketch's question, Alice's Home heading; her greeting is the line above it. */
+const ALICE_HEADING = 'What should run by itself?'
 const OFFLINE = 'I can’t read new requests until an AI model is connected'
 /** A request the Planner answers with a set-up card. */
 const SUMMARY = 'Find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'
 
-const box = (page: Page) => page.getByLabel('Ask the Planner about software versions')
+const box = (page: Page) => page.getByLabel('Ask, or describe a task')
 const thread = (page: Page) => page.getByRole('list', { name: 'Conversation with the Planner' })
 const polite = (page: Page) => page.locator('[aria-live="polite"]')
 const main = (page: Page) => page.getByRole('main')
@@ -110,7 +111,7 @@ async function tooSmall(controls: Locator): Promise<string[]> {
   const small: string[] = []
   for (const control of await controls.all()) {
     const size = await control.boundingBox()
-    if (size && size.height < 43.5) small.push(`${(await control.innerText()).trim() || (await control.getAttribute('aria-label')) || '?'} (${Math.round(size.height)} px)`)
+    if (size && size.height < 24) small.push(`${(await control.innerText()).trim() || (await control.getAttribute('aria-label')) || '?'} (${Math.round(size.height)} px)`)
   }
   return small
 }
@@ -229,15 +230,14 @@ test.describe('with the AI model on', () => {
       await route.continue()
     })
     await ask(page, 'Every Friday, email me the list of tickets we closed this week')
-    await expect(box(page), 'the box waits while the Planner answers').toBeDisabled()
-    await expect(box(page)).toHaveAttribute('placeholder', 'The Planner is answering')
+    await expect(box(page), 'the box waits while the Planner answers, with the sketch’s one placeholder').toBeDisabled()
     await expect(thread(page).getByText('I can’t do all of that, but I can set up something close.')).toBeVisible()
     await expect(thread(page).getByRole('heading', { name: 'What I can’t do yet' })).toBeVisible()
     await expect(thread(page).getByRole('heading', { name: 'What I can do instead' })).toBeVisible()
     await expect(thread(page)).toContainText('email')
     await expect(polite(page), 'the sentence is read once, in the polite region').toContainText('I can’t do all of that, but I can set up something close.')
     await expect(box(page)).toBeEnabled()
-    await expect(box(page)).toHaveAttribute('placeholder', 'Ask for something else')
+    await expect(box(page)).toHaveAttribute('placeholder', 'Ask, or describe a task')
 
     await thread(page).getByRole('button', { name: 'Ask the team' }).click()
     await page.getByLabel('What should the team know?').fill('Please add email so the Planner can send the Friday list')
@@ -575,7 +575,7 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
-  test('the three suggestions are about the watchlist, and Check my workflows, typed, draws the Workflows list’s own rows', async ({ browser, backend }, info) => {
+  test('the sketch’s three chips stay under the box in the chat, and Check my workflows, typed, draws the Workflows list’s own rows', async ({ browser, backend }, info) => {
     await backend.freshWatchlist('alice', [REDIS])
     await backend.waitingRun('alice')
     const repair = await jiraDown(backend)
@@ -583,24 +583,26 @@ test.describe('with the AI model on', () => {
     const page = await context.newPage()
     const watch = watchPage(page)
     await page.goto('/')
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(GREETING)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(ALICE_HEADING)
     const chips = page.getByRole('group', { name: 'Suggestions' }).getByRole('button')
     await expect(chips).toHaveCount(3)
-    await expect(chips).toHaveText(['Which software has a newer version?', 'Watch another software for new versions', 'What can you do?'])
-    const total = Number((await main(page).getByRole('heading', { level: 2, name: /^Needs you/ }).innerText()).replace(/\D/g, ''))
-    await expect(page.getByRole('navigation', { name: 'Main' }).filter({ visible: true }).getByRole('link', { name: new RegExp(`^Workflows, ${total} need you$`) })).toBeVisible()
+    await expect(chips).toHaveText(['What needs me?', 'Which software is behind?', 'What can you do?'])
+    const needsYou = main(page).getByRole('list', { name: 'Needs you' })
+    await expect(needsYou.locator('li[data-home-item]').first(), 'Needs you is plain rows under the chips').toBeVisible()
+    const total = await platformNeeds(backend, 'alice')
 
     await ask(page, 'Check my workflows')
     await expect(thread(page).getByRole('list', { name: 'Your workflows' })).toBeVisible()
     await expect(thread(page)).toContainText(/You have \d+ workflows?\./)
-    await expect(main(page).getByRole('heading', { level: 2, name: /^Needs you/ }), 'Needs you is hidden while the thread shows').toHaveCount(0)
+    await expect(needsYou, 'the rows give way to the strip while the thread shows').toHaveCount(0)
+    await expect(chips, 'the chips stay under the box').toHaveText(['What needs me?', 'Which software is behind?', 'What can you do?'])
     await shot(page, info, 'n10-08-check')
 
-    await ask(page, 'What needs me?')
+    await chips.filter({ hasText: 'What needs me?' }).click()
     await expect(thread(page)).toContainText(`${total} ${total === 1 ? 'thing needs' : 'things need'} you.`)
     await page.getByRole('button', { name: 'New chat' }).click()
     await expect(thread(page)).toHaveCount(0)
-    await expect(main(page).getByRole('heading', { level: 2, name: new RegExp(`^Needs you ${total}`) })).toBeVisible()
+    await expect(needsYou.locator('li[data-home-item]').first()).toBeVisible()
     assertClean(watch)
     await repair()
     await context.close()
@@ -621,12 +623,12 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
-  test('the chip Which software has a newer version? is answered from the watchlist, with its Looked at line', async ({ browser, backend }) => {
+  test('the chip Which software is behind? is answered from the watchlist, with its Looked at line', async ({ browser, backend }) => {
     await backend.freshWatchlist('alice', [REDIS])
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     await page.goto('/')
-    await page.getByRole('group', { name: 'Suggestions' }).getByRole('button', { name: 'Which software has a newer version?' }).click()
+    await page.getByRole('group', { name: 'Suggestions' }).getByRole('button', { name: 'Which software is behind?' }).click()
     await expect(thread(page)).toContainText('Nothing on your watchlist has a newer version.')
     await expect(thread(page).getByText('Looked at')).toBeVisible()
     await expect(thread(page).getByRole('link', { name: 'Software', exact: true })).toBeVisible()
@@ -705,13 +707,13 @@ test.describe('with the AI model on', () => {
     await expect(page.getByRole('group', { name: 'Suggestions' }).getByRole('button')).toHaveCount(3)
     const walk = await walkTabs(page)
     const labels = walk.stops.map((stop) => stop.label)
-    for (const name of ['Ask the Planner about software versions', 'Send to the Planner', 'Which software has a newer version?']) {
+    for (const name of ['Ask, or describe a task', 'Send', 'Which software is behind?']) {
       expect(labels.some((label) => label.includes(name)), `Tab reaches ${name}; stops: ${labels.join(', ')}`).toBe(true)
     }
     expect(walk.unreached, 'controls Tab never reached').toEqual([])
     expect(withoutVisibleFocus(walk.stops), 'stops whose focus ring is missing').toEqual([])
 
-    await tabTo(page, page.getByRole('button', { name: 'Watch another software for new versions' }))
+    await tabTo(page, page.getByRole('button', { name: 'Which software is behind?' }))
     await page.keyboard.press('Enter')
     await expect(thread(page)).toContainText(/software/i)
     await ask(page, 'Every Friday, email me the list of tickets we closed this week')
@@ -727,7 +729,7 @@ test.describe('with the AI model on', () => {
 
   for (const phone of [false, true]) {
     const size = phone ? '390' : '1440'
-    test(`Home and its answers pass WCAG 2.2 AA, do not scroll sideways and keep 44 px targets at ${size} px`, async ({ browser, backend }, info) => {
+    test(`Home and its answers pass WCAG 2.2 AA, do not scroll sideways and keep 24 px targets (WCAG 2.5.8) at ${size} px`, async ({ browser, backend }, info) => {
       await backend.waitingRun('alice')
       const before = await draftIds(backend)
       const context = await devContext(browser, 'alice', { phone })
@@ -737,7 +739,7 @@ test.describe('with the AI model on', () => {
       await settled(page)
       await expectAccessible(page, path.join(OUT, 'axe'), `planner-home-${size}`)
       await noSideways(page)
-      expect(await tooSmall(main(page).locator('button, a[href]')), 'principle 11: targets of at least 44 px').toEqual([])
+      expect(await tooSmall(main(page).locator('button, a[href]')), 'WCAG 2.5.8: targets of at least 24 px, as the sketch’s 36 px chips are').toEqual([])
       await shot(page, info, `n10-08-home-${size}`)
 
       for (const [text, shown] of [
@@ -778,7 +780,7 @@ test.describe('with the AI model on', () => {
     for (const old of ['/new', '/new/done/uc_1']) {
       await page.goto(old)
       await expect(page).toHaveURL(/\/$/)
-      await expect(page.getByLabel('Ask the Planner about software versions')).toBeVisible()
+      await expect(page.getByLabel('Ask, or describe a task')).toBeVisible()
     }
     await context.close()
   })
@@ -812,12 +814,10 @@ test.describe('the chat after the first message', () => {
     await connectMockModel(String(baseURL))
   })
 
-  const pinned = (page: Page) => page.getByRole('region', { name: 'Most urgent' })
+  const pinned = (page: Page) => page.getByRole('region', { name: 'Needs you', exact: true })
   const pinnedOpen = (page: Page) => pinned(page).getByRole('link', { name: /^Open/ }).or(pinned(page).getByRole('button', { name: /^Open/ }))
-  const needsTotal = async (page: Page) =>
-    Number(((await page.getByRole('navigation', { name: 'Main' }).filter({ visible: true }).getByRole('link', { name: /^Workflows, \d+ need you$/ }).getAttribute('aria-label')) ?? '').replace(/\D/g, ''))
 
-  test('SHELL-pinned: the pinned line appears with the first message, the box docks, and N more plus one is the count everywhere', async ({ browser, backend }, info) => {
+  test('SHELL-pinned: the needs strip appears with the first message, the box docks with its chips, and N more plus one is the count everywhere', async ({ browser, backend }, info) => {
     await backend.freshWatchlist('alice', [REDIS])
     await teamReplied(backend)
     const repair = await jiraDown(backend)
@@ -828,12 +828,12 @@ test.describe('the chat after the first message', () => {
     await expect(pinned(page), 'no pinned line before the first message').toHaveCount(0)
     await ask(page, 'What can you do?')
     await expect(pinned(page)).toBeVisible()
-    await expect(box(page)).toHaveAttribute('placeholder', 'Ask for something else')
+    await expect(box(page)).toHaveAttribute('placeholder', 'Ask, or describe a task')
     await expect(box(page), 'an answer with no card hands focus back to the box').toBeFocused()
-    await expect(main(page).getByRole('heading', { level: 2, name: /^Needs you/ }), 'Needs you gives way to the pinned line').toHaveCount(0)
-    const total = await needsTotal(page)
+    await expect(main(page).getByRole('list', { name: 'Needs you' }), 'Home’s rows give way to the strip').toHaveCount(0)
+    await expect(page.getByRole('group', { name: 'Suggestions' }).getByRole('button'), 'the chips stay under the docked box').toHaveCount(3)
+    const total = await platformNeeds(backend, 'alice')
     expect(total, 'a reply from the team and Jira not answering are two needs').toBeGreaterThan(1)
-    expect(total, 'the rail’s count is the platform’s').toBe(await platformNeeds(backend, 'alice'))
     await expect(pinnedOpen(page), 'Open shows a stop or a request in the side panel, and anything else on its page').toBeVisible()
     if ((await pinned(page).getByRole('link', { name: /^Open/ }).count()) > 0) await expect(pinned(page).getByRole('link', { name: /^Open/ })).toHaveAttribute('href', /^\/(settings|software|workflows)/)
     else await expect(pinned(page).getByRole('button', { name: /^Open/ })).toHaveAttribute('data-opens', /^run:/)
@@ -841,7 +841,7 @@ test.describe('the chat after the first message', () => {
     await pinned(page).getByRole('link', { name: /more that need you/ }).click()
     await expect(page).toHaveURL(/\/workflows$/)
     await expect(main(page).getByRole('heading', { level: 2, name: new RegExp(`^Needs you ${String(total)}`) })).toBeVisible()
-    await expect(main(page).getByRole('heading', { level: 3, name: 'Do now' })).toBeVisible()
+    await expect(main(page).getByRole('heading', { name: 'Do now' })).toBeVisible()
     await page.getByRole('link', { name: 'Back to the chat' }).click()
     await expect(thread(page)).toContainText('What can you do?')
     await expect(pinned(page)).toBeVisible()
@@ -873,13 +873,13 @@ test.describe('the chat after the first message', () => {
     await context.close()
   })
 
-  test('ASK-needs: the answer counts what needs her, with one row each, and agrees with the rail', async ({ browser, backend }) => {
+  test('ASK-needs: the answer counts what needs her, with one row each, and agrees with the platform', async ({ browser, backend }) => {
     const repair = await jiraDown(backend)
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     await page.goto('/')
     await ask(page, 'What needs me?')
-    const total = await needsTotal(page)
+    const total = await platformNeeds(backend, 'alice')
     await expect(thread(page)).toContainText(`${String(total)} ${total === 1 ? 'thing needs' : 'things need'} you.`)
     await expect(thread(page).locator('li[data-home-item]')).toHaveCount(total)
     await repair()
@@ -958,7 +958,7 @@ test.describe('the chat after the first message', () => {
     await expect(thread(page).locator('section[data-card]')).toBeVisible()
     await page.getByRole('button', { name: /Test controls/ }).click()
     await page.getByRole('button', { name: 'Bob', exact: true }).click()
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('Bob')
+    await expect(main(page).getByText(/^Good (morning|afternoon|evening), Bob$/)).toBeVisible()
     await page.waitForTimeout(1_000)
     expect(saves, 'no draft is saved as bob').not.toContain('bob')
     await page.getByRole('button', { name: 'Alice', exact: true }).click()
@@ -992,7 +992,7 @@ test.describe('the chat after the first message', () => {
     await expect(thread(page)).toContainText('Check my workflows')
     await page.getByRole('button', { name: /Test controls/ }).click()
     await page.getByRole('button', { name: 'Bob', exact: true }).click()
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('Bob')
+    await expect(main(page).getByText(/^Good (morning|afternoon|evening), Bob$/)).toBeVisible()
     await expect(thread(page)).toHaveCount(0)
     await expect(main(page)).not.toContainText('Check my workflows')
     await page.getByRole('button', { name: 'Alice', exact: true }).click()
@@ -1013,7 +1013,7 @@ test.describe('the chat after the first message', () => {
     await context.close()
   })
 
-  test('New chat clears the thread and brings back Needs you in place of the pinned line, and the keyboard reaches the box, New chat and the pinned line', async ({ browser, backend }) => {
+  test('New chat clears the thread and brings back Home’s rows in place of the strip, and the keyboard reaches the box, New chat and the strip', async ({ browser, backend }) => {
     const repair = await jiraDown(backend)
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
@@ -1024,7 +1024,7 @@ test.describe('the chat after the first message', () => {
     await page.keyboard.press('Enter')
     await expect(thread(page)).toHaveCount(0)
     await expect(pinned(page)).toHaveCount(0)
-    await expect(main(page).getByRole('heading', { level: 2, name: /^Needs you/ })).toBeVisible()
+    await expect(main(page).getByRole('list', { name: 'Needs you' })).toBeVisible()
     await expect(box(page)).toBeFocused()
     await repair()
     await context.close()
@@ -1276,7 +1276,7 @@ test.describe('bob asks the Planner questions only', () => {
     await connectMockModel(String(baseURL))
   })
 
-  const bobBox = (page: Page) => page.getByLabel('Ask the Planner about your approvals and the workflows')
+  const bobBox = (page: Page) => page.getByLabel('Ask, or describe a task')
   const newest = (page: Page) => thread(page).locator(':scope > li').last()
   const said = (page: Page) => newest(page).locator('p').first()
   const panel = (page: Page) => page.locator('#side-panel')
@@ -1311,13 +1311,13 @@ test.describe('bob asks the Planner questions only', () => {
     const page = await context.newPage()
     const watch = watchPage(page)
     await page.goto('/')
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Good (morning|afternoon|evening)! Bob$/)
-    const line = (await page.locator('h1 + p').innerText()).trim()
-    expect(line, 'his line says what waits for his yes').toMatch(/^(\d+ requests? (is|are) waiting for your yes|\d+ things? needs? you)\.$/)
-    await expect(bobBox(page)).toHaveAttribute('placeholder', 'Ask about your approvals, or how the workflows are doing')
+    await expect(main(page).getByText(/^Good (morning|afternoon|evening), Bob$/)).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1 }), 'his heading says what waits for his yes').toHaveText(/^(\d+ requests? (is|are) waiting for your yes|\d+ things? needs? you)\.$/)
+    const line = (await page.getByRole('heading', { level: 1 }).innerText()).trim()
+    await expect(bobBox(page)).toHaveAttribute('placeholder', 'Ask, or describe a task')
     const chips = page.getByRole('group', { name: 'Suggestions' }).getByRole('button')
     await expect(chips).toHaveText(['What is waiting for my yes?', 'What did I decide before?', 'How are the workflows doing?'])
-    const tops = await Promise.all([bobBox(page), chips.first(), page.getByRole('heading', { level: 2, name: /^Needs you/ })].map(async (at) => (await at.boundingBox())?.y ?? -1))
+    const tops = await Promise.all([bobBox(page), chips.first(), main(page).getByRole('list', { name: 'Needs you' })].map(async (at) => (await at.boundingBox())?.y ?? -1))
     expect(tops.every((top, index) => top >= 0 && (index === 0 || top > (tops[index - 1] ?? 0))), 'box, then the questions, then Needs you').toBe(true)
     await expect(main(page)).toContainText('You’re an Approver, so you decide on requests. Operators set up workflows.')
     await settled(page)
@@ -1325,7 +1325,7 @@ test.describe('bob asks the Planner questions only', () => {
     await shot(page, info, 'r16-bob-home')
 
     await chips.first().click()
-    await expect(said(page), 'what waits for his yes is his Home line').toHaveText(line)
+    await expect(said(page), 'what waits for his yes is his Home heading').toHaveText(line)
     await expect(newest(page).getByRole('button', { name: 'Review and decide' }).first()).toBeVisible()
     await bobAsks(page, 'What did I decide before?')
     await expect(said(page)).toHaveText(/^Here (is your decision|are your \d+ decisions)\./)
