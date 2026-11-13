@@ -119,7 +119,8 @@ jobs:
         run: |
           registry=$(terraform -chdir=infra/envs/dev output -raw registry_name)
           server=$(terraform -chdir=infra/envs/dev output -raw registry_login_server)
-          jq -r 'to_entries[] | .value | "\(.repository) \(.tag) \(.digest)"' infra/public-images.json |
+          # n8n is not copied: our n8n image below builds on its pin.
+          jq -r 'to_entries[] | select(.key != "n8n") | .value | "\(.repository) \(.tag) \(.digest)"' infra/public-images.json |
             while read -r repository tag digest; do
               az acr import --name "$registry" --source "docker.io/$repository@$digest" \
                 --image "$repository:$tag" --force --output none
@@ -128,6 +129,7 @@ jobs:
           docker build --target runtime --tag "wab/platform-api:$GITHUB_SHA" platform-api
           docker build --target runtime --tag "wab/agent-runtime:$GITHUB_SHA" agent-runtime
           docker build --file portal/Dockerfile --tag "wab/portal:$GITHUB_SHA" .
+          docker build --file deploy/n8n/Dockerfile --tag "wab/n8n:$GITHUB_SHA" .
           # The deploy identity's AcrPush can still be on its way after Terraform's wait.
           retry() {
             label=$1
@@ -144,7 +146,7 @@ jobs:
             done
           }
           retry "Signing in to the registry" az acr login --name "$registry"
-          for image in platform-api agent-runtime portal; do
+          for image in platform-api agent-runtime portal n8n; do
             docker tag "wab/$image:$GITHUB_SHA" "$server/$image:$GITHUB_SHA"
             retry "Pushing $image" docker push --quiet "$server/$image:$GITHUB_SHA" >/dev/null
             echo "Pushed $image"

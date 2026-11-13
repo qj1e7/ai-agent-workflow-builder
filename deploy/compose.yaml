@@ -54,7 +54,10 @@ services:
       start_period: 10s
 
   n8n:
-    image: n8nio/n8n:2.42.6@sha256:526daa38b68e923cc00c5280d18b4da5d489f115a73bdbf3b8e452b184197a9a
+    build:
+      context: ..
+      dockerfile: deploy/n8n/Dockerfile
+    image: wab/n8n:${WAB_IMAGE_TAG:-dev}
     depends_on:
       postgres:
         condition: service_healthy
@@ -76,6 +79,10 @@ services:
       # n8n, and a locked-down network refuses the call (issue #86). n8n 2.42.6 reads this setting in
       # @n8n/backend-common's ModulesConfig, and docs/evidence/devnet/n8n-proxy.test.sh checks it.
       N8N_DISABLED_MODULES: mcp-registry
+      # Our blocks call only this API, with this key, and check each start with the secret.
+      WAB_API_URL: http://platform-api:8000
+      WAB_NODE_KEY: ${WAB_NODE_KEY:?run deploy/make-env.sh}
+      WAB_START_SECRET: ${WAB_START_SECRET:?run deploy/make-env.sh}
     ports:
       - "${N8N_HOST_PORT:-5678}:5678"
     volumes:

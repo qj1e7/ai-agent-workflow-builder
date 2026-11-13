@@ -57,10 +57,11 @@ locals {
     FIRST_APPROVERS = trimspace(nonsensitive(var.first_approvers))
   }
 
+  # n8n runs our own image, built on the n8n pin in public-images.json with our node pack inside.
   public_images = jsondecode(file("${path.module}/../../public-images.json"))
   images = merge(
-    { for name, image in local.public_images : name => "${module.registry.login_server}/${image.repository}@${image.digest}" },
-    { for name in ["platform-api", "agent-runtime", "portal"] : name => "${module.registry.login_server}/${name}:${var.image_tag}" },
+    { for name, image in local.public_images : name => "${module.registry.login_server}/${image.repository}@${image.digest}" if name != "n8n" },
+    { for name in ["platform-api", "agent-runtime", "portal", "n8n"] : name => "${module.registry.login_server}/${name}:${var.image_tag}" },
   )
 
   # n8n's editor (ADR 0034). The addresses only point at people, and the app table's for_each
@@ -153,6 +154,8 @@ resource "random_password" "generated" {
     "n8n-encryption-key",
     "n8n-owner-password",
     "step-key",
+    "wab-node-key",
+    "wab-start-secret",
     "agent-api-key",
     "callback-signing-key",
     "settings-encryption-key",
@@ -311,6 +314,7 @@ locals {
           N8N_VERSION_NOTIFICATIONS_ENABLED = "false"
           N8N_PERSONALIZATION_ENABLED       = "false"
           N8N_HIRING_BANNER_ENABLED         = "false"
+          WAB_API_URL                       = local.url["platform-api"]
         },
         var.n8n_editor_external ? {
           N8N_PROTOCOL                      = "https"
@@ -326,6 +330,8 @@ locals {
       secrets = {
         DB_POSTGRESDB_PASSWORD = local.secret["n8n-db-password"]
         N8N_ENCRYPTION_KEY     = local.secret["n8n-encryption-key"]
+        WAB_NODE_KEY           = local.secret["wab-node-key"]
+        WAB_START_SECRET       = local.secret["wab-start-secret"]
       }
     }
 

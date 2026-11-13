@@ -47,7 +47,7 @@ infra/
     container_app/     one Container App
     container_app_job/ one Container Apps Job
   sql/db-init.sql      the role setup that the db-init job runs
-  public-images.json   n8n and PostgreSQL, pinned by digest, copied into our registry
+  public-images.json   the pins of n8n and PostgreSQL. PostgreSQL is copied into our registry; our n8n image builds on the n8n pin
   bootstrap/           one-time setup by a person: state storage and the deploy identity
   scripts/             the offline checks, and the job runner the deploy workflow uses
 ```
@@ -244,7 +244,7 @@ If the repository is made public later, add required reviewers and "Prevent self
    With the GitHub CLI, each is one command, for example `gh secret set AZURE_TENANT_ID --env azure-dev` (it asks for the value) or `gh variable set AZURE_LOCATION --env azure-dev --body eastasia`.
 8. **Run the deploy.** In the Actions tab, run the `deploy` workflow on `main`. Leave `allow_destroy` off. The workflow then:
    1. creates the registry if it is missing,
-   2. copies n8n and PostgreSQL into the registry by digest, then builds and pushes our three images, tagged with the commit SHA,
+   2. copies PostgreSQL into the registry by digest, then builds and pushes our four images, tagged with the commit SHA. Our n8n image is the pinned n8n with our node pack inside (`deploy/n8n/Dockerfile`),
    3. creates the `db-init` job if it is missing and runs it, so the database roles exist before any app starts. This step also creates the Cosmos DB account, because the job reads its secrets from Key Vault and Key Vault holds the account's key. A new account takes about 5 to 10 minutes,
    4. creates or updates the `migrate` job with the new platform-api image and runs it, so the database is at the new schema before the new platform-api starts ([Migrations on a deploy](#migrations-on-a-deploy)). Step 3 already brought everything the job depends on up to date, so this apply changes only the job and its identity,
    5. plans everything, puts the count of changes in the run summary, and applies that exact plan,
@@ -266,7 +266,7 @@ These were not testable offline, so they are guesses until a real deploy confirm
   - **Why an action.** It is an `azapi_resource_action`, not an `azapi_update_resource`. That resource sends a PUT that keeps only the fields in azapi's own copy of the API, and that copy has no `environmentMode`, so it would drop the setting without an error. An action has nothing to read back, though. If the mode ever changes in Azure, Terraform does not see it. To send the PATCH again, replace the action by hand (`terraform apply -replace='module.container_env.azapi_resource_action.workload_profiles_mode'`). Removing the action from the code changes nothing in Azure.
 - Azure RBAC can take a few minutes to reach Key Vault and the registry. Microsoft says up to 10 minutes. Each app's identity waits 90 seconds after its role assignments before its app is created. The deploy identity waits 90 seconds after giving itself AcrPush and Key Vault Secrets Officer, before it pushes images or writes secrets. The workflow also tries `az acr login` and each `docker push` up to five times, 30 seconds apart. If an app still fails to read a secret, or Terraform cannot write one, rerun the workflow.
 - The workflow waits for each job twice as long as the job's own timeout: 600 seconds for `db-init` and `migrate`, and 1200 for `bootstrap`. Pulling the image on a cold start counts against the wait, not the timeout. If a wait still runs out, check the job's execution in the Azure portal before you rerun.
-- `az acr import` should keep each image's digest, since the Terraform code pulls n8n and PostgreSQL by digest. If a pull fails with "manifest unknown", compare the digest in the registry with `public-images.json`.
+- `az acr import` should keep each image's digest, since the Terraform code pulls PostgreSQL by digest. If a pull fails with "manifest unknown", compare the digest in the registry with `public-images.json`.
 - The Azure admin role is not a superuser. `db-init` grants itself membership in `n8n` and `wab_owner` before it hands them their databases. A local PostgreSQL 17 run showed that the handover fails without that grant and works with it. On Azure it is still untested.
 - Container Apps ingress ends any request after 240 seconds. The live view's event stream reconnects on its own. Check that the live view keeps up after 4 minutes.
 - A subscription may have only one free-tier Cosmos DB account. If one exists, from a test by hand for example, the create fails. Delete the other account first, or set `COSMOS_SERVERLESS=true`. Azure may also refuse the region, as some Azure for Students subscriptions only allow a few. Then set `COSMOS_LOCATION` to an allowed region.
