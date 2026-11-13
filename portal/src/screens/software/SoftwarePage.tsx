@@ -230,7 +230,7 @@ function Loaded({ view, operator, answeredAt, now, rowId }: LoadedProps) {
   const [confirming, setConfirming] = useState<string | null>(null)
   const changes = useLatch()
   const navigate = useNavigate()
-  const location = useLocation()
+  const arrivedWith: unknown = useLocation().state
   const noticeBox = useRef<HTMLDivElement>(null)
   useFocusOnceRendered(feedback)
 
@@ -263,7 +263,7 @@ function Loaded({ view, operator, answeredAt, now, rowId }: LoadedProps) {
   const checkedBy = scheduled && !paused ? 'Software watchlist' : null
 
   const landOn = useSearchParams()[0].get('row')
-  if (rowId === null && landOn !== null && software.some((row) => row.id === landOn)) return <Navigate to={softwarePath(landOn)} replace state={location.state} />
+  if (rowId === null && landOn !== null && software.some((row) => row.id === landOn)) return <Navigate to={softwarePath(landOn)} replace state={arrivedWith} />
 
   const notice = (
     <Notice
