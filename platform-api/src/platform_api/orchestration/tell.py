@@ -4,14 +4,16 @@ ENGINE-PLAN 2.3.12 and D19).
 A Tell goes out only when all three parts of the rule hold:
 
 - Its recipients are fixed. The block picks the team's channel, the email list or both, never an
-  address. The one Tell flow (TEAMS_TELL_WEBHOOK_URL) holds where each goes.
+  address. The channel is the one the Tell flow (TEAMS_TELL_WEBHOOK_URL) posts in, and the list is
+  TELL_EMAIL_TO, sent to the flow with each notice.
 - Its content is composed here from the run's own stored reads and agent results, never from text
   a block sends. It lists no write, so it never claims a change.
-- The Portal says what it does: the registry's "Posts in Teams and emails", planned until E13.
+- The Portal says what it does: the registry's "Posts in Teams and emails", ready only while the
+  flow is set.
 
-The flow takes one body, the Teams message with the card plus the email's subject and HTML, as
-the team's cert reminder already posts it. Text we did not write goes through teams.inert, so
-none of it is a link, and the email escapes it as well.
+The flow takes one body, the Teams message with the card plus the email's subject, HTML and list,
+as the team's cert reminder already posts it. Text we did not write goes through teams.inert, so
+none of it is a link, and the email escapes it as well. The only link is our own, back to the run.
 """
 
 import html
@@ -22,6 +24,8 @@ from typing import Any, Literal, Protocol, cast
 import httpx
 
 from platform_api.db import Database, json
+from platform_api.monitoring import PLATFORM, PendingEvent, ToldData, ToldStatus
+from platform_api.orchestration.agents import CapabilityList
 from platform_api.orchestration.runs import (
     NO_ANSWER,
     Expired,
@@ -32,9 +36,11 @@ from platform_api.orchestration.runs import (
 )
 from platform_api.orchestration.teams import (
     LINES_SHOWN,
+    OPEN_IN,
     SUMMARY_LIMIT,
     AdaptiveCard,
     CardElement,
+    OpenUrl,
     TextBlock,
     TextRun,
     _plain,  # pyright: ignore[reportPrivateUsage]
@@ -47,9 +53,7 @@ from platform_api.shared import RunId, new_id
 
 type TellWhere = Literal["channel", "email", "both"]
 type TellWhat = Literal["result", "only_when_something_to_report"]
-type TellStatus = Literal[
-    "sent", "sending", "not_confirmed", "would_have_sent", "nothing_to_report"
-]
+type TellStatus = ToldStatus | Literal["sending"]
 
 FALLBACK = "A notice from AI Workflow Builder."
 SIGN_OFF = "A notice from AI Workflow Builder. It asks for nothing."
@@ -58,6 +62,23 @@ LABEL_LIMIT = 200
 THE_LIST = "the team's list"
 MADE = "Made after a yes"
 DECLINED = "Declined. Nothing was written."
+OPEN_THE_RUN = "Open the run in AI Workflow Builder"
+TELL_CAPABILITY = "teams.post"
+"""The registry's "Posts in Teams and emails". The agent runtime keeps it planned, because it
+cannot see the flow. It is ready here exactly while the flow is set."""
+
+
+@dataclass(frozen=True)
+class TellSetup:
+    """What the platform's settings fix for every notice, and no block can change: the channel the
+    flow posts in, the team's email list, and the Portal a notice links back to."""
+
+    channel: str
+    email_to: tuple[str, ...]
+    portal: str
+
+    def run_link(self, run_id: RunId) -> str:
+        return f"{self.portal.rstrip('/')}/runs/{run_id}"
 
 
 @dataclass(frozen=True)
@@ -166,6 +187,7 @@ def something_to_report(results: Sequence[BlockResult], made: Sequence[WriteDone
 class Email:
     subject: str
     html: str
+    to: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -183,10 +205,13 @@ class TellMessage:
         if self.email is not None:
             body["emailSubject"] = self.email.subject
             body["emailHtml"] = self.email.html
+            body["emailTo"] = "; ".join(self.email.to)
         return body
 
 
-def _card(use_case_name: str, parts: Sequence[NoticePart], said: str | None) -> AdaptiveCard:
+def _card(
+    use_case_name: str, parts: Sequence[NoticePart], said: str | None, link: str
+) -> AdaptiveCard:
     body: list[CardElement] = [
         _runs(_plain(use_case_name, weight="bolder"), TextRun(text=": what this run found."))
     ]
@@ -199,14 +224,22 @@ def _card(use_case_name: str, parts: Sequence[NoticePart], said: str | None) -> 
     if said is not None:
         body.append(TextBlock(text=said))
     body.append(TextBlock(text=SIGN_OFF))
-    return AdaptiveCard(fallbackText=FALLBACK, body=body, actions=[])
+    return AdaptiveCard(
+        fallbackText=FALLBACK, body=body, actions=[OpenUrl(title=OPEN_IN, url=link)]
+    )
 
 
 def _escaped(text: str, limit: int = SUMMARY_LIMIT) -> str:
     return html.escape(one_line(inert(text), limit))
 
 
-def _email(use_case_name: str, parts: Sequence[NoticePart], said: str | None) -> Email:
+def _email(
+    use_case_name: str,
+    parts: Sequence[NoticePart],
+    said: str | None,
+    link: str,
+    to: tuple[str, ...],
+) -> Email:
     subject = one_line(inert(f"{use_case_name}: what this run found"), SUBJECT_LIMIT)
     sections: list[str] = [f"<h2>{_escaped(use_case_name)}</h2>", "<p>What this run found.</p>"]
     for part in parts:
@@ -216,21 +249,26 @@ def _email(use_case_name: str, parts: Sequence[NoticePart], said: str | None) ->
             sections.append(f"<ul>{items}</ul>")
     if said is not None:
         sections.append(f"<p>{html.escape(said)}</p>")
+    sections.append(f'<p><a href="{html.escape(link)}">{OPEN_THE_RUN}</a></p>')
     sections.append(f"<p>{SIGN_OFF}</p>")
-    return Email(subject, "".join(sections))
+    return Email(subject, "".join(sections), to)
 
 
 def compose(
     use_case_name: str,
     results: Sequence[BlockResult],
     reach: Reach,
+    setup: TellSetup,
+    run_id: RunId,
     ending: Ending = NO_ENDING,
 ) -> TellMessage:
-    """The notice, from the run's stored results and the gateway's records only."""
+    """The notice, from the run's stored results and the gateway's records only, sent to the
+    fixed list and linked back to its run."""
     parts = notice_parts(results) + made_parts(ending.made)
+    link = setup.run_link(run_id)
     return TellMessage(
-        _card(use_case_name, parts, ending.said) if reach.card else None,
-        _email(use_case_name, parts, ending.said) if reach.email else None,
+        _card(use_case_name, parts, ending.said, link) if reach.card else None,
+        _email(use_case_name, parts, ending.said, link, setup.email_to) if reach.email else None,
     )
 
 
@@ -268,15 +306,39 @@ class Told:
     line: str
 
 
+def told_event(block: str, told: Told) -> PendingEvent | None:
+    """The run's activity line for what a Tell did. None while it is still sending, because only
+    the flow's answer says what happened."""
+    status = told.status
+    if status == "sending":
+        return None
+    return PendingEvent(
+        PLATFORM, "told", told.line, ToldData(block=block, status=status, line=told.line)
+    )
+
+
+def ready_when_set(listed: CapabilityList, flow_set: bool) -> CapabilityList:
+    """The registry, with "Posts in Teams and emails" ready while the Tell flow is set. Once ready,
+    the chat's card names it by its plain words, and nothing says what it can't do."""
+    if not flow_set:
+        return listed
+    ready = {"state": "ready", "cant": None, "why": None, "instead": None}
+    specs = [
+        spec.model_copy(update={**ready, "short": spec.plain})
+        if spec.id == TELL_CAPABILITY
+        else spec
+        for spec in listed.capabilities
+    ]
+    return listed.model_copy(update={"capabilities": specs})
+
+
 class NotConfirmed(Exception):
     """The notice may or may not have gone. Its message names no address."""
 
 
 class TellOutlet(Protocol):
     @property
-    def channel(self) -> str:
-        """The team's channel, by the name people know it."""
-        ...
+    def setup(self) -> TellSetup: ...
 
     async def send(self, run_id: RunId, block: str, message: TellMessage) -> None: ...
 
@@ -284,13 +346,13 @@ class TellOutlet(Protocol):
 class TellPractice:
     """The practice copy of the Tell flow. It keeps each notice as the flow would get it."""
 
-    def __init__(self, db: Database, channel: str) -> None:
+    def __init__(self, db: Database, setup: TellSetup) -> None:
         self._db = db
-        self._channel = channel
+        self._setup = setup
 
     @property
-    def channel(self) -> str:
-        return self._channel
+    def setup(self) -> TellSetup:
+        return self._setup
 
     async def send(self, run_id: RunId, block: str, message: TellMessage) -> None:
         async with self._db.transaction("orchestration") as uow:
@@ -318,14 +380,14 @@ class TellFlow:
     holds it.
     """
 
-    def __init__(self, url: str, channel: str, client: httpx.AsyncClient | None = None) -> None:
+    def __init__(self, url: str, setup: TellSetup, client: httpx.AsyncClient | None = None) -> None:
         self._url = url
-        self._channel = channel
+        self._setup = setup
         self._client = client or httpx.AsyncClient(timeout=10.0, follow_redirects=False)
 
     @property
-    def channel(self) -> str:
-        return self._channel
+    def setup(self) -> TellSetup:
+        return self._setup
 
     async def send(self, run_id: RunId, block: str, message: TellMessage) -> None:
         try:

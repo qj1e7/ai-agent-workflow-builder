@@ -29,6 +29,7 @@ from platform_api.orchestration.agents import (
     RowKind,
 )
 from platform_api.orchestration.service import ActiveModel
+from platform_api.orchestration.tell import ready_when_set
 
 
 @dataclass(frozen=True)
@@ -121,16 +122,17 @@ class CapabilityRegistry:
     """The runtime's capability registry. The runtime can scale to zero, so the last good answer
     is kept and served while the runtime is waking up."""
 
-    def __init__(self, agents: HttpAgentRuntime) -> None:
+    def __init__(self, agents: HttpAgentRuntime, *, tell_flow_set: bool) -> None:
         self._agents = agents
+        self._tell_flow_set = tell_flow_set
         self._last_good: CapabilityList | None = None
 
     async def get(self) -> CapabilityList | RuntimeDown:
         reply = await self._agents.capabilities()
         if isinstance(reply, AgentUnavailable | AgentRejected):
             return self._last_good or RuntimeDown(reply.detail)
-        self._last_good = reply
-        return reply
+        self._last_good = ready_when_set(reply, self._tell_flow_set)
+        return self._last_good
 
 
 class ProjectFinding:

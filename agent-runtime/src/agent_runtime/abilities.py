@@ -251,25 +251,16 @@ CAPABILITIES: Final = (
     ),
     _not_yet(
         "teams.post",
-        "Post messages in Teams channels",
-        "write",
+        "Posts in Teams and emails",
+        "notify",
         "Teams",
-        "teams",
-        "post in Teams channels",
-        "Teams carries approval requests, run outcomes and requests for the team. "
-        "It posts nothing else.",
-        short="Teams channels",
-        instead="Run results show here, in the chat.",
-    ),
-    _not_yet(
-        "email.send",
-        "Send email",
-        "write",
         None,
-        None,
-        "send email",
-        "Email isn't connected to the platform.",
-        short="email",
+        "post in Teams or send email",
+        "The team's Tell flow isn't connected yet. Until it is, Teams carries approval requests, "
+        "run outcomes and requests for the team, and nothing is emailed.",
+        # Two names in the chat's Not yet note, as the sketch lists them. Once the flow is set,
+        # platform-api makes the entry ready and names it by its plain words.
+        short="Teams channels, email",
         instead="Run results show here, in the chat.",
     ),
     _not_yet(
@@ -1226,9 +1217,13 @@ def _past_the_newest(text: str) -> str | None:
     return next(c.cant for c in CAPABILITIES if c.id == "jira.find_older")
 
 
-SAID_FOR: Final = {"Teams": "teams.post", "email": "email.send", "Confluence": "confluence.change"}
+SAID_FOR: Final = {
+    "Teams": ("teams.post", "post in Teams channels"),
+    "email": ("teams.post", "send email"),
+    "Confluence": ("confluence.change", None),
+}
 """The registry entry whose one-line can't stands for a part that sends to or changes the system
-it names, by that system's plain name."""
+it names, by that system's plain name, with the words for that system when the entry covers two."""
 
 
 def cant_entry(text: str, system: str | None) -> CapabilitySpec | None:
@@ -1246,7 +1241,9 @@ def cant_entry(text: str, system: str | None) -> CapabilitySpec | None:
     named = SAID_FOR.get(system or "")
     if named is None or (verb is not None and verb not in WRITES):
         return None
-    return next(c for c in CAPABILITIES if c.id == named)
+    named_id, cant = named
+    entry = next(c for c in CAPABILITIES if c.id == named_id)
+    return entry if cant is None else entry.model_copy(update={"cant": cant})
 
 
 def one_line_cant(entry: CapabilitySpec) -> str:

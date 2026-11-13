@@ -138,7 +138,7 @@ def test_only_the_software_versioning_capabilities_are_marked_focus():
 
 
 def test_a_request_for_email_is_still_refused_in_words_though_it_is_not_a_focus_capability():
-    assert not BY_ID["email.send"].focus
+    assert not BY_ID["teams.post"].focus
     refusal = why_not("do", "Send email to the team")
     assert refusal is not None
     assert refusal.startswith("I can't send email to the team yet.")
