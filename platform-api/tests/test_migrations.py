@@ -1199,3 +1199,31 @@ async def test_migration_0020_keeps_a_request_from_before_without_expiry_and_a_w
         before = await store.load_approval(uow, ApprovalId("apr_before"))
         assert await store.held_wait(uow, ApprovalId("apr_before")) is None
     assert before is not None and (before.expires_at, before.ended) == (None, None)
+
+
+async def test_migration_0021_keeps_one_practice_notice_per_block_of_a_run_and_goes_back(
+    postgres: PostgresUrls, db: Database
+):
+    run_id = RunId("run_tell")
+    async with db.transaction("orchestration") as uow:
+        record = RunRecord(
+            run_id, SPEC, SPEC.owner, NOW, NOW, 1, Pending(run_id, 1, None, NOW), (), None
+        )
+        await Store().insert_run(uow, record, "key-tell")
+    notice = (
+        "INSERT INTO orchestration.tell_practice_messages (id, ts, run_id, block, body) "
+        "VALUES (%s, %s, %s, 'Tell you', '{}')"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute(notice, ("tell_1", NOW, run_id))
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            conn.execute(notice, ("tell_2", NOW, run_id))
+        with pytest.raises(psycopg.errors.ForeignKeyViolation):
+            conn.execute(notice, ("tell_3", NOW, "run_nobody"))
+        downgrade("orchestration", postgres.owner, "0020")
+        try:
+            assert conn.execute(
+                "SELECT to_regclass('orchestration.tell_practice_messages')"
+            ).fetchone() == (None,)
+        finally:
+            upgrade("orchestration", postgres.owner)

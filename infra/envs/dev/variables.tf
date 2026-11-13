@@ -196,6 +196,18 @@ variable "teams_webhook_url" {
   }
 }
 
+variable "teams_tell_webhook_url" {
+  description = "Optional Power Automate flow that posts each Tell's notice to the team's channel and emails the team's list (TEAMS_TELL_WEBHOOK_URL, ENGINE-PLAN D1). Its address carries its own signature, so it is a secret. Empty keeps the practice copy."
+  type        = string
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition     = var.teams_tell_webhook_url == "" || can(regex("^https://[^\\s]+$", var.teams_tell_webhook_url))
+    error_message = "teams_tell_webhook_url must be empty, or the https address the Tell flow gave, with no spaces."
+  }
+}
+
 variable "github_api_base" {
   description = "GitHub API that the release checker reads."
   type        = string

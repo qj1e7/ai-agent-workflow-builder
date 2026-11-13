@@ -5196,6 +5196,101 @@
         "title": "FailedView",
         "type": "object"
       },
+      "FailureIn": {
+        "description": "Which execution failed. The block also sends what the Error Trigger said about it, and\nour API drops all of that here: it checks that the block's own execution is one of our error\nworkflow, and reads the failed block and its words from n8n's own record.",
+        "properties": {
+          "execution_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Execution Id",
+            "type": "string"
+          },
+          "failed_execution_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failed Execution Id"
+          },
+          "mode": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Mode",
+            "type": "string"
+          },
+          "node_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Node Name",
+            "type": "string"
+          },
+          "workflow_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Id"
+          }
+        },
+        "required": [
+          "execution_id",
+          "workflow_id",
+          "node_name",
+          "mode"
+        ],
+        "title": "FailureIn",
+        "type": "object"
+      },
+      "FailureOut": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The run the report failed.",
+            "title": "Run Id"
+          },
+          "status": {
+            "enum": [
+              "failed",
+              "left_as_is"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "detail"
+        ],
+        "title": "FailureOut",
+        "type": "object"
+      },
       "FailureReason": {
         "enum": [
           "AgentError",
@@ -10633,6 +10728,105 @@
         ],
         "title": "TeamsStubMessages",
         "type": "object"
+      },
+      "TellIn": {
+        "additionalProperties": false,
+        "description": "Only the block's two choices. A body with an address or any text of its own is refused,\nso a notice goes only to the fixed recipients, with only what the run read.",
+        "properties": {
+          "execution_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Execution Id",
+            "type": "string"
+          },
+          "mode": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Mode",
+            "type": "string"
+          },
+          "node_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Node Name",
+            "type": "string"
+          },
+          "what": {
+            "$ref": "#/components/schemas/TellWhat"
+          },
+          "where": {
+            "$ref": "#/components/schemas/TellWhere"
+          },
+          "workflow_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Id"
+          }
+        },
+        "required": [
+          "execution_id",
+          "workflow_id",
+          "node_name",
+          "mode",
+          "where",
+          "what"
+        ],
+        "title": "TellIn",
+        "type": "object"
+      },
+      "TellOut": {
+        "additionalProperties": false,
+        "properties": {
+          "line": {
+            "description": "What the block did, in the words the Portal shows.",
+            "title": "Line",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TellStatus"
+          }
+        },
+        "required": [
+          "status",
+          "line"
+        ],
+        "title": "TellOut",
+        "type": "object"
+      },
+      "TellStatus": {
+        "enum": [
+          "sent",
+          "sending",
+          "not_confirmed",
+          "would_have_sent",
+          "nothing_to_report"
+        ],
+        "type": "string"
+      },
+      "TellWhat": {
+        "enum": [
+          "result",
+          "only_when_something_to_report"
+        ],
+        "type": "string"
+      },
+      "TellWhere": {
+        "enum": [
+          "channel",
+          "email",
+          "both"
+        ],
+        "type": "string"
       },
       "TemplateList": {
         "additionalProperties": false,
@@ -19377,6 +19571,106 @@
         ]
       }
     },
+    "/internal/v1/n8n/calls/tell": {
+      "post": {
+        "description": "Tells the team what the run read, in its fixed Teams channel, by its fixed email list or both, with no yes (the Tell rule). Sent at most once, and never in a test run.",
+        "operationId": "tell_internal_v1_n8n_calls_tell_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Wab-Node-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Wab-Node-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TellIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TellOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad node key, or this platform takes no node calls"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Refused by a safety rule, such as a start or a version that fails"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The run has stopped, or another execution carries it"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The block names something our platform does not allow"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryOut"
+                }
+              }
+            },
+            "description": "Try the same call again soon"
+          }
+        },
+        "summary": "Tell",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
     "/internal/v1/n8n/calls/write": {
       "post": {
         "description": "Makes the run's own approved changes. The write gateway checks the yes in our records as it writes each one, and makes each subject once across runs. A retry makes only the changes still to make.",
@@ -19472,6 +19766,106 @@
           }
         },
         "summary": "Write",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/n8n/failures": {
+      "post": {
+        "description": "Report a failure, from our error workflow only. When n8n's own record says the execution failed, fails the run it carries with n8n's words for the block. A run that has ended, or that another attempt carries now, stays as it is.",
+        "operationId": "failures_internal_v1_n8n_failures_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Wab-Node-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Wab-Node-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FailureIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FailureOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad node key, or this platform takes no node calls"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The report did not come from our error workflow"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "n8n does not say this execution failed"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryOut"
+                }
+              }
+            },
+            "description": "Try the same call again soon"
+          }
+        },
+        "summary": "Failures",
         "tags": [
           "internal"
         ]

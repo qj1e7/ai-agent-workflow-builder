@@ -50,6 +50,9 @@ locals {
 
   # The same for the Teams Workflows webhook (ADR 0036). Unset keeps the practice Teams copy.
   teams_webhook_set = nonsensitive(var.teams_webhook_url != "")
+  # And for the Tell flow, which posts a run's notice and emails it (ENGINE-PLAN D1). Unset keeps
+  # the practice copy. E13 sets it, with the registry's "Posts in Teams and emails" made ready.
+  teams_tell_webhook_set = nonsensitive(var.teams_tell_webhook_url != "")
 
   # The first people's addresses are not secret, and the app table's for_each needs plain values.
   first_people = trimspace(nonsensitive(var.first_operator)) == "" ? {} : {
@@ -210,6 +213,7 @@ module "key_vault" {
     local.github_token_set ? { "github-token" = var.github_token } : {},
     local.jira_token_set ? { "jira-api-token" = var.jira_api_token } : {},
     local.teams_webhook_set ? { "teams-webhook-url" = var.teams_webhook_url } : {},
+    local.teams_tell_webhook_set ? { "teams-tell-webhook-url" = var.teams_tell_webhook_url } : {},
   )
 }
 
@@ -262,6 +266,9 @@ locals {
         },
         local.jira_token_set ? { JIRA_API_TOKEN = local.secret["jira-api-token"] } : {},
         local.teams_webhook_set ? { TEAMS_WEBHOOK_URL = local.secret["teams-webhook-url"] } : {},
+        local.teams_tell_webhook_set ? {
+          TEAMS_TELL_WEBHOOK_URL = local.secret["teams-tell-webhook-url"]
+        } : {},
       )
     }
 
