@@ -338,6 +338,7 @@ async def build(settings: Settings) -> Services:
         start_secret=settings.start_secret,
         box=box,
         time_zone=settings.team_time_zone,
+        gateway=gateway,
     )
     schedules = ScheduleBook(db)
     watchlist = Watchlist(

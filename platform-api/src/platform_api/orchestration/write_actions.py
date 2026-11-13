@@ -455,6 +455,7 @@ class InFlight:
 class Made:
     """A change this run made, by this try or an earlier one."""
 
+    action: WriteAction
     done: WriteDone
     now: bool
     """This try made it, so it is logged now. An earlier try logged its own."""
@@ -546,7 +547,7 @@ class WriteGateway:
                 results.append(MadeBefore(action, reference, link, run_id))
                 continue
             done = WriteDone(action.connector, action.operation, reference, write.approvers, link)
-            results.append(Made(done, now))
+            results.append(Made(action, done, now))
         return Carried(tuple(results), failure)
 
     async def _execute_one(self, key: WriteKey, action: WriteAction) -> tuple[str, RunId, bool]:

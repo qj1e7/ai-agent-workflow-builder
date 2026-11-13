@@ -3190,6 +3190,78 @@
         "title": "ChangeLine",
         "type": "object"
       },
+      "ChangeOut": {
+        "additionalProperties": false,
+        "properties": {
+          "change": {
+            "description": "The change, in the words of the run's log.",
+            "title": "Change",
+            "type": "string"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it was not made, or where it was.",
+            "title": "Detail"
+          },
+          "made_in": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The run that made it first, when that was another run.",
+            "title": "Made In"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What it made, such as a ticket key.",
+            "title": "Reference"
+          },
+          "status": {
+            "enum": [
+              "made",
+              "already_made",
+              "not_made"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "change",
+          "status"
+        ],
+        "title": "ChangeOut",
+        "type": "object"
+      },
       "CheckPartIn": {
         "additionalProperties": false,
         "properties": {
@@ -12332,6 +12404,81 @@
         ],
         "title": "WriteDoneView",
         "type": "object"
+      },
+      "WriteIn": {
+        "additionalProperties": false,
+        "description": "Only the fields every block sends. Nothing in the call says what to write.",
+        "properties": {
+          "execution_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Execution Id",
+            "type": "string"
+          },
+          "mode": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Mode",
+            "type": "string"
+          },
+          "node_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Node Name",
+            "type": "string"
+          },
+          "workflow_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Id"
+          }
+        },
+        "required": [
+          "execution_id",
+          "workflow_id",
+          "node_name",
+          "mode"
+        ],
+        "title": "WriteIn",
+        "type": "object"
+      },
+      "WriteOut": {
+        "additionalProperties": false,
+        "properties": {
+          "made": {
+            "description": "Changes that exist now. Fewer than `of` fails the block.",
+            "title": "Made",
+            "type": "integer"
+          },
+          "of": {
+            "title": "Of",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ChangeOut"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "made",
+          "of",
+          "results"
+        ],
+        "title": "WriteOut",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -19225,6 +19372,106 @@
           }
         },
         "summary": "Read",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/n8n/calls/write": {
+      "post": {
+        "description": "Makes the run's own approved changes. The write gateway checks the yes in our records as it writes each one, and makes each subject once across runs. A retry makes only the changes still to make.",
+        "operationId": "write_internal_v1_n8n_calls_write_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Wab-Node-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Wab-Node-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WriteIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad node key, or this platform takes no node calls"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Refused by a safety rule, such as a start or a version that fails"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The run has stopped, or another execution carries it"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The block names something our platform does not allow"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryOut"
+                }
+              }
+            },
+            "description": "Try the same call again soon"
+          }
+        },
+        "summary": "Write",
         "tags": [
           "internal"
         ]

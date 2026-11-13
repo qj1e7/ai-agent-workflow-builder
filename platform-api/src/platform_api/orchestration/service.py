@@ -501,7 +501,7 @@ DENIED_ON_THE_WIRE: Mapping[DenyReason, DeniedReason] = {
 }
 
 
-def _denied(reason: DeniedReason, detail: str) -> PendingEvent:
+def write_denied(reason: DeniedReason, detail: str) -> PendingEvent:
     return PendingEvent(
         SAFETY_CHECKER,
         "write_action_denied",
@@ -648,7 +648,7 @@ class Orchestrator:
         detail = f"{step.value} is not allowed while the run is {state_name(record.state)}"
         events: list[PendingEvent] = []
         if step is StepName.WRITE_ACTION:
-            events.append(_denied("out_of_order", detail))
+            events.append(write_denied("out_of_order", detail))
         events.append(step_finished(step, execution, 1, "refused", detail))
         if fails_run:
             # The referee refuses only before the work is approved, so nothing can be written yet.
@@ -906,7 +906,7 @@ class Orchestrator:
                     moved2 = acting.fail(
                         Failure(FailureReason.SAFETY_DENIED, why, retryable=False)
                     ).preceded_by(
-                        _denied(DENIED_ON_THE_WIRE[reason], detail),
+                        write_denied(DENIED_ON_THE_WIRE[reason], detail),
                         step_finished(StepName.WRITE_ACTION, execution, 1, "refused", detail),
                     )
                     await self._commit(uow, record, moved2)
