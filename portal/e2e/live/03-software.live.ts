@@ -346,7 +346,9 @@ for (const phone of [false, true]) {
     await bobPage.goto(`/approvals/${approvalId}`)
     await expect(bobPage.getByRole('main')).toContainText('tiangolo/fastapi, which GitHub now calls fastapi/fastapi')
     await decline(bobPage)
-    await expect(bobPage.getByRole('heading', { level: 1 })).toHaveText('Declined, nothing was written', { timeout: 60_000 })
+    await expect(bobPage.locator('[data-run-pill]'), 'the run is declined').toHaveText('Declined', { timeout: 60_000 })
+    await expect(bobPage.getByRole('heading', { level: 1 }), 'the page is named for the workflow').toHaveText('Software watchlist')
+    await expect(bobPage.getByRole('main'), 'its settled line says nothing was written').toContainText(/(Ended at|Ended on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2} · Bob declined\. Nothing was written\./)
     await bob.close()
 
     await page.getByRole('button', { name: 'Check now' }).click()

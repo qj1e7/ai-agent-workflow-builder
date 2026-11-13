@@ -54,7 +54,7 @@ test('alice starts a check; bob opens the waiting run, sees the ticket it will c
   const bobWatch = watchPage(bob)
   await bob.goto(`/runs/${runId}`)
   await expect(state(bob)).toHaveText('Waiting for a yes')
-  await expect(heading(bob), 'the page is named for the workflow, with the kind of run above it').toHaveText(/release check$/)
+  await expect(heading(bob), 'the page is named for the workflow the check belongs to, with the kind of run above it').toHaveText('Software watchlist')
   await expect(bob.locator('#decision')).toBeFocused()
   const main = bob.getByRole('main')
   await expect(main).toContainText('1 ticket will be created in Jira project MOCK')
