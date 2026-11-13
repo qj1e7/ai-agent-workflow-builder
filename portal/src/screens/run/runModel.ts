@@ -102,6 +102,8 @@ export interface RunModel {
   readonly approvalId: string | null
   readonly steps: readonly ApprovalStep[]
   readonly proposed: number
+  /** What each proposed action does, such as create_ticket, so the run can say what it writes before the first write lands. */
+  readonly operations: readonly string[]
   readonly connector: string | null
   readonly written: readonly Written[]
   readonly approvedBy: readonly string[]
@@ -130,6 +132,7 @@ export const emptyModel: RunModel = {
   approvalId: null,
   steps: [],
   proposed: 0,
+  operations: [],
   connector: null,
   written: [],
   approvedBy: [],
@@ -272,7 +275,7 @@ function retried(model: RunModel, event: EventOf<'run_retried'>): RunModel {
   }
   const next: RunModel =
     event.data.leg === 'work'
-      ? { ...base, phase: { state: 'pending' }, agents: [], approvalId: null, steps: [], proposed: 0, written: [], found: '' }
+      ? { ...base, phase: { state: 'pending' }, agents: [], approvalId: null, steps: [], proposed: 0, operations: [], written: [], found: '' }
       : { ...base, phase: { state: 'acting' } }
   return say(next, { kind: 'retried', seq: event.seq, at: event.at, by })
 }
@@ -315,7 +318,8 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     }
     case 'write_action_proposed': {
       const phase = model.phase.state === 'pending' || model.phase.state === 'working' ? { state: 'proposed' as const } : model.phase
-      return { ...model, phase, proposed: event.data.actions.length, connector: event.data.actions[0]?.connector ?? model.connector }
+      const { actions } = event.data
+      return { ...model, phase, proposed: actions.length, operations: actions.map((action) => action.operation), connector: actions[0]?.connector ?? model.connector }
     }
     case 'approval_requested': {
       const steps = event.data.steps.map((s) => ({ index: s.index, label: s.label, status: s.status, by: s.decided_by ?? null }))

@@ -15,7 +15,7 @@ import { POLL_FAILED_MS, useReconnectWhenBehind } from '../run/follow'
 import { useLiveRun } from '../run/liveRun'
 import { TROUBLE_FACE } from '../run/troubleFace'
 import { type RunStory, useRunStory } from '../run/useRunStory'
-import { stageWords, type RunStage } from '../run/words'
+import { sentence, stageFactsOf, stageWords, type RunStage } from '../run/words'
 import styles from './Planner.module.css'
 
 type Say = (text: string) => void
@@ -40,7 +40,7 @@ function stopOf(useCaseId: string | null, operator: boolean, home: HomeOut | und
 }
 
 /** What a card says about the run, read aloud once as the run moves: the name and where it is. */
-const sayStage = (story: Pick<RunStory, 'stage'>, name: string): string => `${name}: ${stageWords(story.stage)}.`
+const sayStage = (story: Pick<RunStory, 'stage' | 'model'>, name: string): string => sentence(`${name}: ${stageWords(story.stage, stageFactsOf(story.model))}`)
 
 /** The card's body for one story. Pure, so it can be drawn from a run's fixture events. */
 export function RunCardView({ runId, name, story, beside }: { runId: string; name: string; story: RunStory | Omit<RunStory, 'useCase' | 'approvalId'>; beside: boolean }) {

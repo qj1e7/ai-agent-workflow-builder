@@ -19,7 +19,7 @@ export function andList(items: readonly string[]): string {
 }
 
 /** One closing full stop, unless the words bring their own, as the platform writes it. */
-function sentence(text: string): string {
+export function sentence(text: string): string {
   return /[.!?…]$/.test(text) ? text : `${text}.`
 }
 
@@ -485,11 +485,8 @@ export function endedWords(model: RunModel, nameOf: NameOf, quick: readonly stri
   const { phase } = model
   if (phase.state === 'rejected') return { tone: 'off', text: declinedSentence({ by: phase.by, approvedBy: model.approvedBy, reason: model.declineReason }, nameOf, quick) }
   if (phase.state !== 'succeeded') return null
-  if (model.written.length === 0) return { tone: 'ok', text: 'Nothing new' }
-  const created = model.written.every((written) => written.operation.startsWith('create_'))
-  const refs = model.written.map((written) => written.ref).filter((ref) => ref !== '')
-  const what = refs.length > 0 ? andList(refs) : changesOf(model.written, model.written.length).noun
-  return { tone: 'ok', text: `${what} ${created ? 'created' : 'written'}${afterYeses(model.approvedBy, nameOf)}` }
+  const done = stageWords('done', stageFactsOf(model))
+  return { tone: 'ok', text: model.written.length === 0 ? done : `${done}${afterYeses(model.approvedBy, nameOf)}` }
 }
 
 /**
@@ -542,27 +539,33 @@ const STOPPED_SHORT: Readonly<Record<FailureReason, string>> = {
 
 export interface StageFacts {
   readonly reason?: FailureReason | null
-  /** The tickets or changes the run wrote, as the run's own events name them. */
+  /** What the run wrote, each by the name its own events give it. A write with no name is counted, not named. */
   readonly written?: readonly string[]
+  /** How many tickets or changes it wrote, or is writing while it writes. */
+  readonly count?: number
+  /** Whether what it writes are tickets it creates, from the operation, so a page it updates is never called a ticket. */
   readonly tickets?: boolean
 }
 
 /** "GitHub didn’t answer", "Retrying", "Waiting for a yes", "Creating the ticket", "MOCK-22 created", "Declined. Nothing was written.". */
 export function stageWords(stage: RunStage, facts: StageFacts = {}): string {
+  const tickets = facts.tickets !== false
   switch (stage) {
     case 'stopped':
-      return facts.reason ? STOPPED_SHORT[facts.reason] : 'It stopped'
+      return facts.reason ? STOPPED_SHORT[facts.reason] : 'Stopped'
     case 'retrying':
       return 'Retrying'
     case 'working':
-      return 'Running now'
+      return 'Running'
     case 'waiting':
       return 'Waiting for a yes'
     case 'writing':
-      return facts.tickets === false ? 'Writing the changes' : 'Creating the ticket'
+      return tickets ? `Creating the ${(facts.count ?? 1) > 1 ? 'tickets' : 'ticket'}` : 'Writing the changes'
     case 'done': {
       const written = facts.written ?? []
-      return written.length === 0 ? 'Nothing new' : `${andList(written)} ${facts.tickets === false ? 'written' : 'created'}`
+      const n = facts.count ?? written.length
+      if (n === 0 && written.length === 0) return 'Nothing new'
+      return `${written.length > 0 ? andList(written) : count(n, tickets ? 'ticket' : 'change')} ${tickets ? 'created' : 'written'}`
     }
     case 'declined':
       return 'Declined. Nothing was written.'
@@ -571,13 +574,14 @@ export function stageWords(stage: RunStage, facts: StageFacts = {}): string {
   }
 }
 
-/** A run's stage and what it wrote, as stageWords wants them. */
+/** A run's stage and what it writes, as stageWords wants them, from the run's own events. */
 export function stageFactsOf(model: RunModel): StageFacts {
-  const written = model.written.map((item) => item.ref).filter((ref) => ref !== '')
+  const operations = model.written.length > 0 ? model.written.map((item) => item.operation) : model.operations
   return {
     reason: model.phase.state === 'failed' ? model.phase.reason : null,
-    written,
-    tickets: model.written.length === 0 || model.written.every((item) => item.operation.startsWith('create_')),
+    written: model.written.map((item) => item.ref).filter((ref) => ref !== ''),
+    count: model.phase.state === 'acting' ? Math.max(model.proposed, model.written.length) : model.written.length,
+    tickets: operations.every((operation) => operation === 'create_ticket'),
   }
 }
 

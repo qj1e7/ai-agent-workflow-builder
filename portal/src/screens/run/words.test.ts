@@ -7,6 +7,7 @@ import failure from '@contracts/fixtures/runs/failure.json'
 import rejected from '@contracts/fixtures/runs/rejected.json'
 import success from '@contracts/fixtures/runs/success.json'
 import { emptyModel, foldWire, type ChatItem, type RunModel } from './runModel'
+import { stageAnswers } from './stageAnswers'
 import { declinedBy, declinedNext, declinedNowWords, declinedOfSteps, declinedRecord, declinedWithNext, declineTail, feedTroubleOf, lineOf, logRowsOf, runKind, speakerName, stageFactsOf, stageOf, stageWords } from './words'
 
 describe('the run chat', () => {
@@ -94,13 +95,36 @@ describe('the declined record', () => {
   })
 })
 
-const NAMES: Record<string, string> = { alice: 'Alice', bob: 'Bob' }
+const NAMES: Record<string, string> = { alice: 'Alice', bob: 'Bob', carol: 'Carol' }
 const named = (id: string) => NAMES[id] ?? id
 const QUICK = ['Not this week', 'Wrong version', 'Needs testing first']
 const replay = (raw: readonly { run_id: string; seq: number }[], upTo = Infinity): RunModel => {
   const kept = raw.filter((item) => item.seq <= upTo)
   return foldWire(emptyModel, kept, kept[0]?.run_id ?? '')
 }
+
+type Wire = { run_id: string; seq: number; kind?: string; data?: Record<string, unknown> }
+
+/** The same run, updating a Confluence page in place of creating a Jira ticket. */
+const pageUpdate = (raw: readonly Wire[]): Wire[] =>
+  raw.map((item) => {
+    if (item.kind === 'write_action_proposed') return { ...item, data: { ...item.data, actions: [{ connector: 'confluence', operation: 'update_page', line: 'Update the page' }] } }
+    if (item.kind === 'write_action_done') return { ...item, data: { ...item.data, connector: 'confluence', operation: 'update_page', external_reference: 'PAGE-7' } }
+    return item
+  })
+
+/** The same run with two Approvers, one after the other: Carol says yes first, then Bob. */
+const twoYeses = (raw: readonly Wire[]): Wire[] =>
+  raw
+    .flatMap((item): Wire[] => {
+      if (item.kind === 'approval_requested') {
+        const open = (index: number, label: string) => ({ index, label, status: 'open', decided_by: null, decided_at: null, reason: null })
+        return [{ ...item, data: { ...item.data, steps: [open(0, 'First approver'), open(1, 'Second approver')] } }]
+      }
+      if (item.kind === 'approval_decided') return [{ ...item, data: { ...item.data, by: 'carol' } }, { ...item, data: { ...item.data, step: 1 } }]
+      return [item]
+    })
+    .map((item, index) => ({ ...item, seq: index + 1 }))
 
 describe('a run’s state in one set of words', () => {
   it('reads the stage of a run from its events, and calls a run retried after a stop Retrying', () => {
@@ -116,12 +140,30 @@ describe('a run’s state in one set of words', () => {
 
   it('says each stage the way the sketch’s rows, banners and strip do', () => {
     expect(stageWords('stopped', { reason: 'TimedOut' })).toBe('A step took too long')
+    expect(stageWords('stopped')).toBe('Stopped')
     expect(stageWords('retrying')).toBe('Retrying')
+    expect(stageWords('working')).toBe('Running')
     expect(stageWords('waiting')).toBe('Waiting for a yes')
     expect(stageWords('writing', { tickets: true })).toBe('Creating the ticket')
     expect(stageWords('done', stageFactsOf(replay(success)))).toBe('MOCK-142 created')
     expect(stageWords('done', {})).toBe('Nothing new')
     expect(stageWords('declined')).toBe('Declined. Nothing was written.')
+  })
+
+  it('says what a run writes from what it does, before and after the write lands', () => {
+    expect(stageWords('writing', stageFactsOf(replay(success, 18)))).toBe('Creating the ticket')
+    expect(stageWords('writing', stageFactsOf(replay(pageUpdate(success), 18)))).toBe('Writing the changes')
+    expect(stageWords('done', stageFactsOf(replay(pageUpdate(success))))).toBe('PAGE-7 written')
+  })
+
+  it('gives the troubleshooter’s Now row in the same words, naming every Approver who said yes', () => {
+    const now = (model: RunModel) => stageAnswers(model, '', named).find((answer) => answer.label === 'Now')?.text
+    expect(now(replay(success, 6))).toBe('Running…')
+    expect(now(replay(success, 15))).toBe('Waiting for a yes.')
+    expect(now(replay(success, 18))).toBe('Bob said yes. Creating the ticket…')
+    expect(now(replay(pageUpdate(success), 18))).toBe('Bob said yes. Writing the changes…')
+    expect(now(replay(twoYeses(success), 19))).toBe('Carol and Bob said yes. Creating the ticket…')
+    expect(stageAnswers(replay(success), 'Found 1.2.16.', named)).toEqual([])
   })
 
   it('never says a declined run wrote anything', () => {
