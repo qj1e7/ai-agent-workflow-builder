@@ -190,7 +190,7 @@ async def _use_up(conn: Connection, use_case_id: UseCaseId, slot: datetime) -> N
 
 @dataclass(frozen=True)
 class NotOn:
-    state: Literal["paused", "deleted"]
+    state: Literal["draft", "paused", "deleted"]
 
 
 class CheckSpecs(Protocol):

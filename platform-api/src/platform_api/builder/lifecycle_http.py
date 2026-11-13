@@ -59,6 +59,23 @@ async def resume_use_case(
     return view
 
 
+@router.post(
+    "/use-cases/{use_case_id}/turn-on",
+    description="Turns a draft on, publishing its version 1 (ADR 0044). Its next run is the next "
+    "slot of its schedule, and a slot that fell while it was a draft never starts. Turning on a "
+    "workflow that was turned on before, even one paused since, changes nothing. Not a write to "
+    "Jira or Teams, so it needs no approval.",
+    responses={**OPERATORS_ONLY, 404: NOT_FOUND},
+)
+async def turn_on_use_case(
+    use_case_id: str, principal: WorkflowOperator, builder: CurrentBuilder
+) -> UseCaseView:
+    view = await builder.turn_on_use_case(use_case_id, principal)
+    if view is None:
+        raise HTTPException(404, NO_SUCH)
+    return view
+
+
 @router.delete(
     "/use-cases/{use_case_id}",
     description="Takes the workflow out of the list and stops it running. Nothing is erased: "
