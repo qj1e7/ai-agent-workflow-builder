@@ -320,8 +320,9 @@ for (const width of [1280, 390]) {
       await expect(item, '…and its tone').toHaveAttribute('data-tone', tone ?? 'a tone')
       await item.getByRole('button').click({ timeout: 5_000 })
       await expect(panel(page), 'the row opens the run beside the chat, with its record').toContainText(record, { timeout: 15_000 })
-
-      const { run_id: again } = await backend.post<{ run_id: string }>('alice', `/api/v1/use-cases/${useCaseId}/runs`, { test: true }, { 'Idempotency-Key': randomUUID() }, [201])
+      await panel(page).getByRole('button', { name: 'Do a test run again' }).click({ timeout: 5_000 })
+      await expect(page, 'the new test run opens on its page').toHaveURL(/\/runs\/[^/]+$/)
+      const again = page.url().split('/').at(-1) ?? ''
       expect(again, 'a new run started').not.toBe(runId)
       expect((await backend.run(again)).test, 'it is a test run, as last_run says').toBe(true)
       expect((await backend.get<{ use_cases: { use_case_id: string; last_run: { test: boolean } | null }[] }>('alice', '/api/v1/use-cases')).use_cases.find((u) => u.use_case_id === useCaseId)?.last_run?.test).toBe(true)

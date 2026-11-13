@@ -12,6 +12,7 @@ import { cx } from '../../ui/cx'
 import { IconAlert, IconChevronRight, IconInfo, IconShield, IconX, type Icon } from '../../ui/icons'
 import { OpenButton, OpenLink } from '../../ui/OpenItem'
 import { useAfterPanelAction, useShownInPanel } from '../../ui/sidePanel'
+import { pressTestAgain } from '../run/testAgain'
 import { draftPath } from './card'
 import { actionsOf, CONNECT_ABOVE, draftWords, isModelNeed, lineOf, NO_MODEL_TITLE, openPathOf, panelItemOf, retryProblem, waitingWords, wordsOf, type Action, type Need, type Tone } from './home'
 import styles from './Home.module.css'
@@ -66,16 +67,13 @@ export function RetryButton({ runId, label, primary, describedBy, stay = false }
 }
 
 /** Starts a new test run of the workflow, as Do a test run does, and opens it so the person sees it go. */
-function TestAgainButton({ useCaseId, label, primary, describedBy }: { useCaseId: string; label: string; primary: boolean; describedBy: string }) {
+export function TestAgainButton({ useCaseId, label, primary, describedBy }: { useCaseId: string; label: string; primary: boolean; describedBy: string }) {
   const navigate = useChatNavigate()
   const start = useStartRun()
   const latch = useLatch()
   const words = useErrorWords()
   const [key] = useState(newIdempotencyKey)
-  const press = () =>
-    latch.run((settled) =>
-      start.mutate({ useCaseId, idempotencyKey: key, test: true }, { onSuccess: (started) => navigate(`/runs/${started.run_id}`), onSettled: settled }),
-    )
+  const press = () => pressTestAgain(latch, start.mutate, { useCaseId, idempotencyKey: key }, (runId) => navigate(`/runs/${runId}`))
   return (
     <>
       <Button variant={primary ? 'primary' : 'secondary'} loading={start.isPending} onClick={press} aria-describedby={describedBy}>

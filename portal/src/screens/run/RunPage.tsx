@@ -25,6 +25,7 @@ import { RunPill } from './RunPill'
 import { isFinished, type RunModel } from './runModel'
 import { TROUBLE_FACE } from './troubleFace'
 import { useRunStory } from './useRunStory'
+import { testAgainOf } from './testAgain'
 import { declinedNext, declinedNowWords, declinedRecord, feedTroubleOf, lineOf, logRowsOf, RUN_MISSING, RUN_PROBLEM, speakerName, stageWords, type NameOf, type RunState } from './words'
 import styles from './RunPage.module.css'
 
@@ -267,6 +268,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
       <DecisionArea label="How it ended">
         <Outcome
           declinedNext={shown.phase.state === 'rejected' ? next : null}
+          testAgain={testAgainOf({ ...run, state: shown.phase.state }, me, story.stopped.modelOff ?? false)}
           record={
             approval ? (
               <>

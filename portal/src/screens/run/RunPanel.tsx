@@ -8,7 +8,7 @@ import { useChat } from '../home/ChatProvider'
 import { ApprovalGate, NotChecked } from './ApprovalGate'
 import { openStep, partyOf, useDecision, useNotChecked } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
-import { AnswerList, StopAnswers, StopNext } from './Outcome'
+import { AnswerList, DeclinedNext, StopAnswers, StopNext } from './Outcome'
 import { QuestionThread } from './QuestionThread'
 import { useQuestions } from './questions'
 import { POLL_FAILED_MS, useReconnectWhenBehind } from './follow'
@@ -18,6 +18,7 @@ import { RunPill } from './RunPill'
 import { useRunStory } from './useRunStory'
 import { nextRunOf } from '../workflows/workflow'
 import { declinedNext, declinedNowWords, feedTroubleOf, RUN_PROBLEM } from './words'
+import { testAgainOf } from './testAgain'
 import styles from './RunPage.module.css'
 
 function Loading() {
@@ -134,7 +135,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
       ) : null}
       {declinedSoFar ? <p className="muted">{declinedSoFar}</p> : null}
       <RunLine stations={stations} arrivedLive={arrivedLive} settled={settled} small />
-      {story.model.phase.state === 'rejected' && next ? <p>{next}</p> : null}
+      {story.model.phase.state === 'rejected' && next ? <DeclinedNext words={next} testAgain={testAgainOf({ ...run, state: story.model.phase.state }, me, story.stopped.modelOff ?? false)} /> : null}
       {failure ? (
         <>
           <StopAnswers failure={failure} {...story.stopped} safeId={safeId} />

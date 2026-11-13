@@ -7,6 +7,7 @@ import { requestKindWords, requestPath } from '../workflows/requests'
 import { movedHeadline, notFoundHeadline, softwarePath } from '../software/software'
 import { lineWhen, runWhen } from '../workflows/workflow'
 import type { PanelItem } from '../../ui/sidePanel'
+import { TEST_AGAIN } from '../run/testAgain'
 
 /** Home for an Operator shows the most urgent five, then “N more”. Workflows, and Home for someone who is not an Operator, show everything the platform returned. */
 export const HOME_NEEDS_SHOWN = 5
@@ -478,7 +479,7 @@ export const CAN_TEST_AGAIN = 'A test run can start again once an AI model is co
  */
 export function declinedActions(item: DeclinedItem, modelOff = false): readonly Action[] {
   const open: Action = { kind: 'open', label: 'See the run', to: `/runs/${item.run_id}`, item: runItem(item.run_id) }
-  return modelOff ? [open] : [open, { kind: 'test', label: 'Do a test run again', useCaseId: item.use_case_id }]
+  return modelOff ? [open] : [open, { kind: 'test', label: TEST_AGAIN, useCaseId: item.use_case_id }]
 }
 
 /**
