@@ -71,9 +71,9 @@ describe('a run that was approved and wrote its ticket', () => {
     expect(stations.map((s) => s.agent)).toEqual([null, { id: 'version_checker', display: 'Version checker' }, null, null])
   })
 
-  it('says the version checker’s step and its ticket in the sketch’s words', () => {
+  it('says the version checker’s step in the sketch’s words, and the write in the plan’s', () => {
     const cardRun = replay(card)
-    expect(line(cardRun, planOf(cardUseCase.plan)).map((s) => s.label)).toEqual(['Started by Alice', 'Check release', 'Ask for a yes', 'Create ticket'])
+    expect(line(cardRun, planOf(cardUseCase.plan)).map((s) => s.label)).toEqual(['Started by Alice', 'Check release', 'Ask for a yes', 'Create Jira tickets'])
   })
 
   it('draws the same line without a plan, naming steps after their agents', () => {

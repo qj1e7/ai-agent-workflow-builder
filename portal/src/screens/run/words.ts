@@ -397,10 +397,9 @@ export function withCurrentNames(text: string): string {
 /** The gate's step on the run line, whatever the plan calls its block. */
 export const GATE_STEP = 'Ask for a yes'
 
-/** The sketch's words for the steps of the platform's own plans. A step the team named keeps its name. */
+/** The sketch's words for the agent steps of the platform's own plans. A step the team named keeps its name. */
 const STEP_WORDS: Readonly<Record<string, string>> = {
   crd_version_checker: 'Check release',
-  jira_create_ticket: 'Create ticket',
 }
 
 export function stepWords(block: PlanBlock): string {
@@ -419,11 +418,30 @@ const DAY_SHORT: Readonly<Record<Day, string>> = {
   sunday: 'Sun',
 }
 
-type Schedule = Pick<NonNullable<UseCaseView['schedule']>, 'day' | 'at'>
+export type Schedule = Pick<NonNullable<UseCaseView['schedule']>, 'day' | 'at' | 'time_zone'>
 
-/** The run line's first step: the schedule that started the run, "Daily 8:00", or the person who did, "Started by Alice". */
-export function triggerWords(run: Pick<RunModel, 'trigger' | 'startedBy'>, schedule: Schedule | null, nameOf: NameOf): string {
-  if (run.trigger === 'schedule') return schedule ? `${DAY_SHORT[schedule.day]} ${schedule.at.replace(/^0/, '')}` : 'On schedule'
+const WEEKDAYS: ReadonlySet<string> = new Set(['monday', 'tuesday', 'wednesday', 'thursday', 'friday'])
+/** How late after its time a scheduled run may start and still be that schedule's run. */
+const LATE_MINUTES = 10
+
+function scheduleStarted(schedule: Schedule, startedAt: string): boolean {
+  const at = new Date(startedAt)
+  if (Number.isNaN(at.getTime())) return false
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: schedule.time_zone || TIME_ZONE, weekday: 'long', hour: 'numeric', minute: '2-digit', hourCycle: 'h23' }).formatToParts(at)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? ''
+  const day = part('weekday').toLowerCase()
+  const [hour = NaN, minute = NaN] = schedule.at.split(':').map(Number)
+  const late = Number(part('hour')) * 60 + Number(part('minute')) - (hour * 60 + minute)
+  const onDay = schedule.day === 'every_day' || (schedule.day === 'weekdays' ? WEEKDAYS.has(day) : schedule.day === day)
+  return onDay && late >= 0 && late <= LATE_MINUTES
+}
+
+/**
+ * The run line's first step: the schedule that started the run, "Daily 8:00", or the person who did, "Started by Alice".
+ * A schedule changed since the run is not shown on it, so the run reads "On schedule".
+ */
+export function triggerWords(run: Pick<RunModel, 'trigger' | 'startedBy'>, schedule: Schedule | null, nameOf: NameOf, startedAt: string): string {
+  if (run.trigger === 'schedule') return schedule && scheduleStarted(schedule, startedAt) ? `${DAY_SHORT[schedule.day]} ${schedule.at.replace(/^0/, '')}` : 'On schedule'
   return run.startedBy ? `Started by ${nameOf(run.startedBy)}` : 'Started'
 }
 

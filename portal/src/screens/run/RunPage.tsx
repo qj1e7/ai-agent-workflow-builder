@@ -228,7 +228,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
     ;(open ? line : document.querySelector<HTMLElement>('main h1'))?.focus({ preventScroll: true })
   })
 
-  const stations = stationsOf(shown, planOf(useCase), triggerWords(shown, useCase?.schedule ?? null, nameOf))
+  const stations = stationsOf(shown, planOf(useCase), triggerWords(shown, useCase?.schedule ?? null, nameOf, run.started_at))
   const settled = settledOf(shown, nameOf, new Date(), declineReasons(useCase?.template))
   const proposal = approval.data && waiting ? approval.data.actions : null
   const headline = headlineOf(shown, stations, proposal)

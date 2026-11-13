@@ -10,7 +10,7 @@ import { Chat } from './Chat'
 import { Outcome } from './Outcome'
 import { RunLine } from './RunLine'
 import { emptyModel, foldWire, stationsOf, type ChatItem, type PlanBlock, type RunModel } from './runModel'
-import { headlineOf, settledOf, triggerWords, workingWords } from './words'
+import { headlineOf, settledOf, triggerWords, workingWords, type Schedule } from './words'
 
 interface Raw {
   readonly run_id: string
@@ -200,11 +200,21 @@ describe('the words on the line', () => {
   const run = (trigger: 'person' | 'schedule') => ({ trigger, startedBy: 'alice' })
 
   it('start with who started the run, or with the schedule that did', () => {
-    expect(triggerWords(run('person'), null, nameOf)).toBe('Started by Alice')
-    expect(triggerWords(run('schedule'), { day: 'every_day', at: '08:00' }, nameOf)).toBe('Daily 8:00')
-    expect(triggerWords(run('schedule'), { day: 'monday', at: '09:00' }, nameOf)).toBe('Mon 9:00')
-    expect(triggerWords(run('schedule'), { day: 'weekdays', at: '07:30' }, nameOf)).toBe('Weekdays 7:30')
-    expect(triggerWords(run('schedule'), null, nameOf), 'a schedule that is gone is not guessed').toBe('On schedule')
+    const friday8 = '2026-11-13T00:00:05Z'
+    const sg = (day: Schedule['day'], at: string): Schedule => ({ day, at, time_zone: 'Asia/Singapore' })
+    expect(triggerWords(run('person'), null, nameOf, friday8)).toBe('Started by Alice')
+    expect(triggerWords(run('schedule'), sg('every_day', '08:00'), nameOf, friday8)).toBe('Daily 8:00')
+    expect(triggerWords(run('schedule'), sg('monday', '09:00'), nameOf, '2026-11-16T01:00:02Z')).toBe('Mon 9:00')
+    expect(triggerWords(run('schedule'), sg('weekdays', '07:30'), nameOf, '2026-11-12T23:31:00Z')).toBe('Weekdays 7:30')
+    expect(triggerWords(run('schedule'), { day: 'every_day', at: '08:00', time_zone: 'Europe/London' }, nameOf, '2026-11-13T08:00:03Z'), 'in the schedule’s own zone').toBe('Daily 8:00')
+    expect(triggerWords(run('schedule'), null, nameOf, friday8), 'a schedule that is gone is not guessed').toBe('On schedule')
+  })
+
+  it('say only "On schedule" for a run the schedule today would not have started', () => {
+    const sg = (day: Schedule['day'], at: string): Schedule => ({ day, at, time_zone: 'Asia/Singapore' })
+    expect(triggerWords(run('schedule'), sg('every_day', '09:00'), nameOf, '2026-11-13T00:00:05Z'), 'the time changed since').toBe('On schedule')
+    expect(triggerWords(run('schedule'), sg('monday', '08:00'), nameOf, '2026-11-13T00:00:05Z'), 'the day changed since').toBe('On schedule')
+    expect(triggerWords(run('schedule'), sg('weekdays', '08:00'), nameOf, '2026-11-14T00:00:05Z'), 'a Saturday is not a weekday').toBe('On schedule')
   })
 
   it('count the seconds a step has worked, then the minutes, then the hours', () => {

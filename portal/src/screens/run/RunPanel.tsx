@@ -100,7 +100,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
   const questions = useQuestions(approval.data, nameOf, say)
   const notChecked = useNotChecked(approval.data, useCase.data)
 
-  const stations = stationsOf(shown, planOf(useCase.data), triggerWords(shown, useCase.data?.schedule ?? null, nameOf))
+  const stations = stationsOf(shown, planOf(useCase.data), triggerWords(shown, useCase.data?.schedule ?? null, nameOf, run.started_at))
   const settled = settledOf(shown, nameOf, new Date(), declineReasons(useCase.data?.template))
   const headline = headlineOf(shown, stations, approval.data && waiting ? approval.data.actions : null)
   const status = statusWords(decision, live)
