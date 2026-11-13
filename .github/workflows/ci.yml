@@ -172,6 +172,48 @@ jobs:
           docker pull --quiet nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
           sh nginx/render.test.sh
 
+  n8n-node-pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: n8n-node-pack
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: n8n-node-pack/.nvmrc
+          cache: npm
+          cache-dependency-path: n8n-node-pack/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: The image builds on the n8n pin in infra/public-images.json
+        working-directory: .
+        run: |
+          pin=$(jq -r '.n8n | "\(.repository):\(.tag)@\(.digest)"' infra/public-images.json)
+          if ! grep -qxF "FROM $pin" deploy/n8n/Dockerfile; then
+            echo "deploy/n8n/Dockerfile does not build on $pin from infra/public-images.json." >&2
+            exit 1
+          fi
+
+      - name: Pack smoke, n8n loads our blocks and the allow list holds
+        working-directory: .
+        run: scripts/pack-smoke.sh
+
   scans:
     runs-on: ubuntu-latest
     timeout-minutes: 10
