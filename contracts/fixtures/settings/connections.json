@@ -61,5 +61,13 @@
       "fix": "Add an AI model under Settings, AI model."
     }
   ],
-  "you_can_check": true
+  "you_can_check": true,
+  "tell": {
+    "flow_set": true,
+    "channel": "CODESparks Ops",
+    "email_to": [
+      "ops-lead@codesparks.example",
+      "support@codesparks.example"
+    ]
+  }
 }

@@ -240,6 +240,9 @@ The step that pauses a run before a write action until an Approver approves it i
 A Teams card or an email that only reports what a run read or found. It may go out without a yes, because it changes no data, under the Tell rule: its recipients are the ones fixed in the Portal, our API writes its words from the run's own reads and agent results, and a test run sends nothing (ADR 0026). The node pack's Tell node sends one.
 _Avoid_: Notification, alert
 
+**Tell flow**:
+The team's one Power Automate flow that posts a Tell's card in the team's channel and emails the team's list. Its address is a secret, kept in Key Vault and never shown. Until it is set, a Tell goes to the practice copy. Setting it alone does not make "Posts in Teams and emails" ready. That waits for E14, when the Planner can lay out a Tell block.
+
 **Approval card**:
 The Adaptive Card the platform posts in Teams for each approval request: what would be written, what the agents found, and who can decide. Its one button, Open in AI Workflow Builder, opens the approval page, where the Approver decides. Once decided, it shows who approved or declined. The practice copy shows the same card.
 _Avoid_: Teams message, notification

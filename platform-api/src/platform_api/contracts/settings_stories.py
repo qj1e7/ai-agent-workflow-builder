@@ -11,6 +11,7 @@ from platform_api.orchestration.settings_http import (
     ConnectionOut,
     ConnectionsView,
     SavedOut,
+    TellSetupOut,
     view_of,
 )
 from platform_api.shared import Principal, Role, UserId
@@ -129,6 +130,11 @@ def connections_view() -> ConnectionsView:
             ),
         ],
         you_can_check=True,
+        tell=TellSetupOut(
+            flow_set=True,
+            channel="CODESparks Ops",
+            email_to=["ops-lead@codesparks.example", "support@codesparks.example"],
+        ),
     )
 
 

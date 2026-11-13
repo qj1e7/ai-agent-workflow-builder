@@ -4,6 +4,8 @@ status: accepted
 
 # Staff maintain each workflow in n8n, and the Portal keeps every published version
 
+> Amended by ADR 0045 (14 Nov 2026): the allow list is no longer the fixed list below. It is our node pack, n8n's triggers and flow nodes, and every n8n node and operation classed in `node_classes.json`, with unknown meaning off. HTTP Request, Code and Webhook stay off.
+
 The sponsor's biggest concern is maintenance after handover, and he wants his staff to use n8n for it. He wants them to change how a workflow runs, build new workflows, and see the agents, all in n8n. ADR 0012 made n8n's editor read-only in practice: one generic n8n workflow per template, kept as a file in git and reloaded on each deploy. It left open whether the sponsor would accept that. He does not.
 
 So each use case becomes its own n8n workflow. It is built from our **node pack** and a few of n8n's own nodes:

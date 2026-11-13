@@ -1,10 +1,10 @@
 import { useCapabilities, useCheckConnection, useConnections } from '../../api/capabilityQueries'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
-import type { CapabilityView, ConnectionOut } from '../../api/types'
+import type { CapabilityView, ConnectionOut, TellSetupOut } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { AlertMark, CheckMark } from './marks'
-import { cardsOf, CHECK_DOWN_WORDS, checkResultWords, connectionWords, GITHUB_KEY_NOTE, keyWords, TEAMS_DOES_WORDS, usedBy } from './connections'
+import { cardsOf, CHECK_DOWN_WORDS, checkResultWords, connectionWords, GITHUB_KEY_NOTE, keyWords, TEAMS_DOES_WORDS, TELL_CHANGED_BY_WORDS, tellWords, usedBy } from './connections'
 import { ONLY_OPERATORS_WORDS } from './settings'
 import styles from './Settings.module.css'
 
@@ -85,6 +85,29 @@ function ConnectionCard({ connection, capabilities, canCheck, now }: CardProps) 
   )
 }
 
+function TellCard({ tell }: { tell: TellSetupOut }) {
+  const says = tellWords(tell)
+  return (
+    <article className={styles['connection']} data-connection="tell">
+      <div className={styles['connectionTop']}>
+        <h3>Tell flow</h3>
+        <span className={styles['pill']} data-tone="off">
+          {says.label}
+        </span>
+      </div>
+      <p>{says.text}</p>
+      <dl className={styles['facts']}>
+        <dt>Posts in</dt>
+        <dd>{tell.channel}</dd>
+        <dt>Emails</dt>
+        <dd>{says.emails}</dd>
+        <dt>Who changes these</dt>
+        <dd>{TELL_CHANGED_BY_WORDS}</dd>
+      </dl>
+    </article>
+  )
+}
+
 export function ConnectionsTab({ now }: { now: Date }) {
   const connections = useConnections()
   const capabilities = useCapabilities()
@@ -116,6 +139,7 @@ export function ConnectionsTab({ now }: { now: Date }) {
         {cardsOf(connections.data.connections).map((connection) => (
           <ConnectionCard key={connection.id} connection={connection} capabilities={capabilities.data?.capabilities} canCheck={canCheck} now={now} />
         ))}
+        <TellCard tell={connections.data.tell} />
       </div>
       {canCheck ? null : <p className={styles['note']}>{ONLY_OPERATORS_WORDS}</p>}
     </section>

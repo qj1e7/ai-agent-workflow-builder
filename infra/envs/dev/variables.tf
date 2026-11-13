@@ -208,6 +208,25 @@ variable "teams_tell_webhook_url" {
   }
 }
 
+variable "tell_email_to" {
+  description = "The team's fixed email list that every Tell emails, separated by commas (TELL_EMAIL_TO, ENGINE-PLAN D19). A plain setting, shown to anyone signed in. Required with teams_tell_webhook_url. Empty keeps nobody on it."
+  type        = string
+  default     = ""
+
+  validation {
+    condition = alltrue([
+      for email in split(",", var.tell_email_to) :
+      can(regex("^[^@,;[:space:]]+@[^,;[:space:]]*[.][^,;[:space:]]*$", trimspace(email))) if trimspace(email) != ""
+    ])
+    error_message = "Each address in tell_email_to must be an email, separated by commas."
+  }
+
+  validation {
+    condition     = var.teams_tell_webhook_url == "" || trimspace(var.tell_email_to) != ""
+    error_message = "teams_tell_webhook_url needs tell_email_to, the team's email list."
+  }
+}
+
 # Confluence (ENGINE-PLAN E12, D2). Leave confluence_base_url empty to keep Confluence not
 # connected. The rules match platform-api's startup check, so plan refuses what would stop it.
 

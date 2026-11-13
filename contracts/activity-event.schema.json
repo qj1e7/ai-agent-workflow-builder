@@ -1963,6 +1963,85 @@
       "title": "SupportReportedData",
       "type": "object"
     },
+    "Told": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/ToldData"
+        },
+        "kind": {
+          "const": "told",
+          "default": "told",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "Told",
+      "type": "object"
+    },
+    "ToldData": {
+      "additionalProperties": false,
+      "properties": {
+        "block": {
+          "description": "The Tell block, by its name in the workflow.",
+          "title": "Block",
+          "type": "string"
+        },
+        "line": {
+          "description": "What the block did, in plain words.",
+          "title": "Line",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ToldStatus"
+        }
+      },
+      "required": [
+        "block",
+        "status",
+        "line"
+      ],
+      "title": "ToldData",
+      "type": "object"
+    },
+    "ToldStatus": {
+      "enum": [
+        "sent",
+        "not_confirmed",
+        "would_have_sent",
+        "nothing_to_report"
+      ],
+      "type": "string"
+    },
     "Trigger": {
       "enum": [
         "person",
@@ -2229,6 +2308,7 @@
       "step_retried": "#/$defs/StepRetried",
       "step_started": "#/$defs/StepStarted",
       "support_reported": "#/$defs/SupportReported",
+      "told": "#/$defs/Told",
       "write_action_denied": "#/$defs/WriteActionDenied",
       "write_action_done": "#/$defs/WriteActionDone",
       "write_action_proposed": "#/$defs/WriteActionProposed"
@@ -2319,6 +2399,9 @@
     },
     {
       "$ref": "#/$defs/SupportReported"
+    },
+    {
+      "$ref": "#/$defs/Told"
     }
   ]
 }

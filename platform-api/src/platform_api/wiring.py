@@ -72,7 +72,7 @@ from platform_api.orchestration.service import Orchestrator
 from platform_api.orchestration.spec import CardRun
 from platform_api.orchestration.team_request_card import TeamsRequestChannel
 from platform_api.orchestration.teams import TeamsStub, TeamsWorkflowsWebhook
-from platform_api.orchestration.tell import TellFlow, TellOutlet, TellPractice
+from platform_api.orchestration.tell import TellFlow, TellOutlet, TellPractice, TellSetup
 from platform_api.orchestration.watch_store import WatchFacts
 from platform_api.orchestration.workflows import load_all
 from platform_api.orchestration.write_actions import WriteGateway
@@ -240,11 +240,11 @@ def approval_channel(
 
 def tell_outlet(settings: Settings, db: Database) -> tuple[TellOutlet, TellFlow | None]:
     """Where a Tell goes: the practice copy, or the team's Tell flow when TEAMS_TELL_WEBHOOK_URL
-    is set. E13 sets it, with the registry's "Posts in Teams and emails" made ready. Returns the
-    outlet, and the flow to close on shutdown."""
+    is set. Returns the outlet, and the flow to close on shutdown."""
+    setup = TellSetup(settings.teams_channel, settings.tell_email_to, settings.public_base_url)
     if settings.teams_tell_webhook_url is None:
-        return TellPractice(db, settings.teams_channel), None
-    flow = TellFlow(settings.teams_tell_webhook_url, settings.teams_channel)
+        return TellPractice(db, setup), None
+    flow = TellFlow(settings.teams_tell_webhook_url, setup)
     return flow, flow
 
 
