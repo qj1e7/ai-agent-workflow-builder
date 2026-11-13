@@ -137,8 +137,19 @@ def test_only_the_software_versioning_capabilities_are_marked_focus():
     assert all(c.state == "ready" for c in CAPABILITIES if c.focus)
 
 
+def test_posts_in_teams_and_emails_is_one_entry_planned_until_the_planner_lays_out_a_tell():
+    """platform-api serves it as it is here, so every screen says planned, set flow or not (E14)."""
+    entry = BY_ID["teams.post"]
+    assert (entry.plain, entry.state, entry.short) == (
+        "Posts in Teams and emails",
+        "planned",
+        "Teams channels, email",
+    )
+    assert "email.send" not in BY_ID
+
+
 def test_a_request_for_email_is_still_refused_in_words_though_it_is_not_a_focus_capability():
-    assert not BY_ID["email.send"].focus
+    assert not BY_ID["teams.post"].focus
     refusal = why_not("do", "Send email to the team")
     assert refusal is not None
     assert refusal.startswith("I can't send email to the team yet.")

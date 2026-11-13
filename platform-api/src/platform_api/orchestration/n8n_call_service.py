@@ -148,6 +148,7 @@ from platform_api.orchestration.tell import (
     not_confirmed_line,
     sent_line,
     something_to_report,
+    told_event,
     would_have_line,
 )
 from platform_api.orchestration.watch import Unusable
@@ -434,14 +435,18 @@ class CallBook:
             (datetime.fromtimestamp(0, UTC), call_id),
         )
 
-    async def settle(self, uow: UnitOfWork, call_id: str, told: Told) -> None:
+    async def settle(self, uow: UnitOfWork, call_id: str, told: Told) -> bool:
         """Replaces a Tell's sending with what the flow answered. Its sending, kept before the
         post, is all a repeat of the call ever sees until then, so nothing is sent twice."""
-        await uow.conn.execute(
-            "UPDATE orchestration.node_calls SET answer = %s, answered_at = %s "
-            "WHERE call_id = %s AND outcome = 'answered' AND answer ->> 'status' = 'sending'",
-            (json(_stored(told)), uow.now, call_id),
-        )
+        settled = await (
+            await uow.conn.execute(
+                "UPDATE orchestration.node_calls SET answer = %s, answered_at = %s "
+                "WHERE call_id = %s AND outcome = 'answered' AND answer ->> 'status' = 'sending' "
+                "RETURNING call_id",
+                (json(_stored(told)), uow.now, call_id),
+            )
+        ).fetchone()
+        return settled is not None
 
     async def writing(self, uow: UnitOfWork, execution: N8nExecutionId) -> bool:
         """Whether a Make the approved changes block of this execution is still making its
@@ -1112,10 +1117,11 @@ class NodeCalls:
             return await self._keep_tell(
                 admitted, call, Told("nothing_to_report", NOTHING_TO_REPORT)
             )
+        setup = self._tells.setup
         if test:
-            line = would_have_line(reach, self._tells.channel)
+            line = would_have_line(reach, setup.channel)
             return await self._keep_tell(admitted, call, Told("would_have_sent", line))
-        message = compose(record.spec.use_case_name, results, reach, ending)
+        message = compose(record.spec.use_case_name, results, reach, setup, record.run_id, ending)
         return await self._send(admitted, call, self._tells, message, reach)
 
     async def _keep_tell(
@@ -1125,7 +1131,14 @@ class NodeCalls:
             kept = await self._book.keep(
                 uow, call, admitted.run_id, answer, call_id=admitted.call_id
             )
+            if kept and isinstance(answer, Told):
+                await self._note_told(uow, admitted.run_id, call.node_name, answer)
         return Kept(answer) if kept else BUSY
+
+    async def _note_told(self, uow: UnitOfWork, run_id: RunId, block: str, told: Told) -> None:
+        event = told_event(block, told)
+        if event is not None:
+            await self._activity.append(uow, run_id, [event])
 
     async def _send(
         self,
@@ -1146,11 +1159,12 @@ class NodeCalls:
             return BUSY
         try:
             await outlet.send(admitted.run_id, call.node_name, message)
-            told = Told("sent", sent_line(reach, outlet.channel))
+            told = Told("sent", sent_line(reach, outlet.setup.channel))
         except NotConfirmed as why:
             told = Told("not_confirmed", not_confirmed_line(str(why)))
         async with self._db.transaction("orchestration") as uow:
-            await self._book.settle(uow, admitted.call_id, told)
+            if await self._book.settle(uow, admitted.call_id, told):
+                await self._note_told(uow, admitted.run_id, call.node_name, told)
         return Kept(told)
 
     async def _finish(

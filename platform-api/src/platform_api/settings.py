@@ -88,6 +88,8 @@ class Settings:
     teams_tell_webhook_url: str | None = None
     """The Tell flow, which posts a notice to the team's channel and emails the team's list (D1).
     Unset keeps the practice copy."""
+    tell_email_to: tuple[str, ...] = ()
+    """TELL_EMAIL_TO, the team's fixed email list that every Tell emails."""
     settings_encryption_key: str | None = None
     first_people: FirstPeople | None = None
     activity_reader: ActivityReader = "postgres"
@@ -167,6 +169,19 @@ def teams_webhook_from_env(env: Mapping[str, str], name: str = "TEAMS_WEBHOOK_UR
     if not url.startswith("https://") or len(url) <= len("https://"):
         raise ConfigError(f"{name} must be the https:// address Teams Workflows gave.")
     return url
+
+
+def tell_email_from_env(env: Mapping[str, str], flow_set: bool) -> tuple[str, ...]:
+    """The team's email list, separated by commas. With the Tell flow set it may not be empty,
+    because the flow sends every Tell's email to this list."""
+    emails = tuple(e.strip() for e in env.get("TELL_EMAIL_TO", "").split(",") if e.strip())
+    for email in emails:
+        local, at, domain = email.partition("@")
+        if not (at and local and "." in domain) or any(c.isspace() or c == ";" for c in email):
+            raise ConfigError(f"{email!r} in TELL_EMAIL_TO is not an email.")
+    if flow_set and not emails:
+        raise ConfigError("TEAMS_TELL_WEBHOOK_URL needs TELL_EMAIL_TO, the team's email list.")
+    return emails
 
 
 def max_body_bytes_from_env(env: Mapping[str, str]) -> int:
@@ -277,6 +292,7 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
     cosmos = cosmos_from_env(env)
     public_base_url = auth.public_base_url.rstrip("/")
     practice_systems = practice_systems_from_env(env)
+    tell_flow = teams_webhook_from_env(env, "TEAMS_TELL_WEBHOOK_URL")
     return Settings(
         auth=auth,
         first_people=first_people_from_env(env),
@@ -295,7 +311,8 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         teams_channel=env.get("TEAMS_CHANNEL") or "CODESparks Ops",
         teams_webhook_url=teams_webhook_from_env(env),
         teams_requests_webhook_url=teams_webhook_from_env(env, "TEAMS_REQUESTS_WEBHOOK_URL"),
-        teams_tell_webhook_url=teams_webhook_from_env(env, "TEAMS_TELL_WEBHOOK_URL"),
+        teams_tell_webhook_url=tell_flow,
+        tell_email_to=tell_email_from_env(env, tell_flow is not None),
         settings_encryption_key=env.get("SETTINGS_ENCRYPTION_KEY") or None,
         activity_reader=activity_reader_from_env(env, cosmos),
         cosmos=cosmos,

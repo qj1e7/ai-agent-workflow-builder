@@ -81,6 +81,8 @@ export type ChatItem = { readonly seq: number; readonly at: RunTime } & (
   | { readonly kind: 'stopped'; readonly stage: FailureStage }
   | { readonly kind: 'reported'; readonly by: string; readonly requestId: string }
   | { readonly kind: 'found'; readonly text: string }
+  /** What a Tell block did, in the platform's own words: sent, not confirmed, what a test run would have sent, or nothing to report. */
+  | { readonly kind: 'told'; readonly line: string; readonly bad: boolean }
 )
 
 /** A spot the run reached, and when. */
@@ -371,6 +373,8 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     }
     case 'support_reported':
       return reported(model, event)
+    case 'told':
+      return say(model, { kind: 'told', seq: event.seq, at: event.at, line: event.data.line, bad: event.data.status === 'not_confirmed' })
     case 'run_skipped':
       return advanceTo({ ...model, phase: { state: 'skipped' } }, { at: 'done' }, event)
     case 'run_expired':

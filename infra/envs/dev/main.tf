@@ -51,8 +51,9 @@ locals {
   # The same for the Teams Workflows webhook (ADR 0036). Unset keeps the practice Teams copy.
   teams_webhook_set = nonsensitive(var.teams_webhook_url != "")
   # And for the Tell flow, which posts a run's notice and emails it (ENGINE-PLAN D1). Unset keeps
-  # the practice copy. E13 sets it, with the registry's "Posts in Teams and emails" made ready.
+  # the practice copy. The team's email list must be set with it.
   teams_tell_webhook_set = nonsensitive(var.teams_tell_webhook_url != "")
+  tell_email_to          = trimspace(var.tell_email_to)
 
   # The first people's addresses are not secret, and the app table's for_each needs plain values.
   first_people = trimspace(nonsensitive(var.first_operator)) == "" ? {} : {
@@ -248,6 +249,7 @@ locals {
         },
         var.oidc_jwks_url == "" ? {} : { OIDC_JWKS_URL = var.oidc_jwks_url },
         var.teams_channel == "" ? {} : { TEAMS_CHANNEL = var.teams_channel },
+        local.tell_email_to == "" ? {} : { TELL_EMAIL_TO = local.tell_email_to },
         local.first_people,
         local.jira_settings,
       )

@@ -61,7 +61,9 @@ from platform_api.orchestration import (
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
+from platform_api.orchestration.agents import HttpAgentRuntime
 from platform_api.orchestration.approvals import Decision, Verdict
+from platform_api.orchestration.planning import CapabilityRegistry
 from platform_api.orchestration.run_gist import gist_of
 from platform_api.orchestration.runs import (
     AwaitingApproval,
@@ -94,7 +96,8 @@ from platform_api.shared import (
     UserId,
 )
 from platform_api.wire import Trigger
-from tests.support import LOCAL_ENV, SPEC
+from tests.declared import FakeConnections
+from tests.support import FIXTURES, LOCAL_ENV, SPEC
 
 pytestmark = pytest.mark.anyio
 
@@ -1234,6 +1237,44 @@ async def states_of(front: Front) -> dict[str, dict[str, object]]:
     r = await front.client.get(CAPABILITIES, headers=BOB)
     assert r.status_code == 200
     return {c["id"]: c for c in r.json()["capabilities"]}
+
+
+async def test_posts_in_teams_and_emails_stays_planned_everywhere_while_the_tell_flow_is_set(
+    db: Database,
+):
+    """The flow is only a connection fact. The capability waits for E14, when the Planner can lay
+    out a Tell block, so no screen says the platform posts before anyone can use it."""
+    runtime_registry = (FIXTURES / "agent" / "capabilities.json").read_text()
+
+    def runtime(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, text=runtime_registry, headers={"content-type": "application/json"}
+        )
+
+    agents = HttpAgentRuntime(
+        "http://agent-runtime:8100",
+        "agent-key-not-real",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(runtime)),
+    )
+    flow = "https://prod.example.logic.azure.com/workflows/tell/run?sig=flow-secret"
+    app = create_app({**LOCAL_ENV, "TEAMS_TELL_WEBHOOK_URL": flow, "TELL_EMAIL_TO": "a@x.example"})
+    watchlist = Watchlist(db, NothingLearned(), ScheduleBook(db))
+    builder = Builder(
+        db, SecondCallRepeats(), watchlist, "http://localhost:8000", history=RunBook()
+    )
+    facts = PlannerFactsReader(watchlist, builder, FakeHome())
+    registry = CapabilityRegistry(agents)
+    app.state.planner_front = PlannerFront(
+        FakeAnswers(), builder, watchlist, registry, FakeStates(), facts
+    )
+    app.state.connections = FakeConnections()
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        listed = (await client.get(CAPABILITIES, headers=BOB)).json()["capabilities"]
+        tell = (await client.get("/api/v1/settings/connections", headers=BOB)).json()["tell"]
+    [entry] = [c for c in listed if c["plain"] == "Posts in Teams and emails"]
+    assert (entry["state"], entry["short"]) == ("planned", "Teams channels, email")
+    assert tell["flow_set"] is True
 
 
 async def test_the_capabilities_are_the_registry_with_its_examples(front: Front):

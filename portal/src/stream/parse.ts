@@ -71,6 +71,7 @@ const REQUIRED_KEYS = {
   execution_resumed: ['execution_id'],
   run_lost: ['approval_id', 'why'],
   support_reported: ['request_id', 'reported_by'],
+  told: ['status', 'line'],
 } as const satisfies RequiredKeys
 
 const ACTOR_KINDS: ReadonlySet<string> = new Set(['user', 'platform', 'workflow', 'agent', 'safety_checker'])

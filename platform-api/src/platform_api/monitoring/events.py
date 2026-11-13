@@ -37,6 +37,7 @@ type DeniedReason = Literal[
     "test_run",
 ]
 type WireVerdict = Literal["approve", "decline"]
+type ToldStatus = Literal["sent", "not_confirmed", "would_have_sent", "nothing_to_report"]
 
 
 class Actor(WireModel):
@@ -188,6 +189,12 @@ class SupportReportedData(WireModel):
     reported_by: UserId
 
 
+class ToldData(WireModel):
+    block: str = Field(description="The Tell block, by its name in the workflow.")
+    status: ToldStatus
+    line: str = Field(description="What the block did, in plain words.")
+
+
 class _Envelope(WireModel):
     run_id: RunId
     seq: int = Field(ge=1)
@@ -336,6 +343,11 @@ class SupportReported(_Envelope):
     data: SupportReportedData
 
 
+class Told(_Envelope):
+    kind: Literal["told"] = "told"
+    data: ToldData
+
+
 type ActivityEvent = Annotated[
     RunCreated
     | LegDispatched
@@ -364,7 +376,8 @@ type ActivityEvent = Annotated[
     | RunExpired
     | ExecutionResumed
     | RunLost
-    | SupportReported,
+    | SupportReported
+    | Told,
     Field(discriminator="kind"),
 ]
 
