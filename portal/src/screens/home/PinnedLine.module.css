@@ -1,51 +1,72 @@
-.pinned {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto auto;
+.strip {
+  display: flex;
+  flex: none;
   align-items: center;
-  gap: 4px 12px;
-  padding: 10px 14px;
-  border: 1px solid var(--hair);
-  border-radius: var(--r-card);
+  gap: 10px;
+  min-height: 46px;
+  padding: 6px 10px 6px 18px;
+  border-bottom: 1px solid var(--hair);
   background: var(--surface);
+  font-size: 0.9rem;
+  transition: background-color var(--dur-panel) ease;
 }
 
+.strip[data-tone='err'] {
+  background: var(--red-soft);
+}
+
+.strip[data-tone='wait'] {
+  background: var(--amber-soft);
+}
+
+.strip[data-tone='calm'] {
+  color: var(--muted);
+}
+
+/* A long name wraps inside its own box rather than run under "N more": the fit check counts any ellipsis as cut off. */
 .text {
-  display: grid;
+  flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.text span {
-  color: var(--muted);
-  font-size: 0.875rem;
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+}
+
+[data-tone='err'] > .dot {
+  background: var(--red);
+}
+
+[data-tone='wait'] > .dot {
+  background: var(--amber);
 }
 
 .more {
   display: inline-flex;
   align-items: center;
-  min-height: 44px;
+  min-height: 32px;
   padding: 0 4px;
-  color: var(--ink);
+  color: var(--muted);
   font-weight: 600;
+  white-space: nowrap;
+  text-decoration-color: var(--rail);
+  text-underline-offset: 3px;
 }
 
-@media (max-width: 600px) {
-  .pinned {
-    grid-template-columns: 20px auto minmax(0, 1fr);
+@media (hover: hover) and (pointer: fine) {
+  .more:hover {
+    color: var(--ink);
   }
+}
 
-  .text {
-    grid-column: 2 / -1;
-  }
-
-  /* Open is a link to a page, or a button when it opens the side panel. */
-  .pinned > :is(a, button):not(.more) {
-    grid-column: 2;
-    justify-self: start;
-  }
-
-  .more {
-    grid-column: 3;
-    justify-self: start;
-  }
+/* Open is a link to a page, or a button when it opens the side panel: the sketch's small ghost button. */
+.strip > :is(a, button):not(.more) {
+  min-height: 32px;
+  padding: 0 11px;
+  font-size: 0.84rem;
 }

@@ -227,7 +227,7 @@ describe('after a delete', () => {
 })
 
 const navNames = (html: string) =>
-  [...html.matchAll(/<nav\b[^>]*aria-label="Main"[^>]*>([\s\S]*?)<\/nav>/g)].flatMap((nav) => [...(nav[1] ?? '').matchAll(/<a\b([^>]*)>/g)].map((a) => /aria-label="([^"]*)"/.exec(a[1] ?? '')?.[1] ?? ''))
+  [...html.matchAll(/<nav\b[^>]*aria-label="Browse"[^>]*>([\s\S]*?)<\/nav>/g)].flatMap((nav) => [...(nav[1] ?? '').matchAll(/<a\b([^>]*)>/g)].map((a) => /aria-label="([^"]*)"/.exec(a[1] ?? '')?.[1] ?? ''))
 const primaries = (html: string) => (html.match(/<(?:a|button)\b[^>]*class="[^"]*_primary_[^"]*"[^>]*>/g) ?? []).length
 const labelsOf = (html: string, ...label: string[]) => label.flatMap((words) => [...html.matchAll(new RegExp(`>${words}<`, 'g'))])
 
@@ -255,7 +255,7 @@ describe('Needs you at the top of Workflows', () => {
     const section = /<section[^>]*aria-labelledby="[^"]*"[\s\S]*?<\/section>/.exec(html)?.[0] ?? ''
     expect(text(section)).toContain('Needs you')
     expect(section).toContain('data-home-item="stopped:run_01JB9"')
-    expect(navNames(html).filter((name) => name.startsWith('Workflows'))).toEqual([`Workflows, ${total} need you`])
+    expect(navNames(html).filter((name) => name.startsWith('Workflows'))).toEqual([`Workflows, ${String(HOME.workflows)} in all`])
     expect(html.indexOf('>Needs you</h2>')).toBeLessThan(html.indexOf('aria-label="Workflows"'))
     expect([...section.matchAll(/data-home-item="/g)]).toHaveLength(total)
   })
@@ -356,12 +356,12 @@ describe('the rest of the page under Needs you', () => {
     expect(text(sectionOf(mainOf(render({ home: HOME })), 'following'))).not.toContain('Showing the newest')
   })
 
-  it('shows a reply the person has not opened in Needs you, with the same count as the tab', () => {
+  it('shows a reply the person has not opened in Needs you', () => {
     const html = render({ home: HOME })
     expect(mainOf(html)).toContain('data-home-item="reply:trq_01JD5RP"')
     expect(text(mainOf(html))).toContain('Bob replied to your report')
     expect(mainOf(html)).toMatch(/<li[^>]*data-home-item="reply:trq_01JD5RP"[^>]*><a[^>]*href="\/workflows\?request=trq_01JD5RP"/)
-    expect(navNames(html).filter((name) => name.startsWith('Workflows'))).toEqual([`Workflows, ${needsTotal(HOME)} need you`])
+    expect(navNames(html).filter((name) => name.startsWith('Workflows'))).toEqual([`Workflows, ${String(HOME.workflows)} in all`])
   })
 
   it('leaves a request in Following up but not in Needs you once the person has opened it', () => {

@@ -51,6 +51,8 @@ const PILLS: Record<RunState, Pill> = {
   succeeded: { tone: 'ok', pill: null },
   rejected: { tone: 'ok', pill: null },
   skipped: { tone: 'ok', pill: null },
+  expired: { tone: 'ok', pill: null },
+  lost: { tone: 'bad', pill: 'Lost' },
   pending: { tone: 'new', pill: null },
   working: { tone: 'new', pill: null },
   proposed: { tone: 'new', pill: null },
@@ -89,6 +91,9 @@ export function stageOfRun(run: RunView): StageFacts {
     case 'failed':
       return { ...none, state: run.state, reason: run.reason }
     case 'skipped':
+      return { ...none, state: run.state }
+    case 'expired':
+    case 'lost':
       return { ...none, state: run.state }
     case 'pending':
     case 'working':

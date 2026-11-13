@@ -112,6 +112,8 @@ type RunState = Literal[
     "rejected",
     "failed",
     "skipped",
+    "expired",
+    "lost",
 ]
 type RunOutcome = Literal["written", "nothing_to_write", "test_passed"]
 type FailureStage = Literal["pending", "working", "proposed", "acting"]
@@ -126,7 +128,7 @@ type FailureReason = Literal[
     "OutOfOrderStep",
 ]
 type Trigger = Literal["person", "schedule"]
-type ApprovalStepStatus = Literal["waiting", "open", "approved", "declined"]
+type ApprovalStepStatus = Literal["waiting", "open", "approved", "declined", "expired", "cancelled"]
 
 
 DECLINE_REASON_MAX = 200

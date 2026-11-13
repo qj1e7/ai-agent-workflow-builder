@@ -242,6 +242,10 @@ export function headlineOf(model: RunModel, stations: readonly Station[], propos
       return { text: 'Declined, nothing was written', pill: { label: 'Declined', tone: 'off' } }
     case 'skipped':
       return { text: 'An earlier run is still waiting for a yes', pill: { label: 'Skipped', tone: 'off' } }
+    case 'expired':
+      return { text: 'No answer, nothing was written', pill: { label: 'No answer', tone: 'off' } }
+    case 'lost':
+      return { text: 'Approved, but n8n lost the run', pill: { label: 'Lost', tone: 'bad' } }
     case 'failed': {
       const failed = stations.find((station) => station.state === 'err')
       const before = failed?.spot.at === 'agent' && model.agents.length === 0
@@ -521,6 +525,10 @@ export function stageWords(run: StageFacts, nameOf: NameOf): string {
       return 'Waiting for a yes'
     case 'skipped':
       return 'Skipped. An earlier run is still waiting for a yes.'
+    case 'expired':
+      return 'No answer. Nothing was written.'
+    case 'lost':
+      return 'Approved, but n8n lost the run. Nothing was written.'
     case 'pending':
     case 'working':
     case 'proposed':
@@ -557,5 +565,9 @@ export function runPill(run: StageFacts): { readonly label: string; readonly ton
       return { label: 'Declined', tone: 'quiet' }
     case 'skipped':
       return { label: 'Skipped', tone: 'quiet' }
+    case 'expired':
+      return { label: 'No answer', tone: 'quiet' }
+    case 'lost':
+      return { label: 'Lost', tone: 'bad' }
   }
 }

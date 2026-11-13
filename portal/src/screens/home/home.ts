@@ -5,11 +5,11 @@ import type { AddressItem, CapabilitiesView, PlannerAnswerIn, ApprovalItem, Conf
 import { count, declineTail, withCurrentNames } from '../run/words'
 import { requestKindWords, requestPath } from '../workflows/requests'
 import { movedHeadline, notFoundHeadline } from '../software/software'
-import { lineWhen, nextRunAt, runWhen, workflowPath } from '../workflows/workflow'
+import { lineWhen, runWhen } from '../workflows/workflow'
 import type { PanelItem } from '../../ui/sidePanel'
 
-/** Home for an Operator shows the most urgent few. Workflows, and Home for someone who is not an Operator, show everything the platform returned. */
-export const HOME_NEEDS_SHOWN = 3
+/** Home for an Operator shows the most urgent five, then “N more”. Workflows, and Home for someone who is not an Operator, show everything the platform returned. */
+export const HOME_NEEDS_SHOWN = 5
 
 const CONNECTIONS_PATH = '/settings?tab=connections'
 
@@ -105,59 +105,46 @@ export function needsOf(home: HomeOut, limit = Infinity): Needs {
   return { shown, total, more: { approvals, others: total - shown.length - approvals } }
 }
 
-/** The line under their greeting: what waits for their yes, and when nothing does, what runs next (spec 5.3). */
-export function approverHomeLine(home: HomeOut, now: Date): string {
-  if (needsTotal(home) > 0) return approverLine(home)
-  if (home.workflows === 0) return 'Nothing needs you yet. When a workflow wants to change something, it shows up here and in Teams.'
-  const next = comingUpOf(home, now)
-  return next ? `${approverLine(home)} Next up: ${next.name}, ${next.when}.` : approverLine(home)
-}
-
 /** The requests waiting for this person’s yes, from the same list as Needs you, so the two never disagree. */
 export function approvalsOf(home: HomeOut): Needs {
   const shown = needsOf(home).shown.filter((need) => need.kind === 'approval')
   return { shown, total: home.approvals_total, more: { approvals: home.approvals_total - shown.length, others: 0 } }
 }
 
-/** The one line under the greeting. It never repeats the count, because Needs you under it carries that. */
-export function stateLine(home: HomeOut, now: Date): string {
-  const total = needsTotal(home)
-  if (total > 0) return total === 1 ? 'Something needs you.' : 'Some things need you.'
-  const next = comingUpOf(home, now)
-  return next ? `Nothing needs you. Next up: ${next.name}, ${next.when}.` : 'Nothing needs you. Nothing is scheduled yet.'
-}
-
-/** What waits for the yes of someone who isn’t an Operator, in the same words on their Home, in the chat’s answer and on the rail. */
+/** What waits for the yes of someone who isn’t an Operator, in the sketch’s words, for the chat’s answer and, with no full stop, his Home’s heading. */
 export function approverLine(home: HomeOut): string {
   const total = needsTotal(home)
-  if (total === 0) return 'Nothing needs you right now.'
-  if (total === home.approvals_total) return `${count(total, 'request')} ${total === 1 ? 'is' : 'are'} waiting for your yes.`
+  if (total === 0) return 'Nothing waits for your yes.'
+  if (total === home.approvals_total) return `${count(total, 'change')} ${total === 1 ? 'waits' : 'wait'} for your yes.`
   return total === 1 ? '1 thing needs you.' : `${total} things need you.`
 }
+
+/** His Home’s heading: the same words as his answer, as a heading. */
+export const approverHeading = (home: HomeOut): string => approverLine(home).replace(/\.$/, '')
 
 export interface Suggestion {
   readonly label: string
   readonly ask: PlannerAnswerIn
 }
 
-/** The three questions Home suggests to someone who isn’t an Operator (spec 5.3). Each is a chip that never asks the model. */
+/** The sketch’s three chips for someone who isn’t an Operator. Each is an intent, so none asks the model. */
 export const APPROVER_SUGGESTIONS: readonly Suggestion[] = [
-  { label: 'What is waiting for my yes?', ask: { intent: 'needs_me' } },
-  { label: 'What did I decide before?', ask: { intent: 'decided' } },
-  { label: 'How are the workflows doing?', ask: { intent: 'check_workflows' } },
+  { label: 'What waits for me?', ask: { intent: 'needs_me' } },
+  { label: 'What did I decide?', ask: { intent: 'decided' } },
+  { label: 'What can you do?', ask: { intent: 'abilities' } },
 ]
 
-/** What Home offers once software is on the watchlist. The question lane answers the first, and “Watch another software ...” gets the watchlist answer. */
+/** The sketch’s three once software is on the watchlist. Two are intents the platform answers without the model, and the question lane reads the middle one in the words it knows. */
 const WATCHED_CHIPS: readonly Suggestion[] = [
-  { label: 'Which software has a newer version?', ask: { text: 'Which software has a newer version?' } },
-  { label: 'Watch another software for new versions', ask: { text: 'Watch another software for new versions' } },
-  { label: 'What can you do?', ask: { text: 'What can you do?' } },
+  { label: 'What needs me?', ask: { intent: 'needs_me' } },
+  { label: 'Which software is behind?', ask: { text: 'Which software has a newer version?' } },
+  { label: 'What can you do?', ask: { intent: 'abilities' } },
 ]
 
 /**
- * The chips under the box. The team’s focus is software versioning (8 Nov 2026), so they are about the watchlist.
- * With software watched they are three questions and requests, typed words the model reads. With none, they are the platform’s
- * own examples, where “What can you do?” is an intent. Until the watchlist has loaded there are none, so the set never flips.
+ * The chips under the box. The team’s focus is software versioning (8 Nov 2026), so they are about the watchlist. With none
+ * watched, they are the platform’s own examples, where “What can you do?” is an intent. Until the watchlist has loaded there are
+ * none, so the set never flips.
  */
 export function suggestionsOf(watched: number | undefined, capabilities: CapabilitiesView | undefined): readonly Suggestion[] {
   if (watched === undefined) return []
@@ -338,6 +325,66 @@ export function wordsOf(need: Need, now: Date, modelOff = false): ItemWords {
   }
 }
 
+/** A row’s dot: red when something broke, amber when something waits on the person. */
+export type LineTone = 'err' | 'wait'
+
+/** One row of Needs you as the sketch writes it: what it is about in bold, then what happened, with a shorter form for the strip. */
+export interface NeedLine {
+  readonly tone: LineTone
+  readonly subject: string
+  readonly rest: string
+  readonly short: string
+}
+
+const CONNECTION_STATE: Record<ConnectionItem['state'], string> = {
+  working: 'needs attention',
+  needs_attention: 'needs attention',
+  not_answering: 'isn’t answering',
+  not_set_up: 'isn’t set up',
+  not_checked: 'hasn’t been checked',
+}
+
+/** "at 10:14" today, else "Wed 4 Nov at 10:14". */
+const atWhen = (iso: string, now: Date): string => runWhen(iso, now).replace(/^Today, /, 'at ').replace(/^(.+), (\d+:\d+)$/, '$1 at $2')
+
+/** "today", else the day, such as "Wed 18 Nov". */
+const onDay = (iso: string, now: Date): string => {
+  const day = lineWhen(iso, now)
+  return day.startsWith('Today') ? 'today' : day
+}
+
+const line = (tone: LineTone, subject: string, rest: string, short = rest): NeedLine => ({ tone, subject, rest, short })
+
+function connectionLine(item: ConnectionItem, now: Date): NeedLine {
+  if (item.state === 'working' && item.expires_at) return line('wait', `${item.name} key`, `expires ${onDay(item.expires_at, now)}`)
+  return line(item.state === 'working' ? 'wait' : 'err', item.name, CONNECTION_STATE[item.state])
+}
+
+export function lineOf(need: Need, now: Date): NeedLine {
+  switch (need.kind) {
+    case 'stopped':
+      return line('err', need.item.use_case_name, `stopped ${atWhen(need.item.stopped_at, now)}`, 'stopped')
+    case 'approval':
+      return line('wait', need.item.use_case_name, 'needs your yes')
+    case 'connection':
+      return connectionLine(need.item, now)
+    case 'address':
+      return need.item.moved_to
+        ? line('wait', need.item.name, `moved to ${need.item.moved_to} on GitHub`, 'moved')
+        : line('wait', need.item.name, 'can’t be found on GitHub', 'not found')
+    case 'confirmation':
+      return need.item.kind === 'approver'
+        ? line('wait', need.item.about_name ?? 'A new person', 'waits to be confirmed as an Approver', 'waits to be confirmed')
+        : line('wait', 'A new AI model address', 'waits to be confirmed')
+    case 'declined':
+      return line('wait', need.item.declined_by_name ?? 'An Approver', `declined your test run of ${need.item.use_case_name}`, 'declined your test run')
+    case 'question':
+      return line('wait', need.item.asked_by_name ?? 'An Approver', `asked you about ${need.item.use_case_name}`, 'asked you a question')
+    case 'reply':
+      return line('wait', need.item.latest_reply?.replied_by_name ?? 'The team', `replied to your ${need.item.kind === 'support' ? 'report' : 'request'}`, 'replied')
+  }
+}
+
 /** `item` is set when the chat opens it in the side panel. Anywhere else it opens `to`, its page. */
 export type Action =
   | { readonly kind: 'open'; readonly label: string; readonly to: string; readonly item?: PanelItem }
@@ -388,15 +435,6 @@ export interface Pinned {
 export function pinnedOf(home: HomeOut): Pinned | null {
   const [need] = needsOf(home).shown
   return need === undefined ? null : { need, more: Math.max(0, needsTotal(home) - 1) }
-}
-
-/** The first sentence of a line, for the one line the pinned line has room for. */
-export const firstSentence = (words: string): string => words.split(/(?<=\.)\s/)[0] ?? words
-
-/** What the pinned line says under the title: why it stopped, else where the item came from. */
-export function pinnedWhy(need: Need, now: Date, modelOff = false): string {
-  const words = wordsOf(need, now, modelOff)
-  return words.why !== null ? firstSentence(words.why) : words.meta
 }
 
 /** On Home with no AI model the hero already offers Connect a model, so the model's row points to it instead of offering a second button. */
@@ -485,15 +523,3 @@ export function draftWords(draft: DraftItem, now: Date, left?: Left | null): Row
   return { name: draft.name ?? 'New workflow', sub: `${why}${saved}` }
 }
 
-export interface Next {
-  readonly name: string
-  readonly to: string
-  readonly when: string
-  readonly more: number
-}
-
-export function comingUpOf(home: HomeOut, now: Date): Next | null {
-  const next = home.coming_up
-  if (!next) return null
-  return { name: next.name, to: workflowPath(next), when: nextRunAt(next.next_run_at, now, next.time_zone), more: next.more }
-}

@@ -10,11 +10,6 @@ import { devContext, OUT, shot } from './support/ui'
 const replyItem = (page: Page, requestId: string) => page.locator(`li[data-home-item="reply:${requestId}"]`)
 const followingRow = (page: Page, requestId: string) => page.locator(`li[data-request="${requestId}"]`)
 const draftRow = (page: Page, draftId: string) => page.locator(`li[data-draft="${draftId}"]`)
-const menu = (page: Page) => page.getByRole('navigation', { name: 'Main' }).filter({ visible: true })
-const countOnTab = async (page: Page): Promise<number> => {
-  const name = (await menu(page).getByRole('link', { name: /^Workflows(, \d+ need you)?$/ }).getAttribute('aria-label')) ?? 'Workflows'
-  return Number(/(\d+) need you/.exec(name)?.[1] ?? 0)
-}
 /** The rows in Needs you. The page shows every one of them, so this is the number the tab counts. */
 const countInHeading = (page: Page): Promise<number> => page.getByRole('main').locator('li[data-home-item]').count()
 
@@ -69,7 +64,6 @@ test('a reply is in the asker’s Needs you until they open it, then it stays un
   await expect(replyItem(page, requestId)).toContainText('Bob replied to your request')
   await expect(followingRow(page, requestId)).toContainText('Not on the plan yet')
   const before = await countInHeading(page)
-  expect(await countOnTab(page), 'the tab and Needs you agree').toBe(before)
   await expect(followingRow(page, requestId)).toContainText(note)
   await shot(page, info, 'n9b-asker-needs-you')
 
@@ -86,7 +80,6 @@ test('a reply is in the asker’s Needs you until they open it, then it stays un
   await expect(followingRow(page, requestId)).toBeVisible()
   await expect(replyItem(page, requestId)).toHaveCount(0)
   await expect.poll(() => countInHeading(page), { message: 'Needs you went down by one' }).toBeLessThanOrEqual(before - 1)
-  expect(await countOnTab(page), 'the tab and Needs you still agree').toBe(await countInHeading(page))
   await page.goto('/')
   await expect(replyItem(page, requestId), 'Home agrees').toHaveCount(0)
   assertClean(watch)
@@ -195,7 +188,6 @@ test('a connection that does not answer sends Alice to the Connections tab, wher
     await page.goto('/workflows')
     await expect(page.locator('li[data-home-item="connection:jira"]')).toHaveCount(0)
     await expect.poll(() => countInHeading(page)).toBe(before - 1)
-    await expect.poll(() => countOnTab(page)).toBe(before - 1)
   } finally {
     await answering(true)
     await backend.post('alice', '/api/v1/settings/connections/jira/check')

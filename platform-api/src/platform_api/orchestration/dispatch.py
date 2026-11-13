@@ -1,9 +1,11 @@
 import hashlib
+import hmac
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Final, Literal, NewType, Protocol
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -39,6 +41,84 @@ class RetryPolicy:
 
 
 RETRY_POLICY = RetryPolicy()
+
+
+@dataclass(frozen=True)
+class WakePolicy:
+    """A wake waits for n8n longer than other sends, so an n8n outage never loses a yes
+    (ENGINE-PLAN 2.4). After a day the run is lost."""
+
+    delays: tuple[timedelta, ...] = RETRY_POLICY.delays
+    then_every: timedelta = timedelta(minutes=5)
+    give_up_after: timedelta = timedelta(hours=24)
+
+    def next_try(self, failures: int, first_at: datetime, now: datetime) -> datetime | None:
+        """When to try again after this many failed tries, or None to give up."""
+        if now - first_at >= self.give_up_after:
+            return None
+        delay = self.delays[failures - 1] if failures <= len(self.delays) else self.then_every
+        return now + delay
+
+
+WAKE_POLICY = WakePolicy()
+
+type WakeDecision = Literal["yes", "no", "no_answer"]
+
+
+def wake_mac(
+    node_key: str, execution: N8nExecutionId, request: ApprovalId, decision: WakeDecision
+) -> str:
+    """The mac Ask for a yes checks: HMAC-SHA256 with WAB_NODE_KEY over the execution id, our
+    request id and the decision, one per line (n8n-node-pack/README.md)."""
+    message = "\n".join((execution, request, decision))
+    return hmac.new(node_key.encode(), message.encode(), hashlib.sha256).hexdigest()
+
+
+def resume_path(url: str, execution: N8nExecutionId) -> str | None:
+    """The path and query of n8n's resume address for this execution, or None when the address
+    is not one. Only these go to n8n, at our own address for it, so no node call can point a
+    wake anywhere else."""
+    parts = urlsplit(url)
+    path = f"/webhook-waiting/{execution}"
+    if parts.scheme not in ("http", "https") or not parts.path.endswith(path):
+        return None
+    return f"{path}?{parts.query}" if parts.query else path
+
+
+@dataclass(frozen=True)
+class HeldWait:
+    """A waiting n8n execution, and the resume address it gave, sealed at rest because its
+    query holds n8n's signature."""
+
+    execution_id: N8nExecutionId
+    sealed_url: str
+
+
+@dataclass(frozen=True)
+class Delivered:
+    pass
+
+
+@dataclass(frozen=True)
+class Gone:
+    """n8n answered 409, because something else resumed the execution or it has finished."""
+
+
+type WakeAnswer = Delivered | Gone
+
+
+class Waker(Protocol):
+    async def wake(
+        self, held: HeldWait, request_id: ApprovalId, decision: WakeDecision
+    ) -> WakeAnswer:
+        """Raises DispatchFailure when n8n did not take it, to be tried again."""
+        ...
+
+
+class Sealer(Protocol):
+    def seal(self, key: str) -> str: ...
+
+    def open(self, sealed: str) -> str | None: ...
 
 
 class DispatchFailure(Exception): ...
@@ -160,6 +240,50 @@ class N8nWebhooks:
         if not execution:
             raise DispatchFailure("n8n's 202 carried an empty execution id")
         return N8nExecutionId(execution)
+
+    async def close(self) -> None:
+        await self._client.aclose()
+
+
+class N8nWaker:
+    """Sends a decision to the execution that waits for it. Its errors name no address, because
+    the resume address carries n8n's signature."""
+
+    def __init__(
+        self,
+        base_url: str,
+        node_key: str,
+        box: Sealer,
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._node_key = node_key
+        self._box = box
+        self._client = client or httpx.AsyncClient(timeout=10.0, follow_redirects=False)
+
+    async def wake(
+        self, held: HeldWait, request_id: ApprovalId, decision: WakeDecision
+    ) -> WakeAnswer:
+        url = self._box.open(held.sealed_url)
+        path = None if url is None else resume_path(url, held.execution_id)
+        if path is None:
+            raise DispatchFailure("the resume address could not be opened")
+        mac = wake_mac(self._node_key, held.execution_id, request_id, decision)
+        body = {
+            "execution_id": held.execution_id,
+            "request_id": request_id,
+            "decision": decision,
+            "mac": mac,
+        }
+        try:
+            response = await self._client.post(f"{self._base_url}{path}", json=body)
+        except httpx.HTTPError as error:
+            raise DispatchFailure(f"n8n did not answer the wake ({type(error).__name__})") from None
+        if response.status_code == 409:
+            return Gone()
+        if not 200 <= response.status_code < 300:
+            raise DispatchFailure(f"n8n answered the wake with {response.status_code}")
+        return Delivered()
 
     async def close(self) -> None:
         await self._client.aclose()

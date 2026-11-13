@@ -1,4 +1,4 @@
-import { firstSentence, groupOf, openPathOf, wordsOf, type Need, type NeedGroup } from '../home/home'
+import { groupOf, openPathOf, wordsOf, type Need, type NeedGroup } from '../home/home'
 import { runWhen } from './times'
 
 export interface NeedRow {
@@ -19,7 +19,7 @@ function atWords(iso: string, now: Date): string {
   return runWhen(iso, now).replace(/^Today, /, 'at ').replace(/^(.+), (\d+:\d+)$/, '$1 at $2')
 }
 
-const oneLine = (words: string): string => firstSentence(words).replace(/\.$/, '')
+const oneLine = (words: string): string => (words.split(/(?<=\.)\s/)[0] ?? words).replace(/\.$/, '')
 
 /**
  * A Need as the sketch draws it on Workflows: one line, the subject in bold, a colour for how urgent, and the page it opens.

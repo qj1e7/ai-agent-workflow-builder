@@ -509,7 +509,7 @@ test('APPR-decide-nav: a half-picked decline reason does not survive leaving the
   await page.goto(`/runs/${runId}`)
   await page.getByRole('button', { name: 'Decline' }).click()
   await declineReasons(page).getByRole('button', { name: 'Wrong version' }).click()
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /^Workflows/ }).click()
+  await page.getByRole('navigation', { name: 'Browse' }).getByRole('link', { name: /^Workflows/ }).click()
   await expect(heading(page), 'the run page is left').toHaveText('Workflows')
   await page.goBack()
   await expect(heading(page)).toHaveText('1 ticket is waiting for a yes')
@@ -604,8 +604,7 @@ for (const width of WIDTHS) {
 
     await alice.goto('/')
     const onHome = alice.locator(`li[data-home-item="question:${questionId}"]`)
-    await expect(onHome).toContainText(/Bob asked you about /)
-    await expect(onHome).toContainText(`“${question}”`)
+    await expect(onHome, 'Home’s row names who asked; the question itself is on the request').toContainText(/Bob asked you about /)
     await onHome.scrollIntoViewIfNeeded()
     await shot(alice, info, `r13-needs-you-home-alice-${width}`)
 
@@ -681,9 +680,9 @@ test('KEYS-APPR: Ask, the decline reasons and Decline with the keyboard only, ea
   await expect(page.getByRole('button', { name: 'Skip to main content' })).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(heading(page), 'Skip to main content lands on the heading').toBeFocused()
-  const review = page.locator(`li[data-home-item="approval:${approvalId}"]`).getByRole('link', { name: 'Review and decide' })
+  const review = page.locator(`li[data-home-item="approval:${approvalId}"]`).getByRole('link')
   await tabTo(page, review, 40)
-  expect(await ringShows(page), 'Review and decide has a visible focus').toBe(true)
+  expect(await ringShows(page), 'the request’s row on Home has a visible focus').toBe(true)
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(new RegExp(`/runs/${runId}$`))
   await expect(heading(page)).toHaveText('1 ticket is waiting for a yes')
@@ -752,7 +751,7 @@ test.describe('what a run didn’t check', () => {
   const NO_DETAILS = ['The platform can’t yet see a ticket’s component or priority.', 'The platform can’t yet look past the 50 newest tickets.']
   /** The Not checked answer. The inner locator of has is matched inside the dl, so it starts from the page. */
   const unchecked = (scope: Page | Locator) => scope.locator('dl', { has: ('page' in scope ? scope.page() : scope).locator('dt', { hasText: /^Not checked$/ }) })
-  const box = (page: Page) => page.getByLabel('Ask the Planner about software versions')
+  const box = (page: Page) => page.getByLabel('Ask, or describe a task')
   const newest = (page: Page) => page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
   const sidePanel = (page: Page) => page.locator('#side-panel')
   /** For the shot: scrolls Not checked into view only when it is not there, so a page that fits keeps its place. */
@@ -905,8 +904,8 @@ test.describe('what a run didn’t check', () => {
     await page.keyboard.press('Tab')
     await expect(page.getByRole('button', { name: 'Skip to main content' })).toBeFocused()
     await page.keyboard.press('Enter')
-    await tabTo(page, page.locator(`li[data-home-item="approval:${approvalId}"]`).getByRole('link', { name: 'Review and decide' }))
-    expect(await ringShows(page), 'Review and decide has a visible focus').toBe(true)
+    await tabTo(page, page.locator(`li[data-home-item="approval:${approvalId}"]`).getByRole('link'))
+    expect(await ringShows(page), 'the request’s row on Home has a visible focus').toBe(true)
     await page.keyboard.press('Enter')
     await expect(page).toHaveURL(new RegExp(`/runs/${runId}$`))
     await expect(unchecked(page)).toContainText(inOrder('Not checked', REDIS_UNREAD, NO_REGISTRIES))

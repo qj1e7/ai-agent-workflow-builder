@@ -18,7 +18,7 @@ test.beforeAll(async ({ baseURL }) => {
   await connectMockModel(String(baseURL))
 })
 
-const box = (page: Page) => page.getByLabel('Ask the Planner about software versions')
+const box = (page: Page) => page.getByLabel('Ask, or describe a task')
 const thread = (page: Page) => page.getByRole('list', { name: 'Conversation with the Planner' })
 const newest = (page: Page) => thread(page).locator(':scope > li').last()
 const panel = (page: Page) => page.locator('#side-panel')

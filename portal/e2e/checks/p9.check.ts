@@ -71,7 +71,7 @@ const nextRunOf = (page: Page) => page.locator('dt', { hasText: 'Next run' }).lo
 const whenOf = (page: Page) => page.locator('dt', { hasText: /^When$/ }).locator('xpath=following-sibling::dd[1]')
 const recentRuns = (page: Page) => page.getByRole('region', { name: 'Recent runs' })
 const toastCard = (page: Page) => page.locator('[class*="dock"] > div')
-const mainMenu = (page: Page) => page.getByRole('navigation', { name: 'Main' }).filter({ visible: true })
+const mainMenu = (page: Page) => page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
 
 async function mainButtons(page: Page): Promise<string[]> {
   return (await page.getByRole('main').getByRole('button').allInnerTexts()).map((label) => label.trim())

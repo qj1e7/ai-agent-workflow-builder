@@ -63,7 +63,7 @@ import {
   type RunNowOutcome,
   type Viewer,
 } from './workflow'
-import { stageWords } from '../run/words'
+import { runPill, stageWords } from '../run/words'
 
 const WATCHLIST = watchlistUseCase as UseCaseView
 const PAUSED = pausedWatchlist as UseCaseView
@@ -108,6 +108,13 @@ describe('the status words', () => {
     const skipped = run(failed, { state: 'skipped', waiting_run_id: 'run_06' })
     expect(stageWords(stageOfRun(skipped), nameOf)).toBe('Skipped. An earlier run is still waiting for a yes.')
     expect(rowLine({ schedule: null, ...lastOf({ state: 'skipped' }) }, NOW, nameOf)).toBe('No schedule · last run Mon 26 Oct, skipped. An earlier run is still waiting for a yes.')
+  })
+
+  it('say a run nobody answered, and a run n8n lost after the yes, wrote nothing', () => {
+    expect(stageWords(stageOfRun(run(failed, { state: 'expired' })), nameOf)).toBe('No answer. Nothing was written.')
+    expect(stageWords(stageOfRun(run(failed, { state: 'lost' })), nameOf)).toBe('Approved, but n8n lost the run. Nothing was written.')
+    expect(runPill({ state: 'lost', count: 0, tickets: true, approvedBy: [], declinedBy: null, reason: null })).toEqual({ label: 'Lost', tone: 'bad' })
+    expect(rowLine({ schedule: null, ...lastOf({ state: 'expired' }) }, NOW, nameOf)).toBe('No schedule · last run Mon 26 Oct, no answer. Nothing was written.')
   })
 
   it('say a run that is still going is running', () => {
