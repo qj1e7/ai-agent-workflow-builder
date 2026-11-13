@@ -52,14 +52,14 @@ export function RunCardView({ runId, name, story, beside }: { runId: string; nam
     <Card
       title={name}
       pill={<RunPill pill={story.headline.pill} />}
-      actions={
-        <>
+      status={
+        beside ? undefined : (
           <OpenButton variant="secondary" item={{ kind: 'run', id: runId }} to={`/runs/${runId}`}>
             Open
           </OpenButton>
-          {failure ? <StopNext runId={runId} failure={failure} {...story.stopped} safeId={safeId} /> : null}
-        </>
+        )
       }
+      actions={failure ? <StopNext runId={runId} failure={failure} {...story.stopped} safeId={safeId} /> : undefined}
     >
       {ended ? <SettledLine settled={settled} /> : beside ? null : <RunLine stations={story.stations} arrivedLive={story.arrivedLive} settled={null} small />}
       {failure ? <StopAnswers failure={failure} {...story.stopped} safeId={safeId} /> : story.answers.length > 0 ? <AnswerList answers={story.answers} /> : null}
