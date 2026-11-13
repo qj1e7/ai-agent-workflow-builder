@@ -6,7 +6,7 @@ import styles from './PinnedLine.module.css'
 
 /**
  * The needs strip on top of the chat (the sketch's `.strip`): the most urgent of the grouped Needs you in its short form, tinted by
- * it, with Open and "N more". Open shows a stop or a request in the side panel, and anything else on its page. "N more" is the rest
+ * it, with Open and "N more". Open shows the need beside the chat when it has a view there, and on its page otherwise. "N more" is the rest
  * of the same list, so N plus one is the number Workflows and the Planner's answer show. With nothing to do it stays, calm.
  */
 export function PinnedLine({ home, now }: { home: HomeOut; now: Date }) {

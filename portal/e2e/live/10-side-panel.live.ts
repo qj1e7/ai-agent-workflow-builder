@@ -298,8 +298,10 @@ for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 })
     try {
       await page.goto('/workflows')
-      const needs = page.getByRole('main').locator('li[data-home-item]')
-      await expect(needs.filter({ hasText: 'Bob declined your test run' }).first(), 'Needs you on Workflows says Bob declined it, as one plain row that opens the run').toContainText('Bob declined your test run')
+      const onWorkflows = page.getByRole('main').locator(`li[data-home-item="declined:${runId}"]`)
+      await expect(onWorkflows, 'Needs you on Workflows says Bob declined it, as one plain row that opens the run').toContainText('Bob declined your test run')
+      const said = (await onWorkflows.innerText()).replace(/\s+/g, ' ').trim()
+      const tone = await onWorkflows.getAttribute('data-tone')
       await shot(page, info, `r12-needs-you-declined-test-alice-${width}`)
       await page.goto('/')
       await openRequest(page, runId, 'run')
@@ -313,11 +315,13 @@ for (const width of [1280, 390]) {
 
       await page.goto('/')
       await ask(page, 'What needs me?')
-      const item = newest(page).locator('li[data-home-item^="declined:"]').filter({ hasText: 'Bob declined your test run' })
-      await expect(item.locator('svg path[d="M6 6l12 12M18 6L6 18"]').first(), 'the row has the X, not the info mark').toBeAttached()
-      await item.getByRole('button', { name: 'Do a test run again' }).click()
-      await expect(page).toHaveURL(/\/runs\/[^/]+$/)
-      const again = page.url().split('/').at(-1) ?? ''
+      const item = newest(page).locator(`li[data-home-item="declined:${runId}"]`)
+      await expect(item, 'the Needs card draws the very row Workflows draws, in its words').toHaveText(said, { useInnerText: true })
+      await expect(item, '…and its tone').toHaveAttribute('data-tone', tone ?? 'a tone')
+      await item.getByRole('button').click({ timeout: 5_000 })
+      await expect(panel(page), 'the row opens the run beside the chat, with its record').toContainText(record, { timeout: 15_000 })
+
+      const { run_id: again } = await backend.post<{ run_id: string }>('alice', `/api/v1/use-cases/${useCaseId}/runs`, { test: true }, { 'Idempotency-Key': randomUUID() }, [201])
       expect(again, 'a new run started').not.toBe(runId)
       expect((await backend.run(again)).test, 'it is a test run, as last_run says').toBe(true)
       expect((await backend.get<{ use_cases: { use_case_id: string; last_run: { test: boolean } | null }[] }>('alice', '/api/v1/use-cases')).use_cases.find((u) => u.use_case_id === useCaseId)?.last_run?.test).toBe(true)
