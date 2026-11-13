@@ -73,18 +73,17 @@ interface Closing<T> {
   readonly openers: readonly T[]
   /** Which of them the person pressed, or null when an answer showed the panel by itself. */
   readonly from: number | null
-  /** True when focus was in the panel, which is going, or nowhere. */
+  /** True when focus was in the panel, which is going, or nowhere. Read only for a panel an answer showed. */
   readonly lost: boolean
   readonly box: T | null
 }
 
 /**
- * What takes focus when the panel closes, or null to leave it where the person put it, such as in the box. Focus the panel held
- * goes back to the control that opened it, which shows again, else another way to open the same item. A panel an answer showed by
- * itself was opened by nothing the person pressed, so its focus goes to the box.
+ * What takes focus when the panel closes, or null to leave it where it is. A panel the person opened hands focus back to the control
+ * they pressed, which shows again, else another way to open the same item. A panel an answer showed by itself was opened by nothing
+ * the person pressed, so focus stays where they put it, such as in the box, and only what the panel held goes to the box.
  */
 export function focusAfterClose<T>({ openers, from, lost, box }: Closing<T>): T | null {
-  if (!lost) return null
-  if (from === null) return box
-  return openers[from] ?? openers[0] ?? box
+  if (from !== null) return openers[from] ?? openers[0] ?? box
+  return lost ? box : null
 }

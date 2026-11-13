@@ -232,12 +232,12 @@ describe('closing the side panel', () => {
     expect(focusAfterClose({ openers: [], from: 0, lost: true, box: 'box' })).toBe('box')
   })
 
-  it('leaves focus the person put outside it, such as in the box, where it is', () => {
-    expect(focusAfterClose({ openers: ['strip’s Open', 'card'], from: 1, lost: false, box: 'box' })).toBeNull()
-    expect(focusAfterClose({ openers: ['strip’s Open', 'card'], from: null, lost: false, box: 'box' })).toBeNull()
+  it('hands focus back to the control the person pressed, wherever focus has gone since', () => {
+    expect(focusAfterClose({ openers: ['strip’s Open', 'card'], from: 1, lost: false, box: 'box' })).toBe('card')
   })
 
-  it('sends the focus of a panel an answer showed by itself to the box, never to the first way to open it', () => {
+  it('leaves focus where it is when an answer showed the panel by itself, and sends what the panel held to the box, never to the first way to open it', () => {
+    expect(focusAfterClose({ openers: ['strip’s Open', 'card'], from: null, lost: false, box: 'box' })).toBeNull()
     expect(focusAfterClose({ openers: ['strip’s Open', 'card'], from: null, lost: true, box: 'box' })).toBe('box')
   })
 })

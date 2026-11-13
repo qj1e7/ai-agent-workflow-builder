@@ -137,7 +137,7 @@ export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewPro
     backPanel()
   }, [backPanel])
 
-  // Opening moves focus to the panel's heading. Closing moves it only when the panel held it.
+  // Opening moves focus to the panel's heading. Closing hands it back to what the person pressed to open the panel, if anything.
   useEffect(() => {
     if (opened.current && panel) {
       opened.current = false
