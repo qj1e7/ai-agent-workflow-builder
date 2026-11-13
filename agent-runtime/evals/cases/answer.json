@@ -5708,12 +5708,11 @@
   },
   {
     "id": "r7-command-pause",
-    "note": "Plan 7.5, commands fail closed: a question with a pause is never a state answer.",
+    "note": "Plan 7.5, commands fail closed: a question with a pause is never a state answer. Since PR 6 of the chat-first plan a pause alone is carried out, and the question is kept to ask on its own.",
     "task": "What needs my attention? Pause the morning check",
     "kind": [
-      "edit"
+      "pause"
     ],
-    "edit_cant": "only_schedule",
     "reasons": [
       "ask_on_its_own"
     ],
@@ -5986,5 +5985,158 @@
         }
       ]
     }
+  },
+  {
+    "id": "c6-pause-react",
+    "note": "Chat-first plan PR 6, the sketch's phrase: a pause alone names the workflow, and the platform pauses it.",
+    "task": "pause the React check",
+    "kind": [
+      "pause"
+    ],
+    "workflow_words": "React check",
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "React",
+          "repo": "x/react",
+          "our_version": "19.1.0",
+          "newest_version": "19.2.0",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning new-ticket check",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-10T00:00:00Z"
+        },
+        {
+          "name": "Weekly closed-ticket summary",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-06T08:00:00Z"
+        },
+        {
+          "name": "Keep our software up to date",
+          "state": "on",
+          "last_run": "Waiting for a yes",
+          "last_run_at": "2026-11-09T01:00:00Z"
+        }
+      ]
+    }
+  },
+  {
+    "id": "c6-resume-react",
+    "note": "Chat-first plan PR 6: turning a workflow back on is a resume.",
+    "task": "Turn the React check back on",
+    "kind": [
+      "resume"
+    ],
+    "workflow_words": "React check",
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "React",
+          "repo": "x/react",
+          "our_version": "19.1.0",
+          "newest_version": "19.2.0",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning new-ticket check",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-10T00:00:00Z"
+        },
+        {
+          "name": "Weekly closed-ticket summary",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-06T08:00:00Z"
+        },
+        {
+          "name": "Keep our software up to date",
+          "state": "on",
+          "last_run": "Waiting for a yes",
+          "last_run_at": "2026-11-09T01:00:00Z"
+        }
+      ]
+    }
+  },
+  {
+    "id": "c6-watch-and-email",
+    "note": "Chat-first plan PR 6, the sketch's mixed request: the watch is offered, and email is the registry's one-line can't.",
+    "task": "watch Kubernetes and email me",
+    "kind": [
+      "cant"
+    ],
+    "software": "Kubernetes",
+    "alternative": "watchlist",
+    "cant": [
+      "email*"
+    ],
+    "needs": "new_system",
+    "system": "email",
+    "one_liner": "I can’t send email yet."
+  },
+  {
+    "id": "c6-teams-channel",
+    "note": "Chat-first plan PR 6, the sketch's Something it can't do: a post in a Teams channel is the registry's one-line can't.",
+    "task": "Post the FastAPI news in our Teams channel",
+    "kind": [
+      "cant"
+    ],
+    "cant": [
+      "Teams"
+    ],
+    "system": "Teams",
+    "one_liner": "I can’t post in Teams channels yet."
+  },
+  {
+    "id": "c6-delete-mock",
+    "note": "Chat-first plan PR 6: a delete in Jira is something the platform won't do, said in one line.",
+    "task": "delete the MOCK ticket",
+    "kind": [
+      "cant"
+    ],
+    "not_kind": [
+      "edit",
+      "pause"
+    ],
+    "cant": [
+      "delete*"
+    ],
+    "one_liner": "I don’t delete anything in Jira."
   }
 ]

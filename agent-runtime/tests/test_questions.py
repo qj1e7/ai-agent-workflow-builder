@@ -14,6 +14,7 @@ from agent_runtime.contract import (
     AnswerRequest,
     EditAnswer,
     NeedsYouFact,
+    PauseAnswer,
     PlannerFacts,
     PreviousTurn,
     QuestionAnswer,
@@ -491,9 +492,13 @@ def test_a_question_beside_a_new_workflow_asked_for_reaches_the_lane():
 
 def test_an_edit_never_goes_to_the_lane():
     out = decided(
-        "Is the watchlist running? Pause it", reading("change", workflow_words="watchlist")
+        "Is the watchlist running? Rename it", reading("change", workflow_words="watchlist")
     )
     assert isinstance(out, EditAnswer) and out.cant == "only_schedule"
+    out = decided(
+        "Is the watchlist running? Pause it", reading("change", workflow_words="watchlist")
+    )
+    assert isinstance(out, PauseAnswer) and out.workflow_words == "watchlist"
 
 
 def test_a_question_crossed_as_not_followed_stays_a_cant_without_watched_software():

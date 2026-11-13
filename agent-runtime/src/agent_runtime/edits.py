@@ -2,14 +2,15 @@
 
 Commands fail closed. Code takes the question's own words and the workflows' names out of the
 request, and a change word left over makes it a command, never a status answer. A schedule word
-inside a workflow's own name is neither, and "the run" is a noun. In this first version an edit
-changes only when a workflow runs: any other change, and a schedule it can't hold, come back as
-what the chat can't do yet. The answer only proposes. Nothing changes until the person saves it.
+inside a workflow's own name is neither, and "the run" is a noun. An edit changes only when a
+workflow runs: any other change, and a schedule it can't hold, come back as what the chat can't do
+yet. The answer only proposes. Nothing changes until the person saves it. A pause or a resume and
+nothing else is its own answer, which the platform carries out for the workflow it names.
 """
 
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final
 
 from agent_runtime.abilities import change_verbs_in, commands_a_change, words
@@ -18,7 +19,9 @@ from agent_runtime.contract import (
     EditCant,
     PartMark,
     PartReason,
+    PauseAnswer,
     PlannerFacts,
+    ResumeAnswer,
     ScheduleChange,
     WatchDay,
 )
@@ -87,6 +90,11 @@ OTHER_CHANGES: Final = words(
 )
 """Verbs that change a workflow some other way, which the chat can't do yet."""
 EDIT_VERBS: Final = SCHEDULE_VERBS | OTHER_CHANGES
+PAUSES: Final = words("pause stop halt suspend disable")
+RESUMES: Final = words("resume unpause enable")
+SWITCH_WORDS: Final = PAUSES | RESUMES | words("turn running")
+TURNED: Final = re.compile(r"\bturn\b(?:\s+(?:it|them|back))*\s+(on|off)\b", re.IGNORECASE)
+"""Turning a workflow on or off, as "turn it back on", once the workflow's name is out."""
 FROM_TO_VERBS: Final = words("change move switch shift reschedule push bring")
 """Verbs whose "from Mondays to Tuesdays" names the schedule now and the new one."""
 NOUN: Final = re.compile(
@@ -339,11 +347,15 @@ def commanded(read: TaskRead | None, text: str, facts: PlannerFacts | None) -> b
     )
 
 
-def edit_of(read: TaskRead, text: str, facts: PlannerFacts | None) -> EditAnswer | None:
+type Switch = PauseAnswer | ResumeAnswer
+
+
+def edit_of(read: TaskRead, text: str, facts: PlannerFacts | None) -> EditAnswer | Switch | None:
     """The edit a request asks for, or None. The reading calls it a change; or it asks about
     the person's workflows and a change word is left over, which fails closed to the edit; or an
     order to change one stands beside a workflow the person has, whatever the reading said. A
-    watch request goes to the Software watchlist's answers instead."""
+    watch request goes to the Software watchlist's answers instead. A pause or a resume with no
+    other word of a change beside it is a pause or a resume answer."""
     if read.belongs_on_watchlist and _watch_verb(text, _names(read, text, facts)):
         return None
     if not asks_for_a_change(read, text, facts):
@@ -355,6 +367,9 @@ def edit_of(read: TaskRead, text: str, facts: PlannerFacts | None) -> EditAnswer
         # "delete every closed ticket" changes tickets, not a workflow: it is a task's can't.
         return None
     names = _Names(_names(read, text, facts), None if target is None else _said(target, text))
+    switch = _switch_of(text, names)
+    if switch is not None:
+        return switch(workflow_words=target, software=_software(read, text, target))
     schedule, cant, clashes = _schedule_of(text, names)
     return EditAnswer(
         workflow_words=target,
@@ -363,6 +378,41 @@ def edit_of(read: TaskRead, text: str, facts: PlannerFacts | None) -> EditAnswer
         cant=cant,
         holds_save=bool(clashes) and cant is None,
     )
+
+
+def _switch_of(text: str, names: _Names) -> type[Switch] | None:
+    """Pause or resume, when the change holds nothing else: no schedule, no write and no word
+    beyond the order itself, so "pause it for a week" stays a change the chat can't make."""
+    rest = _rest(text, names)
+    said = {w for w, _, _ in _tokens(rest) if w not in FILLER}
+    if not said or not said <= SWITCH_WORDS:
+        return None
+    turned = {m.group(1).casefold() for m in TURNED.finditer(rest)}
+    if "turn" in said and len(turned) != 1:
+        return None
+    pauses = bool(said & PAUSES) or turned == {"off"}
+    resumes = bool(said & RESUMES) or turned == {"on"}
+    if pauses == resumes:
+        return None
+    return PauseAnswer if pauses else ResumeAnswer
+
+
+def switch_marks(
+    read: TaskRead | None,
+    text: str,
+    answer: Switch,
+    clauses: list[Span],
+    facts: PlannerFacts | None = None,
+) -> list[EditMark]:
+    """The marks of a pause or a resume: the edit's own, with the order it carries out ticked
+    where an edit would cross it as a change the chat can't make."""
+    edit = EditAnswer(
+        workflow_words=answer.workflow_words, software=answer.software, cant="only_schedule"
+    )
+    return [
+        replace(m, mark="will_do", reason=None) if m.reason == "only_schedule" else m
+        for m in edit_marks(read, text, edit, clauses, facts)
+    ]
 
 
 WATCH_VERB: Final = re.compile(

@@ -659,6 +659,20 @@
     "CantRow": {
       "additionalProperties": false,
       "properties": {
+        "instead": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the person has instead, in one sentence, from the registry entry the part asks for. With it, the note is that entry's one-line can't. None when no entry with those words fits the part.",
+          "title": "Instead"
+        },
         "kind": {
           "$ref": "#/$defs/RowKind"
         },
@@ -699,6 +713,12 @@
           "maxLength": 200,
           "title": "Text",
           "type": "string"
+        },
+        "unsupported": {
+          "default": false,
+          "description": "True when the platform won't do the part at all, so there is nothing to ask the team for.",
+          "title": "Unsupported",
+          "type": "boolean"
         }
       },
       "required": [
@@ -778,6 +798,19 @@
           "title": "Id",
           "type": "string"
         },
+        "instead": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For one that isn't ready, what the person has instead, in one sentence, as a can't card says it under its head. None when it is ready, or when nothing comes close.",
+          "title": "Instead"
+        },
         "kind": {
           "$ref": "#/$defs/CapabilityKind"
         },
@@ -795,6 +828,19 @@
           "description": "True for what the platform does by itself, which Home leaves out of its lists.",
           "title": "Platform",
           "type": "boolean"
+        },
+        "short": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The capability in a few words, as the chat's capabilities card names it: one of its lines when it is ready, a name in its Not yet note when it isn't. None for one the card leaves out.",
+          "title": "Short"
         },
         "state": {
           "$ref": "#/$defs/CapabilityState",
@@ -1561,7 +1607,7 @@
             }
           ],
           "default": null,
-          "description": "only_schedule: it asks for a change other than when the workflow runs, such as pausing or renaming it, which the chat can't make yet. how_often: it asks for a frequency the schedule can't hold, such as monthly. None when the change can be made."
+          "description": "only_schedule: it asks for a change other than when the workflow runs, such as renaming it, or pausing it beside another change, which the chat can't make yet. A pause or a resume alone is its own answer. how_often: it asks for a frequency the schedule can't hold, such as monthly. None when the change can be made."
         },
         "holds_save": {
           "default": false,
@@ -2337,6 +2383,48 @@
       ],
       "type": "string"
     },
+    "PauseAnswer": {
+      "additionalProperties": false,
+      "description": "A request to pause one of the person's workflows, and nothing else.",
+      "properties": {
+        "kind": {
+          "const": "pause",
+          "default": "pause",
+          "title": "Kind",
+          "type": "string"
+        },
+        "software": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The software those words name, as \"the React check\" names React. None when they name none.",
+          "title": "Software"
+        },
+        "workflow_words": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The words of the request that name the workflow, as it wrote them. The platform matches them to one of the person's workflows by whole words. None for \"it\", so the person picks one.",
+          "title": "Workflow Words"
+        }
+      },
+      "title": "PauseAnswer",
+      "type": "object"
+    },
     "PlannerAnswer": {
       "discriminator": {
         "mapping": {
@@ -2346,8 +2434,10 @@
           "edit": "#/$defs/EditAnswer",
           "needs_me": "#/$defs/NeedsMeAnswer",
           "part": "#/$defs/PartAnswer",
+          "pause": "#/$defs/PauseAnswer",
           "question": "#/$defs/QuestionAnswer",
           "refused": "#/$defs/RefusedAnswer",
+          "resume": "#/$defs/ResumeAnswer",
           "setup_card": "#/$defs/SetupCardAnswer",
           "watchlist": "#/$defs/WatchlistAnswer",
           "which_software": "#/$defs/WhichSoftwareAnswer",
@@ -2391,6 +2481,12 @@
         },
         {
           "$ref": "#/$defs/EditAnswer"
+        },
+        {
+          "$ref": "#/$defs/PauseAnswer"
+        },
+        {
+          "$ref": "#/$defs/ResumeAnswer"
         }
       ]
     },
@@ -2705,6 +2801,48 @@
         "mark"
       ],
       "title": "RequestPart",
+      "type": "object"
+    },
+    "ResumeAnswer": {
+      "additionalProperties": false,
+      "description": "A request to turn a paused workflow back on, and nothing else.",
+      "properties": {
+        "kind": {
+          "const": "resume",
+          "default": "resume",
+          "title": "Kind",
+          "type": "string"
+        },
+        "software": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The software those words name, as \"the React check\" names React. None when they name none.",
+          "title": "Software"
+        },
+        "workflow_words": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The words of the request that name the workflow, as it wrote them. The platform matches them to one of the person's workflows by whole words. None for \"it\", so the person picks one.",
+          "title": "Workflow Words"
+        }
+      },
+      "title": "ResumeAnswer",
       "type": "object"
     },
     "RoomAddressee": {
