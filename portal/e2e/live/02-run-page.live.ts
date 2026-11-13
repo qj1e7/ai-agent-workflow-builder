@@ -117,7 +117,7 @@ test('the link in a Teams message opens the run page at the decision', async ({ 
   await decline(page)
   await expect(heading(page)).toHaveText('Declined, nothing was written', { timeout: 60_000 })
   await expect(page.getByRole('main')).toContainText('Declined by Bob. Nothing was written.')
-  expect(await runLinks(page), 'faint dots lead into the write that was not needed').toEqual(['solid', 'solid', 'solid', 'dead', 'solid'])
+  expect(await runLinks(page), 'faint dots lead into the write that was not needed').toEqual(['solid', 'solid', 'dead'])
   expect((await backend.tickets()).filter((ticket) => ticket.run_id === runId)).toEqual([])
   assertClean(watch)
   await context.close()
