@@ -167,7 +167,7 @@ test('the edit card keeps the design rules in each of its states', async ({ brow
   await context.close()
 })
 
-const rail = (page: Page) => page.getByRole('navigation', { name: 'Main' }).filter({ visible: true })
+const rail = (page: Page) => page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
 
 /** The total a rail item's accessible name carries, such as "Watchlist, 6 in all". No count is 0. */
 async function railCount(page: Page, label: string): Promise<number> {

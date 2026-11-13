@@ -81,7 +81,7 @@ function currentLinks(html: string): string[] {
 }
 
 function railLabels(html: string): string[] {
-  const nav = /<nav\b[^>]*aria-label="Main"[^>]*>([\s\S]*?)<\/nav>/.exec(html)?.[1] ?? ''
+  const nav = /<nav\b[^>]*aria-label="Browse"[^>]*>([\s\S]*?)<\/nav>/.exec(html)?.[1] ?? ''
   return [...nav.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/g)].map((match) => text(match[1] ?? ''))
 }
 
@@ -92,7 +92,7 @@ describe('the rail', () => {
     const html = render()
     expect(railLabels(html)).toEqual(['Chat', 'Workflows', 'Watchlist'])
     expect(html).not.toContain('href="/agents"')
-    expect(headerOf(html)).not.toMatch(/aria-label="Main"/)
+    expect(headerOf(html)).not.toMatch(/aria-label="Browse"/)
   })
 
   it('has the same three items for an Approver who is not an Operator', () => {
@@ -103,7 +103,7 @@ describe('the rail', () => {
   })
 
   it('is one nav, with no second tab bar', () => {
-    const navs = [...render().matchAll(/<nav\b[^>]*aria-label="Main"/g)]
+    const navs = [...render().matchAll(/<nav\b[^>]*aria-label="Browse"/g)]
     expect(navs).toHaveLength(1)
   })
 
@@ -159,7 +159,7 @@ const ALICE_HOME = aliceHome as HomeOut
 const BOB_HOME = bobHome as HomeOut
 const plain = (html: string) => html.replace(/<[^>]*>/g, '')
 const linkNames = (html: string) =>
-  [...html.matchAll(/<nav\b[^>]*aria-label="Main"[^>]*>([\s\S]*?)<\/nav>/g)].flatMap((nav) =>
+  [...html.matchAll(/<nav\b[^>]*aria-label="Browse"[^>]*>([\s\S]*?)<\/nav>/g)].flatMap((nav) =>
     [...(nav[1] ?? '').matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].map((match) => /aria-label="([^"]*)"/.exec(match[1] ?? '')?.[1] ?? plain(match[2] ?? '')),
   )
 
@@ -185,7 +185,7 @@ describe('the rail’s counts', () => {
   it('start the link’s name with its visible label, and show the number once', () => {
     const html = render({ home: ALICE_HOME })
     expect(html.match(/<a\b[^>]*aria-label="Workflows, 1 in all"/g)).toHaveLength(1)
-    expect(plain(html.match(/<nav\b[^>]*aria-label="Main"[\s\S]*?<\/nav>/)?.[0] ?? '')).toContain('Workflows1')
+    expect(plain(html.match(/<nav\b[^>]*aria-label="Browse"[\s\S]*?<\/nav>/)?.[0] ?? '')).toContain('Workflows1')
   })
 
   it('show nothing for none, or before the numbers have loaded', () => {

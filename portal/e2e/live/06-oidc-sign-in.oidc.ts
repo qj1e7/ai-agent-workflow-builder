@@ -82,7 +82,7 @@ test('alice signs in and sees her name, bob signs in at a deep link, and signing
   ])
 
   for (const label of ['Workflows', 'Watchlist', 'Chat']) {
-    await alice.page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: new RegExp(`^${label}(\\s*, \\d+ need (you|action))?$`) }).click()
+    await alice.page.getByRole('navigation', { name: 'Browse' }).getByRole('link', { name: new RegExp(`^${label}(\\s*, \\d+ need (you|action))?$`) }).click()
     await expect(alice.page.getByRole('heading', { level: 1 })).toBeVisible()
   }
   await alice.page.reload()

@@ -26,7 +26,7 @@ const PAGES = [...RAIL.map(({ path: to, label }) => ({ label, path: to })), { la
 /** Axe reads colours as they are drawn, so it waits for a panel's opening animation to end. */
 const settled = (page: Page) => page.waitForFunction(() => document.getAnimations().length === 0)
 
-const mainMenu = (page: Page) => page.getByRole('navigation', { name: 'Main' })
+const mainMenu = (page: Page) => page.getByRole('navigation', { name: 'Browse' })
 const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 
 async function slowHome(page: Page): Promise<void> {

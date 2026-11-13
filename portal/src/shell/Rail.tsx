@@ -29,7 +29,7 @@ export function Rail({ onList }: RailProps) {
   const { pathname } = useLocation()
   const current = railCurrent(pathname, useRunsRailItem())
   return (
-    <nav className={styles['rail']} aria-label="Main">
+    <nav className={styles['rail']} aria-label="Browse">
       {RAIL_PAGE_IDS.map((id) => {
         const { path, railLabel, icon: Icon } = PAGES[id]
         const count = railCountFor(id, home.data?.workflows, watchlist.data?.software.length)

@@ -487,7 +487,7 @@ test('APPR-decide-nav: a half-picked decline reason does not survive leaving the
   await page.goto(`/runs/${runId}`)
   await page.getByRole('button', { name: 'Decline' }).click()
   await declineReasons(page).getByRole('button', { name: 'Wrong version' }).click()
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /^Workflows/ }).click()
+  await page.getByRole('navigation', { name: 'Browse' }).getByRole('link', { name: /^Workflows/ }).click()
   await expect(heading(page), 'the run page is left').toHaveText('Workflows')
   await page.goBack()
   await expect(heading(page)).toHaveText('1 ticket is waiting for a yes')
