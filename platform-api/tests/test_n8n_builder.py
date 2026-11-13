@@ -20,7 +20,6 @@ from platform_api.orchestration import (
     AgentUnavailable,
     CannotRun,
     NodeOption,
-    WriteEntry,
     Publisher,
     RanVersion,
     ReadFailed,
@@ -28,6 +27,7 @@ from platform_api.orchestration import (
     ReadReleasesResult,
     ReleasesNotRead,
     ReleasesRead,
+    WriteEntry,
     grade,
 )
 from platform_api.orchestration.agents import ReleaseRead
