@@ -73,6 +73,11 @@ DELETE = ("I don’t delete anything in Jira.", "A Jira admin can do that.", Tru
         ("Update the Confluence page", {}, CONFLUENCE),
         ("delete the MOCK ticket", {}, DELETE),
         ("delete the MOCK ticket", {"asks_about": "change"}, DELETE),
+        (
+            "delete the MOCK ticket",
+            {"asks_about": "change", "workflow_words": "MOCK ticket"},
+            DELETE,
+        ),
     ],
 )
 def test_a_cant_the_registry_names_says_its_one_liner_and_what_she_has_instead(
@@ -142,6 +147,11 @@ def test_it_names_no_workflow_so_she_picks_one():
 )
 def test_pause_beside_another_change_is_still_the_change_the_chat_cant_make(task: str):
     answer = answer_of(read(**CHANGE), task, WORKFLOWS)
+    assert isinstance(answer, EditAnswer) and answer.cant == "only_schedule"
+
+
+def test_deleting_a_workflow_whose_name_holds_ticket_is_still_a_change_to_it():
+    answer = answer_of(read(asks_about="change"), "delete the morning new-ticket check", WORKFLOWS)
     assert isinstance(answer, EditAnswer) and answer.cant == "only_schedule"
 
 

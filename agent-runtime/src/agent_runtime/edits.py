@@ -13,7 +13,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from typing import Final
 
-from agent_runtime.abilities import change_verbs_in, commands_a_change, words
+from agent_runtime.abilities import DELETES, TICKETS, change_verbs_in, commands_a_change, words
 from agent_runtime.contract import (
     EditAnswer,
     EditCant,
@@ -358,7 +358,7 @@ def edit_of(read: TaskRead, text: str, facts: PlannerFacts | None) -> EditAnswer
     other word of a change beside it is a pause or a resume answer."""
     if read.belongs_on_watchlist and _watch_verb(text, _names(read, text, facts)):
         return None
-    if not asks_for_a_change(read, text, facts):
+    if not asks_for_a_change(read, text, facts) or _deletes_tickets(text, facts):
         return None
     if read.asks_about not in ("change", *STATE_KINDS) and not _orders_one(read, text, facts):
         return None
@@ -378,6 +378,14 @@ def edit_of(read: TaskRead, text: str, facts: PlannerFacts | None) -> EditAnswer
         cant=cant,
         holds_save=bool(clashes) and cant is None,
     )
+
+
+def _deletes_tickets(text: str, facts: PlannerFacts | None) -> bool:
+    """A delete of tickets, as "delete the MOCK ticket", changes Jira, never a workflow, whatever
+    the reading named. A ticket inside one of the person's workflow names is that workflow's."""
+    names = [r for name in _workflow_names(facts) for r in _name_runs(text, name)]
+    said = {w for w, _, _ in _tokens(_blank(text, names))}
+    return bool(said & DELETES) and bool(said & TICKETS)
 
 
 def _switch_of(text: str, names: _Names) -> type[Switch] | None:
