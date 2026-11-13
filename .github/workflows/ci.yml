@@ -189,8 +189,9 @@ jobs:
           cache: npm
           cache-dependency-path: n8n-node-pack/package-lock.json
 
+      # n8n-workflow pulls in isolated-vm, whose native build the pack never needs.
       - name: Install
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Type check
         run: npm run typecheck
