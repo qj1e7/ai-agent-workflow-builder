@@ -114,7 +114,7 @@ function LiveRunPage({ run, fromApproval }: { run: RunView; fromApproval: boolea
   useReconnectWhenBehind(failed && live.loaded && latest.last_seq > live.head.seq, restart)
 
   const ready = live.loaded || live.connection.is === 'live' || live.connection.is === 'settled'
-  if (!ready) return <FeedNotReady connection={live.connection} onRetry={tryAgain} />
+  if (!ready || useCase.isLoading) return <FeedNotReady connection={live.connection} onRetry={tryAgain} />
   return <RunView run={latest} useCase={useCase.data} live={live} fromApproval={fromApproval} detail={{ choice: detail, choose: setDetail }} />
 }
 
