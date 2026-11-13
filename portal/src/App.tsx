@@ -73,7 +73,7 @@ export function App({ now = WALL_CLOCK }: { now?: () => Date }) {
       </button>
       <Header person={me.data ?? null} />
       <div className={styles['shell']}>
-        <Rail operator={isOperator(me.data)} onList={me.data !== undefined && !notOnTheList(me.data)} />
+        <Rail onList={me.data !== undefined && !notOnTheList(me.data)} />
         <main id="main" tabIndex={-1} className={styles['sheet']}>
           <div className={styles['wrap']}>
             {fromChat ? <BackToChat /> : null}

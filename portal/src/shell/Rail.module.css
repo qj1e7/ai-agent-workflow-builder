@@ -1,9 +1,9 @@
 .rail {
   position: sticky;
-  top: calc(60px + env(safe-area-inset-top, 0px));
+  top: calc(53px + env(safe-area-inset-top, 0px));
   display: grid;
   gap: 4px;
-  padding: 6px 6px 0 12px;
+  padding: 12px 8px;
 }
 
 .link {
@@ -11,43 +11,44 @@
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: 2px;
-  min-height: 62px;
-  padding: 6px 2px;
-  border-radius: var(--r-ctl);
+  gap: 4px;
+  min-height: 58px;
+  padding: 10px 4px 8px;
+  border-radius: 10px;
   color: var(--muted);
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: 0.74rem;
+  font-weight: 700;
   text-decoration: none;
   transition:
     background-color var(--dur-press) ease,
-    color var(--dur-press) ease;
+    color var(--dur-press) ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+.link:active {
+  transform: scale(0.97);
 }
 
 .link[aria-current='page'] {
   background: var(--active);
   color: var(--ink);
-  font-weight: 700;
 }
 
-.link[aria-current='page'] svg {
-  color: var(--nav-mark);
-}
-
+/* A total, not an alert, so it is quiet: the sketch's white badge. */
 .count {
   position: absolute;
   top: 4px;
-  left: calc(50% + 6px);
-  display: inline-grid;
-  place-items: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
+  right: 6px;
+  min-width: 18px;
+  padding: 0 5px;
+  border: 1px solid var(--hair);
   border-radius: 999px;
-  background: var(--amber);
-  color: var(--on-amber);
-  font-size: 0.75rem;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.68rem;
   font-weight: 700;
+  line-height: 16px;
+  text-align: center;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -57,35 +58,25 @@
   }
 }
 
-@media (pointer: coarse) {
-  .link {
-    min-height: 44px;
-  }
-}
-
+/* At 900 px and narrower the rail is a row of small buttons under the top bar, left-aligned, as in the sketch. */
 @media (max-width: 900px) {
   .rail {
     z-index: var(--z-nav);
     top: env(safe-area-inset-top, 0px);
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0;
-    padding: 0;
-    border-block: 1px solid var(--hair);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--hair);
     background: var(--surface);
   }
 
   .link {
     grid-auto-flow: column;
-    justify-content: center;
-    gap: 8px;
-    min-height: 46px;
-    padding: 0 4px;
-    border-radius: 0;
-  }
-
-  .link[aria-current='page'] {
-    background: none;
-    box-shadow: inset 0 -3px 0 var(--nav-mark);
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 6px 10px;
   }
 
   .count {

@@ -46,7 +46,7 @@ export const editCard = (answer: Locator): Locator => answer.locator('section[da
 
 /** Asks the Planner and waits for its answer to land. The answer is held by its place, so it stays this answer after later ones. */
 export async function askAndWait(page: Page, text: string): Promise<Locator> {
-  const box = page.getByLabel('Ask the Planner about software versions')
+  const box = page.getByLabel('Ask, or describe a task')
   const before = await said(page).count()
   await box.fill(text)
   await box.press('Enter')

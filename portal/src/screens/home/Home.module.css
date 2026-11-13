@@ -3,14 +3,23 @@
   margin: 0 auto;
 }
 
-/* The chat and its side panel share the page’s column. */
+/* The hero stretches to the page's height, so it can centre itself without a scroll. */
+.home:has([data-hero]) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+}
+
+/* The chat spans the page beside the rail, as the sketch's chat column does, and shares it with the side panel. */
 .home:has([data-chat]) {
   display: flex;
   flex: 1;
   flex-direction: column;
   min-height: 0;
   width: 100%;
-  max-width: 1180px;
+  max-width: none;
 }
 
 .section {
@@ -401,4 +410,87 @@
   color: var(--muted);
   font-size: 0.875rem;
   font-weight: 700;
+}
+
+/* The sketch's Needs you on Home: plain rows under small group headings, each row one control. */
+.plain {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  margin-top: 8px;
+  text-align: left;
+}
+
+.plain .groups {
+  gap: 14px;
+}
+
+.plain .group {
+  gap: 6px;
+}
+
+.group > h2 {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.needRows {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+}
+
+.need {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-press) ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+.need:active {
+  transform: scale(0.99);
+}
+
+.need svg {
+  flex: none;
+  color: var(--muted);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .need:hover {
+    border-color: var(--ink);
+  }
+}
+
+.needText {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+[data-tone='err'] .dot {
+  background: var(--red);
 }

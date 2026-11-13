@@ -16,17 +16,17 @@
   top: 12px;
 }
 
+/* The sketch's frame: the white top bar over a 76 px rail and the page, with a hairline between the rail and the page. */
 .shell {
   display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
+  grid-template-columns: 76px minmax(0, 1fr);
   align-items: start;
+  background: var(--surface);
 }
 
 .sheet {
-  min-height: calc(100dvh - 68px);
-  margin: 0 8px 8px;
-  border: 1px solid var(--hair);
-  border-radius: var(--r-sheet);
+  min-height: calc(100dvh - 53px);
+  border-left: 1px solid var(--hair);
   background: var(--bg);
 }
 
@@ -45,10 +45,23 @@
 
   .sheet {
     min-height: calc(100dvh - 106px);
-    margin: 0;
-    border-width: 0;
-    border-radius: 0;
+    border-left: 0;
   }
+}
+
+/* Home's hero stretches to the sheet, which is as tall as the window under the top bar, so it never adds a scroll; the page only
+   scrolls when its rows are taller than the window. */
+:global(#root):has([data-hero]) .sheet {
+  display: flex;
+  flex-direction: column;
+}
+
+:global(#root):has([data-hero]) .wrap {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  padding-bottom: 24px;
 }
 
 /* While chatting, the page is exactly as tall as the window and only the conversation scrolls, so the box stays docked at the

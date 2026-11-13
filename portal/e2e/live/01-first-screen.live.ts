@@ -6,10 +6,10 @@ import { connectMockModel } from './support/settings'
 import { expect, test } from './support/test'
 import { openContext, OUT, shot } from './support/ui'
 
-const GREETING = (name: string) => new RegExp(`^Good (morning|afternoon|evening)! ${name}$`)
-/** Alice's Home greets her once her team has a workflow. On day one it asks what the team does again and again. */
-const DAY_ONE = 'Which software should we keep up to date?'
-const HOME_ALICE = new RegExp(`^(Good (morning|afternoon|evening)! Alice|${DAY_ONE.replace('?', '\\?')})$`)
+/** The small line above Home's heading, as in the chat-first sketch. */
+const GREETING = (name: string) => new RegExp(`^Good (morning|afternoon|evening), ${name}$`)
+/** An Operator's Home asks the sketch's question, on day one too. */
+const HOME_ALICE = 'What should run by itself?'
 
 test.beforeAll(async ({ baseURL }) => {
   await connectMockModel(String(baseURL))
@@ -26,7 +26,7 @@ const PAGES = [...RAIL.map(({ path: to, label }) => ({ label, path: to })), { la
 /** Axe reads colours as they are drawn, so it waits for a panel's opening animation to end. */
 const settled = (page: Page) => page.waitForFunction(() => document.getAnimations().length === 0)
 
-const mainMenu = (page: Page) => page.getByRole('navigation', { name: 'Main' })
+const mainMenu = (page: Page) => page.getByRole('navigation', { name: 'Browse' })
 const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 
 async function slowHome(page: Page): Promise<void> {
@@ -48,18 +48,18 @@ async function loaded(page: Page): Promise<void> {
 /** A rail link's text. The count sits beside the name, so a reused stack with something waiting reads “Workflows2”. */
 const linkText = (label: string) => new RegExp(`^${label}\\d*$`)
 
-/** A rail link's name, which carries ", N need you" or ", N need action" when something waits for the person. */
-const linkName = (label: string) => new RegExp(`^${label}(\\s*, \\d+ need (you|action))?$`)
+/** A rail link's name, which carries ", N in all" once its total is known (the sketch's counts). */
+const linkName = (label: string) => new RegExp(`^${label}(, \\d+ in all)?$`)
 
 test('Home greets the signed-in person and the rail reads Chat, Workflows, Watchlist', async ({ page }, info) => {
   await page.goto('/')
   await expect(heading(page)).toHaveText(HOME_ALICE)
-  await expect(page.getByRole('banner')).toContainText('Alice')
-  await expect(page.getByRole('banner')).toContainText('Operator and Approver')
+  await expect(page.getByRole('main').getByText(GREETING('Alice'))).toBeVisible()
+  await expect(page.getByRole('banner')).toContainText('Alice, Operator and Approver')
   await expect(mainMenu(page).getByRole('link')).toHaveText(RAIL.map((item) => linkText(item.label)))
   await expect(mainMenu(page).getByRole('link', { name: 'New workflow' }), 'New workflow has no entry in the rail').toHaveCount(0)
   await expect(mainMenu(page).getByRole('link', { name: 'Chat' })).toHaveAttribute('aria-current', 'page')
-  await expect(page).toHaveTitle(/^(Good (morning|afternoon|evening)! Alice|Which software should we keep up to date\?) · AI Workflow Builder$/)
+  await expect(page).toHaveTitle('What should run by itself? · AI Workflow Builder')
   await shot(page, info, 'p1-01-home')
 })
 
@@ -148,7 +148,7 @@ test('Test controls act as Bob, and Bob can open Settings', async ({ page }, inf
   await expect(header).toContainText('Bob')
   await expect(header).toContainText('Approver')
   await expect(header).not.toContainText('Operator')
-  await expect(heading(page)).toHaveText(GREETING('Bob'))
+  await expect(page.getByRole('main').getByText(GREETING('Bob'))).toBeVisible()
   await shot(page, info, 'p1-05-acting-as-bob')
 
   await page.getByRole('link', { name: 'Settings', exact: true }).click()
