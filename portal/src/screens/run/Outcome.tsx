@@ -123,12 +123,11 @@ export function StopAnswers({ failure, advice, loading, modelOff = false, safeId
  * Under the answers, the one next step: Retry when the platform says the run can run again, or Report to support when it can't.
  * Both ask stoppedActions, the same rule Home uses. With no AI model a retry would fail again, so there is neither.
  */
-export function StopNext({ runId, failure, advice, loading, me, reports, nameOf, modelOff = false, quiet = false, safeId }: TroubleshootingProps & { safeId: string }) {
+export function StopNext({ runId, failure, advice, me, reports, nameOf, modelOff = false, quiet = false, safeId }: Omit<TroubleshootingProps, 'loading'> & { safeId: string }) {
   const [first] = stoppedActions(runId, failure.retryable, modelOff)
   const retry = first?.kind === 'retry'
   const waitsForModel = failure.retryable && modelOff
   const found = [advice ? withCurrentNames(advice.answers.what_happened) : `${failureReasonLabel[failure.reason] ?? failure.reason}.`, failureText(failure.message)].filter((part) => part !== '').join(' ')
-  void loading
   if (waitsForModel) return null
   if (retry) {
     return me?.operator ? <RetryButton runId={runId} label="Retry" primary={!quiet} describedBy={safeId} /> : <p className={styles['note']}>{OPERATORS_RETRY}</p>

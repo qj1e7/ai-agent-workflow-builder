@@ -16,7 +16,7 @@ import { ApprovalGate, NotChecked } from './ApprovalGate'
 import { DECISION_ID, DecisionArea, LONG_LOG, StepLog } from './Chat'
 import { askedWords, foundOf, partyOf, useDecision, useNotChecked, yourPart, type Decision } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
-import { AnswerList, Outcome, Troubleshooting } from './Outcome'
+import { AnswerList, Outcome, StopAnswers, StopNext } from './Outcome'
 import { QuestionThread } from './QuestionThread'
 import { useQuestions } from './questions'
 import { RunLine } from './RunLine'
@@ -255,11 +255,13 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
         )}
       </DecisionArea>
     ) : null
+  const failure = shown.phase.state === 'failed' ? shown.phase : null
+  const safeId = `${run.run_id}-safe`
   const trouble =
-    stage === 'stopped' ? (
+    failure ? (
       <DecisionArea label="Why it stopped">
         <TroubleshooterBlock stage={stage}>
-          <Troubleshooting bare runId={run.run_id} failure={shown.phase as Extract<RunModel['phase'], { state: 'failed' }>} {...story.stopped} />
+          <StopAnswers failure={failure} {...story.stopped} safeId={safeId} />
         </TroubleshooterBlock>
       </DecisionArea>
     ) : story.answers.length > 0 && !waiting ? (
@@ -328,6 +330,11 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
           <StepLog ref={logList} rows={rows} loadedUpTo={loadedUpTo} />
         )}
       </section>
+      {failure ? (
+        <div className={styles['foot']}>
+          <StopNext runId={run.run_id} failure={failure} {...story.stopped} safeId={safeId} />
+        </div>
+      ) : null}
       <div className="visually-hidden" aria-live="polite">
         {announce ? `${speakerName(announce.speaker)}: ${announce.text}` : ''}
       </div>

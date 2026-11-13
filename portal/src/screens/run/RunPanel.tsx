@@ -15,7 +15,8 @@ import { declinedSoFarWords, POLL_FAILED_MS, statusWords, useReconnectWhenBehind
 import { RunLine, SettledLine } from './RunLine'
 import { RunPill } from './RunPill'
 import { useRunStory } from './useRunStory'
-import { declinedNowWords, feedTroubleOf, RUN_PROBLEM } from './words'
+import { nextRunOf } from '../workflows/workflow'
+import { declinedNext, declinedNowWords, feedTroubleOf, RUN_PROBLEM } from './words'
 import styles from './RunPage.module.css'
 
 function Loading() {
@@ -92,6 +93,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
   const status = statusWords(decision, live)
   const declinedSoFar = declinedSoFarWords(decision, live, nameOf)
   const safeId = `${run.run_id}-safe`
+  const next = declinedNext({ test: run.test, watchlist: useCase.data?.template === 'software_watchlist' }, nextRunOf(useCase.data), new Date())
 
   if (useCase.isLoading) return <Loading />
   if (waiting && story.approvalId !== null && (!approval || notChecked === null)) {
@@ -130,6 +132,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
       ) : null}
       {declinedSoFar ? <p className="muted">{declinedSoFar}</p> : null}
       {settled ? <SettledLine settled={settled} /> : <RunLine stations={stations} arrivedLive={arrivedLive} settled={null} small />}
+      {story.model.phase.state === 'rejected' && next ? <p>{next}</p> : null}
       {failure ? (
         <>
           <StopAnswers failure={failure} {...story.stopped} safeId={safeId} />

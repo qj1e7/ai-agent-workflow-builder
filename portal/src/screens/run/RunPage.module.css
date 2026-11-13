@@ -167,6 +167,7 @@
   min-width: 0;
 }
 
+.foot,
 .panelFoot {
   display: flex;
   flex-wrap: wrap;
@@ -177,6 +178,11 @@
   border-top: 1px solid var(--rule);
 }
 
+.foot {
+  margin-top: 18px;
+}
+
+.foot:empty,
 .panelFoot:empty {
   display: none;
 }
