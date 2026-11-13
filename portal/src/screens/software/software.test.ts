@@ -1,21 +1,17 @@
-import capabilitiesFixture from '@contracts/fixtures/planner/capabilities.json'
 import statuses from '@contracts/fixtures/watchlist/statuses.json'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
-import type { CapabilityView, ScheduleView, SoftwareStatus, WatchedSoftwareView } from '../../api/types'
+import type { ScheduleView, SoftwareStatus, WatchedSoftwareView } from '../../api/types'
 import {
   addProblems,
   cantCheckWords,
   checkClock,
-  checkedOnWords,
   checkName,
   checkRepo,
   checkVersion,
   countLine,
   DAYS,
   dayOption,
-  decisionsOf,
-  decisionTitle,
   emptyWords,
   historyOf,
   matches,
@@ -36,8 +32,6 @@ import {
   ticketFact,
   watchRank,
   versionSourceWords,
-  waitingWords,
-  watchAttention,
 } from './software'
 import { formatterFactory, nextRunWords } from '../workflows/workflow'
 
@@ -169,21 +163,6 @@ describe('the list', () => {
     expect(rowsMatching(ROWS, 'zzz')).toHaveLength(0)
   })
 
-  it('makes one decision for the whole check, however many rows wait on it', () => {
-    const waiting = (id: string, approval: string | null): WatchedSoftwareView => ({ ...ROWS[0]!, id, status: 'awaiting_approval', approval_id: approval })
-    expect(decisionsOf(ROWS)).toEqual([{ approvalId: 'apr_01JBB', software: 1 }])
-    expect(decisionsOf([waiting('a', 'apr_1'), waiting('b', 'apr_1'), waiting('c', 'apr_1')])).toEqual([{ approvalId: 'apr_1', software: 3 }])
-    expect(decisionsOf([waiting('a', null)])).toEqual([])
-    expect(decisionsOf([])).toEqual([])
-  })
-
-  it('counts what needs action as one decision per check plus each address that needs a person, as the page’s Needs attention does', () => {
-    const moved: WatchedSoftwareView = { ...ROWS[0]!, id: 'm', status: 'behind', approval_id: null, moved_to: 'new/name' }
-    const gone: WatchedSoftwareView = { ...ROWS[0]!, id: 'g', status: 'cant_check', approval_id: null, not_found: true }
-    expect(watchAttention(ROWS)).toBe(1)
-    expect(watchAttention([...ROWS, moved, gone])).toBe(3)
-    expect(watchAttention([])).toBe(0)
-  })
 })
 
 describe('the count line under the title', () => {
@@ -219,31 +198,6 @@ describe('the count line under the title', () => {
 })
 
 describe('what checks a row', () => {
-  const REGISTRY = capabilitiesFixture.capabilities as CapabilityView[]
-  const withReleases = (state: CapabilityView['state']) => REGISTRY.map((c) => (c.id === 'github.releases' ? { ...c, state } : c))
-
-  it('says it is checked on GitHub while the registry says GitHub releases can be read', () => {
-    expect(checkedOnWords('github', REGISTRY)).toBe('Checked on GitHub')
-  })
-
-  it('never says it is checked while the registry says GitHub is not working, or before the registry is there', () => {
-    expect(checkedOnWords('github', withReleases('down'))).toBe('On GitHub')
-    expect(checkedOnWords('github', withReleases('needs_setup'))).toBe('On GitHub')
-    expect(checkedOnWords('github', undefined)).toBe('On GitHub')
-    expect(checkedOnWords('github', REGISTRY.filter((c) => c.id !== 'github.releases'))).toBe('On GitHub')
-  })
-
-  it('names the tickets the yes covers, in the singular too', () => {
-    expect(decisionTitle(3)).toBe('The latest check wants to raise 3 upgrade tickets.')
-    expect(decisionTitle(1)).toBe('The latest check wants to raise 1 upgrade ticket.')
-  })
-
-  it('says who the bar waits for, and why when the person is the reason', () => {
-    expect(waitingWords('own_work')).toBe('Waiting for another Approver. This check is your own work.')
-    expect(waitingWords('not_an_approver')).toBe('Waiting for an Approver.')
-    expect(waitingWords(null)).toBe('Waiting for an Approver.')
-  })
-
   it('says the count of matches in words', () => {
     expect([0, 1, 3].map(matches)).toEqual(['No matches', '1 match', '3 matches'])
   })

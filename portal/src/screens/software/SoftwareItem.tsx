@@ -1,12 +1,13 @@
 import { Link } from 'react-router'
-import type { CapabilityView, WatchedSoftwareView } from '../../api/types'
+import type { WatchedSoftwareView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { IconChevronLeft, IconExternal } from '../../ui/icons'
+import { AskTheTeam } from '../home/AskTheTeam'
 import { TicketKeys } from '../jira/TicketKeys'
 import { MovedNote, NotFoundNote } from './NewAddress'
 import { removeButtonId } from './removal'
 import { SoftwareHistory } from './SoftwareHistory'
-import { cantCheckWords, checkedByWords, newestOf, oursOf, rowDomId, sentenceFor, singaporeTime, stateOf, ticketFact, ticketsOf, WATCHLIST_PATH } from './software'
+import { askWhereWords, cantCheckWords, newestOf, oursOf, rowDomId, sentenceFor, singaporeTime, stateOf, ticketFact, ticketsOf, NOT_AUTOMATIC, WATCHLIST_PATH } from './software'
 import workflowStyles from '../workflows/Workflows.module.css'
 import styles from './Software.module.css'
 
@@ -29,7 +30,8 @@ interface ItemProps {
   readonly confirming: boolean
   readonly switching: boolean
   readonly nameOf: (id: string) => string
-  readonly capabilities: readonly CapabilityView[] | undefined
+  /** The workflow that checks the watchlist on its own, or null while it is paused or has no schedule. */
+  readonly checkedBy: string | null
   /** The latest check's declined record and what happens next, when an Approver declined it and this software has a newer version. */
   readonly declined: string | null
   readonly lastCheckStopped: boolean
@@ -42,14 +44,14 @@ interface ItemProps {
 
 /**
  * One watched software, as the sketch's software page draws it: the kind line, its name and pill, a banner when GitHub can't find it, then
- * You run, Newest, Upgrade ticket, Checked by and Source. History and Remove stay, because the platform can do both. Remove comes last.
+ * You run, Newest, Upgrade ticket, Checked by and Source. Software GitHub can't find offers Ask the team, as in the sketch. History and
+ * Remove stay, because the platform can do both. Remove comes last.
  */
 export function SoftwareItem(props: ItemProps) {
-  const { row, operator, scheduled, paused, historyOpen, removing, confirming, switching, nameOf, capabilities, declined, lastCheckStopped } = props
+  const { row, operator, scheduled, paused, historyOpen, removing, confirming, switching, nameOf, checkedBy, declined, lastCheckStopped } = props
   const state = stateOf(row)
   const ours = oursOf(row)
   const newest = newestOf(row)
-  const checkedBy = checkedByWords(capabilities)
   const historyId = `history-${row.id}`
   const checked = row.checked_at ? `last checked ${singaporeTime(row.checked_at)}${lastCheckStopped ? ', didn’t finish' : ''}` : 'Not checked yet'
   return (
@@ -99,14 +101,20 @@ export function SoftwareItem(props: ItemProps) {
         <div>
           <dt>Checked by</dt>
           <dd>
-            {checkedBy ?? 'The Version checker'}
+            {checkedBy ? (
+              <Link to={WATCHLIST_PATH} className={styles['checker']}>
+                {checkedBy}
+              </Link>
+            ) : (
+              NOT_AUTOMATIC
+            )}
             <span className={styles['src']}>{checked}</span>
           </dd>
         </div>
         <div>
           <dt>Source</dt>
           <dd>
-            <a href={row.source.url} target="_blank" rel="noopener noreferrer">
+            <a href={row.source.url} target="_blank" rel="noopener noreferrer" className={styles['source']}>
               {`github.com/${row.source.ref}`}
               <IconExternal size={12} />
               <span className="visually-hidden"> (opens GitHub in a new tab)</span>
@@ -115,6 +123,7 @@ export function SoftwareItem(props: ItemProps) {
         </div>
       </dl>
       <div className={styles['acts']}>
+        {row.not_found ? <AskTheTeam capability={`Where ${row.name} moved`} starter={askWhereWords(row)} /> : null}
         <Button aria-expanded={historyOpen} aria-controls={historyOpen ? historyId : undefined} onClick={props.onToggleHistory}>
           {historyOpen ? 'Hide history' : 'History'}
           <span className="visually-hidden"> of {row.name}</span>

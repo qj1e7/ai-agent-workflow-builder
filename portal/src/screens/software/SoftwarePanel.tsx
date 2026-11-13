@@ -1,8 +1,8 @@
 import { isOperator } from '../../api/me'
-import { useCapabilities } from '../../api/plannerQueries'
 import { useMe, useWatchlist } from '../../api/queries'
 import { Button } from '../../ui/Button'
-import { checkedByWords, nextCheckWords, noScheduleWords, REFRESH_MS, scheduleWords, sentenceFor, stateOf } from './software'
+import { Link } from '../../ui/Link'
+import { CHECKER, checksOnItsOwn, nextCheckWords, NOT_AUTOMATIC, noScheduleWords, REFRESH_MS, scheduleWords, sentenceFor, stateOf, WATCHLIST_PATH } from './software'
 import workflowStyles from '../workflows/Workflows.module.css'
 import styles from './Software.module.css'
 
@@ -13,7 +13,6 @@ import styles from './Software.module.css'
  */
 export function SoftwarePanel({ id }: { id: string }) {
   const watchlist = useWatchlist({ poll: REFRESH_MS })
-  const capabilities = useCapabilities()
   const me = useMe()
   const view = watchlist.data
   const row = view?.software.find((software) => software.id === id)
@@ -33,7 +32,6 @@ export function SoftwarePanel({ id }: { id: string }) {
   }
   if (!view || !row) return <p className="muted">That software isn’t on the Software watchlist any more.</p>
   const paused = view.state === 'paused'
-  const checkedBy = checkedByWords(capabilities.data?.capabilities)
   const state = stateOf(row)
   return (
     <>
@@ -44,12 +42,10 @@ export function SoftwarePanel({ id }: { id: string }) {
       </div>
       <p>{sentenceFor(row)}</p>
       <dl className={workflowStyles['factrows']}>
-        {checkedBy ? (
-          <div>
-            <dt>Checked by</dt>
-            <dd>{checkedBy}</dd>
-          </div>
-        ) : null}
+        <div>
+          <dt>Checked by</dt>
+          <dd>{checksOnItsOwn(view) ? <Link to={WATCHLIST_PATH}>{CHECKER}</Link> : NOT_AUTOMATIC}</dd>
+        </div>
         <div>
           <dt>When</dt>
           <dd>{view.schedule ? `${scheduleWords(view.schedule)} ${nextCheckWords(view.schedule, paused)}` : noScheduleWords({ operator: isOperator(me.data), paused })}</dd>

@@ -1,6 +1,6 @@
 import { ApiError } from '../../api/client'
 import { failureReasonLabel } from '../../api/labels'
-import type { CapabilityView, Day, FailureReason, Refusal, ScheduleHold, ScheduleView, VersionSourceView, WatchedSoftwareView, WatchlistView } from '../../api/types'
+import type { Day, FailureReason, ScheduleHold, ScheduleView, VersionSourceView, WatchedSoftwareView, WatchlistView } from '../../api/types'
 import type { NextRun } from '../run/words'
 import { dateAndClock, lineWhen, scheduleZoneName, timesZone } from '../workflows/times'
 
@@ -11,22 +11,6 @@ export const softwarePath = (id: string): string => `${WATCHLIST_PATH}/${encodeU
 
 /** The Software page and the side panel both refresh the watchlist this often. */
 export const REFRESH_MS = 15_000
-
-/** The places releases are read from, from the capability registry, and those of them working now. */
-function releaseSources(capabilities: readonly CapabilityView[]): { readonly all: string; readonly working: string } {
-  const sources = capabilities.filter((c) => c.id.endsWith('.releases') && c.system !== null)
-  const systems = (list: readonly CapabilityView[]) => list.map((c) => c.system).join(' and ')
-  return { all: systems(sources), working: systems(sources.filter((c) => c.state === 'ready')) }
-}
-
-/** Where releases are read from, said from the capability registry so this page never claims more than How it works does. Null while the registry is not there. */
-export function sourcesNote(capabilities: readonly CapabilityView[] | undefined): string | null {
-  if (capabilities === undefined) return null
-  const { all, working } = releaseSources(capabilities)
-  const first = working ? `${working} is the only place we can check today.` : all ? `${all} is the only place we check, and it is not working right now.` : 'No place can be checked right now.'
-  const notYet = capabilities.find((c) => c.id === 'registries.check' && (c.state === 'planned' || c.state === 'unsupported'))
-  return notYet?.cant ? `${first} We can’t ${notYet.cant} yet.` : first
-}
 
 interface Checking {
   readonly scheduled: boolean
@@ -49,6 +33,11 @@ export function notFoundWords(row: Pick<WatchedSoftwareView, 'name' | 'source'>,
   return `${skipped} Remove it and add it again at its new address. ${checkedAgain({ scheduled, paused })}`
 }
 
+/** What Ask the team starts with for software GitHub can't find. The person can change every word. */
+export function askWhereWords(row: Pick<WatchedSoftwareView, 'name' | 'source'>): string {
+  return `GitHub can’t find ${row.source.ref}, and doesn’t say where it moved. Where does ${row.name} live now?`
+}
+
 /** GitHub renamed the saved repository and passes the old name on to the new one. */
 export function movedWords(row: Pick<WatchedSoftwareView, 'source' | 'moved_to'>): string {
   return `GitHub now calls this project ${row.moved_to}. We saved ${row.source.ref}, and checks still reach it through GitHub’s redirect.`
@@ -66,26 +55,6 @@ export function movedHeadline(name: string, saved: string, movedTo: string): str
 
 export function notFoundHeadline(name: string, saved: string): string {
   return `GitHub can’t find ${saved}, the address saved for ${name}.`
-}
-
-export interface Attention {
-  readonly id: string
-  readonly name: string
-  readonly words: string
-}
-
-/** The rows whose address needs a person, in the order of the list. A moved row and a not-found row never overlap. */
-export function addressAttentionOf(rows: readonly WatchedSoftwareView[]): Attention[] {
-  return rows.flatMap((row) => {
-    if (row.moved_to) return [{ id: row.id, name: row.name, words: movedHeadline(row.name, row.source.ref, row.moved_to) }]
-    if (row.not_found) return [{ id: row.id, name: row.name, words: notFoundHeadline(row.name, row.source.ref) }]
-    return []
-  })
-}
-
-/** What the Software page lists under Needs attention. The page's heading and the rail's Watchlist count both read it. */
-export function watchAttention(rows: readonly WatchedSoftwareView[]): number {
-  return decisionsOf(rows).length + addressAttentionOf(rows).length
 }
 
 export type StatusTone = 'bad' | 'wait' | 'good' | 'quiet'
@@ -173,7 +142,7 @@ export function softwareLine(row: WatchedSoftwareView, now: Date, checkedBy: str
             : row.newest_version !== null
               ? `Newest is ${row.newest_version}`
               : `Added ${dayOf(row.added_at, now)}`
-  return `${version} · ${checkedBy ? `checked by ${checkedBy}` : 'not checked automatically'}`
+  return `${version} · ${checkedBy ? `checked by ${checkedBy}` : NOT_AUTOMATIC.toLowerCase()}`
 }
 
 /** The side panel's one sentence on where the software stands. Nothing here is guessed: a version nobody knows is said to be unknown. */
@@ -204,21 +173,20 @@ export function ticketFact(row: Pick<WatchedSoftwareView, 'status' | 'open_ticke
   }
 }
 
-const SOURCE_NAME: Record<WatchedSoftwareView['source']['kind'], string> = { github: 'GitHub' }
-
-/** What checks a row, as "Checked on GitHub" only while the registry says releases are read there. Otherwise it names only where the project is. */
-export function checkedOnWords(kind: WatchedSoftwareView['source']['kind'], capabilities: readonly CapabilityView[] | undefined): string {
-  const releases = capabilities?.find((c) => c.id === `${kind}.releases`)
-  const where = releases?.system ?? SOURCE_NAME[kind]
-  return releases?.state === 'ready' ? `Checked on ${where}` : `On ${where}`
-}
-
 export const PAUSED_WORDS = 'Paused. No check runs until an Operator resumes it.'
 
 /** True when the schedule starts checks: it is set, and not held because its owner can no longer run it. */
 export function scheduleRuns(schedule: ScheduleView | null | undefined): boolean {
   return schedule != null && !schedule.held
 }
+
+/** The workflow that checks the watchlist, as the rows, the side panel and a software's page name it. */
+export const CHECKER = 'Software watchlist'
+
+/** Whether the Software watchlist checks on its own: it has a schedule that runs, and it is not paused. */
+export const checksOnItsOwn = (view: Pick<WatchlistView, 'schedule' | 'state'> | null | undefined): boolean => scheduleRuns(view?.schedule) && view?.state !== 'paused'
+
+export const NOT_AUTOMATIC = 'Not checked automatically'
 
 const heldWhy: Record<ScheduleHold, string> = {
   owner_removed: 'is no longer on the People list',
@@ -250,15 +218,7 @@ export function nextCheckWords(schedule: ScheduleView, paused: boolean): string 
   return `Next check ${dateAndClock(schedule.next_at, schedule.time_zone)}, ${timesZone(schedule.time_zone)}.`
 }
 
-/** Who checks a watched software and where, from the same registry as the Software page's note. Null while the registry is not there. */
-export function checkedByWords(capabilities: readonly CapabilityView[] | undefined): string | null {
-  if (capabilities === undefined) return null
-  const { all, working } = releaseSources(capabilities)
-  if (working) return `The Version checker, on ${working}.`
-  return all ? `The Version checker, on ${all}, which is not working right now.` : 'The Version checker. No place can be checked right now.'
-}
-
-/** How it's checked says this with or without a schedule. The side panel's When row leaves it out. */
+/** The schedule's note says this with or without a schedule. The side panel's When row leaves it out. */
 export const ONE_APPROVAL = 'One approval covers all the upgrade tickets.'
 
 export function noScheduleWords({ operator, paused }: { readonly operator: boolean; readonly paused: boolean }): string {
@@ -390,39 +350,6 @@ function matchesQuery(row: WatchedSoftwareView, query: string): boolean {
 /** Every row stays in Software we watch, so its count is the real number. Only the search narrows it. */
 export function rowsMatching(rows: readonly WatchedSoftwareView[], query: string): WatchedSoftwareView[] {
   return rows.filter((row) => matchesQuery(row, query))
-}
-
-export interface Decision {
-  readonly approvalId: string
-  /** How many watched software this one yes covers. */
-  readonly software: number
-}
-
-/** One decision for the whole check: the tickets of one run wait on one approval, however many rows they came from. */
-export function decisionsOf(rows: readonly WatchedSoftwareView[]): Decision[] {
-  const counts = new Map<string, number>()
-  for (const row of rows) {
-    if (row.status === 'awaiting_approval' && row.approval_id) counts.set(row.approval_id, (counts.get(row.approval_id) ?? 0) + 1)
-  }
-  return [...counts].map(([approvalId, software]) => ({ approvalId, software }))
-}
-
-export function decisionTitle(tickets: number): string {
-  return `The latest check wants to raise ${tickets} upgrade ${tickets === 1 ? 'ticket' : 'tickets'}.`
-}
-
-export const DECISION_NOTE = 'Nothing is written until an Approver says yes.'
-
-/** What the bar says to someone who can't decide it. The platform says why. */
-export function waitingWords(whyNot: Refusal | null): string {
-  switch (whyNot) {
-    case 'own_work':
-      return 'Waiting for another Approver. This check is your own work.'
-    case 'decided_earlier_step':
-      return 'Waiting for another Approver. You decided an earlier step.'
-    default:
-      return 'Waiting for an Approver.'
-  }
 }
 
 export function rowDomId(softwareId: string): string {

@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useReducer, useRef, useState, type RefObject } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
-import { useCapabilities } from '../../api/capabilityQueries'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
-import { useApproval, useMe, usePutAddressBack, useRemoveSoftware, useRestoreSoftware, useRun, useStartRun, useUseNewAddress, useWatchlist } from '../../api/queries'
+import { useMe, usePutAddressBack, useRemoveSoftware, useRestoreSoftware, useRun, useStartRun, useUseNewAddress, useWatchlist } from '../../api/queries'
 import type { LastCheckView, WatchedSoftwareView, WatchlistView } from '../../api/types'
-import { Button, ButtonLink } from '../../ui/Button'
+import { Button } from '../../ui/Button'
 import { IconChevronRight } from '../../ui/icons'
-import { ShieldMark } from '../settings/marks'
 import { AddSoftware } from './AddSoftware'
 import { pressCheckNow } from './checkNow'
 import { FindSoftware } from './FindSoftware'
@@ -33,10 +31,8 @@ import {
 import { declinedNext, declinedOfSteps, declinedWithNext } from '../run/words'
 import { BackToWatchlist, SoftwareItem } from './SoftwareItem'
 import {
-  addressAttentionOf,
-  decisionsOf,
-  decisionTitle,
-  DECISION_NOTE,
+  CHECKER,
+  checksOnItsOwn,
   emptyWords,
   nextCheckOf,
   REFRESH_MS,
@@ -45,13 +41,9 @@ import {
   singaporeTime,
   softwareLine,
   softwarePath,
-  sourcesNote,
   stateOf,
   stoppedWords,
-  waitingWords,
-  watchAttention,
   watchRank,
-  type Decision,
 } from './software'
 import styles from './Software.module.css'
 
@@ -144,28 +136,6 @@ function LastCheckStopped({ last }: { last: LastCheckView }) {
   )
 }
 
-function DecisionBar({ decision }: { decision: Decision }) {
-  const approval = useApproval(decision.approvalId)
-  const tickets = approval.data?.actions.length ?? decision.software
-  const cannot = approval.data !== undefined && !approval.data.you_can_decide
-  return (
-    <div className={styles['decision']}>
-      <ShieldMark size={20} />
-      <div>
-        <b>{decisionTitle(tickets)}</b>
-        <span>{DECISION_NOTE}</span>
-      </div>
-      {cannot ? (
-        <span className={styles['waitingFor']}>{waitingWords(approval.data?.why_not ?? null)}</span>
-      ) : (
-        <ButtonLink to={`/approvals/${decision.approvalId}`} variant="primary">
-          Review and decide
-        </ButtonLink>
-      )}
-    </div>
-  )
-}
-
 interface NoticeProps {
   readonly box: RefObject<HTMLDivElement | null>
   readonly feedback: ChangeFeedback
@@ -217,8 +187,6 @@ interface LoadedProps {
 }
 
 function Loaded({ view, operator, answeredAt, now, rowId }: LoadedProps) {
-  const capabilities = useCapabilities().data?.capabilities
-  const sources = sourcesNote(capabilities)
   const [query, setQuery] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
   const [feedback, dispatch] = useReducer(changeFeedback, NO_FEEDBACK)
@@ -257,11 +225,9 @@ function Loaded({ view, operator, answeredAt, now, rowId }: LoadedProps) {
   const paused = view?.state === 'paused'
   const rows = rowsMatching(software, query)
   const shown = rows.length
-  const decisions = decisionsOf(software)
-  const addresses = addressAttentionOf(software)
   const searching = query.trim() !== ''
   const declined = useLastCheckDeclined(view, nameOf)
-  const checkedBy = scheduled && !paused ? 'Software watchlist' : null
+  const checkedBy = checksOnItsOwn(view) ? CHECKER : null
 
   const landOn = useSearchParams()[0].get('row')
   if (rowId === null && landOn !== null && software.some((row) => row.id === landOn)) return <Navigate to={softwarePath(landOn)} replace state={arrivedWith} />
@@ -301,7 +267,7 @@ function Loaded({ view, operator, answeredAt, now, rowId }: LoadedProps) {
           confirming={confirming === row.id}
           switching={feedback.busy?.act === 'switch' && feedback.busy.id === row.id}
           nameOf={nameOf}
-          capabilities={capabilities}
+          checkedBy={checkedBy}
           declined={declined}
           lastCheckStopped={view?.last_check?.state === 'failed'}
           onToggleHistory={() => setHistoryOpen((open) => !open)}
@@ -326,26 +292,6 @@ function Loaded({ view, operator, answeredAt, now, rowId }: LoadedProps) {
       {operator && view && !paused && software.length > 0 ? <CheckNow useCaseId={view.use_case_id} /> : null}
       {view?.last_check?.state === 'failed' ? <LastCheckStopped last={view.last_check} /> : null}
       {notice}
-      {decisions.length > 0 || addresses.length > 0 ? (
-        <section className={styles['section']} aria-labelledby="needs-attention-heading">
-          <h2 id="needs-attention-heading">
-            Needs attention <span className={styles['count']}>{watchAttention(software)}</span>
-          </h2>
-          {decisions.map((decision) => (
-            <DecisionBar key={decision.approvalId} decision={decision} />
-          ))}
-          {addresses.map((item) => (
-            <div key={item.id} className={styles['addressBar']}>
-              <div>
-                <b>{item.words}</b>
-              </div>
-              <ButtonLink to={softwarePath(item.id)}>
-                Open it<span className="visually-hidden">: {item.name}</span>
-              </ButtonLink>
-            </div>
-          ))}
-        </section>
-      ) : null}
       <section className={styles['section']} aria-label="Software we watch">
         {software.length > 0 || searching ? <FindSoftware query={query} shown={shown} onChange={setQuery} /> : null}
         {software.length === 0 && !searching ? (
@@ -368,20 +314,9 @@ function Loaded({ view, operator, answeredAt, now, rowId }: LoadedProps) {
           <AddSoftware software={software} onShowRow={(id) => void navigate(softwarePath(id))} onAdded={(name) => dispatch({ type: 'added', name })} />
         ) : null}
       </section>
-      <section className={styles['section']} aria-labelledby="how-checked-heading">
-        <h2 id="how-checked-heading">How it’s checked</h2>
-        {view ? (
-          <Schedule
-            schedule={view.schedule}
-            operator={operator}
-            useCaseId={view.use_case_id}
-            paused={paused}
-            answeredAt={answeredAt}
-            onResumed={() => dispatch({ type: 'resumed' })}
-          />
-        ) : null}
-        {sources ? <p className="muted">{sources}</p> : null}
-      </section>
+      {view ? (
+        <Schedule schedule={view.schedule} operator={operator} useCaseId={view.use_case_id} paused={paused} answeredAt={answeredAt} onResumed={() => dispatch({ type: 'resumed' })} />
+      ) : null}
     </>
   )
 }

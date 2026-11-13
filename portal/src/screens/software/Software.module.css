@@ -245,6 +245,12 @@
   gap: 4px;
 }
 
+/* The Source and the checker are links of their own, each a 44 px target. */
+.facts dd a.source,
+.facts dd a.checker {
+  min-height: 44px;
+}
+
 .facts dd {
   margin: 0;
   font-weight: 600;
@@ -347,6 +353,11 @@ a.src {
   gap: var(--space-2);
   padding-top: var(--space-3);
   border-top: 1px solid var(--rule);
+}
+
+/* Ask the team opens into a note and its buttons, or the saved line, which take the whole row. */
+.acts > div {
+  flex-basis: 100%;
 }
 
 .history {
