@@ -92,7 +92,7 @@ infra/
 | `TEAMS_WEBHOOK_URL` | `.env`, empty by default, so the practice Teams copy | a Key Vault secret from `TEAMS_WEBHOOK_URL`, only when that secret is set (ADR 0036) |
 | `TEAMS_REQUESTS_WEBHOOK_URL` | `.env`, empty by default, so new team requests go to the approvals channel's webhook, or nowhere | not wired in Terraform yet, so it is unset and new team requests use `TEAMS_WEBHOOK_URL` (ADR 0038) |
 | `TEAMS_TELL_WEBHOOK_URL` | `.env`, empty by default, so a Tell's notice goes to the practice copy | a Key Vault secret, `teams-tell-webhook-url`, from the `teams_tell_webhook_url` variable, which the deploy takes from the GitHub secret `TEAMS_TELL_WEBHOOK_URL` (ENGINE-PLAN D1). "Posts in Teams and emails" stays planned until E14 |
-| `TELL_EMAIL_TO` | `.env`, empty by default | the `tell_email_to` variable, from the GitHub secret `TELL_EMAIL_TO`. The team's email list, separated by commas. Required with the Tell flow |
+| `TELL_EMAIL_TO` | `.env`, empty by default | the `tell_email_to` variable, from the GitHub variable `TELL_EMAIL_TO`. The team's email list, separated by commas. A plain setting, not a secret: Settings, Connections shows it to anyone signed in. Required with the Tell flow |
 | `TEAM_TIME_ZONE` | not set, so `Asia/Singapore`. platform-api reads the agents' Jira days in it, gives the last run's day in it, and sends it to the agent runtime as the zone of the agents' today | not set, so the same `Asia/Singapore` |
 | `MAX_BODY_BYTES` | not set, so 2 MiB (2097152). platform-api refuses a larger request body with 413 | not set, so the same 2 MiB |
 | `SETTINGS_ENCRYPTION_KEY` | `.env` | a generated Key Vault secret. If it is lost, an Operator pastes the model key again |

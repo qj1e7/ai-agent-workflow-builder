@@ -108,7 +108,10 @@ class TellSetupOut(WireModel):
         "never shown."
     )
     channel: str = Field(description="The Teams channel every Tell posts in.")
-    email_to: list[str] = Field(description="The team's fixed list that every Tell emails.")
+    email_to: list[str] = Field(
+        description="The team's fixed list that every Tell emails. It is a plain setting, not a "
+        "secret, and anyone signed in sees it here."
+    )
 
 
 class ConnectionsView(WireModel):

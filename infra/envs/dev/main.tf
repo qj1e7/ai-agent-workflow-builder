@@ -53,7 +53,7 @@ locals {
   # And for the Tell flow, which posts a run's notice and emails it (ENGINE-PLAN D1). Unset keeps
   # the practice copy. The team's email list must be set with it.
   teams_tell_webhook_set = nonsensitive(var.teams_tell_webhook_url != "")
-  tell_email_to          = trimspace(nonsensitive(var.tell_email_to))
+  tell_email_to          = trimspace(var.tell_email_to)
 
   # The first people's addresses are not secret, and the app table's for_each needs plain values.
   first_people = trimspace(nonsensitive(var.first_operator)) == "" ? {} : {

@@ -209,10 +209,9 @@ variable "teams_tell_webhook_url" {
 }
 
 variable "tell_email_to" {
-  description = "The team's fixed email list that every Tell emails, separated by commas (TELL_EMAIL_TO, ENGINE-PLAN D19). Required with teams_tell_webhook_url. Empty keeps nobody on it."
+  description = "The team's fixed email list that every Tell emails, separated by commas (TELL_EMAIL_TO, ENGINE-PLAN D19). A plain setting, shown to anyone signed in. Required with teams_tell_webhook_url. Empty keeps nobody on it."
   type        = string
   default     = ""
-  sensitive   = true
 
   validation {
     condition = alltrue([

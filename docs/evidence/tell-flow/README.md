@@ -48,7 +48,7 @@ The email list lives in the platform, not in the flow. Leave **To** as the expre
 ## 2. Prove the flow takes our body
 
 1. Copy `sample-body.json` to a scratch file and change `emailTo` to your own address.
-2. Post it, with the address in a shell variable so it stays out of your history:
+2. Post it, with the address in a shell variable so it stays out of your history. Never paste the flow's address into a ticket, a chat or a file. Anyone who has it can post to the team's channel and send email from the flow.
 
    ```sh
    read -r -s TELL_FLOW && curl -sS -o /dev/null -w '%{http_code}\n' -X POST \
@@ -68,7 +68,7 @@ The email list lives in the platform, not in the flow. Leave **To** as the expre
 
 These change cloud settings, so the team lead does them.
 
-1. In the GitHub repository, add the secret `TEAMS_TELL_WEBHOOK_URL` with the flow's address, and the secret `TELL_EMAIL_TO` with the team's list, separated by commas.
+1. In the GitHub repository, add the secret `TEAMS_TELL_WEBHOOK_URL` with the flow's address. Add the variable `TELL_EMAIL_TO` with the team's list, separated by commas. The list is a plain setting, not a secret, and anyone signed in sees it on Settings, Connections.
 2. Check that the repository variable `TEAMS_CHANNEL` names the channel the flow posts in.
 3. Run the deploy. Terraform keeps the address in Key Vault as `teams-tell-webhook-url`.
 4. In the Portal, check:

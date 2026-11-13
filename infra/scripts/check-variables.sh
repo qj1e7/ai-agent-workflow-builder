@@ -68,6 +68,7 @@ expect accepted - "a Teams webhook and channel" \
 expect accepted - "a Tell flow and its email list" \
   -var 'teams_tell_webhook_url=https://prod.example.logic.azure.com/workflows/b/triggers/manual/run?sig=x' \
   -var 'tell_email_to=ops@codesparks.example, lead@codesparks.example'
+expect accepted - "the team's email list alone, a plain setting" -var 'tell_email_to=ops@codesparks.example'
 
 expect accepted - "a Data Center Jira" -var jira_base_url=https://jira.example.test -var jira_api_token=pat
 expect accepted - "a Cloud Jira with its email" -var jira_base_url=https://example.atlassian.net \

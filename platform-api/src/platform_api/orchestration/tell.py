@@ -13,7 +13,8 @@ A Tell goes out only when all three parts of the rule hold:
 
 The flow takes one body, the Teams message with the card plus the email's subject, HTML and list,
 as the team's cert reminder already posts it. Text we did not write goes through teams.inert, so
-none of it is a link, and the email escapes it as well. The only link is our own, back to the run.
+none of it is a link, and the email escapes it as well. The card's only action, and the email's
+only link, is our own link back to the run, built from the Portal's address and the run id.
 """
 
 import html

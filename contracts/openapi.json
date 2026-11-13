@@ -10821,7 +10821,7 @@
             "type": "string"
           },
           "email_to": {
-            "description": "The team's fixed list that every Tell emails.",
+            "description": "The team's fixed list that every Tell emails. It is a plain setting, not a secret, and anyone signed in sees it here.",
             "items": {
               "type": "string"
             },
