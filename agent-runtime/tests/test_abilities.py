@@ -37,10 +37,10 @@ WONT = ("close", "delete", "edit", "move", "update", "change", "reassign", "assi
 
 def cant(what: str) -> str:
     """The refusal: "yet" for what is planned, none for what the registry marks Unsupported
-    (changing tickets, email and Slack)."""
+    (changing tickets, Slack and text messages)."""
     words_of = what.lower().split()
     wont = words_of[0] in WONT or bool(
-        {"email", "slack", "mail", "sms"} & set(re.findall(r"\w+", what.lower()))
+        {"slack", "sms", "text", "texts"} & set(re.findall(r"\w+", what.lower()))
     )
     yet = "" if wont else " yet"
     return f"I can't {what}{yet}. {CAN}"

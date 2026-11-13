@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from agent_runtime.abilities import CAPABILITIES
+from agent_runtime.abilities import CAPABILITIES, why_not
 from agent_runtime.answers import answer_of, check_one_part, parts_of
 from agent_runtime.contract import (
     CantAnswer,
@@ -54,10 +54,10 @@ def _cants(answer: PlannerAnswer) -> list[CantRow]:
             raise AssertionError(answer)
 
 
-TEAMS = ("I can’t post in Teams channels yet.", "Run results show here, in the chat.", False)
-EMAIL = ("I can’t send email yet.", "Run results show here, in the chat.", False)
-CONFLUENCE = ("I can’t update Confluence yet.", "I can create a Jira ticket, after a yes.", False)
-DELETE = ("I don’t delete anything in Jira.", "A Jira admin can do that.", True)
+TEAMS = ("I can't post in Teams channels yet.", "Run results show here, in the chat.", False)
+EMAIL = ("I can't send email yet.", "Run results show here, in the chat.", False)
+CONFLUENCE = ("I can't update Confluence yet.", "I can create a Jira ticket, after a yes.", False)
+DELETE = ("I don't delete anything in Jira.", "A Jira admin can do that.", True)
 
 
 @pytest.mark.parametrize(
@@ -94,6 +94,17 @@ def test_a_cant_no_entry_names_keeps_the_words_it_had():
     task = "Every quarter, list who has admin access in Entra ID"
     [row] = _cants(answer_of(read(schedule="Every quarter"), task))
     assert (row.note, row.instead, row.unsupported) == ("I didn't follow this part.", None, False)
+
+
+def test_a_text_message_is_the_registrys_unsupported_entry():
+    note = why_not("do", "send me a text message")
+    assert note is not None and note.startswith("I can't send me a text message.")
+
+
+def test_removing_a_label_from_tickets_is_not_deleting_them():
+    task = "remove the old label from the MOCK tickets"
+    rows = _cants(answer_of(read(), task))
+    assert [r.note for r in rows if r.instead is not None] == []
 
 
 def test_reading_teams_is_not_posting_in_it():

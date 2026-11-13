@@ -738,7 +738,7 @@ def test_each_edit_case_passes_on_a_good_reading(case_id: str, read: dict[str, A
 
 
 def test_a_cant_in_its_own_words_fails_the_one_liner_check() -> None:
-    case = answer_case("c6-teams-channel").model_copy(update={"one_liner": "I can’t do that."})
+    case = answer_case("c6-teams-channel").model_copy(update={"one_liner": "I can't do that."})
     assert "says_the_one_liner" in failed(ANSWER.score(case, read_answer()))
 
 

@@ -6108,7 +6108,7 @@
     ],
     "needs": "new_system",
     "system": "email",
-    "one_liner": "I can’t send email yet."
+    "one_liner": "I can't send email yet."
   },
   {
     "id": "c6-teams-channel",
@@ -6121,7 +6121,7 @@
       "Teams"
     ],
     "system": "Teams",
-    "one_liner": "I can’t post in Teams channels yet."
+    "one_liner": "I can't post in Teams channels yet."
   },
   {
     "id": "c6-delete-mock",
@@ -6137,6 +6137,6 @@
     "cant": [
       "delete*"
     ],
-    "one_liner": "I don’t delete anything in Jira."
+    "one_liner": "I don't delete anything in Jira."
   }
 ]

@@ -1,6 +1,6 @@
 {
   "state": "cant_do",
-  "note": "I can\u2019t send email yet.",
+  "note": "I can't send email yet.",
   "needs": "new_system",
   "system": "email"
 }

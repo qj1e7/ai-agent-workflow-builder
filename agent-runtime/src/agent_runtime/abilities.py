@@ -1181,14 +1181,14 @@ def _cant_act(kind: RowKind, row: Clause, reader: _Reader) -> str | None:
             return _where_row(row, reader)
 
 
-DELETES: Final = words("delete remove purge erase wipe destroy trash")
+DELETES: Final = words("delete purge erase wipe destroy trash")
 UNSUPPORTED_WORDS: Final = {
-    "slack.send": (words("slack sms"), False),
+    "slack.send": (words("slack sms text texts"), False),
     "jira.delete": (DELETES, True),
     "jira.change_tickets": (
         words(
-            "close resolve cancel reopen edit move transition rename assign reassign update "
-            "change modify"
+            "close resolve cancel reopen remove edit move transition rename assign reassign "
+            "update change modify"
         ),
         True,
     ),
@@ -1252,8 +1252,8 @@ def cant_entry(text: str, system: str | None) -> CapabilitySpec | None:
 def one_line_cant(entry: CapabilitySpec) -> str:
     """The entry's can't as one sentence: what the platform won't do, or can't do yet."""
     if entry.state == "unsupported":
-        return f"I don’t {entry.cant}."
-    return f"I can’t {entry.cant} yet."
+        return f"I don't {entry.cant}."
+    return f"I can't {entry.cant} yet."
 
 
 def _cant_sentence(what: str, reader: _Reader) -> str:

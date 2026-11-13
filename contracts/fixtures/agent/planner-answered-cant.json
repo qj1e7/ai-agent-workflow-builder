@@ -6,7 +6,7 @@
       {
         "kind": "do",
         "text": "email me the list of stale tickets in MOCK",
-        "note": "I can\u2019t send email yet.",
+        "note": "I can't send email yet.",
         "needs": "new_system",
         "system": "email",
         "instead": "Run results show here, in the chat.",
@@ -56,7 +56,7 @@
       "text": "email me the list of stale tickets in MOCK",
       "mark": "cant",
       "reason": "cant_do",
-      "note": "I can\u2019t send email yet.",
+      "note": "I can't send email yet.",
       "choices": []
     }
   ]

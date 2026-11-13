@@ -340,14 +340,14 @@ def test_the_do_row_names_what_the_ticket_holds_and_the_details_the_search_sees(
         (
             "and email me a copy",
             "email me a copy",
-            "I can’t send email yet.",
+            "I can't send email yet.",
             "new_system",
             "email",
         ),
         (
             "and post it in Teams",
             "post it in Teams",
-            "I can’t post in Teams channels yet.",
+            "I can't post in Teams channels yet.",
             "new_system",
             "Teams",
         ),
@@ -515,7 +515,7 @@ def test_a_change_to_tickets_is_a_cant_not_a_part_and_offers_the_search():
     )
     assert isinstance(answer, CantAnswer)
     assert cant_of(answer) == ["delete every closed ticket"]
-    assert answer.cant[0].note == "I don’t delete anything in Jira."
+    assert answer.cant[0].note == "I don't delete anything in Jira."
     assert rows_of(answer)[1] == ("look_for", "Done tickets", "understood")
 
 
@@ -1227,7 +1227,7 @@ def test_a_change_request_answered_with_the_watchlist_shows_a_cant_for_the_chang
         (
             "Change the Redis version to 9.0.0. Delete the old Redis tickets.",
             ["Change the Redis version to 9.0.0", "Delete the old Redis tickets"],
-            ["I", "don’t"],
+            ["I", "don't"],
         ),
     ],
 )
@@ -1424,7 +1424,7 @@ def test_check_part_needs_no_model_and_says_what_a_part_that_does_not_fit_needs(
     client = make_app(None)
     cant = client.post("/v1/planner/check-part", json=check_body("do", "Email the list")).json()
     assert cant["state"] == "cant_do"
-    assert cant["note"] == "I can’t send email yet."
+    assert cant["note"] == "I can't send email yet."
     assert (cant["needs"], cant["system"]) == ("new_system", "email")
     fits = client.post(
         "/v1/planner/check-part", json=check_body("where", "In the MOCK project")
