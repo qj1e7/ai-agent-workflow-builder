@@ -8,7 +8,7 @@ import { Button, ButtonLink } from '../../ui/Button'
 import { OpenButton } from '../../ui/OpenItem'
 import { AskTheTeam } from './AskTheTeam'
 import { useAsker } from './asker'
-import { cantLines, capabilityCard, oneLine, refusalNext, SAY_ANOTHER_WAY, startingPoints, stateWords, switchedSay, TAG_CANT, TAG_CHOICE, type Asker } from './answers'
+import { cantLines, capabilityCard, oneLine, refusalNext, SAY_ANOTHER_WAY, startingPoints, stateWords, switchedSay, TAG_CANT, TAG_CHOICE, watchlistSwitchNote, type Asker } from './answers'
 import { cardFrom } from './card'
 import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard, followedNothing } from './parts'
 import { SetupCard, type CardStart } from './SetupCard'
@@ -280,6 +280,7 @@ function SwitchChoices({ reply }: { reply: PauseReply | ResumeReply }) {
           </button>
         ))}
       </div>
+      {reply.choices.some((choice) => choice.watchlist) ? <p className={styles['note']}>{watchlistSwitchNote(reply.answer)}</p> : null}
       {move.isError ? (
         <p className={styles['problem']} role="alert">
           {errorWords(move.error)}

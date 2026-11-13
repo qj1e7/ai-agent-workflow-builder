@@ -1,7 +1,7 @@
 {
   "parts": [
     {
-      "text": "pause it",
+      "text": "pause the React check",
       "mark": "will_do",
       "reason": null,
       "note": null,
@@ -16,12 +16,14 @@
     {
       "use_case_id": "uc_01JB8",
       "name": "React release check",
-      "state": "on"
+      "state": "on",
+      "watchlist": false
     },
     {
       "use_case_id": "uc_01JC2",
-      "name": "FastAPI release check",
-      "state": "on"
+      "name": "Software watchlist",
+      "state": "on",
+      "watchlist": true
     }
   ],
   "answer": "pause"

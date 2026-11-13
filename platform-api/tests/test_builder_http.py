@@ -1798,8 +1798,13 @@ async def test_it_or_words_that_fit_several_pause_nothing_and_offer_each_one(
     assert (reply["use_case_id"], reply["missing"]) == (None, None)
     choices = cast(list[dict[str, str]], reply["choices"])
     assert sorted(choices, key=lambda c: c["name"]) == [
-        {"use_case_id": morning, "name": "Morning new-ticket check", "state": "on"},
-        {"use_case_id": weekly, "name": "Weekly ticket check", "state": "on"},
+        {
+            "use_case_id": morning,
+            "name": "Morning new-ticket check",
+            "state": "on",
+            "watchlist": False,
+        },
+        {"use_case_id": weekly, "name": "Weekly ticket check", "state": "on", "watchlist": False},
     ]
     assert (await state_of(front, morning), await state_of(front, weekly)) == ("on", "on")
 
@@ -1827,6 +1832,31 @@ async def test_a_watched_softwares_check_is_offered_as_the_watchlist_and_nothing
     [choice] = cast(list[dict[str, str]], reply["choices"])
     assert reply["use_case_id"] is None
     assert await state_of(front, choice["use_case_id"]) == "on"
+
+
+async def test_a_workflow_named_for_a_watched_software_and_the_watchlist_are_both_offered(
+    front: Front,
+):
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
+    await front.watchlist.add(alice, AddSoftware.model_validate(LANGGRAPH))
+    check = await make_workflow(front, "LangGraph release check", FRIDAY_16)
+    pause = PauseAnswer(workflow_words="LangGraph check", software="LangGraph")
+    reply = await switch_reply(front, pause, "pause the LangGraph check")
+    choices = cast(list[dict[str, object]], reply["choices"])
+    assert reply["use_case_id"] is None
+    assert [(c["name"], c["watchlist"]) for c in choices] == [
+        ("LangGraph release check", False),
+        ("Software watchlist", True),
+    ]
+    assert await state_of(front, check) == "on"
+
+
+async def test_a_workflow_named_for_software_nobody_watches_is_paused(front: Front):
+    check = await make_workflow(front, "React release check", FRIDAY_16)
+    pause = PauseAnswer(workflow_words="React check", software="React")
+    reply = await switch_reply(front, pause, "pause the React check")
+    assert (reply["use_case_id"], reply["name"]) == (check, "React release check")
+    assert await state_of(front, check) == "paused"
 
 
 async def test_an_approver_pauses_nothing(front: Front):

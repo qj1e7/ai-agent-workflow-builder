@@ -105,10 +105,13 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
     expect(draw(pauseReply as PauseReply)).toBe('')
   })
 
-  it('asks which workflow when the words fit several or none, with a chip for each, and pauses only the one she picks', () => {
+  it('asks which workflow when the words fit a workflow and the watchlist, and says the watchlist’s pause stops every check', () => {
     const reply = pauseChoices as PauseReply
     expect(sayOf(reply)).toBe('Which workflow?')
-    expect(buttons(draw(reply))).toEqual(['React release check', 'FastAPI release check'])
+    expect(buttons(draw(reply))).toEqual(['React release check', 'Software watchlist'])
+    expect(text(draw(reply))).toContain('Pausing the Software watchlist stops the checks of every software on it.')
+    const workflowsOnly: PauseReply = { ...reply, choices: reply.choices.filter((choice) => !choice.watchlist) }
+    expect(text(draw(workflowsOnly))).not.toContain('Software watchlist')
     expect(switchedSay('pause', 'FastAPI release check', false)).toBe('Paused FastAPI release check. It won’t run until you resume it.')
   })
 

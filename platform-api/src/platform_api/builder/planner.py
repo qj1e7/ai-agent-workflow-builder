@@ -389,6 +389,10 @@ class SwitchChoice(WireModel):
     use_case_id: str
     name: str
     state: UseCaseState
+    watchlist: bool = Field(
+        description="True for the Software watchlist, whose pause stops the checks of every "
+        "software on it."
+    )
 
 
 class _SwitchReply(Reply):
@@ -992,32 +996,44 @@ class PlannerFront:
     async def _switch(
         self, answer: PauseAnswer | ResumeAnswer, viewer: Principal
     ) -> PauseReply | ResumeReply:
-        """Pauses or resumes the one workflow the words name, for an Operator. Several matches,
-        "it", or a watched software's check, which is the whole Software watchlist, change nothing
-        and offer the choices to pick from."""
+        """Pauses or resumes the one workflow the words name, for an Operator. The words are
+        matched to workflow names first. A watched software's check is also the Software
+        watchlist's, which checks every software on it, so when it fits it is offered beside the
+        workflow, never paused for her. Several matches, or "it", change nothing either: she
+        picks one."""
         pausing = isinstance(answer, PauseAnswer)
         reply = PauseReply if pausing else ResumeReply
-        named = await self._named(answer.workflow_words, answer.software)
+        named = await self._named(answer.workflow_words, None)
+        listed = await self._watchlist_of(answer.software)
         one = named.one
-        if one is None or _watched_through(one, answer.software) or not _operates(viewer):
-            several = named.several or ([] if one is None else [one])
-            choices = [
-                SwitchChoice(use_case_id=u.use_case_id, name=u.name, state=u.state) for u in several
-            ]
-            return reply(
-                use_case_id=None, name=None, already=False, missing=named.missing, choices=choices
-            )
-        move = self._workflows.pause_use_case if pausing else self._workflows.resume_use_case
-        moved = await move(one.use_case_id, viewer)
-        if moved is None:
-            return reply(use_case_id=None, name=None, already=False, missing=None, choices=[])
+        if one is not None and listed is None and _operates(viewer):
+            move = self._workflows.pause_use_case if pausing else self._workflows.resume_use_case
+            moved = await move(one.use_case_id, viewer)
+            if moved is not None:
+                return reply(
+                    use_case_id=moved.use_case_id,
+                    name=moved.name,
+                    already=one.state == ("paused" if pausing else "on"),
+                    missing=None,
+                    choices=[],
+                )
+        several = [one] if one is not None else named.several
+        offered = [u for u in several if listed is None or u.use_case_id != listed.use_case_id]
+        offered += [] if listed is None else [listed]
         return reply(
-            use_case_id=moved.use_case_id,
-            name=moved.name,
-            already=one.state == ("paused" if pausing else "on"),
-            missing=None,
-            choices=[],
+            use_case_id=None,
+            name=None,
+            already=False,
+            missing=named.missing if listed is None else None,
+            choices=[_switch_choice(u) for u in offered],
         )
+
+    async def _watchlist_of(self, software: str | None) -> UseCaseView | None:
+        """The Software watchlist, when the software is on it."""
+        if software is None or await self._listed(software) is None:
+            return None
+        cases = await self._use_cases()
+        return next((u for u in cases if u.template == SOFTWARE_WATCHLIST.key), None)
 
     async def check_part(self, body: CheckPartIn) -> PartChecked | RegistryUnavailable:
         checked = await self._answers.check_part(body.kind, body.text)
@@ -1065,10 +1081,13 @@ def _operates(viewer: Principal) -> bool:
     return Role.OPERATOR in viewer.roles
 
 
-def _watched_through(use_case: UseCaseView, software: str | None) -> bool:
-    """Whether the words reached the Software watchlist through a software on it, as "the React
-    check", rather than by its own name."""
-    return use_case.template == SOFTWARE_WATCHLIST.key and software is not None
+def _switch_choice(use_case: UseCaseView) -> SwitchChoice:
+    return SwitchChoice(
+        use_case_id=use_case.use_case_id,
+        name=use_case.name,
+        state=use_case.state,
+        watchlist=use_case.template == SOFTWARE_WATCHLIST.key,
+    )
 
 
 def _example(example: ExampleSpec) -> ExampleView:

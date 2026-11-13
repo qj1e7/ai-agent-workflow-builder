@@ -406,10 +406,14 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
             already=False,
             missing=None,
             choices=[
-                SwitchChoice(use_case_id="uc_01JB8", name="React release check", state="on"),
-                SwitchChoice(use_case_id="uc_01JC2", name="FastAPI release check", state="on"),
+                SwitchChoice(
+                    use_case_id="uc_01JB8", name="React release check", state="on", watchlist=False
+                ),
+                SwitchChoice(
+                    use_case_id="uc_01JC2", name="Software watchlist", state="on", watchlist=True
+                ),
             ],
-            parts=[does("pause it")],
+            parts=[does("pause the React check")],
         ),
         "planner/answer.resume.json": ResumeReply(
             use_case_id="uc_01JB8",

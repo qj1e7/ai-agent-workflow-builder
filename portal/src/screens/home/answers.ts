@@ -92,6 +92,10 @@ export const switchedSay = (answer: 'pause' | 'resume', name: string, already: b
   return already ? `${name} is already on.` : `${name} is on again.`
 }
 
+/** What pausing or resuming the Software watchlist does, beside its chip: it holds every software’s check. */
+export const watchlistSwitchNote = (answer: 'pause' | 'resume'): string =>
+  answer === 'pause' ? 'Pausing the Software watchlist stops the checks of every software on it.' : 'Turning the Software watchlist back on checks every software on it again.'
+
 const withoutArticle = (words: string): string => words.replace(/^(?:the|my|our|that|this)\s+/i, '')
 
 function switchSay(reply: PauseReply | ResumeReply): string {

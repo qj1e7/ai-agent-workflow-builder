@@ -9384,12 +9384,18 @@
           "use_case_id": {
             "title": "Use Case Id",
             "type": "string"
+          },
+          "watchlist": {
+            "description": "True for the Software watchlist, whose pause stops the checks of every software on it.",
+            "title": "Watchlist",
+            "type": "boolean"
           }
         },
         "required": [
           "use_case_id",
           "name",
-          "state"
+          "state",
+          "watchlist"
         ],
         "title": "SwitchChoice",
         "type": "object"
