@@ -8,7 +8,7 @@ import { useChatNavigate } from '../../ui/fromChat'
 import { OpenButton } from '../../ui/OpenItem'
 import { pressCheckNow } from '../software/checkNow'
 import { changeFeedback, noticeWords, NO_FEEDBACK, pressRemove, pressUndo } from '../software/removal'
-import { scheduleRuns } from '../software/software'
+import { scheduleRuns, softwarePath } from '../software/software'
 import styles from './Planner.module.css'
 
 interface StopProps {
@@ -99,7 +99,7 @@ export function SoftwareActions({ names, named = true }: { names: readonly strin
           {held.map((row) => (
             <li key={row.id}>
               {named ? <b>{row.name}</b> : null}
-              <OpenButton item={{ kind: 'software', id: row.id }} to={`/software?row=${encodeURIComponent(row.id)}`}>
+              <OpenButton item={{ kind: 'software', id: row.id }} to={softwarePath(row.id)}>
                 Open<span className="visually-hidden"> {row.name}</span> on the Software page
               </OpenButton>
               <StopWatching

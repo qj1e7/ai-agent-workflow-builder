@@ -4,6 +4,7 @@ import { Button, ButtonLink } from '../../ui/Button'
 import { escapeIsFree } from '../../ui/escape'
 import { InSidePanel, wrapTab, type PanelHead, type PanelItem } from '../../ui/sidePanel'
 import { SoftwarePanel } from '../software/SoftwarePanel'
+import { softwarePath } from '../software/software'
 import { workflowPath } from '../workflows/workflow'
 import { WorkflowPanel } from '../workflows/WorkflowPanel'
 import styles from './SidePanel.module.css'
@@ -34,7 +35,7 @@ function useHead(item: PanelItem): PanelHead {
     }
     case 'software': {
       const row = watchlist.data?.software.find((software) => software.id === item.id)
-      return row ? { title: row.name, page: `/software?row=${encodeURIComponent(row.id)}` } : { title: 'Software', page: null }
+      return row ? { title: row.name, page: softwarePath(row.id) } : { title: 'Software', page: null }
     }
   }
 }

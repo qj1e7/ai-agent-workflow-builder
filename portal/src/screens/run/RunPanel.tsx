@@ -1,23 +1,23 @@
 import { ApiError } from '../../api/client'
 import { useSession } from '../../api/context'
-import { isOperator } from '../../api/me'
-import { useApproval, useMe, useModelOff, useRun, useTroubleshoot, useUseCase } from '../../api/queries'
+import { useRun } from '../../api/queries'
 import type { RunView } from '../../api/types'
 import { Button } from '../../ui/Button'
-import { cx } from '../../ui/cx'
 import { useAfterPanelAction } from '../../ui/sidePanel'
 import { useChat } from '../home/ChatProvider'
 import { ApprovalGate, NotChecked } from './ApprovalGate'
-import { declineReasons, openStep, partyOf, useDecision, useNotChecked } from './decision'
+import { openStep, partyOf, useDecision, useNotChecked } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
-import { Troubleshooting } from './Outcome'
+import { AnswerList, StopAnswers, StopNext } from './Outcome'
 import { QuestionThread } from './QuestionThread'
 import { useQuestions } from './questions'
-import { approvalIdOf, declinedSoFarWords, planOf, POLL_FAILED_MS, statusWords, useNameOf, useReconnectWhenBehind } from './RunPage'
+import { POLL_FAILED_MS, useReconnectWhenBehind } from './follow'
+import { declinedSoFarWords, statusWords } from './RunPage'
 import { RunLine } from './RunLine'
-import { declinedOf, stationsOf } from './runModel'
-import { declinedNext, declinedNowWords, declinedWithNext, feedTroubleOf, headlineOf, RUN_PROBLEM, settledOf, triggerWords } from './words'
+import { RunPill } from './RunPill'
+import { useRunStory } from './useRunStory'
 import { nextRunOf } from '../workflows/workflow'
+import { declinedNext, declinedNowWords, feedTroubleOf, RUN_PROBLEM } from './words'
 import styles from './RunPage.module.css'
 
 function Loading() {
@@ -56,9 +56,10 @@ function FeedNotReady({ connection, onRetry }: { connection: LiveRun['connection
 }
 
 /**
- * A run in the side panel (spec 3.3): its state, its headline and the run line, with a stop's three answers and Retry. While
- * it waits for a yes the reader may give, it is the approval instead, from the run page's own gate (spec 10.4). Someone who
- * can't decide sees the summary, as in the prototype.
+ * A run in the side panel (spec 3.3): its state, its headline and the run line, with a stop's three answers and Retry. A finished
+ * run keeps its line with the settled line under it, as the sketch's panel does. Only the chat's card folds. While it waits for a
+ * yes the reader may give, it is the approval instead, from the run page's own gate (spec 10.4). Someone who can't decide sees the
+ * summary, as in the prototype.
  */
 export function RunPanel({ id }: { id: string }) {
   const run = useRun(id)
@@ -80,63 +81,52 @@ function LiveRunPanel({ run }: { run: RunView }) {
 }
 
 function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
-  const { shown, head, loadedUpTo } = live
-  const me = useMe().data
-  const nameOf = useNameOf(head)
-  const modelOff = useModelOff()
+  const story = useRunStory(run, live)
+  const { me, nameOf, approval, stations, settled, arrivedLive, useCase } = story
   const backToTop = useAfterPanelAction()
-  const useCase = useUseCase(run.use_case_id)
-  const approvalId = approvalIdOf(run, head)
-  const waiting = shown.phase.state === 'awaiting_approval'
-  const approval = useApproval(approvalId ?? '', { poll: waiting, enabled: approvalId !== null })
-  const attempt = head.chat.filter((item) => item.kind === 'retried').length
-  const troubleshoot = useTroubleshoot(run.run_id, shown.phase.state === 'failed' && head.phase.state === 'failed', attempt)
+  const waiting = story.model.phase.state === 'awaiting_approval'
   const { say } = useChat()
-  const party = partyOf(approval.data, me?.id)
-  const decision = useDecision(approval.data, party, (recorded) => {
+  const decision = useDecision(approval, partyOf(approval, me?.id), (recorded) => {
     backToTop?.()
     if (recorded.verdict === 'decline') say(declinedNowWords({ reason: recorded.reason ?? null }))
   })
-  const questions = useQuestions(approval.data, nameOf, say)
-  const notChecked = useNotChecked(approval.data, useCase.data)
-
-  const stations = stationsOf(shown, planOf(useCase.data), triggerWords(shown, useCase.data?.schedule ?? null, nameOf, run.started_at))
-  const settled = settledOf(shown, nameOf, new Date(), declineReasons(useCase.data?.template))
-  const headline = headlineOf(shown, stations, approval.data && waiting ? approval.data.actions : null)
-  const arrivedLive = shown.spotSeq > loadedUpTo ? (stations.findLast((station) => station.state !== 'todo')?.key ?? null) : null
+  const questions = useQuestions(approval, nameOf, say)
+  const notChecked = useNotChecked(approval, useCase.data)
   const status = statusWords(decision, live)
   const declinedSoFar = declinedSoFarWords(decision, live, nameOf)
-  const declined = declinedOf(shown)
+  const safeId = `${run.run_id}-safe`
+  const next = declinedNext({ test: run.test, watchlist: useCase.data?.template === 'software_watchlist' }, nextRunOf(useCase.data), new Date())
 
   if (useCase.isLoading) return <Loading />
-  if (waiting && approvalId !== null && !approval.isError && (!approval.data || notChecked === null)) {
+  if (waiting && story.approvalId !== null && (!approval || notChecked === null)) {
     return (
       <p className="muted" role="status">
         Loading what will be written
       </p>
     )
   }
-  if (waiting && approval.data?.you_can_decide && openStep(approval.data) && decision.recorded === null) {
+  if (waiting && approval?.you_can_decide && openStep(approval) && decision.recorded === null) {
     return (
       <ApprovalGate
-        approval={approval.data}
+        approval={approval}
         page={null}
         decision={decision}
         notChecked={notChecked ?? []}
-        reasons={declineReasons(useCase.data?.template)}
-        requester={nameOf(approval.data.requester)}
+        reasons={story.quick}
+        requester={nameOf(approval.requester)}
         questions={questions}
         me={me?.id}
         nameOf={nameOf}
       />
     )
   }
+  const failure = story.model.phase.state === 'failed' ? story.model.phase : null
   return (
-    <>
-      <div>
-        <span className={cx(styles['pill'], styles[headline.pill.tone])}>{headline.pill.label}</span>
+    <div className={styles['panelView']}>
+      <div className={styles['head']}>
+        <p className={styles['kind']}>{story.kind}</p>
+        <RunPill facts={story.facts} />
       </div>
-      <p>{declined ? declinedWithNext(declined, declinedNext({ test: run.test, watchlist: useCase.data?.template === 'software_watchlist' }, nextRunOf(useCase.data), new Date()), nameOf) : headline.text}</p>
       {status ? (
         <p className="muted" role="status">
           {status}
@@ -144,23 +134,23 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
       ) : null}
       {declinedSoFar ? <p className="muted">{declinedSoFar}</p> : null}
       <RunLine stations={stations} arrivedLive={arrivedLive} settled={settled} small />
-      {shown.phase.state === 'failed' ? (
-        <Troubleshooting
-          runId={run.run_id}
-          failure={shown.phase}
-          advice={troubleshoot.data}
-          loading={troubleshoot.isPending}
-          me={me ? { id: me.id, name: me.display, operator: isOperator(me) } : undefined}
-          reports={shown.reports}
-          nameOf={nameOf}
-          modelOff={modelOff}
-        />
-      ) : approval.data ? (
+      {story.model.phase.state === 'rejected' && next ? <p>{next}</p> : null}
+      {failure ? (
         <>
-          {openStep(approval.data) === null ? <NotChecked lines={notChecked ?? []} /> : null}
-          <QuestionThread approval={approval.data} me={me?.id} nameOf={nameOf} answer={questions.answer} />
+          <StopAnswers failure={failure} {...story.stopped} safeId={safeId} />
+          <div className={styles['panelFoot']}>
+            <StopNext runId={run.run_id} failure={failure} {...story.stopped} safeId={safeId} />
+          </div>
+        </>
+      ) : story.answers.length > 0 && !waiting ? (
+        <AnswerList answers={story.answers} />
+      ) : null}
+      {approval && !failure ? (
+        <>
+          {openStep(approval) === null ? <NotChecked lines={notChecked ?? []} /> : null}
+          <QuestionThread approval={approval} me={me?.id} nameOf={nameOf} answer={questions.answer} />
         </>
       ) : null}
-    </>
+    </div>
   )
 }

@@ -80,6 +80,16 @@ interface RunLineProps {
   readonly small?: boolean
 }
 
+/** How a run ended, as the one line the page, the panel and the card keep for it. */
+export function SettledLine({ settled }: { settled: Settled }) {
+  return (
+    <p className={styles['settled']} data-tone={settled.tone}>
+      {settled.tone === 'ok' ? <IconCheck /> : null}
+      {settled.text}
+    </p>
+  )
+}
+
 export function RunLine({ stations, arrivedLive, settled, small = false }: RunLineProps) {
   const pauseUnseen = usePauseUnseen()
   const moving = motionAllowed()
@@ -147,12 +157,7 @@ export function RunLine({ stations, arrivedLive, settled, small = false }: RunLi
           })}
         </ol>
       </div>
-      {settled ? (
-        <p className={styles['settled']} data-tone={settled.tone}>
-          {settled.tone === 'ok' ? <IconCheck /> : null}
-          {settled.text}
-        </p>
-      ) : null}
+      {settled ? <SettledLine settled={settled} /> : null}
     </div>
   )
 }

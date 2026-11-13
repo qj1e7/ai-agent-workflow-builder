@@ -92,6 +92,9 @@ export function wordsOnly(reply: PlannerReply, asker: Asker): boolean {
   return reply.answer === 'operators' || (reply.answer === 'offline' && asker === 'approver')
 }
 
+/** Who fronts an answer: the AI troubleshooter owns the run card, and the Planner every other answer. */
+export const whoOf = (reply: PlannerReply): 'planner' | 'troubleshooter' => (reply.answer === 'why_stopped' ? 'troubleshooter' : 'planner')
+
 /** The offline answer to someone who isn’t an Operator: one line, with no place to start and nothing only an Operator can do. */
 const APPROVER_OFFLINE: Readonly<Record<OfflineReply['why'], string>> = {
   no_model: 'I can’t answer questions until an AI model is connected. An Operator can connect one in Settings.',

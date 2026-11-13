@@ -1,10 +1,9 @@
 import { ApiError } from '../../api/client'
-import { failureReasonLabel } from '../../api/labels'
 import { pressOnce, type Latch, type Outcome } from '../../api/latch'
 import type { BlockKind, Me, RunView, ScheduleIn, UseCaseView, VersionSchedule, VersionView } from '../../api/types'
 import { agentIdentity } from '../../ui/agents'
-import { andList, count, declinedBy, declinedOfSteps, declinedRecord, type NameOf, type NextRun } from '../run/words'
-import { faceId, howItWorksPath } from '../agents/agents'
+import { andList, declinedOfSteps, declinedRecord, runPill, scheduleShort, stageWords, type NameOf, type NextRun, type StageFacts } from '../run/words'
+import { faceId } from '../agents/agents'
 import { heldWords, repeatWords, TAKE_OVER_WORDS } from '../software/software'
 import { lineWhen, nextRunAt, runWhen, scheduleZoneName, zoneWords } from './times'
 
@@ -14,12 +13,6 @@ export type Tone = 'ok' | 'wait' | 'bad' | 'new'
 export function leftOutWords(leftOut: readonly string[]): string | null {
   if (leftOut.length === 0) return null
   return `Left out: ${andList(leftOut.map((words) => `“${words}”`))}. It was set up without ${leftOut.length === 1 ? 'that part' : 'those parts'}.`
-}
-
-export interface RunFact {
-  readonly tone: Tone
-  readonly pill: string | null
-  readonly words: string
 }
 
 export interface Viewer {
@@ -32,22 +25,6 @@ export function lifeWords(state: UseCaseView['state']): string {
   return state === 'paused' ? 'Paused' : 'On'
 }
 
-function changesWaiting(run: Extract<RunView, { state: 'awaiting_approval' }>): string {
-  const { actions } = run.proposal
-  if (actions.length === 0) return 'Waiting for a yes.'
-  const tickets = actions.every((action) => action.operation === 'create_ticket')
-  const noun = count(actions.length, tickets ? 'ticket' : 'change')
-  return `${noun} ${actions.length === 1 ? 'is' : 'are'} waiting for a yes.`
-}
-
-function doneWords(run: Extract<RunView, { state: 'succeeded' }>, nameOf: NameOf): string {
-  if (run.outcome === 'nothing_to_write' || run.written.length === 0) return 'Done. Nothing to write.'
-  const tickets = run.written.every((write) => write.operation === 'create_ticket')
-  const what = tickets ? `${count(run.written.length, 'ticket')} created` : `${count(run.written.length, 'change')} written`
-  const approvers = [...new Set(run.written.flatMap((write) => write.approved_by))].map(nameOf)
-  return approvers.length > 0 ? `Done. ${what}, approved by ${andList(approvers)}.` : `Done. ${what}.`
-}
-
 const IN_PROGRESS: ReadonlySet<RunView['state']> = new Set(['pending', 'working', 'proposed', 'acting'])
 
 type RunState = RunView['state']
@@ -58,46 +35,67 @@ export type LastRun = NonNullable<UseCaseView['last_run']>
 /** The runs a row calls Running. Anything counting running workflows asks this, so a count never outruns the rows. */
 export const isRunning = (run: { readonly state: RunState } | null): boolean => run !== null && IN_PROGRESS.has(run.state)
 
-export type Pill = Pick<RunFact, 'tone' | 'pill'>
-
-/** The row's one run pill. A succeeded or declined run has none: its last-run line says how it went. */
-const PILLS: Record<RunState, Pill> = {
-  awaiting_approval: { tone: 'wait', pill: 'Waiting for a yes' },
-  failed: { tone: 'bad', pill: 'Stopped' },
-  succeeded: { tone: 'ok', pill: null },
-  rejected: { tone: 'ok', pill: null },
-  skipped: { tone: 'ok', pill: null },
-  expired: { tone: 'ok', pill: null },
-  lost: { tone: 'bad', pill: 'Lost' },
-  pending: { tone: 'new', pill: 'Running' },
-  working: { tone: 'new', pill: 'Running' },
-  proposed: { tone: 'new', pill: 'Running' },
-  acting: { tone: 'new', pill: 'Running' },
+export interface Pill {
+  readonly tone: 'ok' | 'wait' | 'bad' | 'new'
+  readonly pill: string | null
 }
 
-export const pillOf = (run: { readonly state: RunState }): Pill => PILLS[run.state]
+/**
+ * The workflow's own pill, read from its newest run's pill, so the two can't disagree: a run's Stopped, Lost or Waiting for a yes stays,
+ * and any other run reads On, as in the sketch. Running is the run's own pill in Recent runs. The tone stays, because the banner says it.
+ */
+export function pillOf(last: LastRun): Pill {
+  const { label, tone } = runPill(stageOfLast(last))
+  switch (tone) {
+    case 'bad':
+    case 'wait':
+      return { tone, pill: label }
+    case 'new':
+      return { tone: 'new', pill: null }
+    case 'ok':
+    case 'quiet':
+      return { tone: 'ok', pill: null }
+  }
+}
 
-export function runFact(run: RunView, nameOf: NameOf): RunFact {
+/** A newest run, as the list gives it, in the facts the stage words read. */
+export function stageOfLast(last: LastRun): StageFacts {
+  return {
+    state: last.state,
+    count: last.state === 'succeeded' ? last.written : last.proposed,
+    tickets: last.tickets,
+    approvedBy: last.approved_by,
+    declinedBy: last.declined_by ?? null,
+    reason: last.reason ?? null,
+  }
+}
+
+/** A full run, in the same facts, so Recent runs and the list say the same words. */
+export function stageOfRun(run: RunView): StageFacts {
+  const none = { count: 0, tickets: true, approvedBy: [], declinedBy: null, reason: null } as const
   switch (run.state) {
     case 'awaiting_approval':
-      return { ...PILLS[run.state], words: changesWaiting(run) }
-    case 'failed':
-      return { ...PILLS[run.state], words: `Stopped. ${failureReasonLabel[run.reason]}.` }
-    case 'succeeded':
-      return { ...PILLS[run.state], words: doneWords(run, nameOf) }
+    case 'acting': {
+      const { actions } = run.proposal
+      return { ...none, state: run.state, count: actions.length, tickets: actions.every((action) => action.operation === 'create_ticket') }
+    }
+    case 'succeeded': {
+      const tickets = run.written.every((write) => write.operation === 'create_ticket')
+      return { ...none, state: run.state, count: run.outcome === 'nothing_to_write' ? 0 : run.written.length, tickets, approvedBy: [...new Set(run.written.flatMap((write) => write.approved_by))] }
+    }
     case 'rejected':
-      return { ...PILLS[run.state], words: declinedRecord(declinedOfSteps(run.approval.steps) ?? { by: run.rejected_by, approvedBy: [], reason: null }, nameOf) }
+      return { ...none, state: run.state, declinedBy: declinedOfSteps(run.approval.steps)?.by ?? run.rejected_by }
+    case 'failed':
+      return { ...none, state: run.state, reason: run.reason }
     case 'skipped':
-      return { ...PILLS[run.state], words: `Skipped. An earlier run is still waiting for a yes.` }
+      return { ...none, state: run.state }
     case 'expired':
-      return { ...PILLS[run.state], words: 'No answer. Nothing was written.' }
     case 'lost':
-      return { ...PILLS[run.state], words: 'Approved, but n8n lost the run. Nothing was written.' }
+      return { ...none, state: run.state }
     case 'pending':
     case 'working':
     case 'proposed':
-    case 'acting':
-      return { ...PILLS[run.state], words: 'Running now.' }
+      return { ...none, state: run.state }
   }
 }
 
@@ -105,49 +103,36 @@ export function runFact(run: RunView, nameOf: NameOf): RunFact {
 type Room = 'line' | 'record'
 
 function lastRunWhat(last: LastRun, nameOf: NameOf, room: Room): string {
-  const noun = last.tickets ? 'ticket' : 'change'
-  switch (last.state) {
-    case 'awaiting_approval':
-      return last.proposed > 0 ? `${count(last.proposed, noun)} proposed` : 'Waiting for a yes'
-    case 'succeeded':
-      return last.written > 0 ? `${count(last.written, noun)} ${last.tickets ? 'created' : 'written'}` : 'Nothing new to write'
-    case 'rejected': {
-      if (!last.declined_by) return 'Declined'
-      const declined = { by: last.declined_by, approvedBy: last.approved_by, reason: last.decline_reason }
-      return room === 'line' ? declinedBy(declined, nameOf) : declinedRecord(declined, nameOf)
-    }
-    case 'failed':
-      return 'Stopped'
-    case 'skipped':
-      return 'Skipped'
-    case 'expired':
-      return 'No answer'
-    case 'lost':
-      return 'Lost'
-    case 'pending':
-    case 'working':
-    case 'proposed':
-    case 'acting':
-      return 'Running now'
+  if (room === 'record' && last.state === 'rejected' && last.declined_by) {
+    return declinedRecord({ by: last.declined_by, approvedBy: last.approved_by, reason: last.decline_reason }, nameOf)
   }
-}
-
-/**
- * A workflow's last run in one line, such as "Last run Mon 26 Oct · Declined by Bob" or "No runs yet". The Workflows rows and the
- * chat's check card both read it, so they cannot disagree. A test run says so after the day.
- */
-export function lastRunLine(useCase: Pick<UseCaseView, 'last_run'>, now: Date, nameOf: NameOf): string {
-  const words = lastRunWords(useCase, now, nameOf, 'line')
-  return words === null ? NO_RUNS : `Last run ${words}`
+  return stageWords(stageOfLast(last), nameOf)
 }
 
 export const NO_RUNS = 'No runs yet'
 
+/** "today", or the day's date such as "Mon 26 Oct". */
+const dayOf = (iso: string, now: Date): string => {
+  const when = lineWhen(iso, now)
+  return when.startsWith('Today') ? 'today' : when
+}
+
+const lowerFirst = (words: string): string => `${words.charAt(0).toLowerCase()}${words.slice(1)}`
+
+/**
+ * A workflow row's second line, as the sketch has it: "Daily 8:00 · last run today, an agent could not finish its work", or "Daily 8:00 · no runs yet".
+ * The Workflows page and the chat's check card both read it, so they cannot disagree.
+ */
+export function rowLine(useCase: Pick<UseCaseView, 'last_run' | 'schedule'>, now: Date, nameOf: NameOf): string {
+  const when = useCase.schedule ? scheduleShort(useCase.schedule) : 'No schedule'
+  const last = useCase.last_run
+  return last ? `${when} · last run ${dayOf(last.at, now)}, ${lowerFirst(lastRunWhat(last, nameOf, 'line'))}` : `${when} · no runs yet`
+}
+
 /** The line without its label, for the side panel's Last run, where a declined run gives its whole record. Null before the first run. */
 export function lastRunWords({ last_run: last }: Pick<UseCaseView, 'last_run'>, now: Date, nameOf: NameOf, room: Room = 'record'): string | null {
   if (!last) return null
-  const when = lineWhen(last.at, now)
-  return `${last.test ? `${when}, test` : when} · ${lastRunWhat(last, nameOf, room)}`
+  return `${lineWhen(last.at, now)}: ${lastRunWhat(last, nameOf, room)}`
 }
 
 export { formatterFactory, lineWhen, nextRunAt, runWhen, timesZone } from './times'
@@ -196,13 +181,6 @@ export function runsOf(runs: readonly RunView[], useCaseId: string): RunView[] {
   return runs.filter((run) => run.use_case_id === useCaseId).sort(newestFirst)
 }
 
-export interface AgentLink {
-  readonly face: string
-  readonly name: string
-  readonly to: string
-}
-
-const PLANNER: AgentLink = { face: 'planner', name: agentIdentity('planner').name, to: howItWorksPath({ show: 'agents', agent: 'planner' }) }
 const VERSION_CHECKER_CARD = 'crd_version_checker'
 const WATCHLIST_TEMPLATE = 'software_watchlist'
 export const SOFTWARE_PAGE = '/software'
@@ -272,6 +250,24 @@ function runsAt(schedule: VersionSchedule): string {
   return `${repeatWords(schedule)}${zone ? ` ${zone}` : ''}`
 }
 
+const RELEASE_CHECK_CARD = 'crd_version_checker'
+
+/**
+ * The workflow in one sentence, built from its schedule, the repository its Version checker reads and its write step, as the sketch says it.
+ * It is built only from what the platform stored. A workflow that isn't a release check, or lacks its repository, keeps the Operator's own words.
+ */
+export function sentenceOf(useCase: Pick<UseCaseView, 'schedule' | 'agents' | 'plan' | 'instruction'>): string {
+  const checker = useCase.agents.find((agent) => agent.card_id === RELEASE_CHECK_CARD)
+  const repo = checker?.values['GitHub repository']
+  if (!checker || typeof repo !== 'string' || repo.trim() === '') return useCase.instruction
+  const when = useCase.schedule ? runsAt(useCase.schedule) : null
+  const start = when ? `${when.charAt(0).toUpperCase()}${when.slice(1)}, check` : 'Check'
+  const project = checker.values['Jira project']
+  const writes = useCase.plan.some((block) => block.kind === 'write_action')
+  const then = !writes ? 'tell me here' : `create an upgrade ticket in Jira${typeof project === 'string' && project.trim() !== '' ? ` project ${project}` : ''}, after a yes`
+  return `${start} ${repo} on GitHub for a new release${when ? '' : ' when an Operator presses Run now'}. If there is one, ${then}.`
+}
+
 /** What a version changed and who changed it, as the prototype's Versions list says it. */
 export function versionWords(version: VersionView, nameOf: NameOf): string {
   const change = version.change?.schedule
@@ -282,10 +278,10 @@ export function versionWords(version: VersionView, nameOf: NameOf): string {
   return `${who} changed when it runs from ${runsAt(change.before)} to ${change.after ? runsAt(change.after) : 'no schedule'}.`
 }
 
-/** "Today, 9:10. Alice changed ... This is the version running now." The first version has no time, as in the prototype. */
+/** "Today, 9:10. Alice changed when it runs from ... to ...". The first version has no time, as in the sketch. */
 export function versionLine(version: VersionView, now: Date, nameOf: NameOf): string {
   const when = version.version > 1 ? `${runWhen(version.at, now)}. ` : ''
-  return `${when}${versionWords(version, nameOf)}${version.running ? ' This is the version running now.' : ''}`
+  return `${when}${versionWords(version, nameOf)}`
 }
 
 /** What an Undo published, for the chat's edit card. "Undone, as version 3. Morning new-ticket check runs every weekday at 8:00 now.", or, while it is paused, that it won't run until resumed, as in the prototype. */
@@ -332,12 +328,6 @@ export function cardsOf(useCase: Pick<UseCaseView, 'template' | 'agents'>): read
   return useCase.template === WATCHLIST_TEMPLATE
     ? [{ card_id: VERSION_CHECKER_CARD, name: agentIdentity(faceId({ card_id: VERSION_CHECKER_CARD })).name }]
     : useCase.agents
-}
-
-export function agentsOf(useCase: Pick<UseCaseView, 'template' | 'agents'>): AgentLink[] {
-  const cards = cardsOf(useCase)
-  const unique = cards.filter((card, index) => cards.findIndex((other) => other.card_id === card.card_id) === index)
-  return [PLANNER, ...unique.map((card) => ({ face: faceId(card), name: card.name, to: howItWorksPath({ show: 'agents', agent: card.card_id }) }))]
 }
 
 export type RowAction = { readonly kind: 'decide' | 'why'; readonly runId: string }
@@ -458,10 +448,7 @@ export function changeProblem(change: Change, name: string, error: unknown, word
 
 export type BannerTone = 'ok' | 'wait' | 'bad' | 'off' | 'new'
 
-export type BannerAction =
-  | { readonly kind: 'decide'; readonly runId: string }
-  | { readonly kind: 'stopped'; readonly runId: string; readonly retryable: boolean }
-  | { readonly kind: 'resume' }
+export type BannerAction = { readonly kind: 'decide' | 'open'; readonly runId: string } | { readonly kind: 'resume' }
 
 export interface Banner {
   readonly tone: BannerTone
@@ -473,40 +460,61 @@ interface BannerFacts {
   readonly useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule' | 'last_run'>
   readonly viewer: Viewer
   readonly now: Date
+  readonly nameOf: NameOf
 }
 
 const atWords = (when: string) => when.replace(/^Today, /, 'today at ').replace(/^(.+), (\d+:\d+)$/, '$1 at $2')
 
-function waitingWords(last: LastRun): string {
-  if (last.proposed === 0) return 'Waiting for a yes.'
-  const noun = count(last.proposed, last.tickets ? 'ticket' : 'change')
-  return `${noun} ${last.proposed === 1 ? 'is' : 'are'} waiting for a yes.`
-}
+const sentence = (words: string): string => (/[.!?]$/.test(words) ? words : `${words}.`)
 
-/** One sentence on the state, and the one action that moves it on. Pause wins over the last run, because a paused workflow starts nothing. */
-export function bannerOf({ useCase, viewer, now }: BannerFacts): Banner {
+/**
+ * One sentence on the state, and the one action that moves it on. Pause wins over the last run, because a paused workflow starts nothing.
+ * Otherwise the newest run's pill decides, and its stage words say the rest, so the banner, the pill, the row and Recent runs never disagree:
+ * "Stopped today at 8:00. An agent could not finish its work.", "Lost today at 8:00. Approved, but n8n lost the run. Nothing was written.",
+ * "Waiting for a yes.", "Running now.". A run that settled, declined, got no answer or was skipped leaves the workflow On.
+ */
+export function bannerOf({ useCase, viewer, now, nameOf }: BannerFacts): Banner {
   const last = useCase.last_run
   if (useCase.state === 'paused') {
     return viewer.operator
       ? { tone: 'off', text: 'Paused. It won’t run until you resume it.', action: { kind: 'resume' } }
       : { tone: 'off', text: 'Paused. It won’t run until an Operator resumes it.', action: null }
   }
-  if (last?.state === 'awaiting_approval') {
-    return { tone: 'wait', text: waitingWords(last), action: last.you_can_decide ? { kind: 'decide', runId: last.run_id } : null }
-  }
-  if (last?.state === 'failed') {
-    const why = last.reason ? ` ${failureReasonLabel[last.reason]}.` : ''
-    return {
-      tone: 'bad',
-      text: `Stopped ${atWords(runWhen(last.at, now))}.${why}`,
-      action: viewer.operator ? { kind: 'stopped', runId: last.run_id, retryable: last.retryable } : null,
+  if (last) {
+    const stage = stageOfLast(last)
+    const pill = runPill(stage)
+    const words = stageWords(stage, nameOf)
+    const open: BannerAction = { kind: 'open', runId: last.run_id }
+    switch (pill.tone) {
+      case 'bad':
+        return { tone: 'bad', text: `${pill.label} ${atWords(runWhen(last.at, now))}.${words === pill.label ? '' : ` ${sentence(words)}`}`, action: open }
+      case 'wait':
+        return { tone: 'wait', text: sentence(words), action: last.you_can_decide ? { kind: 'decide', runId: last.run_id } : open }
+      case 'new':
+        return { tone: 'new', text: `${words} now.`, action: open }
+      case 'ok':
+      case 'quiet':
+        break
     }
   }
-  if (last && pillOf(last).tone === 'new') return { tone: 'new', text: 'Running now.', action: null }
   const held = heldNote(useCase)
   if (held) return { tone: 'ok', text: held, action: null }
   if (!useCase.schedule) return { tone: 'ok', text: 'On. It has no schedule, so it runs when an Operator presses Run now.', action: null }
   return { tone: 'ok', text: `On. Next run ${nextRunWords(useCase, now)}.`, action: null }
+}
+
+/**
+ * Who says yes, as the sketch has it: "Any Approver but you, in Teams." Nobody says yes to their own work, so the owner is named,
+ * as "you" when it is the person reading. The whole rule is one tap away, in `ownWorkRule`.
+ */
+export function whoSaysYes(owner: string, viewer: Pick<Viewer, 'id'>, nameOf: NameOf): string {
+  return `Any Approver but ${owner === viewer.id ? 'you' : nameOf(owner)}, in Teams.`
+}
+
+/** The rule the approval gate keeps, in full: the people on a run can't approve it. A scheduled run starts as the schedule's owner. */
+export function ownWorkRule(schedule: Pick<NonNullable<UseCaseView['schedule']>, 'owner_name'> | null): string {
+  const started = schedule ? ` A scheduled run starts as ${schedule.owner_name}.` : ''
+  return `Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.${started}`
 }
 
 /** What Delete takes away, said before the person confirms. */
