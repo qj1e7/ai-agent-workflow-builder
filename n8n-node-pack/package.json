@@ -5,7 +5,7 @@
   "description": "Our n8n nodes. Each one calls only our platform's API, at the address and with the key in the container's environment.",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "manifest": "npm run build && node -e \"process.stdout.write(JSON.stringify(require('./dist/manifest').manifest(), null, 2) + '\\n')\" > node-types.json",
+    "manifest": "npm run build && node -e \"process.stdout.write(JSON.stringify(require('./dist/manifest').manifest(), null, 2) + '\\n')\" > node-types.json && cp node-types.json ../contracts/n8n/node-types.json",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run"

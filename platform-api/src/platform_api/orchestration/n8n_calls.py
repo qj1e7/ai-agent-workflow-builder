@@ -79,6 +79,7 @@ type Grade = Literal["safe", "writes_refused", "needs_a_fix"]
 
 START_LIFETIME = timedelta(seconds=240)
 """The node allows 60 s of clock skew and at most 300 s, so a start our API signs lives 240 s."""
+GITHUB_RELEASES = "github_releases"
 READ_LIMIT = 100
 """The most items one Read passes on (ADR 0027, long lists). It says when it stopped there."""
 
@@ -131,6 +132,23 @@ class OwnWorkflow:
     """Who has the workflow open in n8n now, if anyone."""
 
 
+@dataclass(frozen=True)
+class AgentToRun:
+    card_run: CardRun
+    release_of: str | None = None
+    """A repository whose newest release each change the agent proposes is about. Our API reads
+    that release itself and names it as the change's subject, so the same change is never made
+    twice across runs (ENGINE-PLAN 2.3.8)."""
+
+
+@dataclass(frozen=True)
+class CannotRun:
+    """The agent is known, but the block left out something it needs, such as where its write
+    lands. Nothing is filled in for it."""
+
+    detail: str
+
+
 class WorkflowFacts(Protocol):
     """What node calls need from the use case builder, which orchestration may not import."""
 
@@ -142,7 +160,9 @@ class WorkflowFacts(Protocol):
 
     async def agent_inputs(self, agent_id: str) -> Sequence[CardInput]: ...
 
-    async def agent_run(self, agent_id: str, values: Mapping[str, str]) -> CardRun | None: ...
+    async def agent_run(
+        self, agent_id: str, values: Mapping[str, str]
+    ) -> AgentToRun | CannotRun | None: ...
 
 
 @dataclass(frozen=True)
@@ -159,6 +179,21 @@ class SourceReads(Protocol):
     async def places(self, source: str) -> Sequence[NodeOption]: ...
 
     async def read(self, source: str, place: str, query: str | None) -> ReadItems | ReadFailed: ...
+
+
+class ReadSources:
+    """The Read block's sources: each named one answered by its own reader, any other by the
+    rest, so the editor's options and the check at run time ask the same reader."""
+
+    def __init__(self, own: Mapping[str, SourceReads], rest: SourceReads) -> None:
+        self._own = dict(own)
+        self._rest = rest
+
+    async def places(self, source: str) -> Sequence[NodeOption]:
+        return await self._own.get(source, self._rest).places(source)
+
+    async def read(self, source: str, place: str, query: str | None) -> ReadItems | ReadFailed:
+        return await self._own.get(source, self._rest).read(source, place, query)
 
 
 @dataclass(frozen=True)

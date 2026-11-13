@@ -21,7 +21,16 @@ from platform_api.orchestration.confluence_rest import (
     page_text,
 )
 from platform_api.orchestration.model_settings import SettingsState
-from platform_api.orchestration.n8n_calls import NodeCatalog, NodeOption, ReadCall, Refused
+from platform_api.orchestration.n8n_calls import (
+    GITHUB_RELEASES,
+    NodeCatalog,
+    NodeOption,
+    ReadCall,
+    ReadFailed,
+    ReadItems,
+    ReadSources,
+    Refused,
+)
 from platform_api.orchestration.teams import TeamsStub
 from platform_api.settings import ConfluencePage, ConfluenceSettings, settings_from_env
 from platform_api.wiring import approval_channel, connections_for
@@ -252,6 +261,37 @@ async def test_a_read_block_is_offered_and_may_name_only_the_allowed_pages(wiki:
     refused = await catalog.unknown_in(ReadCall(CONFLUENCE_PAGE, "999", None))
     assert refused == Refused(422, 'Our platform does not know the place "999".')
     assert wiki.seen == []
+
+
+class GitHubPlaces:
+    async def places(self, source: str) -> list[NodeOption]:
+        return (
+            [NodeOption("langchain-ai/langgraph", "LangGraph")] if source == GITHUB_RELEASES else []
+        )
+
+    async def read(self, source: str, place: str, query: str | None) -> ReadItems | ReadFailed:
+        return [{"kind": "release", "id": "1.2.16"}]
+
+
+async def test_a_read_block_reads_confluence_from_its_pages_and_github_as_before(wiki: FakeWiki):
+    sources = ReadSources({CONFLUENCE_PAGE: wiki.pages_allowed()}, GitHubPlaces())
+    catalog = NodeCatalog(NoFacts(), sources, [])  # type: ignore[arg-type]
+    assert [o.id for o in await catalog.options("places", {"source": CONFLUENCE_PAGE})] == [
+        "123456",
+        "777",
+    ]
+    assert await catalog.options("places", {"source": GITHUB_RELEASES}) == [
+        NodeOption("langchain-ai/langgraph", "LangGraph")
+    ]
+    assert (
+        await catalog.unknown_in(ReadCall(GITHUB_RELEASES, "langchain-ai/langgraph", None)) is None
+    )
+    assert await catalog.unknown_in(ReadCall(CONFLUENCE_PAGE, "999", None)) is not None
+    assert await sources.read(GITHUB_RELEASES, "langchain-ai/langgraph", None) == [
+        {"kind": "release", "id": "1.2.16"}
+    ]
+    [page] = await sources.read(CONFLUENCE_PAGE, "123456", None)  # type: ignore[misc]
+    assert page["title"] == "Software inventory"
 
 
 async def test_a_read_block_gets_the_page_as_one_item_with_its_text(wiki: FakeWiki):

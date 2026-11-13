@@ -2426,6 +2426,40 @@
         "title": "BlockView",
         "type": "object"
       },
+      "BuildLineKind": {
+        "enum": [
+          "status",
+          "check",
+          "note"
+        ],
+        "type": "string"
+      },
+      "BuildLineView": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "When it happened, for replaying the lines with their real gaps.",
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/BuildLineKind",
+            "description": "status: what the builder was doing. check: a check that passed. note: what the safety checker changed."
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "kind",
+          "text"
+        ],
+        "title": "BuildLineView",
+        "type": "object"
+      },
       "CannotDo": {
         "additionalProperties": false,
         "properties": {
@@ -6418,6 +6452,83 @@
           "message"
         ],
         "title": "ModelTrouble",
+        "type": "object"
+      },
+      "N8nBlockKind": {
+        "enum": [
+          "schedule",
+          "start",
+          "manual",
+          "error",
+          "read",
+          "agent",
+          "propose",
+          "ask",
+          "write",
+          "tell",
+          "report",
+          "branch",
+          "merge",
+          "end",
+          "other"
+        ],
+        "type": "string"
+      },
+      "N8nBlockView": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/N8nBlockKind",
+            "description": "What the block does: schedule, start (Start from the Portal), manual and error start a run; read, agent, propose, ask (Ask for a yes), write (Make the approved changes), tell and report are our blocks; branch (IF), merge and end (No Op) are n8n's; other is a block that is not on the allow list."
+          },
+          "name": {
+            "description": "The block's name, as n8n, the canvas and the run line show it.",
+            "title": "Name",
+            "type": "string"
+          },
+          "next": {
+            "description": "Where each of its exits leads.",
+            "items": {
+              "$ref": "#/components/schemas/N8nExitView"
+            },
+            "title": "Next",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "next"
+        ],
+        "title": "N8nBlockView",
+        "type": "object"
+      },
+      "N8nExitView": {
+        "additionalProperties": false,
+        "properties": {
+          "exit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which way out: true or false for an IF, the name of an Ask for a yes exit (No answer, Yes, No, Nothing to change), or null for a block with one way out.",
+            "title": "Exit"
+          },
+          "to": {
+            "description": "The block it leads to, by name.",
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "exit",
+          "to"
+        ],
+        "title": "N8nExitView",
         "type": "object"
       },
       "NeedsMeReply": {
@@ -11356,6 +11467,51 @@
       "UseCaseCreated": {
         "additionalProperties": false,
         "properties": {
+          "blocks": {
+            "description": "The draft's blocks in the order a run meets them. Empty with no draft in n8n.",
+            "items": {
+              "$ref": "#/components/schemas/N8nBlockView"
+            },
+            "title": "Blocks",
+            "type": "array"
+          },
+          "build_log": {
+            "description": "What happened while it was laid out in n8n, in order, in the set-up card's words. Empty with no draft in n8n.",
+            "items": {
+              "$ref": "#/components/schemas/BuildLineView"
+            },
+            "title": "Build Log",
+            "type": "array"
+          },
+          "grade": {
+            "anyOf": [
+              {
+                "enum": [
+                  "safe",
+                  "writes_refused",
+                  "needs_a_fix"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The safety checker's grade of the draft. Only a safe draft is saved, so it is safe whenever there is a draft.",
+            "title": "Grade"
+          },
+          "n8n_workflow_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The workflow of its own that holds it in n8n, saved as a draft. Null when this platform does not lay workflows out in n8n.",
+            "title": "N8N Workflow Id"
+          },
           "use_case_id": {
             "title": "Use Case Id",
             "type": "string"
@@ -11496,6 +11652,14 @@
               "$ref": "#/components/schemas/UseCaseAgentView"
             },
             "title": "Agents",
+            "type": "array"
+          },
+          "blocks": {
+            "description": "The blocks of this version's own workflow in n8n, in the order a run meets them, read from the workflow the platform keeps for the version. Empty for a workflow that runs on the shared n8n workflow.",
+            "items": {
+              "$ref": "#/components/schemas/N8nBlockView"
+            },
+            "title": "Blocks",
             "type": "array"
           },
           "created_at": {

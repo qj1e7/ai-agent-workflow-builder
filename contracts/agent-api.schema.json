@@ -2708,6 +2708,41 @@
       "title": "QuestionAnswer",
       "type": "object"
     },
+    "ReadReleasesRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "$ref": "#/$defs/RepoName",
+          "description": "The public GitHub repository, as owner/name."
+        },
+        "tag_pattern": {
+          "$ref": "#/$defs/TagPattern"
+        }
+      },
+      "required": [
+        "repo",
+        "tag_pattern"
+      ],
+      "title": "ReadReleasesRequest",
+      "type": "object"
+    },
+    "ReadReleasesResult": {
+      "discriminator": {
+        "mapping": {
+          "not_read": "#/$defs/ReleasesNotRead",
+          "read": "#/$defs/ReleasesRead"
+        },
+        "propertyName": "status"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ReleasesRead"
+        },
+        {
+          "$ref": "#/$defs/ReleasesNotRead"
+        }
+      ]
+    },
     "RefusedAnswer": {
       "additionalProperties": false,
       "properties": {
@@ -2741,6 +2776,97 @@
         "rest"
       ],
       "title": "RefusedAnswer",
+      "type": "object"
+    },
+    "ReleaseRead": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Name"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Published At"
+        },
+        "tag": {
+          "title": "Tag",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tag",
+        "name",
+        "published_at"
+      ],
+      "title": "ReleaseRead",
+      "type": "object"
+    },
+    "ReleasesNotRead": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "description": "What went wrong with GitHub, in plain words.",
+          "maxLength": 300,
+          "title": "Message",
+          "type": "string"
+        },
+        "retryable": {
+          "description": "True when trying again later may work.",
+          "title": "Retryable",
+          "type": "boolean"
+        },
+        "status": {
+          "const": "not_read",
+          "default": "not_read",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message",
+        "retryable"
+      ],
+      "title": "ReleasesNotRead",
+      "type": "object"
+    },
+    "ReleasesRead": {
+      "additionalProperties": false,
+      "properties": {
+        "releases": {
+          "description": "The repository's stable releases that the tag rule counts, newest first, as GitHub lists them. Empty when it has none.",
+          "items": {
+            "$ref": "#/$defs/ReleaseRead"
+          },
+          "maxItems": 30,
+          "title": "Releases",
+          "type": "array"
+        },
+        "status": {
+          "const": "read",
+          "default": "read",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "releases"
+      ],
+      "title": "ReleasesRead",
       "type": "object"
     },
     "RepoName": {
@@ -3886,6 +4012,12 @@
     "planner_choose_result": {
       "$ref": "#/$defs/ChooseResult"
     },
+    "releases_read_request": {
+      "$ref": "#/$defs/ReadReleasesRequest"
+    },
+    "releases_read_result": {
+      "$ref": "#/$defs/ReadReleasesResult"
+    },
     "software_find_request": {
       "$ref": "#/$defs/FindSoftwareRequest"
     },
@@ -3920,6 +4052,8 @@
     "planner_choose_result",
     "software_find_request",
     "software_find_result",
+    "releases_read_request",
+    "releases_read_result",
     "planner_answer_request",
     "planner_answer_result",
     "planner_check_part_request",

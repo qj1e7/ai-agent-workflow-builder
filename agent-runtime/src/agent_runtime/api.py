@@ -44,6 +44,8 @@ from agent_runtime.contract import (
     ModelAccess,
     ModelProblem,
     ModelTestResult,
+    ReadReleasesRequest,
+    ReadReleasesResult,
     TaskError,
     TaskFailed,
     TaskRequest,
@@ -59,6 +61,7 @@ from agent_runtime.jira import JiraReaderFor, PlatformJiraFor, no_jira
 from agent_runtime.model_access import ModelProbe, chat_for, summarizer_for
 from agent_runtime.origins import Origin, origin_of, parse_origin_list
 from agent_runtime.planner import FixedPlanner, Planner, run_cards, run_task
+from agent_runtime.release_source import ReleaseSource, releases_of
 from agent_runtime.summary import (
     ChatFor,
     ModelSummarizer,
@@ -260,6 +263,7 @@ class Runtime:
     chat_source: ChatSource = field(default=_chat_under_default_policy)
     github: GitHubCheck = field(default_factory=_anonymous_github)
     finder: SoftwareFinder | None = None
+    releases: ReleaseSource | None = None
 
 
 def build_summarizer(settings: Settings) -> Summarizer:
@@ -307,6 +311,7 @@ def build_runtime(settings: Settings) -> Runtime:
         chat_source=chat_source,
         github=GitHubConnection(settings.github_api_base, token=settings.github_token),
         finder=SoftwareFinder(source),
+        releases=source,
     )
 
 
@@ -449,6 +454,12 @@ def create_app(
         if active.finder is None:
             raise HTTPException(status_code=501, detail="this runtime does not find software")
         return active.finder.find(body.name, body.tag_pattern)
+
+    @app.post("/v1/releases/read", dependencies=[Depends(require_key)])
+    def read_releases(body: ReadReleasesRequest) -> ReadReleasesResult:
+        if active.releases is None:
+            raise HTTPException(status_code=501, detail="this runtime does not read releases")
+        return releases_of(active.releases, body.repo, body.tag_pattern)
 
     @app.post("/v1/models/connect", dependencies=[Depends(require_key)])
     def connect_model(body: ConnectRequest) -> ConnectResult:

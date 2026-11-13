@@ -253,6 +253,7 @@ locals {
           OIDC_AUDIENCE          = var.oidc_audience
           AGENT_RUNTIME_URL      = local.url["agent-runtime"]
           N8N_BASE_URL           = local.url["n8n"]
+          N8N_OWNER_EMAIL        = var.n8n_owner_email
           PLATFORM_INTERNAL_URL  = local.url["platform-api"]
           COSMOS_ENDPOINT        = module.cosmos.endpoint
           ACTIVITY_READER        = "cosmos"
@@ -276,6 +277,7 @@ locals {
           STEP_KEY                   = local.secret["step-key"]
           WAB_NODE_KEY               = local.secret["wab-node-key"]
           WAB_START_SECRET           = local.secret["wab-start-secret"]
+          N8N_OWNER_PASSWORD         = local.secret["n8n-owner-password"]
           CALLBACK_SIGNING_KEY       = local.secret["callback-signing-key"]
           SETTINGS_ENCRYPTION_KEY    = local.secret["settings-encryption-key"]
           COSMOS_KEY                 = local.secret["cosmos-key"]

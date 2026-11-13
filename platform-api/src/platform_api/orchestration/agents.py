@@ -422,6 +422,33 @@ type FindSoftwareResult = Annotated[
 find_software_result_adapter: TypeAdapter[FindSoftwareResult] = TypeAdapter(FindSoftwareResult)
 
 
+class ReadReleasesRequest(WireModel):
+    repo: RepoName
+    tag_pattern: str
+
+
+class ReleaseRead(WireModel):
+    tag: str
+    name: str | None
+    published_at: str | None
+
+
+class ReleasesRead(WireModel):
+    status: Literal["read"] = "read"
+    releases: list[ReleaseRead] = Field(max_length=30)
+
+
+class ReleasesNotRead(WireModel):
+    status: Literal["not_read"] = "not_read"
+    message: str = Field(max_length=300)
+    retryable: bool
+
+
+type ReadReleasesResult = Annotated[ReleasesRead | ReleasesNotRead, Field(discriminator="status")]
+
+read_releases_result_adapter: TypeAdapter[ReadReleasesResult] = TypeAdapter(ReadReleasesResult)
+
+
 type FactSection = Literal["watchlist", "workflows", "needs_you"]
 
 
@@ -795,6 +822,11 @@ class HttpAgentRuntime:
         self, request: FindSoftwareRequest
     ) -> FindSoftwareResult | AgentUnavailable | AgentRejected:
         return await self._model_call("/v1/software/find", request, find_software_result_adapter)
+
+    async def read_releases(
+        self, request: ReadReleasesRequest
+    ) -> ReadReleasesResult | AgentUnavailable | AgentRejected:
+        return await self._model_call("/v1/releases/read", request, read_releases_result_adapter)
 
     async def answer(
         self, request: AnswerRequest
