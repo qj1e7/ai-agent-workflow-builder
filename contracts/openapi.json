@@ -5123,21 +5123,8 @@
         "type": "object"
       },
       "FailureIn": {
-        "additionalProperties": false,
-        "description": "What the Error Trigger said about the execution that failed. Our API takes none of it as\nsaid: it checks that the block's own execution is one of our error workflow, and reads the\nfailed execution, its block and its words from n8n's own record.",
+        "description": "Which execution failed. The block also sends what the Error Trigger said about it, and\nour API drops all of that here: it checks that the block's own execution is one of our error\nworkflow, and reads the failed block and its words from n8n's own record.",
         "properties": {
-          "error_message": {
-            "anyOf": [
-              {
-                "maxLength": 2048,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error Message"
-          },
           "execution_id": {
             "maxLength": 128,
             "minLength": 1,
@@ -5159,56 +5146,6 @@
             ],
             "title": "Failed Execution Id"
           },
-          "failed_mode": {
-            "anyOf": [
-              {
-                "maxLength": 40,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Failed Mode"
-          },
-          "failed_workflow_id": {
-            "anyOf": [
-              {
-                "maxLength": 128,
-                "minLength": 1,
-                "pattern": "^[A-Za-z0-9_.:-]+$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Failed Workflow Id"
-          },
-          "failed_workflow_name": {
-            "anyOf": [
-              {
-                "maxLength": 2048,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Failed Workflow Name"
-          },
-          "last_node_executed": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Node Executed"
-          },
           "mode": {
             "maxLength": 40,
             "minLength": 1,
@@ -5220,20 +5157,6 @@
             "minLength": 1,
             "title": "Node Name",
             "type": "string"
-          },
-          "retry_of": {
-            "anyOf": [
-              {
-                "maxLength": 128,
-                "minLength": 1,
-                "pattern": "^[A-Za-z0-9_.:-]+$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Retry Of"
           },
           "workflow_id": {
             "anyOf": [

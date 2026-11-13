@@ -2,7 +2,7 @@
 reads only, nothing in a test run, and never twice."""
 
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
@@ -25,7 +25,21 @@ from platform_api.orchestration.n8n_calls import (
     Refused,
     TellCall,
 )
-from platform_api.orchestration.runs import Outcome, Pending, Succeeded, WriteDone
+from platform_api.orchestration.runs import (
+    Expired,
+    Failed,
+    Failure,
+    FailureReason,
+    Lost,
+    Outcome,
+    Pending,
+    Rejected,
+    ResumeWork,
+    RunState,
+    Stage,
+    Succeeded,
+    WriteDone,
+)
 from platform_api.orchestration.store import RunRecord, Store
 from platform_api.orchestration.tell import (
     REACH,
@@ -36,7 +50,7 @@ from platform_api.orchestration.tell import (
     Told,
     compose,
 )
-from platform_api.shared import N8nExecutionId, RunId, UserId
+from platform_api.shared import ApprovalId, N8nExecutionId, ProposalId, RunId, UserId
 from tests.conftest import PostgresUrls
 from tests.declared import NODE_KEY, NODE_KEY_ENV, FakeNodeCalls, app_with, declared_status
 from tests.support import NOW, SPEC
@@ -59,6 +73,15 @@ BOTH = TellCall("both", "result")
 READ = ReadCall("github_releases", REPO, None)
 COMPARE = AgentCall(CARD.id, {"Project": "MOCK"})
 MADE = (WriteDone("jira", "create_ticket", "MOCK-142", (UserId("bob"),)),)
+PRP, APR = ProposalId("prp_1"), ApprovalId("apr_1")
+ENDINGS: dict[str, Callable[[RunId], RunState]] = {
+    "rejected": lambda run: Rejected(run, PRP, APR, UserId("bob"), 1),
+    "expired": lambda run: Expired(run, PRP, APR),
+    "failed": lambda run: Failed(
+        run, Stage.WORKING, Failure(FailureReason.AGENT_ERROR, "boom", True), ResumeWork(2)
+    ),
+    "lost": lambda run: Lost(run, PRP, APR),
+}
 
 
 @dataclass
@@ -115,11 +138,14 @@ class Tells:
         await self.call(execution, READ, "Read release")
         await self.call(execution, COMPARE, "Compare")
 
-    async def made(self) -> None:
-        """What E2d's write does: the gateway made the changes and the run succeeded."""
+    async def end(self, ending: Callable[[RunId], RunState]) -> None:
         async with self.h.db.transaction("orchestration") as uow:
             [run] = await Store().list_runs(uow)
-            await Store().save_run(uow, run, Succeeded(run.run_id, Outcome.WRITTEN, MADE))
+            await Store().save_run(uow, run, ending(run.run_id))
+
+    async def made(self) -> None:
+        """What E2d's write does: the gateway made the changes and the run succeeded."""
+        await self.end(lambda run: Succeeded(run, Outcome.WRITTEN, MADE))
 
 
 def tell_platform(
@@ -209,6 +235,29 @@ async def test_a_tell_after_success_comes_only_from_the_execution_that_carried_t
     assert await t.tell("102") == Told(
         "sent", "Posted to CODESparks Ops and emailed the team's list."
     )
+
+
+@pytest.mark.parametrize("ending", ["rejected", "expired"])
+async def test_a_tell_after_a_no_or_no_answer_says_nothing_was_written(t: Tells, ending: str):
+    """Plan 2.3.6 leaves the No exit open for a Tell. It reports what was read, and no change."""
+    t.started("101")
+    await t.read_and_compare("101")
+    await t.end(ENDINGS[ending])
+    assert await t.tell() == Told("sent", "Posted to CODESparks Ops and emailed the team's list.")
+    [post] = t.flow.posts
+    card = json.dumps(post["attachments"])
+    assert "Nothing was written." in card and "Nothing was written." in post["emailHtml"]
+    assert "Made after a yes" not in json.dumps(post)
+
+
+@pytest.mark.parametrize("ending", ["failed", "lost"])
+async def test_a_tell_after_a_failed_or_lost_run_is_refused(t: Tells, ending: str):
+    t.started("101")
+    await t.read_and_compare("101")
+    await t.end(ENDINGS[ending])
+    refused = await t.tell()
+    assert isinstance(refused, Refused) and refused.status == 409
+    assert t.flow.posts == []
 
 
 async def test_a_tell_with_nothing_read_is_refused_and_sends_nothing(t: Tells):

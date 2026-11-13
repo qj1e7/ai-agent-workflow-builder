@@ -22,7 +22,14 @@ from typing import Any, Literal, Protocol, cast
 import httpx
 
 from platform_api.db import Database, json
-from platform_api.orchestration.runs import WriteDone
+from platform_api.orchestration.runs import (
+    NO_ANSWER,
+    Expired,
+    Rejected,
+    RunState,
+    Succeeded,
+    WriteDone,
+)
 from platform_api.orchestration.teams import (
     LINES_SHOWN,
     SUMMARY_LIMIT,
@@ -50,6 +57,7 @@ SUBJECT_LIMIT = 200
 LABEL_LIMIT = 200
 THE_LIST = "the team's list"
 MADE = "Made after a yes"
+DECLINED = "Declined. Nothing was written."
 
 
 @dataclass(frozen=True)
@@ -119,6 +127,31 @@ def made_parts(made: Sequence[WriteDone]) -> tuple[NoticePart, ...]:
     return (NoticePart(MADE, lead, tuple(done.external_reference for done in made)),)
 
 
+@dataclass(frozen=True)
+class Ending:
+    """What came of the run's yes, for a Tell placed after Ask for a yes: what the gateway made,
+    or our own words that nothing was written."""
+
+    made: tuple[WriteDone, ...] = ()
+    said: str | None = None
+
+
+NO_ENDING = Ending()
+
+
+def ending_of(state: RunState) -> Ending:
+    """Plan 2.3.6 leaves the No exit open for a Tell, and No answer ends the same way."""
+    match state:
+        case Succeeded(written=written):
+            return Ending(made=written)
+        case Rejected():
+            return Ending(said=DECLINED)
+        case Expired():
+            return Ending(said=NO_ANSWER)
+        case _:
+            return NO_ENDING
+
+
 def something_to_report(results: Sequence[BlockResult], made: Sequence[WriteDone] = ()) -> bool:
     """A change made after a yes, an agent's findings, or what was read when no agent ran."""
     if made:
@@ -153,7 +186,7 @@ class TellMessage:
         return body
 
 
-def _card(use_case_name: str, parts: Sequence[NoticePart]) -> AdaptiveCard:
+def _card(use_case_name: str, parts: Sequence[NoticePart], said: str | None) -> AdaptiveCard:
     body: list[CardElement] = [
         _runs(_plain(use_case_name, weight="bolder"), TextRun(text=": what this run found."))
     ]
@@ -163,6 +196,8 @@ def _card(use_case_name: str, parts: Sequence[NoticePart]) -> AdaptiveCard:
         more = len(part.lines) - LINES_SHOWN
         if more > 0:
             body.append(_runs(TextRun(text=f"And {more} more.")))
+    if said is not None:
+        body.append(TextBlock(text=said))
     body.append(TextBlock(text=SIGN_OFF))
     return AdaptiveCard(fallbackText=FALLBACK, body=body, actions=[])
 
@@ -171,7 +206,7 @@ def _escaped(text: str, limit: int = SUMMARY_LIMIT) -> str:
     return html.escape(one_line(inert(text), limit))
 
 
-def _email(use_case_name: str, parts: Sequence[NoticePart]) -> Email:
+def _email(use_case_name: str, parts: Sequence[NoticePart], said: str | None) -> Email:
     subject = one_line(inert(f"{use_case_name}: what this run found"), SUBJECT_LIMIT)
     sections: list[str] = [f"<h2>{_escaped(use_case_name)}</h2>", "<p>What this run found.</p>"]
     for part in parts:
@@ -179,6 +214,8 @@ def _email(use_case_name: str, parts: Sequence[NoticePart]) -> Email:
         if part.lines:
             items = "".join(f"<li>{_escaped(line, LABEL_LIMIT)}</li>" for line in part.lines)
             sections.append(f"<ul>{items}</ul>")
+    if said is not None:
+        sections.append(f"<p>{html.escape(said)}</p>")
     sections.append(f"<p>{SIGN_OFF}</p>")
     return Email(subject, "".join(sections))
 
@@ -187,13 +224,13 @@ def compose(
     use_case_name: str,
     results: Sequence[BlockResult],
     reach: Reach,
-    made: Sequence[WriteDone] = (),
+    ending: Ending = NO_ENDING,
 ) -> TellMessage:
     """The notice, from the run's stored results and the gateway's records only."""
-    parts = notice_parts(results) + made_parts(made)
+    parts = notice_parts(results) + made_parts(ending.made)
     return TellMessage(
-        _card(use_case_name, parts) if reach.card else None,
-        _email(use_case_name, parts) if reach.email else None,
+        _card(use_case_name, parts, ending.said) if reach.card else None,
+        _email(use_case_name, parts, ending.said) if reach.email else None,
     )
 
 

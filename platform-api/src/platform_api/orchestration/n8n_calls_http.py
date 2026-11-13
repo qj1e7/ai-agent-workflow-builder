@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, R
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from platform_api.orchestration.cards import BODY_LIMIT, TITLE_LIMIT
 from platform_api.orchestration.dispatch import resume_path
@@ -152,22 +152,14 @@ class TellOut(WireModel):
     line: str = Field(description="What the block did, in the words the Portal shows.")
 
 
-ERROR_TEXT_LIMIT = 2048
-"""Report a failure cuts the error and the workflow's name to 2 KB."""
-
-
 class FailureIn(_From):
-    """What the Error Trigger said about the execution that failed. Our API takes none of it as
-    said: it checks that the block's own execution is one of our error workflow, and reads the
-    failed execution, its block and its words from n8n's own record."""
+    """Which execution failed. The block also sends what the Error Trigger said about it, and
+    our API drops all of that here: it checks that the block's own execution is one of our error
+    workflow, and reads the failed block and its words from n8n's own record."""
+
+    model_config = ConfigDict(extra="ignore")
 
     failed_execution_id: Token | None = None
-    failed_mode: str | None = Field(default=None, max_length=40)
-    retry_of: Token | None = None
-    last_node_executed: str | None = Field(default=None, max_length=200)
-    error_message: str | None = Field(default=None, max_length=ERROR_TEXT_LIMIT)
-    failed_workflow_id: Token | None = None
-    failed_workflow_name: str | None = Field(default=None, max_length=ERROR_TEXT_LIMIT)
 
 
 class FailureOut(WireModel):

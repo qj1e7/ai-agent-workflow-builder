@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from platform_api.db import json
 from platform_api.orchestration.n8n_call_service import (
     CallBook,
     FailedRun,
@@ -34,6 +35,7 @@ from platform_api.orchestration.runs import (
     Outcome,
     Pending,
     RunState,
+    Stage,
     Succeeded,
 )
 from platform_api.orchestration.store import RunRecord, Store
@@ -195,6 +197,47 @@ async def test_a_report_for_a_run_that_passed_its_test_up_to_the_yes_changes_not
     result = await r.report(node="Ask for a yes", message="Test run passed up to the yes.")
     assert isinstance(result, LeftAsIs)
     assert await r.state() == Succeeded(run_id, Outcome.TEST_PASSED, ())
+
+
+async def acting_with_a_write(r: Reports, in_flight: bool) -> RunState:
+    """The run took its yes in execution 101, whose Make the approved changes has called."""
+    r.started("101")
+    await r.call("101", READ, "Read release")
+    [run] = await r.runs()
+    acting = Acting(
+        run.run_id, ProposalId("prp_1"), ApprovalId("apr_1"), 1, N8nExecutionId("101"), NOW
+    )
+    answer = None if in_flight else json({"made": 1, "of": 2})
+    async with r.h.db.transaction("orchestration") as uow:
+        await Store().save_run(uow, run, acting)
+        await uow.conn.execute(
+            "INSERT INTO orchestration.node_calls (execution_id, node_name, run_id, kind, "
+            "content_hash, attempts, outcome, call_id, claimed_at, answer, answered_at) "
+            "VALUES ('101', 'Make the approved changes', %s, 'write', 'h', 1, %s, 'c_w', %s, "
+            "%s, %s)",
+            (
+                run.run_id,
+                "working" if in_flight else "answered",
+                NOW,
+                answer,
+                None if in_flight else NOW,
+            ),
+        )
+    return acting
+
+
+async def test_a_report_during_a_live_write_leaves_the_run_to_the_writes_outcome(r: Reports):
+    """The run never reads failed and retryable while its changes are being made."""
+    acting = await acting_with_a_write(r, in_flight=True)
+    assert isinstance(await r.report(node="Make the approved changes"), LeftAsIs)
+    assert await r.state() == acting
+
+
+async def test_a_report_for_an_acting_run_with_no_write_in_flight_fails_it(r: Reports):
+    await acting_with_a_write(r, in_flight=False)
+    assert isinstance(await r.report(node="Make the approved changes"), FailedRun)
+    state = await r.state()
+    assert isinstance(state, Failed) and state.stage is Stage.ACTING
 
 
 async def test_a_report_for_a_run_that_succeeded_changes_nothing(r: Reports):
@@ -387,6 +430,15 @@ def test_the_failure_route_takes_reports_only_with_the_node_key():
     client = TestClient(app_with(env=NODE_KEY_ENV, node_calls=calls))
     assert client.post("/internal/v1/n8n/failures", json=REPORT).status_code == 401
     assert calls.reports == []
+
+
+def test_the_reports_words_are_dropped_at_the_route_and_never_checked_or_passed_on():
+    calls = FakeNodeCalls()
+    client = TestClient(app_with(env=NODE_KEY_ENV, node_calls=calls))
+    body = {**REPORT, "error_message": "x" * 10_000, "last_node_executed": "Anything"}
+    response = client.post("/internal/v1/n8n/failures", headers=NODE_KEY, json=body)
+    assert response.status_code == 200
+    assert calls.reports == [(REPORTER, N8nExecutionId("101"))]
 
 
 def test_a_report_with_no_failed_execution_changes_nothing():

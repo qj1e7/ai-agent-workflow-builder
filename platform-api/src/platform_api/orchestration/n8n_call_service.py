@@ -89,12 +89,15 @@ from platform_api.orchestration.n8n_calls import (
     unknown,
 )
 from platform_api.orchestration.runs import (
+    Acting,
     AwaitingApproval,
+    Expired,
     Failed,
     Failure,
     FailureReason,
     Moved,
     Pending,
+    Rejected,
     RunState,
     Skipped,
     Succeeded,
@@ -127,6 +130,7 @@ from platform_api.orchestration.tell import (
     TellOutlet,
     Told,
     compose,
+    ending_of,
     not_confirmed_line,
     sent_line,
     something_to_report,
@@ -401,6 +405,18 @@ class CallBook:
             "WHERE call_id = %s AND outcome = 'answered' AND answer ->> 'status' = 'sending'",
             (json(_stored(told)), uow.now, call_id),
         )
+
+    async def writing(self, uow: UnitOfWork, execution: N8nExecutionId) -> bool:
+        """Whether a Make the approved changes block of this execution is still making its
+        changes."""
+        row = await (
+            await uow.conn.execute(
+                "SELECT 1 FROM orchestration.node_calls WHERE execution_id = %s "
+                "AND kind = 'write' AND outcome = 'working' LIMIT 1",
+                (execution,),
+            )
+        ).fetchone()
+        return row is not None
 
     async def carried_last(self, uow: UnitOfWork, run_id: RunId, execution: N8nExecutionId) -> bool:
         """Whether the run's newest execution is this one, so the one that carried it to its
@@ -707,7 +723,10 @@ class NodeCalls:
             read = await self._book.results_in_run(uow, run_id)
             words = failure_words(failed, read_anything=bool(read))
             failure = Failure(FailureReason.WORKFLOW_NODE_ERROR, words, retryable=True)
-            moved = fail_by_report(record.state, execution, failure)
+            writing = await self._book.writing(uow, execution)
+            moved = fail_by_report(record.state, execution, failure, writing)
+            if moved is None and writing and isinstance(record.state, Acting):
+                return LeftAsIs("Its changes are being made, so the write's own outcome decides.")
             if moved is None:
                 return LeftAsIs(f"The run is {state_name(record.state)}, so it stays as it is.")
             await self._commit(uow, record, moved)
@@ -783,7 +802,7 @@ class NodeCalls:
                 return skipped
             case Working(execution=live) if live == call.execution_id:
                 record = await self._touch_record(uow, record)
-            case Succeeded() if call.kind == "tell":
+            case Succeeded() | Rejected() | Expired() if call.kind == "tell":
                 if not await self._book.carried_last(uow, run_id, call.execution_id):
                     return await self._refuse(uow, call, run_id, ANOTHER_EXECUTION)
             case Working():
@@ -1029,7 +1048,7 @@ class NodeCalls:
         read, with what the gateway made after a yes once the run has succeeded, and sent
         nowhere in a test run. A Tell keeps each of its answers here, a refusal too."""
         record = admitted.record
-        made = record.state.written if isinstance(record.state, Succeeded) else ()
+        ending = ending_of(record.state)
         async with self._db.transaction("orchestration") as uow:
             results = await self._book.results_in_run(uow, record.run_id)
             test = record.spec.stops_at_gate or await self._book.started_as_test(uow, record.run_id)
@@ -1038,14 +1057,16 @@ class NodeCalls:
         if self._tells is None:
             return await self._keep_tell(admitted, call, NO_TELL_FLOW)
         reach = REACH[tell.where]
-        if tell.what == "only_when_something_to_report" and not something_to_report(results, made):
+        if tell.what == "only_when_something_to_report" and not something_to_report(
+            results, ending.made
+        ):
             return await self._keep_tell(
                 admitted, call, Told("nothing_to_report", NOTHING_TO_REPORT)
             )
         if test:
             line = would_have_line(reach, self._tells.channel)
             return await self._keep_tell(admitted, call, Told("would_have_sent", line))
-        message = compose(record.spec.use_case_name, results, reach, made)
+        message = compose(record.spec.use_case_name, results, reach, ending)
         return await self._send(admitted, call, self._tells, message, reach)
 
     async def _keep_tell(

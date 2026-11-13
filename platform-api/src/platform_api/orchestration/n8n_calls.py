@@ -458,14 +458,17 @@ def failure_words(failed: FailedExecution, read_anything: bool) -> str:
 
 
 def fail_by_report(
-    state: RunState, execution: N8nExecutionId, failure: Failure
+    state: RunState, execution: N8nExecutionId, failure: Failure, writing: bool
 ) -> Moved[Failed] | None:
     """A failed execution fails the run only while it carries the run. A run that has ended
     stays as it ended, so a test run that passed up to the yes is not failed by its stop at the
     gate. A run that moved on, to another execution or to an attempt nobody carries yet, is not
     failed by an earlier attempt's execution. An execution linked in the same call carries the
-    run, so a run that stopped before reading is still failed."""
+    run, so a run that stopped before reading is still failed. While the run's changes are being
+    made, the write's own outcome decides, so the run never reads failed and retryable then."""
     match state:
+        case Acting() if writing:
+            return None
         case Pending() | Working() | Proposed() | Acting() if holder_of(state) == execution:
             return state.fail(failure)
         case _:
