@@ -1,17 +1,33 @@
 import { createContext, useContext } from 'react'
 
 /**
- * The one item the side panel shows (spec 3.3). A run waiting for a yes shows its approval, so an approval opens as its run.
- * The chat holds it, never the address.
+ * The one thing the side panel shows (spec 3.3). The lists and the needs have no id. A run waiting for a yes is an approval, and
+ * shows the run's content until its own view lands. The chat holds it, never the address.
  */
-export interface PanelItem {
-  readonly kind: 'workflow' | 'run' | 'software'
-  readonly id: string
+export type PanelItem =
+  | { readonly kind: 'needs' | 'workflows' | 'watchlist'; readonly id?: undefined }
+  | { readonly kind: 'workflow' | 'run' | 'approval' | 'software' | 'connection' | 'build'; readonly id: string }
+
+export const panelKey = (item: PanelItem): string => `${item.kind}:${item.id ?? ''}`
+
+export const sameItem = (shown: PanelItem | null, item: PanelItem): boolean => shown !== null && panelKey(shown) === panelKey(item)
+
+/** Only the build view needs the room: the chat narrows to a column and the panel takes the rest (the sketch's `.wide`). */
+export const isWide = (item: PanelItem): boolean => item.kind === 'build'
+
+/** What Back says for the item it returns to. A list's title is fixed. A single item's name is read from its data, so the panel uses its own. */
+const BACK_TITLES: Readonly<Record<PanelItem['kind'], string>> = {
+  needs: 'Needs you',
+  workflows: 'Workflows',
+  watchlist: 'Watchlist',
+  workflow: 'Workflow',
+  run: 'The run',
+  approval: 'Approval',
+  software: 'Software',
+  connection: 'Connection',
+  build: 'Build',
 }
-
-export const panelKey = (item: PanelItem): string => `${item.kind}:${item.id}`
-
-export const sameItem = (shown: PanelItem | null, item: PanelItem): boolean => shown !== null && shown.kind === item.kind && shown.id === item.id
+export const backTitle = (item: PanelItem): string => BACK_TITLES[item.kind]
 
 /** What the panel's bar says: the item's title, and where More details goes, or null when the item has no page to open. */
 export interface PanelHead {
@@ -22,6 +38,8 @@ export interface PanelHead {
 export interface PanelOpener {
   readonly shown: PanelItem | null
   readonly open: (item: PanelItem, from: HTMLElement) => void
+  /** Shows the item beside the chat without moving focus, as an answer does on a wide screen. */
+  readonly show: (item: PanelItem) => void
 }
 
 /** In the chat's thread and its pinned line, an item opens in the side panel. Anywhere else, the side panel included, it opens as its page. */
