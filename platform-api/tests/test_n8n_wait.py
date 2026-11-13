@@ -26,7 +26,8 @@ from platform_api.orchestration.approvals import (
 from platform_api.orchestration.dispatch import N8nWaker
 from platform_api.orchestration.jira import PRACTICE_SITE
 from platform_api.orchestration.model_settings import KeyBox
-from platform_api.orchestration.n8n_call_service import CallBook, NodeCalls
+from platform_api.orchestration.n8n_call_book import CallBook
+from platform_api.orchestration.n8n_call_service import NodeCalls
 from platform_api.orchestration.n8n_calls import (
     TEST_RUN_STOPS,
     AskCall,
