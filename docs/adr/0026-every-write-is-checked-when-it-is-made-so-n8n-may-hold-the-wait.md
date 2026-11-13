@@ -4,6 +4,8 @@ status: accepted
 
 # Every write is checked when it is made, so n8n may hold the wait
 
+> Amended by ADR 0045 (14 Nov 2026): n8n's own nodes may read and post notices with credentials the platform owns; a write by one of n8n's own nodes may happen only through the platform's write proxy, which checks our records at the moment of writing, and no such node is on the list yet.
+
 The sponsor wants his staff to change how workflows run in n8n, to build new ones there, and to see the agents there (ADR 0027). ADR 0007 kept n8n from holding anything that matters: every node calls our step API, and our API owns every pause. Once staff can edit an n8n workflow, they can change the route a run takes, so safety can no longer depend on that route. This changes the approval gate, so `AGENTS.md` requires an ADR.
 
 So the check moves to the moment of writing. The write gateway (ADR 0008) carries out a run's proposal only when our API's own records show all of these:
