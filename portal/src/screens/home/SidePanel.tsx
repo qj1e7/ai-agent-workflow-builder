@@ -16,6 +16,7 @@ import { NeedsPanel } from './panels/NeedsPanel'
 import { OpensBeside } from './panels/Opens'
 import styles from './SidePanel.module.css'
 
+export const PANEL_ID = 'side-panel'
 export const PANEL_HEADING = 'side-panel-h'
 
 /** The run's view brings the run page's line and live feed, which load on demand, as the run page does. */
@@ -115,7 +116,7 @@ export function SidePanel({ item, back = null, now, narrow, onClose, onBack, onO
   }, [])
 
   return (
-    <div ref={panel} id="side-panel" className={cx(styles['panel'], isWide(item) && styles['wide'])} data-panel={item.kind} data-wide={isWide(item) || undefined} role={narrow ? 'dialog' : 'complementary'} aria-modal={narrow || undefined} aria-labelledby={PANEL_HEADING}>
+    <div ref={panel} id={PANEL_ID} className={cx(styles['panel'], isWide(item) && styles['wide'])} data-panel={item.kind} data-wide={isWide(item) || undefined} role={narrow ? 'dialog' : 'complementary'} aria-modal={narrow || undefined} aria-labelledby={PANEL_HEADING}>
       <div className={styles['bar']}>
         <h2 ref={heading} id={PANEL_HEADING} tabIndex={-1}>
           {head.title}

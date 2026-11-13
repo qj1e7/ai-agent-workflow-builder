@@ -3,11 +3,11 @@ import type { HomeOut } from '../../api/types'
 import { cx } from '../../ui/cx'
 import { InChat } from '../../ui/fromChat'
 import { NARROW, useMediaQuery } from '../../ui/media'
-import { isWide, openerAfterClose, OpensInPanel, panelKey, type PanelItem, type PanelOpener } from '../../ui/sidePanel'
+import { focusAfterClose, isWide, OpensInPanel, panelKey, type PanelItem, type PanelOpener } from '../../ui/sidePanel'
 import type { Page } from './AnswerCards'
 import { useChat, type OpenPanel } from './ChatProvider'
 import { PinnedLine } from './PinnedLine'
-import { PANEL_HEADING, SidePanel } from './SidePanel'
+import { PANEL_HEADING, PANEL_ID, SidePanel } from './SidePanel'
 import { Thread } from './Thread'
 import { isAnswer } from './threadState'
 import styles from './Planner.module.css'
@@ -109,7 +109,7 @@ export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewPro
   const narrow = useMediaQuery(NARROW)
   const { panel, openPanel, pushPanel, backPanel, closePanel } = chat
   const opened = useRef(false)
-  const closed = useRef<OpenPanel | null>(null)
+  const closed = useRef<{ readonly panel: OpenPanel; readonly lost: boolean } | null>(null)
 
   const shown = panel?.item ?? null
   const opener = useMemo<PanelOpener>(
@@ -119,7 +119,7 @@ export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewPro
         opened.current = true
         openPanel(item, Math.max(0, openersOf(column.current, item).indexOf(from)))
       },
-      show: (item) => openPanel(item, 0),
+      show: (item) => openPanel(item, null),
     }),
     [openPanel, shown],
   )
@@ -137,7 +137,7 @@ export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewPro
     backPanel()
   }, [backPanel])
 
-  // Opening moves focus to the panel's heading. Closing hands it back to what opened the panel, which shows again now.
+  // Opening moves focus to the panel's heading. Closing moves it only when the panel held it.
   useEffect(() => {
     if (opened.current && panel) {
       opened.current = false
@@ -146,12 +146,14 @@ export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewPro
     const was = closed.current
     if (!was || panel) return
     closed.current = null
-    const back = openerAfterClose(openersOf(column.current, was.root), was.from) ?? document.getElementById('planner-box')
-    back?.focus({ preventScroll: true })
+    const box = document.getElementById('planner-box')
+    focusAfterClose({ openers: openersOf(column.current, was.panel.root), from: was.panel.from, lost: was.lost, box })?.focus({ preventScroll: true })
   }, [panel])
 
   const close = () => {
-    closed.current = panel
+    if (!panel) return
+    const active = document.activeElement
+    closed.current = { panel, lost: active === null || active === document.body || Boolean(document.getElementById(PANEL_ID)?.contains(active)) }
     closePanel()
   }
 

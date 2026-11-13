@@ -11,10 +11,10 @@ export interface Desk {
   readonly panel: PanelState | null
 }
 
-/** The items the side panel has shown since the chat opened it, the first at the bottom. `from` is the chat control that opened the first. */
+/** The items the side panel has shown since the chat opened it, the first at the bottom. `from` is the chat control that opened the first, or null when an answer showed it. */
 export interface PanelState {
   readonly stack: readonly PanelItem[]
-  readonly from: number
+  readonly from: number | null
 }
 
 /** The side panel keeps only a short history, enough for Back from an item to its list. */
@@ -36,20 +36,20 @@ export type DeskAction =
   | { readonly type: 'problem'; readonly problem: string | null }
   | { readonly type: 'note'; readonly text: string }
   | { readonly type: 'note_read' }
-  | { readonly type: 'panel_open'; readonly item: PanelItem; readonly from: number }
+  | { readonly type: 'panel_open'; readonly item: PanelItem; readonly from: number | null }
   | { readonly type: 'panel_push'; readonly item: PanelItem }
   | { readonly type: 'panel_back' }
   | { readonly type: 'panel_close' }
 
 /** What the side panel shows, and the item Back returns to, or null when it is closed. */
-export function panelOf(panel: PanelState | null): { readonly item: PanelItem; readonly from: number; readonly previous: PanelItem | null; readonly root: PanelItem } | null {
+export function panelOf(panel: PanelState | null): { readonly item: PanelItem; readonly from: number | null; readonly previous: PanelItem | null; readonly root: PanelItem } | null {
   const item = panel?.stack.at(-1)
   if (!panel || !item) return null
   return { item, from: panel.from, previous: panel.stack.at(-2) ?? null, root: panel.stack[0] ?? item }
 }
 
 function pushed(panel: PanelState | null, item: PanelItem): PanelState {
-  if (!panel) return { stack: [item], from: 0 }
+  if (!panel) return { stack: [item], from: null }
   const key = panelKey(item)
   const held = panel.stack.findIndex((held) => panelKey(held) === key)
   const stack = held >= 0 ? panel.stack.slice(0, held + 1) : [...panel.stack, item].slice(-HISTORY_MAX)

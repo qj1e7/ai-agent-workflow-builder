@@ -13,7 +13,7 @@ import { createDevSession } from '../../api/session'
 import type { CapabilitiesView, HomeOut, Me, UseCaseView, WatchlistView } from '../../api/types'
 import { InChat } from '../../ui/fromChat'
 import { escapeIsFree } from '../../ui/escape'
-import { openerAfterClose, wrapTab, type PanelItem } from '../../ui/sidePanel'
+import { focusAfterClose, wrapTab, type PanelItem } from '../../ui/sidePanel'
 import { countLine } from '../software/software'
 import { needsTotal } from './home'
 import { SidePanel } from './SidePanel'
@@ -226,10 +226,19 @@ describe('closing the side panel', () => {
     expect(escapeIsFree({ ...ESCAPE, defaultPrevented: true }, false)).toBe(false)
   })
 
-  it('hands focus back to the control that opened it, else another way to open the same item', () => {
-    expect(openerAfterClose(['card', 'pinned line'], 1)).toBe('pinned line')
-    expect(openerAfterClose(['card'], 1)).toBe('card')
-    expect(openerAfterClose([], 0)).toBeNull()
+  it('hands the focus it held back to the control that opened it, else another way to open the same item, else the box', () => {
+    expect(focusAfterClose({ openers: ['card', 'pinned line'], from: 1, lost: true, box: 'box' })).toBe('pinned line')
+    expect(focusAfterClose({ openers: ['card'], from: 1, lost: true, box: 'box' })).toBe('card')
+    expect(focusAfterClose({ openers: [], from: 0, lost: true, box: 'box' })).toBe('box')
+  })
+
+  it('leaves focus the person put outside it, such as in the box, where it is', () => {
+    expect(focusAfterClose({ openers: ['strip’s Open', 'card'], from: 1, lost: false, box: 'box' })).toBeNull()
+    expect(focusAfterClose({ openers: ['strip’s Open', 'card'], from: null, lost: false, box: 'box' })).toBeNull()
+  })
+
+  it('sends the focus of a panel an answer showed by itself to the box, never to the first way to open it', () => {
+    expect(focusAfterClose({ openers: ['strip’s Open', 'card'], from: null, lost: true, box: 'box' })).toBe('box')
   })
 })
 

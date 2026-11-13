@@ -13,8 +13,8 @@ export const DRAFT_SAVED = 'Your draft is saved. Find it on Workflows.'
 
 export interface OpenPanel {
   readonly item: PanelItem
-  /** Which of the chat's ways to open the item was pressed, counted in page order, so Close hands focus back to it. */
-  readonly from: number
+  /** Which of the chat's ways to open the item was pressed, counted in page order, so Close hands focus back to it. Null when an answer showed it. */
+  readonly from: number | null
   /** The item Back returns to, when the panel was opened from inside another, such as an item from its list. */
   readonly previous: PanelItem | null
   /** The first item, which the chat's control opened, so Close hands focus back to that control. */
@@ -45,7 +45,7 @@ export interface Chat {
   readonly cardMemory: (messageId: number) => CardMemory
   /** What the side panel shows beside the chat. It is kept across pages, so a page opened from the panel comes back to it. */
   readonly panel: OpenPanel | null
-  readonly openPanel: (item: PanelItem, from: number) => void
+  readonly openPanel: (item: PanelItem, from: number | null) => void
   /** Opens an item from inside the panel, keeping the panel's current item behind it for Back. */
   readonly pushPanel: (item: PanelItem) => void
   readonly backPanel: () => void
@@ -71,7 +71,7 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
   const busy = isThinking(thread)
 
   const act = useCallback((owner: string) => (action: DeskAction) => dispatch({ user: owner, action }), [])
-  const openPanel = useCallback((item: PanelItem, from: number) => act(user)({ type: 'panel_open', item, from }), [act, user])
+  const openPanel = useCallback((item: PanelItem, from: number | null) => act(user)({ type: 'panel_open', item, from }), [act, user])
   const pushPanel = useCallback((item: PanelItem) => act(user)({ type: 'panel_push', item }), [act, user])
   const backPanel = useCallback(() => act(user)({ type: 'panel_back' }), [act, user])
   const closePanel = useCallback(() => act(user)({ type: 'panel_close' }), [act, user])

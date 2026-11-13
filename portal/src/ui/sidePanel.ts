@@ -68,7 +68,23 @@ export function wrapTab<T>(stops: readonly T[], active: unknown, back: boolean):
   return !inside || active === last ? first : null
 }
 
-/** What takes focus when the panel closes: the control that opened it, which shows again, else another way to open the same item. */
-export function openerAfterClose<T>(openers: readonly T[], from: number): T | null {
-  return openers[from] ?? openers[0] ?? null
+interface Closing<T> {
+  /** The chat's ways to open the panel's first item, in page order. */
+  readonly openers: readonly T[]
+  /** Which of them the person pressed, or null when an answer showed the panel by itself. */
+  readonly from: number | null
+  /** True when focus was in the panel, which is going, or nowhere. */
+  readonly lost: boolean
+  readonly box: T | null
+}
+
+/**
+ * What takes focus when the panel closes, or null to leave it where the person put it, such as in the box. Focus the panel held
+ * goes back to the control that opened it, which shows again, else another way to open the same item. A panel an answer showed by
+ * itself was opened by nothing the person pressed, so its focus goes to the box.
+ */
+export function focusAfterClose<T>({ openers, from, lost, box }: Closing<T>): T | null {
+  if (!lost) return null
+  if (from === null) return box
+  return openers[from] ?? openers[0] ?? box
 }
