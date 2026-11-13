@@ -203,9 +203,12 @@
             "approval_outcome_not_posted": "#/components/schemas/ApprovalOutcomeNotPosted",
             "approval_requested": "#/components/schemas/ApprovalRequested",
             "execution_linked": "#/components/schemas/ExecutionLinked",
+            "execution_resumed": "#/components/schemas/ExecutionResumed",
             "leg_dispatched": "#/components/schemas/LegDispatched",
             "run_created": "#/components/schemas/RunCreated",
+            "run_expired": "#/components/schemas/RunExpired",
             "run_failed": "#/components/schemas/RunFailed",
+            "run_lost": "#/components/schemas/RunLost",
             "run_rejected": "#/components/schemas/RunRejected",
             "run_retried": "#/components/schemas/RunRetried",
             "run_skipped": "#/components/schemas/RunSkipped",
@@ -292,6 +295,15 @@
           },
           {
             "$ref": "#/components/schemas/RunSkipped"
+          },
+          {
+            "$ref": "#/components/schemas/RunExpired"
+          },
+          {
+            "$ref": "#/components/schemas/ExecutionResumed"
+          },
+          {
+            "$ref": "#/components/schemas/RunLost"
           },
           {
             "$ref": "#/components/schemas/SupportReported"
@@ -1988,7 +2000,9 @@
           "waiting",
           "open",
           "approved",
-          "declined"
+          "declined",
+          "expired",
+          "cancelled"
         ],
         "type": "string"
       },
@@ -2168,6 +2182,89 @@
           "questions"
         ],
         "title": "ApprovalView",
+        "type": "object"
+      },
+      "AskIn": {
+        "additionalProperties": false,
+        "properties": {
+          "execution_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Execution Id",
+            "type": "string"
+          },
+          "mode": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Mode",
+            "type": "string"
+          },
+          "node_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Node Name",
+            "type": "string"
+          },
+          "resume_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Resume Url",
+            "type": "string"
+          },
+          "workflow_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Id"
+          }
+        },
+        "required": [
+          "execution_id",
+          "workflow_id",
+          "node_name",
+          "mode",
+          "resume_url"
+        ],
+        "title": "AskIn",
+        "type": "object"
+      },
+      "AskOut": {
+        "additionalProperties": false,
+        "properties": {
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Our request the execution waits for. Only while waiting.",
+            "title": "Request Id"
+          },
+          "status": {
+            "enum": [
+              "waiting",
+              "nothing_to_change"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "AskOut",
         "type": "object"
       },
       "AwaitingApprovalView": {
@@ -4787,6 +4884,146 @@
         "title": "ExecutionLinkedData",
         "type": "object"
       },
+      "ExecutionResumed": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ExecutionResumedData"
+          },
+          "kind": {
+            "const": "execution_resumed",
+            "default": "execution_resumed",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "ExecutionResumed",
+        "type": "object"
+      },
+      "ExecutionResumedData": {
+        "additionalProperties": false,
+        "properties": {
+          "execution_id": {
+            "description": "The waiting n8n execution that took the yes.",
+            "title": "Execution Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "execution_id"
+        ],
+        "title": "ExecutionResumedData",
+        "type": "object"
+      },
+      "ExpiredView": {
+        "additionalProperties": false,
+        "properties": {
+          "approval": {
+            "$ref": "#/components/schemas/ApprovalRef"
+          },
+          "events_url": {
+            "title": "Events Url",
+            "type": "string"
+          },
+          "last_seq": {
+            "title": "Last Seq",
+            "type": "integer"
+          },
+          "proposal": {
+            "$ref": "#/components/schemas/ProposalView"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "started_by": {
+            "title": "Started By",
+            "type": "string"
+          },
+          "state": {
+            "const": "expired",
+            "default": "expired",
+            "title": "State",
+            "type": "string"
+          },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/Trigger"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          },
+          "use_case_version": {
+            "title": "Use Case Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "use_case_id",
+          "use_case_name",
+          "use_case_version",
+          "started_by",
+          "trigger",
+          "test",
+          "started_at",
+          "updated_at",
+          "last_seq",
+          "events_url",
+          "proposal",
+          "approval"
+        ],
+        "title": "ExpiredView",
+        "type": "object"
+      },
       "FactSection": {
         "enum": [
           "watchlist",
@@ -5528,6 +5765,86 @@
           "name"
         ],
         "title": "ListedSoftware",
+        "type": "object"
+      },
+      "LostView": {
+        "additionalProperties": false,
+        "properties": {
+          "approval": {
+            "$ref": "#/components/schemas/ApprovalRef"
+          },
+          "events_url": {
+            "title": "Events Url",
+            "type": "string"
+          },
+          "last_seq": {
+            "title": "Last Seq",
+            "type": "integer"
+          },
+          "proposal": {
+            "$ref": "#/components/schemas/ProposalView"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "started_by": {
+            "title": "Started By",
+            "type": "string"
+          },
+          "state": {
+            "const": "lost",
+            "default": "lost",
+            "title": "State",
+            "type": "string"
+          },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/Trigger"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          },
+          "use_case_version": {
+            "title": "Use Case Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "use_case_id",
+          "use_case_name",
+          "use_case_version",
+          "started_by",
+          "trigger",
+          "test",
+          "started_at",
+          "updated_at",
+          "last_seq",
+          "events_url",
+          "proposal",
+          "approval"
+        ],
+        "title": "LostView",
         "type": "object"
       },
       "Me": {
@@ -8375,6 +8692,66 @@
         "title": "RunCreatedData",
         "type": "object"
       },
+      "RunExpired": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/RunExpiredData"
+          },
+          "kind": {
+            "const": "run_expired",
+            "default": "run_expired",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "RunExpired",
+        "type": "object"
+      },
+      "RunExpiredData": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "description": "The request that nobody answered in time.",
+            "title": "Approval Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id"
+        ],
+        "title": "RunExpiredData",
+        "type": "object"
+      },
       "RunFailed": {
         "additionalProperties": false,
         "properties": {
@@ -8462,6 +8839,71 @@
           "runs"
         ],
         "title": "RunList",
+        "type": "object"
+      },
+      "RunLost": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/RunLostData"
+          },
+          "kind": {
+            "const": "run_lost",
+            "default": "run_lost",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "RunLost",
+        "type": "object"
+      },
+      "RunLostData": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "why": {
+            "description": "Why n8n could not take the yes, in plain words.",
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id",
+          "why"
+        ],
+        "title": "RunLostData",
         "type": "object"
       },
       "RunOutcome": {
@@ -8706,7 +9148,9 @@
           "succeeded",
           "rejected",
           "failed",
-          "skipped"
+          "skipped",
+          "expired",
+          "lost"
         ],
         "type": "string"
       },
@@ -8773,7 +9217,9 @@
           "mapping": {
             "acting": "#/components/schemas/ActingView",
             "awaiting_approval": "#/components/schemas/AwaitingApprovalView",
+            "expired": "#/components/schemas/ExpiredView",
             "failed": "#/components/schemas/FailedView",
+            "lost": "#/components/schemas/LostView",
             "pending": "#/components/schemas/PendingView",
             "proposed": "#/components/schemas/ProposedView",
             "rejected": "#/components/schemas/RejectedView",
@@ -8810,6 +9256,12 @@
           },
           {
             "$ref": "#/components/schemas/SkippedView"
+          },
+          {
+            "$ref": "#/components/schemas/ExpiredView"
+          },
+          {
+            "$ref": "#/components/schemas/LostView"
           }
         ]
       },
@@ -18471,6 +18923,106 @@
           }
         },
         "summary": "Agent",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/n8n/calls/ask": {
+      "post": {
+        "description": "Asks the workflow's Approvers for a yes on the run's proposal. n8n holds the wait, and our API wakes the execution with the decision. A test run stops here.",
+        "operationId": "ask_internal_v1_n8n_calls_ask_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Wab-Node-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Wab-Node-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad node key, or this platform takes no node calls"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Refused by a safety rule, such as a start or a version that fails"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The run has stopped, or another execution carries it"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The block names something our platform does not allow"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryOut"
+                }
+              }
+            },
+            "description": "Try the same call again soon"
+          }
+        },
+        "summary": "Ask",
         "tags": [
           "internal"
         ]

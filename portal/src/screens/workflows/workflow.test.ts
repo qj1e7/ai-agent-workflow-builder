@@ -102,6 +102,12 @@ describe('the status words', () => {
     expect(lastRunLine(lastOf({ state: 'skipped' }), NOW, nameOf)).toBe('Last run Mon 26 Oct · Skipped')
   })
 
+  it('say a run nobody answered, and a run n8n lost after the yes, wrote nothing', () => {
+    expect(runFact(run(failed, { state: 'expired' }), nameOf)).toEqual({ tone: 'ok', pill: null, words: 'No answer. Nothing was written.' })
+    expect(runFact(run(failed, { state: 'lost' }), nameOf)).toEqual({ tone: 'bad', pill: 'Lost', words: 'Approved, but n8n lost the run. Nothing was written.' })
+    expect(lastRunLine(lastOf({ state: 'expired' }), NOW, nameOf)).toBe('Last run Mon 26 Oct · No answer')
+  })
+
   it('say a run that finished is done, with what it wrote and who said yes', () => {
     expect(runFact(run(done), nameOf)).toEqual({ tone: 'ok', pill: null, words: 'Done. 1 ticket created, approved by Bob.' })
     expect(runFact(run(done, { outcome: 'nothing_to_write', written: [] }), nameOf).words).toBe('Done. Nothing to write.')

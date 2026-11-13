@@ -10,10 +10,13 @@ from platform_api.monitoring import (
     Actor,
     ApprovalRequestedData,
     ExecutionLinkedData,
+    ExecutionResumedData,
     LegDispatchedData,
     PendingEvent,
     RunCreatedData,
+    RunExpiredData,
     RunFailedData,
+    RunLostData,
     RunRejectedData,
     RunRetriedData,
     RunSkippedData,
@@ -83,6 +86,7 @@ class Outcome(Enum):
 
 TEST_PASSED = "Test run passed up to the yes. Nothing was written."
 SKIPPED = "An earlier run is still waiting for a yes."
+NO_ANSWER = "No answer. Nothing was written."
 
 
 @dataclass(frozen=True)
@@ -252,6 +256,27 @@ class Skipped:
 
 
 @dataclass(frozen=True)
+class Expired:
+    """Nobody answered the request before it expired (ADR 0024). Nothing was written."""
+
+    run_id: RunId
+    proposal_id: ProposalId
+    approval_id: ApprovalId
+    unread: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class Lost:
+    """Approved, but the waiting n8n execution could not take the yes (ENGINE-PLAN 2.3.13).
+    Nothing was written, and the approved proposal stays on the record."""
+
+    run_id: RunId
+    proposal_id: ProposalId
+    approval_id: ApprovalId
+    unread: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class Succeeded:
     run_id: RunId
     outcome: Outcome
@@ -349,6 +374,43 @@ class AwaitingApproval:
         )
         return Moved(state, (_leg_dispatched(Leg.ACT, 1),))
 
+    def woken(self, execution: N8nExecutionId, now: datetime) -> Moved[Acting]:
+        """n8n took the yes. The write's deadline starts now, not at the decision, so an n8n
+        outage while it waits does not use it up."""
+        acting = Acting(
+            self.run_id,
+            self.proposal_id,
+            self.approval_id,
+            1,
+            execution,
+            deadline(Acting, now),
+            self.unread,
+        )
+        resumed = PendingEvent(
+            WORKFLOW,
+            "execution_resumed",
+            f"n8n execution {execution} took the yes and carries on.",
+            ExecutionResumedData(execution_id=execution),
+        )
+        return Moved(acting, (resumed,))
+
+    def lose(self, why: str) -> Moved[Lost]:
+        lost = PendingEvent(
+            PLATFORM,
+            "run_lost",
+            f"Approved, but n8n lost the run, because {sentence(why)} Nothing was written.",
+            RunLostData(approval_id=self.approval_id, why=why),
+        )
+        return Moved(Lost(self.run_id, self.proposal_id, self.approval_id, self.unread), (lost,))
+
+    def expire(self) -> Moved[Expired]:
+        expired = PendingEvent(
+            PLATFORM, "run_expired", NO_ANSWER, RunExpiredData(approval_id=self.approval_id)
+        )
+        return Moved(
+            Expired(self.run_id, self.proposal_id, self.approval_id, self.unread), (expired,)
+        )
+
     def reject(
         self, by: UserId, by_display: str, step: int, reason: str | None = None
     ) -> Moved[Rejected]:
@@ -381,12 +443,7 @@ class Proposed:
     def open_approval(
         self, approval_id: ApprovalId, steps: list[ApprovalStepView], link: str
     ) -> Moved[AwaitingApproval]:
-        requested = PendingEvent(
-            PLATFORM,
-            "approval_requested",
-            f"Approval requested. Waiting for the {steps[0].label}.",
-            ApprovalRequestedData(approval_id=approval_id, steps=steps, link=link),
-        )
+        requested = _approval_requested(approval_id, steps, link)
         return Moved(
             AwaitingApproval(self.run_id, self.proposal_id, approval_id, self.summary, self.unread),
             (
@@ -416,12 +473,7 @@ class Proposed:
                     "test_passed",
                     "A test run of a draft asks nobody for a yes",
                 ),
-                PendingEvent(
-                    PLATFORM,
-                    "run_succeeded",
-                    TEST_PASSED,
-                    RunSucceededData(outcome=Outcome.TEST_PASSED.value),
-                ),
+                _test_passed(),
             ),
         )
 
@@ -501,6 +553,42 @@ class Working:
             ),
         )
 
+    def ask(
+        self,
+        proposal: tuple[ProposalId, Digest, tuple[ActionLine, ...]],
+        approval_id: ApprovalId,
+        steps: list[ApprovalStepView],
+        link: str,
+        summary: str,
+    ) -> Moved[AwaitingApproval]:
+        """Ask for a yes in n8n: the run's proposal is what its blocks proposed."""
+        return Moved(
+            AwaitingApproval(self.run_id, proposal[0], approval_id, summary),
+            (_workflow_proposed(*proposal), _approval_requested(approval_id, steps, link)),
+        )
+
+    def stop_at_gate(
+        self, proposal: tuple[ProposalId, Digest, tuple[ActionLine, ...]]
+    ) -> Moved[Succeeded]:
+        """A test run shows what it would ask, asks nobody and writes nothing."""
+        return Moved(
+            Succeeded(self.run_id, Outcome.TEST_PASSED, ()),
+            (_workflow_proposed(*proposal), _test_passed()),
+        )
+
+    def skip(self, waiting: RunId) -> Moved[Skipped]:
+        """Another run of the workflow already waits for a yes (ADR 0026)."""
+        return Moved(Skipped(self.run_id, waiting), (run_skipped(waiting),))
+
+    def nothing_to_change(self) -> Moved[Succeeded]:
+        succeeded = PendingEvent(
+            PLATFORM,
+            "run_succeeded",
+            "The run succeeded. There was nothing to change.",
+            RunSucceededData(outcome=Outcome.NOTHING_TO_WRITE.value),
+        )
+        return Moved(Succeeded(self.run_id, Outcome.NOTHING_TO_WRITE, ()), (succeeded,))
+
     def finish_with_nothing_to_write(self, summary: str) -> Moved[Succeeded]:
         succeeded = PendingEvent(
             PLATFORM,
@@ -576,6 +664,8 @@ type RunState = (
     | Rejected
     | Failed
     | Skipped
+    | Expired
+    | Lost
 )
 type ActiveState = Pending | Working | Proposed | Acting
 
@@ -589,6 +679,8 @@ def unread_in(state: RunState) -> tuple[str, ...]:
             | AwaitingApproval(unread=unread)
             | Acting(unread=unread)
             | Rejected(unread=unread)
+            | Expired(unread=unread)
+            | Lost(unread=unread)
             | Succeeded(unread=unread)
             | Failed(resume=ResumeAct(unread=unread))
         ):
@@ -607,6 +699,8 @@ STATE_NAMES: Mapping[type[RunState], RunStateName] = {
     Rejected: "rejected",
     Failed: "failed",
     Skipped: "skipped",
+    Expired: "expired",
+    Lost: "lost",
 }
 
 
@@ -678,6 +772,37 @@ def execution_linked(execution: N8nExecutionId, mode: str) -> PendingEvent:
     )
 
 
+def _approval_requested(
+    approval_id: ApprovalId, steps: list[ApprovalStepView], link: str
+) -> PendingEvent:
+    return PendingEvent(
+        PLATFORM,
+        "approval_requested",
+        f"Approval requested. Waiting for the {steps[0].label}.",
+        ApprovalRequestedData(approval_id=approval_id, steps=steps, link=link),
+    )
+
+
+def _workflow_proposed(
+    proposal_id: ProposalId, digest: Digest, lines: tuple[ActionLine, ...]
+) -> PendingEvent:
+    count = len(lines)
+    return PendingEvent(
+        WORKFLOW,
+        "write_action_proposed",
+        f"The workflow proposed {count} change{'' if count == 1 else 's'}: "
+        + "; ".join(line.line for line in lines)
+        + ".",
+        WriteActionProposedData(proposal_id=proposal_id, digest=digest, actions=list(lines)),
+    )
+
+
+def _test_passed() -> PendingEvent:
+    return PendingEvent(
+        PLATFORM, "run_succeeded", TEST_PASSED, RunSucceededData(outcome=Outcome.TEST_PASSED.value)
+    )
+
+
 def run_skipped(waiting: RunId) -> PendingEvent:
     return PendingEvent(PLATFORM, "run_skipped", SKIPPED, RunSkippedData(waiting_run_id=waiting))
 
@@ -716,7 +841,15 @@ def caller_of(state: RunState, execution: N8nExecutionId) -> Caller:
             return Caller.CLAIMANT if holder == execution else Caller.OTHER
         case Working(execution=holder) | Proposed(execution=holder):
             return Caller.CLAIMANT if holder == execution else Caller.OTHER
-        case AwaitingApproval() | Succeeded() | Rejected() | Failed() | Skipped():
+        case (
+            AwaitingApproval()
+            | Succeeded()
+            | Rejected()
+            | Failed()
+            | Skipped()
+            | Expired()
+            | Lost()
+        ):
             return Caller.OTHER
 
 
@@ -726,7 +859,15 @@ def holder_of(state: RunState) -> N8nExecutionId | None:
             return holder
         case Working(execution=holder) | Proposed(execution=holder):
             return holder
-        case AwaitingApproval() | Succeeded() | Rejected() | Failed() | Skipped():
+        case (
+            AwaitingApproval()
+            | Succeeded()
+            | Rejected()
+            | Failed()
+            | Skipped()
+            | Expired()
+            | Lost()
+        ):
             return None
 
 
@@ -798,7 +939,10 @@ WRITE_ACTION = frozenset({StepName.WRITE_ACTION})
 
 REFEREE_TABLE: tuple[RefereeRow, ...] = (
     RefereeRow(
-        frozenset(StepName), (Failed, Rejected, Skipped), ANY_CALLER, RowVerdict.REPLAY_FALSE
+        frozenset(StepName),
+        (Failed, Rejected, Skipped, Expired, Lost),
+        ANY_CALLER,
+        RowVerdict.REPLAY_FALSE,
     ),
     RefereeRow(RUN_AGENTS, (Pending,), CLAIM_OR_UNCLAIMED, RowVerdict.BEGIN),
     RefereeRow(RUN_AGENTS, (Pending,), OTHER, RowVerdict.SUPERSEDE),

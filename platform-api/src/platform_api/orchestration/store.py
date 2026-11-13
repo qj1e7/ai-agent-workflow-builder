@@ -7,13 +7,21 @@ import psycopg
 from pydantic import TypeAdapter
 
 from platform_api.db import UnitOfWork, json
-from platform_api.orchestration.approvals import ApprovalPolicy, ApprovalRequest, Decision, Verdict
-from platform_api.orchestration.dispatch import RETRY_POLICY, Identity, MessageRef
+from platform_api.orchestration.approvals import (
+    ApprovalPolicy,
+    ApprovalRequest,
+    Decision,
+    Ended,
+    Verdict,
+)
+from platform_api.orchestration.dispatch import RETRY_POLICY, HeldWait, Identity, MessageRef
 from platform_api.orchestration.runs import (
     Acting,
     AwaitingApproval,
+    Expired,
     Failed,
     Leg,
+    Lost,
     Pending,
     Proposed,
     Rejected,
@@ -46,6 +54,8 @@ STATE_TYPES: Mapping[str, type[RunState]] = {
         Rejected,
         Failed,
         Skipped,
+        Expired,
+        Lost,
     )
 }
 _state_adapters: dict[str, TypeAdapter[Any]] = {
@@ -102,6 +112,8 @@ ANNOUNCE = "announce"
 SHOW_OUTCOME = "show_outcome"
 """Shows a decided request's outcome on its Teams card. The outcome holds however the run ends,
 so cancelling a run's outbox leaves these rows."""
+WAKE = "wake"
+"""Tells the n8n execution that waits for a request what the records decided. One per request."""
 
 
 SOMEONE = "someone on this run"
@@ -116,13 +128,22 @@ class OutboxRow:
     attempt: int
     leased_until: datetime | None = None
     """The lease this tick holds on the row, which only it can renew."""
+    created_at: datetime | None = None
 
 
 def _deadline_of(state: RunState) -> datetime | None:
     match state:
         case Pending() | Working() | Proposed() | Acting():
             return state.deadline_at
-        case AwaitingApproval() | Succeeded() | Rejected() | Failed() | Skipped():
+        case (
+            AwaitingApproval()
+            | Succeeded()
+            | Rejected()
+            | Failed()
+            | Skipped()
+            | Expired()
+            | Lost()
+        ):
             return None
 
 
@@ -372,10 +393,13 @@ class Store:
             for row in rows
         }
 
-    async def insert_approval(self, uow: UnitOfWork, request: ApprovalRequest) -> None:
+    async def insert_approval(
+        self, uow: UnitOfWork, request: ApprovalRequest, held: HeldWait | None = None
+    ) -> None:
         await uow.conn.execute(
             "INSERT INTO orchestration.approval_requests (approval_id, run_id, proposal_id, "
-            "digest, policy, parties, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            "digest, policy, parties, created_at, expires_at, execution_id, resume_url) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 request.id,
                 request.run_id,
@@ -384,8 +408,44 @@ class Store:
                 json(_policy_adapter.dump_python(request.policy, mode="json")),
                 json(sorted(request.parties)),
                 uow.now,
+                request.expires_at,
+                None if held is None else held.execution_id,
+                None if held is None else held.sealed_url,
             ),
         )
+
+    async def held_wait(self, uow: UnitOfWork, approval_id: ApprovalId) -> HeldWait | None:
+        """The n8n execution that waits for this request, when n8n holds the wait."""
+        row = await (
+            await uow.conn.execute(
+                "SELECT execution_id, resume_url FROM orchestration.approval_requests "
+                "WHERE approval_id = %s AND execution_id IS NOT NULL",
+                (approval_id,),
+            )
+        ).fetchone()
+        if row is None:
+            return None
+        return HeldWait(N8nExecutionId(row["execution_id"]), row["resume_url"])
+
+    async def end_request(self, uow: UnitOfWork, approval_id: ApprovalId, ended: Ended) -> None:
+        await uow.conn.execute(
+            "UPDATE orchestration.approval_requests SET ended = %s, ended_at = %s "
+            "WHERE approval_id = %s AND ended IS NULL",
+            (ended.value, uow.now, approval_id),
+        )
+
+    async def requests_past_expiry(self, uow: UnitOfWork, now: datetime) -> list[RunId]:
+        """The runs whose request waits past its expiry. The tick ends each one undecided."""
+        rows = await (
+            await uow.conn.execute(
+                "SELECT a.run_id FROM orchestration.approval_requests a "
+                "JOIN orchestration.runs r ON r.run_id = a.run_id "
+                "WHERE a.ended IS NULL AND a.expires_at <= %s AND r.state = 'AwaitingApproval' "
+                "ORDER BY a.expires_at",
+                (now,),
+            )
+        ).fetchall()
+        return [RunId(row["run_id"]) for row in rows]
 
     async def load_approval(
         self, uow: UnitOfWork, approval_id: ApprovalId
@@ -399,8 +459,8 @@ class Store:
             return {}
         rows = await (
             await uow.conn.execute(
-                "SELECT approval_id, run_id, proposal_id, digest, policy, parties "
-                "FROM orchestration.approval_requests WHERE approval_id = ANY(%s)",
+                "SELECT approval_id, run_id, proposal_id, digest, policy, parties, expires_at, "
+                "ended FROM orchestration.approval_requests WHERE approval_id = ANY(%s)",
                 (list(approval_ids),),
             )
         ).fetchall()
@@ -412,6 +472,8 @@ class Store:
                 Digest(row["digest"]),
                 _policy_adapter.validate_python(row["policy"]),
                 frozenset(UserId(u) for u in row["parties"]),
+                row["expires_at"],
+                None if row["ended"] is None else Ended(row["ended"]),
             )
             for row in rows
         }
@@ -513,12 +575,20 @@ class Store:
         return [_record(row) for row in rows]
 
     async def enqueue(
-        self, uow: UnitOfWork, run_id: RunId, kind: str, payload: dict[str, Any], next_at: datetime
+        self,
+        uow: UnitOfWork,
+        run_id: RunId,
+        kind: str,
+        payload: dict[str, Any],
+        next_at: datetime,
+        once_as: str | None = None,
     ) -> None:
+        """With once_as, a second row under the same key is never made."""
         await uow.conn.execute(
             "INSERT INTO orchestration.outbox (run_id, kind, payload, attempt, next_at, status, "
-            "created_at) VALUES (%s, %s, %s, 0, %s, 'pending', %s)",
-            (run_id, kind, json(payload), next_at, uow.now),
+            "created_at, idempotency_key) VALUES (%s, %s, %s, 0, %s, 'pending', %s, %s) "
+            "ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING",
+            (run_id, kind, json(payload), next_at, uow.now, once_as),
         )
 
     async def take_due_outbox(
@@ -538,7 +608,7 @@ class Store:
                 "AND next_at <= %s AND (leased_until IS NULL OR leased_until <= %s) "
                 "ORDER BY next_at, id LIMIT %s FOR UPDATE SKIP LOCKED) due WHERE o.id = due.id "
                 "RETURNING o.id, o.run_id, o.kind, o.payload, o.attempt, o.next_at, "
-                "o.leased_until",
+                "o.leased_until, o.created_at",
                 (now + lease, now, now, limit),
             )
         ).fetchall()
@@ -551,6 +621,7 @@ class Store:
                 r["payload"],
                 int(r["attempt"]),
                 r["leased_until"],
+                r["created_at"],
             )
             for r in rows
         ]

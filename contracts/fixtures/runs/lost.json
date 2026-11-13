@@ -1,0 +1,137 @@
+[
+  {
+    "run_id": "run_01JBL",
+    "seq": 1,
+    "ts": "2026-11-04T01:00:00Z",
+    "actor": {
+      "kind": "user",
+      "id": "alice",
+      "display": "Alice"
+    },
+    "summary": "Alice's schedule started a check of the Software watchlist.",
+    "kind": "run_created",
+    "data": {
+      "use_case_id": "uc_01JB7",
+      "use_case_version": 1,
+      "started_by": "alice",
+      "trigger": "schedule"
+    }
+  },
+  {
+    "run_id": "run_01JBL",
+    "seq": 2,
+    "ts": "2026-11-04T01:00:00.004000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "n8n execution 52 is carrying the run (trigger).",
+    "kind": "execution_linked",
+    "data": {
+      "execution_id": "52",
+      "mode": "trigger"
+    }
+  },
+  {
+    "run_id": "run_01JBL",
+    "seq": 3,
+    "ts": "2026-11-04T01:00:06.310000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "The workflow proposed 1 change: Create Jira ticket in MOCK: Upgrade LangGraph from 1.2.14 to 1.2.16.",
+    "kind": "write_action_proposed",
+    "data": {
+      "proposal_id": "prp_01JBL",
+      "digest": "sha256:4643d9dfc8577a7b21a6bf16196fde88777715a2e4fb44e786046f80fa921a38",
+      "actions": [
+        {
+          "connector": "jira",
+          "operation": "create_ticket",
+          "line": "Create Jira ticket in MOCK: Upgrade LangGraph from 1.2.14 to 1.2.16"
+        }
+      ]
+    }
+  },
+  {
+    "run_id": "run_01JBL",
+    "seq": 4,
+    "ts": "2026-11-04T01:00:06.312000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "Approval requested. Waiting for the Team approver.",
+    "kind": "approval_requested",
+    "data": {
+      "approval_id": "apr_01JBL",
+      "steps": [
+        {
+          "index": 0,
+          "label": "Team approver",
+          "status": "open",
+          "decided_by": null,
+          "decided_at": null,
+          "reason": null
+        }
+      ],
+      "link": "/approvals/apr_01JBL"
+    }
+  },
+  {
+    "run_id": "run_01JBL",
+    "seq": 5,
+    "ts": "2026-11-04T01:00:08.700000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "The approval request was posted to the Teams channel CODESparks Ops.",
+    "kind": "approval_announced",
+    "data": {
+      "approval_id": "apr_01JBL",
+      "channel": "CODESparks Ops",
+      "link": "/approvals/apr_01JBL"
+    }
+  },
+  {
+    "run_id": "run_01JBL",
+    "seq": 6,
+    "ts": "2026-11-04T01:06:52.500000Z",
+    "actor": {
+      "kind": "user",
+      "id": "bob",
+      "display": "Bob"
+    },
+    "summary": "Bob approved the request (Team approver).",
+    "kind": "approval_decided",
+    "data": {
+      "approval_id": "apr_01JBL",
+      "step": 0,
+      "verdict": "approve",
+      "by": "bob",
+      "digest": "sha256:4643d9dfc8577a7b21a6bf16196fde88777715a2e4fb44e786046f80fa921a38"
+    }
+  },
+  {
+    "run_id": "run_01JBL",
+    "seq": 7,
+    "ts": "2026-11-04T01:06:53.100000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "Approved, but n8n lost the run, because the waiting execution was resumed by something else, or has finished. Nothing was written.",
+    "kind": "run_lost",
+    "data": {
+      "approval_id": "apr_01JBL",
+      "why": "the waiting execution was resumed by something else, or has finished"
+    }
+  }
+]

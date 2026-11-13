@@ -17,6 +17,8 @@ export type Phase =
   | { readonly state: 'awaiting_approval' }
   | { readonly state: 'acting' }
   | { readonly state: 'skipped' }
+  | { readonly state: 'expired' }
+  | { readonly state: 'lost' }
   | { readonly state: 'succeeded'; readonly outcome: RunOutcome }
   | { readonly state: 'rejected'; readonly by: string; readonly step: number }
   | {
@@ -363,8 +365,13 @@ function apply(model: RunModel, event: RunEvent): RunModel {
       return reported(model, event)
     case 'run_skipped':
       return advanceTo({ ...model, phase: { state: 'skipped' } }, { at: 'done' }, event)
+    case 'run_expired':
+      return advanceTo({ ...model, phase: { state: 'expired' } }, { at: 'done' }, event)
+    case 'run_lost':
+      return advanceTo({ ...model, phase: { state: 'lost' } }, { at: 'done' }, event)
     case 'leg_dispatched':
     case 'execution_linked':
+    case 'execution_resumed':
     case 'step_started':
     case 'step_retried':
     case 'approval_outcome_not_posted':
@@ -475,6 +482,11 @@ function stateOf(model: RunModel, station: Skeleton, index: number, current: num
       return unfilled ? 'skip' : 'done'
     case 'skipped':
       return 'skip'
+    case 'expired':
+    case 'lost':
+      if (at === 'gate') return phase.state === 'lost' ? 'done' : 'skip'
+      if (at === 'write') return 'skip'
+      return unfilled ? 'skip' : 'done'
     case 'awaiting_approval':
       if (at === 'gate') return 'wait'
       break
@@ -534,5 +546,5 @@ export function declinedOf(model: RunModel): Declined | null {
 }
 
 export function isFinished(phase: Phase): boolean {
-  return phase.state === 'succeeded' || phase.state === 'rejected' || phase.state === 'failed' || phase.state === 'skipped'
+  return ['succeeded', 'rejected', 'failed', 'skipped', 'expired', 'lost'].includes(phase.state)
 }
