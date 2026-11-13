@@ -59,13 +59,14 @@ These come from the sponsor and from our October feasibility test. Do not weaken
 
 ## Designing screens
 
-The design target is prototype version 4, `docs/design/ai-native-redesign/prototype.html`, with its spec `AI-NATIVE-UX-REDESIGN.md` and build plan `IMPLEMENTATION-PLAN.md` in the same folder.
+The design target is the chat-first sketch, `docs/design/chat-first/prototype.html` ("Chat first, on the desktop", version 3), chosen on 13 Nov 2026. Its README says how to use it.
 
-- It is the source of truth for screens, flows and names. The app is built from it.
-- The 6 Nov prototype in `docs/design/portal-routines/` is kept only as the record of version 3.
+- It is the source of truth for screens, flows, words and motion. The app is built from it.
+- Where it is silent (Settings, the Teams drawer, the Jira page, sign-in), the app keeps what it has.
+- Prototype version 4 in `docs/design/ai-native-redesign/`, with its spec and build plan, is kept only as a record. So is the 6 Nov prototype in `docs/design/portal-routines/`.
 - `docs/design/prototypes/` is out of date. Do not use it.
 
-Every new or changed screen, component or flow follows `docs/design/ai-native-principles.md`. Read it and the spec before any UI work. In short, the twelve principles are:
+Every new or changed screen, component or flow follows `docs/design/ai-native-principles.md`. Read it and the sketch before any UI work. In short, the twelve principles are:
 
 1. **Start from intent.** People say what they want in the Planner's box on Home, and never have to pick a page first.
 2. **Decisions first, details on request.** Each screen leads with what the person must understand or decide.
@@ -80,7 +81,7 @@ Every new or changed screen, component or flow follows `docs/design/ai-native-pr
 11. **Calm, plain and accessible.** A calm Home, plain words, the keyboard, a responsive web view from a narrow window to a wide screen, and reduced motion. No phone-only design.
 12. **Evidence, not looks.** Measure the tasks, and test with real users.
 
-- Design a new screen or component in the prototype first, then build it in the Portal.
+- Design a new screen or component in the sketch first, then build it in the Portal.
 - Walk the checklist there before you build. If you break a principle on purpose, say why in the design note or an ADR.
 - In the pull request, say under Verification which principles applied and how you checked each one.
 - Never ship anything on that page's "Never" list. It includes an unbuilt feature shown as working, part of a request dropped silently, and the AI's summary used as the check.

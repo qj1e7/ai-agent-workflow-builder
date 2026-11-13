@@ -1,0 +1,2108 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Chat-First Desktop</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700;800&display=swap">
+<style>
+/* Layout: a demo bar, then one desktop app window: top bar, a chat column, and a side panel that opens beside it. Light only, like the Portal. */
+:root {
+  color-scheme: light;
+  --frame: #eef1f4; --surface: #ffffff; --sunk: #f3f5f7; --active: #e7ebef; --chat: #f7f8fa;
+  --ink: #121417; --on-ink: #ffffff; --muted: #4d535b; --rail: #c5cbd2; --hair: #e1e5e9; --rule: #eaedf0; --hover: #2e3238;
+  --accent: #1b6c80; --accent-soft: #e2f0f3; --accent-ink: #0f4a59; --focus: #2f6bff; --brand: #02a7e1;
+  --amber: #e89a0c; --amber-ink: #7e4a00; --amber-soft: #fff6e0; --amber-line: #efd08c;
+  --red: #c4242a; --red-ink: #a51f1f; --red-soft: #fdeeed; --red-line: #f2c4c1;
+  --green: #1d7a42; --green-ink: #1b6b3b; --green-soft: #e6f4eb; --green-line: #b2dbbf;
+  --safety: #0a7068; --trouble: #7a4bd6;
+  --font: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --r-card: 8px; --r-ctl: 6px;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1); --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --k: 1;
+  --t-press: calc(120ms * var(--k)); --t-small: calc(200ms * var(--k)); --t-panel: calc(260ms * var(--k)); --t-attn: calc(380ms * var(--k));
+}
+* { box-sizing: border-box; }
+html { background: var(--frame); }
+body { background: var(--frame); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 56px; }
+h1, h2, h3, h4 { margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem); font-weight: 800; letter-spacing: -0.01em; line-height: 1.15; }
+p { margin: 0; }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.muted { color: var(--muted); }
+.small { font-size: 0.84rem; }
+
+.wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 16px; }
+.top { display: grid; gap: 4px; }
+.lead { color: var(--muted); max-width: 80ch; }
+.demo { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; }
+.ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ctl .lbl { font-weight: 600; color: var(--muted); font-size: 0.88rem; }
+.seg { display: inline-flex; flex-wrap: wrap; padding: 3px; background: var(--active); border-radius: 8px; gap: 2px; }
+.seg button { border: 0; background: none; padding: 5px 11px; border-radius: var(--r-ctl); font-weight: 600; font-size: 0.86rem; color: var(--muted); cursor: pointer; min-height: 32px;
+  transition: background-color var(--t-press) ease, color var(--t-press) ease, transform var(--t-press) var(--ease-out); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
+.seg button:active { transform: scale(0.97); }
+
+/* The app window */
+.app { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); height: 780px; border: 1px solid var(--rail); border-radius: 14px; background: var(--surface); overflow: hidden; }
+.abar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--hair); }
+.brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; }
+.mark { width: 22px; height: 22px; border-radius: 6px; background: var(--brand); display: grid; place-items: center; color: #fff; font-size: 0.7rem; font-weight: 800; }
+.abar-r { display: flex; align-items: center; gap: 14px; }
+.who { display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 600; }
+.av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: #ffe0cc; color: #7a3410; font-weight: 800; font-size: 0.85rem; }
+.app[data-user="bob"] .av { background: #d7e3ff; color: #1f3a8a; }
+.linkbtn { background: none; border: 0; padding: 4px; color: var(--muted); font-weight: 600; font-size: 0.9rem; cursor: pointer; text-decoration: underline; text-decoration-color: var(--rail); text-underline-offset: 3px; }
+.main { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; }
+.main.split { grid-template-columns: minmax(360px, 440px) minmax(0, 1fr); }
+.chatcol { display: flex; flex-direction: column; min-height: 0; min-width: 0; view-transition-name: chatcol; }
+.panel { min-height: 0; overflow-y: auto; border-left: 1px solid var(--hair); background: var(--surface); padding: 18px 28px 28px; view-transition-name: panel; }
+.p-bar { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+
+.strip { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 6px 10px 6px 18px; border-bottom: 1px solid var(--hair); font-size: 0.9rem; transition: background-color var(--t-panel) ease; }
+.strip[data-tone="err"] { background: var(--red-soft); }
+.strip[data-tone="wait"] { background: var(--amber-soft); }
+.strip[data-tone="calm"] { color: var(--muted); }
+.strip .st-t { flex: 1; min-width: 0; }
+.sdot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--green); }
+[data-tone="err"] > .sdot { background: var(--red); }
+[data-tone="wait"] > .sdot { background: var(--amber); }
+
+.thread { flex: 1; min-height: 0; overflow-y: auto; background: var(--chat); }
+.app.fresh .thread { display: grid; place-items: center; background: var(--surface); }
+.msgs { width: 100%; max-width: 780px; margin: 0 auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 12px; }
+.main.split .msgs { max-width: none; padding: 16px; }
+.app.fresh .msgs, .app:not(.fresh) .hero { display: none; }
+.hero { width: 100%; max-width: 720px; padding: 24px; display: grid; justify-items: center; gap: 14px; text-align: center; }
+.hero h2 { font-size: clamp(1.6rem, 1.3rem + 1.2vw, 2.3rem); font-weight: 800; letter-spacing: -0.01em; line-height: 1.15; }
+.hero .hi { color: var(--muted); font-weight: 600; }
+.hero-dock { width: 100%; }
+.needs { width: 100%; display: grid; gap: 8px; text-align: left; margin-top: 8px; }
+.needs:empty { display: none; }
+.needs-h { font-size: 0.86rem; font-weight: 700; color: var(--muted); }
+.need { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px 10px 14px; border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); text-align: left; cursor: pointer;
+  transition: border-color var(--t-press) ease, transform var(--t-press) var(--ease-out); }
+.need:active { transform: scale(0.99); }
+.need .st-t { flex: 1; min-width: 0; }
+.need .go { font-weight: 700; font-size: 0.88rem; }
+.calm-line { color: var(--muted); font-size: 0.9rem; }
+
+.dock { display: flex; flex-direction: column; gap: 10px; width: 100%; view-transition-name: dock; }
+.bottom-dock { border-top: 1px solid var(--hair); background: var(--surface); }
+.bottom-dock .dock { max-width: 780px; margin: 0 auto; padding: 10px 24px 14px; }
+.main.split .bottom-dock .dock { max-width: none; padding: 10px 16px 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.app.fresh .chips { order: 2; justify-content: center; }
+.chips button { border: 1px solid var(--rail); background: var(--surface); border-radius: 999px; padding: 5px 13px; font-size: 0.88rem; font-weight: 600; cursor: pointer; min-height: 36px;
+  transition: border-color var(--t-press) ease, transform var(--t-press) var(--ease-out); }
+.chips button:active { transform: scale(0.97); }
+.composer { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; border: 1.5px solid var(--rail); border-radius: 12px; background: var(--surface); transition: border-color var(--t-small) ease; }
+.app.fresh .composer { min-height: 60px; border-radius: 14px; }
+.composer:focus-within, .composer.typing { border-color: var(--ink); }
+.composer input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; padding: 8px 0; font-size: 1rem; }
+.send { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border: 0; border-radius: var(--r-ctl); background: var(--ink); color: var(--on-ink); cursor: pointer; }
+.send svg { width: 17px; height: 17px; }
+
+.m { display: flex; gap: 10px; align-items: flex-start; max-width: 100%; }
+.live .m { animation: fadeup var(--t-small) var(--ease-out) both; }
+.m.me { align-self: flex-end; max-width: 80%; background: var(--ink); color: var(--on-ink); padding: 9px 14px; border-radius: 14px 14px 4px 14px; }
+.m .mb { background: var(--surface); border: 1px solid var(--hair); padding: 9px 13px; border-radius: 4px 14px 14px 14px; min-width: 0; max-width: 88%; }
+.m .mb b { display: block; font-size: 0.78rem; color: var(--hue, var(--muted)); }
+.mcard { flex: 1; min-width: 0; display: grid; gap: 6px; max-width: 620px; }
+.main.split .mcard { max-width: none; }
+.lead-line { font-weight: 600; }
+.dots { display: inline-flex; gap: 4px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--hair); border-radius: 4px 14px 14px 14px; }
+.dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: think 1.2s ease-in-out infinite; }
+.dots i:nth-child(2) { animation-delay: 0.15s; }
+.dots i:nth-child(3) { animation-delay: 0.3s; }
+
+/* Live cards */
+.card { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--rail); border-radius: 10px; background: var(--surface); }
+.c-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; }
+.c-head b { font-size: 1rem; }
+.c-sent { font-size: 0.95rem; line-height: 1.65; }
+.chip { padding: 1px 7px; border-radius: 999px; background: var(--sunk); border: 1px solid var(--hair); font-weight: 600; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.c-note { display: flex; align-items: center; gap: 8px; font-size: 0.84rem; font-weight: 600; color: var(--safety); padding: 6px 8px; border-radius: 6px; background: color-mix(in srgb, var(--safety) 8%, var(--surface)); }
+.c-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding-top: 10px; border-top: 1px solid var(--rule); }
+.c-act { display: inline-flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.c-left { display: inline-flex; align-items: center; gap: 6px; font-size: 0.86rem; font-weight: 600; color: var(--muted); }
+.c-left:empty { display: none; }
+.waiting { color: var(--amber-ink); }
+.okline { display: inline-flex; align-items: center; gap: 6px; color: var(--green-ink); font-weight: 600; font-size: 0.88rem; }
+.okline svg { width: 15px; height: 15px; flex: none; }
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 0 14px; border: 0; border-radius: var(--r-ctl); background: var(--ink); color: var(--on-ink);
+  font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: transform var(--t-press) var(--ease-out), background-color var(--t-press) ease, border-color var(--t-press) ease; }
+.btn:active { transform: scale(0.97); }
+.btn.ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--rail); }
+.btn.sm { min-height: 32px; padding: 0 11px; font-size: 0.84rem; }
+.btn[disabled] { background: var(--rail); color: var(--surface); cursor: default; }
+.pill { display: inline-flex; align-items: center; padding: 1px 9px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; background: var(--sunk); color: var(--muted); border: 1px solid var(--hair); white-space: nowrap; }
+.pill.lg { font-size: 0.86rem; padding: 3px 12px; }
+.pill[data-s="ready"], .pill[data-s="run"] { background: var(--accent-soft); color: var(--accent-ink); border-color: transparent; }
+.pill[data-s="wait"] { background: var(--amber-soft); color: var(--amber-ink); border-color: var(--amber-line); }
+.pill[data-s="err"] { background: var(--red-soft); color: var(--red-ink); border-color: var(--red-line); }
+.pill[data-s="ok"] { background: var(--green-soft); color: var(--green-ink); border-color: var(--green-line); }
+.wl { list-style: none; margin: 0; padding: 0; display: grid; }
+.wl li + li { border-top: 1px solid var(--rule); }
+.wl-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 100%; padding: 9px 4px; border: 0; background: none; text-align: left; cursor: pointer; border-radius: 6px; transition: background-color var(--t-press) ease; }
+.wl-row b { display: block; font-size: 0.94rem; }
+.wl-row .s { display: block; font-size: 0.8rem; color: var(--muted); }
+.tr { display: flex; gap: 10px; align-items: flex-start; font-size: 0.9rem; }
+.tr b { display: block; font-size: 0.78rem; color: var(--trouble); }
+.tr.big { font-size: 1rem; padding: 12px 14px; border-radius: 10px; background: color-mix(in srgb, var(--trouble) 6%, var(--surface)); }
+.c-find { font-size: 0.88rem; font-weight: 600; }
+.c-find:empty { display: none; }
+.chg { margin: 0; display: grid; gap: 8px; }
+.chg div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; }
+.chg dt { font-size: 0.84rem; color: var(--muted); font-weight: 600; }
+.chg dd { margin: 0; font-weight: 600; }
+.chg dd.body { font-weight: 400; white-space: pre-line; padding: 8px 10px; border: 1px solid var(--hair); border-radius: 6px; background: var(--sunk); font-size: 0.92rem; }
+.ai-sum { font-size: 0.86rem; color: var(--muted); background: var(--sunk); padding: 8px 10px; border-radius: 6px; }
+.ai-sum b { color: var(--ink); }
+.done-line { position: relative; padding-right: 74px; }
+.stamp { position: absolute; right: 0; top: 50%; padding: 1px 7px; border: 2px solid var(--green); border-radius: 4px; color: var(--green-ink); font-weight: 800; font-size: 0.72rem; transform: translateY(-50%) rotate(-8deg); }
+.live .stamp { animation: stamp calc(420ms * var(--k)) var(--ease-out) both; }
+@keyframes stamp { from { opacity: 0; transform: translateY(-50%) rotate(-8deg) scale(1.8); } to { opacity: 1; transform: translateY(-50%) rotate(-8deg) scale(1); } }
+.caps { margin: 0; padding-left: 18px; font-size: 0.92rem; display: grid; gap: 2px; }
+.card.big { padding: 18px 20px; }
+
+/* Lines: small inside a chat card, large in the side panel */
+.ml { --d: 22px; list-style: none; margin: 0; padding: 0; display: flex; }
+.ml.lg { --d: 34px; }
+.nd { position: relative; flex: 1 1 0; min-width: 0; display: grid; justify-items: center; align-content: start; gap: 5px; text-align: center; transition: opacity var(--t-small) ease, transform var(--t-small) var(--ease-out); }
+.nd.off { opacity: 0; transform: scale(0.8); }
+.nd::before { content: ""; position: absolute; top: calc(var(--who, 0px) + var(--d) / 2 - 1.5px); left: -50%; width: 100%; height: 3px; background: var(--rail); transition: background-color var(--t-panel) ease; }
+.ml.lg[data-nodes] .nd { --who: 44px; }
+@media (max-width: 560px) { .ml.lg .ntag { display: none; } .ml.lg .nlbl { font-size: 0.76rem; } }
+.nd:first-child::before { display: none; }
+.bwho { height: 38px; display: flex; align-items: flex-end; margin-bottom: 6px; }
+.md { position: relative; z-index: 1; width: var(--d); height: var(--d); border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--ink); background: var(--surface); color: var(--ink);
+  transition: background-color var(--t-small) ease, border-color var(--t-small) ease, color var(--t-small) ease, box-shadow var(--t-attn) ease; }
+.md svg { width: 11px; height: 11px; }
+.ml.lg .md svg { width: 16px; height: 16px; }
+.k-gate .md { border-radius: 6px; }
+.ml.lg .k-gate .md { border-radius: 10px; }
+.nlbl { font-size: 0.7rem; font-weight: 600; line-height: 1.2; padding-inline: 2px; }
+.ml.lg .nlbl { font-size: 0.9rem; font-weight: 700; margin-top: 2px; }
+.ntag { font-size: 0.76rem; color: var(--muted); line-height: 1.2; }
+.k-write .ntag { color: var(--amber-ink); }
+.nd.done .md { background: var(--ink); color: var(--on-ink); }
+.nd.done::before, .nd.now::before, .nd.wait::before { background: var(--ink); }
+.nd.now .md { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.nd.now .md::after { content: ""; position: absolute; inset: -4px; border-radius: inherit; animation: ring 1.4s ease-out infinite; }
+.nd.wait .md { border-color: var(--amber); background: var(--amber-soft); color: var(--amber-ink); }
+.nd.wait .md::after { content: ""; position: absolute; inset: -4px; border-radius: inherit; animation: halo 1.8s ease-out infinite; }
+.nd.err .md { border-color: var(--red); background: var(--red-soft); color: var(--red-ink); }
+.nd.err::before { background: repeating-linear-gradient(90deg, var(--red) 0 5px, transparent 5px 9px); }
+.nd.added .md { box-shadow: 0 0 0 4px color-mix(in srgb, var(--safety) 25%, transparent); border-color: var(--safety); }
+.md .tick { position: absolute; right: -6px; top: -6px; width: 14px; height: 14px; border-radius: 50%; background: var(--green); color: #fff; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--surface);
+  opacity: 0; transform: scale(0.6); transition: opacity var(--t-small) ease, transform var(--t-small) var(--ease-out); }
+.md .tick svg { width: 8px; height: 8px; }
+.nd.ok .tick { opacity: 1; transform: none; }
+.shackle { transform-box: fill-box; transform-origin: 15% 100%; transition: transform var(--t-attn) var(--ease-out); }
+.nd.open .shackle { transform: translateY(-2.6px) rotate(-16deg); }
+@keyframes ring { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); } to { box-shadow: 0 0 0 12px color-mix(in srgb, var(--accent) 0%, transparent); } }
+@keyframes halo { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--amber) 55%, transparent); } to { box-shadow: 0 0 0 12px color-mix(in srgb, var(--amber) 0%, transparent); } }
+
+/* Side panel views */
+.pv { display: grid; gap: 22px; }
+.pv-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px 16px; }
+.pv-head h3 { font-size: 1.45rem; font-weight: 800; line-height: 1.2; }
+.pv-kind { font-size: 0.88rem; font-weight: 700; color: var(--muted); }
+.pv-sent { font-size: 1.02rem; line-height: 1.6; max-width: 68ch; }
+.banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--hair); background: var(--sunk); font-weight: 600; }
+.banner[data-tone="err"] { background: var(--red-soft); border-color: var(--red-line); }
+.banner[data-tone="wait"] { background: var(--amber-soft); border-color: var(--amber-line); }
+.banner:empty { display: none; }
+.pv-sec { display: grid; gap: 8px; }
+.pv-sec h4 { font-size: 0.95rem; font-weight: 800; }
+.pv-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.rows { list-style: none; margin: 0; padding: 0; border: 1px solid var(--hair); border-radius: 10px; }
+.rows li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 10px 14px; }
+.rows li + li { border-top: 1px solid var(--rule); }
+.rows b { display: block; font-size: 0.92rem; }
+.rows .s { display: block; font-size: 0.82rem; color: var(--muted); }
+.pv-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 14px; border-top: 1px solid var(--rule); }
+.pv-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+@media (max-width: 1080px) { .pv-grid { grid-template-columns: 1fr; } }
+
+.toast { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 20; max-width: min(520px, calc(100% - 32px)); padding: 10px 16px; border-radius: 10px; background: var(--ink); color: var(--on-ink); font-size: 0.9rem; font-weight: 600; box-shadow: 0 12px 32px rgba(18, 20, 23, 0.2); }
+.live .toast:not([hidden]) { animation: fadeup var(--t-small) var(--ease-out); }
+.tap { animation: tap 420ms var(--ease-out); }
+@keyframes tap { 0% { box-shadow: 0 0 0 0 rgba(47, 107, 255, 0.55); } 35% { transform: scale(0.96); } 100% { box-shadow: 0 0 0 14px rgba(47, 107, 255, 0); transform: none; } }
+
+.read { display: grid; gap: 8px; padding: 18px 20px; border: 1px solid var(--hair); border-radius: 12px; background: var(--surface); }
+.read h2 { font-size: 1.1rem; font-weight: 800; }
+.read ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+@media (hover: hover) and (pointer: fine) {
+  .btn:not([disabled]):not(.ghost):hover, .send:hover { background: var(--hover); }
+  .btn.ghost:hover, .chips button:hover, .need:hover { border-color: var(--ink); }
+  .wl-row:hover { background: var(--sunk); }
+  .linkbtn:hover { color: var(--ink); }
+}
+@media (max-width: 860px) {
+  .main.split { grid-template-columns: minmax(0, 1fr); }
+  .panel { position: absolute; inset: 0; z-index: 5; padding: 14px 16px 24px; }
+  .app { height: 720px; }
+  .msgs { padding: 14px; }
+  .bottom-dock .dock { padding: 10px 14px 12px; }
+  .who-t { display: none; }
+}
+
+/* n8n: the canvas behind each workflow, and a mock of its editor */
+.ptabs { justify-self: start; }
+.pv-pane { display: grid; gap: 22px; }
+.cv { position: relative; border: 1px solid var(--hair); border-radius: 10px; overflow-x: auto; background: radial-gradient(circle, #d3d8de 1px, transparent 1.3px) 0 0 / 18px 18px, #fafbfc; }
+.cv svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.cn { color: var(--ink); transition: opacity var(--t-panel) ease; }
+.cn .cn-box { fill: var(--surface); stroke: var(--rail); stroke-width: 2; transition: stroke var(--t-small) ease, fill var(--t-small) ease; }
+.cn-l { font: 700 13px var(--font); fill: var(--ink); }
+.cn-s { font: 600 11px var(--font); fill: var(--muted); }
+.cn .ours { fill: color-mix(in srgb, var(--safety) 14%, var(--surface)); }
+.cn .ours-t { font: 700 9.5px var(--font); fill: var(--safety); }
+.port { fill: var(--surface); stroke: var(--rail); stroke-width: 2; }
+.ce { fill: none; stroke: #b4bcc6; stroke-width: 2.5; transition: opacity var(--t-panel) ease, stroke var(--t-small) ease; }
+.ce-l { font: 600 11px var(--font); fill: var(--muted); transition: opacity var(--t-panel) ease; }
+.cn.off, .ce.off, .ce-l.off { opacity: 0; }
+.cn.gone, .ce.gone, .ce-l.gone { display: none; }
+.cn.done .cn-box, .cn.ok .cn-box { stroke: var(--green); }
+.ce.ok { stroke: var(--green); }
+.cn.now .cn-box { stroke: var(--accent); stroke-width: 3.5; }
+.cn.wait .cn-box { stroke: var(--amber); fill: var(--amber-soft); }
+.cn.err .cn-box { stroke: var(--red); fill: var(--red-soft); }
+.cn.added .cn-box { stroke: var(--safety); stroke-width: 3.5; }
+.cn.sel .cn-box, .cn.tap .cn-box { stroke: var(--focus); stroke-width: 3.5; }
+.cn .cn-ok, .cn .cn-err { opacity: 0; transition: opacity var(--t-small) ease; }
+.cn.done .cn-ok, .cn.ok .cn-ok, .cn.err .cn-err { opacity: 1; }
+.cv.edit .cn { cursor: pointer; }
+.cv.edit .cn:focus-visible { outline: none; }
+.cv.edit .cn:focus-visible .cn-box { stroke: var(--focus); stroke-width: 3.5; }
+.cv-meta { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 14px; }
+.bchecks { display: grid; gap: 6px; }
+.bchecks:empty { display: none; }
+.n8n { position: absolute; inset: 0; z-index: 10; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: var(--surface); }
+.live .n8n:not([hidden]) { animation: fadeup var(--t-panel) var(--ease-out); }
+.nx-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 16px; border-bottom: 1px solid var(--hair); }
+.nx-brand { font-weight: 800; padding: 2px 9px; border-radius: 6px; background: var(--ink); color: var(--on-ink); font-size: 0.85rem; }
+.nx-name { font-weight: 700; }
+.nx-gap { flex: 1; }
+.nx-body { display: grid; grid-template-columns: 210px minmax(0, 1fr) 280px; min-height: 0; }
+.nx-pal, .nx-insp { padding: 16px; overflow-y: auto; display: grid; align-content: start; gap: 10px; font-size: 0.9rem; }
+.nx-pal { border-right: 1px solid var(--hair); }
+.nx-insp { border-left: 1px solid var(--hair); }
+.nx-pal ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.nx-pal li { padding: 6px 10px; border: 1px solid var(--hair); border-radius: 6px; font-weight: 600; font-size: 0.86rem; }
+.nx-pal li.ours { border-color: color-mix(in srgb, var(--safety) 45%, var(--surface)); color: var(--safety); }
+.nx-pal li.off { color: var(--muted); text-decoration: line-through; background: var(--sunk); }
+.nx-main { min-width: 0; overflow: auto; padding: 18px; display: grid; align-content: center; background: radial-gradient(circle, #d3d8de 1px, transparent 1.3px) 0 0 / 18px 18px, #fafbfc; }
+.nx-main .cv { border: 0; background: transparent; }
+.nx-note { padding: 6px 16px; font-size: 0.78rem; color: var(--muted); border-top: 1px solid var(--hair); }
+.field { display: grid; gap: 4px; font-weight: 600; }
+.field select { font: inherit; padding: 6px 8px; border: 1px solid var(--rail); border-radius: 6px; background: var(--surface); }
+.btn.danger { background: var(--surface); color: var(--red-ink); border: 1px solid var(--red-line); justify-self: start; }
+@media (max-width: 860px) {
+  .nx-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; overflow-y: auto; }
+  .nx-pal { border-right: 0; border-bottom: 1px solid var(--hair); }
+  .nx-insp { border-left: 0; border-top: 1px solid var(--hair); }
+}
+
+/* Faces, as in prototype version 4 */
+.fw { display: inline-grid; line-height: 0; flex: none; }
+.face { overflow: visible; display: block; }
+.face .f-eyes, .face .f-badge, .face .f-ok, .face .f-wave rect, .face .f-think circle { transform-box: fill-box; transform-origin: center; }
+.face .f-b { transform-box: view-box; transform-origin: 24px 26px; }
+.face .f-spin { transform-box: view-box; transform-origin: 24px 25px; }
+.fs-thinking .f-eyes { animation: look 2.4s var(--ease-in-out) infinite; }
+.face .f-think circle { fill: var(--muted); animation: think 1.5s ease-in-out infinite; }
+.face .f-think circle:nth-child(2) { animation-delay: 0.2s; }
+.face .f-think circle:nth-child(3) { animation-delay: 0.4s; }
+.fs-thinking .f-spin, .fs-working .f-spin { animation: orbit 1.6s linear infinite; }
+.fs-working .f-eyes { animation: eyescan 0.8s var(--ease-in-out) infinite alternate; }
+.face .f-wave rect { animation: talk 300ms ease-in-out infinite alternate; }
+.face .f-wave rect:nth-child(2) { animation-delay: 0.1s; }
+.face .f-wave rect:nth-child(3) { animation-delay: 0.2s; }
+.fs-success .f-b { animation: cheer 560ms var(--ease-out); }
+.fs-error .f-b { animation: concern 380ms var(--ease-out); }
+.f-badge, .f-ok { animation: badge-in 380ms var(--ease-out) both; }
+.hero .face.fs-idle .f-b { animation: breathe 2.4s var(--ease-in-out) infinite alternate; }
+@keyframes breathe { to { transform: translateY(-2px) scale(1.02); } }
+@keyframes look { 0%, 100% { transform: translateX(0); } 30% { transform: translateX(-1.5px); } 65% { transform: translateX(1.5px); } }
+@keyframes think { 0%, 100% { opacity: 0.3; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-1.5px); } }
+@keyframes orbit { to { transform: rotate(360deg); } }
+@keyframes eyescan { from { transform: translateX(-1.4px); } to { transform: translateX(1.4px); } }
+@keyframes talk { from { transform: scaleY(0.35); } to { transform: scaleY(1.15); } }
+@keyframes cheer { 40% { transform: translateY(-3px) scale(1.05); } }
+@keyframes concern { 30% { transform: translateX(-1.5px) rotate(-4deg); } 65% { transform: translateX(1.5px) rotate(3deg); } }
+@keyframes badge-in { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: none; } }
+@keyframes fadeup { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+::view-transition-group(*) { animation-duration: 360ms; animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1); }
+@media (prefers-reduced-motion: reduce) {
+  .face *, .dots i, .tap, .nd .md::after, .hero .face .f-b { animation: none !important; }
+  .live .m, .live .stamp, .live .toast { animation-name: fadeonly !important; }
+  ::view-transition-group(*) { animation-duration: 0s; }
+}
+@keyframes fadeonly { from { opacity: 0; } to { opacity: 1; } }
+
+/* Version 3: three ways to browse, every part shown, edits, fuller approvals. Roomy cards, few words. */
+:root { --brand-ink: #0b78a8; }
+.mark { background: var(--brand-ink); }
+.card { gap: 12px; padding: 16px 18px; }
+.mcard { max-width: 580px; }
+.c-foot { padding-top: 12px; }
+
+.rail { display: flex; flex-direction: column; gap: 4px; padding: 12px 8px; border-right: 1px solid var(--hair); }
+.rail button { position: relative; display: grid; justify-items: center; gap: 4px; padding: 10px 4px 8px; border: 0; border-radius: 10px; background: none; color: var(--muted); font-size: 0.74rem; font-weight: 700; cursor: pointer;
+  transition: background-color var(--t-press) ease, color var(--t-press) ease, transform var(--t-press) var(--ease-out); }
+.rail button:active { transform: scale(0.97); }
+.rail svg { width: 20px; height: 20px; }
+.rail button[aria-pressed="true"] { background: var(--active); color: var(--ink); }
+.cnt { position: absolute; top: 4px; right: 6px; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--surface); border: 1px solid var(--hair); font-size: 0.68rem; line-height: 16px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.cnt:empty { display: none; }
+.main { grid-template-columns: 76px minmax(0, 1fr); }
+/* The panel is a summary, so the chat keeps the width. Only the n8n build needs a wide panel. */
+.main.split { grid-template-columns: 76px minmax(0, 1fr) minmax(380px, 460px); }
+.main.split.wide { grid-template-columns: 76px minmax(360px, 440px) minmax(0, 1fr); }
+/* A rail page replaces the chat. The chat keeps its place and comes back on Chat. */
+.page { min-width: 0; min-height: 0; overflow-y: auto; padding: 24px 32px 32px; view-transition-name: page; }
+.pg-in { max-width: 1040px; margin: 0 auto; display: grid; gap: 10px; }
+.page .wl { border: 1px solid var(--hair); border-radius: 10px; padding: 2px 12px; }
+.log { list-style: none; margin: 0; padding: 0; border: 1px solid var(--hair); border-radius: 10px; }
+.log li { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px; padding: 9px 14px; font-size: 0.94rem; }
+.log li + li { border-top: 1px solid var(--rule); }
+.log .t { color: var(--muted); font-size: 0.86rem; font-variant-numeric: tabular-nums; padding-top: 1px; }
+.app.paging .chatcol, .app.paging .panel { display: none; }
+.app.paging .main.split { grid-template-columns: 76px minmax(0, 1fr); }
+.p-bar { justify-content: space-between; align-items: center; min-height: 34px; margin-bottom: 8px; }
+.p-full, .g-back, .g-chat { gap: 6px; }
+.p-full svg, .g-back svg, .g-chat svg { width: 14px; height: 14px; }
+
+.needs { gap: 14px; }
+.ng { display: grid; gap: 6px; }
+.need { min-height: 46px; }
+.need .go { font-size: 1.25rem; line-height: 1; color: var(--muted); font-weight: 400; }
+.strip .linkbtn { white-space: nowrap; }
+
+/* Every part of a request, with a tick, a cross or a question */
+.parts { list-style: none; margin: 0; padding: 0; display: grid; }
+.pt { display: grid; grid-template-columns: 22px 56px minmax(0, 1fr); gap: 4px 10px; align-items: start; padding: 10px 0; }
+.pt + .pt { border-top: 1px solid var(--rule); }
+.pt.wide { grid-template-columns: 22px minmax(0, 1fr); }
+.ic { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 0.82rem; }
+.ic svg { width: 12px; height: 12px; }
+.pt[data-s="ok"] .ic { background: var(--green-soft); color: var(--green-ink); }
+.pt[data-s="no"] .ic { background: var(--red-soft); color: var(--red-ink); }
+.pt[data-s="ask"] .ic { background: var(--amber-soft); color: var(--amber-ink); }
+.pt .k { font-size: 0.84rem; font-weight: 700; color: var(--muted); padding-top: 2px; }
+.pt .v { min-width: 0; display: grid; gap: 8px; font-weight: 600; }
+.pt[data-s="no"] .v { font-weight: 400; }
+.pt .s { font-weight: 400; font-size: 0.86rem; color: var(--muted); }
+.pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.pick button { border: 1px solid var(--rail); background: var(--surface); border-radius: 999px; padding: 4px 13px; min-height: 36px; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+  transition: border-color var(--t-press) ease, background-color var(--t-press) ease, transform var(--t-press) var(--ease-out); }
+.pick button:active { transform: scale(0.97); }
+.pick button[aria-pressed="true"] { border-color: var(--ink); background: var(--active); }
+.pt select, .sched select { font: inherit; font-weight: 600; padding: 6px 8px; border: 1px solid var(--rail); border-radius: 6px; background: var(--surface); max-width: 100%; min-height: 36px; }
+.ba { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.was { color: var(--muted); font-weight: 400; text-decoration: line-through; text-decoration-color: var(--rail); }
+.arr { color: var(--muted); font-weight: 400; }
+
+/* The troubleshooter's answers */
+.qa { margin: 0; display: grid; gap: 8px; flex: 1; min-width: 0; }
+.qa div { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 10px; }
+.qa dt { font-size: 0.84rem; font-weight: 700; color: var(--muted); padding-top: 1px; }
+.qa dd { margin: 0; }
+.tr.big { gap: 14px; }
+
+/* Approval */
+.why { display: grid; gap: 10px; width: 100%; }
+.why .c-act { justify-content: flex-end; }
+.askf { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+.askf input { flex: 1 1 220px; min-width: 0; border: 1.5px solid var(--rail); border-radius: 8px; padding: 8px 10px; font-size: 0.95rem; min-height: 40px; }
+.askf input:focus { outline: none; border-color: var(--ink); }
+.note-line { font-size: 0.92rem; padding: 10px 12px; border-radius: 8px; background: var(--sunk); }
+.pv-foot { min-height: 40px; padding-top: 14px; border-top: 1px solid var(--rule); }
+.fields { font-weight: 400; color: var(--muted); }
+
+/* A declined yes, and the write it skipped */
+.nd.no .md { border-style: dashed; border-color: var(--muted); background: var(--sunk); color: var(--muted); }
+.nd.skip { opacity: 0.4; }
+.nd.no::before, .nd.skip::before { background: var(--rail); }
+.cn.no .cn-box { stroke: var(--muted); stroke-dasharray: 6 5; }
+.cn.skip { opacity: 0.4; }
+
+.when-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.sched { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pv-more summary { cursor: pointer; font-weight: 800; font-size: 0.95rem; width: fit-content; }
+.pv-more[open] summary { margin-bottom: 8px; }
+.rows.plain li { grid-template-columns: minmax(0, 1fr) auto; }
+.dl2 { margin: 0; display: grid; gap: 8px; }
+.dl2 div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; }
+.dl2 dt { font-size: 0.86rem; color: var(--muted); font-weight: 600; }
+.dl2 dd { margin: 0; font-weight: 600; }
+
+@media (hover: hover) and (pointer: fine) {
+  .rail button:hover { color: var(--ink); }
+  .pick button:hover { border-color: var(--ink); }
+}
+@media (max-width: 860px) {
+  .main, .main.split { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .rail { flex-direction: row; padding: 6px 10px; border-right: 0; border-bottom: 1px solid var(--hair); }
+  .rail button { grid-auto-flow: column; align-items: center; gap: 6px; padding: 6px 10px; }
+  .cnt { position: static; }
+  .app.paging .main.split, .main.split.wide { grid-template-columns: minmax(0, 1fr); }
+  .page { padding: 14px 16px 24px; }
+}
+@media (max-width: 560px) {
+  .pt { grid-template-columns: 22px minmax(0, 1fr); }
+  .pt .v { grid-column: 2; }
+  .qa div, .dl2 div { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}
+
+/* The live run line. Small in cards and the side panel, large with the agents on the full page. */
+.rl { overflow-x: auto; display: grid; gap: 8px; }
+.rl-t { --w: 64px; --m: 24px; --top: 0px; display: flex; align-items: flex-start; min-width: 330px; padding: 8px 2px 2px; }
+.rl.lg .rl-t { --w: 100px; --m: 34px; --top: 46px; min-width: 560px; padding-top: 12px; }
+.rs { position: relative; z-index: 1; flex: none; width: var(--w); display: grid; justify-items: center; align-content: start; gap: 4px; text-align: center; transition: opacity var(--t-panel) ease; }
+.rw { height: 38px; display: flex; align-items: flex-end; margin-bottom: 4px; }
+.rk { position: relative; width: var(--m); height: var(--m); border-radius: 50%; border: 2px solid var(--ink); background: var(--surface); color: var(--ink); display: grid; place-items: center;
+  transition: background-color var(--t-small) ease, border-color var(--t-small) ease, color var(--t-small) ease, box-shadow var(--t-attn) ease; }
+.rk svg { width: 11px; height: 11px; }
+.rl.lg .rk svg { width: 16px; height: 16px; }
+.rs.gate .rk { border-radius: 7px; }
+.rl.lg .rs.gate .rk { border-radius: 10px; }
+.rlb { font-size: 0.7rem; font-weight: 600; line-height: 1.2; }
+.rl.lg .rlb { font-size: 0.88rem; font-weight: 700; }
+.rk .tick { position: absolute; right: -6px; top: -6px; width: 14px; height: 14px; border-radius: 50%; background: var(--green); color: #fff; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--surface);
+  opacity: 0; transform: scale(0.6); transition: opacity var(--t-small) ease, transform var(--t-small) var(--ease-out); }
+.rk .tick svg { width: 8px; height: 8px; }
+.rs.ok .tick { opacity: 1; transform: none; }
+.rs.done .rk { background: var(--ink); color: var(--on-ink); }
+.rs.now .rk { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.rs.wait .rk { border-color: var(--amber); background: var(--amber-soft); color: var(--amber-ink); }
+.rs.wait .rk::after { content: ""; position: absolute; inset: -4px; border-radius: inherit; animation: halo 1.8s ease-out infinite; }
+.rs.err .rk { border-color: var(--red); background: var(--red-soft); color: var(--red-ink); }
+.rs.no .rk { border-style: dashed; border-color: var(--muted); background: var(--sunk); color: var(--muted); }
+.rs.skip { opacity: 0.4; }
+.rs.open .shackle { transform: translateY(-2.6px) rotate(-16deg); }
+.rc { position: relative; flex: 1 1 0; min-width: 40px; height: 3px; margin: calc(var(--top) + var(--m) / 2 - 1.5px) calc((var(--w) - var(--m)) / -2) 0; }
+.rc > .bar, .rc > .fill { position: absolute; inset: 0; border-radius: 2px; }
+.rc > .bar { background: var(--rail); }
+.rc > .fill { background: var(--ink); transform: scaleX(0); transform-origin: left center; }
+.rc.dead > .bar { background: repeating-linear-gradient(90deg, var(--rail) 0 4px, transparent 4px 8px); }
+.rc.red > .bar { background: repeating-linear-gradient(90deg, var(--red) 0 5px, transparent 5px 9px); }
+.rc.flowing > .bar, .nd.flowing > .mc { background: repeating-linear-gradient(90deg, var(--accent) 0 8px, transparent 8px 14px) 0 0 / 14px 3px; animation: march 0.6s linear infinite; }
+.rc.flowing.amber > .bar { background-image: repeating-linear-gradient(90deg, var(--amber) 0 8px, transparent 8px 14px); animation-duration: 1.4s; }
+.rsubs:empty { display: none; }
+.rsub { display: inline-flex; align-items: center; gap: 4px; font-size: 0.68rem; font-weight: 700; color: var(--muted); line-height: 1.3; }
+.rl.lg .rsub { font-size: 0.78rem; }
+.rsub svg { width: 12px; height: 12px; flex: none; }
+.tag-b { padding: 0 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); animation: fadeup var(--t-small) var(--ease-out) both; }
+.ping { color: var(--amber-ink); animation: pingin 600ms var(--ease-out) both; }
+.res { border: 1px solid var(--green-line); background: var(--green-soft); color: var(--green-ink); border-radius: 999px; padding: 1px 9px; cursor: pointer; animation: lift 520ms var(--ease-out) both; }
+.fin { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-weight: 600; font-size: 0.92rem; animation: fadeup var(--t-small) var(--ease-out) both; }
+.fin[data-tone="ok"] { color: var(--green-ink); }
+.fin svg { width: 15px; height: 15px; flex: none; }
+.card.finished .rl-t, [data-live="run"].finished .qa, [data-live="run"].finished .tr { display: none; }
+.card.beside .rl, .card.beside [data-p-line], .card.beside .c-foot [data-open] { display: none; }
+@keyframes march { to { background-position: 14px 0; } }
+@keyframes cvmarch { to { stroke-dashoffset: -14; } }
+@keyframes pingin { 0% { opacity: 0; transform: translateY(4px) scale(0.9); } 60% { opacity: 1; transform: translateY(-2px) scale(1.04); } 100% { opacity: 1; transform: none; } }
+@keyframes lift { from { opacity: 0; transform: translateY(-8px) scale(0.9); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .rc.flowing > .bar, .nd.flowing > .mc, .ce.flowing, .rs.wait .rk::after, .tag-b, .ping, .res, .fin { animation: none !important; }
+}
+
+/* Workflow line: the Planner's test run flows block to block, like a run */
+.mc { position: absolute; top: calc(var(--who, 0px) + var(--d) / 2 - 1.5px); left: -50%; width: 100%; height: 3px; border-radius: 2px; pointer-events: none; }
+.mc > .mfill { position: absolute; inset: 0; border-radius: 2px; background: var(--ink); transform: scaleX(0); transform-origin: left center; }
+.nd.flowing::before { background: transparent; }
+.ce.flowing { stroke: var(--accent); stroke-dasharray: 8 6; animation: cvmarch 0.6s linear infinite; }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Chat first, on the desktop</h1>
+    <p class="lead">Version 3. Every part of a request gets a tick or a cross, changes happen by talking, and what needs you stays in view. The rail opens Workflows and the Watchlist as full pages. What you open from the chat shows beside it. Sample data only.</p>
+  </header>
+  <div class="demo">
+    <div class="ctl"><span class="lbl" id="who-l">View as</span><div class="seg" id="whoSeg" role="group" aria-labelledby="who-l"><button type="button" data-u="alice">Alice</button><button type="button" data-u="maint">Alice, with n8n access</button><button type="button" data-u="bob">Bob, Approver</button></div></div>
+    <div class="ctl"><span class="lbl" id="speed-l">Speed</span><div class="seg" id="speed" role="group" aria-labelledby="speed-l"><button type="button" data-k="1">1x</button><button type="button" data-k="0.5">2x</button><button type="button" data-k="0">Instant</button></div></div>
+  </div>
+  <div class="demo">
+    <div class="ctl"><span class="lbl" id="tasks-l">Play</span><div class="seg" id="tasks" role="group" aria-labelledby="tasks-l">
+      <button type="button" data-t="morning">Morning check</button><button type="button" data-t="words">Ask in my words</button><button type="button" data-t="edit">Change by talking</button><button type="button" data-t="cant">Something it can’t do</button><button type="button" data-t="decline">Bob declines</button><button type="button" data-t="browse">Browse</button><button type="button" data-t="n8n">Edit in n8n</button>
+    </div></div>
+    <button class="btn ghost sm" id="reset" type="button">Start over</button>
+  </div>
+
+  <div class="app fresh" id="app" data-user="alice">
+    <div class="abar">
+      <span class="brand"><span class="mark" aria-hidden="true">AI</span>AI Workflow Builder</span>
+      <span class="abar-r"><button class="linkbtn" type="button" data-toast="Settings would open here.">Settings</button><span class="who"><span class="av" id="av">A</span><span class="who-t" id="who">Alice, Operator</span></span></span>
+    </div>
+    <div class="main" id="main">
+      <nav class="rail" id="rail" aria-label="Browse">
+        <button type="button" data-rail="chat" aria-pressed="true"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.5 1.5H9l-3.5 3v-3H4A1.5 1.5 0 0 1 2.5 13V6A1.5 1.5 0 0 1 4 4.5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg><span>Chat</span></button>
+        <button type="button" data-rail="wf" aria-pressed="false"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="4.5" cy="10" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="15.5" cy="5" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="15.5" cy="15" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6.6 9.1l6.8-3.2M6.6 10.9l6.8 3.2" stroke="currentColor" stroke-width="1.7"/></svg><span>Workflows</span><span class="cnt" data-live="n-wf"></span></button>
+        <button type="button" data-rail="watch" aria-pressed="false"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3.5" width="14" height="4" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="3" y="8" width="14" height="4" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="3" y="12.5" width="14" height="4" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.7"/></svg><span>Watchlist</span><span class="cnt" data-live="n-watch"></span></button>
+      </nav>
+      <section class="chatcol" aria-label="Chat">
+        <div class="strip" id="strip" hidden></div>
+        <div class="thread" id="thread">
+          <div class="hero" id="hero">
+            <span id="heroFace"></span>
+            <p class="hi" id="hi">Good morning, Alice</p>
+            <h2 id="heroH">What should run by itself?</h2>
+            <div class="hero-dock" id="heroDock"></div>
+            <div class="needs" id="needs"></div>
+          </div>
+          <div class="msgs" id="msgs" role="log" aria-live="polite"></div>
+        </div>
+        <div class="bottom-dock" id="bottomDock"></div>
+      </section>
+      <aside class="panel" id="panel" hidden aria-label="Details"></aside>
+      <section class="page" id="page" hidden aria-label="Page"></section>
+    </div>
+    <div class="n8n" id="n8n" hidden aria-label="n8n editor"></div>
+    <div class="toast" id="toast" role="status" hidden></div>
+    <div class="dock" id="dock">
+      <form class="composer" id="composer"><input id="cin" type="text" autocomplete="off" aria-label="Ask, or describe a task" placeholder="Ask, or describe a task"><button class="send" type="submit" aria-label="Send"></button></form>
+      <div class="chips" id="chips"></div>
+    </div>
+  </div>
+
+  <section class="read" aria-labelledby="h-read">
+    <h2 id="h-read">What’s new in version 3</h2>
+    <ul>
+      <li>Where you came from decides. From the rail, Workflows and the Watchlist open as full pages, and the chat shows only on Chat. From a card in the chat, the first click opens beside it, and anything you open from there goes full page, with Back to the chat. A flow shows once: while it is open beside the chat, the card doesn’t repeat it. Play “Browse”, then “Morning check”.
+      <li>The side panel is a summary: what it is, its state, and the next step. More details opens the full page, which adds what helps you understand it, such as a run’s step-by-step log or a release’s notes. An approval always shows everything that will be written.</li>
+      <li>Every part of a request gets a tick or a cross, with a reason. Nothing is dropped, and a missing time is asked, never guessed.</li>
+      <li>“Make the React check run on Mondays only” changes the workflow you have. You see before and after, and can undo.</li>
+      <li>A run tells its story. Moving dashes flow into the step that is working, and turn slow and amber while the run waits for a yes. The line into a step that stopped turns red. Retry picks up at the step that stopped, and a slow step shows how long it has been working. The yes shows where the request went. The new ticket pops out at the end, and a finished run settles into one line. Play “Morning check”, then switch to Bob and approve.</li>
+      <li>The Planner’s test run flows the same way, block to block in n8n. Type “watch Kubernetes every Monday at 9am and create a Jira ticket”.</li>
+      <li>A stopped run answers three things: what happened, what was affected, and whether a retry is safe.</li>
+      <li>Bob sees what will be written and what wasn’t checked, can ask Alice a question, and can decline with a reason. A declined record never says “created”.</li>
+      <li>Needs you is split into Do now and Set up, and stays pinned while you chat.</li>
+      <li>n8n views show only for people with n8n access. Switch “View as” to compare.</li>
+      <li>Try typing “what needs my attention today?”, “is LangGraph up to date?”, “watch Kubernetes and email me”, “make it daily” or “pause the React check”.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+const AG = {
+  lead: { name: 'Planner', hue: '#3e5bd8', tint: '#dfe5ff' },
+  safety: { name: 'Safety checker', hue: '#0a7068', tint: '#d3f0ec', job: 'shield' },
+  tester: { name: 'Tester', hue: '#526d10', tint: '#ebf2d3', job: 'check' },
+  trouble: { name: 'AI troubleshooter', hue: '#7a4bd6', tint: '#ece3ff', job: 'wrench' },
+  version: { name: 'Version checker', hue: '#1f6f9f', tint: '#ddeffb', job: 'magnifier' },
+  writer: { name: 'Ticket writer', hue: '#b2520a', tint: '#ffe7d3', job: 'pen' },
+};
+const KIND = { none: 'No system access', read: 'Reads GitHub', gate: 'Waits for a yes', write: 'Writes after a yes' };
+const ICON = {
+  when: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 5v3.3l2.1 1.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  read: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.2 10.2l3.2 3.2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>',
+  compare: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 5.5h10M10 3l2.5 2.5L10 8M13.5 10.5h-10M6 8l-2.5 2.5L6 13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  gate: '<svg viewBox="0 0 16 16" aria-hidden="true"><path class="shackle" d="M5.3 7.2V5.4a2.7 2.7 0 0 1 5.4 0v1.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><rect x="3.4" y="7.2" width="9.2" height="6.6" rx="1.6" fill="currentColor"/></svg>',
+  write: '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.6" y="3" width="10.8" height="10" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5.2 6.6h5.6M5.2 9.4h3.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  check: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.4l2.9 2.9 6-6.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  send: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M3.5 7.5L8 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+
+/* ---------- Faces: the Visor bot for the Planner, an Orb for every other agent ---------- */
+const GLYPH = {
+  magnifier: '<circle cx="38.7" cy="38.7" r="2.4" fill="none" stroke="#fff" stroke-width="1.5"/><path d="M40.5 40.5l2 2" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>',
+  shield: '<path d="M39.5 35.6l3 1.2v2.2c0 1.9-1.3 3.3-3 4-1.7-.7-3-2.1-3-4v-2.2z" fill="#fff"/>',
+  wrench: '<path d="M42.6 36.4a2.6 2.6 0 0 1-3.1 3.3l-2.9 2.9-1.4-1.4 2.9-2.9a2.6 2.6 0 0 1 3.3-3.1l-1.5 1.5 1.2 1.2z" fill="#fff"/>',
+  pen: '<path d="M36.6 42.4l.6-2.4 4.6-4.6 1.8 1.8-4.6 4.6z" fill="#fff"/>',
+  check: '<path d="M36.7 39.7l1.9 1.9 3.8-4" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
+};
+const mix = (c, p, w = '#ffffff') => `color-mix(in srgb, ${c} ${p}%, ${w})`;
+const stops = (l) => l.map(([o, c, op = 1]) => `<stop offset="${o}" style="stop-color:${c};stop-opacity:${op}"/>`).join('');
+const radial = (id, l, cx = '50%', cy = '50%', r = '50%') => `<radialGradient id="${id}" cx="${cx}" cy="${cy}" r="${r}">${stops(l)}</radialGradient>`;
+const linear = (id, l) => `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">${stops(l)}</linearGradient>`;
+function features(cx, ey, my, glow, st, sp, w, h, mouthy) {
+  const L = cx - sp;
+  const R = cx + sp;
+  const rect = (x, y, hh) => `<rect x="${x - w / 2}" y="${y - hh / 2}" width="${w}" height="${hh}" rx="${Math.min(w / 2, hh / 2)}" style="fill:${glow}"/>`;
+  let eyes = rect(L, ey, h) + rect(R, ey, h);
+  if (st === 'success') eyes = `<path d="M${L - w / 2} ${ey + 1}q${w / 2}-3.4 ${w} 0M${R - w / 2} ${ey + 1}q${w / 2}-3.4 ${w} 0" style="stroke:${glow}" stroke-width="2.2" stroke-linecap="round" fill="none"/>`;
+  const brows = st === 'error' ? `<path d="M${L - 3.5} ${ey - h / 2 - 2.2}l4.5-2M${R + 3.5} ${ey - h / 2 - 2.2}l-4.5-2" style="stroke:${glow}" stroke-width="1.8" stroke-linecap="round" fill="none"/>` : '';
+  let mouth = '';
+  if (mouthy && st === 'speaking') mouth = `<g class="f-wave">${[-4, -2, 0, 2, 4].map((dx) => `<rect x="${cx + dx - 0.7}" y="${my - 1.9}" width="1.4" height="4" rx=".7" style="fill:${glow}"/>`).join('')}</g>`;
+  if (mouthy && st === 'thinking') mouth = `<g class="f-think">${[-3.5, 0, 3.5].map((dx) => `<circle cx="${cx + dx}" cy="${my}" r="1.2" style="fill:${glow}"/>`).join('')}</g>`;
+  return `${brows}<g class="f-eyes">${eyes}</g>${mouth}`;
+}
+function visor(st, k) {
+  const h = AG.lead.hue;
+  return `<defs>${radial(`${k}b`, [[0, '#ffffff'], [0.65, mix(h, 8)], [1, mix(h, 28)]], '40%', '30%', '75%')}${linear(`${k}v`, [[0, '#1d2a44'], [1, '#070c16']])}${radial(`${k}e`, [[0, mix(h, 40)], [1, mix(h, 85, '#0b1020')]], '40%', '35%', '70%')}${radial(`${k}s`, [[0, '#0f1420', 0.3], [1, '#0f1420', 0]])}${radial(`${k}h`, [[0, '#ffffff', 0.95], [1, '#ffffff', 0]])}</defs>
+    <ellipse cx="24" cy="45" rx="12" ry="2.2" fill="url(#${k}s)"/>
+    <g class="f-b"><circle cx="8.6" cy="25" r="3.6" fill="url(#${k}e)"/><circle cx="39.4" cy="25" r="3.6" fill="url(#${k}e)"/>
+    <path d="M24 5C33 5 39.5 13 39.5 23.5C39.5 34.5 33 42 24 42C15 42 8.5 34.5 8.5 23.5C8.5 13 15 5 24 5Z" fill="url(#${k}b)"/>
+    <path d="M12.5 19C12.5 15 17.5 13 24 13C30.5 13 35.5 15 35.5 19V25.5C35.5 30 30.5 32.5 24 32.5C17.5 32.5 12.5 30 12.5 25.5Z" fill="url(#${k}v)"/>
+    <path d="M15 17C17 15.2 20.5 14.6 23.5 14.6" stroke="#fff" stroke-opacity=".35" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+    <ellipse cx="17" cy="9.5" rx="4.5" ry="2.2" fill="url(#${k}h)" opacity=".9" transform="rotate(-20 17 9.5)"/>
+    ${features(24, 22.5, 28.8, mix(h, 30), st, 5, 4.2, 6.6, true)}
+    <path d="M18 37.5c3.5 1.6 8.5 1.6 12 0" style="stroke:${mix(h, 35)}" stroke-width="1.2" fill="none" stroke-linecap="round" opacity=".7"/></g>`;
+}
+function orb(id, st, k, job) {
+  const a = AG[id];
+  return `<defs><radialGradient id="${k}b" cx="40%" cy="34%" r="72%"><stop offset="0" style="stop-color:#ffffff"/><stop offset=".5" style="stop-color:${a.tint}"/><stop offset="1" style="stop-color:${a.hue}"/></radialGradient></defs>
+    <g class="f-b"><circle cx="24" cy="25" r="21" style="fill:${a.hue}" opacity=".12"/><circle cx="24" cy="25" r="17" fill="url(#${k}b)"/>
+    <g class="f-spin"><ellipse cx="15.5" cy="16.5" rx="4.6" ry="2.4" fill="#fff" opacity=".8" transform="rotate(-38 15.5 16.5)"/></g>
+    ${features(24, 25, 30.5, '#16233a', st, 5, 4, 6.5, false)}</g>
+    ${st === 'thinking' ? '<g class="f-think"><circle cx="36.5" cy="6.5" r="1.3"/><circle cx="40.5" cy="4" r="1.7"/><circle cx="45" cy="2" r="2.1"/></g>' : ''}
+    ${job ? `<g><circle cx="39.5" cy="39.5" r="7.2" fill="var(--surface)"/><circle cx="39.5" cy="39.5" r="5.9" style="fill:${a.hue}"/>${GLYPH[a.job]}</g>` : ''}`;
+}
+let faceN = 0;
+const ring = (fill, mark, cls) => `<g class="${cls}"><circle cx="40" cy="9" r="7.5" fill="var(--surface)"/><circle cx="40" cy="9" r="6" fill="${fill}"/>${mark}</g>`;
+function face(id, size, st = 'idle') {
+  const k = `f${(faceN += 1)}`;
+  const badge = st === 'error' ? ring('var(--red)', '<path d="M40 5.4v4.2M40 12.3v.2" stroke="#fff" stroke-width="1.9" stroke-linecap="round"/>', 'f-badge') : '';
+  const ok = st === 'success' ? ring('var(--green)', '<path d="M37.3 9.2l1.9 1.9 3.6-3.8" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>', 'f-ok') : '';
+  return `<svg class="face fs-${st}" viewBox="0 0 48 48" width="${size}" height="${size}" aria-hidden="true">${id === 'lead' ? visor(st, k) : orb(id, st, k, size >= 26)}${badge}${ok}</svg>`;
+}
+const fw = (id, size, st = 'idle') => `<span class="fw" data-a="${id}" data-size="${size}" data-st="${st}" title="${AG[id].name}">${face(id, size, st)}</span>`;
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+function setFace(root, id, st) {
+  if (!root) return;
+  $$(`.fw[data-a="${id}"]`, root).forEach((w) => { if (w.dataset.st === st) return; w.dataset.st = st; w.innerHTML = face(id, +w.dataset.size, st); });
+}
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/* ---------- Timing ---------- */
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let K = reduce ? 0 : 1;
+let PLAY = 0;
+let playing = false;
+const STOP = new Error('stopped');
+function stopAll() { PLAY += 1; playing = false; }
+function wait(ms) {
+  const id = PLAY;
+  return new Promise((res, rej) => {
+    const go = () => (id === PLAY ? res() : rej(STOP));
+    if (K === 0) queueMicrotask(go); else setTimeout(go, ms * K);
+  });
+}
+const quiet = (p) => p.catch((e) => { if (e !== STOP) throw e; });
+function vt(fn) {
+  if (document.startViewTransition && K !== 0 && !reduce) { const t = document.startViewTransition(fn); t.ready.catch(() => {}); t.finished.catch(() => {}); return t.updateCallbackDone.catch(() => {}); }
+  fn();
+  return Promise.resolve();
+}
+
+/* ---------- Version 3 ---------- */
+const REQ = 'Every Monday, check LangGraph for a new release, create a Jira ticket, and flag any security issues.';
+const REQ_EDIT = 'Make the React check run on Mondays only';
+const REQ_CANT = 'Post the FastAPI news in our Teams channel';
+const REQ_N8N = 'Show me the FastAPI check in n8n';
+KIND.tell = 'Shows here';
+Object.assign(ICON, {
+  bell: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 11.4V7.4a4 4 0 0 1 8 0v4l1.2 1.2H2.8z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M6.6 14a1.5 1.5 0 0 0 2.8 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  x: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  back: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5L5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  msg: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3.5h10a1 1 0 0 1 1 1v5.5a1 1 0 0 1-1 1H7.5L4.5 13.5v-2.5H3a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>',
+  expand: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2.5h4v4M13.5 2.5L9 7M6.5 13.5h-4v-4M2.5 13.5L7 9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  fork: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 8h4M6.5 8l3-4h4M6.5 8l3 4h4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  stop: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5.5 8h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+});
+const STEP = {
+  when: { id: 'when', short: 'Daily 8:00', kind: 'none', icon: 'when' },
+  read: { id: 'read', short: 'Read release', kind: 'read', icon: 'read', agent: 'version' },
+  compare: { id: 'compare', short: 'Compare', kind: 'none', icon: 'compare', agent: 'version' },
+  yes: { id: 'yes', short: 'Ask for a yes', kind: 'gate', icon: 'gate' },
+  write: { id: 'write', short: 'Create ticket', kind: 'write', icon: 'write', agent: 'writer' },
+  tell: { id: 'write', short: 'Tell you', kind: 'tell', icon: 'bell' },
+};
+const stepsFor = (then) => (then === 'tell' ? [STEP.when, STEP.read, STEP.compare, STEP.tell] : [STEP.when, STEP.read, STEP.compare, STEP.yes, STEP.write]);
+const THEN = { jira: 'Create a Jira ticket, after a yes', tell: 'Tell me here' };
+
+/* ---------- Schedules: a time is never guessed ---------- */
+const DAY = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
+const short = (s) => `${s.day ? DAY[s.day].slice(0, 3) : 'Daily'} ${s.time || '…'}`;
+const long = (s) => `Every ${s.day ? DAY[s.day] : 'day'} at ${s.time}`;
+const lower = (t) => (/^(GitHub|Bob|Alice|MOCK|Jira|Teams|FastAPI|React|LangGraph)\b/.test(t) ? t : t.charAt(0).toLowerCase() + t.slice(1));
+const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+const sameS = (a, b) => (a.day || null) === (b.day || null) && a.time === b.time;
+const firstRun = (s) => (s.day ? `${DAY[s.day]}, ${s.time}` : `tomorrow, ${s.time}`);
+const DAY_RE = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b|\b(mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)\b/;
+const DAILY_RE = /\b(every ?day|daily|each day|every morning)\b/;
+const WEEKLY_RE = /\b(weekly|every week|once a week)\b/;
+const SCHED_RE = new RegExp(`${DAILY_RE.source}|${WEEKLY_RE.source}|${DAY_RE.source}|\\b\\d{1,2}(:\\d{2})?\\s*(am|pm)\\b|\\bat \\d{1,2}\\b`);
+const dayOf = (s) => { const m = s.match(DAY_RE); return m ? (m[1] || m[2]).slice(0, 3) : null; };
+function timeOf(s) {
+  const m = s.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/) || s.match(/\bat\s+(\d{1,2})(?::(\d{2}))?\b/);
+  if (!m) return null;
+  let h = +m[1];
+  if (m[3] === 'pm' && h < 12) h += 12;
+  if (m[3] === 'am' && h === 12) h = 0;
+  return h > 23 ? null : `${h}:${m[2] || '00'}`;
+}
+
+/* ---------- One source of truth: every card reads from here ---------- */
+const SOFT0 = {
+  fastapi: { name: 'FastAPI', repo: 'fastapi/fastapi', run: '0.115.2', latest: '0.121.0', on: '5 Nov', notes: '3 bug fixes. No breaking changes listed.' },
+  langgraph: { name: 'LangGraph', repo: 'langchain-ai/langgraph', run: '0.2.60', latest: '0.3.1', on: '4 Nov', notes: '2 new features and 4 fixes. One change may break older code.' },
+  log4j: { name: 'Log4j core', repo: 'apache/logging-log4j2', run: '2.24.1', latest: '2.24.3', on: '1 Nov', notes: '2 bug fixes.' },
+  react: { name: 'React', repo: 'facebook/react', run: '19.1.0', latest: '19.1.0' },
+  django: { name: 'Django', repo: 'django/django', run: '5.1.4', latest: '5.1.4' },
+  langserve: { name: 'LangServe', repo: 'langchain-ai/langserve', run: '0.3.0', missing: true },
+};
+const EXTRA = { kubernetes: { name: 'Kubernetes', repo: 'kubernetes/kubernetes' }, grafana: { name: 'Grafana', repo: 'grafana/grafana' }, nginx: { name: 'NGINX', repo: 'nginx/nginx' }, node: { name: 'Node.js', repo: 'nodejs/node' }, python: { name: 'Python', repo: 'python/cpython' } };
+const ALIAS = { k8s: 'kubernetes', 'node.js': 'node', nodejs: 'node' };
+const SOFT_RE = /\b(fastapi|langgraph|react|log4j|django|langserve|kubernetes|k8s|grafana|nginx|node|python)\b/;
+const d8 = { day: null, time: '8:00' };
+const d9 = { day: null, time: '9:00' };
+const WORLD = {
+  user: 'alice', maint: false, stage: 'stopped', run: { when: 'done', read: 'err', compare: '', yes: '', write: '' },
+  appr: 'none', apprUI: null, reason: '', asked: '', paused: {}, focus: null, key: true, langserve: true, schedEdit: null, sd: null, pendingEdit: '',
+  wf: {
+    fastapi: { name: 'FastAPI release check', soft: 'fastapi', sched: d8, then: 'jira', ver: 3, yes: true, by: 'Alice', on: '2 Nov' },
+    react: { name: 'React release check', soft: 'react', sched: d8, then: 'jira', ver: 2, yes: true, by: 'Alice', on: '30 Oct' },
+  },
+  hist: {
+    fastapi: [{ v: 3, what: 'Moved the run to 8:00', by: 'Alice', on: '2 Nov', sched: d8, yes: true }, { v: 2, what: 'Added a test run on practice Jira', by: 'Alice', on: '28 Oct', sched: d9, yes: true }, { v: 1, what: 'Built by the Planner', by: 'Alice', on: '20 Oct', sched: d9, yes: true }],
+    react: [{ v: 2, what: 'Moved the run to 8:00', by: 'Alice', on: '30 Oct', sched: d8, yes: true }, { v: 1, what: 'Built by the Planner', by: 'Alice', on: '22 Oct', sched: d9, yes: true }],
+  },
+  order: ['fastapi', 'react'], drafts: {}, edits: {},
+};
+const WAITING = { stage: 'waiting', appr: 'waiting', run: { when: 'done', read: 'done', compare: 'done', yes: 'wait', write: '' } };
+const DONE = { stage: 'done', appr: 'approved', run: { when: 'done', read: 'done', compare: 'done', yes: 'done', write: 'done' } };
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const W = {};
+function resetWorld(over = {}) {
+  Object.keys(W).forEach((k) => delete W[k]);
+  Object.assign(W, clone(WORLD), { soft: clone(SOFT0) }, clone(over));
+}
+const canEdit = () => W.user !== 'bob';
+const flagged = (id) => W.wf[id].then === 'jira' && !W.wf[id].yes;
+function wfState(id) {
+  if (W.paused[id]) return ['Paused', 'idle'];
+  if (flagged(id)) return ['Needs a fix', 'err'];
+  if (id === 'fastapi' && W.stage === 'stopped') return ['Stopped', 'err'];
+  if (id === 'fastapi' && W.stage === 'waiting') return ['Waiting for a yes', 'wait'];
+  return ['On', 'run'];
+}
+const softIds = () => Object.keys(W.soft).filter((k) => k !== 'langserve' || W.langserve);
+function softState(k) {
+  const s = W.soft[k];
+  if (s.missing) return ['Can’t find', 'err'];
+  if (!s.run) return ['Watching', 'idle'];
+  return s.run === s.latest ? ['Up to date', 'ok'] : ['Newer out', 'wait'];
+}
+function needs() {
+  if (W.user === 'bob') return W.appr === 'waiting' ? [{ g: 'now', t: '<b>FastAPI upgrade ticket</b> needs your yes', s: '<b>FastAPI ticket</b> needs your yes', open: 'appr', tone: 'wait' }] : [];
+  const l = W.order.filter(flagged).map((id) => ({ g: 'now', t: `<b>${W.wf[id].name}</b> can’t write without a yes`, s: `<b>${W.soft[id].name} check</b> can’t write`, open: `wf:${id}`, tone: 'err' }));
+  if (!flagged('fastapi') && W.stage === 'stopped' && !W.paused.fastapi) l.push({ g: 'now', t: '<b>FastAPI release check</b> stopped at 8:00', s: '<b>FastAPI check</b> stopped', open: 'run', tone: 'err' });
+  if (W.langserve) l.push({ g: 'set', t: '<b>LangServe</b> can’t be found on GitHub', s: '<b>LangServe</b> not found', open: 'soft:langserve', tone: 'wait' });
+  if (W.key) l.push({ g: 'set', t: '<b>Jira key</b> expires Friday', s: '<b>Jira key</b> expires Friday', open: 'key', tone: 'wait' });
+  return l;
+}
+const needRow = (n) => `<button class="need" type="button" data-need="${n.open}" data-tone="${n.tone}"><span class="sdot" aria-hidden="true"></span><span class="st-t">${n.t}</span><span class="go" aria-hidden="true">›</span></button>`;
+function needsHTML(l) {
+  if (!l.length) return '<p class="calm-line">Nothing needs you.</p>';
+  return [['now', 'Do now'], ['set', 'Set up']].map(([g, h]) => { const r = l.filter((n) => n.g === g); return r.length ? `<div class="ng"><p class="needs-h">${h}</p>${r.map(needRow).join('')}</div>` : ''; }).join('');
+}
+const needsHead = () => { const n = needs().length; if (W.user === 'bob') return n ? '1 change waits for your yes' : 'Nothing waits for your yes'; return n ? `${n} ${n === 1 ? 'thing needs' : 'things need'} you` : 'Nothing needs you'; };
+
+/* ---------- Lists ---------- */
+const listRows = () => W.order.map((id) => { const [t, s] = wfState(id); return `<li><button class="wl-row" type="button" data-open="wf:${id}"><span><b>${W.wf[id].name}</b><span class="s">${short(W.wf[id].sched)}</span></span><span class="pill" data-s="${s}">${t}</span></button></li>`; }).join('');
+const softSub = (s) => (s.missing ? s.repo : !s.run ? 'Added today' : s.run === s.latest ? s.run : `${s.run} → ${s.latest}`);
+const softRow = (k) => { const s = W.soft[k]; const [t, c] = softState(k); return `<li><button class="wl-row" type="button" data-open="soft:${k}"><span><b>${s.name}</b><span class="s">${softSub(s)}</span></span><span class="pill" data-s="${c}">${t}</span></button></li>`; };
+const watchRows = () => softIds().map(softRow).join('');
+const behindIds = () => softIds().filter((k) => softState(k)[0] === 'Newer out');
+const listCard = () => '<div class="card"><div class="c-head"><b>Workflows</b><span class="small muted" data-live="n-wf"></span></div><ul class="wl" data-live="list"></ul></div>';
+const watchCard = () => '<div class="card"><div class="c-head"><b>Watchlist</b><span class="small muted" data-live="n-watch"></span></div><ul class="wl" data-live="watch"></ul></div>';
+const behindCard = () => '<div class="card"><div class="c-head"><b data-live="behind-h"></b></div><ul class="wl" data-live="behind"></ul><div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="list:watch">See the watchlist</button></span></div></div>';
+const needsCard = () => '<div class="card"><div class="c-head"><b data-live="needs-h"></b></div><div class="needs" data-live="needs"></div></div>';
+const histCard = () => `<div class="card"><div class="c-head"><b>Your recent decisions</b></div><ul class="rows plain">
+  <li><span><b>React upgrade ticket</b><span class="s">Tue 4 Nov</span></span><span class="pill" data-s="ok">Approved</span></li>
+  <li><span><b>FastAPI upgrade ticket</b><span class="s">28 Oct · Not this week</span></span><span class="pill">Declined</span></li></ul></div>`;
+const capsCard = () => (W.user === 'bob'
+  ? '<div class="card"><div class="c-head"><b>What I can do</b></div><ul class="caps"><li>Show what waits for your yes</li><li>Show exactly what a change will write</li><li>Show your past decisions</li></ul></div>'
+  : '<div class="card"><div class="c-head"><b>What I can do</b></div><ul class="caps"><li>Watch software for new releases</li><li>Create Jira tickets, after a yes</li><li>Explain a stopped run, and retry it</li><li>Change or pause your workflows</li></ul><p class="small muted">Not yet: Teams channels, email, Confluence.</p></div>');
+const cantCard = (head, alt, ask) => `<div class="card"><div class="c-head"><b>${head}</b></div>${alt ? `<p class="muted">${alt}</p>` : ''}${ask ? '<div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-toast="Asked the team. Their answer will show here.">Ask the team</button></span></div>' : ''}</div>`;
+const CANT = [
+  [/(teams|channel|slack)/, 'I can’t post in Teams channels yet', 'Run results show here, in the chat.', true],
+  [/e-?mail/, 'I can’t send email yet', 'Run results show here, in the chat.', true],
+  [/(confluence|wiki)/, 'I can’t update Confluence yet', 'I can create a Jira ticket, after a yes.', true],
+  [/\b(delete|remove)\b.*\b(ticket|issue|jira|project)/, 'I don’t delete anything in Jira', 'A Jira admin can do that.', false],
+];
+
+/* ---------- Line of steps ---------- */
+function line(o = {}) {
+  const steps = o.steps || stepsFor('jira');
+  return `<ol class="ml${o.lg ? ' lg' : ''}"${o.live ? ' data-nodes' : ''}>${steps.map((s, i) => `<li class="nd k-${s.kind}${o.off ? ' off' : ''}" data-id="${s.id}">
+    ${i ? '<i class="mc" aria-hidden="true"><i class="mfill"></i></i>' : ''}
+    ${o.lg && o.live ? `<span class="bwho">${s.agent ? fw(s.agent, 34) : ''}</span>` : ''}
+    <span class="md">${ICON[s.icon]}<span class="tick">${ICON.check}</span></span>
+    <span class="nlbl">${s.id === 'when' && o.first ? o.first : s.short}</span>${o.lg ? `<span class="ntag">${KIND[s.kind]}</span>` : ''}
+  </li>`).join('')}</ol>`;
+}
+/* ---------- The stopped run, with the troubleshooter’s answers ---------- */
+const FOUND = 'Found 0.121.0. You run 0.115.2.';
+const QA = {
+  stopped: [['What happened', 'GitHub didn’t answer at 8:00.'], ['Affected', 'Nothing. No ticket was written.'], ['Safe to retry', 'Yes. GitHub is answering again.']],
+  retrying: [['Now', 'Retrying after a short wait…']],
+  waiting: [['Found', FOUND], ['Now', 'Waiting for Bob’s yes.']],
+  writing: [['Found', FOUND], ['Now', 'Bob said yes. Creating the ticket…']],
+  done: [['Found', FOUND], ['Result', 'MOCK-22 created after Bob’s yes.']],
+  declined: [['Found', FOUND], ['Result', '']],
+};
+const TODAY = { stopped: 'GitHub didn’t answer', retrying: 'Retrying', waiting: 'Waiting for Bob’s yes', writing: 'Creating the ticket', done: 'MOCK-22 created', declined: 'Declined. Nothing was written.' };
+const RUNPILL = { stopped: ['Stopped', 'err'], retrying: ['Running', 'run'], waiting: ['Waiting for a yes', 'wait'], writing: ['Running', 'run'], done: ['Done', 'ok'], declined: ['Declined', 'idle'] };
+const qaHTML = () => QA[W.stage].map(([k, v]) => `<div><dt>${k}</dt><dd>${k === 'Result' && W.stage === 'declined' ? `Bob declined${W.reason ? `: ${lower(W.reason)}` : ''}. Nothing was written.` : v}</dd></div>`).join('');
+const runCard = () => `<div class="card" data-live="run" data-spec="run">
+  <div class="c-head"><b>FastAPI release check</b><span class="pill" data-live="run-pill"></span></div>
+  ${runLine()}
+  <dl class="qa" data-live="run-qa"></dl>
+  <div class="c-foot"><button class="btn ghost sm" type="button" data-open="run">Open</button><span class="c-act" data-live="run-act"></span></div>
+</div>`;
+const n8nTabs = (a) => `<div class="seg ptabs" role="group" aria-label="View"><button type="button" data-ptab="sum" aria-pressed="true">${a}</button><button type="button" data-ptab="n8n" aria-pressed="false">In n8n</button></div>`;
+/* Two levels: the side panel is a summary (decide and act); the full page adds what helps understand it. */
+const runHead = '<div class="pv-head"><div><p class="pv-kind">Today’s run, 8:00</p><h3>FastAPI release check</h3></div><span class="pill lg" data-live="run-pill"></span></div>';
+const runView = (full = false) => (full ? `<div class="pv" data-live="run">${runHead}
+  ${W.maint ? n8nTabs('Steps') : ''}
+  <div class="pv-pane" data-pane="sum">${runLine(true)}</div>
+  ${W.maint ? `<div class="pv-pane" data-pane="n8n" hidden>${canvasSVG('fastapi', { live: true })}</div>` : ''}
+  <div class="tr big">${fw('trouble', 34)}<dl class="qa" data-live="run-qa"></dl></div>
+  <div class="pv-sec"><h4>Step by step</h4><ol class="log" data-live="run-log"></ol></div>
+  <div class="pv-foot"><span></span><span class="c-act" data-live="run-act"></span></div>
+</div>` : `<div class="pv" data-live="run">${runHead}
+  ${runLine()}
+  <dl class="qa" data-live="run-qa"></dl>
+  <div class="pv-foot"><span></span><span class="c-act" data-live="run-act"></span></div>
+</div>`);
+function logRows() {
+  const l = [['8:00:00', 'Started on schedule.'], ['8:00:01', 'Version checker asked GitHub for FastAPI’s newest release.'], ['8:00:31', 'GitHub didn’t answer in 30 seconds. Stopped before anything was written.']];
+  if (W.stage !== 'stopped') l.push(['9:01:10', 'Retried from Read release, after a short wait. Daily 8:00 didn’t run again.']);
+  if (['waiting', 'writing', 'done', 'declined'].includes(W.stage)) l.push(['9:01:12', 'Found 0.121.0. You run 0.115.2.'], ['9:01:13', 'Asked an Approver for a yes in Teams.']);
+  if (['writing', 'done'].includes(W.stage)) l.push(['9:04:02', 'Bob said yes.']);
+  if (W.stage === 'done') l.push(['9:04:03', 'Created MOCK-22 in Jira project MOCK.']);
+  if (W.stage === 'declined') l.push(['9:04:02', `Bob declined${W.reason ? `: ${lower(W.reason)}` : ''}. Nothing was written.`]);
+  return l.map(([t, s]) => `<li><span class="t">${t}</span><span>${s}</span></li>`).join('');
+}
+
+/* ---------- The live run line: work flows from agent to agent ----------
+   Its look comes from the run state (patchRunLine): dashes flow into the step that is working, slow and amber
+   into a yes that waits, red into a step that stopped, and solid once a step is done. */
+const RSTEPS = stepsFor('jira');
+const instant = () => reduce || K === 0;
+function anim(el, kf, ms, easing = 'cubic-bezier(0.77, 0, 0.175, 1)') {
+  const lastKf = kf[kf.length - 1];
+  if (!el || instant()) { if (el) Object.assign(el.style, lastKf); return Promise.resolve(); }
+  const a = el.animate(kf, { duration: ms * K, easing, fill: 'forwards' });
+  return a.finished.then(() => { Object.assign(el.style, lastKf); a.cancel(); }).catch(() => {});
+}
+const HOP = 450;
+function runLine(lg = false) {
+  return `<div class="rl${lg ? ' lg' : ''}" data-rl><div class="rl-t">${RSTEPS.map((s, i) => `${i ? '<div class="rc" aria-hidden="true"><i class="bar"></i><i class="fill"></i></div>' : ''}<div class="rs${s.kind === 'gate' ? ' gate' : ''}">${lg ? `<span class="rw">${s.agent ? fw(s.agent, 34) : ''}</span>` : ''}<span class="rk">${ICON[s.icon]}<span class="tick">${ICON.check}</span></span><span class="rlb">${s.id === 'when' ? short(W.wf.fastapi.sched) : s.short}</span><span class="rsubs" data-sub></span></div>`).join('')}</div><p class="fin" data-fin hidden></p></div>`;
+}
+function subFor(id, lg) {
+  const s = W.run[id] || '';
+  if (id === 'read' && s === 'now' && W.rewound) return `<span class="rsub tag-b">${lg ? 'Picks up here' : 'From here'}</span>`;
+  if (s === 'now') return `<span class="rsub tm" data-since="${W.since}" data-p="${lg ? 'Working, ' : ''}">${lg ? 'Working…' : '…'}</span>`;
+  if (id === 'yes' && s === 'wait') return `<span class="rsub ping">${ICON.msg}${lg ? 'Sent to Bob in Teams' : 'Sent to Bob'}</span>`;
+  if (id === 'write' && s === 'done') return '<button class="rsub res" type="button" data-toast="MOCK-22 would open in Jira.">MOCK-22</button>';
+  return '';
+}
+function patchRunLine(rl) {
+  if (rl.dataset.anim) return;
+  const lg = rl.classList.contains('lg');
+  const steps = $$('.rs', rl);
+  RSTEPS.forEach((s, i) => {
+    const st = W.run[s.id] || '';
+    const el = steps[i];
+    el.className = `rs${s.kind === 'gate' ? ' gate' : ''}${st ? ` ${st}` : ''}${st === 'done' ? ' ok' : ''}${s.id === 'yes' && ['writing', 'done'].includes(W.stage) ? ' open' : ''}`;
+    if (s.agent && lg) setFace(el, s.agent, NODE_FACE[st]);
+    const sub = $('[data-sub]', el);
+    const h = subFor(s.id, lg);
+    if (sub.dataset.h !== h) { sub.innerHTML = h; sub.dataset.h = h; }
+  });
+  $$('.rc', rl).forEach((c, i) => {
+    const to = W.run[RSTEPS[i + 1].id] || '';
+    const solid = ['done', 'no'].includes(to);
+    const fill = $('.fill', c);
+    if (solid && c.classList.contains('flowing')) anim(fill, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], 250);
+    else fill.style.transform = `scaleX(${solid ? 1 : 0})`;
+    c.classList.toggle('flowing', to === 'now' || to === 'wait');
+    c.classList.toggle('amber', to === 'wait');
+    c.classList.toggle('red', to === 'err');
+    c.classList.toggle('dead', to === 'skip');
+  });
+  const fin = W.stage === 'done' ? `${ICON.check}Done at 9:04 · MOCK-22 created after Bob’s yes` : W.stage === 'declined' ? `Ended at 9:04 · Bob declined${W.reason ? `: ${lower(W.reason)}` : ''}. Nothing was written.` : '';
+  const p = $('[data-fin]', rl);
+  p.hidden = !fin;
+  p.dataset.tone = W.stage === 'done' ? 'ok' : '';
+  if (p.dataset.h !== fin) { p.innerHTML = fin; p.dataset.h = fin; }
+}
+const shake = (el) => anim(el, [{ transform: 'translateX(0)' }, { transform: 'translateX(-3px)' }, { transform: 'translateX(3px)' }, { transform: 'translateX(0)' }], 320, 'ease-in-out');
+/* When a stopped run first shows in the chat, replay the work flowing into Read release, then stopping there. */
+async function replayFail(rl) {
+  if (!rl || instant() || W.stage !== 'stopped') return;
+  const c = $$('.rc', rl)[0];
+  const st = $$('.rs', rl)[1];
+  rl.dataset.anim = '1';
+  c.classList.remove('red');
+  c.classList.add('flowing');
+  st.classList.remove('err');
+  st.classList.add('now');
+  await new Promise((res) => setTimeout(res, 1000 * K));
+  delete rl.dataset.anim;
+  patchRunLine(rl);
+  await shake($('.rk', st));
+}
+/* A step that takes a while shows how long it has been working. */
+setInterval(() => $$('.tm').forEach((el) => { const s = Math.floor((Date.now() - Number(el.dataset.since)) / 1000); if (s >= 1) el.textContent = `${el.dataset.p}${s} s`; }), 250);
+
+/* ---------- Approval: what will be written, what wasn’t checked, ask or decline with a reason ---------- */
+const REASONS = ['Not this week', 'Wrong version', 'Needs testing first'];
+const apprCard = () => `<div class="card" data-live="appr">
+  <div class="c-head"><b>Create 1 Jira ticket</b><span class="pill" data-live="appr-pill"></span></div>
+  <p>Upgrade FastAPI from 0.115.2 to 0.121.0</p>
+  <div class="c-foot"><span class="c-left" data-live="appr-left"></span><span class="c-act" data-live="appr-act"></span></div>
+</div>`;
+/* The summary never trims what will be written: an Approver decides on the whole change. */
+const apprView = (full = false) => `<div class="pv" data-live="appr">
+  <div class="pv-head"><div><p class="pv-kind">Approval, from Alice’s FastAPI release check</p><h3>Create 1 Jira ticket</h3></div><span class="pill lg" data-live="appr-pill"></span></div>
+  <div class="pv-sec"><h4>What will be written</h4><dl class="chg">
+    <div><dt>Where</dt><dd>Jira project MOCK</dd></div>
+    <div><dt>Summary</dt><dd>Upgrade FastAPI from 0.115.2 to 0.121.0</dd></div>
+    <div><dt>Details</dt><dd class="body">FastAPI 0.121.0 is out. The team runs 0.115.2.
+github.com/fastapi/fastapi/releases/tag/0.121.0</dd></div>
+    <div><dt>Fields</dt><dd class="fields">Task · Medium · upgrade, fastapi</dd></div>
+  </dl></div>
+  <div class="pv-sec"><h4>Not checked</h4><p>Security advisories. I can’t read them yet.</p></div>
+  ${full ? `<p class="ai-sum"><b>Summary by AI.</b> 3 bug fixes, no breaking changes listed. Decide on the change above, not this.</p>
+  <dl class="dl2"><div><dt>Sent</dt><dd>Today, 9:01, in Teams</dd></div><div><dt>Why you</dt><dd>No one can approve their own work.</dd></div></dl>
+  <div class="pv-actions"><button class="btn ghost" type="button" data-open="run">See the run</button></div>` : ''}
+  <div data-live="appr-thread"></div>
+  <div class="pv-foot" data-live="appr-foot"></div>
+</div>`;
+function apprFoot() {
+  if (W.appr === 'waiting') {
+    if (W.user !== 'bob') return '<span class="c-left">Waiting for an Approver. You can’t approve your own work.</span>';
+    if (W.apprUI === 'decline') return `<div class="why"><p><b>Why?</b> <span class="muted small">Optional. Alice will see it.</span></p><div class="pick">${REASONS.map((r) => `<button type="button" data-reason="${r}" aria-pressed="${W.reason === r}">${r}</button>`).join('')}</div><div class="c-act"><button class="btn ghost" type="button" data-appr-ui="">Back</button><button class="btn decline" type="button">Decline</button></div></div>`;
+    if (W.apprUI === 'ask') return '<form class="askf" data-askf><input id="askIn" type="text" autocomplete="off" placeholder="Ask Alice a question" aria-label="Ask Alice a question"><button class="btn ghost" type="button" data-appr-ui="">Back</button><button class="btn" type="submit">Send</button></form>';
+    return '<button class="btn ghost" type="button" data-appr-ui="ask">Ask Alice</button><span class="c-act"><button class="btn ghost" type="button" data-appr-ui="decline">Decline</button><button class="btn approve" type="button">Approve</button></span>';
+  }
+  if (W.appr === 'approved') return `<span class="c-left okline done-line">${ICON.check}Approved by Bob at 9:04.${W.stage === 'done' ? ' MOCK-22 created.<span class="stamp" aria-hidden="true">Created</span>' : ' Creating the ticket…'}</span>`;
+  if (W.appr === 'declined') return `<span class="c-left">Declined by Bob at 9:04${W.reason ? `: ${lower(W.reason)}` : ''}. Nothing was written.</span>`;
+  return '';
+}
+
+/* ---------- Workflow, software and key views ---------- */
+const sentFor = (id) => { const f = W.wf[id]; return `${long(f.sched)}, check ${(W.soft[f.soft] || EXTRA[f.soft]).name} on GitHub for a new release. ${f.then === 'jira' ? 'If there is one, create an upgrade ticket in Jira project MOCK, after a yes.' : 'If there is one, tell me here.'}`; };
+const TIMES = ['7:30', '8:00', '9:00', '13:00', '17:00'];
+const dayOpts = (v) => [['', 'Every day'], ...['mon', 'tue', 'wed', 'thu', 'fri'].map((d) => [d, `Every ${DAY[d]}`])].map(([k, l]) => `<option value="${k}"${(v || '') === k ? ' selected' : ''}>${l}</option>`).join('');
+const timeOpts = (v) => [...new Set([...TIMES, v])].map((t) => `<option${t === v ? ' selected' : ''}>${t}</option>`).join('');
+function whenHTML(id) {
+  const f = W.wf[id];
+  if (W.schedEdit === id) return `<div class="sched"><select id="sdDay" aria-label="Day">${dayOpts(W.sd.day)}</select><select id="sdTime" aria-label="Time">${timeOpts(W.sd.time)}</select><button class="btn sm" type="button" data-sched-save="${id}">Save</button><button class="btn ghost sm" type="button" data-sched-cancel>Cancel</button></div>`;
+  return `<div class="when-row"><span>${long(f.sched)}</span>${canEdit() ? `<button class="linkbtn" type="button" data-sched-edit="${id}">Change</button>` : ''}</div>`;
+}
+const versRows = (id) => W.hist[id].map((h, i) => `<li><span><b>Version ${h.v}${i === 0 ? ', in use' : ''}</b><span class="s">${h.what}. ${h.by}, ${h.on}.</span></span><span></span>${i === 0 || !canEdit() ? '<span></span>' : `<button class="btn ghost sm" type="button" data-rollback="${id}:${h.v}">Roll back</button>`}</li>`).join('');
+const lastRun = (id) => (id === 'fastapi' ? `Today 8:00: ${lower(TODAY[W.stage])}` : W.hist[id].length === 1 && W.hist[id][0].on === 'just now' ? 'No runs yet' : 'Today 8:00: nothing new');
+const nextRun = (id) => (W.paused[id] ? 'Paused' : cap(firstRun(W.wf[id].sched)));
+function wfView(id, full = false) {
+  const f = W.wf[id];
+  if (!full) return `<div class="pv" data-live="wf" data-wf="${id}">
+    <div class="pv-head"><div><p class="pv-kind">Workflow</p><h3>${f.name}</h3></div><span class="pill lg" data-live="wf-pill"></span></div>
+    <p class="pv-sent" data-live="wf-sent"></p>
+    <div class="banner" data-live="wf-banner"></div>
+    <dl class="dl2"><div><dt>Last run</dt><dd data-live="wf-last"></dd></div><div><dt>Next run</dt><dd data-live="wf-next"></dd></div></dl>
+  </div>`;
+  const runs = id === 'fastapi'
+    ? '<li data-live="wf-today"></li><li><span><b>Yesterday, 8:00</b><span class="s">No new release</span></span><span class="pill">Nothing new</span><span></span></li><li><span><b>Tue, 8:00</b><span class="s">1 ticket, approved by Bob</span></span><span class="pill" data-s="ok">Done</span><span></span></li>'
+    : W.hist[id].length === 1 && W.hist[id][0].on === 'just now'
+      ? `<li><span><b>No runs yet</b><span class="s">First run ${firstRun(f.sched)}.</span></span><span></span><span></span></li>`
+      : '<li><span><b>Today, 8:00</b><span class="s">No new release</span></span><span class="pill">Nothing new</span><span></span></li><li><span><b>Yesterday, 8:00</b><span class="s">No new release</span></span><span class="pill">Nothing new</span><span></span></li>';
+  return `<div class="pv" data-live="wf" data-wf="${id}">
+    <div class="pv-head"><div><p class="pv-kind">Workflow</p><h3>${f.name}</h3></div><span class="pill lg" data-live="wf-pill"></span></div>
+    ${W.maint ? n8nTabs('Summary') : ''}
+    <div class="pv-pane" data-pane="sum">
+      <p class="pv-sent" data-live="wf-sent"></p>
+      <div class="banner" data-live="wf-banner"></div>
+      ${line({ lg: true, steps: stepsFor(f.then), first: short(f.sched) })}
+      <div class="pv-grid">
+        <div class="pv-sec"><h4>When</h4><div data-live="wf-when"></div></div>
+        ${f.then === 'jira' ? '<div class="pv-sec"><h4>Who says yes</h4><p>Any Approver but you, in Teams.</p></div>' : ''}
+      </div>
+      <div class="pv-sec"><h4>Recent runs</h4><ul class="rows">${runs}</ul></div>
+      <details class="pv-more"><summary>Versions</summary><ul class="rows" data-live="wf-vers"></ul></details>
+      <div class="pv-actions" data-live="wf-acts"></div>
+    </div>
+    ${W.maint ? `<div class="pv-pane" data-pane="n8n" hidden>
+      <div class="cv-meta"><b data-live="n8n-ver"></b><span class="small muted">Only our blocks are on, so every write waits for a yes.</span></div>
+      <div data-live="n8n-canvas"></div>
+      <div class="pv-actions"><button class="btn" type="button" data-editor="${id}">Open in n8n editor</button></div>
+    </div>` : ''}
+  </div>`;
+}
+const TICKET = { stopped: 'None yet. Today’s check stopped before it could tell.', retrying: 'None yet', waiting: '1 waiting for Bob’s yes', writing: 'Being created', done: 'MOCK-22, created today', declined: 'Declined by Bob. None created.' };
+const ticketFor = (k) => { const s = W.soft[k]; if (k === 'fastapi') return TICKET[W.stage]; if (s.run && s.run === s.latest) return 'Not needed'; return W.wf[k] ? 'None yet' : 'None. Nothing checks it, so no ticket is made.'; };
+const checkedFor = (k) => { if (!W.wf[k]) return ''; if (k === 'fastapi') return W.stage === 'stopped' ? 'Today 8:00, didn’t finish' : 'Today 9:01'; return lastRun(k) === 'No runs yet' ? 'Not yet' : 'Today 8:00'; };
+function softView(k, full = false) {
+  const s = W.soft[k];
+  const [t, c] = softState(k);
+  const head = `<div class="pv-head"><div><p class="pv-kind">Watchlist</p><h3>${s.name}</h3></div><span class="pill lg" data-s="${c}">${t}</span></div>`;
+  if (s.missing) return `<div class="pv" data-live="soft">${head}<div class="banner" data-tone="err"><span>GitHub can’t find ${s.repo}, and doesn’t say where it moved.</span></div><div class="pv-actions" data-live="soft-act"></div></div>`;
+  const by = W.wf[k] ? `<button class="linkbtn" type="button" data-open="wf:${k}">${W.wf[k].name}</button>` : '<span class="muted">Nothing checks it yet</span>';
+  const now = !s.run ? 'Added today. The first check finds the version you run.' : s.run === s.latest ? `You run ${s.run}, the newest.` : `You run ${s.run}. Newest is ${s.latest}, out ${s.on}.`;
+  const act = !W.wf[k] && canEdit() ? `<div class="pv-actions"><button class="btn" type="button" data-say="Watch ${s.name} releases">Watch for new releases</button></div>` : '';
+  if (!full) return `<div class="pv">${head}<p class="pv-sent">${now}</p><dl class="dl2"><div><dt>Checked by</dt><dd>${by}</dd></div></dl>${act}</div>`;
+  return `<div class="pv">${head}<dl class="dl2">
+    <div><dt>You run</dt><dd>${s.run || 'Not known yet'}</dd></div>
+    ${s.latest ? `<div><dt>Newest</dt><dd>${s.latest}${s.on ? ` <span class="muted small">out ${s.on}</span>` : ''}</dd></div>` : ''}
+    ${s.notes ? `<div><dt>What changed</dt><dd>${s.notes} <span class="muted small">From the release notes</span></dd></div>` : ''}
+    <div><dt>Upgrade ticket</dt><dd data-live="soft-ticket" data-soft="${k}"></dd></div>
+    <div><dt>Checked by</dt><dd>${by}${checkedFor(k) ? ` <span class="muted small">last checked ${lower(checkedFor(k))}</span>` : ''}</dd></div>
+    <div><dt>Source</dt><dd>github.com/${s.repo}</dd></div></dl>${act}</div>`;
+}
+const keyView = () => `<div class="pv" data-live="key"><div class="pv-head"><div><p class="pv-kind">Connection</p><h3>Jira key</h3></div><span class="pill lg" data-s="wait">Expires Friday</span></div>
+  <p class="pv-sent">After Friday 14 Nov, nothing can be written to Jira until the key is renewed. Only an admin can renew it.</p>
+  <div class="pv-actions" data-live="key-act"></div></div>`;
+const listView = (k) => ({
+  needs: '<div class="pv"><div class="pv-head"><h3>Needs you</h3></div><div class="needs" data-live="needs"></div></div>',
+  wf: '<div class="pv"><div class="pv-head"><h3>Workflows</h3><span class="muted" data-live="n-wf"></span></div><ul class="wl" data-live="list"></ul></div>',
+  watch: '<div class="pv"><div class="pv-head"><h3>Watchlist</h3><span class="muted" data-live="n-watch"></span></div><ul class="wl" data-live="watch"></ul></div>',
+}[k]);
+
+/* ---------- n8n: the same steps, drawn as n8n blocks ---------- */
+const CV = {
+  when: { x: 90, y: 100, sub: 'Schedule', icon: 'when' },
+  read: { x: 265, y: 100, label: 'Read release', sub: 'GitHub', icon: 'read', ours: true },
+  compare: { x: 440, y: 100, label: 'Newer?', sub: 'IF', icon: 'fork' },
+  yes: { x: 615, y: 100, label: 'Ask for a yes', sub: 'Teams', icon: 'gate', ours: true },
+  write: { x: 795, y: 100, label: 'Make approved changes', sub: 'Jira', icon: 'write', ours: true },
+  noop: { x: 615, y: 245, label: 'Nothing to change', sub: 'Ends the run', icon: 'stop' },
+};
+const EDGES = [['when', 'read'], ['read', 'compare'], ['compare', 'yes', 'true'], ['yes', 'write'], ['compare', 'noop', 'false'], ['compare', 'write', 'true', 'cw']];
+function canvasSVG(id, o = {}) {
+  const st = o.draft || W.wf[id];
+  const yes = st.yes;
+  const tell = st.then === 'tell';
+  const label = (k) => (k === 'when' ? short(st.sched) : k === 'write' && tell ? 'Tell you' : CV[k].label);
+  const sub = (k) => (k === 'write' && tell ? 'In the app' : CV[k].sub);
+  const icon = (k) => (k === 'write' && tell ? 'bell' : CV[k].icon);
+  const cls = (k, edge, a, b) => {
+    if (o.build) return ' off';
+    if (edge) return k === 'cw' ? (yes ? ' gone' : '') : (!yes && (a === 'yes' || b === 'yes') ? ' gone' : '');
+    if (k === 'yes' && !yes) return ' gone';
+    return o.sel === k ? ' sel' : '';
+  };
+  const edges = EDGES.map(([a, b, lab, key]) => {
+    const A = CV[a];
+    const B = CV[b];
+    const k = key || `${a}-${b}`;
+    const c = cls(k, true, a, b);
+    const x1 = A.x + 42;
+    const x2 = B.x - 42;
+    const t = lab ? `<text class="ce-l${c}" data-e="${k}" data-from="${a}" data-to="${b}" x="${x1 + 8}" y="${B.y > A.y ? A.y + 24 : A.y - 9}">${lab}</text>` : '';
+    return `<path class="ce${c}" data-e="${k}" data-from="${a}" data-to="${b}" d="M${x1} ${A.y} C${x1 + 50} ${A.y}, ${x2 - 50} ${B.y}, ${x2} ${B.y}"/>${t}`;
+  }).join('');
+  const nodes = Object.keys(CV).map((k) => {
+    const N = CV[k];
+    return `<g class="cn${cls(k)}" data-node="${k}" transform="translate(${N.x - 42} ${N.y - 42})"${o.editor ? ` tabindex="0" role="button" aria-label="${label(k)}"` : ''}>
+      <rect class="cn-box" width="84" height="84" rx="14"/>
+      ${ICON[icon(k)].replace('<svg ', `<svg x="26" y="${N.ours ? 14 : 26}" width="32" height="32" `)}
+      ${N.ours ? '<rect class="ours" x="14" y="58" width="56" height="16" rx="8"/><text class="ours-t" x="42" y="69.5" text-anchor="middle">Our block</text>' : ''}
+      ${k === 'when' ? '' : '<circle class="port" cx="0" cy="42" r="5"/>'}${k === 'write' || k === 'noop' ? '' : '<circle class="port" cx="84" cy="42" r="5"/>'}
+      <g class="cn-ok"><circle cx="80" cy="4" r="9" fill="var(--green)"/><path d="M75.8 4.2l2.8 2.8 5.2-5.4" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
+      <g class="cn-err"><circle cx="80" cy="4" r="9" fill="var(--red)"/><path d="M80 -0.6v5.2M80 8.4v.2" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></g>
+      <text class="cn-l" x="42" y="104" text-anchor="middle">${label(k)}</text>
+      <text class="cn-s" x="42" y="121" text-anchor="middle">${sub(k)}</text>
+    </g>`;
+  }).join('');
+  return `<div class="cv${o.editor ? ' edit' : ''}"${o.build ? ' data-build' : ''}${o.live ? ' data-cv-live' : ''}><svg viewBox="0 20 900 320" role="${o.editor ? 'group' : 'img'}" aria-label="${(W.wf[id] || W.drafts[id] || {}).name} in n8n">${edges}${nodes}</svg></div>`;
+}
+const buildView = (k) => { const d = W.drafts[k]; return `<div class="pv" data-bview>
+  <div class="pv-head"><div><p class="pv-kind">Building in n8n</p><h3>${d.name}</h3><p class="muted" data-bstat>Starting…</p></div><span class="pill lg" data-bpill>Draft</span></div>
+  ${canvasSVG(k, { build: true, draft: { sched: d.sched, yes: d.then === 'jira', then: d.then } })}
+  <div class="bchecks" data-bchecks></div>
+  <p class="small muted">Only our blocks and n8n’s safe ones. The builder saves a draft. It can’t publish by itself.</p>
+</div>`; };
+const bview = () => $$('[data-bview]').pop();
+function bstat(t) { const v = bview(); if (v) $('[data-bstat]', v).textContent = t; }
+function bcheck(t) { const v = bview(); if (v) $('[data-bchecks]', v).insertAdjacentHTML('beforeend', `<span class="okline">${ICON.check}${t}</span>`); }
+function cvReveal(k, added) {
+  const v = bview();
+  if (!v) return;
+  const show = (n) => { const g = $(`[data-node="${n}"]`, v); if (g) g.classList.remove('off'); };
+  show(k);
+  if (k === 'compare') show('noop');
+  if (added) { $(`[data-node="${k}"]`, v).classList.add('added'); $$('[data-e="cw"]', v).forEach((e) => e.classList.add('gone')); }
+  $$('.ce.off, .ce-l.off', v).forEach((e) => {
+    const a = $(`[data-node="${e.dataset.from}"]`, v);
+    const b = $(`[data-node="${e.dataset.to}"]`, v);
+    if (!a.classList.contains('off') && !b.classList.contains('off') && !a.classList.contains('gone') && !b.classList.contains('gone')) e.classList.remove('off');
+  });
+}
+function cvOk(k) {
+  const v = bview();
+  if (!v) return;
+  const g = $(`[data-node="${k}"]`, v);
+  if (g) g.classList.add('ok');
+  $$(`.ce[data-to="${k}"]`, v).forEach((e) => { if (!e.classList.contains('gone')) e.classList.add('ok'); });
+}
+function newVersion(id, snap, what) {
+  const n = W.wf[id];
+  n.ver += 1;
+  n.sched = { ...snap.sched };
+  n.yes = snap.yes;
+  n.by = 'Alice';
+  n.on = 'just now';
+  W.hist[id].unshift({ v: n.ver, what, by: 'Alice', on: 'just now', sched: { ...snap.sched }, yes: snap.yes });
+  refresh();
+}
+function rollback(id, v) {
+  const h = W.hist[id].find((x) => x.v === v);
+  if (!h) return;
+  newVersion(id, h, `Rolled back to version ${v}`);
+  toast(`Back to version ${v}, saved as version ${W.wf[id].ver}.`);
+}
+function fixYes(id) {
+  newVersion(id, { sched: W.wf[id].sched, yes: true }, 'Put “Ask for a yes” back');
+  toast(`Version ${W.wf[id].ver} has the yes back.`);
+}
+const changedCard = (id, ver, changes, safe) => `<div class="card" data-chg="${id}">
+  <div class="c-head"><b>Changed in n8n</b><span class="pill" data-s="${safe ? 'ok' : 'err'}">${safe ? 'Safe' : 'Writes refused'}</span></div>
+  <p>${W.wf[id].name}, version ${ver}, by Alice.</p>
+  <ul class="caps">${changes.map((c) => `<li>${c}</li>`).join('')}</ul>
+  ${safe ? '' : '<p class="small">Without a yes, our platform refuses the write. The next run stops before the ticket.</p>'}
+  <div class="c-foot"><span class="c-left" data-chg-left></span><span class="c-act">${safe ? '' : `<button class="btn sm" type="button" data-fixyes="${id}">Add the yes back</button>`}<button class="btn ghost sm" type="button" data-rollback="${id}:${ver - 1}">Undo</button></span></div>
+</div>`;
+function settleChg(card) {
+  const id = card.dataset.chg;
+  $('.c-act', card).innerHTML = '';
+  const l = $('[data-chg-left]', card);
+  l.className = 'c-left okline';
+  l.innerHTML = `${ICON.check}Done. Version ${W.wf[id].ver} is in use.`;
+}
+
+/* A mock of n8n’s editor: only our blocks and n8n’s safe ones are turned on. */
+let E = null;
+function editorHTML() {
+  const n = W.wf[E.id];
+  const dirty = !sameS(E.sched, n.sched) || E.yes !== n.yes;
+  return `<div class="nx-bar"><span class="nx-brand">n8n</span><span class="nx-name">${n.name}</span><span class="pill" data-s="${dirty ? 'wait' : 'idle'}">${dirty ? 'Not published' : `Version ${n.ver}`}</span><span class="nx-gap"></span><button class="btn ghost sm" type="button" data-nx-close>Back to the app</button><button class="btn sm" type="button" data-publish>Publish</button></div>
+  <div class="nx-body">
+    <aside class="nx-pal" aria-label="Blocks"><b>Blocks you can use</b><ul><li>Schedule</li><li>IF</li><li>Merge</li><li>Nothing to change</li><li>Sticky note</li><li class="ours">Read</li><li class="ours">Agent</li><li class="ours">Ask for a yes</li><li class="ours">Make approved changes</li><li class="off">HTTP Request</li><li class="off">Code</li><li class="off">Jira</li></ul><p class="small muted">n8n’s own app, HTTP and Code blocks are off.</p></aside>
+    <div class="nx-main">${canvasSVG(E.id, { editor: true, draft: E, sel: E.sel })}</div>
+    <aside class="nx-insp" aria-label="Settings">${inspHTML()}</aside>
+  </div>
+  <p class="nx-note">A mock of n8n’s editor, for this sketch only.</p>`;
+}
+function inspHTML() {
+  const k = E.sel;
+  if (!k) return '<p class="muted">Select a block to see its settings.</p>';
+  if (k === 'when') return `<b>Schedule</b><label class="field">Day<select id="nxDay">${dayOpts(E.sched.day)}</select></label><label class="field">Time<select id="nxTime">${timeOpts(E.sched.time)}</select></label><p class="small muted">Singapore time.</p>`;
+  if (k === 'yes') return '<b>Ask for a yes</b><p>Our block. Asks any Approver except the person who started the run, in Teams.</p><button class="btn danger sm" type="button" data-delyes>Delete this block</button>';
+  const info = {
+    read: ['Read release', 'Our block. Reads the newest release on GitHub. It can’t change anything.'],
+    compare: ['Newer?', 'True when the newest release is newer than the version the team runs.'],
+    write: E.then === 'tell' ? ['Tell you', 'Our block. Shows the result in the app. It changes nothing.'] : ['Make approved changes', 'Our block. Creates 1 ticket in Jira project MOCK. Our platform holds the Jira key and checks for a yes as it writes.'],
+    noop: ['Nothing to change', 'Ends the run quietly when there’s no new release.'],
+  }[k];
+  return `<b>${info[0]}</b><p>${info[1]}</p>`;
+}
+function renderEditor() { $('#n8n').innerHTML = editorHTML(); }
+function openEditor(id) { const n = W.wf[id]; E = { id, sched: { ...n.sched }, yes: n.yes, then: n.then, sel: null }; renderEditor(); $('#n8n').hidden = false; }
+function closeEditor() { const x = $('#n8n'); x.hidden = true; x.innerHTML = ''; E = null; }
+function selectNode(k) { if (!E) return; E.sel = k; renderEditor(); }
+function setTime(t) { if (!E) return; E.sched.time = t; renderEditor(); }
+function setDay(d) { if (!E) return; E.sched.day = d || null; renderEditor(); }
+function delYes() { if (!E) return; E.yes = false; E.sel = null; renderEditor(); toast('Deleted “Ask for a yes”. Nothing changes until you publish.'); }
+async function publishEdit() {
+  if (!E) return null;
+  const { id } = E;
+  const n = W.wf[id];
+  const sched = { ...E.sched };
+  const { yes } = E;
+  const changes = [];
+  const parts = [];
+  if (!sameS(sched, n.sched)) { changes.push(`Now runs ${lower(long(sched))}.`); parts.push(`Moved to ${short(sched)}`); }
+  if (yes !== n.yes) { changes.push(yes ? 'Put “Ask for a yes” back.' : 'Deleted “Ask for a yes”.'); parts.push(yes ? 'Put “Ask for a yes” back' : 'Deleted “Ask for a yes”'); }
+  if (!changes.length) { toast('Nothing changed, so there’s nothing to publish.'); return null; }
+  $('#toast').hidden = true;
+  closeEditor();
+  newVersion(id, { sched, yes }, `${parts.join(' and ')} in n8n`);
+  await fold();
+  const safe = yes || n.then === 'tell';
+  return pushCard(changedCard(id, n.ver, changes, safe), 'safety', safe ? 'I checked the new version.' : 'I checked the new version. It needs a fix.');
+}
+function showTab(btn) {
+  const box = btn.closest('.pv');
+  press(btn.parentElement, 'data-ptab', btn.dataset.ptab);
+  $$('[data-pane]', box).forEach((p) => { if (p.parentElement === box) p.hidden = p.dataset.pane !== btn.dataset.ptab; });
+}
+
+/* ---------- Keep every live card in step with the source ---------- */
+const NODE_FACE = { now: 'working', err: 'error', done: 'success', wait: 'idle', no: 'idle', skip: 'idle', '': 'idle' };
+const TR_FACE = { stopped: 'idle', retrying: 'working', waiting: 'success', writing: 'success', done: 'success', declined: 'idle' };
+function patchRun(el) {
+  $$('[data-rl]', el).forEach(patchRunLine);
+  el.classList.toggle('finished', ['done', 'declined'].includes(W.stage));
+  $$('[data-cv-live] [data-node]', el).forEach((g) => {
+    const s = W.run[g.dataset.node] || '';
+    g.classList.remove('done', 'now', 'wait', 'err', 'no', 'skip');
+    if (s) g.classList.add(s);
+  });
+  $$('[data-cv-live] .ce', el).forEach((e) => e.classList.toggle('ok', W.run[e.dataset.from] === 'done' && ['done', 'now', 'wait', 'err'].includes(W.run[e.dataset.to] || '')));
+  const [pt, ps] = RUNPILL[W.stage];
+  $$('[data-live="run-pill"]', el).forEach((p) => { p.textContent = pt; p.dataset.s = ps; });
+  $$('[data-live="run-qa"]', el).forEach((p) => { p.innerHTML = qaHTML(); });
+  $$('[data-live="run-log"]', el).forEach((p) => { p.innerHTML = logRows(); });
+  setFace(el, 'trouble', TR_FACE[W.stage]);
+  $$('[data-live="run-act"]', el).forEach((p) => { p.innerHTML = W.stage === 'stopped' && canEdit() ? '<button class="btn ghost" type="button" data-toast="Sent to support with this run attached. The reply will show here.">Report to support</button><button class="btn retry" type="button">Retry</button>' : ''; });
+}
+function patchAppr(el) {
+  const map = { waiting: [W.user === 'bob' ? 'Needs your yes' : 'Waiting for a yes', 'wait'], approved: ['Approved', 'ok'], declined: ['Declined', 'idle'], none: ['Not sent', 'idle'] };
+  const [t, s] = map[W.appr];
+  $$('[data-live="appr-pill"]', el).forEach((p) => { p.textContent = t; p.dataset.s = s; });
+  const left = $('[data-live="appr-left"]', el);
+  if (left) {
+    left.className = W.appr === 'approved' ? 'c-left okline' : 'c-left';
+    left.innerHTML = W.appr === 'approved' ? `${ICON.check}Approved.${W.stage === 'done' ? ' MOCK-22 created.' : ''}` : W.appr === 'declined' ? 'Declined. Nothing was written.' : '';
+  }
+  const act = $('[data-live="appr-act"]', el);
+  if (act) act.innerHTML = `<button class="btn ${W.appr === 'waiting' && W.user === 'bob' ? '' : 'ghost '}sm" type="button" data-open="appr">${W.appr === 'waiting' && W.user === 'bob' ? 'Review and decide' : 'Open'}</button>`;
+  const foot = $('[data-live="appr-foot"]', el);
+  if (foot) {
+    const typed = $('#askIn', foot)?.value;
+    foot.innerHTML = apprFoot();
+    if (typed && $('#askIn', foot)) $('#askIn', foot).value = typed;
+  }
+  const th = $('[data-live="appr-thread"]', el);
+  if (th) th.innerHTML = W.asked ? `<p class="note-line"><b>You asked Alice:</b> ${esc(W.asked)}<br><span class="muted">No reply yet. The request stays open.</span></p>` : '';
+}
+function patchWf(el) {
+  const id = el.dataset.wf;
+  const f = W.wf[id];
+  const [t, s] = wfState(id);
+  const p = $('[data-live="wf-pill"]', el);
+  p.textContent = t;
+  p.dataset.s = s;
+  const b = $('[data-live="wf-banner"]', el);
+  b.dataset.tone = '';
+  if (flagged(id)) { b.dataset.tone = 'err'; b.innerHTML = `<span>Writes refused: there’s no yes before the ticket.</span>${canEdit() ? `<button class="btn sm" type="button" data-fixyes="${id}">Add the yes back</button>` : ''}`; }
+  else if (W.paused[id]) b.innerHTML = '<span>Paused. It won’t run until you resume it.</span>';
+  else if (id === 'fastapi' && (W.stage === 'stopped' || W.stage === 'waiting')) { b.dataset.tone = s; b.innerHTML = `<span>${W.stage === 'stopped' ? 'Stopped today at 8:00.' : 'Waiting for Bob’s yes.'}</span><button class="btn sm" type="button" data-open="run">Open the run</button>`; }
+  else b.innerHTML = '';
+  const today = $('[data-live="wf-today"]', el);
+  if (today) { const [pt, ps] = RUNPILL[W.stage]; today.innerHTML = `<span><b>Today, 8:00</b><span class="s">${TODAY[W.stage]}</span></span><span class="pill" data-s="${ps}">${pt}</span><button class="btn ghost sm" type="button" data-open="run">Open</button>`; }
+  $('[data-live="wf-sent"]', el).textContent = sentFor(id);
+  const last = $('[data-live="wf-last"]', el);
+  if (last) { last.textContent = lastRun(id); $('[data-live="wf-next"]', el).textContent = nextRun(id); }
+  if (!$('[data-live="wf-vers"]', el)) return;
+  if (W.schedEdit !== id || !$('#sdDay', el)) $('[data-live="wf-when"]', el).innerHTML = whenHTML(id);
+  $('[data-pane="sum"] .nd[data-id="when"] .nlbl', el).textContent = short(f.sched);
+  $('[data-live="wf-vers"]', el).innerHTML = versRows(id);
+  $('[data-live="wf-acts"]', el).innerHTML = canEdit() ? `<button class="btn ghost" type="button" data-pause="${id}">${W.paused[id] ? 'Resume' : 'Pause'}</button>${W.maint ? `<button class="btn ghost" type="button" data-editor="${id}">Open in n8n editor</button>` : ''}` : '';
+  const ver = $('[data-live="n8n-ver"]', el);
+  if (ver) { ver.textContent = `Version ${f.ver}, published by ${f.by}, ${f.on}`; $('[data-live="n8n-canvas"]', el).innerHTML = canvasSVG(id); }
+}
+function refresh() {
+  renderNeeds();
+  renderStrip();
+  renderRail();
+  const set = (k, v) => $$(`[data-live="${k}"]`).forEach((el) => { el.innerHTML = v; });
+  set('needs', needsHTML(needs()));
+  set('needs-h', needsHead());
+  set('list', listRows());
+  set('watch', watchRows());
+  set('behind', behindIds().map(softRow).join(''));
+  set('behind-h', `${behindIds().length} have a newer version`);
+  set('list-full', listRowsFull());
+  set('watch-full', watchRowsFull());
+  set('watch-sum', watchSummary());
+  $$('[data-live="soft-ticket"]').forEach((el) => { el.textContent = ticketFor(el.dataset.soft); });
+  set('n-wf', String(W.order.length));
+  set('n-watch', String(softIds().length));
+  set('soft-act', W.langserve
+    ? '<button class="btn ghost" type="button" data-toast="Asked the team where LangServe went. Their answer will show here.">Ask the team</button><button class="btn ghost" type="button" data-remove>Remove from watchlist</button>'
+    : `<span class="okline">${ICON.check}Removed from the watchlist.</span><button class="btn ghost sm" type="button" data-restore>Undo</button>`);
+  set('key-act', W.key ? '<button class="btn" type="button" data-keyask>Ask the admin to renew it</button>' : `<span class="okline">${ICON.check}Asked the admin in Teams.</span>`);
+  $$('[data-live="run"]').forEach(patchRun);
+  $$('[data-live="appr"]').forEach(patchAppr);
+  $$('[data-live="wf"]').forEach(patchWf);
+  /* A flow shows once: while a card's item is open beside the chat, the card drops its own copy. */
+  $$('#msgs [data-spec]').forEach((c) => c.classList.toggle('beside', c.dataset.spec === P.stack.at(-1)));
+}
+
+/* ---------- The app ---------- */
+const app = $('#app');
+const main = $('#main');
+const msgs = $('#msgs');
+const thread = $('#thread');
+const panel = $('#panel');
+const dock = $('#dock');
+const cin = $('#cin');
+const P = { stack: [] };
+const G = { stack: [], from: '' };
+const page = $('#page');
+let paging = false;
+$('.send', dock).innerHTML = ICON.send;
+
+function renderNeeds() {
+  const l = needs();
+  $('#needs').innerHTML = l.length ? needsHTML(l) : '';
+  if (W.user === 'bob') $('#heroH').textContent = needsHead();
+}
+function renderStrip() {
+  const s = $('#strip');
+  s.hidden = app.classList.contains('fresh');
+  const l = needs();
+  const n = l[0];
+  s.dataset.tone = n ? n.tone : 'calm';
+  s.innerHTML = n
+    ? `<span class="sdot" aria-hidden="true"></span><span class="st-t">${n.s}</span>${l.length > 1 ? `<button class="linkbtn" type="button" data-open="needs">${l.length - 1} more</button>` : ''}<button class="btn sm ghost" type="button" data-need="${n.open}">Open</button>`
+    : '<span class="sdot" aria-hidden="true"></span><span class="st-t">Nothing needs you</span>';
+}
+function renderRail() {
+  const top = paging ? G.stack[0] : '';
+  const cur = top === 'list:wf' ? 'wf' : top === 'list:watch' ? 'watch' : 'chat';
+  $$('#rail [data-rail]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.rail === cur)));
+}
+const CHIPS = {
+  alice: [['needs', 'What needs me?'], ['behind', 'Which software is behind?'], ['caps', 'What can you do?']],
+  bob: [['mine', 'What waits for me?'], ['hist', 'What did I decide?'], ['caps', 'What can you do?']],
+};
+function renderChips() {
+  const l = W.user === 'bob' ? CHIPS.bob : CHIPS.alice;
+  $('#chips').innerHTML = l.map(([k, t]) => `<button type="button" data-chip="${k}">${t}</button>`).join('');
+}
+function scroll() { thread.scrollTop = thread.scrollHeight; }
+function push(html) { msgs.insertAdjacentHTML('beforeend', html); scroll(); return msgs.lastElementChild; }
+function pushCard(html, who = 'lead', lead = '') { const m = push(`<div class="m">${fw(who, 30)}<div class="mcard">${lead ? `<p class="lead-line">${lead}</p>` : ''}${html}</div></div>`); refresh(); scroll(); return m; }
+function pushText(t, who = 'lead') { return push(`<div class="m" style="--hue:${AG[who].hue}">${fw(who, 30)}<div class="mb"><b>${AG[who].name}</b><p>${esc(t)}</p></div></div>`); }
+async function think(who = 'lead') { const t = push(`<div class="m">${fw(who, 30, 'thinking')}<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></div>`); await wait(650); t.remove(); }
+async function tap(el) { if (!el) return; el.classList.add('tap'); await wait(420); el.classList.remove('tap'); }
+let toastT;
+function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 2600); }
+
+function fold() {
+  if (!app.classList.contains('fresh')) return Promise.resolve();
+  return vt(() => { app.classList.remove('fresh'); $('#bottomDock').appendChild(dock); refresh(); });
+}
+function setUser() {
+  const bob = W.user === 'bob';
+  app.dataset.user = W.user;
+  $('#av').textContent = bob ? 'B' : 'A';
+  $('#who').textContent = bob ? 'Bob, Approver' : W.maint ? 'Alice, Operator, n8n access' : 'Alice, Operator';
+  $('#hi').textContent = bob ? 'Good morning, Bob' : 'Good morning, Alice';
+  $('#heroH').textContent = bob ? needsHead() : 'What should run by itself?';
+  press($('#whoSeg'), 'data-u', bob ? 'bob' : W.maint ? 'maint' : 'alice');
+}
+function scene(over, fresh) {
+  stopAll();
+  resetWorld(over);
+  setUser();
+  msgs.innerHTML = '';
+  closeEditor();
+  $('#toast').hidden = true;
+  P.stack = [];
+  G.stack = [];
+  paging = false;
+  app.classList.remove('paging');
+  page.hidden = true;
+  page.innerHTML = '';
+  app.classList.toggle('fresh', fresh);
+  (fresh ? $('#heroDock') : $('#bottomDock')).appendChild(dock);
+  $('#heroFace').innerHTML = fw('lead', 96);
+  cin.value = '';
+  renderChips();
+  renderPanel();
+}
+
+/* ---------- The side panel keeps a short history, so Back works ---------- */
+function titleOf(spec) {
+  const [v, id] = spec.split(':');
+  if (v === 'list') return id === 'wf' ? 'Workflows' : 'Watchlist';
+  if (v === 'wf') return W.wf[id].name;
+  if (v === 'soft') return W.soft[id].name;
+  return { needs: 'Needs you', run: 'The run', appr: 'Approval', build: 'Build', key: 'Jira key' }[v];
+}
+/* Rail pages carry more per row than chat cards: the last run, what checks each software, urgent first. */
+const listRowsFull = () => W.order.map((id) => { const [t, s] = wfState(id); return `<li><button class="wl-row" type="button" data-open="wf:${id}"><span><b>${W.wf[id].name}</b><span class="s">${short(W.wf[id].sched)} · ${lastRun(id) === 'No runs yet' ? 'no runs yet' : `last run today, ${lastRun(id).replace('Today 8:00: ', '')}`}</span></span><span class="pill" data-s="${s}">${t}</span></button></li>`; }).join('');
+const RANK = { 'Can’t find': 0, 'Newer out': 1, Watching: 2, 'Up to date': 3 };
+const watchRowsFull = () => [...softIds()].sort((a, b) => RANK[softState(a)[0]] - RANK[softState(b)[0]]).map((k) => {
+  const s = W.soft[k];
+  const [t, c] = softState(k);
+  const ver = s.missing ? 'GitHub can’t find it' : !s.run ? 'Added today' : s.run === s.latest ? `${s.run}, the newest` : `${s.run} → ${s.latest}, out ${s.on}`;
+  return `<li><button class="wl-row" type="button" data-open="soft:${k}"><span><b>${s.name}</b><span class="s">${ver} · ${W.wf[k] ? `checked by ${W.wf[k].name}` : 'not checked automatically'}</span></span><span class="pill" data-s="${c}">${t}</span></button></li>`;
+}).join('');
+const watchSummary = () => [['Newer out', 'has a newer version', 'have a newer version'], ['Can’t find', 'can’t be found', 'can’t be found'], ['Up to date', 'is up to date', 'are up to date']]
+  .map(([st, one, many]) => { const n = softIds().filter((k) => softState(k)[0] === st).length; return n ? `${n} ${n === 1 ? one : many}` : ''; }).filter(Boolean).join(' · ');
+const pageList = (k) => (k === 'wf'
+  ? `<div class="pv"><div class="pv-head"><h3>Workflows</h3></div>${needs().length ? '<div class="pv-sec"><h4>Needs you</h4><div class="needs" data-live="needs"></div></div>' : ''}<div class="pv-sec"><h4>All workflows</h4><ul class="wl" data-live="list-full"></ul></div></div>`
+  : '<div class="pv"><div class="pv-head"><div><h3>Watchlist</h3><p class="muted" data-live="watch-sum"></p></div></div><ul class="wl" data-live="watch-full"></ul></div>');
+function viewHTML(spec, full = false) {
+  const [v, id] = spec.split(':');
+  if (v === 'needs') return listView('needs');
+  if (v === 'list') return full ? pageList(id) : listView(id);
+  if (v === 'wf') return wfView(id, full);
+  if (v === 'run') return runView(full);
+  if (v === 'appr') return apprView(full);
+  if (v === 'build') return buildView(id);
+  if (v === 'soft') return softView(id, full);
+  return keyView();
+}
+/* The side panel shows one thing from the chat. Anything opened from inside it goes full page. */
+function renderPanel() {
+  const top = P.stack.at(-1);
+  if (!top) { panel.hidden = true; panel.innerHTML = ''; main.classList.remove('split'); refresh(); return; }
+  panel.innerHTML = `<div class="p-bar"><button class="btn ghost sm p-full" type="button">${ICON.expand}More details</button><button class="btn ghost sm p-close" type="button">Close</button></div>${viewHTML(top)}`;
+  panel.hidden = false;
+  main.classList.add('split');
+  main.classList.toggle('wide', top.startsWith('build'));
+  panel.scrollTop = 0;
+  refresh();
+}
+function openView(spec) { return vt(() => { P.stack = [spec]; renderPanel(); }); }
+function closePanel() { return vt(() => { P.stack = []; renderPanel(); }); }
+
+/* ---------- Full pages: from the rail, or from inside the side panel (then Back returns to the chat) ---------- */
+function renderPage() {
+  const prev = G.stack.at(-2);
+  const back = prev ? `<button class="btn ghost sm g-back" type="button">${ICON.back}${titleOf(prev)}</button>`
+    : G.from === 'chat' ? `<button class="btn ghost sm g-chat" type="button">${ICON.back}Chat</button>` : '';
+  page.innerHTML = `<div class="pg-in">${back ? `<div class="p-bar">${back}</div>` : ''}${viewHTML(G.stack.at(-1), true)}</div>`;
+  page.scrollTop = 0;
+  refresh();
+}
+function showPage(spec, stack = false, from = '') {
+  return vt(() => {
+    if (!stack || !G.stack.length) { G.stack = [spec]; G.from = from; }
+    else if (G.stack.at(-1) !== spec) G.stack.push(spec);
+    paging = true;
+    app.classList.add('paging');
+    page.hidden = false;
+    renderPage();
+  });
+}
+function showChat() {
+  if (!paging) return Promise.resolve();
+  return vt(() => { paging = false; G.stack = []; G.from = ''; app.classList.remove('paging'); page.hidden = true; page.innerHTML = ''; refresh(); scroll(); });
+}
+function pageBack() { return vt(() => { G.stack.pop(); renderPage(); }); }
+function railGo(k) { return k === 'chat' ? showChat() : showPage(k === 'wf' ? 'list:wf' : 'list:watch'); }
+
+/* ---------- Flows ---------- */
+/* On a phone the panel would cover the card, so it opens by itself only on wide screens. */
+const wide = () => matchMedia('(min-width: 861px)').matches;
+async function runFlow(stack = false) {
+  await think('trouble');
+  const m = pushCard(runCard(), 'trouble');
+  if (wide() || stack) await openView('run', stack);
+  await replayFail($('[data-rl]', $('.card', m).classList.contains('beside') ? panel : m));
+}
+async function apprFlow(stack = false) {
+  pushCard(apprCard(), 'lead', W.user === 'bob' ? 'This needs your yes.' : 'This waits for Bob’s yes.');
+  if (wide() || stack) await openView('appr', stack);
+}
+async function needGo(spec, stack) {
+  await fold();
+  if (spec === 'run') return runFlow(stack);
+  if (spec === 'appr') return apprFlow(stack);
+  return openView(spec, stack);
+}
+function apprWaiting() {
+  if (W.appr === 'waiting') return apprFlow();
+  return pushText(W.user === 'bob' ? 'Nothing waits for your yes.' : 'Nothing is waiting for a yes.');
+}
+/* Retry picks up at the step that stopped. Earlier steps keep their ticks and don't run again. */
+async function retry() {
+  if (W.stage !== 'stopped') return;
+  W.stage = 'retrying';
+  W.rewound = true;
+  W.since = Date.now();
+  W.run.read = 'now';
+  refresh();
+  await wait(1100);
+  W.rewound = false;
+  refresh();
+  await wait(1500);
+  W.run.read = 'done';
+  W.since = Date.now();
+  W.run.compare = 'now';
+  refresh();
+  await wait(1600);
+  W.run.compare = 'done';
+  W.run.yes = 'wait';
+  W.stage = 'waiting';
+  W.appr = 'waiting';
+  refresh();
+}
+async function approve() {
+  if (W.appr !== 'waiting') return;
+  if (W.user !== 'bob') { toast('You can’t approve your own work. Another Approver has to say yes.'); return; }
+  W.appr = 'approved';
+  W.apprUI = null;
+  W.stage = 'writing';
+  W.run.yes = 'done';
+  refresh();
+  await wait(HOP);
+  W.since = Date.now();
+  W.run.write = 'now';
+  refresh();
+  await wait(1600);
+  W.run.write = 'done';
+  W.stage = 'done';
+  refresh();
+}
+function setApprUI(v) { W.apprUI = v || null; refresh(); if (v === 'ask') vis('#askIn')?.focus(); }
+function setReason(r) { W.reason = W.reason === r ? '' : r; refresh(); }
+function decline() {
+  if (W.appr !== 'waiting' || W.user !== 'bob') return;
+  W.appr = 'declined';
+  W.apprUI = null;
+  W.run.yes = 'no';
+  W.run.write = 'skip';
+  W.stage = 'declined';
+  refresh();
+}
+function askSend(form) {
+  const v = ($('input', form)?.value || '').trim();
+  if (!v) return;
+  W.asked = v;
+  W.apprUI = null;
+  refresh();
+}
+function pauseIt(id, on) {
+  W.paused[id] = on;
+  W.focus = id;
+  refresh();
+  return pushText(on ? `Paused ${W.wf[id].name}. It won’t run until you resume it.` : `${W.wf[id].name} is on again.`);
+}
+function saveSched(id) {
+  const f = W.wf[id];
+  const sd = { ...W.sd };
+  W.schedEdit = null;
+  if (sameS(sd, f.sched)) { refresh(); return; }
+  newVersion(id, { sched: sd, yes: f.yes }, `Moved to ${short(sd)}`);
+  toast(`Saved. It now runs ${lower(long(sd))}.`);
+}
+
+/* ---------- Reading a request: every part gets a tick, a cross or a question ---------- */
+let DN = 0;
+let EN = 0;
+const STOPW = new Set('a an the for me my our any and please can you could would also new one it its to of in on at with when there is if i want need just all that this be out comes us let know some'.split(' '));
+const KNOWN = [/\b(watch|track|monitor|keep an eye|check|follow)\b/, /\b(release|releases|version|versions|newer|update|updates)\b/, /\b(jira|ticket|tickets)\b/, SCHED_RE, SOFT_RE, /\b(tell me|let me know|notify|alert)\b/];
+const UNSUP = [
+  [/(secur|vulnerab|\bcve|advisor)/, 'Flag security issues', 'I can’t read security advisories yet.', true],
+  [/(teams|channel|slack)/, 'Post in Teams', 'Not yet. I’ll tell you here instead.', true],
+  [/e-?mail/, 'Send an email', 'Not yet. I’ll tell you here instead.', true],
+  [/(confluence|wiki)/, 'Update Confluence', 'Not yet.', true],
+];
+function findSoft(s) {
+  for (const [a, k] of Object.entries(ALIAS)) if (s.includes(a)) return k;
+  for (const [k, v] of Object.entries({ ...W.soft, ...EXTRA })) if (new RegExp(`\\b${k}\\b`).test(s) || s.includes(v.name.toLowerCase())) return k;
+  return null;
+}
+function findWf(s) {
+  const id = W.order.find((k) => s.includes(k) || s.includes(W.wf[k].name.toLowerCase()));
+  if (id) return id;
+  return /\b(it|that one|this one|that)\b/.test(s) ? W.focus : null;
+}
+const nameOf = (d) => (d.soft ? `${(W.soft[d.soft] || EXTRA[d.soft]).name} release check` : 'New release check');
+function parseReq(t) {
+  const s = t.toLowerCase();
+  const d = { key: `d${(DN += 1)}`, status: 'asking', then: /\b(jira|ticket)/.test(s) ? 'jira' : 'tell', cant: [], weekly: WEEKLY_RE.test(s), sched: { day: undefined, time: timeOf(s) } };
+  if (DAILY_RE.test(s)) d.sched.day = null;
+  else if (dayOf(s)) d.sched.day = dayOf(s);
+  const k = findSoft(s);
+  if (k && W.soft[k]?.missing) d.cant.push({ label: `Watch ${W.soft[k].name}`, why: 'GitHub can’t find it.' });
+  else if (k) d.soft = k;
+  else {
+    const m = s.match(/\b(?:watch|track|monitor|check|follow|keep an eye on)\s+(?:the\s+|for\s+)?([a-z][\w.-]+)/);
+    if (m && !STOPW.has(m[1]) && !/^(release|version|new|update)/.test(m[1])) d.cant.push({ label: `Watch ${cap(m[1])}`, why: 'I don’t know it yet. Try its GitHub name, like owner/project.' });
+  }
+  s.split(/,|;|\.(?!\d)|\bthen\b|\band\b/).map((c) => c.trim()).filter(Boolean).forEach((c) => {
+    const u = UNSUP.find(([re]) => re.test(c));
+    if (u) { d.cant.push({ label: u[1], why: u[2], ask: u[3] }); return; }
+    if (KNOWN.some((re) => re.test(c))) return;
+    if (c.split(/\s+/).some((w) => w.replace(/\W/g, '').length > 2 && !STOPW.has(w.replace(/\W/g, '')))) d.cant.push({ label: `“${c}”`, why: 'I didn’t follow this part.' });
+  });
+  d.name = nameOf(d);
+  return d;
+}
+function question(d) {
+  if (!d.soft) return { k: 'Watch', q: 'Which software?', opts: Object.keys(W.soft).filter((k) => !W.soft[k].missing && !W.wf[k]).slice(0, 4).map((k) => [`soft:${k}`, W.soft[k].name]) };
+  if (d.sched.day === undefined) {
+    return d.weekly
+      ? { k: 'When', q: 'Which day?', opts: [['day:mon', 'Mondays'], ['day:wed', 'Wednesdays'], ['day:fri', 'Fridays']] }
+      : { k: 'When', q: 'How often?', opts: [['day:', 'Every day'], ['day:mon', 'Mondays'], ['day:fri', 'Fridays']] };
+  }
+  if (!d.sched.time) return { k: 'When', q: `${d.sched.day ? `${DAY[d.sched.day]}s` : 'Every day'}, at what time?`, opts: ['8:00', '9:00', '13:00', '17:00'].map((t) => [`time:${t}`, t]) };
+  return null;
+}
+const okRow = (k, v, s = '') => `<li class="pt" data-s="ok"><span class="ic">${ICON.check}</span><span class="k">${k}</span><span class="v"><span>${v}</span>${s ? `<span class="s">${s}</span>` : ''}</span></li>`;
+const askRow = (q) => `<li class="pt" data-s="ask"><span class="ic" aria-label="Question">?</span><span class="k">${q.k}</span><span class="v"><span>${q.q}</span><span class="pick">${q.opts.map(([v, l]) => `<button type="button" data-pick="${v}">${l}</button>`).join('')}</span></span></li>`;
+const noRow = (c) => `<li class="pt wide" data-s="no"><span class="ic" aria-label="Can’t do">${ICON.x}</span><span class="v"><span><b>${esc(c.label)}.</b> <span class="s">${c.why}</span>${c.ask ? ' <button class="linkbtn" type="button" data-toast="Asked the team. Their answer will show here.">Ask the team</button>' : ''}</span></span></li>`;
+const thenSelect = (d) => `<select data-then="${d.key}" aria-label="Then">${Object.entries(THEN).map(([v, l]) => `<option value="${v}"${v === d.then ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
+function partsRows(d) {
+  const q = d.status === 'asking' ? question(d) : null;
+  const when = d.sched.day !== undefined && d.sched.time;
+  const S = d.soft && (W.soft[d.soft] || EXTRA[d.soft]);
+  return [
+    d.soft ? okRow('Watch', `${S.name} on GitHub`, W.soft[d.soft] ? (W.soft[d.soft].run ? `You run ${W.soft[d.soft].run}` : '') : 'Not on the watchlist yet. I’ll add it.') : q && q.k === 'Watch' ? askRow(q) : '',
+    when ? okRow('When', long(d.sched)) : q && q.k === 'When' ? askRow(q) : '',
+    okRow('Then', d.status === 'asking' ? thenSelect(d) : THEN[d.then]),
+    ...d.cant.map(noRow),
+  ].join('');
+}
+const partsCard = (d) => `<div class="card" data-parts="${d.key}" data-spec="build:${d.key}">
+  <div class="c-head"><b data-p-name>${d.name}</b><span class="pill" data-p-pill>Draft</span></div>
+  <ul class="parts" data-p-rows></ul>
+  <div data-p-line></div>
+  <p class="c-note" data-p-note hidden></p>
+  <div class="c-foot"><span class="c-left" data-p-left></span><span class="c-act" data-p-act></span></div>
+</div>`;
+function patchParts(c) {
+  const d = W.drafts[c.dataset.parts];
+  d.name = nameOf(d);
+  $('[data-p-name]', c).textContent = d.name;
+  $('[data-p-rows]', c).innerHTML = partsRows(d);
+  if (d.status !== 'asking') return;
+  const q = question(d);
+  const left = $('[data-p-left]', c);
+  left.className = 'c-left';
+  left.textContent = q ? '1 question to answer' : '';
+  $('[data-p-act]', c).innerHTML = `<button class="btn ghost" type="button" data-drop>Never mind</button><button class="btn" type="button" data-setup${q ? ' disabled' : ''}>${d.cant.length ? 'Set up the part I can' : 'Set up'}</button>`;
+}
+function pickPart(btn) {
+  const c = btn.closest('[data-parts]');
+  const d = W.drafts[c.dataset.parts];
+  if (!d || d.status !== 'asking') return;
+  const [k, v] = btn.dataset.pick.split(/:(.*)/);
+  if (k === 'soft') d.soft = v;
+  if (k === 'day') d.sched.day = v || null;
+  if (k === 'time') d.sched.time = v;
+  patchParts(c);
+}
+function dropDraft(c) {
+  const d = W.drafts[c.dataset.parts];
+  if (!d || d.status !== 'asking') return;
+  d.status = 'dropped';
+  patchParts(c);
+  const p = $('[data-p-pill]', c);
+  p.textContent = 'Dropped';
+  p.dataset.s = 'idle';
+  $('[data-p-left]', c).textContent = 'Nothing was set up.';
+  $('[data-p-act]', c).innerHTML = '';
+}
+function buildAsk(t) {
+  const d = parseReq(t);
+  if (d.soft && W.wf[d.soft]) {
+    const f = W.wf[d.soft];
+    const [st, ss] = wfState(d.soft);
+    W.focus = d.soft;
+    return pushCard(`<div class="card"><div class="c-head"><b>${f.name}</b><span class="pill" data-s="${ss}">${st}</span></div><p>It already watches ${W.soft[d.soft].name}, ${lower(long(f.sched))}.</p><div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="wf:${d.soft}">Open it</button></span></div></div>`, 'lead', 'You already have this one.');
+  }
+  W.drafts[d.key] = d;
+  const m = pushCard(partsCard(d), 'lead', 'Here’s what I understood.');
+  patchParts($('[data-parts]', m));
+  return m;
+}
+async function setupDraft(c) {
+  const d = W.drafts[c.dataset.parts];
+  if (!d || d.status !== 'asking' || question(d)) return;
+  d.status = 'building';
+  patchParts(c);
+  const pill = $('[data-p-pill]', c);
+  pill.textContent = 'Building';
+  pill.dataset.s = 'run';
+  $('[data-p-act]', c).innerHTML = '';
+  if (wide()) await openView(`build:${d.key}`);
+  $('[data-p-line]', c).innerHTML = line({ off: true, steps: stepsFor(d.then), first: short(d.sched) });
+  const nd = (id) => $(`.nd[data-id="${id}"]`, c);
+  bstat('Adding blocks in n8n…');
+  for (const id of ['when', 'read', 'compare', 'write']) { nd(id).classList.remove('off'); cvReveal(id); await wait(320); }
+  bcheck('The blocks fit together.');
+  if (d.then === 'jira') {
+    bstat('Safety checker is checking the write…');
+    const note = $('[data-p-note]', c);
+    note.hidden = false;
+    note.innerHTML = `${fw('safety', 20, 'working')}<span>Added a yes before the ticket.</span>`;
+    await wait(450);
+    nd('yes').classList.remove('off');
+    nd('yes').classList.add('added');
+    cvReveal('yes', true);
+    bcheck('Every write waits for a yes.');
+    await wait(450);
+    setFace(note, 'safety', 'success');
+  }
+  const left = $('[data-p-left]', c);
+  left.innerHTML = `${fw('tester', 20, 'working')}<span>Test run…</span>`;
+  bstat(d.then === 'jira' ? 'Test run on practice Jira…' : 'Test run…');
+  const nds = $$('.nd', c);
+  for (const [i, li] of nds.entries()) {
+    if (i) {
+      const edge = bview() && $(`.ce[data-from="${nds[i - 1].dataset.id}"][data-to="${li.dataset.id}"]:not(.gone)`, bview());
+      li.classList.add('flowing');
+      edge?.classList.add('flowing');
+      await wait(HOP);
+      li.classList.remove('flowing');
+      edge?.classList.remove('flowing');
+      anim($('.mfill', li), [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], 250);
+    }
+    li.classList.add('ok');
+    cvOk(li.dataset.id);
+  }
+  bcheck(d.then === 'jira' ? 'Test run passed on practice Jira.' : 'Test run passed.');
+  bstat('Saved as a draft in n8n.');
+  left.className = 'c-left okline';
+  left.innerHTML = `${ICON.check}Test run passed`;
+  pill.textContent = 'Ready';
+  pill.dataset.s = 'ready';
+  d.status = 'ready';
+  $('[data-p-act]', c).innerHTML = '<button class="btn turnon" type="button">Turn it on</button>';
+  scroll();
+}
+function turnOn(c) {
+  const d = W.drafts[c.dataset.parts];
+  if (!d || d.status !== 'ready') return;
+  d.status = 'on';
+  const id = d.soft;
+  if (!W.soft[id]) W.soft[id] = { name: EXTRA[id].name, repo: EXTRA[id].repo, run: null };
+  W.wf[id] = { name: d.name, soft: id, sched: { ...d.sched }, then: d.then, ver: 1, yes: d.then === 'jira', by: 'Alice', on: 'just now' };
+  W.hist[id] = [{ v: 1, what: 'Built by the Planner', by: 'Alice', on: 'just now', sched: { ...d.sched }, yes: d.then === 'jira' }];
+  W.order.push(id);
+  W.focus = id;
+  const pill = $('[data-p-pill]', c);
+  pill.textContent = 'On';
+  pill.dataset.s = 'run';
+  $('.nd[data-id="yes"]', c)?.classList.remove('added');
+  $('[data-p-left]', c).innerHTML = '';
+  $('[data-p-act]', c).innerHTML = `<span class="okline">${ICON.check}On. First run ${firstRun(d.sched)}.</span>`;
+  const v = bview();
+  if (v) { bstat('On. Version 1, published in n8n.'); const bp = $('[data-bpill]', v); bp.textContent = 'On'; bp.dataset.s = 'run'; }
+  refresh();
+}
+
+/* ---------- Changing a workflow by talking ---------- */
+function editAsk(s, forced) {
+  const id = forced || findWf(s);
+  if (!id) {
+    W.pendingEdit = s;
+    return pushCard(`<div class="card"><div class="c-head"><b>Which workflow?</b></div><div class="pick">${W.order.map((k) => `<button type="button" data-which="${k}">${W.wf[k].name}</button>`).join('')}</div></div>`);
+  }
+  const f = W.wf[id];
+  const to = { ...f.sched };
+  if (DAILY_RE.test(s)) to.day = null;
+  else if (dayOf(s)) to.day = dayOf(s);
+  else if (WEEKLY_RE.test(s)) to.day = undefined;
+  if (timeOf(s)) to.time = timeOf(s);
+  W.focus = id;
+  if (to.day !== undefined && sameS(to, f.sched)) return pushText(`${f.name} already runs ${lower(long(f.sched))}.`);
+  const e = { key: `e${(EN += 1)}`, wf: id, from: { ...f.sched }, to, status: 'asking' };
+  W.edits[e.key] = e;
+  const m = pushCard(`<div class="card" data-edit="${e.key}">
+    <div class="c-head"><b>Change ${f.name}</b><span class="pill" data-e-pill></span></div>
+    <ul class="parts" data-e-rows></ul>
+    <div class="c-foot"><span class="c-left" data-e-left></span><span class="c-act" data-e-act></span></div>
+  </div>`);
+  patchEdit($('[data-edit]', m));
+  return m;
+}
+function patchEdit(c) {
+  const e = W.edits[c.dataset.edit];
+  const ask = e.status === 'asking' && e.to.day === undefined;
+  const was = `<span class="was">${short(e.from)}</span><span class="arr" aria-label="becomes">→</span>`;
+  $('[data-e-rows]', c).innerHTML = ask
+    ? `<li class="pt" data-s="ask"><span class="ic" aria-label="Question">?</span><span class="k">When</span><span class="v"><span class="ba">${was}<span>Weekly, which day?</span></span><span class="pick">${[['mon', 'Mondays'], ['wed', 'Wednesdays'], ['fri', 'Fridays']].map(([v, l]) => `<button type="button" data-eday="${v}">${l}</button>`).join('')}</span></span></li>`
+    : `<li class="pt" data-s="ok"><span class="ic">${ICON.check}</span><span class="k">When</span><span class="v"><span class="ba">${was}<b>${short(e.to)}</b></span></span></li>`;
+  const pill = $('[data-e-pill]', c);
+  const left = $('[data-e-left]', c);
+  const act = $('[data-e-act]', c);
+  const st = { asking: ['Not saved', 'wait'], saved: ['Saved', 'ok'], undone: ['Undone', 'idle'], kept: ['Not changed', 'idle'] }[e.status];
+  pill.textContent = st[0];
+  pill.dataset.s = st[1];
+  left.className = e.status === 'saved' ? 'c-left okline' : 'c-left';
+  left.innerHTML = e.status === 'saved' ? `${ICON.check}Saved as version ${e.ver}.` : e.status === 'undone' ? `Back to ${short(e.from)}.` : '';
+  act.innerHTML = e.status === 'asking'
+    ? `<button class="btn ghost" type="button" data-keep>Never mind</button><button class="btn" type="button" data-save${ask ? ' disabled' : ''}>Save change</button>`
+    : e.status === 'saved' ? `<button class="btn ghost sm" type="button" data-open="wf:${e.wf}">Open</button><button class="btn ghost sm" type="button" data-undo>Undo</button>` : '';
+}
+function saveEdit(c) {
+  const e = W.edits[c.dataset.edit];
+  if (!e || e.status !== 'asking' || e.to.day === undefined) return;
+  const f = W.wf[e.wf];
+  newVersion(e.wf, { sched: e.to, yes: f.yes }, `Moved to ${short(e.to)}`);
+  e.ver = f.ver;
+  e.status = 'saved';
+  patchEdit(c);
+}
+function undoEdit(c) {
+  const e = W.edits[c.dataset.edit];
+  if (!e || e.status !== 'saved') return;
+  rollback(e.wf, e.ver - 1);
+  e.status = 'undone';
+  patchEdit(c);
+}
+function keepEdit(c) { const e = W.edits[c.dataset.edit]; if (e && e.status === 'asking') { e.status = 'kept'; patchEdit(c); } }
+
+/* ---------- Answering: one handler per kind of question ---------- */
+function softAsk(s) {
+  const k = findSoft(s);
+  if (k && W.soft[k]) {
+    const S = W.soft[k];
+    const [t, c] = softState(k);
+    const say = S.missing ? 'GitHub can’t find it.' : S.run === S.latest ? `You run ${S.run}, the newest.` : `You run ${S.run}. Newest is ${S.latest}, out ${S.on}.`;
+    return pushCard(`<div class="card"><div class="c-head"><b>${S.name}</b><span class="pill" data-s="${c}">${t}</span></div><p>${say}</p>${!W.wf[k] && !S.missing && canEdit() ? `<div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-say="Watch ${S.name} releases">Watch it</button></span></div>` : ''}</div>`);
+  }
+  if (k) return pushCard(`<div class="card"><div class="c-head"><b>${EXTRA[k].name}</b></div><p class="muted">It isn’t on the watchlist, so I don’t know which version you run.</p>${canEdit() ? `<div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-say="Watch ${EXTRA[k].name} releases">Watch it</button></span></div>` : ''}</div>`);
+  return pushCard(behindCard());
+}
+async function n8nAsk(s) {
+  if (!W.maint) return pushText('Only people with n8n access can open n8n. An admin can add it in Settings.');
+  const id = findWf(s) || 'fastapi';
+  W.focus = id;
+  pushText('Here it is in n8n.');
+  await showPage(`wf:${id}`, false, 'chat');
+  const b = $('#page [data-ptab="n8n"]');
+  if (b) showTab(b);
+  return null;
+}
+const WATCH_RE = /\b(watch|track|monitor|keep an eye on|follow)\b|\bcheck\b.*\b(release|releases|version)\b|\b(tell|let) me (know )?when\b/;
+const EDIT_RE = /\b(make|change|switch|move|set|run|put|reschedule)\b/;
+async function respond(t) {
+  const s = t.toLowerCase();
+  if (/\bn8n\b/.test(s)) return n8nAsk(s);
+  if (/\b(what can you|help|how do i)\b/.test(s)) return pushCard(capsCard());
+  if (canEdit() && /\b(pause|turn off|stop running)\b/.test(s) && findWf(s)) return pauseIt(findWf(s), true);
+  if (canEdit() && /\b(resume|unpause|turn (it )?back on)\b/.test(s) && findWf(s)) return pauseIt(findWf(s), false);
+  if (canEdit() && EDIT_RE.test(s) && SCHED_RE.test(s) && !/\b(watch|track|monitor|new release)\b/.test(s)) return editAsk(s);
+  if (WATCH_RE.test(s)) return canEdit() ? buildAsk(t) : pushText('Operators set up workflows. Ask Alice, or another Operator.');
+  if (/(approv|sign off|decid|decision|my yes)/.test(s)) return W.user === 'bob' && /\b(did i|past|last|history)\b/.test(s) ? pushCard(histCard()) : apprWaiting();
+  if (/(stop|fail|broke|error|why|wrong|retry|didn.?t run)/.test(s)) return W.stage === 'stopped' ? runFlow() : pushText('Nothing has stopped. FastAPI release check ran again after the retry.');
+  if (/(up to date|latest|newer|behind|outdated|out of date|new version)/.test(s)) return softAsk(s);
+  if (/(need|attention|waiting|to ?do|pending|urgent|my day|today|anything for me)/.test(s)) return pushCard(needsCard());
+  if (/(watchlist|software)/.test(s)) return pushCard(watchCard());
+  if (/(workflow|running|my checks|list|show (me )?(all|everything))/.test(s)) return pushCard(listCard());
+  const c = CANT.find(([re]) => re.test(s));
+  if (c) return pushCard(cantCard(c[1], c[2], c[3]));
+  return pushCard(cantCard('I didn’t follow that', W.user === 'bob' ? 'I can show what waits for your yes, and your past decisions.' : 'I can watch software releases, fix stopped runs and change your workflows.'));
+}
+async function send(t) {
+  await fold();
+  push(`<div class="m me"><p>${esc(t)}</p></div>`);
+  cin.value = '';
+  if (!/(stop|fail|broke|error|why|wrong|retry)/.test(t.toLowerCase())) await think();
+  return respond(t);
+}
+async function chip(k) {
+  const label = $(`#chips [data-chip="${k}"]`)?.textContent || k;
+  await fold();
+  push(`<div class="m me"><p>${esc(label)}</p></div>`);
+  if (k === 'needs') return pushCard(needsCard());
+  if (k === 'behind') return softAsk('');
+  if (k === 'caps') return pushCard(capsCard());
+  if (k === 'mine') return apprWaiting();
+  return pushCard(histCard());
+}
+async function typeIn(text) {
+  $('.composer').classList.add('typing');
+  if (K === 0) cin.value = text; else for (let i = 1; i <= text.length; i += 1) { cin.value = text.slice(0, i); await wait(16); }
+  $('.composer').classList.remove('typing');
+  await tap($('.send'));
+  return send(text);
+}
+
+/* ---------- Scripted tasks ---------- */
+const vis = (sel) => $$(sel).find((el) => el.offsetParent !== null);
+const lastIn = (sel) => $$(`#msgs ${sel}`).pop();
+const TASKS = {
+  morning: {
+    start: () => scene({}, true),
+    async run() {
+      await wait(700);
+      await tap(vis('[data-need="run"]'));
+      await needGo('run');
+      await wait(1200);
+      await tap(vis('#panel .retry') || lastIn('.retry'));
+      await retry();
+    },
+  },
+  words: {
+    start: () => scene({}, true),
+    async run() {
+      await wait(400);
+      await typeIn(REQ);
+      await wait(1000);
+      const c = lastIn('[data-parts]');
+      await tap($('[data-pick="time:9:00"]', c));
+      pickPart($('[data-pick="time:9:00"]', c));
+      await wait(800);
+      await tap($('[data-setup]', c));
+      await setupDraft(c);
+      await wait(600);
+      await tap($('.turnon', c));
+      turnOn(c);
+    },
+  },
+  edit: {
+    start: () => scene({}, true),
+    async run() {
+      await wait(400);
+      await typeIn(REQ_EDIT);
+      await wait(1000);
+      const c = lastIn('[data-edit]');
+      await tap($('[data-save]', c));
+      saveEdit(c);
+      await wait(900);
+      await tap($('[data-open]', c));
+      await openView('wf:react');
+    },
+  },
+  cant: {
+    start: () => scene({}, true),
+    async run() { await wait(400); await typeIn(REQ_CANT); },
+  },
+  decline: {
+    start: () => scene({ user: 'bob', ...WAITING }, true),
+    async run() {
+      await wait(700);
+      await tap(vis('[data-need="appr"]'));
+      await needGo('appr');
+      if (!wide()) { await wait(700); await tap(lastIn('[data-open="appr"]')); await openView('appr'); }
+      await wait(1400);
+      await tap($('#panel [data-appr-ui="decline"]'));
+      setApprUI('decline');
+      await wait(900);
+      await tap($('#panel [data-reason="Not this week"]'));
+      setReason('Not this week');
+      await wait(700);
+      await tap($('#panel .decline'));
+      decline();
+    },
+  },
+  browse: {
+    start: () => scene({}, true),
+    async run() {
+      await wait(700);
+      await tap($('#rail [data-rail="wf"]'));
+      await railGo('wf');
+      await wait(1000);
+      await tap($('#page [data-open="wf:fastapi"]'));
+      await showPage('wf:fastapi', true);
+    },
+  },
+  n8n: {
+    start: () => scene({ maint: true, ...DONE }, true),
+    async run() {
+      await wait(400);
+      await typeIn(REQ_N8N);
+      await wait(1200);
+      await tap($('#page [data-pane="n8n"] [data-editor]'));
+      openEditor('fastapi');
+      await wait(900);
+      await tap($('#n8n [data-node="when"]'));
+      selectNode('when');
+      await wait(800);
+      await tap($('#nxTime'));
+      setTime('7:30');
+      await wait(1000);
+      await tap($('#n8n [data-publish]'));
+      await publishEdit();
+    },
+  },
+};
+async function playTask(t) {
+  press($('#tasks'), 'data-t', t);
+  TASKS[t].start();
+  const id = PLAY;
+  playing = true;
+  document.body.classList.add('live');
+  try { await TASKS[t].run(); } catch (e) { if (e !== STOP) throw e; } finally { if (id === PLAY) playing = false; }
+}
+
+/* ---------- Controls ---------- */
+function press(group, attr, value) { $$(`[${attr}]`, group).forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute(attr) === value))); }
+function setSpeed(k) { K = k; document.documentElement.style.setProperty('--k', String(k)); press($('#speed'), 'data-k', String(k)); }
+const whoWorld = (u) => (u === 'bob' ? { user: 'bob', ...WAITING } : { maint: u === 'maint' });
+const whoNow = () => $('#whoSeg [aria-pressed="true"]')?.dataset.u || 'alice';
+$('#speed').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setSpeed(parseFloat(b.dataset.k)); });
+$('#tasks').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) playTask(b.dataset.t); });
+$('#whoSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { press($('#tasks'), 'data-t', ''); scene(whoWorld(b.dataset.u), true); } });
+$('#reset').addEventListener('click', () => { press($('#tasks'), 'data-t', ''); scene(whoWorld(whoNow()), true); });
+$('#composer').addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (playing) return;
+  const t = cin.value.trim();
+  if (t) quiet(send(t));
+});
+app.addEventListener('submit', (e) => { if (e.target.matches('[data-askf]')) { e.preventDefault(); if (!playing) askSend(e.target); } });
+app.addEventListener('click', (e) => {
+  if (playing || !e.isTrusted) return;
+  const t = e.target;
+  const pick = (sel) => t.closest(sel);
+  const inP = !!pick('#panel');
+  const inPage = !!pick('#page');
+  if (pick('[data-chip]')) { quiet(chip(pick('[data-chip]').dataset.chip)); return; }
+  if (pick('[data-rail]')) { quiet(railGo(pick('[data-rail]').dataset.rail)); return; }
+  if (pick('.g-back')) { pageBack(); return; }
+  if (pick('.g-chat')) { quiet(showChat()); return; }
+  if (pick('.p-full')) { quiet(showPage(P.stack.at(-1), false, 'chat')); return; }
+  if (inPage && pick('[data-need]')) { quiet(showPage(pick('[data-need]').dataset.need, true)); return; }
+  if (inPage && pick('[data-open]')) { quiet(showPage(pick('[data-open]').dataset.open, true)); return; }
+  if (inP && pick('[data-need]')) { quiet(showPage(pick('[data-need]').dataset.need, false, 'chat')); return; }
+  if (inP && pick('[data-open]')) { quiet(showPage(pick('[data-open]').dataset.open, false, 'chat')); return; }
+  if (pick('[data-need]')) { quiet(needGo(pick('[data-need]').dataset.need, inP)); return; }
+  if (pick('[data-pick]')) { pickPart(pick('[data-pick]')); return; }
+  if (pick('[data-setup]')) { quiet(setupDraft(pick('[data-parts]'))); return; }
+  if (pick('[data-drop]')) { dropDraft(pick('[data-parts]')); return; }
+  if (pick('.turnon')) { turnOn(pick('[data-parts]')); return; }
+  if (pick('[data-eday]')) { const c = pick('[data-edit]'); W.edits[c.dataset.edit].to.day = pick('[data-eday]').dataset.eday; patchEdit(c); return; }
+  if (pick('[data-save]')) { saveEdit(pick('[data-edit]')); return; }
+  if (pick('[data-keep]')) { keepEdit(pick('[data-edit]')); return; }
+  if (pick('[data-undo]')) { undoEdit(pick('[data-edit]')); return; }
+  if (pick('[data-which]')) { quiet(fold().then(() => editAsk(W.pendingEdit, pick('[data-which]').dataset.which))); return; }
+  if (pick('[data-say]')) { const say = pick('[data-say]').dataset.say; quiet(showChat().then(() => send(say))); return; }
+  if (pick('[data-ptab]')) { showTab(pick('[data-ptab]')); return; }
+  if (pick('[data-editor]')) { openEditor(pick('[data-editor]').dataset.editor); return; }
+  if (pick('[data-nx-close]')) { closeEditor(); return; }
+  if (pick('[data-publish]')) { quiet(publishEdit()); return; }
+  if (pick('[data-delyes]')) { delYes(); return; }
+  if (pick('.cv.edit [data-node]')) { selectNode(pick('.cv.edit [data-node]').dataset.node); return; }
+  if (pick('[data-rollback]')) { const [id, v] = pick('[data-rollback]').dataset.rollback.split(':'); const card = pick('[data-chg]'); rollback(id, +v); if (card) settleChg(card); return; }
+  if (pick('[data-fixyes]')) { const card = pick('[data-chg]'); fixYes(pick('[data-fixyes]').dataset.fixyes); if (card) settleChg(card); return; }
+  if (pick('[data-open]')) { quiet(openView(pick('[data-open]').dataset.open, inP)); return; }
+  if (pick('.p-close')) { closePanel(); return; }
+  if (pick('.retry')) { quiet(retry()); return; }
+  if (pick('.approve')) { quiet(approve()); return; }
+  if (pick('[data-appr-ui]')) { setApprUI(pick('[data-appr-ui]').dataset.apprUi); return; }
+  if (pick('[data-reason]')) { setReason(pick('[data-reason]').dataset.reason); return; }
+  if (pick('.decline')) { decline(); return; }
+  if (pick('[data-sched-edit]')) { const id = pick('[data-sched-edit]').dataset.schedEdit; W.schedEdit = id; W.sd = { ...W.wf[id].sched }; refresh(); return; }
+  if (pick('[data-sched-save]')) { saveSched(pick('[data-sched-save]').dataset.schedSave); return; }
+  if (pick('[data-sched-cancel]')) { W.schedEdit = null; refresh(); return; }
+  if (pick('[data-remove]')) { W.langserve = false; refresh(); return; }
+  if (pick('[data-restore]')) { W.langserve = true; refresh(); return; }
+  if (pick('[data-keyask]')) { W.key = false; refresh(); return; }
+  if (pick('[data-pause]')) { const id = pick('[data-pause]').dataset.pause; W.paused[id] = !W.paused[id]; refresh(); toast(W.paused[id] ? 'Paused. It won’t run until you resume it.' : 'On again.'); return; }
+  if (pick('[data-toast]')) toast(pick('[data-toast]').dataset.toast);
+});
+app.addEventListener('change', (e) => {
+  if (playing) return;
+  const t = e.target;
+  if (t.id === 'nxTime') setTime(t.value);
+  if (t.id === 'nxDay') setDay(t.value);
+  if (t.id === 'sdDay') W.sd.day = t.value || null;
+  if (t.id === 'sdTime') W.sd.time = t.value;
+  if (t.dataset.then) W.drafts[t.dataset.then].then = t.value;
+});
+app.addEventListener('keydown', (e) => {
+  const g = e.target.closest && e.target.closest('.cv.edit [data-node]');
+  if (g && !playing && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); selectNode(g.dataset.node); }
+});
+
+setSpeed(K);
+scene({}, true);
+</script>
+
+</body></html>

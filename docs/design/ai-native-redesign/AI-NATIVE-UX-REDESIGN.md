@@ -1,5 +1,7 @@
 # AI-native UX redesign of the AI Workflow Builder
 
+**Status:** a record since 13 Nov 2026. The design target is now the chat-first sketch in `docs/design/chat-first/`.
+
 Status: the build target since 7 Nov 2026. ADR 0043 (accepted 12 Nov) redrew the prototype as a chat with a rail, in four steps. All four steps merged between 10 and 12 Nov (#204 to #207), with step 4's follow-up (#208), and this spec follows them.
 
 This spec answers the team's AI-native redesign brief, which followed an independent review of the handover package. It changes the existing prototype. It does not start again or change the product's architecture. The redesigned prototype is `prototype.html` in this folder (version 4). The evidence for each change is in `UX-AUDIT.md`, the before and after numbers are in `USER-JOURNEY-COMPARISON.md`, and the build order is in `IMPLEMENTATION-PLAN.md`.
