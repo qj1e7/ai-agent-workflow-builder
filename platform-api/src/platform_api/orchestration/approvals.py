@@ -233,6 +233,10 @@ def decide(
             and earlier.verdict is verdict
         ):
             return AlreadyRecorded(earlier)
+    if request.expires_at is not None and now >= request.expires_at:
+        # The tick ends the request within seconds. Until then a yes or a no is refused here, so
+        # the records never hold a decision the expiry outran (ADR 0024).
+        return Refused(Refusal.NOT_OPEN)
     reason = _refusal(request, recorded, approval_status(request, recorded), principal, step_index)
     if reason is not None:
         return Refused(reason)

@@ -6,20 +6,24 @@ from fastapi.testclient import TestClient
 from platform_api.orchestration.n8n_calls import (
     ANOTHER_EXECUTION,
     BUSY,
+    NO_YES,
     START_USED,
     TEST_RUN_STOPS,
     AgentCall,
     Answer,
     AskCall,
     CallResult,
+    ChangeResult,
     NodeCall,
     NothingToChange,
     ProposeCall,
     ReadCall,
     Waiting,
+    WriteAnswer,
+    WriteCall,
     unknown,
 )
-from platform_api.shared import ApprovalId, N8nExecutionId
+from platform_api.shared import ApprovalId, N8nExecutionId, RunId
 from tests.declared import NODE_KEY, NODE_KEY_ENV, FakeNodeCalls, app_with, declared_status
 
 FROM = {
@@ -46,6 +50,23 @@ ASK = {
     "resume_url": "http://n8n:5678/webhook-waiting/101?signature=abc",
 }
 WAITING = Waiting(ApprovalId("apr_01"))
+WRITE = {**FROM, "node_name": "Make the approved changes"}
+TWO_OF_THREE = WriteAnswer(
+    2,
+    3,
+    (
+        ChangeResult("Create Jira ticket in MOCK: A", "made", "MOCK-1", "/jira/MOCK-1"),
+        ChangeResult(
+            "Create Jira ticket in MOCK: B",
+            "already_made",
+            "MOCK-0",
+            None,
+            RunId("run_0"),
+            "Already made in run run_0.",
+        ),
+        ChangeResult("Create Jira ticket in MOCK: C", "not_made", detail="Jira is down"),
+    ),
+)
 
 CASES = [
     pytest.param("/calls/read", READ, {}, None, 401, id="no-key"),
@@ -88,6 +109,18 @@ CASES = [
         None,
         422,
         id="ask-another-execution",
+    ),
+    pytest.param("/calls/write", WRITE, {}, None, 401, id="write-no-key"),
+    pytest.param("/calls/write", WRITE, NODE_KEY, TWO_OF_THREE, 200, id="write-part-done"),
+    pytest.param("/calls/write", WRITE, NODE_KEY, NO_YES, 403, id="write-no-yes"),
+    pytest.param("/calls/write", WRITE, NODE_KEY, BUSY, 503, id="write-busy"),
+    pytest.param(
+        "/calls/write",
+        {**WRITE, "actions": [{"connector": "jira", "operation": "create_ticket"}]},
+        NODE_KEY,
+        None,
+        422,
+        id="write-names-nothing-to-write",
     ),
 ]
 
@@ -142,6 +175,47 @@ def test_the_options_answer_the_editors_lists_only_with_the_key():
     answered = client.get(path, headers=NODE_KEY)
     assert answered.json() == {"options": [{"id": "MOCK", "name": "MOCK"}]}
     assert client.get("/internal/v1/n8n/options?kind=secrets", headers=NODE_KEY).status_code == 422
+
+
+def test_a_write_answers_how_many_of_its_changes_are_made_and_each_one():
+    """Make the approved changes fails with "2 of 3 made" when made is less than of."""
+    calls = FakeNodeCalls(TWO_OF_THREE)
+    response = TestClient(app_with(env=NODE_KEY_ENV, node_calls=calls)).post(
+        "/internal/v1/n8n/calls/write", headers=NODE_KEY, json=WRITE
+    )
+    assert response.json() == {
+        "made": 2,
+        "of": 3,
+        "results": [
+            {
+                "change": "Create Jira ticket in MOCK: A",
+                "status": "made",
+                "reference": "MOCK-1",
+                "url": "/jira/MOCK-1",
+                "made_in": None,
+                "detail": None,
+            },
+            {
+                "change": "Create Jira ticket in MOCK: B",
+                "status": "already_made",
+                "reference": "MOCK-0",
+                "url": None,
+                "made_in": "run_0",
+                "detail": "Already made in run run_0.",
+            },
+            {
+                "change": "Create Jira ticket in MOCK: C",
+                "status": "not_made",
+                "reference": None,
+                "url": None,
+                "made_in": None,
+                "detail": "Jira is down",
+            },
+        ],
+    }
+    assert calls.calls == [
+        NodeCall(N8nExecutionId("101"), "Make the approved changes", WriteCall())
+    ]
 
 
 def test_a_replayed_answer_says_so():
