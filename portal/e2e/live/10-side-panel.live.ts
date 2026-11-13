@@ -415,11 +415,12 @@ for (const width of [1440, 390]) {
   })
 }
 
-test('PANEL-connection: a connection that needs Alice opens beside the chat in the platform’s words, and sends her to Settings', async ({ browser, backend }, info) => {
+for (const width of [1440, 390]) {
+test(`PANEL-connection at ${String(width)} px: a connection that needs Alice opens beside the chat in the platform’s words, and sends her to Settings`, async ({ browser, backend }, info) => {
   const repair = await jiraDown(backend)
   const context = await devContext(browser, 'alice', { reducedMotion: true })
   const page = await context.newPage()
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.setViewportSize({ width, height: width > 900 ? 900 : 844 })
   await page.goto('/')
   await ask(page, 'What needs me?')
   await newest(page).locator('[data-opens="connection:jira"]').click()
@@ -428,10 +429,11 @@ test('PANEL-connection: a connection that needs Alice opens beside the chat in t
   await expect(panel(page)).toContainText('Jira is not answering.')
   await expect(panel(page).getByRole('link', { name: 'See it in Settings' })).toHaveAttribute('href', '/settings?tab=connections')
   await expect(panel(page)).not.toContainText('Asked the admin')
-  await shot(page, info, 'c4-connection-1440')
+  await shot(page, info, `c4-connection-${String(width)}`)
   await repair()
   await context.close()
 })
+}
 
 test('AUTO-open: on a wide screen an answer about one stopped run shows it beside the chat by itself, without moving focus, and on a narrow one it waits for Open', async ({ browser, backend }, info) => {
   const tag = randomUUID().slice(0, 6)
@@ -459,14 +461,15 @@ test('AUTO-open: on a wide screen an answer about one stopped run shows it besid
   await context.close()
 })
 
-test('PANEL-lists: See all workflows and See the watchlist open the lists beside the chat, a row opens beside them with Back, and More details goes to the page', async ({ browser, backend }, info) => {
+for (const width of [1440, 390]) {
+test(`PANEL-lists at ${String(width)} px: See all workflows and See the watchlist open the lists beside the chat, a row opens beside them with Back, and More details goes to the page`, async ({ browser, backend }, info) => {
   const tag = randomUUID().slice(0, 6)
   for (let n = 0; n < 6; n += 1) await newWorkflow(backend, 'alice', `List panel ${tag} ${String(n)}`)
   await backend.waitingRun('alice')
   const context = await devContext(browser, 'alice', { reducedMotion: true })
   const page = await context.newPage()
   const watch = watchPage(page)
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.setViewportSize({ width, height: width > 900 ? 900 : 844 })
   await page.goto('/')
   await ask(page, 'Check my workflows')
   await expect(newest(page).locator('li[data-workflow-id]'), 'the card shows five').toHaveCount(5)
@@ -474,7 +477,7 @@ test('PANEL-lists: See all workflows and See the watchlist open the lists beside
   await expect(heading(page)).toHaveText('Workflows')
   await expect(panel(page).locator('li[data-workflow-id]').nth(5), 'the panel lists the rest').toBeVisible()
   await expect(panel(page).getByRole('link', { name: 'More details' })).toHaveAttribute('href', '/workflows')
-  await shot(page, info, 'c4-workflows-1440')
+  await shot(page, info, `c4-workflows-${String(width)}`)
   await panel(page).locator('li[data-workflow-id] button').first().click()
   await expect(panel(page).getByRole('button', { name: 'Workflows', exact: true }), 'Back names the list').toBeVisible()
   await panel(page).getByRole('button', { name: 'Workflows', exact: true }).click()
@@ -486,10 +489,26 @@ test('PANEL-lists: See all workflows and See the watchlist open the lists beside
   await newest(page).getByRole('button', { name: 'See the watchlist' }).click()
   await expect(heading(page)).toHaveText('Watchlist')
   await expect(panel(page).getByRole('link', { name: 'More details' })).toHaveAttribute('href', '/software')
-  await shot(page, info, 'c4-watchlist-1440')
+  await shot(page, info, `c4-watchlist-${String(width)}`)
   await panel(page).locator('li[data-software-id] button').first().click()
   await expect(panel(page).getByRole('button', { name: 'Watchlist', exact: true })).toBeVisible()
   await expect(panel(page)).toContainText(/You run[\s\S]*Newest/)
   assertClean(watch)
   await context.close()
 })
+}
+
+for (const width of [1440, 390]) {
+  test(`PANEL-approval at ${String(width)} px: a request opens beside the chat as an approval, with today’s content`, async ({ browser, backend }, info) => {
+    const runId = await carolsWaitingRun(backend)
+    const context = await devContext(browser, 'alice', { reducedMotion: true })
+    const page = await context.newPage()
+    await page.setViewportSize({ width, height: width > 900 ? 900 : 844 })
+    await page.goto('/')
+    await openRequest(page, runId)
+    await expect(panel(page)).toContainText(/What will change/, { timeout: 20_000 })
+    await expect(panel(page).getByRole('button', { name: 'Decline' })).toBeVisible()
+    await shot(page, info, `c4-approval-${String(width)}`)
+    await context.close()
+  })
+}
