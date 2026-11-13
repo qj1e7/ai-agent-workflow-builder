@@ -363,6 +363,8 @@ describe('the heading', () => {
     expect(head(replay(success))).toMatchObject({ text: '1 ticket created in Jira', pill: { label: 'Done', tone: 'ok' } })
     expect(head(replay(rejected))).toMatchObject({ text: 'Declined, nothing was written', pill: { label: 'Declined' } })
     expect(head(replay(failure))).toMatchObject({ text: 'Stopped at Read every source', pill: { label: 'Stopped', tone: 'bad' } })
+    const early = { ...replay(failure, 2), failedAt: { at: 'planner' }, phase: { state: 'failed', stage: 'pending', reason: 'DispatchFailed', retryable: true, message: '' } } as const
+    expect(head(early), 'a stop before any agent began names the step it never reached').toMatchObject({ text: 'Stopped before Read every source' })
   })
 })
 

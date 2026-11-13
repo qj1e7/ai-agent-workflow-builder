@@ -103,12 +103,17 @@ describe('the same run part way', () => {
     expect(shape(line(model))).toEqual(['trigger:done:idle', 'agent:0:now:working', 'gate:todo:idle', 'write:todo:idle'])
   })
 
-  it('while the Planner picks the agents, has the first step at work with nobody in it yet', () => {
+  it('while the Planner picks the agents, has the first step at work with the Planner above it', () => {
     const model = replay(success, 3)
     const stations = line(model)
     expect(stations).toHaveLength(4)
-    expect(shape(stations)).toEqual(['trigger:done:idle', 'agent:0:now:idle', 'gate:todo:idle', 'write:todo:idle'])
-    expect(stations[1]?.agent).toBeNull()
+    expect(shape(stations)).toEqual(['trigger:done:idle', 'agent:0:now:thinking', 'gate:todo:idle', 'write:todo:idle'])
+    expect(stations[1]?.agent).toEqual({ id: 'planner', display: 'Planner' })
+  })
+
+  it('without a plan, keeps one agent step for the Planner’s pick, so the gate is never the step at work', () => {
+    const model = replay(success, 1)
+    expect(shape(line(model, null))).toEqual(['trigger:done:idle', 'agent:0:now:thinking', 'gate:todo:idle', 'write:todo:idle'])
   })
 
   it('times the first step from the start of the run, through the Planner’s pick, and no other step', () => {
@@ -171,12 +176,14 @@ describe('a run that failed', () => {
     expect(model.chat.at(-1)).toMatchObject({ kind: 'stopped', stage: 'working' })
   })
 
-  it('marks the first step when a run fails before any agent starts', () => {
+  it('marks the first step, under the Planner, when a run fails before any agent starts', () => {
     const early = foldAll(emptyModel, [
       ...parsed(failure.slice(0, 2)),
       event(3, 'run_failed', { stage: 'pending', reason: 'DispatchFailed', retryable: true, message: 'n8n is down' }),
     ])
-    expect(shape(line(early))).toEqual(['trigger:done:idle', 'agent:0:err:idle', 'gate:todo:idle', 'write:todo:idle'])
+    expect(shape(line(early))).toEqual(['trigger:done:idle', 'agent:0:err:error', 'gate:todo:idle', 'write:todo:idle'])
+    expect(line(early)[1]?.agent).toEqual({ id: 'planner', display: 'Planner' })
+    expect(shape(line(early, null)), 'and without a plan, never the gate').toEqual(['trigger:done:idle', 'agent:0:err:error', 'gate:todo:idle', 'write:todo:idle'])
   })
 })
 
@@ -229,7 +236,7 @@ describe('a retry', () => {
     expect(retried.agents).toEqual([])
     expect(retried.retriedBy).toEqual(['alice'])
     expect(retried.chat.at(-1)).toMatchObject({ kind: 'retried', by: 'alice' })
-    expect(shape(line(retried))).toEqual(['trigger:done:idle', 'agent:0:now:idle', 'gate:todo:idle', 'write:todo:idle'])
+    expect(shape(line(retried))).toEqual(['trigger:done:idle', 'agent:0:now:thinking', 'gate:todo:idle', 'write:todo:idle'])
   })
 
   it('times the step at work again from the retry', () => {

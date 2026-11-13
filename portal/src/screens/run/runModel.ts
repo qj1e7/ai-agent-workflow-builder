@@ -427,7 +427,7 @@ function skeleton(model: RunModel, plan: readonly PlanBlock[] | null, trigger: s
   const writeBlock = plan?.find((block) => block.kind === 'write_action')
   const hasGate = plan === null || plan.some((block) => block.kind === 'approval')
   const hasWrite = plan === null || writeBlock !== undefined
-  const count = Math.max(agentBlocks.length, model.agents.length)
+  const count = Math.max(agentBlocks.length, model.agents.length, 1)
   const agents = Array.from({ length: count }, (_, index): Skeleton => {
     const agent = model.agents[index] ?? null
     const block = agentBlocks[index]
@@ -480,6 +480,13 @@ function stateOf(model: RunModel, station: Skeleton, index: number, current: num
 }
 
 const FACE: Readonly<Record<StationState, FaceState>> = { todo: 'idle', now: 'working', wait: 'waiting', done: 'success', err: 'error', no: 'idle', skip: 'stopped' }
+const PLANNER: AgentRef = { id: PLANNER_ID, display: 'Planner' }
+
+/** Before any agent joins, the Planner is picking them under the first step, so its face is the one at work there, or stopped. */
+function faceAgent(model: RunModel, station: Skeleton, state: StationState): AgentRef | null {
+  if (station.agent || station.key !== 'agent:0' || model.agents.length > 0) return station.agent
+  return state === 'now' || state === 'err' ? PLANNER : null
+}
 
 /** When the step at work began: the first spot this attempt reached that the step covers. */
 function sinceOf(model: RunModel, stations: readonly Skeleton[], index: number): RunTime | null {
@@ -508,8 +515,9 @@ export function stationsOf(model: RunModel, plan: readonly PlanBlock[] | null, t
   const failed = model.phase.state === 'failed' ? stationOf(stations, model.failedAt) : -1
   return stations.map((station, index) => {
     const state = stateOf(model, station, index, current, failed)
-    const face = station.agent ? FACE[state] : 'idle'
-    return { ...station, state, face, under: underOf(model, stations, index, state) }
+    const agent = faceAgent(model, station, state)
+    const face = agent === null ? 'idle' : agent.id === PLANNER_ID && state === 'now' ? 'thinking' : FACE[state]
+    return { ...station, agent, state, face, under: underOf(model, stations, index, state) }
   })
 }
 
