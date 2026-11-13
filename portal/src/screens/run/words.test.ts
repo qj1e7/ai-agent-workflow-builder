@@ -3,8 +3,11 @@ import { PRODUCT } from '../../shell/product'
 import rejectedView from '@contracts/fixtures/views/rejected.final.json'
 import type { ApprovalStepView, RunViewOf } from '../../api/types'
 import type { LiveRun } from './liveRun'
-import type { ChatItem } from './runModel'
-import { declinedBy, declinedNext, declinedNowWords, declinedOfSteps, declinedRecord, declinedWithNext, declineTail, feedTroubleOf, lineOf, speakerName } from './words'
+import failure from '@contracts/fixtures/runs/failure.json'
+import rejected from '@contracts/fixtures/runs/rejected.json'
+import success from '@contracts/fixtures/runs/success.json'
+import { emptyModel, foldWire, type ChatItem, type RunModel } from './runModel'
+import { declinedBy, declinedNext, declinedNowWords, declinedOfSteps, declinedRecord, declinedWithNext, declineTail, feedTroubleOf, lineOf, logRowsOf, runKind, speakerName, stageFactsOf, stageOf, stageWords } from './words'
 
 describe('the run chat', () => {
   it('names the app by its full name', () => {
@@ -88,5 +91,75 @@ describe('the declined record', () => {
     const declined = { by: 'bob', approvedBy: [], reason: 'Wrong version' }
     expect(declinedWithNext(declined, 'Change what it does, or run the test again.', nameOf)).toBe('Declined by Bob. Nothing was written. Reason: Wrong version. Change what it does, or run the test again.')
     expect(declinedWithNext(declined, null, nameOf)).toBe('Declined by Bob. Nothing was written. Reason: Wrong version.')
+  })
+})
+
+const NAMES: Record<string, string> = { alice: 'Alice', bob: 'Bob' }
+const named = (id: string) => NAMES[id] ?? id
+const QUICK = ['Not this week', 'Wrong version', 'Needs testing first']
+const replay = (raw: readonly { run_id: string; seq: number }[], upTo = Infinity): RunModel => {
+  const kept = raw.filter((item) => item.seq <= upTo)
+  return foldWire(emptyModel, kept, kept[0]?.run_id ?? '')
+}
+
+describe('a run’s state in one set of words', () => {
+  it('reads the stage of a run from its events, and calls a run retried after a stop Retrying', () => {
+    expect(stageOf(replay(failure))).toBe('stopped')
+    expect(stageOf(replay(success, 6))).toBe('working')
+    expect(stageOf(replay(success, 15))).toBe('waiting')
+    expect(stageOf(replay(success, 18))).toBe('writing')
+    expect(stageOf(replay(success))).toBe('done')
+    expect(stageOf(replay(rejected))).toBe('declined')
+    const retried = { ...replay(failure), phase: { state: 'pending' }, chat: [...replay(failure).chat, { kind: 'retried', by: 'alice', seq: 15, at: 0 as ChatItem['at'] }] } as RunModel
+    expect(stageOf(retried)).toBe('retrying')
+  })
+
+  it('says each stage the way the sketch’s rows, banners and strip do', () => {
+    expect(stageWords('stopped', { reason: 'TimedOut' })).toBe('A step took too long')
+    expect(stageWords('retrying')).toBe('Retrying')
+    expect(stageWords('waiting')).toBe('Waiting for a yes')
+    expect(stageWords('writing', { tickets: true })).toBe('Creating the ticket')
+    expect(stageWords('done', stageFactsOf(replay(success)))).toBe('MOCK-142 created')
+    expect(stageWords('done', {})).toBe('Nothing new')
+    expect(stageWords('declined')).toBe('Declined. Nothing was written.')
+  })
+
+  it('never says a declined run wrote anything', () => {
+    const facts = stageFactsOf(replay(rejected))
+    expect(facts.written).toEqual([])
+    expect(stageWords('declined', facts)).not.toMatch(/created|written$/)
+  })
+})
+
+describe('the first line over a run', () => {
+  it('names today’s run by its time, and another day by its day', () => {
+    const now = new Date('2026-11-13T05:00:00Z')
+    expect(runKind('2026-11-13T00:00:00Z', now)).toBe('Today’s run, 8:00')
+    expect(runKind('2026-11-12T00:00:00Z', now)).toBe('Yesterday’s run, 8:00')
+    expect(runKind('2026-11-03T00:00:00Z', now)).toBe('Run on Tue 3 Nov, 8:00')
+  })
+})
+
+describe('the Step by step log', () => {
+  const rows = (model: RunModel) => logRowsOf(model.chat, named, QUICK).map((row) => `${row.time} ${row.agent ? `${row.agent.display}: ` : ''}${row.text}`)
+
+  it('tells an approved run in one sentence a row, with the time to the second and no row for who joined or that it finished', () => {
+    const told = rows(replay(success))
+    expect(told[0]).toBe('10:14:00 Alice started the run.')
+    expect(told).toContain('10:14:08 Asked an Approver for a yes in Teams.')
+    expect(told).toContain('10:20:23 Bob said yes.')
+    expect(told.at(-1)).toBe('10:20:26 Created MOCK-142 in Jira.')
+    expect(told.join(' ')).not.toMatch(/joined|Done\./)
+  })
+
+  it('ends a declined run on the one row that says who declined and that nothing was written', () => {
+    const told = rows(replay(rejected))
+    expect(told.at(-1)).toBe('10:18:11 Bob declined: wrong version. Nothing was written.')
+    expect(told.filter((row) => /declined/.test(row))).toHaveLength(1)
+    expect(told.join(' ')).not.toMatch(/created|Created/)
+  })
+
+  it('says a stopped run stopped before anything was written', () => {
+    expect(rows(replay(failure)).at(-1)).toMatch(/The run stopped\. Nothing was written\.$/)
   })
 })
