@@ -14,6 +14,7 @@ import type { CapabilitiesView, HomeOut, Me, UseCaseView, WatchlistView } from '
 import { InChat } from '../../ui/fromChat'
 import { escapeIsFree } from '../../ui/escape'
 import { openerAfterClose, wrapTab, type PanelItem } from '../../ui/sidePanel'
+import { countLine } from '../software/software'
 import { needsTotal } from './home'
 import { SidePanel } from './SidePanel'
 
@@ -24,7 +25,6 @@ const STOPPED = stopped as UseCaseView
 const WATCHLIST = statuses as WatchlistView
 const REDIS = 'sw_01JBW00000000000000000003'
 const REGISTRY = capabilities as CapabilitiesView
-const GITHUB_DOWN: CapabilitiesView = { ...REGISTRY, capabilities: REGISTRY.capabilities.map((c) => (c.id === 'github.releases' ? { ...c, state: 'down' as const } : c)) }
 
 const ALICE_HOME = aliceHome as HomeOut
 const BOB_HOME = bobHome as HomeOut
@@ -38,7 +38,6 @@ interface Options {
   me?: Me
   narrow?: boolean
   useCase?: UseCaseView
-  registry?: CapabilitiesView
   home?: HomeOut
   useCases?: UseCaseView[]
   back?: PanelItem | null
@@ -47,7 +46,7 @@ interface Options {
 
 function draw(
   item: PanelItem,
-  { me = ALICE, narrow = false, useCase = STOPPED, registry = REGISTRY, home = me.id === 'bob' ? BOB_HOME : ALICE_HOME, useCases = [STOPPED], back = null, onOpen }: Options = {},
+  { me = ALICE, narrow = false, useCase = STOPPED, home = me.id === 'bob' ? BOB_HOME : ALICE_HOME, useCases = [STOPPED], back = null, onOpen }: Options = {},
 ): string {
   const session = createDevSession({ getItem: () => me.id, setItem: () => undefined })
   const scope = session.cacheScope()
@@ -55,7 +54,7 @@ function draw(
   queryClient.setQueryData(['me', scope], me)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB])
   queryClient.setQueryData(['watchlist', scope], WATCHLIST)
-  queryClient.setQueryData(['capabilities', scope], registry)
+  queryClient.setQueryData(['capabilities', scope], REGISTRY)
   queryClient.setQueryData(['home', scope], home)
   queryClient.setQueryData(['use-cases', scope], useCases)
   queryClient.setQueryData(['use-case', scope, useCase.use_case_id], useCase)
@@ -78,7 +77,10 @@ describe('the side panel', () => {
     const html = draw({ kind: 'software', id: REDIS })
     expect(html.match(/id="side-panel"/g)).toHaveLength(1)
     expect(html).toMatch(/<h2[^>]*id="side-panel-h"[^>]*tabindex="-1"[^>]*>Redis<\/h2>/)
-    expect(links(html)).toEqual([['More details', `/software?row=${REDIS}`]])
+    expect(links(html)).toEqual([
+      ['More details', `/software/${REDIS}`],
+      ['Software watchlist', '/software'],
+    ])
     expect(buttons(html)).toEqual(['Close'])
   })
 
@@ -87,18 +89,12 @@ describe('the side panel', () => {
     expect(draw({ kind: 'software', id: REDIS }, { narrow: true })).toMatch(/role="dialog" aria-modal="true" aria-labelledby="side-panel-h"/)
   })
 
-  it('shows a software’s status, the version you run, the newest, and what checks it and when, in the Software page’s words', () => {
+  it('shows a software’s status, the version you run, the newest, and the workflow that checks it and when, in the Software page’s words', () => {
     const shown = text(draw({ kind: 'software', id: REDIS }))
-    expect(shown).toContain('Ticket waiting for a yes')
-    expect(shown).toContain('You run Not known')
-    expect(shown).toContain('Newest 8.2.1')
-    expect(shown).toContain('Checked by The Version checker, on GitHub.')
+    expect(shown).toContain('Newer out')
+    expect(shown).toContain('Newest is 8.2.1. The version you run isn’t known yet.')
+    expect(shown).toContain('Checked by Software watchlist')
     expect(shown).toContain('When Checked every Monday at 9:00, set by Alice. Next check')
-  })
-
-  it('says so when GitHub isn’t working, as the capability registry says, and never claims a check that can’t run', () => {
-    const shown = text(draw({ kind: 'software', id: REDIS }, { registry: GITHUB_DOWN }))
-    expect(shown).toContain('Checked by The Version checker, on GitHub, which is not working right now.')
   })
 
   it('says an item that has gone is gone, with no More details', () => {
@@ -176,9 +172,9 @@ describe('the side panel’s views', () => {
     const html = draw({ kind: 'watchlist' }, { onOpen: OPEN_BESIDE })
     const shown = text(html)
     expect(links(html)).toEqual([['More details', '/software']])
-    expect(shown).toContain('3 have a newer version · 1 can’t be checked · 1 not checked yet')
-    expect(shown).toContain('LangGraph 1.2.14 → 1.2.16 New version')
-    expect(shown).toContain('n8n 2.42.6 Up to date')
+    expect(shown).toContain(countLine(WATCHLIST.software) ?? 'a count line')
+    expect(shown).toContain('LangGraph 1.2.14 → 1.2.16 · checked by Software watchlist Newer out')
+    expect(shown).toContain('n8n 2.42.6, the newest · checked by Software watchlist Up to date')
     expect(html.match(/data-opens="software:/g)).toHaveLength(WATCHLIST.software.length)
   })
 

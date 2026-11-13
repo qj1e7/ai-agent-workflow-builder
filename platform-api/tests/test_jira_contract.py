@@ -45,6 +45,7 @@ from platform_api.orchestration.write_actions import (
     WriteAction,
     WriteKey,
     WriteRefused,
+    subject_key,
 )
 from platform_api.practice_jira import PRACTICE_EMAIL, PracticeJira, practice_token
 from platform_api.practice_jira import router as practice_router
@@ -352,6 +353,25 @@ async def test_a_crash_after_jiras_201_finds_our_own_ticket_and_makes_no_second(
     assert [t.key for t in await practice.tickets()] == [made]
 
 
+async def test_a_subject_write_another_run_crashed_in_finds_that_runs_ticket(
+    target: Target, db: Database
+):
+    """A subject's key is the same in every run, so the run that carries on after a crash in
+    another finds the ticket by the subject's label and makes no second."""
+    practice = target.needs_practice()
+    connector = JiraWriteConnector(target.jira, db, target.site)
+    subject = subject_key("uc_1", "langgraph 1.2.16")
+    crashed_in = WriteKey(RunId("run_1"), ProposalId("prp_1"), 0, subject)
+    await crashed(connector, crashed_in)
+    made = await target.jira.create_issue(
+        NewIssue("MOCK", "Upgrade", "Soon.", (write_label(crashed_in),))
+    )
+    later_run = WriteKey(RunId("run_2"), ProposalId("prp_2"), 3, subject)
+    assert write_label(later_run) == write_label(crashed_in)
+    assert await connector.execute(ACTION, later_run) == made
+    assert [t.key for t in await practice.tickets()] == [made]
+
+
 async def test_a_ticket_someone_else_planted_with_our_label_is_never_taken_as_ours(
     target: Target, db: Database
 ):
@@ -430,10 +450,21 @@ async def test_a_found_ticket_already_recorded_for_another_write_is_refused(
         await connector.execute(ACTION, WRITE)
 
 
-async def test_a_found_ticket_with_another_writes_label_is_refused(target: Target, db: Database):
+@pytest.mark.parametrize(
+    "other",
+    [
+        pytest.param(WriteKey(WRITE.run_id, WRITE.proposal_id, 6), id="another action's"),
+        pytest.param(
+            WriteKey(WRITE.run_id, WRITE.proposal_id, 7, subject_key("uc_1", "lg")),
+            id="another subject's",
+        ),
+    ],
+)
+async def test_a_found_ticket_with_another_writes_label_is_refused(
+    target: Target, db: Database, other: WriteKey
+):
     target.needs_practice()
     connector = JiraWriteConnector(target.jira, db, target.site)
-    other = WriteKey(WRITE.run_id, WRITE.proposal_id, 6)
     await ours(target, "Upgrade", [write_label(other), write_label(WRITE)])
     await crashed(connector, WRITE)
     with pytest.raises(WriteRefused, match="another write"):

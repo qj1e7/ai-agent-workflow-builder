@@ -22,7 +22,7 @@ function Loading({ failed, what, retry }: { failed: boolean; what: string; retry
 }
 
 /** Every workflow the Workflows page lists, with its state, as rows that open the workflow in the panel. */
-export function WorkflowsPanel() {
+export function WorkflowsPanel({ now }: { now: Date }) {
   const me = useMe()
   const useCases = useUseCases({ poll: REFRESH_MS })
   const rows = useMemo(() => (me.data && useCases.data ? rowsOf(useCases.data, viewerOf(me.data), 'all', '', NOTHING).map((row) => row.useCase) : null), [me.data, useCases.data])
@@ -31,21 +31,22 @@ export function WorkflowsPanel() {
   return (
     <div className={styles['stack']}>
       <p className={styles['count']}>{count(rows.length, 'workflow')}</p>
-      <WorkflowRows useCases={rows} label="Workflows" />
+      <WorkflowRows useCases={rows} label="Workflows" now={now} />
     </div>
   )
 }
 
-/** Every software on the watchlist with its versions and state, and the Software page's own count line over it. */
-export function WatchlistPanel() {
+/** Every software on the watchlist, as the Software page lists it, under the page's own count line. */
+export function WatchlistPanel({ now }: { now: Date }) {
   const watchlist = useWatchlist({ poll: WATCH_REFRESH })
-  const rows = watchlist.data?.software
-  if (!rows) return <Loading failed={watchlist.isError} what="the watchlist" retry={() => void watchlist.refetch()} />
+  const view = watchlist.data
+  if (!view) return <Loading failed={watchlist.isError} what="the watchlist" retry={() => void watchlist.refetch()} />
+  const rows = view.software
   if (rows.length === 0) return <p className={styles['calm']}>Nothing is on the Software watchlist yet.</p>
   return (
     <div className={styles['stack']}>
       <p className={styles['count']}>{countLine(rows) ?? count(rows.length, 'software')}</p>
-      <SoftwareRows rows={rows} label="Watchlist" />
+      <SoftwareRows rows={rows} view={view} label="Watchlist" now={now} />
     </div>
   )
 }

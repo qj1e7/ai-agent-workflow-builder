@@ -7,6 +7,7 @@ import { IconChevronLeft } from '../../ui/icons'
 import { backTitle, InSidePanel, isWide, wrapTab, type PanelHead, type PanelItem } from '../../ui/sidePanel'
 import { cx } from '../../ui/cx'
 import { SoftwarePanel } from '../software/SoftwarePanel'
+import { softwarePath } from '../software/software'
 import { workflowPath } from '../workflows/workflow'
 import { WorkflowPanel } from '../workflows/WorkflowPanel'
 import { CONNECTIONS_PATH, ConnectionPanel, connectionTitle } from './panels/ConnectionPanel'
@@ -51,7 +52,7 @@ function useHead(item: PanelItem): PanelHead {
     }
     case 'software': {
       const row = watchlist.data?.software.find((software) => software.id === item.id)
-      return row ? { title: row.name, page: `/software?row=${encodeURIComponent(row.id)}` } : { title: 'Software', page: null }
+      return row ? { title: row.name, page: softwarePath(row.id) } : { title: 'Software', page: null }
     }
     case 'connection': {
       const connection = home.data?.connections.find((found) => found.id === item.id)
@@ -145,9 +146,9 @@ function View({ item, now, onOpen }: { item: PanelItem; now: Date; onOpen: ((ite
     case 'needs':
       return beside(item, onOpen, <NeedsPanel now={now} />)
     case 'workflows':
-      return beside(item, onOpen, <WorkflowsPanel />)
+      return beside(item, onOpen, <WorkflowsPanel now={now} />)
     case 'watchlist':
-      return beside(item, onOpen, <WatchlistPanel />)
+      return beside(item, onOpen, <WatchlistPanel now={now} />)
     case 'workflow':
       return <WorkflowPanel id={item.id} now={now} />
     case 'run':

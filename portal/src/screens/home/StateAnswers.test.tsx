@@ -15,6 +15,7 @@ import { OpensInPanel } from '../../ui/sidePanel'
 import { Thread } from './Thread'
 import { EMPTY, threadReducer, type Thread as ThreadState } from './threadState'
 import { needsTotal } from './home'
+import { countLine } from '../software/software'
 import { WORKFLOWS_SHOWN } from './StateAnswers'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
@@ -95,7 +96,7 @@ describe('the behind card (Which software is behind?)', () => {
     const html = draw(behind)
     expect(text(html)).toContain('3 have a newer version')
     expect(html.match(/data-opens="software:/g)).toHaveLength(3)
-    expect(text(html)).toContain('LangGraph 1.2.14 → 1.2.16 New version')
+    expect(text(html)).toContain('LangGraph 1.2.14 → 1.2.16 · checked by Software watchlist Newer out')
     expect(text(html)).not.toContain('n8n')
   })
 
@@ -107,7 +108,7 @@ describe('the behind card (Which software is behind?)', () => {
     const current: WatchlistView = { ...WATCHLIST, software: WATCHLIST.software.filter((row) => row.status === 'up_to_date') }
     const html = draw(behind, { watchlist: current })
     expect(html).not.toContain('<section')
-    expect(text(html)).toContain('Everything is up to date.')
+    expect(text(html)).toContain(`${countLine(current.software) ?? 'a count line'}.`)
   })
 
   it('is an answer of its own: marked as one, and the person’s words come first', () => {

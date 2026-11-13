@@ -43,6 +43,10 @@ function afterYes(decision: PastDecisionView, nameOf: NameOf): string {
       return 'The run stopped.'
     case 'skipped':
       return 'An earlier run is still waiting for a yes.'
+    case 'expired':
+      return 'Then no answer. Nothing was written.'
+    case 'lost':
+      return 'n8n lost the run. Nothing was written.'
     case 'acting':
       return 'Writing what was approved.'
     case 'pending':

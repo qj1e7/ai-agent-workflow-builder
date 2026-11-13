@@ -817,7 +817,9 @@
         "waiting",
         "open",
         "approved",
-        "declined"
+        "declined",
+        "expired",
+        "cancelled"
       ],
       "type": "string"
     },
@@ -890,7 +892,9 @@
         "digest_mismatch",
         "unregistered_action",
         "target_changed",
-        "out_of_order"
+        "out_of_order",
+        "expired",
+        "test_run"
       ],
       "type": "string"
     },
@@ -957,6 +961,66 @@
         "mode"
       ],
       "title": "ExecutionLinkedData",
+      "type": "object"
+    },
+    "ExecutionResumed": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/ExecutionResumedData"
+        },
+        "kind": {
+          "const": "execution_resumed",
+          "default": "execution_resumed",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "ExecutionResumed",
+      "type": "object"
+    },
+    "ExecutionResumedData": {
+      "additionalProperties": false,
+      "properties": {
+        "execution_id": {
+          "description": "The waiting n8n execution that took the yes.",
+          "title": "Execution Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "execution_id"
+      ],
+      "title": "ExecutionResumedData",
       "type": "object"
     },
     "FailureReason": {
@@ -1137,6 +1201,66 @@
       "title": "RunCreatedData",
       "type": "object"
     },
+    "RunExpired": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/RunExpiredData"
+        },
+        "kind": {
+          "const": "run_expired",
+          "default": "run_expired",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "RunExpired",
+      "type": "object"
+    },
+    "RunExpiredData": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": {
+          "description": "The request that nobody answered in time.",
+          "title": "Approval Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approval_id"
+      ],
+      "title": "RunExpiredData",
+      "type": "object"
+    },
     "RunFailed": {
       "additionalProperties": false,
       "properties": {
@@ -1207,6 +1331,71 @@
         "message"
       ],
       "title": "RunFailedData",
+      "type": "object"
+    },
+    "RunLost": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/RunLostData"
+        },
+        "kind": {
+          "const": "run_lost",
+          "default": "run_lost",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "RunLost",
+      "type": "object"
+    },
+    "RunLostData": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": {
+          "title": "Approval Id",
+          "type": "string"
+        },
+        "why": {
+          "description": "Why n8n could not take the yes, in plain words.",
+          "title": "Why",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approval_id",
+        "why"
+      ],
+      "title": "RunLostData",
       "type": "object"
     },
     "RunOutcome": {
@@ -2026,9 +2215,12 @@
       "approval_outcome_not_posted": "#/$defs/ApprovalOutcomeNotPosted",
       "approval_requested": "#/$defs/ApprovalRequested",
       "execution_linked": "#/$defs/ExecutionLinked",
+      "execution_resumed": "#/$defs/ExecutionResumed",
       "leg_dispatched": "#/$defs/LegDispatched",
       "run_created": "#/$defs/RunCreated",
+      "run_expired": "#/$defs/RunExpired",
       "run_failed": "#/$defs/RunFailed",
+      "run_lost": "#/$defs/RunLost",
       "run_rejected": "#/$defs/RunRejected",
       "run_retried": "#/$defs/RunRetried",
       "run_skipped": "#/$defs/RunSkipped",
@@ -2115,6 +2307,15 @@
     },
     {
       "$ref": "#/$defs/RunSkipped"
+    },
+    {
+      "$ref": "#/$defs/RunExpired"
+    },
+    {
+      "$ref": "#/$defs/ExecutionResumed"
+    },
+    {
+      "$ref": "#/$defs/RunLost"
     },
     {
       "$ref": "#/$defs/SupportReported"

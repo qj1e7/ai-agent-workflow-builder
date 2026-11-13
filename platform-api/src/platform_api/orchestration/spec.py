@@ -1,11 +1,13 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Annotated, Literal, Protocol
 
 from pydantic import Field
 
 from platform_api.orchestration.agents import CardSpec
 from platform_api.orchestration.approvals import ApprovalPolicy
+from platform_api.orchestration.working_hours import EXPIRES_AFTER
 from platform_api.orchestration.write_actions import Binding
 from platform_api.shared import Principal, RunId, SoftwareId, UseCaseId, UserId
 from platform_api.wire import Trigger
@@ -75,6 +77,8 @@ class RunSpec:
     stops_at_gate: bool = False
     """A test run of a draft: it stops at the approval gate, asks nobody for a yes and writes
     nothing (ADR 0044). A row stored without it reads False."""
+    expires_after: timedelta = EXPIRES_AFTER
+    """How long its request waits for a yes, in working hours, before it expires (ADR 0024)."""
 
 
 @dataclass(frozen=True)

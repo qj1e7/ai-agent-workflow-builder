@@ -112,7 +112,7 @@ export function Thread({ thread, now, page, memory }: ThreadProps) {
                   <div className={styles['cards']}>
                     <span className="visually-hidden">Planner: </span>
                     <NewestAnswer.Provider value={message.id === newest}>
-                      <BehindAnswer say={message.id === newest ? sayFor(message.id) : () => undefined} />
+                      <BehindAnswer now={now} say={message.id === newest ? sayFor(message.id) : () => undefined} />
                     </NewestAnswer.Provider>
                   </div>
                 ) : message.kind === 'thinking' ? (

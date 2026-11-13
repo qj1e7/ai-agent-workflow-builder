@@ -4,7 +4,7 @@ import rejectedView from '@contracts/fixtures/views/rejected.final.json'
 import type { ApprovalStepView, RunViewOf } from '../../api/types'
 import type { LiveRun } from './liveRun'
 import type { ChatItem } from './runModel'
-import { declinedBy, declinedNext, declinedNowWords, declinedOfSteps, declinedRecord, declinedWithNext, declineTail, feedTroubleOf, lineOf, speakerName } from './words'
+import { declinedBy, declinedNext, declinedNowWords, declinedOfSteps, declinedRecord, declinedWithNext, declineTail, feedTroubleOf, lineOf, runPill, scheduleShort, speakerName, stageWords, type StageFacts } from './words'
 
 describe('the run chat', () => {
   it('names the app by its full name', () => {
@@ -88,5 +88,56 @@ describe('the declined record', () => {
     const declined = { by: 'bob', approvedBy: [], reason: 'Wrong version' }
     expect(declinedWithNext(declined, 'Change what it does, or run the test again.', nameOf)).toBe('Declined by Bob. Nothing was written. Reason: Wrong version. Change what it does, or run the test again.')
     expect(declinedWithNext(declined, null, nameOf)).toBe('Declined by Bob. Nothing was written. Reason: Wrong version.')
+  })
+})
+
+describe('the stage words, one function for the row, the banner, the strip and Recent runs', () => {
+  const base: StageFacts = { state: 'succeeded', count: 0, tickets: true, approvedBy: [], declinedBy: null, reason: null }
+  const nameOf = (id: string) => ({ bob: 'Bob', alice: 'Alice' })[id] ?? id
+  const stage = (change: Partial<StageFacts>) => stageWords({ ...base, ...change }, nameOf)
+
+  it('says why a run stopped, in the failure’s own plain words', () => {
+    expect(stage({ state: 'failed', reason: 'AgentError' })).toBe('An agent could not finish its work')
+    expect(stage({ state: 'failed' })).toBe('Stopped')
+  })
+
+  it('says a run that waits needs a yes, and a run in progress is running', () => {
+    expect(stage({ state: 'awaiting_approval', count: 1 })).toBe('Waiting for a yes')
+    for (const state of ['pending', 'working', 'proposed'] as const) expect(stage({ state })).toBe('Running')
+  })
+
+  it('says what a run that is writing creates', () => {
+    expect(stage({ state: 'acting', count: 1 })).toBe('Creating the ticket')
+    expect(stage({ state: 'acting', count: 2 })).toBe('Creating the tickets')
+    expect(stage({ state: 'acting', count: 2, tickets: false })).toBe('Writing the changes')
+  })
+
+  it('says what a finished run wrote and who said yes, and says so when nothing was new', () => {
+    expect(stage({ count: 1, approvedBy: ['bob'] })).toBe('1 ticket created, approved by Bob')
+    expect(stage({ count: 2, approvedBy: ['bob', 'alice'] })).toBe('2 tickets created, approved by Bob and Alice')
+    expect(stage({ count: 1, tickets: false })).toBe('1 change written')
+    expect(stage({ count: 0 })).toBe('Nothing new to write')
+  })
+
+  it('says a declined run wrote nothing, and never says created', () => {
+    expect(stage({ state: 'rejected', declinedBy: 'bob' })).toBe('Declined by Bob. Nothing was written.')
+    expect(stage({ state: 'rejected' })).toBe('Declined. Nothing was written.')
+  })
+
+  it('has one pill for each run state, in the sketch’s words', () => {
+    expect(runPill({ ...base, state: 'failed' })).toEqual({ label: 'Stopped', tone: 'bad' })
+    expect(runPill({ ...base, state: 'working' })).toEqual({ label: 'Running', tone: 'new' })
+    expect(runPill({ ...base, state: 'awaiting_approval' })).toEqual({ label: 'Waiting for a yes', tone: 'wait' })
+    expect(runPill({ ...base, count: 1 })).toEqual({ label: 'Done', tone: 'ok' })
+    expect(runPill(base)).toEqual({ label: 'Nothing new', tone: 'quiet' })
+    expect(runPill({ ...base, state: 'rejected' })).toEqual({ label: 'Declined', tone: 'quiet' })
+  })
+})
+
+describe('a schedule in few words', () => {
+  it('reads Daily 8:00, Weekdays 9:30 or Mon 13:00', () => {
+    expect(scheduleShort({ day: 'every_day', at: '08:00' })).toBe('Daily 8:00')
+    expect(scheduleShort({ day: 'weekdays', at: '09:30' })).toBe('Weekdays 9:30')
+    expect(scheduleShort({ day: 'monday', at: '13:00' })).toBe('Mon 13:00')
   })
 })

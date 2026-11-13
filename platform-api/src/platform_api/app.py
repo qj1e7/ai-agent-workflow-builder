@@ -74,6 +74,10 @@ def _log_platform_api() -> None:
     loggers, so without this an INFO line, such as a skipped scheduled check, is dropped.
     Uvicorn's loggers and the root logger are left alone, so no line prints twice. Building the
     app again adds no second handler."""
+    # httpx and httpcore log each request's full address at INFO, and a webhook's address or n8n's
+    # resume address carries its own signature. Their warnings and errors still show.
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
     logger = logging.getLogger("platform_api")
     if any(handler.name == _LOG_HANDLER for handler in logger.handlers):
         return

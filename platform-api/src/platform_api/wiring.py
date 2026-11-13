@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -33,6 +32,7 @@ from platform_api.orchestration.dispatch import (
     PRACTICE,
     ApprovalChannel,
     Identity,
+    N8nWaker,
     N8nWebhooks,
     identity_of,
 )
@@ -42,6 +42,7 @@ from platform_api.orchestration.model_settings import KeyBox, ModelSettings
 from platform_api.orchestration.n8n_call_service import NodeCalls
 from platform_api.orchestration.n8n_calls import (
     ExecutionFacts,
+    FailedExecution,
     NodeCatalog,
     NodeOption,
     OwnWorkflow,
@@ -63,6 +64,7 @@ from platform_api.orchestration.service import Orchestrator
 from platform_api.orchestration.spec import CardRun
 from platform_api.orchestration.team_request_card import TeamsRequestChannel
 from platform_api.orchestration.teams import TeamsStub, TeamsWorkflowsWebhook
+from platform_api.orchestration.tell import TellFlow, TellOutlet, TellPractice
 from platform_api.orchestration.watch_store import WatchFacts
 from platform_api.orchestration.workflows import load_all
 from platform_api.orchestration.write_actions import WriteGateway
@@ -94,7 +96,9 @@ class Services:
     copier: Copier | None = None
     cosmos: CosmosEvents | None = None
     teams_webhook: TeamsWorkflowsWebhook | None = None
+    waker: N8nWaker | None = None
     practice_jira: PracticeJira | None = None
+    tell_flow: TellFlow | None = None
 
 
 JIRA_TIMEOUT_SECONDS = 10.0
@@ -174,6 +178,16 @@ class NoOwnWorkflowsYet:
         """n8n's records are not read yet (E4), so every execution is of no workflow of ours."""
         return ExecutionFacts("", "", None, None, None)
 
+    async def error_workflow_id(self) -> str | None:
+        """Not known until n8n's records are read (E3, E4), so every failure report is refused."""
+        return None
+
+    async def failed_executions(self, workflow_id: str) -> Sequence[N8nExecutionId]:
+        return []
+
+    async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
+        return None
+
     async def places(self, source: str) -> Sequence[NodeOption]:
         return []
 
@@ -197,21 +211,10 @@ def node_writes(settings: Settings) -> list[WriteEntry]:
     ]
 
 
-def quiet_http_logs() -> None:
-    """httpx and httpcore log every request's full address at INFO, and a webhook's address
-    carries its own signature. So with a webhook set, they log only warnings, for every client
-    in this process, n8n's and the agent runtime's too. Their warnings and errors still show."""
-    for name in ("httpx", "httpcore"):
-        logging.getLogger(name).setLevel(logging.WARNING)
-
-
 def request_channel_for(settings: Settings) -> TeamsRequestChannel:
     """Where new team requests are announced (ADR 0038): TEAMS_REQUESTS_WEBHOOK_URL, else the
     approvals channel's webhook, else nowhere. The request is kept either way."""
-    url = settings.teams_requests_webhook_url or settings.teams_webhook_url
-    if url is not None:
-        quiet_http_logs()
-    return TeamsRequestChannel(url)
+    return TeamsRequestChannel(settings.teams_requests_webhook_url or settings.teams_webhook_url)
 
 
 def approval_channel(
@@ -221,9 +224,18 @@ def approval_channel(
     TEAMS_WEBHOOK_URL is set. Returns the channel, and the webhook adapter to close on shutdown."""
     if settings.teams_webhook_url is None:
         return practice, None
-    quiet_http_logs()
     webhook = TeamsWorkflowsWebhook(settings.teams_webhook_url, settings.teams_channel, client)
     return webhook, webhook
+
+
+def tell_outlet(settings: Settings, db: Database) -> tuple[TellOutlet, TellFlow | None]:
+    """Where a Tell goes: the practice copy, or the team's Tell flow when TEAMS_TELL_WEBHOOK_URL
+    is set. E13 sets it, with the registry's "Posts in Teams and emails" made ready. Returns the
+    outlet, and the flow to close on shutdown."""
+    if settings.teams_tell_webhook_url is None:
+        return TellPractice(db, settings.teams_channel), None
+    flow = TellFlow(settings.teams_tell_webhook_url, settings.teams_channel)
+    return flow, flow
 
 
 def connections_for(
@@ -313,7 +325,11 @@ async def build(settings: Settings) -> Services:
 
     agents = HttpAgentRuntime(settings.agent_runtime_url, settings.agent_api_key)
     secret = settings.settings_encryption_key
-    model_settings = ModelSettings(db, agents, KeyBox(secret) if secret else None, people=people)
+    box = KeyBox(secret) if secret else None
+    model_settings = ModelSettings(db, agents, box, people=people)
+    waker = None
+    if settings.node_key is not None and box is not None:
+        waker = N8nWaker(settings.n8n_base_url, settings.node_key, box)
     connections, channel = connections_for(settings, db, jira, channel, agents, model_settings)
     gateway = WriteGateway(db, [JiraWriteConnector(jira, db, site)])
     orchestrator = Orchestrator(
@@ -328,8 +344,10 @@ async def build(settings: Settings) -> Services:
         people=people,
         public_base_url=settings.public_base_url,
         time_zone=settings.team_time_zone,
+        waker=waker,
     )
     not_yet = NoOwnWorkflowsYet()
+    tells, tell_flow = tell_outlet(settings, db)
     node_calls = NodeCalls(
         db,
         activity,
@@ -342,7 +360,11 @@ async def build(settings: Settings) -> Services:
         gateway.sites,
         model_settings,
         start_secret=settings.start_secret,
+        box=box,
         time_zone=settings.team_time_zone,
+        gateway=gateway,
+        tells=tells,
+        failures=not_yet,
     )
     schedules = ScheduleBook(db)
     watchlist = Watchlist(
@@ -397,6 +419,8 @@ async def build(settings: Settings) -> Services:
         copier=copier,
         cosmos=cosmos,
         teams_webhook=webhook,
+        waker=waker,
+        tell_flow=tell_flow,
     )
 
 
@@ -404,18 +428,25 @@ class Runner:
     def __init__(self, services: Services) -> None:
         self._services = services
         self._stop = asyncio.Event()
-        self._task: asyncio.Task[None] | None = None
+        self._tasks: list[asyncio.Task[None]] = []
 
     def start(self) -> None:
-        self._task = asyncio.create_task(self._services.orchestrator.run_forever(self._stop))
+        self._tasks = [
+            asyncio.create_task(self._services.orchestrator.run_forever(self._stop)),
+            asyncio.create_task(self._services.node_calls.sweep_forever(self._stop)),
+        ]
 
     async def stop(self) -> None:
         self._stop.set()
         self._services.orchestrator.nudge()
-        if self._task is not None:
-            await self._task
+        for task in self._tasks:
+            await task
+        if self._services.tell_flow is not None:
+            await self._services.tell_flow.close()
         if self._services.teams_webhook is not None:
             await self._services.teams_webhook.close()
+        if self._services.waker is not None:
+            await self._services.waker.close()
         await self._services.request_channel.close()
         if self._services.copier is not None:
             await self._services.copier.stop()

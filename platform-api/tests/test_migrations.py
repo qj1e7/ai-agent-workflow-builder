@@ -111,7 +111,9 @@ async def test_migration_0005_moves_waiting_runs_and_their_pending_legs_to_the_r
     downgrade("orchestration", postgres.owner, "0004")
     task = SPEC.task
     assert isinstance(task, WatchlistTask)
-    old_spec = {**SPEC.__dict__, "workflow": OLD_RUN_WORKFLOW}
+    # A spec stored then had no expiry wait (ADR 0024 came later).
+    old_spec = {k: v for k, v in SPEC.__dict__.items() if k != "expires_after"}
+    old_spec["workflow"] = OLD_RUN_WORKFLOW
     old_spec["task"] = {
         "kind": "watchlist",
         "tag_pattern": task.tag_pattern,
@@ -1144,3 +1146,84 @@ def test_migration_0013_keeps_who_paused_or_resumed_a_workflow_and_from_where(
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             builder.execute("DELETE FROM builder.use_case_moves")
         builder.rollback()
+
+
+async def test_migration_0020_keeps_a_request_from_before_without_expiry_and_a_wake_once(
+    postgres: PostgresUrls, db: Database
+):
+    store = Store()
+    run_id = RunId("run_wait")
+    async with db.transaction("orchestration") as uow:
+        record = RunRecord(
+            run_id, SPEC, SPEC.owner, NOW, NOW, 1, Pending(run_id, 1, None, NOW), (), None
+        )
+        await store.insert_run(uow, record, "key-wait")
+        action = WriteAction("jira", "create_ticket", {"project": "MOCK"}, {"title": "t"})
+        proposal = Proposal(ProposalId("prp_wait"), run_id, (action,), digest((action,)))
+        await store.insert_proposal(uow, proposal)
+    policy = '{"steps": [{"label": "Team approver", "eligible": {}}]}'
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        downgrade("orchestration", postgres.owner, "0019")
+        conn.execute(
+            "INSERT INTO orchestration.approval_requests (approval_id, run_id, proposal_id, "
+            "digest, policy, parties, created_at) VALUES ('apr_before', %s, 'prp_wait', 'd', "
+            "%s, '[]', %s)",
+            (run_id, policy, NOW),
+        )
+        upgrade("orchestration", postgres.owner)
+        update = "UPDATE orchestration.approval_requests SET {} WHERE approval_id = 'apr_before'"
+        for change in (
+            "ended = 'expired'",
+            "ended = 'gone', ended_at = now()",
+            "execution_id = '41'",
+        ):
+            with pytest.raises(psycopg.errors.CheckViolation):
+                conn.execute(update.format(change))
+        wake = (
+            "INSERT INTO orchestration.outbox (run_id, kind, payload, next_at, status, created_at, "
+            "idempotency_key) VALUES (%s, 'wake', '{}', now(), 'pending', now(), 'wake:apr_before')"
+        )
+        conn.execute(wake, (run_id,))
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            conn.execute(wake, (run_id,))
+        downgrade("orchestration", postgres.owner, "0019")
+        try:
+            columns = conn.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_schema = "
+                "'orchestration' AND table_name IN ('approval_requests', 'outbox')"
+            ).fetchall()
+            assert not {("expires_at",), ("resume_url",), ("idempotency_key",)} & set(columns)
+        finally:
+            upgrade("orchestration", postgres.owner)
+    async with db.transaction("orchestration") as uow:
+        before = await store.load_approval(uow, ApprovalId("apr_before"))
+        assert await store.held_wait(uow, ApprovalId("apr_before")) is None
+    assert before is not None and (before.expires_at, before.ended) == (None, None)
+
+
+async def test_migration_0021_keeps_one_practice_notice_per_block_of_a_run_and_goes_back(
+    postgres: PostgresUrls, db: Database
+):
+    run_id = RunId("run_tell")
+    async with db.transaction("orchestration") as uow:
+        record = RunRecord(
+            run_id, SPEC, SPEC.owner, NOW, NOW, 1, Pending(run_id, 1, None, NOW), (), None
+        )
+        await Store().insert_run(uow, record, "key-tell")
+    notice = (
+        "INSERT INTO orchestration.tell_practice_messages (id, ts, run_id, block, body) "
+        "VALUES (%s, %s, %s, 'Tell you', '{}')"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute(notice, ("tell_1", NOW, run_id))
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            conn.execute(notice, ("tell_2", NOW, run_id))
+        with pytest.raises(psycopg.errors.ForeignKeyViolation):
+            conn.execute(notice, ("tell_3", NOW, "run_nobody"))
+        downgrade("orchestration", postgres.owner, "0020")
+        try:
+            assert conn.execute(
+                "SELECT to_regclass('orchestration.tell_practice_messages')"
+            ).fetchone() == (None,)
+        finally:
+            upgrade("orchestration", postgres.owner)

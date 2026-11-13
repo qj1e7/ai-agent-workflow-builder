@@ -67,6 +67,9 @@ const REQUIRED_KEYS = {
   run_retried: ['leg', 'attempt'],
   execution_linked: ['execution_id', 'mode'],
   run_skipped: ['waiting_run_id'],
+  run_expired: ['approval_id'],
+  execution_resumed: ['execution_id'],
+  run_lost: ['approval_id', 'why'],
   support_reported: ['request_id', 'reported_by'],
 } as const satisfies RequiredKeys
 

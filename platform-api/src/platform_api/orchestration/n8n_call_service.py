@@ -7,6 +7,8 @@ earlier execution already had for that block, so a retry never runs an agent or 
 twice. Each call that finds the run working moves its deadline on.
 """
 
+import asyncio
+import contextlib
 import logging
 import secrets
 from collections.abc import Mapping, Sequence
@@ -32,27 +34,42 @@ from platform_api.orchestration.agents import (
     TaskRequest,
 )
 from platform_api.orchestration.cards import ReviewedCards, bind_cards, review_cards
+from platform_api.orchestration.dispatch import HeldWait, Sealer
 from platform_api.orchestration.n8n_calls import (
     ANOTHER_EXECUTION,
     BUSY,
+    CANNOT_SEAL,
     CHANGED_CALL,
+    DENIED,
     NO_EXECUTION,
+    NO_TELL_FLOW,
+    NOT_FAILED,
+    NOT_OUR_ERROR_WORKFLOW,
     NOT_OURS,
+    NOTHING_READ,
     READ_LIMIT,
     START_LIFETIME,
     START_TOO_LATE,
     START_USED,
+    TEST_RUN_STOPS,
     AgentCall,
     Answer,
+    Answered,
+    AskAnswer,
+    AskCall,
     ByRetry,
     ByStart,
     CallResult,
+    Carry,
+    FailedExecution,
     IssuedStart,
+    N8nFailures,
     N8nReads,
     NewRun,
     NodeCall,
     NodeCatalog,
     NodeOption,
+    NothingToChange,
     OptionKind,
     OwnWorkflow,
     ProposeCall,
@@ -61,52 +78,121 @@ from platform_api.orchestration.n8n_calls import (
     Refused,
     SourceReads,
     StartKind,
+    StopRun,
     StopStart,
+    TellCall,
+    TheRequest,
     TryLater,
+    Waiting,
     WorkflowFacts,
+    WriteAnswer,
+    WriteCall,
+    admit_write,
+    after_write,
     decide_link,
+    fail_by_report,
+    failure_words,
     rejoin,
     run_stopped,
     start_signature,
     unknown,
+    write_answer,
 )
 from platform_api.orchestration.runs import (
+    Acting,
+    AwaitingApproval,
+    Expired,
     Failed,
     Failure,
     FailureReason,
+    Lost,
     Moved,
     Pending,
+    Rejected,
     RunState,
     Skipped,
+    Succeeded,
     Working,
     linked_events,
     run_created,
     skipped_events,
     state_name,
     working_on,
+    write_done,
 )
-from platform_api.orchestration.service import ActiveModel, ActivityLogPort, CallbackMinter
+from platform_api.orchestration.service import (
+    DENIED_ON_THE_WIRE,
+    ActiveModel,
+    ActivityLogPort,
+    CallbackMinter,
+    approval_link,
+    enqueue_announcement,
+    request_for,
+    steps_view,
+    write_denied,
+)
 from platform_api.orchestration.spec import CardsTask
 from platform_api.orchestration.store import RunRecord, Store
+from platform_api.orchestration.tell import (
+    NOTHING_TO_REPORT,
+    REACH,
+    SENDING_LINE,
+    BlockResult,
+    NotConfirmed,
+    Reach,
+    TellMessage,
+    TellOutlet,
+    Told,
+    compose,
+    ending_of,
+    not_confirmed_line,
+    sent_line,
+    something_to_report,
+    would_have_line,
+)
 from platform_api.orchestration.watch import Unusable
 from platform_api.orchestration.watch_store import WatchStore
 from platform_api.orchestration.write_actions import (
+    AuthorizedWrite,
+    Carried,
+    Deny,
+    Proposal,
     Sites,
     UnboundIntent,
     WriteAction,
+    WriteGateway,
+    WritingRun,
     at_sites,
+    check,
+    describe,
+    digest,
+    made_subjects,
+    still_to_make,
+    subject_key,
 )
-from platform_api.shared import TEAM_TIME_ZONE, N8nExecutionId, RunId, TaskId, UserId, new_id
+from platform_api.shared import (
+    TEAM_TIME_ZONE,
+    N8nExecutionId,
+    ProposalId,
+    RunId,
+    TaskId,
+    UserId,
+    new_id,
+)
 
 log = logging.getLogger(__name__)
 
 CLAIM_LEASE = timedelta(minutes=2)
 """An agent call gives up after a minute, so a claim older than this was left by a stopped
 process, and the next call takes it over."""
+SWEEP_EVERY = timedelta(minutes=1)
+"""How often the sweep reads n8n's failed executions, so a failure no report brought is lost for
+a minute at most (ENGINE-PLAN 2.8)."""
 
 type Outcome = Literal["working", "answered", "refused"]
 
 _actions_adapter: TypeAdapter[tuple[WriteAction, ...]] = TypeAdapter(tuple[WriteAction, ...])
+_write_adapter: TypeAdapter[WriteAnswer] = TypeAdapter(WriteAnswer)
 
 
 @dataclass(frozen=True)
@@ -120,12 +206,12 @@ class CallRow:
     status: int | None
     answer: dict[str, Any] | None
 
-    def result(self) -> Answer | Refused:
+    def result(self) -> Answer | AskAnswer | WriteAnswer | Told | Refused:
         assert self.answer is not None
         if self.outcome == "refused":
             assert self.status is not None
             return Refused(self.status, str(self.answer["detail"]))
-        return _answer(self.answer, replayed=True)
+        return _replayed(self.kind, self.answer)
 
 
 @dataclass(frozen=True)
@@ -145,6 +231,15 @@ class Admitted:
 
 
 @dataclass(frozen=True)
+class Writing:
+    """A write the safety checker allowed, claimed by this call."""
+
+    run_id: RunId
+    call_id: str
+    write: AuthorizedWrite
+
+
+@dataclass(frozen=True)
 class Done:
     answer: Answer
     actions: tuple[Mapping[str, Any], ...] = ()
@@ -157,15 +252,69 @@ class Stopped:
     events: tuple[AgentEvent, ...] = ()
 
 
-type Work = Done | Stopped | Refused | TryLater
+@dataclass(frozen=True)
+class Asking:
+    """Ask for a yes, done in the finishing transaction, under the run's lock."""
+
+    resume_url: str
+
+
+@dataclass(frozen=True)
+class FailedRun:
+    run_id: RunId
+
+
+@dataclass(frozen=True)
+class LeftAsIs:
+    detail: str
+
+
+type FailureResult = FailedRun | LeftAsIs | Refused | TryLater
+
+
+@dataclass(frozen=True)
+class Kept:
+    """An answer the block's own work already kept, as a Tell keeps each of its answers."""
+
+    answer: Told | Refused
+
+
+type Work = Done | Stopped | Asking | Kept | Refused | TryLater
 
 
 def _answer(stored: Mapping[str, Any], replayed: bool = False) -> Answer:
     return Answer(tuple(stored["items"]), replayed, bool(stored.get("cut_off", False)))
 
 
-def _stored(answer: Answer) -> dict[str, Any]:
-    return {"items": [dict(item) for item in answer.items], "cut_off": answer.cut_off}
+def _replayed(kind: str, stored: Mapping[str, Any]) -> Answer | AskAnswer | WriteAnswer | Told:
+    """A block's first answer, given again to a repeat or to a retry of the run."""
+    if kind == "ask":
+        return _ask_answer(stored)
+    if kind == "write":
+        return _write_adapter.validate_python(stored)
+    if kind == "tell":
+        return Told(stored["status"], stored["line"])
+    return _answer(stored, replayed=True)
+
+
+def _ask_answer(stored: Mapping[str, Any]) -> AskAnswer:
+    if stored["status"] == "waiting":
+        return Waiting(stored["request_id"])
+    return NothingToChange()
+
+
+def _stored(answer: Answer | AskAnswer | WriteAnswer | Told) -> dict[str, Any]:
+    match answer:
+        case Answer(items, _, cut_off):
+            return {"items": [dict(item) for item in items], "cut_off": cut_off}
+        case WriteAnswer():
+            return _write_adapter.dump_python(answer, mode="json")
+        case Waiting(request_id):
+            return {"status": "waiting", "request_id": request_id}
+        case NothingToChange():
+            return {"status": "nothing_to_change"}
+        case Told(status, line):
+            return {"status": status, "line": line}
 
 
 class CallBook:
@@ -232,14 +381,14 @@ class CallBook:
         uow: UnitOfWork,
         call: NodeCall,
         run_id: RunId | None,
-        result: Answer | Refused,
+        result: Answer | AskAnswer | WriteAnswer | Told | Refused,
         actions: Sequence[Mapping[str, Any]] = (),
         call_id: str | None = None,
     ) -> bool:
         """Keeps a block's one answer or refusal. With call_id, only that claim may keep it: a
         claim that was taken over meanwhile keeps nothing, and False says so."""
         match result:
-            case Answer():
+            case Answer() | Waiting() | NothingToChange() | WriteAnswer() | Told():
                 outcome, status, stored = "answered", None, _stored(result)
             case Refused(status, detail):
                 outcome, stored = "refused", {"detail": detail}
@@ -284,6 +433,76 @@ class CallBook:
             "WHERE call_id = %s AND outcome = 'working'",
             (datetime.fromtimestamp(0, UTC), call_id),
         )
+
+    async def settle(self, uow: UnitOfWork, call_id: str, told: Told) -> None:
+        """Replaces a Tell's sending with what the flow answered. Its sending, kept before the
+        post, is all a repeat of the call ever sees until then, so nothing is sent twice."""
+        await uow.conn.execute(
+            "UPDATE orchestration.node_calls SET answer = %s, answered_at = %s "
+            "WHERE call_id = %s AND outcome = 'answered' AND answer ->> 'status' = 'sending'",
+            (json(_stored(told)), uow.now, call_id),
+        )
+
+    async def writing(self, uow: UnitOfWork, execution: N8nExecutionId) -> bool:
+        """Whether a Make the approved changes block of this execution is still making its
+        changes."""
+        row = await (
+            await uow.conn.execute(
+                "SELECT 1 FROM orchestration.node_calls WHERE execution_id = %s "
+                "AND kind = 'write' AND outcome = 'working' LIMIT 1",
+                (execution,),
+            )
+        ).fetchone()
+        return row is not None
+
+    async def carried_last(self, uow: UnitOfWork, run_id: RunId, execution: N8nExecutionId) -> bool:
+        """Whether the run's newest execution is this one, so the one that carried it to its
+        end. Only it may still call once the run has succeeded."""
+        row = await (
+            await uow.conn.execute(
+                "SELECT execution_id FROM orchestration.executions WHERE run_id = %s "
+                "ORDER BY linked_at DESC LIMIT 1",
+                (run_id,),
+            )
+        ).fetchone()
+        return row is not None and row["execution_id"] == execution
+
+    async def results_in_run(self, uow: UnitOfWork, run_id: RunId) -> tuple[BlockResult, ...]:
+        """What the run's Read and Agent blocks answered, each block once, in the order they
+        first answered. A retry's replayed answer is the same answer again."""
+        rows = await (
+            await uow.conn.execute(
+                "SELECT * FROM (SELECT DISTINCT ON (node_name) node_name, kind, answer, "
+                "answered_at FROM orchestration.node_calls WHERE run_id = %s "
+                "AND kind IN ('read', 'agent') AND outcome = 'answered' "
+                "ORDER BY node_name, answered_at) firsts ORDER BY answered_at, node_name",
+                (run_id,),
+            )
+        ).fetchall()
+        return tuple(
+            BlockResult(
+                row["node_name"],
+                row["kind"],
+                tuple(row["answer"]["items"]),
+                bool(row["answer"].get("cut_off", False)),
+            )
+            for row in rows
+        )
+
+    async def open_executions(self, uow: UnitOfWork) -> dict[str, set[N8nExecutionId]]:
+        """The executions that carry a run our API has not closed, by workflow."""
+        rows = await (
+            await uow.conn.execute(
+                "SELECT e.execution_id, e.n8n_workflow_id FROM orchestration.executions e "
+                "JOIN orchestration.runs r ON r.run_id = e.run_id "
+                "WHERE (r.state = 'Working' AND r.state_data ->> 'execution' = e.execution_id) "
+                "OR (r.state = 'Acting' AND r.state_data ->> 'claimant' = e.execution_id)"
+            )
+        ).fetchall()
+        open_: dict[str, set[N8nExecutionId]] = {}
+        for row in rows:
+            open_.setdefault(row["n8n_workflow_id"], set()).add(N8nExecutionId(row["execution_id"]))
+        return open_
 
     async def answered_in_run(
         self, uow: UnitOfWork, run_id: RunId, call: NodeCall
@@ -392,9 +611,49 @@ class CallBook:
         )
         return start
 
+    async def proposed(self, uow: UnitOfWork, run_id: RunId) -> tuple[WriteAction, ...]:
+        """The run's proposal, which is what its blocks proposed, in the order they answered. A
+        replayed answer carries no actions, so nothing is in it twice."""
+        rows = await (
+            await uow.conn.execute(
+                "SELECT actions FROM orchestration.node_calls WHERE run_id = %s "
+                "AND outcome = 'answered' ORDER BY answered_at, execution_id, node_name",
+                (run_id,),
+            )
+        ).fetchall()
+        return _actions_adapter.validate_python(
+            [action for row in rows for action in row["actions"]]
+        )
+
+    async def found(self, uow: UnitOfWork, run_id: RunId) -> str:
+        """What the run's last agent found, for the Approvers."""
+        row = await (
+            await uow.conn.execute(
+                "SELECT answer->'items'->0->>'summary' AS summary FROM orchestration.node_calls "
+                "WHERE run_id = %s AND kind = 'agent' AND outcome = 'answered' "
+                "ORDER BY answered_at DESC LIMIT 1",
+                (run_id,),
+            )
+        ).fetchone()
+        return "" if row is None or row["summary"] is None else str(row["summary"])
+
+    async def started_as_test(self, uow: UnitOfWork, run_id: RunId) -> bool:
+        row = await (
+            await uow.conn.execute(
+                "SELECT 1 FROM orchestration.starts WHERE run_id = %s AND kind = 'test' LIMIT 1",
+                (run_id,),
+            )
+        ).fetchone()
+        return row is not None
+
     async def waiting_run(self, uow: UnitOfWork, use_case_id: str) -> RunId | None:
         """The run of this use case that waits for a yes, if one does (one waiting run per
-        workflow, ADR 0026)."""
+        workflow, ADR 0026). The lock holds to the end of the transaction, so two runs that ask
+        at once see each other."""
+        await uow.conn.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended('use-case:' || %s, 0))",
+            (use_case_id,),
+        )
         row = await (
             await uow.conn.execute(
                 "SELECT run_id FROM orchestration.runs WHERE use_case_id = %s "
@@ -420,7 +679,11 @@ class NodeCalls:
         models: ActiveModel | None = None,
         *,
         start_secret: str | None = None,
+        box: Sealer | None = None,
         time_zone: ZoneInfo = TEAM_TIME_ZONE,
+        gateway: WriteGateway | None = None,
+        tells: TellOutlet | None = None,
+        failures: N8nFailures | None = None,
     ) -> None:
         self._db = db
         self._activity = activity
@@ -433,7 +696,11 @@ class NodeCalls:
         self._sites = sites
         self._models = models
         self._start_secret = start_secret
+        self._box = box
         self._time_zone = time_zone
+        self._gateway = gateway
+        self._tells = tells
+        self._failures = failures
         self._store = Store()
         self._watch = WatchStore()
         self._book = CallBook()
@@ -455,7 +722,83 @@ class NodeCalls:
         )
         return SignedStart({"nonce": start.nonce, "kind": kind, "expires": expires}, signature)
 
+    async def report(self, reporter: N8nExecutionId, failed: N8nExecutionId) -> FailureResult:
+        """Report a failure, from the error workflow (ENGINE-PLAN 2.8). Nothing in the report is
+        taken as said: the reporter must be an execution of our error workflow, and the failed
+        block and its words come from n8n's own record of a failed execution. While n8n cannot
+        be read, every report is refused."""
+        if self._failures is None:
+            return NOT_OUR_ERROR_WORKFLOW
+        ours = await self._failures.error_workflow_id()
+        facts = await self._n8n.execution(reporter)
+        if not ours or facts is None or facts.workflow_id != ours:
+            return NOT_OUR_ERROR_WORKFLOW
+        found = await self._failures.failure(failed)
+        if found is None:
+            return NOT_FAILED
+        return await self._fail_run(found)
+
+    async def _fail_run(self, failed: FailedExecution) -> FailureResult:
+        """Fails the run a failed execution carried, with the node's words (ENGINE-PLAN 2.3.9 and
+        2.8). An execution none of whose blocks had called is linked first, as its first call
+        would have linked it, so the Portal shows the run that stopped."""
+        execution = failed.execution_id
+        async with self._db.transaction("orchestration") as uow:
+            await self._book.hold_execution(uow, execution)
+            run_id = await self._book.linked_run(uow, execution)
+            if run_id is None:
+                match await self._link(uow, execution):
+                    case TryLater() as later:
+                        return later
+                    case Refused(detail=detail):
+                        return LeftAsIs(detail)
+                    case linked:
+                        run_id = linked
+            record = await self._store.load_run(uow, run_id, lock=True)
+            assert record is not None
+            read = await self._book.results_in_run(uow, run_id)
+            words = failure_words(failed, read_anything=bool(read))
+            failure = Failure(FailureReason.WORKFLOW_NODE_ERROR, words, retryable=True)
+            writing = await self._book.writing(uow, execution)
+            moved = fail_by_report(record.state, execution, failure, writing)
+            if moved is None and writing and isinstance(record.state, Acting):
+                return LeftAsIs("Its changes are being made, so the write's own outcome decides.")
+            if moved is None:
+                return LeftAsIs(f"The run is {state_name(record.state)}, so it stays as it is.")
+            await self._commit(uow, record, moved)
+            await self._store.cancel_outbox(uow, run_id)
+        return FailedRun(run_id)
+
+    async def sweep(self) -> list[RunId]:
+        """Fails each open run whose execution n8n says ended in an error, for a failure no report
+        brought. A run that has ended is not open, so it is never failed."""
+        if self._failures is None:
+            return []
+        async with self._db.transaction("orchestration") as uow:
+            open_ = await self._book.open_executions(uow)
+        failed: list[RunId] = []
+        for workflow_id, executions in sorted(open_.items()):
+            errored = await self._failures.failed_executions(workflow_id)
+            for execution in (e for e in errored if e in executions):
+                found = await self._failures.failure(execution)
+                if found is None:
+                    continue
+                if isinstance(result := await self._fail_run(found), FailedRun):
+                    failed.append(result.run_id)
+        return failed
+
+    async def sweep_forever(self, stop: asyncio.Event, every: timedelta = SWEEP_EVERY) -> None:
+        while not stop.is_set():
+            try:
+                await self.sweep()
+            except Exception:
+                log.exception("the failure sweep failed")
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(stop.wait(), every.total_seconds())
+
     async def call(self, call: NodeCall) -> CallResult:
+        if isinstance(call.work, WriteCall):
+            return await self._write(call)
         async with self._db.transaction("orchestration") as uow:
             admitted = await self._admit(uow, call)
         if not isinstance(admitted, Admitted):
@@ -465,6 +808,42 @@ class NodeCalls:
             return await self._finish(uow, admitted, call, work)
 
     async def _admit(self, uow: UnitOfWork, call: NodeCall) -> Admitted | CallResult:
+        linked = await self._linked_run(uow, call)
+        if not isinstance(linked, str):
+            return linked
+        run_id = linked
+        record = await self._store.load_run(uow, run_id, lock=True)
+        assert record is not None
+        match record.state:
+            case Skipped():
+                skipped = NothingToChange() if call.kind == "ask" else Answer(())
+                await self._book.keep(uow, call, run_id, skipped)
+                return skipped
+            case Working(execution=live) if live == call.execution_id:
+                record = await self._touch_record(uow, record)
+            case Succeeded() | Rejected() | Expired() if call.kind == "tell":
+                if not await self._book.carried_last(uow, run_id, call.execution_id):
+                    return await self._refuse(uow, call, run_id, ANOTHER_EXECUTION)
+            case Working():
+                return await self._refuse(uow, call, run_id, ANOTHER_EXECUTION)
+            case Failed(failure=failure):
+                return await self._refuse(uow, call, run_id, run_stopped(failure.message))
+            case _:
+                why = f"it is {state_name(record.state)}, not working."
+                return await self._refuse(uow, call, run_id, run_stopped(why))
+        earlier = await self._book.answered_in_run(uow, run_id, call)
+        if earlier is not None:
+            answer = _replayed(call.kind, earlier)
+            await self._book.keep(uow, call, run_id, answer)
+            return answer
+        if await self._book.working_in_run(uow, run_id, call):
+            return BUSY
+        call_id = await self._book.claim(uow, call, run_id)
+        return Admitted(run_id, call_id, TaskId(f"{run_id}/{call_id}"), record)
+
+    async def _linked_run(self, uow: UnitOfWork, call: NodeCall) -> RunId | CallResult:
+        """The run a block's call is for, linking its execution on the first call. A call this
+        block already had an answer or a refusal for gets that same one again."""
         await self._book.hold_execution(uow, call.execution_id)
         row = await self._book.call(uow, call)
         if row is not None and (row.kind, row.content_hash) != (call.kind, call.content_hash):
@@ -479,7 +858,7 @@ class NodeCalls:
             return BUSY
         run_id = await self._book.linked_run(uow, call.execution_id)
         if run_id is None:
-            linked = await self._link(uow, call)
+            linked = await self._link(uow, call.execution_id)
             if isinstance(linked, TryLater):
                 return linked
             if isinstance(linked, Refused):
@@ -488,31 +867,7 @@ class NodeCalls:
             run_id = linked
         if (refused := await self._catalog.unknown_in(call.work)) is not None:
             return await self._refuse(uow, call, run_id, refused)
-        record = await self._store.load_run(uow, run_id, lock=True)
-        assert record is not None
-        match record.state:
-            case Skipped():
-                await self._book.keep(uow, call, run_id, Answer(()))
-                return Answer(())
-            case Working(execution=live) if live == call.execution_id:
-                pass
-            case Working():
-                return await self._refuse(uow, call, run_id, ANOTHER_EXECUTION)
-            case Failed(failure=failure):
-                return await self._refuse(uow, call, run_id, run_stopped(failure.message))
-            case _:
-                why = f"it is {state_name(record.state)}, not working."
-                return await self._refuse(uow, call, run_id, run_stopped(why))
-        record = await self._touch_record(uow, record)
-        earlier = await self._book.answered_in_run(uow, run_id, call)
-        if earlier is not None:
-            answer = _answer(earlier, replayed=True)
-            await self._book.keep(uow, call, run_id, answer)
-            return answer
-        if await self._book.working_in_run(uow, run_id, call):
-            return BUSY
-        call_id = await self._book.claim(uow, call, run_id)
-        return Admitted(run_id, call_id, TaskId(f"{run_id}/{call_id}"), record)
+        return run_id
 
     async def _refuse(
         self, uow: UnitOfWork, call: NodeCall, run_id: RunId | None, refused: Refused
@@ -527,8 +882,8 @@ class NodeCalls:
         await self._book.keep(uow, call, run_id, refused)
         return refused
 
-    async def _link(self, uow: UnitOfWork, call: NodeCall) -> RunId | Refused | TryLater:
-        facts = await self._n8n.execution(call.execution_id)
+    async def _link(self, uow: UnitOfWork, execution: N8nExecutionId) -> RunId | Refused | TryLater:
+        facts = await self._n8n.execution(execution)
         if facts is None:
             return NO_EXECUTION
         own = await self._workflows.workflow(facts.workflow_id)
@@ -545,7 +900,6 @@ class NodeCalls:
         if version_id is not None:
             version = await self._workflows.version(facts.workflow_id, version_id)
         link = decide_link(facts, retried, start, own.holder, version, uow.now)
-        execution = call.execution_id
 
         async def linked(run_id: RunId) -> RunId:
             await self._book.link(
@@ -564,7 +918,7 @@ class NodeCalls:
                 return link
             case NewRun(started_by, trigger):
                 return await linked(
-                    await self._new_run(uow, own, started_by, trigger, call, facts.mode)
+                    await self._new_run(uow, own, started_by, trigger, execution, facts.mode)
                 )
             case StopStart(issued, why):
                 record = await self._pending_for(uow, issued, execution)
@@ -619,7 +973,7 @@ class NodeCalls:
         own: OwnWorkflow,
         started_by: UserId,
         trigger: Literal["person", "schedule"],
-        call: NodeCall,
+        execution: N8nExecutionId,
         mode: str,
     ) -> RunId:
         spec = replace(own.spec, trigger=trigger)
@@ -635,13 +989,13 @@ class NodeCalls:
         waiting = await self._book.waiting_run(uow, spec.use_case_id)
         state: RunState
         if waiting is None:
-            state = working_on(run_id, call.execution_id, 1, uow.now)
-            events = linked_events(created, call.execution_id, mode)
+            state = working_on(run_id, execution, 1, uow.now)
+            events = linked_events(created, execution, mode)
         else:
             state = Skipped(run_id, waiting)
-            events = skipped_events(created, call.execution_id, mode, waiting)
+            events = skipped_events(created, execution, mode, waiting)
         record = RunRecord(run_id, spec, started_by, uow.now, uow.now, 1, state, (), None)
-        await self._store.insert_run(uow, record, f"n8n:{call.execution_id}")
+        await self._store.insert_run(uow, record, f"n8n:{execution}")
         await self._activity.append(uow, run_id, events)
         return run_id
 
@@ -669,6 +1023,12 @@ class NodeCalls:
                 return Done(Answer(items, cut_off=len(read) > READ_LIMIT))
             case AgentCall(agent, inputs):
                 return await self._run_agent(admitted, agent, inputs)
+            case AskCall(resume_url):
+                return Asking(resume_url)
+            case WriteCall():
+                raise AssertionError("a write is carried by _write, never by _work")
+            case TellCall() as tell:
+                return await self._tell(admitted, call, tell)
             case ProposeCall(action, place, title, body, subject):
                 entry = self._catalog.write(action)
                 proposed = WriteAction(
@@ -732,6 +1092,67 @@ class NodeCalls:
                 actions = _recorded(at_sites(bound, self._sites), None)
                 return Done(Answer((found,)), actions, tuple(events))
 
+    async def _tell(self, admitted: Admitted, call: NodeCall, tell: TellCall) -> Kept | TryLater:
+        """A notice under the Tell rule (ENGINE-PLAN 2.3.12, D19): composed from what the run
+        read, with what the gateway made after a yes once the run has succeeded, and sent
+        nowhere in a test run. A Tell keeps each of its answers here, a refusal too."""
+        record = admitted.record
+        ending = ending_of(record.state)
+        async with self._db.transaction("orchestration") as uow:
+            results = await self._book.results_in_run(uow, record.run_id)
+            test = record.spec.stops_at_gate or await self._book.started_as_test(uow, record.run_id)
+        if not results:
+            return await self._keep_tell(admitted, call, NOTHING_READ)
+        if self._tells is None:
+            return await self._keep_tell(admitted, call, NO_TELL_FLOW)
+        reach = REACH[tell.where]
+        if tell.what == "only_when_something_to_report" and not something_to_report(
+            results, ending.made
+        ):
+            return await self._keep_tell(
+                admitted, call, Told("nothing_to_report", NOTHING_TO_REPORT)
+            )
+        if test:
+            line = would_have_line(reach, self._tells.channel)
+            return await self._keep_tell(admitted, call, Told("would_have_sent", line))
+        message = compose(record.spec.use_case_name, results, reach, ending)
+        return await self._send(admitted, call, self._tells, message, reach)
+
+    async def _keep_tell(
+        self, admitted: Admitted, call: NodeCall, answer: Told | Refused
+    ) -> Kept | TryLater:
+        async with self._db.transaction("orchestration") as uow:
+            kept = await self._book.keep(
+                uow, call, admitted.run_id, answer, call_id=admitted.call_id
+            )
+        return Kept(answer) if kept else BUSY
+
+    async def _send(
+        self,
+        admitted: Admitted,
+        call: NodeCall,
+        outlet: TellOutlet,
+        message: TellMessage,
+        reach: Reach,
+    ) -> Kept | TryLater:
+        """Keeps the Tell as sending before the post, so a flow that posted and then answered 5xx,
+        or a stop mid-post, is never posted again: a repeat gets "sending, not confirmed"."""
+        sending = Told("sending", SENDING_LINE)
+        async with self._db.transaction("orchestration") as uow:
+            kept = await self._book.keep(
+                uow, call, admitted.run_id, sending, call_id=admitted.call_id
+            )
+        if not kept:
+            return BUSY
+        try:
+            await outlet.send(admitted.run_id, call.node_name, message)
+            told = Told("sent", sent_line(reach, outlet.channel))
+        except NotConfirmed as why:
+            told = Told("not_confirmed", not_confirmed_line(str(why)))
+        async with self._db.transaction("orchestration") as uow:
+            await self._book.settle(uow, admitted.call_id, told)
+        return Kept(told)
+
     async def _finish(
         self, uow: UnitOfWork, admitted: Admitted, call: NodeCall, work: Work
     ) -> CallResult:
@@ -740,6 +1161,8 @@ class NodeCalls:
         if isinstance(work, TryLater):
             await self._book.release(uow, admitted.call_id)
             return work
+        if isinstance(work, Kept):
+            return work.answer
         events = work.events if isinstance(work, Done | Stopped) else ()
         if events:
             await self._activity.ingest_agent_events(uow, admitted.run_id, admitted.task_id, events)
@@ -749,6 +1172,8 @@ class NodeCalls:
             await self._book.keep(uow, call, admitted.run_id, why, call_id=admitted.call_id)
             return why
         match work:
+            case Asking(resume_url):
+                return await self._ask(uow, record, admitted, call, resume_url)
             case Refused():
                 await self._book.keep(uow, call, admitted.run_id, work, call_id=admitted.call_id)
                 return work
@@ -771,6 +1196,158 @@ class NodeCalls:
                     return BUSY
                 return answer
 
+    async def _ask(
+        self, uow: UnitOfWork, record: RunRecord, admitted: Admitted, call: NodeCall, url: str
+    ) -> CallResult:
+        """Asks for a yes on the run's proposal, held in n8n (ENGINE-PLAN 2.3.4). With nothing
+        proposed, the block leaves by Nothing to change. A test run stops here and asks nobody."""
+        working = record.state
+        assert isinstance(working, Working)
+        actions, left_out = await self._still_to_make(uow, record)
+        proposal = Proposal(ProposalId(new_id("prp")), record.run_id, actions, digest(actions))
+        shown = (proposal.id, proposal.digest, tuple(describe(action) for action in actions))
+        test = record.spec.stops_at_gate or await self._book.started_as_test(uow, record.run_id)
+        request = None
+        result: AskAnswer | Refused
+        moved: Moved[Any]
+        if not actions:
+            result, moved = NothingToChange(), working.nothing_to_change(left_out)
+        elif test:
+            result, moved = TEST_RUN_STOPS, working.stop_at_gate(shown, left_out)
+        elif self._box is None:
+            failure = Failure(FailureReason.SAFETY_DENIED, CANNOT_SEAL, retryable=False)
+            result, moved = run_stopped(CANNOT_SEAL), working.fail(failure)
+        elif (waiting := await self._book.waiting_run(uow, record.spec.use_case_id)) is not None:
+            result, moved = NothingToChange(), working.skip(waiting)
+        else:
+            request = request_for(record, proposal, uow.now, self._time_zone)
+            summary = await self._book.found(uow, record.run_id)
+            steps = steps_view(request, ())
+            result = Waiting(request.id)
+            link = approval_link(request.id)
+            moved = working.ask(shown, request.id, steps, link, summary, left_out)
+        if not await self._book.keep(uow, call, record.run_id, result, call_id=admitted.call_id):
+            return BUSY
+        if actions:
+            await self._store.insert_proposal(uow, proposal)
+        if request is not None and self._box is not None:
+            held = HeldWait(call.execution_id, self._box.seal(url))
+            await self._store.insert_approval(uow, request, held)
+        record = await self._commit(uow, record, moved)
+        if isinstance(moved.state, AwaitingApproval) and request is not None:
+            await enqueue_announcement(
+                uow, self._store, record, request, proposal, moved.state.summary, self._sites
+            )
+        return result
+
+    async def _still_to_make(
+        self, uow: UnitOfWork, record: RunRecord
+    ) -> tuple[tuple[WriteAction, ...], tuple[str, ...]]:
+        """What the run's blocks proposed, less each change whose subject is made already, so the
+        Approvers see only what will be made (ENGINE-PLAN 2.3.8)."""
+        proposed = await self._book.proposed(uow, record.run_id)
+        use_case = record.spec.use_case_id
+        subjects = {subject_key(use_case, a.subject) for a in proposed if a.subject is not None}
+        return still_to_make(use_case, proposed, await made_subjects(uow, subjects))
+
+    async def _write(self, call: NodeCall) -> CallResult:
+        """Make the approved changes (ENGINE-PLAN 2.3.8). The gateway makes the run's own approved
+        proposal, checked against our records as it is made. The call says nothing about what."""
+        if self._gateway is None:
+            return TryLater("This platform has no write gateway, so it makes no changes.")
+        async with self._db.transaction("orchestration") as uow:
+            admitted = await self._admit_write(uow, call, self._gateway)
+        if not isinstance(admitted, Writing):
+            return admitted
+        carried = await self._gateway.execute(admitted.write)
+        async with self._db.transaction("orchestration") as uow:
+            return await self._finish_write(uow, admitted, call, carried)
+
+    async def _admit_write(
+        self, uow: UnitOfWork, call: NodeCall, gateway: WriteGateway
+    ) -> Writing | CallResult:
+        linked = await self._linked_run(uow, call)
+        if not isinstance(linked, str):
+            return linked
+        run_id = linked
+        record = await self._store.load_run(uow, run_id, lock=True)
+        assert record is not None
+        held = await self._the_request(uow, record.state)
+        match admit_write(record.state, call.execution_id, held, uow.now):
+            case Refused() as refused:
+                return await self._refuse(uow, call, run_id, refused)
+            case StopRun(refused, moved):
+                await self._commit(uow, record, moved)
+                await self._store.cancel_outbox(uow, run_id)
+                return await self._refuse(uow, call, run_id, refused)
+            case Answered(answer):
+                await self._book.keep(uow, call, run_id, answer)
+                return answer
+            case Carry(acting, took_yes):
+                if took_yes is not None:
+                    record = await self._commit(uow, record, took_yes)
+        assert held is not None
+        proposal = await self._store.load_proposal(uow, acting.proposal_id)
+        assert proposal is not None
+        test = record.spec.stops_at_gate or await self._book.started_as_test(uow, run_id)
+        verdict = check(
+            acting,
+            WritingRun(record.spec.use_case_id, test),
+            proposal,
+            held.request,
+            held.decisions,
+            gateway.registry,
+            gateway.sites,
+        )
+        match verdict:
+            case Deny(reason):
+                words = DENIED[reason]
+                failure = Failure(FailureReason.SAFETY_DENIED, words, retryable=False)
+                denied = write_denied(DENIED_ON_THE_WIRE[reason], words)
+                await self._commit(uow, record, acting.fail(failure).preceded_by(denied))
+                await self._store.cancel_outbox(uow, run_id)
+                return await self._refuse(uow, call, run_id, Refused(403, words))
+            case AuthorizedWrite() as write:
+                return Writing(run_id, await self._book.claim(uow, call, run_id), write)
+
+    async def _the_request(self, uow: UnitOfWork, state: RunState) -> TheRequest | None:
+        match state:
+            case (
+                AwaitingApproval(approval_id=approval_id)
+                | Acting(approval_id=approval_id)
+                | Lost(approval_id=approval_id)
+            ):
+                pass
+            case _:
+                return None
+        request = await self._store.load_approval(uow, approval_id)
+        assert request is not None
+        decisions = tuple(await self._store.load_decisions(uow, approval_id))
+        held = await self._store.held_wait(uow, approval_id)
+        return TheRequest(request, decisions, None if held is None else held.execution_id)
+
+    async def _finish_write(
+        self, uow: UnitOfWork, writing: Writing, call: NodeCall, carried: Carried
+    ) -> CallResult:
+        """Keeps the answer and moves the run. What this try made is logged even when the run
+        moved on meanwhile, such as past its deadline."""
+        record = await self._store.load_run(uow, writing.run_id, lock=True)
+        assert record is not None
+        answer = write_answer(carried)
+        if not await self._book.keep(uow, call, writing.run_id, answer, call_id=writing.call_id):
+            await self._activity.append(uow, writing.run_id, [write_done(w) for w in carried.fresh])
+            return BUSY
+        match record.state:
+            case Acting(claimant=claimant) as acting if claimant == call.execution_id:
+                await self._commit(uow, record, after_write(acting, carried))
+                if carried.failure is not None:
+                    await self._store.cancel_outbox(uow, writing.run_id)
+            case _:
+                await self._activity.append(
+                    uow, writing.run_id, [write_done(w) for w in carried.fresh]
+                )
+        return answer
+
     async def _commit(
         self,
         uow: UnitOfWork,
@@ -788,5 +1365,5 @@ class NodeCalls:
 def _recorded(actions: Sequence[WriteAction], subject: str | None) -> tuple[Mapping[str, Any], ...]:
     """The actions a block adds to the run's proposal, each with what it is about, so a later
     change is never made twice for one subject (ENGINE-PLAN 2.3.8)."""
-    dumped = _actions_adapter.dump_python(tuple(actions), mode="json")
-    return tuple({**action, "subject": subject} for action in dumped)
+    about = tuple(replace(action, subject=subject) for action in actions)
+    return tuple(_actions_adapter.dump_python(about, mode="json"))

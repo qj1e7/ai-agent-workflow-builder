@@ -33,6 +33,8 @@ type DeniedReason = Literal[
     "unregistered_action",
     "target_changed",
     "out_of_order",
+    "expired",
+    "test_run",
 ]
 type WireVerdict = Literal["approve", "decline"]
 
@@ -168,6 +170,19 @@ class RunSkippedData(WireModel):
     )
 
 
+class RunExpiredData(WireModel):
+    approval_id: ApprovalId = Field(description="The request that nobody answered in time.")
+
+
+class ExecutionResumedData(WireModel):
+    execution_id: str = Field(description="The waiting n8n execution that took the yes.")
+
+
+class RunLostData(WireModel):
+    approval_id: ApprovalId
+    why: str = Field(description="Why n8n could not take the yes, in plain words.")
+
+
 class SupportReportedData(WireModel):
     request_id: str
     reported_by: UserId
@@ -301,6 +316,21 @@ class RunSkipped(_Envelope):
     data: RunSkippedData
 
 
+class RunExpired(_Envelope):
+    kind: Literal["run_expired"] = "run_expired"
+    data: RunExpiredData
+
+
+class ExecutionResumed(_Envelope):
+    kind: Literal["execution_resumed"] = "execution_resumed"
+    data: ExecutionResumedData
+
+
+class RunLost(_Envelope):
+    kind: Literal["run_lost"] = "run_lost"
+    data: RunLostData
+
+
 class SupportReported(_Envelope):
     kind: Literal["support_reported"] = "support_reported"
     data: SupportReportedData
@@ -331,6 +361,9 @@ type ActivityEvent = Annotated[
     | RunRetried
     | ExecutionLinked
     | RunSkipped
+    | RunExpired
+    | ExecutionResumed
+    | RunLost
     | SupportReported,
     Field(discriminator="kind"),
 ]

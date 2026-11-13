@@ -23,16 +23,21 @@ const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;'
 const links = (html: string) => [...html.matchAll(/<a[^>]*href="([^"]+)"/g)].map((m) => m[1])
 
 describe('the recent runs of a workflow', () => {
-  it('list each run as it went, newest first, each opening its own run page', () => {
+  it('list each run as it went, newest first, with its stage words and its pill, each opening its own run page', () => {
     const html = render([failed as RunView, done as RunView])
     expect(links(html)).toEqual(['/runs/run_01JB9', '/runs/run_01JB8'])
     const said = text(html)
-    expect(said).toContain('Today, 10:14 Stopped. An agent could not finish its work. Started by Alice')
-    expect(said).toContain('Tue 3 Nov, 10:14 Done. 1 ticket created, approved by Bob. Started by Alice')
+    expect(said).toContain('Today, 10:14 An agent could not finish its work Stopped Open')
+    expect(said).toContain('Tue 3 Nov, 10:14 1 ticket created, approved by Bob Done Open')
   })
 
-  it('say when a schedule started a run', () => {
-    expect(text(render([scheduled as RunView]))).toContain("Started by Alice's schedule")
+  it('has one heading, Recent runs', () => {
+    expect(render([done as RunView])).toContain('>Recent runs</h2>')
+  })
+
+  it('says a run in progress is running, and one that wrote nothing is Nothing new', () => {
+    expect(text(render([scheduled as RunView]))).toContain('Running')
+    expect(text(render([{ ...(done as RunView), outcome: 'nothing_to_write', written: [] } as RunView]))).toContain('Nothing new to write Nothing new')
   })
 
   it('show the newest ones first and offer the older ones on request', () => {
@@ -43,8 +48,8 @@ describe('the recent runs of a workflow', () => {
   })
 
   it('say there are no runs yet, and when the first one is', () => {
-    expect(text(render([]))).toContain('No runs yet. The first one is Mon 9 Nov, 9:00.')
-    expect(text(render([], null))).toContain('No runs yet.')
-    expect(text(render([], null))).not.toContain('The first one')
+    expect(text(render([]))).toContain('No runs yet First run Mon 9 Nov, 9:00.')
+    expect(text(render([], null))).toContain('No runs yet')
+    expect(text(render([], null))).not.toContain('First run')
   })
 })

@@ -41,7 +41,7 @@ export function useSaidOnce(text: string | null, say: Say) {
 export const WORKFLOWS_SHOWN = 5
 
 /** Check my workflows: the sketch's Workflows card, a few rows from the same list as the Workflows page, for one workflow or all of them. */
-export function CheckWorkflowsAnswer({ useCaseId, say }: { useCaseId: string | null; now: Date; say: Say }) {
+export function CheckWorkflowsAnswer({ useCaseId, now, say }: { useCaseId: string | null; now: Date; say: Say }) {
   const me = useMe()
   const useCases = useUseCases({ poll: REFRESH_MS })
   const rows = useMemo(() => {
@@ -83,7 +83,7 @@ export function CheckWorkflowsAnswer({ useCaseId, say }: { useCaseId: string | n
             }
           : {})}
       >
-        <WorkflowRows useCases={rows.slice(0, WORKFLOWS_SHOWN).map((row) => row.useCase)} label="Your workflows" />
+        <WorkflowRows useCases={rows.slice(0, WORKFLOWS_SHOWN).map((row) => row.useCase)} label="Your workflows" now={now} />
       </Card>
     </>
   )
@@ -127,13 +127,14 @@ export function NeedsMeAnswer({ now, say }: { now: Date; say: Say }) {
 }
 
 /** Which software is behind: the sketch's behind card, read from the watchlist with no model. Each row opens the software beside the chat. */
-export function BehindAnswer({ say }: { say: Say }) {
+export function BehindAnswer({ now, say }: { now: Date; say: Say }) {
   const watchlist = useWatchlist({ poll: WATCH_REFRESH })
-  const rows = watchlist.data?.software
+  const view = watchlist.data
+  const rows = view?.software
   const behind = useMemo(() => rows?.filter(hasNewer) ?? [], [rows])
-  const sentence = !rows ? null : behind.length > 0 ? `${behind.length} ${behind.length === 1 ? 'has' : 'have'} a newer version.` : (countLine(rows) ?? 'Nothing is on the Software watchlist yet.')
+  const sentence = !rows ? null : behind.length > 0 ? `${behind.length} ${behind.length === 1 ? 'has' : 'have'} a newer version.` : `${countLine(rows) ?? 'Nothing is on the Software watchlist yet'}.`
   useSaidOnce(sentence, say)
-  if (!rows || sentence === null) {
+  if (!view || sentence === null) {
     return (
       <p className="muted" role="status">
         {watchlist.isError ? 'I couldn’t read the watchlist just now.' : 'Checking the watchlist'}
@@ -150,7 +151,7 @@ export function BehindAnswer({ say }: { say: Say }) {
         </OpenButton>
       }
     >
-      <SoftwareRows rows={behind} label="Software with a newer version" />
+      <SoftwareRows rows={behind} view={view} label="Software with a newer version" now={now} />
     </Card>
   )
 }

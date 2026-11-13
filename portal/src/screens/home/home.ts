@@ -4,7 +4,7 @@ import { connectorLabel, starterName } from '../../api/labels'
 import type { AddressItem, CapabilitiesView, PlannerAnswerIn, ApprovalItem, ConfirmationItem, ConnectionItem, DeclinedItem, DraftItem, FollowingUpItem, HomeOut, QuestionItem, StoppedItem, WaitingItem } from '../../api/types'
 import { count, declineTail, withCurrentNames } from '../run/words'
 import { requestKindWords, requestPath } from '../workflows/requests'
-import { movedHeadline, notFoundHeadline } from '../software/software'
+import { movedHeadline, notFoundHeadline, softwarePath } from '../software/software'
 import { lineWhen, runWhen } from '../workflows/workflow'
 import type { PanelItem } from '../../ui/sidePanel'
 
@@ -405,7 +405,7 @@ export function actionsOf(need: Need, modelOff = false): readonly Action[] {
         ? [{ kind: 'open', label: 'Connect a model', to: '/settings?tab=model' }]
         : [{ kind: 'open', label: 'See it in Settings', to: CONNECTIONS_PATH, item: { kind: 'connection', id: need.item.id } }]
     case 'address':
-      return [{ kind: 'open', label: 'Show it on the watchlist', to: `/software?row=${encodeURIComponent(need.item.software_id)}`, item: { kind: 'software', id: need.item.software_id } }]
+      return [{ kind: 'open', label: 'Show it on the watchlist', to: softwarePath(need.item.software_id), item: { kind: 'software', id: need.item.software_id } }]
     case 'confirmation':
       return [{ kind: 'open', label: 'Review in Settings', to: need.item.kind === 'approver' ? '/settings?tab=people' : '/settings?tab=model' }]
     case 'stopped':

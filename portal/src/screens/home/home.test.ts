@@ -62,14 +62,14 @@ describe('the order of what needs you', () => {
     expect(pinnedOf(home)).toEqual({ need, more: 0 })
   })
 
-  it('puts a moved or missing repository after the connections, counts it, and lands on its row', () => {
+  it('puts a moved or missing repository after the connections, counts it, and opens that software’s own page', () => {
     const [moved, lost] = ALICE.addresses as [AddressItem, AddressItem]
     const home: HomeOut = { ...BOB, connections: [(ALICE.connections as [ConnectionItem])[0]], addresses: [moved, lost], stopped: [STOP], stopped_total: 1 }
     const needs = needsOf(home)
     expect(needs.shown.map((need) => need.kind)).toEqual(['stopped', 'approval', 'connection', 'address', 'address', 'confirmation', 'confirmation'])
     expect(needs.total).toBe(needsTotal(home))
     const [first, second] = needs.shown.filter((need) => need.kind === 'address') as [Need, Need]
-    expect(actionsOf(first)).toEqual([{ kind: 'open', label: 'Show it on the watchlist', to: `/software?row=${moved.software_id}`, item: { kind: 'software', id: moved.software_id } }])
+    expect(actionsOf(first)).toEqual([{ kind: 'open', label: 'Show it on the watchlist', to: `/software/${moved.software_id}`, item: { kind: 'software', id: moved.software_id } }])
     expect(wordsOf(first, NOW).title).toBe('GitHub moved FastAPI from tiangolo/fastapi to fastapi/fastapi.')
     expect(wordsOf(second, NOW).title).toBe('GitHub can’t find langchain-ai/langserve, the address saved for LangServe.')
   })
@@ -413,12 +413,12 @@ describe('the pinned line', () => {
     expect(pinnedOf(DAY_ONE)).toBeNull()
   })
 
-  it('opens the item’s own page: the run for a stop or a request, Settings for a key, the row for software', () => {
+  it('opens the item’s own page: the run for a stop or a request, Settings for a key, its own page for software', () => {
     const open = (home: HomeOut, key: string) => openPathOf(needsOf(home).shown.find((need) => need.key === key) as Need)
     expect(open(ALICE, 'stopped:run_01JB9')).toBe('/runs/run_01JB9')
     expect(open(BOB, 'approval:apr_01JB8')).toBe('/runs/run_01JB8')
     expect(open(ALICE, 'connection:jira')).toBe('/settings?tab=connections')
-    expect(open(ALICE, `address:${(ALICE.addresses[0] as AddressItem).software_id}`)).toContain('/software?row=')
+    expect(open(ALICE, `address:${(ALICE.addresses[0] as AddressItem).software_id}`)).toBe(`/software/${(ALICE.addresses[0] as AddressItem).software_id}`)
   })
 })
 

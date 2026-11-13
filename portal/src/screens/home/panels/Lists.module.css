@@ -33,7 +33,7 @@
   font-size: 0.92rem;
 }
 
-.row .small {
+.row .sub {
   display: block;
   overflow-wrap: anywhere;
   color: var(--muted);
@@ -69,11 +69,6 @@
   border-color: var(--green-line);
   background: var(--green-soft);
   color: var(--green-ink);
-}
-
-.pill[data-tone='open'] {
-  background: var(--info-bg);
-  color: var(--info-ink);
 }
 
 @media (hover: hover) and (pointer: fine) {

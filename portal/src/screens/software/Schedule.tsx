@@ -165,9 +165,9 @@ export function Schedule({ schedule, operator, paused, useCaseId, answeredAt, on
   const words = useErrorWords()
   return (
     <section className={styles['schedule']} aria-labelledby="schedule-heading">
-      <h3 id="schedule-heading" className="visually-hidden">
+      <h2 id="schedule-heading" className="visually-hidden">
         Schedule
-      </h3>
+      </h2>
       <div className={styles['scheduleText']}>
         <ScheduleNote schedule={schedule} operator={operator} paused={paused} />
       </div>
