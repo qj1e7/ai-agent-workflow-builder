@@ -10,7 +10,9 @@ from platform_api.orchestration.jira import JiraError
 from platform_api.orchestration.runs import (
     STATE_NAMES,
     Acting,
+    Expired,
     Failed,
+    Lost,
     Outcome,
     Rejected,
     RunState,
@@ -149,11 +151,11 @@ class WatchStore:
 
     async def run_moved(self, uow: UnitOfWork, record: RunRecord, after: RunState) -> None:
         """Follows a watchlist run's tickets: written when the act leg wrote them, dropped when
-        the run was declined or failed. The next check proposes dropped tickets again."""
+        the run ended without writing them. The next check proposes dropped tickets again."""
         if not isinstance(record.spec.task, WatchlistTask):
             return
         match after:
-            case Failed() | Rejected():
+            case Failed() | Rejected() | Expired() | Lost():
                 await uow.conn.execute(
                     "UPDATE orchestration.proposed_tickets SET status = 'dropped' "
                     "WHERE run_id = %s AND status = 'proposed'",

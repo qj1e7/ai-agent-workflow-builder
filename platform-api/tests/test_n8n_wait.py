@@ -379,6 +379,8 @@ async def test_an_old_engine_request_expires_too_and_wakes_nothing(w: Wait):
     await w.tick()
     assert isinstance((await w.run()).state, Expired)
     assert await w.wake_rows() == []
+    tickets = await w.rows("SELECT status FROM orchestration.proposed_tickets")
+    assert tickets == [{"status": "dropped"}], "the next check proposes it again (ADR 0024)"
 
 
 # The safety rules, each with a test that fails when its guard is removed (see mutate.py).
