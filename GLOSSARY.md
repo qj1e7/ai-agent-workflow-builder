@@ -81,7 +81,7 @@ A request someone saves for the team when the platform can't help: Ask the team,
 _Avoid_: Ticket (that is Jira), support email
 
 **Draft**:
-A set-up card that an Operator started and has not turned on, kept so they can come back to it. Only they see it, listed on Workflows. Always write "n8n draft" for an n8n workflow that is not published yet.
+A workflow that is set up but not turned on yet. It never runs on its schedule, its test run stops before the yes, and Turn it on publishes its version 1 (ADR 0044). Everyone sees it on Workflows. A set-up card that an Operator started and kept to come back to is a draft too, and only they see it. Always write "n8n draft" for an n8n workflow that is not published yet.
 _Avoid_: Proposal (that is a run's write actions)
 
 **Paused**:
@@ -162,8 +162,8 @@ One execution of a use case, from trigger to result.
 _Avoid_: Job, execution (n8n uses "execution" for its own internal runs)
 
 **Test run**:
-A run an Operator starts by hand to try a workflow. It asks for a yes and writes like any other run.
-_Avoid_: Dry run (nothing is skipped)
+A run an Operator starts by hand to try a workflow. On a workflow that is on, it asks for a yes and writes like any other run. On a draft, it stops at the approval gate: it asks nobody for a yes and writes nothing (ADR 0044).
+_Avoid_: Dry run
 
 **Planner**:
 The agent that reads a task, says what it understood, and decides which saved agents to bring in, or that a new agent card is needed.
@@ -180,7 +180,7 @@ The specialist agent that reads each watched software's releases at its source, 
 _Avoid_: Release checker (the old name), scanner
 
 **Leg**:
-The part of a run that n8n carries in one execution. A run has a work leg up to the approval request and an act leg from the approval to the end. Our platform owns the pause between them.
+Retired on 13 Nov 2026 (ADR 0026). It was the part of a run that n8n carried in one execution, a work leg and an act leg with our platform owning the pause between them. Each workflow is now its own n8n workflow, and n8n holds the wait for a yes.
 
 **Write action**:
 Any action that changes data in an external system, such as Jira, Confluence or GitLab.

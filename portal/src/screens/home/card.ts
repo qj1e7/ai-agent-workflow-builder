@@ -517,6 +517,7 @@ export function createBody(form: Form, plan: PlanView, savedDrafts: Readonly<Rec
     })),
     schedule: scheduleOf(form.when),
     left_out: leftOutOf(form),
+    on: true,
   }
 }
 

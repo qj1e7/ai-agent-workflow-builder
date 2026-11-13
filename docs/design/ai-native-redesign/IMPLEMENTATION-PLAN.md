@@ -139,7 +139,7 @@ Each screen lists the files to change, what to reuse, what is new, and how state
 - **Change.** The pages an Approver reads (`WorkflowsPage.tsx`, `WorkflowPage.tsx`, `SoftwarePage.tsx`, Settings) show no control that changes anything and no dead button, and one note each, such as "Only Operators change workflows. Ask Alice or Carol." People and permissions shows each person's roles as text.
 - **Change.** The watchlist count on the rail shows only for someone who can act on it.
 - **Change.** `ChatProvider` (2.2) keeps one conversation per signed-in person, so a dev sign-in that changes person never shows another person's chat.
-- **Change.** `portal/src/shell/Shell.module.css` and `Header.module.css`. On a wide screen the content keeps one column, at most 1180 px wide, and the header lines up with it. The chat and its side panel share that column. A Workflows list with no row actions drops its empty action column.
+- **Change.** `portal/src/shell/Shell.module.css` and `Header.module.css`. On a wide screen the content keeps one column, at most 1180 px wide. The header spans the window, with the brand top left above the rail and the tools at the right edge (changed 13 Nov 2026, after the team lead found the centred header floating on a wide screen). The chat and its side panel share that column. A Workflows list with no row actions drops its empty action column.
 - **Must match.** `ROLE-*`, `KEYS-ROLE`, `FIX-deny-default`, `FIX-bob-settings`, `FIX-rail-count`, `FIX-wide`.
 
 ### New components, all of them

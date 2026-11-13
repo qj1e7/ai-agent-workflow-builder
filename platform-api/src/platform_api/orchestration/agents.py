@@ -453,7 +453,7 @@ class WatchedFact(WireModel):
 
 class WorkflowFact(WireModel):
     name: str = Field(max_length=80)
-    state: Literal["on", "paused"]
+    state: Literal["draft", "on", "paused"]
     last_run: str | None = Field(max_length=40)
     last_run_at: datetime | None
 

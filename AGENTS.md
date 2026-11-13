@@ -56,6 +56,8 @@ These come from the sponsor and from our October feasibility test. Do not weaken
 - n8n error workflows must be active, or n8n skips them.
 - Wait a short delay before a retry.
 - Log every agent action with who approved it.
+- n8n holds no write key. The write gateway checks every approval itself at the moment of writing (ADR 0026).
+- A notice that only reports what was read may go out without a yes, under the Tell rule in ADR 0026. A change to data always needs a yes.
 
 ## Designing screens
 

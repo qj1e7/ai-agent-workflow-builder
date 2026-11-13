@@ -3816,6 +3816,7 @@
         },
         "state": {
           "enum": [
+            "draft",
             "on",
             "paused"
           ],

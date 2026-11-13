@@ -72,6 +72,9 @@ class RunSpec:
     trigger: Trigger = "person"
     test: bool = False
     """A person started it with Do a test run. A row stored without it reads False."""
+    stops_at_gate: bool = False
+    """A test run of a draft: it stops at the approval gate, asks nobody for a yes and writes
+    nothing (ADR 0044). A row stored without it reads False."""
 
 
 @dataclass(frozen=True)

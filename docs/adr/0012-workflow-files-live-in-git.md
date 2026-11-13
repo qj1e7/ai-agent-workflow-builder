@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: superseded by ADR 0027
 ---
 
 # n8n workflow files live in git, and a bootstrap job lints and loads them
@@ -17,3 +17,7 @@ The sponsor wants staff to maintain the platform without code, and n8n's editor 
 - One workflow serves every use case of a template, so saving a use case never touches n8n.
 - Bootstrap uses n8n's owner setup and API key endpoints, which are internal to n8n, so the n8n version stays pinned.
 - Whether the sponsor accepts that the editor is read-only in practice is an open question for him.
+
+## Superseded on 13 Nov 2026
+
+ADR 0027 replaces this decision. See `docs/design/chat-first/ENGINE-PLAN.md`.

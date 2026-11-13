@@ -1,15 +1,18 @@
-"""A workflow paused, held, deleted and changed, the watchlist paused, and a set-up card draft,
-as the API answers them."""
+"""A workflow paused, held, deleted, changed, set up as a draft and turned on, the watchlist
+paused, and a set-up card draft, as the API answers them."""
 
 from datetime import UTC, datetime, timedelta
 
 from platform_api.builder.lifecycle import RESTORE_WINDOW
 from platform_api.builder.models import (
+    AgentChoice,
+    CreateAgentUseCase,
     DraftIn,
     DraftList,
     DraftView,
     LastRunView,
     ScheduleChangeView,
+    ScheduleIn,
     UndoIn,
     UseCaseDeleted,
     UseCaseScheduleIn,
@@ -18,6 +21,7 @@ from platform_api.builder.models import (
     VersionSchedule,
     VersionView,
 )
+from platform_api.contracts.cards_stories import INSTRUCTION, USE_CASE_NAME, VALUES
 from platform_api.contracts.cards_stories import USE_CASE as AGENT_USE_CASE
 from platform_api.contracts.stories import (
     ALICE,
@@ -174,6 +178,22 @@ UNDONE_USE_CASE = AGENT_USE_CASE.model_copy(
     }
 )
 
+# Alice set the agent workflow up as a draft that runs every Monday at 8:00 once it is on, tried
+# it, and turned it on (ADR 0044).
+SET_UP_OFF = CreateAgentUseCase(
+    name=USE_CASE_NAME,
+    instruction=INSTRUCTION,
+    agents=[AgentChoice(card_id=AGENT_USE_CASE.agents[0].card_id, values=VALUES)],
+    schedule=ScheduleIn(day="monday", at="08:00"),
+    on=False,
+)
+DRAFT_USE_CASE = AGENT_USE_CASE.model_copy(
+    update={"state": "draft", "schedule": SCHEDULED_BY_ALICE, "next_run_at": None}
+)
+TURNED_ON = DRAFT_USE_CASE.model_copy(
+    update={"state": "on", "next_run_at": datetime(2026, 11, 9, 0, 0, tzinfo=UTC)}
+)
+
 
 def lifecycle_fixtures() -> dict[str, WireModel | list[WireModel]]:
     return {
@@ -192,4 +212,7 @@ def lifecycle_fixtures() -> dict[str, WireModel | list[WireModel]]:
         "builder/use-case.undone.json": UNDONE_USE_CASE,
         "builder/versions.json": VERSIONS,
         "builder/versions.undone.json": VERSIONS_UNDONE,
+        "builder/agent-use-case.off.in.json": SET_UP_OFF,
+        "builder/use-case.draft.json": DRAFT_USE_CASE,
+        "builder/use-case.turned-on.json": TURNED_ON,
     }

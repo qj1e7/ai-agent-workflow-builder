@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Each use case names its Approvers, and an unanswered request goes to a backup, then expires
@@ -39,3 +39,7 @@ The rule that checks a decision already allows a list of people for a step (`One
 - **Leave calendars and public holidays are not covered.** Reading leave from Outlook or Entra ID would be a new external dependency, with its own ADR. Until then, the backup covers leave.
 - **Existing use cases keep "any Approver".** Their requests start to expire after the default wait.
 - **If this ADR is accepted,** the safety rules in `AGENTS.md` gain one line: a request that nobody answers expires, and never approves itself.
+
+## Accepted on 13 Nov 2026
+
+Accepted unchanged with ADR 0026, because the n8n engine builds its two waits and its expiry.

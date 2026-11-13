@@ -88,6 +88,7 @@ from platform_api.orchestration.questions import (
 from platform_api.orchestration.run_gist import RunGist, gist_of
 from platform_api.orchestration.runs import (
     PLANNER,
+    TEST_PASSED,
     Acting,
     AwaitingApproval,
     Begin,
@@ -763,6 +764,9 @@ class Orchestrator:
             record = admitted
             assert isinstance(record.state, Proposed)
             proposed = record.state
+            if record.spec.stops_at_gate:
+                await self._commit(uow, record, proposed.stop_for_test())
+                return StepReply(False, "test_passed", TEST_PASSED)
             proposal = await self._store.load_proposal(uow, proposed.proposal_id)
             assert proposal is not None
             request = ApprovalRequest(

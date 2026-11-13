@@ -35,23 +35,17 @@
   margin-left: auto;
 }
 
-/* Wider than 900 px the header lines up with the page under it: past the rail, in the same column as the content. */
+/* Wider than 900 px the header spans the window, as the rail and the sheet under it do: the brand sits top left above the
+   rail, and the tools at the right edge. Only the page's content keeps its 1180 px column. */
 @media (min-width: 901px) {
-  .header {
-    display: grid;
-    grid-template-columns: 96px minmax(0, 1fr) 8px;
-  }
-
   .inner {
-    grid-column: 2;
-    width: 100%;
-    max-width: 1180px;
-    padding-left: 16px;
-    padding-right: 16px;
+    max-width: none;
+    padding-left: max(24px, env(safe-area-inset-left, 0px));
+    padding-right: max(24px, env(safe-area-inset-right, 0px));
   }
 }
 
-@media (min-width: 901px) and (max-width: 1045px), (max-width: 420px) {
+@media (max-width: 420px) {
   .brandText {
     position: absolute;
     width: 1px;
