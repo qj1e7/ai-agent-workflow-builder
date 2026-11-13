@@ -107,13 +107,22 @@ async function noSideways(page: Page): Promise<void> {
   expect(widths[0], 'no sideways scroll').toBeLessThanOrEqual(widths[1] ?? 0)
 }
 
-async function tooSmall(controls: Locator): Promise<string[]> {
+/** The controls under 44 px tall. The sketch's chips (36 px) and the needs strip's Open and “N more” (32 px) are drawn smaller on purpose, so they are left out by name. */
+async function tooSmall(controls: Locator, sketchSized: readonly string[] = []): Promise<string[]> {
   const small: string[] = []
   for (const control of await controls.all()) {
     const size = await control.boundingBox()
-    if (size && size.height < 24) small.push(`${(await control.innerText()).trim() || (await control.getAttribute('aria-label')) || '?'} (${Math.round(size.height)} px)`)
+    const name = (await control.innerText()).trim() || (await control.getAttribute('aria-label')) || '?'
+    if (size && size.height < 43.5 && !sketchSized.includes(name)) small.push(`${name} (${Math.round(size.height)} px)`)
   }
   return small
+}
+
+/** The names of the controls the sketch draws under 44 px: the chips, and the strip's Open and “N more”. */
+async function sketchSized(page: Page): Promise<string[]> {
+  const chips = await page.getByRole('group', { name: /^(Suggestions|Starting points)$/ }).getByRole('button').allInnerTexts()
+  const strip = await page.getByRole('region', { name: 'Needs you', exact: true }).locator('a, button').allInnerTexts()
+  return [...chips, ...strip].map((name) => name.trim())
 }
 
 test.describe('with no AI model', () => {
@@ -165,7 +174,7 @@ test.describe('with no AI model', () => {
     const page = await context.newPage()
     await page.goto('/')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('I can’t answer questions until an AI model is connected')
-    await expect(main(page)).toContainText(/An Operator can connect one in Settings\. (\d+ requests? (is|are) waiting for your yes|\d+ things? needs? you)\./)
+    await expect(main(page)).toContainText(/An Operator can connect one in Settings\. (\d+ changes? waits? for your yes|\d+ things? needs? you)\./)
     await expect(page.getByRole('textbox'), 'no box while there is no model').toHaveCount(0)
     await expect(main(page).getByRole('link', { name: 'Connect a model' }), 'no Connect a model, which only an Operator can use').toHaveCount(0)
     await expect(page.getByRole('list', { name: 'Needs you' }).getByRole('link', { name: 'Review and decide' }).first()).toBeVisible()
@@ -230,7 +239,8 @@ test.describe('with the AI model on', () => {
       await route.continue()
     })
     await ask(page, 'Every Friday, email me the list of tickets we closed this week')
-    await expect(box(page), 'the box waits while the Planner answers, with the sketch’s one placeholder').toBeDisabled()
+    await expect(box(page), 'the box stays focused and read-only while the Planner answers, so one message goes at a time').toHaveAttribute('readonly', '')
+    await expect(box(page)).toBeFocused()
     await expect(thread(page).getByText('I can’t do all of that, but I can set up something close.')).toBeVisible()
     await expect(thread(page).getByRole('heading', { name: 'What I can’t do yet' })).toBeVisible()
     await expect(thread(page).getByRole('heading', { name: 'What I can do instead' })).toBeVisible()
@@ -731,8 +741,35 @@ test.describe('with the AI model on', () => {
   })
 
   for (const phone of [false, true]) {
+    test(`Home keeps the sketch’s measures at ${phone ? '390' : '1440'} px: a 96 px face, a 60 px box, 36 px chips, and a page that ends in the window`, async ({ browser }) => {
+      const context = await devContext(browser, 'alice', { phone })
+      const page = await context.newPage()
+      // Home with nothing to do, so the rows can't make the page longer than the window.
+      await page.route('**/api/v1/home', async (route) => {
+        const response = await route.fetch()
+        const home = (await response.json()) as Record<string, unknown>
+        const calm = { approvals: [], approvals_total: 0, stopped: [], stopped_total: 0, declined: [], declined_total: 0, questions_for_me: [], questions_for_me_total: 0, confirmations: [], connections: [], addresses: [], replied: [] }
+        await route.fulfill({ response, json: { ...home, ...calm } })
+      })
+      await page.goto('/')
+      await expect(box(page)).toBeVisible()
+      await page.evaluate(() => document.fonts.ready)
+      const face = await main(page).locator('svg').first().boundingBox()
+      const composer = await box(page).locator('xpath=..').boundingBox()
+      const chip = await page.getByRole('group', { name: /^(Suggestions|Starting points)$/ }).getByRole('button').first().boundingBox()
+      expect(Math.round(face?.width ?? 0), 'the Planner’s face is 96 px').toBe(96)
+      expect(Math.round(composer?.height ?? 0), 'the box is 60 px tall before the first message').toBe(60)
+      expect(Math.round(chip?.height ?? 0), 'a chip is 36 px tall').toBe(36)
+      // At 900 px and narrower the practice stack's test controls sit under the page, so the check is that the page itself ends in the window.
+      const mainBottom = await main(page).evaluate((element) => element.getBoundingClientRect().bottom)
+      expect(mainBottom, 'the empty Home never makes the page scroll').toBeLessThanOrEqual((await page.evaluate(() => window.innerHeight)) + 1)
+      await context.close()
+    })
+  }
+
+  for (const phone of [false, true]) {
     const size = phone ? '390' : '1440'
-    test(`Home and its answers pass WCAG 2.2 AA, do not scroll sideways and keep 24 px targets (WCAG 2.5.8) at ${size} px`, async ({ browser, backend }, info) => {
+    test(`Home and its answers pass WCAG 2.2 AA, do not scroll sideways and keep 44 px targets at ${size} px`, async ({ browser, backend }, info) => {
       await backend.waitingRun('alice')
       const before = await draftIds(backend)
       const context = await devContext(browser, 'alice', { phone })
@@ -742,7 +779,7 @@ test.describe('with the AI model on', () => {
       await settled(page)
       await expectAccessible(page, path.join(OUT, 'axe'), `planner-home-${size}`)
       await noSideways(page)
-      expect(await tooSmall(main(page).locator('button, a[href]')), 'WCAG 2.5.8: targets of at least 24 px, as the sketch’s 36 px chips are').toEqual([])
+      expect(await tooSmall(main(page).locator('button, a[href]'), await sketchSized(page)), 'principle 11: targets of at least 44 px, but for the sketch’s chips and strip').toEqual([])
       await shot(page, info, `n10-08-home-${size}`)
 
       for (const [text, shown] of [
@@ -1315,20 +1352,20 @@ test.describe('bob asks the Planner questions only', () => {
     const watch = watchPage(page)
     await page.goto('/')
     await expect(main(page).getByText(/^Good (morning|afternoon|evening), Bob$/)).toBeVisible()
-    await expect(page.getByRole('heading', { level: 1 }), 'his heading says what waits for his yes').toHaveText(/^(\d+ requests? (is|are) waiting for your yes|\d+ things? needs? you)\.$/)
+    await expect(page.getByRole('heading', { level: 1 }), 'his heading says what waits for his yes, in the sketch’s words').toHaveText(/^(\d+ changes? waits? for your yes|\d+ things? needs? you)$/)
     const line = (await page.getByRole('heading', { level: 1 }).innerText()).trim()
     await expect(bobBox(page)).toHaveAttribute('placeholder', 'Ask, or describe a task')
     const chips = page.getByRole('group', { name: 'Suggestions' }).getByRole('button')
-    await expect(chips).toHaveText(['What is waiting for my yes?', 'What did I decide before?', 'How are the workflows doing?'])
+    await expect(chips).toHaveText(['What waits for me?', 'What did I decide?', 'What can you do?'])
     const tops = await Promise.all([bobBox(page), chips.first(), main(page).getByRole('list', { name: 'Needs you' })].map(async (at) => (await at.boundingBox())?.y ?? -1))
     expect(tops.every((top, index) => top >= 0 && (index === 0 || top > (tops[index - 1] ?? 0))), 'box, then the questions, then Needs you').toBe(true)
-    await expect(main(page)).toContainText('You’re an Approver, so you decide on requests. Operators set up workflows.')
+    await expect(main(page), 'the sketch’s Home for Bob has no note').not.toContainText('You’re an Approver')
     await settled(page)
     await expectAccessible(page, path.join(OUT, 'axe'), 'planner-home-bob')
     await shot(page, info, 'r16-bob-home')
 
     await chips.first().click()
-    await expect(said(page), 'what waits for his yes is his Home heading').toHaveText(line)
+    await expect(said(page), 'what waits for his yes is his Home heading, as a sentence').toHaveText(`${line}.`)
     await expect(newest(page).getByRole('button', { name: 'Review and decide' }).first()).toBeVisible()
     await bobAsks(page, 'What did I decide before?')
     await expect(said(page)).toHaveText(/^Here (is your decision|are your \d+ decisions)\./)
