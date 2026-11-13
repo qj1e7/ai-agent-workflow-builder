@@ -1,0 +1,521 @@
+# Build plan: the Portal becomes the chat-first sketch
+
+Written 13 Nov 2026 from `sketch-v3.html` (the design to follow, in full), the running app on branch `fix/header-full-width` (head `c73a7cbd`), and the code surveys of `portal/src/`, `platform-api/`, `agent-runtime/` and `contracts/`. Read it with the sketch open beside you. The sketch's "Play" flows (Morning check, Ask in my words, Change by talking, Something it can't do, Bob declines, Browse, Edit in n8n) and its three "View as" people are the acceptance script: when a flow in the app reads and moves like the sketch's, that part is done.
+
+How to read the inventory. Each item says what the sketch shows (its words kept), what the app does today with file references, the gap (`none`, `words`, `layout`, `behaviour`, `missing`) and where the work sits (`Portal` only, or `Backend`/`Contract` too). File paths are relative to the repo root; `portal/src/screens/home/` is written `home/`, `portal/src/screens/run/` is `run/`, `portal/src/screens/workflows/` is `workflows/`, `portal/src/screens/software/` is `software/`, `portal/src/shell/` is `shell/`, `portal/src/ui/` is `ui/`, and `platform-api/src/platform_api/` is `pa/`.
+
+Three rules the sketch must not be allowed to break, and how each item keeps them: no write without an Approver's yes in the Portal (the sketch's test run and n8n publish are the two places this needs care); an Approver never approves their own work (the backend refuses `OWN_WORK`, keep its words); a rule may need two Approvers in turn (the sketch shows one; the app's "Step 1 of 2" stays whenever a rule asks for two). Where the sketch would break one, the item says so and gives the fix.
+
+## 1. The inventory
+
+### A. Home, empty (Alice, Operator)
+
+**A1. Greeting.** Sketch: a small muted line `Good morning, Alice` (comma, no exclamation mark), above a large heading. App: the greeting is the `h1`, built as `` `${greeting(now)}! ${name}` `` in `shell/routes.tsx:42`, so "Good afternoon! Carol", with `shell/today.ts:6-10` picking the time of day. Gap: words and layout. Portal. Keep the app's time of day (the sketch hard-codes morning); change the join to `, ` and demote it to the `.hi` line.
+
+**A2. Heading.** Sketch: `What should run by itself?` for an Operator. App: a state sentence from `home/home.ts:123-128` ("Nothing needs you. Next up: Find bug tickets in MOCK, Today, 16:00."), and on day one "Which software should we keep up to date?" (`home/HomePage.tsx:74-75`). Gap: words. Portal. The state sentence moves into the needs rows (A6), not under the heading. Phase 1 is software versioning only (8 Nov decision), so the heading can stay open but the Planner's answers underneath stay narrow; say so in the design note.
+
+**A3. Planner face.** Sketch: a 96px Visor face above the greeting, breathing. App: `ui/PlannerBot.tsx` at 128px (96px under 600px), with idle breathing, listening tilt, thinking dots (`ui/PlannerBot.module.css`). Gap: none beyond size. Portal.
+
+**A4. Composer.** Sketch: one input, placeholder and aria-label `Ask, or describe a task`, a round black send button with an up arrow, 60px tall on the fresh Home, and it stays the same box after the first message (it moves from the hero to the bottom dock, view-transitioned). App: `home/PlannerBox.tsx:19-28`, placeholder "Ask about your software versions, or name software to watch" (Approver: "Ask about your approvals, or how the workflows are doing"), then "Ask for something else" after the first message; a `textarea` with send aria-label "Send to the Planner". Gap: words and look. Portal. Keep the textarea (Shift+Enter) and the 2000-character cap; one placeholder for everyone and for both states.
+
+**A5. Chips.** Sketch, Alice: `What needs me?`, `Which software is behind?`, `What can you do?`; the chips sit under the composer on Home and stay under it after the first message. App: `home/home.ts:144-169` gives "Which software has a newer version?", "Watch another software for new versions", "What can you do?" (or the runtime's starting points when nothing is watched), and the chips disappear once the chat starts (`home/ChatView.tsx`). Gap: words and behaviour. Portal. The chip intents already exist (`needs_me`, `question` for software behind, `abilities`); map `What needs me?` to `needs_me` and `Which software is behind?` to the software question. Keep the day-one starting points as a fourth chip set.
+
+**A6. Needs you on Home.** Sketch: under the chips, two small headings `Do now` and `Set up`, each with plain rows: a tone dot, bold subject plus a short clause (`FastAPI release check stopped at 8:00`, `LangServe can’t be found on GitHub`, `Jira key expires Friday`), a `›` on the right; the whole row is the button and opens the thing (the stopped run opens as the troubleshooter's card plus the panel, A24). Nothing else: no buttons, no troubleshooter box, no `Needs you` heading, no count. Empty: `Nothing needs you.` App: `home/NeedsSection.tsx` has the `Do now` / `Set up` split already (`home/home.ts:42-45`), but an `h2` "Needs you" with a count pill, the first row drawn as a full card with meta, the AI troubleshooter box and buttons (`home/HomeItem.tsx:152-184`), compact rows with a secondary button, three shown then "See all on Workflows". Gap: layout and words. Portal. Row words come from `home.ts:196-339` (`wordsOf`); add a short form per kind (A9). The row click uses `ui/OpenItem.tsx`; on the empty Home it opens the full page, the sketch opens beside the chat after folding the hero, so the click must first fold the hero into the chat (A8).
+
+**A7. "What can I ask for?"** Sketch: no such link; the `What can you do?` chip answers with the capabilities card (C7). App: `home/HomePage.tsx:298-305` toggles `CapabilityLists` on Home. Gap: remove. Portal.
+
+### B. Home after the first message, the strip and the thread
+
+**B1. Fold.** Sketch: on the first send or the first needs-row click the hero folds (a view transition), the composer and chips move to the bottom dock, the messages column is 780px wide, and the needs strip appears at the top. App: `home/HomePage.tsx:243-260` swaps the hero for `ChatView` with a "New chat" link, the conversation region and the docked box; no chips. Gap: layout. Portal. Keep "New chat" (the sketch has "Start over" only as a demo control); keep the draft-saved toast.
+
+**B2. The needs strip.** Sketch: one line, tinted by the most urgent need (red, amber, or calm grey), a dot, the short form in bold plus clause (`FastAPI check stopped`, `LangServe not found`, `FastAPI ticket needs your yes`), `{n} more` as a link that opens the Needs you panel beside the chat, and an `Open` button that opens the item beside the chat. When nothing needs you it still shows: `Nothing needs you`. App: `home/PinnedLine.tsx` shows the most urgent item with a 20px icon, title, meta line, `Open`, and `{N} more` linking to `/workflows`; hidden when nothing needs the person. Gap: words and behaviour. Portal. `{n} more` opens the panel kind `needs` (D1) instead of leaving the chat; the calm state shows.
+
+**B3. The user's bubble.** Sketch: black (`--ink`) with white text, right-aligned, 80% max width, radius 14/14/4/14. App: `home/Planner.module.css` `.bubble`, grey `--sunk`, min(560px, 90%), radius 8/8/4/8. Gap: look. Portal.
+
+**B4. The Planner's reply.** Sketch: a 30px face on the left, then either a plain text bubble (`.mb`: white, hairline, radius 4/14/14/14, with the agent's name in small coloured text on top) or a card column (`.mcard`: an optional bold `lead-line` sentence, then the card; no name label). Other agents reply the same way with their own face: the AI troubleshooter owns the run card, the Safety checker the "Changed in n8n" card. App: `home/Thread.tsx` draws a 40px `PlannerBot`, a blue `Planner` label, a plain sentence, then boxed cards. Gap: look. Portal. Add a `who` to answers so the troubleshooter's face fronts the run card (C8); keep the hidden "You:" prefix for screen readers.
+
+**B5. Thinking.** Sketch: the face in its thinking state and three bouncing dots in a bubble, about 650ms, nothing else. App: `home/Waiting.tsx` shows dots and "Working on it…", then "Still working. Questions about your data take a little longer." after 8s. Gap: words. Portal. Keep the 8s line (the real model is slower than the sketch), drop the first line.
+
+**B6. Scrolling.** Sketch: scroll to bottom on every push. App: `home/ChatView.tsx:40-104` brings a new answer in from its top and follows it for 2s (this branch's fix). Gap: none. Keep the app's behaviour, it is better for long cards.
+
+### C. Answer cards
+
+The app's Planner has 17 answer kinds (`contracts/openapi.json` `PlannerReply`: abilities, cant, check_workflows, decide, decided, edit, ideas, needs_me, offline, operators, part, question, refused, setup_card, watchlist, which_software, why_stopped), handled exhaustively in `home/AnswerCards.tsx:307-340`. The sketch's cards map onto them; nothing new is needed in the contract except where noted.
+
+**C1. Card chrome.** Sketch: white card, hairline, 16px padding, a `c-head` row (bold title left, pill right), body, and a `c-foot` row with a muted status on the left (`c-left`) and buttons on the right (`c-act`, ghost buttons, one black primary). App: `.pcard` in `home/Planner.module.css`, cards vary in layout. Gap: layout. Portal. One `Card` component with head, body, foot slots; every card below uses it.
+
+**C2. Needs card** (`What needs me?`, "what needs my attention today?"). Sketch: head `{n} things need you`, then the Do now / Set up rows exactly as on Home. App: `needs_me` renders "N things need you." plus the full `NeedsSection` with cards and buttons (`home/StateAnswers.tsx`). Gap: layout. Portal. Reuse A6's rows.
+
+**C3. Workflows card** ("show my workflows"). Sketch: head `Workflows` with the count, rows `{name}` / `{Daily 8:00}` and a state pill, each row opens the workflow beside the chat. App: `check_workflows` lists every `WorkflowRow` with sentence, last run and next run, uncapped (85 rows with the test data). Gap: layout and behaviour. Portal. Cap at 5 rows and end with `See all workflows` (opens the Workflows page); the sketch has two so never had to.
+
+**C4. Watchlist card and behind card** (`Which software is behind?`). Sketch: `{n} have a newer version`, rows `{name}` / `{0.115.2 → 0.121.0}` / `Newer out`, foot `See the watchlist`; or the full `Watchlist` card with the count. App: "Which software has a newer version?" is a `question` answer: the model's text plus "Looked at" links and `SoftwareActions` (`home/StateAnswers.tsx`, `home/WatchlistActions.tsx`). Gap: missing (the behind card is a list the Portal can build from the watchlist query, no model needed). Portal. Add a `software_behind` intent handled client-side from `GET` watchlist, like the needs chip; the API already returns the versions.
+
+**C5. Software card** ("is LangGraph up to date?"). Sketch: head `{name}` + pill, one line `You run 0.2.60. Newest is 0.3.1, out 4 Nov.`, foot `Watch it` when nothing checks it. Unknown software: `It isn’t on the watchlist, so I don’t know which version you run.` + `Watch it`. App: `watchlist` answer: "Already on the watchlist" with "Open it", or "The Software watchlist" with `AddToWatchlist` ("Looking for {name}’s GitHub project.", "Add {name}"). Gap: words and layout. Portal; the `watchlist` answer already carries the software and its versions. `Watch it` sends `Watch {name} releases` as a message (the sketch's `data-say`), which lands on the set-up card (E).
+
+**C6. Already-have card.** Sketch: lead `You already have this one.`, head `{Workflow name}` + pill, `It already watches React, every day at 8:00.`, foot `Open it`. App: the `setup_card` reply's `similar` field (`pa/builder/planner.py:208`) shows "You already have a workflow with this name. Open {name}" inside the set-up card. Gap: words and layout. Portal. When `similar` names a workflow that watches the same software, show this card instead of the set-up card.
+
+**C7. Capabilities card** (`What can you do?`). Sketch, Alice: `What I can do` then four lines (`Watch software for new releases`, `Create Jira tickets, after a yes`, `Explain a stopped run, and retry it`, `Change or pause your workflows`) and a footnote `Not yet: Teams channels, email, Confluence.` Bob: three lines. App: `abilities` renders `CapabilityLists` with "I can" / "Needs setup" columns from the registry (`agent-runtime/src/agent_runtime/abilities.py:157-299`), filtered to the versioning focus. Gap: words and layout. Runtime (the registry's lines) and Portal. Keep one source: the four lines become the registry's `ready` entries' short words; the footnote lists the `planned` and `unsupported` entries by their short names. Principle 5: nothing unbuilt reads as working.
+
+**C8. Run card** (the stopped run, "why did it stop?", the needs row). Sketch: fronted by the AI troubleshooter's face, head `FastAPI release check` + pill, the small run line (G), then the three answers as a `dt`/`dd` list: `What happened` / `Affected` / `Safe to retry`, foot `Open`, `Report to support`, `Retry`. While the run is open beside the chat the card hides its line and `Open` (`.beside`). After a retry the same card changes in place through `waiting`, `writing`, `done` (`Found` / `Now` / `Result`), and a finished run folds to the head plus one line (`.finished`). App: `why_stopped` shows "{name} stopped" with `Troubleshooting` and "See the run"; the panel's `Outcome.tsx:107-149` has the labels "What happened" / "What was affected" / "Safe to retry" with long text ("An agent could not finish its work. A service the agent reads from was unavailable…"). Gap: layout, words and behaviour. Portal, plus runtime words: the troubleshooter's `what_happened` and `likely_cause` (`pa/monitoring/troubleshooter.py`) should be one short sentence each; the sketch's `Affected` is the app's "Nothing was written." The card must subscribe to the run's stream (the panel already does through `stream/feed.ts`) so it moves in place.
+
+**C9. Approval card** (`What waits for me?`, Bob's needs row). Sketch: lead `This needs your yes.` (Bob) or `This waits for Bob’s yes.` (Alice), head `Create 1 Jira ticket` + pill `Needs your yes`, one line `Upgrade FastAPI from 0.115.2 to 0.121.0`, foot `Review and decide` (black) or `Open`; after a decision the foot's left reads `Approved. MOCK-22 created.` or `Declined. Nothing was written.` App: `decide` says "I can’t approve or decline for you. Open the request…" and lists up to three `RequestsToOpen` rows with "Review and decide". Gap: words and layout. Portal. The lead line needs the requester's and the Approvers' names: `ApprovalView.requester` exists; "Bob" in the Alice lead needs the eligible Approvers (H4). With more than one waiting, show one card per request, three at most, then `{n} more` to Workflows.
+
+**C10. Decisions card** (`What did I decide?`). Sketch: `Your recent decisions`, rows `React upgrade ticket` / `Tue 4 Nov` / `Approved`, `FastAPI upgrade ticket` / `28 Oct · Not this week` / `Declined`. App: `decided` renders "Here are your N decisions." with workflow names and Approved/Declined pills. Gap: words. Portal. Row title = the approval's title (`Create 1 Jira ticket` becomes `{Software} upgrade ticket` only if the API gives that; otherwise use the approval title), sub = date and the decline reason.
+
+**C11. Can't card.** Sketch: head `I can’t post in Teams channels yet`, one muted line `Run results show here, in the chat.`, foot `Ask the team` (toast `Asked the team. Their answer will show here.`). Four fixed can'ts plus `I didn’t follow that`. App: `cant` renders "What I can’t do yet" with rows, a quoted request, an explanation, then "What I can do instead" with a set-up card or watchlist card (`home/AnswerCards.tsx:72-108`); Ask the team opens a box "What should the team know?" and saves a request (ADR 0038). Gap: words and layout. Runtime and Portal. The runtime's `CantAnswer` text comes from each planned ability's "can't" words in `abilities.py`; rewrite those to the sketch's one-liners (`I can’t send email yet` / `Run results show here, in the chat.`). Keep the app's Ask the team flow (it saves a real request, the sketch only toasts) but collapse it to the sketch's one button plus the box on press. Keep "What I can do instead" only when the runtime returns an `alternative` (the sketch's parts card handles mixed requests instead, E3).
+
+**C12. Which-workflow picker.** Sketch: `Which workflow?` + one chip per workflow. App: `EditCard` "Change a workflow" / "Which workflow?" chips (`home/EditCard.tsx:190-200`). Gap: none. Portal (card chrome only).
+
+**C13. Plain replies.** Sketch: pause, resume, "already runs", "nothing waits", "nothing has stopped", Operators-only, n8n-access: a text bubble with the `Planner` label. App: pause and resume by talking do not exist (the Planner's `edit` handles schedule only; `cant: only_schedule`). Gap: missing. Runtime (a `pause`/`resume` intent in the Planner answer, platform `POST /use-cases/{id}/pause|resume` exists at `pa/builder/lifecycle_http.py:31,47`) and Portal. Contract: add answer kinds `pause` and `resume` (or one `lifecycle` kind with `action`). The Planner should ask when the workflow is ambiguous (reuse C12), never guess (principle 4).
+
+### D. The side panel
+
+**D1. Kinds.** Sketch panel views: `needs`, `list:wf` (Workflows), `list:watch` (Watchlist), `wf:{id}`, `run`, `appr`, `build:{draft}`, `soft:{id}`, `key`. The bar has `More details` (expands to the full page) and `Close`. App: `ui/sidePanel.ts` has `workflow | run | software`; an approval opens as its run; no needs, list, build or key kind; no history (`home/ChatProvider.tsx:61-62`). Gap: missing kinds. Portal. Add `needs`, `workflows`, `watchlist`, `approval`, `build`, `connection` kinds. `More details` for `needs` and the lists goes to `/workflows` and `/software`; for `build` there is no page (hide the button).
+
+**D2. The rule for where things open.** Sketch: from a card in the chat, the first click opens beside; anything clicked inside the panel goes full page with a `Chat` back button; from the rail, full page and the chat is hidden; Back on a page returns to the previous page title, or `Chat`. App: the same table (`docs/design/ai-native-redesign/AI-NATIVE-UX-REDESIGN.md:67-75`), with `shell/BackToChat.tsx`. Gap: none.
+
+**D3. Panel width.** Sketch: `minmax(380px, 460px)`, wide (`minmax(360px, 440px)` for the chat, the rest for the panel) only for the build view. App: `min(400px, 40%)`; modal at 900px and under. Gap: layout. Portal. Add the `wide` mode for `build`.
+
+**D4. Auto-open.** Sketch: on a wide screen, opening a run or an approval from a needs row or a chip opens it beside at once (`wide()` = min-width 861px); on a narrow screen only the card shows and `Open` opens the panel. App: a card's `Open` opens the panel; nothing opens by itself. Gap: behaviour. Portal.
+
+**D5. Flow shows once.** Sketch: while a card's item is open beside the chat, the card drops its own line and `Open` (`.beside`). App: nothing. Gap: behaviour. Portal (C8).
+
+### E. Set-up card ("Ask in my words")
+
+**E1. The parts rows.** Sketch: lead `Here’s what I understood.`, head `LangGraph release check` + `Draft`, three keyed rows `Watch` / `When` / `Then` (tick, key, value, muted sub), then full-width crossed rows for every part it can't do (`Flag security issues.` `I can’t read security advisories yet.` `Ask the team`). `Then` is a select (`Create a Jira ticket, after a yes` / `Tell me here`). One open question at a time as an amber `?` row with chips (`Which software?`, `How often?`, `Which day?`, `{Mondays}, at what time?`); foot `1 question to answer`, `Never mind`, `Set up` (or `Set up the part I can`), disabled while a question is open. App: `home/SetupCard.tsx` with rows `When` / `Which tickets` / `What it does` / `Where it goes` (`home/card.ts:103`), one question at a time with chips (`How often should it run?`, `Which day should it run?`, `What time should it run?` + `Another time`), `Filled in by me`, `Rename`, placeholder chips with a free-text editor and `POST /planner/check-part`, "You already have a workflow with this name", the `What needs a yes` paragraph, the `How this workflow works` disclosure, `Turn it on`, `N choices left`. Gap: layout and words (the mechanics match: one question at a time, chips, crosses with reasons). Portal, plus runtime: the `UnderstoodRow` kinds are `schedule | look_for | do | where` (`agent-runtime/src/agent_runtime/contract.py:670`), which map to `When` / `Watch` / `Then` / (folded into Then). For the versioning use case the row keys become `Watch`, `When`, `Then`; keep the generic keys for other templates. Drop `Rename` (the name follows the software), `Filled in by me` (the sketch shows filled rows as plain ticks; principle 4 still holds because every value is visible and changeable through its row), the `How this workflow works` disclosure (the build panel shows the blocks instead, E3) and the `What needs a yes` paragraph (the safety note replaces it, E2).
+
+**E2. Set up, the build.** Sketch: pressing `Set up` turns the pill to `Building`, draws the workflow line under the rows block by block (`Daily 8:00`, `Read release`, `Compare`, `Create ticket`, each fading in at 320ms), then the Safety checker's note `Added a yes before the ticket.` appears with its face and the `Ask for a yes` block slides in with a teal ring; then the Tester's face with `Test run…` and dashes flow block to block, each block ticks, then `Test run passed` in green, pill `Ready`, button `Turn it on`. Pressing it: pill `On`, `On. First run Monday, 9:00.` App: `Turn it on` creates the workflow already on (`POST /api/v1/agent-use-cases`, `pa/builder/http.py:200`), deletes the draft, and shows a Done block ("{name} is on.", "First run …", "Before it changes anything, any Approver…", `Do a test run`, `See it on Workflows`). No build step, no test run before it is on, no separate activate. Gap: behaviour. Backend and Portal. The backend needs: create with `on: false` (a new `off` state the Workflows page shows as `Draft`, or reuse paused), the existing test run `POST /use-cases/{id}/runs {test:true}` (`pa/builder/http.py:175-209`), and `POST /use-cases/{id}/turn-on` (or `resume`). Safety: the test run must not write. Today a test run proposes a write and waits for a yes like any run; if the Portal shows `Test run passed` only after `run_succeeded`, the Operator would sit waiting for an Approver. Fix: the test run stops at the gate and reports `nothing_to_write`-style success as `Test run passed up to the yes. Nothing was written.`, or the sketch's `Test run passed on practice Jira.` only when the connection is the practice Jira (`pa/orchestration/jira.py` knows). Either way the gate stays in the line and the rule "every write waits for a yes" is not weakened; the words say what was and wasn't done.
+
+**E3. The build panel.** Sketch: on a wide screen `Set up` also opens `Building in n8n` beside the chat (for everyone, not only n8n access): kind line, draft name, status line (`Adding blocks in n8n…`, `Safety checker is checking the write…`, `Test run on practice Jira…`, `Saved as a draft in n8n.`, `On. Version 1, published in n8n.`), the n8n-style canvas with the blocks appearing and going green as the test run flows, three check lines, and the footnote `Only our blocks and n8n’s safe ones. The builder saves a draft. It can’t publish by itself.` App: nothing opens; the set-up card's disclosure lists agents and steps with tags. Gap: missing. Portal; it needs no n8n read (the canvas is drawn from the plan's blocks, which the set-up answer already carries, `home/SetupCard.tsx:249-297`). Honesty: the status lines must follow real events (draft saved, test run started, each step finished, turned on), never a timer. The footnote is true only once ADR 0027's node allow list exists; until then say `The builder saves a draft. It can’t publish by itself.` and drop the first sentence (principle 5).
+
+**E4. Never mind and dropped.** Sketch: `Never mind` → pill `Dropped`, `Nothing was set up.`, no buttons. App: deletes the draft, "All right, never mind." Gap: words. Portal.
+
+**E5. Mixed requests.** Sketch: "watch Kubernetes and email me" gives one card: a ticked `Watch`, a question `When`, `Then`, and a crossed `Send an email.` `Not yet. I’ll tell you here instead.` with `Set up the part I can`. App: the `part` answer does the same ("I can do part of that…"). Gap: words. Portal and runtime words.
+
+### F. Change by talking (edit card)
+
+**F1. The card.** Sketch: lead none; head `Change React release check` + pill `Not saved`; one `When` row showing `Daily 8:00` struck, `→`, `Mon 8:00` in bold; or an amber question `Weekly, which day?` with three chips; foot `Never mind`, `Save change`. App: `home/EditCard.tsx`: "Here’s the change. Nothing changes until you save it.", "Change {name}", a `When it runs` block with `Before` / `After` lines, a `Change` link, a time question with four chips and `Another time`, `Save change`, `Never mind`. Gap: words and layout. Portal. Note for the brief's "saves at once": the sketch too saves on `Save change`, not on the message; the difference from the app is only words and the compact before→after row. Keep the app's chips (seven days, `Another time`); the sketch's three days are a demo shortcut.
+
+**F2. Saved and Undo.** Sketch: pill `Saved`, left `Saved as version 3.`, buttons `Open` (opens the workflow beside) and `Undo` → pill `Undone`, `Back to Daily 8:00.`, toast `Back to version 2, saved as version 4.` App: `PUT /use-cases/{id}/schedule {via:'chat'}` publishes a version, the card reads "Saved. {name} runs every weekday at 8:00 now." / "Saved as version N. Next run …", and Undo calls `POST …/versions/{v}/undo` ("Undone, as version N."). Gap: words. Portal. The backend already matches, with one limit: Undo works only on the newest version and only on a schedule change (`pa/builder/lifecycle_http.py:150`, 409 otherwise); the card shows the 409's words when someone changed it since.
+
+### G. The live run line
+
+**G1. Steps.** Sketch: the workflow's blocks, nothing else: `Daily 8:00` (clock), `Read release` (magnifier), `Compare` (arrows), `Ask for a yes` (lock, square dot), `Create ticket` (ticket) or `Tell you` (bell). Small in cards and the panel (64px steps, no faces), large on the run page with the agent's face above each agent step. App: `run/runModel.ts:414-444` builds `Started` (starter's initial), `Pick agents` (Planner), one step per agent, `Approval gate`, the write, `Done`/`Ended`. Gap: layout and the model. Portal only: the stream already carries `step_started`, `agent_step_started/finished`, `approval_requested/decided`, `write_action_done`, `run_*` (`pa/monitoring/events.py:174-288`). Map: the schedule or starter becomes the first node's label (`Daily 8:00`, or `Started by Alice` for a manual run); `Pick agents` is not a node; each agent is a node; the gate; the write; no `Done` node (the settled line says it). `Compare` exists only where the plan has such a step; the versioning template's version checker reads and compares in one agent, so draw one node `Check release` unless the plan names two.
+
+**G2. Connectors and motion.** Sketch: a grey bar; dashes in the accent colour marching at 0.6s into the step that is `now`; the same dashes in amber at 1.4s into a gate that `wait`s; a red dashed bar into the step that `err`ed; a solid ink fill that grows (250ms) when the next step is `done`; a faint dashed bar into a `skip`ped step. The step dot: solid ink when done (with a green tick badge), accent ring with a 1.4s pulse when now, amber with a 1.8s halo when waiting, red when stopped, dashed grey when declined (`no`), faded when skipped. App: `run/RunLine.module.css:52-84` has the same five connector states (flow 0.6s, wait 1.6s, stop, dead, todo) and dot states; the face lands with a 200ms `land` animation on the run page only. Gap: small (timing, the growing fill, the done tick badge). Portal.
+
+**G3. Stop replay.** Sketch: when a stopped run first shows, the line replays 1s of dashes flowing into the stopped step, then turns red and the dot shakes (320ms). App: nothing. Gap: behaviour. Portal; cosmetic, respects reduced motion.
+
+**G4. Retry from the stopped step.** Sketch: `Retry` keeps earlier ticks, the stopped step turns `now` with a tag `From here` (large: `Picks up here`) for 1.1s, then the run flows on; the log says `Retried from Read release, after a short wait. Daily 8:00 didn’t run again.` App: `POST /runs/{id}/retry` reruns the whole work leg from the start when the failure was in the agents' part (`pa/orchestration/service.py:1044-1061`, `pa/orchestration/runs.py:210-235`); a failure while writing redoes only the write with the same approval. The line goes back to `Started` and clears the agents (`run/runModel.ts:247-261`). Gap: behaviour. Portal first, backend later: with G1's step model the first node (the schedule) is never rerun, so `From here` on the first agent step is a true statement for a one-agent run; for a run with two agents where the second stopped, say `Runs again from {first agent}` until the backend can resume at the failed step (see section 3). Keep the short delay before a retry (`MIN_RETRY_WAIT`).
+
+**G5. The slow step's timer.** Sketch: under a `now` step, `…` (small) or `Working…` (large) becomes `Working, 12 s` after one second, ticking every 250ms. App: none. Gap: missing. Portal, from `step_started`'s time.
+
+**G6. "Sent to Bob".** Sketch: under the `wait`ing gate, a message icon and `Sent to Bob` (large: `Sent to Bob in Teams`) that pings in (600ms). App: the gate shows "Waiting for a yes"; no event names who it went to; `ApprovalStepView` has `index, label, status, decided_by, decided_at, reason` (`pa/wire.py:145`), and only the Teams payload lists names (`pa/orchestration/service.py:355-364`). Gap: missing. Backend and contract: add `sent_to: [names]` and `sent_at` to `ApprovalStepView` and to `approval_announced`. Honesty: show `Sent to {names} in Teams` only after `approval_announced`; after `approval_announce_failed` show `Couldn’t send to Teams` with the retry the app already has. When the rule names any Approver, list the eligible ones (the people with the role minus the run's parties, which the backend already computes for the card).
+
+**G7. The ticket pops out.** Sketch: under `Create ticket`, a green chip `MOCK-22` lifts in (520ms) when the write finishes; it is a button that opens the ticket. App: the key arrives as `write_action_done.external_reference` and `url` (`pa/monitoring/events.py:126-133`); the run page shows it in the Done card only. Gap: missing in the line. Portal; use `api/ticketLinks.tsx`.
+
+**G8. Settling.** Sketch: when the stage is `done` or `declined`, the card and the panel hide the line and the answers and show one line: `Done at 9:04 · MOCK-22 created after Bob’s yes` (green, tick) or `Ended at 9:04 · Bob declined: not this week. Nothing was written.`; the page keeps the line and shows the settled line under it. App: the line never folds; the page has the Done card ("Bob approved, and the platform created the ticket.") and the log folds. Gap: behaviour and words. Portal.
+
+**G9. Declined line.** Sketch: the gate dot goes dashed grey (`no`), the write step fades (`skip`), connectors go faint. App: `declined` and `skip` states exist with "Declined" and "Not needed" words. Gap: words (`Nothing written` stays true; keep it). Portal.
+
+**G10. Reduced motion.** Sketch: every march, halo, pop and ping is off; fills set instantly. App: `ui/motion.ts`, `ui/base.css:144-153`, pacing off (`run/liveRun.ts:172`). Gap: none.
+
+### H. Run views, approval views, and the troubleshooter
+
+**H1. Run panel.** Sketch: bar, kind line `Today’s run, 8:00`, title, pill, the small line, the `dt`/`dd` answers, foot with `Report to support` and `Retry` (Operators; the sketch hides them for Bob). App: `run/RunPanel.tsx:131-161`: pill, headline, status line, the small vertical line, then `Troubleshooting` or the gate; no Done card, no ticket chip. Gap: layout and words. Portal; depends on G.
+
+**H2. Run page.** Sketch: `Chat` back, the same head, the large line with faces, the troubleshooter's face beside the answers (`tr big`), `Step by step` as a timed log (`8:00:31` `GitHub didn’t answer in 30 seconds. Stopped before anything was written.`), the foot with the actions. For n8n access: `Steps` / `In n8n` tabs. App: `run/RunPage.tsx:276-313`: back link, h1 headline + pill, status line, the line, `NeedsYou` with the gate or outcome, a `Show what each agent did` disclosure holding the chat-style log (`run/Chat.tsx`, words in `run/words.ts:157-207`). Gap: layout and words. Portal. The log rows come from the same events; each row is `time` + one sentence, no bubbles, always open (the sketch has it open; keep a disclosure only when the log is long, over 12 rows).
+
+**H3. Troubleshooter words.** Sketch: `What happened` `GitHub didn’t answer at 8:00.`; `Affected` `Nothing. No ticket was written.`; `Safe to retry` `Yes. GitHub is answering again.`. App: "What happened" = `what_happened` + `likely_cause` + "The failure text: {note}"; "What was affected" "Nothing was written."; "Safe to retry" "Yes. A retry runs the work again, and any write still waits for a yes." (`run/Outcome.tsx:107-149`). Gap: words. Runtime (`pa/monitoring/troubleshooter.py`) and Portal. Keep "The failure text" behind a `Details` disclosure, not inline. `Safe to retry` should say whether the service answers again only when the platform checked (the connection checks in `pa/orchestration/connections.py`); otherwise `Yes. Nothing was written, so a retry is safe.`
+
+**H4. Approval panel and page.** Sketch: kind line `Approval, from Alice’s FastAPI release check`, title `Create 1 Jira ticket`, pill; `What will be written` as a `Where` / `Summary` / `Details` / `Fields` table; `Not checked`; the page adds `Summary by AI.` (marked as help, not the check), `Sent` / `Why you`, `See the run`; the thread (`You asked Alice: …` / `No reply yet. The request stays open.`); foot `Ask Alice`, `Decline`, `Approve` (Bob) or `Waiting for an Approver. You can’t approve your own work.` (Alice). App: `run/ApprovalGate.tsx:126-255`: `What will change` (a title, one ticket card per change, "This is exactly what will be written, and nothing else."), `Not checked`, page-only `Why` (findings) and `Who asked`, `What happens`, `Your part`, `Questions`, `Approve N tickets` / `Decline`, "Not sure yet? Ask {requester} a question". Gap: layout and words. Portal; contract check: `Where` is the connector plus project (`ActionLine.connector`), `Summary` and `Details` are the ticket title and body; `Fields` (issue type, priority, labels) only if the proposal carries them, otherwise leave the row out rather than invent it. `Sent` needs G6. Safety: the sketch shows one Approver; when the rule needs two, keep the app's `It needs two Approvers, one after the other.` and `Your yes is the second of two.` lines in `What happens` and `Why you`. The `OWN_WORK` refusal keeps the backend's words.
+
+**H5. Decline with a reason.** Sketch: `Decline` turns the foot into `Why?` `Optional. Alice will see it.`, three chips (`Not this week`, `Wrong version`, `Needs testing first`), `Back`, `Decline` (red-tinted). App: the same three reasons for the watchlist (`run/decision.ts:100-102`), "Why are you declining? Optional. {requester} sees it with the record.", `Decline` and `Back`. Gap: words. Portal. The API takes any 1 to 200 character reason, so the chips stay chips.
+
+**H6. Ask Alice a question.** Sketch: `Ask Alice` turns the foot into an input `Ask Alice a question`, `Back`, `Send`; after sending the thread shows `You asked Alice: …` and `No reply yet. The request stays open.` App: "Your question for {requester}", `Send question` / `Cancel`, toast "Sent to {name}. The request is still waiting for a yes.", the `QuestionThread` (`POST /approvals/{id}/questions`). Gap: words. Portal.
+
+**H7. Approved and declined records.** Sketch: `Approved by Bob at 9:04. Creating the ticket…` then `Approved by Bob at 9:04. MOCK-22 created.` with a stamp `Created`; `Declined by Bob at 9:04: not this week. Nothing was written.` A declined record never says "created". App: "Declined by Bob. Nothing was written. Reason: Wrong version." plus what happens next (`run/words.ts:45-71`); approved shows in the log. Gap: words. Portal. Keep the app's "what happens next" sentence after the sketch's record; it answers a real question.
+
+**H8. Report to support.** Sketch: a toast `Sent to support with this run attached. The reply will show here.` App: a form with a note and "Report to support", then "You reported this to support." and a link under Following up (`run/Report.tsx`, ADR 0038). Gap: none to fix. Keep the app's form (it is a real request); use the sketch's sentence as the sent line.
+
+### I. Full pages from the rail
+
+**I1. Rail.** Sketch: `Chat`, `Workflows` with the workflow count, `Watchlist` with the software count; 76px; a rail page replaces the chat; `Chat` brings the chat back as it was. App: `shell/Rail.tsx`: the same three, counts are the needs-you count (Workflows for Operators, Chat for others) and items needing action (Watchlist). Gap: words (the counts). Portal. Principle 7 says a count means one thing: the sketch's badges are totals, and the needs count lives in the strip. Use the totals.
+
+**I2. Workflows page.** Sketch: `Workflows`; `Needs you` (Do now / Set up rows) when any; `All workflows` as rows `{name}` / `{Daily 8:00} · last run today, {GitHub didn’t answer}` + pill, each opening the workflow page. App: `workflows/WorkflowsPage.tsx`: lead sentence, `Needs you`, `Drafts`, `Waiting on others`, `Following up`, `All workflows` with search and `All` / `Stopped` / `Paused` filters, rows with sentence, last run, next run and an action button. Gap: layout. Portal. Keep `Drafts` (the app has real drafts; show them under `Set up` in Needs you as `{name} is a draft` rows), keep `Following up` (ADR 0038) as a section after `All workflows`, keep the search once there are more than 10 rows.
+
+**I3. Workflow page.** Sketch: back `Workflows`, kind `Workflow`, title, pill; the sentence (`Every day at 8:00, check FastAPI on GitHub for a new release. If there is one, create an upgrade ticket in Jira project MOCK, after a yes.`); a banner (`Stopped today at 8:00.` + `Open the run`, `Waiting for Bob’s yes.`, `Paused. It won’t run until you resume it.`, `Writes refused: there’s no yes before the ticket.` + `Add the yes back`); the large step line with a tag under each (`No system access`, `Reads GitHub`, `Waits for a yes`, `Writes after a yes`); `When` with `Change` (day and time selects, `Save`, `Cancel`); `Who says yes` `Any Approver but you, in Teams.`; `Recent runs` rows with pills and `Open`; `Versions` (details) with `Roll back` on older versions; `Pause` / `Resume`. App: `workflows/WorkflowPage.tsx`: pills, h1, the instruction, `Pause` and a `More actions` menu (Run now, Change schedule, Delete), the banner (`workflows/workflow.ts:472`), `Schedule` and `Approval` facts, `Recent activity` (10 runs, "Show N older runs"), read-only `Versions` from version 2 (`workflows/Versions.tsx:15`), `Technical details` with steps tagged "Reads only" / "Asks an Approver in Teams" / "Changes data, waits for a yes". Gap: layout and words; `Roll back` is missing in the backend. Portal, plus backend for roll back (section 3). The sentence: the app stores the Operator's instruction; the sketch's sentence is generated from the schedule, software and action (`sentFor`). Generate it in the Portal from the use case's fields; fall back to the instruction. The `Writes refused` banner belongs to the n8n flows (K) and only shows once a published version can lack the gate.
+
+**I4. Run row stage words.** Sketch: `GitHub didn’t answer`, `Retrying`, `Waiting for Bob’s yes`, `Creating the ticket`, `MOCK-22 created`, `Declined. Nothing was written.`, `No new release`, `1 ticket, approved by Bob`. App: `run/words.ts:219-248` headlines ("Stopped at {label}", "{N tickets} created in Jira", "Done, nothing to write"). Gap: words. Portal: one function (`run/words.ts`) feeds the row, the banner, the strip and the Recent runs row (principle 7).
+
+**I5. Watchlist page.** Sketch: `Watchlist`, summary `3 have a newer version · 1 can’t be found · 2 are up to date`, rows sorted urgent first (`Can’t find`, `Newer out`, `Watching`, `Up to date`) with `{0.115.2 → 0.121.0}, out {5 Nov} · checked by {Workflow name}` / `not checked automatically`, each opening the software page. App: `software/SoftwarePage.tsx`: "Software watchlist", a summary line from `software.ts:110` ("3 have a newer version · 4 can't be checked · 2 not checked yet"), `Check now`, `Needs attention`, `Software we watch` with `Find software`, `How it's checked`, rows with Ours/Newest, pills "Can't check" / "New version" / "Ticket waiting for a yes" / "Ticket open" / "Up to date" / "Not checked yet", `History`, `Remove`. Gap: words and layout. Portal. The state words change in one place (`software/software.ts:188`) and everywhere at once: `Newer out`, `Can’t find`, `Watching`, `Up to date`; keep `Ticket waiting for a yes` as the sketch's `Upgrade ticket` fact on the software page rather than a pill. Keep `Check now` and `Find software` (`Add software`) on the page; the sketch adds software by talking.
+
+**I6. Software page and panel.** Sketch panel: kind `Watchlist`, name, pill, one sentence (`You run 0.115.2. Newest is 0.121.0, out 5 Nov.`), `Checked by` with the workflow link or `Nothing checks it yet`, button `Watch for new releases`. Page: `You run` / `Newest` / `What changed` (release notes, `From the release notes`) / `Upgrade ticket` / `Checked by` (`last checked today 8:00, didn’t finish`) / `Source`. Not found: a red banner `GitHub can’t find {owner/repo}, and doesn’t say where it moved.`, `Ask the team`, `Remove from watchlist`, then `Removed from the watchlist.` + `Undo`. App: `software/SoftwarePanel.tsx` shows the pill, `You run`, `Newest`, `Checked by`, `When`; the page has rows, History and Remove with an undo toast (`software/removal.ts`). Gap: words and layout. Portal; `What changed` needs the release notes summary the watchlist run already stores (check `pa/contracts/watchlist_run.py`); if absent, leave the row out.
+
+**I7. Jira key panel.** Sketch: kind `Connection`, `Jira key`, pill `Expires Friday`, `After Friday 14 Nov, nothing can be written to Jira until the key is renewed. Only an admin can renew it.`, `Ask the admin to renew it` → `Asked the admin in Teams.` App: connection checks (`pa/orchestration/connections.py`, `pa/migrations/orchestration/versions/0013_connection_checks.py`) feed a Set up row "Review in Settings"; Settings' Connections tab holds the key. Gap: missing panel. Portal (a `connection` panel kind) plus backend: the expiry date and an "ask the admin" request (reuse ADR 0038's request store with kind `renew_key`). Until then the button opens Settings' Connections tab, with the same words minus the Teams promise (never a "Sent" the system can't back).
+
+### J. Bob, Approver
+
+**J1. Bob's Home.** Sketch: `Good morning, Bob`, heading `1 change waits for your yes` / `Nothing waits for your yes`, chips `What waits for me?`, `What did I decide?`, `What can you do?`, a `Do now` row `FastAPI upgrade ticket needs your yes`. App: heading from `approverHomeLine` ("2 requests are waiting for your yes."), chips "What is waiting for my yes?", "What did I decide before?", "How are the workflows doing?", placeholder "Ask about your approvals…", a note "You’re an Approver, so you decide on requests. Operators set up workflows." Gap: words. Portal. Keep the note as the answer to "watch X" from Bob (C13's `Operators set up workflows. Ask Alice, or another Operator.`).
+
+**J2. Bob's approval flow.** Sketch: the row opens the approval card (C9) and the panel (H4) at once; decline with a reason (H5); the declined record (H7); the strip turns calm `Nothing needs you` after. App: the same data through `decide`, `RunPanel` with `ApprovalGate`. Gap: as in C9, H4 to H7.
+
+**J3. Self-approval.** Sketch: Alice pressing Approve gets a toast `You can’t approve your own work. Another Approver has to say yes.` and sees `Waiting for an Approver. You can’t approve your own work.` App: the gate is not shown to a party; `run/words.ts:314-334` explains why ("You set this workflow up and started this run, so another Approver must decide. Nobody approves their own work."); the API refuses `OWN_WORK`. Gap: words only; the rule holds. Portal.
+
+### K. n8n views (View as "Alice, with n8n access")
+
+**K1. n8n access.** Sketch: a per-person flag; without it the Planner answers `Only people with n8n access can open n8n. An admin can add it in Settings.` App: no such flag anywhere (`GLOSSARY.md:302` marks "n8n access" as planned under ADR 0043); roles are Operator and Approver. Gap: missing. Backend (people and permissions, `pa/migrations/orchestration/versions/0006_people.py`), contract (`me.n8n_access`), Portal (Settings' People tab, the Planner reply). Blocked on ADR 0027 (section 3).
+
+**K2. "In n8n" tab on the workflow and run pages.** Sketch: `Summary` / `In n8n` tabs; the n8n pane shows `Version 4, published by Alice, just now`, `Only our blocks are on, so every write waits for a yes.`, the canvas (blocks `Schedule`, `Read release / GitHub / Our block`, `Newer? / IF`, `Ask for a yes / Teams / Our block`, `Make approved changes / Jira / Our block`, `Nothing to change / Ends the run`, edges `true` / `false`), and `Open in n8n editor`. On the run page the canvas is live: blocks take the run's states. App: nothing; the API's n8n client (`pa/orchestration/n8n.py`) reads and writes its own three managed n8n workflows (`run`, `run_failure_reporter`, `schedule_tick`) and never serves a workflow's nodes to the Portal. Gap: missing. Backend (a read of the n8n workflow JSON per use case and a mapping from n8n node to our step), contract, Portal (an SVG canvas drawn from the JSON). Blocked on ADRs 0026 and 0027 (section 3).
+
+**K3. The n8n editor and Publish.** Sketch: `Open in n8n editor` opens a mock editor (palette with our blocks on and `HTTP Request` / `Code` / `Jira` crossed out, inspector per block, `Publish`), and publishing lands in the chat as a `Changed in n8n` card from the Safety checker (`Safe` or `Writes refused`, with `Add the yes back` and `Undo`), plus a `Needs a fix` state and the `Writes refused` banner on the workflow. App: nothing; ADR 0034 opens the real n8n editor on Azure for maintainers. Gap: missing. The mock editor is not to be built (its footnote says so); `Open in n8n editor` links to the real editor. The `Changed in n8n` card needs the API to notice a publish in n8n (a webhook from n8n or a poll of `/workflows/{id}` versions) and the safety checker to grade the new version. Backend, contract, Portal. Blocked on ADRs 0026 and 0027.
+
+### L. Toasts and the top bar
+
+**L1. Toasts.** Sketch: a dark pill at the bottom centre, 96px up, 2.6s, fades up. App: `ui/Toast.tsx` matches (dark, bottom centre, 96px, 2s + 45ms per character, Undo variant, Escape). Gap: none.
+
+**L2. Top bar.** Sketch: brand mark `AI` + `AI Workflow Builder`; right: `Settings` as a text link, then an avatar letter and `Alice, Operator`. App: `shell/Header.tsx`: the logo + name; `Teams` (drawer, with a badge), `Jira` (practice, only without a real Jira), a settings icon, `PersonChip` with initial, name, role and Sign out. Gap: words and layout. Portal. Show `Settings` as text, the chip as `{Name}, {Role}`; keep Teams and Jira (section 2).
+
+**L3. Counts in the rail.** See I1.
+
+Totals: 72 items (A 7, B 6, C 13, D 5, E 5, F 2, G 10, H 8, I 7, J 3, K 3, L 3). Backend, runtime or contract work in 15 of them: C13, E2, G4 (later), G6, H4 (a fields check), I3 (roll back), I7, K1, K2, K3, plus the runtime's words or row keys in C7, C8, C11, E1, H3. The other 57 are the Portal alone.
+## 2. What the sketch doesn't cover
+
+These stay as they are today unless a PR below touches them for a reason given.
+
+- **Settings** (`portal/src/screens/settings/`): Connections, People and permissions, AI model, How it works. Stays. The sketch's `Settings` link opens it (L2). Two additions come from the plan: the n8n access flag on People and permissions (K1, blocked), and the Jira key expiry on Connections (I7).
+- **The Teams drawer** (`shell/TeamsPanel.tsx`, `shell/TeamsCard.tsx`): the practice copy of Teams with the Adaptive Cards. Stays in the top bar. It is how the team proves "approvals go to Teams" without a real tenant. The sketch's `Sent to Bob in Teams` line points at it: clicking the line can open the drawer at that card.
+- **The Jira page** (`portal/src/screens/jira/`): the practice Jira with "Mark done". Stays, reachable from the top bar. The sketch's `MOCK-22` chip opens the ticket here when the connection is the practice Jira, or the real Jira address otherwise (`api/ticketLinks.tsx`).
+- **Sign-in** (`ui/SignInGate.tsx`): stays. The sketch's "View as" is a demo control; the app's dev-user switch (`localStorage['portal.dev-user']`) covers it.
+- **The How it works screen** (`portal/src/screens/agents/`, a Settings tab): stays. The set-up card stops linking to it inline (E1); the Agents list is still where saved agent cards live.
+- **Drafts** (`workflows/Sections.tsx`): the sketch has no drafts list. Keep the autosave and the Resume/Discard rows, shown under Needs you's `Set up` group on Workflows (I2). A card replaced in the chat still says it was saved as a draft.
+- **Following up** (ADR 0038): the sketch's `Ask the team` only toasts. The app keeps the real request store; the sketch's toast words become the sent line (C11, H8, I6).
+- **Day one** (an Operator with no workflows): the sketch never shows it. Keep the app's starting points as chips and the heading `What should run by itself?`.
+- **Offline and no-model states** (`home/HomePage.tsx:76-81, 191-224`): the sketch has none. Keep them; they are honest states (principle 7).
+- **Delete a workflow**, **Run now**, **Check now**, **Find software**, **History**: the sketch has none of these. Keep them where they are (the workflow page's menu, the Watchlist page); the sketch adds software by talking, the page keeps the button.
+- **Two-approver rules**: the sketch shows one Approver. Keep every "Step 1 of 2" and "one after the other" word the app has (H4).
+
+What the sketch would remove, and the decision:
+
+| Today | Sketch | Do |
+|---|---|---|
+| `What can I ask for?` link on Home | gone, the chip answers | Remove (A7) |
+| `Filled in by me`, `Rename`, `How this workflow works`, `What needs a yes` on the set-up card | gone; the build panel and the safety note replace them | Remove from the card; the panel shows the blocks (E1, E3) |
+| The full first card in Needs you with the troubleshooter box | plain rows | Replace; the troubleshooter's answers live in the run card (A6, C8) |
+| The Planner's `Planner` label and 40px face on every reply | 30px face, label only on plain text | Replace (B4) |
+| `Started`, `Pick agents`, `Done` nodes on the run line | only the workflow's blocks | Replace (G1); the log still records the start |
+| `Show what each agent did` chat log | `Step by step` timed rows | Replace (H2) |
+| Workflows page lead sentence, `Waiting on others`, search and filters | not shown | Keep `Following up` and the search over 10 rows; drop the lead sentence (I2) |
+| The run page's Done card | the settled line and the ticket chip | Replace (G7, G8) |
+| Uncapped workflow list in the chat | two rows | Cap at 5 (C3) |
+
+## 3. Blocked or risky items
+
+**3.1 The n8n views and n8n access (K1 to K3).** Blocked. ADR 0026 (writes checked when made, so n8n may hold the wait) and ADR 0027 (staff maintain each workflow in n8n, the Portal keeps every published version, the `NODES_INCLUDE` allow list) are still `proposed`; ADR 0034's note says the allow list is not built. Without them: there is no per-person flag, the API does not read a workflow's nodes from n8n, nothing watches for a publish in n8n, and the safety checker cannot grade a version that lacks the gate. Recommendation: build everything else first; raise the two ADRs for acceptance now with the sketch as the picture of what they enable; then land the n8n PRs in section 6. Until then the Planner's reply to "show me X in n8n" is the sketch's `Only people with n8n access can open n8n.` only for people without the flag, and for everyone while the flag doesn't exist, which is honest.
+
+**3.2 Save-then-undo and the versions route (F2, I3).** Risky, partly built. `PUT /use-cases/{id}/schedule` already publishes a version and `POST …/versions/{v}/undo` republishes the previous schedule, but only for the newest version and only for a schedule change (`pa/builder/lifecycle_http.py:109-150`, `pa/builder/versions.py`). The sketch's `Roll back` on any older version, and versions that record more than a schedule (`Put “Ask for a yes” back`, `Moved to Daily 7:30 in n8n`), are not there. Recommendation: ship the edit card on the existing routes (PR 9), show the 409 words when undo is refused, and do arbitrary roll back as its own PR (PR 12) with an ADR note, since a roll back republishes an n8n workflow and must keep the gate.
+
+**3.3 Retry from the stopped step (G4).** Risky. The backend reruns the whole work leg (`pa/orchestration/runs.py:210-235`). Resuming at the failed agent needs the agents' earlier outputs kept and replayed into the next agent, which touches the run model, the dispatch and the n8n `run` workflow. Recommendation: Portal words that stay true (`Runs again from {first agent}`), then PR 13 as a separate, later change with its own tests; the sketch's log line `Daily 8:00 didn’t run again.` is already true today.
+
+**3.4 "Sent to Bob" (G6, C9).** Small contract change, low risk, but the honesty rule bites: show it only after `approval_announced`, name the eligible Approvers the backend already computes for the card, and show `Couldn’t send to Teams` after `approval_announce_failed`.
+
+**3.5 The test run before "Turn it on" (E2).** Safety rule. A test run that writes to the practice Jira without a yes would be the only write in the platform without an Approver, and the sketch's `Test run passed on practice Jira.` reads that way. Recommendation: the test run stops at the gate and the words say `Test run passed up to the yes. Nothing was written.`; `on practice Jira` only where the connection is the practice stub and the write actually happened after a yes. No weakening of the deny-by-default checker; say so in the PR's Tradeoffs.
+
+**3.6 "Added a yes before the ticket" (E2).** Fine as words, since the planner already puts the gate before every write (`What needs a yes` today). It must never be the only sign of the gate: the line and the canvas show the gate block, and the approval view shows what will be written (principle 6).
+
+**3.7 State words changing everywhere (I4, I5).** Medium. `Newer out`, `Can’t find`, `Watching`, `Up to date`, `Stopped`, `Waiting for a yes`, `Needs a fix` replace today's words in `software/software.ts:188`, `run/words.ts`, `workflows/workflow.ts:64`, the e2e design-rules spec (`portal/e2e/live/design-rules.spec.ts`) and the spec's section 15 vocabulary. One PR changes them all at once, or counts and pills will disagree (principle 7).
+
+**3.8 Approval `Fields` row (H4).** Only if the proposal carries issue type, priority and labels. If the `ActionLine` doesn't, leave the row out; never show a guessed field.
+
+**3.9 The `Writes refused` state (I3, K3).** Only reachable once a published version can lack the gate, which needs the n8n editor flow. Do not add the banner until then (an unreachable state is dead UI).
+
+**3.10 Scope.** The sketch is wider than phase 1's "software versioning only" focus in two places: the open heading `What should run by itself?` and the `Then` select's `Tell me here`. Both are fine: the heading is a question, and `Tell me here` is a read-only workflow the platform can run today (no write, no gate). The `Then` select stays at two options.
+
+## 4. The PR plan
+
+Fourteen PRs. Order is by how much each changes the feel; the first six are the chat-first feel, the rest finish the pages and the backend. "Parallel" names PRs that touch no shared file and can run at the same time. Sizes: S under 200 lines, M 200 to 600, L over 600. Every PR follows the design principles checklist in its Verification section and runs `unslop` on user-facing words.
+
+**PR 1. `feat(builder): make the chat look and read like the sketch`** M. Items A1 to A7, B1 to B5, C1, L2, I1. Changes: the hero (greeting line, heading, 96px face, one composer, chips that stay), the fold into the chat with the strip (calm state, `{n} more` opens the needs panel later in PR 4; for now links to Workflows), the needs rows as plain rows under `Do now` / `Set up`, the black user bubble, the 30px face with a label only on plain text, dots-only thinking, the `Card` chrome, `Settings` as text, `{Name}, {Role}`, rail totals. Files: `home/HomePage.tsx`, `home/Home.module.css`, `home/PlannerBox.tsx`, `home/ChatView.tsx`, `home/Thread.tsx`, `home/Waiting.tsx`, `home/Planner.module.css`, `home/PinnedLine.tsx`, `home/NeedsSection.tsx`, `home/HomeItem.tsx`, `home/home.ts`, `shell/routes.tsx`, `shell/Header.tsx`, `shell/Rail.tsx`, `ui/Card.tsx` (new), `ui/tokens.css`. Depends on: nothing. Tests: `HomePage.test.tsx`, `HomePage.heading.test.tsx`, `Thread.test.tsx`, `PinnedLine.test.tsx`, `shell.test.tsx`, a screenshot check at 1440 and 390 against `shots/home-empty-sketch.png`. Parallel with PRs 2, 5, 8, 10.
+
+**PR 2. `feat(monitoring): draw the run as the workflow's blocks, with every state and the motion`** L. Items G1 to G3, G5, G7 to G10. Changes: the step model (`runModel.ts`) built from the plan's blocks plus the gate and the write; connector and dot states with the sketch's timings; the stop replay; the timer; the ticket chip from `write_action_done`; the settled line; the declined look; small and large variants; reduced motion. Files: `run/RunLine.tsx`, `run/RunLine.module.css`, `run/runModel.ts`, `run/liveRun.ts`, `run/words.ts` (the settled line), `ui/icons.tsx` (the five step icons). Depends on: nothing. Tests: `RunLine.test.tsx` and `runModel.test.ts` for every state (todo, now, wait, done, err, no, skip), the timer, the chip, the settle; the e2e run page spec. Parallel with PRs 1, 5, 8, 10.
+
+**PR 3. `feat(builder): put the run in the chat card and the panel, with the troubleshooter's three answers`** M. Items C8, D5, H1, H2, H3 (Portal side), I4. Changes: the `why_stopped` answer becomes the run card fronted by the troubleshooter, subscribed to the run's stream and changing in place; the `.beside` rule; the run panel and page in the sketch's shape with the `Step by step` log; one `stageWords` function for rows, banners and the strip. Files: `home/AnswerCards.tsx`, `home/answers.ts`, `run/RunPanel.tsx`, `run/RunPage.tsx`, `run/RunPage.module.css`, `run/Outcome.tsx`, `run/Chat.tsx` (becomes the log rows), `run/words.ts`, `run/panels.module.css`. Depends on: PR 2. Tests: `AnswerCards.test.tsx` (card moves through stopped, retrying, waiting, done, declined from fixture events), `Outcome.test.tsx`, run page e2e. Parallel with PR 4.
+
+**PR 4. `feat(builder): give the side panel the sketch's views, with history and auto-open`** M. Items B2 (the `{n} more` panel), D1, D3, D4, I7 (Portal side), C2 to C4. Changes: panel kinds `needs`, `workflows`, `watchlist`, `approval`, `build`, `connection`; a short history so Back works; the wide mode; auto-open on wide screens; the needs, workflows (capped) and behind cards. Files: `ui/sidePanel.ts`, `home/SidePanel.tsx`, `home/SidePanel.module.css`, `home/ChatProvider.tsx`, `home/chatState.ts`, `home/StateAnswers.tsx`, `home/PinnedLine.tsx`, `ui/OpenItem.tsx`, new `home/panels/{NeedsPanel,ListPanel,ConnectionPanel}.tsx`. Depends on: PR 1. Tests: `SidePanel.test.tsx`, `chatState.test.ts`, `StateAnswers` tests, e2e "first click beside, second full page". Parallel with PR 3.
+
+**PR 5. `feat(builder): the approval in the sketch's shape: what will be written, not checked, ask, decline with a reason`** M. Items C9, C10, H4 to H7, J1, J2, J3. Changes: the approval card and the `decided` card; the panel and page views with the `Where` / `Summary` / `Details` / `Fields` table, `Summary by AI`, `Sent` / `Why you`, the ask and decline forms, the records; Bob's Home words. Files: `run/ApprovalGate.tsx`, `run/decision.ts`, `run/words.ts`, `run/QuestionThread.tsx`, `run/AnswerQuestion.tsx`, `home/StateAnswers.tsx` (decide, decided), `home/home.ts` (Approver lines and chips). Depends on: PR 1 for the card chrome; PR 7 for `Sent` (ships without that row until then). Tests: `ApprovalGate.test.tsx` (every state, both roles, the two-approver words kept), `decision.ts` tests, e2e Bob declines. Parallel with PRs 2, 6, 8.
+
+**PR 6. `feat(runtime): the Planner's short answers: can'ts, capabilities, troubleshooter, pause and resume`** M. Items C7, C11, C13, H3 (words), E5 words. Changes: the planned and unsupported abilities' "can't" words in `abilities.py` become the sketch's one-liners; the ready abilities' short lines; `pause` and `resume` answer kinds (with the workflow picker when ambiguous); the troubleshooter's `what_happened` as one sentence and the `Details` text separate; set-up row keys `Watch` / `When` / `Then` for the versioning template. Files: `agent-runtime/src/agent_runtime/abilities.py`, `agent-runtime/src/agent_runtime/contract.py`, `contracts/agent-api.schema.json`, `contracts/openapi.json`, `contracts/fixtures/planner/answer.*.json` (new `pause.json`, `resume.json`), `pa/builder/planner.py`, `pa/builder/lifecycle_http.py` (called by the Planner route), `pa/monitoring/troubleshooter.py`, and the Portal's `home/AnswerCards.tsx` for the two new kinds. Depends on: nothing. Tests: the runtime's golden set (add the sketch's phrases: "pause the React check", "watch Kubernetes and email me", "Post the FastAPI news in our Teams channel", "delete the MOCK ticket"), contract tests, `AnswerCards.test.tsx`. Parallel with PRs 1, 2, 5.
+
+**PR 7. `feat(orchestration): say where an approval was sent`** S. Items G6, C9's lead, H4's `Sent`. Changes: `sent_to` (names) and `sent_at` on `ApprovalStepView` and the `approval_announced` event; the Portal's `Sent to {names} in Teams` under the gate, after the event only, and `Couldn’t send to Teams` after `approval_announce_failed`. Files: `pa/wire.py`, `pa/orchestration/service.py` (the names are computed at `355-364`), `pa/orchestration/cards.py`, `pa/monitoring/events.py`, `contracts/activity-event.schema.json`, `contracts/openapi.json`, `run/RunLine.tsx`, `run/runModel.ts`. Depends on: PR 2 for the display. Tests: platform-api approval tests (sent_to lists eligible Approvers minus the parties), `runModel.test.ts`. Parallel with PRs 5, 6.
+
+**PR 8. `feat(builder): set up as a draft, test it, then turn it on`** M (backend). Item E2's backend. Changes: `POST /api/v1/agent-use-cases` accepts `on: false` and creates the use case off (state `draft` on the Workflows page, never scheduled); `POST /api/v1/use-cases/{id}/turn-on` publishes version 1 and activates it; the test run `{test: true}` on an off use case runs the work leg and stops at the gate with outcome `test_passed` (`StepOutcome`), writing nothing. Files: `pa/builder/http.py`, `pa/builder/lifecycle_http.py`, `pa/builder/versions.py`, `pa/orchestration/runs.py`, `pa/orchestration/service.py`, `pa/wire.py`, `contracts/openapi.json`, a migration. Depends on: nothing. Tests: platform-api lifecycle tests (create off, test run writes nothing and never asks for a yes, turn on publishes version 1, turn on twice is idempotent), the safety checker test that a test run's write is refused. Parallel with PRs 1, 2, 5.
+
+**PR 9. `feat(builder): the set-up card builds, tests and turns on, with the build panel`** L. Items E1, E3, E4, E5, C5, C6, F1, F2. Changes: the parts rows `Watch` / `When` / `Then` plus crosses; `Set up` → building state with the line appearing block by block, the Safety checker's note, the Tester's test run flowing along the line driven by the test run's events, `Test run passed`, `Turn it on`, `On. First run …`; the `Building in n8n` panel with the canvas drawn from the plan's blocks and the honest status lines; `Dropped`; the software card and the already-have card; the edit card's compact row, `Saved as version N.`, `Open` beside, `Undo`. Files: `home/SetupCard.tsx`, `home/SetupCard.module.css`, `home/PartsList.tsx`, `home/parts.ts`, `home/card.ts`, `home/answers.ts`, `home/EditCard.tsx`, `home/EditCard.module.css`, `home/edit.ts`, new `home/BuildPanel.tsx` and `ui/Canvas.tsx` (the SVG blocks, reused by the n8n views later), `api/workflowQueries.ts`. Depends on: PRs 2 (the line), 4 (the `build` panel kind), 6 (row keys), 8 (routes). Tests: `SetupCard` and `EditCard` tests for every state, `card.test.ts`, `parts.test.ts`, e2e Ask in my words and Change by talking.
+
+**PR 10. `feat(builder): Workflows, Watchlist, workflow and software pages in the sketch's shape`** L. Items I2, I3 (except roll back), I5, I6, I4's one source, the state words (3.7). Changes: Workflows with `Needs you` and `All workflows` rows; the workflow page with the sentence, banner, large step line with tags, `When` + `Change` inline editor, `Who says yes`, `Recent runs`, `Versions` (read-only until PR 12), `Pause`; the Watchlist with the summary and sorted rows; the software panel and page; the state words changed in one place each. Files: `workflows/WorkflowsPage.tsx`, `workflows/WorkflowPage.tsx`, `workflows/WorkflowPanel.tsx`, `workflows/Sections.tsx`, `workflows/Status.tsx`, `workflows/Versions.tsx`, `workflows/RecentRuns.tsx`, `workflows/workflow.ts`, `workflows/Workflows.module.css`, `software/SoftwarePage.tsx`, `software/SoftwarePanel.tsx`, `software/software.ts`, `software/Software.module.css`, `run/words.ts`, `portal/e2e/live/design-rules.spec.ts`, `docs/design/ai-native-redesign/AI-NATIVE-UX-REDESIGN.md` section 15. Depends on: PR 2 (the large line). Tests: `WorkflowsPage.test.tsx`, `WorkflowPage.test.tsx`, `SoftwarePage.test.tsx`, `NeedsReachable.test.tsx`, the design-rules e2e with the new vocabulary. Parallel with PRs 5, 9 (no shared files once `run/words.ts`'s settled line landed in PR 2).
+
+**PR 11. `docs(builder): the sketch is the build target, and the words list`** S. Changes: the spec and the implementation plan point at `sketch-v3.html` (copied to `docs/design/chat-first/sketch-v3.html`), section 15's vocabulary updated, this plan's words list added as `docs/design/chat-first/WORDS.md`, `GLOSSARY.md` gains `Needs a fix`, `Newer out`, `Watching`, `settled line`, `build panel`. Depends on: nothing; land first so PRs cite it. Tests: the docs check scripts.
+
+**PR 12. `feat(builder): roll back to any published version`** M. Item I3's `Roll back`. Changes: `POST /use-cases/{id}/versions/{v}/rollback` republishes version `v`'s full definition as a new version (`Rolled back to version N`), versions record what changed, not only the schedule; `Roll back` buttons on the page; the toast. Files: `pa/builder/versions.py`, `pa/builder/lifecycle_http.py`, `contracts/openapi.json`, `workflows/Versions.tsx`, `api/workflowQueries.ts`. Depends on: PR 10. Risky (3.2): the republished version must still carry the gate; add the safety checker's check to the rollback path and a test for it. Needs a note in ADR 0027's "Portal keeps every published version" or its own ADR.
+
+**PR 13. `feat(orchestration): a retry picks up at the step that stopped`** L. Item G4's backend. Changes: `Failed.retry` keeps the finished agents' outputs and resumes the work leg at the failed agent; `step_retried` names the step; the Portal shows `From here` on that step and the log says `Retried from {step}, after a short wait.` Files: `pa/orchestration/runs.py`, `pa/orchestration/service.py`, `pa/orchestration/dispatch.py`, `pa/orchestration/workflows/run.n8n.json`, `pa/monitoring/events.py`, `contracts/activity-event.schema.json`, `run/runModel.ts`, `run/words.ts`. Depends on: PR 2. Risky (3.3): own tests for a two-agent run failing at the second, idempotent retries, and the short delay. Land last of the non-n8n PRs.
+
+**PR 14 and onward: the n8n views.** See section 6; blocked on ADRs 0026 and 0027.
+
+Order of landing: 11, then 1, 2, 6, 8 in parallel; then 3, 4, 5, 7; then 9, 10; then 12, 13; then the n8n PRs. The feel changes with 1, 2 and 3 landed (the chat, the line in the card); 4 and 5 finish the panel and Bob; 9 finishes Ask in my words.
+## 5. The words
+
+Every user-facing string in the sketch, grouped by screen. Copy them exactly, including the curly apostrophe (’) and the middle dot (·). Where the sketch builds a string from data, the pattern is shown with `{braces}`; sample values sit in brackets after it. Line references are to `sketch-v3.html`.
+
+### Top bar and rail
+
+- Brand: `AI Workflow Builder` (mark reads `AI`).
+- Right side: `Settings` (link), then the person: `Alice, Operator`, `Alice, Operator, n8n access`, `Bob, Approver`. Avatar letter `A` or `B`.
+- Rail: `Chat`, `Workflows` (count badge = number of workflows), `Watchlist` (count badge = number of software on the watchlist). Rail aria-label: `Browse`.
+
+### Home, empty (Alice)
+
+- `Good morning, Alice` (the sketch always says morning; the app keeps its time of day)
+- `What should run by itself?`
+- Composer placeholder and aria-label: `Ask, or describe a task`. Send button aria-label: `Send`.
+- Chips (Alice): `What needs me?`, `Which software is behind?`, `What can you do?`
+- Needs you groups: `Do now`, `Set up`. Empty: `Nothing needs you.`
+- Need rows (long form, Home and panel):
+  - `{Workflow name} stopped at 8:00` [FastAPI release check stopped at 8:00], Do now, red
+  - `{Workflow name} can’t write without a yes`, Do now, red
+  - `{Software} can’t be found on GitHub` [LangServe can’t be found on GitHub], Set up, amber
+  - `Jira key expires Friday`, Set up, amber
+  - Each row ends with `›`.
+- Needs heading used in the card and Bob's hero: `{n} thing needs you` / `{n} things need you` / `Nothing needs you`.
+
+### Home, empty (Bob)
+
+- `Good morning, Bob`
+- Heading = `1 change waits for your yes` or `Nothing waits for your yes`
+- Chips (Bob): `What waits for me?`, `What did I decide?`, `What can you do?`
+- Need row: `FastAPI upgrade ticket needs your yes`, under `Do now`, amber.
+
+### The pinned needs strip (after the first message)
+
+- Short forms: `{Workflow short} stopped` [FastAPI check stopped], `{Software} check can’t write`, `{Software} not found` [LangServe not found], `Jira key expires Friday`, `FastAPI ticket needs your yes` (Bob).
+- `{n} more` (link, opens the Needs you panel), `Open` (button), `Nothing needs you` (calm tone).
+
+### Message style
+
+- Planner's name label on a plain text reply: `Planner` (and `Safety checker`, `Tester`, `AI troubleshooter`, `Version checker`, `Ticket writer` for other agents).
+- Lead lines above cards: `Here’s what I understood.`, `You already have this one.`, `This needs your yes.` (Bob), `This waits for Bob’s yes.` (Alice), `I checked the new version.`, `I checked the new version. It needs a fix.`
+
+### Plain replies
+
+- `Paused {Workflow name}. It won’t run until you resume it.`
+- `{Workflow name} is on again.`
+- `{Workflow name} already runs {every day at 8:00}.`
+- `Nothing waits for your yes.` (Bob) / `Nothing is waiting for a yes.` (Alice)
+- `Nothing has stopped. FastAPI release check ran again after the retry.`
+- `Operators set up workflows. Ask Alice, or another Operator.` (Bob asks to watch something)
+- `Only people with n8n access can open n8n. An admin can add it in Settings.`
+- `Here it is in n8n.`
+
+### Cards: lists and capabilities
+
+- Workflows card: head `Workflows` + count; rows `{name}` / `{Daily 8:00}` + pill.
+- Watchlist card: head `Watchlist` + count; rows `{name}` / `{0.115.2 → 0.121.0}` or `{19.1.0}` or `Added today` or `{owner/repo}` + pill.
+- Behind card: head `{n} have a newer version`; foot `See the watchlist`.
+- Needs card: head = needs heading; body = Do now / Set up rows.
+- Decisions card (Bob): `Your recent decisions`; rows `React upgrade ticket` / `Tue 4 Nov` / `Approved`; `FastAPI upgrade ticket` / `28 Oct · Not this week` / `Declined`.
+- Capabilities card (Alice): `What I can do`; `Watch software for new releases`; `Create Jira tickets, after a yes`; `Explain a stopped run, and retry it`; `Change or pause your workflows`; footnote `Not yet: Teams channels, email, Confluence.`
+- Capabilities card (Bob): `What I can do`; `Show what waits for your yes`; `Show exactly what a change will write`; `Show your past decisions`.
+- Software card: head `{name}` + pill; `You run {0.2.60}. Newest is {0.3.1}, out {4 Nov}.` / `You run {19.1.0}, the newest.` / `GitHub can’t find it.`; button `Watch it`. Unknown software: `It isn’t on the watchlist, so I don’t know which version you run.` + `Watch it`.
+- Already-have card: `{Workflow name}` + pill; `It already watches {React}, {every day at 8:00}.`; `Open it`.
+- Which workflow picker: `Which workflow?` then one chip per workflow name.
+
+### Pills (states)
+
+- Workflow: `On`, `Paused`, `Stopped`, `Waiting for a yes`, `Needs a fix`.
+- Run: `Stopped`, `Running`, `Waiting for a yes`, `Done`, `Declined`.
+- Software: `Up to date`, `Newer out`, `Can’t find`, `Watching`.
+- Approval: `Needs your yes` (Bob), `Waiting for a yes` (Alice), `Approved`, `Declined`, `Not sent`.
+- Draft: `Draft`, `Building`, `Ready`, `On`, `Dropped`.
+- Edit: `Not saved`, `Saved`, `Undone`, `Not changed`.
+- n8n: `Version {n}`, `Not published`, `Safe`, `Writes refused`.
+- Run row: `Nothing new`.
+- Jira key: `Expires Friday`.
+
+### Can't cards
+
+- `I can’t post in Teams channels yet` / `Run results show here, in the chat.` / `Ask the team`
+- `I can’t send email yet` / `Run results show here, in the chat.` / `Ask the team`
+- `I can’t update Confluence yet` / `I can create a Jira ticket, after a yes.` / `Ask the team`
+- `I don’t delete anything in Jira` / `A Jira admin can do that.` (no Ask the team)
+- `I didn’t follow that` / Alice: `I can watch software releases, fix stopped runs and change your workflows.` / Bob: `I can show what waits for your yes, and your past decisions.`
+- Toast after Ask the team: `Asked the team. Their answer will show here.`
+
+### Set-up card (parts)
+
+- Head `{Software} release check` [LangGraph release check] or `New release check`; pill as above.
+- Row keys: `Watch`, `When`, `Then`.
+- Watch value: `{Software} on GitHub`; sub `You run {0.2.60}` or `Not on the watchlist yet. I’ll add it.`
+- When value: `Every {Monday} at {9:00}` / `Every day at {8:00}`.
+- Then select: `Create a Jira ticket, after a yes`, `Tell me here`.
+- Questions (amber `?` rows): `Which software?` (chips: up to four unwatched names); `How often?` (`Every day`, `Mondays`, `Fridays`); `Which day?` (`Mondays`, `Wednesdays`, `Fridays`, when the request said weekly); `{Mondays}, at what time?` / `Every day, at what time?` (`8:00`, `9:00`, `13:00`, `17:00`).
+- Crossed rows (red `×`): `Flag security issues.` `I can’t read security advisories yet.`; `Post in Teams.` `Not yet. I’ll tell you here instead.`; `Send an email.` `Not yet. I’ll tell you here instead.`; `Update Confluence.` `Not yet.`; `Watch {Name}.` `GitHub can’t find it.`; `Watch {Name}.` `I don’t know it yet. Try its GitHub name, like owner/project.`; `“{clause}”` `I didn’t follow this part.`; each with `Ask the team` where the sketch allows (`ask: true`).
+- Foot: `1 question to answer`; buttons `Never mind`, `Set up` or `Set up the part I can` (disabled while a question is open).
+- Building: safety note `Added a yes before the ticket.` (Safety checker face); `Test run…` (Tester face); then `Test run passed`; pill `Ready`; button `Turn it on`.
+- On: `On. First run {Monday, 9:00}.` / `On. First run tomorrow, {8:00}.`
+- Dropped: pill `Dropped`; `Nothing was set up.`
+- Step tags under the workflow line (large): `No system access`, `Reads GitHub`, `Waits for a yes`, `Writes after a yes`, `Shows here`.
+- Step labels: `{Daily 8:00}` / `{Mon 9:00}`, `Read release`, `Compare`, `Ask for a yes`, `Create ticket`, `Tell you`.
+
+### Build panel ("Building in n8n")
+
+- Kind `Building in n8n`; title = draft name; pill `Draft` then `On`.
+- Status lines: `Starting…`, `Adding blocks in n8n…`, `Safety checker is checking the write…`, `Test run on practice Jira…` / `Test run…`, `Saved as a draft in n8n.`, `On. Version 1, published in n8n.`
+- Checks: `The blocks fit together.`, `Every write waits for a yes.`, `Test run passed on practice Jira.` / `Test run passed.`
+- Footnote: `Only our blocks and n8n’s safe ones. The builder saves a draft. It can’t publish by itself.`
+- Canvas blocks: `{Daily 8:00}` / `Schedule`; `Read release` / `GitHub`; `Newer?` / `IF`; `Ask for a yes` / `Teams`; `Make approved changes` / `Jira` (or `Tell you` / `In the app`); `Nothing to change` / `Ends the run`; edge labels `true`, `false`; badge `Our block`.
+
+### Edit card (change by talking)
+
+- Head `Change {Workflow name}`; pill as above.
+- Row `When`: `{Daily 8:00}` (struck) `→` `{Mon 8:00}`; question form `Weekly, which day?` with `Mondays`, `Wednesdays`, `Fridays`.
+- Buttons: `Never mind`, `Save change`; after save `Open`, `Undo`.
+- Left text: `Saved as version {3}.`; after undo `Back to {Daily 8:00}.`
+- Toast on undo: `Back to version {2}, saved as version {4}.`
+
+### Run card and run views
+
+- Card head `FastAPI release check` + run pill; foot `Open`, and on a stop `Report to support`, `Retry`.
+- Troubleshooter answers by stage:
+  - stopped: `What happened` `GitHub didn’t answer at 8:00.`; `Affected` `Nothing. No ticket was written.`; `Safe to retry` `Yes. GitHub is answering again.`
+  - retrying: `Now` `Retrying after a short wait…`
+  - waiting: `Found` `Found 0.121.0. You run 0.115.2.`; `Now` `Waiting for Bob’s yes.`
+  - writing: `Found` …; `Now` `Bob said yes. Creating the ticket…`
+  - done: `Found` …; `Result` `MOCK-22 created after Bob’s yes.`
+  - declined: `Found` …; `Result` `Bob declined: {not this week}. Nothing was written.`
+- Panel and page head: kind `Today’s run, 8:00`; title `FastAPI release check`.
+- Line subs: `…` (small) / `Working…` then `Working, {n} s` (large) under the working step; `From here` (small) / `Picks up here` (large) on a retry; `Sent to Bob` (small) / `Sent to Bob in Teams` (large) under the gate; ticket chip `MOCK-22` (toast `MOCK-22 would open in Jira.`).
+- Settled line: `Done at 9:04 · MOCK-22 created after Bob’s yes` (green, tick); `Ended at 9:04 · Bob declined: {not this week}. Nothing was written.`
+- Page section `Step by step`, rows: `8:00:00` `Started on schedule.`; `8:00:01` `Version checker asked GitHub for FastAPI’s newest release.`; `8:00:31` `GitHub didn’t answer in 30 seconds. Stopped before anything was written.`; `9:01:10` `Retried from Read release, after a short wait. Daily 8:00 didn’t run again.`; `9:01:12` `Found 0.121.0. You run 0.115.2.`; `9:01:13` `Asked an Approver for a yes in Teams.`; `9:04:02` `Bob said yes.`; `9:04:03` `Created MOCK-22 in Jira project MOCK.`; `9:04:02` `Bob declined: {not this week}. Nothing was written.`
+- Page tabs (n8n access only): `Steps`, `In n8n`.
+- Toasts: `Sent to support with this run attached. The reply will show here.`; `You can’t approve your own work. Another Approver has to say yes.`
+
+### Approval card and views
+
+- Card: `Create 1 Jira ticket` + pill; `Upgrade FastAPI from 0.115.2 to 0.121.0`; button `Review and decide` (Bob, waiting) or `Open`; left `Approved.` / `Approved. MOCK-22 created.` / `Declined. Nothing was written.`
+- Panel/page kind: `Approval, from Alice’s FastAPI release check`; title `Create 1 Jira ticket`.
+- `What will be written`: `Where` `Jira project MOCK`; `Summary` `Upgrade FastAPI from 0.115.2 to 0.121.0`; `Details` `FastAPI 0.121.0 is out. The team runs 0.115.2.` + `github.com/fastapi/fastapi/releases/tag/0.121.0`; `Fields` `Task · Medium · upgrade, fastapi`.
+- `Not checked`: `Security advisories. I can’t read them yet.`
+- Page only: `Summary by AI.` `3 bug fixes, no breaking changes listed. Decide on the change above, not this.`; `Sent` `Today, 9:01, in Teams`; `Why you` `No one can approve their own work.`; button `See the run`.
+- Foot (Bob, waiting): `Ask Alice`, `Decline`, `Approve`.
+- Foot (Alice, waiting): `Waiting for an Approver. You can’t approve your own work.`
+- Decline form: `Why?` `Optional. Alice will see it.`; chips `Not this week`, `Wrong version`, `Needs testing first`; `Back`, `Decline`.
+- Ask form: placeholder `Ask Alice a question`; `Back`, `Send`. After send: `You asked Alice: {question}` / `No reply yet. The request stays open.`
+- After a decision: `Approved by Bob at 9:04. Creating the ticket…` then `Approved by Bob at 9:04. MOCK-22 created.` with a stamp `Created`; `Declined by Bob at 9:04: {not this week}. Nothing was written.`
+
+### Workflows page and workflow views
+
+- Page: `Workflows`; sections `Needs you` (when any), `All workflows`.
+- Row sub: `{Daily 8:00} · last run today, {GitHub didn’t answer}` / `{Daily 8:00} · no runs yet`.
+- Workflow kind line: `Workflow`; title; pill.
+- Sentence: `Every {day} at {8:00}, check {FastAPI} on GitHub for a new release. If there is one, create an upgrade ticket in Jira project MOCK, after a yes.` / `… If there is one, tell me here.`
+- Banners: `Stopped today at 8:00.` + `Open the run`; `Waiting for Bob’s yes.` + `Open the run`; `Paused. It won’t run until you resume it.`; `Writes refused: there’s no yes before the ticket.` + `Add the yes back`.
+- Panel facts: `Last run` `Today 8:00: {GitHub didn’t answer}` / `Today 8:00: nothing new` / `No runs yet`; `Next run` `Tomorrow, 8:00` / `{Monday}, {9:00}` / `Paused`.
+- Page sections: `When` (`Every day at 8:00` + `Change`; editor: Day select `Every day`, `Every Monday`…`Every Friday`; Time select `7:30`, `8:00`, `9:00`, `13:00`, `17:00`; `Save`, `Cancel`; toast `Saved. It now runs {every Monday at 9:00}.`); `Who says yes` `Any Approver but you, in Teams.`; `Recent runs` rows `Today, 8:00` / `{stage text}` + pill + `Open`, `Yesterday, 8:00` / `No new release` / `Nothing new`, `Tue, 8:00` / `1 ticket, approved by Bob` / `Done`, `No runs yet` / `First run {Monday, 9:00}.`; `Versions` (details) rows `Version {n}, in use` / `{what}. {who}, {when}.` and `Roll back` on older ones; version notes `Moved the run to 8:00`, `Added a test run on practice Jira`, `Built by the Planner`, `Moved to {Mon 8:00}`, `Rolled back to version {n}`, `Put “Ask for a yes” back`, `{Moved to Daily 7:30} in n8n`.
+- Actions: `Pause` / `Resume`; `Open in n8n editor` (n8n access). Toasts: `Paused. It won’t run until you resume it.` / `On again.`; `Back to version {2}, saved as version {4}.`; `Version {n} has the yes back.`
+- Stage text in Recent runs today row: `GitHub didn’t answer`, `Retrying`, `Waiting for Bob’s yes`, `Creating the ticket`, `MOCK-22 created`, `Declined. Nothing was written.`
+
+### Watchlist page and software views
+
+- Page: `Watchlist`; summary `{3} have a newer version · {1} can’t be found · {2} are up to date` (singular: `has a newer version`, `is up to date`).
+- Row sub: `{0.115.2 → 0.121.0}, out {5 Nov}` / `{19.1.0}, the newest` / `GitHub can’t find it` / `Added today`, then ` · checked by {Workflow name}` or ` · not checked automatically`.
+- Software kind line: `Watchlist`; title; pill.
+- Panel: `You run {0.115.2}. Newest is {0.121.0}, out {5 Nov}.` / `You run {19.1.0}, the newest.` / `Added today. The first check finds the version you run.`; `Checked by` `{Workflow name}` (link) or `Nothing checks it yet`; button `Watch for new releases`.
+- Page facts: `You run` `{0.115.2}` / `Not known yet`; `Newest` `{0.121.0}` `out {5 Nov}`; `What changed` `{notes}` `From the release notes`; `Upgrade ticket` `None yet. Today’s check stopped before it could tell.` / `None yet` / `1 waiting for Bob’s yes` / `Being created` / `MOCK-22, created today` / `Declined by Bob. None created.` / `Not needed` / `None. Nothing checks it, so no ticket is made.`; `Checked by` `{Workflow name}` `last checked {today 9:01}` / `last checked today 8:00, didn’t finish` / `Not yet`; `Source` `github.com/{owner/repo}`.
+- Not found: banner `GitHub can’t find {owner/repo}, and doesn’t say where it moved.`; `Ask the team` (toast `Asked the team where LangServe went. Their answer will show here.`); `Remove from watchlist`; then `Removed from the watchlist.` + `Undo`.
+
+### Jira key panel
+
+- Kind `Connection`; title `Jira key`; pill `Expires Friday`.
+- `After Friday 14 Nov, nothing can be written to Jira until the key is renewed. Only an admin can renew it.`
+- `Ask the admin to renew it` → `Asked the admin in Teams.`
+
+### n8n views (n8n access only)
+
+- Tabs: `Summary` / `In n8n` (workflow page), `Steps` / `In n8n` (run page).
+- Meta: `Version {4}, published by {Alice}, {just now}`; `Only our blocks are on, so every write waits for a yes.`; button `Open in n8n editor`.
+- Editor bar: `n8n`, workflow name, pill `Version {n}` / `Not published`; `Back to the app`, `Publish`.
+- Palette: `Blocks you can use`; `Schedule`, `IF`, `Merge`, `Nothing to change`, `Sticky note`, ours `Read`, `Agent`, `Ask for a yes`, `Make approved changes`; off `HTTP Request`, `Code`, `Jira`; `n8n’s own app, HTTP and Code blocks are off.`
+- Inspector: `Select a block to see its settings.`; `Schedule` with `Day`, `Time`, `Singapore time.`; `Ask for a yes` `Our block. Asks any Approver except the person who started the run, in Teams.` + `Delete this block`; `Read release` `Our block. Reads the newest release on GitHub. It can’t change anything.`; `Newer?` `True when the newest release is newer than the version the team runs.`; `Make approved changes` `Our block. Creates 1 ticket in Jira project MOCK. Our platform holds the Jira key and checks for a yes as it writes.`; `Tell you` `Our block. Shows the result in the app. It changes nothing.`; `Nothing to change` `Ends the run quietly when there’s no new release.`
+- Footnote: `A mock of n8n’s editor, for this sketch only.` (do not ship)
+- Toasts: `Deleted “Ask for a yes”. Nothing changes until you publish.`; `Nothing changed, so there’s nothing to publish.`
+- Changed card: `Changed in n8n` + pill `Safe` / `Writes refused`; `{Workflow name}, version {5}, by Alice.`; bullets `Now runs {every day at 7:30}.`, `Deleted “Ask for a yes”.`, `Put “Ask for a yes” back.`; `Without a yes, our platform refuses the write. The next run stops before the ticket.`; buttons `Add the yes back`, `Undo`; settled `Done. Version {6} is in use.`
+
+### Panel and page chrome
+
+- `More details`, `Close`, `Chat` (back to the chat), `{Previous title}` (back one page, for example `Workflows`).
+- Panel titles for Back: `Workflows`, `Watchlist`, `Needs you`, `The run`, `Approval`, `Build`, `Jira key`, and workflow or software names.
+- Settings toast (sketch only): `Settings would open here.` (the app opens the real Settings page).
+## 6. Integrating the n8n work
+
+The teammate's `n8n-project/` folder on `main` (commit `0359b667`, Qingtao) carries one standalone n8n workflow, "Cert List expiry reminder (Teams)" (`backups/workflows/PI5CBumIHtf59dIm__Cert_List_expiry_reminder__Teams_.json`), plus helper scripts and an opencode assistant with n8n MCP tools. What the export holds, node by node: a Manual Trigger; a Schedule Trigger at 9:00 (disabled in the export); an HTTP Request to Confluence (`/wiki/rest/api/content/{PAGE_ID}?expand=body.storage`, Basic Auth credential "Fetch Cert List Page - Confluence Basic Auth"); a Code node (19 KB, the parser and report builder, source of truth `scripts/parse-build.js`); an IF "Anything to report?"; an HTTP Request "Send Teams 1 - Incoming Webhook" to a Power Automate trigger URL whose `?sig=` is the credential (redacted to `sig=REDACTED`); two Set nodes ("All Clear (nothing sent)", "Build Failure Notice"); and an optional AI leg: HTTP Request "Ollama Reachable?" to `host.docker.internal:11434`, IF "Local Model Available?", a LangChain chain node with an Ollama chat model and a structured output parser, and a second Code node "Merge AI Notes". It runs on `docker.n8n.io/n8nio/n8n:latest`; our stack pins `n8nio/n8n:2.42.6` by digest (`deploy/compose.yaml:57`).
+
+### 6.1 How it shows up in the sketch's design
+
+As a workflow like any other. On Workflows: a row `Cert list expiry reminder` / `Daily 9:00 · last run today, nothing new` with a pill `On`, `Paused`, `Stopped`; on Home and in the strip when it stops: `Cert list expiry reminder stopped at 9:00`. Its page: the sentence (`Every day at 9:00, read the certificate list in Confluence. If any certificate is expiring, post a card in Teams and send an email.`), the step line drawn from its nodes (`Daily 9:00` / `No system access`, `Read cert list` / `Reads Confluence`, `Find expiring` / `No system access`, `Anything to report?` / `No system access`, `Tell the team` / `Posts in Teams and emails`), `When`, `Recent runs`, `Versions`, `Pause`. Its runs: the small line in the run card and panel, with the troubleshooter's three answers when it stops (`What happened` `Confluence didn’t answer at 9:00.`, `Affected` `Nothing. No card or email was sent.`, `Safe to retry` `Yes.`), and the settled line `Done at 9:02 · 3 certificates expiring, card sent to Teams` or `Done at 9:02 · Nothing to report`. For people with n8n access: the `In n8n` tab shows its real canvas (fifteen nodes, so the canvas scrolls), and `Open in n8n editor` opens the real editor, not the sketch's mock. The AI leg shows as a note under `Find expiring`: `AI notes, when a local model answers` (it is optional and gated in the workflow; the sketch's "Shows here" tag fits).
+
+Two things in the sketch do not apply to it: `Who says yes` (it has no gate, see 6.4) and the `Writes refused` banner (nothing to refuse). Its `Then` is a new kind for the capability registry: `Post a card in Teams and email` as a `ready` entry only once 6.4 is settled, otherwise the registry keeps `teams.post` and `email.send` as planned and unsupported, and this workflow is the exception that proves them, documented on its page.
+
+### 6.2 What the backend needs
+
+Today `pa/orchestration/n8n.py` is a client for our own three managed n8n workflows (`run`, `run_failure_reporter`, `schedule_tick`): `find_workflow`, `upsert_workflow`, `read_back`, `delete_workflow`, activate and deactivate, through n8n's public `/api/v1`, with an API key whose scopes already include `execution:read` and `execution:list`. Every use case the Portal shows is one the platform built; its runs are the platform's own run model (`pa/orchestration/runs.py`), driven by callbacks from the `run` workflow into `/internal/v1/runs/{id}/steps/{step}`. A workflow built by hand in n8n has none of that: no use case row, no run rows, no events.
+
+So three additions, in order:
+
+1. **Register a workflow built in n8n.** A route `POST /api/v1/use-cases/from-n8n {workflow_id}` (Operator with n8n access) that reads the n8n workflow with `read_back`, stores a use case of kind `n8n` with its name, schedule (from the Schedule Trigger node), the node list as its blocks, and version 1 as the n8n `versionId`; and a listing of candidate n8n workflows not yet registered (`GET /api/v1/n8n/workflows`). The Workflows page gets a `Set up` row `{name} is in n8n but not registered` for people with n8n access. Contract: `UseCase.kind: platform | n8n`, `blocks[]` with `{name, kind: trigger | read | code | if | write | note, system}` derived from node types.
+2. **Read n8n executions as runs.** A poll (the `schedule_tick` workflow already ticks every 5 minutes; add an executions sweep) or n8n's Error Trigger workflow: for each registered n8n workflow, list executions since the last seen id (`GET /api/v1/executions?workflowId=…&includeData=false`), store each as a run of kind `n8n` with `started_at`, `finished_at`, `status` (success, error, waiting), and the per-node results (`includeData=true` for the failed one) so the step line can colour the node that stopped and the troubleshooter has the error text. Emit the same monitoring events (`run_created`, `step_started`, `step_finished`, `run_failed`, `run_succeeded`) so the Portal's stream, strip and cards work unchanged. Retry: n8n's `POST /executions/{id}/retry` is not in the public API; retry means a new manual run (`POST /webhook`-less workflows cannot be started over the public API either), so the run card's `Retry` for an n8n-kind run starts it through our `run` workflow's manual path, or says `Run it again from n8n` with the editor link. State this honestly on the card.
+3. **Versions.** On each sweep compare the n8n `versionId`; when it changes, store a new published version (`Changed in n8n`, by the n8n user if the API gives it, else `in n8n`) and run the safety checker over the node list (6.5). This is ADR 0027's "the Portal keeps every published version".
+
+Pause and resume map to n8n's activate and deactivate, which the client already has.
+
+### 6.3 Where its secrets go
+
+Never the repo; the export already redacts them (`sig=REDACTED`, `YOUR-TENANT`, `PAGE_ID`). In our stack:
+
+- The Power Automate trigger URL with its `sig`, and the Confluence email plus API token, live in n8n's credential store, encrypted with `N8N_ENCRYPTION_KEY`, which comes from Azure Key Vault through `deploy/make-env.sh` and the Container App's secrets. The platform's n8n client can create credentials (`create_header_credential`), so the registration route can offer `Add the Confluence token` and `Add the Teams webhook` fields that go straight into n8n and are shown only as `Set` / `Not set` on Settings' Connections tab, like the Jira key today.
+- The Power Automate URL is a bearer-in-URL secret: it must be an `httpHeaderAuth` or a query-auth credential in n8n, never a literal in the node's `url` field as the export has it. Rewrite the node on import to read the URL from a credential (n8n's HTTP Request node supports a generic credential for query auth).
+- ADR 0027's rule that our nodes carry no editable address is the stronger fix: once the allow list is on, HTTP Request is off, and the Confluence read and the Teams post become our `Read` and `Make approved changes` blocks with the connectors held by the platform. Until then the two HTTP nodes stay as they are, and the secrets stay in n8n's store.
+- The Ollama leg needs no secret (the "Ollama (local)" credential is a bare address); in our stack there is no local Ollama, so the reachability gate takes the "model unavailable" branch, which is the designed behaviour.
+
+### 6.4 Do its Teams card and email count as writes?
+
+Under `AGENTS.md`: "No write action runs without approval in Teams. The safety checker denies write actions by default." The workflow reads Confluence (a read, fine) and then posts a Teams card and sends an email through Power Automate. Those are outbound messages, not changes to a system of record: nothing in Jira or Confluence changes. Today the platform already sends the approval request itself to Teams without a yes, so "tell people something" is not what the rule guards; the rule guards changes to data. Recommendation, to be recorded in ADR 0026's acceptance: a message that only reports what was read (a notification) is a `tell`, like the sketch's `Tell you` block, and needs no gate, provided (a) it goes only to channels and addresses fixed in the workflow's definition, not chosen per run from the data, (b) the content is derived from the read and contains no secret, and (c) the Portal shows it as `Posts in Teams and emails` so nobody mistakes it for a silent change. The email recipient `EMAIL_TO` is fixed in the Code node, which meets (a). If the sponsor wants a yes before any outbound message, the IF "Anything to report?" is exactly where the `Ask for a yes` block goes, and the sketch already draws that. Either way the safety checker's grade for this workflow is `Safe` because it writes to no system of record; and the card said "no write without approval" stays true.
+
+### 6.5 Does it run on our pinned n8n and node allow list?
+
+On n8n 2.42.6: yes for the node versions used (Schedule Trigger 1.2, HTTP Request 4.5 and 4.2, Code 2, IF 2.2, Set 3.4, the LangChain chain 1.9, Ollama model 1.2, structured parser 1.3). Those all exist in 2.42.6; `n8n:latest` is only newer. Import it once into the pinned instance and run the author's `clone-webhook.mjs create` (dry) to prove it; keep that output under `docs/evidence/`. One difference: our n8n sets `N8N_DISABLED_MODULES: mcp-registry` and talks to Postgres, neither of which this workflow touches.
+
+On ADR 0027's allow list (`NODES_INCLUDE`: our node pack, Schedule, Manual and Error triggers, IF, Merge, No Op, Sticky Note): no. Six of its fifteen nodes are outside the list: three HTTP Requests, two Code nodes, and the three LangChain nodes (chain, Ollama model, output parser) plus Set. With the allow list on, n8n refuses to load them, and the P6 evidence shows such a workflow cannot be published or run. So the choice is binary and belongs in ADR 0027's acceptance:
+
+- Keep the allow list as proposed. Then this workflow is ported: the Confluence HTTP node becomes our `Read` block with a Confluence connector held by the platform (new connector, `pa/orchestration/connections.py`); the parser Code node becomes an `Agent` block running `parse-build.js`'s logic as a tool in the agent runtime (the offline test `parse-test.js` ports as a unit test); the Teams and email sends become a `Tell` block through the platform's Teams adapter and a new email adapter (both planned entries in the registry today); the Ollama leg becomes the platform's model, no gate needed. The IF and Set nodes stay. This is the clean path and matches "agents clean and reusable for NCS's hub", at the cost of rebuilding the workflow (about a week).
+- Or the allow list admits `n8n-nodes-base.httpRequest`, `code` and `set` for people with n8n access. ADR 0034 already names the risk: an HTTP Request node can send what a run read to any address. That is the sponsor's "never critical tasks without approval" line crossed by a maintainer by accident, so the plan recommends against it.
+
+Recommendation: run it as is on the pinned n8n now, unregistered, for the team's own use and as evidence; port it when ADR 0027 is accepted; do not widen the allow list.
+
+### 6.6 Could opencode with n8n MCP tools power "Ask in my words"?
+
+Partly, and not as the demo shows. What it is: a coding assistant (opencode, "Sunny") given two MCP servers that expose n8n's API (list, read, update workflows), so a person can say "change the threshold to 45 days" and the assistant edits the Code node. What the sketch's flow needs: the Planner reading a plain request, choosing blocks, saving a draft in n8n, the safety checker adding the gate, a test run, and `Turn it on`. The platform already does the first (the `setup_card` answer from the plan), saves drafts, and publishes the `run` workflow through `upsert_workflow`; it does not yet lay the use case out as its own n8n workflow with our blocks (ADR 0027's "the Planner lays out the agent nodes").
+
+Where the MCP approach helps: as the implementation of "the Planner writes the n8n workflow JSON", an MCP server (or just `n8n.py`) is the same thing as the tool the Planner would call; the n8n MCP's node schemas could feed the Planner's tool definitions so it writes valid node parameters. Where it does not: ADR 0023 rejected letting a model write arbitrary n8n workflows, because a generated workflow can do anything n8n can; ADR 0027 answers that with the allow list, so the Planner may only place our blocks. An assistant that edits Code and HTTP nodes freely is the thing the allow list forbids. So: take the idea (model-driven edits to n8n through the API, verified byte for byte as `set-code.mjs` does), keep it inside the platform (the Planner's tools in `agent-runtime`, calling `pa/orchestration/n8n.py`, never a desktop assistant with the n8n API key), and limit it to our blocks and the simple flow nodes. The teammate's `apply-gate.mjs` ("re-applies the optional-AI gate because an open UI tab once autosaved an old draft over the API edits") is a real lesson for 6.2's versions sweep: an editor tab can overwrite an API edit, so the platform must compare `versionId` before and after every write and show `Changed again since, in n8n` when it lost.
+
+### 6.7 PRs for the n8n work, and what is blocked
+
+- **PR 14. `docs(orchestration): accept ADRs 0026 and 0027, with the cert reminder as the worked example`** S. Adds the 6.4 notification rule and the 6.5 allow-list decision to the two ADRs, moves them to `accepted`, and records the port plan. Blocked on: a human decision; nothing else. Everything below waits for it.
+- **PR 15. `docs(infra): keep the cert reminder as evidence on the pinned n8n`** S. Moves `n8n-project/` to `docs/evidence/n8n/cert-reminder/`, imports the export into a 2.42.6 instance, records the dry run, pins `n8n:2.42.6` in its compose file, and drops the Windows-only helpers from the path of the deploy. Not blocked. Parallel with everything.
+- **PR 16. `feat(orchestration): n8n access per person`** S. The flag on people (migration, `me.n8n_access`, Settings' People tab, the Planner's `Only people with n8n access…` reply). Blocked on PR 14.
+- **PR 17. `feat(orchestration): register a workflow built in n8n, and read its runs`** L. 6.2 items 1 and 2: the registration route and listing, the executions sweep, runs of kind `n8n`, the events. Blocked on PR 14; depends on PR 16.
+- **PR 18. `feat(monitoring): the In n8n tab, with the canvas drawn from the workflow's nodes`** M. `ui/Canvas.tsx` from PR 9 reads a node list; the workflow and run pages get the `Summary` / `In n8n` and `Steps` / `In n8n` tabs for people with n8n access; `Open in n8n editor` links to the real editor (ADR 0034). Blocked on PR 14; depends on PRs 9, 16, 17.
+- **PR 19. `feat(orchestration): keep every version published in n8n, and grade it`** M. 6.2 item 3 and the `Changed in n8n` card with `Safe` / `Writes refused`, `Add the yes back` and `Undo`; the `Needs a fix` state and the `Writes refused` banner (3.9). Blocked on PR 14; depends on PRs 12, 17.
+- **PR 20. `feat(runtime): port the cert reminder to our blocks`** L. The Confluence connector, the parser as an agent tool with `parse-test.js` as its unit test, the `Tell` block through the Teams adapter and a new email adapter. Blocked on PR 14's allow-list decision; depends on PR 17 for the registration.
+
+Blocked summary: PRs 16 to 20 wait on ADRs 0026 and 0027 (PR 14). PR 15 can land now. Nothing in PRs 1 to 13 depends on the n8n work; PR 9's canvas is drawn from the plan's blocks and needs no n8n read.

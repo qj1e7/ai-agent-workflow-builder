@@ -180,7 +180,7 @@ The specialist agent that reads each watched software's releases at its source, 
 _Avoid_: Release checker (the old name), scanner
 
 **Leg**:
-The part of a run that n8n carries in one execution. A run has a work leg up to the approval request and an act leg from the approval to the end. Our platform owns the pause between them.
+Retired on 13 Nov 2026 (ADR 0026). It was the part of a run that n8n carried in one execution, a work leg and an act leg with our platform owning the pause between them. Each workflow is now its own n8n workflow, and n8n holds the wait for a yes.
 
 **Write action**:
 Any action that changes data in an external system, such as Jira, Confluence or GitLab.
