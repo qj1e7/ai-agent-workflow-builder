@@ -1,19 +1,16 @@
 import { useCallback, useEffect, useReducer, useRef, useState, type RefObject } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router'
-import { useCapabilities } from '../../api/capabilityQueries'
+import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
-import { useApproval, useMe, usePutAddressBack, useRemoveSoftware, useRestoreSoftware, useRun, useStartRun, useUseNewAddress, useWatchlist } from '../../api/queries'
-import type { CapabilityView, LastCheckView, WatchedSoftwareView, WatchlistView } from '../../api/types'
-import { Button, ButtonLink } from '../../ui/Button'
-import { IconExternal } from '../../ui/icons'
-import { ShieldMark } from '../settings/marks'
-import { TicketKeys, TicketLink } from '../jira/TicketKeys'
+import { useMe, usePutAddressBack, useRemoveSoftware, useRestoreSoftware, useRun, useStartRun, useUseNewAddress, useWatchlist } from '../../api/queries'
+import type { LastCheckView, WatchedSoftwareView, WatchlistView } from '../../api/types'
+import { Button } from '../../ui/Button'
+import { IconChevronRight } from '../../ui/icons'
 import { AddSoftware } from './AddSoftware'
 import { pressCheckNow } from './checkNow'
 import { FindSoftware } from './FindSoftware'
-import { askButtonId, MovedNote, NotFoundNote } from './NewAddress'
+import { askButtonId } from './NewAddress'
 import { Schedule } from './Schedule'
 import {
   changeFeedback,
@@ -27,37 +24,26 @@ import {
   pressUndoAddress,
   pressUseNewAddress,
   PROBLEM_ID,
-  removeButtonId,
   UNDO_ID,
   type ChangeFeedback,
   type Moved,
 } from './removal'
 import { declinedNext, declinedOfSteps, declinedWithNext } from '../run/words'
-import { SoftwareHistory } from './SoftwareHistory'
+import { BackToWatchlist, SoftwareItem } from './SoftwareItem'
 import {
-  addressAttentionOf,
-  cantCheckWords,
-  checkedOnWords,
-  decisionsOf,
-  decisionTitle,
-  DECISION_NOTE,
+  CHECKER,
+  checksOnItsOwn,
   emptyWords,
-  newestOf,
   nextCheckOf,
-  oursOf,
   REFRESH_MS,
-  rowDomId,
   rowsMatching,
   scheduleRuns,
   singaporeTime,
-  sourcesNote,
-  statusTone,
-  statusWords,
+  softwareLine,
+  softwarePath,
+  stateOf,
   stoppedWords,
-  ticketsOf,
-  waitingWords,
-  watchAttention,
-  type Decision,
+  watchRank,
 } from './software'
 import styles from './Software.module.css'
 
@@ -72,134 +58,35 @@ function useFocusOnceRendered(feedback: ChangeFeedback) {
   })
 }
 
-interface RowProps {
-  readonly row: WatchedSoftwareView
-  readonly operator: boolean
-  readonly scheduled: boolean
-  readonly paused: boolean
-  readonly open: boolean
-  readonly removing: boolean
-  readonly confirming: boolean
-  readonly switching: boolean
-  readonly nameOf: (id: string) => string
-  readonly capabilities: readonly CapabilityView[] | undefined
-  /** The latest check's declined record and what happens next, when an Approver declined it and this row has a new version. */
-  readonly declined: string | null
-  readonly onToggle: () => void
-  readonly onRemove: () => void
-  readonly onAskAddress: () => void
-  readonly onConfirmAddress: () => void
-  readonly onCancelAddress: () => void
-}
-
-function Row({ row, operator, scheduled, paused, open, removing, confirming, switching, nameOf, capabilities, declined, onToggle, onRemove, onAskAddress, onConfirmAddress, onCancelAddress }: RowProps) {
-  const historyId = `history-${row.id}`
-  const newest = newestOf(row)
-  const ours = oursOf(row)
-  return (
-    <li id={rowDomId(row.id)} tabIndex={-1} className={styles['row']} data-status={row.status}>
-      <div className={styles['who']}>
-        <b>{row.name}</b>
-        <span className={styles['src']}>
-          {checkedOnWords(row.source.kind, capabilities)} ·{' '}
-          <a href={row.source.url} target="_blank" rel="noopener noreferrer">
-            {row.source.ref}
-            <IconExternal size={12} />
-            <span className="visually-hidden"> (opens GitHub in a new tab)</span>
-          </a>
-        </span>
-      </div>
-      <dl className={styles['versions']}>
-        <div>
-          <dt>Ours</dt>
-          <dd>
-            {ours.version}
-            <span className={styles['src']}><TicketKeys text={ours.note} keys={ticketsOf(row)} /></span>
-          </dd>
-        </div>
-        <div>
-          <dt>Newest</dt>
-          <dd>
-            {newest.version}
-            {newest.note ? <span className={styles['src']}>{newest.note}</span> : null}
-          </dd>
-        </div>
-      </dl>
-      <div className={styles['state']}>
-        <span className={styles['pill']} data-tone={statusTone[row.status]}>
-          {statusWords(row)}
-        </span>
-        {row.status === 'cant_check' && !row.not_found ? <span className={styles['src']}>{cantCheckWords(row.problem, { scheduled, paused })}</span> : null}
-        {declined ? <span className={styles['src']}>{declined}</span> : null}
-        <NotFoundNote row={row} operator={operator} scheduled={scheduled} paused={paused} />
-        <MovedNote row={row} operator={operator} confirming={confirming} busy={switching} onAsk={onAskAddress} onConfirm={onConfirmAddress} onCancel={onCancelAddress} />
-        {row.status === 'ticket_open' && row.open_ticket ? (
-          <span className={styles['src']}>
-            <TicketLink ticketKey={row.open_ticket} />
-          </span>
-        ) : null}
-      </div>
-      <div className={styles['acts']}>
-        <Button aria-expanded={open} aria-controls={open ? historyId : undefined} onClick={onToggle}>
-          {open ? 'Hide history' : 'History'}
-          <span className="visually-hidden"> of {row.name}</span>
-        </Button>
-        {operator ? (
-          <Button id={removeButtonId(row.id)} loading={removing} onClick={onRemove}>
-            Remove<span className="visually-hidden"> {row.name}</span>
-          </Button>
-        ) : null}
-      </div>
-      {open ? <SoftwareHistory row={row} nameOf={nameOf} declined={declined} id={historyId} /> : null}
-    </li>
-  )
-}
-
 interface RowsProps {
   readonly rows: readonly WatchedSoftwareView[]
-  readonly operator: boolean
-  readonly scheduled: boolean
-  readonly paused: boolean
-  readonly opened: string | null
-  readonly removing: string | null
-  readonly confirming: string | null
-  readonly switching: string | null
-  readonly nameOf: (id: string) => string
-  readonly capabilities: readonly CapabilityView[] | undefined
-  /** The latest check's declined record, which only the rows with a new version give. */
-  readonly declined: string | null
-  readonly onToggle: (id: string) => void
-  readonly onRemove: (row: WatchedSoftwareView) => void
-  readonly onAskAddress: (row: WatchedSoftwareView) => void
-  readonly onConfirmAddress: (row: WatchedSoftwareView) => void
-  readonly onCancelAddress: (row: WatchedSoftwareView) => void
+  readonly checkedBy: string | null
+  readonly now: Date
 }
 
-function Rows({ rows, ...rest }: RowsProps) {
+/** One link of 44 px or more for each software: its name, "1.2.14 → 1.2.16 · checked by Software watchlist", and its pill. Urgent first. */
+function Rows({ rows, checkedBy, now }: RowsProps) {
   if (rows.length === 0) return null
+  const sorted = [...rows].sort((a, b) => watchRank(a) - watchRank(b))
   return (
-    <ul className={styles['list']}>
-      {rows.map((row) => (
-        <Row
-          key={row.id}
-          row={row}
-          operator={rest.operator}
-          scheduled={rest.scheduled}
-          paused={rest.paused}
-          open={rest.opened === row.id}
-          removing={rest.removing === row.id}
-          confirming={rest.confirming === row.id}
-          switching={rest.switching === row.id}
-          nameOf={rest.nameOf}
-          capabilities={rest.capabilities}
-          declined={row.status === 'behind' ? rest.declined : null}
-          onToggle={() => rest.onToggle(row.id)}
-          onRemove={() => rest.onRemove(row)}
-          onAskAddress={() => rest.onAskAddress(row)}
-          onConfirmAddress={() => rest.onConfirmAddress(row)}
-          onCancelAddress={() => rest.onCancelAddress(row)}
-        />
-      ))}
+    <ul className={styles['list']} aria-label="Software on the watchlist">
+      {sorted.map((row) => {
+        const state = stateOf(row)
+        return (
+          <li key={row.id} data-status={row.status} data-software-id={row.id}>
+            <Link to={softwarePath(row.id)} className={styles['rowLink']}>
+              <span className={styles['who']}>
+                <b>{row.name}</b>
+                <span className={styles['src']}>{softwareLine(row, now, checkedBy)}</span>
+              </span>
+              <span className={styles['pill']} data-tone={state.tone}>
+                {state.words}
+              </span>
+              <IconChevronRight size={16} />
+            </Link>
+          </li>
+        )
+      })}
     </ul>
   )
 }
@@ -249,28 +136,6 @@ function LastCheckStopped({ last }: { last: LastCheckView }) {
   )
 }
 
-function DecisionBar({ decision }: { decision: Decision }) {
-  const approval = useApproval(decision.approvalId)
-  const tickets = approval.data?.actions.length ?? decision.software
-  const cannot = approval.data !== undefined && !approval.data.you_can_decide
-  return (
-    <div className={styles['decision']}>
-      <ShieldMark size={20} />
-      <div>
-        <b>{decisionTitle(tickets)}</b>
-        <span>{DECISION_NOTE}</span>
-      </div>
-      {cannot ? (
-        <span className={styles['waitingFor']}>{waitingWords(approval.data?.why_not ?? null)}</span>
-      ) : (
-        <ButtonLink to={`/approvals/${decision.approvalId}`} variant="primary">
-          Review and decide
-        </ButtonLink>
-      )}
-    </div>
-  )
-}
-
 interface NoticeProps {
   readonly box: RefObject<HTMLDivElement | null>
   readonly feedback: ChangeFeedback
@@ -312,11 +177,18 @@ function Notice({ box, feedback, scheduled, paused, onUndo, onDismiss }: NoticeP
   )
 }
 
-function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; operator: boolean; answeredAt: number }) {
-  const capabilities = useCapabilities().data?.capabilities
-  const sources = sourcesNote(capabilities)
+interface LoadedProps {
+  readonly view: WatchlistView | null
+  readonly operator: boolean
+  readonly answeredAt: number
+  readonly now: Date
+  /** Set on a software's own page. The Watchlist itself has none. */
+  readonly rowId: string | null
+}
+
+function Loaded({ view, operator, answeredAt, now, rowId }: LoadedProps) {
   const [query, setQuery] = useState('')
-  const [opened, setOpened] = useState<string | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [feedback, dispatch] = useReducer(changeFeedback, NO_FEEDBACK)
   const nameOf = useDisplayName()
   const words = useErrorWords()
@@ -326,6 +198,8 @@ function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; op
   const putBack = usePutAddressBack()
   const [confirming, setConfirming] = useState<string | null>(null)
   const changes = useLatch()
+  const navigate = useNavigate()
+  const arrivedWith: unknown = useLocation().state
   const noticeBox = useRef<HTMLDivElement>(null)
   useFocusOnceRendered(feedback)
 
@@ -351,91 +225,74 @@ function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; op
   const paused = view?.state === 'paused'
   const rows = rowsMatching(software, query)
   const shown = rows.length
-  const decisions = decisionsOf(software)
-  const addresses = addressAttentionOf(software)
   const searching = query.trim() !== ''
   const declined = useLastCheckDeclined(view, nameOf)
-
-  const rowProps = {
-    operator,
-    capabilities,
-    declined,
-    scheduled,
-    paused,
-    opened,
-    removing: feedback.busy?.act === 'remove' ? feedback.busy.id : null,
-    confirming,
-    switching: feedback.busy?.act === 'switch' ? feedback.busy.id : null,
-    nameOf,
-    onAskAddress: (row: WatchedSoftwareView) => setConfirming(row.id),
-    onCancelAddress: (row: WatchedSoftwareView) => {
-      setConfirming(null)
-      requestAnimationFrame(() => document.getElementById(askButtonId(row.id))?.focus())
-    },
-    onConfirmAddress: (row: WatchedSoftwareView) => {
-      if (!row.moved_to) return
-      const moved: Moved = { id: row.id, name: row.name, ref: row.source.ref, movedTo: row.moved_to }
-      pressUseNewAddress(changes, useAddress.mutate, moved, dispatch, words, () => setConfirming(null))
-    },
-    onToggle: (id: string) => setOpened((current) => (current === id ? null : id)),
-    onRemove: (row: WatchedSoftwareView) => pressRemove(changes, removal.mutate, row, dispatch, words),
-  }
-
-  const showRow = (id: string) => {
-    setQuery('')
-    setOpened(null)
-    requestAnimationFrame(() => {
-      const row = document.getElementById(rowDomId(id))
-      row?.focus()
-      row?.scrollIntoView?.({ block: 'center' })
-    })
-  }
+  const checkedBy = checksOnItsOwn(view) ? CHECKER : null
 
   const landOn = useSearchParams()[0].get('row')
-  const landOnListed = landOn !== null && software.some((row) => row.id === landOn)
-  const landed = useRef(false)
-  useEffect(() => {
-    if (landed.current || landOn === null || !landOnListed) return
-    landed.current = true
-    showRow(landOn)
-  }, [landOn, landOnListed])
+  if (rowId === null && landOn !== null && software.some((row) => row.id === landOn)) return <Navigate to={softwarePath(landOn)} replace state={arrivedWith} />
+
+  const notice = (
+    <Notice
+      box={noticeBox}
+      feedback={feedback}
+      scheduled={scheduled}
+      paused={paused}
+      onUndo={(notice) => (notice.kind === 'switched' ? pressUndoAddress(changes, putBack.mutate, notice, dispatch, words) : notice.kind === 'removed' ? pressUndo(changes, restore.mutate, notice.row, dispatch, words) : undefined)}
+      onDismiss={dismiss}
+    />
+  )
+
+  if (rowId !== null) {
+    const row = software.find((item) => item.id === rowId)
+    if (!row) {
+      return (
+        <>
+          <BackToWatchlist />
+          {notice}
+          {feedback.notice?.kind === 'removed' ? null : <p className="muted">That software isn’t on the Watchlist any more.</p>}
+        </>
+      )
+    }
+    return (
+      <>
+        {notice}
+        <SoftwareItem
+          row={row}
+          operator={operator}
+          scheduled={scheduled}
+          paused={paused}
+          historyOpen={historyOpen}
+          removing={feedback.busy?.act === 'remove' && feedback.busy.id === row.id}
+          confirming={confirming === row.id}
+          switching={feedback.busy?.act === 'switch' && feedback.busy.id === row.id}
+          nameOf={nameOf}
+          checkedBy={checkedBy}
+          declined={declined}
+          lastCheckStopped={view?.last_check?.state === 'failed'}
+          onToggleHistory={() => setHistoryOpen((open) => !open)}
+          onRemove={() => pressRemove(changes, removal.mutate, row, dispatch, words)}
+          onAskAddress={() => setConfirming(row.id)}
+          onCancelAddress={() => {
+            setConfirming(null)
+            requestAnimationFrame(() => document.getElementById(askButtonId(row.id))?.focus())
+          }}
+          onConfirmAddress={() => {
+            if (!row.moved_to) return
+            const moved: Moved = { id: row.id, name: row.name, ref: row.source.ref, movedTo: row.moved_to }
+            pressUseNewAddress(changes, useAddress.mutate, moved, dispatch, words, () => setConfirming(null))
+          }}
+        />
+      </>
+    )
+  }
 
   return (
     <>
       {operator && view && !paused && software.length > 0 ? <CheckNow useCaseId={view.use_case_id} /> : null}
       {view?.last_check?.state === 'failed' ? <LastCheckStopped last={view.last_check} /> : null}
-      <Notice
-        box={noticeBox}
-        feedback={feedback}
-        scheduled={scheduled}
-        paused={paused}
-        onUndo={(notice) => (notice.kind === 'switched' ? pressUndoAddress(changes, putBack.mutate, notice, dispatch, words) : notice.kind === 'removed' ? pressUndo(changes, restore.mutate, notice.row, dispatch, words) : undefined)}
-        onDismiss={dismiss}
-      />
-      {decisions.length > 0 || addresses.length > 0 ? (
-        <section className={styles['section']} aria-labelledby="needs-attention-heading">
-          <h2 id="needs-attention-heading">
-            Needs attention <span className={styles['count']}>{watchAttention(software)}</span>
-          </h2>
-          {decisions.map((decision) => (
-            <DecisionBar key={decision.approvalId} decision={decision} />
-          ))}
-          {addresses.map((item) => (
-            <div key={item.id} className={styles['addressBar']}>
-              <div>
-                <b>{item.words}</b>
-              </div>
-              <Button onClick={() => showRow(item.id)}>
-                Show it<span className="visually-hidden"> on the list: {item.name}</span>
-              </Button>
-            </div>
-          ))}
-        </section>
-      ) : null}
-      <section className={styles['section']} aria-labelledby="software-we-watch-heading">
-        <h2 id="software-we-watch-heading">
-          Software we watch <span className={styles['count']}>{shown}</span>
-        </h2>
+      {notice}
+      <section className={styles['section']} aria-label="Software we watch">
         {software.length > 0 || searching ? <FindSoftware query={query} shown={shown} onChange={setQuery} /> : null}
         {software.length === 0 && !searching ? (
           <div className={styles['empty']}>
@@ -452,32 +309,22 @@ function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; op
             </div>
           </div>
         ) : null}
-        <Rows rows={rows} {...rowProps} />
+        <Rows rows={rows} checkedBy={checkedBy} now={now} />
         {operator ? (
-          <AddSoftware software={software} onShowRow={showRow} onAdded={(name) => dispatch({ type: 'added', name })} />
+          <AddSoftware software={software} onShowRow={(id) => void navigate(softwarePath(id))} onAdded={(name) => dispatch({ type: 'added', name })} />
         ) : null}
       </section>
-      <section className={styles['section']} aria-labelledby="how-checked-heading">
-        <h2 id="how-checked-heading">How it’s checked</h2>
-        {view ? (
-          <Schedule
-            schedule={view.schedule}
-            operator={operator}
-            useCaseId={view.use_case_id}
-            paused={paused}
-            answeredAt={answeredAt}
-            onResumed={() => dispatch({ type: 'resumed' })}
-          />
-        ) : null}
-        {sources ? <p className="muted">{sources}</p> : null}
-      </section>
+      {view ? (
+        <Schedule schedule={view.schedule} operator={operator} useCaseId={view.use_case_id} paused={paused} answeredAt={answeredAt} onResumed={() => dispatch({ type: 'resumed' })} />
+      ) : null}
     </>
   )
 }
 
-export function SoftwareRoute() {
+export function SoftwareRoute({ now }: { now: Date }) {
   const me = useMe()
   const watchlist = useWatchlist({ poll: REFRESH_MS })
+  const { softwareId = null } = useParams()
   if ((watchlist.isError && !watchlist.data) || me.isError) {
     return (
       <>
@@ -493,5 +340,5 @@ export function SoftwareRoute() {
       </p>
     )
   }
-  return <Loaded view={watchlist.data} operator={me.data.roles.includes('operator')} answeredAt={Math.max(watchlist.dataUpdatedAt, watchlist.errorUpdatedAt)} />
+  return <Loaded view={watchlist.data} operator={me.data.roles.includes('operator')} answeredAt={Math.max(watchlist.dataUpdatedAt, watchlist.errorUpdatedAt)} now={now} rowId={softwareId} />
 }

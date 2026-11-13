@@ -7,6 +7,7 @@ import { useMoveWorkflow } from '../../api/workflowQueries'
 import { Button, ButtonLink } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { OpenButton } from '../../ui/OpenItem'
+import { softwarePath } from '../software/software'
 import { AskTheTeam } from './AskTheTeam'
 import { useAsker } from './asker'
 import { cantLines, capabilityCard, oneLine, questionActions, refusalNext, SAY_ANOTHER_WAY, startingPoints, stateWords, switchedSay, watchlistSwitchNote, type Asker } from './answers'
@@ -121,7 +122,7 @@ export function WatchlistAnswer({ reply, typed }: { reply: WatchlistReply; typed
           <>
             <p>{listed.name} is on the Software watchlist.</p>
             <div className={styles['buttons']}>
-              <OpenButton variant={main} item={{ kind: 'software', id: listed.software_id }} to={`/software?row=${encodeURIComponent(listed.software_id)}`}>
+              <OpenButton variant={main} item={{ kind: 'software', id: listed.software_id }} to={softwarePath(listed.software_id)}>
                 Open it
               </OpenButton>
             </div>

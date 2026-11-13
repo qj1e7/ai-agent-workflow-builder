@@ -8,7 +8,7 @@ export function PageHead({ heading, lead, movesFocus = false, children }: { head
         <h1 tabIndex={-1} data-page-moves-focus={movesFocus || undefined}>
           {heading}
         </h1>
-        <p>{lead}</p>
+        {lead ? <p>{lead}</p> : null}
         {children}
       </div>
     </div>

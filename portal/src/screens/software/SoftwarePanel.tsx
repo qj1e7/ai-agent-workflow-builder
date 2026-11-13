@@ -1,19 +1,17 @@
 import { isOperator } from '../../api/me'
-import { useCapabilities } from '../../api/plannerQueries'
 import { useMe, useWatchlist } from '../../api/queries'
 import { Button } from '../../ui/Button'
-import { checkedByWords, newestOf, nextCheckWords, noScheduleWords, oursOf, REFRESH_MS, scheduleWords, statusTone, statusWords } from './software'
+import { Link } from '../../ui/Link'
+import { CHECKER, checksOnItsOwn, nextCheckWords, NOT_AUTOMATIC, noScheduleWords, REFRESH_MS, scheduleWords, sentenceFor, stateOf, WATCHLIST_PATH } from './software'
 import workflowStyles from '../workflows/Workflows.module.css'
 import styles from './Software.module.css'
 
 /**
- * A watched software in the side panel (spec 3.3): its status, the version you run, the newest, what checks it and when.
- * Where and when are said in the Software page's own words, so the panel never claims more than the page. More details opens
- * its row there.
+ * A watched software in the side panel (spec 3.3): its status, the version you run, the newest, the workflow that checks it and when.
+ * Each is said in the Software page's own words, so the panel never claims more than the page. More details opens its page.
  */
 export function SoftwarePanel({ id }: { id: string }) {
   const watchlist = useWatchlist({ poll: REFRESH_MS })
-  const capabilities = useCapabilities()
   const me = useMe()
   const view = watchlist.data
   const row = view?.software.find((software) => software.id === id)
@@ -33,29 +31,20 @@ export function SoftwarePanel({ id }: { id: string }) {
   }
   if (!view || !row) return <p className="muted">That software isn’t on the Software watchlist any more.</p>
   const paused = view.state === 'paused'
-  const checkedBy = checkedByWords(capabilities.data?.capabilities)
+  const state = stateOf(row)
   return (
     <>
       <div>
-        <span className={styles['pill']} data-tone={statusTone[row.status]}>
-          {statusWords(row)}
+        <span className={styles['pill']} data-tone={state.tone}>
+          {state.words}
         </span>
       </div>
+      <p>{sentenceFor(row)}</p>
       <dl className={workflowStyles['factrows']}>
         <div>
-          <dt>You run</dt>
-          <dd>{oursOf(row).version}</dd>
+          <dt>Checked by</dt>
+          <dd>{checksOnItsOwn(view) ? <Link to={WATCHLIST_PATH}>{CHECKER}</Link> : NOT_AUTOMATIC}</dd>
         </div>
-        <div>
-          <dt>Newest</dt>
-          <dd>{newestOf(row).version}</dd>
-        </div>
-        {checkedBy ? (
-          <div>
-            <dt>Checked by</dt>
-            <dd>{checkedBy}</dd>
-          </div>
-        ) : null}
         <div>
           <dt>When</dt>
           <dd>{view.schedule ? `${scheduleWords(view.schedule)} ${nextCheckWords(view.schedule, paused)}` : noScheduleWords({ operator: isOperator(me.data), paused })}</dd>

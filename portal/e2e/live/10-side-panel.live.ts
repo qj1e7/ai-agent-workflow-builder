@@ -153,9 +153,9 @@ test('a stopped run: SHELL-more, RUN-retry-from-chat and RUN-retry-panel, at 128
   await ask(page, `Why did ${names[0] ?? ''} stop?`)
   const card = newest(page)
   await card.locator(`[data-opens="run:${first}"]`).click()
-  await expect(panel(page)).toContainText(/What happened[\s\S]*What was affected[\s\S]*Safe to retry[\s\S]*Retry the run/)
+  await expect(panel(page)).toContainText(/What happened[\s\S]*Affected[\s\S]*Safe to retry[\s\S]*Retry/)
   await expect(heading(page), 'focus is on the heading once the run has loaded').toBeFocused()
-  await expect(card.getByRole('button', { name: 'Retry the run' }), 'a flow shows once: the card gives its Retry to the panel').toHaveCount(0)
+  await expect(card.getByRole('button', { name: 'Retry', exact: true }), 'a flow shows once: the card gives its Retry to the panel').toHaveCount(0)
   await expect(card.locator(`[data-opens="run:${first}"]`), '…and its See the run').toHaveCount(0)
   await shot(page, info, 'r3-side-panel-run-1280')
 
@@ -163,26 +163,81 @@ test('a stopped run: SHELL-more, RUN-retry-from-chat and RUN-retry-panel, at 128
   await expect(page).toHaveURL(new RegExp(`/runs/${first}$`))
   await expect(page.getByRole('link', { name: 'Back to the chat' })).toBeVisible()
   await expect(thread(page), 'the chat is not on a full page').toHaveCount(0)
-  await page.getByRole('main').getByRole('button', { name: 'Retry the run' }).click()
-  await expect(page.getByRole('main').getByRole('button', { name: 'Retry the run' })).toHaveCount(0, { timeout: 15_000 })
+  await page.getByRole('main').getByRole('button', { name: 'Retry', exact: true }).click()
+  await expect(page.getByRole('main').getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0, { timeout: 15_000 })
   await expect(page.getByRole('link', { name: 'Back to the chat' }), 'Back still goes to the chat after Retry').toBeVisible()
   await page.getByRole('link', { name: 'Back to the chat' }).click()
   await expect(panel(page), 'the panel is still there on return').toBeVisible()
-  await expect(panel(page).getByRole('button', { name: 'Retry the run' }), 'the panel shows the retried run').toHaveCount(0, { timeout: 15_000 })
+  await expect(panel(page).getByRole('button', { name: 'Retry', exact: true }), 'the panel shows the retried run').toHaveCount(0, { timeout: 15_000 })
+  await expect(card, 'the card drawn again keeps its run, though the retry took it off the stopped list').toContainText(names[0] ?? '')
+  await expect(card).not.toContainText('Nothing has stopped right now.')
   await panel(page).getByRole('button', { name: 'Close' }).click()
 
   await page.setViewportSize({ width: 900, height: 844 })
   await ask(page, `Why did ${names[1] ?? ''} stop?`)
   await newest(page).locator(`[data-opens="run:${second}"]`).click()
   await expectBesideOrCovering(page, 900)
-  await expect(panel(page).getByRole('button', { name: 'Retry the run' })).toBeVisible()
+  await expect(panel(page).getByRole('button', { name: 'Retry', exact: true })).toBeVisible()
   await expect(heading(page), 'focus is on the heading in the dialog').toBeFocused()
   await shot(page, info, 'r3-side-panel-run-900')
-  await panel(page).getByRole('button', { name: 'Retry the run' }).click()
-  await expect(panel(page).getByRole('button', { name: 'Retry the run' })).toHaveCount(0, { timeout: 15_000 })
+  await panel(page).getByRole('button', { name: 'Retry', exact: true }).click()
+  await expect(panel(page).getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0, { timeout: 15_000 })
   await expect(panel(page), 'the panel stays open on what changed').toBeVisible()
   await expect(heading(page), 'focus is on the panel’s heading').toBeFocused()
   expect(await pageScroll(page), '#app has not scrolled').toEqual([0, 0, 0])
+  assertClean(watch)
+  await context.close()
+})
+
+test('the run card moves in place from the stream: stopped, retrying, waiting for a yes, then done, as one element', async ({ browser, backend }, info) => {
+  const name = `Moves in place ${randomUUID().slice(0, 6)}`
+  const [runId] = await stoppedRuns(backend, [name])
+  if (!runId) throw new Error('a stopped run')
+  const context = await devContext(browser, 'alice', { reducedMotion: true })
+  const page = await context.newPage()
+  const watch = watchPage(page)
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto('/')
+  await ask(page, `Why did ${name} stop?`)
+  const card = newest(page).locator('section').filter({ has: page.getByRole('heading', { name, exact: true }) })
+  const pill = card.locator('[data-run-pill]')
+  await expect(pill).toHaveText('Stopped', { timeout: 15_000 })
+  await card.evaluate((element) => {
+    const seen: string[] = []
+    const note = () => {
+      const said = [element.querySelector('[data-run-pill]')?.textContent ?? '', ...Array.from(element.querySelectorAll('dd'), (dd) => dd.textContent ?? '')].join(' | ')
+      if (seen.at(-1) !== said) seen.push(said)
+    }
+    note()
+    new MutationObserver(note).observe(element, { subtree: true, childList: true, characterData: true })
+    Object.assign(window, { runCard: { element, seen } })
+  })
+
+  await card.getByRole('button', { name: 'Retry', exact: true }).click()
+  await expect(pill, 'the same card waits for a yes after the retry').toHaveText('Waiting for a yes', { timeout: 90_000 })
+  const approvalId = await backend.approvalIdOf(runId)
+  const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
+  await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'approve', digest }, undefined, [201])
+  await expect(pill, '…and is done once Bob said yes').toHaveText('Done', { timeout: 60_000 })
+  await shot(page, info, 'c3-run-card-done-1280')
+
+  const { same, seen } = await page.evaluate(() => {
+    const { element, seen } = (window as unknown as { runCard: { element: Element; seen: string[] } }).runCard
+    return { same: element.isConnected && element.querySelector('[data-run-pill]')?.textContent === 'Done', seen }
+  })
+  expect(same, 'the card that stopped is the element that is done: it moved in place, with no remount').toBe(true)
+  const STAGES: readonly (readonly [string, RegExp])[] = [
+    ['stopped', /^Stopped/],
+    ['retrying', /Retrying after a short wait/],
+    ['waiting', /^Waiting for a yes/],
+    ['writing', /said yes\. Creating the ticket/],
+    ['done', /^Done/],
+  ]
+  const order = seen
+    .flatMap((said) => STAGES.filter(([, words]) => words.test(said)).map(([stage]) => stage))
+    .filter((stage, index, all) => stage !== all[index - 1])
+  // The write can land in the same moment as the yes, so the card may never draw "Creating the ticket" on its own.
+  expect([['stopped', 'retrying', 'waiting', 'done'], ['stopped', 'retrying', 'waiting', 'writing', 'done']], `the card went through each stage in order: ${seen.join(' / ')}`).toContainEqual(order)
   assertClean(watch)
   await context.close()
 })
@@ -210,7 +265,7 @@ test('APPR-panel: Alice declines in the side panel, focus goes to its heading, t
   await decline(panel(page), 'Not needed this time')
   await expect(page.getByRole('status').filter({ hasText: 'Declined. Nothing was written. Reason: Not needed this time.' }), 'a message at the bottom tells Alice').toHaveCount(1)
   await expect(heading(page), 'focus is on the panel’s heading').toBeFocused()
-  await expect(panel(page), 'the panel gives the declined record').toContainText(/Declined\s*Declined by Alice\. Nothing was written\. Reason: Not needed this time\./, { timeout: 15_000 })
+  await expect(panel(page), 'the panel gives the declined record under its line').toContainText(/Ended (at|on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2} · Alice declined: not needed this time\. Nothing was written\./, { timeout: 15_000 })
   await expect(panel(page), 'its line says nothing was written').toContainText('Nothing written')
   await shot(page, info, 'r12-panel-declined-by-alice-1280')
   expect(await pageScroll(page), '#app has not scrolled').toEqual([0, 0, 0])
@@ -230,29 +285,29 @@ for (const width of [1280, 390]) {
     const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
     await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest, reason: 'Something in it is wrong' }, undefined, [201])
     await backend.waitForState(runId, ['rejected'])
-    const record = /Declined\s*Declined by Bob\. Nothing was written\. Reason: Something in it is wrong\./
+    const record = /Ended (at|on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2} · Bob declined: something in it is wrong\. Nothing was written\./
 
     const context = await devContext(browser, 'alice', { reducedMotion: true })
     const page = await context.newPage()
     await page.setViewportSize({ width, height: 900 })
     try {
       await page.goto('/workflows')
-      const needs = page.getByRole('list', { name: 'Needs you' })
-      await expect(needs, 'Needs you says Bob declined it, in the record’s words').toContainText(/Bob declined your test run[\s\S]{0,120}Nothing was written\. Reason: Something in it is wrong\./)
+      const needs = page.getByRole('main').locator('li[data-home-item]')
+      await expect(needs.filter({ hasText: 'Bob declined your test run' }).first(), 'Needs you on Workflows says Bob declined it, as one plain row that opens the run').toContainText('Bob declined your test run')
       await shot(page, info, `r12-needs-you-declined-test-alice-${width}`)
       await page.goto('/')
       await openRequest(page, runId)
       await expect(panel(page), 'the side panel gives the state and the record').toContainText(record, { timeout: 15_000 })
-      await expect(panel(page), 'and what happens next').toContainText('Something in it is wrong. Change what it does, or run the test again.')
-      await expect(panel(page), 'its line says the write did not happen').toContainText('Nothing written')
+      await expect(panel(page), 'and what happens next').toContainText('Change what it does, or run the test again.')
+      await expect(panel(page), 'its line stays, and says the write did not happen').toContainText('Nothing written')
       await expect(panel(page), 'the panel shows no write').not.toContainText(/created|MOCK-\d/)
       await shot(page, info, `r12-panel-declined-test-alice-${width}`)
       await page.goto(`/runs/${runId}`)
-      await page.locator('summary', { hasText: /what each agent did$/ }).click()
-      await expect(page.getByRole('list', { name: 'What the agents said' }), 'the run ends with what happens next').toContainText('The run ended. Change what it does, or run the test again.')
+      await expect(page.getByRole('main'), 'the run page ends with what happens next').toContainText('Change what it does, or run the test again.')
 
-      await page.goto('/workflows')
-      const item = needs.locator('li').filter({ hasText: 'Bob declined your test run' })
+      await page.goto('/')
+      await ask(page, 'What needs me?')
+      const item = newest(page).locator('li[data-home-item^="declined:"]').filter({ hasText: 'Bob declined your test run' })
       await expect(item.locator('svg path[d="M6 6l12 12M18 6L6 18"]').first(), 'the row has the X, not the info mark').toBeAttached()
       await item.getByRole('button', { name: 'Do a test run again' }).click()
       await expect(page).toHaveURL(/\/runs\/[^/]+$/)
@@ -298,11 +353,11 @@ test('FIX-open-software: a software already on the watchlist opens in the side p
   await ask(page, 'Monitor LangGraph releases')
   await newest(page).getByRole('button', { name: 'Open it' }).click()
   await expect(heading(page)).toHaveText('LangGraph')
-  await expect(panel(page)).toContainText(/You run\s*1\.2\.14[\s\S]*Newest[\s\S]*Checked by\s*The Version checker/)
+  await expect(panel(page), 'with no schedule, nothing checks it on its own').toContainText(/Watching[\s\S]*Checked by\s*Not checked automatically/)
   await expectAccessible(page, path.join(OUT, 'axe'), 'side-panel-software-1280')
   await shot(page, info, 'r3-side-panel-software-1280')
   await panel(page).getByRole('link', { name: 'More details' }).click()
-  await expect(page).toHaveURL(/\/software\?row=/)
+  await expect(page).toHaveURL(/\/software\/[^/?]+$/)
   await expect(page.getByRole('link', { name: 'Back to the chat' })).toBeVisible()
   await context.close()
 })

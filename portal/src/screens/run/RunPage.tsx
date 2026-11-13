@@ -1,34 +1,34 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Link, useParams } from 'react-router'
 import { ApiError } from '../../api/client'
 import { useSession } from '../../api/context'
-import { displayName, usePeople } from '../../api/people'
-import { isOperator } from '../../api/me'
-import { useApproval, useMe, useModelOff, useRun, useTroubleshoot, useUseCase } from '../../api/queries'
-import type { ApprovalView, Me, RunView, UseCaseView } from '../../api/types'
+import { useApproval, useRun, useUseCase } from '../../api/queries'
+import type { RunView, UseCaseView } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
 import { PRODUCT } from '../../shell/product'
+import { AgentFace } from '../../ui/AgentFace'
 import { Button } from '../../ui/Button'
-import { cx } from '../../ui/cx'
 import { Toast, type ToastMessage } from '../../ui/Toast'
 import { useFromChat } from '../../ui/fromChat'
 import { motionAllowed } from '../../ui/motion'
 import { nextRunOf } from '../workflows/workflow'
 import { ApprovalGate, NotChecked } from './ApprovalGate'
-import { Chat, DECISION_ID, LastWord, NeedsYou, Typing } from './Chat'
-import { askedWords, declineReasons, foundOf, partyOf, useDecision, useNotChecked, yourPart, type Decision } from './decision'
+import { DECISION_ID, DecisionArea, LONG_LOG, StepLog } from './Chat'
+import { askedWords, foundOf, partyOf, useDecision, useNotChecked, yourPart, type Decision } from './decision'
+import { POLL_FAILED_MS, useReconnectWhenBehind } from './follow'
 import { useLiveRun, type LiveRun } from './liveRun'
-import { Outcome, Troubleshooting } from './Outcome'
+import { AnswerList, Outcome, StopAnswers, StopNext } from './Outcome'
 import { QuestionThread } from './QuestionThread'
-import { useQuestions, type Questions } from './questions'
+import { useQuestions } from './questions'
 import { RunLine } from './RunLine'
-import { isFinished, PLANNER_ID, stationsOf, type PlanBlock, type RunModel } from './runModel'
-import { declinedNext, declinedNowWords, declinedRecord, feedTroubleOf, headlineOf, lineOf, RUN_MISSING, RUN_PROBLEM, settledOf, speakerName, triggerWords, type NameOf, type Speaker } from './words'
+import { RunPill } from './RunPill'
+import { isFinished, type RunModel } from './runModel'
+import { TROUBLE_FACE } from './troubleFace'
+import { useRunStory } from './useRunStory'
+import { declinedNext, declinedNowWords, declinedRecord, feedTroubleOf, lineOf, logRowsOf, RUN_MISSING, RUN_PROBLEM, speakerName, stageWords, type NameOf, type RunState } from './words'
 import styles from './RunPage.module.css'
 
 const LANDS_ON_DECISION = new Set(['awaiting_approval', 'failed', 'rejected'])
-
-export const POLL_FAILED_MS = 10_000
 
 function notFound(error: unknown): boolean {
   return error instanceof ApiError && error.status === 404
@@ -119,39 +119,8 @@ function LiveRunPage({ run, fromApproval }: { run: RunView; fromApproval: boolea
   return <RunView run={latest} useCase={useCase.data} live={live} fromApproval={fromApproval} detail={{ choice: detail, choose: setDetail }} />
 }
 
-/** After a failure the stream may close. When the run has moved on without it, as after a retry, reconnect now. */
-export function useReconnectWhenBehind(behind: boolean, restart: () => void): void {
-  useEffect(() => {
-    if (behind) restart()
-  }, [behind, restart])
-}
-
-export function approvalIdOf(run: RunView, model: RunModel): string | null {
-  if (model.approvalId) return model.approvalId
-  return 'approval' in run ? run.approval.approval_id : null
-}
-
-export function useNameOf(model: RunModel): NameOf {
-  const people = usePeople()
-  return (id) => model.people[id] ?? displayName(people, id)
-}
-
-export function planOf(useCase: UseCaseView | undefined): PlanBlock[] | null {
-  return useCase ? useCase.plan.map((block) => ({ key: block.key, name: block.name, kind: block.kind })) : null
-}
-
 function backTo(useCase: UseCaseView | undefined): string {
   return useCase?.template === 'software_watchlist' ? '/software' : '/workflows'
-}
-
-function workingNow(model: RunModel): { speaker: Speaker; thinking: boolean } {
-  const { spot, agents, phase } = model
-  if (phase.state === 'acting') return { speaker: { kind: 'platform' }, thinking: false }
-  if (spot.at === 'agent') {
-    const agent = agents[spot.index]
-    if (agent) return { speaker: { kind: 'agent', agent }, thinking: false }
-  }
-  return { speaker: { kind: 'agent', agent: { id: PLANNER_ID, display: 'Planner' } }, thinking: true }
 }
 
 function useFollowUntilScrolled(newest: number, loadedUpTo: number, list: RefObject<HTMLOListElement | null>): void {
@@ -183,64 +152,65 @@ interface RunViewProps {
   readonly useCase: UseCaseView | undefined
   readonly live: LiveRun
   readonly fromApproval: boolean
-  /** Whether the agents' conversation is open, once the person chose. Null follows the run. */
+  /** Whether a long Step by step is open, once the person chose. Null follows the run. */
   readonly detail: { readonly choice: boolean | null; readonly choose: (open: boolean) => void }
 }
 
 const WORKING = new Set<RunModel['phase']['state']>(['pending', 'working', 'proposed', 'acting'])
 
-/** The default level follows the run: the conversation is open while the agents work, and folded once the run needs the person or is over. */
-function detailOpen(choice: boolean | null, model: RunModel): boolean {
+/** A short log is always open. A long one is open while the agents work, and folded once the run needs the person or is over. */
+function logOpen(choice: boolean | null, model: RunModel): boolean {
   return choice ?? WORKING.has(model.phase.state)
+}
+
+/** The troubleshooter's face beside its words, as the sketch's `tr big`. Its mood follows the run. */
+function TroubleshooterBlock({ state, children }: { state: RunState; children: ReactNode }) {
+  return (
+    <div className={styles['trouble']}>
+      <AgentFace id="troubleshooter" size={34} state={TROUBLE_FACE[state]} />
+      <div className={styles['troubleBody']}>{children}</div>
+    </div>
+  )
 }
 
 function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const { shown, head, loadedUpTo } = live
-  const me = useMe().data
+  const story = useRunStory(run, live)
+  const { me, nameOf, approval, facts, stations, settled, arrivedLive } = story
   const fromChat = useFromChat()
-  const nameOf = useNameOf(head)
   const [lands] = useState(() => fromApproval || LANDS_ON_DECISION.has(shown.phase.state))
-  const chatList = useRef<HTMLOListElement>(null)
+  const logList = useRef<HTMLOListElement>(null)
 
-  const approvalId = approvalIdOf(run, head)
   const waiting = shown.phase.state === 'awaiting_approval'
-  const approval = useApproval(approvalId ?? '', { poll: waiting, enabled: approvalId !== null })
-  const attempt = head.chat.filter((item) => item.kind === 'retried').length
-  const showFailure = shown.phase.state === 'failed' && head.phase.state === 'failed'
-  const troubleshoot = useTroubleshoot(run.run_id, showFailure, attempt)
-
-  const party = partyOf(approval.data, me?.id)
   const saidByMe = me ? shown.chat.findLast((item) => item.kind === 'decided' && item.by === me.id) : undefined
-  const open = detailOpen(detail.choice, shown)
   const [said, setSaid] = useState<ToastMessage | null>(null)
   const say = (text: string) => setSaid((before) => ({ id: (before?.id ?? 0) + 1, text }))
-  const decision = useDecision(approval.data, party, (recorded) => {
+  const decision = useDecision(approval, partyOf(approval, me?.id), (recorded) => {
     if (recorded.verdict === 'decline') say(declinedNowWords({ reason: recorded.reason ?? null }))
   })
   const declinedSoFar = declinedSoFarWords(decision, live, nameOf)
-  const questions = useQuestions(approval.data, nameOf, say)
-  const notChecked = useNotChecked(approval.data, useCase)
+  const questions = useQuestions(approval, nameOf, say)
+  const notChecked = useNotChecked(approval, useCase)
+  const rows = logRowsOf(shown.chat, nameOf, story.quick)
+  const long = rows.length > LONG_LOG
+  const open = !long || logOpen(detail.choice, shown)
   const answered = decision.recorded !== null && !waiting && !WORKING.has(shown.phase.state)
   const focused = useRef(false)
   useEffect(() => {
     if (!answered || focused.current) return
     focused.current = true
-    const line = chatList.current?.querySelector<HTMLElement>(`[data-gate-said="${saidByMe?.seq ?? ''}"]`)
+    const line = logList.current?.querySelector<HTMLElement>(`[data-gate-said="${saidByMe?.seq ?? ''}"]`)
     ;(open ? line : document.querySelector<HTMLElement>('main h1'))?.focus({ preventScroll: true })
   })
 
-  const stations = stationsOf(shown, planOf(useCase), triggerWords(shown, useCase?.schedule ?? null, nameOf, run.started_at))
-  const settled = settledOf(shown, nameOf, new Date(), declineReasons(useCase?.template))
-  const proposal = approval.data && waiting ? approval.data.actions : null
-  const headline = headlineOf(shown, stations, proposal)
-  const arrivedLive = shown.spotSeq > loadedUpTo ? (stations.findLast((station) => station.state !== 'todo')?.key ?? null) : null
   const newest = shown.chat.at(-1)
   const next = declinedNext({ test: run.test, watchlist: useCase?.template === 'software_watchlist' }, nextRunOf(useCase), new Date())
   const announce = newest && newest.seq > loadedUpTo ? lineOf(newest, nameOf, next) : null
 
+  const title = `${run.use_case_name}: ${stageWords(facts, nameOf)}`
   useEffect(() => {
-    document.title = `${headline.text} · ${PRODUCT}`
-  }, [headline.text])
+    document.title = `${title} · ${PRODUCT}`
+  }, [title])
 
   useEffect(() => {
     if (!lands) return
@@ -253,27 +223,61 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
     decisionArea.scrollIntoView({ block: 'start' })
   }, [lands])
 
+  useFollowUntilScrolled(newest?.seq ?? 0, loadedUpTo, logList)
 
-  useFollowUntilScrolled(newest?.seq ?? 0, loadedUpTo, chatList)
-
-  const working = WORKING.has(shown.phase.state)
-  const resting = working ? <Typing {...workingNow(shown)} /> : null
-  const last = (
-    <LastWordFor
-      model={shown}
-      approval={approval.data}
-      found={foundOf(head.found, approval.data?.found)}
-      decision={decision}
-      notChecked={notChecked}
-      questions={questions}
-      troubleshoot={troubleshoot}
-      nameOf={nameOf}
-      me={me}
-      runId={run.run_id}
-      reasons={declineReasons(useCase?.template)}
-      declinedNext={next}
-    />
-  )
+  const modelFinished = isFinished(shown.phase)
+  const gate =
+    waiting ? (
+      <DecisionArea label="Approval">
+        {approval && notChecked ? (
+          <ApprovalGate
+            approval={approval}
+            page={{ found: foundOf(head.found, approval.found), part: yourPart(approval, partyOf(approval, me?.id), nameOf), askedBy: askedWords(approval, nameOf) }}
+            decision={decision}
+            notChecked={notChecked}
+            reasons={story.quick}
+            requester={nameOf(approval.requester)}
+            questions={questions}
+            me={me?.id}
+            nameOf={nameOf}
+          />
+        ) : (
+          <p className="muted" role="status">
+            Loading what will be written
+          </p>
+        )}
+      </DecisionArea>
+    ) : null
+  const failure = shown.phase.state === 'failed' ? shown.phase : null
+  const safeId = `${run.run_id}-safe`
+  const trouble =
+    failure ? (
+      <DecisionArea label="Why it stopped">
+        <TroubleshooterBlock state={facts.state}>
+          <StopAnswers failure={failure} {...story.stopped} safeId={safeId} />
+        </TroubleshooterBlock>
+      </DecisionArea>
+    ) : story.answers.length > 0 && !waiting ? (
+      <TroubleshooterBlock state={facts.state}>
+        <AnswerList answers={story.answers} />
+      </TroubleshooterBlock>
+    ) : null
+  const ending =
+    modelFinished && shown.phase.state !== 'failed' ? (
+      <DecisionArea label="How it ended">
+        <Outcome
+          declinedNext={shown.phase.state === 'rejected' ? next : null}
+          record={
+            approval ? (
+              <>
+                <NotChecked lines={notChecked ?? []} />
+                <QuestionThread approval={approval} me={me?.id} nameOf={nameOf} answer={questions.answer} />
+              </>
+            ) : null
+          }
+        />
+      </DecisionArea>
+    ) : null
 
   return (
     <div className={styles['page']}>
@@ -284,29 +288,46 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
         </Link>
       )}
       <div className={styles['head']}>
-        <h1 tabIndex={-1} data-page-moves-focus={lands || undefined}>
-          {headline.text}
-        </h1>
-        <span className={cx(styles['pill'], styles[headline.pill.tone])}>{headline.pill.label}</span>
+        <div>
+          <p className={styles['kind']}>{story.kind}</p>
+          <h1 tabIndex={-1} data-page-moves-focus={lands || undefined}>
+            {run.use_case_name}
+          </h1>
+        </div>
+        <RunPill facts={facts} />
       </div>
       <p className={styles['status']}>
         <span role="status">{statusWords(decision, live)}</span>
         {declinedSoFar ? ` ${declinedSoFar}` : null}
       </p>
       <RunLine stations={stations} arrivedLive={arrivedLive} settled={settled} />
-      {working ? null : <NeedsYou>{last}</NeedsYou>}
-      <details className={styles['detail']} open={open}>
-        <summary
-          className={styles['detailToggle']}
-          onClick={(event) => {
-            event.preventDefault()
-            detail.choose(!open)
-          }}
-        >
-          {open ? 'Hide what each agent did' : 'Show what each agent did'}
-        </summary>
-        <Chat ref={chatList} items={shown.chat} loadedUpTo={loadedUpTo} nameOf={nameOf} declinedNext={next} last={resting} />
-      </details>
+      {trouble}
+      {gate}
+      {ending}
+      <section className={styles['log']} aria-labelledby="step-by-step">
+        <h2 id="step-by-step">Step by step</h2>
+        {long ? (
+          <details open={open}>
+            <summary
+              className={styles['detailToggle']}
+              onClick={(event) => {
+                event.preventDefault()
+                detail.choose(!open)
+              }}
+            >
+              {open ? 'Hide the steps' : `Show the ${rows.length} steps`}
+            </summary>
+            <StepLog ref={logList} rows={rows} loadedUpTo={loadedUpTo} />
+          </details>
+        ) : (
+          <StepLog ref={logList} rows={rows} loadedUpTo={loadedUpTo} />
+        )}
+      </section>
+      {failure ? (
+        <div className={styles['foot']}>
+          <StopNext runId={run.run_id} failure={failure} {...story.stopped} safeId={safeId} />
+        </div>
+      ) : null}
       <div className="visually-hidden" aria-live="polite">
         {announce ? `${speakerName(announce.speaker)}: ${announce.text}` : ''}
       </div>
@@ -330,84 +351,4 @@ export function statusWords(decision: Pick<Decision, 'recorded'>, live: LiveRun)
  */
 export function declinedSoFarWords(decision: Pick<Decision, 'declined'>, live: LiveRun, nameOf: NameOf): string | null {
   return decision.declined && !isFinished(live.shown.phase) ? declinedRecord(decision.declined, nameOf) : null
-}
-
-interface LastWordForProps {
-  readonly model: RunModel
-  readonly approval: ApprovalView | undefined
-  readonly found: string
-  readonly decision: ReturnType<typeof useDecision>
-  readonly notChecked: readonly string[] | null
-  readonly questions: Questions
-  readonly troubleshoot: ReturnType<typeof useTroubleshoot>
-  readonly nameOf: NameOf
-  readonly me: Me | undefined
-  readonly runId: string
-  readonly reasons: readonly string[]
-  readonly declinedNext: string | null
-}
-
-function LastWordFor({ model, approval, found, decision, notChecked, questions, troubleshoot, nameOf, me, runId, reasons, declinedNext }: LastWordForProps) {
-  const modelOff = useModelOff()
-  const { phase } = model
-  switch (phase.state) {
-    case 'awaiting_approval':
-      return (
-        <LastWord speaker={{ kind: 'gate' }}>
-          {approval && notChecked ? (
-            <ApprovalGate
-              approval={approval}
-              page={{ found, part: yourPart(approval, partyOf(approval, me?.id), nameOf), askedBy: askedWords(approval, nameOf) }}
-              decision={decision}
-              notChecked={notChecked}
-              reasons={reasons}
-              requester={nameOf(approval.requester)}
-              questions={questions}
-              me={me?.id}
-              nameOf={nameOf}
-            />
-          ) : (
-            <p className="muted" role="status">
-              Loading what will be written
-            </p>
-          )}
-        </LastWord>
-      )
-    case 'failed':
-      return (
-        <LastWord speaker={{ kind: 'troubleshooter' }}>
-          <Troubleshooting
-            runId={runId}
-            failure={phase}
-            advice={troubleshoot.data}
-            loading={troubleshoot.isPending}
-            me={me ? { id: me.id, name: me.display, operator: isOperator(me) } : undefined}
-            reports={model.reports}
-            nameOf={nameOf}
-            modelOff={modelOff}
-          />
-        </LastWord>
-      )
-    case 'succeeded':
-    case 'rejected':
-      return (
-        <LastWord speaker={{ kind: 'app' }}>
-          <Outcome
-            model={model}
-            nameOf={nameOf}
-            declinedNext={declinedNext}
-            record={
-              approval ? (
-                <>
-                  <NotChecked lines={notChecked ?? []} />
-                  <QuestionThread approval={approval} me={me?.id} nameOf={nameOf} answer={questions.answer} />
-                </>
-              ) : null
-            }
-          />
-        </LastWord>
-      )
-    default:
-      return null
-  }
 }

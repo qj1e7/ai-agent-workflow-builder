@@ -38,14 +38,16 @@ function slot<T>(): Slot<T> {
  */
 export interface CardMemory extends Slot<CardKept> {
   readonly edit: Slot<EditKept>
+  /** The run a run card follows, so it keeps following it after a retry takes the run off the stopped list. */
+  readonly run: Slot<string>
 }
 
 export function newCardMemory(): CardMemory {
-  return { ...slot<CardKept>(), edit: slot<EditKept>() }
+  return { ...slot<CardKept>(), edit: slot<EditKept>(), run: slot<string>() }
 }
 
 const forgets = <T,>(): Slot<T> => ({ kept: () => undefined, keep: () => undefined })
 
-export const NO_MEMORY: CardMemory = { ...forgets<CardKept>(), edit: forgets<EditKept>() }
+export const NO_MEMORY: CardMemory = { ...forgets<CardKept>(), edit: forgets<EditKept>(), run: forgets<string>() }
 
 export const CardMemoryContext = createContext<CardMemory>(NO_MEMORY)
