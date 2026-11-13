@@ -610,12 +610,12 @@ for (const width of WIDTHS) {
 
     await alice.goto('/workflows')
     const item = alice.locator(`li[data-home-item="question:${questionId}"]`)
-    await expect(item).toContainText(/Bob asked you about /)
-    await expect(item).toContainText('The request is still waiting for a yes')
-    await expect(item).toContainText(`“${question}”`)
+    await expect(item, 'Workflows says the row in Home’s words, as one plain row').toHaveText(/^Bob\s+asked you about Software watchlist$/)
     await item.scrollIntoViewIfNeeded()
     await shot(alice, info, `r13-needs-you-alice-${width}`)
-    await item.getByRole('link', { name: 'Answer Bob' }).click()
+    await item.getByRole('link').click()
+    await expect(alice).toHaveURL(new RegExp(`/runs/${runId}$`))
+    await expect(questionsOf(alice), 'the request shows the question').toContainText(`Bob asked you: ${question}`)
 
     const box = alice.getByRole('textbox', { name: 'Your answer for Bob' })
     await expect(box).toBeVisible()

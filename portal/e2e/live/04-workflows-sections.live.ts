@@ -189,7 +189,7 @@ test('a draft is a row under All workflows with the pill Draft, never in Needs y
     const row = draftRow(page, draft.id)
     await expect(row).toContainText(draft.name)
     await expect(row).toContainText('Only your words are saved.')
-    await expect(row.locator('span[class*="pill"]')).toHaveText('Draft')
+    await expect(row.getByText('Draft', { exact: true }), 'the row has one pill, Draft').toHaveCount(1)
     await expect(row.getByRole('button'), 'the row is one link, and Discard is on the draft’s card in the chat').toHaveCount(0)
     await expect(page.getByRole('region', { name: 'Needs you' }).locator('li[data-draft]'), 'the strip does not count a draft, so Needs you does not list one').toHaveCount(0)
     await expect(row.getByRole('link')).toHaveAttribute('href', `/?draft=${draft.id}`)

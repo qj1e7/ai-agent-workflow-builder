@@ -3,7 +3,7 @@ import { connectMockModel } from './support/settings'
 import { SettingsApi } from './support/settings'
 import type { Backend } from './support/stack'
 import { expect, test } from './support/test'
-import { devContext } from './support/ui'
+import { devContext, needsOnWorkflows } from './support/ui'
 import { askAndWait, editCard, scheduledWorkflow, tag } from './support/edit'
 
 /**
@@ -181,9 +181,7 @@ test('the Needs you rows on Workflows are the number the Planner’s answer and 
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
   await page.goto('/workflows')
-  const needsYou = main(page).getByRole('region', { name: 'Needs you' })
-  await expect(needsYou.locator('li[data-home-item]').first()).toBeVisible()
-  const total = await needsYou.locator('li[data-home-item]').count()
+  const total = await needsOnWorkflows(page)
   const { workflows } = await backend.get<{ workflows: number }>('alice', '/api/v1/home')
   expect(await railCount(page, 'Workflows'), 'Principle 7 (one source per fact): the rail’s Workflows count is how many workflows the team has').toBe(workflows)
   expect(await railCount(page, 'Chat'), 'Principle 7: the rail never repeats what needs her').toBe(0)
@@ -223,7 +221,7 @@ test('an Approver who is not an Operator has his Needs you count in his heading,
   expect(await railCount(page, 'Chat'), 'Principle 7: Chat carries no count').toBe(0)
   expect(await railCount(page, 'Workflows'), 'Principle 7: the rail shows the team’s workflows').toBeGreaterThan(0)
   await rail(page).getByRole('link', { name: /^Workflows/ }).click()
-  await expect(main(page).getByRole('region', { name: 'Needs you' }).locator('li[data-home-item]'), 'Principle 7: his heading and the rows on Workflows agree').toHaveCount(onHome)
+  expect(await needsOnWorkflows(page), 'Principle 7: his heading and the Needs you rows on Workflows, with the rest its note counts, agree').toBe(onHome)
   await context.close()
 })
 

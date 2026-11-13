@@ -175,7 +175,7 @@ test('a project that publishes no releases is not added: it says why and offers 
 })
 
 test('while a yes waits, every row stays in the list, and the decision is in Needs you on Workflows, not on the Watchlist', async ({ browser, backend }, info) => {
-  await backend.waitingRun('alice', [
+  const { approvalId } = await backend.waitingRun('alice', [
     { name: 'LangGraph', repo: 'langchain-ai/langgraph', our_version: '1.2.14' },
     { name: 'Redis', repo: 'redis/redis', our_version: '8.0.0' },
   ])
@@ -199,8 +199,8 @@ test('while a yes waits, every row stays in the list, and the decision is in Nee
   await expect(bobPage.getByRole('link', { name: 'Review and decide' })).toHaveCount(0)
   await shot(bobPage, info, 'n21-03-waiting-bob')
   await bobPage.goto('/workflows')
-  const waiting = bobPage.getByRole('main').locator('li[data-home-item^="approval:"]')
-  await expect(waiting).toHaveCount(1)
+  const waiting = bobPage.getByRole('main').locator(`li[data-home-item="approval:${approvalId}"]`)
+  await expect(waiting, 'this check’s one decision is one row, among any other runs waiting for bob').toHaveCount(1)
   await expect(waiting).toHaveText(/Software watchlist\s+needs your yes/)
   await bob.close()
 })

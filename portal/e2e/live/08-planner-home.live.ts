@@ -8,7 +8,7 @@ import { connectMockModel } from './support/settings'
 import { SettingsApi } from './support/settings'
 import { REDIS, type Backend } from './support/stack'
 import { expect, test } from './support/test'
-import { devContext, OUT, shot } from './support/ui'
+import { devContext, needsOnWorkflows, OUT, shot } from './support/ui'
 import { askAndWait, editCard, newestAnswer, rereadOf, scheduledWorkflow, shown, tag, versionsOf } from './support/edit'
 
 /** The sketch's question, Alice's Home heading; her greeting is the line above it. */
@@ -889,7 +889,7 @@ test.describe('the chat after the first message', () => {
     await expect(pinned(page).getByRole('link', { name: `${String(total - 1)} more that need you` })).toHaveAttribute('href', '/workflows')
     await pinned(page).getByRole('link', { name: /more that need you/ }).click()
     await expect(page).toHaveURL(/\/workflows$/)
-    await expect(main(page).getByRole('heading', { level: 2, name: new RegExp(`^Needs you ${String(total)}`) })).toBeVisible()
+    expect(await needsOnWorkflows(page), 'N more plus one is the Needs you rows on Workflows').toBe(total)
     await expect(main(page).getByRole('heading', { name: 'Do now' })).toBeVisible()
     await page.getByRole('link', { name: 'Back to the chat', exact: true }).click()
     await expect(thread(page)).toContainText('What can you do?')
@@ -1114,7 +1114,8 @@ test.describe('the edit card (spec 6.7)', () => {
     await rail.getByRole('link', { name: /^Workflows/ }).click()
     await main(page).getByRole('link', { name: morning.name, exact: true }).click()
     await expect(page).toHaveURL(new RegExp(`/workflows/${morning.id}$`))
-    await expect(page.getByRole('list', { name: 'Versions, newest first' }).getByRole('listitem').first()).toContainText('Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00. This is the version running now.')
+    await page.locator('summary', { hasText: 'Versions' }).click()
+    await expect(page.getByRole('list', { name: 'Versions, newest first' }).getByRole('listitem').first()).toContainText(/Version 3, in use\s*Today, \d{1,2}:\d\d\. Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00\./)
     await rail.getByRole('link', { name: /^Chat/ }).click()
     const kept = newestAnswer(page)
     await expect(editCard(kept), 'the card keeps its Undo across pages').toContainText('Saved as version 3.')

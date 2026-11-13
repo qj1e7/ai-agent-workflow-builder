@@ -252,8 +252,8 @@ for (const width of [1280, 390]) {
       await expect(page.getByRole('list', { name: 'What the agents said' }), 'the run ends with what happens next').toContainText('The run ended. Change what it does, or run the test again.')
 
       await page.goto('/')
-      const homeNeeds = page.getByRole('list', { name: 'Needs you' })
-      const item = homeNeeds.locator('li').filter({ hasText: 'Bob declined your test run' })
+      await ask(page, 'What needs me?')
+      const item = newest(page).locator('li[data-home-item^="declined:"]').filter({ hasText: 'Bob declined your test run' })
       await expect(item.locator('svg path[d="M6 6l12 12M18 6L6 18"]').first(), 'the row has the X, not the info mark').toBeAttached()
       await item.getByRole('button', { name: 'Do a test run again' }).click()
       await expect(page).toHaveURL(/\/runs\/[^/]+$/)
