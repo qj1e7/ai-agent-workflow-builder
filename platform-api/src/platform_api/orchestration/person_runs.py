@@ -169,8 +169,7 @@ def _waiting_or_ask(run: OpenRun, viewer: Principal) -> Ask | Waiting | None:
 
 
 def _stopped(record: RunRecord, state: Failed, viewer: Principal) -> Stopped | None:
-    parties = {record.started_by, record.spec.owner, *record.retried_by}
-    if Role.OPERATOR not in viewer.roles or viewer.user_id not in parties:
+    if Role.OPERATOR not in viewer.roles or viewer.user_id not in record.parties:
         return None
     return Stopped(
         run=_facts(record),

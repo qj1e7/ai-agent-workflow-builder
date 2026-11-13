@@ -18,6 +18,7 @@ from platform_api.orchestration.runs import (
     Proposed,
     Rejected,
     RunState,
+    Skipped,
     Succeeded,
     Working,
 )
@@ -35,7 +36,17 @@ from platform_api.shared import (
 
 STATE_TYPES: Mapping[str, type[RunState]] = {
     cls.__name__: cls
-    for cls in (Pending, Working, Proposed, AwaitingApproval, Acting, Succeeded, Rejected, Failed)
+    for cls in (
+        Pending,
+        Working,
+        Proposed,
+        AwaitingApproval,
+        Acting,
+        Succeeded,
+        Rejected,
+        Failed,
+        Skipped,
+    )
 }
 _state_adapters: dict[str, TypeAdapter[Any]] = {
     name: TypeAdapter(cls) for name, cls in STATE_TYPES.items()
@@ -65,6 +76,13 @@ class RunRecord:
     state: RunState
     retried_by: tuple[UserId, ...]
     carry_forward: str | None
+    joined_by: tuple[UserId, ...] = ()
+    """People who joined the run in n8n: the holder of a run started or retried by hand there."""
+
+    @property
+    def parties(self) -> frozenset[UserId]:
+        """Whose work the run is, so who can never approve it."""
+        return frozenset({self.started_by, self.spec.owner, *self.retried_by, *self.joined_by})
 
 
 @dataclass(frozen=True)
@@ -104,7 +122,7 @@ def _deadline_of(state: RunState) -> datetime | None:
     match state:
         case Pending() | Working() | Proposed() | Acting():
             return state.deadline_at
-        case AwaitingApproval() | Succeeded() | Rejected() | Failed():
+        case AwaitingApproval() | Succeeded() | Rejected() | Failed() | Skipped():
             return None
 
 
@@ -119,12 +137,13 @@ def _record(row: Mapping[str, Any]) -> RunRecord:
         state=load_state(row["state"], row["state_data"]),
         retried_by=tuple(UserId(u) for u in row["retried_by"]),
         carry_forward=row["carry_forward"],
+        joined_by=tuple(UserId(u) for u in row["joined_by"]),
     )
 
 
 RUN_COLUMNS = (
     "run_id, spec, started_by, started_at, updated_at, version, state, state_data, "
-    "retried_by, carry_forward"
+    "retried_by, carry_forward, joined_by"
 )
 
 
@@ -137,8 +156,8 @@ class Store:
             await uow.conn.execute(
                 "INSERT INTO orchestration.runs (run_id, use_case_id, idempotency_key, spec, "
                 "started_by, started_at, updated_at, version, state, state_data, deadline_at, "
-                "retried_by, carry_forward) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "retried_by, carry_forward, joined_by) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                 "ON CONFLICT (use_case_id, idempotency_key) DO NOTHING RETURNING run_id",
                 (
                     record.run_id,
@@ -154,6 +173,7 @@ class Store:
                     _deadline_of(record.state),
                     json(list(record.retried_by)),
                     record.carry_forward,
+                    json(list(record.joined_by)),
                 ),
             )
         ).fetchone()
@@ -188,14 +208,16 @@ class Store:
         state: RunState,
         *,
         retried_by: UserId | None = None,
+        joined_by: UserId | None = None,
     ) -> RunRecord:
         name, data = dump_state(state)
         new_retried = record.retried_by + ((retried_by,) if retried_by else ())
+        new_joined = record.joined_by + ((joined_by,) if joined_by else ())
         updated = await (
             await uow.conn.execute(
                 "UPDATE orchestration.runs SET state = %s, state_data = %s, deadline_at = %s, "
-                "updated_at = %s, version = version + 1, retried_by = %s, carry_forward = %s "
-                "WHERE run_id = %s AND version = %s RETURNING version",
+                "updated_at = %s, version = version + 1, retried_by = %s, carry_forward = %s, "
+                "joined_by = %s WHERE run_id = %s AND version = %s RETURNING version",
                 (
                     name,
                     json(data),
@@ -203,6 +225,7 @@ class Store:
                     uow.now,
                     json(list(new_retried)),
                     record.carry_forward,
+                    json(list(new_joined)),
                     record.run_id,
                     record.version,
                 ),
@@ -216,6 +239,7 @@ class Store:
             version=int(updated["version"]),
             updated_at=uow.now,
             retried_by=new_retried,
+            joined_by=new_joined,
         )
 
     async def list_runs(self, uow: UnitOfWork) -> list[RunRecord]:

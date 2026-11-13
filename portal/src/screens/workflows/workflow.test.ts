@@ -96,6 +96,12 @@ describe('the status words', () => {
     expect(runFact(run(failed), nameOf)).toEqual({ tone: 'bad', pill: 'Stopped', words: 'Stopped. An agent could not finish its work.' })
   })
 
+  it('say a run skipped while an earlier one waits for a yes, and need nobody', () => {
+    const skipped = run(failed, { state: 'skipped', waiting_run_id: 'run_06' })
+    expect(runFact(skipped, nameOf)).toEqual({ tone: 'ok', pill: null, words: 'Skipped. An earlier run is still waiting for a yes.' })
+    expect(lastRunLine(lastOf({ state: 'skipped' }), NOW, nameOf)).toBe('Last run Mon 26 Oct · Skipped')
+  })
+
   it('say a run that finished is done, with what it wrote and who said yes', () => {
     expect(runFact(run(done), nameOf)).toEqual({ tone: 'ok', pill: null, words: 'Done. 1 ticket created, approved by Bob.' })
     expect(runFact(run(done, { outcome: 'nothing_to_write', written: [] }), nameOf).words).toBe('Done. Nothing to write.')

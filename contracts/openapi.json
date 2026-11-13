@@ -202,11 +202,13 @@
             "approval_decided": "#/components/schemas/ApprovalDecided",
             "approval_outcome_not_posted": "#/components/schemas/ApprovalOutcomeNotPosted",
             "approval_requested": "#/components/schemas/ApprovalRequested",
+            "execution_linked": "#/components/schemas/ExecutionLinked",
             "leg_dispatched": "#/components/schemas/LegDispatched",
             "run_created": "#/components/schemas/RunCreated",
             "run_failed": "#/components/schemas/RunFailed",
             "run_rejected": "#/components/schemas/RunRejected",
             "run_retried": "#/components/schemas/RunRetried",
+            "run_skipped": "#/components/schemas/RunSkipped",
             "run_succeeded": "#/components/schemas/RunSucceeded",
             "step_finished": "#/components/schemas/StepFinished",
             "step_retried": "#/components/schemas/StepRetried",
@@ -284,6 +286,12 @@
           },
           {
             "$ref": "#/components/schemas/RunRetried"
+          },
+          {
+            "$ref": "#/components/schemas/ExecutionLinked"
+          },
+          {
+            "$ref": "#/components/schemas/RunSkipped"
           },
           {
             "$ref": "#/components/schemas/SupportReported"
@@ -4573,6 +4581,71 @@
         "title": "ExampleView",
         "type": "object"
       },
+      "ExecutionLinked": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ExecutionLinkedData"
+          },
+          "kind": {
+            "const": "execution_linked",
+            "default": "execution_linked",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "ExecutionLinked",
+        "type": "object"
+      },
+      "ExecutionLinkedData": {
+        "additionalProperties": false,
+        "properties": {
+          "execution_id": {
+            "title": "Execution Id",
+            "type": "string"
+          },
+          "mode": {
+            "description": "How n8n says the execution started, such as trigger or retry.",
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "execution_id",
+          "mode"
+        ],
+        "title": "ExecutionLinkedData",
+        "type": "object"
+      },
       "FactSection": {
         "enum": [
           "watchlist",
@@ -8022,6 +8095,66 @@
         "title": "RunRetriedData",
         "type": "object"
       },
+      "RunSkipped": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/RunSkippedData"
+          },
+          "kind": {
+            "const": "run_skipped",
+            "default": "run_skipped",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "RunSkipped",
+        "type": "object"
+      },
+      "RunSkippedData": {
+        "additionalProperties": false,
+        "properties": {
+          "waiting_run_id": {
+            "description": "The earlier run of the same workflow that is still waiting for a yes.",
+            "title": "Waiting Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "waiting_run_id"
+        ],
+        "title": "RunSkippedData",
+        "type": "object"
+      },
       "RunStarted": {
         "additionalProperties": false,
         "properties": {
@@ -8056,7 +8189,8 @@
           "acting",
           "succeeded",
           "rejected",
-          "failed"
+          "failed",
+          "skipped"
         ],
         "type": "string"
       },
@@ -8127,6 +8261,7 @@
             "pending": "#/components/schemas/PendingView",
             "proposed": "#/components/schemas/ProposedView",
             "rejected": "#/components/schemas/RejectedView",
+            "skipped": "#/components/schemas/SkippedView",
             "succeeded": "#/components/schemas/SucceededView",
             "working": "#/components/schemas/WorkingView"
           },
@@ -8156,6 +8291,9 @@
           },
           {
             "$ref": "#/components/schemas/FailedView"
+          },
+          {
+            "$ref": "#/components/schemas/SkippedView"
           }
         ]
       },
@@ -8557,6 +8695,84 @@
           "name"
         ],
         "title": "SimilarWorkflow",
+        "type": "object"
+      },
+      "SkippedView": {
+        "additionalProperties": false,
+        "properties": {
+          "events_url": {
+            "title": "Events Url",
+            "type": "string"
+          },
+          "last_seq": {
+            "title": "Last Seq",
+            "type": "integer"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "started_by": {
+            "title": "Started By",
+            "type": "string"
+          },
+          "state": {
+            "const": "skipped",
+            "default": "skipped",
+            "title": "State",
+            "type": "string"
+          },
+          "test": {
+            "description": "True when a person started it with Do a test run.",
+            "title": "Test",
+            "type": "boolean"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/Trigger"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          },
+          "use_case_version": {
+            "title": "Use Case Version",
+            "type": "integer"
+          },
+          "waiting_run_id": {
+            "description": "The earlier run of the same workflow that was still waiting for a yes.",
+            "title": "Waiting Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "use_case_id",
+          "use_case_name",
+          "use_case_version",
+          "started_by",
+          "trigger",
+          "test",
+          "started_at",
+          "updated_at",
+          "last_seq",
+          "events_url",
+          "waiting_run_id"
+        ],
+        "title": "SkippedView",
         "type": "object"
       },
       "SoftwareName": {

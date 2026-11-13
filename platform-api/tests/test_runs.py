@@ -29,6 +29,7 @@ from platform_api.orchestration.runs import (
     ResumeAct,
     ResumeWork,
     RunState,
+    Skipped,
     Stage,
     StepName,
     Succeeded,
@@ -37,8 +38,13 @@ from platform_api.orchestration.runs import (
     Working,
     WriteDone,
     created_events,
+    linked_events,
     referee,
+    run_created,
+    skipped_events,
+    state_name,
     unread_in,
+    working_on,
 )
 from platform_api.shared import (
     WRITE_STOP_ADVICE,
@@ -74,6 +80,8 @@ WRITTEN = Succeeded(RUN, Outcome.WRITTEN, (TICKET,))
 NOTHING_WRITTEN = Succeeded(RUN, Outcome.NOTHING_TO_WRITE, ())
 REJECTED = Rejected(RUN, PROPOSAL, APPROVAL, UserId("bob"), 0)
 FAILED = Failed(RUN, Stage.WORKING, AGENT_DOWN, ResumeWork(2))
+WAITING_RUN = RunId("run_0")
+SKIPPED = Skipped(RUN, WAITING_RUN)
 
 STOP = Replay(False)
 GO_ON = Replay(True)
@@ -94,6 +102,7 @@ class Row(NamedTuple):
 TABLE = [
     Row("failed, any caller", FAILED, OTHER, STOP, STOP, STOP),
     Row("rejected, any caller", REJECTED, OTHER, STOP, STOP, STOP),
+    Row("skipped, any caller", SKIPPED, HOLDER, STOP, STOP, STOP),
     Row("pending unclaimed", PENDING_UNCLAIMED, OTHER, Begin(), REFUSED, REFUSED),
     Row("pending, the claimant", PENDING, HOLDER, Begin(), REFUSED_AND_FAILED, REFUSED_AND_FAILED),
     Row("pending, another execution", PENDING, OTHER, SUPERSEDED, REFUSED, REFUSED),
@@ -133,6 +142,7 @@ def test_referee_table_covers_every_step_and_state():
         NOTHING_WRITTEN,
         REJECTED,
         FAILED,
+        SKIPPED,
     )
     for state in states:
         for step in StepName:
@@ -377,3 +387,43 @@ def test_the_software_a_check_could_not_read_stays_with_the_run_to_its_end():
         assert unread_in(state) == unread, type(state).__name__
     assert unread_in(NOTHING_WRITTEN) == ()
     assert unread_in(FAILED) == (), "a failed check never reached an approval"
+
+
+CREATED = run_created("uc_1", 1, "LangGraph releases", ALICE, "schedule")
+
+
+def test_a_run_n8n_started_works_on_that_execution_from_the_first_call():
+    moved = linked_events(CREATED, HOLDER, "trigger")
+    assert kinds(moved) == ["run_created", "execution_linked"]
+    assert moved[1].data.model_dump() == {"execution_id": "41", "mode": "trigger"}
+    assert working_on(RUN, HOLDER, 1, NOW) == Working(
+        RUN, HOLDER, 1, 1, NOW + DEADLINES[Working], NOW + CALLBACK_LIFETIME
+    )
+
+
+def test_a_run_that_finds_another_waiting_for_a_yes_is_skipped_and_names_it():
+    moved = skipped_events(CREATED, HOLDER, "trigger", WAITING_RUN)
+    assert kinds(moved) == ["run_created", "execution_linked", "run_skipped"]
+    assert moved[2].summary == "An earlier run is still waiting for a yes."
+    assert moved[2].data.model_dump() == {"waiting_run_id": "run_0"}
+    assert state_name(SKIPPED) == "skipped"
+    assert unread_in(SKIPPED) == ()
+
+
+def test_a_pending_run_joins_the_execution_its_start_began():
+    moved = PENDING_UNCLAIMED.link(HOLDER, "webhook", NOW)
+    assert moved.state == working_on(RUN, HOLDER, 1, NOW)
+    assert kinds(moved.events) == ["execution_linked"]
+
+
+def test_a_pending_run_is_skipped_while_another_waits_for_a_yes():
+    moved = PENDING_UNCLAIMED.skip(HOLDER, "webhook", WAITING_RUN)
+    assert moved.state == SKIPPED
+    assert kinds(moved.events) == ["execution_linked", "run_skipped"]
+
+
+def test_each_node_call_moves_the_working_deadline_on():
+    working = working_on(RUN, HOLDER, 1, NOW)
+    assert working.touch(LATER) == Working(
+        RUN, HOLDER, 1, 1, LATER + DEADLINES[Working], NOW + CALLBACK_LIFETIME
+    )

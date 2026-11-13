@@ -46,6 +46,7 @@ RUN_WORDS: Final[dict[RunState, str]] = {
     "succeeded": "Done",
     "rejected": "Declined",
     "failed": "Stopped",
+    "skipped": "Skipped",
 }
 """A run's state in the Workflows page's words: its pill while it needs someone or is going, and
 its last-run line once it is over (`pillOf` and `lastRunLine` in the Portal)."""
