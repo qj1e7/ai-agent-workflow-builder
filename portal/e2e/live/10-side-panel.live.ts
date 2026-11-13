@@ -302,7 +302,7 @@ test('FIX-open-software: a software already on the watchlist opens in the side p
   await expectAccessible(page, path.join(OUT, 'axe'), 'side-panel-software-1280')
   await shot(page, info, 'r3-side-panel-software-1280')
   await panel(page).getByRole('link', { name: 'More details' }).click()
-  await expect(page).toHaveURL(/\/software\?row=/)
+  await expect(page).toHaveURL(/\/software\/[^/?]+$/)
   await expect(page.getByRole('link', { name: 'Back to the chat' })).toBeVisible()
   await context.close()
 })

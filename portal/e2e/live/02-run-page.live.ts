@@ -397,16 +397,17 @@ async function expectDeclinedEverywhere(page: Page, runId: string, info: TestInf
   await expect(page.getByRole('main')).toContainText(RECORD)
   await shot(page, info, `r12-run-page-${who}-${width}`)
   await page.goto('/workflows')
-  const workflow = page.locator('li[data-workflow-id]').filter({ has: page.getByRole('heading', { name: 'Software watchlist', exact: true }) })
-  await expect(workflow.getByText(/^Last run .+ · Declined by Bob$/), 'the Workflows row names who declined, the record’s short form for its one line').toBeVisible()
+  const workflow = page.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })
+  await expect(workflow.getByText(/last run .+, declined by Bob\. Nothing was written\./), 'the Workflows row names who declined, the short form for its one line').toBeVisible()
   await expect(workflow).not.toContainText(/created|Sent/)
   await workflow.scrollIntoViewIfNeeded()
   await shot(page, info, `r12-workflows-${who}-${width}`)
   await page.goto('/software')
   const row = softwareRow(page, 'LangGraph')
-  await expect(row).toContainText('New version')
-  await expect(row).toContainText(RECORD)
-  await row.scrollIntoViewIfNeeded()
+  await expect(row).toContainText('Newer out')
+  await row.getByRole('link').click()
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('LangGraph')
+  await expect(page.getByRole('main'), 'the software page gives the record as its Upgrade ticket').toContainText(RECORD)
   await shot(page, info, `r12-watchlist-${who}-${width}`)
 }
 
@@ -474,8 +475,8 @@ for (const phone of [false, true]) {
       try {
         const next = /The tickets will be proposed again at the next check, Mon \d+ \w+, 9:00\./
         await alice.goto('/software')
-        await expect(softwareRow(alice, 'LangGraph'), 'the row says when the tickets are proposed again').toContainText(next)
-        await softwareRow(alice, 'LangGraph').scrollIntoViewIfNeeded()
+        await softwareRow(alice, 'LangGraph').getByRole('link').click()
+        await expect(alice.getByRole('main'), 'the software page says when the tickets are proposed again').toContainText(next)
         await shot(alice, info, `r12-watchlist-next-check-alice-${width}`)
         await alice.goto(`/runs/${runId}`)
         await expect(alice.getByRole('main'), 'the run page gives the same next step').toContainText(next)

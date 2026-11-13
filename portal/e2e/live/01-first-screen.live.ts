@@ -18,7 +18,7 @@ test.beforeAll(async ({ baseURL }) => {
 const RAIL = [
   { label: 'Chat', path: '/', heading: HOME_ALICE },
   { label: 'Workflows', path: '/workflows', heading: 'Workflows' },
-  { label: 'Watchlist', path: '/software', heading: 'Software watchlist' },
+  { label: 'Watchlist', path: '/software', heading: 'Watchlist' },
 ] as const
 
 const PAGES = [...RAIL.map(({ path: to, label }) => ({ label, path: to })), { label: 'Settings', path: '/settings' }]
@@ -81,7 +81,7 @@ test('Back and Forward walk across three pages', async ({ page }) => {
   await page.goto('/')
   await mainMenu(page).getByRole('link', { name: linkName('Workflows') }).click()
   await mainMenu(page).getByRole('link', { name: linkName('Watchlist') }).click()
-  await expect(heading(page)).toHaveText('Software watchlist')
+  await expect(heading(page)).toHaveText('Watchlist')
   await page.goBack()
   await expect(page).toHaveURL(/\/workflows$/)
   await expect(heading(page)).toHaveText('Workflows')
@@ -92,7 +92,7 @@ test('Back and Forward walk across three pages', async ({ page }) => {
   await expect(heading(page)).toHaveText('Workflows')
   await page.goForward()
   await expect(page).toHaveURL(/\/software$/)
-  await expect(heading(page)).toHaveText('Software watchlist')
+  await expect(heading(page)).toHaveText('Watchlist')
 })
 
 test('the Settings gear opens Settings, and a path that does not exist says so', async ({ page }, info) => {
@@ -222,7 +222,7 @@ test('at 390 px wide the page does not scroll sideways, and every rail item can 
   expect(barTop, 'at 390 px the rail is a bar across the top, under the header').toBeGreaterThanOrEqual(bannerBottom - 1)
   for (const [label, to, words] of [
     ['Workflows', /\/workflows$/, 'Workflows'],
-    ['Watchlist', /\/software$/, 'Software watchlist'],
+    ['Watchlist', /\/software$/, 'Watchlist'],
     ['Chat', /\/$/, HOME_ALICE],
   ] as const) {
     const tab = bar.getByRole('link', { name: linkName(label) })

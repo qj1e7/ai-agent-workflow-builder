@@ -25,8 +25,9 @@ let runId: string | undefined
 
 const WIDTHS = [1920, 1440, 1280, 1050, 1024, 901, 900, 768, 390] as const
 
-/** A workflow that never ran, so a search for it leaves a Workflows list with no action in any row. */
-let quiet: string | undefined
+/** A workflow that never ran, so a search for it leaves the Workflows list with one row. Its page, and a software's page, are measured too. */
+let quiet: { readonly name: string; readonly id: string } | undefined
+let softwarePages: readonly string[] = []
 
 interface Screen {
   readonly name: string
@@ -44,7 +45,7 @@ const ANY_HEADING = /\S/
 const SCREENS: readonly Screen[] = [
   { name: 'Chat', path: '/', heading: ANY_HEADING },
   { name: 'Workflows', path: '/workflows', heading: 'Workflows' },
-  { name: 'Watchlist', path: '/software', heading: 'Software watchlist', lead: /^(?:\d+ (?:has|have) a newer version(?: · \d+ can’t be checked)?(?: · \d+ not checked yet)?|\d+ can’t be checked(?: · \d+ not checked yet)?|\d+ not checked yet|Everything is up to date\.|Nothing newer yet\.|Everything your team runs, in one list\.)$/ },
+  { name: 'Watchlist', path: '/software', heading: 'Watchlist', lead: /^(?:(?:\d+ (?:has|have) a newer version|\d+ can’t be found|\d+ can’t be checked|\d+ (?:is|are) up to date|\d+ watching)(?: · (?:\d+ (?:has|have) a newer version|\d+ can’t be found|\d+ can’t be checked|\d+ (?:is|are) up to date|\d+ watching))*|Everything your team runs, in one list\.)$/ },
   { name: 'Settings, Connections', path: '/settings', heading: 'Settings' },
   { name: 'Settings, People and permissions', path: '/settings?tab=people', heading: 'Settings' },
   { name: 'Settings, AI model', path: '/settings?tab=model', heading: 'Settings' },
@@ -76,15 +77,25 @@ for (const user of USERS) {
     test(`nothing spills, is cut off or overlaps, and the page does not scroll sideways, as ${user.role} at ${String(width)} px`, async ({ browser, backend }) => {
       runId ??= (await backend.waitingRunWithUnread('alice')).runId
       if (quiet === undefined) {
-        quiet = `Fit lane ${randomUUID().slice(0, 6)}`
-        await backend.post('alice', '/api/v1/agent-use-cases', { name: quiet, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents: [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }] }, undefined, [201])
+        const name = `Fit lane ${randomUUID().slice(0, 6)}`
+        const made = await backend.post<{ use_case_id: string }>('alice', '/api/v1/agent-use-cases', { name, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents: [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }] }, undefined, [201])
+        quiet = { name, id: made.use_case_id }
+        const { watchlist } = await backend.get<{ watchlist: { software: { id: string }[] } }>('alice', '/api/v1/watchlist')
+        softwarePages = watchlist.software.map((item) => `/software/${item.id}`)
+      }
+      for (let have = (await backend.get<{ use_cases: unknown[] }>('alice', '/api/v1/use-cases')).use_cases.length; have <= 10; have += 1) {
+        await backend.post('alice', '/api/v1/agent-use-cases', { name: `Fit filler ${randomUUID().slice(0, 6)}`, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents: [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }] }, undefined, [201])
       }
       const context = await devContext(browser, user.id, { reducedMotion: true })
       const page = await context.newPage()
       await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
       const found: string[] = []
       const runPage: Screen = { name: 'A run waiting for a yes', path: `/runs/${runId}`, heading: ANY_HEADING, shows: 'Not checked' }
-      for (const screen of [...SCREENS, runPage].filter((s) => user.id === 'alice' || s.operatorOnly !== true)) {
+      const pages: Screen[] = [
+        { name: 'A workflow', path: `/workflows/${quiet.id}`, heading: quiet.name },
+        ...softwarePages.map((softwarePath, index): Screen => ({ name: `Software ${String(index + 1)}`, path: softwarePath, heading: ANY_HEADING })),
+      ]
+      for (const screen of [...SCREENS, ...pages, runPage].filter((s) => user.id === 'alice' || s.operatorOnly !== true)) {
         await page.goto(screen.path)
         await settled(page, screen)
         if (screen.shows) await expect(page.getByRole('main').getByText(screen.shows, { exact: true })).toBeVisible()
@@ -93,11 +104,13 @@ for (const user of USERS) {
       }
       await page.goto('/workflows')
       await settled(page, { name: 'Workflows', path: '/workflows', heading: 'Workflows' })
-      await page.getByRole('button', { name: 'Search workflows' }).click()
-      await page.getByRole('searchbox', { name: 'Find a workflow' }).fill(quiet)
+      await expect(page.getByRole('group', { name: 'Show' }), 'more than ten workflows give the list its search and filters').toBeVisible()
+      const withSearch = await fitProblems(page)
+      if (withSearch.length) found.push(`Workflows with its search and filters at ${String(width)} px as ${user.role}:\n${describeProblems(withSearch).replace(/^/gm, '    ')}`)
+      await page.getByRole('searchbox', { name: 'Find a workflow' }).fill(quiet.name)
       await expect(page.getByRole('list', { name: 'Workflows' }).locator('li[data-workflow-id]')).toHaveCount(1)
-      const noAction = await fitProblems(page)
-      if (noAction.length) found.push(`Workflows with no action in any row at ${String(width)} px as ${user.role}:\n${describeProblems(noAction).replace(/^/gm, '    ')}`)
+      const narrowed = await fitProblems(page)
+      if (narrowed.length) found.push(`Workflows narrowed to one row at ${String(width)} px as ${user.role}:\n${describeProblems(narrowed).replace(/^/gm, '    ')}`)
       await context.close()
       expect(found, found.join('\n')).toEqual([])
     })

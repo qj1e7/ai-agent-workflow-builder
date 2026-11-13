@@ -372,15 +372,9 @@
 }
 
 .factrows dt,
-.factrows dd:not(.rowAction) {
+.factrows dd {
   grid-column: 1;
   min-width: 0;
-}
-
-.factrows .rowAction {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  margin: 0;
 }
 
 .factrows dt {
@@ -517,8 +511,8 @@
   min-height: 32px;
 }
 
-.head p.opsNote {
-  margin-top: 8px;
+.opsNote {
+  margin-bottom: 16px;
   font-size: var(--text-14);
 }
 
@@ -541,6 +535,7 @@
 }
 
 .leftOut {
+  margin-bottom: 16px;
   color: var(--muted);
 }
 

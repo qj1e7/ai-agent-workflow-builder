@@ -194,17 +194,19 @@ test('the Needs you count is one number on Home, the rail and the Planner’s an
   expect(more + 1, 'Principle 7: the pinned line’s N more plus the one it names is the count everywhere').toBe(onHome)
 
   await rail(page).getByRole('link', { name: /^Watchlist/ }).click()
-  await expect(page.getByRole('heading', { level: 1, name: 'Software watchlist' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Watchlist' })).toBeVisible()
   await expect(main(page).getByRole('status').filter({ hasText: /^Loading/ })).toHaveCount(0)
   const attention = main(page).locator('#needs-attention-heading')
   const onPage = (await attention.count()) === 0 ? 0 : Number((await attention.innerText()).replace(/\D/g, ''))
   expect(await railCount(page, 'Watchlist'), 'Principle 7: the rail’s Watchlist count is the page’s Needs attention').toBe(onPage)
   const line = await main(page).locator('h1 + p').innerText()
   const said = (part: RegExp) => Number(part.exec(line)?.[1] ?? 0)
-  const rowsWith = (...statuses: readonly string[]) => main(page).locator(statuses.map((status) => `li[data-status="${status}"]`).join(', ')).count()
-  expect(said(/(\d+) ha(?:s|ve) a newer version/), `Principle 7: the count line "${line}" counts every row with a newer version`).toBe(await rowsWith('behind', 'awaiting_approval', 'ticket_open'))
-  expect(said(/(\d+) can’t be checked/), `Principle 7: the count line "${line}" counts every row that can’t be checked`).toBe(await rowsWith('cant_check'))
-  expect(said(/(\d+) not checked yet/), `Principle 7: the count line "${line}" counts every row not checked yet`).toBe(await rowsWith('not_checked'))
+  const withPill = (...words: readonly string[]) => main(page).locator('li[data-status]').filter({ has: page.locator('span[class*="pill"]').filter({ hasText: new RegExp(`^(${words.join('|')})$`) }) }).count()
+  expect(said(/(\d+) ha(?:s|ve) a newer version/), `Principle 7: the count line "${line}" counts every row whose pill says Newer out`).toBe(await withPill('Newer out'))
+  expect(said(/(\d+) can’t be found/), `Principle 7: the count line "${line}" counts every row whose pill says Can’t find`).toBe(await withPill('Can’t find'))
+  expect(said(/(\d+) can’t be checked/), `Principle 7: the count line "${line}" counts every row whose pill says Can’t check`).toBe(await withPill('Can’t check'))
+  expect(said(/(\d+) (?:is|are) up to date/), `Principle 7: the count line "${line}" counts every row whose pill says Up to date`).toBe(await withPill('Up to date'))
+  expect(said(/(\d+) watching/), `Principle 7: the count line "${line}" counts every row whose pill says Watching`).toBe(await withPill('Watching'))
   await repair()
   await context.close()
 })
@@ -264,7 +266,56 @@ test('a declined run never claims a write, on its page, in its chat, on Workflow
     await page.goto('/workflows')
     await noWriteClaimed(main(page).locator('li[data-workflow-id]').filter({ hasText: 'Declined by Bob' }), `the declined run’s Workflows row, as ${user}`)
     await page.goto('/software')
-    await noWriteClaimed(main(page).locator('li[data-status]').filter({ hasText: 'Declined by Bob.' }), `the watchlist row of the declined check, as ${user}`)
+    await page.locator('li[data-status="behind"] a').first().click()
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('LangGraph')
+    await noWriteClaimed(main(page).filter({ hasText: 'Declined by Bob.' }), `the software page of the declined check, as ${user}`)
     await context.close()
   }
+})
+
+/** The words a state had before the sketch. They are gone from every page, so a state reads one way everywhere. */
+const RETIRED_STATE_WORDS = /\bNew version\b|\bNot checked yet\b|\bTicket waiting for a yes\b|\bNothing newer yet\b|\bSoftware we watch\b|\bWaiting on others\b|\bRecent activity\b/
+
+test('Workflows, a workflow, the Watchlist and a software page keep the design rules, and a state reads the same on the list and on the page', async ({ browser, backend }) => {
+  await backend.waitingRun('alice')
+  const context = await devContext(browser, 'alice')
+  const page = await context.newPage()
+  const rules = async (state: string) => {
+    await onePrimary(page, state)
+    await noOverclaim(page, state)
+    await noDeadButtons(page, state)
+    expect(await main(page).innerText(), `Principle 7 (one source per fact): ${state} uses a retired state word`).not.toMatch(RETIRED_STATE_WORDS)
+  }
+
+  await page.goto('/workflows')
+  const row = main(page).locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })
+  await expect(row).toContainText('Waiting for a yes')
+  await rules('Workflows')
+  const onList = (await row.locator('span[data-life]').innerText()).trim()
+  await row.getByRole('link').click()
+  await expect(page).toHaveURL(/\/software$/)
+  await expect(main(page).locator('li[data-status]').first()).toBeVisible()
+  await rules('the Watchlist')
+
+  const pillOf = async (scope: Locator) => (await scope.locator('span[class*="pill"]').first().innerText()).trim()
+  const listed = main(page).locator('li[data-status]').first()
+  const onWatchlist = await pillOf(listed)
+  await listed.getByRole('link').click()
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await rules('a software page')
+  expect(await pillOf(main(page).locator('div[class*="head"]')), 'Principle 7: a software reads the same on the Watchlist and on its page').toBe(onWatchlist)
+
+  const listedWorkflows = await backend.get<{ use_cases: { use_case_id: string; template: string }[] }>('alice', '/api/v1/use-cases')
+  const agent = listedWorkflows.use_cases.find((useCase) => useCase.template !== 'software_watchlist')
+  if (agent) {
+    await page.goto('/workflows')
+    const agentRow = main(page).locator(`li[data-workflow-id="${agent.use_case_id}"]`)
+    const rowPill = (await agentRow.locator('span[data-life]').innerText()).trim()
+    await agentRow.getByRole('link').click()
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await rules('a workflow page')
+    expect((await main(page).locator('div[class*="head"] span[data-life]').innerText()).trim(), 'Principle 7: a workflow reads the same on Workflows and on its page').toBe(rowPill)
+  }
+  expect(onList, 'the waiting check reads Waiting for a yes').toBe('Waiting for a yes')
+  await context.close()
 })

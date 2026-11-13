@@ -23,7 +23,7 @@ interface EditorProps {
 /** The sketch's inline editor: a day, a time, Save and Cancel. The time is any 5-minute step, since the platform takes any, and a time is never guessed. */
 export function WhenEditor({ schedule, isPending, save, onDone }: EditorProps) {
   const [day, setDay] = useState<Day>(schedule?.day ?? 'every_day')
-  const [at, setAt] = useState(schedule?.at ?? '09:00')
+  const [at, setAt] = useState(schedule?.at ?? '')
   const [error, setError] = useState<string | undefined>()
   const words = useErrorWords()
   const first = useRef<HTMLSelectElement>(null)

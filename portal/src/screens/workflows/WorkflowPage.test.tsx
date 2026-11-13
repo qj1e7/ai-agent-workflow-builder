@@ -253,6 +253,11 @@ describe('a workflow page', () => {
     expect(text(html)).toContain('Saving makes you the owner of this schedule. Its runs then count as your work, so you won’t be able to approve them.')
   })
 
+  it('opens with no time chosen while the workflow has no schedule, so a time is never guessed', () => {
+    expect(renderEditor(null)).toMatch(/<input[^>]*type="time"[^>]*value=""/)
+    expect(renderEditor(SCHEDULED.schedule)).toContain('value="09:00"')
+  })
+
   it('tells everyone a held schedule can be taken over by saving it', () => {
     const held: UseCaseView = { ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: 'owner_removed' } }
     for (const me of [ALICE, BOB]) {
