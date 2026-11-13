@@ -102,7 +102,7 @@ describe('the side panel’s short history', () => {
       ['alice', { type: 'panel_open', item: NEEDS, from: 1 }],
       ['alice', { type: 'panel_open', item: flow('a'), from: 0 }],
     ])
-    expect(shownBy(desks)).toEqual({ item: flow('a'), from: 0, previous: null })
+    expect(shownBy(desks)).toEqual({ item: flow('a'), from: 0, previous: null, root: flow('a') })
   })
 
   it('keeps the list when an item opens from inside it, so Back returns to the list', () => {
@@ -110,9 +110,9 @@ describe('the side panel’s short history', () => {
       ['alice', { type: 'panel_open', item: WORKFLOWS, from: 2 }],
       ['alice', { type: 'panel_push', item: flow('a') }],
     ])
-    expect(shownBy(desks)).toEqual({ item: flow('a'), from: 2, previous: WORKFLOWS })
+    expect(shownBy(desks)).toEqual({ item: flow('a'), from: 2, previous: WORKFLOWS, root: WORKFLOWS })
     const back = run([['alice', { type: 'panel_back' }]], desks)
-    expect(shownBy(back)).toEqual({ item: WORKFLOWS, from: 2, previous: null })
+    expect(shownBy(back)).toEqual({ item: WORKFLOWS, from: 2, previous: null, root: WORKFLOWS })
   })
 
   it('does not add the item it already shows, and cuts back to an item it already holds', () => {
@@ -123,7 +123,7 @@ describe('the side panel’s short history', () => {
     ])
     expect(shownBy(base)?.previous).toEqual(NEEDS)
     const again = run([['alice', { type: 'panel_push', item: NEEDS }]], base)
-    expect(shownBy(again)).toEqual({ item: NEEDS, from: 0, previous: null })
+    expect(shownBy(again)).toEqual({ item: NEEDS, from: 0, previous: null, root: NEEDS })
   })
 
   it('has nothing to go back to at the first item, and Back there changes nothing', () => {

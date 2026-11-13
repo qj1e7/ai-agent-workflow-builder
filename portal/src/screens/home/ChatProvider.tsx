@@ -17,6 +17,8 @@ export interface OpenPanel {
   readonly from: number
   /** The item Back returns to, when the panel was opened from inside another, such as an item from its list. */
   readonly previous: PanelItem | null
+  /** The first item, which the chat's control opened, so Close hands focus back to that control. */
+  readonly root: PanelItem
 }
 
 export interface Chat {

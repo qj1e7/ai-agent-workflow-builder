@@ -187,7 +187,7 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
     const newest = page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
     const panel = page.locator('#side-panel')
     const views: readonly (readonly [string, string, () => Locator, () => readonly Locator[]])[] = [
-      ['workflow', `Check ${facts.workflow}`, () => newest.getByRole('button', { name: facts.workflow, exact: true }), () => [panel.getByText('Next run')]],
+      ['workflow', `Is ${facts.workflow} running?`, () => newest.getByRole('button', { name: facts.workflow, exact: true }), () => [panel.getByText('Next run')]],
       [
         'approval',
         'What needs me?',

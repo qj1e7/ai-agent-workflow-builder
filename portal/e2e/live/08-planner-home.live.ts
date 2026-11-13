@@ -1021,7 +1021,7 @@ test.describe('the chat after the first message', () => {
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     await page.goto('/')
-    await ask(page, `Check ${name}`)
+    await ask(page, `Is ${name} running?`)
     await thread(page).getByRole('list', { name: 'Your workflows' }).getByRole('button', { name, exact: true }).click()
     await page.locator('#side-panel').getByRole('link', { name: 'More details' }).click()
     await expect(page.getByRole('link', { name: 'Back to the chat', exact: true })).toBeVisible()

@@ -146,7 +146,7 @@ export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewPro
     const was = closed.current
     if (!was || panel) return
     closed.current = null
-    const back = openerAfterClose(openersOf(column.current, was.item), was.from) ?? document.getElementById('planner-box')
+    const back = openerAfterClose(openersOf(column.current, was.root), was.from) ?? document.getElementById('planner-box')
     back?.focus({ preventScroll: true })
   }, [panel])
 
