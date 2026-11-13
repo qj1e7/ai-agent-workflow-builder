@@ -703,6 +703,8 @@ details.rule > summary {
   min-height: 44px;
   color: var(--muted);
   font-size: 0.875rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
   cursor: pointer;
 }
 
