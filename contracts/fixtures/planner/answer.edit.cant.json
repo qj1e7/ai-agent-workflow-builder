@@ -8,7 +8,7 @@
       "choices": []
     },
     {
-      "text": "Pause the morning check",
+      "text": "Rename the morning check",
       "mark": "cant",
       "reason": "only_schedule",
       "note": null,

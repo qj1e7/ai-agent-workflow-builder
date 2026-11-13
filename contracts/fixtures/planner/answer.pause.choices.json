@@ -1,0 +1,28 @@
+{
+  "parts": [
+    {
+      "text": "pause it",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ],
+  "use_case_id": null,
+  "name": null,
+  "already": false,
+  "missing": null,
+  "choices": [
+    {
+      "use_case_id": "uc_01JB8",
+      "name": "React release check",
+      "state": "on"
+    },
+    {
+      "use_case_id": "uc_01JC2",
+      "name": "FastAPI release check",
+      "state": "on"
+    }
+  ],
+  "answer": "pause"
+}

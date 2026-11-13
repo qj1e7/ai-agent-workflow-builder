@@ -13,9 +13,9 @@
     "suggestion": "Retry the run. If it fails again, check whether that service is up."
   },
   "answers": {
-    "what_happened": "An agent could not finish its work.",
-    "what_affected": "Nothing was written.",
-    "safe_to_retry": "Yes. A retry runs the work again, and any write still waits for a yes.",
+    "what_happened": "GitHub didn\u2019t answer at 10:14.",
+    "what_affected": "Nothing. No ticket was written.",
+    "safe_to_retry": "Yes. Nothing was written, so a retry is safe.",
     "retry": {
       "possible": true,
       "asks_again": true
