@@ -76,6 +76,10 @@ class Stage(Enum):
 class Outcome(Enum):
     WRITTEN = "written"
     NOTHING_TO_WRITE = "nothing_to_write"
+    TEST_PASSED = "test_passed"
+
+
+TEST_PASSED = "Test run passed up to the yes. Nothing was written."
 
 
 @dataclass(frozen=True)
@@ -382,6 +386,29 @@ class Proposed:
                     1,
                     "approval_opened",
                     f"Approval {approval_id} opened",
+                ),
+            ),
+        )
+
+    def stop_for_test(self) -> Moved[Succeeded]:
+        """A test run of a draft ends at the approval gate. Nobody is asked for a yes, so the
+        write can never be made (ADR 0044)."""
+        return Moved(
+            Succeeded(self.run_id, Outcome.TEST_PASSED, (), self.unread),
+            (
+                _step_started(StepName.ASK_APPROVAL, self.execution, 1),
+                step_finished(
+                    StepName.ASK_APPROVAL,
+                    self.execution,
+                    1,
+                    "test_passed",
+                    "A test run of a draft asks nobody for a yes",
+                ),
+                PendingEvent(
+                    PLATFORM,
+                    "run_succeeded",
+                    TEST_PASSED,
+                    RunSucceededData(outcome=Outcome.TEST_PASSED.value),
                 ),
             ),
         )

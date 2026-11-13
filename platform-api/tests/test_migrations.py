@@ -979,3 +979,35 @@ async def test_migration_0018_keeps_questions_with_whole_answers_and_a_downgrade
     async with db.transaction("orchestration") as uow:
         assert await load_questions_for(uow, [approval_id]) == {}, "the table starts empty again"
     assert asked.answer is None
+
+
+def test_migration_0012_leaves_every_workflow_from_before_on_and_a_downgrade_pauses_a_draft(
+    postgres: PostgresUrls,
+):
+    insert = (
+        "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version)"
+        " VALUES (%s, 'alice', %s, 1)"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        downgrade("builder", postgres.owner, "0011")
+        conn.execute(insert, ("uc_before", NOW))
+        upgrade("builder", postgres.owner)
+        conn.execute(insert, ("uc_draft", NOW))
+        conn.execute("UPDATE builder.use_cases SET draft = true WHERE use_case_id = 'uc_draft'")
+        assert conn.execute(
+            "SELECT use_case_id, draft FROM builder.use_cases"
+            " WHERE use_case_id IN ('uc_before', 'uc_draft') ORDER BY use_case_id"
+        ).fetchall() == [("uc_before", False), ("uc_draft", True)]
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(
+                "UPDATE builder.use_cases SET paused_at = now(), paused_by = 'alice'"
+                " WHERE use_case_id = 'uc_draft'"
+            )
+        downgrade("builder", postgres.owner, "0011")
+        try:
+            assert conn.execute(
+                "SELECT use_case_id, paused_at, paused_by FROM builder.use_cases"
+                " WHERE use_case_id IN ('uc_before', 'uc_draft') ORDER BY use_case_id"
+            ).fetchall() == [("uc_before", None, None), ("uc_draft", NOW, "alice")]
+        finally:
+            upgrade("builder", postgres.owner)

@@ -17,18 +17,19 @@ from platform_api.builder.last_run import RunHistory, last_run_view
 from platform_api.builder.lifecycle import (
     AlreadyDeleted,
     Deleted,
+    Draft,
     Lifecycle,
     On,
     Paused,
     TooLate,
     comes_on,
     delete,
-    is_on,
     lifecycle_of,
     pause,
     restore,
     resume,
     to_columns,
+    turn_on,
 )
 from platform_api.builder.models import (
     CardChecked,
@@ -51,6 +52,7 @@ from platform_api.builder.models import (
     UseCaseList,
     UseCaseSchedule,
     UseCaseScheduleIn,
+    UseCaseState,
     UseCaseView,
     VersionList,
     Via,
@@ -103,14 +105,15 @@ from platform_api.shared import Principal, UseCaseId, UserId, new_id
 
 _CURRENT_VERSION = """
     SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
-           u.left_out, v.version, v.template, v.name, v.instruction, v.params, v.created_at
+           u.draft, u.left_out, v.version, v.template, v.name, v.instruction, v.params,
+           v.created_at
     FROM builder.use_cases u
     JOIN builder.use_case_versions v
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
 """
 
 _USE_CASE_ROW = (
-    "SELECT current_version, paused_at, paused_by, deleted_at, deleted_by"
+    "SELECT current_version, paused_at, paused_by, deleted_at, deleted_by, draft"
     " FROM builder.use_cases WHERE use_case_id = %s"
 )
 
@@ -125,6 +128,17 @@ def _schedule_view(saved: SavedSchedule) -> UseCaseSchedule:
     )
 
 
+def _state(state: Lifecycle) -> UseCaseState:
+    """A deleted workflow is never shown, so it has no word of its own."""
+    match state:
+        case Draft():
+            return "draft"
+        case On():
+            return "on"
+        case Paused() | Deleted():
+            return "paused"
+
+
 def _view(
     row: Mapping[str, Any],
     agents: Sequence[PinnedAgent],
@@ -133,7 +147,7 @@ def _view(
     now: datetime,
 ) -> UseCaseView:
     template = TEMPLATES[row["template"]]
-    on = is_on(lifecycle_of(row))
+    state = _state(lifecycle_of(row))
     plan = (
         plan_for_cards([a.card for a in agents])
         if template.key == AGENT_CARDS.key
@@ -148,8 +162,8 @@ def _view(
         params=row["params"],
         owner=UserId(row["owner"]),
         created_at=row["created_at"],
-        state="on" if on else "paused",
-        next_run_at=schedule.next_run(now) if on and schedule is not None else None,
+        state=state,
+        next_run_at=schedule.next_run(now) if state == "on" and schedule is not None else None,
         schedule=None if schedule is None else _schedule_view(schedule),
         plan=plan,
         agents=[
@@ -191,6 +205,11 @@ class CardsRefused:
 @dataclass(frozen=True)
 class UseCasePaused:
     pass
+
+
+@dataclass(frozen=True)
+class NotOnYet:
+    """A draft runs by hand only as a test run."""
 
 
 @dataclass(frozen=True)
@@ -301,6 +320,13 @@ class Builder:
             return None
         return await self.get_use_case(use_case_id, principal)
 
+    async def turn_on_use_case(self, use_case_id: str, principal: Principal) -> UseCaseView | None:
+        """Publishes a draft's version 1 and turns it on. Asking again changes nothing."""
+        moved = await self._move(use_case_id, lambda state, _template, _now: turn_on(state))
+        if moved is None or isinstance(moved, AlreadyDeleted):
+            return None
+        return await self.get_use_case(use_case_id, principal)
+
     async def delete_use_case(
         self, use_case_id: str, principal: Principal
     ) -> UseCaseDeleted | WatchlistStays | None:
@@ -352,7 +378,12 @@ class Builder:
     async def list_versions(self, use_case_id: str) -> VersionList | None:
         async with self._db.connection("builder") as conn:
             row = await (await conn.execute(_USE_CASE_ROW, (use_case_id,))).fetchone()
-            if row is None or not isinstance(lifecycle_of(row), On | Paused):
+            if row is None:
+                return None
+            state = lifecycle_of(row)
+            if isinstance(state, Draft):
+                return VersionList(versions=[])
+            if not isinstance(state, On | Paused):
                 return None
             versions = await versions_of(conn, use_case_id)
         running = row["current_version"]
@@ -387,7 +418,8 @@ class Builder:
         against the schedule the newest version recorded, so that retry publishes the missing
         version. Version 1 and the watchlist's versions record no schedule, so against them it
         is judged on the live schedule, and the first change after version 1 stays without a
-        version if its commit is lost."""
+        version if its commit is lost. A draft has published no version, so a change to it
+        saves its schedule and publishes none."""
         async with self._db.transaction("builder") as uow:
             # A delete holds this lock alone, so it waits until the schedule is stored, and a
             # delete that came first is seen here. The row lock puts changes in turn.
@@ -395,23 +427,28 @@ class Builder:
             row = await (
                 await uow.conn.execute(_USE_CASE_ROW + " FOR UPDATE", (use_case_id,))
             ).fetchone()
-            if row is None or not isinstance(lifecycle_of(row), On | Paused):
+            if row is None:
                 return None
-            versions = await versions_of(uow.conn, use_case_id)
+            state = lifecycle_of(row)
+            if not isinstance(state, Draft | On | Paused):
+                return None
+            draft = isinstance(state, Draft)
+            versions = [] if draft else await versions_of(uow.conn, use_case_id)
             decided = decide(versions)
             if not isinstance(decided, Publish):
                 return decided
-            recorded = versions[0].change
-            if recorded is None:
-                saved = await self._schedules.get(UseCaseId(use_case_id))
-                before = None if saved is None else saved.schedule
-            else:
-                before = recorded.after
-            if decided.after != before or decided.undid is not None:
-                change = ScheduleChange(
-                    principal.user_id, via, before, decided.after, decided.undid
-                )
-                await publish(uow, use_case_id, row["current_version"], change)
+            if not draft:
+                recorded = versions[0].change
+                if recorded is None:
+                    saved = await self._schedules.get(UseCaseId(use_case_id))
+                    before = None if saved is None else saved.schedule
+                else:
+                    before = recorded.after
+                if decided.after != before or decided.undid is not None:
+                    change = ScheduleChange(
+                        principal.user_id, via, before, decided.after, decided.undid
+                    )
+                    await publish(uow, use_case_id, row["current_version"], change)
             if decided.after is None:
                 await self._schedules.delete(UseCaseId(use_case_id))
             else:
@@ -423,7 +460,8 @@ class Builder:
             await hold_workflow(uow.conn, use_case_id, alone=True)
             row = await (
                 await uow.conn.execute(
-                    "SELECT u.paused_at, u.paused_by, u.deleted_at, u.deleted_by, v.template"
+                    "SELECT u.paused_at, u.paused_by, u.deleted_at, u.deleted_by, u.draft,"
+                    " v.template"
                     " FROM builder.use_cases u JOIN builder.use_case_versions v"
                     " ON v.use_case_id = u.use_case_id AND v.version = u.current_version"
                     " WHERE u.use_case_id = %s FOR UPDATE OF u",
@@ -434,16 +472,17 @@ class Builder:
                 return None
             before = lifecycle_of(row)
             after = move(before, row["template"], uow.now)
-            if isinstance(after, On | Paused | Deleted) and after != before:
+            if isinstance(after, Draft | On | Paused | Deleted) and after != before:
                 columns = to_columns(after)
                 await uow.conn.execute(
                     "UPDATE builder.use_cases SET paused_at = %s, paused_by = %s,"
-                    " deleted_at = %s, deleted_by = %s WHERE use_case_id = %s",
+                    " deleted_at = %s, deleted_by = %s, draft = %s WHERE use_case_id = %s",
                     (
                         columns.paused_at,
                         columns.paused_by,
                         columns.deleted_at,
                         columns.deleted_by,
+                        columns.draft,
                         use_case_id,
                     ),
                 )
@@ -523,8 +562,8 @@ class Builder:
         async with self._db.transaction("builder") as uow:
             await uow.conn.execute(
                 "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version,"
-                " left_out) VALUES (%s, %s, %s, 1, %s)",
-                (use_case_id, principal.user_id, uow.now, body.left_out),
+                " left_out, draft) VALUES (%s, %s, %s, 1, %s, %s)",
+                (use_case_id, principal.user_id, uow.now, body.left_out, not body.on),
             )
             await uow.conn.execute(
                 "INSERT INTO builder.use_case_versions (use_case_id, version, template, name,"
@@ -604,6 +643,8 @@ class Builder:
         match state:
             case None:
                 return None
+            case Draft():
+                return NotOn("draft")
             case Paused():
                 return NotOn("paused")
             case Deleted():
@@ -618,12 +659,16 @@ class Builder:
         principal: Principal,
         idempotency_key: str,
         test: bool = False,
-    ) -> RunStarted | None | NothingToCheck | NoModelToRun | UseCasePaused:
+    ) -> RunStarted | None | NothingToCheck | NoModelToRun | UseCasePaused | NotOnYet:
+        """A test run of a draft stops at the approval gate (ADR 0044). Whether it is a draft
+        is read under the lock, so a draft turned on since runs as any test run does."""
         view = await self.get_use_case(use_case_id)
         if view is None:
             return None
         if view.state == "paused":
             return UseCasePaused()
+        if view.state == "draft" and not test:
+            return NotOnYet()
         spec = await self._spec_of(view)
         if isinstance(spec, NothingToCheck):
             return spec
@@ -639,6 +684,11 @@ class Builder:
                     return None
                 case Paused():
                     return UseCasePaused()
+                case Draft() if not test:
+                    return NotOnYet()
+                case Draft():
+                    trial = replace(spec, stops_at_gate=True)
+                    return await self._runs.start_run(trial, principal, idempotency_key)
                 case On():
                     return await self._runs.start_run(spec, principal, idempotency_key)
 
@@ -646,7 +696,7 @@ class Builder:
 async def _lifecycle_now(conn: Connection, use_case_id: str) -> Lifecycle | None:
     row = await (
         await conn.execute(
-            "SELECT paused_at, paused_by, deleted_at, deleted_by FROM builder.use_cases"
+            "SELECT paused_at, paused_by, deleted_at, deleted_by, draft FROM builder.use_cases"
             " WHERE use_case_id = %s",
             (use_case_id,),
         )
