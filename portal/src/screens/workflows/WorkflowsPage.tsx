@@ -72,13 +72,19 @@ export function WorkflowRow({ row, index, arrive, now, nameOf }: RowProps) {
   const { useCase } = row
   const path = workflowPath(useCase)
   const item = { kind: 'workflow', id: useCase.use_case_id } as const
+  const ids = useId()
+  const link = { 'aria-labelledby': `${ids}-name`, 'aria-describedby': `${ids}-pill ${ids}-sub` }
   const inside = (
     <>
       <span className={styles['main']}>
-        <b>{useCase.name}</b>
-        <span className={styles['sub']}>{rowLine(useCase, now, nameOf)}</span>
+        <b id={`${ids}-name`}>{useCase.name}</b>
+        <span id={`${ids}-sub`} className={styles['sub']}>
+          {rowLine(useCase, now, nameOf)}
+        </span>
       </span>
-      <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} test={useCase.last_run?.test === true} />
+      <span id={`${ids}-pill`}>
+        <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} test={useCase.last_run?.test === true} />
+      </span>
     </>
   )
   return (
@@ -89,11 +95,11 @@ export function WorkflowRow({ row, index, arrive, now, nameOf }: RowProps) {
       data-paused={useCase.state === 'paused' || undefined}
     >
       {path === SOFTWARE_PAGE ? (
-        <Link id={rowLinkId(useCase.use_case_id)} to={path} state={FROM_LIST} className={styles['rowLink']}>
+        <Link id={rowLinkId(useCase.use_case_id)} to={path} state={FROM_LIST} className={styles['rowLink']} {...link}>
           {inside}
         </Link>
       ) : (
-        <OpenLink item={item} id={rowLinkId(useCase.use_case_id)} to={path} state={FROM_LIST} className={styles['rowLink']}>
+        <OpenLink item={item} id={rowLinkId(useCase.use_case_id)} to={path} state={FROM_LIST} className={styles['rowLink']} {...link}>
           {inside}
         </OpenLink>
       )}
