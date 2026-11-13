@@ -7,6 +7,7 @@ import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
 import stopped from '../../../../contracts/fixtures/builder/use-case.stopped.json'
 import checkWorkflows from '../../../../contracts/fixtures/planner/answer.check_workflows.json'
 import needsMe from '../../../../contracts/fixtures/planner/answer.needs_me.json'
+import decide from '../../../../contracts/fixtures/planner/answer.decide.json'
 import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
@@ -115,5 +116,14 @@ describe('the behind card (Which software is behind?)', () => {
     const html = draw(behind)
     expect(html).toContain('data-answer="true"')
     expect(text(html)).toContain('You: Which software is behind? Planner:')
+  })
+})
+
+describe('the requests an approve is sent to (approve the upgrade tickets)', () => {
+  it('opens each request as the approval it is, the same way its row in Needs you does', () => {
+    const html = draw(answered(decide as PlannerReply), { me: BOB })
+    const opens = [...html.matchAll(/data-opens="([^"]+)"/g)].map((match) => match[1])
+    expect(opens.length).toBeGreaterThan(0)
+    expect(opens).toEqual((bobHome as HomeOut).approvals.slice(0, opens.length).map((request) => `approval:${request.run_id}`))
   })
 })

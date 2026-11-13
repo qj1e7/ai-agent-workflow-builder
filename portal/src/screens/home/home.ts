@@ -399,7 +399,7 @@ export type Action =
   | { readonly kind: 'test'; readonly label: string; readonly useCaseId: string }
 
 const runItem = (runId: string): PanelItem => ({ kind: 'run', id: runId })
-const approvalItem = (runId: string): PanelItem => ({ kind: 'approval', id: runId })
+export const approvalItem = (runId: string): PanelItem => ({ kind: 'approval', id: runId })
 
 export function actionsOf(need: Need, modelOff = false): readonly Action[] {
   switch (need.kind) {

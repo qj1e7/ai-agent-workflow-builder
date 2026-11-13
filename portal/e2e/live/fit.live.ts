@@ -243,12 +243,12 @@ let bobsDecision: string | undefined
 /** Bob's chat (R16): his Home with the box, what waits for his yes, his decisions, a refusal, a question beside a change, and his request in the side panel. */
 for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
   test(`bob’s chat, his answers and his request in the side panel fit, as an Approver at ${String(width)} px`, async ({ browser, backend }, info) => {
-    test.slow()
-    runId ??= (await backend.waitingRun('alice')).runId
     if (bobsDecision === undefined) {
       bobsDecision = (await backend.waitingRun('alice')).runId
       await approve(backend, bobsDecision)
     }
+    // His own request, the newest waiting for his yes, so the answer's few newest requests hold it however many earlier specs left.
+    const { runId: request } = await backend.waitingRun('alice')
     const context = await devContext(browser, 'bob', { reducedMotion: true })
     const page = await context.newPage()
     await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
@@ -279,7 +279,9 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
         await expect(newest).toHaveAttribute('data-answer', 'true')
         await check(state)
       }
-      await newest.locator(`[data-opens="approval:${String(runId)}"]`).click()
+      const opener = newest.locator(`[data-opens="approval:${request}"]`)
+      await expect(opener, 'the answer offers his own request, as the approval it is').toBeVisible()
+      await opener.click({ timeout: 5_000 })
       await expect(panel.getByRole('button', { name: 'Decline' })).toBeVisible({ timeout: 20_000 })
       await expect(panel).toHaveAttribute('role', width > 900 ? 'complementary' : 'dialog')
       await check('panel')

@@ -14,7 +14,7 @@ import { useCapabilities } from '../../api/plannerQueries'
 import { ideasSay, needsSay, startingPoints, workflowsSay } from './answers'
 import { useAsker } from './asker'
 import { decidedSay, decisionLine } from './decided'
-import { approvalsOf, approverLine, moreWords, needsOf, needsTotal, wordsOf } from './home'
+import { approvalItem, approvalsOf, approverLine, moreWords, needsOf, needsTotal, wordsOf } from './home'
 import { useShowBesideOnWide } from './autoOpen'
 import { NeedRows } from './NeedsSection'
 import { SoftwareRows, WorkflowRows } from './panels/ListRows'
@@ -181,7 +181,7 @@ export function RequestsToOpen({ now }: { now: Date }) {
                   <b>{wordsOf(need, now).title}</b>
                   <span className={styles['note']}>{wordsOf(need, now).meta}</span>
                 </div>
-                <OpenButton variant={index === 0 ? main : 'secondary'} item={{ kind: 'run', id: need.item.run_id }} to={`/runs/${need.item.run_id}`}>
+                <OpenButton variant={index === 0 ? main : 'secondary'} item={approvalItem(need.item.run_id)} to={`/runs/${need.item.run_id}`}>
                   Review and decide
                 </OpenButton>
               </li>
