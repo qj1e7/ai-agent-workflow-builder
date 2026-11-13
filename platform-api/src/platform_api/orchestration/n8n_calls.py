@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal, Protocol
 
+from platform_api.orchestration.agents import CardInput, InputKind
+from platform_api.orchestration.cards import TOOL_RULES
 from platform_api.orchestration.runs import (
     Failed,
     Moved,
@@ -41,8 +43,6 @@ type Grade = Literal["safe", "writes_refused", "needs_a_fix"]
 
 START_LIFETIME = timedelta(seconds=240)
 """The node allows 60 s of clock skew and at most 300 s, so a start our API signs lives 240 s."""
-STARTED_BY_N8N = frozenset({"trigger", "webhook"})
-"""n8n says trigger for a Schedule Trigger and webhook for our Start from the Portal."""
 READ_LIMIT = 100
 """The most items one Read passes on (ADR 0027, long lists). It says when it stopped there."""
 
@@ -103,7 +103,7 @@ class WorkflowFacts(Protocol):
 
     async def agents(self) -> Sequence[NodeOption]: ...
 
-    async def agent_inputs(self, agent_id: str) -> Sequence[NodeOption]: ...
+    async def agent_inputs(self, agent_id: str) -> Sequence[CardInput]: ...
 
     async def agent_run(self, agent_id: str, values: Mapping[str, str]) -> CardRun | None: ...
 
@@ -309,7 +309,9 @@ def decide_link(
 ) -> Link:
     """Which run an execution belongs to, in 2.3's order. A retry copies its original's start
     item, so its used nonce is expected there. A start item that does not check out is refused,
-    never taken as a trigger's run."""
+    never taken as a trigger's run. Run now and our Start from the Portal arrive as webhook, so
+    a webhook with no start item is refused: only the Schedule Trigger, trigger, makes a run
+    credited to the publisher."""
     problem = version_problem(version)
     if facts.retry_of is not None and retried_run is not None:
         return problem or ByRetry(retried_run, holder)
@@ -325,7 +327,7 @@ def decide_link(
         if holder is None:
             return NOBODY_HOLDS
         return problem or NewRun(holder, "person")
-    if facts.mode in STARTED_BY_N8N:
+    if facts.mode == "trigger":
         if problem is not None:
             return problem
         assert version is not None
@@ -356,6 +358,15 @@ def rejoin(
             return Refused(409, f"This run cannot take a retry while it is {state_name(state)}.")
 
 
+WRITE_TARGETS: Mapping[InputKind, str] = {
+    rule.target_input: rule.connector
+    for rule in TOOL_RULES
+    if rule.kind == "write" and rule.target_input is not None and rule.connector is not None
+}
+"""An agent input of one of these kinds names where a write lands, such as a jira_project for
+Jira, so its value must be a place the Portal allows for that connector."""
+
+
 class NodeCatalog:
     """The one list of what a block may name: the editor's options, and the check at run time
     that refuses anything else (ENGINE-PLAN 2.2)."""
@@ -377,7 +388,8 @@ class NodeCatalog:
             case "agents":
                 return list(await self._facts.agents())
             case "agent_inputs":
-                return list(await self._facts.agent_inputs(of.get("agent", "")))
+                inputs = await self._facts.agent_inputs(of.get("agent", ""))
+                return [NodeOption(item.name, item.name) for item in inputs]
             case "write_actions":
                 return [NodeOption(entry.id, entry.name) for entry in self._writes.values()]
 
@@ -386,9 +398,17 @@ class NodeCatalog:
             case ReadCall(source, place):
                 if not await self._listed(self._sources.places(source), place):
                     return unknown("place", place)
-            case AgentCall(agent):
+            case AgentCall(agent, inputs):
                 if not await self._listed(self._facts.agents(), agent):
                     return unknown("agent", agent)
+                inputs_of = await self._facts.agent_inputs(agent)
+                kinds: dict[str, InputKind] = {item.name: item.kind for item in inputs_of}
+                for name, value in inputs.items():
+                    if name not in kinds:
+                        return unknown("input", name)
+                    connector = WRITE_TARGETS.get(kinds[name])
+                    if connector is not None and value not in self._places_for(connector):
+                        return unknown("place", value)
             case ProposeCall(action, place):
                 entry = self._writes.get(action)
                 if entry is None:
@@ -396,6 +416,14 @@ class NodeCatalog:
                 if place not in {option.id for option in entry.places}:
                     return unknown("place", place)
         return None
+
+    def _places_for(self, connector: str) -> set[str]:
+        return {
+            place.id
+            for entry in self._writes.values()
+            if entry.connector == connector
+            for place in entry.places
+        }
 
     def write(self, action: str) -> WriteEntry:
         return self._writes[action]

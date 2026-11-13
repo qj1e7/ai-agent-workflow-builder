@@ -26,6 +26,7 @@ from platform_api.orchestration.n8n_calls import (
     START_UNKNOWN,
     START_USED,
     UNKNOWN_PUBLISHER,
+    UNKNOWN_START,
     VERSION_FAILED,
     AgentCall,
     Answer,
@@ -119,8 +120,8 @@ class FakeWorkflows:
     async def agents(self) -> Sequence[NodeOption]:
         return [NodeOption(CARD.id, CARD.name)]
 
-    async def agent_inputs(self, agent_id: str) -> Sequence[NodeOption]:
-        return [NodeOption("Project", "Project")] if agent_id == CARD.id else []
+    async def agent_inputs(self, agent_id: str) -> Sequence[CardInput]:
+        return CARD.inputs if agent_id == CARD.id else []
 
     async def agent_run(self, agent_id: str, values: Mapping[str, str]) -> CardRun | None:
         return CARD_RUN if agent_id == CARD.id else None
@@ -232,12 +233,13 @@ async def test_a_scheduled_first_call_makes_a_run_of_the_publisher_and_reads(t: 
     assert t.sources.reads == [("github_releases", REPO, None)]
 
 
-async def test_our_start_from_the_portal_reports_webhook_and_starts_a_run_as_a_trigger_does(
-    t: Calls,
-):
+async def test_a_webhook_execution_without_a_start_is_refused_and_credited_to_nobody(t: Calls):
+    """Run now and our Start from the Portal arrive as webhook, and each carries a start our API
+    issued. Only the Schedule Trigger's run is credited to the publisher."""
     t.started("101", "webhook")
-    assert await t.call("101") == Answer((RELEASE,))
-    assert (await t.only_run()).started_by == ALICE
+    assert await t.call("101") == UNKNOWN_START
+    assert await t.runs() == []
+    assert t.sources.reads == []
 
 
 @pytest.mark.parametrize(
@@ -267,6 +269,16 @@ async def test_our_start_from_the_portal_reports_webhook_and_starts_a_run_as_a_t
             ProposeCall("jira.create_ticket", "PROD", "t", "b", None),
             'Our platform does not know the place "PROD".',
             id="propose-place",
+        ),
+        pytest.param(
+            AgentCall(CARD.id, {"Project": "PROD"}),
+            'Our platform does not know the place "PROD".',
+            id="agent-write-target",
+        ),
+        pytest.param(
+            AgentCall(CARD.id, {"Project": "MOCK", "Repo": "evil/repo"}),
+            'Our platform does not know the input "Repo".',
+            id="agent-input",
         ),
     ],
 )
@@ -452,6 +464,27 @@ async def test_a_retry_joins_its_original_run_and_gets_the_blocks_earlier_answer
     assert await t.call("101", node="Compare", work=AgentCall(CARD.id, {})) == ANOTHER_EXECUTION
 
 
+async def stopped_on_timeout(t: Calls) -> None:
+    t.started("101")
+    await t.call("101")
+    t.h.advance(DEADLINES[Working] + timedelta(seconds=1))
+    await t.h.orchestrator.tick()
+
+
+async def test_a_retry_carries_no_version_of_its_own_and_runs_on_its_originals(t: Calls):
+    await stopped_on_timeout(t)
+    t.started("102", "retry", retry_of="101", version=None)
+    assert await t.call("102") == Answer((RELEASE,), replayed=True)
+
+
+async def test_a_retry_of_a_version_since_graded_failed_is_refused(t: Calls):
+    await stopped_on_timeout(t)
+    t.workflows.versions["v1"] = RanVersion("needs_a_fix", Publisher(ALICE))
+    t.started("102", "retry", retry_of="101", version=None)
+    assert await t.call("102", node="Compare", work=AgentCall(CARD.id, {})) == VERSION_FAILED
+    assert isinstance((await t.only_run()).state, Failed)
+
+
 async def test_a_retry_of_a_stop_that_cannot_be_retried_is_refused(t: Calls):
     t.workflows.versions["v2"] = RanVersion("needs_a_fix", Publisher(ALICE))
     run_id = await t.pending_run()
@@ -587,6 +620,9 @@ async def test_an_issued_start_expires_240_seconds_on_and_carries_its_signature(
 
 async def test_the_options_list_only_what_the_portal_allows(t: Calls):
     assert await t.calls.options("agents", {}) == [NodeOption(CARD.id, "Compare")]
+    assert await t.calls.options("agent_inputs", {"agent": CARD.id}) == [
+        NodeOption("Project", "Project")
+    ]
     assert await t.calls.options("places", {"source": "github_releases"}) == [
         NodeOption(REPO, "LangGraph")
     ]

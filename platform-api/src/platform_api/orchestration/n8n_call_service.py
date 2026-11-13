@@ -295,6 +295,17 @@ class CallBook:
         ).fetchone()
         return None if row is None else RunId(row["run_id"])
 
+    async def version_of(self, uow: UnitOfWork, execution: N8nExecutionId) -> str | None:
+        """The version a linked execution ran. n8n's retry with loadWorkflow false names none of
+        its own, and runs its original's (P7)."""
+        row = await (
+            await uow.conn.execute(
+                "SELECT version_id FROM orchestration.executions WHERE execution_id = %s",
+                (execution,),
+            )
+        ).fetchone()
+        return None if row is None else row["version_id"]
+
     async def link(
         self,
         uow: UnitOfWork,
@@ -497,15 +508,16 @@ class NodeCalls:
         own = await self._workflows.workflow(facts.workflow_id)
         if own is None:
             return NOT_OURS
-        retried = None
+        retried, version_id = None, facts.version_id
         if facts.retry_of is not None:
             retried = await self._book.linked_run(uow, facts.retry_of)
+            version_id = version_id or await self._book.version_of(uow, facts.retry_of)
         start = None
         if facts.start_nonce is not None:
             start = await self._book.start(uow, facts.start_nonce)
         version = None
-        if facts.version_id is not None:
-            version = await self._workflows.version(facts.workflow_id, facts.version_id)
+        if version_id is not None:
+            version = await self._workflows.version(facts.workflow_id, version_id)
         link = decide_link(facts, retried, start, own.holder, version, uow.now)
         execution = call.execution_id
 
@@ -517,7 +529,7 @@ class NodeCalls:
                 facts.workflow_id,
                 facts.mode,
                 facts.retry_of,
-                facts.version_id,
+                version_id,
             )
             return run_id
 
