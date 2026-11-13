@@ -175,8 +175,10 @@ services:
       # approvals channel above, and with neither set nothing is posted (ADR 0038).
       TEAMS_REQUESTS_WEBHOOK_URL: ${TEAMS_REQUESTS_WEBHOOK_URL:-}
       # Optional: the Tell flow, which posts a run's notice and emails it. Unset keeps the practice
-      # copy. Leave it unset until E13 makes "Posts in Teams and emails" ready.
+      # copy, and "Posts in Teams and emails" stays planned. Set, it needs TELL_EMAIL_TO, the team's
+      # email list, separated by commas.
       TEAMS_TELL_WEBHOOK_URL: ${TEAMS_TELL_WEBHOOK_URL:-}
+      TELL_EMAIL_TO: ${TELL_EMAIL_TO:-}
       # The first deploy's people (ADR 0030). Read only while the People list is empty, and only
       # with real sign-in; dev mode seeds alice, bob and carol instead.
       FIRST_OPERATOR: ${FIRST_OPERATOR:-}

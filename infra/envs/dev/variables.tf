@@ -208,6 +208,26 @@ variable "teams_tell_webhook_url" {
   }
 }
 
+variable "tell_email_to" {
+  description = "The team's fixed email list that every Tell emails, separated by commas (TELL_EMAIL_TO, ENGINE-PLAN D19). Required with teams_tell_webhook_url. Empty keeps nobody on it."
+  type        = string
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition = alltrue([
+      for email in split(",", var.tell_email_to) :
+      can(regex("^[^@,;[:space:]]+@[^,;[:space:]]*[.][^,;[:space:]]*$", trimspace(email))) if trimspace(email) != ""
+    ])
+    error_message = "Each address in tell_email_to must be an email, separated by commas."
+  }
+
+  validation {
+    condition     = var.teams_tell_webhook_url == "" || trimspace(var.tell_email_to) != ""
+    error_message = "teams_tell_webhook_url needs tell_email_to, the team's email list."
+  }
+}
+
 variable "github_api_base" {
   description = "GitHub API that the release checker reads."
   type        = string
