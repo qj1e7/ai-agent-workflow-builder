@@ -11,7 +11,12 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from platform_api.orchestration.agents import CarryForward, Finding, TaskOutput
+from platform_api.monitoring.events import Told as ToldEvent
+from platform_api.orchestration.agents import (
+    CarryForward,
+    Finding,
+    TaskOutput,
+)
 from platform_api.orchestration.n8n_call_service import CLAIM_LEASE, CallBook, NodeCalls
 from platform_api.orchestration.n8n_calls import (
     ANOTHER_EXECUTION,
@@ -47,6 +52,7 @@ from platform_api.orchestration.tell import (
     TellFlow,
     TellMessage,
     TellPractice,
+    TellSetup,
     Told,
     compose,
 )
@@ -69,6 +75,9 @@ pytestmark = pytest.mark.anyio
 
 FLOW_URL = "https://prod.example.logic.azure.com/workflows/tell/run?sig=flow-secret"
 CHANNEL = "CODESparks Ops"
+LIST = ("ops-lead@codesparks.example", "support@codesparks.example")
+PORTAL = "https://wab.example"
+SETUP = TellSetup(CHANNEL, LIST, PORTAL)
 BOTH = TellCall("both", "result")
 READ = ReadCall("github_releases", REPO, None)
 COMPARE = AgentCall(CARD.id, {"Project": "MOCK"})
@@ -147,6 +156,18 @@ class Tells:
         """What E2d's write does: the gateway made the changes and the run succeeded."""
         await self.end(lambda run: Succeeded(run, Outcome.WRITTEN, MADE))
 
+    async def run_id(self) -> RunId:
+        async with self.h.db.transaction("orchestration") as uow:
+            [run] = await Store().list_runs(uow)
+        return run.run_id
+
+    async def told(self) -> list[tuple[str, str, str]]:
+        """The run's activity lines for its Tells: the block, the status, and the words shown."""
+        events = await self.h.log.read_after(await self.run_id(), 0)
+        return [
+            (e.data.block, e.data.status, e.summary) for e in events if isinstance(e, ToldEvent)
+        ]
+
 
 def tell_platform(
     h: Harness, flow: Flow, n8n: FakeN8n, workflows: FakeWorkflows, sources: FakeSources
@@ -163,7 +184,7 @@ def tell_platform(
         sources,
         {},
         start_secret="test-start-secret",
-        tells=TellFlow(FLOW_URL, CHANNEL, client),
+        tells=TellFlow(FLOW_URL, SETUP, client),
     )
 
 
@@ -184,7 +205,11 @@ async def test_a_tell_posts_what_the_run_read_to_the_one_fixed_flow(t: Tells):
     for read in ("Read release", "1.2.16", "Compare", "LangGraph 1.2.16 is out.", "is behind"):
         assert read in card and read in post["emailHtml"]
     assert post["emailSubject"] == "Software watchlist: what this run found"
-    assert set(post) == {"type", "attachments", "emailSubject", "emailHtml"}
+    assert post["emailTo"] == "ops-lead@codesparks.example; support@codesparks.example"
+    assert set(post) == {"type", "attachments", "emailSubject", "emailHtml", "emailTo"}
+    assert await t.told() == [
+        ("Tell you", "sent", "Posted to CODESparks Ops and emailed the team's list.")
+    ]
 
 
 async def test_a_tell_claims_no_change_and_names_no_proposal(t: Tells):
@@ -280,13 +305,13 @@ async def test_a_tell_in_a_test_run_sends_nothing_and_says_what_it_would_have_se
     t.started("101", "manual", start.nonce)
     t.workflows.holder = SPEC.owner
     await t.read_and_compare("101", "LangGraph is behind.")
-    told = await t.tell()
-    assert told == Told(
-        "would_have_sent",
+    would = (
         "Would have posted to CODESparks Ops and emailed the team's list. "
-        "Nothing was sent in a test run.",
+        "Nothing was sent in a test run."
     )
+    assert await t.tell() == Told("would_have_sent", would)
     assert t.flow.posts == []
+    assert await t.told() == [("Tell you", "would_have_sent", would)]
 
 
 @pytest.mark.parametrize("status", [500, 502, 504])
@@ -303,6 +328,13 @@ async def test_a_tell_is_never_posted_again_after_the_flow_answers_5xx(t: Tells,
     assert await t.tell() == first
     assert await t.tell() == first
     assert len(t.flow.posts) == 1
+    assert await t.told() == [
+        (
+            "Tell you",
+            "not_confirmed",
+            f"Not confirmed: the Tell flow answered {status}. It is not sent again.",
+        )
+    ]
 
 
 async def test_a_tell_cut_off_mid_post_is_kept_as_sending_and_never_posted_again(t: Tells):
@@ -315,6 +347,7 @@ async def test_a_tell_cut_off_mid_post_is_kept_as_sending_and_never_posted_again
     t.h.advance(CLAIM_LEASE * 2)
     assert await t.tell() == Told("sending", "Sending, not confirmed. It is not sent again.")
     assert len(t.flow.posts) == 1
+    assert await t.told() == [], "only the flow's answer says what happened"
 
 
 async def test_a_retry_of_the_run_gets_the_tells_first_answer_and_posts_nothing(t: Tells):
@@ -332,6 +365,9 @@ async def test_only_when_something_to_report_sends_nothing_when_nothing_was_foun
     told = await t.tell(tell=TellCall("channel", "only_when_something_to_report"))
     assert told == Told("nothing_to_report", "Nothing to report, so nothing was sent.")
     assert t.flow.posts == []
+    assert await t.told() == [
+        ("Tell you", "nothing_to_report", "Nothing to report, so nothing was sent.")
+    ]
 
 
 async def test_only_when_something_to_report_sends_the_agents_findings(t: Tells):
@@ -344,7 +380,7 @@ async def test_only_when_something_to_report_sends_the_agents_findings(t: Tells)
 
 
 async def test_the_practice_copy_keeps_the_notice_once_as_the_flow_would_get_it(t: Tells):
-    practice = TellPractice(t.h.db, CHANNEL)
+    practice = TellPractice(t.h.db, SETUP)
     t.calls = NodeCalls(
         t.h.db,
         t.h.log,
@@ -368,13 +404,49 @@ async def test_the_practice_copy_keeps_the_notice_once_as_the_flow_would_get_it(
     assert kept["body"]["emailSubject"] == "Software watchlist: what this run found"
 
 
+async def test_the_practice_copy_keeps_the_card_the_email_and_the_list_with_a_link_to_the_run(
+    t: Tells,
+):
+    """The body the Tell flow takes: the card, the email's subject and HTML, and the fixed list.
+    Both lead back to the run, and nothing else in them is a link."""
+    practice = TellPractice(t.h.db, SETUP)
+    t.calls = NodeCalls(
+        t.h.db,
+        t.h.log,
+        t.h.agent,
+        mint,
+        NodeCatalog(t.workflows, FakeSources(), [JIRA]),
+        t.workflows,
+        t.n8n,
+        FakeSources(),
+        {},
+        tells=practice,
+    )
+    t.started("101")
+    await t.read_and_compare("101", "LangGraph is behind: 1.2.16 is out.")
+    await t.tell()
+    [kept] = await practice.messages()
+    body = kept["body"]
+    link = f"https://wab.example/runs/{await t.run_id()}"
+    [attachment] = body["attachments"]
+    card = attachment["content"]
+    assert card["type"] == "AdaptiveCard" and "1.2.16 is out." in json.dumps(card["body"])
+    assert card["actions"] == [
+        {"type": "Action.OpenUrl", "title": "Open in AI Workflow Builder", "url": link}
+    ]
+    assert body["emailSubject"] == "Software watchlist: what this run found"
+    assert "1.2.16 is out." in body["emailHtml"] and f'href="{link}"' in body["emailHtml"]
+    assert body["emailHtml"].count("href=") == 1
+    assert body["emailTo"] == "ops-lead@codesparks.example; support@codesparks.example"
+
+
 def test_text_the_run_read_never_becomes_a_link_in_the_card_or_the_email():
     read = BlockResult(
         "Read page",
         "read",
         ({"id": "https://evil.example/approve", "title": "<script>alert(1)</script>"},),
     )
-    message = compose("Cert reminder", [read], REACH["both"])
+    message = compose("Cert reminder", [read], REACH["both"], SETUP, RunId("run_1"))
     body = json.dumps(message.body())
     assert "evil.example" not in body and "https://evil" not in body
     assert message.email is not None
@@ -386,7 +458,7 @@ def test_text_the_run_read_never_becomes_a_link_in_the_card_or_the_email():
     [("channel", True, False), ("email", False, True), ("both", True, True)],
 )
 def test_where_picks_the_card_the_email_or_both(where: Any, card: bool, email: bool):
-    message: TellMessage = compose("Release check", [], REACH[where])
+    message: TellMessage = compose("Release check", [], REACH[where], SETUP, RunId("run_1"))
     body = message.body()
     assert bool(body["attachments"]) is card
     assert ("emailHtml" in body) is email

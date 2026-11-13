@@ -217,6 +217,7 @@
             "step_retried": "#/components/schemas/StepRetried",
             "step_started": "#/components/schemas/StepStarted",
             "support_reported": "#/components/schemas/SupportReported",
+            "told": "#/components/schemas/Told",
             "write_action_denied": "#/components/schemas/WriteActionDenied",
             "write_action_done": "#/components/schemas/WriteActionDone",
             "write_action_proposed": "#/components/schemas/WriteActionProposed"
@@ -307,6 +308,9 @@
           },
           {
             "$ref": "#/components/schemas/SupportReported"
+          },
+          {
+            "$ref": "#/components/schemas/Told"
           }
         ]
       },
@@ -3941,6 +3945,10 @@
             "title": "Connections",
             "type": "array"
           },
+          "tell": {
+            "$ref": "#/components/schemas/TellSetupOut",
+            "description": "Where every Tell goes. Fixed in the platform's settings, so read only here."
+          },
           "you_can_check": {
             "description": "True for an Operator.",
             "title": "You Can Check",
@@ -3949,7 +3957,8 @@
         },
         "required": [
           "connections",
-          "you_can_check"
+          "you_can_check",
+          "tell"
         ],
         "title": "ConnectionsView",
         "type": "object"
@@ -10914,15 +10923,46 @@
         "title": "TellOut",
         "type": "object"
       },
-      "TellStatus": {
-        "enum": [
-          "sent",
-          "sending",
-          "not_confirmed",
-          "would_have_sent",
-          "nothing_to_report"
+      "TellSetupOut": {
+        "additionalProperties": false,
+        "properties": {
+          "channel": {
+            "description": "The Teams channel every Tell posts in.",
+            "title": "Channel",
+            "type": "string"
+          },
+          "email_to": {
+            "description": "The team's fixed list that every Tell emails. It is a plain setting, not a secret, and anyone signed in sees it here.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Email To",
+            "type": "array"
+          },
+          "flow_set": {
+            "description": "Whether the Tell flow's address is set. The address is a secret and is never shown.",
+            "title": "Flow Set",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "flow_set",
+          "channel",
+          "email_to"
         ],
-        "type": "string"
+        "title": "TellSetupOut",
+        "type": "object"
+      },
+      "TellStatus": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ToldStatus"
+          },
+          {
+            "const": "sending",
+            "type": "string"
+          }
+        ]
       },
       "TellWhat": {
         "enum": [
@@ -11105,6 +11145,85 @@
         "enum": [
           "To Do",
           "Done"
+        ],
+        "type": "string"
+      },
+      "Told": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ToldData"
+          },
+          "kind": {
+            "const": "told",
+            "default": "told",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "Told",
+        "type": "object"
+      },
+      "ToldData": {
+        "additionalProperties": false,
+        "properties": {
+          "block": {
+            "description": "The Tell block, by its name in the workflow.",
+            "title": "Block",
+            "type": "string"
+          },
+          "line": {
+            "description": "What the block did, in plain words.",
+            "title": "Line",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ToldStatus"
+          }
+        },
+        "required": [
+          "block",
+          "status",
+          "line"
+        ],
+        "title": "ToldData",
+        "type": "object"
+      },
+      "ToldStatus": {
+        "enum": [
+          "sent",
+          "not_confirmed",
+          "would_have_sent",
+          "nothing_to_report"
         ],
         "type": "string"
       },

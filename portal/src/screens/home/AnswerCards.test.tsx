@@ -30,10 +30,19 @@ import resumeReply from '../../../../contracts/fixtures/planner/answer.resume.js
 import capabilities from '../../../../contracts/fixtures/planner/capabilities.json'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { CantReply, CantRowView, CapabilitiesView, DecisionsView, HomeOut, Me, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, UseCaseView, WatchlistReply } from '../../api/types'
+import runFailure from '../../../../contracts/fixtures/runs/failure.json'
+import runRejected from '../../../../contracts/fixtures/runs/rejected.json'
+import runSuccess from '../../../../contracts/fixtures/runs/success.json'
+import runUseCase from '../../../../contracts/fixtures/builder/use-case.json'
+import { OpensInPanel } from '../../ui/sidePanel'
+import { emptyModel, foldWire, type RunModel } from '../run/runModel'
+import { storyOf } from '../run/useRunStory'
+import type { TroubleshootingOut, CantReply, CantRowView, CapabilitiesView, DecisionsView, HomeOut, Me, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, UseCaseView, WatchlistReply } from '../../api/types'
 import { Answer, type Page } from './AnswerCards'
-import { sayOf, switchedSay } from './answers'
+import { newCardMemory, type CardMemory } from './cardMemory'
+import { sayOf, switchedSay, whoOf } from './answers'
 import { Leftovers } from './PartsList'
+import { RunCardView } from './RunCard'
 import { Thread } from './Thread'
 import { EMPTY, threadReducer } from './threadState'
 
@@ -427,8 +436,8 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     const said = answerOf(ask(decidedReply as PlannerReply))
     expect(said).toContain('Here are your 3 decisions.')
     expect(said).toContain('Keep our software up to date Declined Declined by Bob at 9:10 today. Nothing was written. Reason: Wrong version.')
-    expect(said).toContain('Morning new-ticket check Approved Approved by Bob, Mon 26 Oct, 8:00. 1 ticket created in Jira.')
-    expect(said).toContain('Weekly closed-ticket summary Approved Approved by Bob, Fri 16 Oct, 16:00. Then declined by Alice. Nothing was written.')
+    expect(said).toContain('Morning new-ticket check Approved Approved by Bob, Mon 26 Oct, 8:00. 1 ticket created.')
+    expect(said).toContain('Weekly closed-ticket summary Approved Approved by Bob, Fri 16 Oct, 16:00. Declined by Alice. Nothing was written.')
     expect(said.indexOf('9:10 today')).toBeLessThan(said.indexOf('Mon 26 Oct'))
   })
 
@@ -499,9 +508,177 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
   it('speaks of the team’s workflows, and of why one stopped with who can retry, from his Workflows page’s rows', () => {
     const stopped = stoppedUseCase as UseCaseView
     expect(answerOf(ask({ answer: 'check_workflows', use_case_id: null, parts: [] }, { useCases: [stopped] }))).toMatch(/^The team has 1 workflow\. 1 stopped\./)
-    const why = ask({ answer: 'why_stopped', use_case_id: null, parts: [] }, { useCases: [stopped] })
-    expect(answerOf(why)).toMatch(/^LangGraph release check stopped What happened/)
-    expect(answerOf(why)).toContain('An Operator can retry the run.')
-    expect(buttons(why)).toEqual(['See the run'])
+  })
+})
+
+describe('the run card: the AI troubleshooter’s answer that moves with the run', () => {
+  const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator'] }
+  const BOB_: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
+  const NAMES: Record<string, string> = { alice: 'Alice', bob: 'Bob' }
+  const nameOf = (id: string) => NAMES[id] ?? id
+  const replay = (raw: readonly { run_id: string; seq: number }[], upTo = Infinity): RunModel => {
+    const kept = raw.filter((item) => item.seq <= upTo)
+    return foldWire(emptyModel, kept, kept[0]?.run_id ?? '')
+  }
+  const useCase = runUseCase as UseCaseView
+  const retriedBy = (model: RunModel, by: string): RunModel =>
+    foldWire(model, [{ run_id: 'run_01JB9', seq: model.seq + 1, ts: '2026-11-04T02:20:00Z', actor: { kind: 'user', id: by, display: by }, summary: '', kind: 'run_retried', data: { leg: 'work', attempt: 2 } }], 'run_01JB9')
+
+  function card(model: RunModel, { me = ALICE, beside = false, shownInPanel = false }: { me?: Me; beside?: boolean; shownInPanel?: boolean } = {}): string {
+    const story = storyOf({
+      run: { run_id: 'run_01JB9', started_at: '2026-11-04T02:14:00Z' },
+      live: { shown: model, head: model, loadedUpTo: model.seq },
+      me,
+      nameOf,
+      useCase,
+      approval: undefined,
+      advice: troubleshooting as TroubleshootingOut,
+      adviceLoading: false,
+      modelOff: false,
+      now: new Date((model.chat.at(-1)?.at ?? 0) + 3_600_000),
+    })
+    const opener = { shown: shownInPanel ? { kind: 'run' as const, id: 'run_01JB9' } : null, open: () => undefined }
+    return renderToStaticMarkup(
+      <QueryClientProvider client={new QueryClient()}>
+        <ApiProvider session={createDevSession(null)} platformFetch={fetch} origin="http://portal.test">
+          <MemoryRouter>
+            <OpensInPanel.Provider value={opener}>
+              <RunCardView runId="run_01JB9" name="LangGraph release check" story={story} beside={beside} />
+            </OpensInPanel.Provider>
+          </MemoryRouter>
+        </ApiProvider>
+      </QueryClientProvider>,
+    )
+  }
+  const pill = (html: string) => /<span class="[^"]*pill[^"]*"[^>]*>([^<]*)<\/span>/.exec(html)?.[1]
+  const labels = (html: string) => [...html.matchAll(/<dt>([^<]*)<\/dt>/g)].map((match) => match[1])
+
+  it('stopped: the head and its pill, the line, the three answers, and Open and Retry', () => {
+    const html = card(replay(runFailure))
+    expect(text(html)).toContain('LangGraph release check Stopped')
+    expect(html).toContain('aria-label="Steps of this run"')
+    expect(labels(html)).toEqual(['What happened', 'Affected', 'Safe to retry'])
+    expect(buttons(html)).toEqual(['Open', 'Retry'])
+    expect(whoOf({ answer: 'why_stopped', use_case_id: null, parts: [] })).toBe('troubleshooter')
+  })
+
+  it('stopped, asked by an Approver: the same answers, and who can retry in place of a button', () => {
+    const html = card(replay(runFailure), { me: BOB_ })
+    expect(labels(html)).toEqual(['What happened', 'Affected', 'Safe to retry'])
+    expect(buttons(html)).toEqual(['Open'])
+    expect(text(html)).toContain('An Operator can retry the run.')
+  })
+
+  it('retrying: the same card says Now, with no stop’s answers and no second Retry', () => {
+    const html = card(retriedBy(replay(runFailure), 'alice'))
+    expect(pill(html)).toBe('Running')
+    expect(labels(html)).toEqual(['Now'])
+    expect(text(html)).toContain('Retrying after a short wait…')
+    expect(buttons(html)).toEqual(['Open'])
+  })
+
+  it('waiting: what it found and that it waits for a yes, and nothing written yet', () => {
+    const html = card(replay(runSuccess, 15))
+    expect(pill(html)).toBe('Waiting for a yes')
+    expect(labels(html)).toEqual(['Found', 'Now'])
+    expect(text(html)).toContain('Waiting for a yes.')
+    expect(html).not.toMatch(/MOCK-142/)
+  })
+
+  it('done: folds to the head and one settled line, the ticket said once', () => {
+    const html = card(replay(runSuccess))
+    expect(pill(html)).toBe('Done')
+    expect(text(html)).toContain('Done at 10:20 · MOCK-142 created after Bob’s yes')
+    expect(labels(html)).toEqual([])
+    expect(html).not.toContain('aria-label="Steps of this run"')
+    expect(text(html).match(/MOCK-142/g)).toHaveLength(1)
+  })
+
+  it('declined: one line that says nothing was written, and never a ticket', () => {
+    const html = card(replay(runRejected))
+    expect(pill(html)).toBe('Declined')
+    expect(text(html)).toContain('Ended at 10:18 · Bob declined: wrong version. Nothing was written.')
+    expect(html).not.toMatch(/created|MOCK-/)
+    expect(labels(html)).toEqual([])
+  })
+
+  it('beside the chat: drops its line, its Open and its Retry, which the panel has, and keeps its answers (a flow shows once)', () => {
+    const html = card(replay(runFailure), { beside: true, shownInPanel: true })
+    expect(html).not.toContain('aria-label="Steps of this run"')
+    expect(buttons(html)).toEqual([])
+    expect(labels(html)).toHaveLength(3)
+  })
+
+  it('beside the chat when finished: drops its settled line too, which the panel keeps under its own line', () => {
+    const html = card(replay(runSuccess), { beside: true, shownInPanel: true })
+    expect(pill(html)).toBe('Done')
+    expect(text(html)).not.toContain('Done at')
+  })
+
+  it('a stop that can’t be retried offers Report to support once: on the card, or in the panel while the panel shows the run', () => {
+    const unretryable = replay(runFailure.map((item) => (item.kind === 'run_failed' ? { ...item, data: { ...item.data, retryable: false } } : item)))
+    expect(buttons(card(unretryable))).toEqual(['Open', 'Report to support'])
+    expect(buttons(card(unretryable, { beside: true, shownInPanel: true }))).toEqual([])
+  })
+
+  it('keeps following its run when the chat draws it again, after a retry took the run off the stopped list', () => {
+    const why: PlannerReply = { answer: 'why_stopped', use_case_id: null, parts: [] }
+    const thread = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'Why did it stop?' }), { type: 'answered', reply: why, typed: 'Why did it stop?' })
+    const drawn = (memory: (id: number) => CardMemory = () => newCardMemory()): string => {
+      const session = createDevSession(null)
+      const scope = session.cacheScope()
+      const client = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
+      client.setQueryData(['me', scope], ALICE)
+      client.setQueryData(['dev-users'], [ALICE])
+      client.setQueryData(['home', scope], { ...(bobHome as HomeOut), stopped: [] })
+      client.setQueryData(['people', scope], people.people)
+      client.setQueryData(['use-cases', scope], [])
+      return text(
+        renderToStaticMarkup(
+          <QueryClientProvider client={client}>
+            <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
+              <MemoryRouter>
+                <Thread thread={thread} now={new Date('2026-11-04T12:00:00+08:00')} page={PAGE} memory={memory} />
+              </MemoryRouter>
+            </ApiProvider>
+          </QueryClientProvider>,
+        ),
+      )
+    }
+    expect(drawn(), 'a card that kept no run finds nothing stopped').toContain('Nothing has stopped right now.')
+    const kept = newCardMemory()
+    kept.run.keep('run_01JB9')
+    const again = drawn(() => kept)
+    expect(again, 'the card kept its run with the message').not.toContain('Nothing has stopped right now.')
+    expect(again).toContain('Reading the run')
+  })
+
+  /** One stream for one card: the stop, Alice's retry, then the run waits for a yes, writes and is done. */
+  const STREAM = [
+    ...runFailure,
+    { run_id: 'run_01JB9', seq: 15, ts: '2026-11-04T02:20:00Z', actor: { kind: 'user', id: 'alice', display: 'Alice' }, summary: '', kind: 'run_retried', data: { leg: 'work', attempt: 2 } },
+    ...runSuccess.filter((item) => item.seq > 1).map((item) => ({ ...item, run_id: 'run_01JB9', seq: item.seq + 14, ts: item.ts.replace('2026-11-03T02:', '2026-11-04T03:') })),
+  ]
+
+  it('moves in place from the run’s stream: the one card goes stopped, retrying, waiting, writing, then done', () => {
+    const frames: string[] = []
+    STREAM.reduce((model, item) => {
+      const next = foldWire(model, [item], 'run_01JB9')
+      if (next.seq >= 14) frames.push(card(next))
+      return next
+    }, emptyModel)
+    const stageOfFrame = (html: string): string => {
+      const said = text(html)
+      if (pill(html) === 'Stopped') return 'stopped'
+      if (said.includes('Now Retrying after a short wait…')) return 'retrying'
+      if (pill(html) === 'Waiting for a yes' && said.includes('Now Waiting for a yes.')) return 'waiting'
+      if (said.includes('Now Bob said yes. Creating the ticket…')) return 'writing'
+      if (pill(html) === 'Done' && said.includes('MOCK-142 created after Bob’s yes')) return 'done'
+      return `unexpected: ${said}`
+    }
+    const stages = frames.map(stageOfFrame).filter((stage, index, all) => stage !== all[index - 1])
+    expect(stages).toEqual(['stopped', 'retrying', 'waiting', 'writing', 'done'])
+    const heads = new Set(frames.map((html) => /^<section[^>]*><div[^>]*><h3[^>]*>([^<]*)<\/h3>/.exec(html)?.[1]))
+    expect(heads, 'every frame is the same card, headed by the run’s workflow').toEqual(new Set(['LangGraph release check']))
   })
 })

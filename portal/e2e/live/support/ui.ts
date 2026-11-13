@@ -41,6 +41,19 @@ export async function shot(page: Page, info: TestInfo, name: string): Promise<vo
   info.annotations.push({ type: 'shot', description: name })
 }
 
+/**
+ * What Needs you on Workflows counts: its rows, plus the rest its note says the platform has not listed yet. The heading carries
+ * no number, as in the sketch, so this is the number the strip, the Planner's answer and an Approver's Home heading must match.
+ */
+export async function needsOnWorkflows(page: Page): Promise<number> {
+  const section = page.getByRole('main').getByRole('region', { name: 'Needs you' })
+  await expect(section.locator('li[data-home-item]').first()).toBeVisible()
+  const rows = await section.locator('li[data-home-item]').count()
+  const note = section.locator('p').filter({ hasText: /\d+ more/ })
+  const more = (await note.count()) === 0 ? 0 : Number(/(\d+) more/.exec(await note.innerText())?.[1] ?? 0)
+  return rows + more
+}
+
 /** A page someone who isn't an Operator reads: one note naming the Operators, and no control there that is dead. */
 export async function expectReadOnly(page: Page, what: string): Promise<void> {
   const main = page.getByRole('main')

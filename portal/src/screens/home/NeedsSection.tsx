@@ -109,11 +109,15 @@ export function NeedsSection({ needs, now, arrival, more, whenNone, quiet = fals
   )
 }
 
-function RowGroup({ label, needs, now }: { label: string; needs: readonly Need[]; now: Date }) {
+/** A group label is a level 2 heading on Home, which has no Needs you heading, and level 3 under Workflows' Needs you. */
+type Level = 2 | 3
+
+function RowGroup({ label, needs, now, level }: { label: string; needs: readonly Need[]; now: Date; level: Level }) {
   const headingId = useId()
+  const Heading = level === 2 ? 'h2' : 'h3'
   return (
     <li className={styles['group']}>
-      <h2 id={headingId}>{label}</h2>
+      <Heading id={headingId}>{label}</Heading>
       <ul className={styles['needRows']} aria-labelledby={headingId}>
         {needs.map((need) => (
           <NeedRow key={need.key} need={need} now={now} />
@@ -123,15 +127,18 @@ function RowGroup({ label, needs, now }: { label: string; needs: readonly Need[]
   )
 }
 
-/** Needs you as plain rows under Do now and Set up, with no heading, count or buttons (the sketch’s Home). `more` follows the rows. */
-export function NeedRows({ needs, now, more }: { needs: readonly Need[]; now: Date; more: ReactNode }) {
+/**
+ * Needs you as plain rows under Do now and Set up, with no count or buttons, as the sketch draws it on Home and on Workflows, so both
+ * say every row in the same words and tone. `more` follows the rows.
+ */
+export function NeedRows({ needs, now, more, level = 2 }: { needs: readonly Need[]; now: Date; more: ReactNode; level?: Level }) {
   if (needs.length === 0) return null
   return (
     <div className={styles['plain']}>
       <ul className={styles['groups']} aria-label="Needs you">
         {NEED_GROUPS.map(([group, label]) => {
           const rows = needs.filter((need) => groupOf(need) === group)
-          return rows.length > 0 ? <RowGroup key={group} label={label} needs={rows} now={now} /> : null
+          return rows.length > 0 ? <RowGroup key={group} label={label} needs={rows} now={now} level={level} /> : null
         })}
       </ul>
       {more}

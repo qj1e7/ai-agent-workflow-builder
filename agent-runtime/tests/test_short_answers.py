@@ -35,8 +35,7 @@ def test_the_capabilities_card_lists_the_ready_entries_by_their_short_words():
 
 def test_the_not_yet_note_names_the_entries_that_are_not_ready_by_their_short_words():
     assert [c.short for c in CAPABILITIES if c.state != "ready" and c.short] == [
-        "Teams channels",
-        "email",
+        "Teams channels, email",
         "Confluence",
     ]
 

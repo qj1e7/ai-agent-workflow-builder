@@ -80,6 +80,9 @@ export type ChatItem = { readonly seq: number; readonly at: RunTime } & (
   | { readonly kind: 'declined'; readonly record: Declined }
   | { readonly kind: 'stopped'; readonly stage: FailureStage }
   | { readonly kind: 'reported'; readonly by: string; readonly requestId: string }
+  | { readonly kind: 'found'; readonly text: string }
+  /** What a Tell block did, in the platform's own words: sent, not confirmed, what a test run would have sent, or nothing to report. */
+  | { readonly kind: 'told'; readonly line: string; readonly bad: boolean }
 )
 
 /** A spot the run reached, and when. */
@@ -104,6 +107,8 @@ export interface RunModel {
   readonly approvalId: string | null
   readonly steps: readonly ApprovalStep[]
   readonly proposed: number
+  /** What each proposed action does, such as create_ticket, so the run can say what it writes before the first write lands. */
+  readonly operations: readonly string[]
   readonly connector: string | null
   readonly written: readonly Written[]
   readonly approvedBy: readonly string[]
@@ -132,6 +137,7 @@ export const emptyModel: RunModel = {
   approvalId: null,
   steps: [],
   proposed: 0,
+  operations: [],
   connector: null,
   written: [],
   approvedBy: [],
@@ -274,7 +280,7 @@ function retried(model: RunModel, event: EventOf<'run_retried'>): RunModel {
   }
   const next: RunModel =
     event.data.leg === 'work'
-      ? { ...base, phase: { state: 'pending' }, agents: [], approvalId: null, steps: [], proposed: 0, written: [], found: '' }
+      ? { ...base, phase: { state: 'pending' }, agents: [], approvalId: null, steps: [], proposed: 0, operations: [], written: [], found: '' }
       : { ...base, phase: { state: 'acting' } }
   return say(next, { kind: 'retried', seq: event.seq, at: event.at, by })
 }
@@ -317,7 +323,8 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     }
     case 'write_action_proposed': {
       const phase = model.phase.state === 'pending' || model.phase.state === 'working' ? { state: 'proposed' as const } : model.phase
-      return { ...model, phase, proposed: event.data.actions.length, connector: event.data.actions[0]?.connector ?? model.connector }
+      const { actions } = event.data
+      return { ...model, phase, proposed: actions.length, operations: actions.map((action) => action.operation), connector: actions[0]?.connector ?? model.connector }
     }
     case 'approval_requested': {
       const steps = event.data.steps.map((s) => ({ index: s.index, label: s.label, status: s.status, by: s.decided_by ?? null }))
@@ -359,10 +366,15 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     }
     case 'run_retried':
       return retried(model, event)
-    case 'step_finished':
-      return event.data.step === 'run_agents' && FOUND_OUTCOMES.has(event.data.outcome) && event.data.detail ? { ...model, found: event.data.detail } : model
+    case 'step_finished': {
+      const { step, outcome, detail } = event.data
+      if (step !== 'run_agents' || !FOUND_OUTCOMES.has(outcome) || !detail) return model
+      return say({ ...model, found: detail }, { kind: 'found', seq: event.seq, at: event.at, text: detail })
+    }
     case 'support_reported':
       return reported(model, event)
+    case 'told':
+      return say(model, { kind: 'told', seq: event.seq, at: event.at, line: event.data.line, bad: event.data.status === 'not_confirmed' })
     case 'run_skipped':
       return advanceTo({ ...model, phase: { state: 'skipped' } }, { at: 'done' }, event)
     case 'run_expired':

@@ -207,14 +207,18 @@ class CallBook:
             (datetime.fromtimestamp(0, UTC), call_id),
         )
 
-    async def settle(self, uow: UnitOfWork, call_id: str, told: Told) -> None:
+    async def settle(self, uow: UnitOfWork, call_id: str, told: Told) -> bool:
         """Replaces a Tell's sending with what the flow answered. Its sending, kept before the
         post, is all a repeat of the call ever sees until then, so nothing is sent twice."""
-        await uow.conn.execute(
-            "UPDATE orchestration.node_calls SET answer = %s, answered_at = %s "
-            "WHERE call_id = %s AND outcome = 'answered' AND answer ->> 'status' = 'sending'",
-            (json(_stored(told)), uow.now, call_id),
-        )
+        settled = await (
+            await uow.conn.execute(
+                "UPDATE orchestration.node_calls SET answer = %s, answered_at = %s "
+                "WHERE call_id = %s AND outcome = 'answered' AND answer ->> 'status' = 'sending' "
+                "RETURNING call_id",
+                (json(_stored(told)), uow.now, call_id),
+            )
+        ).fetchone()
+        return settled is not None
 
     async def writing(self, uow: UnitOfWork, execution: N8nExecutionId) -> bool:
         """Whether a Make the approved changes block of this execution is still making its

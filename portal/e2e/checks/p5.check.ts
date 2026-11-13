@@ -56,6 +56,8 @@ async function shotTo(page: Page, lane: number | string, name: string, fullPage 
 }
 
 const h1 = (page: Page) => page.getByRole('heading', { level: 1 })
+/** The run's one state pill: the run page is named for its workflow, and says where the run stands in the pill (the chat-first sketch). */
+const pill = (page: Page) => page.locator('[data-run-pill]')
 
 async function stepsOf(page: Page): Promise<Step[]> {
   return page
@@ -183,7 +185,7 @@ test('@lane1 alice watches a new check move through each step in order and stop 
     const gate = last.split(',').indexOf('wait')
     await page.waitForTimeout(3_000)
     const later = (await stepsOf(page)).map((s) => s.state).join(',')
-    await expect(h1(page)).toHaveText(/waiting for a yes$/)
+    await expect(pill(page)).toHaveText('Waiting for a yes')
     await page.evaluate(() => window.scrollTo(0, 0))
     await shotTo(page, 1, 'p5-live-run.png')
     const fills = await page.locator('ol[aria-label="Steps of this run"] > li[aria-hidden="true"]').evaluateAll((items) => items.map((li) => getComputedStyle(li).transform))
@@ -210,7 +212,7 @@ test('@lane2 bob approves a waiting run and the page shows the ticket created an
     await page.goto(`/runs/${runId}`)
     await expect(page.getByRole('button', { name: 'Approve 1 ticket' })).toBeVisible()
     await page.getByRole('button', { name: 'Approve 1 ticket' }).click()
-    await expect(h1(page)).toHaveText('1 ticket created in Jira', { timeout: 60_000 })
+    await expect(pill(page)).toHaveText('Done', { timeout: 60_000 })
     const tickets = await ticketsOf(backend, runId)
     await expect(page.getByRole('main')).toContainText(`Created ${tickets[0]?.key ?? 'nothing'} in Jira.`)
     await expect(page.getByRole('main')).toContainText('Bob approved, and the platform created the ticket.')
@@ -236,7 +238,7 @@ test('@lane3 bob declines a waiting run and nothing is written', async ({ browse
     await page.goto(`/runs/${runId}`)
     await page.getByRole('button', { name: 'Decline' }).click()
     await page.getByRole('group', { name: /^Why are you declining\?/ }).getByRole('button', { name: 'Decline' }).click()
-    await expect(h1(page)).toHaveText('Declined, nothing was written', { timeout: 60_000 })
+    await expect(pill(page)).toHaveText('Declined', { timeout: 60_000 })
     await expect(page.getByRole('main')).toContainText('Declined by Bob. Nothing was written.')
     const steps = await stepsOf(page)
     await page.evaluate(() => window.scrollTo(0, 0))
@@ -261,13 +263,13 @@ async function cannotDecide(browser: Browser, user: 'alice' | 'carol', lane: 4 |
     const posts = decisionPosts(page)
 
     await page.goto(`/runs/${runId}`)
-    await expect(h1(page)).toHaveText('1 ticket is waiting for a yes')
+    await expect(pill(page)).toHaveText('Waiting for a yes')
     await expect(page.locator('#decision')).toBeFocused()
     await shotTo(page, lane, file)
     const onRunPage = { ...(await decisionButtons(page)), text: await page.getByRole('main').innerText() }
 
     await page.goto(`/approvals/${approvalId}`)
-    await expect(h1(page)).toHaveText('1 ticket is waiting for a yes')
+    await expect(pill(page)).toHaveText('Waiting for a yes')
     const onApprovalLink = { ...(await decisionButtons(page)), url: page.url() }
 
     const card = await scrollToTeamsCard(await openTeams(page), approvalId)
@@ -336,7 +338,7 @@ test('@lane6 a failed run marks the step that stopped and shows the troubleshoot
     const page = await context.newPage()
     const watch = watchPage(page)
     await page.goto(`/runs/${runId}`)
-    await expect(h1(page)).toHaveText(/^Stopped at /)
+    await expect(pill(page)).toHaveText('Stopped')
     await expect(page.locator('#decision')).toBeFocused()
     const failed = page.locator('ol[aria-label="Steps of this run"] > li[data-state="fail"]')
     await expect(failed).toHaveCount(1)
@@ -378,7 +380,7 @@ test('@lane7 a reload mid-run redraws the steps so far and keeps following new e
     const open = forBob.steps.find((s) => s.status === 'open')
     await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: open?.index ?? 0, verdict: 'approve', digest: forBob.digest }, {}, [201])
     const toDone = await watchLine(page, finished)
-    await expect(h1(page)).toHaveText('1 ticket created in Jira')
+    await expect(pill(page)).toHaveText('Done')
     const navigations = await page.evaluate(() => performance.getEntriesByType('navigation').length)
     await page.evaluate(() => window.scrollTo(0, 0))
     await shotTo(page, 7, 'p5-reload.png', true)
@@ -404,7 +406,7 @@ test('@lane8 the Teams link opens a run at the decision, and a yes there shows o
     const linkPage = await fresh.newPage()
     const freshWatch = watchPage(linkPage)
     await linkPage.goto(linkPath)
-    await expect(h1(linkPage)).toHaveText('1 ticket is waiting for a yes')
+    await expect(pill(linkPage)).toHaveText('Waiting for a yes')
     await expect(linkPage.locator('#decision')).toBeFocused()
     const freshLoad = { link: message?.link, url: linkPage.url(), focused: await linkPage.evaluate(() => document.activeElement?.id ?? ''), buttons: await decisionButtons(linkPage) }
     assertClean(freshWatch)
@@ -433,7 +435,7 @@ test('@lane8 the Teams link opens a run at the decision, and a yes there shows o
     await secondCard.getByRole('link', { name: OPEN_LINK }).click()
     await expect(page).toHaveURL(new RegExp(`/approvals/${second.approvalId}$`))
     await page.getByRole('button', { name: 'Approve 1 ticket' }).click()
-    await expect(h1(page)).toHaveText('1 ticket created in Jira', { timeout: 60_000 })
+    await expect(pill(page)).toHaveText('Done', { timeout: 60_000 })
     const decidedCard = await scrollToTeamsCard(await openTeams(page), second.approvalId)
     await expect(decidedCard.getByText('Approved by Bob')).toBeVisible({ timeout: 30_000 })
     await shotTo(page, 8, 'p5-teams-approve.png')
@@ -599,7 +601,7 @@ test('@lane10 pressing Approve twice, however it is pressed, records one decisio
       const { runId } = await backend.waitingRun('alice')
       const tab = await approvePage(browser, runId)
       await press(tab.approve, tab.page)
-      await expect(h1(tab.page)).toHaveText('1 ticket created in Jira', { timeout: 60_000 })
+      await expect(pill(tab.page)).toHaveText('Done', { timeout: 60_000 })
       out[name] = { runId, posts: tab.posts, ...(await oneDecision(backend, runId)) }
       assertClean(tab.watch)
       await tab.context.close()
@@ -625,8 +627,8 @@ test('@lane10 pressing Approve twice, however it is pressed, records one decisio
     const tab1 = await approvePage(browser, both.runId)
     const tab2 = await approvePage(browser, both.runId)
     await Promise.all([tab1.approve.evaluate((b: HTMLButtonElement) => b.click()), tab2.approve.evaluate((b: HTMLButtonElement) => b.click())])
-    await expect(h1(tab1.page)).toHaveText('1 ticket created in Jira', { timeout: 60_000 })
-    await expect(h1(tab2.page)).toHaveText('1 ticket created in Jira', { timeout: 60_000 })
+    await expect(pill(tab1.page)).toHaveText('Done', { timeout: 60_000 })
+    await expect(pill(tab2.page)).toHaveText('Done', { timeout: 60_000 })
     await tab2.page.screenshot({ path: path.join(laneDir(10), 'p5-two-tabs.png'), fullPage: true })
     out['twoTabs'] = { runId: both.runId, posts: [...tab1.posts, ...tab2.posts], alerts: [...(await tab1.page.getByRole('alert').allInnerTexts()), ...(await tab2.page.getByRole('alert').allInnerTexts())], ...(await oneDecision(backend, both.runId)) }
     await tab1.context.close()
@@ -665,7 +667,7 @@ test('@perf largest contentful paint of a done run', async ({ browser }) => {
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
   await page.goto(`/runs/${runId}`, { waitUntil: 'load' })
-  await expect(h1(page)).toHaveText('1 ticket created in Jira', { timeout: 30_000 })
+  await expect(pill(page)).toHaveText('Done', { timeout: 30_000 })
   await page.waitForTimeout(1_500)
   const measured = await page.evaluate(
     () =>

@@ -11,20 +11,28 @@ interface VersionsProps {
   readonly nameOf: (id: string) => string
 }
 
-/** The prototype's Versions panel, shown once a change has published a second version. It only reads: Undo is on the chat's edit card. */
+/**
+ * Versions, as the sketch draws them: a details with a row for each, "Version 3, in use" and what changed. It only reads.
+ * The sketch's Roll back is not here, because the platform can undo only the newest schedule change, and that is on the chat's edit card.
+ */
 export function Versions({ useCase, now, nameOf }: VersionsProps) {
   const versions = useVersions(useCase.use_case_id, useCase.version)
   const headingId = useId()
   if (useCase.version < 2) return null
   return (
-    <section className={styles['panel']} aria-labelledby={headingId}>
-      <h2 id={headingId}>Versions</h2>
+    <details className={styles['more']} aria-labelledby={headingId}>
+      <summary id={headingId}>Versions</summary>
       {versions.data ? (
-        <ol className={styles['versions']} aria-label="Versions, newest first">
+        <ol className={styles['rows']} aria-label="Versions, newest first">
           {versions.data.map((version) => (
-            <li key={version.version} data-version={version.version}>
-              <b>Version {version.version}</b>
-              <span>{versionLine(version, now, nameOf)}</span>
+            <li key={version.version} data-version={version.version} className={styles['plainRow']}>
+              <span className={styles['main']}>
+                <b>
+                  Version {version.version}
+                  {version.running ? ', in use' : ''}
+                </b>
+                <span className={styles['sub']}>{versionLine(version, now, nameOf)}</span>
+              </span>
             </li>
           ))}
         </ol>
@@ -37,6 +45,6 @@ export function Versions({ useCase, now, nameOf }: VersionsProps) {
           Loading the versions
         </p>
       )}
-    </section>
+    </details>
   )
 }

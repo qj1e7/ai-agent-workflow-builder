@@ -68,6 +68,29 @@ def test_a_second_webhook_for_team_requests_is_optional_and_must_be_https():
         settings_from_env({**LOCAL_ENV, "TEAMS_REQUESTS_WEBHOOK_URL": "http://hook.example/run"})
 
 
+TELL_FLOW = "https://prod.example.logic.azure.com/workflows/tell/triggers/manual/run?sig=z"
+
+
+def test_the_tell_flow_comes_with_the_teams_email_list():
+    settings = settings_from_env(
+        {
+            **LOCAL_ENV,
+            "TEAMS_TELL_WEBHOOK_URL": TELL_FLOW,
+            "TELL_EMAIL_TO": " a@x.example, b@x.example",
+        }
+    )
+    assert settings.tell_email_to == ("a@x.example", "b@x.example")
+    assert settings_from_env(LOCAL_ENV).tell_email_to == ()
+    with pytest.raises(ConfigError, match="TEAMS_TELL_WEBHOOK_URL needs TELL_EMAIL_TO"):
+        settings_from_env({**LOCAL_ENV, "TEAMS_TELL_WEBHOOK_URL": TELL_FLOW})
+
+
+@pytest.mark.parametrize("bad", ["ops", "ops@local", "a@x.example; b@x.example", "a b@x.example"])
+def test_an_address_on_the_teams_email_list_must_be_one_email(bad: str):
+    with pytest.raises(ConfigError, match="in TELL_EMAIL_TO is not an email"):
+        settings_from_env({**LOCAL_ENV, "TELL_EMAIL_TO": bad})
+
+
 def test_practice_systems_are_on_and_the_watchlist_writes_to_mock_by_default():
     settings = settings_from_env(LOCAL_ENV)
     assert settings.practice_systems is True
@@ -194,6 +217,7 @@ SECRETS = {
     "TEAMS_WEBHOOK_URL": "https://teams.example/hook?sig=teams-secret",
     "TEAMS_REQUESTS_WEBHOOK_URL": "https://teams.example/hook?sig=requests-secret",
     "TEAMS_TELL_WEBHOOK_URL": "https://teams.example/hook?sig=tell-secret",
+    "TELL_EMAIL_TO": "ops@example.com",
     "SETTINGS_ENCRYPTION_KEY": "encryption-secret",
     "COSMOS_ENDPOINT": "https://cosmos.example:8081",
     "COSMOS_KEY": "cosmos-secret",
