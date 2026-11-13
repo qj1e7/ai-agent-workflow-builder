@@ -43,7 +43,7 @@ const sayStage = (story: Pick<RunStory, 'stage'>, name: string): string => `${na
 
 /** The card's body for one story. Pure, so it can be drawn from a run's fixture events. */
 export function RunCardView({ runId, name, story, beside }: { runId: string; name: string; story: RunStory | Omit<RunStory, 'useCase' | 'approvalId'>; beside: boolean }) {
-  const { stage, settled, model } = story
+  const { settled, model } = story
   const ended = settled !== null
   const failure = model.phase.state === 'failed' ? model.phase : null
   const safeId = `${runId}-safe`
@@ -62,7 +62,6 @@ export function RunCardView({ runId, name, story, beside }: { runId: string; nam
     >
       {ended ? <SettledLine settled={settled} /> : beside ? null : <RunLine stations={story.stations} arrivedLive={story.arrivedLive} settled={null} small />}
       {failure ? <StopAnswers failure={failure} {...story.stopped} safeId={safeId} /> : story.answers.length > 0 ? <AnswerList answers={story.answers} /> : null}
-      <span className="visually-hidden" data-stage={stage} />
     </Card>
   )
 }
