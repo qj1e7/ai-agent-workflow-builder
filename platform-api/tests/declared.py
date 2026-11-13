@@ -17,9 +17,11 @@ from platform_api.builder.watchlist import (
     RepoAlreadyWatched,
     WatchlistFull,
 )
+from platform_api.orchestration.n8n_call_service import FailureResult, LeftAsIs
 from platform_api.orchestration.n8n_calls import (
     Answer,
     CallResult,
+    FailedExecution,
     NodeCall,
     NodeOption,
     OptionKind,
@@ -58,9 +60,13 @@ class FakeOrchestrator:
 class FakeNodeCalls:
     """Answers every node call with one result, and records the calls."""
 
-    def __init__(self, result: CallResult | None = None) -> None:
+    def __init__(
+        self, result: CallResult | None = None, failure: FailureResult | None = None
+    ) -> None:
         self._result = result or Answer(({"id": "1.2.16"},))
+        self._failure = failure or LeftAsIs("No run carries this execution.")
         self.calls: list[NodeCall] = []
+        self.failures: list[FailedExecution] = []
 
     async def call(self, call: NodeCall) -> CallResult:
         self.calls.append(call)
@@ -68,6 +74,10 @@ class FakeNodeCalls:
 
     async def options(self, kind: OptionKind, of: Mapping[str, str]) -> list[NodeOption]:
         return [NodeOption("MOCK", "MOCK")] if kind == "places" else []
+
+    async def failed(self, failed: FailedExecution) -> FailureResult:
+        self.failures.append(failed)
+        return self._failure
 
 
 class FakeBuilder:

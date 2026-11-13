@@ -42,6 +42,7 @@ from platform_api.orchestration.model_settings import KeyBox, ModelSettings
 from platform_api.orchestration.n8n_call_service import NodeCalls
 from platform_api.orchestration.n8n_calls import (
     ExecutionFacts,
+    FailedExecution,
     NodeCatalog,
     NodeOption,
     OwnWorkflow,
@@ -63,6 +64,7 @@ from platform_api.orchestration.service import Orchestrator
 from platform_api.orchestration.spec import CardRun
 from platform_api.orchestration.team_request_card import TeamsRequestChannel
 from platform_api.orchestration.teams import TeamsStub, TeamsWorkflowsWebhook
+from platform_api.orchestration.tell import TellFlow, TellOutlet, TellPractice
 from platform_api.orchestration.watch_store import WatchFacts
 from platform_api.orchestration.workflows import load_all
 from platform_api.orchestration.write_actions import WriteGateway
@@ -96,6 +98,7 @@ class Services:
     teams_webhook: TeamsWorkflowsWebhook | None = None
     waker: N8nWaker | None = None
     practice_jira: PracticeJira | None = None
+    tell_flow: TellFlow | None = None
 
 
 JIRA_TIMEOUT_SECONDS = 10.0
@@ -175,6 +178,12 @@ class NoOwnWorkflowsYet:
         """n8n's records are not read yet (E4), so every execution is of no workflow of ours."""
         return ExecutionFacts("", "", None, None, None)
 
+    async def failed_executions(self, workflow_id: str) -> Sequence[N8nExecutionId]:
+        return []
+
+    async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
+        return None
+
     async def places(self, source: str) -> Sequence[NodeOption]:
         return []
 
@@ -213,6 +222,16 @@ def approval_channel(
         return practice, None
     webhook = TeamsWorkflowsWebhook(settings.teams_webhook_url, settings.teams_channel, client)
     return webhook, webhook
+
+
+def tell_outlet(settings: Settings, db: Database) -> tuple[TellOutlet, TellFlow | None]:
+    """Where a Tell goes: the practice copy, or the team's Tell flow when TEAMS_TELL_WEBHOOK_URL
+    is set. E13 sets it, with the registry's "Posts in Teams and emails" made ready. Returns the
+    outlet, and the flow to close on shutdown."""
+    if settings.teams_tell_webhook_url is None:
+        return TellPractice(db, settings.teams_channel), None
+    flow = TellFlow(settings.teams_tell_webhook_url, settings.teams_channel)
+    return flow, flow
 
 
 def connections_for(
@@ -324,6 +343,7 @@ async def build(settings: Settings) -> Services:
         waker=waker,
     )
     not_yet = NoOwnWorkflowsYet()
+    tells, tell_flow = tell_outlet(settings, db)
     node_calls = NodeCalls(
         db,
         activity,
@@ -338,6 +358,8 @@ async def build(settings: Settings) -> Services:
         start_secret=settings.start_secret,
         box=box,
         time_zone=settings.team_time_zone,
+        tells=tells,
+        failures=not_yet,
     )
     schedules = ScheduleBook(db)
     watchlist = Watchlist(
@@ -393,6 +415,7 @@ async def build(settings: Settings) -> Services:
         cosmos=cosmos,
         teams_webhook=webhook,
         waker=waker,
+        tell_flow=tell_flow,
     )
 
 
@@ -400,16 +423,21 @@ class Runner:
     def __init__(self, services: Services) -> None:
         self._services = services
         self._stop = asyncio.Event()
-        self._task: asyncio.Task[None] | None = None
+        self._tasks: list[asyncio.Task[None]] = []
 
     def start(self) -> None:
-        self._task = asyncio.create_task(self._services.orchestrator.run_forever(self._stop))
+        self._tasks = [
+            asyncio.create_task(self._services.orchestrator.run_forever(self._stop)),
+            asyncio.create_task(self._services.node_calls.sweep_forever(self._stop)),
+        ]
 
     async def stop(self) -> None:
         self._stop.set()
         self._services.orchestrator.nudge()
-        if self._task is not None:
-            await self._task
+        for task in self._tasks:
+            await task
+        if self._services.tell_flow is not None:
+            await self._services.tell_flow.close()
         if self._services.teams_webhook is not None:
             await self._services.teams_webhook.close()
         if self._services.waker is not None:

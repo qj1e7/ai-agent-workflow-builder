@@ -14,22 +14,25 @@ from pydantic import Field, model_validator
 
 from platform_api.orchestration.cards import BODY_LIMIT, TITLE_LIMIT
 from platform_api.orchestration.dispatch import resume_path
-from platform_api.orchestration.n8n_call_service import NodeCalls
+from platform_api.orchestration.n8n_call_service import FailedRun, LeftAsIs, NodeCalls
 from platform_api.orchestration.n8n_calls import (
     AgentCall,
     Answer,
     AskCall,
     CallResult,
+    FailedExecution,
     NodeCall,
     NothingToChange,
     OptionKind,
     ProposeCall,
     ReadCall,
     Refused,
+    TellCall,
     TryLater,
     Waiting,
     Work,
 )
+from platform_api.orchestration.tell import TellStatus, TellWhat, TellWhere, Told
 from platform_api.shared import N8nExecutionId
 from platform_api.wire import WireIn, WireModel, error_response
 
@@ -137,6 +140,43 @@ class AskIn(_From):
         return self
 
 
+class TellIn(_From):
+    """Only the block's two choices. A body with an address or any text of its own is refused,
+    so a notice goes only to the fixed recipients, with only what the run read."""
+
+    where: TellWhere
+    what: TellWhat
+
+
+class TellOut(WireModel):
+    status: TellStatus
+    line: str = Field(description="What the block did, in the words the Portal shows.")
+
+
+ERROR_TEXT_LIMIT = 2048
+"""Report a failure cuts the error and the workflow's name to 2 KB."""
+
+
+class FailureIn(_From):
+    """What the Error Trigger said about the execution that failed. The fields of the block's own
+    execution, the error workflow's, say who reports. Our API takes the failed execution's mode,
+    retry and workflow from n8n's own record, as its first call would."""
+
+    failed_execution_id: Token | None = None
+    failed_mode: str | None = Field(default=None, max_length=40)
+    retry_of: Token | None = None
+    last_node_executed: str | None = Field(default=None, max_length=200)
+    error_message: str | None = Field(default=None, max_length=ERROR_TEXT_LIMIT)
+    failed_workflow_id: Token | None = None
+    failed_workflow_name: str | None = Field(default=None, max_length=ERROR_TEXT_LIMIT)
+
+
+class FailureOut(WireModel):
+    status: Literal["failed", "left_as_is"]
+    run_id: str | None = Field(default=None, description="The run the report failed.")
+    detail: str
+
+
 class AskOut(WireModel):
     status: Literal["waiting", "nothing_to_change"]
     request_id: str | None = Field(
@@ -175,7 +215,7 @@ REFUSALS: dict[int | str, dict[str, Any]] = {
 }
 
 
-def _answered(result: CallResult) -> AnswerOut | AskOut | JSONResponse:
+def _answered(result: CallResult) -> AnswerOut | AskOut | TellOut | JSONResponse:
     match result:
         case Answer(items, replayed, cut_off):
             return AnswerOut(
@@ -185,6 +225,8 @@ def _answered(result: CallResult) -> AnswerOut | AskOut | JSONResponse:
             return AskOut(status="waiting", request_id=request_id)
         case NothingToChange():
             return AskOut(status="nothing_to_change")
+        case Told(status, line):
+            return TellOut(status=status, line=line)
         case Refused(status, detail):
             return JSONResponse(status_code=status, content={"detail": detail})
         case TryLater(detail):
@@ -194,7 +236,7 @@ def _answered(result: CallResult) -> AnswerOut | AskOut | JSONResponse:
 async def _call(calls: NodeCalls, body: _From, work: Work) -> AnswerOut | JSONResponse:
     call = NodeCall(N8nExecutionId(body.execution_id), body.node_name, work)
     answer = _answered(await calls.call(call))
-    assert not isinstance(answer, AskOut)
+    assert not isinstance(answer, AskOut | TellOut)
     return answer
 
 
@@ -260,5 +302,43 @@ async def propose(body: ProposeIn, calls: CurrentNodeCalls) -> AnswerOut | JSONR
 async def ask(body: AskIn, calls: CurrentNodeCalls) -> AskOut | JSONResponse:
     call = NodeCall(N8nExecutionId(body.execution_id), body.node_name, AskCall(body.resume_url))
     answer = _answered(await calls.call(call))
-    assert not isinstance(answer, AnswerOut)
+    assert not isinstance(answer, AnswerOut | TellOut)
     return answer
+
+
+@router.post(
+    "/calls/tell",
+    response_model=TellOut,
+    description="Tells the team what the run read, in its fixed Teams channel, by its fixed email "
+    "list or both, with no yes (the Tell rule). Sent at most once, and never in a test run.",
+    responses=REFUSALS,
+)
+async def tell(body: TellIn, calls: CurrentNodeCalls) -> TellOut | JSONResponse:
+    call = NodeCall(
+        N8nExecutionId(body.execution_id), body.node_name, TellCall(body.where, body.what)
+    )
+    answer = _answered(await calls.call(call))
+    assert not isinstance(answer, AnswerOut | AskOut)
+    return answer
+
+
+@router.post(
+    "/failures",
+    response_model=FailureOut,
+    description="Report a failure, from the error workflow: fails the run the failed execution "
+    "carried with the block's words. A run that has ended stays as it is.",
+    responses={401: REFUSALS[401], 503: REFUSALS[503]},
+)
+async def failures(body: FailureIn, calls: CurrentNodeCalls) -> FailureOut | JSONResponse:
+    if body.failed_execution_id is None:
+        return FailureOut(status="left_as_is", detail="The report names no execution.")
+    failed = FailedExecution(
+        N8nExecutionId(body.failed_execution_id), body.last_node_executed, body.error_message
+    )
+    match await calls.failed(failed):
+        case FailedRun(run_id):
+            return FailureOut(status="failed", run_id=run_id, detail="The run failed.")
+        case LeftAsIs(detail):
+            return FailureOut(status="left_as_is", detail=detail)
+        case TryLater(detail):
+            return JSONResponse(status_code=503, content=RetryOut(detail=detail).model_dump())

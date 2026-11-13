@@ -23,23 +23,28 @@ from platform_api.orchestration.agents import CardInput, InputKind
 from platform_api.orchestration.cards import TOOL_RULES
 from platform_api.orchestration.runs import (
     TEST_PASSED,
+    Acting,
     Failed,
+    Failure,
     Moved,
     Pending,
+    Proposed,
     ResumeWork,
     RunState,
     Working,
     execution_linked,
+    holder_of,
     sentence,
     state_name,
     working_on,
 )
 from platform_api.orchestration.spec import CardRun, RunSpec
-from platform_api.orchestration.write_actions import Json
+from platform_api.orchestration.tell import TellWhat, TellWhere, Told
+from platform_api.orchestration.write_actions import Json, one_line
 from platform_api.shared import ApprovalId, N8nExecutionId, RunId, UserId
 from platform_api.wire import Trigger
 
-type NodeKind = Literal["read", "agent", "propose", "ask"]
+type NodeKind = Literal["read", "agent", "propose", "ask", "tell"]
 type StartKind = Literal["run_now", "test", "retry"]
 type OptionKind = Literal["places", "agents", "agent_inputs", "write_actions"]
 type Grade = Literal["safe", "writes_refused", "needs_a_fix"]
@@ -169,13 +174,23 @@ class AskCall:
     """$execution.resumeUrl, which n8n signs. It is kept sealed and never shown."""
 
 
-type Work = ReadCall | AgentCall | ProposeCall | AskCall
+@dataclass(frozen=True)
+class TellCall:
+    """A choice of the fixed recipients and of when to tell. It carries no address and no text:
+    our API composes the notice from what the run read (the Tell rule)."""
+
+    where: TellWhere
+    what: TellWhat
+
+
+type Work = ReadCall | AgentCall | ProposeCall | AskCall | TellCall
 
 KIND_OF: Mapping[type[Work], NodeKind] = {
     ReadCall: "read",
     AgentCall: "agent",
     ProposeCall: "propose",
     AskCall: "ask",
+    TellCall: "tell",
 }
 
 
@@ -234,7 +249,7 @@ class TryLater:
     detail: str
 
 
-type CallResult = Answer | AskAnswer | Refused | TryLater
+type CallResult = Answer | AskAnswer | Told | Refused | TryLater
 
 NOT_OURS = Refused(403, "This workflow is not one our platform runs.")
 NOBODY_HOLDS = Refused(403, "Nobody holds this workflow, so nobody may run it by hand.")
@@ -252,6 +267,8 @@ CHANGED_CALL = Refused(409, "This block already called with other content in thi
 BUSY = TryLater("Our platform is still answering this block.")
 TEST_RUN_STOPS = Refused(409, TEST_PASSED)
 """A test run ends at Ask for a yes, with no exit taken (ENGINE-PLAN 2.3.3)."""
+NOTHING_READ = Refused(403, "A Tell reports only what this run read, and it has read nothing yet.")
+NO_TELL_FLOW = Refused(409, "This platform has no Tell flow, so it sends no notice.")
 CANNOT_SEAL = (
     "This platform cannot keep n8n's resume address safe, because SETTINGS_ENCRYPTION_KEY is not "
     "set."
@@ -399,6 +416,56 @@ def rejoin(
             return Refused(409, f"This run cannot take a retry while it is {state_name(state)}.")
 
 
+MESSAGE_LIMIT = 500
+
+
+@dataclass(frozen=True)
+class FailedExecution:
+    """An execution that ended in an error, as Report a failure sends it or the sweep reads it
+    from n8n (ENGINE-PLAN 2.8)."""
+
+    execution_id: N8nExecutionId
+    node: str | None
+    message: str | None
+
+
+class N8nFailures(Protocol):
+    """n8n's record of failed executions, the sweep's fallback for any report that never came:
+    from a workflow held in a member's project, or a run by hand, which reaches no error
+    workflow (P7 Q13 and Q22)."""
+
+    async def failed_executions(self, workflow_id: str) -> Sequence[N8nExecutionId]:
+        """GET /api/v1/executions?status=error&workflowId=…"""
+        ...
+
+    async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
+        """The node that failed and its error text, from the execution's data."""
+        ...
+
+
+def failure_words(failed: FailedExecution, read_anything: bool) -> str:
+    node = f'"{failed.node}"' if failed.node else "A block"
+    said = one_line(failed.message or "n8n gave no reason", MESSAGE_LIMIT)
+    words = f"{node} failed in n8n: {sentence(said)}"
+    return words if read_anything else f"Stopped before it read anything. {words}"
+
+
+def fail_by_report(
+    state: RunState, execution: N8nExecutionId, failure: Failure
+) -> Moved[Failed] | None:
+    """A failed execution fails the run it carries. A run that has ended stays as it ended, so
+    a test run that passed up to the yes is not failed by its stop at the gate, and neither is a
+    run another execution carries now."""
+    match state:
+        case Pending() | Working() | Proposed() | Acting():
+            holder = holder_of(state)
+            if holder is not None and holder != execution:
+                return None
+            return state.fail(failure)
+        case _:
+            return None
+
+
 WRITE_TARGETS: Mapping[InputKind, str] = {
     rule.target_input: rule.connector
     for rule in TOOL_RULES
@@ -456,7 +523,7 @@ class NodeCatalog:
                     return unknown("change", action)
                 if place not in {option.id for option in entry.places}:
                     return unknown("place", place)
-            case AskCall():
+            case AskCall() | TellCall():
                 pass
         return None
 
