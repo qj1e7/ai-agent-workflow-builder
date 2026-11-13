@@ -15,8 +15,10 @@ from agent_runtime.contract import (
     PartCantDo,
     PauseAnswer,
     PlannerAnswer,
+    PlannerFacts,
     ResumeAnswer,
     WatchlistAnswer,
+    WorkflowFact,
 )
 from tests.test_answers import WORKFLOWS, read
 
@@ -223,3 +225,44 @@ def test_someone_who_cant_change_workflows_gets_no_pause():
 def test_why_it_stopped_is_a_question_not_a_pause():
     answer = answer_of(read(asks_about="why_stopped"), "why did the morning check stop?", WORKFLOWS)
     assert not isinstance(answer, PauseAnswer | ResumeAnswer)
+
+
+CHECKS = PlannerFacts(
+    workflows=[
+        WorkflowFact(name=name, state="on", last_run=None, last_run_at=None)
+        for name in (
+            "Morning check bbeda",
+            "Evening check bbeda",
+            "Morning check cddeb",
+            "Morning check decaf",
+        )
+    ]
+)
+"""Newest first, as the platform lists them: the workflow named in full is not the first whose
+words the request holds."""
+
+
+@pytest.mark.parametrize(
+    ("task", "about", "kind"),
+    [
+        (
+            "how are my workflows doing? make the Morning check decaf run at 10am",
+            "my_workflows",
+            EditAnswer,
+        ),
+        ("pause the Morning check decaf", "change", PauseAnswer),
+        ("resume the Morning check decaf", "change", ResumeAnswer),
+    ],
+)
+def test_a_whole_name_wins_over_the_words_it_shares_with_other_workflows(
+    task: str, about: str, kind: type[EditAnswer | PauseAnswer | ResumeAnswer]
+):
+    answer = answer_of(read(asks_about=about), task, CHECKS)
+    assert isinstance(answer, kind)
+    assert answer.workflow_words == "Morning check decaf"
+
+
+def test_words_two_workflows_share_name_both_so_she_picks():
+    answer = answer_of(read(asks_about="change"), "pause the bbeda check", CHECKS)
+    assert isinstance(answer, PauseAnswer)
+    assert answer.workflow_words == "bbeda check"
