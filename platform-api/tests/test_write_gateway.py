@@ -318,7 +318,8 @@ async def test_a_part_done_proposal_says_so_and_a_retry_makes_only_the_rest(db: 
     assert first.results[2] == NotMade(proposal.actions[2], NOT_TRIED)
 
     connector.down = set()
-    again = await gateway.execute(authorized(connector, proposal))
+    # The failed try released its claim, so the retry needs no wait for the in-flight timeout.
+    again = await asyncio.wait_for(gateway.execute(authorized(connector, proposal)), RACE_LIMIT)
     assert (again.made, again.failure) == (3, None)
     assert [done.external_reference for done in again.written] == ["MOCK-1", "MOCK-2", "MOCK-3"]
     assert [done.external_reference for done in again.fresh] == ["MOCK-2", "MOCK-3"]

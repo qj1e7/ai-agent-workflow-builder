@@ -3,7 +3,7 @@ import hashlib
 import json
 from collections.abc import Collection, Iterable, Mapping, Sequence, Set
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Protocol
 
@@ -567,10 +567,12 @@ class WriteGateway:
             try:
                 reference = await self._connectors[action.connector].execute(action, key)
             except WriteRefused as refused:
+                await self._release(key)
                 raise WriteFailed(
                     f"{action.connector} {action.operation} was refused: {refused}", retryable=False
                 ) from refused
             except Exception as error:
+                await self._release(key)
                 raise WriteFailed(
                     f"{action.connector} {action.operation} failed: {error}"
                 ) from error
@@ -625,6 +627,17 @@ class WriteGateway:
         except psycopg.errors.UniqueViolation:
             return False
         return row is not None
+
+    async def _release(self, key: WriteKey) -> None:
+        """This try failed and stopped, so the next try may claim the key at once instead of
+        after the in-flight timeout. The connector keeps its own record of each key, so a change
+        the failed try did make is found there, not made twice."""
+        async with self._db.transaction("orchestration") as uow:
+            await uow.conn.execute(
+                "UPDATE orchestration.write_executions SET started_at = %s "
+                "WHERE idempotency_key = %s AND status = 'started'",
+                (datetime.fromtimestamp(0, UTC), key.text),
+            )
 
     async def _mark_done(self, key: WriteKey, reference: str) -> None:
         async with self._db.transaction("orchestration") as uow:
