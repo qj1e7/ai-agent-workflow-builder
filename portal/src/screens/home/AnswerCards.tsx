@@ -67,7 +67,7 @@ export function SetupCardAnswer({ reply, typed }: { reply: SetupCardReply | Part
 }
 
 /** A can’t the registry says in one line: the line as the head, what she has instead under it, and Ask the team unless the platform won’t do it. */
-function OneLineCant({ row, typed, secondary }: { row: CantRowView; typed: string; secondary: boolean }) {
+function OneLineCant({ row, typed }: { row: CantRowView; typed: string }) {
   return (
     <Card title={row.note.replace(/\.$/, '')}>
       <div className={styles['pcardPart']}>
@@ -75,7 +75,7 @@ function OneLineCant({ row, typed, secondary }: { row: CantRowView; typed: strin
       </div>
       {row.unsupported ? null : (
         <div className={styles['footer']}>
-          <AskTheTeam capability={row.system ?? row.text} starter={`I asked the Planner for: ${typed}\n\nIt can't do this yet: ${row.text}`} secondary={secondary} />
+          <AskTheTeam capability={row.system ?? row.text} starter={`I asked the Planner for: ${typed}\n\nIt can't do this yet: ${row.text}`} />
         </div>
       )}
     </Card>
@@ -98,7 +98,7 @@ export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }
   return (
     <>
       {named.filter(oneLine).map((row) => (
-        <OneLineCant key={row.text} row={row} typed={typed} secondary={alternative !== null} />
+        <OneLineCant key={row.text} row={row} typed={typed} />
       ))}
       {rows.length > 0 ? (
         <Card title="What I can’t do yet">
