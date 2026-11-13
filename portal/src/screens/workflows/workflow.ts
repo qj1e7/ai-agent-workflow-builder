@@ -505,7 +505,7 @@ export function bannerOf({ useCase, viewer, now, nameOf }: BannerFacts): Banner 
 
 /**
  * Who says yes, as the sketch has it: "Any Approver but you, in Teams." Nobody says yes to their own work, so the owner is named,
- * as "you" when it is the person reading. The whole rule is one tap away, in `OWN_WORK_RULE`.
+ * as "you" when it is the person reading. The whole rule is one tap away, in `ownWorkRule`.
  */
 export function whoSaysYes(owner: string, viewer: Pick<Viewer, 'id'>, nameOf: NameOf): string {
   return `Any Approver but ${owner === viewer.id ? 'you' : nameOf(owner)}, in Teams.`

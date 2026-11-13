@@ -7,9 +7,8 @@ import workflowStyles from '../workflows/Workflows.module.css'
 import styles from './Software.module.css'
 
 /**
- * A watched software in the side panel (spec 3.3): its status, the version you run, the newest, what checks it and when.
- * Where and when are said in the Software page's own words, so the panel never claims more than the page. More details opens
- * its row there.
+ * A watched software in the side panel (spec 3.3): its status, the version you run, the newest, the workflow that checks it and when.
+ * Each is said in the Software page's own words, so the panel never claims more than the page. More details opens its page.
  */
 export function SoftwarePanel({ id }: { id: string }) {
   const watchlist = useWatchlist({ poll: REFRESH_MS })
