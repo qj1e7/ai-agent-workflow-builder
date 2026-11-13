@@ -10,6 +10,10 @@ from agent_runtime.contract import (
     AgentRef,
     AgentStepFinishedData,
     AgentStepStartedData,
+    ReadReleasesResult,
+    ReleaseRead,
+    ReleasesNotRead,
+    ReleasesRead,
     RoomAddressee,
     TaskError,
 )
@@ -104,6 +108,30 @@ def read_releases(
                 )
             sleep(retry.wait_seconds)
     raise AssertionError("the retry loop always returns")
+
+
+RELEASES_READ_LIMIT = 30
+
+
+def releases_of(source: ReleaseSource, repo: str, tag_pattern: str) -> ReadReleasesResult:
+    """One read of a repository's stable releases that the tag rule counts, newest first, for the
+    platform's Read block. n8n tries a failed block again by itself, so this tries once."""
+    try:
+        releases = source.fetch(repo)
+    except SourceRejected as refused:
+        if refused.limited:
+            return ReleasesNotRead(message=f"{LIMITED}.", retryable=True)
+        message = f"{SOURCE_NAME} answered {phrase(refused.status)}."
+        return ReleasesNotRead(message=message, retryable=False)
+    except SourceUnavailable as unavailable:
+        return ReleasesNotRead(message=f"{gave_up_message(unavailable)}.", retryable=True)
+    counted = set(candidates(releases, tag_pattern))
+    read = [
+        ReleaseRead(tag=r.tag, name=r.name, published_at=r.published_at)
+        for r in releases
+        if r.tag in counted
+    ]
+    return ReleasesRead(releases=read[:RELEASES_READ_LIMIT])
 
 
 def candidates(releases: list[Release], tag_pattern: str) -> list[str]:

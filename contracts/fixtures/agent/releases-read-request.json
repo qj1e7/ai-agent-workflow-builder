@@ -1,0 +1,4 @@
+{
+  "repo": "langchain-ai/langgraph",
+  "tag_pattern": "^(?:[vV]|docker-v|n8n@|langchain==)?\\d+\\.\\d+\\.\\d+$"
+}

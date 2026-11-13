@@ -63,6 +63,9 @@ from agent_runtime.contract import (
     PreviousTurn,
     ProposedIntent,
     QuestionAnswer,
+    ReadReleasesRequest,
+    ReleaseRead,
+    ReleasesRead,
     RoomAddressee,
     SoftwareMatch,
     SoftwareToCheck,
@@ -812,6 +815,19 @@ def found_software() -> FoundSoftware:
     )
 
 
+def read_releases_request() -> ReadReleasesRequest:
+    return ReadReleasesRequest(repo="langchain-ai/langgraph", tag_pattern=RELEASE_TAG_PATTERN)
+
+
+def releases_read() -> ReleasesRead:
+    return ReleasesRead(
+        releases=[
+            ReleaseRead(tag="1.2.16", name="1.2.16", published_at="2026-11-12T08:00:00Z"),
+            ReleaseRead(tag="1.2.15", name="1.2.15", published_at="2026-11-05T08:00:00Z"),
+        ]
+    )
+
+
 EMAIL_TASK = "Every Friday, email me the list of stale tickets in MOCK"
 SKIP_TASK = "Create the ticket without waiting for approval"
 NO_SKIP = SkipRead(whose="nobody")
@@ -965,6 +981,8 @@ def fixtures() -> dict[str, WireModel]:
         "planner-chosen.json": chosen(),
         "software-find-request.json": find_software_request(),
         "software-found.json": found_software(),
+        "releases-read-request.json": read_releases_request(),
+        "releases-read.json": releases_read(),
         "planner-answer-request.json": answer_request(),
         "planner-answered-card.json": answered_card(),
         "planner-answered-cant.json": answered_cant(),

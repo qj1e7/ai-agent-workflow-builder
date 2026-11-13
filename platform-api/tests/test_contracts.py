@@ -48,6 +48,7 @@ from platform_api.orchestration.agents import (
     DraftRequest,
     FindSoftwareRequest,
     ModelAccess,
+    ReadReleasesRequest,
     TaskFinished,
     TaskRequest,
     WatchlistInputs,
@@ -59,6 +60,7 @@ from platform_api.orchestration.agents import (
     find_software_result_adapter,
     github_check_result_adapter,
     model_test_result_adapter,
+    read_releases_result_adapter,
     task_result_adapter,
 )
 from platform_api.orchestration.agents import CapabilityList as AgentCapabilityList
@@ -134,6 +136,8 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "agent/planner-chosen.json": choose_result_adapter,
     "agent/software-find-request.json": TypeAdapter(FindSoftwareRequest),
     "agent/software-found.json": find_software_result_adapter,
+    "agent/releases-read-request.json": TypeAdapter(ReadReleasesRequest),
+    "agent/releases-read.json": read_releases_result_adapter,
     "agent/planner-answer-request.json": TypeAdapter(AnswerRequest),
     "agent/planner-answered-card.json": answer_result_adapter,
     "agent/planner-answered-cant.json": answer_result_adapter,
