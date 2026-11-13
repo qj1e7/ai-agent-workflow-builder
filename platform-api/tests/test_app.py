@@ -28,6 +28,7 @@ ROUTES = {
     ("POST", "/api/v1/use-cases/{use_case_id}/runs"),
     ("POST", "/api/v1/use-cases/{use_case_id}/pause"),
     ("POST", "/api/v1/use-cases/{use_case_id}/resume"),
+    ("POST", "/api/v1/use-cases/{use_case_id}/turn-on"),
     ("PUT", "/api/v1/use-cases/{use_case_id}/schedule"),
     ("GET", "/api/v1/use-cases/{use_case_id}/versions"),
     ("POST", "/api/v1/use-cases/{use_case_id}/versions/{version}/undo"),

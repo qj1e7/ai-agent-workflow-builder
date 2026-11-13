@@ -1,0 +1,19 @@
+{
+  "name": "LangGraph release check",
+  "instruction": "Check langchain-ai/langgraph for a new release and raise a ticket in MOCK.",
+  "agents": [
+    {
+      "card_id": "crd_version_checker",
+      "values": {
+        "GitHub repository": "langchain-ai/langgraph",
+        "Jira project": "MOCK"
+      }
+    }
+  ],
+  "schedule": {
+    "day": "monday",
+    "at": "08:00"
+  },
+  "left_out": [],
+  "on": false
+}

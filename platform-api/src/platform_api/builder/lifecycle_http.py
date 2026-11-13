@@ -31,8 +31,8 @@ NO_UNDO_BODY = UndoIn()
 @router.post(
     "/use-cases/{use_case_id}/pause",
     description="Stops the workflow starting runs, on its schedule or by hand, until an "
-    "Operator resumes it. A run that has started carries on. Pausing a paused workflow "
-    "changes nothing.",
+    "Operator resumes it. A run that has started carries on. Pausing a paused workflow, or a "
+    "draft, changes nothing.",
     responses={**OPERATORS_ONLY, 404: NOT_FOUND},
 )
 async def pause_use_case(
@@ -47,13 +47,31 @@ async def pause_use_case(
 @router.post(
     "/use-cases/{use_case_id}/resume",
     description="Turns a paused workflow back on. Its next run is the next slot of its "
-    "schedule. Resuming a workflow that is on changes nothing.",
+    "schedule. Resuming a workflow that is on changes nothing, and a draft stays a draft until "
+    "it is turned on.",
     responses={**OPERATORS_ONLY, 404: NOT_FOUND},
 )
 async def resume_use_case(
     use_case_id: str, principal: WorkflowOperator, builder: CurrentBuilder
 ) -> UseCaseView:
     view = await builder.resume_use_case(use_case_id, principal)
+    if view is None:
+        raise HTTPException(404, NO_SUCH)
+    return view
+
+
+@router.post(
+    "/use-cases/{use_case_id}/turn-on",
+    description="Turns a draft on, publishing its version 1 (ADR 0044). Its next run is the next "
+    "slot of its schedule, and a slot that fell while it was a draft never starts. Turning on a "
+    "workflow that was turned on before, even one paused since, changes nothing. Not a write to "
+    "Jira or Teams, so it needs no approval.",
+    responses={**OPERATORS_ONLY, 404: NOT_FOUND},
+)
+async def turn_on_use_case(
+    use_case_id: str, principal: WorkflowOperator, builder: CurrentBuilder
+) -> UseCaseView:
+    view = await builder.turn_on_use_case(use_case_id, principal)
     if view is None:
         raise HTTPException(404, NO_SUCH)
     return view

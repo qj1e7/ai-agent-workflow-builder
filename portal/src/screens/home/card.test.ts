@@ -337,7 +337,7 @@ describe('step 4, turn it on', () => {
     expect(checkedRows(ready())[0]).toEqual({ ok: true, words: 'When: Every weekday at 15:00, as you asked.' })
   })
 
-  it('sends the name, the rows as the instruction, each agent’s values and the schedule', () => {
+  it('sends the name, the rows as the instruction, each agent’s values and the schedule, turned on', () => {
     const form = { ...ready(), name: '  Follow up stale bugs ' }
     expect(createBody(form, planView(CLEAN_DRAFT, form.rows), { 0: 'crd_new' })).toEqual({
       name: 'Follow up stale bugs',
@@ -345,6 +345,7 @@ describe('step 4, turn it on', () => {
       agents: [{ card_id: 'crd_new', values: { 'Jira project': 'MOCK' } }],
       schedule: { day: 'weekdays', at: '15:00' },
       left_out: [],
+      on: true,
     })
     const named = createBody({ ...form, name: '' }, planView(CLEAN_DRAFT, form.rows), { 0: 'crd_new' })
     expect(named.name).toBe('Stale bug follow-up')

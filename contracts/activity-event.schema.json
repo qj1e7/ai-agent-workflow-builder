@@ -1147,7 +1147,8 @@
     "RunOutcome": {
       "enum": [
         "written",
-        "nothing_to_write"
+        "nothing_to_write",
+        "test_passed"
       ],
       "type": "string"
     },
@@ -1443,7 +1444,8 @@
         "failed",
         "superseded",
         "refused",
-        "replayed"
+        "replayed",
+        "test_passed"
       ],
       "type": "string"
     },

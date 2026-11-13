@@ -294,7 +294,7 @@ def given_versions(record: WatchlistRecord) -> Mapping[SoftwareId, Given | None]
 
 _CURRENT = """
     SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
-           v.version, v.params
+           u.draft, v.version, v.params
     FROM builder.use_cases u
     JOIN builder.use_case_versions v
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
@@ -743,7 +743,7 @@ class Watchlist:
             row = await (
                 await conn.execute(
                     "SELECT u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by, "
-                    "v.params FROM builder.use_cases u "
+                    "u.draft, v.params FROM builder.use_cases u "
                     "JOIN builder.use_case_versions v ON v.use_case_id = u.use_case_id "
                     "WHERE u.use_case_id = %s AND v.version = %s",
                     (use_case_id, version),

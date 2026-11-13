@@ -78,6 +78,7 @@ export const blockKindLabel: Record<BlockKind, string> = {
 export const runOutcomeLabel: Record<RunOutcome, string> = {
   written: 'Written',
   nothing_to_write: 'Nothing to write',
+  test_passed: 'Test run passed',
 }
 
 export const roleLabel: Record<Role, string> = {
