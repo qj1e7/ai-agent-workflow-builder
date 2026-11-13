@@ -107,7 +107,7 @@ describe('the status words', () => {
   it('say a run skipped while an earlier one waits for a yes, and need nobody', () => {
     const skipped = run(failed, { state: 'skipped', waiting_run_id: 'run_06' })
     expect(stageWords(stageOfRun(skipped), nameOf)).toBe('Skipped. An earlier run is still waiting for a yes.')
-    expect(rowLine({ schedule: null, ...lastOf({ state: 'skipped' }) }, NOW, nameOf)).toBe('No schedule · last run Mon 26 Oct, skipped. an earlier run is still waiting for a yes.')
+    expect(rowLine({ schedule: null, ...lastOf({ state: 'skipped' }) }, NOW, nameOf)).toBe('No schedule · last run Mon 26 Oct, skipped. An earlier run is still waiting for a yes.')
   })
 
   it('say a run that is still going is running', () => {
