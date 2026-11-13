@@ -115,6 +115,12 @@ class Waker(Protocol):
         ...
 
 
+class WakeLanding(Protocol):
+    async def landed(self, execution_id: N8nExecutionId) -> bool:
+        """Whether n8n shows the execution running or finished."""
+        ...
+
+
 class Sealer(Protocol):
     def seal(self, key: str) -> str: ...
 

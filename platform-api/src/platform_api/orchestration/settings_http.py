@@ -30,6 +30,7 @@ from platform_api.orchestration.model_settings import (
     SettingsState,
     StoredModel,
 )
+from platform_api.settings import Settings
 from platform_api.shared import Principal, Role, UserId
 from platform_api.wire import WireIn, WireModel, error_response
 
@@ -101,9 +102,24 @@ class ConnectionOut(WireModel):
     fix: str | None
 
 
+class TellSetupOut(WireModel):
+    flow_set: bool = Field(
+        description="Whether the Tell flow's address is set. The address is a secret and is "
+        "never shown."
+    )
+    channel: str = Field(description="The Teams channel every Tell posts in.")
+    email_to: list[str] = Field(
+        description="The team's fixed list that every Tell emails. It is a plain setting, not a "
+        "secret, and anyone signed in sees it here."
+    )
+
+
 class ConnectionsView(WireModel):
     connections: list[ConnectionOut]
     you_can_check: bool = Field(description="True for an Operator.")
+    tell: TellSetupOut = Field(
+        description="Where every Tell goes. Fixed in the platform's settings, so read only here."
+    )
 
 
 class ConnectIn(WireIn):
@@ -341,13 +357,29 @@ def connection_out(check: ConnectionCheck) -> ConnectionOut:
     )
 
 
+def tell_out(settings: Settings) -> TellSetupOut:
+    return TellSetupOut(
+        flow_set=settings.teams_tell_webhook_url is not None,
+        channel=settings.teams_channel,
+        email_to=list(settings.tell_email_to),
+    )
+
+
+def current_settings(request: Request) -> Settings:
+    settings: Settings = request.app.state.settings
+    return settings
+
+
 @router.get("/api/v1/settings/connections", tags=["settings"], responses=SIGNED_IN)
 async def get_connections(
-    principal: CurrentPrincipal, connections: CurrentConnections
+    principal: CurrentPrincipal,
+    connections: CurrentConnections,
+    settings: Annotated[Settings, Depends(current_settings)],
 ) -> ConnectionsView:
     return ConnectionsView(
         connections=[connection_out(c) for c in await connections.view()],
         you_can_check=Role.OPERATOR in principal.roles,
+        tell=tell_out(settings),
     )
 
 

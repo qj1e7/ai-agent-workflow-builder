@@ -175,6 +175,10 @@ class FakeN8n:
         self.calls: list[str] = []
         self.scopes: list[str] = []
         self.next_id = len(existing) + 1
+        self.api_keys = [
+            {"id": "k1", "label": "platform-api"},
+            {"id": "k2", "label": "Alice's own key"},
+        ]
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         path, method = request.url.path, request.method
@@ -184,7 +188,11 @@ class FakeN8n:
         if path in ("/rest/owner/setup", "/rest/login"):
             return httpx.Response(200, json={"data": {"id": "1"}})
         if path == "/rest/api-keys" and method == "GET":
-            return httpx.Response(200, json={"data": {"items": []}})
+            return httpx.Response(200, json={"data": {"items": self.api_keys}})
+        if path.startswith("/rest/api-keys/") and method == "DELETE":
+            gone = path.removeprefix("/rest/api-keys/")
+            self.api_keys = [key for key in self.api_keys if key["id"] != gone]
+            return httpx.Response(200, json={"data": True})
         if path == "/rest/api-keys" and method == "POST":
             self.scopes = list(body["scopes"])
             return httpx.Response(200, json={"data": {"rawApiKey": "key"}})
@@ -362,6 +370,7 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
     ]
     assert "workflow:delete" in n8n.scopes
     assert any(line.startswith(f"workflow {OLD_RUN_WORKFLOW} (W1): removed") for line in said)
+    assert n8n.api_keys == [{"id": "k2", "label": "Alice's own key"}], "platform-api makes its own"
 
 
 SECRET_ADDRESS = "wab-secret-host.internal.example"

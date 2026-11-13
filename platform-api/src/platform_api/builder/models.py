@@ -56,9 +56,80 @@ class CreateUseCase(WireIn):
     params: dict[str, str]
 
 
+type N8nBlockKind = Literal[
+    "schedule",
+    "start",
+    "manual",
+    "error",
+    "read",
+    "agent",
+    "propose",
+    "ask",
+    "write",
+    "tell",
+    "report",
+    "branch",
+    "merge",
+    "end",
+    "other",
+]
+
+
+class N8nExitView(WireModel):
+    exit: str | None = Field(
+        description="Which way out: true or false for an IF, the name of an Ask for a yes exit "
+        "(No answer, Yes, No, Nothing to change), or null for a block with one way out."
+    )
+    to: str = Field(description="The block it leads to, by name.")
+
+
+class N8nBlockView(WireModel):
+    name: str = Field(description="The block's name, as n8n, the canvas and the run line show it.")
+    kind: N8nBlockKind = Field(
+        description="What the block does: schedule, start (Start from the Portal), manual and "
+        "error start a run; read, agent, propose, ask (Ask for a yes), write (Make the approved "
+        "changes), tell and report are our blocks; branch (IF), merge and end (No Op) are n8n's; "
+        "other is a block that is not on the allow list."
+    )
+    next: list[N8nExitView] = Field(description="Where each of its exits leads.")
+
+
+type BuildLineKind = Literal["status", "check", "note"]
+
+
+class BuildLineView(WireModel):
+    at: AwareDatetime = Field(
+        description="When it happened, for replaying the lines with their real gaps."
+    )
+    kind: BuildLineKind = Field(
+        description="status: what the builder was doing. check: a check that passed. note: what "
+        "the safety checker changed."
+    )
+    text: str
+
+
 class UseCaseCreated(WireModel):
     use_case_id: str
     version: int
+    n8n_workflow_id: str | None = Field(
+        default=None,
+        description="The workflow of its own that holds it in n8n, saved as a draft. Null when "
+        "this platform does not lay workflows out in n8n.",
+    )
+    grade: Literal["safe", "writes_refused", "needs_a_fix"] | None = Field(
+        default=None,
+        description="The safety checker's grade of the draft. Only a safe draft is saved, so it "
+        "is safe whenever there is a draft.",
+    )
+    build_log: list[BuildLineView] = Field(
+        default_factory=list[BuildLineView],
+        description="What happened while it was laid out in n8n, in order, in the set-up card's "
+        "words. Empty with no draft in n8n.",
+    )
+    blocks: list[N8nBlockView] = Field(
+        default_factory=list[N8nBlockView],
+        description="The draft's blocks in the order a run meets them. Empty with no draft in n8n.",
+    )
 
 
 class UseCaseAgentView(WireModel):
@@ -165,6 +236,12 @@ class UseCaseView(WireModel):
     left_out: list[str] = Field(
         description="The parts of the request it was set up without, in the person's own words "
         "(plan 4.6). Text for people to read: nothing runs from it."
+    )
+    blocks: list[N8nBlockView] = Field(
+        default_factory=list[N8nBlockView],
+        description="The blocks of this version's own workflow in n8n, in the order a run meets "
+        "them, read from the workflow the platform keeps for the version. Empty for a workflow "
+        "that runs on the shared n8n workflow.",
     )
 
 

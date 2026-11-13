@@ -12,7 +12,7 @@ from psycopg.types.json import Jsonb
 
 from platform_api.auth import ConfigError
 from platform_api.migrations import upgrade_all
-from platform_api.orchestration.n8n import N8nClient, N8nError
+from platform_api.orchestration.n8n import PLATFORM_API_KEY_LABEL, N8nClient, N8nError
 from platform_api.orchestration.workflows import (
     Finding,
     LiveState,
@@ -123,6 +123,8 @@ def load_into_n8n(
         say(f"owner {settings.n8n_owner_email}: {owner.value}")
         removed = client.fresh_api_key(API_KEY_LABEL)
         say(f"api key '{API_KEY_LABEL}': created, {removed} older removed")
+        removed = client.remove_api_keys(PLATFORM_API_KEY_LABEL)
+        say(f"api key '{PLATFORM_API_KEY_LABEL}': {removed} removed, platform-api makes its own")
         credential_id = client.create_header_credential(
             CREDENTIAL_NAME, STEP_KEY_HEADER, settings.step_key
         )

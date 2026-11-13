@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from platform_api.auth import ConfigError
-from platform_api.settings import CosmosSettings, settings_from_env
+from platform_api.settings import CosmosSettings, bootstrap_settings_from_env, settings_from_env
 from tests.support import LOCAL_ENV
 
 COSMOS = {"COSMOS_ENDPOINT": "http://cosmos:8081", "COSMOS_KEY": "a2V5"}
@@ -66,6 +66,29 @@ def test_a_second_webhook_for_team_requests_is_optional_and_must_be_https():
     assert (settings.teams_webhook_url, settings.teams_requests_webhook_url) == (None, hook)
     with pytest.raises(ConfigError, match="TEAMS_REQUESTS_WEBHOOK_URL must be the https://"):
         settings_from_env({**LOCAL_ENV, "TEAMS_REQUESTS_WEBHOOK_URL": "http://hook.example/run"})
+
+
+TELL_FLOW = "https://prod.example.logic.azure.com/workflows/tell/triggers/manual/run?sig=z"
+
+
+def test_the_tell_flow_comes_with_the_teams_email_list():
+    settings = settings_from_env(
+        {
+            **LOCAL_ENV,
+            "TEAMS_TELL_WEBHOOK_URL": TELL_FLOW,
+            "TELL_EMAIL_TO": " a@x.example, b@x.example",
+        }
+    )
+    assert settings.tell_email_to == ("a@x.example", "b@x.example")
+    assert settings_from_env(LOCAL_ENV).tell_email_to == ()
+    with pytest.raises(ConfigError, match="TEAMS_TELL_WEBHOOK_URL needs TELL_EMAIL_TO"):
+        settings_from_env({**LOCAL_ENV, "TEAMS_TELL_WEBHOOK_URL": TELL_FLOW})
+
+
+@pytest.mark.parametrize("bad", ["ops", "ops@local", "a@x.example; b@x.example", "a b@x.example"])
+def test_an_address_on_the_teams_email_list_must_be_one_email(bad: str):
+    with pytest.raises(ConfigError, match="in TELL_EMAIL_TO is not an email"):
+        settings_from_env({**LOCAL_ENV, "TELL_EMAIL_TO": bad})
 
 
 def test_practice_systems_are_on_and_the_watchlist_writes_to_mock_by_default():
@@ -182,3 +205,47 @@ def test_the_node_key_and_start_secret_are_read_and_no_node_call_is_taken_withou
     assert (unset.node_key, unset.start_secret) == (None, None)
     both = settings_from_env({**LOCAL_ENV, "WAB_NODE_KEY": " nk ", "WAB_START_SECRET": "ss"})
     assert (both.node_key, both.start_secret) == ("nk", "ss")
+
+
+SECRETS = {
+    "DATABASE_URL_BUILDER": "postgresql://wab_builder:db-secret-1@db/platform",
+    "DATABASE_URL_ORCHESTRATION": "postgresql://wab_orchestration:db-secret-2@db/platform",
+    "DATABASE_URL_MONITORING": "postgresql://wab_monitoring:db-secret-3@db/platform",
+    "AGENT_API_KEY": "agent-secret",
+    "STEP_KEY": "step-secret",
+    "CALLBACK_SIGNING_KEY": "callback-secret",
+    "TEAMS_WEBHOOK_URL": "https://teams.example/hook?sig=teams-secret",
+    "TEAMS_REQUESTS_WEBHOOK_URL": "https://teams.example/hook?sig=requests-secret",
+    "TEAMS_TELL_WEBHOOK_URL": "https://teams.example/hook?sig=tell-secret",
+    "TELL_EMAIL_TO": "ops@example.com",
+    "SETTINGS_ENCRYPTION_KEY": "encryption-secret",
+    "COSMOS_ENDPOINT": "https://cosmos.example:8081",
+    "COSMOS_KEY": "cosmos-secret",
+    "JIRA_BASE_URL": "https://jira.example",
+    "JIRA_API_TOKEN": "jira-secret",
+    "WAB_NODE_KEY": "node-secret",
+    "WAB_START_SECRET": "start-secret",
+    "N8N_OWNER_EMAIL": "owner@example.com",
+    "N8N_OWNER_PASSWORD": "n8n-owner-secret",
+}
+
+
+def test_no_secret_shows_in_the_settings_repr():
+    settings = settings_from_env({**LOCAL_ENV, **SECRETS})
+    shown = repr(settings)
+    secrets = ["db-secret", "-secret", "sig="]
+    leaked = [word for word in secrets if word in shown]
+    assert leaked == [], shown
+    assert settings.n8n_owner is not None and settings.n8n_owner.password == "n8n-owner-secret"
+
+
+def test_no_secret_shows_in_the_bootstrap_settings_repr():
+    env = {
+        "DATABASE_URL_OWNER": "postgresql://wab_owner:db-secret-0@db/platform",
+        "N8N_BASE_URL": "http://n8n:5678",
+        "N8N_OWNER_EMAIL": "owner@example.com",
+        "N8N_OWNER_PASSWORD": "n8n-owner-secret",
+        "STEP_KEY": "step-secret",
+        "PLATFORM_INTERNAL_URL": "http://platform-api:8000",
+    }
+    assert "-secret" not in repr(bootstrap_settings_from_env(env))

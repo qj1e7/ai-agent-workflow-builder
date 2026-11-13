@@ -62,6 +62,10 @@ services:
       MOCK_MODEL_URL: http://mock-model:8300
       E2E_WAIT_SECONDS: ${E2E_WAIT_SECONDS:-90}
       STEP_KEY: ${STEP_KEY:?run deploy/make-env.sh}
+      # Only to read the drafts the platform saves in n8n, as the platform itself does.
+      N8N_BASE_URL: http://n8n:5678
+      N8N_OWNER_EMAIL: ${N8N_OWNER_EMAIL:?run deploy/make-env.sh}
+      N8N_OWNER_PASSWORD: ${N8N_OWNER_PASSWORD:?run deploy/make-env.sh}
       # Only to seed practice Jira tickets that were last updated long ago, which no API call can
       # do. It is the same role the practice Jira itself uses.
       E2E_DATABASE_URL: postgresql://wab_orchestration:${WAB_ORCHESTRATION_PASSWORD:?run deploy/make-env.sh}@postgres:5432/platform

@@ -70,6 +70,10 @@ jobs:
       # Optional (ADR 0036). Unset keeps the practice Teams copy and its channel name.
       TF_VAR_teams_webhook_url: ${{ secrets.TEAMS_WEBHOOK_URL }}
       TF_VAR_teams_channel: ${{ vars.TEAMS_CHANNEL }}
+      # Optional (ENGINE-PLAN D1). The Tell flow, a secret kept in Key Vault, and the team's email
+      # list, a plain variable that the Portal shows. Unset keeps the practice copy.
+      TF_VAR_teams_tell_webhook_url: ${{ secrets.TEAMS_TELL_WEBHOOK_URL }}
+      TF_VAR_tell_email_to: ${{ vars.TELL_EMAIL_TO }}
       # Optional, for a subscription that refuses Cosmos DB's free tier or its region (ADR 0031).
       TF_VAR_cosmos_location: ${{ vars.COSMOS_LOCATION }}
       TF_VAR_cosmos_serverless: ${{ vars.COSMOS_SERVERLESS || 'false' }}

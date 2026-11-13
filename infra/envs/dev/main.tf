@@ -51,8 +51,9 @@ locals {
   # The same for the Teams Workflows webhook (ADR 0036). Unset keeps the practice Teams copy.
   teams_webhook_set = nonsensitive(var.teams_webhook_url != "")
   # And for the Tell flow, which posts a run's notice and emails it (ENGINE-PLAN D1). Unset keeps
-  # the practice copy. E13 sets it, with the registry's "Posts in Teams and emails" made ready.
+  # the practice copy. The team's email list must be set with it.
   teams_tell_webhook_set = nonsensitive(var.teams_tell_webhook_url != "")
+  tell_email_to          = trimspace(var.tell_email_to)
 
   # The first people's addresses are not secret, and the app table's for_each needs plain values.
   first_people = trimspace(nonsensitive(var.first_operator)) == "" ? {} : {
@@ -239,6 +240,7 @@ locals {
           OIDC_AUDIENCE          = var.oidc_audience
           AGENT_RUNTIME_URL      = local.url["agent-runtime"]
           N8N_BASE_URL           = local.url["n8n"]
+          N8N_OWNER_EMAIL        = var.n8n_owner_email
           PLATFORM_INTERNAL_URL  = local.url["platform-api"]
           COSMOS_ENDPOINT        = module.cosmos.endpoint
           ACTIVITY_READER        = "cosmos"
@@ -248,6 +250,7 @@ locals {
         },
         var.oidc_jwks_url == "" ? {} : { OIDC_JWKS_URL = var.oidc_jwks_url },
         var.teams_channel == "" ? {} : { TEAMS_CHANNEL = var.teams_channel },
+        local.tell_email_to == "" ? {} : { TELL_EMAIL_TO = local.tell_email_to },
         local.first_people,
         local.jira_settings,
       )
@@ -260,6 +263,7 @@ locals {
           STEP_KEY                   = local.secret["step-key"]
           WAB_NODE_KEY               = local.secret["wab-node-key"]
           WAB_START_SECRET           = local.secret["wab-start-secret"]
+          N8N_OWNER_PASSWORD         = local.secret["n8n-owner-password"]
           CALLBACK_SIGNING_KEY       = local.secret["callback-signing-key"]
           SETTINGS_ENCRYPTION_KEY    = local.secret["settings-encryption-key"]
           COSMOS_KEY                 = local.secret["cosmos-key"]

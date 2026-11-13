@@ -1,0 +1,109 @@
+{
+  "type": "message",
+  "attachments": [
+    {
+      "contentType": "application/vnd.microsoft.card.adaptive",
+      "contentUrl": null,
+      "content": {
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "fallbackText": "A notice from AI Workflow Builder.",
+        "body": [
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "Cert list expiry reminder",
+                "weight": "bolder"
+              },
+              {
+                "type": "TextRun",
+                "text": ": what this run found."
+              }
+            ]
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "Read cert list",
+                "weight": "bolder"
+              },
+              {
+                "type": "TextRun",
+                "text": ": 2 read"
+              }
+            ]
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "\u2022 web-01 web-01.codesparks.example"
+              }
+            ]
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "\u2022 api-02 api-02.codesparks.example"
+              }
+            ]
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "Find expiring",
+                "weight": "bolder"
+              },
+              {
+                "type": "TextRun",
+                "text": ": 2 certificates expire within 30 days."
+              }
+            ]
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "\u2022 web-01 expires on 20 Nov."
+              }
+            ]
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "\u2022 api-02 expires on 2 Dec."
+              }
+            ]
+          },
+          {
+            "type": "TextBlock",
+            "text": "A notice from AI Workflow Builder. It asks for nothing.",
+            "wrap": true
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.OpenUrl",
+            "title": "Open in AI Workflow Builder",
+            "url": "https://portal.example/runs/run_sample"
+          }
+        ]
+      }
+    }
+  ],
+  "emailSubject": "Cert list expiry reminder: what this run found",
+  "emailHtml": "<h2>Cert list expiry reminder</h2><p>What this run found.</p><p><b>Read cert list</b>: 2 read</p><ul><li>web-01 web-01.codesparks.example</li><li>api-02 api-02.codesparks.example</li></ul><p><b>Find expiring</b>: 2 certificates expire within 30 days.</p><ul><li>web-01 expires on 20 Nov.</li><li>api-02 expires on 2 Dec.</li></ul><p><a href=\"https://portal.example/runs/run_sample\">Open the run in AI Workflow Builder</a></p><p>A notice from AI Workflow Builder. It asks for nothing.</p>",
+  "emailTo": "you@example.com"
+}
