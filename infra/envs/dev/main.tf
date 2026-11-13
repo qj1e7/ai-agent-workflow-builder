@@ -314,7 +314,12 @@ locals {
           N8N_VERSION_NOTIFICATIONS_ENABLED = "false"
           N8N_PERSONALIZATION_ENABLED       = "false"
           N8N_HIRING_BANNER_ENABLED         = "false"
-          WAB_API_URL                       = local.url["platform-api"]
+          # The node key is in this environment, so nothing a person adds to a workflow may read it.
+          # n8n excludes these two nodes by default; pinned so an upgrade cannot drop them.
+          N8N_BLOCK_ENV_ACCESS_IN_NODE   = "true"
+          NODES_EXCLUDE                  = jsonencode(["n8n-nodes-base.executeCommand", "n8n-nodes-base.localFileTrigger"])
+          N8N_COMMUNITY_PACKAGES_ENABLED = "false"
+          WAB_API_URL                    = local.url["platform-api"]
         },
         var.n8n_editor_external ? {
           N8N_PROTOCOL                      = "https"
