@@ -1011,3 +1011,136 @@ def test_migration_0012_leaves_every_workflow_from_before_on_and_a_downgrade_pau
             ).fetchall() == [("uc_before", None, None), ("uc_draft", NOW, "alice")]
         finally:
             upgrade("builder", postgres.owner)
+
+
+async def test_migration_0019_keeps_starts_links_and_node_calls_whole_and_a_downgrade_drops_them(
+    postgres: PostgresUrls, db: Database
+):
+    store = Store()
+    run_id = RunId("run_n8n")
+    async with db.transaction("orchestration") as uow:
+        pending = Pending(run_id, 1, None, NOW)
+        record = RunRecord(
+            run_id, SPEC, SPEC.owner, NOW, NOW, 1, pending, (), None, (UserId("dave"),)
+        )
+        await store.insert_run(uow, record, "key-n8n")
+    start = (
+        "INSERT INTO orchestration.starts (nonce, run_id, kind, n8n_workflow_id, issued_at, "
+        "expires_at, used_at, used_by) VALUES (%s, %s, %s, 'wf1', %s, %s, %s, %s)"
+    )
+    call = (
+        "INSERT INTO orchestration.node_calls (execution_id, node_name, run_id, kind, "
+        "content_hash, attempts, outcome, call_id, claimed_at, status, answer, answered_at) "
+        "VALUES ('41', %s, %s, %s, 'h', 1, %s, %s, %s, %s, %s, %s)"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute(start, ("n_ok", run_id, "run_now", NOW, NOW, None, None))
+        for nonce, kind, at, by in (
+            ("n_kind", "later", None, None),
+            ("n_no_execution", "run_now", NOW, None),
+            ("n_no_time", "run_now", None, "41"),
+        ):
+            with pytest.raises(psycopg.errors.CheckViolation):
+                conn.execute(start, (nonce, run_id, kind, NOW, NOW, at, by))
+        refusal = '{"detail": "This start was already used."}'
+        conn.execute(call, ("Read", run_id, "read", "working", "c1", NOW, None, None, None))
+        conn.execute(call, ("Agent", None, "agent", "refused", "c2", NOW, 403, refusal, NOW))
+        for node, run, kind, outcome, status, answer, at in (
+            ("Odd", run_id, "loop", "working", None, None, None),
+            ("No run", None, "read", "answered", None, '{"items": []}', NOW),
+            ("No time", run_id, "agent", "answered", None, '{"items": []}', None),
+            ("No answer", run_id, "agent", "answered", None, None, NOW),
+            ("Status", run_id, "agent", "answered", 403, '{"items": []}', NOW),
+            ("No status", run_id, "agent", "refused", None, refusal, NOW),
+        ):
+            with pytest.raises(psycopg.errors.CheckViolation):
+                conn.execute(call, (node, run, kind, outcome, node, NOW, status, answer, at))
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            conn.execute(call, ("Read", run_id, "read", "working", "c3", NOW, None, None, None))
+        downgrade("orchestration", postgres.owner, "0018")
+        try:
+            for table in ("starts", "executions", "node_calls"):
+                assert conn.execute(
+                    "SELECT to_regclass(%s)", (f"orchestration.{table}",)
+                ).fetchone() == (None,)
+            assert conn.execute(
+                "SELECT count(*) FROM orchestration.runs WHERE run_id = %s", (run_id,)
+            ).fetchone() == (1,), "a downgrade keeps the run"
+        finally:
+            upgrade("orchestration", postgres.owner)
+    async with db.transaction("orchestration") as uow:
+        kept = await store.load_run(uow, run_id)
+    assert kept is not None and kept.joined_by == (), "the joined people go with the downgrade"
+
+
+def test_builder_migration_0014_puts_every_use_case_on_the_shared_run_and_back(
+    postgres: PostgresUrls,
+):
+    insert = (
+        "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version)"
+        " VALUES (%s, 'alice', %s, 1)"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        downgrade("builder", postgres.owner, "0013")
+        conn.execute(insert, ("uc_engine_before", NOW))
+        upgrade("builder", postgres.owner)
+        conn.execute(insert, ("uc_engine_own", NOW))
+        conn.execute(
+            "UPDATE builder.use_cases SET engine = 'own' WHERE use_case_id = 'uc_engine_own'"
+        )
+        assert conn.execute(
+            "SELECT use_case_id, engine FROM builder.use_cases"
+            " WHERE use_case_id LIKE 'uc_engine_%' ORDER BY use_case_id"
+        ).fetchall() == [("uc_engine_before", "shared_run"), ("uc_engine_own", "own")]
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(
+                "UPDATE builder.use_cases SET engine = 'n8n' WHERE use_case_id = 'uc_engine_own'"
+            )
+        downgrade("builder", postgres.owner, "0013")
+        try:
+            assert conn.execute(
+                "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'builder'"
+                " AND table_name = 'use_cases' AND column_name = 'engine'"
+            ).fetchone() == (0,)
+        finally:
+            upgrade("builder", postgres.owner)
+
+
+def test_migration_0013_keeps_who_paused_or_resumed_a_workflow_and_from_where(
+    postgres: PostgresUrls,
+):
+    def present(conn: psycopg.Connection) -> bool:
+        return (
+            conn.execute(
+                "SELECT 1 FROM information_schema.tables WHERE table_schema = 'builder'"
+                " AND table_name = 'use_case_moves'"
+            ).fetchone()
+            is not None
+        )
+
+    moved = (
+        "INSERT INTO builder.use_case_moves (use_case_id, move, moved_by, via, moved_at)"
+        " VALUES ('uc_moved', %s, 'alice', %s, now())"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        assert present(conn)
+        conn.execute(
+            "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version)"
+            " VALUES ('uc_moved', 'alice', now(), 1)"
+        )
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(moved, ("delete", "chat"))
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(moved, ("pause", "teams"))
+        downgrade("builder", postgres.owner, "0012")
+        assert not present(conn)
+        upgrade("builder", postgres.owner)
+        assert present(conn)
+    with psycopg.connect(postgres.contexts.builder) as builder:
+        builder.execute(moved, ("pause", "chat"))
+        assert builder.execute(
+            "SELECT move, moved_by, via FROM builder.use_case_moves"
+        ).fetchall() == [("pause", "alice", "chat")]
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            builder.execute("DELETE FROM builder.use_case_moves")
+        builder.rollback()

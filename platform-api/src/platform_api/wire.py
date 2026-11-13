@@ -111,6 +111,7 @@ type RunState = Literal[
     "succeeded",
     "rejected",
     "failed",
+    "skipped",
 ]
 type RunOutcome = Literal["written", "nothing_to_write", "test_passed"]
 type FailureStage = Literal["pending", "working", "proposed", "acting"]

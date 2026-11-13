@@ -28,7 +28,7 @@ from platform_api.db import Database
 from platform_api.orchestration import ScheduleBook
 from platform_api.settings import settings_from_env
 from platform_api.wire import BROKEN_TEXT_MESSAGE
-from tests.declared import ALICE, STEP_KEY, app_with
+from tests.declared import ALICE, NODE_KEY, NODE_KEY_ENV, STEP_KEY, app_with
 from tests.support import LOCAL_ENV
 from tests.test_builder_http import NothingLearned, SecondCallRepeats
 
@@ -40,6 +40,7 @@ UNREADABLE = "Input should be a valid string, unable to parse raw data as a unic
 HEADERS = {
     **ALICE,
     **STEP_KEY,
+    **NODE_KEY,
     "Content-Type": "application/json",
     "X-Callback-Token": "t",
     "Authorization": "Bearer t",
@@ -63,7 +64,7 @@ ROUTES = json_body_routes()
 
 @pytest.fixture
 async def client() -> AsyncIterator[httpx.AsyncClient]:
-    app = app_with()
+    app = app_with(env=NODE_KEY_ENV)
     app.state.model_settings = None
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:

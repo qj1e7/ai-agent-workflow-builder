@@ -16,6 +16,7 @@ export type Phase =
   | { readonly state: 'proposed' }
   | { readonly state: 'awaiting_approval' }
   | { readonly state: 'acting' }
+  | { readonly state: 'skipped' }
   | { readonly state: 'succeeded'; readonly outcome: RunOutcome }
   | { readonly state: 'rejected'; readonly by: string; readonly step: number }
   | {
@@ -360,7 +361,10 @@ function apply(model: RunModel, event: RunEvent): RunModel {
       return event.data.step === 'run_agents' && FOUND_OUTCOMES.has(event.data.outcome) && event.data.detail ? { ...model, found: event.data.detail } : model
     case 'support_reported':
       return reported(model, event)
+    case 'run_skipped':
+      return advanceTo({ ...model, phase: { state: 'skipped' } }, { at: 'done' }, event)
     case 'leg_dispatched':
+    case 'execution_linked':
     case 'step_started':
     case 'step_retried':
     case 'approval_outcome_not_posted':
@@ -469,6 +473,8 @@ function stateOf(model: RunModel, station: Skeleton, index: number, current: num
       if (at === 'gate') return 'no'
       if (at === 'write') return 'skip'
       return unfilled ? 'skip' : 'done'
+    case 'skipped':
+      return 'skip'
     case 'awaiting_approval':
       if (at === 'gate') return 'wait'
       break
@@ -528,5 +534,5 @@ export function declinedOf(model: RunModel): Declined | null {
 }
 
 export function isFinished(phase: Phase): boolean {
-  return phase.state === 'succeeded' || phase.state === 'rejected' || phase.state === 'failed'
+  return phase.state === 'succeeded' || phase.state === 'rejected' || phase.state === 'failed' || phase.state === 'skipped'
 }

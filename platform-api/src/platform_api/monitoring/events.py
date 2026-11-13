@@ -157,6 +157,17 @@ class RunRetriedData(WireModel):
     attempt: int
 
 
+class ExecutionLinkedData(WireModel):
+    execution_id: str
+    mode: str = Field(description="How n8n says the execution started, such as trigger or retry.")
+
+
+class RunSkippedData(WireModel):
+    waiting_run_id: RunId = Field(
+        description="The earlier run of the same workflow that is still waiting for a yes."
+    )
+
+
 class SupportReportedData(WireModel):
     request_id: str
     reported_by: UserId
@@ -280,6 +291,16 @@ class RunRetried(_Envelope):
     data: RunRetriedData
 
 
+class ExecutionLinked(_Envelope):
+    kind: Literal["execution_linked"] = "execution_linked"
+    data: ExecutionLinkedData
+
+
+class RunSkipped(_Envelope):
+    kind: Literal["run_skipped"] = "run_skipped"
+    data: RunSkippedData
+
+
 class SupportReported(_Envelope):
     kind: Literal["support_reported"] = "support_reported"
     data: SupportReportedData
@@ -308,6 +329,8 @@ type ActivityEvent = Annotated[
     | RunRejected
     | RunFailed
     | RunRetried
+    | ExecutionLinked
+    | RunSkipped
     | SupportReported,
     Field(discriminator="kind"),
 ]

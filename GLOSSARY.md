@@ -190,6 +190,13 @@ _Avoid_: Job, execution (n8n uses "execution" for its own internal runs)
 A run an Operator starts by hand to try a workflow. On a workflow that is on, it asks for a yes and writes like any other run. On a draft, it stops at the approval gate: it asks nobody for a yes and writes nothing (ADR 0044).
 _Avoid_: Dry run
 
+**Skipped**:
+A run that n8n started while an earlier run of the same workflow was still waiting for a yes. It stops at its first step and does nothing, so Approvers never see two requests for one change. The Portal says "An earlier run is still waiting for a yes."
+
+**Node call**:
+One call from a block of the node pack to our platform, such as a Read or an Agent. The first call of a run links its n8n execution to the run. Our platform keeps each block's first answer and gives it again when n8n repeats or retries the call, so no agent runs twice and no change is proposed twice.
+_Avoid_: Step call, webhook
+
 **Planner**:
 The agent that reads a task, says what it understood, and decides which saved agents to bring in, or that a new agent card is needed.
 _Avoid_: Room lead (the old name), orchestrator

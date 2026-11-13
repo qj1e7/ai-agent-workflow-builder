@@ -104,6 +104,12 @@ describe('the status words', () => {
     expect(stageWords(stageOfRun(run(declined)), nameOf)).toBe('Declined by Bob. Nothing was written.')
   })
 
+  it('say a run skipped while an earlier one waits for a yes, and need nobody', () => {
+    const skipped = run(failed, { state: 'skipped', waiting_run_id: 'run_06' })
+    expect(stageWords(stageOfRun(skipped), nameOf)).toBe('Skipped. An earlier run is still waiting for a yes.')
+    expect(rowLine({ schedule: null, ...lastOf({ state: 'skipped' }) }, NOW, nameOf)).toBe('No schedule · last run Mon 26 Oct, skipped. an earlier run is still waiting for a yes.')
+  })
+
   it('say a run that is still going is running', () => {
     for (const view of [working, scheduled]) expect(stageWords(stageOfRun(run(view)), nameOf)).toBe('Running')
   })

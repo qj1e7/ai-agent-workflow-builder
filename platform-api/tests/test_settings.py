@@ -175,3 +175,10 @@ def test_the_team_works_in_singapore_unless_team_time_zone_says_otherwise():
 def test_a_team_time_zone_that_is_not_a_zone_name_refuses_to_start(zone: str):
     with pytest.raises(ConfigError, match="TEAM_TIME_ZONE"):
         settings_from_env({**LOCAL_ENV, "TEAM_TIME_ZONE": zone})
+
+
+def test_the_node_key_and_start_secret_are_read_and_no_node_call_is_taken_without_them():
+    unset = settings_from_env(LOCAL_ENV)
+    assert (unset.node_key, unset.start_secret) == (None, None)
+    both = settings_from_env({**LOCAL_ENV, "WAB_NODE_KEY": " nk ", "WAB_START_SECRET": "ss"})
+    assert (both.node_key, both.start_secret) == ("nk", "ss")

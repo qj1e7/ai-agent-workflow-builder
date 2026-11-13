@@ -67,6 +67,8 @@ A TypeScript package `n8n-nodes-wab` in `n8n-node-pack/` at the repo root, built
 
 Options lists are loaded by the editor through `POST /rest/dynamic-node-parameters/options`, which our node answers by calling `GET /internal/v1/n8n/options?kind=…` with `WAB_NODE_KEY`. Our API answers from the Portal's settings: cards, watched software, allowed Jira projects, Confluence pages, Teams channel. An id that is not in that list is refused at run time too, in every `calls/*` route ("Our API refuses an agent ID it doesn't know", P6).
 
+**The start's expiry, on two clocks.** Our API makes each start expire 240 s after it issues it, and on the first call refuses it once `now > expires_at` on our API's own clock. The block refuses a start more than 60 s past its expiry, or more than 300 s plus 60 s ahead, so the 60 s covers n8n's clock running a minute apart from ours. The two checks agree: every start our API issues passes the block, the first call comes seconds after the start and finds it unexpired, and our API's check is the strict one, so a start the block lets in late is still refused at the first call.
+
 **Build, version, test.**
 - `npm run build` (tsc) and `npm test` (vitest) in `n8n-node-pack/`. Unit tests run each node's `execute` against a fake `this` (n8n's `IExecuteFunctions`) and a fake API, and cover: no call without env; fixed fields only; 4xx becomes a node error with the API's words; 5xx throws; Ask for a yes's four exits; Start from the Portal's 401 on a bad signature, an expired body and a reused nonce; Report a failure's payload shape.
 - The package version is the platform's version; the image is tagged with it. `infra/public-images.json` keeps the base pin; CI's `checks` matrix gains `n8n-node-pack`.

@@ -103,6 +103,7 @@ from platform_api.orchestration.runs import (
     Rejected,
     Replay,
     RunState,
+    Skipped,
     StepName,
     Succeeded,
     Supersede,
@@ -775,7 +776,7 @@ class Orchestrator:
                 proposal_id=proposal.id,
                 digest=proposal.digest,
                 policy=record.spec.approval_policy,
-                parties=frozenset({record.started_by, record.spec.owner, *record.retried_by}),
+                parties=record.parties,
             )
             await self._store.insert_approval(uow, request)
             link = approval_link(request.id)
@@ -891,7 +892,7 @@ class Orchestrator:
                     )
                     await self._commit(uow, record, fail(state, failure))
                     await self._store.cancel_outbox(uow, run_id)
-                case AwaitingApproval() | Succeeded() | Rejected() | Failed():
+                case AwaitingApproval() | Succeeded() | Rejected() | Failed() | Skipped():
                     return
 
     async def get_approval(

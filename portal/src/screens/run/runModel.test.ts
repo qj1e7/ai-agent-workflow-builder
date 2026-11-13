@@ -310,3 +310,18 @@ describe('a check with nothing to write', () => {
     expect(shape(line(model))).toEqual(['trigger:done:idle', 'agent:0:done:success', 'gate:skip:idle', 'write:skip:idle'])
   })
 })
+
+describe('a run n8n skipped because an earlier run still waits for a yes', () => {
+  const started = fold(emptyModel, event(1, 'run_created', { started_by: 'alice', use_case_id: 'uc_01', trigger: 'schedule' }))
+  const linked = fold(started, event(2, 'execution_linked', { execution_id: '41', mode: 'trigger' }, { kind: 'workflow', id: 'n8n', display: 'Workflow engine' }))
+  const model = fold(linked, event(3, 'run_skipped', { waiting_run_id: 'run_00' }))
+
+  it('ends skipped: its trigger fired, and every step after it was skipped', () => {
+    expect(linked.phase).toEqual({ state: 'pending' })
+    expect(model.phase).toEqual({ state: 'skipped' })
+    const [trigger, ...steps] = line(model)
+    expect(trigger?.state).toBe('done')
+    expect(steps.length).toBeGreaterThan(0)
+    expect(steps.every((station) => station.state === 'skip')).toBe(true)
+  })
+})

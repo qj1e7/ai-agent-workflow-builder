@@ -28,7 +28,7 @@ SERVICE_PREFIXES = ("/api/v1/", "/internal/v1/", "/practice-jira/")
 SERVICE_PATHS = frozenset(
     {"/healthz", "/healthz/ready", "/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
 )
-SERVICE_KEYS = frozenset({"X-Step-Key", "X-Callback-Token"})
+SERVICE_KEYS = frozenset({"X-Step-Key", "X-Callback-Token", "X-Wab-Node-Key"})
 LEAST_CHANGES = 43
 
 # Who else may call a route that changes something, and why. Every other change needs an

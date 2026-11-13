@@ -259,6 +259,8 @@ class CapabilitySpec(WireModel):
     platform: bool
     focus: bool
     tools: list[ToolId]
+    short: str | None = None
+    instead: str | None = None
 
 
 class ExampleSpec(WireModel):
@@ -504,6 +506,8 @@ class CantRow(WireModel):
     note: str = Field(max_length=300)
     needs: CantNeed | None = None
     system: str | None = Field(default=None, max_length=40)
+    instead: str | None = Field(default=None, max_length=200)
+    unsupported: bool = False
 
 
 class SetupCardAnswer(WireModel):
@@ -579,6 +583,19 @@ class QuestionAnswer(WireModel):
     )
 
 
+class _OnOrOff(WireModel):
+    workflow_words: str | None = Field(default=None, max_length=80)
+    software: str | None = Field(default=None, max_length=80)
+
+
+class PauseAnswer(_OnOrOff):
+    kind: Literal["pause"] = "pause"
+
+
+class ResumeAnswer(_OnOrOff):
+    kind: Literal["resume"] = "resume"
+
+
 type EditCant = Literal["only_schedule", "how_often"]
 
 
@@ -627,7 +644,9 @@ type PlannerAnswer = Annotated[
     | NeedsMeAnswer
     | AbilitiesAnswer
     | QuestionAnswer
-    | EditAnswer,
+    | EditAnswer
+    | PauseAnswer
+    | ResumeAnswer,
     Field(discriminator="kind"),
 ]
 

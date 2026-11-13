@@ -240,6 +240,8 @@ export function headlineOf(model: RunModel, stations: readonly Station[], propos
     }
     case 'rejected':
       return { text: 'Declined, nothing was written', pill: { label: 'Declined', tone: 'off' } }
+    case 'skipped':
+      return { text: 'An earlier run is still waiting for a yes', pill: { label: 'Skipped', tone: 'off' } }
     case 'failed': {
       const failed = stations.find((station) => station.state === 'err')
       const before = failed?.spot.at === 'agent' && model.agents.length === 0
@@ -517,6 +519,8 @@ export function stageWords(run: StageFacts, nameOf: NameOf): string {
       return run.reason ? failureReasonLabel[run.reason] : 'Stopped'
     case 'awaiting_approval':
       return 'Waiting for a yes'
+    case 'skipped':
+      return 'Skipped. An earlier run is still waiting for a yes.'
     case 'pending':
     case 'working':
     case 'proposed':
@@ -551,5 +555,7 @@ export function runPill(run: StageFacts): { readonly label: string; readonly ton
       return run.count === 0 ? { label: 'Nothing new', tone: 'quiet' } : { label: 'Done', tone: 'ok' }
     case 'rejected':
       return { label: 'Declined', tone: 'quiet' }
+    case 'skipped':
+      return { label: 'Skipped', tone: 'quiet' }
   }
 }
