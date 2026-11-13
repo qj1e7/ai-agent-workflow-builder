@@ -4,7 +4,7 @@ import type {
   IWebhookFunctions,
   IWebhookResponseData,
 } from 'n8n-workflow';
-import { isToken, refuse, signedBy } from '../signing';
+import { answerSafely, isToken, refuse, signedBy } from '../signing';
 
 /**
  * The trigger's path, and the only place it is decided. With `isFullPath: false` n8n registers
@@ -15,14 +15,15 @@ export const START_PATH = 'start';
 
 const KINDS = new Set(['run_now', 'test', 'retry']);
 const MAX_LIFETIME_S = 300;
-const CLOCK_SKEW_S = 30;
+// The clocks of our API and n8n may differ by up to this much either way.
+const CLOCK_SKEW_S = 60;
 
 // A first filter only: n8n forgets it on restart. Our API, which issued each nonce for one run of
 // one workflow, is the real guard.
 const startedNonces = new Map<string, number>();
 
 function rememberNonce(nonce: string, expires: number, now: number): boolean {
-  for (const [seen, until] of startedNonces) if (until < now) startedNonces.delete(seen);
+  for (const [seen, until] of startedNonces) if (until + CLOCK_SKEW_S < now) startedNonces.delete(seen);
   if (startedNonces.has(nonce)) return false;
   startedNonces.set(nonce, expires);
   return true;
@@ -44,7 +45,7 @@ export class StartFromPortal implements INodeType {
   };
 
   webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
-    return Promise.resolve(answerStart(this));
+    return Promise.resolve(answerSafely(this, answerStart));
   }
 }
 
@@ -72,7 +73,7 @@ function answerStart(ctx: IWebhookFunctions): IWebhookResponseData {
   }
 
   const now = Math.floor(Date.now() / 1000);
-  if (expires < now) return refuse(ctx, 401, 'This start has expired.');
+  if (expires + CLOCK_SKEW_S < now) return refuse(ctx, 401, 'This start has expired.');
   if (expires > now + MAX_LIFETIME_S + CLOCK_SKEW_S) return refuse(ctx, 401, 'This start lives too long.');
   if (!rememberNonce(nonce, expires, now)) return refuse(ctx, 401, 'This start was already used.');
 

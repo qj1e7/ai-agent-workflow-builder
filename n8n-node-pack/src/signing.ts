@@ -19,6 +19,25 @@ export function isToken(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,128}$/.test(value);
 }
 
+/**
+ * Runs a webhook's check and never throws. When webhook() throws, n8n answers 500 and still runs
+ * the node's output 0, so an error here must refuse like any other bad request.
+ */
+export function answerSafely(
+  ctx: IWebhookFunctions,
+  answer: (ctx: IWebhookFunctions) => IWebhookResponseData,
+): IWebhookResponseData {
+  try {
+    return answer(ctx);
+  } catch {
+    try {
+      return refuse(ctx, 500, 'This block could not check the request.');
+    } catch {
+      return { noWebhookResponse: true };
+    }
+  }
+}
+
 /** Answers the request itself, so n8n neither starts nor resumes anything. */
 export function refuse(ctx: IWebhookFunctions, status: number, detail: string): IWebhookResponseData {
   const res = ctx.getResponseObject() as unknown as { status(code: number): { json(body: unknown): unknown } };

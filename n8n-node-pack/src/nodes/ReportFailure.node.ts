@@ -1,6 +1,16 @@
 import type { IDataObject, IExecuteFunctions, INodeExecutionData, INodeType, INodeTypeDescription } from 'n8n-workflow';
 import { callApi } from '../api';
 
+const MAX_TEXT_BYTES = 2048;
+
+function capped(text: string | undefined): string | null {
+  if (text === undefined) return null;
+  const bytes = Buffer.from(text, 'utf8');
+  if (bytes.length <= MAX_TEXT_BYTES) return text;
+  // Cut on a character boundary, never inside one.
+  return new TextDecoder('utf-8', { fatal: false }).decode(bytes.subarray(0, MAX_TEXT_BYTES)).replace(/\uFFFD$/, '');
+}
+
 /** What n8n's Error Trigger passes on, as far as we read it. */
 interface ErrorTriggerItem {
   execution?: { id?: string; mode?: string; retryOf?: string; lastNodeExecuted?: string; error?: { message?: string } };
@@ -28,9 +38,9 @@ export class ReportFailure implements INodeType {
       failed_mode: execution.mode ?? null,
       retry_of: execution.retryOf ?? null,
       last_node_executed: execution.lastNodeExecuted ?? null,
-      error_message: execution.error?.message ?? null,
+      error_message: capped(execution.error?.message),
       failed_workflow_id: workflow.id ?? null,
-      failed_workflow_name: workflow.name ?? null,
+      failed_workflow_name: capped(workflow.name),
     });
     return [];
   }

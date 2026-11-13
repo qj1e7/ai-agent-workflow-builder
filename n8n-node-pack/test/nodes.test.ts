@@ -92,6 +92,16 @@ describe('Agent', () => {
     expect(api.sent).toEqual([]);
   });
 
+  it('sends an input that is not text as JSON', async () => {
+    const api = new FakeApi().answers(200, { items: [] });
+    const input = [
+      { name: 'versions', value: { ours: '1.1.0' } },
+      { name: 'count', value: 5 },
+    ];
+    await new Agent().execute.call(executeContext({ api, params: { agent: 'version-checker', inputs: { input } } }).ctx);
+    expect(api.sent[0]?.body).toMatchObject({ inputs: { versions: '{"ours":"1.1.0"}', count: '5' } });
+  });
+
   it("lists the chosen agent's declared inputs", async () => {
     const api = new FakeApi().answers(200, { options: [{ id: 'repo', name: 'Repository' }] });
     const options = await new Agent().methods.loadOptions.getAgentInputs.call(
@@ -137,6 +147,15 @@ describe('Report a failure', () => {
     const input = [{ json: { execution: { id: '40', mode: 'trigger', error: { message: 'boom' } }, workflow: { id: 'wf-7' } } }];
     const { ctx } = executeContext({ api, input });
     expect(await new ReportFailure().execute.call(ctx)).toEqual([]);
+  });
+
+  it('sends at most 2 KB of the error and of the workflow name', async () => {
+    const api = new FakeApi().answers(200, {});
+    const json = { execution: { id: '40', error: { message: 'x'.repeat(5000) } }, workflow: { id: 'wf-7', name: 'é'.repeat(2000) } };
+    await new ReportFailure().execute.call(executeContext({ api, input: [{ json }] }).ctx);
+    const body = api.sent[0]?.body as { error_message: string; failed_workflow_name: string };
+    expect(body.error_message).toBe('x'.repeat(2048));
+    expect(body.failed_workflow_name).toBe('é'.repeat(1024));
   });
 
   it('sends nulls for what the Error Trigger left out', async () => {

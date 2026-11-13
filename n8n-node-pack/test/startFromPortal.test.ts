@@ -1,5 +1,5 @@
 import { createHmac, randomUUID } from 'node:crypto';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { START_PATH, StartFromPortal } from '../src/nodes/StartFromPortal.node';
 import { START_SECRET, setEnv, webhookContext } from './fake';
 
@@ -8,9 +8,9 @@ const now = () => Math.floor(Date.now() / 1000);
 const WORKFLOW = 'wf-7';
 const WEBHOOK = '5b0c9a51-2f3e-4c1d-9a7b-6e8f0d1c2b3a';
 
-// The start our API sends to one workflow's trigger. The signature is the contract: HMAC-SHA256
-// with WAB_START_SECRET over the workflow id, the trigger's webhook id, the nonce, the kind and
-// the expiry (Unix seconds), one per line, in the X-Wab-Signature header.
+// The start our API sends to one workflow's trigger. The signature is the contract in the pack's
+// README: HMAC-SHA256 with WAB_START_SECRET over the workflow id, the trigger's webhook id, the
+// nonce, the kind and the expiry as the decimal string of Unix seconds, joined by \n.
 function signedStart(
   overrides: { nonce?: string; kind?: string; expires?: number; secret?: string; workflowId?: string; webhookId?: string } = {},
 ) {
@@ -25,10 +25,11 @@ function signedStart(
 
 async function deliver(
   start: { body: unknown; headers: Record<string, string> },
-  trigger: { workflowId?: string; webhookId?: string | null } = {},
+  trigger: { workflowId?: string | null; webhookId?: string | null } = {},
 ) {
   const webhookId = trigger.webhookId === null ? undefined : (trigger.webhookId ?? WEBHOOK);
-  const { ctx, response } = webhookContext({ ...start, workflowId: trigger.workflowId ?? WORKFLOW, webhookId });
+  const workflowId = trigger.workflowId === null ? undefined : (trigger.workflowId ?? WORKFLOW);
+  const { ctx, response } = webhookContext({ ...start, workflowId, webhookId });
   const out = await new StartFromPortal().webhook.call(ctx);
   return { out, status: response.status };
 }
@@ -66,10 +67,20 @@ describe('Start from the Portal', () => {
     expect(out).toEqual({ noWebhookResponse: true });
   });
 
-  it('refuses every start while the trigger has no webhook id', async () => {
-    const { out, status } = await deliver(signedStart(), { webhookId: null });
+  it.each([
+    ['webhook id', { webhookId: null }],
+    ['workflow id', { workflowId: null }],
+  ])('refuses every start while the trigger has no %s', async (_name, trigger) => {
+    const { out, status } = await deliver(signedStart(), trigger);
     expect(status).toBe(503);
     expect(out).toEqual({ noWebhookResponse: true });
+  });
+
+  it.each([
+    ['up to a minute past its expiry', -59],
+    ['up to six minutes ahead', 359],
+  ])('allows a minute of clock difference: a start %s is accepted', async (_name, offset) => {
+    expect((await deliver(signedStart({ expires: now() + offset }))).status).toBeUndefined();
   });
 
   it.each([
@@ -79,8 +90,8 @@ describe('Start from the Portal', () => {
       const start = signedStart({ kind: 'test' });
       return { ...start, body: { ...start.body, kind: 'run_now' } };
     }],
-    ['an expiry in the past', () => signedStart({ expires: now() - 1 })],
-    ['an expiry more than five minutes away', () => signedStart({ expires: now() + 400 })],
+    ['an expiry more than a minute in the past', () => signedStart({ expires: now() - 61 })],
+    ['an expiry more than six minutes away', () => signedStart({ expires: now() + 361 })],
     ['a kind we never send', () => signedStart({ kind: 'schedule' })],
     ['a nonce with a line break', () => signedStart({ nonce: 'a\nrun_now' })],
     ['a body that is not an object', () => ({ ...signedStart(), body: 'start' })],
@@ -96,6 +107,28 @@ describe('Start from the Portal', () => {
     const again = await deliver(start);
     expect(again.status).toBe(401);
     expect(again.out).toEqual({ noWebhookResponse: true });
+  });
+
+  it('still refuses a used nonce in the minute after its expiry, and keeps starting others', async () => {
+    vi.useFakeTimers();
+    try {
+      const start = signedStart();
+      expect((await deliver(start)).status).toBeUndefined();
+      vi.setSystemTime(Date.now() + 330_000);
+      expect((await deliver(start)).status).toBe(401);
+      vi.setSystemTime(Date.now() + 60_000);
+      expect((await deliver(signedStart())).status).toBeUndefined();
+      expect((await deliver(start)).status).toBe(401);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('answers 500 and starts nothing when its check throws', async () => {
+    const start = signedStart();
+    const { ctx, response } = webhookContext({ ...start, workflowId: WORKFLOW, webhookId: WEBHOOK, failsWith: new Error('boom') });
+    expect(await new StartFromPortal().webhook.call(ctx)).toEqual({ noWebhookResponse: true });
+    expect(response.status).toBe(500);
   });
 
   it('refuses every start while WAB_START_SECRET is not set', async () => {

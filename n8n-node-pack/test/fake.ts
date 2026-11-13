@@ -11,6 +11,7 @@ import type {
 export const API_URL = 'http://platform-api:8000';
 export const NODE_KEY = 'node-key-for-tests';
 export const START_SECRET = 'start-secret-for-tests';
+export const RESUME_URL = 'http://n8n:5678/webhook-waiting/41?signature=resume-token';
 
 export function setEnv(values: Record<string, string | undefined>): void {
   for (const [name, value] of Object.entries(values)) {
@@ -70,8 +71,19 @@ export interface ExecuteRun {
   waits: Date[];
 }
 
+/**
+ * An execution's custom data. n8n saves it with the execution's run data and hands it to the
+ * resumed webhook, so an execute and its later wake share it (checked on n8n 2.42.6).
+ */
+export type CustomData = Record<string, string>;
+
+function customDataOf(data: CustomData = {}) {
+  return { set: (key: string, value: string) => (data[key] = value), get: (key: string) => data[key] };
+}
+
 export function executeContext(options: {
   api: FakeApi;
+  customData?: CustomData;
   params?: IDataObject;
   input?: INodeExecutionData[];
   nodeName?: string;
@@ -87,7 +99,12 @@ export function executeContext(options: {
     getExecutionId: () => '41',
     getWorkflow: () => ({ id: 'wf-7', name: 'Release check', active: true }),
     getMode: () => options.mode ?? 'trigger',
-    getSignedResumeUrl: () => 'http://n8n:5678/webhook-waiting/41/node-1?signature=abc',
+    // n8n checks a wake against the execution's resume token, which only $execution.resumeUrl carries.
+    evaluateExpression: (expression: string) => {
+      if (expression !== '{{ $execution.resumeUrl }}') throw new Error(`unexpected expression ${expression}`);
+      return RESUME_URL;
+    },
+    customData: customDataOf(options.customData),
     putExecutionToWait: (until: Date) => {
       waits.push(until);
       return Promise.resolve();
@@ -108,6 +125,8 @@ export function webhookContext(options: {
   executionId?: string;
   workflowId?: string;
   webhookId?: string;
+  customData?: CustomData;
+  failsWith?: Error;
 }): WebhookCall {
   const response: WebhookCall['response'] = {};
   const res = {
@@ -122,11 +141,15 @@ export function webhookContext(options: {
   };
   const ctx = {
     getNode: () => ({ ...node('Block', 'CUSTOM.block'), webhookId: options.webhookId }),
-    getWorkflow: () => ({ id: options.workflowId ?? 'wf-7', name: 'Release check', active: true }),
-    getBodyData: () => options.body,
+    getWorkflow: () => ({ id: options.workflowId, name: 'Release check', active: true }),
+    getBodyData: () => {
+      if (options.failsWith) throw options.failsWith;
+      return options.body;
+    },
     getHeaderData: () => options.headers ?? {},
     getResponseObject: () => res,
     getExecutionId: () => options.executionId ?? '41',
+    customData: customDataOf(options.customData),
   };
   return { ctx: ctx as unknown as IWebhookFunctions, response };
 }

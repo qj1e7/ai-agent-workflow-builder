@@ -8,7 +8,7 @@ import { ProposeChange } from '../src/nodes/ProposeChange.node';
 import { Read } from '../src/nodes/Read.node';
 import { ReportFailure } from '../src/nodes/ReportFailure.node';
 import { Tell } from '../src/nodes/Tell.node';
-import { API_URL, FakeApi, NODE_KEY, executeContext, setEnv } from './fake';
+import { API_URL, FakeApi, NODE_KEY, RESUME_URL, executeContext, setEnv } from './fake';
 
 const FIXED = { execution_id: '41', workflow_id: 'wf-7', node_name: 'Block', mode: 'trigger' };
 
@@ -73,8 +73,8 @@ const CASES: Record<string, Case> = {
     node: new AskForYes(),
     path: 'calls/ask',
     params: {},
-    sends: { ...FIXED, resume_url: 'http://n8n:5678/webhook-waiting/41/node-1?signature=abc' },
-    answer: { status: 'waiting' },
+    sends: { ...FIXED, resume_url: RESUME_URL },
+    answer: { status: 'waiting', request_id: 'req-1' },
   },
   'Make the approved changes': {
     node: new MakeApprovedChanges(),
@@ -156,9 +156,20 @@ describe.each(Object.entries(CASES))('%s', (_name, c) => {
     await expect(run(c, api)).rejects.toThrow(/HTTP 503/);
   });
 
-  it('throws when our API cannot be reached', async () => {
-    const api = new FakeApi().fails(new Error('timeout of 60000ms exceeded'));
-    await expect(run(c, api)).rejects.toThrow(/did not answer/);
+  it('throws when our API cannot be reached, naming only the error code', async () => {
+    const api = new FakeApi().fails(Object.assign(new Error('connect ECONNREFUSED 10.1.2.3:8000'), { code: 'ECONNREFUSED' }));
+    await expect(run(c, api)).rejects.toSatisfy(
+      (e) =>
+        e instanceof NodeOperationError &&
+        /did not answer/.test(e.message) &&
+        e.description === 'ECONNREFUSED' &&
+        !`${e.message} ${e.description}`.includes('10.1.2.3'),
+    );
+  });
+
+  it('throws on an answer that is a list, not an object', async () => {
+    const api = new FakeApi().answers(200, [c.answer]);
+    await expect(run(c, api)).rejects.toThrow(/cannot read/);
   });
 });
 

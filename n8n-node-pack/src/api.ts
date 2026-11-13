@@ -62,8 +62,10 @@ async function send(
       ignoreHttpStatusErrors: true,
     })) as FullResponse;
   } catch (error) {
+    // Only the code: the message names hosts and addresses that anyone who opens the editor would see.
+    const code = (error as { code?: unknown } | null)?.code;
     throw new NodeOperationError(node, 'Our platform did not answer. n8n tries again if this block has retries on.', {
-      description: error instanceof Error ? error.message : undefined,
+      description: typeof code === 'string' ? code : 'No answer',
     });
   }
   const { statusCode, body } = response;
@@ -74,6 +76,8 @@ async function send(
     }
     return body as IDataObject;
   }
+  // n8n's retryOnFail retries every error, a refusal included, and a node cannot opt out. So a
+  // refused call is sent again up to three times, and our API must refuse it the same way each time.
   if (statusCode >= 400 && statusCode < 500) {
     const detail = (body as { detail?: unknown } | null)?.detail;
     throw new NodeOperationError(
