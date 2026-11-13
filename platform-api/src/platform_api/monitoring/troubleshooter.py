@@ -1,5 +1,7 @@
+import re
 from collections.abc import Mapping
-from typing import Literal
+from datetime import datetime
+from typing import Final, Literal
 
 from platform_api.monitoring.events import RunFailedData
 from platform_api.shared import JIRA_SITE_CHANGED, WRITE_STOP_ADVICE
@@ -184,13 +186,14 @@ class RetryAnswer(WireModel):
 
 class Answers(WireModel):
     what_happened: str
+    """One sentence. The advice's likely cause and the failure text are the details behind it."""
     what_affected: str
     safe_to_retry: str
     retry: RetryAnswer
     next: Literal["retry", "report"]
 
 
-NOTHING_WRITTEN = "Nothing was written."
+NOTHING_WRITTEN = "Nothing. No ticket was written."
 # The log holds a write's done event only once the whole write step succeeds, and Jira can make a
 # ticket and lose its answer, so at the write step nobody can say from the log what was written.
 MAYBE_WRITTEN = "The approved write may or may not have reached Jira."
@@ -215,16 +218,34 @@ def _safe_to_retry(failure: RunFailedData, retry: RetryAnswer) -> str:
             "earlier try made instead of making a second one."
         )
     wait = _wait_first(explain_failure(failure))
-    return f"Yes. {wait}A retry runs the work again, and any write still waits for a yes."
+    return f"Yes. {wait}Nothing was written, so a retry is safe."
 
 
-def answers(failure: RunFailedData) -> Answers:
+DIDNT_ANSWER: Final = re.compile(r"\bGitHub (?:returned 5\d\d|could not be reached)\b")
+"""The runtime's words when GitHub gave no usable answer, every try."""
+
+
+def _what_happened(failure: RunFailedData, at: datetime | None) -> str:
+    """One sentence: GitHub didn't answer, with the time it stopped when that is known, or the
+    advice's explanation."""
+    if (
+        failure.reason == "AgentError"
+        and failure.retryable
+        and DIDNT_ANSWER.search(failure.message)
+    ):
+        when = "" if at is None else f" at {at.hour}:{at.minute:02d}"
+        return f"GitHub didn't answer{when}."
+    return explain_failure(failure).explanation
+
+
+def answers(failure: RunFailedData, at: datetime | None = None) -> Answers:
+    """The three answers to a stop. `at` is when it stopped, in the team's time zone."""
     at_the_write = failure.stage == "acting"
     retry = RetryAnswer(
         possible=failure.retryable, asks_again=failure.retryable and not at_the_write
     )
     return Answers(
-        what_happened=explain_failure(failure).explanation,
+        what_happened=_what_happened(failure, at),
         what_affected=MAYBE_WRITTEN if at_the_write else NOTHING_WRITTEN,
         safe_to_retry=_safe_to_retry(failure, retry),
         retry=retry,

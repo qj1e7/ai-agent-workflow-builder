@@ -23,7 +23,7 @@ import { QuestionThread } from './QuestionThread'
 import { useQuestions, type Questions } from './questions'
 import { RunLine } from './RunLine'
 import { isFinished, PLANNER_ID, stationsOf, type PlanBlock, type RunModel } from './runModel'
-import { declinedNext, declinedNowWords, declinedRecord, feedTroubleOf, headlineOf, lineOf, RUN_MISSING, RUN_PROBLEM, shortTime, speakerName, writeLabel, type NameOf, type Speaker } from './words'
+import { declinedNext, declinedNowWords, declinedRecord, feedTroubleOf, headlineOf, lineOf, RUN_MISSING, RUN_PROBLEM, settledOf, speakerName, triggerWords, type NameOf, type Speaker } from './words'
 import styles from './RunPage.module.css'
 
 const LANDS_ON_DECISION = new Set(['awaiting_approval', 'failed', 'rejected'])
@@ -115,6 +115,7 @@ function LiveRunPage({ run, fromApproval }: { run: RunView; fromApproval: boolea
 
   const ready = live.loaded || live.connection.is === 'live' || live.connection.is === 'settled'
   if (!ready) return <FeedNotReady connection={live.connection} onRetry={tryAgain} />
+  if (useCase.isLoading) return <Loading />
   return <RunView run={latest} useCase={useCase.data} live={live} fromApproval={fromApproval} detail={{ choice: detail, choose: setDetail }} />
 }
 
@@ -136,7 +137,7 @@ export function useNameOf(model: RunModel): NameOf {
 }
 
 export function planOf(useCase: UseCaseView | undefined): PlanBlock[] | null {
-  return useCase ? useCase.plan.map((block) => ({ name: block.name, kind: block.kind })) : null
+  return useCase ? useCase.plan.map((block) => ({ key: block.key, name: block.name, kind: block.kind })) : null
 }
 
 function backTo(useCase: UseCaseView | undefined): string {
@@ -228,7 +229,8 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
     ;(open ? line : document.querySelector<HTMLElement>('main h1'))?.focus({ preventScroll: true })
   })
 
-  const stations = stationsOf(shown, planOf(useCase), writeLabel)
+  const stations = stationsOf(shown, planOf(useCase), triggerWords(shown, useCase?.schedule ?? null, nameOf, run.started_at))
+  const settled = settledOf(shown, nameOf, new Date(), declineReasons(useCase?.template))
   const proposal = approval.data && waiting ? approval.data.actions : null
   const headline = headlineOf(shown, stations, proposal)
   const arrivedLive = shown.spotSeq > loadedUpTo ? (stations.findLast((station) => station.state !== 'todo')?.key ?? null) : null
@@ -291,7 +293,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
         <span role="status">{statusWords(decision, live)}</span>
         {declinedSoFar ? ` ${declinedSoFar}` : null}
       </p>
-      <RunLine stations={stations} arrivedLive={arrivedLive} startedAt={shortTime(run.started_at)} nameOf={nameOf} />
+      <RunLine stations={stations} arrivedLive={arrivedLive} settled={settled} />
       {working ? null : <NeedsYou>{last}</NeedsYou>}
       <details className={styles['detail']} open={open}>
         <summary

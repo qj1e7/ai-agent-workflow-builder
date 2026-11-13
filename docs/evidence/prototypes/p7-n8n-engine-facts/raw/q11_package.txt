@@ -1,0 +1,8 @@
+001 variant: package: "[\"n8n-nodes-wab.startFromPortal\", \"n8n-nodes-wab.callOurApi\", \"n8n-nodes-wab.askForYes\", \"n8n-nodes-wab.reportFailure\", \"n8n-nodes-base.scheduleTrigger\", \"n8n-nodes-base.manualTrigger\", \"n8n-nodes-base.errorTrigger\", \"n8n-nodes-base.if\", \"n8n-nodes-base.merge\", \"n8n-nodes-base.noOp\", \"n8n-nodes-base.stickyNote\"]"
+002 node types n8n loaded: count, ours: [11, ["n8n-nodes-wab.askForYes", "n8n-nodes-wab.callOurApi", "n8n-nodes-wab.reportFailure", "n8n-nodes-wab.startFromPortal"]]
+003 every type n8n loaded: ["n8n-nodes-base.errorTrigger", "n8n-nodes-base.if", "n8n-nodes-base.manualTrigger", "n8n-nodes-base.merge", "n8n-nodes-base.noOp", "n8n-nodes-base.scheduleTrigger", "n8n-nodes-base.stickyNote", "n8n-nodes-wab.askForYes", "n8n-nodes-wab.callOurApi", "n8n-nodes-wab.reportFailure", "n8n-nodes-wab.startFromPortal"]
+004 create a workflow with an HTTP Request node: [200, "EtLjyVVQpfMR1GbG"]
+005 publish it: [400, {"message": "Unrecognized node type: n8n-nodes-base.httpRequest"}]
+006 run it by hand: [400, {"code": 0, "message": "Unrecognized node type: n8n-nodes-base.httpRequest"}]
+007 requests that reached the stand-in API from the HTTP Request node: []
+008 a workflow using n8n-nodes-wab.callOurApi, run by hand: ["success", ["Run by hand", "Read release"]]

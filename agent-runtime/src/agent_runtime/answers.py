@@ -16,10 +16,12 @@ from agent_runtime.abilities import (
     NOTIFIES,
     VULNERABILITIES_PLANNED,
     Need,
+    cant_entry,
     change_verbs_in,
     commands_a_change,
     names_a_ticket_field,
     need_of,
+    one_line_cant,
     other_release_source,
     other_systems,
     release_source_note,
@@ -51,9 +53,11 @@ from agent_runtime.contract import (
     PartAnswer,
     PartCantDo,
     PartFits,
+    PauseAnswer,
     PlannerAnswer,
     PlannerFacts,
     RefusedAnswer,
+    ResumeAnswer,
     RowKind,
     SetupCardAnswer,
     UnderstoodRow,
@@ -740,7 +744,48 @@ def _about(read: TaskRead, request: str) -> PlannerAnswer:
             return AbilitiesAnswer()
 
 
+def said_plainly(row: CantRow) -> CantRow:
+    """The row in its registry entry's words, when an entry with words of its own fits it: its
+    one-line can't as the note, and what the person has instead."""
+    entry = cant_entry(row.text, row.system)
+    if entry is None:
+        return row
+    return row.model_copy(
+        update={
+            "note": one_line_cant(entry),
+            "instead": entry.instead,
+            "unsupported": entry.state == "unsupported",
+        }
+    )
+
+
+def _plainly(answer: PlannerAnswer) -> PlannerAnswer:
+    """The answer with every can't row in it said plainly, the ones inside another answer too."""
+    match answer:
+        case CantAnswer(alternative=alternative):
+            inner = None if alternative is None else _plainly(alternative)
+            rows = [said_plainly(r) for r in answer.cant]
+            return answer.model_copy(update={"cant": rows, "alternative": inner})
+        case PartAnswer():
+            return answer.model_copy(update={"cant": [said_plainly(r) for r in answer.cant]})
+        case WatchlistAnswer(also=also) if also is not None:
+            return answer.model_copy(update={"also": _plainly(also)})
+        case _:
+            return answer
+
+
 def answer_of(
+    read: TaskRead,
+    request: str,
+    facts: PlannerFacts | None = None,
+    changes_workflows: bool = True,
+) -> PlannerAnswer:
+    """The answer code decides, with every can't in the registry's words where an entry has its
+    own (`said_plainly`)."""
+    return _plainly(_answer_of(read, request, facts, changes_workflows))
+
+
+def _answer_of(
     read: TaskRead,
     request: str,
     facts: PlannerFacts | None = None,
@@ -840,7 +885,9 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     fails closed: a change word left once the question's own words and the names are out keeps
     the first answer, whatever the shape of the sentence (spec 6.4)."""
     answer = answer_of(read, request.task, request.facts, request.changes_workflows)
-    if question_messages(request) is None or isinstance(answer, EditAnswer):
+    if question_messages(request) is None or isinstance(
+        answer, EditAnswer | PauseAnswer | ResumeAnswer
+    ):
         return answer
     text = visible_words(request.task)
     if commanded(read, text, request.facts):
@@ -989,4 +1036,6 @@ def check_one_part(request: CheckPartRequest) -> CheckPartResult:
     if note is None:
         return PartFits()
     need = need_of(request.kind, text)
-    return PartCantDo(note=plain(note, NOTE_LIMIT), needs=need.needs, system=need.system)
+    entry = None if mentions_approval else cant_entry(text, need.system)
+    said = note if entry is None else one_line_cant(entry)
+    return PartCantDo(note=plain(said, NOTE_LIMIT), needs=need.needs, system=need.system)

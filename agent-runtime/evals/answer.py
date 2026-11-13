@@ -90,6 +90,7 @@ class AnswerCase(Case):
     reasons: list[str] = []
     change: ScheduleChange | None = None
     edit_cant: EditCant | None = None
+    one_liner: str | None = None
     changes_workflows: bool = True
     facts: PlannerFacts | None = None
     previous: PreviousTurn | None = None
@@ -240,6 +241,9 @@ def _cant_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
         found.append(
             check("names_the_system", [] if case.system in systems else [str(s) for s in systems])
         )
+    if case.one_liner is not None:
+        notes = [c.note for c in cant if c.instead is not None]
+        found.append(check("says_the_one_liner", [] if case.one_liner in notes else notes))
     return found
 
 

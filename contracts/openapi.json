@@ -2512,6 +2512,18 @@
       "CantRowView": {
         "additionalProperties": false,
         "properties": {
+          "instead": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the person has instead, in one sentence, when the note is a registry entry's one-line can't. Null otherwise.",
+            "title": "Instead"
+          },
           "kind": {
             "$ref": "#/components/schemas/RowKind"
           },
@@ -2550,6 +2562,11 @@
           "text": {
             "title": "Text",
             "type": "string"
+          },
+          "unsupported": {
+            "description": "True when the platform won't do it at all, so there is nothing to ask the team for.",
+            "title": "Unsupported",
+            "type": "boolean"
           }
         },
         "required": [
@@ -2557,7 +2574,9 @@
           "text",
           "note",
           "needs",
-          "system"
+          "system",
+          "instead",
+          "unsupported"
         ],
         "title": "CantRowView",
         "type": "object"
@@ -2651,6 +2670,18 @@
             "title": "Id",
             "type": "string"
           },
+          "instead": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For one that isn't ready, what the person has instead, in one sentence.",
+            "title": "Instead"
+          },
           "kind": {
             "enum": [
               "read",
@@ -2686,6 +2717,18 @@
             "description": "A duty of the platform itself, with no tool.",
             "title": "Platform",
             "type": "boolean"
+          },
+          "short": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its words on the chat's capabilities card: a line when it is ready, a name in the card's Not yet note when it isn't. Null for one the card leaves out.",
+            "title": "Short"
           },
           "state": {
             "$ref": "#/components/schemas/CapabilityState",
@@ -2729,6 +2772,8 @@
           "system",
           "state",
           "cant",
+          "short",
+          "instead",
           "why",
           "fix",
           "connection",
@@ -6769,6 +6814,86 @@
         "title": "PastDecisionView",
         "type": "object"
       },
+      "PauseReply": {
+        "additionalProperties": false,
+        "description": "A pause asked for alone. For an Operator the platform pauses the one workflow the words\nname, as POST /api/v1/use-cases/{use_case_id}/pause does: it starts no runs until it is\nresumed, and a run that has started carries on.",
+        "properties": {
+          "already": {
+            "description": "True when it was already that way, so nothing changed.",
+            "title": "Already",
+            "type": "boolean"
+          },
+          "answer": {
+            "const": "pause",
+            "default": "pause",
+            "title": "Answer",
+            "type": "string"
+          },
+          "choices": {
+            "description": "The workflows the request could mean, for the person to pick one, which the Portal then pauses or resumes through the workflow's own route: every one its words match when they match several, the Software watchlist for \"the React check\", or every workflow for \"it\". Empty when one matched or the words name none.",
+            "items": {
+              "$ref": "#/components/schemas/SwitchChoice"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "missing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The request's words for a workflow the person doesn't have. Null otherwise.",
+            "title": "Missing"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its name. Null with use_case_id.",
+            "title": "Name"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "use_case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The workflow paused or turned back on. Null when the words named none of the person's workflows, or several, or a watched software's check, so nothing changed.",
+            "title": "Use Case Id"
+          }
+        },
+        "required": [
+          "parts",
+          "use_case_id",
+          "name",
+          "already",
+          "missing",
+          "choices",
+          "answer"
+        ],
+        "title": "PauseReply",
+        "type": "object"
+      },
       "PendingApproverOut": {
         "additionalProperties": false,
         "properties": {
@@ -7152,8 +7277,10 @@
             "offline": "#/components/schemas/OfflineReply",
             "operators": "#/components/schemas/OperatorsReply",
             "part": "#/components/schemas/PartReply",
+            "pause": "#/components/schemas/PauseReply",
             "question": "#/components/schemas/QuestionReply",
             "refused": "#/components/schemas/RefusedReply",
+            "resume": "#/components/schemas/ResumeReply",
             "setup_card": "#/components/schemas/SetupCardReply",
             "watchlist": "#/components/schemas/WatchlistReply",
             "which_software": "#/components/schemas/WhichSoftwareReply",
@@ -7200,6 +7327,12 @@
           },
           {
             "$ref": "#/components/schemas/EditReply"
+          },
+          {
+            "$ref": "#/components/schemas/PauseReply"
+          },
+          {
+            "$ref": "#/components/schemas/ResumeReply"
           },
           {
             "$ref": "#/components/schemas/OperatorsReply"
@@ -8255,6 +8388,86 @@
           "done"
         ],
         "type": "string"
+      },
+      "ResumeReply": {
+        "additionalProperties": false,
+        "description": "A resume asked for alone. For an Operator the platform turns the one workflow the words\nname back on, as POST /api/v1/use-cases/{use_case_id}/resume does.",
+        "properties": {
+          "already": {
+            "description": "True when it was already that way, so nothing changed.",
+            "title": "Already",
+            "type": "boolean"
+          },
+          "answer": {
+            "const": "resume",
+            "default": "resume",
+            "title": "Answer",
+            "type": "string"
+          },
+          "choices": {
+            "description": "The workflows the request could mean, for the person to pick one, which the Portal then pauses or resumes through the workflow's own route: every one its words match when they match several, the Software watchlist for \"the React check\", or every workflow for \"it\". Empty when one matched or the words name none.",
+            "items": {
+              "$ref": "#/components/schemas/SwitchChoice"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "missing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The request's words for a workflow the person doesn't have. Null otherwise.",
+            "title": "Missing"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its name. Null with use_case_id.",
+            "title": "Name"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "use_case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The workflow paused or turned back on. Null when the words named none of the person's workflows, or several, or a watched software's check, so nothing changed.",
+            "title": "Use Case Id"
+          }
+        },
+        "required": [
+          "parts",
+          "use_case_id",
+          "name",
+          "already",
+          "missing",
+          "choices",
+          "answer"
+        ],
+        "title": "ResumeReply",
+        "type": "object"
       },
       "RetryAccepted": {
         "additionalProperties": false,
@@ -10135,6 +10348,35 @@
           "reported_by"
         ],
         "title": "SupportReportedData",
+        "type": "object"
+      },
+      "SwitchChoice": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/UseCaseState"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "watchlist": {
+            "description": "True for the Software watchlist, whose pause stops the checks of every software on it.",
+            "title": "Watchlist",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "name",
+          "state",
+          "watchlist"
+        ],
+        "title": "SwitchChoice",
         "type": "object"
       },
       "TeamRequestList": {

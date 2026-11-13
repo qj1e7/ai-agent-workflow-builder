@@ -10,6 +10,10 @@ describe('agentIdentity', () => {
     expect(agentIdentity('troubleshooter')).toMatchObject({ name: 'AI troubleshooter', job: 'wrench', hue: 'var(--trouble)' })
   })
 
+  it('knows the version checker card as the version checker, keeping the card’s id', () => {
+    expect(agentIdentity('crd_version_checker', 'Version checker')).toMatchObject({ id: 'crd_version_checker', name: 'Version checker', job: 'magnifier', hue: 'var(--checker)', tint: 'var(--checker-tint)' })
+  })
+
   it('keeps a known agent its own name whatever the event calls it', () => {
     expect(agentIdentity('planner', 'Someone else').name).toBe('Planner')
   })
