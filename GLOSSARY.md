@@ -108,7 +108,7 @@ Our own n8n nodes, built into our n8n image: Start from the Portal, Read, Agent,
 _Avoid_: Plugin, integration, custom nodes
 
 **Start from the Portal**:
-The node pack's trigger. It starts a workflow when someone presses Run now, Test run or Retry in the Portal, and only for a start our API signed, within five minutes and once.
+The node pack's trigger. It starts a workflow when someone presses Run now, Test run or Retry in the Portal, and only for a start our API signed for that workflow, within five minutes and once.
 _Avoid_: Webhook
 
 **Made in n8n**:

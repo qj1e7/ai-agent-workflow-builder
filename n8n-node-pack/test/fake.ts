@@ -102,7 +102,13 @@ export interface WebhookCall {
   response: { status?: number; body?: unknown };
 }
 
-export function webhookContext(options: { body: unknown; headers?: IDataObject; executionId?: string }): WebhookCall {
+export function webhookContext(options: {
+  body: unknown;
+  headers?: IDataObject;
+  executionId?: string;
+  workflowId?: string;
+  webhookId?: string;
+}): WebhookCall {
   const response: WebhookCall['response'] = {};
   const res = {
     status(code: number) {
@@ -115,7 +121,8 @@ export function webhookContext(options: { body: unknown; headers?: IDataObject; 
     },
   };
   const ctx = {
-    getNode: () => node('Block', 'CUSTOM.block'),
+    getNode: () => ({ ...node('Block', 'CUSTOM.block'), webhookId: options.webhookId }),
+    getWorkflow: () => ({ id: options.workflowId ?? 'wf-7', name: 'Release check', active: true }),
     getBodyData: () => options.body,
     getHeaderData: () => options.headers ?? {},
     getResponseObject: () => res,

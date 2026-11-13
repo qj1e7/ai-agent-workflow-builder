@@ -1,8 +1,8 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IWebhookFunctions, IWebhookResponseData } from 'n8n-workflow';
 
-// Both the start and the wake are signed over their fields, one per line, so our API can check a
-// start item again from the execution's own record, where only the parsed fields survive.
+// The start and the wake are signed over named fields, one per line, so a signature can bind values
+// the receiver knows itself, such as its own workflow id, and our API builds the same message.
 export function sign(secret: string, fields: readonly (string | number)[]): string {
   return createHmac('sha256', secret).update(fields.join('\n')).digest('hex');
 }
