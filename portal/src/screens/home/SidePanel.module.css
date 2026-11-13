@@ -1,7 +1,7 @@
-/* Beside the chat it is a summary: 38% of the window, between 340 and 460 px, and the chat keeps the rest (the sketch's minmax(380px, 460px)). */
+/* Beside the chat it is a summary: 38% of the window, between 380 and 460 px as in the sketch's minmax(380px, 460px), and the chat keeps the rest. */
 .panel {
   display: flex;
-  flex: 0 0 clamp(340px, 38%, 460px);
+  flex: 0 0 clamp(380px, 38%, 460px);
   flex-direction: column;
   min-width: 0;
   border-left: 1px solid var(--hair);
