@@ -619,6 +619,17 @@
   padding: 20px 24px;
 }
 
+/* With the side panel open, the chat fills its column and its cards their width, so it sits against the panel, as in the sketch. */
+.beside .chatIn,
+.beside .chatDock .dock {
+  max-width: none;
+  padding-inline: 16px;
+}
+
+.beside .cards {
+  max-width: none;
+}
+
 .chatDock {
   flex: none;
   border-top: 1px solid var(--hair);

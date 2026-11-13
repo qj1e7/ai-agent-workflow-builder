@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { HomeOut } from '../../api/types'
+import { cx } from '../../ui/cx'
 import { InChat } from '../../ui/fromChat'
 import { NARROW, useMediaQuery } from '../../ui/media'
 import { openerAfterClose, OpensInPanel, panelKey, type PanelItem, type PanelOpener } from '../../ui/sidePanel'
@@ -141,7 +142,7 @@ export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewPro
 
   return (
     <InChat.Provider value>
-      <div className={styles['chatLayout']} data-chat>
+      <div className={cx(styles['chatLayout'], panel !== null && styles['beside'])} data-chat>
         <div ref={column} className={styles['chat']} inert={(narrow && panel !== null) || undefined}>
           <OpensInPanel.Provider value={opener}>
             <h1 className="visually-hidden" tabIndex={-1}>
