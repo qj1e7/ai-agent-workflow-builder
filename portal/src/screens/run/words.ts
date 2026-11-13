@@ -470,6 +470,6 @@ export function settledOf(model: RunModel, nameOf: NameOf, now: Date, quick: rea
   if (model.written.length === 0) return { tone: 'ok', text: `Done ${when} · Nothing new` }
   const created = model.written.every((written) => written.operation.startsWith('create_'))
   const refs = model.written.map((written) => written.ref).filter((ref) => ref !== '')
-  const what = refs.length > 0 ? andList(refs) : count(model.written.length, created ? 'ticket' : 'change')
+  const what = refs.length > 0 ? andList(refs) : changesOf(model.written, model.written.length).noun
   return { tone: 'ok', text: `Done ${when} · ${what} ${created ? 'created' : 'written'}${afterYeses(model.approvedBy, nameOf)}` }
 }

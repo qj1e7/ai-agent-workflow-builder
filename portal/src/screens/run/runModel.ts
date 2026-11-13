@@ -492,7 +492,8 @@ function underOf(model: RunModel, stations: readonly Skeleton[], index: number, 
     const since = sinceOf(model, stations, index)
     return since === null ? null : { kind: 'timer', since }
   }
-  if (at === 'write' && state === 'done' && model.written.length > 0) return { kind: 'tickets', written: model.written }
+  const written = model.written.filter((write) => write.ref !== '')
+  if (at === 'write' && state === 'done' && written.length > 0) return { kind: 'tickets', written }
   if (at === 'write' && state === 'skip' && model.phase.state === 'rejected') return { kind: 'note', text: 'Nothing written' }
   return null
 }

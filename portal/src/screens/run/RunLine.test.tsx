@@ -234,6 +234,9 @@ describe('the words on the line', () => {
     expect(settledOf(twoYeses, nameOf, new Date('2026-11-03T09:00:00Z'), QUICK)?.text).toBe('Done at 10:20 · MOCK-142 created after Carol and Bob said yes')
     const page = { ...replay(success), written: [{ connector: 'confluence', operation: 'update_page', ref: 'PAGE-9' }] }
     expect(settledOf(page, nameOf, new Date('2026-11-03T09:00:00Z'), QUICK)?.text).toBe('Done at 10:20 · PAGE-9 written after Bob’s yes')
+    const noKey = { ...replay(success), written: [{ connector: 'jira', operation: 'create_ticket', ref: '' }] }
+    expect(settledOf(noKey, nameOf, new Date('2026-11-03T09:00:00Z'), QUICK)?.text, 'a write with no key is counted, never shown as an empty key').toBe('Done at 10:20 · 1 ticket created after Bob’s yes')
+    expect(line(noKey), 'and puts no empty chip under the write').not.toMatch(/_chip_/)
   })
 
   it('settle a run with nothing to write as nothing new', () => {

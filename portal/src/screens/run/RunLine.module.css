@@ -110,7 +110,7 @@
 }
 
 .grow {
-  animation: grow var(--move) var(--ease-move) both;
+  animation: grow var(--move) var(--ease-move);
 }
 
 .who {
@@ -236,7 +236,6 @@
   border-radius: 50%;
   color: var(--on-status);
   box-shadow: 0 0 0 2px var(--surface);
-  animation: badge-in var(--dur-small) var(--ease-out) both;
 }
 
 .tick {
@@ -303,7 +302,7 @@
   background: var(--green-soft);
   color: var(--green-ink);
   text-decoration: none;
-  animation: lift 520ms var(--ease-out) both;
+  animation: lift 520ms var(--ease-out);
 }
 
 .chip:hover {
@@ -327,7 +326,7 @@
   margin: 0;
   font-size: 0.92rem;
   font-weight: 600;
-  animation: fade-up var(--dur-small) var(--ease-out) both;
+  animation: fade-up var(--dur-small) var(--ease-out);
 }
 
 .settled[data-tone='ok'] {
@@ -375,13 +374,6 @@
 
   75% {
     transform: translateX(3px);
-  }
-}
-
-@keyframes badge-in {
-  from {
-    opacity: 0;
-    transform: scale(0.6);
   }
 }
 
