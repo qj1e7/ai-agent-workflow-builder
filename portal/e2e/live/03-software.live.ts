@@ -306,15 +306,13 @@ for (const phone of [false, true]) {
     if (phone) expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'no sideways scroll at 390 px').toBe(true)
 
     const fastapiId = (await backend.get<{ watchlist: { software: { id: string }[] } }>('alice', '/api/v1/watchlist')).watchlist.software[0]?.id ?? ''
-    await page.goto('/')
-    const onHome = page.locator(`[data-home-item="address:${fastapiId}"]`)
-    await expect(onHome).toContainText('GitHub moved FastAPI from tiangolo/fastapi to fastapi/fastapi.')
-    await onHome.getByRole('link', { name: 'Show it on the watchlist' }).click()
-    await expect(page).toHaveURL(new RegExp(`/software/${fastapiId}$`))
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('FastAPI')
     await page.goto('/workflows')
     await expect(page.locator(`[data-home-item="address:${fastapiId}"]`)).toHaveCount(1)
+    await expect(page.locator(`[data-home-item="address:${fastapiId}"]`)).toContainText('FastAPI moved on GitHub')
     await page.locator(`[data-home-item="address:${fastapiId}"] a`).click()
+    await expect(page).toHaveURL(new RegExp(`/software/${fastapiId}$`))
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('FastAPI')
+    await page.goto('/software?row=' + fastapiId)
     await expect(page).toHaveURL(new RegExp(`/software/${fastapiId}$`))
 
     const forBob = await backend.get<{ actions: { fields: { title: string; body: string } }[] }>('bob', `/api/v1/approvals/${approvalId}`)

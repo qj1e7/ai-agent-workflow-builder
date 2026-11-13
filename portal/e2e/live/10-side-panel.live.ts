@@ -238,7 +238,7 @@ for (const width of [1280, 390]) {
     try {
       await page.goto('/workflows')
       const needs = page.getByRole('main').locator('li[data-home-item]')
-      await expect(needs.first(), 'Needs you on Workflows says Bob declined it, as one plain row that opens the run').toContainText('Bob declined your test run')
+      await expect(needs.filter({ hasText: 'Bob declined your test run' }).first(), 'Needs you on Workflows says Bob declined it, as one plain row that opens the run').toContainText('Bob declined your test run')
       await shot(page, info, `r12-needs-you-declined-test-alice-${width}`)
       await page.goto('/')
       await openRequest(page, runId)
