@@ -10,16 +10,21 @@ from fastapi.responses import JSONResponse
 from pydantic import Field, model_validator
 
 from platform_api.orchestration.cards import BODY_LIMIT, TITLE_LIMIT
+from platform_api.orchestration.dispatch import resume_path
 from platform_api.orchestration.n8n_call_service import NodeCalls
 from platform_api.orchestration.n8n_calls import (
     AgentCall,
     Answer,
+    AskCall,
+    CallResult,
     NodeCall,
+    NothingToChange,
     OptionKind,
     ProposeCall,
     ReadCall,
     Refused,
     TryLater,
+    Waiting,
     Work,
 )
 from platform_api.shared import N8nExecutionId
@@ -96,6 +101,23 @@ class ProposeIn(_From):
     subject: str = Field(default="", max_length=200)
 
 
+class AskIn(_From):
+    resume_url: str = Field(min_length=1, max_length=2048)
+
+    @model_validator(mode="after")
+    def _for_this_execution(self) -> Self:
+        if resume_path(self.resume_url, N8nExecutionId(self.execution_id)) is None:
+            raise ValueError("This is not n8n's resume address for this execution.")
+        return self
+
+
+class AskOut(WireModel):
+    status: Literal["waiting", "nothing_to_change"]
+    request_id: str | None = Field(
+        default=None, description="Our request the execution waits for. Only while waiting."
+    )
+
+
 class AnswerOut(WireModel):
     items: list[dict[str, Any]] = Field(description="Each becomes one n8n item.")
     replayed: bool = Field(
@@ -127,12 +149,16 @@ REFUSALS: dict[int | str, dict[str, Any]] = {
 }
 
 
-def _answered(result: Answer | Refused | TryLater) -> AnswerOut | JSONResponse:
+def _answered(result: CallResult) -> AnswerOut | AskOut | JSONResponse:
     match result:
         case Answer(items, replayed, cut_off):
             return AnswerOut(
                 items=[dict(item) for item in items], replayed=replayed, cut_off=cut_off
             )
+        case Waiting(request_id):
+            return AskOut(status="waiting", request_id=request_id)
+        case NothingToChange():
+            return AskOut(status="nothing_to_change")
         case Refused(status, detail):
             return JSONResponse(status_code=status, content={"detail": detail})
         case TryLater(detail):
@@ -141,7 +167,9 @@ def _answered(result: Answer | Refused | TryLater) -> AnswerOut | JSONResponse:
 
 async def _call(calls: NodeCalls, body: _From, work: Work) -> AnswerOut | JSONResponse:
     call = NodeCall(N8nExecutionId(body.execution_id), body.node_name, work)
-    return _answered(await calls.call(call))
+    answer = _answered(await calls.call(call))
+    assert not isinstance(answer, AskOut)
+    return answer
 
 
 @router.get(
@@ -194,3 +222,17 @@ async def agent(body: AgentIn, calls: CurrentNodeCalls) -> AnswerOut | JSONRespo
 async def propose(body: ProposeIn, calls: CurrentNodeCalls) -> AnswerOut | JSONResponse:
     work = ProposeCall(body.action, body.place, body.title, body.body, body.subject or None)
     return await _call(calls, body, work)
+
+
+@router.post(
+    "/calls/ask",
+    response_model=AskOut,
+    description="Asks the workflow's Approvers for a yes on the run's proposal. n8n holds the "
+    "wait, and our API wakes the execution with the decision. A test run stops here.",
+    responses=REFUSALS,
+)
+async def ask(body: AskIn, calls: CurrentNodeCalls) -> AskOut | JSONResponse:
+    call = NodeCall(N8nExecutionId(body.execution_id), body.node_name, AskCall(body.resume_url))
+    answer = _answered(await calls.call(call))
+    assert not isinstance(answer, AnswerOut)
+    return answer

@@ -7,15 +7,19 @@ from platform_api.orchestration.n8n_calls import (
     ANOTHER_EXECUTION,
     BUSY,
     START_USED,
+    TEST_RUN_STOPS,
     AgentCall,
     Answer,
+    AskCall,
     CallResult,
     NodeCall,
+    NothingToChange,
     ProposeCall,
     ReadCall,
+    Waiting,
     unknown,
 )
-from platform_api.shared import N8nExecutionId
+from platform_api.shared import ApprovalId, N8nExecutionId
 from tests.declared import NODE_KEY, NODE_KEY_ENV, FakeNodeCalls, app_with, declared_status
 
 FROM = {
@@ -35,6 +39,13 @@ PROPOSE = {
     "body": "1.2.16 is out.",
     "subject": "",
 }
+
+ASK = {
+    **FROM,
+    "node_name": "Ask for a yes",
+    "resume_url": "http://n8n:5678/webhook-waiting/101?signature=abc",
+}
+WAITING = Waiting(ApprovalId("apr_01"))
 
 CASES = [
     pytest.param("/calls/read", READ, {}, None, 401, id="no-key"),
@@ -67,6 +78,17 @@ CASES = [
     ),
     pytest.param("/calls/propose", PROPOSE, NODE_KEY, None, 200, id="propose"),
     pytest.param("/calls/propose", {**PROPOSE, "title": ""}, NODE_KEY, None, 422, id="no-title"),
+    pytest.param("/calls/ask", ASK, NODE_KEY, WAITING, 200, id="ask-waiting"),
+    pytest.param("/calls/ask", ASK, NODE_KEY, NothingToChange(), 200, id="ask-nothing"),
+    pytest.param("/calls/ask", ASK, NODE_KEY, TEST_RUN_STOPS, 409, id="ask-test-run"),
+    pytest.param(
+        "/calls/ask",
+        {**ASK, "resume_url": "http://n8n:5678/webhook-waiting/102?signature=abc"},
+        NODE_KEY,
+        None,
+        422,
+        id="ask-another-execution",
+    ),
 ]
 
 
@@ -127,3 +149,13 @@ def test_a_replayed_answer_says_so():
     client = TestClient(app_with(env=NODE_KEY_ENV, node_calls=calls))
     answer = client.post("/internal/v1/n8n/calls/read", headers=NODE_KEY, json=READ).json()
     assert answer == {"items": [], "replayed": True, "cut_off": False}
+
+
+def test_an_ask_answers_the_request_the_execution_waits_for():
+    calls = FakeNodeCalls(WAITING)
+    response = TestClient(app_with(env=NODE_KEY_ENV, node_calls=calls)).post(
+        "/internal/v1/n8n/calls/ask", headers=NODE_KEY, json=ASK
+    )
+    assert response.json() == {"status": "waiting", "request_id": "apr_01"}
+    [call] = calls.calls
+    assert call.work == AskCall(ASK["resume_url"])

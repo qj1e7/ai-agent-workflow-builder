@@ -32,9 +32,11 @@ from platform_api.orchestration.agents import (
     TaskRequest,
 )
 from platform_api.orchestration.cards import ReviewedCards, bind_cards, review_cards
+from platform_api.orchestration.dispatch import HeldWait, Sealer
 from platform_api.orchestration.n8n_calls import (
     ANOTHER_EXECUTION,
     BUSY,
+    CANNOT_SEAL,
     CHANGED_CALL,
     NO_EXECUTION,
     NOT_OURS,
@@ -42,8 +44,11 @@ from platform_api.orchestration.n8n_calls import (
     START_LIFETIME,
     START_TOO_LATE,
     START_USED,
+    TEST_RUN_STOPS,
     AgentCall,
     Answer,
+    AskAnswer,
+    AskCall,
     ByRetry,
     ByStart,
     CallResult,
@@ -53,6 +58,7 @@ from platform_api.orchestration.n8n_calls import (
     NodeCall,
     NodeCatalog,
     NodeOption,
+    NothingToChange,
     OptionKind,
     OwnWorkflow,
     ProposeCall,
@@ -63,6 +69,7 @@ from platform_api.orchestration.n8n_calls import (
     StartKind,
     StopStart,
     TryLater,
+    Waiting,
     WorkflowFacts,
     decide_link,
     rejoin,
@@ -71,6 +78,7 @@ from platform_api.orchestration.n8n_calls import (
     unknown,
 )
 from platform_api.orchestration.runs import (
+    AwaitingApproval,
     Failed,
     Failure,
     FailureReason,
@@ -85,18 +93,37 @@ from platform_api.orchestration.runs import (
     state_name,
     working_on,
 )
-from platform_api.orchestration.service import ActiveModel, ActivityLogPort, CallbackMinter
+from platform_api.orchestration.service import (
+    ActiveModel,
+    ActivityLogPort,
+    CallbackMinter,
+    approval_link,
+    enqueue_announcement,
+    request_for,
+    steps_view,
+)
 from platform_api.orchestration.spec import CardsTask
 from platform_api.orchestration.store import RunRecord, Store
 from platform_api.orchestration.watch import Unusable
 from platform_api.orchestration.watch_store import WatchStore
 from platform_api.orchestration.write_actions import (
+    Proposal,
     Sites,
     UnboundIntent,
     WriteAction,
     at_sites,
+    describe,
+    digest,
 )
-from platform_api.shared import TEAM_TIME_ZONE, N8nExecutionId, RunId, TaskId, UserId, new_id
+from platform_api.shared import (
+    TEAM_TIME_ZONE,
+    N8nExecutionId,
+    ProposalId,
+    RunId,
+    TaskId,
+    UserId,
+    new_id,
+)
 
 log = logging.getLogger(__name__)
 
@@ -120,11 +147,13 @@ class CallRow:
     status: int | None
     answer: dict[str, Any] | None
 
-    def result(self) -> Answer | Refused:
+    def result(self) -> Answer | AskAnswer | Refused:
         assert self.answer is not None
         if self.outcome == "refused":
             assert self.status is not None
             return Refused(self.status, str(self.answer["detail"]))
+        if self.kind == "ask":
+            return _ask_answer(self.answer)
         return _answer(self.answer, replayed=True)
 
 
@@ -157,15 +186,34 @@ class Stopped:
     events: tuple[AgentEvent, ...] = ()
 
 
-type Work = Done | Stopped | Refused | TryLater
+@dataclass(frozen=True)
+class Asking:
+    """Ask for a yes, done in the finishing transaction, under the run's lock."""
+
+    resume_url: str
+
+
+type Work = Done | Stopped | Asking | Refused | TryLater
 
 
 def _answer(stored: Mapping[str, Any], replayed: bool = False) -> Answer:
     return Answer(tuple(stored["items"]), replayed, bool(stored.get("cut_off", False)))
 
 
-def _stored(answer: Answer) -> dict[str, Any]:
-    return {"items": [dict(item) for item in answer.items], "cut_off": answer.cut_off}
+def _ask_answer(stored: Mapping[str, Any]) -> AskAnswer:
+    if stored["status"] == "waiting":
+        return Waiting(stored["request_id"])
+    return NothingToChange()
+
+
+def _stored(answer: Answer | AskAnswer) -> dict[str, Any]:
+    match answer:
+        case Answer(items, _, cut_off):
+            return {"items": [dict(item) for item in items], "cut_off": cut_off}
+        case Waiting(request_id):
+            return {"status": "waiting", "request_id": request_id}
+        case NothingToChange():
+            return {"status": "nothing_to_change"}
 
 
 class CallBook:
@@ -232,14 +280,14 @@ class CallBook:
         uow: UnitOfWork,
         call: NodeCall,
         run_id: RunId | None,
-        result: Answer | Refused,
+        result: Answer | AskAnswer | Refused,
         actions: Sequence[Mapping[str, Any]] = (),
         call_id: str | None = None,
     ) -> bool:
         """Keeps a block's one answer or refusal. With call_id, only that claim may keep it: a
         claim that was taken over meanwhile keeps nothing, and False says so."""
         match result:
-            case Answer():
+            case Answer() | Waiting() | NothingToChange():
                 outcome, status, stored = "answered", None, _stored(result)
             case Refused(status, detail):
                 outcome, stored = "refused", {"detail": detail}
@@ -392,6 +440,44 @@ class CallBook:
         )
         return start
 
+    async def proposed(self, uow: UnitOfWork, run_id: RunId) -> tuple[WriteAction, ...]:
+        """The run's proposal, which is what its blocks proposed, in the order they answered. A
+        replayed answer carries no actions, so nothing is in it twice."""
+        rows = await (
+            await uow.conn.execute(
+                "SELECT actions FROM orchestration.node_calls WHERE run_id = %s "
+                "AND outcome = 'answered' ORDER BY answered_at, execution_id, node_name",
+                (run_id,),
+            )
+        ).fetchall()
+        dumped = [
+            {key: value for key, value in action.items() if key != "subject"}
+            for row in rows
+            for action in row["actions"]
+        ]
+        return _actions_adapter.validate_python(dumped)
+
+    async def found(self, uow: UnitOfWork, run_id: RunId) -> str:
+        """What the run's last agent found, for the Approvers."""
+        row = await (
+            await uow.conn.execute(
+                "SELECT answer->'items'->0->>'summary' AS summary FROM orchestration.node_calls "
+                "WHERE run_id = %s AND kind = 'agent' AND outcome = 'answered' "
+                "ORDER BY answered_at DESC LIMIT 1",
+                (run_id,),
+            )
+        ).fetchone()
+        return "" if row is None or row["summary"] is None else str(row["summary"])
+
+    async def started_as_test(self, uow: UnitOfWork, run_id: RunId) -> bool:
+        row = await (
+            await uow.conn.execute(
+                "SELECT 1 FROM orchestration.starts WHERE run_id = %s AND kind = 'test' LIMIT 1",
+                (run_id,),
+            )
+        ).fetchone()
+        return row is not None
+
     async def waiting_run(self, uow: UnitOfWork, use_case_id: str) -> RunId | None:
         """The run of this use case that waits for a yes, if one does (one waiting run per
         workflow, ADR 0026)."""
@@ -420,6 +506,7 @@ class NodeCalls:
         models: ActiveModel | None = None,
         *,
         start_secret: str | None = None,
+        box: Sealer | None = None,
         time_zone: ZoneInfo = TEAM_TIME_ZONE,
     ) -> None:
         self._db = db
@@ -433,6 +520,7 @@ class NodeCalls:
         self._sites = sites
         self._models = models
         self._start_secret = start_secret
+        self._box = box
         self._time_zone = time_zone
         self._store = Store()
         self._watch = WatchStore()
@@ -669,6 +757,8 @@ class NodeCalls:
                 return Done(Answer(items, cut_off=len(read) > READ_LIMIT))
             case AgentCall(agent, inputs):
                 return await self._run_agent(admitted, agent, inputs)
+            case AskCall(resume_url):
+                return Asking(resume_url)
             case ProposeCall(action, place, title, body, subject):
                 entry = self._catalog.write(action)
                 proposed = WriteAction(
@@ -749,6 +839,8 @@ class NodeCalls:
             await self._book.keep(uow, call, admitted.run_id, why, call_id=admitted.call_id)
             return why
         match work:
+            case Asking(resume_url):
+                return await self._ask(uow, record, admitted, call, resume_url)
             case Refused():
                 await self._book.keep(uow, call, admitted.run_id, work, call_id=admitted.call_id)
                 return work
@@ -770,6 +862,47 @@ class NodeCalls:
                 ):
                     return BUSY
                 return answer
+
+    async def _ask(
+        self, uow: UnitOfWork, record: RunRecord, admitted: Admitted, call: NodeCall, url: str
+    ) -> CallResult:
+        """Asks for a yes on the run's proposal, held in n8n (ENGINE-PLAN 2.3.4). With nothing
+        proposed, the block leaves by Nothing to change. A test run stops here and asks nobody."""
+        working = record.state
+        assert isinstance(working, Working)
+        actions = await self._book.proposed(uow, record.run_id)
+        proposal = Proposal(ProposalId(new_id("prp")), record.run_id, actions, digest(actions))
+        shown = (proposal.id, proposal.digest, tuple(describe(action) for action in actions))
+        test = record.spec.stops_at_gate or await self._book.started_as_test(uow, record.run_id)
+        request = None
+        result: AskAnswer | Refused
+        moved: Moved[Any]
+        if not actions:
+            result, moved = NothingToChange(), working.nothing_to_change()
+        elif test:
+            result, moved = TEST_RUN_STOPS, working.stop_at_gate(shown)
+        elif self._box is None:
+            failure = Failure(FailureReason.SAFETY_DENIED, CANNOT_SEAL, retryable=False)
+            result, moved = run_stopped(CANNOT_SEAL), working.fail(failure)
+        else:
+            request = request_for(record, proposal, uow.now, self._time_zone)
+            summary = await self._book.found(uow, record.run_id)
+            steps = steps_view(request, ())
+            result = Waiting(request.id)
+            moved = working.ask(shown, request.id, steps, approval_link(request.id), summary)
+        if not await self._book.keep(uow, call, record.run_id, result, call_id=admitted.call_id):
+            return BUSY
+        if actions:
+            await self._store.insert_proposal(uow, proposal)
+        if request is not None and self._box is not None:
+            held = HeldWait(call.execution_id, self._box.seal(url))
+            await self._store.insert_approval(uow, request, held)
+        record = await self._commit(uow, record, moved)
+        if isinstance(moved.state, AwaitingApproval) and request is not None:
+            await enqueue_announcement(
+                uow, self._store, record, request, proposal, moved.state.summary, self._sites
+            )
+        return result
 
     async def _commit(
         self,

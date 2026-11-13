@@ -22,6 +22,7 @@ from typing import Literal, Protocol
 from platform_api.orchestration.agents import CardInput, InputKind
 from platform_api.orchestration.cards import TOOL_RULES
 from platform_api.orchestration.runs import (
+    TEST_PASSED,
     Failed,
     Moved,
     Pending,
@@ -35,10 +36,10 @@ from platform_api.orchestration.runs import (
 )
 from platform_api.orchestration.spec import CardRun, RunSpec
 from platform_api.orchestration.write_actions import Json
-from platform_api.shared import N8nExecutionId, RunId, UserId
+from platform_api.shared import ApprovalId, N8nExecutionId, RunId, UserId
 from platform_api.wire import Trigger
 
-type NodeKind = Literal["read", "agent", "propose"]
+type NodeKind = Literal["read", "agent", "propose", "ask"]
 type StartKind = Literal["run_now", "test", "retry"]
 type OptionKind = Literal["places", "agents", "agent_inputs", "write_actions"]
 type Grade = Literal["safe", "writes_refused", "needs_a_fix"]
@@ -162,12 +163,19 @@ class ProposeCall:
     subject: str | None
 
 
-type Work = ReadCall | AgentCall | ProposeCall
+@dataclass(frozen=True)
+class AskCall:
+    resume_url: str
+    """$execution.resumeUrl, which n8n signs. It is kept sealed and never shown."""
+
+
+type Work = ReadCall | AgentCall | ProposeCall | AskCall
 
 KIND_OF: Mapping[type[Work], NodeKind] = {
     ReadCall: "read",
     AgentCall: "agent",
     ProposeCall: "propose",
+    AskCall: "ask",
 }
 
 
@@ -198,6 +206,21 @@ class Answer:
 
 
 @dataclass(frozen=True)
+class Waiting:
+    """Ask for a yes waits in n8n for this request of ours."""
+
+    request_id: ApprovalId
+
+
+@dataclass(frozen=True)
+class NothingToChange:
+    pass
+
+
+type AskAnswer = Waiting | NothingToChange
+
+
+@dataclass(frozen=True)
 class Refused:
     """A call our API will not do. n8n repeats a refused call with retryOnFail, so a repeat
     from the same execution and block gets this same answer and nothing else happens."""
@@ -211,7 +234,7 @@ class TryLater:
     detail: str
 
 
-type CallResult = Answer | Refused | TryLater
+type CallResult = Answer | AskAnswer | Refused | TryLater
 
 NOT_OURS = Refused(403, "This workflow is not one our platform runs.")
 NOBODY_HOLDS = Refused(403, "Nobody holds this workflow, so nobody may run it by hand.")
@@ -227,6 +250,12 @@ NO_EXECUTION = TryLater("n8n has no record of this execution yet.")
 ANOTHER_EXECUTION = Refused(409, "Another execution of this run is live.")
 CHANGED_CALL = Refused(409, "This block already called with other content in this execution.")
 BUSY = TryLater("Our platform is still answering this block.")
+TEST_RUN_STOPS = Refused(409, TEST_PASSED)
+"""A test run ends at Ask for a yes, with no exit taken (ENGINE-PLAN 2.3.3)."""
+CANNOT_SEAL = (
+    "This platform cannot keep n8n's resume address safe, because SETTINGS_ENCRYPTION_KEY is not "
+    "set."
+)
 
 
 def run_stopped(why: str) -> Refused:
@@ -427,6 +456,8 @@ class NodeCatalog:
                     return unknown("change", action)
                 if place not in {option.id for option in entry.places}:
                     return unknown("place", place)
+            case AskCall():
+                pass
         return None
 
     def _places_for(self, connector: str) -> set[str]:

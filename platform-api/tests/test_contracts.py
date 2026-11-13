@@ -111,6 +111,8 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "runs/success.json": activity_events_adapter,
     "runs/failure.json": activity_events_adapter,
     "runs/rejected.json": activity_events_adapter,
+    "runs/expired.json": activity_events_adapter,
+    "runs/lost.json": activity_events_adapter,
     "runs/watchlist.json": activity_events_adapter,
     "runs/card.json": activity_events_adapter,
     "cards/tools.json": TypeAdapter(ToolList),

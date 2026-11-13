@@ -34,6 +34,14 @@ class ApprovalPolicy:
             raise ValueError("an approval policy needs at least one step")
 
 
+class Ended(Enum):
+    """How a request ended that nobody decided. Nobody answered by its expiry (ADR 0024), or its
+    workflow was deleted while it waited (ENGINE-PLAN D7). Nothing is written either way."""
+
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
+
+
 @dataclass(frozen=True)
 class ApprovalRequest:
     id: ApprovalId
@@ -42,6 +50,9 @@ class ApprovalRequest:
     digest: Digest
     policy: ApprovalPolicy
     parties: frozenset[UserId]
+    expires_at: datetime | None = None
+    """When it expires unanswered. A request made before ADR 0024's clock has none."""
+    ended: Ended | None = None
 
 
 class Verdict(Enum):
@@ -90,7 +101,14 @@ class Invalid:
     fault: DecisionFault
 
 
-type ApprovalStatus = Open | Approved | Declined | Invalid
+@dataclass(frozen=True)
+class Closed:
+    """Ended undecided. It takes no decision after that, so it never approves itself."""
+
+    ended: Ended
+
+
+type ApprovalStatus = Open | Approved | Declined | Invalid | Closed
 
 
 def _recorded(request: ApprovalRequest, decisions: Iterable[Decision]) -> frozenset[Decision]:
@@ -116,6 +134,8 @@ def approval_status(request: ApprovalRequest, decisions: Iterable[Decision]) -> 
     fault = _fault(request, recorded)
     if fault is not None:
         return Invalid(fault)
+    if request.ended is not None:
+        return Closed(request.ended)
     by_step = {d.step_index: d for d in recorded}
     approvers: list[UserId] = []
     for index in range(len(request.policy.steps)):
