@@ -49,6 +49,21 @@
   }
 }
 
+/* Home's hero stretches to the sheet, which is as tall as the window under the top bar, so it never adds a scroll; the page only
+   scrolls when its rows are taller than the window. */
+:global(#root):has([data-hero]) .sheet {
+  display: flex;
+  flex-direction: column;
+}
+
+:global(#root):has([data-hero]) .wrap {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  padding-bottom: 24px;
+}
+
 /* While chatting, the page is exactly as tall as the window and only the conversation scrolls, so the box stays docked at the
    bottom and nothing depends on the header's height. */
 :global(#root):has([data-chat]) {

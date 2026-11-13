@@ -23,10 +23,13 @@
   color: var(--muted);
 }
 
+/* One line, cut with an ellipsis when a long name meets a narrow window. */
 .text {
   flex: 1;
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dot {

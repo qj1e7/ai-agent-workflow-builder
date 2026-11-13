@@ -3,6 +3,15 @@
   margin: 0 auto;
 }
 
+/* The hero stretches to the page's height, so it can centre itself without a scroll. */
+.home:has([data-hero]) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+}
+
 /* The chat spans the page beside the rail, as the sketch's chat column does, and shares it with the side panel. */
 .home:has([data-chat]) {
   display: flex;
@@ -408,6 +417,7 @@
   display: grid;
   gap: 14px;
   width: 100%;
+  margin-top: 8px;
   text-align: left;
 }
 
@@ -423,6 +433,7 @@
   color: var(--muted);
   font-size: 0.86rem;
   font-weight: 700;
+  line-height: 1.5;
 }
 
 .needRows {

@@ -39,17 +39,24 @@
 }
 
 /* The sketch's hero: the face, a small greeting, the one question, then the box and chips, and Needs you under them. */
+/* The hero fills what is left of the page under the top bar (the shell stretches Home to it), so it is centred and never makes the page scroll. */
 .hero {
   display: grid;
+  flex: 1;
   align-content: center;
   justify-items: center;
   gap: 14px;
   width: 100%;
   max-width: 720px;
-  min-height: calc(100dvh - 190px);
   margin: 0 auto;
-  padding-block: 8px 24px;
+  padding: 0 24px;
   text-align: center;
+}
+
+@media (max-width: 900px) {
+  .hero {
+    padding-inline: 0;
+  }
 }
 
 .hi {
@@ -65,10 +72,6 @@
   text-wrap: balance;
 }
 
-.hero > .plain {
-  margin-top: 8px;
-}
-
 /* The box and the chips under it: in the hero first, then docked at the bottom of the chat. The fold glides it between the two. */
 .dock {
   display: flex;
@@ -82,7 +85,7 @@
   justify-content: center;
 }
 
-:global(::view-transition-group(planner-dock)) {
+:global(::view-transition-group(*)) {
   animation-duration: 360ms;
   animation-timing-function: var(--ease-out);
 }
@@ -123,7 +126,7 @@
   resize: none;
 }
 
-.composer textarea:disabled {
+.composer textarea:read-only {
   color: var(--muted);
 }
 
@@ -138,8 +141,8 @@
   flex: none;
   place-items: center;
   align-self: flex-end;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border: 0;
   border-radius: var(--r-ctl);
   background: var(--ink);
@@ -590,6 +593,7 @@
 }
 
 .chatScroll {
+  position: relative;
   flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
