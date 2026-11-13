@@ -229,7 +229,7 @@ test('the run line marches into the step at work by moving its dashes only, stop
     await expect(heading(page)).toHaveText('The agents are working')
     const line = page.getByRole('list', { name: 'Steps of this run' })
     const [before, after] = await marchReadings(page)
-    await expect(line.locator('li[aria-current="step"]'), 'the step at work says how long it has worked').toContainText(/Read every source Working, \d+ (s|min|h)$/)
+    await expect(line.locator('li[aria-current="step"]'), 'the step at work says how long it has worked').toContainText(/Read every source\s*Working, \d+ (s|min|h)$/)
     if (reducedMotion) {
       expect(await runLinks(page), 'the same dashes into the step at work, holding still').toEqual(['flow', 'todo', 'todo'])
       expect(after, 'the dashes do not move').toBe(before)
