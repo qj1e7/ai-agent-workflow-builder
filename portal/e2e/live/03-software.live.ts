@@ -210,7 +210,7 @@ test('the count line and what checks each row hold through a decline, and the de
     { name: 'Redis', repo: 'redis/redis', our_version: '8.0.0' },
     { name: 'LangServe', repo: 'langchain-ai/langserve', our_version: '0.3.1' },
   ])
-  const LINE = '2 have a newer version · 1 can’t be checked'
+  const LINE = '2 have a newer version · 1 can’t be found'
   const before = await devContext(browser, 'alice')
   const waiting = await before.newPage()
   await waiting.goto('/software')

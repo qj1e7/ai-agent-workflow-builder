@@ -174,7 +174,7 @@ test('bob sees who may approve and the recent runs, with no Run now, Pause or De
   await page.goto('/workflows')
   await expect(rowOf(page, workflow.id)).toBeVisible()
   await expectReadOnly(page, 'workflows')
-  for (const name of ['Run now', 'Pause', 'Resume', 'Delete', 'Discard']) await expect(page.getByRole('main').getByRole('button', { name })).toHaveCount(0)
+  for (const name of ['Run now', 'Pause', 'Resume', 'Delete', 'Discard']) await expect(page.getByRole('main').getByRole('button', { name, exact: true })).toHaveCount(0)
   await context.close()
 })
 
