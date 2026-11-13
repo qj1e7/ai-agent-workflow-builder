@@ -387,3 +387,65 @@
     transform: none;
   }
 }
+
+/* The AI troubleshooter's answers (the sketch's .qa): a label and its words, side by side where there is room. */
+.answers {
+  display: grid;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+}
+
+.answers > div {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.answers dt {
+  padding-top: 1px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.answers dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 520px) {
+  .answers > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}
+
+.details {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.details summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.details p {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.bare {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.bare p {
+  margin: 0;
+}

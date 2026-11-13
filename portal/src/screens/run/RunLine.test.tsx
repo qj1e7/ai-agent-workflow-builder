@@ -6,11 +6,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BlockKind } from '../../api/types'
-import { Chat } from './Chat'
+import { StepLog } from './Chat'
 import { Outcome } from './Outcome'
 import { RunLine } from './RunLine'
 import { emptyModel, foldWire, stationsOf, type ChatItem, type PlanBlock, type RunModel } from './runModel'
-import { headlineOf, settledOf, triggerWords, workingWords, type Schedule } from './words'
+import { headlineOf, logRowsOf, settledOf, triggerWords, workingWords, type Schedule } from './words'
 
 interface Raw {
   readonly run_id: string
@@ -274,45 +274,42 @@ describe('the words on the line', () => {
   })
 })
 
-describe('the chat', () => {
-  function chat(model: RunModel, loadedUpTo = model.seq): string {
+describe('the Step by step', () => {
+  function steps(items: RunModel['chat'], loadedUpTo = 99): string {
     return renderToStaticMarkup(
       <MemoryRouter>
-        <Chat items={model.chat} loadedUpTo={loadedUpTo} nameOf={nameOf} declinedNext={null} last={null} />
+        <StepLog rows={logRowsOf(items, nameOf, QUICK)} loadedUpTo={loadedUpTo} />
       </MemoryRouter>,
     )
   }
+  const rowsOf = (html: string) =>
+    [...html.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)].map((match) => {
+      const row = match[1] ?? ''
+      return `${row.match(/<time[^>]*>([^<]*)<\/time>/)?.[1] ?? '-'} ${text(row.replace(/<time[\s\S]*?<\/time>/, ''))}`
+    })
 
-  it('tells a done run with the gate’s words in its own markers', () => {
-    const said = text(chat(replay(success)))
-    expect(said).toContain('Alice started the run.')
-    expect(said).toContain('Version checker joined')
-    expect(said).toContain('Asked for a yes in Teams, in CODESparks Ops.')
-    expect(said).toContain('Bob approved.')
-    expect(said).toContain('Created MOCK-142 in Jira.')
-    expect(said).toContain('Done. 1 ticket created.')
-    expect(said).not.toMatch(/n8n|execution|workflow step|room lead|release checker|use case/i)
+  it('tells a done run one sentence a row, with the gate’s words, and never repeats the ticket the settled line names', () => {
+    expect(rowsOf(steps(replay(success).chat))).toEqual([
+      '10:14:00 Alice started the run.',
+      '10:14:02 Planner Please check LangGraph for new releases.',
+      '10:14:05 Version checker LangGraph has a new release: 1.2.16. I suggest one ticket.',
+      "10:14:05 Planner Agreed. I'll draft one ticket for an Approver to check.",
+      '10:14:08 Asked an Approver for a yes in Teams.',
+      '10:20:23 Bob said yes.',
+      '10:20:26 Created MOCK-142 in Jira.',
+    ])
+    expect(steps(replay(success).chat)).not.toMatch(/n8n|execution|workflow step|room lead|release checker|use case/i)
   })
 
-  it('gives a declined run’s record and what happens next on the page, with no write', () => {
-    const html = renderToStaticMarkup(
-      <MemoryRouter>
-        <Outcome model={replay(rejected)} nameOf={nameOf} declinedNext="Change what it does, or run the test again." />
-      </MemoryRouter>,
-    )
-    expect(text(html)).toContain('Declined Declined by Bob. Nothing was written. Reason: Wrong version. Change what it does, or run the test again.')
-    expect(html).not.toMatch(/created|href="\/jira\//)
+  it('ends a declined run on one row that says who declined and that nothing was written, and never says Done', () => {
+    const said = rowsOf(steps(replay(rejected).chat))
+    expect(said.at(-1)).toBe('10:18:11 Bob declined: wrong version. Nothing was written.')
+    expect(said.filter((row) => /declined/.test(row))).toHaveLength(1)
+    expect(said.join(' ')).not.toMatch(/Done|created/)
   })
 
-  it('says who declined, and ends on the declined record, never on Done', () => {
-    const said = text(chat(replay(rejected)))
-    expect(said).toContain('Bob declined.')
-    expect(said).toContain('Declined by Bob. Nothing was written. Reason: Wrong version. The run ended.')
-    expect(said).not.toMatch(/Done\.|created/)
-  })
-
-  it('lets the agent that failed say so in a red bubble', () => {
-    const html = chat(replay(failure))
+  it('lets the agent that failed say so in red', () => {
+    const html = steps(replay(failure).chat)
     expect(html).toMatch(/class="[^"]*bad[^"]*"/)
     expect(text(html)).toContain('The run stopped. Nothing was written.')
   })
@@ -320,60 +317,44 @@ describe('the chat', () => {
   it('animates only what arrived while the page watched', () => {
     const model = replay(success, 9)
     const animated = (html: string) => (html.match(/class="[^"]*_in_[^"]*"/g) ?? []).length
-    expect(animated(chat(model))).toBe(0)
-    expect(animated(chat(model, 7))).toBe(2)
+    expect(animated(steps(model.chat, model.seq))).toBe(0)
+    expect(animated(steps(model.chat, 7))).toBe(2)
   })
 
-  it('gives each entry its time, the first with its day, and none to the line that says who joined', () => {
-    const entries = [...chat(replay(success)).matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)].map((match) => {
-      const html = match[1] ?? ''
-      return `${html.match(/<time[^>]*>([^<]*)<\/time>/)?.[1] ?? '-'} ${text(html.replace(/<time[\s\S]*?<\/time>/, ''))}`
-    })
-    expect(entries).toEqual([
-      'Tue 3 Nov, 10:14 Alice started the run.',
-      '- Version checker joined',
-      '10:14 Planner Please check LangGraph for new releases.',
-      '10:14 Version checker LangGraph has a new release: 1.2.16. I suggest one ticket.',
-      "10:14 Planner Agreed. I'll draft one ticket for an Approver to check.",
-      '10:14 Asked for a yes in Teams, in CODESparks Ops. Nothing is written until an Approver says yes.',
-      '10:20 Bob approved.',
-      '10:20 Created MOCK-142 in Jira.',
-      '10:20 Done. 1 ticket created.',
+  it('says the day again on a row from another day', () => {
+    const html = steps([
+      { kind: 'started', seq: 1, at: at('2026-10-27T00:00:00Z'), by: 'alice', trigger: 'person' },
+      { kind: 'decided', seq: 2, at: at('2026-10-27T15:59:00Z'), by: 'bob', verdict: 'approve', step: null },
+      { kind: 'declined', seq: 3, at: at('2026-10-27T16:01:00Z'), record: { by: 'bob', approvedBy: [], reason: null } },
+    ])
+    expect([...html.matchAll(/<time[^>]*dateTime="([^"]+)"[^>]*>([^<]*)<\/time>/gi)].map((match) => `${match[1] ?? ''} ${match[2] ?? ''}`)).toEqual([
+      '2026-10-27T00:00:00.000Z 8:00:00',
+      '2026-10-27T15:59:00.000Z 23:59:00',
+      '2026-10-27T16:01:00.000Z Wed 28 Oct, 0:01:00',
     ])
   })
 
-  it('says the day again on an entry from another day', () => {
+  it('lets the gate’s row take focus after a decision', () => {
+    expect(steps(replay(success).chat)).toMatch(/tabindex="-1" data-gate-said="16"/)
+  })
+})
+
+describe('what stays after a finished run', () => {
+  it('keeps what happens next after a decline, and says nothing of the ticket or the reason the settled line gives', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <Chat
-          items={[
-            { kind: 'started', seq: 1, at: at('2026-10-27T00:00:00Z'), by: 'alice', trigger: 'person' },
-            { kind: 'decided', seq: 2, at: at('2026-10-27T15:59:00Z'), by: 'bob', verdict: 'approve', step: null },
-            { kind: 'declined', seq: 3, at: at('2026-10-27T16:01:00Z'), record: { by: 'bob', approvedBy: [], reason: null } },
-          ]}
-          loadedUpTo={9}
-          nameOf={nameOf}
-          declinedNext={null}
-          last={null}
-        />
+        <Outcome declinedNext="Change what it does, or run the test again." />
       </MemoryRouter>,
     )
-    expect([...html.matchAll(/<time[^>]*dateTime="([^"]+)"[^>]*>([^<]*)<\/time>/gi)].map((match) => `${match[1] ?? ''} ${match[2] ?? ''}`)).toEqual([
-      '2026-10-27T00:00:00.000Z Tue 27 Oct, 8:00',
-      '2026-10-27T15:59:00.000Z 23:59',
-      '2026-10-27T16:01:00.000Z Wed 28 Oct, 0:01',
-    ])
-  })
-
-  it('lets the gate’s lines take focus after a decision', () => {
-    expect(chat(replay(success))).toMatch(/tabindex="-1" data-gate-said="16"/)
+    expect(text(html)).toContain('Change what it does, or run the test again.')
+    expect(html).not.toMatch(/created|Declined by|href="\/jira\//)
   })
 })
 
 describe('the heading', () => {
   it('says what the run needs or did', () => {
     const head = (model: RunModel) => headlineOf(model, stationsOf(model, PLAN, 'Started by Alice'), null)
-    expect(head(replay(success, 6))).toMatchObject({ text: 'The agents are working', pill: { label: 'Working' } })
+    expect(head(replay(success, 6))).toMatchObject({ text: 'The agents are working', pill: { label: 'Running' } })
     expect(head(replay(success, 15))).toMatchObject({ text: 'Waiting for a yes', pill: { label: 'Waiting for a yes', tone: 'wait' } })
     expect(head(replay(success))).toMatchObject({ text: '1 ticket created in Jira', pill: { label: 'Done', tone: 'ok' } })
     expect(head(replay(rejected))).toMatchObject({ text: 'Declined, nothing was written', pill: { label: 'Declined' } })
@@ -391,7 +372,7 @@ describe('ticket keys on the run page', () => {
   function chatHtml(items: RunModel['chat']): string {
     return renderToStaticMarkup(
       <MemoryRouter>
-        <Chat items={items} loadedUpTo={99} nameOf={nameOf} declinedNext={null} last={null} />
+        <StepLog rows={logRowsOf(items, nameOf, QUICK)} loadedUpTo={99} />
       </MemoryRouter>,
     )
   }
@@ -408,29 +389,8 @@ describe('ticket keys on the run page', () => {
     expect(html).not.toContain('href="/jira/')
   })
 
-  it('links a written ticket to the address the platform gave, in the chat and in the Done panel', () => {
+  it('links a written ticket to the address the platform gave', () => {
     const real = JSON.parse(JSON.stringify(ops).replaceAll('/jira/OPS-142', 'https://jira.real.test/browse/OPS-142')) as Raw[]
-    const model = replay(real)
-    expect(chatHtml(model.chat)).toContain('href="https://jira.real.test/browse/OPS-142"')
-    const done = renderToStaticMarkup(
-      <MemoryRouter>
-        <Outcome model={model} nameOf={nameOf} />
-      </MemoryRouter>,
-    )
-    expect(done).toContain('href="https://jira.real.test/browse/OPS-142"')
-  })
-
-  it('links the ticket chip in the Done panel, and not a written reference from another system', () => {
-    const outcome = (model: RunModel) =>
-      renderToStaticMarkup(
-        <MemoryRouter>
-          <Outcome model={model} nameOf={nameOf} />
-        </MemoryRouter>,
-      )
-    expect(outcome(replay(ops))).toMatch(link('OPS-142'))
-    const confluence = { ...replay(ops), written: [{ connector: 'confluence', operation: 'update_page', ref: 'PAGE-9' }] }
-    expect(outcome(confluence)).not.toContain('href="/jira/')
-    const empty = { ...replay(ops), written: [{ connector: 'jira', operation: 'create_ticket', ref: '' }] }
-    expect(outcome(empty)).not.toContain('href="/jira/"')
+    expect(chatHtml(replay(real).chat)).toContain('href="https://jira.real.test/browse/OPS-142"')
   })
 })

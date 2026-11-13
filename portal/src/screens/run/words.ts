@@ -220,10 +220,10 @@ export function headlineOf(model: RunModel, stations: readonly Station[], propos
   const { phase } = model
   switch (phase.state) {
     case 'pending':
-      return { text: 'Starting the run', pill: { label: 'Working', tone: 'new' } }
+      return { text: 'Starting the run', pill: { label: 'Running', tone: 'new' } }
     case 'working':
     case 'proposed':
-      return { text: 'The agents are working', pill: { label: 'Working', tone: 'new' } }
+      return { text: 'The agents are working', pill: { label: 'Running', tone: 'new' } }
     case 'awaiting_approval': {
       const pill = { label: 'Waiting for a yes', tone: 'wait' } as const
       if (!proposal) return { text: 'Waiting for a yes', pill }
@@ -231,7 +231,7 @@ export function headlineOf(model: RunModel, stations: readonly Station[], propos
       return { text: `${noun} ${proposal.length === 1 ? 'is' : 'are'} waiting for a yes`, pill }
     }
     case 'acting':
-      return { text: 'Writing what was approved', pill: { label: 'Working', tone: 'new' } }
+      return { text: 'Writing what was approved', pill: { label: 'Running', tone: 'new' } }
     case 'succeeded': {
       if (phase.outcome === 'nothing_to_write' || model.written.length === 0) return { text: 'Done, nothing to write', pill: { label: 'Done', tone: 'ok' } }
       const { noun, tickets } = changesOf(model.written, model.written.length)
