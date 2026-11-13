@@ -1525,11 +1525,11 @@ add('FIX-rail-count', 'The Watchlist count is for whoever can act on it: Alice�
   await t.expect('Bob has no Watchlist count', badge(t.kit), 'none');
 }, [1280]);
 
-add('FIX-wide', 'On a wide screen the header lines up with the page, Workflows rows use their width, and the chat sits next to its side panel', async (t) => {
+add('FIX-wide', 'On a wide screen the header spans the window, Workflows rows use their width, and the chat sits next to its side panel', async (t) => {
   const left = (sel) => t.page.evaluate((s) => Math.round(document.querySelector(s).getBoundingClientRect().left), sel);
   await t.menu('workflows', 'Open Workflows');
-  const brand = await left('.hdr .brand');
-  await t.expect('The brand lines up with the page heading', left('main h1'), (v) => Math.abs(v - brand) <= 2);
+  await t.expect('The brand sits top left, above the rail', t.page.evaluate(() => { const b = document.querySelector('.hdr .brand').getBoundingClientRect(); const r = document.querySelector('.rail').getBoundingClientRect(); return Math.round(b.left - r.left); }), (v) => v >= 16 && v <= 32);
+  await t.expect('The tools end at the right edge', t.page.evaluate(() => Math.round(innerWidth - document.querySelector('.hdr .tools').getBoundingClientRect().right)), (v) => v >= 16 && v <= 32);
   await t.expect('Each row’s last column ends at the row’s padding', t.page.$$eval('main .wf-row', (rows) => rows.map((r) => { const kids = [...r.children].filter((c) => c.getClientRects().length && !c.classList.contains('wf-last')); return Math.round(r.getBoundingClientRect().right - Math.max(...kids.map((c) => c.getBoundingClientRect().right))); })), (gaps) => gaps.length && gaps.every((g) => g <= 24));
   await t.menu('home', 'Back to Chat');
   await t.ask(CHECK_WORKFLOWS);

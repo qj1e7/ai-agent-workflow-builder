@@ -55,6 +55,41 @@ export function ChatView({ home, now, page, box, onNewChat }: ChatViewProps) {
     shownCount.current = count
   }, [count])
 
+  // An answer takes the place of its "answering" line, so the count stays the same and the answer, often a tall card, would
+  // land below the fold. It is brought into view from its top. An answer already there when the chat comes back keeps the
+  // restored position.
+  const newest = chat.thread.messages.at(-1)
+  const answered = newest?.kind === 'reply' ? newest.id : null
+  const shownAnswer = useRef(answered)
+  useLayoutEffect(() => {
+    if (answered === null || answered === shownAnswer.current) return
+    shownAnswer.current = answered
+    const region = scroller.current
+    const item = region?.querySelector<HTMLElement>(NEWEST)
+    if (!region || !item) return
+    // Only the conversation scrolls, never the page around it.
+    const show = () => {
+      const view = region.getBoundingClientRect()
+      const box = item.getBoundingClientRect()
+      if (box.height > view.height) region.scrollTop += box.top - view.top
+      else if (box.bottom > view.bottom) region.scrollTop += box.bottom - view.bottom
+    }
+    show()
+    // A card can grow once its own data arrives, so the answer is followed for a moment, until the person scrolls.
+    const observer = new ResizeObserver(show)
+    observer.observe(item)
+    const stop = () => observer.disconnect()
+    const timer = window.setTimeout(stop, 2000)
+    region.addEventListener('wheel', stop, { once: true, passive: true })
+    region.addEventListener('touchstart', stop, { once: true, passive: true })
+    return () => {
+      stop()
+      window.clearTimeout(timer)
+      region.removeEventListener('wheel', stop)
+      region.removeEventListener('touchstart', stop)
+    }
+  }, [answered])
+
   // The region is measured when the window or the conversation changes size, which a new message or a card opening does.
   useLayoutEffect(() => {
     const region = scroller.current
