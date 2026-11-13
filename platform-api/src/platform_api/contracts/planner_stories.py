@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from platform_api.builder.cards import VERSION_CHECKER, sorted_for_library
-from platform_api.builder.models import CardList, UnderstoodRowView, UseCaseList
+from platform_api.builder.models import CardList, UnderstoodRowView, UseCaseList, Via
 from platform_api.builder.planner import (
     AbilitiesReply,
     AnswerIn,
@@ -203,10 +203,10 @@ class _Workflows:
     async def list_cards(self) -> CardList:
         return CardList(cards=sorted_for_library([VERSION_CHECKER], []))
 
-    async def pause_use_case(self, use_case_id: str, principal: Principal) -> None:
+    async def pause_use_case(self, use_case_id: str, principal: Principal, via: Via) -> None:
         return None
 
-    async def resume_use_case(self, use_case_id: str, principal: Principal) -> None:
+    async def resume_use_case(self, use_case_id: str, principal: Principal, via: Via) -> None:
         return None
 
 

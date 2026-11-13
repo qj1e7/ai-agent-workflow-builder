@@ -27,6 +27,7 @@ from platform_api.builder.models import (
     UseCaseList,
     UseCaseState,
     UseCaseView,
+    Via,
     WatchlistView,
 )
 from platform_api.builder.planning import FALLBACK_WORDS, STARTERS, FallbackWhy
@@ -579,11 +580,11 @@ class Workflows(Protocol):
     async def list_cards(self) -> CardList: ...
 
     async def pause_use_case(
-        self, use_case_id: str, principal: Principal
+        self, use_case_id: str, principal: Principal, via: Via
     ) -> UseCaseView | None: ...
 
     async def resume_use_case(
-        self, use_case_id: str, principal: Principal
+        self, use_case_id: str, principal: Principal, via: Via
     ) -> UseCaseView | None: ...
 
 
@@ -1008,7 +1009,7 @@ class PlannerFront:
         one = named.one
         if one is not None and listed is None and _operates(viewer):
             move = self._workflows.pause_use_case if pausing else self._workflows.resume_use_case
-            moved = await move(one.use_case_id, viewer)
+            moved = await move(one.use_case_id, viewer, "chat")
             if moved is not None:
                 return reply(
                     use_case_id=moved.use_case_id,

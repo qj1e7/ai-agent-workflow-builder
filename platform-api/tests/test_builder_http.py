@@ -1859,6 +1859,30 @@ async def test_a_workflow_named_for_software_nobody_watches_is_paused(front: Fro
     assert await state_of(front, check) == "paused"
 
 
+async def test_who_paused_and_resumed_from_the_chat_is_kept_after_the_resume(
+    front: Front, db: Database, caplog: pytest.LogCaptureFixture
+):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    caplog.set_level("INFO", logger="platform_api.builder.service")
+    await switch_reply(front, PauseAnswer(workflow_words="morning check"))
+    await switch_reply(front, PauseAnswer(workflow_words="morning check"))
+    await front.client.post(f"/api/v1/use-cases/{morning}/resume", headers=ALICE)
+    async with db.connection("builder") as conn:
+        rows = await (
+            await conn.execute(
+                "SELECT move, moved_by, via FROM builder.use_case_moves"
+                " WHERE use_case_id = %s ORDER BY moved_at",
+                (morning,),
+            )
+        ).fetchall()
+    assert [(r["move"], r["moved_by"], r["via"]) for r in rows] == [
+        ("pause", "alice", "chat"),
+        ("resume", "alice", "page"),
+    ]
+    said = [r.getMessage() for r in caplog.records if morning in r.getMessage()]
+    assert said == [f"alice paused {morning} via chat", f"alice resumed {morning} via page"]
+
+
 async def test_an_approver_pauses_nothing(front: Front):
     morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
     front.answers.result = answered(PauseAnswer(workflow_words="morning check"))

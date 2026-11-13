@@ -979,3 +979,43 @@ async def test_migration_0018_keeps_questions_with_whole_answers_and_a_downgrade
     async with db.transaction("orchestration") as uow:
         assert await load_questions_for(uow, [approval_id]) == {}, "the table starts empty again"
     assert asked.answer is None
+
+
+def test_migration_0012_keeps_who_paused_or_resumed_a_workflow_and_from_where(
+    postgres: PostgresUrls,
+):
+    def present(conn: psycopg.Connection) -> bool:
+        return (
+            conn.execute(
+                "SELECT 1 FROM information_schema.tables WHERE table_schema = 'builder'"
+                " AND table_name = 'use_case_moves'"
+            ).fetchone()
+            is not None
+        )
+
+    moved = (
+        "INSERT INTO builder.use_case_moves (use_case_id, move, moved_by, via, moved_at)"
+        " VALUES ('uc_moved', %s, 'alice', %s, now())"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        assert present(conn)
+        conn.execute(
+            "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version)"
+            " VALUES ('uc_moved', 'alice', now(), 1)"
+        )
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(moved, ("delete", "chat"))
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(moved, ("pause", "teams"))
+        downgrade("builder", postgres.owner, "0011")
+        assert not present(conn)
+        upgrade("builder", postgres.owner)
+        assert present(conn)
+    with psycopg.connect(postgres.contexts.builder) as builder:
+        builder.execute(moved, ("pause", "chat"))
+        assert builder.execute(
+            "SELECT move, moved_by, via FROM builder.use_case_moves"
+        ).fetchall() == [("pause", "alice", "chat")]
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            builder.execute("DELETE FROM builder.use_case_moves")
+        builder.rollback()

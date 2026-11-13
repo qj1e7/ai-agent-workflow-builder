@@ -1,7 +1,8 @@
+import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from platform_api.builder.card_store import CardLibrary, NoSuchCard, PinnedAgent, StarterCard
 from platform_api.builder.cards import (
@@ -84,7 +85,7 @@ from platform_api.builder.versions import (
 )
 from platform_api.builder.views import template_view
 from platform_api.builder.watchlist import Watchlist
-from platform_api.db import Connection, Database, hold_workflow, json
+from platform_api.db import Connection, Database, UnitOfWork, hold_workflow, json
 from platform_api.orchestration import (
     CardRun,
     CardsTask,
@@ -100,6 +101,8 @@ from platform_api.orchestration import (
     cards_policy,
 )
 from platform_api.shared import Principal, UseCaseId, UserId, new_id
+
+log = logging.getLogger(__name__)
 
 _CURRENT_VERSION = """
     SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
@@ -204,6 +207,27 @@ class ScheduleOnSoftwarePage:
 
 
 type Moved = Lifecycle | AlreadyDeleted | TooLate | WatchlistStays
+
+
+@dataclass(frozen=True)
+class Recorded:
+    """A pause or a resume, kept with who made it and from where, so the record outlives the
+    state it changed (AGENTS.md: every agent action is logged with who asked for it)."""
+
+    move: Literal["pause", "resume"]
+    by: UserId
+    via: Via
+
+
+async def _record(uow: UnitOfWork, use_case_id: str, recorded: Recorded) -> None:
+    await uow.conn.execute(
+        "INSERT INTO builder.use_case_moves (use_case_id, move, moved_by, via, moved_at)"
+        " VALUES (%s, %s, %s, %s, %s)",
+        (use_case_id, recorded.move, recorded.by, recorded.via, uow.now),
+    )
+    log.info("%s %sd %s via %s", recorded.by, recorded.move, use_case_id, recorded.via)
+
+
 type Move = Callable[[Lifecycle, str, datetime], Moved]
 
 
@@ -287,16 +311,26 @@ class Builder:
             for row in rows
         ]
 
-    async def pause_use_case(self, use_case_id: str, principal: Principal) -> UseCaseView | None:
+    async def pause_use_case(
+        self, use_case_id: str, principal: Principal, via: Via = "page"
+    ) -> UseCaseView | None:
         moved = await self._move(
-            use_case_id, lambda state, _, now: pause(state, now, principal.user_id)
+            use_case_id,
+            lambda state, _, now: pause(state, now, principal.user_id),
+            Recorded("pause", principal.user_id, via),
         )
         if moved is None or isinstance(moved, AlreadyDeleted):
             return None
         return await self.get_use_case(use_case_id, principal)
 
-    async def resume_use_case(self, use_case_id: str, principal: Principal) -> UseCaseView | None:
-        moved = await self._move(use_case_id, lambda state, _template, _now: resume(state))
+    async def resume_use_case(
+        self, use_case_id: str, principal: Principal, via: Via = "page"
+    ) -> UseCaseView | None:
+        moved = await self._move(
+            use_case_id,
+            lambda state, _template, _now: resume(state),
+            Recorded("resume", principal.user_id, via),
+        )
         if moved is None or isinstance(moved, AlreadyDeleted):
             return None
         return await self.get_use_case(use_case_id, principal)
@@ -418,7 +452,9 @@ class Builder:
                 await self._schedules.save(UseCaseId(use_case_id), decided.after, principal)
         return decided
 
-    async def _move(self, use_case_id: str, move: Move) -> Moved | None:
+    async def _move(
+        self, use_case_id: str, move: Move, recorded: Recorded | None = None
+    ) -> Moved | None:
         async with self._db.transaction("builder") as uow:
             await hold_workflow(uow.conn, use_case_id, alone=True)
             row = await (
@@ -447,6 +483,8 @@ class Builder:
                         use_case_id,
                     ),
                 )
+                if recorded is not None:
+                    await _record(uow, use_case_id, recorded)
                 if comes_on(before, after):
                     # The builder's role cannot write orchestration's schedules, so this is its
                     # own transaction. It commits before the move does: a move that then fails
