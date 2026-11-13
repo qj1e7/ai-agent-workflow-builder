@@ -191,15 +191,15 @@ def _issue(
 def _expired(
     request: ApprovalRequest, decisions: Iterable[Decision], status: ApprovalStatus
 ) -> bool:
-    """The request reached its expiry without its yes: it ended unanswered, or its last yes came
-    after the expiry, before the tick ended it. A yes given in time stays good after the expiry,
-    so a wake n8n takes late, or a lost run carried on, still writes."""
+    """The request reached its expiry without its yes: it ended unanswered, or the records hold a
+    yes from its expiry or after, which decide() never records. A yes given in time stays good
+    after the expiry, so a wake n8n takes late, or a lost run carried on, still writes."""
     match status:
         case Closed(ended=Ended.EXPIRED):
             return True
         case Approved() if request.expires_at is not None:
             yeses = (d.at for d in decisions if d.approval_id == request.id)
-            return any(at > request.expires_at for at in yeses)
+            return any(at >= request.expires_at for at in yeses)
         case _:
             return False
 

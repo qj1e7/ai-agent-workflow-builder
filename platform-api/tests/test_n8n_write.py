@@ -8,7 +8,7 @@ from datetime import timedelta
 import httpx
 import pytest
 
-from platform_api.orchestration.approvals import Ended, Verdict
+from platform_api.orchestration.approvals import Decision, Ended, Refusal, Verdict
 from platform_api.orchestration.dispatch import N8nWaker
 from platform_api.orchestration.jira import PRACTICE_SITE
 from platform_api.orchestration.model_settings import KeyBox
@@ -39,7 +39,7 @@ from platform_api.orchestration.runs import (
     Rejected,
     Succeeded,
 )
-from platform_api.orchestration.service import Orchestrator
+from platform_api.orchestration.service import Decided, DecisionRefused, Orchestrator
 from platform_api.orchestration.store import RunRecord, Store
 from platform_api.orchestration.write_actions import (
     DenyReason,
@@ -285,14 +285,37 @@ async def test_safety_an_expired_request_never_writes(w: Writes):
     assert await w.tickets() == []
 
 
-async def test_safety_a_yes_recorded_after_the_expiry_never_writes(w: Writes):
-    """The tick ends a request a few seconds after its expiry. A yes that lands in between is
-    recorded, and n8n takes it, but the gateway refuses it at the write."""
+@pytest.mark.parametrize("step", [0, 1])
+async def test_safety_a_yes_after_the_expiry_is_refused_and_recorded_nowhere(w: Writes, step: int):
+    """The tick ends a request a few seconds after its expiry. A yes in between is refused, so
+    a late first yes never sends the second Approver a request that has already run out."""
+    w.workflows.spec = replace(SPEC, approval_policy=TWO_STEPS)
     await w.ask()
-    w.h.clock["now"] = TWO_WORKING_DAYS_LATER + timedelta(seconds=1)
-    await w.decide(BOB)
+    if step == 1:
+        assert isinstance(await w.decide(BOB, step=0), Decided)
+    w.h.clock["now"] = TWO_WORKING_DAYS_LATER
+    late = ERIN if step == 1 else BOB
+    assert await w.decide(late, step=step) == DecisionRefused(Refusal.NOT_OPEN)
+    decided = await w.rows("SELECT step_index FROM orchestration.approval_decisions")
+    assert decided == ([{"step_index": 0}] if step == 1 else [])
     await w.tick()
-    assert isinstance((await w.run()).state, Acting)
+    assert isinstance((await w.run()).state, Expired)
+    await w.tick()
+    assert w.waits.decisions == ["no_answer"]
+    assert await w.tickets() == []
+
+
+async def test_safety_a_late_yes_found_in_the_records_never_writes(w: Writes):
+    """Defence in depth: a yes the records hold from after the expiry, however it got there,
+    is refused at the write."""
+    await w.ask()
+    approval_id = await w.approval_id()
+    w.h.clock["now"] = TWO_WORKING_DAYS_LATER + timedelta(seconds=1)
+    async with w.h.db.transaction("orchestration") as uow:
+        request = await Store().load_approval(uow, approval_id)
+        assert request is not None
+        yes = Decision(approval_id, 0, BOB.user_id, Verdict.APPROVE, request.digest, uow.now)
+        await Store().insert_decision(uow, yes)
     words = DENIED[DenyReason.EXPIRED]
     assert await w.write() == Refused(403, words)
     run = await w.run()

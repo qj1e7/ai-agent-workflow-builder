@@ -38,6 +38,7 @@ from platform_api.orchestration.write_actions import (
     site_name,
     still_to_make,
     subject_key,
+    write_key,
 )
 from platform_api.shared import ApprovalId, Digest, ProposalId, RunId, UseCaseId, UserId
 
@@ -515,7 +516,9 @@ def test_safety_a_yes_recorded_after_the_expiry_never_writes():
 
 def test_a_yes_given_before_the_expiry_still_writes_after_it():
     """n8n may take the yes hours later, or a lost run may carry on, and the yes still stands."""
-    assert isinstance(checked(expiring(), approved_at(EXPIRES_AT)), AuthorizedWrite)
+    in_time = approved_at(EXPIRES_AT - timedelta(seconds=1))
+    assert isinstance(checked(expiring(), in_time), AuthorizedWrite)
+    assert checked(expiring(), approved_at(EXPIRES_AT)) == Deny(DenyReason.EXPIRED)
 
 
 def test_safety_a_cancelled_or_declined_request_never_writes():
@@ -534,6 +537,14 @@ def test_a_subject_key_is_one_per_use_case_and_subject():
     assert key != subject_key(UseCaseId("uc_2"), "langgraph 1.2.16")
     assert key != subject_key(USE_CASE, "langgraph 1.2.17")
     assert key.startswith("subject/") and len(key) == len("subject/") + 40
+
+
+def test_each_action_without_a_subject_has_its_own_key_naming_its_index():
+    """A retry finds each change by its key, so two changes of one proposal never share one."""
+    actions = (ticket("A"), ticket("B"), replace(ticket("C"), subject="lg"))
+    proposal = Proposal(PROPOSAL, RUN, actions, digest(actions))
+    keys = [write_key(USE_CASE, proposal, index).text for index in range(3)]
+    assert keys == [f"{RUN}/{PROPOSAL}/0", f"{RUN}/{PROPOSAL}/1", subject_key(USE_CASE, "lg")]
 
 
 def test_the_ask_leaves_out_a_subject_already_made_or_proposed_twice():
