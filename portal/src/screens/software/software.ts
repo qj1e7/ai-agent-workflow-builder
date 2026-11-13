@@ -1,27 +1,16 @@
 import { ApiError } from '../../api/client'
 import { failureReasonLabel } from '../../api/labels'
-import type { CapabilityView, Day, FailureReason, Refusal, ScheduleHold, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView, WatchlistView } from '../../api/types'
+import type { Day, FailureReason, ScheduleHold, ScheduleView, VersionSourceView, WatchedSoftwareView, WatchlistView } from '../../api/types'
 import type { NextRun } from '../run/words'
-import { dateAndClock, scheduleZoneName, timesZone } from '../workflows/times'
+import { dateAndClock, lineWhen, scheduleZoneName, timesZone } from '../workflows/times'
+
+export const WATCHLIST_PATH = '/software'
+
+/** A watched software's own page. Every link to one comes here, never through the old `?row=` address. */
+export const softwarePath = (id: string): string => `${WATCHLIST_PATH}/${encodeURIComponent(id)}`
 
 /** The Software page and the side panel both refresh the watchlist this often. */
 export const REFRESH_MS = 15_000
-
-/** The places releases are read from, from the capability registry, and those of them working now. */
-function releaseSources(capabilities: readonly CapabilityView[]): { readonly all: string; readonly working: string } {
-  const sources = capabilities.filter((c) => c.id.endsWith('.releases') && c.system !== null)
-  const systems = (list: readonly CapabilityView[]) => list.map((c) => c.system).join(' and ')
-  return { all: systems(sources), working: systems(sources.filter((c) => c.state === 'ready')) }
-}
-
-/** Where releases are read from, said from the capability registry so this page never claims more than How it works does. Null while the registry is not there. */
-export function sourcesNote(capabilities: readonly CapabilityView[] | undefined): string | null {
-  if (capabilities === undefined) return null
-  const { all, working } = releaseSources(capabilities)
-  const first = working ? `${working} is the only place we can check today.` : all ? `${all} is the only place we check, and it is not working right now.` : 'No place can be checked right now.'
-  const notYet = capabilities.find((c) => c.id === 'registries.check' && (c.state === 'planned' || c.state === 'unsupported'))
-  return notYet?.cant ? `${first} We can’t ${notYet.cant} yet.` : first
-}
 
 interface Checking {
   readonly scheduled: boolean
@@ -39,9 +28,14 @@ export function cantCheckWords(problem: string | null, checking: Checking): stri
 
 /** GitHub told the check the saved repository has no home: the row says so, with no way to fix it by button. */
 export function notFoundWords(row: Pick<WatchedSoftwareView, 'name' | 'source'>, { operator, scheduled, paused }: Checking & { readonly operator: boolean }): string {
-  const skipped = `GitHub can’t find ${row.source.ref}. It may have moved to another repository. ${row.name} stays Can’t check until GitHub finds that address.`
+  const skipped = `GitHub can’t find ${row.source.ref}, and doesn’t say where it moved.`
   if (!operator) return `${skipped} An Operator can fix this.`
   return `${skipped} Remove it and add it again at its new address. ${checkedAgain({ scheduled, paused })}`
+}
+
+/** What Ask the team starts with for software GitHub can't find. The person can change every word. */
+export function askWhereWords(row: Pick<WatchedSoftwareView, 'name' | 'source'>): string {
+  return `GitHub can’t find ${row.source.ref}, and doesn’t say where it moved. Where does ${row.name} live now?`
 }
 
 /** GitHub renamed the saved repository and passes the old name on to the new one. */
@@ -63,67 +57,120 @@ export function notFoundHeadline(name: string, saved: string): string {
   return `GitHub can’t find ${saved}, the address saved for ${name}.`
 }
 
-export interface Attention {
-  readonly id: string
-  readonly name: string
+export type StatusTone = 'bad' | 'wait' | 'good' | 'quiet'
+
+export interface SoftwareState {
+  /** The pill's words, the same on the Watchlist rows, the panel and the software page. */
   readonly words: string
+  readonly tone: StatusTone
+  /** Which part of the count line the row counts in. */
+  readonly part: LinePart
 }
 
-/** The rows whose address needs a person, in the order of the list. A moved row and a not-found row never overlap. */
-export function addressAttentionOf(rows: readonly WatchedSoftwareView[]): Attention[] {
-  return rows.flatMap((row) => {
-    if (row.moved_to) return [{ id: row.id, name: row.name, words: movedHeadline(row.name, row.source.ref, row.moved_to) }]
-    if (row.not_found) return [{ id: row.id, name: row.name, words: notFoundHeadline(row.name, row.source.ref) }]
-    return []
-  })
+type LinePart = 'newer' | 'gone' | 'cant' | 'current' | 'watching'
+
+/**
+ * The state of a watched software in the sketch's words: Can’t find, Newer out, Watching, Up to date. Everything that says a state reads this,
+ * so a pill and a count never disagree. A row whose check just failed says Can’t check, because GitHub has not said the address is gone.
+ * A row with no version to compare says Watching, never Up to date. The upgrade ticket is a fact on the software page, not a state.
+ */
+export function stateOf(row: Pick<WatchedSoftwareView, 'status' | 'our_version' | 'not_found'>): SoftwareState {
+  switch (row.status) {
+    case 'cant_check':
+      return row.not_found ? { words: 'Can’t find', tone: 'bad', part: 'gone' } : { words: 'Can’t check', tone: 'bad', part: 'cant' }
+    case 'behind':
+    case 'awaiting_approval':
+    case 'ticket_open':
+      return { words: 'Newer out', tone: 'wait', part: 'newer' }
+    case 'not_checked':
+      return { words: 'Watching', tone: 'quiet', part: 'watching' }
+    case 'up_to_date':
+      return row.our_version === null ? { words: 'Watching', tone: 'quiet', part: 'watching' } : { words: 'Up to date', tone: 'good', part: 'current' }
+  }
 }
 
-/** What the Software page lists under Needs attention. The page's heading and the rail's Watchlist count both read it. */
-export function watchAttention(rows: readonly WatchedSoftwareView[]): number {
-  return decisionsOf(rows).length + addressAttentionOf(rows).length
-}
+const RANK: Record<LinePart, number> = { gone: 0, cant: 0, newer: 1, watching: 2, current: 3 }
 
-type LinePart = 'newer' | 'cant' | 'unchecked'
-
-/** The part of the count line each status counts in. A row whose upgrade ticket waits for a yes or is open still runs an older version. */
-const linePart: Record<SoftwareStatus, LinePart | null> = {
-  behind: 'newer',
-  awaiting_approval: 'newer',
-  ticket_open: 'newer',
-  cant_check: 'cant',
-  not_checked: 'unchecked',
-  up_to_date: null,
-}
+/** The Watchlist lists what needs a person first: Can’t find, Newer out, Watching, then Up to date. */
+export const watchRank = (row: Pick<WatchedSoftwareView, 'status' | 'our_version' | 'not_found'>): number => RANK[stateOf(row).part]
 
 const lineWords: Record<LinePart, (count: number) => string> = {
   newer: (count) => `${count} ${count === 1 ? 'has' : 'have'} a newer version`,
+  gone: (count) => `${count} can’t be found`,
   cant: (count) => `${count} can’t be checked`,
-  unchecked: (count) => `${count} not checked yet`,
+  current: (count) => `${count} ${count === 1 ? 'is' : 'are'} up to date`,
+  watching: (count) => `${count} watching`,
 }
 
-const LINE_ORDER: readonly LinePart[] = ['newer', 'cant', 'unchecked']
+const LINE_ORDER: readonly LinePart[] = ['newer', 'gone', 'cant', 'current', 'watching']
 
 /**
- * The line under the page's title, such as "3 have a newer version · 4 can’t be checked", from every row on the list, so a search
- * never changes it. Null for an empty list. Up to date needs a version to be up to date with, as on the rows.
+ * The line under the page's title, such as "3 have a newer version · 1 can’t be found · 2 are up to date", from every row on the list, so a
+ * search never changes it. Null for an empty list. Every row counts once, in the part its pill names.
  */
 export function countLine(rows: readonly WatchedSoftwareView[]): string | null {
   if (rows.length === 0) return null
-  const parts = LINE_ORDER.flatMap((part) => {
-    const count = rows.filter((row) => linePart[row.status] === part).length
+  return LINE_ORDER.flatMap((part) => {
+    const count = rows.filter((row) => stateOf(row).part === part).length
     return count > 0 ? [lineWords[part](count)] : []
-  })
-  if (parts.length > 0) return parts.join(' · ')
-  return rows.every((row) => row.our_version !== null) ? 'Everything is up to date.' : 'Nothing newer yet.'
+  }).join(' · ')
 }
 
-const SOURCE_NAME: Record<WatchedSoftwareView['source']['kind'], string> = { github: 'GitHub' }
+/** "today", or the day's date such as "Thu 12 Nov". */
+function dayOf(iso: string, now: Date): string {
+  const when = lineWhen(iso, now)
+  return when.startsWith('Today') ? 'today' : when
+}
 
-/** What checks a row, as "Checked on GitHub" only while the registry says releases are read there. Otherwise it names only where the project is. */
-export function checkedOnWords(kind: WatchedSoftwareView['source']['kind'], capabilities: readonly CapabilityView[] | undefined): string {
-  const releases = capabilities?.find((c) => c.id === `${kind}.releases`)
-  const where = releases?.system ?? SOURCE_NAME[kind]
-  return releases?.state === 'ready' ? `Checked on ${where}` : `On ${where}`
+/**
+ * A Watchlist row's second line, as the sketch has it: "1.2.14 → 1.2.16 · checked by Software watchlist". The sketch's "out 5 Nov" is left out,
+ * because the platform doesn't keep a release's date. `checkedBy` is null while nothing checks the list: it is paused or has no schedule.
+ */
+export function softwareLine(row: WatchedSoftwareView, now: Date, checkedBy: string | null): string {
+  const { part } = stateOf(row)
+  const version =
+    part === 'gone'
+      ? 'GitHub can’t find it'
+      : part === 'cant'
+        ? 'Can’t check right now'
+        : part === 'newer'
+          ? row.our_version !== null && row.newest_version !== null
+            ? `${row.our_version} → ${row.newest_version}`
+            : `Newest is ${row.newest_version ?? 'not known'}`
+          : part === 'current'
+            ? `${row.our_version ?? ''}, the newest`
+            : row.newest_version !== null
+              ? `Newest is ${row.newest_version}`
+              : `Added ${dayOf(row.added_at, now)}`
+  return `${version} · ${checkedBy ? `checked by ${checkedBy}` : NOT_AUTOMATIC.toLowerCase()}`
+}
+
+/** The side panel's one sentence on where the software stands. Nothing here is guessed: a version nobody knows is said to be unknown. */
+export function sentenceFor(row: WatchedSoftwareView): string {
+  const { part } = stateOf(row)
+  if (part === 'gone') return row.moved_to ? `GitHub now calls this project ${row.moved_to}.` : `GitHub can’t find ${row.source.ref}, and doesn’t say where it moved.`
+  if (part === 'cant') return row.newest_version !== null ? `The last check stopped. The newest version it read was ${row.newest_version}.` : 'The last check stopped before it read the newest version.'
+  if (row.newest_version === null) return 'Not checked yet. The first check reads the newest release.'
+  if (row.our_version === null) return `Newest is ${row.newest_version}. The version you run isn’t known yet.`
+  return part === 'current' ? `You run ${row.our_version}, the newest.` : `You run ${row.our_version}. Newest is ${row.newest_version}.`
+}
+
+/** The software page's Upgrade ticket fact. `declined` is the latest check's declined record, when an Approver said no to this row's ticket. */
+export function ticketFact(row: Pick<WatchedSoftwareView, 'status' | 'open_ticket' | 'our_version' | 'not_found'>, declined: string | null): string {
+  if (declined) return declined
+  switch (row.status) {
+    case 'awaiting_approval':
+      return 'Waiting for a yes'
+    case 'ticket_open':
+      return row.open_ticket ? `${row.open_ticket}, open in Jira` : 'Open in Jira'
+    case 'cant_check':
+      return 'None yet. The last check stopped before it could tell.'
+    case 'up_to_date':
+      return row.our_version === null ? 'None yet' : 'Not needed'
+    case 'behind':
+    case 'not_checked':
+      return 'None yet'
+  }
 }
 
 export const PAUSED_WORDS = 'Paused. No check runs until an Operator resumes it.'
@@ -132,6 +179,14 @@ export const PAUSED_WORDS = 'Paused. No check runs until an Operator resumes it.
 export function scheduleRuns(schedule: ScheduleView | null | undefined): boolean {
   return schedule != null && !schedule.held
 }
+
+/** The workflow that checks the watchlist, as the rows, the side panel and a software's page name it. */
+export const CHECKER = 'Software watchlist'
+
+/** Whether the Software watchlist checks on its own: it has a schedule that runs, and it is not paused. */
+export const checksOnItsOwn = (view: Pick<WatchlistView, 'schedule' | 'state'> | null | undefined): boolean => scheduleRuns(view?.schedule) && view?.state !== 'paused'
+
+export const NOT_AUTOMATIC = 'Not checked automatically'
 
 const heldWhy: Record<ScheduleHold, string> = {
   owner_removed: 'is no longer on the People list',
@@ -163,15 +218,7 @@ export function nextCheckWords(schedule: ScheduleView, paused: boolean): string 
   return `Next check ${dateAndClock(schedule.next_at, schedule.time_zone)}, ${timesZone(schedule.time_zone)}.`
 }
 
-/** Who checks a watched software and where, from the same registry as the Software page's note. Null while the registry is not there. */
-export function checkedByWords(capabilities: readonly CapabilityView[] | undefined): string | null {
-  if (capabilities === undefined) return null
-  const { all, working } = releaseSources(capabilities)
-  if (working) return `The Version checker, on ${working}.`
-  return all ? `The Version checker, on ${all}, which is not working right now.` : 'The Version checker. No place can be checked right now.'
-}
-
-/** How it's checked says this with or without a schedule. The side panel's When row leaves it out. */
+/** The schedule's note says this with or without a schedule. The side panel's When row leaves it out. */
 export const ONE_APPROVAL = 'One approval covers all the upgrade tickets.'
 
 export function noScheduleWords({ operator, paused }: { readonly operator: boolean; readonly paused: boolean }): string {
@@ -183,31 +230,6 @@ export function emptyWords({ operator, scheduled, paused }: { readonly operator:
   if (!operator) return 'An Operator can add the tools your team runs.'
   if (paused) return 'Add the tools your team runs. They can be checked once an Operator resumes the watchlist.'
   return scheduled ? 'Add the tools your team runs. Each one is checked at the next check.' : 'Add the tools your team runs, then press Check now to check them.'
-}
-
-export const statusLabel: Record<SoftwareStatus, string> = {
-  cant_check: 'Can’t check',
-  behind: 'New version',
-  awaiting_approval: 'Ticket waiting for a yes',
-  ticket_open: 'Ticket open',
-  up_to_date: 'Up to date',
-  not_checked: 'Not checked yet',
-}
-
-/** Up to date needs a version to be up to date with. With none known, the row says what the check can truthfully say. */
-export function statusWords(row: Pick<WatchedSoftwareView, 'status' | 'our_version'>): string {
-  return row.status === 'up_to_date' && row.our_version === null ? 'Nothing newer yet' : statusLabel[row.status]
-}
-
-type StatusTone = 'bad' | 'wait' | 'open' | 'good' | 'quiet'
-
-export const statusTone: Record<SoftwareStatus, StatusTone> = {
-  cant_check: 'bad',
-  behind: 'wait',
-  awaiting_approval: 'wait',
-  ticket_open: 'open',
-  up_to_date: 'good',
-  not_checked: 'quiet',
 }
 
 const dayLabel: Record<Day, string> = {
@@ -328,39 +350,6 @@ function matchesQuery(row: WatchedSoftwareView, query: string): boolean {
 /** Every row stays in Software we watch, so its count is the real number. Only the search narrows it. */
 export function rowsMatching(rows: readonly WatchedSoftwareView[], query: string): WatchedSoftwareView[] {
   return rows.filter((row) => matchesQuery(row, query))
-}
-
-export interface Decision {
-  readonly approvalId: string
-  /** How many watched software this one yes covers. */
-  readonly software: number
-}
-
-/** One decision for the whole check: the tickets of one run wait on one approval, however many rows they came from. */
-export function decisionsOf(rows: readonly WatchedSoftwareView[]): Decision[] {
-  const counts = new Map<string, number>()
-  for (const row of rows) {
-    if (row.status === 'awaiting_approval' && row.approval_id) counts.set(row.approval_id, (counts.get(row.approval_id) ?? 0) + 1)
-  }
-  return [...counts].map(([approvalId, software]) => ({ approvalId, software }))
-}
-
-export function decisionTitle(tickets: number): string {
-  return `The latest check wants to raise ${tickets} upgrade ${tickets === 1 ? 'ticket' : 'tickets'}.`
-}
-
-export const DECISION_NOTE = 'Nothing is written until an Approver says yes.'
-
-/** What the bar says to someone who can't decide it. The platform says why. */
-export function waitingWords(whyNot: Refusal | null): string {
-  switch (whyNot) {
-    case 'own_work':
-      return 'Waiting for another Approver. This check is your own work.'
-    case 'decided_earlier_step':
-      return 'Waiting for another Approver. You decided an earlier step.'
-    default:
-      return 'Waiting for an Approver.'
-  }
 }
 
 export function rowDomId(softwareId: string): string {

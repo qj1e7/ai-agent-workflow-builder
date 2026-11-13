@@ -38,7 +38,7 @@ describe('the Software-page actions under an answer about watched software', () 
   it('gives an Operator Open, Stop watching last for the software, and the check of the whole watchlist', () => {
     const html = draw(ALICE, ['fastapi'])
     expect(buttons(html)).toEqual(['Software', 'Open FastAPI on the Software page', 'Stop watching FastAPI', 'Check all software now'])
-    expect(html).toContain(`href="/software?row=${LIST.software[0]?.id}"`)
+    expect(html).toContain(`href="/software/${LIST.software[0]?.id}"`)
   })
 
   it('names one software once, as the card’s title, and several by row under “On your watchlist”', () => {

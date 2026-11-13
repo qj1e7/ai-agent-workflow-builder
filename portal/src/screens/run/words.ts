@@ -1,8 +1,8 @@
 import { OPEN_RUN_AGAIN_WORDS } from '../../api/errors'
-import { connectorLabel, refusalLabel, starterName } from '../../api/labels'
+import { connectorLabel, failureReasonLabel, refusalLabel, starterName } from '../../api/labels'
 import { nextRunAt } from '../workflows/times'
 import type { SessionKind } from '../../api/session'
-import type { ApprovalActionView, ApprovalStepView, Day, Refusal, UseCaseView, WriteActionView } from '../../api/types'
+import type { ApprovalActionView, ApprovalStepView, Day, FailureReason, Refusal, RunView, UseCaseView, WriteActionView } from '../../api/types'
 import { PRODUCT } from '../../shell/product'
 import type { LiveRun } from './liveRun'
 import type { AgentRef, ChatItem, Declined, PlanBlock, RunModel, Station } from './runModel'
@@ -424,6 +424,11 @@ const DAY_SHORT: Readonly<Record<Day, string>> = {
   sunday: 'Sun',
 }
 
+/** "Daily 8:00", "Weekdays 9:30" or "Mon 13:00": a schedule in the few words a row has room for. */
+export function scheduleShort({ day, at }: { readonly day: Day; readonly at: string }): string {
+  return `${DAY_SHORT[day]} ${at.replace(/^0/, '')}`
+}
+
 export type Schedule = Pick<NonNullable<UseCaseView['schedule']>, 'day' | 'at' | 'time_zone'>
 
 const WEEKDAYS: ReadonlySet<string> = new Set(['monday', 'tuesday', 'wednesday', 'thursday', 'friday'])
@@ -447,7 +452,7 @@ function scheduleStarted(schedule: Schedule, startedAt: string): boolean {
  * A schedule changed since the run is not shown on it, so the run reads "On schedule".
  */
 export function triggerWords(run: Pick<RunModel, 'trigger' | 'startedBy'>, schedule: Schedule | null, nameOf: NameOf, startedAt: string): string {
-  if (run.trigger === 'schedule') return schedule && scheduleStarted(schedule, startedAt) ? `${DAY_SHORT[schedule.day]} ${schedule.at.replace(/^0/, '')}` : 'On schedule'
+  if (run.trigger === 'schedule') return schedule && scheduleStarted(schedule, startedAt) ? scheduleShort(schedule) : 'On schedule'
   return run.startedBy ? `Started by ${nameOf(run.startedBy)}` : 'Started'
 }
 
@@ -497,4 +502,72 @@ export function settledOf(model: RunModel, nameOf: NameOf, now: Date, quick: rea
   const refs = model.written.map((written) => written.ref).filter((ref) => ref !== '')
   const what = refs.length > 0 ? andList(refs) : changesOf(model.written, model.written.length).noun
   return { tone: 'ok', text: `Done ${when} · ${what} ${created ? 'created' : 'written'}${afterYeses(model.approvedBy, nameOf)}` }
+}
+
+/** What a run needs to say where it stands. A list's row, the page's banner, the strip and Recent runs all read it, so they never disagree. */
+export interface StageFacts {
+  readonly state: RunView['state']
+  /** What the run wrote when it succeeded, or what it proposes while it waits or writes. */
+  readonly count: number
+  readonly tickets: boolean
+  readonly approvedBy: readonly string[]
+  readonly declinedBy: string | null
+  readonly reason: FailureReason | null
+}
+
+/** Where the run stands, in a short phrase that reads after "last run today," and on its own: "Waiting for a yes", "1 ticket created, approved by Bob". */
+export function stageWords(run: StageFacts, nameOf: NameOf): string {
+  const noun = (n: number) => count(n, run.tickets ? 'ticket' : 'change')
+  switch (run.state) {
+    case 'failed':
+      return run.reason ? failureReasonLabel[run.reason] : 'Stopped'
+    case 'awaiting_approval':
+      return 'Waiting for a yes'
+    case 'skipped':
+      return 'Skipped. An earlier run is still waiting for a yes.'
+    case 'expired':
+      return 'No answer. Nothing was written.'
+    case 'lost':
+      return 'Approved, but n8n lost the run. Nothing was written.'
+    case 'pending':
+    case 'working':
+    case 'proposed':
+      return 'Running'
+    case 'acting':
+      return run.tickets ? `Creating the ${run.count === 1 ? 'ticket' : 'tickets'}` : 'Writing the changes'
+    case 'succeeded': {
+      if (run.count === 0) return 'Nothing new to write'
+      const approvers = run.approvedBy.map(nameOf)
+      return `${noun(run.count)} ${run.tickets ? 'created' : 'written'}${approvers.length > 0 ? `, approved by ${andList(approvers)}` : ''}`
+    }
+    case 'rejected':
+      return `${run.declinedBy ? declinedBy({ by: run.declinedBy }, nameOf) : 'Declined'}. Nothing was written.`
+  }
+}
+
+export type StageTone = 'ok' | 'wait' | 'bad' | 'new' | 'quiet'
+
+/** The one pill a run has: Stopped, Running, Waiting for a yes, Done, Nothing new or Declined. */
+export function runPill(run: StageFacts): { readonly label: string; readonly tone: StageTone } {
+  switch (run.state) {
+    case 'failed':
+      return { label: 'Stopped', tone: 'bad' }
+    case 'awaiting_approval':
+      return { label: 'Waiting for a yes', tone: 'wait' }
+    case 'pending':
+    case 'working':
+    case 'proposed':
+    case 'acting':
+      return { label: 'Running', tone: 'new' }
+    case 'succeeded':
+      return run.count === 0 ? { label: 'Nothing new', tone: 'quiet' } : { label: 'Done', tone: 'ok' }
+    case 'rejected':
+      return { label: 'Declined', tone: 'quiet' }
+    case 'skipped':
+      return { label: 'Skipped', tone: 'quiet' }
+    case 'expired':
+      return { label: 'No answer', tone: 'quiet' }
+    case 'lost':
+      return { label: 'Lost', tone: 'bad' }
+  }
 }
