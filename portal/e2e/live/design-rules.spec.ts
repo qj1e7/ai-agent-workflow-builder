@@ -190,10 +190,10 @@ test('the Needs you count is one number on Workflows, the Planner’s answer and
 
   await rail(page).getByRole('link', { name: /^Chat/ }).click()
   await ask(page, 'What needs me?')
-  await expect(main(page), 'Principle 7: the Planner’s answer').toContainText(`${String(total)} ${total === 1 ? 'thing needs' : 'things need'} you.`)
+  await expect(main(page), 'Principle 7: the Planner’s answer').toContainText(`${String(total)} ${total === 1 ? 'thing needs' : 'things need'} you`)
   const strip = main(page).getByRole('region', { name: 'Needs you', exact: true })
   await expect(strip, 'Principle 7: the strip is there while something needs her').toBeVisible()
-  const more = (await strip.getByRole('link', { name: /more that need you/ }).count()) === 0 ? 0 : Number((await strip.getByRole('link', { name: /more that need you/ }).innerText()).replace(/\D/g, ''))
+  const more = (await strip.getByRole('button', { name: /more that need you/ }).count()) === 0 ? 0 : Number((await strip.getByRole('button', { name: /more that need you/ }).innerText()).replace(/\D/g, ''))
   expect(more + 1, 'Principle 7: the strip’s N more plus the one it names is the count everywhere').toBe(total)
 
   await rail(page).getByRole('link', { name: /^Watchlist/ }).click()

@@ -186,9 +186,9 @@ test('a stopped run: SHELL-more, RUN-retry-from-chat and RUN-retry-panel, at 128
   await context.close()
 })
 
-async function openRequest(page: Page, runId: string): Promise<Locator> {
+async function openRequest(page: Page, runId: string, kind: 'approval' | 'run' = 'approval'): Promise<Locator> {
   await ask(page, 'What needs me?')
-  const opener = newest(page).locator(`[data-opens="approval:${runId}"]`)
+  const opener = newest(page).locator(`[data-opens="${kind}:${runId}"]`)
   await opener.click()
   return opener
 }
@@ -240,7 +240,7 @@ for (const width of [1280, 390]) {
       await expect(needs, 'Needs you says Bob declined it, in the record’s words').toContainText(/Bob declined your test run[\s\S]{0,120}Nothing was written\. Reason: Something in it is wrong\./)
       await shot(page, info, `r12-needs-you-declined-test-alice-${width}`)
       await page.goto('/')
-      await openRequest(page, runId)
+      await openRequest(page, runId, 'run')
       await expect(panel(page), 'the side panel gives the state and the record').toContainText(record, { timeout: 15_000 })
       await expect(panel(page), 'and what happens next').toContainText('Something in it is wrong. Change what it does, or run the test again.')
       await expect(panel(page), 'its line says the write did not happen').toContainText('Nothing written')
