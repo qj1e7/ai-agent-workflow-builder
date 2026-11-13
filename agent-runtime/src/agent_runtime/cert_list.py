@@ -64,8 +64,6 @@ class Where:
     channel: str = CHANNEL
 
 
-# ── Confluence storage format → rows of plain text cells ──────────────────────────────────────
-
 _TIME: Final = re.compile(r'<time[^>]*datetime="([^"]+)"', re.IGNORECASE)
 _BREAK: Final = re.compile(r"<br\s*/?>", re.IGNORECASE)
 _TAG: Final = re.compile(r"<[^>]+>")
@@ -106,8 +104,6 @@ def extract_tables(html: str) -> list[list[list[str]]]:
             tables.append(rows)
     return tables
 
-
-# ── Dates ─────────────────────────────────────────────────────────────────────────────────────
 
 MONTHS: Final = {
     **dict.fromkeys(("jan", "january"), 0),
@@ -245,9 +241,6 @@ def locale_order(text: str) -> tuple[tuple[tuple[int, str], ...], tuple[bool, ..
     return first, tuple(ch.isupper() for ch in text)
 
 
-# ── The rows ──────────────────────────────────────────────────────────────────────────────────
-
-
 @dataclass(frozen=True)
 class Untracked:
     """A row whose cell gives no date: no expiry, kept elsewhere, or unreadable."""
@@ -320,9 +313,6 @@ def _merged(items: Sequence[Cert], duplicates: list[Cert]) -> list[Cert]:
 
 def _at(row: Sequence[str], index: int) -> str:
     return row[index] if 0 <= index < len(row) else ""
-
-
-# ── The report ────────────────────────────────────────────────────────────────────────────────
 
 
 def _esc(text: object) -> str:
