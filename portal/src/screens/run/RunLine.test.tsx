@@ -93,11 +93,12 @@ describe('the run line', () => {
     const html = line(replay(success))
     expect(stepsSaid(html)).toEqual(['Done: Started by Alice', 'Done: Read every source', 'Done: Ask for a yes', 'Done: Create Jira tickets MOCK-142'])
     expect(stepItems(html)[3]).toMatch(/<a\b[^>]*href="\/jira\/MOCK-142"[^>]*>MOCK-142<\/a>/)
+    expect(stepItems(html)[3], 'a key too long for its step is cut short on screen, never in its title').toContain('title="MOCK-142"')
     expect(text(html)).toContain('Done at 10:20 · MOCK-142 created after Bob’s yes')
   })
 
   it('gives every step done a tick, the stopped step a stop mark, and no other step a mark', () => {
-    const marks = (html: string) => stepItems(html).map((item) => item.match(/_(tick|stopMark)_/)?.[1] ?? '-')
+    const marks = (html: string) => stepItems(html).map((item) => item.match(/_(tick|stopMark)_[^"]*" data-shown="true"/)?.[1] ?? '-')
     expect(marks(line(replay(success)))).toEqual(['tick', 'tick', 'tick', 'tick'])
     expect(marks(line(replay(success, 15)))).toEqual(['tick', 'tick', '-', '-'])
     expect(marks(line(replay(failure)))).toEqual(['tick', 'stopMark', '-', '-'])

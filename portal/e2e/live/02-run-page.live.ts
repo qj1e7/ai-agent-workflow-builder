@@ -438,6 +438,12 @@ for (const phone of [false, true]) {
     await expect(bob.getByRole('main')).toContainText(RECORD)
     await expect(pill(bob)).toBeVisible()
     await expect(steps(bob).filter({ hasText: 'Nothing written' }), 'the write step says nothing was written').toHaveCount(1)
+    const shown = await steps(bob).last().getByText('Nothing written').evaluate((note) => {
+      let opacity = 1
+      for (let node: Element | null = note; node; node = node.parentElement) opacity *= Number(getComputedStyle(node).opacity)
+      return opacity
+    })
+    expect(shown, 'the skipped step fades, but what it says under it keeps full contrast').toBe(1)
     await expect(steps(bob).last(), 'the write is the last step, skipped').toHaveAttribute('data-state', 'skip')
     await expect(steps(bob).nth(2), 'the gate shows the decline').toHaveAttribute('data-state', 'no')
     await expect(settledLine(bob, 'Bob declined: wrong version. Nothing was written.'), 'the run settles in one line, never saying created').toBeVisible()

@@ -55,15 +55,11 @@ function UnderStep({ under, small }: { under: Under; small: boolean }) {
     case 'timer':
       return <Working since={under.since} small={small} />
     case 'tickets':
-      return under.written.map((written, index) =>
-        written.connector === 'jira' && written.ref !== '' ? (
-          <TicketLink key={index} className={cx(styles['chip'])} ticketKey={written.ref} href={written.url} />
-        ) : (
-          <span key={index} className={styles['chip']}>
-            {written.ref}
-          </span>
-        ),
-      )
+      return under.written.map((written, index) => (
+        <span key={index} className={styles['chip']} title={written.ref}>
+          {written.connector === 'jira' ? <TicketLink ticketKey={written.ref} href={written.url} /> : written.ref}
+        </span>
+      ))
     case 'note':
       return <span>{under.text}</span>
   }
@@ -96,61 +92,59 @@ export function RunLine({ stations, arrivedLive, settled, small = false }: RunLi
   const arrived = stations.findIndex((station) => station.key === arrivedLive)
   return (
     <div className={cx(styles['line'], small ? styles['small'] : styles['large'])}>
-      <ol className={styles['track']} style={{ '--n': stations.length } as CSSProperties} aria-label="Steps of this run" ref={pauseUnseen}>
-        {stations.map((station, index) => {
-          const next = stations[index + 1]
-          const link = next ? LINK_INTO[next.state] : null
-          const grows = link === 'solid' && arrived >= 0 && (index === arrived - 1 || index === arrived - 2)
-          const { state } = station
-          const StepPicture = ICON[station.icon]
-          return (
-            <li
-              key={station.key}
-              className={cx(styles['step'], styles[state], station.spot.at === 'gate' && styles['gate'], index === arrived && styles['arrive'])}
-              aria-current={state === 'now' || state === 'wait' ? 'step' : undefined}
-              data-state={state}
-              data-replay={(replaying && state === 'err') || undefined}
-            >
-              {link ? (
-                <span
-                  className={cx(styles['link'], grows && styles['grow'])}
-                  data-link={link}
-                  data-march={(moving && MARCHES.has(link)) || undefined}
-                  data-replay={(replaying && next?.state === 'err') || undefined}
-                  aria-hidden="true"
-                />
-              ) : null}
-              {small ? null : (
-                <span className={styles['who']}>
-                  <Face station={station} />
-                </span>
-              )}
-              <span className={styles['dot']}>
-                <StepPicture />
-                {state === 'done' ? (
-                  <span className={styles['tick']}>
+      <div className={styles['scroll']}>
+        <ol className={styles['track']} style={{ '--n': stations.length } as CSSProperties} aria-label="Steps of this run" ref={pauseUnseen}>
+          {stations.map((station, index) => {
+            const next = stations[index + 1]
+            const link = next ? LINK_INTO[next.state] : null
+            const grows = link === 'solid' && arrived >= 0 && (index === arrived - 1 || index === arrived - 2)
+            const { state } = station
+            const StepPicture = ICON[station.icon]
+            return (
+              <li
+                key={station.key}
+                className={cx(styles['step'], styles[state], station.spot.at === 'gate' && styles['gate'], index === arrived && styles['arrive'])}
+                aria-current={state === 'now' || state === 'wait' ? 'step' : undefined}
+                data-state={state}
+                data-replay={(replaying && state === 'err') || undefined}
+              >
+                {link ? (
+                  <span
+                    className={cx(styles['link'], grows && styles['grow'])}
+                    data-link={link}
+                    data-march={(moving && MARCHES.has(link)) || undefined}
+                    data-replay={(replaying && next?.state === 'err') || undefined}
+                    aria-hidden="true"
+                  />
+                ) : null}
+                {small ? null : (
+                  <span className={styles['who']}>
+                    <Face station={station} />
+                  </span>
+                )}
+                <span className={styles['dot']}>
+                  <StepPicture />
+                  <span className={styles['tick']} data-shown={state === 'done' || undefined}>
                     <IconCheck />
                   </span>
-                ) : null}
-                {state === 'err' ? (
-                  <span className={styles['stopMark']}>
+                  <span className={styles['stopMark']} data-shown={state === 'err' || undefined}>
                     <IconX />
                   </span>
-                ) : null}
-              </span>
-              <span className={styles['label']}>
-                <span className="visually-hidden">{STATE_WORDS[state]}</span>
-                {station.label}
-              </span>
-              {station.under ? (
-                <span className={styles['under']}>
-                  <UnderStep under={station.under} small={small} />
                 </span>
-              ) : null}
-            </li>
-          )
-        })}
-      </ol>
+                <span className={styles['label']}>
+                  <span className="visually-hidden">{STATE_WORDS[state]}</span>
+                  {station.label}
+                </span>
+                {station.under ? (
+                  <span className={styles['under']}>
+                    <UnderStep under={station.under} small={small} />
+                  </span>
+                ) : null}
+              </li>
+            )
+          })}
+        </ol>
+      </div>
       {settled ? (
         <p className={styles['settled']} data-tone={settled.tone}>
           {settled.tone === 'ok' ? <IconCheck /> : null}
