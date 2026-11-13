@@ -201,6 +201,7 @@ def test_a_block_naming_an_option_the_editor_does_not_list_needs_a_fix() -> None
         frozenset({"crd_version_checker"}),
         {"github_releases": frozenset({"langchain-ai/langgraph"})},
         {"jira.create_ticket": frozenset({"MOCK"})},
+        {"crd_version_checker": {"GitHub repository": None, "Jira project": frozenset({"MOCK"})}},
     )
     assert grade(release_check(), ERROR_WORKFLOW, known).grade == "safe"
     elsewhere = release_check()
@@ -209,6 +210,14 @@ def test_a_block_naming_an_option_the_editor_does_not_list_needs_a_fix() -> None
     stranger = release_check()
     node(stranger, "Compare")["parameters"]["agent"] = "crd_unknown"
     assert grade(stranger, ERROR_WORKFLOW, known).grade == "needs_a_fix"
+    elsewhere = release_check()
+    node(elsewhere, "Compare")["parameters"]["inputs"]["input"][1]["value"] = "PROD"
+    assert grade(elsewhere, ERROR_WORKFLOW, known).grade == "needs_a_fix"
+    unknown_input = release_check()
+    node(unknown_input, "Compare")["parameters"]["inputs"]["input"].append(
+        {"name": "Repo", "value": "evil/repo"}
+    )
+    assert grade(unknown_input, ERROR_WORKFLOW, known).grade == "needs_a_fix"
 
 
 def test_something_that_is_not_a_workflow_needs_a_fix() -> None:

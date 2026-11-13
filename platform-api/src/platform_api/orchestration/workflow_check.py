@@ -17,7 +17,8 @@ from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
-from platform_api.orchestration.n8n_calls import Grade
+from platform_api.orchestration.agents import CardInput
+from platform_api.orchestration.n8n_calls import WRITE_TARGETS, Grade, WriteEntry
 from platform_api.orchestration.schedule import TIME_ZONE
 
 type BlockKind = Literal[
@@ -111,6 +112,37 @@ class KnownOptions:
     """Read places by source."""
     writes: Mapping[str, frozenset[str]]
     """Propose a change places by change."""
+    inputs: Mapping[str, Mapping[str, frozenset[str] | None]]
+    """Each agent's inputs, and for an input that names where a write lands, the places allowed.
+    None allows any value."""
+
+
+def known_options(
+    agents: Mapping[str, Sequence[CardInput]],
+    places: Mapping[str, Iterable[str]],
+    writes: Sequence[WriteEntry],
+) -> KnownOptions:
+    """The editor's lists as one snapshot, with the same write targets the node calls check."""
+    by_connector: dict[str, set[str]] = {}
+    for entry in writes:
+        by_connector.setdefault(entry.connector, set()).update(o.id for o in entry.places)
+    inputs = {
+        agent: {
+            item.name: (
+                None
+                if (connector := WRITE_TARGETS.get(item.kind)) is None
+                else frozenset(by_connector.get(connector, set()))
+            )
+            for item in items
+        }
+        for agent, items in agents.items()
+    }
+    return KnownOptions(
+        frozenset(agents),
+        {source: frozenset(listed) for source, listed in places.items()},
+        {entry.id: frozenset(o.id for o in entry.places) for entry in writes},
+        inputs,
+    )
 
 
 class _Target(BaseModel):
@@ -322,8 +354,18 @@ def _number(value: JsonValue) -> int:
 
 def _options(flow: Flow, known: KnownOptions) -> Iterable[Finding]:
     for block in flow.of_kind("agent"):
-        if block.parameters.get("agent") not in known.agents:
+        agent = block.parameters.get("agent")
+        if not isinstance(agent, str) or agent not in known.agents:
             yield _fix(block.name, f'"{block.name}" names an agent the platform does not know.')
+            continue
+        allowed = known.inputs.get(agent, {})
+        for name, value in _input_rows(block):
+            if name not in allowed:
+                yield _fix(block.name, f'"{block.name}" gives its agent an input it does not have.')
+            elif (places := allowed[name]) is not None and value not in places:
+                yield _fix(
+                    block.name, f'"{block.name}" writes to a place the platform does not allow.'
+                )
     for block in flow.of_kind("read"):
         source = str(block.parameters.get("source", "github_releases"))
         if block.parameters.get("place") not in known.places.get(source, frozenset()):
@@ -332,6 +374,15 @@ def _options(flow: Flow, known: KnownOptions) -> Iterable[Finding]:
         places = known.writes.get(str(block.parameters.get("action")))
         if places is None or block.parameters.get("place") not in places:
             yield _fix(block.name, f'"{block.name}" proposes a change the platform does not allow.')
+
+
+def _input_rows(block: Block) -> list[tuple[str, JsonValue]]:
+    """An Agent block's inputs, as its fixed collection holds them."""
+    inputs = block.parameters.get("inputs")
+    rows = inputs.get("input") if isinstance(inputs, dict) else None
+    if not isinstance(rows, list):
+        return []
+    return [(str(row.get("name")), row.get("value")) for row in rows if isinstance(row, dict)]
 
 
 def _yes_before_writes(flow: Flow) -> Iterable[Finding]:

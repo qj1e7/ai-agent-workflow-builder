@@ -20,6 +20,7 @@ from platform_api.orchestration import (
     AgentUnavailable,
     CannotRun,
     NodeOption,
+    WriteEntry,
     Publisher,
     RanVersion,
     ReadFailed,
@@ -90,7 +91,19 @@ class N8nLab:
 
     def facts(self, releases: Releases | None = None) -> BuilderWorkflowFacts:
         reader = releases or Releases(ReleasesRead(releases=[]))
-        return BuilderWorkflowFacts(self.lab.h.db, self.lab.builder, reader)
+        return BuilderWorkflowFacts(self.lab.h.db, self.lab.builder, reader, WRITES)
+
+
+WRITES = [
+    WriteEntry(
+        "jira.create_ticket",
+        "Create a Jira ticket",
+        "jira",
+        "create_ticket",
+        "project",
+        (NodeOption("MOCK", "MOCK"),),
+    )
+]
 
 
 def with_n8n(lab: Lab, drafts: N8nWorkflows) -> None:
@@ -101,6 +114,7 @@ def with_n8n(lab: Lab, drafts: N8nWorkflows) -> None:
         "https://portal.example",
         ModelConnected(),
         n8n=drafts,
+        writes=WRITES,
     )
     lab.app.state.builder = lab.builder
 
@@ -185,6 +199,30 @@ async def test_when_n8n_does_not_take_the_draft_nothing_is_set_up(lab: Lab):
     assert refused.json()["detail"] == "n8n did not take the draft. Try again in a minute."
     assert n8n.workflows == {}, "the draft n8n changed on the way in is removed"
     assert await lab.listed() == []
+
+
+async def test_a_draft_its_first_call_would_refuse_is_refused_at_set_up(n8n_lab: N8nLab):
+    """Graded with what the editor's lists hold, so a draft never reads safe and then fails at
+    its first call: here the platform writes to MOCK only."""
+    agents = [{"card_id": VERSION_CHECKER_ID, "values": {**VALUES, "Jira project": "PROD"}}]
+    refused = await n8n_lab.create({**BODY, "agents": agents})
+    assert refused.status_code == 422
+    assert [e["msg"] for e in refused.json()["detail"]] == [
+        '"Compare" writes to a place the platform does not allow.'
+    ]
+    assert n8n_lab.n8n.workflows == {}
+    assert await n8n_lab.lab.listed() == []
+
+
+async def test_the_draft_s_own_repository_is_a_place_its_read_may_read(n8n_lab: N8nLab):
+    other = {**VALUES, "GitHub repository": "acme/planted"}
+    created = await n8n_lab.create(
+        {**BODY, "agents": [{"card_id": VERSION_CHECKER_ID, "values": other}]}
+    )
+    assert created.status_code == 201, created.text
+    assert NodeOption("acme/planted", "acme/planted") in await n8n_lab.lab.builder.facts.places(
+        "github_releases"
+    )
 
 
 async def test_n8n_without_its_error_workflow_is_not_ready(lab: Lab):

@@ -6,7 +6,7 @@ Orchestration may not import the builder, so it asks through its WorkflowFacts a
 ports, and wiring hands it this.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Protocol
 
 from platform_api.builder.card_store import CardLibrary
@@ -22,6 +22,7 @@ from platform_api.orchestration import (
     CannotRun,
     CardInput,
     CardRun,
+    KnownOptions,
     NodeOption,
     OwnWorkflow,
     Publisher,
@@ -32,7 +33,9 @@ from platform_api.orchestration import (
     ReadReleasesResult,
     ReleasesNotRead,
     RunSpec,
+    WriteEntry,
     card_bindings,
+    known_options,
 )
 from platform_api.shared import UseCaseId, UserId
 
@@ -66,11 +69,27 @@ def missing_target(card_name: str, inputs: Sequence[CardInput], values: Mapping[
 
 
 class BuilderWorkflowFacts:
-    def __init__(self, db: Database, specs: Specs, releases: ReleaseReader) -> None:
+    def __init__(
+        self,
+        db: Database,
+        specs: Specs,
+        releases: ReleaseReader | None,
+        writes: Sequence[WriteEntry],
+    ) -> None:
         self._db = db
         self._specs = specs
         self._releases = releases
+        self._writes = writes
         self._cards = CardLibrary(db)
+
+    async def known(self, adding: Mapping[str, Iterable[str]]) -> KnownOptions:
+        """What the editor's lists hold now, and the places a use case about to be saved adds,
+        since saving it lists them."""
+        cards = await self._cards.list()
+        listed = [option.id for option in await self.places(GITHUB_RELEASES)]
+        places = {GITHUB_RELEASES: [*listed, *adding.get(GITHUB_RELEASES, ())]}
+        agents = {card.card_id: card_spec(card).inputs for card in cards}
+        return known_options(agents, places, self._writes)
 
     async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | None:
         async with self._db.connection("builder") as conn:
@@ -149,7 +168,7 @@ class BuilderWorkflowFacts:
     async def read(self, source: str, place: str, query: str | None) -> ReadItems | ReadFailed:
         """A repository's counted releases, newest first, through the agent runtime, which holds
         GitHub's key."""
-        if source != GITHUB_RELEASES:
+        if source != GITHUB_RELEASES or self._releases is None:
             return ReadFailed("Our platform does not read this source yet.")
         answer = await self._releases.read_releases(
             ReadReleasesRequest(repo=place, tag_pattern=TAG_PATTERN)

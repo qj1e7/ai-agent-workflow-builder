@@ -17,7 +17,7 @@ from platform_api.builder.cards import (
 )
 from platform_api.builder.drafts import Drafts, TooManyDrafts
 from platform_api.builder.last_run import RunHistory, last_run_view
-from platform_api.builder.layout import LayoutPlan, PlannedAgent, lay_out
+from platform_api.builder.layout import REPO_INPUT, LayoutPlan, PlannedAgent, lay_out
 from platform_api.builder.lifecycle import (
     AlreadyDeleted,
     Deleted,
@@ -63,6 +63,7 @@ from platform_api.builder.models import (
     Via,
 )
 from platform_api.builder.n8n_draft import ADDING, SAVED, DraftRefused, blocks_of, check_draft
+from platform_api.builder.n8n_facts import BuilderWorkflowFacts, ReleaseReader
 from platform_api.builder.planning import (
     CardPlanner,
     NoModelConnected,
@@ -94,6 +95,7 @@ from platform_api.builder.views import template_view
 from platform_api.builder.watchlist import Watchlist
 from platform_api.db import Connection, Database, UnitOfWork, hold_workflow, json
 from platform_api.orchestration import (
+    GITHUB_RELEASES,
     CardRun,
     CardsTask,
     Graded,
@@ -108,6 +110,7 @@ from platform_api.orchestration import (
     Schedule,
     ScheduleBook,
     Task,
+    WriteEntry,
     card_bindings,
     cards_policy,
     tools_used,
@@ -299,6 +302,8 @@ class Builder:
         schedules: ScheduleBook | None = None,
         history: RunHistory | None = None,
         n8n: N8nDrafts | None = None,
+        releases: ReleaseReader | None = None,
+        writes: Sequence[WriteEntry] = (),
     ) -> None:
         self._db = db
         self._runs = runs
@@ -310,6 +315,8 @@ class Builder:
         self._history = history
         self._n8n = n8n
         self.public_base_url = public_base_url
+        self.facts = BuilderWorkflowFacts(db, self, releases, writes)
+        """What node calls ask of the builder, and what a draft is graded against."""
 
     async def list_use_cases(self, viewer: Principal | None = None) -> UseCaseList:
         """Team-wide by design: one team, two roles, and Approvers need the context.
@@ -693,7 +700,9 @@ class Builder:
             tuple(_planned(card, values) for card, values in chosen),
             error_workflow,
         )
-        checked = check_draft(lay_out(plan), use_case_id, error_workflow)
+        repos = [values[REPO_INPUT] for _, values in chosen if REPO_INPUT in values]
+        known = await self.facts.known({GITHUB_RELEASES: repos})
+        checked = check_draft(lay_out(plan), use_case_id, error_workflow, known)
         if isinstance(checked, DraftRefused):
             log.error("the safety checker refused the layout of %s: %s", use_case_id, checked)
             return checked

@@ -17,6 +17,7 @@ from platform_api.orchestration import (
     Edge,
     Finding,
     Graded,
+    KnownOptions,
     Unreadable,
     add_yes,
     grade,
@@ -58,7 +59,9 @@ def added_line(write: str) -> str:
     return f"Added a yes before {WHAT_IS_WRITTEN.get(write, f'"{write}"')}."
 
 
-def check_draft(laid: Mapping[str, Any], key: str, error_workflow: str) -> Checked | DraftRefused:
+def check_draft(
+    laid: Mapping[str, Any], key: str, error_workflow: str, known: KnownOptions | None = None
+) -> Checked | DraftRefused:
     """The checker puts a yes before each write, then grades the result. Only a draft that grades
     Safe is saved: a layout that needs a fix, or a write the checker could not put behind one
     yes, is refused."""
@@ -67,7 +70,7 @@ def check_draft(laid: Mapping[str, Any], key: str, error_workflow: str) -> Check
         with_yes = add_yes(laid, key)
     except Unreadable as unreadable:
         return DraftRefused((Finding("needs_a_fix", None, str(unreadable)),))
-    graded = grade(with_yes.document, error_workflow)
+    graded = grade(with_yes.document, error_workflow, known)
     if graded.grade != "safe":
         return DraftRefused(graded.findings)
     lines: list[tuple[LineKind, str]] = [("check", FIT)]

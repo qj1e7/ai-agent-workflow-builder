@@ -8,7 +8,6 @@ from fastapi import FastAPI
 
 from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
 from platform_api.builder import Builder, Home, PlannerFront, TeamRequests, Watchlist
-from platform_api.builder.n8n_facts import BuilderWorkflowFacts
 from platform_api.builder.planner_facts import PlannerFactsReader
 from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
@@ -361,8 +360,10 @@ async def build(settings: Settings) -> Services:
         schedules,
         orchestrator,
         n8n=n8n.drafts,
+        releases=agents,
+        writes=node_writes(settings),
     )
-    facts = BuilderWorkflowFacts(db, builder, agents)
+    facts = builder.facts
     tells, tell_flow = tell_outlet(settings, db)
     node_calls = NodeCalls(
         db,

@@ -104,6 +104,7 @@ from platform_api.orchestration.n8n_calls import (
     RanVersion,
     ReadFailed,
     ReadItems,
+    WriteEntry,
 )
 from platform_api.orchestration.people_store import ConfirmationRow
 from platform_api.orchestration.person_runs import (
@@ -198,12 +199,15 @@ from platform_api.orchestration.workflow_check import (
     block_id,
     free_name,
     grade,
+    known_options,
     read_flow,
     writes,
 )
 from platform_api.orchestration.write_actions import Binding
 
 __all__ = [
+    "WriteEntry",
+    "known_options",
     "block_id",
     "Edge",
     "N8nDrafts",
