@@ -5988,7 +5988,7 @@
   },
   {
     "id": "c6-pause-react",
-    "note": "Chat-first plan PR 6, the sketch's phrase: a pause alone names the workflow, and the platform pauses it.",
+    "note": "Chat-first plan PR 6, the sketch's phrase: a pause alone names the workflow, and the platform pauses it. The facts hold a React release check beside the watchlist's React, so the words must name the check.",
     "task": "pause the React check",
     "kind": [
       "pause"
@@ -6036,13 +6036,19 @@
           "state": "on",
           "last_run": "Waiting for a yes",
           "last_run_at": "2026-11-09T01:00:00Z"
+        },
+        {
+          "name": "React release check",
+          "state": "on",
+          "last_run": "Done",
+          "last_run_at": "2026-11-12T00:00:00Z"
         }
       ]
     }
   },
   {
     "id": "c6-resume-react",
-    "note": "Chat-first plan PR 6: turning a workflow back on is a resume.",
+    "note": "Chat-first plan PR 6: turning a workflow back on is a resume. The facts hold a React release check beside the watchlist's React, so the words must name the check.",
     "task": "Turn the React check back on",
     "kind": [
       "resume"
@@ -6090,6 +6096,12 @@
           "state": "on",
           "last_run": "Waiting for a yes",
           "last_run_at": "2026-11-09T01:00:00Z"
+        },
+        {
+          "name": "React release check",
+          "state": "on",
+          "last_run": "Done",
+          "last_run_at": "2026-11-12T00:00:00Z"
         }
       ]
     }
