@@ -52,8 +52,8 @@ function Summary({ useCase, me, now }: { useCase: UseCaseView; me: Me; now: Date
   const stopped = stopOf(useCase, me, now)
   const troubleshoot = useTroubleshoot(stopped?.run_id ?? '', stopped !== null, 0)
   const whole = bannerOf({ useCase, viewer: viewerOf(me), now })
-  // A stop's Retry is in the answers below it, and Resume is beside Pause, so the banner keeps one primary action for the state.
-  const banner = whole.action?.kind === 'stopped' || whole.action?.kind === 'resume' ? { ...whole, action: null } : whole
+  // A stop's Retry is in the answers below it, so its banner only opens the run. Resume is beside Pause. One primary action for the state.
+  const banner = whole.action?.kind === 'stopped' ? { ...whole, action: { kind: 'open' as const, runId: whole.action.runId } } : whole.action?.kind === 'resume' ? { ...whole, action: null } : whole
   return (
     <>
       <div>

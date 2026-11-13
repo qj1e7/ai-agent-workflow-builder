@@ -66,9 +66,8 @@ describe('the side panel', () => {
 
   it('shows a software’s status, the version you run, the newest, and what checks it and when, in the Software page’s words', () => {
     const shown = text(draw({ kind: 'software', id: REDIS }))
-    expect(shown).toContain('Ticket waiting for a yes')
-    expect(shown).toContain('You run Not known')
-    expect(shown).toContain('Newest 8.2.1')
+    expect(shown).toContain('Newer out')
+    expect(shown).toContain('Newest is 8.2.1. The version you run isn’t known yet.')
     expect(shown).toContain('Checked by The Version checker, on GitHub.')
     expect(shown).toContain('When Checked every Monday at 9:00, set by Alice. Next check')
   })
