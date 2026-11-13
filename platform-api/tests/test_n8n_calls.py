@@ -287,11 +287,33 @@ async def test_an_unknown_option_id_is_refused_and_nothing_is_read_run_or_propos
 ):
     t.started("101")
     assert await t.call("101", work) == Refused(422, refused)
-    assert await t.runs() == []
     assert t.sources.reads == []
     assert t.h.agent.requests == []
     [row] = await t.node_calls()
-    assert (row["outcome"], row["actions"]) == ("refused", [])
+    run = await t.only_run()
+    assert (row["run_id"], row["outcome"], row["actions"]) == (run.run_id, "refused", [])
+
+
+async def test_nothing_is_kept_for_an_execution_n8n_does_not_know(t: Calls):
+    """The catalog is asked only once n8n vouches for the execution, so a caller with the node
+    key alone leaves no row behind, whatever it names."""
+    unknown_place = ReadCall("github_releases", "evil/repo", None)
+    assert isinstance(await t.call("999", unknown_place), TryLater)
+    assert await t.node_calls() == []
+    assert await t.runs() == []
+
+
+async def test_a_repeat_of_a_block_with_other_content_is_refused_and_changes_nothing(t: Calls):
+    t.started("101")
+    first = await t.call("101")
+    other_place = ReadCall("github_releases", "langchain-ai/langchain", None)
+    changed = Refused(409, "This block already called with other content in this execution.")
+    assert await t.call("101", other_place) == changed
+    assert await t.call("101", AgentCall(CARD.id, {})) == changed, "another kind, same name"
+    [row] = await t.node_calls()
+    assert (row["outcome"], row["attempts"]) == ("answered", 1)
+    assert await t.call("101") == replace(first, replayed=True)  # type: ignore[arg-type]
+    assert len(t.sources.reads) == 1
 
 
 async def test_a_refusal_n8n_repeats_gets_the_same_answer_and_is_kept_once(t: Calls):

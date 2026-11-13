@@ -1029,9 +1029,9 @@ async def test_migration_0019_keeps_starts_links_and_node_calls_whole_and_a_down
         "expires_at, used_at, used_by) VALUES (%s, %s, %s, 'wf1', %s, %s, %s, %s)"
     )
     call = (
-        "INSERT INTO orchestration.node_calls (execution_id, node_name, run_id, kind, attempts, "
-        "outcome, call_id, claimed_at, status, answer, answered_at) "
-        "VALUES ('41', %s, %s, %s, 1, %s, %s, %s, %s, %s, %s)"
+        "INSERT INTO orchestration.node_calls (execution_id, node_name, run_id, kind, "
+        "content_hash, attempts, outcome, call_id, claimed_at, status, answer, answered_at) "
+        "VALUES ('41', %s, %s, %s, 'h', 1, %s, %s, %s, %s, %s, %s)"
     )
     with psycopg.connect(postgres.owner, autocommit=True) as conn:
         conn.execute(start, ("n_ok", run_id, "run_now", NOW, NOW, None, None))

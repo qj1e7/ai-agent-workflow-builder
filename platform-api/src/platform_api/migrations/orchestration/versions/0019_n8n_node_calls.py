@@ -7,10 +7,10 @@ down_revision = "0018"
 def upgrade() -> None:
     # n8n carries each run of a workflow on its own (ENGINE-PLAN 2.3). A start is a nonce our API
     # gives one run of one workflow, used once. An execution joins exactly one run, on its first
-    # node call. Each block's first answer or refusal is kept by (execution, block), because n8n
-    # repeats a call, a refused one too. A refusal can come before there is any run. A call still
-    # working is a claim. joined_by holds whoever joined the run in n8n, such as the holder of a
-    # run started by hand there, who may not approve it.
+    # node call. Each block's first answer or refusal is kept by (execution, block), with a hash
+    # of what it asked, because n8n repeats a call, a refused one too. A refusal can come before
+    # there is any run. A call still working is a claim. joined_by holds whoever joined the run in
+    # n8n, such as the holder of a run started by hand there, who may not approve it.
     op.execute("""
         CREATE TABLE orchestration.starts (
             nonce text PRIMARY KEY,
@@ -42,6 +42,7 @@ def upgrade() -> None:
             run_id text REFERENCES orchestration.runs (run_id),
             kind text NOT NULL
                 CHECK (kind IN ('read', 'agent', 'propose', 'ask', 'write', 'tell')),
+            content_hash text NOT NULL,
             attempts integer NOT NULL CHECK (attempts >= 1),
             outcome text NOT NULL CHECK (outcome IN ('working', 'answered', 'refused')),
             call_id text NOT NULL UNIQUE,
@@ -65,7 +66,7 @@ def upgrade() -> None:
 
         GRANT SELECT, INSERT, UPDATE ON orchestration.starts, orchestration.executions
             TO wab_orchestration;
-        GRANT SELECT, INSERT, UPDATE, DELETE ON orchestration.node_calls TO wab_orchestration;
+        GRANT SELECT, INSERT, UPDATE ON orchestration.node_calls TO wab_orchestration;
     """)
 
 

@@ -13,8 +13,9 @@ Pure, apart from the ports. The service that runs the calls is in n8n_call_servi
 
 import hashlib
 import hmac
+import json
 from collections.abc import Awaitable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from typing import Literal, Protocol
 
@@ -180,6 +181,14 @@ class NodeCall:
     def kind(self) -> NodeKind:
         return KIND_OF[type(self.work)]
 
+    @property
+    def content_hash(self) -> str:
+        """What the block asked, so a repeat that asks something else is not taken for it."""
+        content = json.dumps(
+            {"kind": self.kind, **asdict(self.work)}, sort_keys=True, separators=(",", ":")
+        )
+        return hashlib.sha256(content.encode()).hexdigest()
+
 
 @dataclass(frozen=True)
 class Answer:
@@ -216,6 +225,7 @@ START_TOO_LATE = Refused(409, "The run this start was made for is no longer wait
 UNKNOWN_START = Refused(403, "This execution did not start from a trigger our platform knows.")
 NO_EXECUTION = TryLater("n8n has no record of this execution yet.")
 ANOTHER_EXECUTION = Refused(409, "Another execution of this run is live.")
+CHANGED_CALL = Refused(409, "This block already called with other content in this execution.")
 BUSY = TryLater("Our platform is still answering this block.")
 
 

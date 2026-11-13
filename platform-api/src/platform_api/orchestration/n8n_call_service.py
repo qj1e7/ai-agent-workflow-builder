@@ -35,6 +35,7 @@ from platform_api.orchestration.cards import ReviewedCards, bind_cards, review_c
 from platform_api.orchestration.n8n_calls import (
     ANOTHER_EXECUTION,
     BUSY,
+    CHANGED_CALL,
     NO_EXECUTION,
     NOT_OURS,
     READ_LIMIT,
@@ -111,6 +112,8 @@ _actions_adapter: TypeAdapter[tuple[WriteAction, ...]] = TypeAdapter(tuple[Write
 @dataclass(frozen=True)
 class CallRow:
     run_id: RunId | None
+    kind: str
+    content_hash: str
     outcome: Outcome
     call_id: str
     claimed_at: datetime
@@ -178,9 +181,9 @@ class CallBook:
     async def call(self, uow: UnitOfWork, call: NodeCall) -> CallRow | None:
         row = await (
             await uow.conn.execute(
-                "UPDATE orchestration.node_calls SET attempts = attempts + 1 "
-                "WHERE execution_id = %s AND node_name = %s "
-                "RETURNING run_id, outcome, call_id, claimed_at, status, answer",
+                "SELECT run_id, kind, content_hash, outcome, call_id, claimed_at, status, answer "
+                "FROM orchestration.node_calls WHERE execution_id = %s AND node_name = %s "
+                "FOR UPDATE",
                 (call.execution_id, call.node_name),
             )
         ).fetchone()
@@ -188,6 +191,8 @@ class CallBook:
             return None
         return CallRow(
             None if row["run_id"] is None else RunId(row["run_id"]),
+            row["kind"],
+            row["content_hash"],
             row["outcome"],
             row["call_id"],
             row["claimed_at"],
@@ -195,14 +200,30 @@ class CallBook:
             row["answer"],
         )
 
+    async def count_again(self, uow: UnitOfWork, call: NodeCall) -> None:
+        await uow.conn.execute(
+            "UPDATE orchestration.node_calls SET attempts = attempts + 1 "
+            "WHERE execution_id = %s AND node_name = %s",
+            (call.execution_id, call.node_name),
+        )
+
     async def claim(self, uow: UnitOfWork, call: NodeCall, run_id: RunId) -> str:
         call_id = new_id("call")
         await uow.conn.execute(
             "INSERT INTO orchestration.node_calls (execution_id, node_name, run_id, kind, "
-            "attempts, outcome, call_id, claimed_at) VALUES (%s, %s, %s, %s, 1, 'working', %s, %s)"
-            " ON CONFLICT (execution_id, node_name) DO UPDATE SET call_id = EXCLUDED.call_id, "
+            "content_hash, attempts, outcome, call_id, claimed_at) "
+            "VALUES (%s, %s, %s, %s, %s, 1, 'working', %s, %s) "
+            "ON CONFLICT (execution_id, node_name) DO UPDATE SET call_id = EXCLUDED.call_id, "
             "claimed_at = EXCLUDED.claimed_at",
-            (call.execution_id, call.node_name, run_id, call.kind, call_id, uow.now),
+            (
+                call.execution_id,
+                call.node_name,
+                run_id,
+                call.kind,
+                call.content_hash,
+                call_id,
+                uow.now,
+            ),
         )
         return call_id
 
@@ -234,8 +255,8 @@ class CallBook:
             return kept is not None
         await uow.conn.execute(
             "INSERT INTO orchestration.node_calls (execution_id, node_name, run_id, kind, "
-            "attempts, outcome, call_id, claimed_at, status, answer, actions, answered_at) "
-            "VALUES (%s, %s, %s, %s, 1, %s, %s, %s, %s, %s, %s, %s) "
+            "content_hash, attempts, outcome, call_id, claimed_at, status, answer, actions, "
+            "answered_at) VALUES (%s, %s, %s, %s, %s, 1, %s, %s, %s, %s, %s, %s, %s) "
             "ON CONFLICT (execution_id, node_name) DO UPDATE SET run_id = EXCLUDED.run_id, "
             "outcome = EXCLUDED.outcome, status = EXCLUDED.status, answer = EXCLUDED.answer, "
             "actions = EXCLUDED.actions, answered_at = EXCLUDED.answered_at",
@@ -244,6 +265,7 @@ class CallBook:
                 call.node_name,
                 run_id,
                 call.kind,
+                call.content_hash,
                 outcome,
                 new_id("call"),
                 uow.now,
@@ -445,6 +467,10 @@ class NodeCalls:
     async def _admit(self, uow: UnitOfWork, call: NodeCall) -> Admitted | CallResult:
         await self._book.hold_execution(uow, call.execution_id)
         row = await self._book.call(uow, call)
+        if row is not None and (row.kind, row.content_hash) != (call.kind, call.content_hash):
+            return CHANGED_CALL
+        if row is not None:
+            await self._book.count_again(uow, call)
         if row is not None and row.outcome != "working":
             if row.run_id is not None:
                 await self._touch(uow, row.run_id, call.execution_id)
@@ -452,8 +478,6 @@ class NodeCalls:
         if row is not None and row.claimed_at > uow.now - CLAIM_LEASE:
             return BUSY
         run_id = await self._book.linked_run(uow, call.execution_id)
-        if (refused := await self._catalog.unknown_in(call.work)) is not None:
-            return await self._refuse(uow, call, run_id, refused)
         if run_id is None:
             linked = await self._link(uow, call)
             if isinstance(linked, TryLater):
@@ -462,6 +486,8 @@ class NodeCalls:
                 run_id = await self._book.linked_run(uow, call.execution_id)
                 return await self._refuse(uow, call, run_id, linked)
             run_id = linked
+        if (refused := await self._catalog.unknown_in(call.work)) is not None:
+            return await self._refuse(uow, call, run_id, refused)
         record = await self._store.load_run(uow, run_id, lock=True)
         assert record is not None
         match record.state:
