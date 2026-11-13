@@ -26,4 +26,15 @@ describe('a card in the chat', () => {
     expect(text(bare)).toBe('What I can do body')
     expect(bare.match(/<div/g)).toHaveLength(1)
   })
+
+  it('lets a foot lay itself out, so Ask the team’s open box spans the card instead of sitting squeezed in the buttons’ corner', () => {
+    const open = renderToStaticMarkup(
+      <Card title="What I can’t do yet" foot={<div data-box="ask"><textarea /></div>}>
+        body
+      </Card>,
+    )
+    const foot = /<div class="[^"]*_foot_[^"]*_own_[^"]*">([\s\S]*)<\/div><\/section>/.exec(open)?.[1] ?? ''
+    expect(foot, 'the box is the foot’s own child').toMatch(/^<div data-box="ask"><textarea><\/textarea><\/div>$/)
+    expect(open).not.toMatch(/_actions_/)
+  })
 })

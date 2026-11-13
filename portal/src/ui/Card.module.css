@@ -54,6 +54,15 @@
   margin-left: auto;
 }
 
+/* A foot that lays itself out: its button sits at the right, and what it opens spans the card. */
+.own {
+  justify-content: flex-end;
+}
+
+.own > :not(button, a) {
+  flex: 1 1 100%;
+}
+
 /* Buttons that gave way to the side panel leave no foot behind them. */
 .actions:empty,
 .foot:has(> .actions:empty:only-child) {

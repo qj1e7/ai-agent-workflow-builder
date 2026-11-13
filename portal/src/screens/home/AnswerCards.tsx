@@ -65,7 +65,7 @@ export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }
     <>
       <Card
         title="What I can’t do yet"
-        actions={
+        foot={
           <AskTheTeam
             capability={reply.cant.find((row) => row.system)?.system ?? rows[0]?.text ?? 'something new'}
             starter={`I asked the Planner for: ${typed}\n\nIt can't do this yet: ${rows.map((line) => line.text).join('; ')}`}
