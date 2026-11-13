@@ -4,13 +4,15 @@ The runtime reads a typed request and the builder adds what only it knows: a wor
 already has under that name, software already on the list, and which workflow a name means. An
 intent chip never asks the model. When no model is connected, or it is slow or gives an answer
 that cannot be used, the person gets the plain offline answer with the starter workflows, never
-a guess. Nothing here writes.
+a guess. Nothing here writes, and the only change it makes is the one asked for alone: an
+Operator's pause or resume of the one workflow its words name.
 """
 
 import asyncio
 import logging
 import re
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Final, Literal, Protocol, Self
 
@@ -23,7 +25,9 @@ from platform_api.builder.models import (
     StarterView,
     UnderstoodRowView,
     UseCaseList,
+    UseCaseState,
     UseCaseView,
+    Via,
     WatchlistView,
 )
 from platform_api.builder.planning import FALLBACK_WORDS, STARTERS, FallbackWhy
@@ -52,12 +56,14 @@ from platform_api.orchestration import (
     PartCantDo,
     PartMark,
     PartReason,
+    PauseAnswer,
     PlannerAnswer,
     PlannerFacts,
     PreviousTurn,
     QuestionAnswer,
     RefusedAnswer,
     RequestPart,
+    ResumeAnswer,
     RowKind,
     RuntimeDown,
     SetupCardAnswer,
@@ -145,6 +151,14 @@ class CantRowView(WireModel):
         "part the Planner didn't follow, which names nothing to build."
     )
     system: str | None
+    instead: str | None = Field(
+        description="What the person has instead, in one sentence, when the note is a registry "
+        "entry's one-line can't. Null otherwise."
+    )
+    unsupported: bool = Field(
+        description="True when the platform won't do it at all, so there is nothing to ask the "
+        "team for."
+    )
 
 
 class PartView(WireModel):
@@ -372,6 +386,49 @@ class EditReply(Reply):
     )
 
 
+class SwitchChoice(WireModel):
+    use_case_id: str
+    name: str
+    state: UseCaseState
+    watchlist: bool = Field(
+        description="True for the Software watchlist, whose pause stops the checks of every "
+        "software on it."
+    )
+
+
+class _SwitchReply(Reply):
+    use_case_id: str | None = Field(
+        description="The workflow paused or turned back on. Null when the words named none of the "
+        "person's workflows, or several, or a watched software's check, so nothing changed."
+    )
+    name: str | None = Field(description="Its name. Null with use_case_id.")
+    already: bool = Field(description="True when it was already that way, so nothing changed.")
+    missing: str | None = Field(
+        description="The request's words for a workflow the person doesn't have. Null otherwise."
+    )
+    choices: list[SwitchChoice] = Field(
+        description="The workflows the request could mean, for the person to pick one, which the "
+        "Portal then pauses or resumes through the workflow's own route: every one its words "
+        'match when they match several, the Software watchlist for "the React check", or every '
+        'workflow for "it". Empty when one matched or the words name none.'
+    )
+
+
+class PauseReply(_SwitchReply):
+    """A pause asked for alone. For an Operator the platform pauses the one workflow the words
+    name, as POST /api/v1/use-cases/{use_case_id}/pause does: it starts no runs until it is
+    resumed, and a run that has started carries on."""
+
+    answer: Literal["pause"] = "pause"
+
+
+class ResumeReply(_SwitchReply):
+    """A resume asked for alone. For an Operator the platform turns the one workflow the words
+    name back on, as POST /api/v1/use-cases/{use_case_id}/resume does."""
+
+    answer: Literal["resume"] = "resume"
+
+
 class OperatorsReply(Reply):
     """A change asked by someone who isn't an Operator. Only Operators set up and change
     workflows, so nothing is offered that changes anything (ADR 0043)."""
@@ -422,6 +479,8 @@ type PlannerReply = Annotated[
     | NeedsMeReply
     | QuestionReply
     | EditReply
+    | PauseReply
+    | ResumeReply
     | OperatorsReply
     | DecidedReply
     | DecideReply
@@ -455,6 +514,13 @@ class CapabilityView(WireModel):
         "unsupported: the team has decided against it."
     )
     cant: str | None = Field(description="What the platform can't do, when it is not ready.")
+    short: str | None = Field(
+        description="Its words on the chat's capabilities card: a line when it is ready, a name "
+        "in the card's Not yet note when it isn't. Null for one the card leaves out."
+    )
+    instead: str | None = Field(
+        description="For one that isn't ready, what the person has instead, in one sentence."
+    )
     why: str | None = Field(
         description="Why it is not ready: the registry's words for a planned or unsupported "
         "entry, the connection's problem for needs_setup and down. Null when ready."
@@ -513,6 +579,14 @@ class Workflows(Protocol):
 
     async def list_cards(self) -> CardList: ...
 
+    async def pause_use_case(
+        self, use_case_id: str, principal: Principal, via: Via
+    ) -> UseCaseView | None: ...
+
+    async def resume_use_case(
+        self, use_case_id: str, principal: Principal, via: Via
+    ) -> UseCaseView | None: ...
+
 
 class Listed(Protocol):
     async def view(self) -> WatchlistView | None: ...
@@ -532,7 +606,13 @@ def offline(why: FallbackWhy) -> OfflineReply:
 
 def _cant_row(row: CantRow) -> CantRowView:
     return CantRowView(
-        kind=row.kind, text=row.text, note=row.note, needs=row.needs, system=row.system
+        kind=row.kind,
+        text=row.text,
+        note=row.note,
+        needs=row.needs,
+        system=row.system,
+        instead=row.instead,
+        unsupported=row.unsupported,
     )
 
 
@@ -753,10 +833,10 @@ class PlannerFront:
                 log.warning("The Planner's answer fell back to the starters: %s", reason)
                 return offline("too_slow" if reason == "too_slow" else "trouble")
             case Answered(answer=answer, parts=parts):
-                reply = await self._finish(answer)
+                reply = await self._finish(answer, viewer)
                 return reply.model_copy(update={"parts": [_part_view(p) for p in parts]})
 
-    async def _finish(self, answer: PlannerAnswer) -> PlannerReply:
+    async def _finish(self, answer: PlannerAnswer, viewer: Principal) -> PlannerReply:
         match answer:
             case SetupCardAnswer(name=name, rows=rows):
                 return SetupCardReply(
@@ -772,10 +852,10 @@ class PlannerFront:
             case CantAnswer(cant=cant, alternative=alternative):
                 return CantReply(
                     cant=[_cant_row(c) for c in cant],
-                    alternative=await self._alternative(alternative),
+                    alternative=await self._alternative(alternative, viewer),
                 )
             case WatchlistAnswer() as watch:
-                return await self._watch(watch)
+                return await self._watch(watch, viewer)
             case WhichSoftwareAnswer(word=word):
                 return WhichSoftwareReply(word=word)
             case RefusedAnswer(reason=reason, said=said, rest=rest):
@@ -792,9 +872,11 @@ class PlannerFront:
                 return QuestionReply(text=text, looked_at=looked_at, about_software=software)
             case EditAnswer() as edit:
                 return await self._edit(edit)
+            case PauseAnswer() | ResumeAnswer():
+                return await self._switch(answer, viewer)
 
     async def _alternative(
-        self, alternative: SetupCardAnswer | WatchlistAnswer | None
+        self, alternative: SetupCardAnswer | WatchlistAnswer | None, viewer: Principal
     ) -> SetupCardReply | WatchlistReply | None:
         match alternative:
             case None:
@@ -804,12 +886,12 @@ class PlannerFront:
                     name=name, rows=_rows(rows), similar=await self._similar(name)
                 )
             case WatchlistAnswer() as watch:
-                return await self._watch(watch)
+                return await self._watch(watch, viewer)
 
-    async def _watch(self, watch: WatchlistAnswer) -> WatchlistReply:
+    async def _watch(self, watch: WatchlistAnswer, viewer: Principal) -> WatchlistReply:
         also = None
         if watch.also is not None:
-            rest = await self._finish(watch.also)
+            rest = await self._finish(watch.also, viewer)
             if isinstance(rest, SetupCardReply | PartReply | CantReply):
                 also = rest
         return WatchlistReply(
@@ -883,29 +965,76 @@ class PlannerFront:
             return watchlist
         return []
 
-    async def _edit(self, edit: EditAnswer) -> EditReply:
-        """The change proposed, for the workflow its words name. The after is the saved schedule
-        with the change made. Nothing is saved here."""
-        words = edit.workflow_words
+    async def _named(self, words: str | None, software: str | None) -> _Named:
+        """The workflows the request's words name, by whole words."""
         named = words if words is not None and _own_words(words, keep_check=True) else None
-        matched = [] if named is None else await self._matching(named, edit.software)
-        one = _choice(matched[0], edit) if len(matched) == 1 else None
+        matched = [] if named is None else await self._matching(named, software)
         missing = named if named is not None and not matched and _own_words(named) else None
         # "it", or "the check" that fits none, names no workflow: she picks from every one.
         several = matched if matched else [] if missing is not None else await self._use_cases()
+        one = matched[0] if len(matched) == 1 else None
+        return _Named(one=one, missing=missing, several=[] if one is not None else several)
+
+    async def _edit(self, edit: EditAnswer) -> EditReply:
+        """The change proposed, for the workflow its words name. The after is the saved schedule
+        with the change made. Nothing is saved here."""
+        named = await self._named(edit.workflow_words, edit.software)
+        one = None if named.one is None else _choice(named.one, edit)
         return EditReply(
             use_case_id=None if one is None else one.use_case_id,
             name=None if one is None else one.name,
             watchlist=one is not None and one.watchlist,
-            missing=missing,
+            missing=named.missing,
             software=edit.software,
-            choices=[] if one is not None else [_choice(u, edit) for u in several],
+            choices=[_choice(u, edit) for u in named.several],
             before=None if one is None else one.before,
             after=None if one is None else one.after,
             hour=None if edit.schedule is None else edit.schedule.hour,
             cant=edit.cant,
             holds_save=edit.holds_save,
         )
+
+    async def _switch(
+        self, answer: PauseAnswer | ResumeAnswer, viewer: Principal
+    ) -> PauseReply | ResumeReply:
+        """Pauses or resumes the one workflow the words name, for an Operator. The words are
+        matched to workflow names first. A watched software's check is also the Software
+        watchlist's, which checks every software on it, so when it fits it is offered beside the
+        workflow, never paused for her. Several matches, or "it", change nothing either: she
+        picks one."""
+        pausing = isinstance(answer, PauseAnswer)
+        reply = PauseReply if pausing else ResumeReply
+        named = await self._named(answer.workflow_words, None)
+        listed = await self._watchlist_of(answer.software)
+        one = named.one
+        if one is not None and listed is None and _operates(viewer):
+            move = self._workflows.pause_use_case if pausing else self._workflows.resume_use_case
+            moved = await move(one.use_case_id, viewer, "chat")
+            if moved is not None:
+                return reply(
+                    use_case_id=moved.use_case_id,
+                    name=moved.name,
+                    already=one.state == ("paused" if pausing else "on"),
+                    missing=None,
+                    choices=[],
+                )
+        several = [one] if one is not None else named.several
+        offered = [u for u in several if listed is None or u.use_case_id != listed.use_case_id]
+        offered += [] if listed is None else [listed]
+        return reply(
+            use_case_id=None,
+            name=None,
+            already=False,
+            missing=named.missing if listed is None else None,
+            choices=[_switch_choice(u) for u in offered],
+        )
+
+    async def _watchlist_of(self, software: str | None) -> UseCaseView | None:
+        """The Software watchlist, when the software is on it."""
+        if software is None or await self._listed(software) is None:
+            return None
+        cases = await self._use_cases()
+        return next((u for u in cases if u.template == SOFTWARE_WATCHLIST.key), None)
 
     async def check_part(self, body: CheckPartIn) -> PartChecked | RegistryUnavailable:
         checked = await self._answers.check_part(body.kind, body.text)
@@ -939,6 +1068,29 @@ class PlannerFront:
         return uses
 
 
+@dataclass(frozen=True)
+class _Named:
+    """What a request's words name: the one workflow they match, the words when they name a
+    workflow the person doesn't have, or the workflows to pick from when not exactly one matched."""
+
+    one: UseCaseView | None
+    missing: str | None
+    several: list[UseCaseView]
+
+
+def _operates(viewer: Principal) -> bool:
+    return Role.OPERATOR in viewer.roles
+
+
+def _switch_choice(use_case: UseCaseView) -> SwitchChoice:
+    return SwitchChoice(
+        use_case_id=use_case.use_case_id,
+        name=use_case.name,
+        state=use_case.state,
+        watchlist=use_case.template == SOFTWARE_WATCHLIST.key,
+    )
+
+
 def _example(example: ExampleSpec) -> ExampleView:
     return ExampleView(text=example.text, kind=example.kind, needs=list(example.needs))
 
@@ -966,6 +1118,8 @@ def _capability(
         system=spec.system,
         state=state,
         cant=spec.cant,
+        short=spec.short,
+        instead=spec.instead,
         why=why,
         fix=fix,
         connection=spec.connection,

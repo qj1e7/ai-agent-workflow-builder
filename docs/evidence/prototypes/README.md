@@ -12,6 +12,7 @@ Start with each folder's `findings.md`. The other files are the scripts and raw 
 | [P4](p4-n8n-two-legs/findings.md) | Does the two-leg design in [ADR 0007](../../adr/0007-n8n-carries-runs-our-api-decides.md) work on n8n? | n8n 2.42.6 and PostgreSQL 17 in Docker |
 | [P5](p5-iac-terraform-vs-bicep/findings.md) | Can Terraform and Bicep both express our Azure setup, and how do they compare? | Terraform 1.16.5, OpenTofu 1.12.7 and Bicep 0.48.1 in Docker, offline |
 | [P6](p6-n8n-node-pack/findings.md) | On n8n's free Community edition, does our node pack load, can it pause a run, can editing be kept apart from publishing, and who published? | n8n 2.42.6 in Docker, no licence key |
+| [P7](p7-n8n-engine-facts/findings.md) | Which facts about n8n 2.42.6 can the new engine (ENGINE-PLAN) build on, and which fallback works where one is false? | n8n 2.42.6 and PostgreSQL 17 in Docker, no licence key |
 
 ## What each one showed
 
@@ -49,6 +50,13 @@ Start with each folder's `findings.md`. The other files are the scripts and raw 
 - Ordinary staff can add their own keys, including a Jira key.
 - With `NODES_INCLUDE` limited to our nodes and simple flow nodes, an HTTP Request or Jira node could not be published, run by hand or run from an old published version. Our nodes still worked.
 
+**P7.**
+- Run now, a test run of a draft, a Schedule Trigger run and n8n's own retry all work, and our API can tell them apart and read the start item mid-run.
+- Our node can refuse a wake and leave the run waiting, so the real yes still lands. If the node throws instead, n8n runs the Yes exit.
+- The platform's error workflow does not report a workflow held in a member's space unless it allows other callers. The sweep of failed executions works either way.
+- Our nodes are named `CUSTOM.<name>` or `n8n-nodes-wab.<name>`, never `wab.<name>`, and the allow list works with either.
+- The findings list fifteen changes to the engine plan.
+
 ## What was removed before commit
 
 - **Local n8n API keys and login cookies.** These are the files `apikey`, `apikey_resp.json` and `cj`. Two workflow files had a key inside, which now reads `<redacted: local n8n API key>`.
@@ -56,6 +64,7 @@ Start with each folder's `findings.md`. The other files are the scripts and raw 
 - **The test step key.** It now reads `<redacted-step-key>`.
 - **The database password and n8n encryption key.** In the compose files and findings they are now `${PROTO_DB_PASSWORD}` and `${PROTO_ENCRYPTION_KEY}`.
 - **P6's local logins, API key and n8n encryption key** (`p6-secrets.json`, `p6-encryption-key`). They were never committed and were deleted after the run.
+- **P7's keys and logins** (`p7.env`, `p7-secrets.json`). The harness made them for one run and masks them in every raw line. They were never committed.
 - **Installed packages, n8n's local data folder, process ID files and `package-lock.json`.** Local machine paths in the logs now read `./` or `<scratch>`.
 
 Every key above worked only on local containers or processes that were deleted after each test.

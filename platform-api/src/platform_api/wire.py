@@ -100,6 +100,7 @@ type StepOutcome = Literal[
     "superseded",
     "refused",
     "replayed",
+    "test_passed",
 ]
 type RunState = Literal[
     "pending",
@@ -111,7 +112,7 @@ type RunState = Literal[
     "rejected",
     "failed",
 ]
-type RunOutcome = Literal["written", "nothing_to_write"]
+type RunOutcome = Literal["written", "nothing_to_write", "test_passed"]
 type FailureStage = Literal["pending", "working", "proposed", "acting"]
 type FailureReason = Literal[
     "AgentError",

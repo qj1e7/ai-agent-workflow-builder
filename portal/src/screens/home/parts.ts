@@ -88,6 +88,9 @@ export const cantOnCard = (reply: CantReply): boolean => reply.alternative?.answ
 /** What a set-up card inside another answer asks itself, since it runs on that schedule and search: a clash and how many days. */
 export const asksOnCard = (part: PartView): boolean => isClash(part) || part.reason === 'how_many_days'
 
+/** Whether the Planner followed none of what was typed, so its card says so instead of listing what it can do. */
+export const followedNothing = (reply: PlannerReply): boolean => reply.parts.length > 0 && reply.parts.every((part) => part.reason === 'not_followed')
+
 /** Whether a set-up card is drawn somewhere inside the answer. */
 function holdsCard(reply: PlannerReply): boolean {
   if (reply.answer === 'setup_card' || reply.answer === 'part') return true
@@ -116,8 +119,12 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
     case 'operators':
       // The answer’s sentence already says who makes the changes, so only a question beside them is marked.
       return above(reply.parts.filter((part) => part.reason !== 'operators'))
-    case 'watchlist':
     case 'abilities':
+      // A request it followed none of gets one card that says so, in place of the crosses.
+      return followedNothing(reply) ? [] : above(reply.parts)
+    case 'pause':
+    case 'resume':
+    case 'watchlist':
     case 'check_workflows':
     case 'why_stopped':
     case 'needs_me':

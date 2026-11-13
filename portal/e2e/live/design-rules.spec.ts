@@ -97,7 +97,7 @@ test('Home keeps the design rules in each of its states', async ({ browser, back
   await allRules(page, capabilities, 'Alice’s Home')
 
   await ask(page, 'What can you do?')
-  await expect(main(page).getByRole('heading', { name: 'I can' })).toBeVisible()
+  await expect(main(page).getByRole('heading', { name: 'What I can do' })).toBeVisible()
   await allRules(page, capabilities, 'the abilities answer')
 
   await ask(page, 'Check my workflows')
@@ -109,7 +109,7 @@ test('Home keeps the design rules in each of its states', async ({ browser, back
   await allRules(page, capabilities, 'the What needs me answer')
 
   await ask(page, 'Every Friday, email me the list of tickets we closed this week')
-  await expect(main(page).getByRole('heading', { name: 'What I can’t do yet' }).last()).toBeVisible()
+  await expect(main(page).getByRole('heading', { name: 'I can\'t send email yet' }).last()).toBeVisible()
   await allRules(page, capabilities, 'the can’t answer')
 
   await ask(page, 'Every Friday at 5pm, find bug tickets in MOCK with no update for 10 days and create one ticket that lists them. Colour them by team.')

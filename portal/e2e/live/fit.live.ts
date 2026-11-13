@@ -305,9 +305,9 @@ async function lineSetup(backend: Backend): Promise<LineRuns> {
 }
 
 const LINE_STATES = {
-  'at-work': /^solid( solid)* flow( todo)+$/,
-  waiting: /^solid( solid)* wait( todo)+$/,
-  stopped: /^solid( solid)* stop( todo)*$/,
+  'at-work': /^(solid )*flow( todo)+$/,
+  waiting: /^(solid )*wait( todo)+$/,
+  stopped: /^(solid )*stop( todo)*$/,
   done: /^solid( solid)*$/,
 } as const
 
@@ -400,7 +400,7 @@ test('the side panel draws the same run line, small and without faces, at work, 
     await panel.getByRole('button', { name: 'Retry the run' }).click()
     await expect
       .poll(async () => (await runLinks(panel)).join(' '), { message: 'the panel follows the retry: dashes into the step at work, then into the yes', intervals: [100], timeout: 90_000 })
-      .toMatch(/^solid( solid)* (flow|wait)( todo)+$/)
+      .toMatch(/^(solid )*(flow|wait)( todo)+$/)
     await reach('waiting')
     await samePage('waiting')
     await approve(backend, runId)

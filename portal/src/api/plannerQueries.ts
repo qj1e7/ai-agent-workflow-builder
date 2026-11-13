@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { ApiError, unwrap } from './client'
 import { useApiClient, useCacheScope } from './context'
 import type { CheckPartIn, DraftIn, PlanOut, PlannerAnswerIn } from './types'
+import { useRereadWorkflow } from './workflowQueries'
 
 export const CAPABILITIES_STALE_MS = 60_000
 
@@ -22,8 +23,13 @@ export function useCapabilities({ enabled = true }: { enabled?: boolean } = {}) 
 /** A mutation, not a query: an answer is not cached, and asking again with the same words is a new question. */
 export function usePlannerAnswer() {
   const client = useApiClient()
+  const reread = useRereadWorkflow()
   return useMutation({
     mutationFn: async (body: PlannerAnswerIn) => unwrap(await client.POST('/api/v1/planner/answer', { body })),
+    // A pause or a resume answer is the one answer that changed a workflow, so its views are read again.
+    onSuccess: (reply) => {
+      if ((reply.answer === 'pause' || reply.answer === 'resume') && reply.use_case_id !== null) reread(reply.use_case_id)
+    },
   })
 }
 

@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: superseded by ADR 0026
 ---
 
 # n8n carries runs in legs and calls only our step API, and our API owns every pause
@@ -20,3 +20,7 @@ This refines ADR 0002. n8n still does the plumbing (triggers, sequencing, retrie
 - A refused step answers 200 with `proceed: false`, not an HTTP error. P4 showed that n8n retries a 409 three times.
 - Active run states carry deadlines that fail a run when n8n loses an execution. Each deadline must be longer than n8n's retry budget for that step plus our outbox's dispatch schedule, and the workflow lint checks this.
 - Workflows are short and have no event nodes. A CI lint rejects any node that calls something other than our internal API.
+
+## Superseded on 13 Nov 2026
+
+ADR 0026 replaces this decision. See `docs/design/chat-first/ENGINE-PLAN.md`.

@@ -1,0 +1,21 @@
+001 created q04 held by Alice: {"id": "uTyx3FxlA7RyVZgr", "versionId": "60645701-7092-443b-b84d-8081b5f85e76", "activeVersionId": null}
+002 public PUT /workflows/{id}/transfer to Alice's project: [204, {}]
+003 after transfer: public GET: [200, {"versionId": "60645701-7092-443b-b84d-8081b5f85e76", "activeVersionId": "60645701-7092-443b-b84d-8081b5f85e76", "active": true}]
+004 Alice lists her workflows: [200, ["q04 held by Alice"]]
+005 owner public PUT on the held workflow (publishIfActive default): [200, {"versionId": "ffa6d037-daec-4be6-b50f-c20cbfbf1065", "activeVersionId": "ffa6d037-daec-4be6-b50f-c20cbfbf1065"}]
+006 owner public POST /publish {versionId: the first version} on the held workflow: [200, {"versionId": "ffa6d037-daec-4be6-b50f-c20cbfbf1065", "activeVersionId": "60645701-7092-443b-b84d-8081b5f85e76"}]
+007 Alice saves an edit (PATCH /rest/workflows/{id}): [200, "8d5e7353-a41b-4938-93af-6ff4d89e80de"]
+008 Alice publishes it (POST /rest/workflows/{id}/activate {versionId}): [200, "8d5e7353-a41b-4938-93af-6ff4d89e80de"]
+009 after Alice publishes: public GET: [200, {"versionId": "8d5e7353-a41b-4938-93af-6ff4d89e80de", "activeVersionId": "8d5e7353-a41b-4938-93af-6ff4d89e80de", "active": true}]
+010 GET /rest/workflow-history/workflow/{id}/publish-timeline: (versionId, event, user email, user id): [200, [["60645701", "activated", "platform@example.com", "ef530bdb-d627-4255-ad0a-b678b6c7c5bb"], ["ffa6d037", "activated", "platform@example.com", "ef530bdb-d627-4255-ad0a-b678b6c7c5bb"], ["60645701", "deactivated", "platform@example.com", "ef530bdb-d627-4255-ad0a-b678b6c7c5bb"], ["ffa6d037", "deactivated", "platform@example.com", "ef530bdb-d627-4255-ad0a-b678b6c7c5bb"], ["60645701", "activated", "platform@example.com", "ef530bdb-d627-4255-ad0a-b678b6c7c5bb"], ["60645701", "deactivated", "alice@example.com", "c3040094-09d8-44f7-9c09-471bf8113c35"], ["8d5e7353", "activated", "alice@example.com", "c3040094-09d8-44f7-9c09-471bf8113c35"]]]
+011 timeline entry keys: ["createdAt", "event", "id", "user", "versionId", "versionName", "workflowId"]
+012 public GET /workflows/{id}/history: (versionId, authors): [200, [["8d5e7353", "Alice Tester"], ["ffa6d037", "Platform Account"], ["60645701", "Platform Account"]]]
+013 history entry keys: ["authors", "createdAt", "description", "name", "updatedAt", "versionId", "workflowId"]
+014 user ids: {"92137a89-82fa-4556-90a8-336f6b57d2dc": "bob@example.com", "c3040094-09d8-44f7-9c09-471bf8113c35": "alice@example.com", "ef530bdb-d627-4255-ad0a-b678b6c7c5bb": "platform@example.com"}
+015 Alice runs it by hand (POST /rest/workflows/{id}/run): [200, {"data": {"executionId": "21"}}]
+016 Alice's run: {"id": "21", "status": "success", "mode": "manual", "finished": true, "retryOf": null, "retrySuccessId": null, "waitTill": null, "workflowId": "uTyx3FxlA7RyVZgr", "startedAt": "2026-11-13T08:57:04.187Z", "stoppedAt": "2026-11-13T08:57:04.238Z", "workflowVersionId": "8d5e7353-a41b-4938-93af-6ff4d89e80de", "lastNodeExecuted": "Read release (Alice)", "nodes_run": {"Start from the Portal": 1, "Read release (Alice)": 1}}
+017 node calls (node, mode): [["Read release (Alice)", "manual"]]
+018 Alice presses Execute in the editor (destinationNode, no item): [200, {"data": {"waitingForWebhook": true}}]
+019 take it back: public transfer to the owner's project: [204, {}]
+020 after take back: public GET: [200, {"versionId": "8d5e7353-a41b-4938-93af-6ff4d89e80de", "activeVersionId": "8d5e7353-a41b-4938-93af-6ff4d89e80de", "active": true}]
+021 Alice opens it after take back: [403, {"status": "error", "message": "User is missing a scope required to perform this action"}]

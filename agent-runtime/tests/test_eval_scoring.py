@@ -717,10 +717,29 @@ def test_a_request_that_says_no_update_fails_on_an_update_within_some_days():
         ("r7-command-daily", {"asks_about": "my_workflows", "workflow_words": "weekly summary"}),
         ("r7-name-next-run", {"asks_about": "my_workflows", "workflow_words": "weekly summary"}),
         ("r7-name-holds-weekly", {"asks_about": "my_workflows"}),
+        (
+            "c6-pause-react",
+            {"asks_about": "change", "workflow_words": "React check", "software": "React"},
+        ),
+        (
+            "c6-resume-react",
+            {"asks_about": "change", "workflow_words": "React check", "software": "React"},
+        ),
+        (
+            "c6-watch-and-email",
+            {"belongs_on_watchlist": True, "watchlist_word": "watch", "software": "Kubernetes"},
+        ),
+        ("c6-teams-channel", {}),
+        ("c6-delete-mock", {}),
     ],
 )
 def test_each_edit_case_passes_on_a_good_reading(case_id: str, read: dict[str, Any]) -> None:
     assert failed(ANSWER.score(answer_case(case_id), read_answer(**read))) == set()
+
+
+def test_a_cant_in_its_own_words_fails_the_one_liner_check() -> None:
+    case = answer_case("c6-teams-channel").model_copy(update={"one_liner": "I can't do that."})
+    assert "says_the_one_liner" in failed(ANSWER.score(case, read_answer()))
 
 
 def test_an_edit_with_the_wrong_schedule_or_cant_fails_the_check_that_names_it() -> None:

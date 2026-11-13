@@ -21,17 +21,19 @@ from agent_runtime.contract import (
     PartAnswer,
     PartMark,
     PartReason,
+    PauseAnswer,
     PlannerAnswer,
     PlannerFacts,
     QuestionAnswer,
     RefusedAnswer,
     RequestPart,
+    ResumeAnswer,
     SetupCardAnswer,
     WatchlistAnswer,
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
-from agent_runtime.edits import QUESTION_START, STATE_WORDS, edit_marks
+from agent_runtime.edits import QUESTION_START, STATE_WORDS, edit_marks, switch_marks
 from agent_runtime.planner import NOTE_LIMIT, TEXT_LIMIT, plain, visible_words
 from agent_runtime.reading import (
     FILLER,
@@ -105,10 +107,15 @@ def parts_of(
     if isinstance(answer, AbilitiesAnswer):
         about = [c for c in clauses if ABOUT_THE_PLANNER.search(text[c[0] : c[1]])]
         return _answered(text, clauses, about)
-    if isinstance(answer, EditAnswer):
+    if isinstance(answer, EditAnswer | PauseAnswer | ResumeAnswer):
+        marked = (
+            edit_marks(read, text, answer, clauses, facts)
+            if isinstance(answer, EditAnswer)
+            else switch_marks(read, text, answer, clauses, facts)
+        )
         return [
             _part(text, trim(text, m.start, m.end), m.mark, m.reason, choices=m.choices)
-            for m in edit_marks(read, text, answer, clauses, facts)
+            for m in marked
         ]
     crosses = _crosses(read, text, answer)
     found: list[RequestPart] = []

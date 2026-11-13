@@ -550,6 +550,17 @@ class CapabilitySpec(WireModel):
         "creating the upgrade ticket. Home's lists show only these."
     )
     tools: list[ToolId] = Field(description="The tools that do it. Empty unless it is ready.")
+    short: str | None = Field(
+        default=None,
+        description="The capability in a few words, as the chat's capabilities card names it: one "
+        "of its lines when it is ready, a name in its Not yet note when it isn't. None for one the "
+        "card leaves out.",
+    )
+    instead: str | None = Field(
+        default=None,
+        description="For one that isn't ready, what the person has instead, in one sentence, as a "
+        "can't card says it under its head. None when it is ready, or when nothing comes close.",
+    )
 
 
 class ExampleSpec(WireModel):
@@ -785,7 +796,7 @@ class WatchedFact(WireModel):
 
 class WorkflowFact(WireModel):
     name: str = Field(max_length=80)
-    state: Literal["on", "paused"]
+    state: Literal["draft", "on", "paused"]
     last_run: str | None = Field(
         max_length=40, description="The state of the newest run, in the words the Portal uses."
     )
@@ -903,6 +914,18 @@ class CantRow(WireModel):
         max_length=40,
         description="The system the part names, in plain words, such as Jira or email. None "
         "when it names none.",
+    )
+    instead: str | None = Field(
+        default=None,
+        max_length=200,
+        description="What the person has instead, in one sentence, from the registry entry the "
+        "part asks for. With it, the note is that entry's one-line can't. None when no entry with "
+        "those words fits the part.",
+    )
+    unsupported: bool = Field(
+        default=False,
+        description="True when the platform won't do the part at all, so there is nothing to ask "
+        "the team for.",
     )
 
 
@@ -1034,6 +1057,34 @@ class QuestionAnswer(WireModel):
     )
 
 
+class _OnOrOff(WireModel):
+    workflow_words: str | None = Field(
+        default=None,
+        max_length=80,
+        description="The words of the request that name the workflow, as it wrote them. The "
+        'platform matches them to one of the person\'s workflows by whole words. None for "it", '
+        "so the person picks one.",
+    )
+    software: str | None = Field(
+        default=None,
+        max_length=80,
+        description='The software those words name, as "the React check" names React. None when '
+        "they name none.",
+    )
+
+
+class PauseAnswer(_OnOrOff):
+    """A request to pause one of the person's workflows, and nothing else."""
+
+    kind: Literal["pause"] = "pause"
+
+
+class ResumeAnswer(_OnOrOff):
+    """A request to turn a paused workflow back on, and nothing else."""
+
+    kind: Literal["resume"] = "resume"
+
+
 type EditCant = Literal["only_schedule", "how_often"]
 
 
@@ -1095,7 +1146,8 @@ class EditAnswer(WireModel):
     cant: EditCant | None = Field(
         default=None,
         description="only_schedule: it asks for a change other than when the workflow runs, "
-        "such as pausing or renaming it, which the chat can't make yet. how_often: it asks for "
+        "such as renaming it, or pausing it beside another change, which the chat can't make "
+        "yet. A pause or a resume alone is its own answer. how_often: it asks for "
         "a frequency the schedule can't hold, such as monthly. None when the change can be made.",
     )
     holds_save: bool = Field(
@@ -1123,7 +1175,9 @@ type PlannerAnswer = Annotated[
     | NeedsMeAnswer
     | AbilitiesAnswer
     | QuestionAnswer
-    | EditAnswer,
+    | EditAnswer
+    | PauseAnswer
+    | ResumeAnswer,
     Field(discriminator="kind"),
 ]
 

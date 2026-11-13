@@ -2311,6 +2311,18 @@
       "CantRowView": {
         "additionalProperties": false,
         "properties": {
+          "instead": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the person has instead, in one sentence, when the note is a registry entry's one-line can't. Null otherwise.",
+            "title": "Instead"
+          },
           "kind": {
             "$ref": "#/components/schemas/RowKind"
           },
@@ -2349,6 +2361,11 @@
           "text": {
             "title": "Text",
             "type": "string"
+          },
+          "unsupported": {
+            "description": "True when the platform won't do it at all, so there is nothing to ask the team for.",
+            "title": "Unsupported",
+            "type": "boolean"
           }
         },
         "required": [
@@ -2356,7 +2373,9 @@
           "text",
           "note",
           "needs",
-          "system"
+          "system",
+          "instead",
+          "unsupported"
         ],
         "title": "CantRowView",
         "type": "object"
@@ -2450,6 +2469,18 @@
             "title": "Id",
             "type": "string"
           },
+          "instead": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For one that isn't ready, what the person has instead, in one sentence.",
+            "title": "Instead"
+          },
           "kind": {
             "enum": [
               "read",
@@ -2485,6 +2516,18 @@
             "description": "A duty of the platform itself, with no tool.",
             "title": "Platform",
             "type": "boolean"
+          },
+          "short": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its words on the chat's capabilities card: a line when it is ready, a name in the card's Not yet note when it isn't. Null for one the card leaves out.",
+            "title": "Short"
           },
           "state": {
             "$ref": "#/components/schemas/CapabilityState",
@@ -2528,6 +2571,8 @@
           "system",
           "state",
           "cant",
+          "short",
+          "instead",
           "why",
           "fix",
           "connection",
@@ -3636,6 +3681,12 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "on": {
+            "default": true,
+            "description": "False sets it up as a draft (ADR 0044): it never runs on its schedule, a test run of it stops before the yes and writes nothing, and turning it on publishes version 1.",
+            "title": "On",
+            "type": "boolean"
           },
           "schedule": {
             "anyOf": [
@@ -6241,6 +6292,86 @@
         "title": "PastDecisionView",
         "type": "object"
       },
+      "PauseReply": {
+        "additionalProperties": false,
+        "description": "A pause asked for alone. For an Operator the platform pauses the one workflow the words\nname, as POST /api/v1/use-cases/{use_case_id}/pause does: it starts no runs until it is\nresumed, and a run that has started carries on.",
+        "properties": {
+          "already": {
+            "description": "True when it was already that way, so nothing changed.",
+            "title": "Already",
+            "type": "boolean"
+          },
+          "answer": {
+            "const": "pause",
+            "default": "pause",
+            "title": "Answer",
+            "type": "string"
+          },
+          "choices": {
+            "description": "The workflows the request could mean, for the person to pick one, which the Portal then pauses or resumes through the workflow's own route: every one its words match when they match several, the Software watchlist for \"the React check\", or every workflow for \"it\". Empty when one matched or the words name none.",
+            "items": {
+              "$ref": "#/components/schemas/SwitchChoice"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "missing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The request's words for a workflow the person doesn't have. Null otherwise.",
+            "title": "Missing"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its name. Null with use_case_id.",
+            "title": "Name"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "use_case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The workflow paused or turned back on. Null when the words named none of the person's workflows, or several, or a watched software's check, so nothing changed.",
+            "title": "Use Case Id"
+          }
+        },
+        "required": [
+          "parts",
+          "use_case_id",
+          "name",
+          "already",
+          "missing",
+          "choices",
+          "answer"
+        ],
+        "title": "PauseReply",
+        "type": "object"
+      },
       "PendingApproverOut": {
         "additionalProperties": false,
         "properties": {
@@ -6624,8 +6755,10 @@
             "offline": "#/components/schemas/OfflineReply",
             "operators": "#/components/schemas/OperatorsReply",
             "part": "#/components/schemas/PartReply",
+            "pause": "#/components/schemas/PauseReply",
             "question": "#/components/schemas/QuestionReply",
             "refused": "#/components/schemas/RefusedReply",
+            "resume": "#/components/schemas/ResumeReply",
             "setup_card": "#/components/schemas/SetupCardReply",
             "watchlist": "#/components/schemas/WatchlistReply",
             "which_software": "#/components/schemas/WhichSoftwareReply",
@@ -6672,6 +6805,12 @@
           },
           {
             "$ref": "#/components/schemas/EditReply"
+          },
+          {
+            "$ref": "#/components/schemas/PauseReply"
+          },
+          {
+            "$ref": "#/components/schemas/ResumeReply"
           },
           {
             "$ref": "#/components/schemas/OperatorsReply"
@@ -7577,6 +7716,86 @@
         ],
         "type": "string"
       },
+      "ResumeReply": {
+        "additionalProperties": false,
+        "description": "A resume asked for alone. For an Operator the platform turns the one workflow the words\nname back on, as POST /api/v1/use-cases/{use_case_id}/resume does.",
+        "properties": {
+          "already": {
+            "description": "True when it was already that way, so nothing changed.",
+            "title": "Already",
+            "type": "boolean"
+          },
+          "answer": {
+            "const": "resume",
+            "default": "resume",
+            "title": "Answer",
+            "type": "string"
+          },
+          "choices": {
+            "description": "The workflows the request could mean, for the person to pick one, which the Portal then pauses or resumes through the workflow's own route: every one its words match when they match several, the Software watchlist for \"the React check\", or every workflow for \"it\". Empty when one matched or the words name none.",
+            "items": {
+              "$ref": "#/components/schemas/SwitchChoice"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "missing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The request's words for a workflow the person doesn't have. Null otherwise.",
+            "title": "Missing"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its name. Null with use_case_id.",
+            "title": "Name"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "use_case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The workflow paused or turned back on. Null when the words named none of the person's workflows, or several, or a watched software's check, so nothing changed.",
+            "title": "Use Case Id"
+          }
+        },
+        "required": [
+          "parts",
+          "use_case_id",
+          "name",
+          "already",
+          "missing",
+          "choices",
+          "answer"
+        ],
+        "title": "ResumeReply",
+        "type": "object"
+      },
       "RetryAccepted": {
         "additionalProperties": false,
         "properties": {
@@ -7872,7 +8091,8 @@
       "RunOutcome": {
         "enum": [
           "written",
-          "nothing_to_write"
+          "nothing_to_write",
+          "test_passed"
         ],
         "type": "string"
       },
@@ -8746,7 +8966,8 @@
           "failed",
           "superseded",
           "refused",
-          "replayed"
+          "replayed",
+          "test_passed"
         ],
         "type": "string"
       },
@@ -9156,6 +9377,35 @@
           "reported_by"
         ],
         "title": "SupportReportedData",
+        "type": "object"
+      },
+      "SwitchChoice": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/UseCaseState"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "watchlist": {
+            "description": "True for the Software watchlist, whose pause stops the checks of every software on it.",
+            "title": "Watchlist",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "name",
+          "state",
+          "watchlist"
+        ],
+        "title": "SwitchChoice",
         "type": "object"
       },
       "TeamRequestList": {
@@ -9835,6 +10085,7 @@
       },
       "UseCaseState": {
         "enum": [
+          "draft",
           "on",
           "paused"
         ],
@@ -9893,7 +10144,7 @@
                 "type": "null"
               }
             ],
-            "description": "When the workflow next runs on its own. Null while it is paused, while its schedule is held because the owner can no longer run it, and for a workflow with no schedule.",
+            "description": "When the workflow next runs on its own. Null while it is a draft, while it is paused, while its schedule is held because the owner can no longer run it, and for a workflow with no schedule.",
             "title": "Next Run At"
           },
           "owner": {
@@ -9924,11 +10175,11 @@
                 "type": "null"
               }
             ],
-            "description": "When it runs on its own, and who owns the schedule. Kept while it is paused or held. Null for a workflow with no schedule."
+            "description": "When it runs on its own, and who owns the schedule. Kept while it is a draft, paused or held. Null for a workflow with no schedule."
           },
           "state": {
             "$ref": "#/components/schemas/UseCaseState",
-            "description": "on, or paused until an Operator resumes it. A paused workflow starts no run, on its schedule or by hand. A deleted workflow is not shown."
+            "description": "on, paused until an Operator resumes it, or draft until an Operator turns it on (ADR 0044). A paused workflow starts no run, on its schedule or by hand. A draft never runs on its schedule, and by hand only a test run, which stops before the yes and writes nothing. A deleted workflow is not shown."
           },
           "template": {
             "title": "Template",
@@ -10071,7 +10322,7 @@
         "additionalProperties": false,
         "properties": {
           "versions": {
-            "description": "Newest first.",
+            "description": "Newest first. Empty for a draft, which has published no version yet.",
             "items": {
               "$ref": "#/components/schemas/VersionView"
             },
@@ -10150,7 +10401,7 @@
         "additionalProperties": false,
         "properties": {
           "at": {
-            "description": "When it was published.",
+            "description": "When it was published. For version 1, when the workflow was set up.",
             "format": "date-time",
             "title": "At",
             "type": "string"
@@ -10582,8 +10833,13 @@
             "type": "array"
           },
           "state": {
-            "$ref": "#/components/schemas/UseCaseState",
-            "description": "on, or paused until an Operator resumes it, as on its use case view. A paused watchlist starts no check, on its schedule or by hand."
+            "description": "on, or paused until an Operator resumes it, as on its use case view. A paused watchlist starts no check, on its schedule or by hand.",
+            "enum": [
+              "on",
+              "paused"
+            ],
+            "title": "State",
+            "type": "string"
           },
           "ticket_project": {
             "title": "Ticket Project",
@@ -11543,6 +11799,7 @@
     },
     "/api/v1/agent-use-cases": {
       "post": {
+        "description": "Sets up an agent use case, on unless the body says on: false. A draft never runs on its schedule until an Operator turns it on (ADR 0044).",
         "operationId": "create_agent_use_case_api_v1_agent_use_cases_post",
         "requestBody": {
           "content": {
@@ -15899,7 +16156,7 @@
     },
     "/api/v1/use-cases/{use_case_id}/pause": {
       "post": {
-        "description": "Stops the workflow starting runs, on its schedule or by hand, until an Operator resumes it. A run that has started carries on. Pausing a paused workflow changes nothing.",
+        "description": "Stops the workflow starting runs, on its schedule or by hand, until an Operator resumes it. A run that has started carries on. Pausing a paused workflow, or a draft, changes nothing.",
         "operationId": "pause_use_case_api_v1_use_cases__use_case_id__pause_post",
         "parameters": [
           {
@@ -16091,7 +16348,7 @@
     },
     "/api/v1/use-cases/{use_case_id}/resume": {
       "post": {
-        "description": "Turns a paused workflow back on. Its next run is the next slot of its schedule. Resuming a workflow that is on changes nothing.",
+        "description": "Turns a paused workflow back on. Its next run is the next slot of its schedule. Resuming a workflow that is on changes nothing, and a draft stays a draft until it is turned on.",
         "operationId": "resume_use_case_api_v1_use_cases__use_case_id__resume_post",
         "parameters": [
           {
@@ -16182,6 +16439,7 @@
     },
     "/api/v1/use-cases/{use_case_id}/runs": {
       "post": {
+        "description": "Starts a run. On a draft only a test run starts, and it stops at the approval gate: it asks nobody for a yes and writes nothing (ADR 0044).",
         "operationId": "start_run_api_v1_use_cases__use_case_id__runs_post",
         "parameters": [
           {
@@ -16274,7 +16532,7 @@
                 }
               }
             },
-            "description": "The watchlist is empty, so there is nothing to check, an agent use case has no AI model connected, or the workflow is paused"
+            "description": "The watchlist is empty, so there is nothing to check, an agent use case has no AI model connected, the workflow is paused, or it is a draft and this is not a test run"
           },
           "422": {
             "content": {
@@ -16417,6 +16675,97 @@
           }
         ],
         "summary": "Save Schedule",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/use-cases/{use_case_id}/turn-on": {
+      "post": {
+        "description": "Turns a draft on, publishing its version 1 (ADR 0044). Its next run is the next slot of its schedule, and a slot that fell while it was a draft never starts. Turning on a workflow that was turned on before, even one paused since, changes nothing. Not a write to Jira or Teams, so it needs no approval.",
+        "operationId": "turn_on_use_case_api_v1_use_cases__use_case_id__turn_on_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "use_case_id",
+            "required": true,
+            "schema": {
+              "title": "Use Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UseCaseView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such workflow, or it is deleted"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Turn On Use Case",
         "tags": [
           "builder"
         ]

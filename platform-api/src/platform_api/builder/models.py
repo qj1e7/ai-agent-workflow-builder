@@ -68,7 +68,7 @@ class UseCaseAgentView(WireModel):
     values: dict[str, str]
 
 
-type UseCaseState = Literal["on", "paused"]
+type UseCaseState = Literal["draft", "on", "paused"]
 
 type ClockTime = Annotated[str, Field(pattern=AT_PATTERN, examples=["09:00"])]
 
@@ -135,17 +135,19 @@ class UseCaseView(WireModel):
     owner: UserId
     created_at: datetime
     state: UseCaseState = Field(
-        description="on, or paused until an Operator resumes it. A paused workflow starts no "
-        "run, on its schedule or by hand. A deleted workflow is not shown."
+        description="on, paused until an Operator resumes it, or draft until an Operator turns "
+        "it on (ADR 0044). A paused workflow starts no run, on its schedule or by hand. A draft "
+        "never runs on its schedule, and by hand only a test run, which stops before the yes and "
+        "writes nothing. A deleted workflow is not shown."
     )
     next_run_at: datetime | None = Field(
-        description="When the workflow next runs on its own. Null while it is paused, while its "
-        "schedule is held because the owner can no longer run it, and for a workflow with no "
-        "schedule."
+        description="When the workflow next runs on its own. Null while it is a draft, while it "
+        "is paused, while its schedule is held because the owner can no longer run it, and for a "
+        "workflow with no schedule."
     )
     schedule: UseCaseSchedule | None = Field(
-        description="When it runs on its own, and who owns the schedule. Kept while it is "
-        "paused or held. Null for a workflow with no schedule."
+        description="When it runs on its own, and who owns the schedule. Kept while it is a "
+        "draft, paused or held. Null for a workflow with no schedule."
     )
     plan: list[BlockView] = Field(
         description="The blocks a run of this use case draws, in order. A template use case "
@@ -393,7 +395,9 @@ class VersionChange(WireModel):
 
 class VersionView(WireModel):
     version: int
-    at: AwareDatetime = Field(description="When it was published.")
+    at: AwareDatetime = Field(
+        description="When it was published. For version 1, when the workflow was set up."
+    )
     by: UserId | None = Field(description="Who changed it. Null when change is null.")
     via: Via | None = Field(description="Where it was changed. Null when change is null.")
     change: VersionChange | None = Field(
@@ -407,7 +411,9 @@ class VersionView(WireModel):
 
 
 class VersionList(WireModel):
-    versions: list[VersionView] = Field(description="Newest first.")
+    versions: list[VersionView] = Field(
+        description="Newest first. Empty for a draft, which has published no version yet."
+    )
 
 
 class ScheduleView(WireModel):
@@ -433,7 +439,7 @@ class WatchlistView(WireModel):
     use_case_id: str
     version: int
     ticket_project: str
-    state: UseCaseState = Field(
+    state: Literal["on", "paused"] = Field(
         description="on, or paused until an Operator resumes it, as on its use case view. A "
         "paused watchlist starts no check, on its schedule or by hand."
     )
@@ -620,6 +626,12 @@ class CreateAgentUseCase(WireIn):
         description="The parts of the request the Planner marked with a cross, in the person's "
         "own words, so the workflow keeps what it was set up without (plan 4.6). Nothing runs "
         "from them.",
+    )
+    on: bool = Field(
+        default=True,
+        description="False sets it up as a draft (ADR 0044): it never runs on its schedule, a "
+        "test run of it stops before the yes and writes nothing, and turning it on publishes "
+        "version 1.",
     )
 
 

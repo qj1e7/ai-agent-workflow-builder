@@ -346,6 +346,26 @@
   list-style: none;
 }
 
+/* What I can do: the sketch's short bulleted list. */
+.caps {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.92rem;
+  list-style: disc;
+}
+
+/* "and N more" after the which-workflow chips: a 44 px target that takes the chips' line. */
+.moreChoices {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-block: -4px;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
 .note {
   display: block;
   color: var(--muted);

@@ -13,5 +13,6 @@
   "schedule": null,
   "left_out": [
     "colour them by team"
-  ]
+  ],
+  "on": true
 }

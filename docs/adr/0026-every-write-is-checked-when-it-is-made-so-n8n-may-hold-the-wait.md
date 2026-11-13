@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Every write is checked when it is made, so n8n may hold the wait
@@ -69,3 +69,29 @@ If this ADR is accepted, it replaces ADR 0007.
 - **A run whose "Ask for a yes" was deleted or moved** reaches "Make the approved changes" with nothing approved. The gateway refuses with "No yes for this run", and the AI troubleshooter says which edit caused it.
 - **The workflow lint in `orchestration/workflows.py` stops being the safety barrier.** It becomes the usefulness check that ADR 0027 describes.
 - **If this ADR is accepted,** the glossary's "Leg" no longer applies, and `AGENTS.md` gains one line: n8n holds no write key, and the write gateway checks every approval itself.
+
+## Accepted on 13 Nov 2026, with these additions
+
+**A notice needs no yes (the Tell rule).** A Teams card or an email that only reports what a run read may go out without an Approver, when all three hold: its recipients are fixed in the Portal's Connections, not chosen per run from the data; its content is composed by our API from the run's stored reads and agent results, never from text in a node; and the Portal says what it does, "Posts in Teams and emails". A change to data in Jira or Confluence always needs a yes. A Tell never claims a change was made unless the write gateway made it.
+
+This rule replaces the consequence above that read "Posting in Teams is a write, so it goes through the gateway too": a Tell is a notice under this rule, and a Teams message that asks a question or carries a change stays a write.
+
+**The write gateway gains two checks** that deny a proposal: the request has not expired, and the run is not a test run. A third rule is per action: an action whose subject key was already carried out for this use case in any run is skipped as "already made", and dropped from the proposal before the Approvers see it. The write key is `(use case, subject)` where the action has a subject, else `(run, proposal, index)`. A part-done proposal is recorded per action, so a retry carries out only what is not done.
+
+**How a run is linked.** Our API links an n8n execution to a run on the first node call by the start item it finds in the execution's data: a nonce our API issued for exactly one run, checked and marked used by our API itself, never by the node alone. An execution started by a trigger with no start item is a new run; one started by hand in n8n is the holder's run, and is refused when nobody holds the workflow.
+
+**Whose work, from our records.** For a version published from the Portal, the publisher is the Portal person who acted, from our records; n8n's timeline names the owner account there, which is nobody. For a version published in n8n, the publisher is the n8n user, matched by the user id stored when the platform made their account. The authors of a republished version are parties too.
+
+**Retries.** A retry from the Portal uses n8n's own retry of the failed execution, after the short delay, and our API records who retried. Our API answers a repeated call for the same run and node with its first answer, so no retry runs an agent twice or adds an action twice.
+
+**A lost wake.** If our API cannot wake a waiting execution for a day, the run is lost and the Operator may carry out the approved proposal from the Portal. A workflow deleted while a request waits ends the request as cancelled, with nothing written, and tells the Approvers.
+
+**Test runs** run the draft by hand in n8n, read for real, and stop at "Ask for a yes" without asking anyone; the gateway refuses any write from a test run.
+
+**Whose work, made fail-safe.** A version published in n8n whose publisher is not matched to a person on our People list cannot run until an Operator matches the person.
+
+**Two lines marked "P7 confirms"**: the manual run of a draft and n8n's public retry are the chosen mechanisms; the spike P7 confirms both on 2.42.6 before the code that relies on them lands, and each has a named fallback.
+
+This ADR supersedes ADR 0007. ADR 0024 is accepted at the same time, unchanged, because this engine builds its two waits and its expiry. The glossary's "Leg" is retired. `AGENTS.md`'s safety rules gain: "n8n holds no write key, and the write gateway checks every approval itself at the moment of writing", and "a notice that only reports what was read may go out without a yes, under the Tell rule".
+
+The team lead accepted this ADR on 13 Nov 2026, when they decided that n8n is the engine behind every workflow. The design and build plan are in `docs/design/chat-first/ENGINE-PLAN.md`.

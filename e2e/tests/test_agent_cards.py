@@ -111,7 +111,8 @@ def test_one_changed_part_is_checked_by_code_and_the_capabilities_list_what_work
     assert listed["jira.create"]["state"] in ("ready", "needs_setup")
     assert listed["teams.post"]["state"] == "planned"
     assert "approval requests only" not in listed["teams.post"]["why"]
-    assert listed["email.send"]["state"] == "unsupported"
+    assert listed["email.send"]["state"] == "planned"
+    assert listed["email.send"]["short"] == "email"
     assert "crd_version_checker" in listed["github.releases"]["agents"]
 
 

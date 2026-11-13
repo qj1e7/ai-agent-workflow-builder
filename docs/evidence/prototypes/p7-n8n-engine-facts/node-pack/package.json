@@ -1,0 +1,15 @@
+{
+  "name": "n8n-nodes-wab",
+  "version": "0.0.7",
+  "private": true,
+  "description": "Throwaway P7 node pack: Start from the Portal, Call our API, Ask for a yes, Report a failure. Each node calls only the stand-in API.",
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "nodes": [
+      "nodes/StartFromPortal.node.js",
+      "nodes/CallOurApi.node.js",
+      "nodes/AskForYes.node.js",
+      "nodes/ReportFailure.node.js"
+    ]
+  }
+}

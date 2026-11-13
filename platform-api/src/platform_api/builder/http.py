@@ -37,6 +37,7 @@ from platform_api.builder.service import (
     CardsRefused,
     NoModelToRun,
     NothingToCheck,
+    NotOnYet,
     UseCasePaused,
 )
 from platform_api.builder.templates import (
@@ -110,6 +111,7 @@ NO_SUCH = "No such workflow"
 NOT_FOUND = error_response("No such workflow, or it is deleted")
 NO_MODEL = "Connect an AI model in Settings first."
 NO_MODEL_TO_RUN = "Connect an AI model in Settings to run agents."
+NOT_ON_YET = "This workflow isn't on yet. Do a test run, or turn it on to run it."
 NOT_OFFERED = {
     SOFTWARE_WATCHLIST.key: "Add software on the Software page",
     AGENT_CARDS.key: "Describe the task on the Builder page",
@@ -181,9 +183,12 @@ async def get_use_case(
         404: NOT_FOUND,
         409: error_response(
             "The watchlist is empty, so there is nothing to check, an agent use case has no "
-            "AI model connected, or the workflow is paused"
+            "AI model connected, the workflow is paused, or it is a draft and this is not a "
+            "test run"
         ),
     },
+    description="Starts a run. On a draft only a test run starts, and it stops at the approval "
+    "gate: it asks nobody for a yes and writes nothing (ADR 0044).",
 )
 async def start_run(
     use_case_id: str,
@@ -204,6 +209,8 @@ async def start_run(
         raise HTTPException(409, NO_MODEL_TO_RUN)
     if isinstance(started, UseCasePaused):
         raise HTTPException(409, "This workflow is paused. Resume it to start a run.")
+    if isinstance(started, NotOnYet):
+        raise HTTPException(409, NOT_ON_YET)
     if not started.created:
         response.status_code = 200
     return RunStarted(run_id=started.run_id, events_url=f"/api/v1/runs/{started.run_id}/events")
@@ -310,6 +317,8 @@ async def plan_task(body: PlanIn, principal: Operator, builder: CurrentBuilder) 
     "/agent-use-cases",
     status_code=201,
     responses=OPERATORS_ONLY,
+    description="Sets up an agent use case, on unless the body says on: false. A draft never "
+    "runs on its schedule until an Operator turns it on (ADR 0044).",
 )
 async def create_agent_use_case(
     body: CreateAgentUseCase, principal: Operator, builder: CurrentBuilder

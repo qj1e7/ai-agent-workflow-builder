@@ -1,136 +1,158 @@
-import type { CSSProperties, ReactNode } from 'react'
-import { Mark } from '../../shell/icons'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { AgentFace } from '../../ui/AgentFace'
 import { cx } from '../../ui/cx'
-import { IconCheck, IconLock, IconShield, IconX } from '../../ui/icons'
+import { IconCheck, IconClock, IconGate, IconPlay, IconSearch, IconTicket, IconX, type Icon } from '../../ui/icons'
 import { usePauseUnseen } from '../../ui/loops'
 import { motionAllowed } from '../../ui/motion'
-import { PersonInitial } from '../../ui/PersonInitial'
-import type { Station, StationState } from './runModel'
-import type { NameOf } from './words'
+import { TicketLink } from '../jira/TicketKeys'
+import type { Station, StationState, StepIcon, Under } from './runModel'
+import { workingWords, type Settled } from './words'
 import styles from './RunLine.module.css'
 
-const STATE_PREFIX: Partial<Record<StationState, string>> = { done: 'Done: ', now: 'Now: ', todo: 'Not reached yet: ' }
+/** The state in words, for a screen reader: the line shows it by shape and colour. */
+const STATE_WORDS: Readonly<Record<StationState, string>> = {
+  todo: 'Not reached yet: ',
+  now: 'Now: ',
+  wait: 'Waiting for a yes: ',
+  done: 'Done: ',
+  err: 'Stopped here: ',
+  no: 'Declined: ',
+  skip: 'Skipped: ',
+}
 
-/** A link takes the state of the step it leads into (spec 10.1). */
+/** A link takes the state of the step it leads into. */
 type Link = 'solid' | 'flow' | 'wait' | 'stop' | 'dead' | 'todo'
 
 const LINK_INTO: Readonly<Record<StationState, Link>> = {
-  done: 'solid',
-  declined: 'solid',
+  todo: 'todo',
   now: 'flow',
   wait: 'wait',
-  fail: 'stop',
+  done: 'solid',
+  err: 'stop',
+  no: 'solid',
   skip: 'dead',
-  todo: 'todo',
 }
 
 const MARCHES: ReadonlySet<Link> = new Set(['flow', 'wait'])
 
-function subOf(station: Station, startedAt: string): string | null {
-  switch (station.state) {
-    case 'skip':
-      return station.sub ?? 'Not needed'
-    case 'fail':
-      return 'Stopped here'
-    case 'wait':
-      return 'Waiting for a yes'
-    case 'declined':
-      return 'Declined'
-    default:
-      if (station.spot.at === 'gate' && station.state === 'done') return 'Approved'
-      if (station.spot.at === 'started') return startedAt || null
-      return station.sub
-  }
+const ICON: Readonly<Record<StepIcon, Icon>> = { schedule: IconClock, person: IconPlay, read: IconSearch, gate: IconGate, write: IconTicket }
+
+/** A stopped run's line first shows the work flowing into the stop for this long, then the stop. */
+const REPLAY_MS = 1000
+const TICK_MS = 250
+
+function Working({ since, small }: { since: number; small: boolean }) {
+  const [words, setWords] = useState(() => workingWords(since, Date.now(), small))
+  useEffect(() => {
+    const timer = setInterval(() => setWords(workingWords(since, Date.now(), small)), TICK_MS)
+    return () => clearInterval(timer)
+  }, [since, small])
+  return <span className={styles['timer']}>{words}</span>
 }
 
-function dotOf(station: Station, small: boolean): ReactNode {
-  const gate = small ? 12 : 18
-  const mark = small ? 11 : 14
-  if (station.spot.at === 'gate') {
-    if (station.state === 'wait') return <IconLock size={gate} />
-    if (station.state === 'declined') return <IconX size={small ? 11 : 16} />
-    return <IconShield size={gate} />
-  }
-  if (station.ended) return <span className={styles['endDot']} />
-  if (station.state === 'done') return <IconCheck size={mark} />
-  if (station.state === 'fail') return <IconX size={mark} />
-  return null
-}
-
-function Who({ station, nameOf }: { station: Station; nameOf: NameOf }) {
-  const { who } = station
-  switch (who.kind) {
-    case 'person':
-      return <PersonInitial name={nameOf(who.id)} size={44} />
-    case 'agent':
-      return who.agent ? <AgentFace id={who.agent.id} display={who.agent.display} size={56} state={station.face} /> : <span className={styles['nobody']} />
-    case 'platform':
-      return (
-        <span className={styles['app']}>
-          <Mark height={18} />
+function UnderStep({ under, small }: { under: Under; small: boolean }) {
+  switch (under.kind) {
+    case 'timer':
+      return <Working since={under.since} small={small} />
+    case 'tickets':
+      return under.written.map((written, index) => (
+        <span key={index} className={styles['chip']} title={written.ref}>
+          {written.connector === 'jira' ? <TicketLink ticketKey={written.ref} href={written.url} /> : written.ref}
         </span>
-      )
-    case 'none':
-      return null
+      ))
+    case 'note':
+      return <span>{under.text}</span>
   }
+}
+
+function Face({ station }: { station: Station }) {
+  if (station.spot.at !== 'agent') return null
+  return station.agent ? <AgentFace id={station.agent.id} display={station.agent.display} size={34} state={station.face} /> : <span className={styles['nobody']} />
 }
 
 interface RunLineProps {
   readonly stations: readonly Station[]
   /** The step the run reached while the page watched. It lands, and the solid links into it and the step before it grow. */
   readonly arrivedLive: string | null
-  readonly startedAt: string
-  readonly nameOf: NameOf
-  /** The side panel's line: upright, smaller, and without the agents' faces. */
+  /** How the run ended, said under the line once it has. */
+  readonly settled: Settled | null
+  /** Cards and the side panel: smaller, and without the agents' faces. */
   readonly small?: boolean
 }
 
-export function RunLine({ stations, arrivedLive, startedAt, nameOf, small = false }: RunLineProps) {
+export function RunLine({ stations, arrivedLive, settled, small = false }: RunLineProps) {
   const pauseUnseen = usePauseUnseen()
   const moving = motionAllowed()
+  const [replaying, setReplaying] = useState(() => moving && stations.some((station) => station.state === 'err'))
+  useEffect(() => {
+    if (!replaying) return
+    const timer = setTimeout(() => setReplaying(false), REPLAY_MS)
+    return () => clearTimeout(timer)
+  }, [replaying])
   const arrived = stations.findIndex((station) => station.key === arrivedLive)
-  const line = (
-    <ol className={cx(styles['line'], small && styles['small'])} style={{ '--n': stations.length } as CSSProperties} aria-label="Steps of this run" ref={pauseUnseen}>
-      {stations.map((station, index) => {
-        const next = stations[index + 1]
-        const link = next ? LINK_INTO[next.state] : null
-        const grows = link === 'solid' && arrived >= 0 && (index === arrived - 1 || index === arrived - 2)
-        const sub = subOf(station, startedAt)
-        const said = STATE_PREFIX[station.state]
-        const current = station.state === 'now' || station.state === 'wait'
-        return (
-          <li
-            key={station.key}
-            className={cx(styles['station'], styles[station.state], station.spot.at === 'gate' && styles['gate'], index === arrived && styles['arrive'])}
-            aria-current={current ? 'step' : undefined}
-            data-state={station.state}
-          >
-            {link ? (
-              <span
-                className={cx(styles['link'], grows && styles['grow'])}
-                data-link={link}
-                data-march={(moving && MARCHES.has(link)) || undefined}
-                aria-hidden="true"
-              />
-            ) : null}
-            {small ? null : (
-              <div className={styles['who']}>
-                <Who station={station} nameOf={nameOf} />
-              </div>
-            )}
-            <div className={styles['dotWrap']}>
-              <span className={styles['dot']}>{dotOf(station, small)}</span>
-            </div>
-            <div className={styles['label']}>
-              {said ? <span className="visually-hidden">{said}</span> : null}
-              {station.label}
-              {sub ? <small>{sub}</small> : null}
-            </div>
-          </li>
-        )
-      })}
-    </ol>
+  return (
+    <div className={cx(styles['line'], small ? styles['small'] : styles['large'])}>
+      {/* The steps scroll sideways when the line is too long for its space, so the keyboard can reach them (axe: scrollable-region-focusable). */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+      <div className={styles['scroll']} tabIndex={0} role="group" aria-label="Steps">
+        <ol className={styles['track']} style={{ '--n': stations.length } as CSSProperties} aria-label="Steps of this run" ref={pauseUnseen}>
+          {stations.map((station, index) => {
+            const next = stations[index + 1]
+            const link = next ? LINK_INTO[next.state] : null
+            const grows = link === 'solid' && arrived >= 0 && (index === arrived - 1 || index === arrived - 2)
+            const { state } = station
+            const StepPicture = ICON[station.icon]
+            return (
+              <li
+                key={station.key}
+                className={cx(styles['step'], styles[state], station.spot.at === 'gate' && styles['gate'], index === arrived && styles['arrive'])}
+                aria-current={state === 'now' || state === 'wait' ? 'step' : undefined}
+                data-state={state}
+                data-replay={(replaying && state === 'err') || undefined}
+              >
+                {link ? (
+                  <span
+                    className={cx(styles['link'], grows && styles['grow'])}
+                    data-link={link}
+                    data-march={(moving && MARCHES.has(link)) || undefined}
+                    data-replay={(replaying && next?.state === 'err') || undefined}
+                    aria-hidden="true"
+                  />
+                ) : null}
+                {small ? null : (
+                  <span className={styles['who']}>
+                    <Face station={station} />
+                  </span>
+                )}
+                <span className={styles['dot']}>
+                  <StepPicture />
+                  <span className={styles['tick']} data-shown={state === 'done' || undefined}>
+                    <IconCheck />
+                  </span>
+                  <span className={styles['stopMark']} data-shown={state === 'err' || undefined}>
+                    <IconX />
+                  </span>
+                </span>
+                <span className={styles['label']}>
+                  <span className="visually-hidden">{STATE_WORDS[state]}</span>
+                  {station.label}
+                </span>
+                {station.under ? (
+                  <span className={styles['under']}>
+                    <UnderStep under={station.under} small={small} />
+                  </span>
+                ) : null}
+              </li>
+            )
+          })}
+        </ol>
+      </div>
+      {settled ? (
+        <p className={styles['settled']} data-tone={settled.tone}>
+          {settled.tone === 'ok' ? <IconCheck /> : null}
+          {settled.text}
+        </p>
+      ) : null}
+    </div>
   )
-  return small ? line : <div className={styles['stage']}>{line}</div>
 }

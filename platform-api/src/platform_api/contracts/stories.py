@@ -86,7 +86,7 @@ from platform_api.orchestration.questions import QuestionId
 from platform_api.orchestration.teams import approval_card, practice_text, with_outcome
 from platform_api.orchestration.write_actions import WriteAction, describe_at, digest
 from platform_api.practice_jira.http import MockJiraTicket, MockJiraTickets
-from platform_api.shared import ApprovalId, ProposalId, RunId, UserId
+from platform_api.shared import TEAM_TIME_ZONE, ApprovalId, ProposalId, RunId, UserId
 from platform_api.wire import ApprovalStepView, Trigger, WireModel
 
 ALICE = UserId("alice")
@@ -791,7 +791,7 @@ def troubleshooting(tl: Timeline) -> TroubleshootingOut:
         run_id=FAILURE.run_id,
         failure=failed.data,
         advice=explain(failed.data.reason),
-        answers=answers(failed.data),
+        answers=answers(failed.data, failed.ts.astimezone(TEAM_TIME_ZONE)),
     )
 
 
