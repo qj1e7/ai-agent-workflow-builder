@@ -10,6 +10,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, Literal, Protocol, cast
 
@@ -279,8 +280,24 @@ def _short(response: httpx.Response) -> str:
 # line in docs/evidence/prototypes/p7-n8n-engine-facts, so a version bump has a short checklist.
 
 PLATFORM_API_KEY_LABEL = "platform-api"
-"""Bootstrap removes keys with this label at each deploy, so a restart leaves none behind for
-long."""
+"""Bootstrap removes keys with this label at each deploy, and platform-api removes its own older
+than a day whenever it makes one."""
+PLATFORM_API_SCOPES = (
+    "workflow:create",
+    "workflow:read",
+    "workflow:update",
+    "workflow:delete",
+    "workflow:move",
+    "workflow:activate",
+    "workflow:deactivate",
+    "execution:read",
+    "execution:list",
+)
+"""Only what the platform's calls need, as n8n 2.42.6's public controllers check them: read covers
+history and versions, activate covers publish, move covers transfer."""
+KEY_LIFETIME = timedelta(days=3)
+"""A key that leaks stops working within days. When n8n refuses it, the platform makes another."""
+STALE_KEY_AGE = timedelta(days=1)
 START_TYPE = "CUSTOM.wabStartFromPortal"
 START_NAME = "Start from the Portal"
 VOUCHED = frozenset({"running", "waiting"})
@@ -460,6 +477,21 @@ class _ExecutionOut(_Data):
     workflow_data: dict[str, JsonValue] | None = Field(default=None, alias="workflowData")
 
 
+class _KeyOwner(_Data):
+    email: str
+
+
+class _ListedKey(_Data):
+    id: str
+    label: str
+    created_at: str = Field(alias="createdAt")
+    owner: _KeyOwner
+
+
+class _KeyList(_Data):
+    items: list[_ListedKey]
+
+
 class _Page[T](_Data):
     data: list[T]
 
@@ -578,11 +610,13 @@ class N8nApi:
         client: httpx.AsyncClient | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         clock: Callable[[], float] = time.monotonic,
+        wall: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self._http = client or httpx.AsyncClient(base_url=base_url, timeout=30)
         self._owner = owner
         self._sleep = sleep
         self._clock = clock
+        self._wall = wall
         self._signed_in = False
         self._key: str | None = None
         self._lock = asyncio.Lock()
@@ -620,20 +654,31 @@ class N8nApi:
         async with self._lock:
             if self._key is not None and self._key != refused:
                 return self._key
-        scopes = _parse(_Rest[list[str]], _expect(await self._rest("GET", "/api-keys/scopes")))
-        created = _expect(
-            await self._rest(
-                "POST",
-                "/api-keys",
-                {"label": PLATFORM_API_KEY_LABEL, "expiresAt": None, "scopes": scopes.data},
-            )
-        )
+        await self._remove_stale_keys()
+        expires = int((self._wall() + KEY_LIFETIME).timestamp())
+        body = {
+            "label": PLATFORM_API_KEY_LABEL,
+            "expiresAt": expires,
+            "scopes": list(PLATFORM_API_SCOPES),
+        }
+        created = _expect(await self._rest("POST", "/api-keys", body))
         key = _parse(_Rest[dict[str, JsonValue]], created).data.get("rawApiKey")
         if not isinstance(key, str):
             raise N8nError("n8n made an API key but did not show it")
         async with self._lock:
             self._key = key
         return key
+
+    async def _remove_stale_keys(self) -> None:
+        """The platform's own keys older than a day, which an earlier process or a key that ran
+        out left behind. A key another process made today is left alone, and so is any key of
+        someone else's, whatever its label."""
+        listed = _parse(_Rest[_KeyList], _expect(await self._rest("GET", "/api-keys"))).data
+        cutoff = self._wall() - STALE_KEY_AGE
+        for key in listed.items:
+            ours = key.label == PLATFORM_API_KEY_LABEL and key.owner.email == self._owner.email
+            if ours and datetime.fromisoformat(key.created_at) < cutoff:
+                _expect(await self._rest("DELETE", f"/api-keys/{key.id}"))
 
     async def _public(
         self,

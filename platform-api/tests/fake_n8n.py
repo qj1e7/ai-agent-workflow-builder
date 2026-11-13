@@ -32,6 +32,9 @@ class FakeN8n:
     """publication-status answers still to give, in_progress first, before published."""
     projects: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
     keys: list[str] = field(default_factory=list[str])
+    listed_keys: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
+    """The API keys n8n lists, each with its label, owner and when it was made."""
+    key_requests: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
     logins: int = 0
     minted: int = 0
     deleted_keys: int = 0
@@ -75,13 +78,18 @@ class FakeN8n:
         match method, path.strip("/").split("/"):
             case "GET", ["api-keys", "scopes"]:
                 return httpx.Response(200, json={"data": ["workflow:read", "execution:read"]})
+            case "GET", ["api-keys"]:
+                items = self.listed_keys
+                return httpx.Response(200, json={"data": {"items": items, "count": len(items)}})
             case "POST", ["api-keys"]:
                 self.minted += 1
                 key = f"key-{self.minted}"
                 self.keys.append(key)
+                self.key_requests.append(body)
                 return httpx.Response(200, json={"data": {"rawApiKey": key}})
-            case "DELETE", ["api-keys", _]:
+            case "DELETE", ["api-keys", key_id]:
                 self.deleted_keys += 1
+                self.listed_keys = [k for k in self.listed_keys if k["id"] != key_id]
                 return httpx.Response(200, json={"data": True})
             case "GET", ["workflows", workflow_id]:
                 workflow = self.workflows[workflow_id]

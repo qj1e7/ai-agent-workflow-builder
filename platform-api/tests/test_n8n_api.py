@@ -1,6 +1,7 @@
 """The platform's own calls to n8n while it runs (ENGINE-PLAN 2.1 and 2.5), against a fake n8n
 that answers as spike P7 recorded n8n 2.42.6 answering."""
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -24,6 +25,7 @@ from tests.fake_n8n import OWNER_EMAIL, OWNER_ID, OWNER_PASSWORD, FakeN8n
 pytestmark = pytest.mark.anyio
 
 ALICE, BOB = UserId("alice"), UserId("bob")
+WALL = datetime(2026, 11, 13, 9, 0, tzinfo=UTC)
 ALICE_IN_N8N = "c3040094-09d8-44f7-9c09-471bf8113c35"
 DOCUMENT: dict[str, Any] = {
     "name": "LangGraph release check",
@@ -55,6 +57,10 @@ DOCUMENT: dict[str, Any] = {
 class Sleeps:
     def __init__(self) -> None:
         self.now = 0.0
+        self.wall = WALL
+
+    def wall_clock(self) -> datetime:
+        return self.wall
 
     def clock(self) -> float:
         return self.now
@@ -71,6 +77,7 @@ def api_for(n8n: FakeN8n, sleeps: Sleeps | None = None) -> N8nApi:
         n8n.client(),
         sleep=sleeps.sleep,
         clock=sleeps.clock,
+        wall=sleeps.wall_clock,
     )
 
 
@@ -95,15 +102,58 @@ async def test_a_draft_is_saved_unpublished_and_n8n_holds_what_was_sent() -> Non
     assert same_as_sent(DOCUMENT, held.document)
 
 
-async def test_the_platform_signs_in_and_makes_its_key_once_and_never_deletes_a_key() -> None:
+async def test_the_platform_signs_in_and_makes_its_key_once() -> None:
     n8n = FakeN8n()
     api = api_for(n8n)
     for _ in range(3):
         await api.create(DOCUMENT)
     assert (n8n.logins, n8n.keys) == (1, ["key-1"])
-    n8n.keys.remove("key-1")
+
+
+def listed_key(key_id: str, label: str, made: datetime, email: str = OWNER_EMAIL) -> dict[str, Any]:
+    owner = {"id": OWNER_ID, "email": email}
+    return {"id": key_id, "label": label, "createdAt": made.isoformat(), "owner": owner}
+
+
+async def test_the_platform_s_key_has_only_the_scopes_it_uses_and_runs_out_in_days() -> None:
+    n8n = FakeN8n()
+    await api_for(n8n).create(DOCUMENT)
+    [asked] = n8n.key_requests
+    assert asked["label"] == "platform-api"
+    assert sorted(asked["scopes"]) == [
+        "execution:list",
+        "execution:read",
+        "workflow:activate",
+        "workflow:create",
+        "workflow:deactivate",
+        "workflow:delete",
+        "workflow:move",
+        "workflow:read",
+        "workflow:update",
+    ]
+    assert asked["expiresAt"] == int((WALL + timedelta(days=3)).timestamp())
+
+
+async def test_a_key_that_ran_out_is_replaced_without_a_new_sign_in() -> None:
+    n8n = FakeN8n()
+    api = api_for(n8n)
     await api.create(DOCUMENT)
-    assert (n8n.logins, n8n.keys, n8n.deleted_keys) == (1, ["key-2"], 0)
+    n8n.keys.clear()
+    await api.create(DOCUMENT)
+    assert (n8n.logins, len(n8n.key_requests)) == (1, 2)
+
+
+async def test_making_a_key_removes_only_the_platform_s_own_keys_older_than_a_day() -> None:
+    n8n = FakeN8n(
+        listed_keys=[
+            listed_key("old", "platform-api", WALL - timedelta(days=2)),
+            listed_key("fresh", "platform-api", WALL - timedelta(hours=2)),
+            listed_key("hers", "platform-api", WALL - timedelta(days=9), "alice@example.com"),
+            listed_key("staff", "Alice's key", WALL - timedelta(days=9)),
+        ]
+    )
+    await api_for(n8n).create(DOCUMENT)
+    assert [k["id"] for k in n8n.listed_keys] == ["fresh", "hers", "staff"]
 
 
 async def test_write_publishes_the_change_when_nothing_changed_under_it() -> None:
