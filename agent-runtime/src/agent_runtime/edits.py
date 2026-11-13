@@ -533,15 +533,15 @@ WATCHLIST: Final = re.compile(r"\bwatchlist\b", re.IGNORECASE)
 def _target(read: TaskRead, text: str, facts: PlannerFacts | None) -> str | None:
     """The words that name the workflow to change, as the request wrote them: the reading's,
     else one of the person's workflow names or a run of its words, else a short form such as
-    "the morning check", else the software the reading named. None for "make it daily"."""
-    said = _said(read.workflow_words, text)
+    "the morning check", else the software the reading named. None for "make it daily". The
+    words widen to the longest name that holds them, so a whole name said wins over the words it
+    shares with another workflow's name."""
     runs = [r for name in _workflow_names(facts) for r in _name_runs(text, name)]
+    said = _said(read.workflow_words, text) or (runs[0] if runs else None)
     if said is not None:
         known = [r for r in runs if r[0] <= said[0] and said[1] <= r[1]]
         start, end = max(known, key=lambda r: r[1] - r[0], default=said)
         return text[start:end]
-    if runs:
-        return text[runs[0][0] : runs[0][1]]
     reference = REFERENCE.search(text)
     if reference is not None:
         return ARTICLE.sub("", reference.group(0))
