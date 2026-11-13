@@ -109,8 +109,6 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
     case 'setup_card':
     case 'part':
     case 'edit':
-    case 'pause':
-    case 'resume':
     case 'refused':
     case 'which_software':
     case 'ideas':
@@ -124,6 +122,8 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
     case 'abilities':
       // A request it followed none of gets one card that says so, in place of the crosses.
       return followedNothing(reply) ? [] : above(reply.parts)
+    case 'pause':
+    case 'resume':
     case 'watchlist':
     case 'check_workflows':
     case 'why_stopped':

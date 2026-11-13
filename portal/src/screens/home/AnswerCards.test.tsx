@@ -112,6 +112,11 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
     expect(switchedSay('pause', 'FastAPI release check', false)).toBe('Paused FastAPI release check. It won’t run until you resume it.')
   })
 
+  it('keeps a question asked beside the pause above it, to ask on its own', () => {
+    const beside: PauseReply = { ...(pauseReply as PauseReply), parts: [asked('what needs my attention', 'cant', 'ask_on_its_own'), asked('pause the React check', 'will_do')] }
+    expect(text(draw(beside, { leftovers: true }))).toContain('“what needs my attention” Ask this on its own, and I’ll answer it.')
+  })
+
   it('names the workflow it can’t find, and changes nothing', () => {
     const missing: PauseReply = { ...(pauseChoices as PauseReply), choices: [], missing: 'the morning check' }
     expect(sayOf(missing)).toBe('You don’t have a workflow called “morning check”.')

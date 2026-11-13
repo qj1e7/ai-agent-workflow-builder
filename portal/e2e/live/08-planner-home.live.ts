@@ -1318,7 +1318,7 @@ test.describe('bob asks the Planner questions only', () => {
     await bobAsks(page, 'How are the workflows doing?')
     await expect(said(page)).toHaveText(/^The team has \d+ workflows?\./)
     await bobAsks(page, 'What can you do?')
-    await expect(newest(page)).toContainText(/What you decided before, with when, and any reason you gave[\s\S]*Operators set up workflows\. Ask /)
+    await expect(newest(page)).toContainText(/What I can do\s*Show what waits for your yes\s*Show exactly what a change will write\s*Show your past decisions/)
     await noChangeControl(page)
     await shot(page, info, 'r16-bob-asks')
     assertClean(watch)
