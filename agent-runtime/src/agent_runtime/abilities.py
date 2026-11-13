@@ -111,6 +111,7 @@ def _ready(
     needs_model: bool = False,
     platform: bool = False,
     focus: bool = False,
+    short: str | None = None,
 ) -> CapabilitySpec:
     return CapabilitySpec(
         id=id,
@@ -125,6 +126,7 @@ def _ready(
         platform=platform,
         focus=focus,
         tools=tools,
+        short=short,
     )
 
 
@@ -137,6 +139,8 @@ def _not_yet(
     cant: str,
     why: str,
     state: CapabilityState = "planned",
+    short: str | None = None,
+    instead: str | None = None,
 ) -> CapabilitySpec:
     return CapabilitySpec(
         id=id,
@@ -151,6 +155,8 @@ def _not_yet(
         platform=False,
         focus=False,
         tools=[],
+        short=short,
+        instead=instead,
     )
 
 
@@ -200,6 +206,7 @@ CAPABILITIES: Final = (
         "github",
         ["github.read_releases"],
         focus=True,
+        short="Watch software for new releases",
     ),
     _ready(
         "jira.create",
@@ -210,6 +217,7 @@ CAPABILITIES: Final = (
         ["jira.create_ticket"],
         needs_model=True,
         focus=True,
+        short="Create Jira tickets, after a yes",
     ),
     _ready(
         "teams.ask",
@@ -221,15 +229,48 @@ CAPABILITIES: Final = (
         platform=True,
         focus=True,
     ),
+    _ready(
+        "runs.explain",
+        "Explain a stopped run, and retry it",
+        "none",
+        None,
+        None,
+        [],
+        platform=True,
+        short="Explain a stopped run, and retry it",
+    ),
+    _ready(
+        "workflows.change",
+        "Change when a workflow runs, or pause it",
+        "none",
+        None,
+        None,
+        [],
+        platform=True,
+        short="Change or pause your workflows",
+    ),
     _not_yet(
         "teams.post",
-        "Post messages in Teams",
+        "Post messages in Teams channels",
         "write",
         "Teams",
         "teams",
-        "post messages in Teams",
+        "post in Teams channels",
         "Teams carries approval requests, run outcomes and requests for the team. "
         "It posts nothing else.",
+        short="Teams channels",
+        instead="Run results show here, in the chat.",
+    ),
+    _not_yet(
+        "email.send",
+        "Send email",
+        "write",
+        None,
+        None,
+        "send email",
+        "Email isn't connected to the platform.",
+        short="email",
+        instead="Run results show here, in the chat.",
     ),
     _not_yet(
         "confluence.change",
@@ -237,8 +278,10 @@ CAPABILITIES: Final = (
         "write",
         "Confluence",
         None,
-        "change Confluence pages",
+        "update Confluence",
         "Confluence isn't connected to the platform.",
+        short="Confluence",
+        instead="I can create a Jira ticket, after a yes.",
     ),
     _not_yet(
         "github.issues",
@@ -277,22 +320,33 @@ CAPABILITIES: Final = (
         "That needs a new tool. The team decides on new tools.",
     ),
     _not_yet(
-        "email.send",
-        "Send email or Slack messages",
+        "slack.send",
+        "Send Slack or text messages",
         "write",
         None,
         None,
-        "send email or Slack messages",
-        "Email and Slack aren't on the team's plan. Ask the team if you need them.",
+        "send Slack or text messages",
+        "Slack and text messages aren't on the team's plan.",
         state="unsupported",
     ),
     _not_yet(
-        "jira.change_tickets",
-        "Close, edit, move or delete tickets",
+        "jira.delete",
+        "Delete Jira tickets",
         "write",
         "Jira",
         "jira",
-        "close, edit, move or delete tickets",
+        "delete anything in Jira",
+        "Only people do that here.",
+        state="unsupported",
+        instead="A Jira admin can do that.",
+    ),
+    _not_yet(
+        "jira.change_tickets",
+        "Close, edit or move tickets",
+        "write",
+        "Jira",
+        "jira",
+        "close, edit or move tickets",
         "Only people do that here.",
         state="unsupported",
     ),
@@ -1127,12 +1181,14 @@ def _cant_act(kind: RowKind, row: Clause, reader: _Reader) -> str | None:
             return _where_row(row, reader)
 
 
+DELETES: Final = words("delete purge erase wipe destroy trash")
 UNSUPPORTED_WORDS: Final = {
-    "email.send": (words("email e-mail mail slack sms"), False),
+    "slack.send": (words("slack sms text texts"), False),
+    "jira.delete": (DELETES, True),
     "jira.change_tickets": (
         words(
-            "close resolve cancel reopen delete remove edit move transition rename assign "
-            "reassign update change modify"
+            "close resolve cancel reopen remove edit move transition rename assign reassign "
+            "update change modify"
         ),
         True,
     ),
@@ -1168,6 +1224,36 @@ def _past_the_newest(text: str) -> str | None:
     if PAST_THE_NEWEST.search(text) is None:
         return None
     return next(c.cant for c in CAPABILITIES if c.id == "jira.find_older")
+
+
+SAID_FOR: Final = {"Teams": "teams.post", "email": "email.send", "Confluence": "confluence.change"}
+"""The registry entry whose one-line can't stands for a part that sends to or changes the system
+it names, by that system's plain name."""
+
+
+def cant_entry(text: str, system: str | None) -> CapabilitySpec | None:
+    """The registry entry with words of its own that a can't part asks for: a post or a send to
+    Teams or email, a change in Confluence, or a delete of Jira tickets. A part that names only
+    the place, as "Teams", sends there. None for anything else, as reading Teams or deleting a
+    branch, which keeps its own words."""
+    row = _tokens(text)
+    at = _action_at(row)
+    found = _reader(ABILITIES).verb(row[at]) if at is not None else None
+    verb = None if found is None else found[0]
+    tickets = system == SYSTEMS[JIRA] or any(w.low in TICKETS for w in row)
+    if verb in DELETES and tickets:
+        return next(c for c in CAPABILITIES if c.id == "jira.delete")
+    named = SAID_FOR.get(system or "")
+    if named is None or (verb is not None and verb not in WRITES):
+        return None
+    return next(c for c in CAPABILITIES if c.id == named)
+
+
+def one_line_cant(entry: CapabilitySpec) -> str:
+    """The entry's can't as one sentence: what the platform won't do, or can't do yet."""
+    if entry.state == "unsupported":
+        return f"I don't {entry.cant}."
+    return f"I can't {entry.cant} yet."
 
 
 def _cant_sentence(what: str, reader: _Reader) -> str:

@@ -1011,3 +1011,43 @@ def test_migration_0012_leaves_every_workflow_from_before_on_and_a_downgrade_pau
             ).fetchall() == [("uc_before", None, None), ("uc_draft", NOW, "alice")]
         finally:
             upgrade("builder", postgres.owner)
+
+
+def test_migration_0013_keeps_who_paused_or_resumed_a_workflow_and_from_where(
+    postgres: PostgresUrls,
+):
+    def present(conn: psycopg.Connection) -> bool:
+        return (
+            conn.execute(
+                "SELECT 1 FROM information_schema.tables WHERE table_schema = 'builder'"
+                " AND table_name = 'use_case_moves'"
+            ).fetchone()
+            is not None
+        )
+
+    moved = (
+        "INSERT INTO builder.use_case_moves (use_case_id, move, moved_by, via, moved_at)"
+        " VALUES ('uc_moved', %s, 'alice', %s, now())"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        assert present(conn)
+        conn.execute(
+            "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version)"
+            " VALUES ('uc_moved', 'alice', now(), 1)"
+        )
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(moved, ("delete", "chat"))
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(moved, ("pause", "teams"))
+        downgrade("builder", postgres.owner, "0012")
+        assert not present(conn)
+        upgrade("builder", postgres.owner)
+        assert present(conn)
+    with psycopg.connect(postgres.contexts.builder) as builder:
+        builder.execute(moved, ("pause", "chat"))
+        assert builder.execute(
+            "SELECT move, moved_by, via FROM builder.use_case_moves"
+        ).fetchall() == [("pause", "alice", "chat")]
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            builder.execute("DELETE FROM builder.use_case_moves")
+        builder.rollback()

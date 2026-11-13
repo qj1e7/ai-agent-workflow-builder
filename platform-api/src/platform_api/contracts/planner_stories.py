@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from platform_api.builder.cards import VERSION_CHECKER, sorted_for_library
-from platform_api.builder.models import CardList, UnderstoodRowView, UseCaseList
+from platform_api.builder.models import CardList, UnderstoodRowView, UseCaseList, Via
 from platform_api.builder.planner import (
     AbilitiesReply,
     AnswerIn,
@@ -33,12 +33,15 @@ from platform_api.builder.planner import (
     PartCheckFits,
     PartReply,
     PartView,
+    PauseReply,
     PlannerFront,
     QuestionReply,
     RefusedReply,
     ReplyReason,
+    ResumeReply,
     SetupCardReply,
     SimilarWorkflow,
+    SwitchChoice,
     WatchlistReply,
     WhichSoftwareReply,
     WhyStoppedReply,
@@ -130,11 +133,11 @@ CLASH_ROWS = [
 EMAIL = CantRowView(
     kind="do",
     text="email it to the team",
-    note="I can't email it to the team. I can only read Jira tickets, sum up what I find, "
-    "check software for new releases, create a Jira ticket after a yes, and ask Approvers for a "
-    "yes in Teams.",
+    note="I can't send email yet.",
     needs="new_system",
     system="email",
+    instead="Run results show here, in the chat.",
+    unsupported=False,
 )
 
 
@@ -199,6 +202,12 @@ class _Workflows:
 
     async def list_cards(self) -> CardList:
         return CardList(cards=sorted_for_library([VERSION_CHECKER], []))
+
+    async def pause_use_case(self, use_case_id: str, principal: Principal, via: Via) -> None:
+        return None
+
+    async def resume_use_case(self, use_case_id: str, principal: Principal, via: Via) -> None:
+        return None
 
 
 class _Facts:
@@ -380,8 +389,39 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
             holds_save=False,
             parts=[
                 crossed("What needs my attention", "ask_on_its_own"),
-                crossed("Pause the morning check", "only_schedule"),
+                crossed("Rename the morning check", "only_schedule"),
             ],
+        ),
+        "planner/answer.pause.json": PauseReply(
+            use_case_id="uc_01JB8",
+            name="React release check",
+            already=False,
+            missing=None,
+            choices=[],
+            parts=[does("pause the React check")],
+        ),
+        "planner/answer.pause.choices.json": PauseReply(
+            use_case_id=None,
+            name=None,
+            already=False,
+            missing=None,
+            choices=[
+                SwitchChoice(
+                    use_case_id="uc_01JB8", name="React release check", state="on", watchlist=False
+                ),
+                SwitchChoice(
+                    use_case_id="uc_01JC2", name="Software watchlist", state="on", watchlist=True
+                ),
+            ],
+            parts=[does("pause the React check")],
+        ),
+        "planner/answer.resume.json": ResumeReply(
+            use_case_id="uc_01JB8",
+            name="React release check",
+            already=False,
+            missing=None,
+            choices=[],
+            parts=[does("resume the React check")],
         ),
         "planner/answer.edit.hour.json": EDIT.model_copy(
             update={

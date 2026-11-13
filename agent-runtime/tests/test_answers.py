@@ -28,6 +28,7 @@ from agent_runtime.contract import (
     ModelProblem,
     NeedsMeAnswer,
     PartAnswer,
+    PauseAnswer,
     PlannerAnswer,
     PlannerFacts,
     QuestionAnswer,
@@ -339,14 +340,14 @@ def test_the_do_row_names_what_the_ticket_holds_and_the_details_the_search_sees(
         (
             "and email me a copy",
             "email me a copy",
-            "I can't email me a copy.",
+            "I can't send email yet.",
             "new_system",
             "email",
         ),
         (
             "and post it in Teams",
             "post it in Teams",
-            "I can't post it in Teams yet.",
+            "I can't post in Teams channels yet.",
             "new_system",
             "Teams",
         ),
@@ -514,7 +515,7 @@ def test_a_change_to_tickets_is_a_cant_not_a_part_and_offers_the_search():
     )
     assert isinstance(answer, CantAnswer)
     assert cant_of(answer) == ["delete every closed ticket"]
-    assert answer.cant[0].note.startswith("I can't delete every closed ticket.")
+    assert answer.cant[0].note == "I don't delete anything in Jira."
     assert rows_of(answer)[1] == ("look_for", "Done tickets", "understood")
 
 
@@ -1216,25 +1217,28 @@ def test_a_change_request_answered_with_the_watchlist_shows_a_cant_for_the_chang
 
 
 @pytest.mark.parametrize(
-    ("task", "said"),
+    ("task", "said", "said_by"),
     [
         (
             "Can you change the version of Redis to 9, then remove 8 from our servers?",
             ["change the version of Redis to 9", "remove 8 from our servers"],
+            ["I", "can't"],
         ),
         (
             "Change the Redis version to 9.0.0. Delete the old Redis tickets.",
             ["Change the Redis version to 9.0.0", "Delete the old Redis tickets"],
+            ["I", "don't"],
         ),
     ],
 )
-def test_every_change_clause_gets_its_own_cant_row(task: str, said: list[str]):
+def test_every_change_clause_gets_its_own_cant_row(task: str, said: list[str], said_by: list[str]):
     answer = answer_of(
         read(belongs_on_watchlist=True, watchlist_word="version", software="Redis"), task
     )
     assert isinstance(answer, CantAnswer)
     assert [row.text for row in answer.cant] == said
-    assert all(row.kind == "do" and row.note.startswith("I can't") for row in answer.cant)
+    assert all(row.kind == "do" for row in answer.cant)
+    assert [row.note.split(" ")[:2] for row in answer.cant] == [["I", "can't"], said_by]
     assert isinstance(answer.alternative, WatchlistAnswer)
 
 
@@ -1420,7 +1424,7 @@ def test_check_part_needs_no_model_and_says_what_a_part_that_does_not_fit_needs(
     client = make_app(None)
     cant = client.post("/v1/planner/check-part", json=check_body("do", "Email the list")).json()
     assert cant["state"] == "cant_do"
-    assert cant["note"].startswith("I can't email the list")
+    assert cant["note"] == "I can't send email yet."
     assert (cant["needs"], cant["system"]) == ("new_system", "email")
     fits = client.post(
         "/v1/planner/check-part", json=check_body("where", "In the MOCK project")
@@ -2214,7 +2218,11 @@ def test_the_react_check_names_the_software_so_the_watchlist_can_be_told():
 
 @pytest.mark.parametrize(
     "task",
-    ["Rename the morning check", "rename the morning check to Daily tickets", "Pause it"],
+    [
+        "Rename the morning check",
+        "rename the morning check to Daily tickets",
+        "Pause it for a week",
+    ],
 )
 def test_any_other_change_is_only_schedule_and_proposes_nothing(task: str):
     answer = edited(read(asks_about="change", workflow_words="the morning check"), task)
@@ -2257,7 +2265,7 @@ def test_two_days_hold_save_with_a_cross_never_the_first_day():
             "What needs my attention? Pause the morning check",
             "What needs my attention",
             "Pause the morning check",
-            "only_schedule",
+            None,
         ),
         (
             "my_workflows",
@@ -2271,14 +2279,14 @@ def test_two_days_hold_save_with_a_cross_never_the_first_day():
             "what went wrong with the weekly summary? pause it",
             "what went wrong with the weekly summary",
             "pause it",
-            "only_schedule",
+            None,
         ),
         (
             "my_workflows",
             "how are my workflows? turn the weekly one off",
             "how are my workflows",
             "turn the weekly one off",
-            "only_schedule",
+            None,
         ),
         (
             "my_workflows",
@@ -2292,6 +2300,13 @@ def test_two_days_hold_save_with_a_cross_never_the_first_day():
             "What is waiting for my yes, and pause the morning new-ticket check",
             "What is waiting for my yes",
             "pause the morning new-ticket check",
+            None,
+        ),
+        (
+            "my_workflows",
+            "how are my workflows? rename the weekly one",
+            "how are my workflows",
+            "rename the weekly one",
             "only_schedule",
         ),
     ],
@@ -2300,7 +2315,7 @@ def test_a_question_with_a_change_word_is_a_command_never_a_status_answer(
     asks: str, task: str, question: str, change: str, reason: str | None
 ):
     fields = read(asks_about=asks)
-    edited(fields, task)
+    assert isinstance(answer_of(fields, task, WORKFLOWS), EditAnswer | PauseAnswer)
     assert marks(fields, task) == [
         (question, "cant", "ask_on_its_own"),
         (change, "will_do" if reason is None else "cant", reason),
@@ -2326,15 +2341,18 @@ def test_a_name_or_a_question_word_is_never_a_command(asks: str, task: str, word
 
 
 def test_a_change_after_the_question_is_an_edit_and_the_question_is_kept():
-    task = "Pause the morning check, then tell me how my workflows are doing"
+    task = "Rename the morning check, then tell me how my workflows are doing"
     fields = read(asks_about="my_workflows")
     assert edited(fields, task).cant == "only_schedule"
     assert marks(fields, task) == [
-        ("Pause the morning check", "cant", "only_schedule"),
+        ("Rename the morning check", "cant", "only_schedule"),
         ("tell me how my workflows are doing", "cant", "ask_on_its_own"),
     ]
-    assert marks(fields, "Pause the morning check") == [
-        ("Pause the morning check", "cant", "only_schedule")
+    task = "Pause the morning check, then tell me how my workflows are doing"
+    assert isinstance(answer_of(fields, task, WORKFLOWS), PauseAnswer)
+    assert marks(fields, task) == [
+        ("Pause the morning check", "will_do", None),
+        ("tell me how my workflows are doing", "cant", "ask_on_its_own"),
     ]
 
 
@@ -2553,7 +2571,7 @@ def test_it_alone_names_no_workflow():
 def test_a_change_that_names_no_workflow_and_no_it_is_not_an_edit():
     answer = answer_of(read(asks_about="change"), "delete every closed ticket", WORKFLOWS)
     assert isinstance(answer, CantAnswer)
-    assert isinstance(answer_of(read(asks_about="change"), "pause it", WORKFLOWS), EditAnswer)
+    assert isinstance(answer_of(read(asks_about="change"), "rename it", WORKFLOWS), EditAnswer)
 
 
 @pytest.mark.parametrize(

@@ -2,23 +2,26 @@
 
 Commands fail closed. Code takes the question's own words and the workflows' names out of the
 request, and a change word left over makes it a command, never a status answer. A schedule word
-inside a workflow's own name is neither, and "the run" is a noun. In this first version an edit
-changes only when a workflow runs: any other change, and a schedule it can't hold, come back as
-what the chat can't do yet. The answer only proposes. Nothing changes until the person saves it.
+inside a workflow's own name is neither, and "the run" is a noun. An edit changes only when a
+workflow runs: any other change, and a schedule it can't hold, come back as what the chat can't do
+yet. The answer only proposes. Nothing changes until the person saves it. A pause or a resume and
+nothing else is its own answer, which the platform carries out for the workflow it names.
 """
 
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final
 
-from agent_runtime.abilities import change_verbs_in, commands_a_change, words
+from agent_runtime.abilities import DELETES, TICKETS, change_verbs_in, commands_a_change, words
 from agent_runtime.contract import (
     EditAnswer,
     EditCant,
     PartMark,
     PartReason,
+    PauseAnswer,
     PlannerFacts,
+    ResumeAnswer,
     ScheduleChange,
     WatchDay,
 )
@@ -87,6 +90,11 @@ OTHER_CHANGES: Final = words(
 )
 """Verbs that change a workflow some other way, which the chat can't do yet."""
 EDIT_VERBS: Final = SCHEDULE_VERBS | OTHER_CHANGES
+PAUSES: Final = words("pause stop halt suspend disable")
+RESUMES: Final = words("resume unpause enable")
+SWITCH_WORDS: Final = PAUSES | RESUMES | words("turn running")
+TURNED: Final = re.compile(r"\bturn\b(?:\s+(?:it|them|back))*\s+(on|off)\b", re.IGNORECASE)
+"""Turning a workflow on or off, as "turn it back on", once the workflow's name is out."""
 FROM_TO_VERBS: Final = words("change move switch shift reschedule push bring")
 """Verbs whose "from Mondays to Tuesdays" names the schedule now and the new one."""
 NOUN: Final = re.compile(
@@ -339,14 +347,18 @@ def commanded(read: TaskRead | None, text: str, facts: PlannerFacts | None) -> b
     )
 
 
-def edit_of(read: TaskRead, text: str, facts: PlannerFacts | None) -> EditAnswer | None:
+type Switch = PauseAnswer | ResumeAnswer
+
+
+def edit_of(read: TaskRead, text: str, facts: PlannerFacts | None) -> EditAnswer | Switch | None:
     """The edit a request asks for, or None. The reading calls it a change; or it asks about
     the person's workflows and a change word is left over, which fails closed to the edit; or an
     order to change one stands beside a workflow the person has, whatever the reading said. A
-    watch request goes to the Software watchlist's answers instead."""
+    watch request goes to the Software watchlist's answers instead. A pause or a resume with no
+    other word of a change beside it is a pause or a resume answer."""
     if read.belongs_on_watchlist and _watch_verb(text, _names(read, text, facts)):
         return None
-    if not asks_for_a_change(read, text, facts):
+    if not asks_for_a_change(read, text, facts) or _deletes_tickets(text, facts):
         return None
     if read.asks_about not in ("change", *STATE_KINDS) and not _orders_one(read, text, facts):
         return None
@@ -355,6 +367,9 @@ def edit_of(read: TaskRead, text: str, facts: PlannerFacts | None) -> EditAnswer
         # "delete every closed ticket" changes tickets, not a workflow: it is a task's can't.
         return None
     names = _Names(_names(read, text, facts), None if target is None else _said(target, text))
+    switch = _switch_of(text, names)
+    if switch is not None:
+        return switch(workflow_words=target, software=_software(read, text, target))
     schedule, cant, clashes = _schedule_of(text, names)
     return EditAnswer(
         workflow_words=target,
@@ -363,6 +378,116 @@ def edit_of(read: TaskRead, text: str, facts: PlannerFacts | None) -> EditAnswer
         cant=cant,
         holds_save=bool(clashes) and cant is None,
     )
+
+
+def _deletes_tickets_in(words_: str) -> bool:
+    said = {w for w, _, _ in _tokens(words_)}
+    return bool(said & DELETES) and bool(said & TICKETS)
+
+
+def _deletes_tickets(text: str, facts: PlannerFacts | None) -> bool:
+    """A delete of tickets, as "delete the MOCK ticket", changes Jira, never a workflow, whatever
+    the reading named. A ticket inside one of the person's workflow names is that workflow's. A
+    pause beside it is still a pause, with the delete crossed."""
+    names = [r for name in _workflow_names(facts) for r in _name_runs(text, name)]
+    unnamed = _blank(text, names)
+    return _deletes_tickets_in(unnamed) and not _orders_switch(unnamed)
+
+
+def _orders_switch(words_: str) -> bool:
+    return bool({w for w, _, _ in _tokens(words_)} & (PAUSES | RESUMES | {"turn"}))
+
+
+def _writes_beside(words_: str) -> bool:
+    """A write in the words that changes no workflow, as "email me" or "delete the MOCK ticket".
+    "rename it" is a change to one."""
+    tokens = {w for w, _, _ in _tokens(words_)}
+    plain = bool(_writes(words_) - EDIT_VERBS) and not tokens & EDIT_VERBS
+    return plain or _deletes_tickets_in(words_)
+
+
+def _switch_of(text: str, names: _Names) -> type[Switch] | None:
+    """Pause or resume, when the order holds nothing else: no schedule and no word beyond the
+    order itself, so "pause it for a week" stays a change the chat can't make. A write in a clause
+    of its own, as "and email me", is no part of the order and keeps its own cross."""
+    unnamed = _blank(text, names.all)
+    beside = [
+        c
+        for c in change_clauses(text, names)
+        if _writes_beside(unnamed[c[0] : c[1]]) and not _orders_switch(unnamed[c[0] : c[1]])
+    ]
+    rest = _blank(_rest(text, names), beside)
+    said = {w for w, _, _ in _tokens(rest) if w not in FILLER}
+    if not said or not said <= SWITCH_WORDS:
+        return None
+    turned = {m.group(1).casefold() for m in TURNED.finditer(rest)}
+    if "turn" in said and len(turned) != 1:
+        return None
+    pauses = bool(said & PAUSES) or turned == {"off"}
+    resumes = bool(said & RESUMES) or turned == {"on"}
+    if pauses == resumes:
+        return None
+    return PauseAnswer if pauses else ResumeAnswer
+
+
+EDGE_WORDS: Final = re.compile(
+    r"^(?:[\s,;]|\b(?:and|then|also|plus|the|my|our|this|that)\b)+"
+    r"|(?:[\s,;]|\b(?:and|then|also|plus|the|my|our|this|that)\b)+$",
+    re.IGNORECASE,
+)
+"""The joining words and articles at either end of the order, once another workflow's name is
+cut out of its clause."""
+
+
+def _order_marks(text: str, clause: Span, names: _Names) -> list[EditMark]:
+    """The clause that gives the order: the order ticked, and each other workflow it names
+    crossed to ask on its own, so a pause of one never reads as a pause of both."""
+    others = sorted(names.others(clause))
+    cuts = [clause[0], *(edge for other in others for edge in other), clause[1]]
+    marks: list[EditMark] = []
+    for start, end in zip(cuts[::2], cuts[1::2], strict=True):
+        piece = text[start:end]
+        if not _orders_switch(piece):
+            continue
+        lead = EDGE_WORDS.match(piece)
+        a = start + (lead.end() if lead and lead.start() == 0 else 0)
+        tail = EDGE_WORDS.search(text[a:end])
+        b = end - (len(tail.group(0)) if tail and tail.end() == end - a else 0)
+        marks.append(EditMark(a, b, "will_do"))
+    for other in others:
+        bare = ARTICLE.match(text[other[0] : other[1]])
+        marks.append(
+            EditMark(other[0] + (bare.end() if bare else 0), other[1], "cant", "ask_on_its_own")
+        )
+    return sorted(marks, key=lambda m: m.start)
+
+
+def switch_marks(
+    read: TaskRead | None,
+    text: str,
+    answer: Switch,
+    clauses: list[Span],
+    facts: PlannerFacts | None = None,
+) -> list[EditMark]:
+    """The marks of a pause or a resume. Only the clause that gives the order is ticked, up to any
+    other workflow it names. Every other clause keeps the cross an edit gives it, and a write or a
+    change beside the order, which an edit crosses as a change the chat can't make, is asked on
+    its own: the chat did carry out the order."""
+    target = _said(answer.workflow_words, text)
+    names = _Names(_names(read, text, facts) + ([target] if target else []), target)
+    unnamed = _blank(text, names.all)
+    edit = EditAnswer(
+        workflow_words=answer.workflow_words, software=answer.software, cant="only_schedule"
+    )
+    marks: list[EditMark] = []
+    for mark in edit_marks(read, text, edit, clauses, facts):
+        if mark.reason != "only_schedule":
+            marks.append(mark)
+        elif _orders_switch(unnamed[mark.start : mark.end]):
+            marks += _order_marks(text, (mark.start, mark.end), names)
+        else:
+            marks.append(replace(mark, reason="ask_on_its_own"))
+    return marks
 
 
 WATCH_VERB: Final = re.compile(
@@ -408,15 +533,15 @@ WATCHLIST: Final = re.compile(r"\bwatchlist\b", re.IGNORECASE)
 def _target(read: TaskRead, text: str, facts: PlannerFacts | None) -> str | None:
     """The words that name the workflow to change, as the request wrote them: the reading's,
     else one of the person's workflow names or a run of its words, else a short form such as
-    "the morning check", else the software the reading named. None for "make it daily"."""
-    said = _said(read.workflow_words, text)
+    "the morning check", else the software the reading named. None for "make it daily". The
+    words widen to the longest name that holds them, so a whole name said wins over the words it
+    shares with another workflow's name."""
     runs = [r for name in _workflow_names(facts) for r in _name_runs(text, name)]
+    said = _said(read.workflow_words, text) or (runs[0] if runs else None)
     if said is not None:
         known = [r for r in runs if r[0] <= said[0] and said[1] <= r[1]]
         start, end = max(known, key=lambda r: r[1] - r[0], default=said)
         return text[start:end]
-    if runs:
-        return text[runs[0][0] : runs[0][1]]
     reference = REFERENCE.search(text)
     if reference is not None:
         return ARTICLE.sub("", reference.group(0))
