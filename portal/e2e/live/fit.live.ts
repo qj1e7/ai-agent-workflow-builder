@@ -410,7 +410,7 @@ test('the side panel draws the same run line, small and without faces, at work, 
     await expect(panelLine, 'the stop is named in words too').toContainText('Stopped here')
     await samePage('stopped')
 
-    await panel.getByRole('button', { name: 'Retry the run' }).click()
+    await panel.getByRole('button', { name: 'Retry', exact: true }).click()
     await expect
       .poll(async () => (await runLinks(panel)).join(' '), { message: 'the panel follows the retry: dashes into the step at work, then into the yes', intervals: [100], timeout: 90_000 })
       .toMatch(/^(solid )*(flow|wait)( todo)+$/)

@@ -2,19 +2,16 @@ import { useEffect, useMemo } from 'react'
 import { Link } from '../../ui/Link'
 import { useDecisions, useHome } from '../../api/homeQueries'
 import { useDisplayName } from '../../api/people'
-import { isOperator } from '../../api/me'
-import { useMe, useModelOff, useTroubleshoot, useUseCases } from '../../api/queries'
+import { useMe, useUseCases } from '../../api/queries'
 import { usePeopleList } from '../../api/settingsQueries'
-import type { DecidedReply, FailureReason, HomeOut, UseCaseView } from '../../api/types'
+import type { DecidedReply, HomeOut } from '../../api/types'
 import { operatorsSay } from '../../shell/OperatorsNote'
 import { ButtonLink } from '../../ui/Button'
-import { Card } from '../../ui/Card'
 import { OpenButton, OpenLink } from '../../ui/OpenItem'
 import { listClass, WorkflowRow } from '../workflows/WorkflowsPage'
 import { REFRESH_MS, rowsOf, viewerOf } from '../workflows/workflow'
 import { useCapabilities } from '../../api/plannerQueries'
 import { ideasSay, needsSay, startingPoints, workflowsSay } from './answers'
-import { Troubleshooting } from '../run/Outcome'
 import { useAsker } from './asker'
 import { decidedSay, decisionLine } from './decided'
 import { approvalsOf, approverLine, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, wordsOf, type Needs } from './home'
@@ -244,82 +241,4 @@ export function OperatorsAnswer({ say }: { say: Say }) {
   const sentence = operatorsSay(people.data)
   useSaidOnce(people.isPending ? null : sentence, say)
   return <p>{sentence}</p>
-}
-
-interface Stop {
-  readonly run_id: string
-  readonly use_case_name: string
-  readonly reason: FailureReason
-  readonly retryable: boolean
-}
-
-/**
- * The stop the answer is about. An Operator’s comes from the stopped list Needs you is made from. Needs you lists no stops for
- * someone who isn’t an Operator, so theirs comes from the workflows’ last runs, which their Workflows page shows as Stopped.
- */
-function stopOf(useCaseId: string | null, operator: boolean, home: HomeOut | undefined, list: readonly UseCaseView[] | undefined): Stop | null | undefined {
-  const asked = (id: string) => useCaseId === null || id === useCaseId
-  if (operator) return home ? (home.stopped.find((item) => asked(item.use_case_id)) ?? null) : undefined
-  if (!list) return undefined
-  for (const { use_case_id, name, last_run } of list) {
-    if (asked(use_case_id) && last_run?.state === 'failed' && last_run.reason !== null) return { run_id: last_run.run_id, use_case_name: name, reason: last_run.reason, retryable: last_run.retryable }
-  }
-  return null
-}
-
-/**
- * Why it stopped: the stopped list Needs you is made from, so the answer and the row can't disagree, then the AI
- * troubleshooter's three answers and the next step under them, Retry or Report to support, from the run page's own pieces.
- * Someone who isn't an Operator gets the same answers, with who can retry in place of Retry.
- */
-export function WhyStoppedAnswer({ useCaseId, say }: { useCaseId: string | null; say: Say }) {
-  const home = useHome()
-  const me = useMe().data
-  const operator = isOperator(me)
-  const useCases = useUseCases()
-  const nameOf = useDisplayName()
-  const modelOff = useModelOff()
-  const main = useMainButton()
-  const stopped = me === undefined ? undefined : stopOf(useCaseId, operator, home.data, useCases.data)
-  const troubleshoot = useTroubleshoot(stopped?.run_id ?? '', Boolean(stopped), 0)
-  const sentence = stopped === undefined ? null : stopped ? `${stopped.use_case_name} stopped.` : 'Nothing has stopped right now.'
-  useSaidOnce(sentence, say)
-  if (stopped === undefined) {
-    return (
-      <p className="muted" role="status">
-        {home.isError || useCases.isError ? 'I couldn’t read the stopped workflows just now.' : 'Checking what stopped'}
-      </p>
-    )
-  }
-  if (!stopped) {
-    return (
-      <>
-        <p>{sentence}</p>
-        <ButtonLink to="/workflows">Open Workflows</ButtonLink>
-      </>
-    )
-  }
-  const failure = { state: 'failed', stage: 'working', reason: stopped.reason, retryable: stopped.retryable, message: '' } as const
-  return (
-    <Card
-      title={`${stopped.use_case_name} stopped`}
-      actions={
-        <OpenButton item={{ kind: 'run', id: stopped.run_id }} to={`/runs/${stopped.run_id}`}>
-          See the run
-        </OpenButton>
-      }
-    >
-      <Troubleshooting
-        runId={stopped.run_id}
-        failure={failure}
-        advice={troubleshoot.data}
-        loading={troubleshoot.isPending}
-        me={me ? { id: me.id, name: me.display, operator: isOperator(me) } : undefined}
-        reports={[]}
-        nameOf={nameOf}
-        modelOff={modelOff}
-        quiet={main !== 'primary'}
-      />
-    </Card>
-  )
 }

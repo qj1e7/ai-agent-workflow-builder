@@ -83,8 +83,8 @@ describe('the side panel', () => {
   it('shows a stopped workflow’s three answers with Retry, its last and next run, Open the run, and Pause, to an Operator', () => {
     const html = draw({ kind: 'workflow', id: STOPPED.use_case_id })
     const shown = text(html)
-    expect(shown).toMatch(/What happened[\s\S]*What was affected[\s\S]*Safe to retry[\s\S]*Last run[\s\S]*Next run/)
-    expect(buttons(html)).toEqual(['Close', 'Retry the run', 'Pause'])
+    expect(shown).toMatch(/What happened[\s\S]*Affected[\s\S]*Safe to retry[\s\S]*Last run[\s\S]*Next run/)
+    expect(buttons(html)).toEqual(['Close', 'Retry', 'Pause'])
     expect(links(html)).toEqual([
       ['More details', `/workflows/${STOPPED.use_case_id}`],
       ['Open the run', `/runs/${STOPPED.last_run?.run_id ?? ''}`],

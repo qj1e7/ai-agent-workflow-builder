@@ -38,13 +38,14 @@ function motionProps({ glide, arrive, stagger, leaving, onAnimationEnd }: Motion
 }
 
 /**
- * Retries a stopped run and opens it, so the person sees it go. In the side panel the run stays where it is, with the panel back
+ * Retries a stopped run and opens it, so the person sees it go, unless `stay` says the place it is drawn already follows the run, as the
+ * run card does. In the side panel the run stays where it is, with the panel back
  * at its top. While the panel shows the run, the chat hides its own Retry, because the panel has it.
  */
-export function RetryButton({ runId, label, primary, describedBy }: { runId: string; label: string; primary: boolean; describedBy: string }) {
+export function RetryButton({ runId, label, primary, describedBy, stay = false }: { runId: string; label: string; primary: boolean; describedBy: string; stay?: boolean }) {
   const navigate = useChatNavigate()
   const backToTop = useAfterPanelAction()
-  const retry = useRetry(runId, () => (backToTop ? backToTop() : navigate(`/runs/${runId}`)))
+  const retry = useRetry(runId, () => (backToTop ? backToTop() : stay ? undefined : navigate(`/runs/${runId}`)))
   const latch = useLatch()
   const words = useErrorWords()
   const inPanel = useShownInPanel({ kind: 'run', id: runId })

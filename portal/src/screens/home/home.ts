@@ -2,7 +2,7 @@ import { ApiError } from '../../api/client'
 import { andList, crossedWords, type Left } from './card'
 import { connectorLabel, starterName } from '../../api/labels'
 import type { AddressItem, CapabilitiesView, PlannerAnswerIn, ApprovalItem, ConfirmationItem, ConnectionItem, DeclinedItem, DraftItem, FollowingUpItem, HomeOut, QuestionItem, StoppedItem, WaitingItem } from '../../api/types'
-import { count, declineTail, withCurrentNames } from '../run/words'
+import { count, declineTail, factsOf, stageWords, withCurrentNames } from '../run/words'
 import { requestKindWords, requestPath } from '../workflows/requests'
 import { movedHeadline, notFoundHeadline, softwarePath } from '../software/software'
 import { lineWhen, runWhen } from '../workflows/workflow'
@@ -360,10 +360,15 @@ function connectionLine(item: ConnectionItem, now: Date): NeedLine {
   return line(item.state === 'working' ? 'wait' : 'err', item.name, CONNECTION_STATE[item.state])
 }
 
+/** A run's stage words after its name, as a row and the strip write them: "FastAPI release check stopped". */
+const afterName = (words: string): string => words.charAt(0).toLowerCase() + words.slice(1)
+
 export function lineOf(need: Need, now: Date): NeedLine {
   switch (need.kind) {
-    case 'stopped':
-      return line('err', need.item.use_case_name, `stopped ${atWhen(need.item.stopped_at, now)}`, 'stopped')
+    case 'stopped': {
+      const stopped = afterName(stageWords(factsOf('failed'), (id) => id))
+      return line('err', need.item.use_case_name, `${stopped} ${atWhen(need.item.stopped_at, now)}`, stopped)
+    }
     case 'approval':
       return line('wait', need.item.use_case_name, 'needs your yes')
     case 'connection':
