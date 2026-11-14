@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from platform_api.app import create_app
 from platform_api.bootstrap import LoadedWorkflow, previous_hashes, record_status
 from platform_api.monitoring import CosmosEvents, callback_for
+from platform_api.monitoring.log import COPIED_CHANNEL, copied_notice
 from platform_api.orchestration.self_test import SelfTestsSeen, ready_line
 from platform_api.settings import CosmosSettings
 from platform_api.shared import RunId, TaskId
@@ -167,17 +168,6 @@ async def read_from_cosmos(settings: CosmosSettings, run_id: RunId) -> list[int]
         await events.close()
 
 
-async def copied_to_cosmos(
-    settings: CosmosSettings, run_id: RunId, *, within: float = 30.0
-) -> list[int]:
-    """The copy to Cosmos runs in the background, so a read just after the post can be early."""
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + within
-    while not (seqs := await read_from_cosmos(settings, run_id)) and loop.time() < deadline:
-        await asyncio.sleep(0.5)
-    return seqs
-
-
 @pytest.mark.cosmos
 def test_with_activity_reader_cosmos_the_api_copies_each_event_and_reads_it_back(
     postgres: PostgresUrls,
@@ -203,7 +193,11 @@ def test_with_activity_reader_cosmos_the_api_copies_each_event_and_reads_it_back
         datetime.now(UTC) + timedelta(hours=1),
     ).token
 
-    with TestClient(create_app(env)) as client:
+    with (
+        psycopg.connect(postgres.contexts.monitoring, autocommit=True) as listener,
+        TestClient(create_app(env)) as client,
+    ):
+        listener.execute(f"LISTEN {COPIED_CHANNEL}")
         ready = client.get("/healthz/ready")
         assert ready.status_code == 200
         assert {k: v for k, v in ready.json()["checks"][1].items() if k in ("name", "ok")} == {
@@ -217,7 +211,10 @@ def test_with_activity_reader_cosmos_the_api_copies_each_event_and_reads_it_back
             headers={"X-Callback-Token": token},
         )
         page = client.get(f"/api/v1/runs/{run_id}/events", headers={"X-Dev-User": "alice"})
+        # Stopping the app cancels a copy still under way, so wait for the copier to announce it.
+        copied = [n.payload for n in listener.notifies(timeout=30, stop_after=1)]
 
     assert posted.status_code == 202
     assert [e["kind"] for e in page.json()["events"]] == ["agent_joined"]
-    assert asyncio.run(copied_to_cosmos(settings, run_id)) == [1]
+    assert copied == [copied_notice(run_id, 1)]
+    assert asyncio.run(read_from_cosmos(settings, run_id)) == [1]
