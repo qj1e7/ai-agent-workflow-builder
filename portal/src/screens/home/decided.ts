@@ -21,9 +21,6 @@ export function decidedSay(total: number, shown: number, only: Only): string {
   return shown < total ? `${said} The ${String(shown)} newest are here.` : said
 }
 
-/** "Approved" or "Declined", the decision's one pill. */
-export const verdictWords = (decision: Pick<PastDecisionView, 'verdict'>): string => (decision.verdict === 'approve' ? 'Approved' : 'Declined')
-
 /**
  * The line under a decision in the sketch's decisions card: the day, then the reason for a decline ("Tue 4 Nov · Not this week"), or
  * what the run did after a yes, in the stage words its run page, its card and the Workflows row use ("Today 9:10 · 1 ticket created").

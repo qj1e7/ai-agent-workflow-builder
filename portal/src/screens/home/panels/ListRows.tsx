@@ -7,7 +7,7 @@ import { CHECKER, checksOnItsOwn, softwareLine, softwarePath, stateOf, watchRank
 import { StatusPills } from '../../workflows/Status'
 import { pillOf, rowLine, SOFTWARE_PAGE, workflowPath } from '../../workflows/workflow'
 import type { NameOf } from '../../run/words'
-import { decisionSub, verdictWords } from '../decided'
+import { decisionSub } from '../decided'
 import styles from './Lists.module.css'
 
 /** The row is one button. Its name is the workflow or software, and its line and state are read after it as its description. */
@@ -89,7 +89,7 @@ export function DecisionRows({ decisions, label, now, nameOf }: { decisions: rea
           line={decisionSub(decision, now, nameOf)}
           state={
             <span className={styles['pill']} data-tone={decision.verdict === 'approve' ? 'good' : undefined}>
-              {verdictWords(decision)}
+              {decision.verdict === 'approve' ? 'Approved' : 'Declined'}
             </span>
           }
           data={{ 'data-decision': decision.verdict }}
