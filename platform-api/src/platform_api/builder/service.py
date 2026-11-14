@@ -834,8 +834,9 @@ class Builder:
     async def _bring_back(
         self, uow: UnitOfWork, use_case_id: str, row: Mapping[str, Any]
     ) -> Mapping[str, Any] | N8nNotReady:
-        """A deleted workflow was removed from n8n (D7), so restoring it saves the version in
-        use again as a new n8n workflow, from the workflow the platform kept for it."""
+        """A deleted workflow was removed from n8n (D7), or deleted there, so restoring it saves
+        the version in use again as a new n8n workflow, from the workflow the platform kept for
+        it. n8n has it again, so it is no longer marked deleted in n8n."""
         assert self._n8n is not None
         try:
             if await self._n8n.look(row["n8n_workflow_id"]) is not None:
@@ -845,8 +846,8 @@ class Builder:
             log.warning("n8n did not take %s back: %s", use_case_id, error)
             return N8nNotReady(NOT_TAKEN)
         await uow.conn.execute(
-            "UPDATE builder.use_cases SET n8n_workflow_id = %s, n8n_draft_id = %s"
-            " WHERE use_case_id = %s",
+            "UPDATE builder.use_cases SET n8n_workflow_id = %s, n8n_draft_id = %s,"
+            " deleted_in_n8n_at = NULL WHERE use_case_id = %s",
             (saved.workflow_id, saved.version_id, use_case_id),
         )
         await uow.conn.execute(
@@ -859,6 +860,7 @@ class Builder:
             "n8n_workflow_id": saved.workflow_id,
             "n8n_version_id": saved.version_id,
             "document": saved.document,
+            "deleted_in_n8n_at": None,
         }
 
     async def _removed(self, use_case_id: str) -> None:

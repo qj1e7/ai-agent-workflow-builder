@@ -69,6 +69,8 @@ class FakeN8n:
     """Each workflow's versions n8n still holds, by version id. A test prunes one as n8n does
     after a day (P7 Q7)."""
     archived: set[str] = field(default_factory=set[str])
+    made: int = 0
+    """How many workflows n8n has made: it never gives a deleted workflow's id to another."""
 
     def client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(transport=httpx.MockTransport(self.handle), base_url="http://n8n")
@@ -199,7 +201,8 @@ class FakeN8n:
         parts = path.strip("/").split("/")
         match request.method, parts:
             case "POST", ["workflows"]:
-                workflow_id = f"wf{len(self.workflows) + 1}"
+                self.made += 1
+                workflow_id = f"wf{self.made}"
                 self.workflows[workflow_id] = {
                     **self.keeps(json.loads(json.dumps(body))),
                     "id": workflow_id,

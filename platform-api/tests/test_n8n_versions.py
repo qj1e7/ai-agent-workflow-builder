@@ -17,7 +17,7 @@ from platform_api.orchestration import Publisher, RanVersion, Schedule
 from platform_api.orchestration.schedule import DAYS
 from platform_api.shared import UseCaseId, UserId
 from tests.fake_n8n import FakeN8n
-from tests.test_builder_lifecycle import Lab, ModelConnected
+from tests.test_builder_lifecycle import Lab, ModelConnected, start_run
 from tests.test_n8n_builder import WRITES, N8nLab, lab
 from tests.test_n8n_lifecycle import Workflows, made, move, version_row
 
@@ -433,3 +433,25 @@ async def test_safety_a_version_published_again_from_n8ns_history_keeps_its_auth
     v.n8n._activate(workflow_id, first["n8n_version_id"], DAVE_IN_N8N)  # pyright: ignore[reportPrivateUsage]
     assert await v.sweep() == 1
     assert {UserId("alice"), DAVE} <= await v.parties(use_case_id, 3, workflow_id)
+
+
+async def test_a_workflow_deleted_in_n8n_comes_back_whole_when_restored(v: Versions):
+    """Deleted in n8n, then deleted and restored in the Portal: restoring saves it in n8n again,
+    so it is no longer marked deleted there, and it resumes, runs and is swept again."""
+    use_case_id, workflow_id = await made(v.own, on=True)
+    assert (await move(v.own, "pause", use_case_id)).status_code == 200
+    del v.n8n.workflows[workflow_id]
+    assert await v.sweep() == 1
+    assert (await move(v.own, "delete", use_case_id)).status_code == 200
+    restored = await move(v.own, "restore", use_case_id)
+    assert restored.status_code == 200, restored.text
+    assert (restored.json()["state"], restored.json()["deleted_in_n8n_at"]) == ("paused", None)
+    [again] = v.n8n.workflows
+    assert again != workflow_id
+    resumed = await move(v.own, "resume", use_case_id)
+    assert resumed.status_code == 200, resumed.text
+    assert v.n8n.workflows[again]["activeVersionId"] is not None
+    assert (await start_run(v.own.lab, use_case_id)).startswith("run")
+    assert await v.sweep() == 0, "the sweep looks at it again, and n8n has it"
+    v.n8n.publish_as(again, DAVE_IN_N8N, at_seven_thirty)
+    assert await v.sweep() == 1
