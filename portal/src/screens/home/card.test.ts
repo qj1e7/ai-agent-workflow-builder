@@ -17,6 +17,8 @@ import {
   cardFrom,
   nextQuestion,
   setUpWords,
+  cardPhase,
+  isQuestion,
   leftWords,
   savedLeft,
   setupLeft,
@@ -701,5 +703,33 @@ describe('the Planner’s set-up card', () => {
     const draft = saved(2, JSON.parse(JSON.stringify(draftContent(card, null))) as Record<string, unknown>)
     expect(savedLeft(draft)).toEqual(setupLeft(card, null))
     expect(savedLeft(saved(2, { intent: 'Every Wednesday, find tickets' }))).toBeNull()
+  })
+})
+
+describe('pressing on the set-up card', () => {
+  const built = { type: 'built', useCaseId: 'uc_1', draftKept: false, newAgents: [] } as const
+
+  it('Set up makes it Building, the platform’s answer builds it, and a refusal opens the card again', () => {
+    expect(cardPhase({ kind: 'open' }, { type: 'set_up' })).toEqual({ kind: 'creating' })
+    expect(cardPhase({ kind: 'creating' }, built)).toEqual({ kind: 'built', useCaseId: 'uc_1', draftKept: false, newAgents: [] })
+    expect(cardPhase({ kind: 'creating' }, { type: 'refused' })).toEqual({ kind: 'open' })
+    expect(cardPhase({ kind: 'built', useCaseId: 'uc_1', draftKept: false, newAgents: [] }, { type: 'set_up' }), 'a second press sets up nothing more').toEqual({ kind: 'built', useCaseId: 'uc_1', draftKept: false, newAgents: [] })
+  })
+
+  it('Never mind drops an open card, never one being set up, and Undo opens a dropped one again', () => {
+    expect(cardPhase({ kind: 'open' }, { type: 'never_mind' })).toEqual({ kind: 'dropped' })
+    expect(cardPhase({ kind: 'creating' }, { type: 'never_mind' })).toEqual({ kind: 'creating' })
+    expect(cardPhase({ kind: 'dropped' }, { type: 'undo' })).toEqual({ kind: 'open' })
+    expect(cardPhase({ kind: 'dropped' }, { type: 'set_up' })).toEqual({ kind: 'dropped' })
+  })
+})
+
+describe('what the footer counts', () => {
+  it('counts only the questions the card asks, and says what else waits in its own words', () => {
+    expect(leftWords({ choices: ['when it runs', 'a part I can’t do yet'], leftOut: [] }), 'a part she must change is no question').toBe('1 question to answer')
+    expect(leftWords({ choices: ['a part I can’t do yet'], leftOut: [] })).toBe('Change the part I can’t do yet, or leave it out.')
+    expect(leftWords({ choices: ['a request I can do'], leftOut: [] })).toBe('Change your words to something I can do.')
+    expect(isQuestion('the Jira project')).toBe(true)
+    expect(isQuestion('nothing left out for want of a tool')).toBe(false)
   })
 })

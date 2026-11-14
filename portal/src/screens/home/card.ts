@@ -723,11 +723,11 @@ function choicesLeft(form: Form, plan: PlanView | null): string[] {
   if (form.marked.some((part) => part.reason === 'how_many_days')) add(LEFT_DAYS)
   if (cardBlockers(form.rows).length > 0) return left
   if (plan === null) add(LEFT_PLAN)
-  else if (plan.kind === 'cannot') add('a request I can do')
+  else if (plan.kind === 'cannot') add(LEFT_REQUEST)
   else if (plan.kind === 'trouble') add('the Planner to answer')
   else {
-    if (plan.problems.length > 0) add('a fix for the new agent’s problems')
-    if (plan.notIncluded.length > 0) add('nothing left out for want of a tool')
+    if (plan.problems.length > 0) add(LEFT_FIX)
+    if (plan.notIncluded.length > 0) add(LEFT_TOOL)
     for (const agent of plan.agents)
       for (const input of agent.inputs) if (valueProblem(input.kind, valueOf(form, agent, input.name)) !== null) add(`the ${lowerFirst(input.name)}`)
   }
@@ -742,17 +742,35 @@ export const orList = (items: readonly string[]): string =>
 
 export const crossedWords = (count: number): string => (count === 1 ? 'The part with a cross is left out.' : `The ${count} parts with a cross are left out.`)
 
-const WAITS: ReadonlySet<string> = new Set([LEFT_PLAN, LEFT_CHECKING, 'the Planner to answer'])
+const LEFT_REQUEST = 'a request I can do'
+const LEFT_FIX = 'a fix for the new agent’s problems'
+const LEFT_TOOL = 'nothing left out for want of a tool'
+const QUESTIONS: ReadonlySet<string> = new Set([...Object.values(LEFT_NAME), LEFT_WHEN, LEFT_DAYS])
+
+
+/** What else holds Set up, in the words that say what to do about it. */
+const NOT_QUESTIONS: Readonly<Record<string, string>> = {
+  [LEFT_CANT]: 'Change the part I can’t do yet, or leave it out.',
+  [LEFT_CHECKING]: 'Checking your new words…',
+  [LEFT_PLAN]: 'Waiting for the Planner…',
+  'the Planner to answer': 'Waiting for the Planner…',
+  [LEFT_REQUEST]: 'Change your words to something I can do.',
+  [LEFT_FIX]: 'The new agent has a problem. Change your words to fix it.',
+  [LEFT_TOOL]: 'Part of it needs a tool I don’t have. Change your words to leave it out.',
+}
+
+/** What the card asks her as a question, one at a time: a part not said, when it runs, how many days, or a value an agent needs ("the Jira project"). */
+export const isQuestion = (choice: string): boolean => QUESTIONS.has(choice) || (/^the /.test(choice) && NOT_QUESTIONS[choice] === undefined)
 
 /**
- * The footer’s line, in the sketch’s words: how many questions are left for her, or what the card waits for. The rows show which,
+ * The footer’s line, in the sketch’s words: how many questions are left for her, else what else holds Set up. The rows show which,
  * one question at a time, and a cross is on the card, so nothing left says nothing: the button says what it sets up.
  */
 export function leftWords({ choices }: Left): string {
-  const asks = choices.filter((choice) => !WAITS.has(choice)).length
+  const asks = choices.filter(isQuestion).length
   if (asks > 0) return asks === 1 ? '1 question to answer' : `${String(asks)} questions to answer`
-  if (choices.includes(LEFT_CHECKING)) return 'Checking your new words…'
-  return choices.length > 0 ? 'Waiting for the Planner…' : ''
+  const other = choices[0]
+  return other === undefined ? '' : (NOT_QUESTIONS[other] ?? '')
 }
 
 /** “Set up the part I can” while any part has a cross, so the button never claims the whole request. */
@@ -827,3 +845,33 @@ export function whenSaid(when: When): string | null {
 }
 
 export const DEST_WORDS = 'one new Jira ticket'
+
+/** Where a set-up card is: open to change, being set up, built as a draft that builds and tests, or dropped. */
+export type CardPhase =
+  | { readonly kind: 'open' }
+  | { readonly kind: 'creating' }
+  | { readonly kind: 'built'; readonly useCaseId: string; readonly draftKept: boolean; readonly newAgents: readonly string[] }
+  | { readonly kind: 'dropped' }
+
+export type CardPress =
+  | { readonly type: 'set_up' }
+  | { readonly type: 'built'; readonly useCaseId: string; readonly draftKept: boolean; readonly newAgents: readonly string[] }
+  | { readonly type: 'refused' }
+  | { readonly type: 'never_mind' }
+  | { readonly type: 'undo' }
+
+/** What a press does to the card. Only an open card sets up or drops, and only a card being set up is built or opened again. */
+export function cardPhase(phase: CardPhase, press: CardPress): CardPhase {
+  switch (press.type) {
+    case 'set_up':
+      return phase.kind === 'open' ? { kind: 'creating' } : phase
+    case 'built':
+      return phase.kind === 'creating' ? { kind: 'built', useCaseId: press.useCaseId, draftKept: press.draftKept, newAgents: press.newAgents } : phase
+    case 'refused':
+      return phase.kind === 'creating' ? { kind: 'open' } : phase
+    case 'never_mind':
+      return phase.kind === 'open' ? { kind: 'dropped' } : phase
+    case 'undo':
+      return phase.kind === 'dropped' ? { kind: 'open' } : phase
+  }
+}

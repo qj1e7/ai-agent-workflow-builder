@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useContext, useEffect, useId, useMemo, useReducer, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
 import { useErrorWords, useSession } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
@@ -16,6 +16,7 @@ import { Building, DraftPill } from './Building'
 import {
   afterPartCheck,
   answerWhen,
+  cardPhase,
   ASK_DAYS,
   canDrop,
   changeRow,
@@ -49,6 +50,7 @@ import {
   type When,
   type WhenField,
   type Form,
+  type CardPhase,
 } from './card'
 import { DiscardDialog } from '../workflows/Sections'
 import { CardMemoryContext } from './cardMemory'
@@ -237,10 +239,7 @@ export function frozenParts(form: Form, plan: PlanView | null, writes: boolean |
   ]
 }
 
-export type Phase =
-  | { readonly kind: 'open' }
-  | { readonly kind: 'built'; readonly useCaseId: string; readonly draftKept: boolean; readonly newAgents: readonly string[] }
-  | { readonly kind: 'dropped' }
+export type Phase = CardPhase
 
 /**
  * The set-up card, in the sketch's shape: what it understood as Watch, When and Then, a cross for each part it can't do, and one
@@ -262,7 +261,7 @@ function SettingUp({ start }: { start: CardStart }) {
   const [kept] = useState(memory.kept)
   const [form, setForm] = useState(kept?.form ?? start.form)
   const [draft, setDraft] = useState(kept ? kept.draft : start.draftId)
-  const [phase, setPhase] = useState<Phase>(kept?.phase ?? { kind: 'open' })
+  const [phase, act] = useReducer(cardPhase, kept?.phase ?? { kind: 'open' })
   const [editing, setEditing] = useState<number | 'when' | null>(null)
   const [shown, setShown] = useState(false)
   const [refused, setRefused] = useState<readonly string[]>([])
@@ -426,6 +425,7 @@ function SettingUp({ start }: { start: CardStart }) {
     }
     setRefused([])
     settingUp.current = true
+    act({ type: 'set_up' })
     latch.run((settled) => {
       setUp(form, plan, draft, cards.current, {
         savedCard: async (card) => (me.data ? savedCopyOf(await readCards(), me.data.id, card) : null),
@@ -436,14 +436,15 @@ function SettingUp({ start }: { start: CardStart }) {
         .then(({ useCaseId, draftKept }) => {
           void queryClient.invalidateQueries({ queryKey: ['home'] })
           void queryClient.invalidateQueries({ queryKey: ['agent-cards'] })
-          const built: Phase = { kind: 'built', useCaseId, draftKept, newAgents: plan.agents.filter((agent) => agent.card.kind === 'drafted' && !(reused?.has(agent.index) ?? false)).map((agent) => agent.name) }
-          memory.keep({ form, draft: null, phase: built })
-          setPhase(built)
+          const newAgents = plan.agents.filter((agent) => agent.card.kind === 'drafted' && !(reused?.has(agent.index) ?? false)).map((agent) => agent.name)
+          memory.keep({ form, draft: null, phase: { kind: 'built', useCaseId, draftKept, newAgents } })
+          act({ type: 'built', useCaseId, draftKept, newAgents })
           if (params.get('draft') !== null) setParams({}, { replace: true })
         })
         .catch((error: unknown) => {
           const said = refusedWords(error)
           settingUp.current = false
+          act({ type: 'refused' })
           setRefused(said.length > 0 ? said : [words(error)])
         })
         .finally(settled)
@@ -451,7 +452,7 @@ function SettingUp({ start }: { start: CardStart }) {
   }
 
   const leave = () => {
-    setPhase({ kind: 'dropped' })
+    act({ type: 'never_mind' })
     if (params.get('draft') !== null) setParams({}, { replace: true })
   }
 
@@ -488,7 +489,7 @@ function SettingUp({ start }: { start: CardStart }) {
         {
           onSuccess: () => {
             setUndoProblem(null)
-            setPhase({ kind: 'open' })
+            act({ type: 'undo' })
             setParams({ draft: before.draft_id }, { replace: true })
           },
           onError: (error) => setUndoProblem(`Could not put it back. ${words(error)}`),
@@ -498,14 +499,12 @@ function SettingUp({ start }: { start: CardStart }) {
     )
   }
 
+  // A question first, since the footer counts questions. Else the part she must change.
   const pointAtWhatIsLeft = () => {
     setShown(true)
+    const asked = document.querySelector<HTMLElement>(`[data-card="${id}"] [data-mark="ask"] :is(button, input)`)
     const row = form.rows.findIndex((r) => r.kind !== 'schedule' && (r.state === 'cant_do' || r.state === 'checking'))
-    if (row >= 0) {
-      document.getElementById(`${id}-chip-${row}`)?.focus()
-      return
-    }
-    document.querySelector<HTMLElement>(`[data-card="${id}"] [data-mark="ask"] :is(button, input)`)?.focus()
+    ;(asked ?? (row >= 0 ? document.getElementById(`${id}-chip-${row}`) : null))?.focus()
   }
 
   const title = nameOf(form, plan) || 'New workflow'
@@ -535,7 +534,7 @@ function SettingUp({ start }: { start: CardStart }) {
     )
   if (!live) return <p className="muted">Saved as a draft. Open it from Workflows to carry on.</p>
 
-  const creating = create.isPending || saveCard.isPending
+  const creating = phase.kind === 'creating'
   const asked = (words: string, body: ReactNode) => (
     <>
       <span className={styles['pq']} id={`${id}-q`}>
