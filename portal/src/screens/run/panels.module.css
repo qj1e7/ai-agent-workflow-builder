@@ -383,6 +383,11 @@
   min-width: 0;
 }
 
+.apprHead > div {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
 .apprHead :is(h2, h3) {
   font-size: 1.45rem;
   font-weight: 800;

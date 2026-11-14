@@ -395,7 +395,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
   const NOW = new Date('2026-11-13T15:00:00+08:00')
   const OPS = 'Operators set up workflows. Ask Alice, Carol or Dave.'
 
-  function ask(reply: PlannerReply, seed: { home?: HomeOut; decisions?: DecisionsView; useCases?: readonly UseCaseView[] } = {}): string {
+  function ask(reply: PlannerReply, seed: { home?: HomeOut; decisions?: DecisionsView; useCases?: readonly UseCaseView[]; memory?: CardMemory; approval?: ApprovalView } = {}): string {
     const session = createDevSession(null)
     const scope = session.cacheScope()
     const client = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
@@ -405,6 +405,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     for (const request of (seed.home ?? HOME).approvals) {
       client.setQueryData(['approval', scope, request.approval_id], { ...(bobApproval as ApprovalView), approval_id: request.approval_id, run_id: request.run_id })
     }
+    if (seed.approval) client.setQueryData(['approval', scope, seed.approval.approval_id], seed.approval)
     client.setQueryData(['people', scope], people.people)
     client.setQueryData(['use-cases', scope], seed.useCases ?? [])
     for (const useCase of seed.useCases ?? []) if (useCase.last_run) client.setQueryData(['troubleshoot', scope, useCase.last_run.run_id, 0], troubleshooting)
@@ -414,7 +415,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
       <QueryClientProvider client={client}>
         <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
           <MemoryRouter>
-            <Thread thread={thread} now={NOW} page={PAGE} />
+            <Thread thread={thread} now={NOW} page={PAGE} {...(seed.memory ? { memory: () => seed.memory! } : {})} />
           </MemoryRouter>
         </ApiProvider>
       </QueryClientProvider>,
@@ -460,6 +461,24 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     expect(answerOf(html)).toMatch(/^These need your yes\. Create 1 Jira ticket Needs your yes Upgrade LangGraph from 1\.2\.14 to 1\.2\.16 Review and decide/)
     expect(buttons(html).filter((name) => name === 'Review and decide')).toHaveLength(3)
     expect(html).toMatch(/<a[^>]*href="\/workflows"[^>]*>22 more<\/a>/)
+  })
+
+  it('keeps the card on its request after Bob declines, which takes it off Home’s list, and says what happened (Bob declines)', () => {
+    const memory = newCardMemory()
+    memory.approvals.keep([{ approvalId: 'apr_01JB8', runId: 'run_01JB8' }])
+    const declined: ApprovalView = {
+      ...(bobApproval as ApprovalView),
+      you_can_decide: false,
+      why_not: 'not_open',
+      steps: [{ index: 0, label: 'Team approver', status: 'declined', decided_by: 'bob', decided_at: '2026-11-13T01:04:00Z', reason: 'Not this week' }],
+    }
+    const after = { ...HOME, approvals: [], approvals_total: 0, confirmations: [] }
+    for (const reply of [{ answer: 'needs_me', parts: [] }, decideReply] as PlannerReply[]) {
+      const html = ask(reply, { home: after, memory, approval: declined })
+      expect(answerOf(html)).toMatch(/Create 1 Jira ticket Declined Upgrade LangGraph from 1\.2\.14 to 1\.2\.16 Declined\. Nothing was written\. Open$/)
+      expect(answerOf(html)).not.toMatch(/Nothing (waits|is waiting) for your yes/)
+      expect(buttons(html)).not.toContain('Review and decide')
+    }
   })
 
   it('leads one request with the sketch’s line', () => {

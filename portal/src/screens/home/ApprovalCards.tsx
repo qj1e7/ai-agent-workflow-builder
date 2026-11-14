@@ -97,7 +97,7 @@ export function ApprovalCards({ items, total, nameOf }: ApprovalCardsProps) {
   const [only] = pinned
   useShowBesideOnWide(pinned.length === 1 && only ? approvalItem(only.runId) : null)
   const main = useMainButton() === 'primary'
-  const left = total - pinned.length
+  const left = Math.max(0, total - pinned.length)
   return (
     <>
       {pinned.map((request, index) => (

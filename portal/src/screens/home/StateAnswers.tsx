@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useContext, useEffect, useMemo } from 'react'
 import { useDecisions, useHome } from '../../api/homeQueries'
 import { useDisplayName } from '../../api/people'
 import { useMe, useUseCases, useWatchlist } from '../../api/queries'
@@ -15,6 +15,7 @@ import { ideasSay, needsSay, startingPoints, workflowsSay } from './answers'
 import { useAsker } from './asker'
 import { leadWords } from '../run/approvalWords'
 import { ApprovalCards } from './ApprovalCards'
+import { CardMemoryContext } from './cardMemory'
 import { decidedSay } from './decided'
 import { approvalsOf, approverLine, needsOf, needsTotal, type Needs } from './home'
 import { NeedRows } from './NeedsSection'
@@ -101,6 +102,9 @@ function needsSentence(home: HomeOut, operator: boolean): string {
 /** Only requests wait for this person, so the answer is the requests themselves, as the sketch's approval cards. */
 const onlyRequests = (home: HomeOut, operator: boolean): boolean => !operator && home.approvals_total > 0 && needsTotal(home) === home.approvals_total
 
+/** The requests this answer's cards follow, once it has shown them. A decision takes a request off Home's list, never off the answer. */
+const useShownRequests = () => useContext(CardMemoryContext).approvals.kept()
+
 /**
  * What needs me: the sketch's Needs card. Its head is the sentence, and its body the same Do now and Set up rows as on Home, from
  * the same list as the strip, the panel and the rail. For an Approver whom only requests wait for, it is the approval cards.
@@ -110,8 +114,9 @@ export function NeedsMeAnswer({ now, say }: { now: Date; say: Say }) {
   const operator = useAsker() === 'operator'
   const nameOf = useDisplayName()
   const needs = useMemo(() => (home.data ? needsOf(home.data) : null), [home.data])
-  const requests = home.data && onlyRequests(home.data, operator) ? approvalsOf(home.data) : null
-  const sentence = home.data ? (requests ? leadWords(requests.shown.length) : needsSentence(home.data, operator)) : null
+  const shown = useShownRequests()
+  const requests = home.data && (shown !== undefined || onlyRequests(home.data, operator)) ? approvalsOf(home.data) : null
+  const sentence = home.data ? (requests ? leadWords(shown?.length ?? requests.shown.length) : needsSentence(home.data, operator)) : null
   useSaidOnce(sentence, say)
   if (requests && sentence !== null) {
     return (
@@ -179,7 +184,8 @@ export function RequestsToOpen() {
   const home = useHome()
   const nameOf = useDisplayName()
   const needs = useMemo(() => (home.data ? approvalsOf(home.data) : null), [home.data])
-  if (!needs || needs.total === 0) return null
+  const shown = useShownRequests()
+  if (!needs || (needs.total === 0 && shown === undefined)) return null
   return <ApprovalCards items={requestItems(needs)} total={needs.total} nameOf={nameOf} />
 }
 
@@ -187,7 +193,8 @@ export function RequestsToOpen() {
 export function DecideAnswer({ say }: { say: Say }) {
   const home = useHome()
   const total = home.data?.approvals_total
-  const sentence = total === undefined ? null : total > 0 ? DECIDE_SAY : NOTHING_TO_DECIDE
+  const shown = useShownRequests()
+  const sentence = total === undefined ? null : total > 0 || shown !== undefined ? DECIDE_SAY : NOTHING_TO_DECIDE
   useSaidOnce(sentence, say)
   if (sentence === null) {
     return (
