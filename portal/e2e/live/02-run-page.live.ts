@@ -309,7 +309,8 @@ test('scenario B: a stopped run opens on the three answers, an Operator retries 
   await context.close()
 })
 
-test('a Retry that another Operator beat says who retried it, keeps focus on the run, and is read aloud (issue 158)', async ({ browser, backend }, info) => {
+test('a Retry that another Operator beat says who retried it, keeps focus on the run, and is read aloud (issue 158)', async ({ browser, backend, baseURL }, info) => {
+  await connectMockModel(String(baseURL))
   let runId = ''
   try {
     await setMockGithubMode('unavailable')
