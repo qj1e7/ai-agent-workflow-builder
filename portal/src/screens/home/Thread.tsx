@@ -61,9 +61,9 @@ function ReplyBody({ message, now, page, say, about }: { message: Extract<Messag
       {reply.answer === 'edit' ? <EditCard reply={reply} typed={message.typed} page={page} say={say} now={now} about={about} /> : null}
       {reply.answer === 'operators' ? <OperatorsAnswer say={say} /> : null}
       {reply.answer === 'decided' ? <DecidedAnswer only={reply.only} now={now} say={say} /> : null}
-      {reply.answer === 'decide' ? <DecideAnswer now={now} say={say} /> : null}
+      {reply.answer === 'decide' ? <DecideAnswer say={say} /> : null}
       <Answer reply={reply} typed={message.typed} page={page} />
-      {reply.answer === 'refused' && asker === 'approver' ? <RequestsToOpen now={now} /> : null}
+      {reply.answer === 'refused' && asker === 'approver' ? <RequestsToOpen /> : null}
     </div>
   )
 }

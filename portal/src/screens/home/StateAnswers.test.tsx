@@ -8,10 +8,13 @@ import stopped from '../../../../contracts/fixtures/builder/use-case.stopped.jso
 import checkWorkflows from '../../../../contracts/fixtures/planner/answer.check_workflows.json'
 import needsMe from '../../../../contracts/fixtures/planner/answer.needs_me.json'
 import decide from '../../../../contracts/fixtures/planner/answer.decide.json'
+import bobApproval from '../../../../contracts/fixtures/approvals/apr_01JB8.bob.json'
+import aliceApproval from '../../../../contracts/fixtures/approvals/apr_01JB8.alice.json'
+import waitingRun from '../../../../contracts/fixtures/views/success.awaiting_approval.json'
 import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { HomeOut, Me, PlannerReply, UseCaseView, WatchlistView } from '../../api/types'
+import type { ApprovalView, HomeOut, Me, PlannerReply, UseCaseView, WatchlistView } from '../../api/types'
 import { OpensInPanel } from '../../ui/sidePanel'
 import { Thread } from './Thread'
 import { EMPTY, threadReducer, type Thread as ThreadState } from './threadState'
@@ -35,7 +38,11 @@ function draw(thread: ThreadState, { me = ALICE, home, useCases = [STOPPED], wat
   const client = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   client.setQueryData(['me', scope], me)
   client.setQueryData(['dev-users'], [ALICE, BOB])
-  client.setQueryData(['home', scope], home ?? (me.id === 'bob' ? bobHome : aliceHome))
+  const shownHome = (home ?? (me.id === 'bob' ? bobHome : aliceHome)) as HomeOut
+  client.setQueryData(['home', scope], shownHome)
+  for (const request of shownHome.approvals) client.setQueryData(['approval', scope, request.approval_id], { ...(bobApproval as ApprovalView), approval_id: request.approval_id, run_id: request.run_id })
+  client.setQueryData(['run', scope, 'run_01JB8'], waitingRun)
+  if (me.id === 'alice') client.setQueryData(['approval', scope, 'apr_01JB8'], aliceApproval)
   client.setQueryData(['use-cases', scope], useCases)
   client.setQueryData(['watchlist', scope], watchlist)
   return renderToStaticMarkup(
@@ -128,5 +135,14 @@ describe('the requests an approve is sent to (approve the upgrade tickets)', () 
     const opens = [...html.matchAll(/data-opens="([^"]+)"/g)].map((match) => match[1])
     expect(opens.length).toBeGreaterThan(0)
     expect(opens).toEqual((bobHome as HomeOut).approvals.slice(0, opens.length).map((request) => `approval:${request.run_id}`))
+  })
+})
+
+describe('a request that waits for someone else’s yes (approve, asked by the person whose run it is)', () => {
+  it('shows Alice her own request as its card, led by who it waits for, with Open and no way to decide', () => {
+    const html = draw(answered(decide as PlannerReply), { me: ALICE })
+    expect(text(html)).toContain('This waits for an Approver’s yes. Create 1 Jira ticket Waiting for a yes Upgrade LangGraph from 1.2.14 to 1.2.16 Open')
+    expect(html).toMatch(/<button[^>]*data-opens="approval:run_01JB8"[^>]*>Open<\/button>/)
+    expect(text(html)).not.toMatch(/Review and decide|\bApprove\b|Nothing is waiting/)
   })
 })

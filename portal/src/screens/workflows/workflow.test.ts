@@ -113,7 +113,7 @@ describe('the status words', () => {
 
   it('say a run nobody answered, and a run n8n lost after the yes, wrote nothing', () => {
     expect(stageWords(stageOfRun(run(failed, { state: 'expired' })), nameOf)).toBe('No answer. Nothing was written.')
-    expect(stageWords(stageOfRun(run(failed, { state: 'lost' })), nameOf)).toBe('Approved, but n8n lost the run. Nothing was written.')
+    expect(stageWords(stageOfRun(run(failed, { state: 'lost' })), nameOf)).toBe('Approved, but the run stopped before it could make the change. Nothing was written.')
     expect(runPill({ state: 'lost', count: 0, tickets: true, approvedBy: [], declinedBy: null, reason: null })).toEqual({ label: 'Lost', tone: 'bad' })
     expect(rowLine({ schedule: null, ...lastOf({ state: 'expired' }) }, NOW, nameOf)).toBe('No schedule · last run Mon 26 Oct, no answer. Nothing was written.')
   })
@@ -696,7 +696,7 @@ describe('the status banner', () => {
   const EVERY_STATE: Record<LastRun['state'], { readonly pill: string; readonly banner: string; readonly tone: string; readonly opens: boolean }> = {
     awaiting_approval: { pill: 'Waiting for a yes', banner: 'Waiting for a yes.', tone: 'wait', opens: true },
     failed: { pill: 'Stopped', banner: 'Stopped today at 8:00. An agent could not finish its work.', tone: 'bad', opens: true },
-    lost: { pill: 'Lost', banner: 'Lost today at 8:00. Approved, but n8n lost the run. Nothing was written.', tone: 'bad', opens: true },
+    lost: { pill: 'Lost', banner: 'Lost today at 8:00. Approved, but the run stopped before it could make the change. Nothing was written.', tone: 'bad', opens: true },
     expired: { pill: 'On', banner: 'On. Next run Mon 9 Nov, 9:00.', tone: 'ok', opens: false },
     skipped: { pill: 'On', banner: 'On. Next run Mon 9 Nov, 9:00.', tone: 'ok', opens: false },
     rejected: { pill: 'On', banner: 'On. Next run Mon 9 Nov, 9:00.', tone: 'ok', opens: false },

@@ -14,7 +14,7 @@ import { motionAllowed } from '../../ui/motion'
 import { nextRunOf } from '../workflows/workflow'
 import { ApprovalGate, NotChecked } from './ApprovalGate'
 import { DECISION_ID, DecisionArea, LONG_LOG, StepLog } from './Chat'
-import { askedWords, foundOf, partyOf, useDecision, useNotChecked, yourPart, type Decision } from './decision'
+import { canDecideNow, foundOf, partyOf, useDecision, useNotChecked, type Decision } from './decision'
 import { POLL_FAILED_MS, useReconnectWhenBehind } from './follow'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { AnswerList, Outcome, StopAnswers, StopNext } from './Outcome'
@@ -233,14 +233,18 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
         {approval && notChecked ? (
           <ApprovalGate
             approval={approval}
-            page={{ found: foundOf(head.found, approval.found), part: yourPart(approval, partyOf(approval, me?.id), nameOf), askedBy: askedWords(approval, nameOf) }}
+            page={{ found: foundOf(head.found, approval.found) }}
             decision={decision}
+            facts={facts}
             notChecked={notChecked}
             reasons={story.quick}
             requester={nameOf(approval.requester)}
             questions={questions}
             me={me?.id}
+            party={partyOf(approval, me?.id)}
             nameOf={nameOf}
+            next={next}
+            now={new Date()}
           />
         ) : (
           <p className="muted" role="status">
@@ -272,7 +276,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
           record={
             approval ? (
               <>
-                <NotChecked lines={notChecked ?? []} />
+                <NotChecked lines={notChecked ?? []} level={2} />
                 <QuestionThread approval={approval} me={me?.id} nameOf={nameOf} answer={questions.answer} />
               </>
             ) : null
@@ -296,7 +300,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
             {run.use_case_name}
           </h1>
         </div>
-        <RunPill facts={facts} />
+        <RunPill facts={facts} yours={waiting && approval !== undefined && canDecideNow(approval, decision)} />
       </div>
       <p className={styles['status']}>
         <span role="status">{statusWords(decision, live)}</span>
