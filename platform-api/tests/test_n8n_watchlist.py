@@ -8,6 +8,7 @@ from dataclasses import replace
 import pytest
 
 from platform_api.orchestration.agents import TaskOutput, WatchlistInputs
+from platform_api.orchestration.approvals import Refusal
 from platform_api.orchestration.jira import PRACTICE_SITE
 from platform_api.orchestration.n8n_calls import (
     NOT_A_WATCHLIST_RUN,
@@ -15,19 +16,25 @@ from platform_api.orchestration.n8n_calls import (
     Answer,
     AskCall,
     NothingToChange,
+    Publisher,
+    RanVersion,
     ReadCall,
     Refused,
     Waiting,
     WriteAnswer,
 )
 from platform_api.orchestration.runs import Failed, FailureReason, Succeeded
+from platform_api.orchestration.schedule import Schedule
+from platform_api.orchestration.schedule_store import ScheduleBook
+from platform_api.orchestration.service import DecisionRefused
 from platform_api.orchestration.spec import CardsTask, WatchlistTask
 from platform_api.orchestration.watch import Given
 from platform_api.orchestration.watch_store import WatchFacts, WatchlistStanding
+from platform_api.shared import Principal
 from tests.conftest import PostgresUrls
 from tests.support import BOB, LANGGRAPH, NOW, REDIS, SPEC, fixture, watched
 from tests.test_n8n_calls import CARD_RUN
-from tests.test_n8n_wait import resume_url
+from tests.test_n8n_wait import DAVE, ERIN, resume_url
 from tests.test_n8n_write import Writes, open_writes
 
 pytestmark = pytest.mark.anyio
@@ -180,3 +187,27 @@ async def test_a_retry_once_github_answers_again_checks_again_and_asks(wl: Write
     assert isinstance(await wl.call("201", CHECK, "Check the watchlist"), Answer)
     assert isinstance(await wl.call("201", AskCall(resume_url("201")), "Ask for a yes"), Waiting)
     assert len(wl.h.agent.requests) == 2, "the check ran again, not its stopped answer"
+
+
+@pytest.mark.parametrize(
+    ("publisher", "owner", "other"),
+    [
+        pytest.param(DAVE, ERIN, BOB, id="erin-saved-the-same-schedule-again"),
+        pytest.param(BOB, DAVE, ERIN, id="dave-saved-it-while-paused-and-bob-resumed"),
+    ],
+)
+async def test_the_schedule_owner_the_portal_names_never_approves_a_scheduled_run(
+    wl: Writes, publisher: Principal, owner: Principal, other: Principal
+):
+    """The version's publisher and the schedule's owner can be different people: saving the same
+    schedule again writes no version, and a version saved while paused is published by whoever
+    resumes it. Both are the run's own work."""
+    wl.workflows.versions = {"v1": RanVersion("safe", Publisher(publisher.user_id))}
+    await ScheduleBook(wl.h.db).save(SPEC.use_case_id, Schedule("tuesday", "07:30"), owner)
+
+    waiting = await check(wl, "101")
+
+    assert isinstance(waiting, Waiting)
+    for party in (owner, publisher):
+        assert await wl.decide(party) == DecisionRefused(Refusal.OWN_WORK), party.display
+    assert not isinstance(await wl.decide(other), DecisionRefused), "another Approver can say yes"

@@ -129,6 +129,7 @@ from platform_api.orchestration.runs import (
     working_on,
     write_done,
 )
+from platform_api.orchestration.schedule_store import schedule_owner
 from platform_api.orchestration.service import (
     DENIED_ON_THE_WIRE,
     ActiveModel,
@@ -631,7 +632,11 @@ class NodeCalls:
         else:
             state = Skipped(run_id, waiting)
             events = skipped_events(created, execution, mode, waiting)
-        record = RunRecord(run_id, spec, started_by, uow.now, uow.now, 1, state, (), None)
+        # The schedule's owner, as the Portal names them, is a party to every run it starts, even
+        # when someone else published the version that runs (D5).
+        owner = None if trigger != "schedule" else await schedule_owner(uow.conn, spec.use_case_id)
+        joined = () if owner is None else (owner,)
+        record = RunRecord(run_id, spec, started_by, uow.now, uow.now, 1, state, (), None, joined)
         await self._store.insert_run(uow, record, f"n8n:{execution}")
         await self._activity.append(uow, run_id, events)
         return run_id
