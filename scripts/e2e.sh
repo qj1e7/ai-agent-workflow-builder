@@ -64,7 +64,9 @@ ui_status=0
 
 if wanted api; then
   set +e
-  "${compose[@]}" --profile e2e run --rm --build e2e 2>&1 | tee "$out/e2e.log"
+  api_args=()
+  [ -z "${API_K:-}" ] || api_args=(-e "PYTEST_ADDOPTS=-k '$API_K'")
+  "${compose[@]}" --profile e2e run --rm --build ${api_args[@]+"${api_args[@]}"} e2e 2>&1 | tee "$out/e2e.log"
   api_status="${PIPESTATUS[0]}"
   set -e
 fi
