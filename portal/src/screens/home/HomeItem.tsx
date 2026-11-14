@@ -4,7 +4,8 @@ import { useChatNavigate } from '../../ui/fromChat'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { newIdempotencyKey } from '../../api/idempotency'
-import { useModelOff, useRetry, useStartRun } from '../../api/queries'
+import { RetriedFirst, useMe, useModelOff, useRetry, useStartRun, type RetryAfter } from '../../api/queries'
+import { useDisplayName } from '../../api/people'
 import type { DraftItem, WaitingItem } from '../../api/types'
 import { AgentFace } from '../../ui/AgentFace'
 import { Button, ButtonLink } from '../../ui/Button'
@@ -12,9 +13,11 @@ import { cx } from '../../ui/cx'
 import { IconAlert, IconChevronRight, IconInfo, IconShield, IconX, type Icon } from '../../ui/icons'
 import { OpenButton, OpenLink } from '../../ui/OpenItem'
 import { useAfterPanelAction, useShownInPanel } from '../../ui/sidePanel'
+import { useRunPlace } from '../run/place'
 import { pressTestAgain } from '../run/testAgain'
 import { draftPath } from './card'
-import { actionsOf, CONNECT_ABOVE, draftWords, isModelNeed, lineOf, NO_MODEL_TITLE, openPathOf, panelItemOf, retryProblem, waitingWords, wordsOf, type Action, type Need, type Tone } from './home'
+import { useNote } from './ChatProvider'
+import { actionsOf, CONNECT_ABOVE, draftWords, isModelNeed, lineOf, NO_MODEL_TITLE, openPathOf, panelItemOf, retriedFirstWords, retryProblem, waitingWords, wordsOf, type Action, type Need, type Tone } from './home'
 import styles from './Home.module.css'
 
 const TONE_ICON: Record<Tone, Icon> = { wait: IconShield, tool: IconShield, bad: IconAlert, info: IconInfo, off: IconX }
@@ -39,14 +42,33 @@ function motionProps({ glide, arrive, stagger, leaving, onAnimationEnd }: Motion
 }
 
 /**
- * Retries a stopped run and opens it, so the person sees it go, unless `stay` says the place it is drawn already follows the run, as the
- * run card does. In the side panel the run stays where it is, with the panel back
- * at its top. While the panel shows the run, the chat hides its own Retry, because the panel has it.
+ * Where a Retry press leaves the person. A press takes Retry away as the run moves on, so in a place that follows the run, or in the
+ * side panel, that place's heading takes focus. Anywhere else a retry the platform took opens the run, so the person sees it go. A
+ * press another Operator beat is said where the person is, naming who retried it.
  */
-export function RetryButton({ runId, label, primary, describedBy, stay = false }: { runId: string; label: string; primary: boolean; describedBy: string; stay?: boolean }) {
+export function useRetryAfter(runId: string): RetryAfter {
   const navigate = useChatNavigate()
   const backToTop = useAfterPanelAction()
-  const retry = useRetry(runId, () => (backToTop ? backToTop() : stay ? undefined : navigate(`/runs/${runId}`)))
+  const place = useRunPlace()
+  const note = useNote()
+  const me = useMe().data?.id
+  const nameOf = useDisplayName()
+  const say = place?.say ?? note
+  const focus = backToTop ?? place?.focus ?? null
+  return {
+    retried: () => (focus ? focus() : navigate(`/runs/${runId}`)),
+    retriedFirst: (by) => {
+      say(retriedFirstWords(by, me, nameOf))
+      ;(focus ?? focusPageHeading)()
+    },
+  }
+}
+
+const focusPageHeading = () => document.querySelector<HTMLElement>('main h1')?.focus()
+
+/** Retries a stopped run. While the side panel shows the run, the chat hides its own Retry, because the panel has it. */
+export function RetryButton({ runId, label, primary, describedBy }: { runId: string; label: string; primary: boolean; describedBy: string }) {
+  const retry = useRetry(runId, useRetryAfter(runId))
   const latch = useLatch()
   const words = useErrorWords()
   const inPanel = useShownInPanel({ kind: 'run', id: runId })
@@ -57,7 +79,7 @@ export function RetryButton({ runId, label, primary, describedBy, stay = false }
       <Button variant={primary ? 'primary' : 'secondary'} loading={retry.isPending} onClick={press} aria-describedby={describedBy}>
         {label}
       </Button>
-      {retry.isError ? (
+      {retry.isError && !(retry.error instanceof RetriedFirst) ? (
         <p className={styles['problem']} role="alert">
           {retryProblem(retry.error, words)}
         </p>
