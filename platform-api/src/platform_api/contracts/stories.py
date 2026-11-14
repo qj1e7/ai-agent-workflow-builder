@@ -202,14 +202,51 @@ class Timeline:
         return self.events[-1]
 
 
-def open_step() -> ApprovalStepView:
-    return ApprovalStepView(index=0, label="Team approver", status="open")
+SENT_TO = ["Bob"]
+"""Who may decide: the Approvers on the People list, Alice and Bob, minus Alice, whose run it is."""
+ANNOUNCED_AT = 10.612
+"""Seconds into the run when its request is posted to Teams."""
 
 
-def decided_step(verdict: Verdict, at: datetime, reason: str | None = None) -> ApprovalStepView:
+def open_step(sent_at: datetime | None = None) -> ApprovalStepView:
+    """The one step, open. Once the request is in Teams it names who it went to."""
+    return ApprovalStepView(
+        index=0,
+        label="Team approver",
+        status="open",
+        sent_to=SENT_TO if sent_at else [],
+        sent_at=sent_at,
+    )
+
+
+def decided_step(
+    verdict: Verdict, at: datetime, reason: str | None = None, sent_at: datetime | None = None
+) -> ApprovalStepView:
     status = "approved" if verdict is Verdict.APPROVE else "declined"
     return ApprovalStepView(
-        index=0, label="Team approver", status=status, decided_by=BOB, decided_at=at, reason=reason
+        index=0,
+        label="Team approver",
+        status=status,
+        decided_by=BOB,
+        decided_at=at,
+        reason=reason,
+        sent_to=SENT_TO if sent_at else [],
+        sent_at=sent_at,
+    )
+
+
+def announced_at(tl: Timeline) -> datetime:
+    return next(e.ts for e in tl.events if e.kind == "approval_announced")
+
+
+def announced(tl: Timeline, seconds: float) -> ApprovalAnnouncedData:
+    """The request posted to Teams at seconds into the run, naming who may decide."""
+    return ApprovalAnnouncedData(
+        approval_id=tl.story.approval_id,
+        channel=CHANNEL,
+        link=tl.story.approval_link,
+        sent_to=[SENT_TO],
+        sent_at=tl.at(seconds),
     )
 
 
@@ -353,12 +390,10 @@ def work_leg_to_announcement(tl: Timeline) -> None:
     )
     tl.add(
         ApprovalAnnounced,
-        10.612,
+        ANNOUNCED_AT,
         PLATFORM,
         f"The approval request was posted to the Teams channel {CHANNEL}.",
-        ApprovalAnnouncedData(
-            approval_id=tl.story.approval_id, channel=CHANNEL, link=tl.story.approval_link
-        ),
+        announced(tl, ANNOUNCED_AT),
     )
 
 
@@ -569,7 +604,7 @@ def awaiting_approval_view(story: Story, tl: Timeline) -> RunView:
     return AwaitingApprovalView(
         **_base(story, tl, seq),
         proposal=proposal_view(story),
-        approval=approval_ref(story, [open_step()]),
+        approval=approval_ref(story, [open_step(announced_at(tl))]),
         you_can_decide=True,  # As Bob, who decides it, sees the run.
     )
 
@@ -615,7 +650,8 @@ def rejected_final_view(tl: Timeline) -> RunView:
         **_base(REJECTED, tl, len(tl.events)),
         proposal=proposal_view(REJECTED),
         approval=approval_ref(
-            REJECTED, [decided_step(Verdict.DECLINE, decided.ts, DECLINE_REASON)]
+            REJECTED,
+            [decided_step(Verdict.DECLINE, decided.ts, DECLINE_REASON, announced_at(tl))],
         ),
         rejected_by=BOB,
         step=0,
@@ -650,7 +686,7 @@ def approval_view_for(
         run_id=story.run_id,
         digest=DIGEST,
         actions=[ApprovalActionView(**ACTION_VIEW.model_dump(), site_name=PRACTICE_SITE.name)],
-        steps=[open_step()],
+        steps=[open_step(story.t0 + timedelta(seconds=ANNOUNCED_AT))],
         you_can_decide=not own_work,
         why_not=Refusal.OWN_WORK if own_work else None,
         use_case_id=USE_CASE_ID,

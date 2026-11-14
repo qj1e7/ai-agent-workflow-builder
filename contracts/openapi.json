@@ -1654,6 +1654,30 @@
           "link": {
             "title": "Link",
             "type": "string"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it was posted. Events from before have none.",
+            "title": "Sent At"
+          },
+          "sent_to": {
+            "description": "Who may decide each step, by name, in step order, as the request's steps named them when it was posted. Events from before names have none.",
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Sent To",
+            "type": "array"
           }
         },
         "required": [
@@ -2055,6 +2079,27 @@
             ],
             "description": "Why the Approver declined this step, when they gave a reason. Null for any other step.",
             "title": "Reason"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the request was posted to Teams. Null until it is, and after a post that failed.",
+            "title": "Sent At"
+          },
+          "sent_to": {
+            "description": "Who may decide this step, by name, once the request is in Teams: the Approvers on the People list, minus the run's parties and whoever decided an earlier step. Empty until it is sent.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Sent To",
+            "type": "array"
           },
           "status": {
             "$ref": "#/components/schemas/ApprovalStepStatus"

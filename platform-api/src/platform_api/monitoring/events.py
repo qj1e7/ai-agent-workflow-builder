@@ -100,6 +100,14 @@ class ApprovalAnnouncedData(WireModel):
     approval_id: ApprovalId
     channel: str
     link: str
+    sent_to: list[list[str]] = Field(
+        default_factory=list[list[str]],
+        description="Who may decide each step, by name, in step order, as the request's steps "
+        "named them when it was posted. Events from before names have none.",
+    )
+    sent_at: datetime | None = Field(
+        default=None, description="When it was posted. Events from before have none."
+    )
 
 
 class ApprovalAnnounceFailedData(WireModel):

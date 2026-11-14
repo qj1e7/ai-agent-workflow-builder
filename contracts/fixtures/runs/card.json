@@ -328,7 +328,9 @@
           "status": "open",
           "decided_by": null,
           "decided_at": null,
-          "reason": null
+          "reason": null,
+          "sent_to": [],
+          "sent_at": null
         }
       ],
       "link": "/approvals/apr_01JD1"
@@ -367,7 +369,13 @@
     "data": {
       "approval_id": "apr_01JD1",
       "channel": "CODESparks Ops",
-      "link": "/approvals/apr_01JD1"
+      "link": "/approvals/apr_01JD1",
+      "sent_to": [
+        [
+          "Bob"
+        ]
+      ],
+      "sent_at": "2026-11-05T02:14:14.600000Z"
     }
   },
   {

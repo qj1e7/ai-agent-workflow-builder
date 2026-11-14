@@ -157,6 +157,17 @@ class ApprovalStepView(WireModel):
         description="Why the Approver declined this step, when they gave a reason. Null for "
         "any other step.",
     )
+    sent_to: list[str] = Field(
+        default_factory=list[str],
+        description="Who may decide this step, by name, once the request is in Teams: the "
+        "Approvers on the People list, minus the run's parties and whoever decided an earlier "
+        "step. Empty until it is sent.",
+    )
+    sent_at: datetime | None = Field(
+        default=None,
+        description="When the request was posted to Teams. Null until it is, and after a post "
+        "that failed.",
+    )
 
 
 REPO_PATTERN = r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$"

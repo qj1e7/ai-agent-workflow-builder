@@ -48,6 +48,7 @@ from platform_api.orchestration.service import (
     QuestionRefused,
     Retried,
     RunDetail,
+    Sent,
     approval_link,
     steps_view,
 )
@@ -427,11 +428,13 @@ def proposal_view(proposal: Proposal) -> ProposalView:
     )
 
 
-def approval_ref(request: ApprovalRequest, decisions: tuple[Decision, ...]) -> ApprovalRef:
+def approval_ref(
+    request: ApprovalRequest, decisions: tuple[Decision, ...], sent: Sent | None
+) -> ApprovalRef:
     return ApprovalRef(
         approval_id=request.id,
         link=approval_link(request.id),
-        steps=steps_view(request, decisions),
+        steps=steps_view(request, decisions, sent),
     )
 
 
@@ -478,7 +481,7 @@ def run_view(detail: RunDetail, viewer: Principal) -> RunView:
             return AwaitingApprovalView(
                 **base,
                 proposal=proposal_view(detail.proposal),
-                approval=approval_ref(detail.approval, detail.decisions),
+                approval=approval_ref(detail.approval, detail.decisions, detail.sent),
                 # The same rule, and the same person, as the approval's own view.
                 you_can_decide=why_not(detail.approval, detail.decisions, viewer) is None,
             )
@@ -487,7 +490,7 @@ def run_view(detail: RunDetail, viewer: Principal) -> RunView:
             return ActingView(
                 **base,
                 proposal=proposal_view(detail.proposal),
-                approval=approval_ref(detail.approval, detail.decisions),
+                approval=approval_ref(detail.approval, detail.decisions, detail.sent),
             )
         case Succeeded():
             return SucceededView(
@@ -509,7 +512,7 @@ def run_view(detail: RunDetail, viewer: Principal) -> RunView:
             return RejectedView(
                 **base,
                 proposal=proposal_view(detail.proposal),
-                approval=approval_ref(detail.approval, detail.decisions),
+                approval=approval_ref(detail.approval, detail.decisions, detail.sent),
                 rejected_by=state.by,
                 step=state.step,
             )
@@ -529,7 +532,7 @@ def run_view(detail: RunDetail, viewer: Principal) -> RunView:
             return view(
                 **base,
                 proposal=proposal_view(detail.proposal),
-                approval=approval_ref(detail.approval, detail.decisions),
+                approval=approval_ref(detail.approval, detail.decisions, detail.sent),
             )
 
 
@@ -652,7 +655,7 @@ async def get_approval(
                 proposal_view(detail.proposal).actions, detail.site_names, strict=True
             )
         ],
-        steps=steps_view(detail.request, detail.decisions),
+        steps=steps_view(detail.request, detail.decisions, detail.sent),
         you_can_decide=detail.why_not is None,
         why_not=detail.why_not,
         use_case_id=run.spec.use_case_id,

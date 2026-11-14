@@ -33,6 +33,7 @@ from platform_api.contracts.stories import (
     WORKFLOW,
     Story,
     Timeline,
+    announced,
     approval_ref,
     open_step,
 )
@@ -48,7 +49,6 @@ from platform_api.monitoring.events import (
     AgentStepFinished,
     AgentStepStarted,
     ApprovalAnnounced,
-    ApprovalAnnouncedData,
     ApprovalDecided,
     ApprovalDecidedData,
     ApprovalRequested,
@@ -478,9 +478,7 @@ def check_events() -> Timeline:
         at + 5.6,
         PLATFORM,
         f"The approval request was posted to the Teams channel {CHANNEL}.",
-        ApprovalAnnouncedData(
-            approval_id=CHECK.approval_id, channel=CHANNEL, link=CHECK.approval_link
-        ),
+        announced(tl, at + 5.6),
     )
     _act_leg(tl, at + 1260.0)
     return tl
@@ -574,7 +572,7 @@ def awaiting_approval_view(tl: Timeline) -> RunView:
                 for action in ACTIONS
             ],
         ),
-        approval=approval_ref(CHECK, [open_step()]),
+        approval=approval_ref(CHECK, [open_step(announced.ts)]),
         you_can_decide=True,  # As Bob, who decides it, sees the run.
     )
 

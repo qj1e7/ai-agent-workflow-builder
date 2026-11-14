@@ -746,6 +746,31 @@ class Store:
         found = {UserId(row["id"]): str(row["display"]) for row in rows}
         return {user: found.get(user, SOMEONE) for user in ids}
 
+    async def approvers(self, uow: UnitOfWork) -> dict[UserId, str]:
+        """Everyone on the People list who holds the Approver role now, by name."""
+        rows = await (
+            await uow.conn.execute(
+                "SELECT id, display FROM orchestration.people "
+                "WHERE is_approver AND removed_at IS NULL"
+            )
+        ).fetchall()
+        return {UserId(row["id"]): str(row["display"]) for row in rows}
+
+    async def posted_at(
+        self, uow: UnitOfWork, approval_ids: Collection[ApprovalId]
+    ) -> dict[ApprovalId, datetime]:
+        """When each request was posted to Teams. One not posted, or whose post failed, has none."""
+        if not approval_ids:
+            return {}
+        rows = await (
+            await uow.conn.execute(
+                "SELECT approval_id, posted_at FROM orchestration.approval_messages "
+                "WHERE approval_id = ANY(%s)",
+                (list(approval_ids),),
+            )
+        ).fetchall()
+        return {ApprovalId(row["approval_id"]): row["posted_at"] for row in rows}
+
     async def pending_outbox(self, uow: UnitOfWork, run_id: RunId) -> int:
         row = await (
             await uow.conn.execute(

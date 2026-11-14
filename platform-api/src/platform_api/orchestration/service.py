@@ -229,12 +229,22 @@ class RetryLater(Exception): ...
 
 
 @dataclass(frozen=True)
+class Sent:
+    """A request posted to Teams: when, and everyone on the People list with the Approver role
+    now, by name."""
+
+    at: datetime
+    approvers: Mapping[UserId, str]
+
+
+@dataclass(frozen=True)
 class RunDetail:
     record: RunRecord
     last_seq: int
     proposal: Proposal | None
     approval: ApprovalRequest | None
     decisions: tuple[Decision, ...]
+    sent: Sent | None = None
 
 
 @dataclass(frozen=True)
@@ -289,6 +299,7 @@ class ApprovalDetail:
     """Where each action writes, as people read it, in the order of the proposal's actions."""
     questions: tuple[Question, ...]
     requester: UserId
+    sent: Sent | None = None
 
 
 @dataclass(frozen=True)
@@ -474,11 +485,33 @@ ENDED_STEPS: Mapping[Ended, ApprovalStepStatus] = {
 """What a step nobody decided reads once its request ended."""
 
 
-def steps_view(request: ApprovalRequest, decisions: Iterable[Decision]) -> list[ApprovalStepView]:
+def _sent_to(
+    request: ApprovalRequest,
+    index: int,
+    decided_before: Collection[UserId],
+    approvers: Mapping[UserId, str],
+) -> list[str]:
+    """Who may decide a step, by name, by the rules approvals.decide applies: the Approvers the
+    step allows, minus the run's parties and whoever decided an earlier step."""
+    match request.policy.steps[index].eligible:
+        case approvals.AnyApprover():
+            allowed = set(approvers)
+        case approvals.OneOf(users):
+            allowed = users & approvers.keys()
+    may = allowed - request.parties - set(decided_before)
+    return sorted({approvers[user] for user in may})
+
+
+def steps_view(
+    request: ApprovalRequest, decisions: Iterable[Decision], sent: Sent | None = None
+) -> list[ApprovalStepView]:
     by_step = {d.step_index: d for d in decisions if d.approval_id == request.id}
     views: list[ApprovalStepView] = []
     open_seen = False
     for index, step in enumerate(request.policy.steps):
+        before = [d.by for i, d in by_step.items() if i < index]
+        names = [] if sent is None else _sent_to(request, index, before, sent.approvers)
+        sent_at = None if sent is None else sent.at
         decision = by_step.get(index)
         if decision is not None:
             status = "approved" if decision.verdict is Verdict.APPROVE else "declined"
@@ -490,6 +523,8 @@ def steps_view(request: ApprovalRequest, decisions: Iterable[Decision]) -> list[
                     decided_by=decision.by,
                     decided_at=decision.at,
                     reason=decision.reason,
+                    sent_to=names,
+                    sent_at=sent_at,
                 )
             )
             if status == "declined":
@@ -499,7 +534,11 @@ def steps_view(request: ApprovalRequest, decisions: Iterable[Decision]) -> list[
         if request.ended is not None:
             status = ENDED_STEPS[request.ended]
         open_seen = True
-        views.append(ApprovalStepView(index=index, label=step.label, status=status))
+        views.append(
+            ApprovalStepView(
+                index=index, label=step.label, status=status, sent_to=names, sent_at=sent_at
+            )
+        )
     return views
 
 
@@ -1015,6 +1054,7 @@ class Orchestrator:
             assert proposal is not None and record is not None
             decisions = await self._store.load_decisions(uow, approval_id)
             asked = await load_questions_for(uow, [approval_id])
+            sent = await self._sent(uow, [approval_id])
         match record.state:
             case AwaitingApproval(approval_id=waiting, summary=summary) if waiting == approval_id:
                 found = summary
@@ -1031,6 +1071,7 @@ class Orchestrator:
             tuple(site_name(action, self._gateway.sites) for action in proposal.actions),
             asked.get(approval_id, ()),
             requester_of(record.spec, record.started_by),
+            sent.get(approval_id),
         )
 
     async def decide(
@@ -1280,6 +1321,7 @@ class Orchestrator:
         proposals = await self._store.load_proposals(uow, proposal_ids)
         approvals = await self._store.load_approvals(uow, approval_ids)
         decisions = await self._store.load_decisions_for(uow, approval_ids)
+        sent = await self._sent(uow, approval_ids)
         return [
             RunDetail(
                 record,
@@ -1287,9 +1329,20 @@ class Orchestrator:
                 proposals.get(pid) if pid is not None else None,
                 approvals.get(aid) if aid is not None else None,
                 decisions.get(aid, ()) if aid is not None else (),
+                sent.get(aid) if aid is not None else None,
             )
             for record, (pid, aid) in zip(records, links, strict=True)
         ]
+
+    async def _sent(
+        self, uow: UnitOfWork, approval_ids: Collection[ApprovalId]
+    ) -> dict[ApprovalId, Sent]:
+        """The requests posted to Teams. The Approvers are read only when one was."""
+        posted = await self._store.posted_at(uow, approval_ids)
+        if not posted:
+            return {}
+        approvers = await self._store.approvers(uow)
+        return {aid: Sent(at, approvers) for aid, at in posted.items()}
 
     def nudge(self) -> None:
         self._wake.set()
@@ -1450,6 +1503,10 @@ class Orchestrator:
         async with self._db.transaction("orchestration") as uow:
             await self._store.save_message_ref(uow, approval_id, ref)
             await self._store.outbox_sent(uow, row.id)
+            request = await self._store.load_approval(uow, approval_id)
+            decisions = await self._store.load_decisions(uow, approval_id)
+            sent = Sent(uow.now, await self._store.approvers(uow))
+            steps = [] if request is None else steps_view(request, decisions, sent)
             await self._activity.append(
                 uow,
                 row.run_id,
@@ -1463,6 +1520,8 @@ class Orchestrator:
                             approval_id=notice.approval_id,
                             channel=self._channel.name,
                             link=notice.link,
+                            sent_to=[step.sent_to for step in steps],
+                            sent_at=sent.at,
                         ),
                         dedupe_key=f"announced:{notice.approval_id}",
                     )

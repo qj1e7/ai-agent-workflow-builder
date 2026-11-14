@@ -63,7 +63,11 @@
         "status": "open",
         "decided_by": null,
         "decided_at": null,
-        "reason": null
+        "reason": null,
+        "sent_to": [
+          "Bob"
+        ],
+        "sent_at": "2026-11-20T02:14:11.400000Z"
       }
     ]
   },

@@ -76,7 +76,9 @@
           "status": "open",
           "decided_by": null,
           "decided_at": null,
-          "reason": null
+          "reason": null,
+          "sent_to": [],
+          "sent_at": null
         }
       ],
       "link": "/approvals/apr_01JBE"
@@ -96,7 +98,13 @@
     "data": {
       "approval_id": "apr_01JBE",
       "channel": "CODESparks Ops",
-      "link": "/approvals/apr_01JBE"
+      "link": "/approvals/apr_01JBE",
+      "sent_to": [
+        [
+          "Bob"
+        ]
+      ],
+      "sent_at": "2026-11-03T01:00:08.700000Z"
     }
   },
   {
