@@ -32,7 +32,13 @@ const STOPPED = stopped as UseCaseView
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 const many = (n: number): UseCaseView[] => Array.from({ length: n }, (_, i) => ({ ...STOPPED, use_case_id: `uc_${String(i)}`, name: `Workflow ${String(i)}` }))
 
-function draw(thread: ThreadState, { me = ALICE, home, useCases = [STOPPED], watchlist = WATCHLIST, run = waitingRun }: { me?: Me; home?: HomeOut; useCases?: UseCaseView[]; watchlist?: WatchlistView; run?: object } = {}): string {
+/** When the run was read: after the answer opened, or earlier, from the cache. */
+type RunRead = 'fresh' | 'cached'
+
+function draw(
+  thread: ThreadState,
+  { me = ALICE, home, useCases = [STOPPED], watchlist = WATCHLIST, run = waitingRun, runRead = 'fresh' }: { me?: Me; home?: HomeOut; useCases?: UseCaseView[]; watchlist?: WatchlistView; run?: object; runRead?: RunRead } = {},
+): string {
   const session = createDevSession({ getItem: () => me.id, setItem: () => undefined })
   const scope = session.cacheScope()
   const client = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
@@ -41,7 +47,7 @@ function draw(thread: ThreadState, { me = ALICE, home, useCases = [STOPPED], wat
   const shownHome = (home ?? (me.id === 'bob' ? bobHome : aliceHome)) as HomeOut
   client.setQueryData(['home', scope], shownHome)
   for (const request of shownHome.approvals) client.setQueryData(['approval', scope, request.approval_id], { ...(bobApproval as ApprovalView), approval_id: request.approval_id, run_id: request.run_id })
-  client.setQueryData(['run', scope, 'run_01JB8'], run)
+  client.setQueryData(['run', scope, 'run_01JB8'], run, { updatedAt: Date.now() + (runRead === 'fresh' ? 60_000 : -60_000) })
   if (me.id === 'alice') client.setQueryData(['approval', scope, 'apr_01JB8'], aliceApproval)
   client.setQueryData(['use-cases', scope], useCases)
   client.setQueryData(['watchlist', scope], watchlist)
@@ -147,7 +153,13 @@ describe('a request that waits for someone else’s yes (approve, asked by the p
   })
 
   it('says it waits for an Approver while the request isn’t in Teams yet, naming no one', () => {
-    const unsent = { ...waitingRun, approval: { ...waitingRun.approval, steps: waitingRun.approval.steps.map((step) => ({ ...step, sent_to: [], sent_at: null })) } }
+    const unsent = { ...waitingRun, approval: { ...waitingRun.approval, steps: waitingRun.approval.steps.map((step) => ({ ...step, post: 'waiting', sent_to: [], sent_at: null })) } }
     expect(text(draw(answered(decide as PlannerReply), { me: ALICE, run: unsent }))).toContain('This waits for an Approver’s yes. Create 1 Jira ticket')
+  })
+
+  it('names no one from a read of the run taken before the answer opened, and waits for a fresh one', () => {
+    const said = text(draw(answered(decide as PlannerReply), { me: ALICE, runRead: 'cached' }))
+    expect(said).toContain('Checking what waits for your yes')
+    expect(said).not.toMatch(/Bob|waits for an Approver/)
   })
 })

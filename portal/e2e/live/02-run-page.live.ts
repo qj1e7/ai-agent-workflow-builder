@@ -33,10 +33,10 @@ const settled = (page: Page) => page.waitForFunction(() => document.getAnimation
 const steps = (page: Page) => page.getByRole('list', { name: 'Steps of this run' }).locator('li[data-state]')
 /** How visible the green tick on the face above a step is, 0 to 1. */
 const faceTick = (step: Locator) => step.locator('[data-face] circle[fill="var(--green)"]').evaluate((circle) => getComputedStyle(circle.parentElement ?? circle).opacity)
-/** The one line under a finished run's steps: "Done at 10:20 · …" or "Ended at 10:18 · …", with the day when it was not today. */
 /** Under the waiting gate, once the platform says the request is in Teams: who may decide it, never the person whose run it is. */
 const sentLine = (page: Page) => page.locator('li[data-state="wait"] [data-sent]')
 const SENT_TO_BOB = /^Sent to (.+, )?Bob( and .+|, .+)? in Teams$/
+/** The one line under a finished run's steps: "Done at 10:20 · …" or "Ended at 10:18 · …", with the day when it was not today. */
 const settledLine = (page: Page, rest: string) => page.getByText(new RegExp(`^(Done|Ended) (at|on \\w{3} \\d{1,2} \\w{3} at) \\d{1,2}:\\d{2} · ${rest.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`))
 
 test('alice starts a check; bob opens the waiting run, sees the ticket it will create, approves, and watches it reach Done', async ({ browser, backend }, info) => {
@@ -157,7 +157,7 @@ for (const phone of [false, true]) {
     await expect(aiSummary(page)).toContainText('Decide on the change above, not this.')
     await expect(page.locator('#decision'), 'what will be written comes before the AI’s summary').toContainText(/What will be written[\s\S]*Summary by AI\./)
     await expect(answer(page, 'Why you')).toContainText('No one can approve their own work.')
-    await expect(answer(page, 'Sent'), 'when and to whom it went in Teams').toContainText(/\d{1,2}:\d{2}, to (.+, )?Bob( and .+|, .+)? in Teams/)
+    await expect(answer(page, 'Sent'), 'when it went to Teams, in the sketch’s words; the names stay under the gate').toContainText(/(Today|\w{3} \d{1,2} \w{3}), \d{1,2}:\d{2}, in Teams/)
     await expect(sentLine(page)).toHaveText(SENT_TO_BOB)
     await expect(page.getByRole('main'), 'today’s rule: no stop time or backup is named').not.toContainText(/backup|expires|reminder/i)
     await expect(page.getByRole('button', { name: /^(Approve|Decline)$/ })).toHaveCount(2)

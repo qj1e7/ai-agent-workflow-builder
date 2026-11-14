@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
 import { useDecisions, useHome } from '../../api/homeQueries'
 import { useDisplayName } from '../../api/people'
 import { useMe, useRun, useUseCases, useWatchlist } from '../../api/queries'
@@ -193,13 +193,15 @@ export function RequestsToOpen() {
 }
 
 /**
- * Who one of this person's own requests waits for, by name, read from its run. Undefined while the run is read, so the sentence
- * is said once, with the names. Empty when there is no one request or its run can't be read.
+ * Who one of this person's own requests waits for, by name, from a read of its run taken since the answer opened, so an older
+ * read can't name someone who has said yes since. Undefined until that read comes, so the sentence is said once, with the
+ * names. Empty when there is no one request or its run can't be read.
  */
 function useWaitingFor(runId: string | null): readonly string[] | undefined {
+  const [opened] = useState(() => Date.now())
   const run = useRun(runId ?? '')
   if (runId === null || run.isError) return []
-  if (!run.data) return undefined
+  if (!run.data || run.dataUpdatedAt < opened) return undefined
   return 'approval' in run.data ? waitingFor(run.data.approval.steps) : []
 }
 

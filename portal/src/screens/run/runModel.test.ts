@@ -155,7 +155,9 @@ describe('a request with two steps', () => {
     { index: 0, label: 'Team approver', status: 'open', decided_by: null, decided_at: null, reason: null, sent_to: [], sent_at: null },
     { index: 1, label: 'Second approver', status: 'waiting', decided_by: null, decided_at: null, reason: null, sent_to: [], sent_at: null },
   ]
-  const sentTo = [['Bob', 'Carol', 'Dave'], ['Bob', 'Carol', 'Dave']]
+  const person = (id: string, display: string) => ({ id, display })
+  const everyone = [person('bob', 'Bob'), person('carol', 'Carol'), person('dave', 'Dave')]
+  const sentTo = [everyone, everyone]
   const asked = foldAll(replay(success, 12), [
     event(13, 'approval_requested', { approval_id: 'apr_2', steps, link: '/approvals/apr_2' }),
     event(14, 'approval_announced', { approval_id: 'apr_2', channel: 'CODESparks Ops', link: '/approvals/apr_2', sent_to: sentTo, sent_at: '2026-11-04T02:20:00Z' }),
@@ -167,6 +169,17 @@ describe('a request with two steps', () => {
     const second = fold(asked, event(15, 'approval_decided', { approval_id: 'apr_2', step: 0, verdict: 'approve', by: 'bob' }, bob))
     expect(second.phase.state).toBe('awaiting_approval')
     expect(line(second)[2]?.under).toEqual({ kind: 'sent', to: ['Carol', 'Dave'] })
+  })
+
+  it('leaves out only the person who said yes, never someone who shares their name', () => {
+    const twoBobs = [person('bob', 'Bob'), person('bob_2', 'Bob')]
+    const asked2 = foldAll(replay(success, 12), [
+      event(13, 'approval_requested', { approval_id: 'apr_2', steps, link: '/approvals/apr_2' }),
+      event(14, 'approval_announced', { approval_id: 'apr_2', channel: 'CODESparks Ops', link: '/approvals/apr_2', sent_to: [twoBobs, twoBobs], sent_at: '2026-11-04T02:20:00Z' }),
+    ])
+    expect(line(asked2)[2]?.under).toEqual({ kind: 'sent', to: ['Bob', 'Bob'] })
+    const second = fold(asked2, event(15, 'approval_decided', { approval_id: 'apr_2', step: 0, verdict: 'approve', by: 'bob' }, { kind: 'user', id: 'bob', display: 'Bob' }))
+    expect(line(second)[2]?.under).toEqual({ kind: 'sent', to: ['Bob'] })
   })
 
   it('reads an older event with no names as sent to Teams, naming no one', () => {

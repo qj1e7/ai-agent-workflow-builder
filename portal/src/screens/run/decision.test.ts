@@ -33,6 +33,7 @@ const step = (index: number, status: ApprovalStepView['status'], decided_by: str
   decided_by,
   decided_at,
   reason,
+  post: 'waiting',
 })
 
 describe('where a request stands, from its steps', () => {
@@ -162,20 +163,27 @@ describe('the request’s words', () => {
   })
 
   describe('who it was sent to', () => {
-    const sent = (s: ApprovalStepView, sent_to: string[]): ApprovalStepView => ({ ...s, sent_to, sent_at: EARLIER })
+    const ref = (id: string) => ({ id, display: id.charAt(0).toUpperCase() + id.slice(1) })
+    const sent = (s: ApprovalStepView, ids: string[]): ApprovalStepView => ({ ...s, post: 'sent', sent_to: ids.map(ref), sent_at: EARLIER })
 
-    it('is the Approvers of the step it waits at, only once it is in Teams', () => {
+    it('is the Approvers of the step it waits at, by name, only once it is in Teams', () => {
       expect(waitingFor(BOB.steps)).toEqual(['Bob'])
-      expect(waitingFor(BOB.steps.map((s) => ({ ...s, sent_to: [], sent_at: null })))).toEqual([])
-      expect(waitingFor([sent(step(0, 'approved', 'bob'), ['Bob', 'Dave']), sent(step(1, 'open'), ['Dave'])])).toEqual(['Dave'])
-      expect(waitingFor([sent(step(0, 'approved', 'bob'), ['Bob', 'Dave']), sent(step(1, 'waiting'), ['Dave'])]), 'right after the first yes').toEqual(['Dave'])
+      expect(waitingFor(BOB.steps.map((s) => ({ ...s, post: 'waiting', sent_to: [], sent_at: null })))).toEqual([])
+      expect(waitingFor([sent(step(0, 'approved', 'bob'), ['bob', 'dave']), sent(step(1, 'open'), ['dave'])])).toEqual(['Dave'])
     })
 
-    it('reads on the page as the sketch’s Sent row, with the names', () => {
-      expect(sentRowWords([sent(step(0, 'open'), ['Bob'])], NOW)).toBe('Today, 9:01, to Bob in Teams')
-      expect(sentRowWords([sent(step(0, 'open'), ['Bob', 'Dave'])], NOW)).toBe('Today, 9:01, to Bob and Dave in Teams')
-      expect(sentRowWords([sent(step(0, 'open'), [])], NOW), 'no one to name').toBe('Today, 9:01, in Teams')
-      expect(sentRowWords([step(0, 'open')], NOW), 'not sent').toBeNull()
+    it('reads on the page as the sketch’s Sent row, with no names, or that it couldn’t be sent', () => {
+      expect(sentRowWords([sent(step(0, 'open'), ['bob'])], NOW)).toBe('Today, 9:01, in Teams')
+      expect(sentRowWords([{ ...step(0, 'open'), post: 'failed' }], NOW)).toBe('Couldn’t send to Teams')
+      expect(sentRowWords([step(0, 'open')], NOW), 'not tried yet').toBeNull()
+    })
+
+    it('drops the person who just said yes from the steps after, by id, until the next read', () => {
+      const twoBobs: ApprovalStepView[] = [sent(step(0, 'open'), ['bob', 'carol']), { ...sent(step(1, 'waiting'), ['bob', 'carol']), sent_to: [ref('bob'), { id: 'bob_2', display: 'Bob' }, ref('carol')] }]
+      const after = stepsAfter(twoBobs, { step: 0, verdict: 'approve', by: 'bob', at: AT, reason: null })
+      expect(after[0]?.sent_to?.map((p) => p.id), 'the step he decided keeps who it went to').toEqual(['bob', 'carol'])
+      expect(after[1]?.sent_to?.map((p) => p.id)).toEqual(['bob_2', 'carol'])
+      expect(waitingFor(after), 'the other Bob may still say the second yes').toEqual(['Bob', 'Carol'])
     })
   })
 

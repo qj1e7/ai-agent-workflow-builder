@@ -2,7 +2,7 @@ import { connectorLabel } from '../../api/labels'
 import type { ApprovalActionView, ApprovalStepView, ApprovalView, Refusal, WriteActionView } from '../../api/types'
 import { runWhen } from '../workflows/times'
 import type { Standing } from './decision'
-import { andList, count, LOST_TAIL, sentence, settledWhen, stageWords, type NameOf, type StageFacts, type StageTone } from './words'
+import { andList, count, LOST_TAIL, sentence, settledWhen, stageWords, UNSENT_WORDS, type NameOf, type StageFacts, type StageTone } from './words'
 
 const isTicket = (action: Pick<WriteActionView, 'connector' | 'operation'>) => action.connector === 'jira' && action.operation === 'create_ticket'
 
@@ -113,7 +113,7 @@ const stepAt = (steps: readonly ApprovalStepView[]) => steps.find((step) => step
 /** Who an open request waits for, by name: whoever may decide the step it waits at, once it is in Teams. Empty before. */
 export function waitingFor(steps: readonly ApprovalStepView[]): readonly string[] {
   const open = stepAt(steps)
-  return open?.sent_at ? (open.sent_to ?? []) : []
+  return open?.post === 'sent' ? (open.sent_to ?? []).map((person) => person.display) : []
 }
 
 const orList = (names: readonly string[]) => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} or ${names.at(-1) ?? ''}`)
@@ -129,12 +129,11 @@ export function leadWords(requests: number, yours: boolean, waiting: readonly st
   return waiting.length > 1 ? `This waits for a yes from ${orList(waiting)}.` : 'This waits for an Approver’s yes.'
 }
 
-/** The page's Sent row: "Today, 9:01, to Bob in Teams", naming who may decide the open step. Null until the request is in Teams. */
+/** The page's Sent row, in the sketch's words: "Today, 9:01, in Teams", or that it couldn't be sent. Null before it is tried. */
 export function sentRowWords(steps: readonly ApprovalStepView[], now: Date): string | null {
   const open = stepAt(steps)
-  if (!open?.sent_at) return null
-  const to = waitingFor(steps)
-  return `${runWhen(open.sent_at, now)}, ${to.length > 0 ? `to ${andList(to)} ` : ''}in Teams`
+  if (open?.post === 'failed') return UNSENT_WORDS
+  return open?.post === 'sent' && open.sent_at ? `${runWhen(open.sent_at, now)}, in Teams` : null
 }
 
 const WRITING = new Set<StageFacts['state']>(['pending', 'working', 'proposed', 'awaiting_approval', 'acting'])

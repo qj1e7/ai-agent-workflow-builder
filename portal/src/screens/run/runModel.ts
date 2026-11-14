@@ -1,4 +1,4 @@
-import type { ApprovalStepStatus, BlockKind, FailureReason, FailureStage, RunOutcome, Trigger, Verdict } from '../../api/types'
+import type { ApprovalStepStatus, ApproverRef, BlockKind, FailureReason, FailureStage, RunOutcome, Trigger, Verdict } from '../../api/types'
 import { runId as asRunId, type RunTime } from '../../stream/brand'
 import { parseEvent, type EventOf, type RunEvent } from '../../stream/parse'
 import { GATE_STEP, stepWords, writeLabel } from './words'
@@ -65,8 +65,8 @@ export type ChatItem = { readonly seq: number; readonly at: RunTime } & (
   | { readonly kind: 'started'; readonly by: string; readonly trigger: Trigger }
   | { readonly kind: 'joined'; readonly agents: readonly AgentRef[] }
   | { readonly kind: 'said'; readonly speaker: AgentRef; readonly text: string; readonly bad: boolean }
-  /** A request for a yes. Once the platform says it was posted to Teams, who may decide each step, by name in step order. */
-  | { readonly kind: 'asked'; readonly channel: string | null; readonly posted: boolean | null; readonly sentTo: readonly (readonly string[])[] }
+  /** A request for a yes. Once the platform says it was posted to Teams, who may decide each step, in step order. */
+  | { readonly kind: 'asked'; readonly channel: string | null; readonly posted: boolean | null; readonly sentTo: readonly (readonly ApproverRef[])[] }
   | { readonly kind: 'decided'; readonly by: string; readonly verdict: Verdict; readonly step: string | null }
   | {
       readonly kind: 'written'
@@ -529,17 +529,17 @@ function sinceOf(model: RunModel, stations: readonly Skeleton[], index: number):
 }
 
 /**
- * What the waiting gate says of its request: sent, and to whom, or not sent. Nothing until the platform says either. The names were
- * read when the request was posted, so whoever said yes to an earlier step since is left out, as the platform's view of the step
- * leaves them out.
+ * What the waiting gate says of its request: sent, and to whom, or not sent. Nothing until the platform says either. Who it went
+ * to was read when the request was posted, so whoever said yes to an earlier step since is left out by id, as the platform's view
+ * of the step leaves them out.
  */
 function sentUnder(model: RunModel): Under | null {
   const asked = model.chat.findLast((item) => item.kind === 'asked')
   if (asked?.kind !== 'asked' || asked.posted === null) return null
   if (!asked.posted) return { kind: 'unsent' }
   const open = model.steps.find((step) => step.status === 'open' || step.status === 'waiting')?.index ?? 0
-  const before = new Set(model.steps.flatMap((step) => (step.index < open && step.by ? [model.people[step.by] ?? step.by] : [])))
-  return { kind: 'sent', to: (asked.sentTo[open] ?? []).filter((name) => !before.has(name)) }
+  const before = new Set(model.steps.flatMap((step) => (step.index < open && step.by ? [step.by] : [])))
+  return { kind: 'sent', to: (asked.sentTo[open] ?? []).filter((person) => !before.has(person.id)).map((person) => person.display) }
 }
 
 function underOf(model: RunModel, stations: readonly Skeleton[], index: number, state: StationState): Under | null {
