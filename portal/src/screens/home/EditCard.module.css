@@ -2,22 +2,30 @@
   margin: 0;
 }
 
-/* Before and After, the labels in a column and the schedules beside them. */
+/* The sketch's one row: the old schedule struck, an arrow, and the new one in bold. */
 .ba {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 6px 16px;
-  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
 }
 
-.ba dt {
+.was {
   color: var(--muted);
-  font-weight: 600;
+  font-weight: 400;
+  text-decoration-color: var(--rail);
 }
 
-.ba dd {
-  margin: 0;
-  min-width: 0;
+.arrow::before {
+  content: '→' / '';
+  color: var(--muted);
+}
+
+.saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green-ink);
 }
 
 .note {

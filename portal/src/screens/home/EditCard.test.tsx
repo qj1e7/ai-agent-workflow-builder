@@ -21,7 +21,7 @@ import type { EditReply, Me, UseCaseView, VersionView, WatchlistView } from '../
 import { chatScheduleOptions, undoOptions } from '../../api/workflowQueries'
 import type { Page } from './AnswerCards'
 import { CardMemoryContext, newCardMemory, type EditKept } from './cardMemory'
-import { doneLine, doneSay, editView, NO_PICKS, openSay, pressSave, publishedVersion, sinceUnversioned, type Read, type Schedule } from './edit'
+import { doneLine, doneSay, editView, NO_PICKS, openSay, pressSave, publishedVersion, sinceUnversioned, undoneNote, type Read, type Schedule } from './edit'
 import { EditCard } from './EditCard'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
@@ -74,30 +74,32 @@ const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;'
 const buttons = (html: string) => [...html.matchAll(/<(?:button|a)\b[^>]*>([\s\S]*?)<\/(?:button|a)>/g)].map((m) => text(m[1] ?? ''))
 const primaries = (html: string) => (html.match(/class="[^"]*_primary_[^"]*"/g) ?? []).length
 const sentence = (html: string) => text(/<p[^>]*id="[^"]*-sentence"[^>]*>([\s\S]*?)<\/p>/.exec(html)?.[1] ?? '')
+const pill = (html: string) => text(/<span[^>]*data-edit-pill[^>]*>([\s\S]*?)<\/span>/.exec(html)?.[1] ?? '')
+const status = (html: string) => text(/<span[^>]*data-edit-status[^>]*>([\s\S]*?)<\/span>/.exec(html)?.[1] ?? '')
 
 describe('the edit card while it proposes a change', () => {
-  it('shows only what changes, before and after, with Save change as the one primary and Never mind', () => {
+  it('shows only what changes, in one When row, the old schedule struck and the new one after it, Not saved, with Never mind and Save change as the one primary', () => {
     const html = draw(EDIT)
-    expect(sentence(html)).toBe('Here’s the change. Nothing changes until you save it.')
+    expect(sentence(html), 'the card needs no lead: its head says what changes').toBe('')
     expect(html).toMatch(/<h3 id="[^"]*-heading" tabindex="-1">Change Morning new-ticket check<\/h3>/)
-    expect(text(html)).toContain('When it runs Before Every weekday at 8:00 After Every Monday at 8:00')
-    expect(buttons(html)).toEqual(['Save change', 'Never mind'])
+    expect(pill(html)).toBe('Not saved')
+    expect(text(html)).toContain('Will do: When Weekdays 8:00 becomes Mon 8:00')
+    expect(html, 'the old schedule is struck through').toMatch(/<s[^>]*>Weekdays 8:00<\/s>/)
+    expect(buttons(html)).toEqual(['Never mind', 'Save change'])
     expect(primaries(html)).toBe(1)
   })
 
   it('never guesses a time: “at 9” asks 9:00 or 21:00 before Save, and “at 12” asks 0:00 or 12:00', () => {
     const html = draw(editHour as EditReply)
-    expect(text(html)).toContain('Question: When At 9:00 or 21:00?')
-    expect(buttons(html)).toEqual(['9:00', '21:00', 'Save change', 'Never mind'])
-    expect(text(html)).toContain('After Choose a time')
+    expect(text(html)).toContain('Question: When Weekdays 8:00 becomes At 9:00 or 21:00?')
+    expect(buttons(html)).toEqual(['9:00', '21:00', 'Never mind', 'Save change'])
     expect(text(draw({ ...(editHour as EditReply), hour: 12 }))).toContain('At 0:00 or 12:00?')
   })
 
   it('asks the time when it couldn’t read it, with Another time, and keeps the words it didn’t follow as a cross', () => {
     const html = draw(editUnclear as EditReply)
-    expect(sentence(html)).toBe('Here’s the change, but I can’t do every part of it.')
-    expect(text(html)).toContain('Question: When What time should it run?')
-    expect(buttons(html)).toEqual(['8:00', '9:00', '13:00', '17:00', 'Another time', 'Save change', 'Never mind'])
+    expect(text(html)).toContain('What time should it run?')
+    expect(buttons(html)).toEqual(['8:00', '9:00', '13:00', '17:00', 'Another time', 'Never mind', 'Save change'])
     expect(text(html)).toContain('Can’t do: “in the afternoon” I didn’t follow this part.')
   })
 
@@ -106,7 +108,7 @@ describe('the edit card while it proposes a change', () => {
     expect(text(html)).toContain('Can’t do: “Mondays and Thursdays” I can only set one day.')
     expect(text(html)).toContain('Ask again without the part with a cross.')
     expect(buttons(html)).toEqual(['Never mind'])
-    expect(text(html)).toContain('After Unchanged')
+    expect(text(html)).toContain('When Weekdays 8:00 Unchanged')
     expect(primaries(html)).toBe(0)
   })
 
@@ -120,8 +122,8 @@ describe('the edit card while it proposes a change', () => {
   it('reads “it” as the workflow the answer before was about, names it on the card, and lets her pick another', () => {
     const html = draw(editChoices as EditReply, { about: 'uc_01JB8', typed: 'make it daily' })
     expect(text(html)).toContain('Change Morning new-ticket check')
-    expect(text(html)).toContain('Before Every weekday at 8:00 After Every day at 8:00')
-    expect(buttons(html)).toEqual(['Pick another workflow', 'Save change', 'Never mind'])
+    expect(text(html)).toContain('Weekdays 8:00 becomes Daily 8:00')
+    expect(buttons(html)).toEqual(['Pick another workflow', 'Never mind', 'Save change'])
   })
 
   it('never picks one of several workflows her words fit, even the one talked about before', () => {
@@ -182,48 +184,52 @@ describe('the edit card while it proposes a change', () => {
 
   it('tells her saving the watchlist’s schedule makes her its owner', () => {
     const html = draw(editWatchlist as EditReply, { useCase: { ...MORNING, use_case_id: 'uc_01WL', version: 3, schedule: { ...MONDAY_8, at: '09:00' } } })
-    expect(text(html)).toContain('Before Every Monday at 9:00 After Every day at 9:00')
+    expect(text(html)).toContain('Mon 9:00 becomes Daily 9:00')
     expect(text(html)).toContain('This changes when all 6 software on the watchlist are checked. Saving makes you the owner of this schedule.')
-    expect(buttons(html)).toEqual(['Save change', 'Never mind'])
+    expect(buttons(html)).toEqual(['Never mind', 'Save change'])
   })
 })
 
 describe('the edit card once she has pressed', () => {
-  it('saved: says the version and the next run, with Undo and no primary', () => {
+  it('saved: Saved, says the version, with Open beside it and Undo, and no primary', () => {
     const html = draw(EDIT, { kept: SAVED, useCase: MORNING })
-    expect(sentence(html)).toBe('Saved. Morning new-ticket check runs every Monday at 8:00 now.')
-    expect(text(html)).toContain('Saved as version 2. Next run Mon 9 Nov, 8:00.')
-    expect(buttons(html)).toEqual(['Undo the change to Morning new-ticket check'])
+    expect(pill(html)).toBe('Saved')
+    expect(status(html)).toBe('Saved as version 2.')
+    expect(text(html)).toContain('Weekdays 8:00 becomes Mon 8:00')
+    expect(buttons(html)).toEqual(['Open Morning new-ticket check', 'Undo the change to Morning new-ticket check'])
     expect(primaries(html)).toBe(0)
   })
 
   it('saved while paused: says it won’t run until she resumes it', () => {
     const html = draw(EDIT, { kept: SAVED, useCase: { ...MORNING, state: 'paused', next_run_at: null } })
-    expect(sentence(html)).toBe('Saved. Morning new-ticket check is paused, so it won’t run until you resume it.')
-    expect(text(html)).toContain('Saved as version 2. It’s paused, so it won’t run until you resume it.')
+    expect(status(html)).toBe('Saved as version 2. It’s paused, so it won’t run until you resume it.')
   })
 
   it('changed again on its page since: names where, and takes Undo away so it never throws that change away', () => {
     const html = draw(EDIT, { kept: SAVED, useCase: { ...MORNING, version: 3 }, versions: [version(3, 'page'), version(2, 'chat'), version(1, null)] })
-    expect(sentence(html)).toBe('Saved as version 2. Changed again since, on its page.')
-    expect(buttons(html)).toEqual([])
+    expect(status(html)).toBe('Saved as version 2. Changed again since, on its page.')
+    expect(buttons(html)).toEqual(['Open Morning new-ticket check'])
     const later = draw(EDIT, { kept: SAVED, useCase: { ...MORNING, version: 3 }, versions: [version(3, 'chat'), version(2, 'chat'), version(1, null)] })
-    expect(sentence(later)).toBe('Saved as version 2. Changed again since, in a later answer.')
+    expect(status(later)).toBe('Saved as version 2. Changed again since, in a later answer.')
   })
 
-  it('undone: says the version Undo published and what it runs on again', () => {
+  it('undone: Undone, back to the schedule before, with no button', () => {
     const undone: EditKept = { ...SAVED, phase: { ...SAVED.phase, kind: 'undone', version: 3 } as EditKept['phase'] }
     const html = draw(EDIT, { kept: undone, useCase: { ...MORNING, version: 3, schedule: WEEKDAYS_8 } })
-    expect(sentence(html)).toBe('Undone, as version 3. Morning new-ticket check runs every weekday at 8:00 now.')
-    expect(text(html)).toContain('Undone, as version 3.')
+    expect(pill(html)).toBe('Undone')
+    expect(status(html)).toBe('Back to Weekdays 8:00.')
     expect(buttons(html)).toEqual([])
+  })
+
+  it('says in the note which version Undo went back to, and which version it saved as', () => {
+    expect(undoneNote(2, 3)).toBe('Back to version 1, saved as version 3.')
   })
 
   it('saved the watchlist’s schedule: keeps no version, so offers no Undo, and says who owns it now', () => {
     const target = { use_case_id: 'uc_01WL', name: 'Keep our software up to date', watchlist: true, before: { day: 'monday' as const, at: '09:00' }, after: { day: 'every_day' as const, at: '09:00' } }
     const kept: EditKept = { picks: SAVED.picks, phase: { kind: 'saved', target, after: { day: 'every_day', at: '09:00' }, version: null } }
     const html = draw(editWatchlist as EditReply, { kept, useCase: { ...MORNING, use_case_id: 'uc_01WL' } })
-    expect(sentence(html)).toBe('Saved. Next run Mon 23 Nov, 9:00. You now own this schedule, so you can’t approve its checks.')
+    expect(status(html)).toBe('Saved.')
     expect(text(html)).toContain('This changed when all 6 software on the watchlist are checked, and made you the owner of this schedule.')
     expect(buttons(html)).toEqual(['Change it on the Software page'])
   })
@@ -240,10 +246,10 @@ describe('the edit card once she has pressed', () => {
     expect(doneLine(phase, now, since)).toEqual({ words: 'Saved. Changed again since.', undo: false })
   })
 
-  it('never mind: changes nothing and says so, with no card', () => {
+  it('never mind: Not changed, with no button', () => {
     const html = draw(EDIT, { kept: { ...SAVED, phase: { kind: 'kept' } } })
-    expect(sentence(html)).toBe('No problem. Nothing changed.')
-    expect(html).not.toContain('<section')
+    expect(pill(html)).toBe('Not changed')
+    expect(buttons(html)).toEqual([])
   })
 })
 

@@ -14,15 +14,20 @@ interface CardProps {
   readonly actions?: ReactNode
   /** A foot that lays itself out in place of status and actions: a button at the right that opens into a box across the card, such as Ask the team. */
   readonly foot?: ReactNode
+  /** The title's id, for a card that moves focus to its title after a press. The title then takes focus from script only. */
+  readonly headingId?: string
 }
 
 /** The chrome every card in the chat shares (the sketch’s `.card`): a head, the body, and a foot only when there is something in it. */
-export function Card({ title, pill, children, status, actions, foot }: CardProps) {
-  const titleId = useId()
+export function Card({ title, pill, children, status, actions, foot, headingId }: CardProps) {
+  const ownId = useId()
+  const titleId = headingId ?? ownId
   return (
     <section className={styles['card']} aria-labelledby={titleId}>
       <div className={styles['head']}>
-        <h3 id={titleId}>{title}</h3>
+        <h3 id={titleId} tabIndex={headingId === undefined ? undefined : -1}>
+          {title}
+        </h3>
         {pill}
       </div>
       {children}
