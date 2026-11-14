@@ -130,12 +130,48 @@ describe('the same run part way', () => {
     expect(line(model).map(since)).toEqual([null, null, null, null])
   })
 
+  it('says nothing under the waiting gate until the platform says the request is in Teams, then who it went to', () => {
+    expect(line(replay(success, 14))[2]?.under).toBeNull()
+    expect(line(replay(success, 15))[2]?.under).toEqual({ kind: 'sent', to: ['Bob'] })
+    expect(line(replay(success, 16))[2]?.under, 'nothing once Bob has decided').toBeNull()
+  })
+
+  it('says the request could not be sent when the post to Teams failed', () => {
+    const failed = fold(replay(success, 14), event(15, 'approval_announce_failed', { approval_id: 'apr_01JB8', channel: 'CODESparks Ops', message: 'Teams is down' }))
+    expect(line(failed)[2]?.under).toEqual({ kind: 'unsent' })
+  })
+
   it('after the yes, writes while the gate shows done, timing the write from the yes', () => {
     const model = replay(success, 16)
     expect(model.phase.state).toBe('acting')
     const stations = line(model)
     expect(shape(stations).slice(2)).toEqual(['gate:done:idle', 'write:now:idle'])
     expect(since(stations[3])).toBe(at(success[15]?.ts ?? ''))
+  })
+})
+
+describe('a request with two steps', () => {
+  const steps = [
+    { index: 0, label: 'Team approver', status: 'open', decided_by: null, decided_at: null, reason: null, sent_to: [], sent_at: null },
+    { index: 1, label: 'Second approver', status: 'waiting', decided_by: null, decided_at: null, reason: null, sent_to: [], sent_at: null },
+  ]
+  const sentTo = [['Bob', 'Carol', 'Dave'], ['Bob', 'Carol', 'Dave']]
+  const asked = foldAll(replay(success, 12), [
+    event(13, 'approval_requested', { approval_id: 'apr_2', steps, link: '/approvals/apr_2' }),
+    event(14, 'approval_announced', { approval_id: 'apr_2', channel: 'CODESparks Ops', link: '/approvals/apr_2', sent_to: sentTo, sent_at: '2026-11-04T02:20:00Z' }),
+  ])
+
+  it('names each step’s own Approvers in turn, and never again whoever said yes to the first', () => {
+    expect(line(asked)[2]?.under).toEqual({ kind: 'sent', to: ['Bob', 'Carol', 'Dave'] })
+    const bob = { kind: 'user', id: 'bob', display: 'Bob' }
+    const second = fold(asked, event(15, 'approval_decided', { approval_id: 'apr_2', step: 0, verdict: 'approve', by: 'bob' }, bob))
+    expect(second.phase.state).toBe('awaiting_approval')
+    expect(line(second)[2]?.under).toEqual({ kind: 'sent', to: ['Carol', 'Dave'] })
+  })
+
+  it('reads an older event with no names as sent to Teams, naming no one', () => {
+    const older = fold(replay(success, 14), event(15, 'approval_announced', { approval_id: 'apr_01JB8', channel: 'CODESparks Ops', link: '/approvals/apr_01JB8' }))
+    expect(line(older)[2]?.under).toEqual({ kind: 'sent', to: [] })
   })
 })
 

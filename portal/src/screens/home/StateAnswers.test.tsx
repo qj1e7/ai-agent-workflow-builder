@@ -32,7 +32,7 @@ const STOPPED = stopped as UseCaseView
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 const many = (n: number): UseCaseView[] => Array.from({ length: n }, (_, i) => ({ ...STOPPED, use_case_id: `uc_${String(i)}`, name: `Workflow ${String(i)}` }))
 
-function draw(thread: ThreadState, { me = ALICE, home, useCases = [STOPPED], watchlist = WATCHLIST }: { me?: Me; home?: HomeOut; useCases?: UseCaseView[]; watchlist?: WatchlistView } = {}): string {
+function draw(thread: ThreadState, { me = ALICE, home, useCases = [STOPPED], watchlist = WATCHLIST, run = waitingRun }: { me?: Me; home?: HomeOut; useCases?: UseCaseView[]; watchlist?: WatchlistView; run?: object } = {}): string {
   const session = createDevSession({ getItem: () => me.id, setItem: () => undefined })
   const scope = session.cacheScope()
   const client = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
@@ -41,7 +41,7 @@ function draw(thread: ThreadState, { me = ALICE, home, useCases = [STOPPED], wat
   const shownHome = (home ?? (me.id === 'bob' ? bobHome : aliceHome)) as HomeOut
   client.setQueryData(['home', scope], shownHome)
   for (const request of shownHome.approvals) client.setQueryData(['approval', scope, request.approval_id], { ...(bobApproval as ApprovalView), approval_id: request.approval_id, run_id: request.run_id })
-  client.setQueryData(['run', scope, 'run_01JB8'], waitingRun)
+  client.setQueryData(['run', scope, 'run_01JB8'], run)
   if (me.id === 'alice') client.setQueryData(['approval', scope, 'apr_01JB8'], aliceApproval)
   client.setQueryData(['use-cases', scope], useCases)
   client.setQueryData(['watchlist', scope], watchlist)
@@ -141,8 +141,13 @@ describe('the requests an approve is sent to (approve the upgrade tickets)', () 
 describe('a request that waits for someone else’s yes (approve, asked by the person whose run it is)', () => {
   it('shows Alice her own request as its card, led by who it waits for, with Open and no way to decide', () => {
     const html = draw(answered(decide as PlannerReply), { me: ALICE })
-    expect(text(html)).toContain('This waits for an Approver’s yes. Create 1 Jira ticket Waiting for a yes Upgrade LangGraph from 1.2.14 to 1.2.16 Open')
+    expect(text(html)).toContain('This waits for Bob’s yes. Create 1 Jira ticket Waiting for a yes Upgrade LangGraph from 1.2.14 to 1.2.16 Open')
     expect(html).toMatch(/<button[^>]*data-opens="approval:run_01JB8"[^>]*>Open<\/button>/)
     expect(text(html)).not.toMatch(/Review and decide|\bApprove\b|Nothing is waiting/)
+  })
+
+  it('says it waits for an Approver while the request isn’t in Teams yet, naming no one', () => {
+    const unsent = { ...waitingRun, approval: { ...waitingRun.approval, steps: waitingRun.approval.steps.map((step) => ({ ...step, sent_to: [], sent_at: null })) } }
+    expect(text(draw(answered(decide as PlannerReply), { me: ALICE, run: unsent }))).toContain('This waits for an Approver’s yes. Create 1 Jira ticket')
   })
 })

@@ -1,7 +1,7 @@
 import { useContext, useEffect, useMemo } from 'react'
 import { useDecisions, useHome } from '../../api/homeQueries'
 import { useDisplayName } from '../../api/people'
-import { useMe, useUseCases, useWatchlist } from '../../api/queries'
+import { useMe, useRun, useUseCases, useWatchlist } from '../../api/queries'
 import { usePeopleList } from '../../api/settingsQueries'
 import type { DecidedReply, HomeOut } from '../../api/types'
 import { operatorsSay } from '../../shell/OperatorsNote'
@@ -13,7 +13,7 @@ import { behindWords, hasNewer, REFRESH_MS as WATCH_REFRESH } from '../software/
 import { useCapabilities } from '../../api/plannerQueries'
 import { ideasSay, needsSay, startingPoints, workflowsSay } from './answers'
 import { useAsker } from './asker'
-import { leadWords } from '../run/approvalWords'
+import { leadWords, waitingFor } from '../run/approvalWords'
 import { ApprovalCards } from './ApprovalCards'
 import { CardMemoryContext, type RequestRef } from './cardMemory'
 import { decidedSay } from './decided'
@@ -193,8 +193,19 @@ export function RequestsToOpen() {
 }
 
 /**
+ * Who one of this person's own requests waits for, by name, read from its run. Undefined while the run is read, so the sentence
+ * is said once, with the names. Empty when there is no one request or its run can't be read.
+ */
+function useWaitingFor(runId: string | null): readonly string[] | undefined {
+  const run = useRun(runId ?? '')
+  if (runId === null || run.isError) return []
+  if (!run.data) return undefined
+  return 'approval' in run.data ? waitingFor(run.data.approval.steps) : []
+}
+
+/**
  * An approve or decline asked in the chat: nobody decides there, so the answer is the requests waiting for this person’s yes, to
- * open. With none, their own requests that wait for another Approver's yes, as the sketch shows Alice hers.
+ * open. With none, their own requests that wait for another Approver's yes, as the sketch shows Alice hers, with who it waits for.
  */
 export function DecideAnswer({ say }: { say: Say }) {
   const home = useHome()
@@ -202,7 +213,11 @@ export function DecideAnswer({ say }: { say: Say }) {
   const total = home.data?.approvals_total
   const shown = useShownRequests()
   const theirs = shown === undefined ? total === 0 && (home.data?.waiting_on_others_total ?? 0) > 0 : shown.length > 0 && shown.every((request) => request.approvalId === null)
-  const sentence = total === undefined ? null : theirs ? leadWords(shown?.length ?? home.data?.waiting_on_others.length ?? 0, false) : total > 0 || shown !== undefined ? DECIDE_SAY : NOTHING_TO_DECIDE
+  const count = shown?.length ?? home.data?.waiting_on_others.length ?? 0
+  const only = theirs && count === 1 ? (shown?.[0]?.runId ?? home.data?.waiting_on_others[0]?.run_id ?? null) : null
+  const waiting = useWaitingFor(only)
+  const lead = waiting === undefined ? null : leadWords(count, false, waiting)
+  const sentence = total === undefined ? null : theirs ? lead : total > 0 || shown !== undefined ? DECIDE_SAY : NOTHING_TO_DECIDE
   useSaidOnce(sentence, say)
   if (theirs && home.data && sentence !== null) {
     return (

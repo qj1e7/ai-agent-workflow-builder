@@ -396,6 +396,15 @@ export function workingWords(since: number, now: number, small: boolean): string
   return small ? took : `Working, ${took}`
 }
 
+/** Under the waiting gate once its request is in Teams: "Sent to Bob" on a small line, "Sent to Bob in Teams" on a large one. */
+export function sentToWords(to: readonly string[], small: boolean): string {
+  if (to.length === 0) return 'Sent to Teams'
+  return `Sent to ${andList(to)}${small ? '' : ' in Teams'}`
+}
+
+/** Under the waiting gate when its request could not be posted. An Approver can still decide in the app. */
+export const UNSENT_WORDS = 'Couldn’t send to Teams'
+
 /** How a finished run ended, said once under its line. */
 export interface Settled {
   readonly tone: 'ok' | 'off'

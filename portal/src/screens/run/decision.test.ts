@@ -8,7 +8,9 @@ import {
   kindWords,
   leadWords,
   recordWords,
+  sentRowWords,
   turnWords,
+  waitingFor,
   waitingWords,
   whereWords,
   whyYouWords,
@@ -150,6 +152,31 @@ describe('the request’s words', () => {
     expect(leadWords(3, true)).toBe('These need your yes.')
     expect(leadWords(1, false)).toBe('This waits for an Approver’s yes.')
     expect(leadWords(2, false)).toBe('These wait for an Approver’s yes.')
+  })
+
+  it('names who a request waits for once the platform does: one name, or several any one of whom may say yes', () => {
+    expect(leadWords(1, false, ['Bob'])).toBe('This waits for Bob’s yes.')
+    expect(leadWords(1, false, ['Bob', 'Dave', 'Erin'])).toBe('This waits for a yes from Bob, Dave or Erin.')
+    expect(leadWords(2, false, ['Bob'])).toBe('These wait for an Approver’s yes.')
+    expect(leadWords(1, true, ['Bob'])).toBe('This needs your yes.')
+  })
+
+  describe('who it was sent to', () => {
+    const sent = (s: ApprovalStepView, sent_to: string[]): ApprovalStepView => ({ ...s, sent_to, sent_at: EARLIER })
+
+    it('is the Approvers of the step it waits at, only once it is in Teams', () => {
+      expect(waitingFor(BOB.steps)).toEqual(['Bob'])
+      expect(waitingFor(BOB.steps.map((s) => ({ ...s, sent_to: [], sent_at: null })))).toEqual([])
+      expect(waitingFor([sent(step(0, 'approved', 'bob'), ['Bob', 'Dave']), sent(step(1, 'open'), ['Dave'])])).toEqual(['Dave'])
+      expect(waitingFor([sent(step(0, 'approved', 'bob'), ['Bob', 'Dave']), sent(step(1, 'waiting'), ['Dave'])]), 'right after the first yes').toEqual(['Dave'])
+    })
+
+    it('reads on the page as the sketch’s Sent row, with the names', () => {
+      expect(sentRowWords([sent(step(0, 'open'), ['Bob'])], NOW)).toBe('Today, 9:01, to Bob in Teams')
+      expect(sentRowWords([sent(step(0, 'open'), ['Bob', 'Dave'])], NOW)).toBe('Today, 9:01, to Bob and Dave in Teams')
+      expect(sentRowWords([sent(step(0, 'open'), [])], NOW), 'no one to name').toBe('Today, 9:01, in Teams')
+      expect(sentRowWords([step(0, 'open')], NOW), 'not sent').toBeNull()
+    })
   })
 
   describe('the record', () => {

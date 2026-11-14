@@ -138,6 +138,9 @@ export const IconInfo = drawn(
   2.4,
 )
 
+/** A message, as a request sent to Teams. */
+export const IconMessage = drawn('IconMessage', <path d="M4.5 5.25h15a1.5 1.5 0 0 1 1.5 1.5V15a1.5 1.5 0 0 1-1.5 1.5h-8.25l-4.5 3.75V16.5H4.5A1.5 1.5 0 0 1 3 15V6.75a1.5 1.5 0 0 1 1.5-1.5z" />, 2.2)
+
 export const IconSend = drawn('IconSend', <path d="M4 12l16-8-6 16-2.5-6.5z" />, 2)
 
 /** An IF block: one way in, two ways out. */

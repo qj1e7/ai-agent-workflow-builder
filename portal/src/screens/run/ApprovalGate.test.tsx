@@ -152,6 +152,16 @@ describe('the approval, waiting for Bob’s yes', () => {
     expect(html).not.toMatch(/<button[^>]*\sdisabled=""/)
   })
 
+  it('on the page says when and to whom the request went in Teams, before why him', () => {
+    expect(text(draw(BOB, { page: true }))).toContain('Sent Today, 10:14, to Bob in Teams Why you No one can approve their own work.')
+  })
+
+  it('says nothing of a send before the request is in Teams, nor in the side panel', () => {
+    const unsent: ApprovalView = { ...BOB, steps: BOB.steps.map((step) => ({ ...step, sent_to: [], sent_at: null })) }
+    expect(text(draw(unsent, { page: true }))).not.toMatch(/\bSent\b/)
+    expect(text(draw(BOB))).not.toMatch(/\bSent\b/)
+  })
+
   it('says what went wrong as an alert', () => {
     expect(draw(BOB, { decision: { ...idle, error: 'Another Approver decided this step first.' } })).toMatch(/role="alert"[^>]*>Another Approver decided this step first\./)
   })
@@ -191,6 +201,15 @@ describe('two Approvers, one after the other', () => {
     expect(html).toContain('Why you No one can approve their own work. Your yes is the second of two.')
     expect(html.match(/Carol said yes/g), 'who said yes first is said once').toHaveLength(1)
     expect(buttons(draw(SECOND))).toEqual(['Ask Alice', 'Approve', 'Decline'])
+  })
+
+  it('names the Approvers of the step it waits at, in turn', () => {
+    const sent = (approval: ApprovalView, names: readonly string[][]): ApprovalView => ({
+      ...approval,
+      steps: approval.steps.map((step, index) => ({ ...step, sent_to: names[index] ?? [], sent_at: '2026-11-03T01:01:00Z' })),
+    })
+    expect(text(draw(sent(TWO, [['Bob', 'Carol'], ['Bob', 'Carol']]), { page: true }))).toContain('Sent Today, 9:01, to Bob and Carol in Teams')
+    expect(text(draw(sent(SECOND, [['Bob', 'Carol'], ['Bob']]), { page: true }))).toContain('Sent Today, 9:01, to Bob in Teams')
   })
 
   it('never offers the first Approver the second yes: right after it, and once the platform says so', () => {

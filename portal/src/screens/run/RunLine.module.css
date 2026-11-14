@@ -359,6 +359,22 @@
   margin-left: 3px;
 }
 
+/* The request reached Teams: it pings in once, in the waiting colour. The icon starts the first line when the names wrap. */
+.sent {
+  color: var(--amber-ink);
+  animation: ping 600ms var(--ease-out) both;
+}
+
+.sent svg {
+  display: inline;
+  margin-right: 3px;
+  vertical-align: -2px;
+}
+
+.unsent {
+  color: var(--red-ink);
+}
+
 .arrive .dot,
 .arrive .who {
   animation: land var(--dur-small) var(--ease-out) var(--move) backwards;
@@ -419,6 +435,18 @@
 
   75% {
     transform: translateX(3px);
+  }
+}
+
+@keyframes ping {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.9);
+  }
+
+  60% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.04);
   }
 }
 

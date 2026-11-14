@@ -1,5 +1,6 @@
 import { connectorLabel } from '../../api/labels'
-import type { ApprovalActionView, ApprovalView, Refusal, WriteActionView } from '../../api/types'
+import type { ApprovalActionView, ApprovalStepView, ApprovalView, Refusal, WriteActionView } from '../../api/types'
+import { runWhen } from '../workflows/times'
 import type { Standing } from './decision'
 import { andList, count, LOST_TAIL, sentence, settledWhen, stageWords, type NameOf, type StageFacts, type StageTone } from './words'
 
@@ -106,10 +107,34 @@ export function waitingWords(whyNot: Refusal | null, withWhy = true): string {
   return withWhy && why ? `${who} ${why}` : who
 }
 
-/** The line over the cards: whose yes the requests need. Someone whose own run waits reads that it waits for an Approver. */
-export function leadWords(requests: number, yours: boolean): string {
+/** The step a request waits at: the first nobody has decided. A later step reads "waiting" until this one is decided. */
+const stepAt = (steps: readonly ApprovalStepView[]) => steps.find((step) => step.status === 'open' || step.status === 'waiting')
+
+/** Who an open request waits for, by name: whoever may decide the step it waits at, once it is in Teams. Empty before. */
+export function waitingFor(steps: readonly ApprovalStepView[]): readonly string[] {
+  const open = stepAt(steps)
+  return open?.sent_at ? (open.sent_to ?? []) : []
+}
+
+const orList = (names: readonly string[]) => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} or ${names.at(-1) ?? ''}`)
+
+/**
+ * The line over the cards: whose yes the requests need. Someone whose own request waits reads who it waits for, "This waits for
+ * Bob’s yes.", once the platform names them, and otherwise that it waits for an Approver.
+ */
+export function leadWords(requests: number, yours: boolean, waiting: readonly string[] = []): string {
   if (yours) return requests === 1 ? 'This needs your yes.' : 'These need your yes.'
-  return requests === 1 ? 'This waits for an Approver’s yes.' : 'These wait for an Approver’s yes.'
+  if (requests !== 1) return 'These wait for an Approver’s yes.'
+  if (waiting.length === 1) return `This waits for ${waiting.join('')}’s yes.`
+  return waiting.length > 1 ? `This waits for a yes from ${orList(waiting)}.` : 'This waits for an Approver’s yes.'
+}
+
+/** The page's Sent row: "Today, 9:01, to Bob in Teams", naming who may decide the open step. Null until the request is in Teams. */
+export function sentRowWords(steps: readonly ApprovalStepView[], now: Date): string | null {
+  const open = stepAt(steps)
+  if (!open?.sent_at) return null
+  const to = waitingFor(steps)
+  return `${runWhen(open.sent_at, now)}, ${to.length > 0 ? `to ${andList(to)} ` : ''}in Teams`
 }
 
 const WRITING = new Set<StageFacts['state']>(['pending', 'working', 'proposed', 'awaiting_approval', 'acting'])
