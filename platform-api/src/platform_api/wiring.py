@@ -435,6 +435,7 @@ async def build(settings: Settings) -> Services:
         tells=tells,
         failures=n8n.failures,
         switch=n8n.drafts,
+        nudge=orchestrator.nudge,
     )
     request_channel = request_channel_for(settings)
     team_requests = TeamRequests(

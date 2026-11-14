@@ -97,6 +97,8 @@ class Flaky:
 
 class Writes(Wait):
     flaky: Flaky
+    nudged: list[int]
+    """Each time the node calls woke the orchestrator to send what they put in its outbox."""
 
     async def write(self, execution: str = "101", node: str = MAKE) -> object:
         return await self.call(execution, WriteCall(), node)
@@ -149,6 +151,7 @@ async def open_writes(postgres: PostgresUrls) -> AsyncIterator[Writes]:
         n8n, workflows, sources = FakeN8n(), SpecWorkflows(), FakeSources()
         flaky = Flaky(h.jira)
         gateway = WriteGateway(h.db, [flaky], poll=0.05)
+        nudged: list[int] = []
         calls = NodeCalls(
             h.db,
             h.log,
@@ -161,6 +164,7 @@ async def open_writes(postgres: PostgresUrls) -> AsyncIterator[Writes]:
             {"jira": PRACTICE_SITE},
             box=box,
             gateway=gateway,
+            nudge=lambda: nudged.append(1),
         )
         waits = FakeN8nWaits()
         client = httpx.AsyncClient(transport=httpx.MockTransport(waits.handle))
@@ -177,6 +181,7 @@ async def open_writes(postgres: PostgresUrls) -> AsyncIterator[Writes]:
         )
         writes = Writes(h, n8n, workflows, calls, waits, orchestrator, FakeLanding())
         writes.flaky = flaky
+        writes.nudged = nudged
         yield writes
 
 
