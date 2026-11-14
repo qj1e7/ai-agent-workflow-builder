@@ -1,0 +1,112 @@
+{
+  "CUSTOM.wabStartFromPortal": {"block": "start", "rows": [{"versions": [1], "class": "read"}]},
+  "CUSTOM.wabRead": {"block": "read", "rows": [{"versions": [1], "class": "read"}]},
+  "CUSTOM.wabAgent": {"block": "agent", "rows": [{"versions": [1], "class": "read"}]},
+  "CUSTOM.wabProposeChange": {"block": "propose", "rows": [{"versions": [1], "class": "read"}]},
+  "CUSTOM.wabAskForYes": {"block": "ask", "rows": [{"versions": [1], "class": "notice"}]},
+  "CUSTOM.wabMakeApprovedChanges": {"block": "write", "rows": [{"versions": [1], "class": "write"}]},
+  "CUSTOM.wabTell": {"block": "tell", "rows": [{"versions": [1], "class": "notice"}]},
+  "CUSTOM.wabReportFailure": {"block": "report", "rows": [{"versions": [1], "class": "read"}]},
+
+  "n8n-nodes-base.scheduleTrigger": {"block": "schedule", "rows": [{"versions": [1, 1.1, 1.2, 1.3, 1.4], "class": "read"}]},
+  "n8n-nodes-base.manualTrigger": {"block": "manual", "rows": [{"versions": [1], "class": "read"}]},
+  "n8n-nodes-base.errorTrigger": {"block": "error", "rows": [{"versions": [1], "class": "read"}]},
+  "n8n-nodes-base.if": {"block": "branch", "rows": [{"versions": [1, 2, 2.1, 2.2, 2.3], "class": "read"}]},
+  "n8n-nodes-base.merge": {
+    "block": "merge",
+    "rows": [
+      {
+        "versions": [3, 3.1, 3.2],
+        "by": "mode",
+        "default": "append",
+        "operations": {"append": "read", "combine": "read", "combineBySql": "off", "chooseBranch": "read"}
+      },
+      {
+        "versions": [2, 2.1],
+        "by": "mode",
+        "default": "append",
+        "operations": {"append": "read", "combine": "read", "chooseBranch": "read"}
+      },
+      {
+        "versions": [1],
+        "by": "mode",
+        "default": "append",
+        "operations": {
+          "append": "read",
+          "keepKeyMatches": "read",
+          "mergeByIndex": "read",
+          "mergeByKey": "read",
+          "multiplex": "read",
+          "passThrough": "read",
+          "removeKeyMatches": "read",
+          "wait": "read"
+        }
+      }
+    ]
+  },
+  "n8n-nodes-base.noOp": {"block": "end", "rows": [{"versions": [1], "class": "read"}]},
+  "n8n-nodes-base.stickyNote": {"block": "note", "rows": [{"versions": [1], "class": "read"}]},
+
+  "n8n-nodes-base.filter": {"block": "shape", "rows": [{"versions": [1, 2, 2.1, 2.2, 2.3], "class": "read"}]},
+  "n8n-nodes-base.switch": {"block": "shape", "rows": [{"versions": [1, 2, 3, 3.1, 3.2, 3.3, 3.4], "class": "read"}]},
+  "n8n-nodes-base.set": {"block": "shape", "rows": [{"versions": [1, 2, 3, 3.1, 3.2, 3.3, 3.4, 3.5], "class": "read"}]},
+  "n8n-nodes-base.limit": {"block": "shape", "rows": [{"versions": [1], "class": "read"}]},
+  "n8n-nodes-base.aggregate": {"block": "shape", "rows": [{"versions": [1], "class": "read"}]},
+  "n8n-nodes-base.splitOut": {"block": "shape", "rows": [{"versions": [1], "class": "read"}]},
+  "n8n-nodes-base.removeDuplicates": {
+    "block": "shape",
+    "rows": [
+      {"versions": [1, 1.1], "class": "read"},
+      {
+        "versions": [2],
+        "by": "operation",
+        "default": "removeDuplicateInputItems",
+        "operations": {
+          "removeDuplicateInputItems": "read",
+          "removeItemsSeenInPreviousExecutions": "read",
+          "clearDeduplicationHistory": "off"
+        }
+      }
+    ]
+  },
+  "n8n-nodes-base.summarize": {"block": "shape", "rows": [{"versions": [1, 1.1], "class": "read"}]},
+  "n8n-nodes-base.renameKeys": {"block": "shape", "rows": [{"versions": [1], "class": "read"}]},
+  "n8n-nodes-base.dateTime": {
+    "block": "shape",
+    "rows": [
+      {
+        "versions": [2],
+        "by": "operation",
+        "default": "getCurrentDate",
+        "operations": {
+          "addToDate": "read",
+          "extractDate": "read",
+          "formatDate": "read",
+          "getCurrentDate": "read",
+          "getTimeBetweenDates": "read",
+          "roundDate": "read",
+          "subtractFromDate": "read"
+        }
+      },
+      {"versions": [1], "class": "off"}
+    ]
+  },
+  "n8n-nodes-base.compareDatasets": {"block": "shape", "rows": [{"versions": [1, 2, 2.1, 2.2, 2.3], "class": "read"}]},
+  "n8n-nodes-base.splitInBatches": {"block": "shape", "rows": [{"versions": [1, 2, 3], "class": "read"}]},
+  "n8n-nodes-base.xml": {"block": "shape", "rows": [{"versions": [1], "class": "read"}]},
+  "n8n-nodes-base.markdown": {"block": "shape", "rows": [{"versions": [1], "class": "read"}]},
+  "n8n-nodes-base.executionData": {
+    "block": "shape",
+    "rows": [{"versions": [1, 1.1], "by": "operation", "default": "save", "operations": {"save": "read"}}]
+  },
+  "n8n-nodes-base.stopAndError": {"block": "shape", "rows": [{"versions": [1], "class": "read"}]},
+
+  "n8n-nodes-base.httpRequest": {"off": "It can send what a run read to any address (P6 Q5)."},
+  "n8n-nodes-base.code": {"off": "It runs code a person writes."},
+  "n8n-nodes-base.webhook": {"off": "It opens an address anyone can call. Start from the Portal starts runs instead (D6)."},
+  "n8n-nodes-base.wait": {"off": "It opens addresses of its own and takes credentials (P7 Q10)."},
+  "n8n-nodes-base.executeWorkflow": {"off": "It runs another workflow, also one fetched from an address (P7 Q10)."},
+  "n8n-nodes-base.respondToWebhook": {"off": "It answers a webhook call and takes a credential (P7 Q10)."},
+  "n8n-nodes-base.sort": {"off": "Its code mode runs JavaScript (P7 Q10)."},
+  "n8n-nodes-base.itemLists": {"off": "Its sort has the same code mode as Sort (P7 Q10)."}
+}

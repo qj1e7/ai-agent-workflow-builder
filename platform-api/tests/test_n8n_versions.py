@@ -252,11 +252,11 @@ async def test_safety_a_publisher_the_people_list_cant_match_is_never_guessed(v:
         "n8n-nodes-base.somethingNobodyClassed",
     ],
 )
-async def test_safety_a_block_that_is_not_on_needs_a_fix(v: Versions, node_type: str):
+async def test_safety_a_block_that_is_off_needs_a_fix(v: Versions, node_type: str):
     use_case_id, _ = await on_and_changed(v, adding(node_type))
     view = await v.view(use_case_id)
     assert view["grade"] == "needs_a_fix"
-    assert view["findings"] == [f'"Added in n8n" is a block that is not on: {node_type}.']
+    assert view["findings"] == [f'"Added in n8n" uses a block that is off: {node_type}.']
 
 
 async def test_the_platforms_own_publish_is_never_taken_for_one_made_in_n8n(v: Versions):

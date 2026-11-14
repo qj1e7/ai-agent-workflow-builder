@@ -120,7 +120,7 @@ def blocks_of(document: Mapping[str, Any]) -> list[N8nBlockView]:
     for name in order:
         spec = flow.blocks[name].spec
         kind: N8nBlockKind
-        if spec is None:
+        if spec is None or spec.kind == "shape":
             kind = "other"
         elif (known := spec.kind) == "note":
             continue
