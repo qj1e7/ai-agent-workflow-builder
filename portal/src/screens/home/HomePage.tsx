@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom'
 import { useSearchParams } from 'react-router'
 import { Link } from '../../ui/Link'
 import { useCacheScope } from '../../api/context'
-import { useHome } from '../../api/homeQueries'
+import { useHome, type Pager } from '../../api/homeQueries'
 import { isOperator } from '../../api/me'
 import { useCapabilities, useDrafts } from '../../api/plannerQueries'
 import { useSweepOnFocus } from '../../api/workflowQueries'
@@ -18,7 +18,9 @@ import { PlannerBot, type BotState } from '../../ui/PlannerBot'
 import { restoreDraft } from './card'
 import { NEEDS_YOU_ANCHOR, type Page } from './AnswerCards'
 import { CapabilityLists } from './CapabilityLists'
-import { APPROVER_SUGGESTIONS, approverHeading, approverLine, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, suggestionsOf, type Needs } from './home'
+import { APPROVER_SUGGESTIONS, approverHeading, approverLine, HOME_NEEDS_SHOWN, needsOf, needsTotal, suggestionsOf, type Needs } from './home'
+import { NeedsMore } from './panels/NeedsMore'
+import { usePagedNeeds } from './usePagedNeeds'
 import { NeedRows, NeedsSection, useArrival } from './NeedsSection'
 import { ChatView, NEWEST } from './ChatView'
 import { foldSender, type Transition } from './fold'
@@ -121,7 +123,8 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
   const written = useRef<string | null>(null)
   const offline = model.data !== undefined && model.data.active === null
   const empty = thread.messages.length === 0
-  const needs = useMemo(() => (operator ? needsHere(home) : needsOf(home)), [home, operator])
+  const { needs: paged, pager } = usePagedNeeds(home)
+  const needs = useMemo(() => (operator ? needsHere(home) : (paged ?? needsOf(home))), [home, operator, paged])
   const arrival = useArrival(needs.shown.map((need) => need.key))
   const watching = useWatchlist({ enabled: operator }).data?.software.length
   const watched = !operator || (watching !== undefined && watching > 0)
@@ -223,7 +226,7 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
             {APPROVER_OFFLINE_LEAD} {approverLine(home)}
           </p>
         </div>
-        {needs.shown.length > 0 ? <NeedsHere needs={needs} now={now} arrival={arrival} full /> : null}
+        {needs.shown.length > 0 ? <NeedsHere needs={needs} now={now} arrival={arrival} pager={pager} full /> : null}
         <p className={`muted ${styles['centred']}`}>{APPROVER_NOTE}</p>
       </div>
     )
@@ -242,7 +245,7 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
             </ButtonLink>
           </div>
         </div>
-        {needs.shown.length > 0 ? <NeedsHere needs={needs} now={now} arrival={arrival} quiet connectAbove /> : null}
+        {needs.shown.length > 0 ? <NeedsHere needs={needs} now={now} arrival={arrival} pager={pager} quiet connectAbove /> : null}
         {capabilities.data ? <CapabilityLists view={capabilities.data} /> : null}
       </div>
     )
@@ -313,17 +316,14 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
         {box}
         {chips}
       </div>
-      <NeedRows needs={needs.shown} now={now} more={<More needs={needs} full={!operator} />} />
+      <NeedRows needs={needs.shown} now={now} more={<More needs={needs} pager={pager} full={!operator} />} />
     </div>
   )
 }
 
-/** What Needs you has past its rows on Home: a link to the rest on Workflows, or, where Home lists all the platform returned, how many are left. */
-function More({ needs, full }: { needs: Needs; full: boolean }) {
-  if (full) {
-    const said = moreWords(needs.more)
-    return said === null ? null : <p className={homeStyles['more']}>{said}</p>
-  }
+/** What Needs you has past its rows on Home: a link to the rest on Workflows, or, where Home lists every row, Show more for the next page. */
+function More({ needs, pager, full }: { needs: Needs; pager: Pager; full: boolean }) {
+  if (full) return <NeedsMore needs={needs} pager={pager} />
   const left = needs.total - needs.shown.length
   return left > 0 ? (
     <p className={homeStyles['more']}>
@@ -335,10 +335,10 @@ function More({ needs, full }: { needs: Needs; full: boolean }) {
 }
 
 /**
- * `quiet`: the page has its own main button, so Needs you has none. `full`: Home already lists all the platform returned, as it does for
- * someone who isn’t an Operator, so what is left is said, not linked to Workflows, which lists no more.
+ * `quiet`: the page has its own main button, so Needs you has none. `full`: Home lists every row, as it does for someone who isn’t an
+ * Operator, so the rest come with Show more here rather than a link to Workflows.
  */
-function NeedsHere({ needs, now, arrival, quiet = false, connectAbove = false, full = false }: { needs: Needs; now: Date; arrival: ReturnType<typeof useArrival>; quiet?: boolean; connectAbove?: boolean; full?: boolean }) {
+function NeedsHere({ needs, now, arrival, pager, quiet = false, connectAbove = false, full = false }: { needs: Needs; now: Date; arrival: ReturnType<typeof useArrival>; pager: Pager; quiet?: boolean; connectAbove?: boolean; full?: boolean }) {
   return (
     <NeedsSection
       needs={needs}
@@ -347,7 +347,7 @@ function NeedsHere({ needs, now, arrival, quiet = false, connectAbove = false, f
       quiet={quiet}
       connectAbove={connectAbove}
       anchor={NEEDS_YOU_ANCHOR}
-      more={<More needs={needs} full={full} />}
+      more={<More needs={needs} pager={pager} full={full} />}
       whenNone={null}
     />
   )
