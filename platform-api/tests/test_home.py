@@ -368,13 +368,15 @@ async def test_the_newest_waiting_runs_come_first_and_home_counts_them_all(lab: 
     assert [a["run_id"] for a in home["approvals"]] == started[::-1][:10]
 
 
-async def waiting_runs(lab: Lab, count: int) -> list[RunId]:
-    """`count` runs alice started, each waiting for a yes, a second apart, the oldest first."""
+async def waiting_runs(
+    lab: Lab, count: int, apart: timedelta = timedelta(seconds=1)
+) -> list[RunId]:
+    """`count` runs alice started, each waiting for a yes, `apart` apart, the oldest first."""
     started: list[RunId] = []
     for n in range(count):
         run = await lab.h.orchestrator.start_run(SPEC, ALICE, f"many-{n}-{uuid.uuid4()}")
         started.append(run.run_id)
-        lab.h.advance(timedelta(seconds=1))
+        lab.h.advance(apart)
     for run_id in started:
         await work(lab, run_id, cards=False)
     return started
@@ -404,6 +406,40 @@ async def test_a_page_goes_on_where_the_last_one_ended_when_a_new_request_arrive
     assert [a["run_id"] for a in after["approvals"]] == started[::-1][10:]
     assert after["approvals_total"] == 13, "the count is the list as it is now"
     assert [a["run_id"] for a in (await lab.home("bob"))["approvals"]][0] == newest
+
+
+async def test_a_request_decided_between_pages_skips_nothing_and_repeats_nothing(lab: Lab):
+    started = await waiting_runs(lab, 13)
+    first = await lab.home("bob")
+    on_first_page, not_read_yet = started[-1], started[0]
+
+    await decide_first_step(lab, "bob", on_first_page)
+    await decide_first_step(lab, "bob", not_read_yet)
+    after = await lab.page("bob", "/api/v1/home/needs", first["needs_next"])
+
+    read = [a["run_id"] for a in first["approvals"]] + [a["run_id"] for a in after["approvals"]]
+    assert len(read) == len(set(read)), "no request twice"
+    assert set(started[1:-1]) <= set(read), "every request still waiting was reached"
+    assert not_read_yet not in read
+    assert after["approvals_total"] == 11, "the count is what still waits"
+    again = await lab.home("bob")
+    pages = await lab.every_page("bob", "/api/v1/home/needs", again["needs_next"])
+    fresh = [a["run_id"] for a in again["approvals"]]
+    fresh += [a["run_id"] for page in pages for a in page["approvals"]]
+    assert fresh == started[1:-1][::-1] and again["approvals_total"] == len(fresh)
+
+
+async def test_requests_started_at_the_same_moment_are_each_reached_once_by_their_id(lab: Lab):
+    started = await waiting_runs(lab, 23, apart=timedelta(0))
+
+    home = await lab.home("bob")
+    pages = await lab.every_page("bob", "/api/v1/home/needs", home["needs_next"])
+
+    reached = [a["run_id"] for a in home["approvals"]]
+    reached += [a["run_id"] for page in pages for a in page["approvals"]]
+    assert len({a["started_at"] for a in home["approvals"]}) == 1, "one moment for all"
+    assert reached == sorted(started, reverse=True), "each once, the larger id first"
+    assert [len(home["approvals"]), *(len(p["approvals"]) for p in pages)] == [10, 10, 3]
 
 
 async def test_every_stopped_run_is_reached_through_the_pages(lab: Lab):
