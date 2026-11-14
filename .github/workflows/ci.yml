@@ -96,6 +96,11 @@ jobs:
             exit 1
           fi
 
+      - name: n8n's allow list in compose and Terraform is the one node_classes.json makes
+        if: matrix.project == 'e2e'
+        working-directory: .
+        run: scripts/nodes-include.sh --check
+
       - name: Check import rules
         if: matrix.project == 'platform-api'
         working-directory: ${{ matrix.project }}
@@ -235,7 +240,12 @@ jobs:
             exit 1
           fi
 
-      - name: Pack smoke, n8n loads our blocks and the allow list holds
+      # The pin check in the pack smoke runs platform-api's code against what the image serves.
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: false
+
+      - name: Pack smoke, n8n loads exactly the classed types and the pin check holds
         working-directory: .
         run: scripts/pack-smoke.sh
 

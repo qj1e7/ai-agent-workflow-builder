@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Boots our n8n image twice, with the guards deploy/compose.yaml sets, and checks what n8n allows:
-# - as deployed now, with no allow list: all eight of our blocks load, and Execute Command and
-#   Local File Trigger do not;
-# - with the allow list ENGINE-PLAN.md names for E11: exactly those types load, and a workflow
-#   with an HTTP Request node cannot be turned on.
-# Needs Docker and jq. Publishes no port. PACK_SMOKE_IMAGE names an image already built.
+# - with no allow list: all eight of our blocks load, and Execute Command and Local File Trigger
+#   do not;
+# - with the allow list scripts/nodes-include.sh makes from node_classes.json, as deployed:
+#   exactly those types load, a workflow with an HTTP Request node cannot be turned on, and the
+#   pin check finds every version and choice of every type n8n serves classed (ADR 0045).
+# Needs Docker, jq and uv. Publishes no port. PACK_SMOKE_IMAGE names an image already built.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -15,18 +16,23 @@ if [ -z "$image" ]; then
 fi
 
 ours=$(jq -c '[.nodes[].type]' n8n-node-pack/node-types.json)
-n8n_own='["n8n-nodes-base.scheduleTrigger","n8n-nodes-base.manualTrigger","n8n-nodes-base.errorTrigger","n8n-nodes-base.if","n8n-nodes-base.merge","n8n-nodes-base.noOp","n8n-nodes-base.stickyNote"]'
-allow_list=$(jq -cn --argjson a "$ours" --argjson b "$n8n_own" '$a + $b')
+allow_list=$(scripts/nodes-include.sh --print)
 never='["n8n-nodes-base.executeCommand","n8n-nodes-base.localFileTrigger"]'
+served=$(mktemp -d)
 
 # Each check runs in a subshell, so the containers are found by name, not kept in a variable.
-cleanup() { docker ps -aq --filter "name=^pack-smoke-$$-" | xargs docker rm -f >/dev/null 2>&1 || true; }
+cleanup() {
+  docker ps -aq --filter "name=^pack-smoke-$$-" | xargs docker rm -f >/dev/null 2>&1 || true
+  rm -rf "$served"
+}
 trap cleanup EXIT
 
 # Prints {"types": [the node types n8n serves to a signed-in owner], "turnOn": what n8n answered
-# when asked to turn on a workflow with an HTTP Request node}.
+# when asked to turn on a workflow with an HTTP Request node}, and copies what n8n serves at
+# /types/nodes.json to $served/<label>.json.
 check_n8n() {
-  local name="pack-smoke-$$-$1"
+  local label=$1
+  local name="pack-smoke-$$-$label"
   shift
   docker run --detach --name "$name" --env N8N_DIAGNOSTICS_ENABLED=false \
     --env N8N_VERSION_NOTIFICATIONS_ENABLED=false --env N8N_BLOCK_ENV_ACCESS_IN_NODE=true \
@@ -37,6 +43,7 @@ check_n8n() {
   done
   local out
   out=$(docker exec -i "$name" node --input-type=module - <<'JS'
+import { writeFileSync } from 'node:fs';
 const base = 'http://localhost:5678';
 const setup = await fetch(`${base}/rest/owner/setup`, {
   method: 'POST',
@@ -62,6 +69,7 @@ for (let attempt = 1; !types; attempt++) {
   const text = await res.text();
   try {
     types = JSON.parse(text);
+    writeFileSync('/tmp/served-types.json', text);
   } catch (error) {
     if (attempt === 10) throw error;
     await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -90,6 +98,7 @@ console.log(JSON.stringify({
 JS
   ) || { docker logs "$name" 2>&1 | tail -n 20 >&2; return 1; }
   docker logs "$name" 2>&1 | grep -iE 'error.*(load|node)|class could not be found' >&2 || true
+  docker cp "$name:/tmp/served-types.json" "$served/$label.json" >/dev/null
   echo "$out"
 }
 
@@ -126,6 +135,11 @@ if jq -e '.status == 400 and (.message | test("Unrecognized node type: n8n-nodes
   pass "with the allow list, n8n refuses to turn on a workflow with an HTTP Request node: $turn_on."
 else
   fail "with the allow list, turning on a workflow with an HTTP Request node answered $turn_on."
+fi
+if (cd platform-api && uv run --locked --quiet python -m platform_api.pin_check "$served/on.json"); then
+  pass "with the allow list, every version and choice of every type n8n serves is classed."
+else
+  fail "the pin check found what n8n serves and node_classes.json disagree, as above."
 fi
 
 exit "$status"
