@@ -165,6 +165,14 @@ describe('the set-up card after Set up', () => {
     expect(buttons(html)).toEqual(['Test again'])
   })
 
+  it('never waits on a test run it can’t start: with the set-up gone from this visit, it says the draft is saved and opens it', () => {
+    const html = building(null, { setUp: null })
+    expect(pill(html)).toBe('Draft')
+    expect(text(html)).toContain('Saved as a draft. Open it to test it and turn it on.')
+    expect(text(html)).not.toContain('Test run…')
+    expect(buttons(html)).toEqual(['Open LangGraph release check'])
+  })
+
   it('says On only once the platform says the workflow is on, with its first run', () => {
     const ready = building(passed, { useCase: DRAFT }, { turning: true })
     expect(pill(ready), 'pressing Turn it on is not On').toBe('Ready')

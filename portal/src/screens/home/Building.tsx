@@ -167,11 +167,21 @@ export function BuildingCard({ useCaseId, title, parts, newAgents, draftKept, te
   const line = buildLine(stations, log, shown, test !== null && test.seq > 0, stage.kind === 'on')
   const notes = notesOf(replay.lines)
   const result = test ? testStatus(test) : null
-  const pill = draftPill(stage)
 
   let status: ReactNode
   let actions: ReactNode
-  switch (stage.kind) {
+  const lost = setUp === undefined && stage.kind !== 'on'
+  const pill = lost ? draftPill({ kind: 'stopped' }) : draftPill(stage)
+  switch (lost ? 'lost' : stage.kind) {
+    case 'lost':
+      // The set-up's answer lives only as long as this visit. Without it no test run can start here, so the card says where to carry on.
+      status = 'Saved as a draft. Open it to test it and turn it on.'
+      actions = (
+        <OpenButton item={{ kind: 'workflow', id: useCaseId }} to={`/workflows/${encodeURIComponent(useCaseId)}`}>
+          Open<span className="visually-hidden"> {title}</span>
+        </OpenButton>
+      )
+      break
     case 'laying_out':
       status = replay.lines.findLast((one) => one.kind === 'status')?.text ?? 'Starting…'
       break
