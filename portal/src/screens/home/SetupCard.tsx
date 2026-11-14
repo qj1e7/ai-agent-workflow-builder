@@ -52,7 +52,7 @@ import {
 } from './card'
 import { DiscardDialog } from '../workflows/Sections'
 import { CardMemoryContext } from './cardMemory'
-import { ASKED_NEXT, type Mark } from './parts'
+import { ASKED_NEXT, partMark, type Mark } from './parts'
 import { crossParts, PartsList, type Part } from './PartsList'
 import { CardLive, useMainButton } from './primary'
 import styles from './SetupCard.module.css'
@@ -213,16 +213,10 @@ function WhenPicker({ when, problems, focus, onWhen, onDone }: { when: When; pro
   )
 }
 
-/** Of a part's marks, the one it shows: the question asked now, else a part it can't do, else a question for later, else a tick. */
-function markOf(marks: readonly Mark[]): Mark {
-  for (const mark of ['ask', 'no', 'later'] as const) if (marks.includes(mark)) return mark
-  return 'ok'
-}
-
 /** One of the card's three parts, from the pieces that belong to it. A part with nothing in it is left off. */
 function keyed(key: PartKey, pieces: readonly { readonly mark: Mark; readonly body: ReactNode }[]): Part[] {
   if (pieces.length === 0) return []
-  return [{ key, mark: markOf(pieces.map((piece) => piece.mark)), label: key, body: pieces.map((piece, at) => <span key={at} className={styles['piece']}>{piece.body}</span>) }]
+  return [{ key, mark: partMark(pieces.map((piece) => piece.mark)), label: key, body: pieces.map((piece, at) => <span key={at} className={styles['piece']}>{piece.body}</span>) }]
 }
 
 /** The parts once Set up is pressed: what it watches, when and what it does then, as words, each a tick. */

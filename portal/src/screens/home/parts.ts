@@ -7,6 +7,12 @@ export type Mark = 'ok' | 'no' | 'ask' | 'later'
 
 export const MARK_WORDS: Readonly<Record<Mark, string>> = { ok: 'Will do', no: 'Can’t do', ask: 'Question', later: 'Question for later' }
 
+/** The mark of one of the set-up card's parts, Watch, When or Then, from what it holds: the question asked now, else a part it can't do, else a question for later, else a tick. */
+export function partMark(marks: readonly Mark[]): Mark {
+  for (const mark of ['ask', 'no', 'later'] as const) if (marks.includes(mark)) return mark
+  return 'ok'
+}
+
 export const ASKED_NEXT = 'Asked next'
 
 export const quote = (text: string): string => `“${text}”`
