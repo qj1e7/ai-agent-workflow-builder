@@ -1,0 +1,37 @@
+               
+               
+┌─────────────┐
+│ Scan Status │
+└─────────────┘
+  Scanning 987 files tracked by git with 314 Code rules:
+                                                                                                                        
+  Language      Rules   Files          Origin      Rules                                                                
+ ─────────────────────────────        ───────────────────                                                               
+  ts               74     324          Community     314                                                                
+  python          151     210                                                                                           
+  terraform        63      43                                                                                           
+  <multilang>       7      33                                                                                           
+  yaml             12      11                                                                                           
+  js               68      10                                                                                           
+  dockerfile        7       8                                                                                           
+                                                                                                                        
+                
+                
+┌──────────────┐
+│ Scan Summary │
+└──────────────┘
+✅ Scan completed successfully.
+ • Findings: 0 (0 blocking)
+ • Rules run: 313
+ • Targets scanned: 625
+ • Parsed lines: ~99.9%
+ • Scan skipped: 
+   ◦ Matching --exclude patterns: 1074
+   ◦ Files matching .semgrepignore patterns: 154
+ • Scan was limited to files tracked by git
+ • For a detailed list of skipped files and lines, run semgrep with the --verbose flag
+Ran 313 rules on 625 files: 0 findings.
+(need more rules? `semgrep login` for additional free Semgrep Registry rules)
+
+
+A new version of Semgrep is available. See https://semgrep.dev/docs/upgrading

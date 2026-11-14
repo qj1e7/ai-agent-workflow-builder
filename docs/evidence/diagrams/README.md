@@ -5,6 +5,8 @@
 **Command.** `scripts/render-diagrams.sh`. It printed `checked 17 diagrams, 21 event kinds, 31 tables and 8 jobs` and `PASS`.
 **Tool.** Mermaid CLI 11.17.1, image `minlag/mermaid-cli:11.17.1@sha256:7b18341ab7398a0cfd290fdbf066243151c0adb4cbf5b81d8cf074f82019ec6f` (published 24 Sep 2026).
 
+**14 Nov 2026: the sources are newer than these PNGs.** On 14 Nov the Mermaid sources were brought up to `main` at `a7ba7673`: the chat-first Portal, n8n as the engine with our node pack, the write gateway, Ask for a yes held in n8n, Tell, the Confluence reader, 13 new tables, the `n8n-node-pack` CI job, and a new logical architecture view. `scripts/render-diagrams.sh --check-only` printed `checked 18 diagrams, 29 event kinds, 44 tables and 9 jobs` and `PASS`. The PNGs were not rendered again, because the render needs Docker, and this update was made without Docker. So the PNGs below still show the app of 31 Oct, and the new Mermaid has not been parsed by Mermaid yet. Before the slides, run `scripts/render-diagrams.sh` on a machine with Docker. It writes new PNGs named after the new headings, and the table below needs the new names.
+
 The source of every diagram is a Mermaid block in [the design diagrams page](../../design/diagrams.md). GitHub renders those blocks directly. These PNGs are copies for the progress report and the slides. The 22 Oct diagrams of the old app are in git history, at commit `8ee417d` and before.
 
 | File | Diagram |
