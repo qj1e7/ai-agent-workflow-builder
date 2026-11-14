@@ -12,6 +12,7 @@ from platform_api.builder.planner_facts import PlannerFactsReader
 from platform_api.builder.watchlist import OnN8n
 from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
+from platform_api.orchestration import self_test
 from platform_api.orchestration.agents import HttpAgentRuntime
 from platform_api.orchestration.confluence_rest import (
     CONFLUENCE_PAGE,
@@ -59,7 +60,9 @@ from platform_api.orchestration.n8n_calls import (
     N8nReads,
     NodeCatalog,
     NodeOption,
+    PlatformWorkflow,
     ReadSources,
+    TryLater,
     WriteEntry,
 )
 from platform_api.orchestration.n8n_starts import N8nStarts
@@ -179,8 +182,11 @@ class NoN8nReads:
     async def execution(self, execution_id: N8nExecutionId) -> ExecutionFacts | None:
         return None
 
-    async def error_workflow_id(self) -> str | None:
-        return None
+    async def platform_workflows(self) -> dict[str, PlatformWorkflow]:
+        return {}
+
+    async def in_place(self, workflow: PlatformWorkflow) -> bool | TryLater:
+        return False
 
     async def ended(self, execution_id: N8nExecutionId) -> Ended | None:
         return None
@@ -490,6 +496,7 @@ class Runner:
         self._tasks = [
             asyncio.create_task(self._services.orchestrator.run_forever(self._stop)),
             asyncio.create_task(self._services.node_calls.sweep_forever(self._stop)),
+            asyncio.create_task(self_test.watch_forever(self._services.db, self._stop)),
         ]
         if (sweep := self._services.builder.sweep) is not None:
             self._tasks.append(asyncio.create_task(sweep.sweep_forever(self._stop)))

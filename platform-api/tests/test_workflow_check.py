@@ -16,6 +16,13 @@ from platform_api.orchestration import (
     add_yes,
     grade,
 )
+from platform_api.orchestration.workflow_check import ERROR_WORKFLOW as ERROR_WORKFLOW_NAME
+from platform_api.orchestration.workflow_check import (
+    PLATFORM_SHAPES,
+    PLATFORM_WORKFLOWS_DIR,
+    SELF_TEST,
+    check_platform,
+)
 from tests.support import FIXTURES
 
 GOLDEN = Path(__file__).parent / "golden" / "n8n"
@@ -284,3 +291,74 @@ def test_the_checker_never_changes_the_document_it_is_given() -> None:
     add_yes(document, "uc")
     grade(document, ERROR_WORKFLOW)
     assert document == before
+
+
+def platform(name: str) -> Doc:
+    """One of the platform's own workflows as bootstrap loads it, failures sent to the error
+    workflow."""
+    document: Doc = json.loads((PLATFORM_WORKFLOWS_DIR / f"{name}.n8n.json").read_text())
+    if name == SELF_TEST:
+        document["settings"]["errorWorkflow"] = ERROR_WORKFLOW
+    return document
+
+
+def test_the_platform_s_own_workflows_as_committed_are_in_shape() -> None:
+    assert set(PLATFORM_SHAPES) == {"run_failure_reporter", "self_test_failure"}
+    for name in PLATFORM_SHAPES:
+        assert check_platform(platform(name), ERROR_WORKFLOW) == (), name
+
+
+def test_the_self_test_runs_once_a_day_at_six_singapore_time() -> None:
+    self_test = platform(SELF_TEST)
+    [trigger] = [n for n in self_test["nodes"] if n["type"] == "n8n-nodes-base.scheduleTrigger"]
+    assert trigger["parameters"]["rule"]["interval"] == [
+        {"field": "days", "triggerAtHour": 6, "triggerAtMinute": 0}
+    ]
+    assert self_test["settings"]["timezone"] == "Asia/Singapore"
+
+
+def http_reporter(document: Doc) -> None:
+    node(document, "Report a failure")["type"] = "n8n-nodes-base.httpRequest"
+
+
+def second_report(document: Doc) -> None:
+    second = {**node(document, "Report a failure"), "id": "again", "name": "Report again"}
+    document["nodes"].append(second)
+    link(document, "Report a failure", "Report again")
+
+
+def unlinked(document: Doc) -> None:
+    document["connections"] = {}
+
+
+@pytest.mark.parametrize(
+    ("name", "change", "says"),
+    [
+        (ERROR_WORKFLOW_NAME, lambda d: d["settings"].pop("callerPolicy"), "callerPolicy"),
+        (ERROR_WORKFLOW_NAME, http_reporter, "not on"),
+        (ERROR_WORKFLOW_NAME, second_report, "nothing else"),
+        (ERROR_WORKFLOW_NAME, unlinked, "nothing else"),
+        (SELF_TEST, lambda d: d["settings"].pop("errorWorkflow"), "error workflow"),
+        (SELF_TEST, lambda d: d["settings"].update(timezone="UTC"), "Singapore"),
+        (SELF_TEST, lambda d: without(d, "Fail on purpose"), "nothing else"),
+        (SELF_TEST, lambda d: d.update(name="something else"), "not one of the platform"),
+    ],
+    ids=[
+        "no-caller-policy",
+        "http-node",
+        "a-second-block",
+        "not-linked",
+        "no-error-workflow",
+        "another-time-zone",
+        "no-read",
+        "unknown-name",
+    ],
+)
+def test_a_platform_workflow_out_of_shape_is_named(
+    name: str, change: Callable[[Doc], object], says: str
+) -> None:
+    document = platform(name)
+    change(document)
+    findings = check_platform(document, ERROR_WORKFLOW)
+    assert findings and all(f.grade == "needs_a_fix" for f in findings)
+    assert any(says in f.text for f in findings), [f.text for f in findings]
