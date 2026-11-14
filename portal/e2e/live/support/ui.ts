@@ -65,7 +65,7 @@ export async function expectReadOnly(page: Page, what: string): Promise<void> {
 }
 
 /** The reasons Decline opens, before anything is declined (spec 10.4). */
-export const declineReasons = (scope: Page | Locator): Locator => scope.getByRole('group', { name: /^Why are you declining\? Optional\./ })
+export const declineReasons = (scope: Page | Locator): Locator => scope.getByRole('group', { name: /^Why\? Optional\./ })
 
 /** Decline asks why first. This picks the reason when there is one, then declines. */
 export async function decline(scope: Page | Locator, reason?: string): Promise<void> {

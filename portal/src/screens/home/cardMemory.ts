@@ -42,14 +42,22 @@ export interface CardMemory extends Slot<CardKept> {
   readonly beside: Slot<true>
   /** The run a run card follows, so it keeps following it after a retry takes the run off the stopped list. */
   readonly run: Slot<string>
+  /** The requests approval cards follow, so each keeps its record after a decision takes it off the waiting list. */
+  readonly approvals: Slot<readonly RequestRef[]>
+}
+
+/** One request a card follows: the run it opens as, and its approval, or null until the run names it. */
+export interface RequestRef {
+  readonly approvalId: string | null
+  readonly runId: string
 }
 
 export function newCardMemory(): CardMemory {
-  return { ...slot<CardKept>(), edit: slot<EditKept>(), beside: slot<true>(), run: slot<string>() }
+  return { ...slot<CardKept>(), edit: slot<EditKept>(), beside: slot<true>(), run: slot<string>(), approvals: slot<readonly RequestRef[]>() }
 }
 
 const forgets = <T,>(): Slot<T> => ({ kept: () => undefined, keep: () => undefined })
 
-export const NO_MEMORY: CardMemory = { ...forgets<CardKept>(), edit: forgets<EditKept>(), beside: forgets<true>(), run: forgets<string>() }
+export const NO_MEMORY: CardMemory = { ...forgets<CardKept>(), edit: forgets<EditKept>(), beside: forgets<true>(), run: forgets<string>(), approvals: forgets<readonly RequestRef[]>() }
 
 export const CardMemoryContext = createContext<CardMemory>(NO_MEMORY)
