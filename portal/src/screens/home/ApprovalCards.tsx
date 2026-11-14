@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from 'react'
 import { useApproval, useRun } from '../../api/queries'
-import type { ApprovalItem, RunView } from '../../api/types'
+import type { RunView } from '../../api/types'
 import { Card } from '../../ui/Card'
 import { cx } from '../../ui/cx'
 import { IconCheck } from '../../ui/icons'
@@ -28,22 +28,36 @@ function factsOfRun(run: RunView): StageFacts {
   return run.state === 'succeeded' ? { ...facts, refs: run.written.map((write) => write.external_reference).filter((ref) => ref !== '') } : facts
 }
 
+const READING = (failed: boolean) => (
+  <p className="muted" role="status">
+    {failed ? 'I couldn’t read that request just now.' : 'Reading the request'}
+  </p>
+)
+
+interface CardProps {
+  readonly request: RequestRef
+  readonly main: boolean
+  readonly nameOf: NameOf
+}
+
+/** A request waiting for someone else's yes is known by its run, which names its approval. */
+function ApprovalCard({ request, main, nameOf }: CardProps) {
+  const run = useRun(request.approvalId === null ? request.runId : '')
+  if (request.approvalId !== null) return <RequestCard request={{ ...request, approvalId: request.approvalId }} main={main} nameOf={nameOf} />
+  const approvalId = run.data && 'approval' in run.data ? run.data.approval.approval_id : null
+  return approvalId === null ? READING(run.isError) : <RequestCard request={{ ...request, approvalId }} main={main} nameOf={nameOf} />
+}
+
 /**
  * One request as the sketch's approval card: what it writes, its pill, the first change, and Review and decide or Open. It follows
  * the request, so after a decision it keeps its place and says what happened at the left of its foot.
  */
-function ApprovalCard({ request, main, nameOf }: { request: RequestRef; main: boolean; nameOf: NameOf }) {
+function RequestCard({ request, main, nameOf }: { request: RequestRef & { readonly approvalId: string }; main: boolean; nameOf: NameOf }) {
   const approval = useApproval(request.approvalId)
   const shown = approval.data
   const standing = shown ? standingOf(shown.steps) : null
   const run = useRun(request.runId, { poll: standing?.is === 'approved' ? WRITING_POLL_MS : false })
-  if (!shown || !standing) {
-    return (
-      <p className="muted" role="status">
-        {approval.isError ? 'I couldn’t read that request just now.' : 'Reading the request'}
-      </p>
-    )
-  }
+  if (!shown || !standing) return READING(approval.isError)
   const canDecide = shown.you_can_decide && standing.is === 'open'
   const pill = approvalPill(standing, canDecide)
   const done = cardStatusWords(standing, run.data ? factsOfRun(run.data) : null)
@@ -80,19 +94,19 @@ function ApprovalCard({ request, main, nameOf }: { request: RequestRef; main: bo
 }
 
 interface ApprovalCardsProps {
-  /** The requests waiting for this person's yes, newest first, from the same list as Needs you. */
-  readonly items: readonly ApprovalItem[]
+  /** The requests, newest first: those waiting for this person's yes from the same list as Needs you, or their own that wait for another's. */
+  readonly items: readonly RequestRef[]
   readonly total: number
   readonly nameOf: NameOf
 }
 
 /**
- * The requests waiting for this person's yes as cards, three at most, then how many more, which opens Needs you. The answer keeps
- * the requests it first showed, so a card stays after its decision. With one, it opens beside the chat on a wide screen.
+ * The requests as cards, three at most, then how many more, which opens Needs you. The answer keeps the requests it first showed,
+ * so a card stays after its decision. With one, it opens beside the chat on a wide screen.
  */
 export function ApprovalCards({ items, total, nameOf }: ApprovalCardsProps) {
   const memory = useContext(CardMemoryContext).approvals
-  const [pinned] = useState<readonly RequestRef[]>(() => memory.kept() ?? items.slice(0, REQUESTS_SHOWN).map((item) => ({ approvalId: item.approval_id, runId: item.run_id })))
+  const [pinned] = useState<readonly RequestRef[]>(() => memory.kept() ?? items.slice(0, REQUESTS_SHOWN))
   useEffect(() => memory.keep(pinned), [memory, pinned])
   const [only] = pinned
   useShowBesideOnWide(pinned.length === 1 && only ? approvalItem(only.runId) : null)
@@ -101,7 +115,7 @@ export function ApprovalCards({ items, total, nameOf }: ApprovalCardsProps) {
   return (
     <>
       {pinned.map((request, index) => (
-        <ApprovalCard key={request.approvalId} request={request} main={main && index === 0} nameOf={nameOf} />
+        <ApprovalCard key={request.runId} request={request} main={main && index === 0} nameOf={nameOf} />
       ))}
       {left > 0 ? (
         <p className={styles['more']}>

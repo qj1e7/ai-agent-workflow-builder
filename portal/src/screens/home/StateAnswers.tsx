@@ -3,7 +3,7 @@ import { useDecisions, useHome } from '../../api/homeQueries'
 import { useDisplayName } from '../../api/people'
 import { useMe, useUseCases, useWatchlist } from '../../api/queries'
 import { usePeopleList } from '../../api/settingsQueries'
-import type { ApprovalItem, DecidedReply, HomeOut } from '../../api/types'
+import type { DecidedReply, HomeOut } from '../../api/types'
 import { operatorsSay } from '../../shell/OperatorsNote'
 import { ButtonLink } from '../../ui/Button'
 import { Card } from '../../ui/Card'
@@ -15,7 +15,7 @@ import { ideasSay, needsSay, startingPoints, workflowsSay } from './answers'
 import { useAsker } from './asker'
 import { leadWords } from '../run/approvalWords'
 import { ApprovalCards } from './ApprovalCards'
-import { CardMemoryContext } from './cardMemory'
+import { CardMemoryContext, type RequestRef } from './cardMemory'
 import { decidedSay } from './decided'
 import { approvalsOf, approverLine, needsOf, needsTotal, type Needs } from './home'
 import { NeedRows } from './NeedsSection'
@@ -116,7 +116,7 @@ export function NeedsMeAnswer({ now, say }: { now: Date; say: Say }) {
   const needs = useMemo(() => (home.data ? needsOf(home.data) : null), [home.data])
   const shown = useShownRequests()
   const requests = home.data && (shown !== undefined || onlyRequests(home.data, operator)) ? approvalsOf(home.data) : null
-  const sentence = home.data ? (requests ? leadWords(shown?.length ?? requests.shown.length) : needsSentence(home.data, operator)) : null
+  const sentence = home.data ? (requests ? leadWords(shown?.length ?? requests.shown.length, true) : needsSentence(home.data, operator)) : null
   useSaidOnce(sentence, say)
   if (requests && sentence !== null) {
     return (
@@ -174,7 +174,10 @@ export function BehindAnswer({ now, say }: { now: Date; say: Say }) {
 export const DECIDE_SAY = 'I can’t approve or decline for you. Open the request to see exactly what it will write, and decide there.'
 export const NOTHING_TO_DECIDE = 'Nothing is waiting for your yes, so there’s nothing to decide.'
 
-const requestItems = (needs: Needs): ApprovalItem[] => needs.shown.flatMap((need) => (need.kind === 'approval' ? [need.item] : []))
+const requestItems = (needs: Needs): RequestRef[] => needs.shown.flatMap((need) => (need.kind === 'approval' ? [{ approvalId: need.item.approval_id, runId: need.item.run_id }] : []))
+
+/** The person's own requests that wait for someone else's yes, which the sketch shows as cards too. */
+const theirsWaiting = (home: HomeOut): RequestRef[] => home.waiting_on_others.map((item) => ({ approvalId: null, runId: item.run_id }))
 
 /**
  * The requests waiting for this person’s yes, as the sketch's approval cards, the newest few and how many more. It is what an
@@ -189,13 +192,26 @@ export function RequestsToOpen() {
   return <ApprovalCards items={requestItems(needs)} total={needs.total} nameOf={nameOf} />
 }
 
-/** An approve or decline asked in the chat: nobody decides there, so the answer is the requests waiting for this person’s yes, to open. */
+/**
+ * An approve or decline asked in the chat: nobody decides there, so the answer is the requests waiting for this person’s yes, to
+ * open. With none, their own requests that wait for another Approver's yes, as the sketch shows Alice hers.
+ */
 export function DecideAnswer({ say }: { say: Say }) {
   const home = useHome()
+  const nameOf = useDisplayName()
   const total = home.data?.approvals_total
   const shown = useShownRequests()
-  const sentence = total === undefined ? null : total > 0 || shown !== undefined ? DECIDE_SAY : NOTHING_TO_DECIDE
+  const theirs = shown === undefined ? total === 0 && (home.data?.waiting_on_others_total ?? 0) > 0 : shown.length > 0 && shown.every((request) => request.approvalId === null)
+  const sentence = total === undefined ? null : theirs ? leadWords(shown?.length ?? home.data?.waiting_on_others.length ?? 0, false) : total > 0 || shown !== undefined ? DECIDE_SAY : NOTHING_TO_DECIDE
   useSaidOnce(sentence, say)
+  if (theirs && home.data && sentence !== null) {
+    return (
+      <>
+        <p>{sentence}</p>
+        <ApprovalCards items={theirsWaiting(home.data)} total={home.data.waiting_on_others_total} nameOf={nameOf} />
+      </>
+    )
+  }
   if (sentence === null) {
     return (
       <p className="muted" role="status">

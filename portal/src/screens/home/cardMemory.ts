@@ -46,9 +46,9 @@ export interface CardMemory extends Slot<CardKept> {
   readonly approvals: Slot<readonly RequestRef[]>
 }
 
-/** One request a card follows: the approval, and the run it opens as. */
+/** One request a card follows: the run it opens as, and its approval, or null until the run names it. */
 export interface RequestRef {
-  readonly approvalId: string
+  readonly approvalId: string | null
   readonly runId: string
 }
 
