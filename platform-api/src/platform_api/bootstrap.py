@@ -12,7 +12,12 @@ from psycopg.types.json import Jsonb
 
 from platform_api.auth import ConfigError
 from platform_api.migrations import upgrade_all
-from platform_api.orchestration.n8n import PLATFORM_API_KEY_LABEL, N8nClient, N8nError
+from platform_api.orchestration.n8n import (
+    PLATFORM_API_KEY_LABEL,
+    N8nClient,
+    N8nError,
+    OwnerOutcome,
+)
 from platform_api.orchestration.workflows import (
     Finding,
     LiveState,
@@ -121,6 +126,8 @@ def load_into_n8n(
         say("n8n is healthy")
         owner = client.ensure_owner(settings.n8n_owner_email, settings.n8n_owner_password)
         say(f"owner {settings.n8n_owner_email}: {owner.value}")
+        if owner is OwnerOutcome.CREATED:
+            ask_for_restore(settings.owner_database_url, say)
         removed = client.fresh_api_key(API_KEY_LABEL)
         say(f"api key '{API_KEY_LABEL}': created, {removed} older removed")
         removed = client.remove_api_keys(PLATFORM_API_KEY_LABEL)
@@ -215,6 +222,18 @@ def _count_if_table_exists(
         return 0
     row = conn.execute(f"SELECT count(*) FROM {table} WHERE {where}", (value,)).fetchone()
     return 0 if row is None else int(row[0])
+
+
+def ask_for_restore(owner_url: str, say: Say) -> None:
+    """n8n had no owner, so it starts empty: whatever workflows it held before are lost, and
+    platform-api saves each one again from the version it kept (Restore to n8n) as it starts."""
+    with psycopg.connect(owner_url) as conn:
+        conn.execute(
+            "INSERT INTO orchestration.engine_status (id, loaded_at, ready, detail, workflows,"
+            " restore_pending) VALUES (1, now(), false, 'n8n was set up again', '[]', true)"
+            " ON CONFLICT (id) DO UPDATE SET restore_pending = true"
+        )
+    say("n8n was empty: platform-api restores the workflows it kept as it starts")
 
 
 def previous_hashes(owner_url: str) -> dict[str, str]:

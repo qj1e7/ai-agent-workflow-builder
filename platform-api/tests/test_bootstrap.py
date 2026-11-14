@@ -32,6 +32,7 @@ from tests.support import LOCAL_ENV, NOW, SPEC
 N8N = "http://n8n.test"
 TRUNK_HEADS = {"monitoring": "0001", "orchestration": "0004", "builder": "0003"}
 READY = (True, "all workflows loaded, active and linted")
+OWNER_EXISTS = "Instance owner already setup"
 
 
 def env_for(owner_url: str) -> dict[str, str]:
@@ -165,7 +166,8 @@ def test_old_release_data_stops_bootstrap_before_any_migration_or_n8n_and_delete
 
 
 class FakeN8n:
-    def __init__(self, existing: list[str]) -> None:
+    def __init__(self, existing: list[str], owner_exists: bool = False) -> None:
+        self.owner_exists = owner_exists
         self.workflows: dict[str, dict[str, Any]] = {
             f"W{n}": {"id": f"W{n}", "name": name, "active": True, "nodes": [], "settings": {}}
             for n, name in enumerate(existing, start=1)
@@ -185,6 +187,8 @@ class FakeN8n:
         body: Any = json.loads(request.content) if request.content else None
         if path == "/healthz/readiness":
             return httpx.Response(200, json={"status": "ok"})
+        if path == "/rest/owner/setup" and self.owner_exists:
+            return httpx.Response(400, json={"message": OWNER_EXISTS})
         if path in ("/rest/owner/setup", "/rest/login"):
             return httpx.Response(200, json={"data": {"id": "1"}})
         if path == "/rest/api-keys" and method == "GET":
@@ -371,6 +375,30 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
     assert "workflow:delete" in n8n.scopes
     assert any(line.startswith(f"workflow {OLD_RUN_WORKFLOW} (W1): removed") for line in said)
     assert n8n.api_keys == [{"id": "k2", "label": "Alice's own key"}], "platform-api makes its own"
+
+
+def restore_pending(owner_url: str) -> bool:
+    with psycopg.connect(owner_url) as conn:
+        row = conn.execute("SELECT restore_pending FROM orchestration.engine_status").fetchone()
+    return row is not None and bool(row[0])
+
+
+def test_an_n8n_that_had_no_owner_asks_platform_api_to_restore_what_it_lost(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    truncate_all(postgres.owner)
+    serve(monkeypatch, FakeN8n([]))
+    assert main(env_for(postgres.owner)) == 0
+    assert restore_pending(postgres.owner)
+
+
+def test_an_n8n_that_kept_its_owner_asks_for_no_restore(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    truncate_all(postgres.owner)
+    serve(monkeypatch, FakeN8n([], owner_exists=True))
+    assert main(env_for(postgres.owner)) == 0
+    assert not restore_pending(postgres.owner)
 
 
 SECRET_ADDRESS = "wab-secret-host.internal.example"

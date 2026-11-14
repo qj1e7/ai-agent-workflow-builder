@@ -51,6 +51,8 @@ export function madeWords(version: Pick<VersionView, 'made' | 'changes' | 'rolle
       return version.rolled_back_to === null || version.rolled_back_to === undefined ? 'Rolled back' : `Rolled back to version ${version.rolled_back_to}`
     case 'yes_put_back':
       return 'Put “Ask for a yes” back'
+    case 'moved_to_n8n':
+      return 'Moved to its own n8n workflow'
     default:
       return null
   }

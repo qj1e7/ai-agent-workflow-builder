@@ -107,6 +107,11 @@ describe('a workflow page', () => {
     expect(mainOf(html)).toMatch(/data-life="on"[^>]*>.*On<\/span>/)
   })
 
+  it('says it moves to its own n8n workflow after the run that holds it back, and only then', () => {
+    expect(text(mainOf(render({ useCase: { ...AGENTS, moving_to_n8n: true } })))).toContain('Moving to n8n after this run.')
+    expect(text(mainOf(render()))).not.toContain('Moving to n8n')
+  })
+
   it('says what it does in one sentence built from what the platform stored, never a guessed time', () => {
     expect(sentenceOfHtml(render())).toBe('Check langchain-ai/langgraph on GitHub for a new release when an Operator presses Run now. If there is one, create an upgrade ticket in Jira project MOCK, after a yes.')
     const html = render({ useCase: { ...AGENTS, next_run_at: '2026-11-05T00:00:00Z', schedule: { day: 'every_day', at: '08:00', time_zone: 'Asia/Singapore', owner_name: 'Alice' } } })

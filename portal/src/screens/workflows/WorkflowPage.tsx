@@ -275,6 +275,11 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
         </p>
       )}
       <StatusBanner banner={banner} resuming={move.isPending} onResume={() => pauseOrResume('resume')} onRepublish={republish} republishing={rollback.isPending || addYes.isPending} />
+      {useCase.moving_to_n8n ? (
+        <p className="muted" role="status">
+          Moving to n8n after this run.
+        </p>
+      ) : null}
       {runNow.error ? (
         <p className={styles['problem']} role="alert">
           {words(runNow.error)}

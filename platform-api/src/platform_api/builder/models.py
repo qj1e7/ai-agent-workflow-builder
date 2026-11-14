@@ -268,6 +268,12 @@ class UseCaseView(WireModel):
         description="When the platform found its workflow deleted in n8n. It runs no more, and "
         "its runs and versions are kept (ENGINE-PLAN D7). Null while n8n has it.",
     )
+    moving_to_n8n: bool = Field(
+        default=False,
+        description="True while it still runs on the shared n8n workflow only because a run of "
+        "it has not ended. It moves to an n8n workflow of its own once that run ends "
+        "(ENGINE-PLAN 2.6).",
+    )
 
 
 class UseCaseList(WireModel):
@@ -505,7 +511,7 @@ class VersionChange(WireModel):
     schedule: ScheduleChangeView
 
 
-type VersionMade = Literal["published_in_n8n", "rolled_back", "yes_put_back"]
+type VersionMade = Literal["published_in_n8n", "rolled_back", "yes_put_back", "moved_to_n8n"]
 
 
 class VersionView(WireModel):
@@ -534,8 +540,9 @@ class VersionView(WireModel):
     made: VersionMade | None = Field(
         default=None,
         description="How a version that is not a change of when it runs came about: "
-        "published_in_n8n by a person in n8n's editor, rolled_back to an earlier version, or "
-        "yes_put_back, which put Ask for a yes back before each write. Null otherwise.",
+        "published_in_n8n by a person in n8n's editor, rolled_back to an earlier version, "
+        "yes_put_back, which put Ask for a yes back before each write, or moved_to_n8n, the "
+        "version that moved it from the shared n8n workflow to its own. Null otherwise.",
     )
     grade: Grade | None = Field(
         default=None,
