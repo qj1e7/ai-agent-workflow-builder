@@ -32,15 +32,15 @@ const decidedAs = (approval: ApprovalView, status: ApprovalStepView['status'], r
 const TWO: ApprovalView = {
   ...BOB,
   steps: [
-    { index: 0, label: 'First approver', status: 'open', decided_by: null, decided_at: null, reason: null },
-    { index: 1, label: 'Second approver', status: 'waiting', decided_by: null, decided_at: null, reason: null },
+    { index: 0, label: 'First approver', status: 'open', decided_by: null, decided_at: null, reason: null, post: 'sent' },
+    { index: 1, label: 'Second approver', status: 'waiting', decided_by: null, decided_at: null, reason: null, post: 'sent' },
   ],
 }
 const SECOND: ApprovalView = {
   ...BOB,
   steps: [
-    { index: 0, label: 'First approver', status: 'approved', decided_by: 'carol', decided_at: '2026-11-03T01:01:00Z', reason: null },
-    { index: 1, label: 'Second approver', status: 'open', decided_by: null, decided_at: null, reason: null },
+    { index: 0, label: 'First approver', status: 'approved', decided_by: 'carol', decided_at: '2026-11-03T01:01:00Z', reason: null, post: 'sent' },
+    { index: 1, label: 'Second approver', status: 'open', decided_by: null, decided_at: null, reason: null, post: 'sent' },
   ],
 }
 
@@ -150,6 +150,23 @@ describe('the approval, waiting for Bob’s yes', () => {
     expect(html).toMatch(/<button[^>]*aria-disabled="true"[^>]*aria-busy="true"[^>]*>[\s\S]*?Approve/)
     expect(html).toMatch(/<button[^>]*aria-disabled="true"[^>]*>Decline<\/button>/)
     expect(html).not.toMatch(/<button[^>]*\sdisabled=""/)
+  })
+
+  it('on the page says when the request went to Teams, in the sketch’s words, before why him', () => {
+    expect(text(draw(BOB, { page: true }))).toContain('Sent Today, 10:14, in Teams Why you No one can approve their own work.')
+  })
+
+  it('says nothing of a send before the request is tried, nor in the side panel', () => {
+    const waiting: ApprovalView = { ...BOB, steps: BOB.steps.map((step) => ({ ...step, post: 'waiting', sent_to: [], sent_at: null })) }
+    expect(text(draw(waiting, { page: true }))).not.toMatch(/\bSent\b|Teams/)
+    expect(text(draw(BOB))).not.toMatch(/\bSent\b/)
+  })
+
+  it('says on the page when the request couldn’t be sent to Teams, and still lets him decide', () => {
+    const failed: ApprovalView = { ...BOB, steps: BOB.steps.map((step) => ({ ...step, post: 'failed', sent_to: [], sent_at: null })) }
+    const html = draw(failed, { page: true })
+    expect(text(html)).toContain('Sent Couldn’t send to Teams Why you')
+    expect(buttons(html)).toContain('Approve')
   })
 
   it('says what went wrong as an alert', () => {

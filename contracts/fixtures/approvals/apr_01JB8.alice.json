@@ -24,7 +24,15 @@
       "status": "open",
       "decided_by": null,
       "decided_at": null,
-      "reason": null
+      "reason": null,
+      "post": "sent",
+      "sent_to": [
+        {
+          "id": "bob",
+          "display": "Bob"
+        }
+      ],
+      "sent_at": "2026-11-03T02:14:10.612000Z"
     }
   ],
   "you_can_decide": false,

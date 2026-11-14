@@ -512,7 +512,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
       ...(bobApproval as ApprovalView),
       you_can_decide: false,
       why_not: 'not_open',
-      steps: [{ index: 0, label: 'Team approver', status: 'declined', decided_by: 'bob', decided_at: '2026-11-13T01:04:00Z', reason: 'Not this week' }],
+      steps: [{ index: 0, label: 'Team approver', status: 'declined', decided_by: 'bob', decided_at: '2026-11-13T01:04:00Z', reason: 'Not this week', post: 'sent' }],
     }
     const after = { ...HOME, approvals: [], approvals_total: 0, confirmations: [] }
     for (const reply of [{ answer: 'needs_me', parts: [] }, decideReply] as PlannerReply[]) {
@@ -535,7 +535,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
       run_id: 'run_done',
       you_can_decide: false,
       why_not: 'not_open',
-      steps: [{ index: 0, label: 'Team approver', status: 'approved', decided_by: 'bob', decided_at: '2026-11-13T01:04:00Z', reason: null }],
+      steps: [{ index: 0, label: 'Team approver', status: 'approved', decided_by: 'bob', decided_at: '2026-11-13T01:04:00Z', reason: null, post: 'sent' }],
     }
     const stillOpen = { ...(bobApproval as ApprovalView), approval_id: 'apr_open', run_id: 'run_open' }
     const home = { ...HOME, approvals: [{ ...HOME.approvals[0]!, approval_id: 'apr_open', run_id: 'run_open' }], approvals_total: 1, confirmations: [] }

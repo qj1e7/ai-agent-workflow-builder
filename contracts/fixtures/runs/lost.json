@@ -76,7 +76,10 @@
           "status": "open",
           "decided_by": null,
           "decided_at": null,
-          "reason": null
+          "reason": null,
+          "post": "waiting",
+          "sent_to": [],
+          "sent_at": null
         }
       ],
       "link": "/approvals/apr_01JBL"
@@ -96,7 +99,16 @@
     "data": {
       "approval_id": "apr_01JBL",
       "channel": "CODESparks Ops",
-      "link": "/approvals/apr_01JBL"
+      "link": "/approvals/apr_01JBL",
+      "sent_to": [
+        [
+          {
+            "id": "bob",
+            "display": "Bob"
+          }
+        ]
+      ],
+      "sent_at": "2026-11-04T01:00:08.700000Z"
     }
   },
   {

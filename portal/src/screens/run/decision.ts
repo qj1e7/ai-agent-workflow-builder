@@ -34,11 +34,17 @@ export function standingOf(steps: readonly ApprovalStepView[]): Standing {
   return { is: 'approved', by, at: approved.at(-1)?.decided_at ?? null }
 }
 
-/** The steps with this person's recorded decision in, until the platform's next read shows it. */
+/**
+ * The steps with this person's recorded decision in, until the platform's next read shows it. A later step no longer names them,
+ * since no one says yes twice.
+ */
 export function stepsAfter(steps: readonly ApprovalStepView[], decision: DecisionView): readonly ApprovalStepView[] {
   if (steps.find((step) => step.index === decision.step)?.status !== 'open') return steps
   const status = decision.verdict === 'approve' ? ('approved' as const) : ('declined' as const)
-  return steps.map((step) => (step.index === decision.step ? { ...step, status, decided_by: decision.by, decided_at: decision.at, reason: decision.reason ?? null } : step))
+  return steps.map((step) => {
+    if (step.index === decision.step) return { ...step, status, decided_by: decision.by, decided_at: decision.at, reason: decision.reason ?? null }
+    return step.index > decision.step ? { ...step, sent_to: (step.sent_to ?? []).filter((person) => person.id !== decision.by) } : step
+  })
 }
 
 /**

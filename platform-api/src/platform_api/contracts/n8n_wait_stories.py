@@ -16,11 +16,11 @@ from platform_api.contracts.stories import (
     WORKFLOW,
     Story,
     Timeline,
+    announced,
     open_step,
 )
 from platform_api.monitoring.events import (
     ApprovalAnnounced,
-    ApprovalAnnouncedData,
     ApprovalDecided,
     ApprovalDecidedData,
     ApprovalRequested,
@@ -88,9 +88,7 @@ def asked_in_n8n(tl: Timeline) -> None:
         8.7,
         PLATFORM,
         f"The approval request was posted to the Teams channel {CHANNEL}.",
-        ApprovalAnnouncedData(
-            approval_id=tl.story.approval_id, channel=CHANNEL, link=tl.story.approval_link
-        ),
+        announced(tl, 8.7),
     )
 
 
