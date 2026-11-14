@@ -474,8 +474,7 @@ class NodeCalls:
         """Why a linked execution may not ask for a yes or write: its workflow was deleted, or
         the version it ran did not grade safe, as the sweep graded it."""
         ran = await self._book.ran(uow, execution)
-        if ran is None:
-            return WRITES_REFUSED
+        assert ran is not None, "only a linked execution asks or writes"
         workflow_id, version_id = ran
         if await self._workflows.deleted(workflow_id):
             return DELETED_BEFORE

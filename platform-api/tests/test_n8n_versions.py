@@ -4,6 +4,7 @@ guessed; only a safe version is put back in use, under the version compare; ever
 workflow a version puts back joins its runs; a delete cancels the open request, then archives
 and deletes in n8n; a workflow deleted in n8n keeps its runs and versions."""
 
+import asyncio
 from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -12,8 +13,9 @@ import pytest
 
 from platform_api.builder import Builder
 from platform_api.builder.layout import schedule_rule
+from platform_api.builder.sweep import ASKED_GAP, VersionsSweep
 from platform_api.builder.versions import changes_between, schedule_of
-from platform_api.orchestration import Publisher, RanVersion, Schedule
+from platform_api.orchestration import N8nWorkflow, Publisher, RanVersion, Schedule
 from platform_api.orchestration.schedule import DAYS
 from platform_api.shared import UseCaseId, UserId
 from tests.fake_n8n import FakeN8n
@@ -455,3 +457,42 @@ async def test_a_workflow_deleted_in_n8n_comes_back_whole_when_restored(v: Versi
     assert await v.sweep() == 0, "the sweep looks at it again, and n8n has it"
     v.n8n.publish_as(again, DAVE_IN_N8N, at_seven_thirty)
     assert await v.sweep() == 1
+
+
+async def test_a_look_the_portal_asks_for_is_made_once_every_few_seconds(v: Versions):
+    use_case_id, workflow_id = await made(v.own, on=True)
+    sweep = v.builder.sweep
+    assert sweep is not None
+    looked = f"GET /api/v1/workflows/{workflow_id}"
+
+    async def looks(ask: str | None) -> int:
+        before = v.n8n.calls.count(looked)
+        await sweep.asked(ask)
+        return v.n8n.calls.count(looked) - before
+
+    assert await looks(use_case_id) == 1
+    assert await looks(use_case_id) == 0, "asked again at once, for one workflow"
+    assert await looks(None) == 1, "a look at all is its own"
+    assert await looks(None) == 0
+    v.own.lab.h.advance(ASKED_GAP)
+    assert (await looks(use_case_id), await looks(None)) == (1, 1)
+
+
+class Stuck(Workflows):
+    """An n8n that never answers a look."""
+
+    async def look(self, workflow_id: str) -> N8nWorkflow | None:
+        await asyncio.sleep(60)
+        return await super().look(workflow_id)
+
+
+async def test_safety_a_slow_n8n_never_holds_a_workflow_from_undo_for_long(v: Versions):
+    use_case_id, _ = await on_and_changed(v)
+    stuck = VersionsSweep(
+        v.own.lab.h.db, Stuck(v.n8n, v.own.lab.h.db), v.builder.facts, v.accounts, None, 0.2
+    )
+    looking = asyncio.create_task(stuck.sweep())
+    await asyncio.sleep(0.05)
+    undone = await asyncio.wait_for(v.rollback("carol", use_case_id, 1, in_use=2), 5)
+    assert undone.status_code == 200, undone.text
+    assert await asyncio.wait_for(looking, 5) == [], "the slow look gave up, and changed nothing"

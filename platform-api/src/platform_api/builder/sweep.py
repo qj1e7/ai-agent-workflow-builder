@@ -35,7 +35,11 @@ log = logging.getLogger(__name__)
 
 SWEEP_EVERY = timedelta(seconds=60)
 ASKED_GAP = timedelta(seconds=5)
-"""A look the Portal asks for within this long of the last one is not made again."""
+"""A look the Portal asks for within this long of the last one, at the same workflow or at all,
+is not made again."""
+LOOK_SECONDS = 10.0
+"""How long a look at one workflow may hold its row. n8n slower than this is looked at again at
+the next sweep, so it never holds up Undo or a schedule save for long."""
 
 _OWN = """
     SELECT u.use_case_id, u.current_version, u.n8n_workflow_id, v.n8n_version_id
@@ -98,29 +102,32 @@ class VersionsSweep:
         graders: Graders,
         accounts: N8nAccounts,
         requests: OpenRequests | None,
+        look_seconds: float = LOOK_SECONDS,
     ) -> None:
         self._db = db
         self._n8n = n8n
         self._graders = graders
         self._accounts = accounts
         self._requests = requests
+        self._look_seconds = look_seconds
         self._lock = asyncio.Lock()
-        self._last: datetime | None = None
+        self._last: dict[str | None, datetime] = {}
+        """When each workflow, or all of them as None, was last looked at."""
 
     async def sweep(self, use_case_id: str | None = None) -> list[Found | Gone]:
         """One look at every workflow n8n carries, or at one."""
         async with self._lock:
-            self._last = self._db.clock()
+            self._last[use_case_id] = self._db.clock()
             return await self._sweep(use_case_id)
 
     async def asked(self, use_case_id: str | None = None) -> list[Found | Gone]:
         """A look the Portal asked for, made at most once every few seconds."""
         async with self._lock:
             now = self._db.clock()
-            if use_case_id is None and self._last is not None and now - self._last < ASKED_GAP:
+            last = self._last.get(use_case_id)
+            if last is not None and now - last < ASKED_GAP:
                 return []
-            if use_case_id is None:
-                self._last = now
+            self._last[use_case_id] = now
             return await self._sweep(use_case_id)
 
     async def sweep_forever(self, stop: asyncio.Event, every: timedelta = SWEEP_EVERY) -> None:
@@ -144,8 +151,9 @@ class VersionsSweep:
         found: list[Found | Gone] = []
         for row in rows:
             try:
-                seen = await self._look(row["use_case_id"], known, error_workflow)
-            except (N8nError, httpx.HTTPError) as error:
+                async with asyncio.timeout(self._look_seconds):
+                    seen = await self._look(row["use_case_id"], known, error_workflow)
+            except (N8nError, httpx.HTTPError, TimeoutError) as error:
                 log.warning("could not look at %s in n8n: %s", row["use_case_id"], error)
                 continue
             if seen is None:
