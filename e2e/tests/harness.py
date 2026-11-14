@@ -32,7 +32,9 @@ def fail(message: str) -> NoReturn:
     pytest.fail(message, pytrace=False)
 
 
-OLD_ENGINE_KINDS = frozenset({"leg_dispatched", "step_started", "step_finished"})
+OLD_ENGINE_KINDS = frozenset({"leg_dispatched", "step_started"})
+"""Only the shared run workflow dispatches legs and starts steps. Both engines finish the agents'
+step, which keeps what they found in the run's log."""
 
 
 def assert_story(events: list[Json], story: list[str]) -> None:

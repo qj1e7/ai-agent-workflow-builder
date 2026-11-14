@@ -17,7 +17,7 @@ from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from platform_api.db import Database, UnitOfWork
-from platform_api.monitoring import AgentEvent, user_actor
+from platform_api.monitoring import AgentEvent, PendingEvent, user_actor
 from platform_api.orchestration.agents import (
     AgentRejected,
     AgentRuntime,
@@ -122,12 +122,14 @@ from platform_api.orchestration.runs import (
     Rejected,
     RunState,
     Skipped,
+    StepName,
     Succeeded,
     Working,
     linked_events,
     run_created,
     skipped_events,
     state_name,
+    step_finished,
     working_on,
     write_done,
 )
@@ -968,6 +970,8 @@ class NodeCalls:
                     uow, call, admitted.run_id, answer, actions, call_id=admitted.call_id
                 ):
                     return BUSY
+                if earlier is None and (found := _found(call, state, answer, actions)) is not None:
+                    await self._activity.append(uow, admitted.run_id, [found])
                 return answer
 
     async def _ask(
@@ -1138,6 +1142,20 @@ class NodeCalls:
         await self._activity.append(uow, record.run_id, moved.events)
         await self._watch.run_moved(uow, record, moved.state)
         return saved
+
+
+def _found(
+    call: NodeCall, working: Working, answer: Answer, actions: Sequence[Mapping[str, Any]]
+) -> PendingEvent | None:
+    """What an Agent block's agents found, kept in the run's log, which outlives the request
+    that shows it only while it waits. The Portal reads it from the agents' step, as before."""
+    summary = answer.items[0].get("summary") if call.kind == "agent" and answer.items else None
+    if not isinstance(summary, str) or not summary:
+        return None
+    outcome = "proposed" if actions else "nothing_to_write"
+    return step_finished(
+        StepName.RUN_AGENTS, call.execution_id, working.try_number, outcome, summary
+    )
 
 
 def _read_watchlist(task: Task) -> Done | Refused:
