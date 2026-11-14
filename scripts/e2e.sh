@@ -63,8 +63,16 @@ if [ "$auth" = oidc ] && wanted api; then
   exit 2
 fi
 
+# The seeded stack's own logs, in the job's log, when it fails.
+show_seed_logs() {
+  [ -n "$seed" ] || return 0
+  echo "--- seed, bootstrap and platform-api logs ---" >&2
+  "${compose[@]}" logs --no-color --tail 200 seed bootstrap platform-api >&2 || true
+}
+
 if ! "${compose[@]}" up --build --wait --wait-timeout "${WAIT_TIMEOUT:-300}" >"$out/up.log" 2>&1; then
   tail -n 30 "$out/up.log" >&2
+  show_seed_logs
   echo "FAIL: the stack did not become healthy. See $out/up.log and $out/compose.log." >&2
   exit 2
 fi
@@ -78,6 +86,7 @@ if wanted api; then
   [ -z "${API_K:-}" ] || api_args=(-e "PYTEST_ADDOPTS=-k '$API_K'")
   "${compose[@]}" --profile e2e run --rm --build ${api_args[@]+"${api_args[@]}"} e2e 2>&1 | tee "$out/e2e.log"
   api_status="${PIPESTATUS[0]}"
+  [ "$api_status" -eq 0 ] || show_seed_logs
   set -e
 fi
 
