@@ -1502,7 +1502,9 @@ test.describe('bob asks the Planner questions only', () => {
     await panel(page).getByRole('button', { name: 'Close' }).click()
     const card = newest(page).locator('section', { has: page.locator(`[data-opens="approval:${runId}"]`) })
     await expect(card, 'his card stays and says what happened').toContainText(/Approved\. MOCK-\d+ created\./, { timeout: 20_000 })
-    await expect(newest(page).getByRole('button', { name: 'Review and decide' }), 'and no longer asks him to decide').toHaveCount(0)
+    // Other requests left waiting by earlier tests keep their own Review and decide, so only his card is checked.
+    await expect(card.getByRole('button', { name: 'Review and decide' }), 'and no longer asks him to decide').toHaveCount(0)
+    await expect(card.getByRole('button', { name: 'Open', exact: true }), 'it opens the request’s record instead').toBeVisible()
     await context.close()
   })
 })
