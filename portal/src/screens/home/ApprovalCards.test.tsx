@@ -30,16 +30,16 @@ function draw(kept: readonly RequestRef[], items: readonly RequestRef[], total: 
 }
 
 describe('her own requests that wait for someone else’s yes', () => {
-  it('keeps a decided card, but counts only what still waits, so Show more reaches the last one', () => {
+  it('keeps a decided card and counts it, so the count is the cards and Show more reaches the last one', () => {
     const html = draw([ref('A'), ref('B'), ref('C')], WAITING, 9, IDLE)
     expect([...html.matchAll(/data-run-card="([^"]+)"/g)].map((m) => m[1])).toEqual(['A', 'B', 'C'])
-    expect(html).toMatch(/role="status"[^>]*>Showing 2 of 9\.<\/p>/)
+    expect(html).toMatch(/role="status"[^>]*>Showing 3 of 10\.<\/p>/)
     expect(html).toContain('>Show more</button>')
   })
 
   it('still offers Show more when the one decided card would have hidden the last request', () => {
     const html = draw([ref('A'), ref('B'), ref('C')], [ref('B'), ref('C'), ref('D')], 3, IDLE)
-    expect(html).toMatch(/Showing 2 of 3\./)
+    expect(html).toMatch(/Showing 3 of 4\./)
     expect(html).toContain('>Show more</button>')
   })
 })

@@ -31,12 +31,46 @@ interface Paged<P> extends Pager {
   readonly pages: readonly P[] | undefined
 }
 
+type Paging = { readonly next: string | null }
+
+/** What Show more uses of a paged query. Each read answers with the query as it then stands. */
+interface PagesRead<P> {
+  readonly data?: { readonly pages: readonly P[] } | undefined
+  readonly isError: boolean
+}
+
+export interface PagedRead<P> {
+  readonly fetchNextPage: () => Promise<PagesRead<P>>
+  readonly refetch: () => Promise<PagesRead<P>>
+}
+
+const oneCount = <P,>(pages: readonly P[], counts: (page: P) => string): boolean => new Set(pages.map(counts)).size <= 1
+
+/**
+ * One press of Show more over `pages`, the pages drawn now. It reads the next page. When that page counts differently from the
+ * pages before it, a row came or went between the reads, so every page is read again from the first, and the rows and the count
+ * come from one read (principle 7). With no next page while the count says more, the pages are out of date: they are read again,
+ * then the page after them. True when a read failed.
+ */
+export async function readMore<P extends Paging>(pages: readonly P[], query: PagedRead<P>, counts: (page: P) => string): Promise<boolean> {
+  if (pages.at(-1)?.next) {
+    const read = await query.fetchNextPage()
+    if (read.isError) return true
+    if (oneCount(read.data?.pages ?? [], counts)) return false
+    return (await query.refetch()).isError
+  }
+  const again = await query.refetch()
+  if (again.isError) return true
+  return again.data?.pages.at(-1)?.next ? (await query.fetchNextPage()).isError : false
+}
+
 /**
  * A list Home answers the first page of, and a paged read goes on with. The first Show more takes Home's page as page one and
  * reads the next. From then on every refresh reads each page again in order, from the first, so a row that arrives while the
  * person reads is never skipped between pages. Under `['home', user]`, so whatever refreshes Home refreshes the pages too.
+ * `counts` names a page's totals, which must agree across the pages drawn.
  */
-function usePages<P extends { readonly next: string | null }>(list: string, first: P | undefined, read: (after: string | null) => Promise<P>): Paged<P> {
+function usePages<P extends Paging>(list: string, first: P | undefined, read: (after: string | null) => Promise<P>, counts: (page: P) => string): Paged<P> {
   const queryClient = useQueryClient()
   const key = [...homeKey(useCacheScope()), list] as const
   const query = useInfiniteQuery({
@@ -47,25 +81,20 @@ function usePages<P extends { readonly next: string | null }>(list: string, firs
     enabled: (cached) => cached.state.data !== undefined,
     refetchInterval: HOME_REFRESH_MS,
   })
-  const [rereading, setRereading] = useState(false)
-  const [rereadFailed, setRereadFailed] = useState(false)
+  const [reading, setReading] = useState(false)
+  const [failed, setFailed] = useState(false)
   function showMore() {
     const pages = query.data?.pages ?? (first ? [first] : null)
-    if (pages === null || query.isFetchingNextPage || rereading) return
+    if (pages === null || reading) return
     if (query.data === undefined) queryClient.setQueryData<InfiniteData<P, string | null>>(key, { pages: [...pages], pageParams: [null] })
-    setRereadFailed(false)
-    if (pages.at(-1)?.next) {
-      void query.fetchNextPage()
-      return
-    }
-    // With no next page while the count says more, the pages are out of date: read them all again.
-    setRereading(true)
-    void query.refetch().then((result) => {
-      setRereading(false)
-      setRereadFailed(result.isError)
+    setReading(true)
+    setFailed(false)
+    void readMore(pages, query, counts).then((readFailed) => {
+      setReading(false)
+      setFailed(readFailed)
     })
   }
-  return { pages: query.data?.pages, busy: query.isFetchingNextPage || rereading, failed: query.isFetchNextPageError || rereadFailed, showMore }
+  return { pages: query.data?.pages, busy: reading, failed, showMore }
 }
 
 const needsOfHome = (home: HomeOut): NeedsPage => ({
@@ -101,8 +130,11 @@ export function withNeedsPages(home: HomeOut, pages: readonly NeedsPage[] | unde
 /** Needs you's runs waiting for a yes, stopped runs, declined test runs and questions, as far as Show more has read them. */
 export function useNeedsPages(home: HomeOut | undefined): { readonly home: HomeOut | undefined } & Pager {
   const client = useApiClient()
-  const paged = usePages('needs', home ? needsOfHome(home) : undefined, async (after) =>
-    unwrap(await client.GET('/api/v1/home/needs', { params: { query: after === null ? {} : { after } } })),
+  const paged = usePages(
+    'needs',
+    home ? needsOfHome(home) : undefined,
+    async (after) => unwrap(await client.GET('/api/v1/home/needs', { params: { query: after === null ? {} : { after } } })),
+    (page) => [page.approvals_total, page.stopped_total, page.declined_total, page.questions_for_me_total].join(' '),
   )
   const merged = useMemo(() => (home ? withNeedsPages(home, paged.pages) : undefined), [home, paged.pages])
   return { home: merged, busy: paged.busy, failed: paged.failed, showMore: paged.showMore }
@@ -117,8 +149,11 @@ export interface Rows<T> extends Pager {
 export function useFollowingPages(home: HomeOut | undefined): Rows<FollowingUpItem> {
   const client = useApiClient()
   const first: FollowingUpPage | undefined = home && { following_up: home.following_up, following_up_total: home.following_up_total, next: home.following_up_next }
-  const paged = usePages('following-up', first, async (after) =>
-    unwrap(await client.GET('/api/v1/home/following-up', { params: { query: after === null ? {} : { after } } })),
+  const paged = usePages(
+    'following-up',
+    first,
+    async (after) => unwrap(await client.GET('/api/v1/home/following-up', { params: { query: after === null ? {} : { after } } })),
+    (page) => String(page.following_up_total),
   )
   const items = useMemo(() => (paged.pages ? paged.pages.flatMap((page) => page.following_up) : (home?.following_up ?? [])), [paged.pages, home?.following_up])
   const total = paged.pages?.at(-1)?.following_up_total ?? home?.following_up_total ?? 0
@@ -129,8 +164,11 @@ export function useFollowingPages(home: HomeOut | undefined): Rows<FollowingUpIt
 export function useWaitingPages(home: HomeOut | undefined): Rows<WaitingItem> {
   const client = useApiClient()
   const first: WaitingPage | undefined = home && { waiting_on_others: home.waiting_on_others, waiting_on_others_total: home.waiting_on_others_total, next: home.waiting_on_others_next }
-  const paged = usePages('waiting-on-others', first, async (after) =>
-    unwrap(await client.GET('/api/v1/home/waiting-on-others', { params: { query: after === null ? {} : { after } } })),
+  const paged = usePages(
+    'waiting-on-others',
+    first,
+    async (after) => unwrap(await client.GET('/api/v1/home/waiting-on-others', { params: { query: after === null ? {} : { after } } })),
+    (page) => String(page.waiting_on_others_total),
   )
   const items = useMemo(() => (paged.pages ? paged.pages.flatMap((page) => page.waiting_on_others) : (home?.waiting_on_others ?? [])), [paged.pages, home?.waiting_on_others])
   const total = paged.pages?.at(-1)?.waiting_on_others_total ?? home?.waiting_on_others_total ?? 0
