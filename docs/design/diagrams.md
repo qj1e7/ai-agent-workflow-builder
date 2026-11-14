@@ -12,7 +12,7 @@ The diagrams are drawn from these sources:
 - `deploy/compose.yaml`, `deploy/n8n/Dockerfile`, `infra/envs/dev/main.tf` and the workflows in `.github/workflows/`.
 - `contracts/openapi.json`, `contracts/activity-event.schema.json`, `contracts/agent-api.schema.json`, `n8n-node-pack/node-types.json` and the recorded runs in `contracts/fixtures/runs/`.
 
-To check every diagram, run `scripts/render-diagrams.sh`. It renders each Mermaid block with the Mermaid CLI in Docker and writes the PNGs to `docs/evidence/diagrams/`. It checks the routes and event kinds against the contracts, the ER diagrams' tables against the migrations, and the CI/CD diagram's jobs against the workflow files. It also fails on the old themed names, on the names the rebuild retired, and on long dashes. `docs/evidence/diagrams/README.md` says when the PNGs were last rendered.
+To check every diagram, run `scripts/render-diagrams.sh`. It renders each Mermaid block with the Mermaid CLI in Docker and writes the PNGs to `docs/evidence/diagrams/`. It checks the routes and event kinds against the contracts, the ER diagrams' tables against the migrations, and the CI/CD diagram's jobs against the workflow files. It also fails on the old themed names, on the names the rebuild retired, and on long dashes. `scripts/render-diagrams.sh --check-only` runs the checks without Docker and leaves the PNGs alone. `docs/evidence/diagrams/README.md` says when the PNGs were last rendered.
 
 "Use case" is the code's name for what people see in the app as a workflow (`GLOSSARY.md`). The diagrams use "workflow" for what people see, and "use case" for the code and the tables. "n8n workflow" always means the workflow inside n8n.
 
