@@ -771,10 +771,17 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
-  for (const phone of [false, true]) {
-    test(`Home keeps the sketch’s measures at ${phone ? '390' : '1440'} px: a 96 px face, a 60 px box, 36 px chips, and a page that ends in the window`, async ({ browser }) => {
+  // The sketch's measures up to a 1440 px window. Wider, Home grows as one block: 1.25 times at 1920 px and 1.4 times at 2560 px.
+  for (const { width, height, phone, face: faceSize, box: boxHeight, chip: chipHeight } of [
+    { width: 390, height: 844, phone: true, face: 96, box: 60, chip: 36 },
+    { width: 1440, height: 900, phone: false, face: 96, box: 60, chip: 36 },
+    { width: 1920, height: 1080, phone: false, face: 120, box: 75, chip: 45 },
+    { width: 2560, height: 1440, phone: false, face: 134, box: 84, chip: 50 },
+  ]) {
+    test(`Home at ${String(width)} px: a ${String(faceSize)} px face, a ${String(boxHeight)} px box, ${String(chipHeight)} px chips, the question on one line, and a page that ends in the window`, async ({ browser }) => {
       const context = await devContext(browser, 'alice', { phone })
       const page = await context.newPage()
+      await page.setViewportSize({ width, height })
       // Home with nothing to do, so the rows can't make the page longer than the window.
       await page.route('**/api/v1/home', async (route) => {
         const response = await route.fetch()
@@ -788,9 +795,11 @@ test.describe('with the AI model on', () => {
       const face = await main(page).locator('svg').first().boundingBox()
       const composer = await box(page).locator('xpath=..').boundingBox()
       const chip = await page.getByRole('group', { name: /^(Suggestions|Starting points)$/ }).getByRole('button').first().boundingBox()
-      expect(Math.round(face?.width ?? 0), 'the Planner’s face is 96 px').toBe(96)
-      expect(Math.round(composer?.height ?? 0), 'the box is 60 px tall before the first message').toBe(60)
-      expect(Math.round(chip?.height ?? 0), 'a chip is 36 px tall').toBe(36)
+      expect(Math.round(face?.width ?? 0), 'the Planner’s face').toBe(faceSize)
+      expect(Math.round(composer?.height ?? 0), 'the box before the first message').toBe(boxHeight)
+      expect(Math.round(chip?.height ?? 0), 'a chip').toBe(chipHeight)
+      const lines = await main(page).getByRole('heading', { level: 1 }).evaluate((h1: HTMLElement) => Math.round(h1.offsetHeight / parseFloat(getComputedStyle(h1).lineHeight)))
+      expect(lines, 'the question stays on one line').toBe(1)
       // At 900 px and narrower the practice stack's test controls sit under the page, so the check is that the page itself ends in the window.
       const mainBottom = await main(page).evaluate((element) => element.getBoundingClientRect().bottom)
       expect(mainBottom, 'the empty Home never makes the page scroll').toBeLessThanOrEqual((await page.evaluate(() => window.innerHeight)) + 1)
