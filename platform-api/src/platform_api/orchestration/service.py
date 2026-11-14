@@ -1638,6 +1638,9 @@ class Orchestrator:
             await self._lose(uow, record, approval_id, row.payload["decision"], why)
 
     async def _dispatch_failed(self, row: OutboxRow, now: datetime, error: str) -> None:
+        tried = row.attempt + 1
+        said = without_addresses(error)
+        log.warning("outbox %s for %s failed on try %d: %s", row.kind, row.run_id, tried, said)
         if row.kind == WAKE:
             await self._wake_failed(row, now, error)
             return

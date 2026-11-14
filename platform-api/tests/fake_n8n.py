@@ -55,6 +55,8 @@ class FakeN8n:
     """How n8n answers a retry: "stops" once the retry stopped, "slow" never in time, "slow
     refusal" never in time and with no retry made, or with "succeeded" when the execution needs
     no retry."""
+    scopes: dict[str, set[str]] = field(default_factory=dict[str, set[str]])
+    """Each key n8n made and its scopes. A key a test seeds holds every scope."""
     data_reads: list[str] = field(default_factory=list[str])
     """Each execution read with its data, which n8n sends in full."""
     on_run: RunHook | None = None
@@ -102,6 +104,7 @@ class FakeN8n:
                 key = f"key-{self.minted}"
                 self.keys.append(key)
                 self.key_requests.append(body)
+                self.scopes[key] = set(body.get("scopes", []))
                 return httpx.Response(200, json={"data": {"rawApiKey": key}})
             case "DELETE", ["api-keys", key_id]:
                 self.deleted_keys += 1
@@ -207,6 +210,9 @@ class FakeN8n:
                 workflow.update(activeVersionId=None, active=False)
                 return httpx.Response(200, json=workflow)
             case "POST", ["executions", execution_id, "retry"]:
+                key = request.headers.get("X-N8N-API-KEY", "")
+                if "execution:retry" not in self.scopes.get(key, {"execution:retry"}):
+                    return httpx.Response(403, json={"message": "Forbidden"})
                 self.retries.append(execution_id)
                 if self.retry_answer == "succeeded":
                     message = "The execution succeeded, so it cannot be retried."

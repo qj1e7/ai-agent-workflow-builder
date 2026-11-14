@@ -3,7 +3,6 @@ n8n 2.42.6's code and its `cron` library (ENGINE-PLAN 2.4, P7 Q12)."""
 
 import json
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -18,23 +17,23 @@ from platform_api.orchestration.n8n_schedule import (
     next_fire,
     next_run,
 )
+from tests.support import FIXTURES, REPO
 
-TABLE = json.loads(
-    (
-        Path(__file__).parents[2]
-        / "docs"
-        / "evidence"
-        / "prototypes"
-        / "p7-n8n-engine-facts"
-        / "cron_table.json"
-    ).read_text()
-)
+COPY = FIXTURES.parent / "n8n" / "cron_table.json"
+"""n8n's own answers, copied from P7's evidence into contracts/, which the test image has."""
+EVIDENCE = REPO / "docs" / "evidence" / "prototypes" / "p7-n8n-engine-facts" / "cron_table.json"
+TABLE = json.loads(COPY.read_text())
 ROWS: list[dict[str, Any]] = TABLE["rows"]
 SINGAPORE = ZoneInfo("Asia/Singapore")
 FRIDAY_0830 = datetime(2026, 11, 13, 8, 30, tzinfo=SINGAPORE)
 DAILY_8 = {"field": "days", "triggerAtHour": 8, "triggerAtMinute": 0}
 MONDAY_9 = {"field": "weeks", "triggerAtDay": [1], "triggerAtHour": 9, "triggerAtMinute": 0}
 EVERY_2_DAYS = {"field": "days", "daysInterval": 2, "triggerAtHour": 8, "triggerAtMinute": 0}
+
+
+@pytest.mark.skipif(not EVIDENCE.exists(), reason="the test image holds contracts/, not docs/")
+def test_the_table_is_p7_s_own_evidence_unchanged():
+    assert json.loads(EVIDENCE.read_text()) == TABLE
 
 
 def labelled(rows: list[dict[str, Any]]) -> Any:

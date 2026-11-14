@@ -298,9 +298,11 @@ PLATFORM_API_SCOPES = (
     "workflow:deactivate",
     "execution:read",
     "execution:list",
+    "execution:retry",
 )
 """Only what the platform's calls need, as n8n 2.42.6's public controllers check them: read covers
-history and versions, activate covers publish, move covers transfer."""
+history and versions, activate covers publish, move covers transfer, and the retry of an execution
+has a scope of its own."""
 KEY_LIFETIME = timedelta(days=3)
 """A key that leaks stops working within days. When n8n refuses it, the platform makes another."""
 STALE_KEY_AGE = timedelta(days=1)

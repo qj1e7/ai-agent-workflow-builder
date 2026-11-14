@@ -342,7 +342,12 @@ def approval_requested(events: list[Json]) -> Json:
 
 
 def tickets_for(api: Api, run_id: str) -> list[Json]:
-    return [t for t in api.tickets() if t["run_id"] == run_id]
+    """The tickets a run wrote, by the run's own record of what it made, or by the run named in
+    a ticket's label. A change made under its subject's key, as a workflow's own n8n run makes
+    it (ENGINE-PLAN 2.3.8), is labelled with the subject, not the run."""
+    written: list[Json] = api.run_view("alice", run_id).get("written") or []
+    made = {w["external_reference"] for w in written}
+    return [t for t in api.tickets() if t["run_id"] == run_id or t["key"] in made]
 
 
 def bob_decides(api: Api, approval_id: str, verdict: str, digest: str) -> httpx.Response:

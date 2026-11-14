@@ -5,7 +5,8 @@ need a running n8n."""
 
 import os
 import time
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -26,7 +27,9 @@ from harness import (
 N8N_URL = os.environ.get("N8N_BASE_URL", "http://n8n:5678")
 LANGGRAPH = {"GitHub repository": "langchain-ai/langgraph", "Jira project": "MOCK"}
 SINGAPORE = ZoneInfo("Asia/Singapore")
-SCHEDULE_WAIT_SECONDS = 240
+SCHEDULE_WAIT_SECONDS = 480
+"""A schedule's minute is a multiple of five, so the next slot is up to seven minutes away, and
+n8n's hidden second adds up to a minute."""
 
 
 def set_up(api: Api, name: str, *, on: bool, at: str = "09:00") -> Json:
@@ -40,15 +43,22 @@ def set_up(api: Api, name: str, *, on: bool, at: str = "09:00") -> Json:
     return api.post("carol", "/api/v1/agent-use-cases", body, expect=(201,)).json()
 
 
-def owner() -> httpx.Client:
-    """n8n as its owner signs in, the way the platform reads it."""
+@contextmanager
+def owner() -> Generator[httpx.Client]:
+    """n8n as its owner signs in, the way the platform reads it, on a client of its own."""
     login = {
         "emailOrLdapLoginId": os.environ["N8N_OWNER_EMAIL"],
         "password": os.environ["N8N_OWNER_PASSWORD"],
     }
-    n8n = httpx.Client(base_url=N8N_URL, timeout=30)
-    n8n.post("/rest/login", json=login).raise_for_status()
-    return n8n
+    with httpx.Client(base_url=N8N_URL, timeout=30) as n8n:
+        n8n.post("/rest/login", json=login).raise_for_status()
+        yield n8n
+
+
+def ticket_count(api: Api) -> int:
+    """Every ticket in the practice Jira, so "nothing was written" does not rest on the run's
+    own record of what it wrote."""
+    return len(api.tickets())
 
 
 def in_n8n(workflow_id: str) -> Json:
@@ -84,6 +94,7 @@ def test_the_sketch_flow_runs_on_the_workflow_s_own_n8n_workflow(api: Api, mock_
     created = set_up(api, "e2e engine sketch", on=False)
     use_case_id, workflow_id = created["use_case_id"], created["n8n_workflow_id"]
     runs = f"/api/v1/use-cases/{use_case_id}/runs"
+    tickets = ticket_count(api)
 
     test_run = api.post(
         "carol",
@@ -99,7 +110,7 @@ def test_the_sketch_flow_runs_on_the_workflow_s_own_n8n_workflow(api: Api, mock_
     assert "write_action_proposed" in kinds and "approval_requested" not in kinds
     finished = api.wait_for_state("carol", test_id, {"succeeded"})
     assert (finished["outcome"], finished["written"]) == ("test_passed", [])
-    assert tickets_for(api, test_id) == [], "a test run writes nothing"
+    assert ticket_count(api) == tickets, "a test run writes nothing"
     assert in_n8n(workflow_id)["activeVersionId"] is None, "a test run publishes nothing"
 
     turned_on = api.post("alice", f"/api/v1/use-cases/{use_case_id}/turn-on", expect=(200,))
@@ -160,6 +171,7 @@ def test_resume_url_alone_writes_nothing(api: Api, mock_model: None):
     events = api.stream_until("carol", run_id, {"approval_requested"})
     [execution] = [e["data"]["execution_id"] for e in events if e["kind"] == "execution_linked"]
     approval_id = approval_requested(events)["approval_id"]
+    tickets = ticket_count(api)
     forged = {
         "execution_id": execution,
         "request_id": approval_id,
@@ -171,7 +183,7 @@ def test_resume_url_alone_writes_nothing(api: Api, mock_model: None):
     assert answer.status_code in (401, 403), answer.text
     time.sleep(3)
     assert api.run_view("carol", run_id)["state"] == "awaiting_approval"
-    assert tickets_for(api, run_id) == []
+    assert ticket_count(api) == tickets
 
     approval = api.get("bob", f"/api/v1/approvals/{approval_id}")
     bob_decides(api, approval_id, "approve", approval["digest"])
@@ -205,17 +217,20 @@ def test_gate_removed(api: Api, mock_model: None):
         lambda: publication(workflow_id)["status"] == "published",
     )
 
+    tickets = ticket_count(api)
     run_id, _ = api.start_run("carol", use_case_id)
     stopped = api.wait_for_state("carol", run_id, {"failed", "succeeded"})
     assert (stopped["state"], stopped["reason"]) == ("failed", "SafetyDenied")
-    assert tickets_for(api, run_id) == []
+    assert ticket_count(api) == tickets
     tidy(api, use_case_id)
 
 
 def test_publisher_cannot_approve(api: Api, mock_model: None):
     """Carol sets it up and Alice turns it on, so Alice published it. Its schedule fires in n8n,
     and the run is Alice's work: she can never approve it, and Bob can."""
-    soon = (datetime.now(SINGAPORE) + timedelta(minutes=2)).strftime("%H:%M")
+    early = datetime.now(SINGAPORE) + timedelta(minutes=2)
+    slot = early + timedelta(minutes=-early.minute % 5)
+    soon = slot.strftime("%H:%M")
     created = set_up(api, "e2e engine publisher", on=False, at=soon)
     use_case_id = created["use_case_id"]
     api.post("alice", f"/api/v1/use-cases/{use_case_id}/turn-on", expect=(200,))

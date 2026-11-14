@@ -125,6 +125,7 @@ async def test_the_platform_s_key_has_only_the_scopes_it_uses_and_runs_out_in_da
     assert sorted(asked["scopes"]) == [
         "execution:list",
         "execution:read",
+        "execution:retry",
         "workflow:activate",
         "workflow:create",
         "workflow:deactivate",
