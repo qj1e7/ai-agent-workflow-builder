@@ -209,9 +209,11 @@ export function EditCard({ reply, typed, page, say, now, about }: EditCardProps)
     return (
       <>
         {said}
-        <Card headingId={`${id}-heading`} title="Change a workflow">
-          <PartsList parts={[asked('which', 'Workflow', question, (useCaseId) => pick({ useCaseId }, 'heading')), ...crosses]} />
-        </Card>
+        <div data-card="edit">
+          <Card headingId={`${id}-heading`} title="Change a workflow">
+            <PartsList parts={[asked('which', 'Workflow', question, (useCaseId) => pick({ useCaseId }, 'heading')), ...crosses]} />
+          </Card>
+        </div>
       </>
     )
   }
