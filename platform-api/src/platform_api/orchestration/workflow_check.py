@@ -19,6 +19,11 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
 from platform_api.orchestration.agents import CardInput
 from platform_api.orchestration.n8n_calls import WRITE_TARGETS, Grade, WriteEntry
+from platform_api.orchestration.n8n_schedule import (
+    SCHEDULE_TRIGGER,
+    interval_problem,
+    schedule_intervals,
+)
 from platform_api.orchestration.schedule import TIME_ZONE
 
 type BlockKind = Literal[
@@ -61,7 +66,7 @@ NODE_TYPES: Mapping[str, NodeType] = {
     "CUSTOM.wabMakeApprovedChanges": NodeType("write", retried=True),
     "CUSTOM.wabTell": NodeType("tell", retried=True),
     "CUSTOM.wabReportFailure": NodeType("report"),
-    "n8n-nodes-base.scheduleTrigger": NodeType("schedule", starts=True),
+    SCHEDULE_TRIGGER: NodeType("schedule", starts=True),
     "n8n-nodes-base.manualTrigger": NodeType("manual", starts=True),
     "n8n-nodes-base.errorTrigger": NodeType("error", starts=True),
     "n8n-nodes-base.if": NodeType("branch"),
@@ -85,7 +90,6 @@ NOTHING_TO_CHANGE_BLOCK = "Nothing to change"
 change exit there too."""
 
 TELL_WHERE = frozenset({"channel", "email", "both"})
-HOURS_IN_A_DAY = 24
 ASK_TYPE_VERSION = 1
 ADDED_SPACING = 220
 
@@ -317,39 +321,13 @@ def _schedules(flow: Flow) -> Iterable[Finding]:
     """n8n picks a missing hour or minute itself, and runs "every 2 days" or "every 5 hours" by
     state it keeps, so the next run could not be shown to the minute (P7 Q12)."""
     for block in flow.of_kind("schedule"):
-        rule = block.parameters.get("rule")
-        intervals = rule.get("interval") if isinstance(rule, dict) else None
-        if not isinstance(intervals, list) or not intervals:
+        intervals = schedule_intervals(block.parameters)
+        if not intervals:
             yield _fix(block.name, f'"{block.name}" has no time to run.')
-            continue
         for interval in intervals:
-            problem = _interval_problem(interval if isinstance(interval, dict) else {})
+            problem = interval_problem(interval)
             if problem is not None:
                 yield _fix(block.name, f'"{block.name}" {problem}')
-
-
-def _interval_problem(interval: Mapping[str, JsonValue]) -> str | None:
-    field = interval.get("field", "days")
-    if field in ("days", "weeks"):
-        if "triggerAtHour" not in interval or "triggerAtMinute" not in interval:
-            return "leaves its hour or minute for n8n to pick."
-        if field == "days" and _number(interval.get("daysInterval")) > 1:
-            return "skips days, which n8n counts in a way the Portal cannot show."
-    if field == "hours":
-        if "triggerAtMinute" not in interval:
-            return "leaves its minute for n8n to pick."
-        hours = _number(interval.get("hoursInterval"))
-        if hours < 1 or HOURS_IN_A_DAY % hours != 0:
-            return "runs every few hours in a way that does not fit a day."
-    return None
-
-
-def _number(value: JsonValue) -> int:
-    """n8n's default for an interval it leaves out is 1. Anything that is not a whole number
-    counts as 0, which no rule allows."""
-    if value is None:
-        return 1
-    return value if isinstance(value, int) and not isinstance(value, bool) else 0
 
 
 def _options(flow: Flow, known: KnownOptions) -> Iterable[Finding]:

@@ -163,6 +163,24 @@ def test_an_unknown_error_workflow_is_never_taken_for_the_platform_s() -> None:
         {"field": "days", "triggerAtHour": 8},
         {"field": "weeks", "triggerAtDay": [1], "triggerAtMinute": 0},
         {"field": "hours", "hoursInterval": 1},
+        {
+            "field": "weeks",
+            "weeksInterval": 2,
+            "triggerAtDay": [1],
+            "triggerAtHour": 9,
+            "triggerAtMinute": 0,
+        },
+        {"field": "minutes", "minutesInterval": 7},
+        {
+            "field": "months",
+            "monthsInterval": 5,
+            "triggerAtDayOfMonth": 1,
+            "triggerAtHour": 9,
+            "triggerAtMinute": 0,
+        },
+        {"field": "months", "triggerAtHour": 9, "triggerAtMinute": 0},
+        {"field": "seconds", "secondsInterval": 30},
+        {"field": "cronExpression", "expression": "at nine on weekdays"},
     ],
 )
 def test_a_schedule_whose_next_run_n8n_decides_needs_a_fix(interval: dict[str, Any]) -> None:
@@ -181,6 +199,15 @@ def test_a_schedule_whose_next_run_n8n_decides_needs_a_fix(interval: dict[str, A
             "triggerAtHour": 7,
             "triggerAtMinute": 30,
         },
+        {"field": "minutes", "minutesInterval": 15},
+        {
+            "field": "months",
+            "monthsInterval": 3,
+            "triggerAtDayOfMonth": 1,
+            "triggerAtHour": 9,
+            "triggerAtMinute": 0,
+        },
+        {"field": "cronExpression", "expression": "0 30 7 * * 1-5"},
     ],
 )
 def test_a_schedule_the_portal_can_show_to_the_minute_is_fine(interval: dict[str, Any]) -> None:
