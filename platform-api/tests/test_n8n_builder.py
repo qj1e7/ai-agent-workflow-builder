@@ -15,6 +15,8 @@ from platform_api.builder.n8n_draft import ADDING, CHECKING, EVERY_WRITE, FIT, S
 from platform_api.builder.n8n_facts import BuilderWorkflowFacts
 from platform_api.db import Database
 from platform_api.orchestration import (
+    WATCHLIST_CHECKER,
+    WATCHLIST_PLACE,
     AgentRejected,
     AgentToRun,
     AgentUnavailable,
@@ -294,12 +296,13 @@ async def test_an_agent_without_its_write_target_is_refused_never_given_a_defaul
     )
 
 
-async def test_a_read_block_may_read_the_repositories_the_version_checker_watches(
+async def test_a_read_block_may_read_the_watchlist_and_the_repositories_the_version_checker_watches(
     n8n_lab: N8nLab,
 ):
     await n8n_lab.create()
     facts = n8n_lab.facts()
-    assert await facts.places("github_releases") == [NodeOption(REPO, REPO)]
+    assert await facts.places("github_releases") == [WATCHLIST_PLACE, NodeOption(REPO, REPO)]
+    assert WATCHLIST_CHECKER in await facts.agents()
     assert await facts.places("confluence_page") == []
 
 

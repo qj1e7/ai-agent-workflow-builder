@@ -16,6 +16,8 @@ from platform_api.builder.templates import TAG_PATTERN
 from platform_api.db import Database
 from platform_api.orchestration import (
     GITHUB_RELEASES,
+    WATCHLIST_CHECKER,
+    WATCHLIST_PLACE,
     AgentRejected,
     AgentToRun,
     AgentUnavailable,
@@ -89,7 +91,7 @@ class BuilderWorkflowFacts:
         cards = await self._cards.list()
         listed = [option.id for option in await self.places(GITHUB_RELEASES)]
         places = {GITHUB_RELEASES: [*listed, *adding.get(GITHUB_RELEASES, ())]}
-        agents = {card.card_id: card_spec(card).inputs for card in cards}
+        agents = {WATCHLIST_CHECKER.id: [], **{c.card_id: card_spec(c).inputs for c in cards}}
         return known_options(agents, places, self._writes)
 
     async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | None:
@@ -132,7 +134,9 @@ class BuilderWorkflowFacts:
         return RanVersion(row["grade"], publisher)
 
     async def agents(self) -> Sequence[NodeOption]:
-        return [NodeOption(card.card_id, card.name) for card in await self._cards.list()]
+        """The platform's watchlist checker, then the saved cards."""
+        cards = [NodeOption(card.card_id, card.name) for card in await self._cards.list()]
+        return [WATCHLIST_CHECKER, *cards]
 
     async def deleted(self, n8n_workflow_id: str) -> bool:
         async with self._db.connection("builder") as conn:
@@ -170,8 +174,8 @@ class BuilderWorkflowFacts:
         return AgentToRun(CardRun(spec, dict(values), bindings), release_of)
 
     async def places(self, source: str) -> Sequence[NodeOption]:
-        """GitHub releases: the watched software and the repositories the Version checker
-        watches. Nothing else is set up to be read yet."""
+        """GitHub releases: the watchlist as a whole, then the watched software and the
+        repositories the Version checker watches. Nothing else is set up to be read yet."""
         if source != GITHUB_RELEASES:
             return []
         async with self._db.connection("builder") as conn:
@@ -179,7 +183,7 @@ class BuilderWorkflowFacts:
                 await conn.execute(_PLACES, {"input": REPO_INPUT, "card": VERSION_CHECKER_ID})
             ).fetchall()
         named = {str(row["repo"]): str(row["name"]) for row in rows}
-        return [NodeOption(repo, name) for repo, name in sorted(named.items())]
+        return [WATCHLIST_PLACE, *(NodeOption(repo, name) for repo, name in sorted(named.items()))]
 
     async def read(self, source: str, place: str, query: str | None) -> ReadItems | ReadFailed:
         """A repository's counted releases, newest first, through the agent runtime, which holds

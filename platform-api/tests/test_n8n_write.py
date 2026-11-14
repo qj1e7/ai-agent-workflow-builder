@@ -2,6 +2,7 @@
 is made, checked against our records alone, through our API and a fake n8n at the HTTP edge."""
 
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import timedelta
 
@@ -137,6 +138,12 @@ class Writes(Wait):
 
 @pytest.fixture
 async def w(postgres: PostgresUrls) -> AsyncIterator[Writes]:
+    async with open_writes(postgres) as writes:
+        yield writes
+
+
+@asynccontextmanager
+async def open_writes(postgres: PostgresUrls) -> AsyncIterator[Writes]:
     async with open_harness(postgres) as h:
         box = KeyBox("test-settings-key")
         n8n, workflows, sources = FakeN8n(), SpecWorkflows(), FakeSources()

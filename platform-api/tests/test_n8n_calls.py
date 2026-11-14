@@ -29,6 +29,8 @@ from platform_api.orchestration.n8n_calls import (
     UNKNOWN_PUBLISHER,
     UNKNOWN_START,
     VERSION_FAILED,
+    WATCHLIST_CHECKER,
+    WATCHLIST_PLACE,
     AgentCall,
     AgentToRun,
     Answer,
@@ -125,7 +127,7 @@ class FakeWorkflows:
         return self.versions.get(version_id)
 
     async def agents(self) -> Sequence[NodeOption]:
-        return [NodeOption(CARD.id, CARD.name)]
+        return [WATCHLIST_CHECKER, NodeOption(CARD.id, CARD.name)]
 
     async def deleted(self, n8n_workflow_id: str) -> bool:
         return n8n_workflow_id in self.gone
@@ -154,7 +156,9 @@ class FakeSources:
     )
 
     async def places(self, source: str) -> Sequence[NodeOption]:
-        return [NodeOption(REPO, "LangGraph")] if source == "github_releases" else []
+        return (
+            [WATCHLIST_PLACE, NodeOption(REPO, "LangGraph")] if source == "github_releases" else []
+        )
 
     async def read(self, source: str, place: str, query: str | None) -> ReadItems | ReadFailed:
         self.reads.append((source, place, query))
@@ -659,12 +663,16 @@ async def test_an_issued_start_expires_240_seconds_on_and_carries_its_signature(
 
 
 async def test_the_options_list_only_what_the_portal_allows(t: Calls):
-    assert await t.calls.options("agents", {}) == [NodeOption(CARD.id, "Compare")]
+    assert await t.calls.options("agents", {}) == [
+        WATCHLIST_CHECKER,
+        NodeOption(CARD.id, "Compare"),
+    ]
     assert await t.calls.options("agent_inputs", {"agent": CARD.id}) == [
         NodeOption("Project", "Project")
     ]
     assert await t.calls.options("places", {"source": "github_releases"}) == [
-        NodeOption(REPO, "LangGraph")
+        WATCHLIST_PLACE,
+        NodeOption(REPO, "LangGraph"),
     ]
     assert await t.calls.options("places", {"action": "jira.create_ticket"}) == [
         NodeOption("MOCK", "MOCK")

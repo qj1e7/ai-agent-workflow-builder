@@ -11,7 +11,7 @@
         -400
       ],
       "parameters": {
-        "content": "## Software watchlist\nChecks every watched software and raises upgrade tickets in MOCK.\n\nSet up in the Portal: https://portal.example/workflows/uc_01JB8RELEASE\n\nSafe to change here: when it runs, and the words in a block. Every change to Jira waits for a yes in Teams before it is made.",
+        "content": "## Software watchlist\nChecks every watched software and raises a ticket for each one behind.\n\nSet up in the Portal: https://portal.example/workflows/uc_01JB8RELEASE\n\nSafe to change here: when it runs, and the words in a block. Every change to Jira waits for a yes in Teams before it is made.",
         "height": 260,
         "width": 460
       }
@@ -81,12 +81,7 @@
       "parameters": {
         "agent": "watchlist_checker",
         "inputs": {
-          "input": [
-            {
-              "name": "Jira project",
-              "value": "MOCK"
-            }
-          ]
+          "input": []
         }
       },
       "retryOnFail": true,

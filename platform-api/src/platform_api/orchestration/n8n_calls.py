@@ -90,6 +90,14 @@ class NodeOption:
     name: str
 
 
+WATCHLIST_PLACE = NodeOption("watchlist", "Software watchlist")
+"""The GitHub releases place that stands for every watched software (D11). Its Read lists the
+software the run checks."""
+WATCHLIST_CHECKER = NodeOption("watchlist_checker", "Watchlist checker")
+"""The platform's own agent that checks every watched software at once and proposes the upgrade
+tickets, with the same review as before the move (D11)."""
+
+
 @dataclass(frozen=True)
 class ExecutionFacts:
     """What n8n's own record of an execution says, read on its first call."""
@@ -388,6 +396,7 @@ DENIED: Mapping[DenyReason, str] = {
 NOT_OUR_ERROR_WORKFLOW = Refused(403, "Only our error workflow may report a failure.")
 NOT_FAILED = Refused(409, "n8n does not say this execution failed.")
 NOTHING_READ = Refused(403, "A Tell reports only what this run read, and it has read nothing yet.")
+NOT_A_WATCHLIST_RUN = Refused(409, "Only the Software watchlist reads and checks the watchlist.")
 NO_TELL_FLOW = Refused(409, "This platform has no Tell flow, so it sends no notice.")
 CANNOT_SEAL = (
     "This platform cannot keep n8n's resume address safe, because SETTINGS_ENCRYPTION_KEY is not "

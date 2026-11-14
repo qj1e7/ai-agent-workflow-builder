@@ -141,7 +141,7 @@ def test_agent_cards_that_only_read_have_no_yes_and_no_write() -> None:
 
 
 def test_the_watchlist_reads_every_watched_software_then_checks_them_at_once() -> None:
-    checked = drafted(watchlist(WATCHLIST, "MOCK"), WATCHLIST)
+    checked = drafted(watchlist(WATCHLIST), WATCHLIST)
     matches_golden("watchlist", checked.document)
     assert checked.graded.grade == "safe"
 

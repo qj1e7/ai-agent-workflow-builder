@@ -97,6 +97,8 @@ from platform_api.orchestration.n8n import (
 )
 from platform_api.orchestration.n8n_calls import (
     GITHUB_RELEASES,
+    WATCHLIST_CHECKER,
+    WATCHLIST_PLACE,
     AgentToRun,
     CannotRun,
     Grade,
@@ -223,6 +225,8 @@ __all__ = [
     "next_run",
     "read_flow",
     "GITHUB_RELEASES",
+    "WATCHLIST_CHECKER",
+    "WATCHLIST_PLACE",
     "AgentRejected",
     "AgentUnavailable",
     "ReadReleasesRequest",
