@@ -38,6 +38,16 @@
   }
 }
 
+/* Home's hero and chat keep the sketch's sizes up to a 1440 px window, then grow with it: 1.25 times at 1920 px, and at most 1.4
+   times, from 2208 px. Zoom grows each as one block, so every size, face and icon in them, and in any card added later, keeps its
+   proportion with no size of its own to change. The scale is (100vw + 480px) / 1920px: tan(atan2(a, b)) is a / b as a plain number,
+   which calc() can't give yet in every browser. */
+.hero,
+.chat {
+  --scale: clamp(1, tan(atan2(100vw + 480px, 1920px)), 1.4);
+  zoom: var(--scale);
+}
+
 /* The sketch's hero: the face, a small greeting, the one question, then the box and chips, and Needs you under them. */
 /* The hero fills what is left of the page under the top bar (the shell stretches Home to it), so it is centred and never makes the page scroll. */
 .hero {
