@@ -24,6 +24,7 @@ from platform_api.builder.n8n_draft import Checked, DraftRefused, N8nNotReady, N
 from platform_api.builder.templates import AGENT_CARDS
 from platform_api.builder.versions import Held, Made, Publication, add_version
 from platform_api.builder.watchlist import AlreadyOnN8n, MovedToN8n, WaitsForRun, Watchlist
+from platform_api.builder.watchlist import Move as WatchlistMove
 from platform_api.db import Connection, Database, UnitOfWork, hold_workflow, json
 from platform_api.orchestration import (
     KnownOptions,
@@ -44,6 +45,7 @@ log = logging.getLogger(__name__)
 MOVES_EVERY = timedelta(seconds=60)
 NOT_TAKEN = "n8n did not take the workflow. It runs as before."
 NOT_LIVE = "n8n did not turn the workflow on. It runs as before."
+NOT_BACK = "n8n did not take the workflow back. The next start tries again."
 
 type LayOut = Callable[
     [str, Mapping[str, Any], Schedule | None], Awaitable[Checked | DraftRefused | N8nNotReady]
@@ -155,10 +157,10 @@ class Moves:
             rows = await (await conn.execute(_LEFT, (AGENT_CARDS.key,))).fetchall()
         return [UseCaseId(row["use_case_id"]) for row in rows]
 
-    async def move_all(self) -> dict[str, object]:
+    async def move_all(self) -> dict[str, Move | WatchlistMove | None]:
         """Every workflow left on the shared run workflow, the watchlist first. One that cannot
         move yet says why, and the next pass asks again."""
-        moved: dict[str, object] = {}
+        moved: dict[str, Move | WatchlistMove | None] = {}
         if self._watchlist is not None:
             moved["watchlist"] = await self._watchlist.move_to_n8n()
         for use_case_id in await self.left():
@@ -245,7 +247,7 @@ class Moves:
                 done = await self.restore(row["use_case_id"])
             except Exception:
                 log.exception("could not restore %s to n8n", row["use_case_id"])
-                done = N8nNotReady(NOT_TAKEN)
+                done = N8nNotReady(NOT_BACK)
             if done is not None:
                 restored[row["use_case_id"]] = done
         return restored
@@ -264,7 +266,7 @@ class Moves:
                     return None
             except (N8nError, httpx.HTTPError) as error:
                 log.warning("could not look for %s in n8n: %s", use_case_id, error)
-                return N8nNotReady(NOT_TAKEN)
+                return N8nNotReady(NOT_BACK)
             error_workflow = await self._n8n.error_workflow_id()
             if error_workflow is None:
                 return N8nNotReady("n8n is not ready yet: its error workflow is not loaded.")
@@ -280,7 +282,7 @@ class Moves:
                 draft = await self._n8n.save_draft(document)
             except (N8nError, httpx.HTTPError) as error:
                 log.warning("n8n did not take %s back: %s", use_case_id, error)
-                return N8nNotReady(NOT_TAKEN)
+                return N8nNotReady(NOT_BACK)
             await _name_in_n8n(uow, use_case_id, draft.workflow_id)
         async with self._db.transaction("builder") as uow:
             row = await _hold(uow, use_case_id)
@@ -293,7 +295,7 @@ class Moves:
                 log.warning("n8n did not turn %s on again: %s", use_case_id, error)
                 await discard(self._n8n, draft.workflow_id)
                 await _name_in_n8n(uow, use_case_id, lost)
-                return N8nNotReady(NOT_LIVE)
+                return N8nNotReady(NOT_BACK)
             await _keep_restored(uow, use_case_id, row["current_version"], draft)
         log.info("%s is back in n8n as workflow %s", use_case_id, draft.workflow_id)
         return Restored(draft.workflow_id)
