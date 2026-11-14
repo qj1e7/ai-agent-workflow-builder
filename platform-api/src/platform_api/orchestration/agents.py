@@ -484,7 +484,10 @@ class WatchedFact(WireModel):
 
 WORKFLOW_FACTS: Final = 50
 """The workflows sent with their state and last run. The names of the rest are sent alone."""
-OTHER_WORKFLOWS: Final = 1000
+OTHER_WORKFLOWS: Final = 250
+"""At the 80-character limit, 250 names are about 21 KB of the question's facts, less than a full
+watchlist section. Past it the facts count the names left out, and the Planner says it read only
+some."""
 
 type WorkflowName = Annotated[str, StringConstraints(max_length=80)]
 
@@ -517,6 +520,7 @@ class PlannerFacts(WireModel):
     watchlist: list[WatchedFact] | None = Field(default=None, max_length=100)
     workflows: list[WorkflowFact] | None = Field(default=None, max_length=WORKFLOW_FACTS)
     other_workflows: list[WorkflowName] | None = Field(default=None, max_length=OTHER_WORKFLOWS)
+    left_out_workflows: int | None = Field(default=None, gt=0)
     needs_you: NeedsYouFact | None = None
     watchlist_schedule: WatchlistScheduleFact | None = None
 

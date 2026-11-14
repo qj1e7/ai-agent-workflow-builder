@@ -2495,6 +2495,20 @@
       "additionalProperties": false,
       "description": "What the platform holds for the signed-in person at the moment of the question. A section\nthat is None was not sent, and the answer may not claim to have looked at it.",
       "properties": {
+        "left_out_workflows": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How many more workflows the person has whose names were not sent at all, to keep the facts short. None when every name was sent.",
+          "title": "Left Out Workflows"
+        },
         "needs_you": {
           "anyOf": [
             {
@@ -2512,7 +2526,7 @@
               "items": {
                 "$ref": "#/$defs/WorkflowName"
               },
-              "maxItems": 1000,
+              "maxItems": 250,
               "type": "array"
             },
             {

@@ -56,6 +56,7 @@ from agent_runtime.contract import (
     PauseAnswer,
     PlannerAnswer,
     PlannerFacts,
+    QuestionAnswer,
     RefusedAnswer,
     ResumeAnswer,
     RowKind,
@@ -730,6 +731,17 @@ def _change_row(clause: str) -> CantRow:
     return CantRow(kind="do", text=text, note=plain(note, NOTE_LIMIT), needs="new_tool")
 
 
+def could_only_read(facts: PlannerFacts) -> QuestionAnswer:
+    """A change to a workflow whose name wasn't among those sent, said plainly rather than crossed:
+    some names were left out of the facts, and the one asked about may be among them."""
+    named, total = len(facts.workflow_names()), facts.workflows_in_all()
+    return QuestionAnswer(
+        text=f"I could only read {named:,} of your {total:,} workflows, so I couldn't find the one "
+        "you named.",
+        looked_at=["workflows"],
+    )
+
+
 def _about(read: TaskRead, request: str) -> PlannerAnswer:
     said = ARTICLES.sub("", visible_words(read.workflow_words))
     words = whole_word_of(request, said)
@@ -817,6 +829,8 @@ def _answer_of(
     edit = edit_of(read, text, facts) if changes_workflows else None
     if edit is not None:
         return edit
+    if read.asks_about == "change" and facts is not None and facts.left_out_workflows:
+        return could_only_read(facts)
     if read.asks_about == "change":
         unchanged = _unchanged(read, text, facts, changes_workflows)
         read = read.model_copy(update={"asks_about": unchanged})

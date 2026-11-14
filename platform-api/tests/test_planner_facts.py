@@ -16,11 +16,17 @@ STOPPED = UseCaseView.model_validate(
 
 
 def workflows(count: int) -> list[UseCaseView]:
-    """`count` workflows, the newest first as the Workflows page lists them: Check {count} first."""
+    """`count` workflows, the newest first as the Workflows page lists them: Check {count} first.
+    Each one's last run stopped."""
     return [
         STOPPED.model_copy(update={"use_case_id": f"uc_{n}", "name": f"Check {n}"})
         for n in range(count, 0, -1)
     ]
+
+
+def healthy(count: int) -> list[UseCaseView]:
+    """`count` workflows that need nobody: on, safe, and never run."""
+    return [u.model_copy(update={"last_run": None, "grade": "safe"}) for u in workflows(count)]
 
 
 class Listed:
@@ -99,7 +105,35 @@ async def test_a_name_too_long_for_the_facts_leaves_out_the_workflows_alone():
     assert (facts.workflows, facts.other_workflows) == (None, None)
 
 
-async def test_past_the_names_cap_the_section_is_left_out_so_the_planner_says_it_could_not_look():
-    facts = await reader(workflows(WORKFLOW_FACTS + OTHER_WORKFLOWS + 1)).read(ALICE, "hi")
+async def test_past_the_names_cap_the_named_workflow_survives_and_the_rest_are_counted():
+    listed = workflows(WORKFLOW_FACTS + OTHER_WORKFLOWS + 7)
 
-    assert (facts.workflows, facts.other_workflows) == (None, None)
+    facts = await reader(listed).read(ALICE, "pause Check 1")
+
+    assert facts.workflows is not None and facts.workflows[0].name == "Check 1"
+    assert len(facts.workflows) == WORKFLOW_FACTS
+    assert facts.other_workflows is not None and len(facts.other_workflows) == OTHER_WORKFLOWS
+    assert facts.left_out_workflows == 7, "the names not sent are counted, never dropped silently"
+
+
+async def test_with_every_name_sent_nothing_is_counted_as_left_out():
+    facts = await reader(workflows(120)).read(ALICE, "what needs me?")
+
+    assert facts.left_out_workflows is None
+
+
+async def test_workflows_that_need_someone_get_their_last_run_before_the_newest():
+    listed = healthy(120)
+    stopped = STOPPED.model_copy(update={"use_case_id": "uc_old_stop", "name": "Old stop"})
+    paused = listed[90].model_copy(update={"use_case_id": "uc_paused", "name": "Paused one"})
+    paused = paused.model_copy(update={"state": "paused"})
+    unsafe = listed[100].model_copy(update={"use_case_id": "uc_unsafe", "name": "Unsafe one"})
+    unsafe = unsafe.model_copy(update={"grade": "needs_a_fix"})
+    listed += [stopped, paused, unsafe]
+
+    facts = await reader(listed).read(ALICE, "did anything stop?")
+
+    assert facts.workflows is not None
+    assert [w.name for w in facts.workflows[:3]] == ["Old stop", "Paused one", "Unsafe one"]
+    assert facts.workflows[0].last_run == "Stopped"
+    assert facts.other_workflows is not None and "Old stop" not in facts.other_workflows
