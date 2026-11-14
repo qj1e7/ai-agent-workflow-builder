@@ -309,6 +309,41 @@ test('scenario B: a stopped run opens on the three answers, an Operator retries 
   await context.close()
 })
 
+test('a Retry that another Operator beat says who retried it, keeps focus on the run, and is read aloud (issue 158)', async ({ browser, backend }, info) => {
+  let runId = ''
+  try {
+    await setMockGithubMode('unavailable')
+    runId = await backend.startCheck('alice')
+    await backend.waitForState(runId, ['failed'], 150_000)
+  } finally {
+    await setMockGithubMode('ok')
+  }
+  const context = await devContext(browser, 'alice')
+  const page = await context.newPage()
+  const watch = watchPage(page)
+  await page.goto(`/runs/${runId}`)
+  await expect(state(page)).toHaveText('Stopped')
+  await page.route(`**/api/v1/runs/${runId}/retry`, async (route) => {
+    await backend.post('carol', `/api/v1/runs/${runId}/retry`, undefined, undefined, [202])
+    await backend.waitToLeave(runId, 'failed', 60_000)
+    await route.continue()
+  })
+  const answered = page.waitForResponse((response) => response.url().endsWith(`/api/v1/runs/${runId}/retry`), { timeout: 90_000 })
+  await page.getByRole('button', { name: 'Retry', exact: true }).click()
+  expect((await answered).status(), 'Carol retried it first, so the platform refuses Alice’s press').toBe(409)
+
+  const said = 'Carol already retried this run.'
+  await expect(page.getByRole('status').filter({ hasText: said }), 'a screen reader hears who retried it').toHaveText(said)
+  await expect(page.locator('[aria-hidden="true"]', { hasText: said }), 'and the page shows it').toBeVisible()
+  await expect(heading(page), 'focus goes to the run’s name, not the page body').toBeFocused()
+  await shot(page, info, 'i158-retried-first')
+  await expect(state(page), 'the page shows the run going again').not.toHaveText('Stopped')
+  await expect(page.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('main')).not.toContainText('can’t be retried')
+  assertClean(watch)
+  await context.close()
+})
+
 for (const phone of [false, true]) {
   const width = phone ? '390' : '1440'
 
