@@ -9,6 +9,17 @@
   pointer-events: none;
 }
 
+/* Home's toast takes its place in the dock's flow, above the box: the chat gives it room rather than having it laid over the box,
+   the chips or a card's buttons. The status line is absolute, so with no message the dock keeps its usual gaps. */
+.inline {
+  display: contents;
+}
+
+.inline > .toast {
+  align-self: center;
+  max-width: 100%;
+}
+
 .toast {
   display: flex;
   align-items: center;

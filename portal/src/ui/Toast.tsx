@@ -19,6 +19,8 @@ interface ToastProps {
   readonly onDismiss: () => void
   /** Where focus goes when the message leaves while focus is on it. Only a message with Undo can hold focus. */
   readonly focusAfter?: () => HTMLElement | null
+  /** Drawn in the flow of the dock it is placed in, above the box, rather than floating at the foot of the page, so it never covers anything. */
+  readonly inline?: boolean
 }
 
 /**
@@ -26,9 +28,9 @@ interface ToastProps {
  * Dismiss or leaving the page. One without Undo leaves after its reading time, which waits while the pointer or focus
  * is on it and while the tab is hidden.
  */
-export function Toast({ message, onDismiss, focusAfter }: ToastProps) {
+export function Toast({ message, onDismiss, focusAfter, inline = false }: ToastProps) {
   return (
-    <div className={styles['dock']}>
+    <div className={styles[inline ? 'inline' : 'dock']}>
       <p role="status" className="visually-hidden">
         {message?.text ?? ''}
       </p>
