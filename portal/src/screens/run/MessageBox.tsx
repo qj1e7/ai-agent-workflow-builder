@@ -5,14 +5,14 @@ import styles from './panels.module.css'
 
 interface MessageBoxProps {
   readonly label: string
-  readonly help: string
+  readonly help?: string
   /** What an empty send says, next to the box, which keeps focus. */
   readonly empty: string
   readonly send: string
   readonly pending: boolean
   readonly error: string | null
   readonly onSend: (text: string) => void
-  /** Only a box that opened in place of other buttons has Cancel, and it takes focus when it opens. */
+  /** Only a box that opened in place of other buttons has Back, and it takes focus when it opens. */
   readonly onCancel?: () => void
 }
 
@@ -46,15 +46,17 @@ export function MessageBox({ label, help, empty, send, pending, error, onSend, o
           maxLength={1000}
           value={text}
           aria-invalid={blank ? true : undefined}
-          aria-describedby={blank ? `${id}-help ${id}-err` : `${id}-help`}
+          aria-describedby={[help ? `${id}-help` : '', blank ? `${id}-err` : ''].filter(Boolean).join(' ') || undefined}
           onChange={(event) => {
             setText(event.target.value)
             setBlank(false)
           }}
         />
-        <span id={`${id}-help`} className={styles['help']}>
-          {help}
-        </span>
+        {help ? (
+          <span id={`${id}-help`} className={styles['help']}>
+            {help}
+          </span>
+        ) : null}
         {blank ? (
           <span id={`${id}-err`} className={styles['fieldError']}>
             <IconAlert size={16} />
@@ -63,14 +65,14 @@ export function MessageBox({ label, help, empty, send, pending, error, onSend, o
         ) : null}
       </div>
       <div className={styles['buttons']}>
+        {onCancel ? (
+          <Button disabled={pending} onClick={onCancel}>
+            Back
+          </Button>
+        ) : null}
         <Button type="submit" variant="primary" loading={pending}>
           {send}
         </Button>
-        {onCancel ? (
-          <Button disabled={pending} onClick={onCancel}>
-            Cancel
-          </Button>
-        ) : null}
       </div>
       {error ? (
         <p className={styles['error']} role="alert">

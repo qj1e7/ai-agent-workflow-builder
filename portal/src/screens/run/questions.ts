@@ -13,10 +13,9 @@ import type { NameOf } from './words'
 export const EMPTY_QUESTION = 'Type your question.'
 export const EMPTY_ANSWER = 'Type your answer.'
 export const ANSWER_HELP = 'It shows on this request. It doesn’t decide anything.'
-export const STILL_WAITING = 'No answer yet. The request is still waiting for a yes.'
+export const STILL_WAITING = 'No reply yet. The request stays open.'
 export const NOT_ANSWERED = 'Not answered before the request was decided.'
 
-export const askHelp = (requester: string) => `${requester} sees it on this request and can answer. It stays open, waiting for a yes.`
 /** What a question or an answer says once the platform kept it, as the prototype's toast does. */
 export const sentWords = (to: string) => `Sent to ${to}. The request is still waiting for a yes.`
 

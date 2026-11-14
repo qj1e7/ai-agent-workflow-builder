@@ -19,8 +19,9 @@ import styles from './SidePanel.module.css'
 export const PANEL_ID = 'side-panel'
 export const PANEL_HEADING = 'side-panel-h'
 
-/** The run's view brings the run page's line and live feed, which load on demand, as the run page does. */
+/** The run's view brings the run page's line and live feed, which load on demand, as the run page does. So does a request's. */
 const RunPanel = lazy(() => import('../run/RunPanel').then((module) => ({ default: module.RunPanel })))
+const ApprovalPanel = lazy(() => import('../run/RunPanel').then((module) => ({ default: module.ApprovalPanel })))
 
 const TAB_STOPS = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
 
@@ -162,7 +163,7 @@ function View({ item, now, onOpen }: { item: PanelItem; now: Date; onOpen: ((ite
             </p>
           }
         >
-          <RunPanel key={item.id} id={item.id} />
+          {item.kind === 'run' ? <RunPanel key={item.id} id={item.id} /> : <ApprovalPanel key={item.id} id={item.id} />}
         </Suspense>
       )
     case 'software':

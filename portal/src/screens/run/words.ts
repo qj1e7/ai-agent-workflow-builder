@@ -2,7 +2,7 @@ import { OPEN_RUN_AGAIN_WORDS } from '../../api/errors'
 import { connectorLabel, failureReasonLabel, refusalLabel, starterName } from '../../api/labels'
 import { nextRunAt } from '../workflows/times'
 import type { SessionKind } from '../../api/session'
-import type { ApprovalActionView, ApprovalStepView, Day, FailureReason, Refusal, RunView, UseCaseView, WriteActionView } from '../../api/types'
+import type { ApprovalStepView, Day, FailureReason, Refusal, RunView, UseCaseView, WriteActionView } from '../../api/types'
 import { PRODUCT } from '../../shell/product'
 import type { LiveRun } from './liveRun'
 import type { AgentRef, ChatItem, Declined, PlanBlock, RunModel } from './runModel'
@@ -223,34 +223,10 @@ export function bodyOf(action: WriteActionView): string | null {
   return stringField(action, 'body')
 }
 
-function sameTicketProject(actions: readonly WriteActionView[]): string | null {
-  const projects = new Set(actions.map((action) => (action.connector === 'jira' && action.operation === 'create_ticket' ? action.target['project'] : null)))
-  const [only] = projects
-  return projects.size === 1 && typeof only === 'string' ? only : null
-}
-
 /** Ticket keys in the agents' words, only those in a project the proposal writes to, so no other word becomes a link. */
 export function ticketKeysIn(text: string, projects: readonly string[]): string[] {
   const keys = text.match(/(?<![A-Za-z0-9_-])[A-Z][A-Z0-9_]*-[1-9][0-9]*(?![A-Za-z0-9_-])/g) ?? []
   return [...new Set(keys.filter((key) => projects.includes(key.slice(0, key.lastIndexOf('-')))))]
-}
-
-export function proposalTitle(actions: readonly WriteActionView[]): string {
-  const project = sameTicketProject(actions)
-  if (project) return `${count(actions.length, 'ticket')} will be created in Jira project ${project}`
-  const where = new Set(actions.map((action) => connectorLabel(action.connector)))
-  return `${count(actions.length, 'change')} will be written${where.size === 1 ? ` in ${[...where].join('')}` : ''}`
-}
-
-/** The approval panel's heading, naming the Jira the tickets go to, so the Approver sees where before saying yes (ADR 0041). */
-export function approvalTitle(actions: readonly ApprovalActionView[]): string {
-  const sites = new Set(actions.map((action) => action.site_name))
-  const [only] = sites
-  return sites.size === 1 && only ? `${proposalTitle(actions)} on ${only}` : proposalTitle(actions)
-}
-
-export function approveLabel(actions: readonly WriteActionView[]): string {
-  return sameTicketProject(actions) ? `Approve ${count(actions.length, 'ticket')}` : 'Approve'
 }
 
 /** How the signed-in person is tied to the run, as the approval says it. */
@@ -426,7 +402,8 @@ export interface Settled {
   readonly text: string
 }
 
-function settledWhen(at: number, now: Date): string {
+/** "at 9:04" today, else "on Tue 3 Nov at 9:04", in Singapore time. */
+export function settledWhen(at: number, now: Date): string {
   const { day, clock } = dayAndClock(at)
   return day === dayAndClock(now.getTime()).day ? `at ${clock}` : `on ${day} at ${clock}`
 }
