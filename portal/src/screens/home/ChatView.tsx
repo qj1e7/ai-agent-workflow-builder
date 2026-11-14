@@ -76,8 +76,10 @@ export function ChatView({ home, now, page, box, chips, toast, onNewChat }: Chat
     const show = () => {
       const view = region.getBoundingClientRect()
       const box = item.getBoundingClientRect()
-      if (box.height > view.height) region.scrollTop += box.top - view.top
-      else if (box.bottom > view.bottom) region.scrollTop += box.bottom - view.bottom
+      // The boxes are in screen pixels and scrollTop in the chat's own, which its zoom on a big screen draws larger.
+      const zoom = view.height / region.offsetHeight
+      if (box.height > view.height) region.scrollTop += (box.top - view.top) / zoom
+      else if (box.bottom > view.bottom) region.scrollTop += (box.bottom - view.bottom) / zoom
     }
     show()
     // A card can grow once its own data arrives, so the answer is followed for a moment, until the person scrolls.
