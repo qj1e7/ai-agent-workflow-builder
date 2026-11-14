@@ -12,6 +12,16 @@ case "$auth" in
 esac
 export E2E_AUTH="$auth"
 
+# E2E_SEED=old-engine starts the stack from a database made before ENGINE-PLAN E10 and runs only the
+# test of the move, on a project of its own.
+seed="${E2E_SEED:-}"
+case "$seed" in
+  "") ;;
+  old-engine) default_project=wab-e2e-seed default_suites=api files+=(-f deploy/compose.seed.yaml) ;;
+  *) echo "E2E_SEED takes old-engine, not '$seed'." >&2; exit 2 ;;
+esac
+export E2E_SEED="$seed"
+
 # Its own project name, so tearing it down never touches a stack that scripts/up.sh started.
 project="${E2E_PROJECT:-$default_project}"
 suites="${E2E_SUITES:-$default_suites}"

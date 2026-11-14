@@ -251,8 +251,9 @@ jobs:
   e2e:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    # The browser suite alone took 27 minutes on 13 Nov 2026, then ZAP and k6 need about 8 more.
-    timeout-minutes: 60
+    # The browser suite alone took 27 minutes on 13 Nov 2026, then ZAP and k6 need about 8 more,
+    # and the move from an old-engine database about 8.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -275,6 +276,20 @@ jobs:
         with:
           name: portal-live-evidence
           path: portal/e2e/out/live/
+          if-no-files-found: ignore
+
+      - name: Move an old-engine database to the new engine, with its history
+        if: ${{ !cancelled() }}
+        env:
+          E2E_SEED: old-engine
+        run: scripts/e2e.sh
+
+      - name: Keep the logs of the move
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-old-engine-logs
+          path: e2e/out/
           if-no-files-found: ignore
 
       # DAST and the load test share this job and its Docker layer cache. A failed e2e run does not hide them.
