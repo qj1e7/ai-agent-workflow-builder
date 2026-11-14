@@ -86,6 +86,12 @@
   }
 }
 
+/* The side panel and a run's decision hold forms at their foot, so while either is on screen the message sits at the top, clear of them. */
+:global(body:has(#side-panel, #decision)) .dock {
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  bottom: auto;
+}
+
 @keyframes toast-in {
   from {
     opacity: 0;
