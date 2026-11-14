@@ -15,6 +15,7 @@ import setupCross from '../../../../contracts/fixtures/planner/answer.setup_card
 import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
 import stoppedUseCase from '../../../../contracts/fixtures/builder/use-case.stopped.json'
 import decisionsOfBob from '../../../../contracts/fixtures/approvals/decisions.bob.json'
+import bobApproval from '../../../../contracts/fixtures/approvals/apr_01JB8.bob.json'
 import noDecisions from '../../../../contracts/fixtures/approvals/decisions.none.json'
 import people from '../../../../contracts/fixtures/people/list.json'
 import troubleshooting from '../../../../contracts/fixtures/troubleshooting/failure.json'
@@ -37,7 +38,7 @@ import runUseCase from '../../../../contracts/fixtures/builder/use-case.json'
 import { OpensInPanel } from '../../ui/sidePanel'
 import { emptyModel, foldWire, type RunModel } from '../run/runModel'
 import { storyOf } from '../run/useRunStory'
-import type { TroubleshootingOut, CantReply, CantRowView, CapabilitiesView, DecisionsView, HomeOut, Me, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, UseCaseView, WatchlistReply } from '../../api/types'
+import type { ApprovalView, TroubleshootingOut, CantReply, CantRowView, CapabilitiesView, DecisionsView, HomeOut, Me, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, UseCaseView, WatchlistReply } from '../../api/types'
 import { Answer, type Page } from './AnswerCards'
 import { newCardMemory, type CardMemory } from './cardMemory'
 import { sayOf, switchedSay, whoOf } from './answers'
@@ -401,6 +402,9 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     client.setQueryData(['me', scope], BOB)
     client.setQueryData(['dev-users'], [BOB])
     client.setQueryData(['home', scope], seed.home ?? HOME)
+    for (const request of (seed.home ?? HOME).approvals) {
+      client.setQueryData(['approval', scope, request.approval_id], { ...(bobApproval as ApprovalView), approval_id: request.approval_id, run_id: request.run_id })
+    }
     client.setQueryData(['people', scope], people.people)
     client.setQueryData(['use-cases', scope], seed.useCases ?? [])
     for (const useCase of seed.useCases ?? []) if (useCase.last_run) client.setQueryData(['troubleshoot', scope, useCase.last_run.run_id, 0], troubleshooting)
@@ -432,13 +436,15 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     expect(answerOf(html)).not.toContain('What is waiting for my yes')
   })
 
-  it('lists his own decisions newest first, each with its workflow, Approved or Declined, when and what it led to (ROLE-asks)', () => {
-    const said = answerOf(ask(decidedReply as PlannerReply))
-    expect(said).toContain('Here are your 3 decisions.')
-    expect(said).toContain('Keep our software up to date Declined Declined by Bob at 9:10 today. Nothing was written. Reason: Wrong version.')
-    expect(said).toContain('Morning new-ticket check Approved Approved by Bob, Mon 26 Oct, 8:00. 1 ticket created.')
-    expect(said).toContain('Weekly closed-ticket summary Approved Approved by Bob, Fri 16 Oct, 16:00. Declined by Alice. Nothing was written.')
-    expect(said.indexOf('9:10 today')).toBeLessThan(said.indexOf('Mon 26 Oct'))
+  it('lists his own decisions newest first in the sketch’s decisions card: the workflow, the day with the reason or what the yes led to, and the verdict (ROLE-asks)', () => {
+    const html = ask(decidedReply as PlannerReply)
+    const said = answerOf(html)
+    expect(said).toMatch(/^Your recent decisions /)
+    expect(said).toContain('Keep our software up to date Today 9:10 · Wrong version Declined')
+    expect(said).toContain('Morning new-ticket check Mon 26 Oct · 1 ticket created Approved')
+    expect(said).toContain('Weekly closed-ticket summary Fri 16 Oct · Declined by Alice. Nothing was written. Approved')
+    expect(said.indexOf('Today 9:10')).toBeLessThan(said.indexOf('Mon 26 Oct'))
+    expect(html.match(/data-decision=/g), 'one row each, which opens its run').toHaveLength(3)
   })
 
   it('says plainly when he has declined nothing, with no rows (FIX-decisions-detail)', () => {
@@ -447,12 +453,18 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     expect(html).not.toContain('aria-label="Your decisions"')
   })
 
-  it('says how many more wait for his yes, with no link to a page that lists no more', () => {
+  it('answers what waits for him with the requests themselves, three cards at most, then how many more', () => {
     const [request] = HOME.approvals
     const many = { ...HOME, approvals: Array.from({ length: 10 }, (_, n) => ({ ...request!, approval_id: `apr_${String(n)}`, run_id: `run_${String(n)}` })), approvals_total: 25, confirmations: [] }
     const html = ask({ answer: 'needs_me', parts: [] }, { home: many })
-    expect(answerOf(html)).toContain('15 more runs are waiting for your yes. The next ones show here as you decide these.')
-    expect(answerOf(html)).not.toContain('See all on Workflows')
+    expect(answerOf(html)).toMatch(/^These need your yes\. Create 1 Jira ticket Needs your yes Upgrade LangGraph from 1\.2\.14 to 1\.2\.16 Review and decide/)
+    expect(buttons(html).filter((name) => name === 'Review and decide')).toHaveLength(3)
+    expect(html).toMatch(/<a[^>]*href="\/workflows"[^>]*>22 more<\/a>/)
+  })
+
+  it('leads one request with the sketch’s line', () => {
+    const one = { ...HOME, confirmations: [] }
+    expect(answerOf(ask({ answer: 'needs_me', parts: [] }, { home: one }))).toMatch(/^This needs your yes\. Create 1 Jira ticket Needs your yes/)
   })
 
   it('sends an approve to the request to decide there, never a decision in the chat', () => {
@@ -501,7 +513,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     const many = { ...HOME, approvals: Array.from({ length: 10 }, (_, n) => ({ ...request!, approval_id: `apr_${String(n)}`, run_id: `run_${String(n)}` })), approvals_total: 12 }
     const html = ask(decideReply as PlannerReply, { home: many })
     expect(buttons(html).filter((name) => name === 'Review and decide')).toHaveLength(3)
-    expect(answerOf(html)).toContain('9 more runs are waiting for your yes.')
+    expect(html).toMatch(/<a[^>]*href="\/workflows"[^>]*>9 more<\/a>/)
     expect(html).not.toMatch(/<h2[^>]*>\s*Needs you/)
   })
 

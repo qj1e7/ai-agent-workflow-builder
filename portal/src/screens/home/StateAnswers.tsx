@@ -3,25 +3,24 @@ import { useDecisions, useHome } from '../../api/homeQueries'
 import { useDisplayName } from '../../api/people'
 import { useMe, useUseCases, useWatchlist } from '../../api/queries'
 import { usePeopleList } from '../../api/settingsQueries'
-import type { DecidedReply, HomeOut } from '../../api/types'
+import type { ApprovalItem, DecidedReply, HomeOut } from '../../api/types'
 import { operatorsSay } from '../../shell/OperatorsNote'
 import { ButtonLink } from '../../ui/Button'
 import { Card } from '../../ui/Card'
-import { OpenButton, OpenLink } from '../../ui/OpenItem'
+import { OpenButton } from '../../ui/OpenItem'
 import { REFRESH_MS, rowsOf, viewerOf } from '../workflows/workflow'
 import { behindWords, hasNewer, REFRESH_MS as WATCH_REFRESH } from '../software/software'
 import { useCapabilities } from '../../api/plannerQueries'
 import { ideasSay, needsSay, startingPoints, workflowsSay } from './answers'
 import { useAsker } from './asker'
-import { decidedSay, decisionLine } from './decided'
-import { approvalItem, approvalsOf, approverLine, moreWords, needsOf, needsTotal, wordsOf } from './home'
-import { useShowBesideOnWide } from './autoOpen'
+import { leadWords } from '../run/approvalWords'
+import { ApprovalCards } from './ApprovalCards'
+import { decidedSay } from './decided'
+import { approvalsOf, approverLine, needsOf, needsTotal, type Needs } from './home'
 import { NeedRows } from './NeedsSection'
-import { SoftwareRows, WorkflowRows } from './panels/ListRows'
+import { DecisionRows, SoftwareRows, WorkflowRows } from './panels/ListRows'
 import { NeedsMore } from './panels/NeedsMore'
 import lists from './panels/Lists.module.css'
-import { useMainButton } from './primary'
-import styles from './Planner.module.css'
 
 const NOTHING: ReadonlySet<string> = new Set()
 
@@ -99,15 +98,29 @@ function needsSentence(home: HomeOut, operator: boolean): string {
   return operator ? needsSay(needsTotal(home)) : approverLine(home)
 }
 
-/** What needs me: the sketch's Needs card. Its head is the sentence, and its body the same Do now and Set up rows as on Home, from the same list as the strip, the panel and the rail. */
+/** Only requests wait for this person, so the answer is the requests themselves, as the sketch's approval cards. */
+const onlyRequests = (home: HomeOut, operator: boolean): boolean => !operator && home.approvals_total > 0 && needsTotal(home) === home.approvals_total
+
+/**
+ * What needs me: the sketch's Needs card. Its head is the sentence, and its body the same Do now and Set up rows as on Home, from
+ * the same list as the strip, the panel and the rail. For an Approver whom only requests wait for, it is the approval cards.
+ */
 export function NeedsMeAnswer({ now, say }: { now: Date; say: Say }) {
   const home = useHome()
   const operator = useAsker() === 'operator'
+  const nameOf = useDisplayName()
   const needs = useMemo(() => (home.data ? needsOf(home.data) : null), [home.data])
-  const sentence = home.data ? needsSentence(home.data, operator) : null
+  const requests = home.data && onlyRequests(home.data, operator) ? approvalsOf(home.data) : null
+  const sentence = home.data ? (requests ? leadWords(requests.shown.length) : needsSentence(home.data, operator)) : null
   useSaidOnce(sentence, say)
-  const only = needs?.total === 1 ? needs.shown[0] : undefined
-  useShowBesideOnWide(!operator && only?.kind === 'approval' ? { kind: 'approval', id: only.item.run_id } : null)
+  if (requests && sentence !== null) {
+    return (
+      <>
+        <p>{sentence}</p>
+        <ApprovalCards items={requestItems(requests)} total={requests.total} nameOf={nameOf} />
+      </>
+    )
+  }
   if (!needs || sentence === null) {
     return (
       <p className="muted" role="status">
@@ -156,46 +169,22 @@ export function BehindAnswer({ now, say }: { now: Date; say: Say }) {
 export const DECIDE_SAY = 'I can’t approve or decline for you. Open the request to see exactly what it will write, and decide there.'
 export const NOTHING_TO_DECIDE = 'Nothing is waiting for your yes, so there’s nothing to decide.'
 
-/** The newest few requests an answer offers to open. */
-const REQUESTS_SHOWN = 3
+const requestItems = (needs: Needs): ApprovalItem[] => needs.shown.flatMap((need) => (need.kind === 'approval' ? [need.item] : []))
 
 /**
- * The requests waiting for this person’s yes, each with Review and decide, the newest few and how many more. It is
- * what an approve, a decline or a refused way around the gate offers instead: the request, where they decide.
+ * The requests waiting for this person’s yes, as the sketch's approval cards, the newest few and how many more. It is what an
+ * approve, a decline or a refused way around the gate offers instead: the request, where they decide.
  */
-export function RequestsToOpen({ now }: { now: Date }) {
+export function RequestsToOpen() {
   const home = useHome()
-  const main = useMainButton()
+  const nameOf = useDisplayName()
   const needs = useMemo(() => (home.data ? approvalsOf(home.data) : null), [home.data])
-  if (!needs) return null
-  const shown = needs.shown.slice(0, REQUESTS_SHOWN)
-  const left = needs.total - shown.length
-  return (
-    <>
-      {shown.length > 0 ? (
-        <ul className={styles['starters']} aria-label="Requests waiting for your yes">
-          {shown.map((need, index) =>
-            need.kind === 'approval' ? (
-              <li key={need.key} className={styles['starter']}>
-                <div>
-                  <b>{wordsOf(need, now).title}</b>
-                  <span className={styles['note']}>{wordsOf(need, now).meta}</span>
-                </div>
-                <OpenButton variant={index === 0 ? main : 'secondary'} item={approvalItem(need.item.run_id)} to={`/runs/${need.item.run_id}`}>
-                  Review and decide
-                </OpenButton>
-              </li>
-            ) : null,
-          )}
-        </ul>
-      ) : null}
-      {left > 0 ? <p className={styles['more']}>{moreWords({ approvals: left, others: 0 })}</p> : null}
-    </>
-  )
+  if (!needs || needs.total === 0) return null
+  return <ApprovalCards items={requestItems(needs)} total={needs.total} nameOf={nameOf} />
 }
 
 /** An approve or decline asked in the chat: nobody decides there, so the answer is the requests waiting for this person’s yes, to open. */
-export function DecideAnswer({ now, say }: { now: Date; say: Say }) {
+export function DecideAnswer({ say }: { say: Say }) {
   const home = useHome()
   const total = home.data?.approvals_total
   const sentence = total === undefined ? null : total > 0 ? DECIDE_SAY : NOTHING_TO_DECIDE
@@ -210,49 +199,35 @@ export function DecideAnswer({ now, say }: { now: Date; say: Say }) {
   return (
     <>
       <p>{sentence}</p>
-      <RequestsToOpen now={now} />
+      <RequestsToOpen />
     </>
   )
 }
 
-/** This person’s own decisions, newest first, each with its workflow, Approved or Declined, when, and what it led to. */
+const DECIDED_TITLE = { approve: 'Your recent approvals', decline: 'Your recent declines' } as const
+
+/**
+ * This person’s own decisions as the sketch's decisions card: newest first, each row its workflow, the day with a decline's
+ * reason or what a yes led to, and Approved or Declined. Each row opens the run. With none, the sentence says so.
+ */
 export function DecidedAnswer({ only, now, say }: { only: DecidedReply['only']; now: Date; say: Say }) {
   const decisions = useDecisions(only)
-  const me = useMe().data
   const nameOf = useDisplayName()
   const view = decisions.data
   const sentence = view ? decidedSay(view.total, view.decisions.length, only) : null
   useSaidOnce(sentence, say)
-  if (!view || !me) {
+  if (!view) {
     return (
       <p className="muted" role="status">
         {decisions.isError ? 'I couldn’t read your decisions just now.' : 'Checking your decisions'}
       </p>
     )
   }
+  if (view.decisions.length === 0) return <p>{sentence}</p>
   return (
-    <>
-      <p>{sentence}</p>
-      {view.decisions.length > 0 ? (
-        <ul className={styles['decided']} aria-label="Your decisions">
-          {view.decisions.map((decision) => (
-            <li key={`${decision.run_id}:${decision.at}`}>
-              <div className={styles['decidedHead']}>
-                <h3>
-                  <OpenLink item={{ kind: 'run', id: decision.run_id }} to={`/runs/${decision.run_id}`} className={styles['decidedLink']}>
-                    {decision.use_case_name}
-                  </OpenLink>
-                </h3>
-                <span className={styles['verdict']} data-verdict={decision.verdict}>
-                  {decision.verdict === 'approve' ? 'Approved' : 'Declined'}
-                </span>
-              </div>
-              <p>{decisionLine(decision, me.id, now, nameOf)}</p>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </>
+    <Card title={only === null ? 'Your recent decisions' : DECIDED_TITLE[only]} status={view.decisions.length < view.total ? sentence : undefined}>
+      <DecisionRows decisions={view.decisions} label="Your decisions" now={now} nameOf={nameOf} />
+    </Card>
   )
 }
 

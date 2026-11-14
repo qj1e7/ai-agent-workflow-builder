@@ -17,7 +17,7 @@ import doneView from '../../../../contracts/fixtures/views/success.final.json'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import type { Me, PastDecisionView, RunView, TroubleshootingOut, UseCaseView } from '../../api/types'
-import { decisionLine } from '../home/decided'
+import { decisionSub } from '../home/decided'
 import { RunCardView } from '../home/RunCard'
 import { RecentRuns } from '../workflows/RecentRuns'
 import { emptyModel, foldWire, type RunModel } from './runModel'
@@ -125,7 +125,7 @@ describe('one run state, the same words on the card, the panel, the chat’s dec
       const onCard = card(one.model)
       const inPanel = wrap(<RunPill facts={stageFactsOf(one.model)} />)
       const row = wrap(<RecentRuns runs={[one.view]} now={NOW} nameOf={nameOf} firstRun={null} />)
-      const decided = decisionLine({ ...DECISION, ...one.decision }, 'bob', NOW, nameOf)
+      const decided = decisionSub({ ...DECISION, ...one.decision }, NOW, nameOf)
       expect(pills(onCard), 'the card').toEqual([one.pill])
       expect(pills(inPanel), 'the panel and the page').toEqual([one.pill])
       expect(pills(row), 'Recent runs').toEqual([one.pill])

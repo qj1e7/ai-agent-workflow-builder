@@ -1,11 +1,13 @@
 import { useId, type ReactNode } from 'react'
 import { useDisplayName } from '../../../api/people'
-import type { UseCaseView, WatchedSoftwareView, WatchlistView } from '../../../api/types'
+import type { PastDecisionView, UseCaseView, WatchedSoftwareView, WatchlistView } from '../../../api/types'
 import { OpenLink } from '../../../ui/OpenItem'
 import type { PanelItem } from '../../../ui/sidePanel'
 import { CHECKER, checksOnItsOwn, softwareLine, softwarePath, stateOf, watchRank } from '../../software/software'
 import { StatusPills } from '../../workflows/Status'
 import { pillOf, rowLine, SOFTWARE_PAGE, workflowPath } from '../../workflows/workflow'
+import type { NameOf } from '../../run/words'
+import { decisionSub, verdictWords } from '../decided'
 import styles from './Lists.module.css'
 
 /** The row is one button. Its name is the workflow or software, and its line and state are read after it as its description. */
@@ -70,6 +72,29 @@ export function SoftwareRows({ rows, view, label, now }: { rows: readonly Watche
           />
         )
       })}
+    </ul>
+  )
+}
+
+/** Decision rows in the sketch's decisions card: the workflow, the day with the reason or what the yes led to, and Approved or Declined. Each opens the run. */
+export function DecisionRows({ decisions, label, now, nameOf }: { decisions: readonly PastDecisionView[]; label: string; now: Date; nameOf: NameOf }): ReactNode {
+  return (
+    <ul className={styles['wl']} aria-label={label}>
+      {decisions.map((decision) => (
+        <Row
+          key={`${decision.run_id}:${decision.at}`}
+          item={{ kind: 'run', id: decision.run_id }}
+          to={`/runs/${decision.run_id}`}
+          name={decision.use_case_name}
+          line={decisionSub(decision, now, nameOf)}
+          state={
+            <span className={styles['pill']} data-tone={decision.verdict === 'approve' ? 'good' : undefined}>
+              {verdictWords(decision)}
+            </span>
+          }
+          data={{ 'data-decision': decision.verdict }}
+        />
+      ))}
     </ul>
   )
 }

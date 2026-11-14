@@ -8,10 +8,11 @@ import stopped from '../../../../contracts/fixtures/builder/use-case.stopped.jso
 import checkWorkflows from '../../../../contracts/fixtures/planner/answer.check_workflows.json'
 import needsMe from '../../../../contracts/fixtures/planner/answer.needs_me.json'
 import decide from '../../../../contracts/fixtures/planner/answer.decide.json'
+import bobApproval from '../../../../contracts/fixtures/approvals/apr_01JB8.bob.json'
 import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { HomeOut, Me, PlannerReply, UseCaseView, WatchlistView } from '../../api/types'
+import type { ApprovalView, HomeOut, Me, PlannerReply, UseCaseView, WatchlistView } from '../../api/types'
 import { OpensInPanel } from '../../ui/sidePanel'
 import { Thread } from './Thread'
 import { EMPTY, threadReducer, type Thread as ThreadState } from './threadState'
@@ -35,7 +36,9 @@ function draw(thread: ThreadState, { me = ALICE, home, useCases = [STOPPED], wat
   const client = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   client.setQueryData(['me', scope], me)
   client.setQueryData(['dev-users'], [ALICE, BOB])
-  client.setQueryData(['home', scope], home ?? (me.id === 'bob' ? bobHome : aliceHome))
+  const shownHome = (home ?? (me.id === 'bob' ? bobHome : aliceHome)) as HomeOut
+  client.setQueryData(['home', scope], shownHome)
+  for (const request of shownHome.approvals) client.setQueryData(['approval', scope, request.approval_id], { ...(bobApproval as ApprovalView), approval_id: request.approval_id, run_id: request.run_id })
   client.setQueryData(['use-cases', scope], useCases)
   client.setQueryData(['watchlist', scope], watchlist)
   return renderToStaticMarkup(
