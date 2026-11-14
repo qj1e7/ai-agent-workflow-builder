@@ -114,4 +114,13 @@
   .body {
     grid-column: 2;
   }
+
+  /* The sketch's keys are short enough to keep their column at any width. */
+  .parts[data-short] .part:not([data-mark='no']) {
+    grid-template-columns: 22px 3.75rem minmax(0, 1fr);
+  }
+
+  .parts[data-short] .part:not([data-mark='no']) .body {
+    grid-column: 3;
+  }
 }

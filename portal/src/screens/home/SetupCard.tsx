@@ -221,7 +221,10 @@ function keyed(key: PartKey, pieces: readonly { readonly mark: Mark; readonly bo
 
 /** The parts once Set up is pressed: what it watches, when and what it does then, as words, each a tick. */
 export function frozenParts(form: Form, plan: PlanView | null, writes: boolean | null): Part[] {
-  const texts = (part: PartKey) => form.rows.filter((row) => row.kind !== 'schedule' && PART_OF[row.kind] === part && row.text !== '').map((row) => upperFirst(row.text))
+  const project = plan?.kind === 'agents' && plan.agents.some((agent) => agent.inputs.some((input) => input.kind === 'jira_project'))
+  // Where it goes is said once: by the Jira project it was set up with, when an agent has one.
+  const said = (row: Row) => row.kind !== 'schedule' && row.text !== '' && !(row.kind === 'where' && project)
+  const texts = (part: PartKey) => form.rows.filter((row) => said(row) && PART_OF[row.kind] === part).map((row) => upperFirst(row.text))
   const values = (part: PartKey) =>
     plan?.kind === 'agents'
       ? plan.agents.flatMap((agent) => agent.inputs.filter((input) => inputPart(input.kind) === part).map((input) => `${input.name}: ${valueOf(form, agent, input.name)}`))

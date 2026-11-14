@@ -98,11 +98,19 @@ export function layOut(blocks: readonly N8nBlockView[]): Laid {
       const a = nodeOf.get(block.name)
       const b = nodeOf.get(exit.to)
       if (!a || !b) return []
+      const label = block.kind === 'branch' ? exit.exit : null
+      if (b.col <= a.col) {
+        // A way out to a block in the same column or before it leaves from the bottom and comes in at the top, so it never loops back across the blocks.
+        const x1 = a.x + NODE / 2
+        const y1 = a.y + NODE
+        const x2 = b.x + NODE / 2
+        const y2 = b.y
+        return [{ from: block.name, to: exit.to, label, path: `M${x1} ${y1} C${x1} ${y1 + 30}, ${x2} ${y2 - 30}, ${x2} ${y2}`, labelAt: { x: x1 + 8, y: y1 + 18 } }]
+      }
       const x1 = a.x + NODE
       const y1 = a.y + NODE / 2
       const x2 = b.x
       const y2 = b.y + NODE / 2
-      const label = block.kind === 'branch' ? exit.exit : null
       return [{ from: block.name, to: exit.to, label, path: `M${x1} ${y1} C${x1 + 50} ${y1}, ${x2 - 50} ${y2}, ${x2} ${y2}`, labelAt: { x: x1 + 8, y: y2 > y1 ? y1 + 24 : y1 - 9 } }]
     }),
   )
