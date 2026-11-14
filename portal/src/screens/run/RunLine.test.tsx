@@ -74,9 +74,30 @@ describe('the run line', () => {
 
   it('draws only the workflow’s blocks, says each step’s state in words, and marks the gate as the current step while it waits', () => {
     const html = line(replay(success, 15))
-    expect(stepsSaid(html)).toEqual(['Done: Started by Alice', 'Done: Read every source', 'Waiting for a yes: Ask for a yes', 'Not reached yet: Create Jira tickets'])
+    expect(stepsSaid(html)).toEqual(['Done: Started by Alice', 'Done: Read every source', 'Waiting for a yes: Ask for a yes Sent to Bob in Teams', 'Not reached yet: Create Jira tickets'])
     expect(html.match(/aria-current="step"/g)).toHaveLength(1)
     expect(html).toMatch(/aria-current="step"[^>]*data-state="wait"/)
+  })
+
+  it('says who the request went to under the waiting gate, only once the platform says it is in Teams', () => {
+    expect(stepsSaid(line(replay(success, 14)))[2]).toBe('Waiting for a yes: Ask for a yes')
+    expect(stepsSaid(line(replay(success, 15)))[2]).toBe('Waiting for a yes: Ask for a yes Sent to Bob in Teams')
+    expect(stepsSaid(line(replay(success, 15), { small: true }))[2]).toBe('Waiting for a yes: Ask for a yes Sent to Bob')
+    expect(stepItems(line(replay(success, 16)))[2], 'nothing is said once Bob has decided').not.toContain('Sent to')
+  })
+
+  it('says it couldn’t send to Teams when the post failed, and never that it was sent', () => {
+    const gaveUp = {
+      run_id: 'run_01JB8',
+      seq: 15,
+      ts: '2026-11-03T02:15:00Z',
+      actor: { kind: 'platform', id: 'platform', display: 'Platform' },
+      summary: 'The approval request could not be posted to Teams.',
+      kind: 'approval_announce_failed',
+      data: { approval_id: 'apr_01JB8', channel: 'CODESparks Ops', message: 'Teams is down' },
+    }
+    const said = stepsSaid(line(replay([...success.filter((item) => item.seq <= 14), gaveUp])))[2]
+    expect(said).toBe('Waiting for a yes: Ask for a yes Couldn’t send to Teams')
   })
 
   it('says how long the step at work has been working, once a second has passed', () => {
@@ -196,7 +217,7 @@ describe('the links between the steps', () => {
       const big = line(model)
       const small = line(model, { small: true })
       expect(links(small)).toEqual(links(big))
-      expect(stepsSaid(small)).toEqual(stepsSaid(big).map((said) => said.replace('Working…', '…').replace('Working, ', '')))
+      expect(stepsSaid(small)).toEqual(stepsSaid(big).map((said) => said.replace('Working…', '…').replace('Working, ', '').replace(' in Teams', '')))
     }
   })
 })

@@ -31,9 +31,13 @@ async function onePrimary(page: Page, state: string): Promise<void> {
   expect(primaries, `Principle 3 (one primary action): ${state} shows ${String(primaries)} primary buttons`).toBeLessThanOrEqual(1)
 }
 
-/** Principle 5: no claim the system can't back. */
+/**
+ * Principle 5: no claim the system can't back. The one "Sent to" allowed is the line under a waiting gate, which shows only after
+ * the platform's own event says the request is in Teams.
+ */
 async function noOverclaim(page: Page, state: string): Promise<void> {
-  const words = await main(page).innerText()
+  const backed = await main(page).locator('[data-sent]').allInnerTexts()
+  const words = backed.reduce((left, sent) => left.replace(sent, ''), await main(page).innerText())
   expect(words, `Principle 5 (never claim more than the platform can do): ${state} says "Sent"`).not.toMatch(/\bSent to\b|\bWe sent\b/)
   expect(words, `Principle 5: ${state} says "all tickets"`).not.toMatch(/\ball (the )?tickets\b/i)
   expect(words, `Principle 7 (honest states): ${state} says a retired phrase`).not.toMatch(/follow it on Home|Check what I understood/)

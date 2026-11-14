@@ -4,7 +4,7 @@ import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { IconCheck, IconLock } from '../../ui/icons'
 import { TicketKeys } from '../jira/TicketKeys'
-import { approvalPill, approvalTitle, fieldRows, kindWords, recordWords, turnWords, waitingWords, whereWords, whyYouWords } from './approvalWords'
+import { approvalPill, approvalTitle, fieldRows, kindWords, recordWords, sentRowWords, turnWords, waitingWords, whereWords, whyYouWords } from './approvalWords'
 import { APPROVE, canDecideNow, standingOf, type Decision, type Standing } from './decision'
 import { AskBox, QuestionThread } from './QuestionThread'
 import { useFocusAfter, type Questions } from './questions'
@@ -154,7 +154,8 @@ function Record({ standing, words, facts, next }: { standing: Standing; words: s
  * platform checks the digest and the deciding person again at the write, so nothing here is the check.
  */
 export function ApprovalGate({ approval, page, decision, facts, notChecked, reasons, requester, questions, me, party, nameOf, next, now }: ApprovalGateProps) {
-  const standing = standingOf(decision.steps ?? approval.steps)
+  const steps = decision.steps ?? approval.steps
+  const standing = standingOf(steps)
   const canDecide = canDecideNow(approval, decision)
   // Once this person's decision is recorded, the request offers them nothing more, though the next read may take a while to say so.
   const whyNot = decision.recorded === null ? approval.why_not : 'decided_earlier_step'
@@ -178,6 +179,7 @@ export function ApprovalGate({ approval, page, decision, facts, notChecked, reas
   const pill = approvalPill(standing, canDecide)
   const turn = turnWords(standing, nameOf)
   const record = recordWords(standing, facts, nameOf, reasons, now)
+  const sent = sentRowWords(steps, now)
   const projects = approval.actions.flatMap((action) => (typeof action.target['project'] === 'string' ? [action.target['project']] : []))
   const declining = opened?.kind === 'decline' ? opened : null
 
@@ -209,6 +211,12 @@ export function ApprovalGate({ approval, page, decision, facts, notChecked, reas
       ) : null}
       {page && standing.is === 'open' ? (
         <dl className={styles['chg']}>
+          {sent ? (
+            <div>
+              <dt>Sent</dt>
+              <dd>{sent}</dd>
+            </div>
+          ) : null}
           <div>
             <dt>{canDecide ? 'Why you' : 'Why not you'}</dt>
             <dd>{canDecide ? whyYouWords(standing) : lockWords(whyNot, party)}</dd>
