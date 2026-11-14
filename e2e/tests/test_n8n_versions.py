@@ -84,6 +84,22 @@ class Member:
         return published
 
 
+LAID_OUT = {
+    "timezone": "Asia/Singapore",
+    "saveManualExecutions": True,
+    "saveExecutionProgress": True,
+}
+"""What every layout sets and the safety checker requires, beside the error workflow."""
+
+
+def settings_in_n8n(workflow_id: str, where: str) -> Json:
+    """The workflow's settings as n8n holds them now, which must still be the layout's."""
+    settings: Json = N8N_OWNER.call("GET", f"/workflows/{workflow_id}").get("settings") or {}
+    kept = {key: settings.get(key) for key in LAID_OUT}
+    assert kept == LAID_OUT and settings.get("errorWorkflow"), f"{where}: {settings}"
+    return settings
+
+
 def held_by(api: Api, member: Member, workflow_id: str) -> None:
     """Open in n8n, done by hand until E7: the workflow moves to the member's own project. The
     move is checked by reading the workflow back, not by the transfer's answer."""
@@ -115,9 +131,14 @@ def test_a_version_published_in_n8n_is_kept_graded_and_carded_and_undo_restores(
     use_case_id, workflow_id = created["use_case_id"], created["n8n_workflow_id"]
     first = api.get("alice", f"/api/v1/use-cases/{use_case_id}/versions")["versions"][0]
     assert (first["version"], first["grade"]) == (1, "safe")
+    laid_out = settings_in_n8n(workflow_id, "as the platform laid it out")
     member = Member("dana")
     held_by(api, member, workflow_id)
+    assert settings_in_n8n(workflow_id, "once the member holds it") == laid_out
     published = member.publish_without_the_yes(workflow_id)
+    assert settings_in_n8n(workflow_id, "once the member published") == laid_out
+    history = N8N_OWNER.call("GET", f"/workflow-history/workflow/{workflow_id}/version/{published}")
+    print(f"n8n's history keeps for a version: {sorted(history)}")
 
     view = swept(api, use_case_id, 2)
     assert view["grade"] == "writes_refused", view["findings"]
