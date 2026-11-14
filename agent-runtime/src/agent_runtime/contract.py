@@ -827,8 +827,14 @@ class WatchedFact(WireModel):
     )
 
 
+WORKFLOW_FACTS: Final = 50
+OTHER_WORKFLOWS: Final = 1000
+
+type WorkflowName = Annotated[str, StringConstraints(max_length=80)]
+
+
 class WorkflowFact(WireModel):
-    name: str = Field(max_length=80)
+    name: WorkflowName
     state: Literal["draft", "on", "paused"]
     last_run: str | None = Field(
         max_length=40, description="The state of the newest run, in the words the Portal uses."
@@ -878,13 +884,23 @@ class PlannerFacts(WireModel):
     that is None was not sent, and the answer may not claim to have looked at it."""
 
     watchlist: list[WatchedFact] | None = Field(default=None, max_length=100)
-    workflows: list[WorkflowFact] | None = Field(default=None, max_length=50)
+    workflows: list[WorkflowFact] | None = Field(default=None, max_length=WORKFLOW_FACTS)
+    other_workflows: list[WorkflowName] | None = Field(
+        default=None,
+        max_length=OTHER_WORKFLOWS,
+        description="The names of the person's other workflows, sent when they have more than "
+        "the workflows above. Their state and last run were not read.",
+    )
     needs_you: NeedsYouFact | None = None
     watchlist_schedule: WatchlistScheduleFact | None = Field(
         default=None,
         description="When the Software watchlist checks all its software. None when it is off "
         "or was not read, so a time asked for one software is a cross.",
     )
+
+    def workflow_names(self) -> list[str]:
+        """Every workflow's name the platform sent, those with a last run and the others."""
+        return [w.name for w in self.workflows or []] + list(self.other_workflows or [])
 
 
 class PreviousTurn(WireModel):

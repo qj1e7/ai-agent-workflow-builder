@@ -482,8 +482,15 @@ class WatchedFact(WireModel):
         return value[:NEWEST_VERSION_LIMIT] if isinstance(value, str) else value
 
 
+WORKFLOW_FACTS: Final = 50
+"""The workflows sent with their state and last run. The names of the rest are sent alone."""
+OTHER_WORKFLOWS: Final = 1000
+
+type WorkflowName = Annotated[str, StringConstraints(max_length=80)]
+
+
 class WorkflowFact(WireModel):
-    name: str = Field(max_length=80)
+    name: WorkflowName
     state: Literal["draft", "on", "paused"]
     last_run: str | None = Field(max_length=40)
     last_run_at: datetime | None
@@ -508,7 +515,8 @@ class WatchlistScheduleFact(WireModel):
 
 class PlannerFacts(WireModel):
     watchlist: list[WatchedFact] | None = Field(default=None, max_length=100)
-    workflows: list[WorkflowFact] | None = Field(default=None, max_length=50)
+    workflows: list[WorkflowFact] | None = Field(default=None, max_length=WORKFLOW_FACTS)
+    other_workflows: list[WorkflowName] | None = Field(default=None, max_length=OTHER_WORKFLOWS)
     needs_you: NeedsYouFact | None = None
     watchlist_schedule: WatchlistScheduleFact | None = None
 

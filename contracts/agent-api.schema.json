@@ -2506,6 +2506,23 @@
           ],
           "default": null
         },
+        "other_workflows": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/WorkflowName"
+              },
+              "maxItems": 1000,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The names of the person's other workflows, sent when they have more than the workflows above. Their state and last run were not read.",
+          "title": "Other Workflows"
+        },
         "watchlist": {
           "anyOf": [
             {
@@ -3938,9 +3955,7 @@
           "title": "Last Run At"
         },
         "name": {
-          "maxLength": 80,
-          "title": "Name",
-          "type": "string"
+          "$ref": "#/$defs/WorkflowName"
         },
         "state": {
           "enum": [
@@ -3960,6 +3975,10 @@
       ],
       "title": "WorkflowFact",
       "type": "object"
+    },
+    "WorkflowName": {
+      "maxLength": 80,
+      "type": "string"
     }
   },
   "additionalProperties": false,

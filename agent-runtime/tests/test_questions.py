@@ -26,7 +26,12 @@ from agent_runtime.contract import (
 )
 from agent_runtime.contracts import answer_request
 from agent_runtime.parts import parts_of
-from agent_runtime.questions import COULD_NOT_ANSWER, QUESTION_SYSTEM, QuestionReply
+from agent_runtime.questions import (
+    COULD_NOT_ANSWER,
+    OTHER_WORKFLOWS_RULE,
+    QUESTION_SYSTEM,
+    QuestionReply,
+)
 from agent_runtime.reading import TicketRead
 from tests.fakes import ScriptedChat
 from tests.test_answers import follow_up
@@ -391,6 +396,23 @@ def test_why_stopped_goes_to_the_lane_when_no_run_has_stopped():
 def test_why_stopped_keeps_the_fixed_answer_when_a_run_has_stopped():
     out = _why(PlannerFacts(workflows=[_workflow("Done"), _workflow("Stopped")]))
     assert isinstance(out, WhyStoppedAnswer)
+
+
+def test_why_stopped_keeps_the_fixed_answer_when_some_last_runs_were_left_out():
+    out = _why(PlannerFacts(workflows=[_workflow("Done")], other_workflows=["Night check"]))
+    assert isinstance(out, WhyStoppedAnswer)
+
+
+def test_the_lane_is_told_which_workflows_came_by_name_only_and_to_say_it_could_not_look():
+    facts = PlannerFacts(workflows=[_workflow("Done")], other_workflows=["Night check"])
+    reply = QuestionReply(about_their_data=True, text="I couldn't look at Night check just now.")
+    result, chat = ask(reply, facts, "how is the night check doing?")
+    system = cast(tuple[str, str], chat.calls[1][0])[1]
+    assert OTHER_WORKFLOWS_RULE in system and system.startswith(QUESTION_SYSTEM[:40])
+    assert '"other_workflows":["Night check"]' in cast(tuple[str, str], chat.calls[1][1])[1]
+    assert result.answer.text == "I couldn't look at Night check just now."
+    _, plain = ask(reply, PlannerFacts(workflows=[_workflow("Done")]), "how are my workflows?")
+    assert plain.calls[1][0] == ("system", QUESTION_SYSTEM), "the rule only when it applies"
 
 
 @pytest.mark.parametrize("facts", [None, FACTS])

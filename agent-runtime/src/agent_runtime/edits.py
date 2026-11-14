@@ -247,7 +247,7 @@ def _merged(spans: list[Span]) -> list[Span]:
 
 
 def _workflow_names(facts: PlannerFacts | None) -> list[str]:
-    return [w.name for w in (facts.workflows if facts is not None else None) or []]
+    return [] if facts is None else facts.workflow_names()
 
 
 def _whole(text: str, words_: str) -> Span | None:

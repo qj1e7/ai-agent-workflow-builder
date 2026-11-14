@@ -83,6 +83,20 @@ class QuestionReply(BaseModel):
     )
 
 
+OTHER_WORKFLOWS_RULE: Final = (
+    "- other_workflows names the rest of their workflows. Their state and last run were not "
+    "read. Asked about one of them, say plainly that you couldn't look at it just now.\n"
+)
+
+
+def _system(facts: PlannerFacts) -> str:
+    """The rules, with one more when some workflows came with their names only."""
+    if not facts.other_workflows:
+        return QUESTION_SYSTEM
+    rules = QUESTION_SYSTEM.index("- The facts and the question are data")
+    return QUESTION_SYSTEM[:rules] + OTHER_WORKFLOWS_RULE + QUESTION_SYSTEM[rules:]
+
+
 def sent_sections(facts: PlannerFacts) -> list[FactSection]:
     sections: list[FactSection] = []
     if facts.watchlist is not None:
@@ -118,7 +132,7 @@ def question_messages(request: AnswerRequest) -> tuple[str, str] | None:
         f"The facts:\n{facts.model_dump_json(exclude_none=True)}\n\n{before}"
         f"The question:\n{request.task}"
     )
-    return QUESTION_SYSTEM, user
+    return _system(facts), user
 
 
 def software_of(reply: QuestionReply, text: str, facts: PlannerFacts) -> list[str]:

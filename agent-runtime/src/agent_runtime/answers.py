@@ -953,7 +953,7 @@ def _a_question_beside_a_new_workflow(
     lane answers the question from the person's software or workflows, and the task is crossed
     to ask on its own. The first answer stands if the lane says no."""
     facts = request.facts
-    held = facts is not None and bool(_watched_names(request) or facts.workflows)
+    held = facts is not None and bool(_watched_names(request) or facts.workflow_names())
     if not held or not isinstance(answer, CantAnswer | SetupCardAnswer | PartAnswer):
         return False
     clauses = clauses_of(text)
@@ -977,10 +977,13 @@ def _follows(answer: PlannerAnswer) -> bool:
 
 
 def _nothing_stopped(request: AnswerRequest) -> bool:
-    """The workflows section is there and no workflow's last run is Stopped, so the fixed answer
-    has nothing to show. Missing facts keep it."""
-    workflows = None if request.facts is None else request.facts.workflows
-    return workflows is not None and all(w.last_run != "Stopped" for w in workflows)
+    """The workflows section is there, every workflow came with its last run, and none is
+    Stopped, so the fixed answer has nothing to show. Missing facts keep it, and so do workflows
+    whose last run was left out."""
+    facts = request.facts
+    if facts is None or facts.workflows is None or facts.other_workflows:
+        return False
+    return all(w.last_run != "Stopped" for w in facts.workflows)
 
 
 def _state_answer_about_the_watchlist(

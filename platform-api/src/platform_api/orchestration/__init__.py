@@ -1,4 +1,6 @@
 from platform_api.orchestration.agents import (
+    OTHER_WORKFLOWS,
+    WORKFLOW_FACTS,
     AbilitiesAnswer,
     AgentRejected,
     AgentUnavailable,
@@ -219,6 +221,8 @@ from platform_api.orchestration.workflow_check import (
 from platform_api.orchestration.write_actions import Binding
 
 __all__ = [
+    "OTHER_WORKFLOWS",
+    "WORKFLOW_FACTS",
     "WriteEntry",
     "known_options",
     "block_id",
