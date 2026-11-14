@@ -5,10 +5,9 @@ import dayOne from '../../../../contracts/fixtures/builder/home.day-one.json'
 import declinedTest from '../../../../contracts/fixtures/builder/home.alice.declined-test.json'
 import questionForAlice from '../../../../contracts/fixtures/builder/home.alice.question.json'
 import type { AddressItem, ApprovalItem, ConnectionItem, FollowingUpItem, HomeOut, ReplyView, StoppedItem, WaitingItem } from '../../api/types'
-import { ApiError } from '../../api/client'
 import capabilities from '../../../../contracts/fixtures/planner/capabilities.json'
 import type { CapabilitiesView } from '../../api/types'
-import { actionsOf, approverHeading, approverLine, draftWords, groupOf, HOME_NEEDS_SHOWN, lineOf, moreWords, needsOf, needsTotal, openPathOf, panelItemOf, pinnedOf, retryProblem, suggestionsOf, waitingWords, wordsOf, type Need } from './home'
+import { actionsOf, approverHeading, approverLine, draftWords, groupOf, HOME_NEEDS_SHOWN, lineOf, moreWords, needsOf, needsTotal, openPathOf, panelItemOf, pinnedOf, retriedFirstWords, retryProblem, suggestionsOf, waitingWords, wordsOf, type Need } from './home'
 
 const BOB = bobHome as HomeOut
 const ALICE = aliceHome as HomeOut
@@ -287,8 +286,10 @@ describe('a test run an Approver declined', () => {
 describe('a retry the platform refused', () => {
   const words = () => 'Check your connection, or try again in a moment.'
 
-  it('says the run may have been retried already when it is no longer stopped', () => {
-    expect(retryProblem(new ApiError(409, null), words)).toBe('It can’t be retried now. Someone may have retried it already, so look at the run.')
+  it('says who retried it first when another press beat this one, by the name the run gives them', () => {
+    expect(retriedFirstWords({ kind: 'user', id: 'carol', display: 'Carol' }, 'alice')).toBe('Carol already retried this run.')
+    expect(retriedFirstWords({ kind: 'user', id: 'alice', display: 'Alice' }, 'alice'), 'her own press in another tab').toBe('You already retried this run.')
+    expect(retriedFirstWords(null, 'alice'), 'the run names nobody').toBe('This run isn’t stopped any more. Someone may have retried it already.')
   })
 
   it('says it could not retry, in the app’s words for anything else', () => {

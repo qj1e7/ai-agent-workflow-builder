@@ -2,6 +2,7 @@ import { keepPreviousData, queryOptions, useMutation, useQueries, useQuery, useQ
 import { ApiError, unwrap, type ApiClient } from './client'
 import { useApiClient, useSession, useCacheScope } from './context'
 import type {
+  Actor,
   AddSoftware,
   AddressDecisionIn,
   ApprovalView,
@@ -324,15 +325,37 @@ export function useAnswerQuestion(approvalId: string) {
   })
 }
 
-export function useRetry(runId: string, onRetried: () => void) {
+export interface RetryAfter {
+  readonly retried: () => void
+  /**
+   * The run had left its stop before the press reached the platform, so the platform refused it. `by` is who retried it, as the run's
+   * newest retry names them, or null when no person did or the run can't be read. It is called before the page reads the run again,
+   * which takes Retry away, so it runs even when Retry has already gone.
+   */
+  readonly retriedFirst: (by: Actor | null) => void
+}
+
+export function useRetry(runId: string, after: RetryAfter) {
   const client = useApiClient()
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async () =>
       unwrap(await client.POST('/api/v1/runs/{run_id}/retry', { params: { path: { run_id: runId } } })),
-    onSuccess: onRetried,
+    onSuccess: after.retried,
+    onError: async (error) => {
+      if (isConflict(error)) after.retriedFirst(await lastRetriedBy(client, runId))
+    },
     onSettled: () => refreshAfterChange(queryClient),
   })
+}
+
+async function lastRetriedBy(client: ApiClient, runId: string): Promise<Actor | null> {
+  try {
+    const retried = (await fetchEventPage(client, runId)).events.findLast((event) => event.kind === 'run_retried')
+    return retried?.actor.kind === 'user' ? retried.actor : null
+  } catch {
+    return null
+  }
 }
 
 /** Keyed by attempt, so a second failure never shows the first one's cached advice. */
