@@ -13,6 +13,7 @@ from platform_api.builder import Builder, Watchlist
 from platform_api.builder.models import AddSoftware, ScheduleIn, WatchlistView
 from platform_api.builder.watchlist import (
     AlreadyOnN8n,
+    Move,
     MovedToN8n,
     OnN8n,
     WaitsForRun,
@@ -307,3 +308,54 @@ async def test_the_builder_knows_the_watchlist_s_own_workflow(world: World):
 
     assert await facts.watchlist(workflow_id) is True
     assert await facts.watchlist("wf-someone-else") is False
+
+
+class Crash(BaseException):
+    """The process stops here, so no handler runs."""
+
+
+class CrashesOnceLive(Drafts):
+    async def go_live(self, workflow_id: str, version_id: str) -> None:
+        await super().go_live(workflow_id, version_id)
+        raise Crash
+
+
+async def test_a_move_cut_off_once_its_workflow_is_live_is_finished_by_the_next(world: World):
+    await watchlist_before_the_move(world)
+    on = OnN8n(CrashesOnceLive(world.n8n, world.db), world.runs, SOFTWARE_PAGE)
+    with pytest.raises(Crash):
+        await Watchlist(world.db, FakeFacts(), ScheduleBook(world.db), n8n=on).move_to_n8n()
+    assert len(world.n8n.workflows) == 1
+    assert (await world.use_case())["engine"] == "shared_run"
+
+    moved = await world.on_n8n.move_to_n8n()
+
+    assert isinstance(moved, MovedToN8n)
+    assert list(world.n8n.workflows) == [moved.workflow_id], "nothing of the cut-off move is left"
+    assert (await world.use_case())["n8n_workflow_id"] == moved.workflow_id
+
+
+class MovedMeanwhile(Watchlist):
+    """Another start moved the watchlist between Check now's first read and its own move."""
+
+    def __init__(self, world: World) -> None:
+        super().__init__(world.db, FakeFacts(), ScheduleBook(world.db))
+        self.world = world
+
+    async def move_to_n8n(self) -> Move:
+        await self.world.on_n8n.move_to_n8n()
+        return AlreadyOnN8n()
+
+
+async def test_check_now_runs_the_version_that_is_current_after_the_move(world: World):
+    await watchlist_before_the_move(world)
+    starts = Starts()
+    builder = Builder(world.db, starts, MovedMeanwhile(world), "")
+    [use_case_id] = [
+        row["use_case_id"] for row in await world.rows("SELECT use_case_id FROM builder.use_cases")
+    ]
+
+    await builder.start_run(UseCaseId(use_case_id), ALICE, "check-now-1")
+
+    [spec] = starts.specs
+    assert (spec.use_case_version, spec.n8n is not None) == (2, True)

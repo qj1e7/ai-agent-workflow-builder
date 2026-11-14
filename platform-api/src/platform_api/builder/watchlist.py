@@ -136,6 +136,9 @@ class WatchlistRecord:
     lifecycle: Lifecycle
     n8n: InN8n | None = None
     """None while the watchlist still runs on the shared run workflow (ENGINE-PLAN 2.6)."""
+    left_in_n8n: str | None = None
+    """A workflow a move made and named before it was cut off, while the watchlist still runs on
+    the shared run workflow. The next move removes it."""
 
 
 @dataclass(frozen=True)
@@ -529,7 +532,8 @@ async def _current(conn: Connection, lock: bool) -> WatchlistRecord | None:
     if row is None:
         return None
     use_case_id = UseCaseId(row["use_case_id"])
-    workflow_id: str | None = row["n8n_workflow_id"] if row["engine"] == "own" else None
+    own = row["engine"] == "own"
+    workflow_id: str | None = row["n8n_workflow_id"]
     return WatchlistRecord(
         use_case_id,
         int(row["version"]),
@@ -537,7 +541,15 @@ async def _current(conn: Connection, lock: bool) -> WatchlistRecord | None:
         str(row["params"]["ticket_project"]),
         await _software_of(conn, use_case_id, int(row["version"])),
         lifecycle_of(row),
-        None if workflow_id is None else InN8n(workflow_id, row["n8n_version_id"], row["document"]),
+        InN8n(workflow_id, row["n8n_version_id"], row["document"]) if own and workflow_id else None,
+        None if own else workflow_id,
+    )
+
+
+async def _name_in_n8n(uow: UnitOfWork, use_case_id: UseCaseId, workflow_id: str | None) -> None:
+    await uow.conn.execute(
+        "UPDATE builder.use_cases SET n8n_workflow_id = %s WHERE use_case_id = %s",
+        (workflow_id, use_case_id),
     )
 
 
@@ -770,7 +782,10 @@ class Watchlist:
         """Puts the watchlist on its own n8n workflow, with its schedule in the Schedule Trigger,
         in a new version (ENGINE-PLAN 2.6). Asking again changes nothing. A watchlist with a run
         that has not ended stays as it is, so nothing that run waits for is lost; it moves the next
-        time it is asked."""
+        time it is asked.
+
+        The records name the new workflow before it can run, so a move cut off at any point leaves
+        nothing in n8n that the next move does not find and remove."""
         if self._n8n is None:
             return N8nNotReady("This platform is not connected to n8n.")
         on = self._n8n
@@ -783,6 +798,8 @@ class Watchlist:
             if (open_run := await on.runs.open_run(record.use_case_id)) is not None:
                 log.info("the watchlist moves to n8n once run %s ends", open_run)
                 return WaitsForRun(open_run)
+            if record.left_in_n8n is not None:
+                await _discard(on.drafts, record.left_in_n8n)
             saved = await self._schedules.get(record.use_case_id)
             schedule = None if saved is None else saved.schedule
             laid = await self._laid_out(on, record.use_case_id, schedule)
@@ -793,30 +810,32 @@ class Watchlist:
             except (N8nError, httpx.HTTPError) as error:
                 log.warning("n8n did not take the watchlist's workflow: %s", error)
                 return N8nNotReady("n8n did not take the watchlist's workflow. It runs as before.")
-            held = Written(draft.version_id, draft.document)
+            await _name_in_n8n(uow, record.use_case_id, draft.workflow_id)
+        async with self._db.transaction("builder") as uow:
+            record = await self._hold(uow)
+            if record is None or record.left_in_n8n != draft.workflow_id:
+                return AlreadyOnN8n()
             live = is_on(record.lifecycle)
             try:
                 if live:
                     await on.drafts.go_live(draft.workflow_id, draft.version_id)
-                moved = await self._next_version(uow, record, record.software)
-                publisher = (record.owner if saved is None else saved.owner) if live else None
-                await _keep_in_n8n(
-                    uow, record.use_case_id, moved.version, held, laid.graded.grade, publisher
-                )
-                await uow.conn.execute(
-                    "UPDATE builder.use_cases SET engine = 'own', n8n_workflow_id = %s"
-                    " WHERE use_case_id = %s",
-                    (draft.workflow_id, record.use_case_id),
-                )
             except (N8nError, httpx.HTTPError) as error:
                 log.warning("n8n did not put the watchlist's workflow live: %s", error)
                 await _discard(on.drafts, draft.workflow_id)
+                await _name_in_n8n(uow, record.use_case_id, None)
                 return N8nNotReady(
                     "n8n did not turn the watchlist's workflow on. It runs as before."
                 )
-            except Exception:
-                await _discard(on.drafts, draft.workflow_id)
-                raise
+            moved = await self._next_version(uow, record, record.software)
+            publisher = (record.owner if saved is None else saved.owner) if live else None
+            held = Written(draft.version_id, draft.document)
+            await _keep_in_n8n(
+                uow, record.use_case_id, moved.version, held, laid.graded.grade, publisher
+            )
+            await uow.conn.execute(
+                "UPDATE builder.use_cases SET engine = 'own' WHERE use_case_id = %s",
+                (record.use_case_id,),
+            )
         log.info(
             "the watchlist runs as n8n workflow %s from version %d",
             draft.workflow_id,
