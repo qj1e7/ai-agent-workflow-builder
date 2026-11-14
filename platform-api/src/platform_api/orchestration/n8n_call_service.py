@@ -180,6 +180,7 @@ from platform_api.orchestration.watch import (
     watchlist_inputs,
 )
 from platform_api.orchestration.watch_store import WatchStore
+from platform_api.orchestration.workflow_check import ERROR_WORKFLOW, SELF_TEST
 from platform_api.orchestration.write_actions import (
     AuthorizedWrite,
     Carried,
@@ -334,14 +335,14 @@ class NodeCalls:
         be read, every report is refused."""
         if self._failures is None:
             return NOT_OUR_ERROR_WORKFLOW
-        ours = await self._failures.error_workflow_id()
+        ours = await self._failures.platform_workflow(ERROR_WORKFLOW)
         facts = await self._n8n.execution(reporter)
         if not ours or facts is None or facts.workflow_id != ours:
             return NOT_OUR_ERROR_WORKFLOW
         found = await self._failures.failure(failed)
         if found is None:
             return NOT_FAILED
-        if found.workflow_id == await self._failures.self_test_workflow_id():
+        if found.workflow_id == await self._failures.platform_workflow(SELF_TEST):
             async with self._db.transaction("orchestration") as uow:
                 await self._self_tests.arrived(uow, found.execution_id, found.workflow_id)
             return SelfTestArrived()
@@ -693,7 +694,9 @@ class NodeCalls:
     ) -> Refused:
         """A workflow no use case runs. The platform's daily self-test is one: its Read is
         refused on purpose, so the execution fails and the error workflow reports it."""
-        if self._failures is None or workflow_id != await self._failures.self_test_workflow_id():
+        if self._failures is None or workflow_id != await self._failures.platform_workflow(
+            SELF_TEST
+        ):
             return NOT_OURS
         await self._self_tests.sent(uow, execution, workflow_id)
         return SELF_TEST_FAILS

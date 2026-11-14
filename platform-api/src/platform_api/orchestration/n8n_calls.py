@@ -654,12 +654,10 @@ class N8nFailures(Protocol):
     or in a run by hand, which reaches no error workflow (P7 Q13 and Q22), and a run that ended
     without asking for a yes."""
 
-    async def error_workflow_id(self) -> str | None:
-        """The platform's own error workflow, the only one whose executions may report."""
-        ...
-
-    async def self_test_workflow_id(self) -> str | None:
-        """The platform's daily self-test, whose failures prove the error workflow reports."""
+    async def platform_workflow(self, name: str) -> str | None:
+        """One of the platform's own workflows, such as the error workflow, the only one whose
+        executions may report, or the daily self-test. None unless the last bootstrap recorded it
+        and n8n still holds it in the platform's project."""
         ...
 
     async def ended(self, execution_id: N8nExecutionId) -> Ended | None:

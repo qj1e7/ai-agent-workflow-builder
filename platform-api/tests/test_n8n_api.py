@@ -6,6 +6,8 @@ from typing import Any
 
 import pytest
 
+from platform_api.bootstrap import LoadedWorkflow, record_status
+from platform_api.db import Database
 from platform_api.orchestration.n8n import (
     ChangedInN8n,
     N8nApi,
@@ -20,8 +22,10 @@ from platform_api.orchestration.n8n import (
     same_as_sent,
 )
 from platform_api.orchestration.n8n_calls import FailedExecution, Finished, Publisher
+from platform_api.orchestration.workflow_check import ERROR_WORKFLOW
 from platform_api.settings import N8nOwner
 from platform_api.shared import N8nExecutionId, UserId
+from tests.conftest import PostgresUrls
 from tests.fake_n8n import OWNER_EMAIL, OWNER_ID, OWNER_PASSWORD, FakeN8n
 
 pytestmark = pytest.mark.anyio
@@ -441,3 +445,34 @@ async def test_the_platform_keeps_its_n8n_session_and_signs_in_again_only_when_i
     n8n.session_ends = True
     status = await api.publication_status(created.id)
     assert (status.status, n8n.logins) == ("published", 2)
+
+
+@pytest.mark.parametrize(
+    ("recorded_in", "ready", "held_in", "trusted"),
+    [
+        ("P-owner", True, "P-owner", True),
+        ("P-owner", True, "P-alice", False),
+        (None, True, "P-owner", False),
+        ("P-owner", False, "P-owner", False),
+        ("P-owner", True, None, False),
+    ],
+    ids=["in-place", "moved-to-a-member", "recorded-before-projects", "bootstrap-failed", "gone"],
+)
+async def test_a_platform_workflow_is_trusted_only_by_its_recorded_id_in_its_recorded_project(
+    db: Database,
+    postgres: PostgresUrls,
+    recorded_in: str | None,
+    ready: bool,
+    held_in: str | None,
+    trusted: bool,
+) -> None:
+    """A report counts only from the error workflow bootstrap recorded, while n8n still holds it
+    in the platform's project: never one a member made or was handed."""
+    loaded = LoadedWorkflow(ERROR_WORKFLOW, "wf_errors", True, "abc", recorded_in)
+    record_status(postgres.owner, ready=ready, detail="d", workflows=[loaded])
+    n8n = FakeN8n()
+    if held_in is not None:
+        shared = [{"role": "workflow:owner", "projectId": held_in}]
+        n8n.workflows["wf_errors"] = {"id": "wf_errors", "name": ERROR_WORKFLOW, "shared": shared}
+    found = await N8nWorkflows(api_for(n8n), db).platform_workflow(ERROR_WORKFLOW)
+    assert found == ("wf_errors" if trusted else None)

@@ -75,11 +75,10 @@ class FakeFailures:
     read: list[str] = field(default_factory=list[str])
     finished: set[str] = field(default_factory=set[str])
 
-    async def error_workflow_id(self) -> str | None:
-        return self.error_workflow
-
-    async def self_test_workflow_id(self) -> str | None:
-        return self.self_test
+    async def platform_workflow(self, name: str) -> str | None:
+        return {"run_failure_reporter": self.error_workflow, "self_test_failure": self.self_test}[
+            name
+        ]
 
     async def ended(self, execution_id: N8nExecutionId) -> Ended | None:
         if execution_id in self.finished:

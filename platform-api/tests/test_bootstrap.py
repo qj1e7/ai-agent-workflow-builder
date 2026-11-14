@@ -164,17 +164,37 @@ def test_old_release_data_stops_bootstrap_before_any_migration_or_n8n_and_delete
     assert runs[0] + versions[0] == 1
 
 
+PLATFORM_PROJECT = "P-owner"
+MEMBER_PROJECT = "P-alice"
+
+
+def in_project(project: str) -> list[dict[str, str]]:
+    """How n8n's public API names a workflow's home project."""
+    return [{"role": "workflow:owner", "projectId": project}]
+
+
 class FakeN8n:
-    def __init__(self, existing: list[str]) -> None:
+    """`existing` sit in the platform's project, the owner's own, and `theirs` in a member's."""
+
+    def __init__(self, existing: list[str], theirs: list[str] | None = None) -> None:
+        placed = [(name, PLATFORM_PROJECT) for name in existing]
+        placed += [(name, MEMBER_PROJECT) for name in theirs or []]
         self.workflows: dict[str, dict[str, Any]] = {
-            f"W{n}": {"id": f"W{n}", "name": name, "active": True, "nodes": [], "settings": {}}
-            for n, name in enumerate(existing, start=1)
+            f"W{n}": {
+                "id": f"W{n}",
+                "name": name,
+                "active": True,
+                "nodes": [],
+                "settings": {},
+                "shared": in_project(project),
+            }
+            for n, (name, project) in enumerate(placed, start=1)
         }
         self.deleted: list[str] = []
         self.unpublishing: set[str] = set()
         self.calls: list[str] = []
         self.scopes: list[str] = []
-        self.next_id = len(existing) + 1
+        self.next_id = len(placed) + 1
         self.api_keys = [
             {"id": "k1", "label": "platform-api"},
             {"id": "k2", "label": "Alice's own key"},
@@ -187,6 +207,8 @@ class FakeN8n:
             return httpx.Response(200, json={"status": "ok"})
         if path in ("/rest/owner/setup", "/rest/login"):
             return httpx.Response(200, json={"data": {"id": "1"}})
+        if path == "/rest/projects/personal":
+            return httpx.Response(200, json={"data": {"id": PLATFORM_PROJECT, "type": "personal"}})
         if path == "/rest/api-keys" and method == "GET":
             return httpx.Response(200, json={"data": {"items": self.api_keys}})
         if path.startswith("/rest/api-keys/") and method == "DELETE":
@@ -207,11 +229,14 @@ class FakeN8n:
         if path == "/api/v1/workflows" and method == "POST":
             workflow_id = f"W{self.next_id}"
             self.next_id += 1
-            self.workflows[workflow_id] = {**body, "id": workflow_id, "active": False}
+            created = {**body, "id": workflow_id, "active": False}
+            self.workflows[workflow_id] = {**created, "shared": in_project(PLATFORM_PROJECT)}
             return httpx.Response(200, json=self.workflows[workflow_id])
         if path.startswith("/api/v1/workflows/"):
             workflow_id = path.split("/")[4]
             self.calls.append(f"{method} {path.removeprefix('/api/v1/workflows/')}")
+            if workflow_id not in self.workflows:
+                return httpx.Response(404, json={"message": "Not Found"})
             if path.endswith("/activate"):
                 self.workflows[workflow_id]["active"] = True
             elif path.endswith("/deactivate"):
@@ -433,6 +458,77 @@ def test_bootstrap_is_not_ready_when_n8n_holds_the_error_workflow_out_of_shape(
         "run_failure_reporter: Its setting callerPolicy must be 'any'." in capsys.readouterr().out
     )
     assert engine_status(postgres.owner) == (False, "the live workflows fail the lint")
+
+
+def by_name(n8n: FakeN8n, name: str) -> list[dict[str, Any]]:
+    return [w for w in n8n.workflows.values() if w["name"] == name]
+
+
+def test_a_same_name_workflow_in_a_member_s_project_is_left_alone(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    """A member could name a workflow of their own after the error workflow or the self-test.
+    Bootstrap never takes it for the platform's, and never writes to it."""
+    truncate_all(postgres.owner)
+    theirs = ["run_failure_reporter", "self_test_failure", "run"]
+    n8n = serve(monkeypatch, FakeN8n([], theirs=theirs))
+    untouched = json.loads(json.dumps(n8n.workflows))
+
+    assert main(env_for(postgres.owner)) == 0
+
+    assert {k: n8n.workflows[k] for k in untouched} == untouched
+    recorded = loaded_names(postgres.owner)
+    for name in theirs:
+        [ours] = [w for w in by_name(n8n, name) if w["shared"] == in_project(PLATFORM_PROJECT)]
+        assert recorded[name] == ours["id"] not in untouched, name
+    run = n8n.workflows[recorded["run"]]
+    assert run["settings"]["errorWorkflow"] == recorded["run_failure_reporter"]
+
+
+def test_two_workflows_of_one_name_in_the_platform_project_stop_bootstrap(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n(["run_failure_reporter", "run_failure_reporter"]))
+    before = json.loads(json.dumps(n8n.workflows))
+
+    assert main(env_for(postgres.owner)) == 1
+
+    said = "2 workflows named run_failure_reporter are in the platform's n8n project: W1, W2"
+    assert said in capsys.readouterr().out
+    assert engine_status(postgres.owner) == (False, said)
+    assert n8n.workflows == before, "bootstrap wrote to neither"
+
+
+def test_a_recorded_workflow_moved_out_of_the_platform_project_stops_bootstrap(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n([]))
+    assert main(env_for(postgres.owner)) == 0
+    reporter = loaded_names(postgres.owner)["run_failure_reporter"]
+    n8n.workflows[reporter]["shared"] = in_project(MEMBER_PROJECT)
+
+    moved = (False, f"run_failure_reporter ({reporter}) is no longer in the platform's n8n project")
+    assert main(env_for(postgres.owner)) == 1
+    assert engine_status(postgres.owner) == moved
+    assert main(env_for(postgres.owner)) == 1, "it stays stopped until a person puts it back"
+    assert engine_status(postgres.owner) == moved
+
+
+def test_bootstrap_keeps_to_the_workflow_it_recorded_over_a_copy_of_the_same_name(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n([]))
+    assert main(env_for(postgres.owner)) == 0
+    first = loaded_names(postgres.owner)
+    copy = {**n8n.workflows[first["self_test_failure"]], "id": "W99"}
+    n8n.workflows["W99"] = copy
+
+    assert main(env_for(postgres.owner)) == 0
+
+    assert loaded_names(postgres.owner) == first
 
 
 SECRET_ADDRESS = "wab-secret-host.internal.example"
