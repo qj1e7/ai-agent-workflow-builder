@@ -21,8 +21,10 @@ export interface Viewer {
   readonly approver: boolean
 }
 
+const LIFE_WORDS: Readonly<Record<UseCaseView['state'], string>> = { on: 'On', paused: 'Paused', draft: 'Draft' }
+
 export function lifeWords(state: UseCaseView['state']): string {
-  return state === 'paused' ? 'Paused' : 'On'
+  return LIFE_WORDS[state]
 }
 
 const IN_PROGRESS: ReadonlySet<RunView['state']> = new Set(['pending', 'working', 'proposed', 'acting'])

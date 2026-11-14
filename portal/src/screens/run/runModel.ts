@@ -486,7 +486,7 @@ function stateOf(model: RunModel, station: Skeleton, index: number, current: num
       if (index === failed) return 'err'
       return index < failed ? (unfilled ? 'skip' : 'done') : 'todo'
     case 'succeeded':
-      if (phase.outcome === 'nothing_to_write' && (at === 'gate' || at === 'write')) return 'skip'
+      if (phase.outcome !== 'written' && (at === 'gate' || at === 'write')) return 'skip'
       return unfilled ? 'skip' : 'done'
     case 'rejected':
       if (at === 'gate') return 'no'
@@ -531,7 +531,8 @@ function underOf(model: RunModel, stations: readonly Skeleton[], index: number, 
   }
   const written = model.written.filter((write) => write.ref !== '')
   if (at === 'write' && state === 'done' && written.length > 0) return { kind: 'tickets', written }
-  if (at === 'write' && state === 'skip' && model.phase.state === 'rejected') return { kind: 'note', text: 'Nothing written' }
+  const tested = model.phase.state === 'succeeded' && model.phase.outcome === 'test_passed'
+  if (at === 'write' && state === 'skip' && (model.phase.state === 'rejected' || tested)) return { kind: 'note', text: 'Nothing written' }
   return null
 }
 

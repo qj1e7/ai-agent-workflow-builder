@@ -88,6 +88,7 @@ describe('the status words', () => {
   it('say whether a workflow is on or paused', () => {
     expect(lifeWords('on')).toBe('On')
     expect(lifeWords('paused')).toBe('Paused')
+    expect(lifeWords('draft'), 'a workflow set up but not turned on never reads On').toBe('Draft')
   })
 
   it('read a run as the same stage words the row and the banner use', () => {

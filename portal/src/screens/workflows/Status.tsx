@@ -22,7 +22,7 @@ export function StatusPills({ state, fact, test = false, large = false }: { stat
   const run = state === 'on' && fact?.pill ? fact : null
   const words = run?.pill ?? lifeWords(state)
   const changes = useChanges(words)
-  const Icon = run ? RUN_ICON[run.tone] : state === 'paused' ? IconPause : IconCheck
+  const Icon = run ? RUN_ICON[run.tone] : state === 'paused' ? IconPause : state === 'draft' ? null : IconCheck
   return (
     <span className={large ? `${styles['pills']} ${styles['largePills']}` : styles['pills']}>
       <span key={changes} className={changes > 0 ? `${styles['pill']} ${styles['changed']}` : styles['pill']} data-life={state} data-tone={run?.tone}>
