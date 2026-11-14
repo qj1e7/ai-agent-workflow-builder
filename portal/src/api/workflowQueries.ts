@@ -1,8 +1,8 @@
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { skipToken, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { unwrap, type ApiClient } from './client'
 import { useApiClient, useCacheScope } from './context'
 import { keys } from './queries'
-import type { ScheduleIn, UseCaseView, VersionView, WatchlistView } from './types'
+import type { CreateAgentUseCase, ScheduleIn, UseCaseCreated, UseCaseView, VersionView, WatchlistView } from './types'
 
 type Move = 'pause' | 'resume' | 'restore'
 
@@ -182,4 +182,67 @@ export function useVersions(useCaseId: string, version: number) {
     enabled: version > 1,
     placeholderData: (before) => before,
   })
+}
+
+/**
+ * What Set up made, held for the set-up card and the build panel: the platform's answer with its build log and blocks, when it came,
+ * which the log's replay counts from, and the test run the card started. Only the card writes it. The panel reads it.
+ */
+export interface SetUp {
+  readonly created: UseCaseCreated
+  readonly at: number
+  readonly testRunId: string | null
+}
+
+export function holdSetUp(queryClient: QueryClient, user: string, created: UseCaseCreated, at: number): void {
+  queryClient.setQueryData<SetUp>(keys.setUp(user, created.use_case_id), { created, at, testRunId: null })
+}
+
+export function testStarted(queryClient: QueryClient, user: string, useCaseId: string, runId: string): void {
+  queryClient.setQueryData<SetUp>(keys.setUp(user, useCaseId), (held) => (held ? { ...held, testRunId: runId } : held))
+}
+
+/** Set up always makes a draft (ADR 0044): it never runs on its schedule, and only Turn it on publishes it. */
+export function setUpOffOptions(client: ApiClient, queryClient: QueryClient, user: string, now: () => number = Date.now) {
+  return {
+    mutationFn: async (body: CreateAgentUseCase) => unwrap(await client.POST('/api/v1/agent-use-cases', { body: { ...body, on: false } })),
+    onSuccess: (created: UseCaseCreated) => {
+      holdSetUp(queryClient, user, created, now())
+      rereadWorkflowsAndWatchlist(queryClient)
+    },
+  }
+}
+
+/** Turn it on publishes the draft. The card and the panel say On only from the view the platform answers with. */
+export function turnOnOptions(client: ApiClient, queryClient: QueryClient, user: string) {
+  return {
+    mutationFn: async (useCaseId: string) => unwrap(await client.POST('/api/v1/use-cases/{use_case_id}/turn-on', { params: { path: { use_case_id: useCaseId } } })),
+    onSuccess: (view: UseCaseView) => applySavedView(queryClient, user, view),
+  }
+}
+
+export function useSetUpOff() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation(setUpOffOptions(client, queryClient, user))
+}
+
+export function useTurnOn() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation(turnOnOptions(client, queryClient, user))
+}
+
+/** The set-up as the card holds it. Nothing is read from the platform: the build log comes only with Set up's answer. */
+export function useSetUp(useCaseId: string): SetUp | undefined {
+  const user = useCacheScope()
+  return useQuery<SetUp>({ queryKey: keys.setUp(user, useCaseId), queryFn: skipToken, staleTime: Infinity, gcTime: Infinity }).data
+}
+
+export function useTestStarted(): (useCaseId: string, runId: string) => void {
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return (useCaseId, runId) => testStarted(queryClient, user, useCaseId, runId)
 }

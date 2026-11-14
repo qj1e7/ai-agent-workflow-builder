@@ -27,6 +27,7 @@ export const keys = {
   useCases: (user: string) => ['use-cases', user] as const,
   useCase: (user: string, useCaseId: string) => ['use-case', user, useCaseId] as const,
   versions: (user: string, useCaseId: string, version: number) => ['versions', user, useCaseId, version] as const,
+  setUp: (user: string, useCaseId: string) => ['set-up', user, useCaseId] as const,
   templates: () => ['templates'] as const,
   tools: () => ['tools'] as const,
   agentCards: (user: string) => ['agent-cards', user] as const,
