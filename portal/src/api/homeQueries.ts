@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { unwrap } from './client'
 import { useApiClient, useCacheScope } from './context'
 import type { DecidedReply, FollowingUpItem, FollowingUpPage, HomeOut, NeedsPage, WaitingItem, WaitingPage } from './types'
@@ -47,14 +47,25 @@ function usePages<P extends { readonly next: string | null }>(list: string, firs
     enabled: (cached) => cached.state.data !== undefined,
     refetchInterval: HOME_REFRESH_MS,
   })
+  const [rereading, setRereading] = useState(false)
+  const [rereadFailed, setRereadFailed] = useState(false)
   function showMore() {
     const pages = query.data?.pages ?? (first ? [first] : null)
-    if (pages === null || query.isFetchingNextPage) return
+    if (pages === null || query.isFetchingNextPage || rereading) return
     if (query.data === undefined) queryClient.setQueryData<InfiniteData<P, string | null>>(key, { pages: [...pages], pageParams: [null] })
+    setRereadFailed(false)
+    if (pages.at(-1)?.next) {
+      void query.fetchNextPage()
+      return
+    }
     // With no next page while the count says more, the pages are out of date: read them all again.
-    void (pages.at(-1)?.next ? query.fetchNextPage() : query.refetch())
+    setRereading(true)
+    void query.refetch().then((result) => {
+      setRereading(false)
+      setRereadFailed(result.isError)
+    })
   }
-  return { pages: query.data?.pages, busy: query.isFetchingNextPage, failed: query.isFetchNextPageError, showMore }
+  return { pages: query.data?.pages, busy: query.isFetchingNextPage || rereading, failed: query.isFetchNextPageError || rereadFailed, showMore }
 }
 
 const needsOfHome = (home: HomeOut): NeedsPage => ({

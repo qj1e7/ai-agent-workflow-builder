@@ -39,21 +39,26 @@ describe('Show more', () => {
 })
 
 describe('where focus goes after Show more', () => {
-  it('waits while the page is read, and while nothing new has come', () => {
-    expect(landing(BEFORE, ['a', 'b'], true, true)).toBe('waiting')
-    expect(landing(BEFORE, ['a', 'b'], true, false)).toBe('waiting')
-    expect(landing(BEFORE, ['a', 'b', 'c'], false, true)).toBe('waiting')
+  it('waits while the page is read, and while nothing new has come and the read is not over', () => {
+    expect(landing(BEFORE, ['a', 'b'], true, true, false)).toBe('waiting')
+    expect(landing(BEFORE, ['a', 'b'], true, false, false)).toBe('waiting')
+    expect(landing(BEFORE, ['a', 'b', 'c'], false, true, true)).toBe('waiting')
   })
 
   it('stays on the button when new rows came and more are left', () => {
-    expect(landing(BEFORE, ['a', 'b', 'c'], true, false)).toBe('kept')
+    expect(landing(BEFORE, ['a', 'b', 'c'], true, false, true)).toBe('kept')
+    expect(landing(BEFORE, ['a', 'b', 'c'], true, false, false), 'rows shown from what was already read').toBe('kept')
+  })
+
+  it('lets the press go once the read is over with nothing new, so a later refresh never moves focus', () => {
+    expect(landing(BEFORE, ['a', 'b'], true, false, true)).toBe('kept')
   })
 
   it('moves to the first new row as drawn when the last rows arrive and the button goes', () => {
-    expect(landing(BEFORE, ['c', 'a', 'd', 'b'], false, false)).toEqual({ row: 'c' })
+    expect(landing(BEFORE, ['c', 'a', 'd', 'b'], false, false, true)).toEqual({ row: 'c' })
   })
 
   it('moves to the line when the button goes with no new row, so focus is never lost', () => {
-    expect(landing(BEFORE, ['a'], false, false)).toBe('line')
+    expect(landing(BEFORE, ['a'], false, false, true)).toBe('line')
   })
 })

@@ -10,7 +10,6 @@ are capped, and the workflows the request names get theirs first."""
 import logging
 import re
 from collections.abc import Awaitable, Sequence
-from dataclasses import dataclass
 from typing import Final, Protocol
 
 from platform_api.builder.home import HomeOut
@@ -104,12 +103,6 @@ def watched_facts(software: Sequence[WatchedSoftwareView]) -> list[WatchedFact]:
     ]
 
 
-@dataclass(frozen=True)
-class WorkflowsFacts:
-    detail: list[WorkflowFact]
-    others: list[str]
-
-
 def _says_whole(request: str, name: str) -> bool:
     """Whether the request writes the workflow's whole name, so "Check 1" is not "Check 12"."""
     said = name.strip().casefold()
@@ -126,16 +119,22 @@ def _fact(u: UseCaseView) -> WorkflowFact:
     )
 
 
-def workflows_facts(use_cases: Sequence[UseCaseView], request: str) -> WorkflowsFacts | None:
-    """Every workflow's name, in the Workflows page's order, with the state and last run of the
-    first `WORKFLOW_FACTS`, the ones the request names by their whole name first. None past
-    `OTHER_WORKFLOWS` more, so the Planner says it could not look rather than guess."""
-    named = {u.use_case_id for u in use_cases if _says_whole(request, u.name)}
-    ordered = sorted(use_cases, key=lambda u: u.use_case_id not in named)
+def workflows_facts(use_cases: Sequence[UseCaseView], request: str) -> PlannerFacts | None:
+    """The workflows part of the facts: every name, in the Workflows page's order, with the state
+    and last run of the first `WORKFLOW_FACTS`. Past that many, the ones the request names by
+    their whole name come first, and the rest are names alone. None past `OTHER_WORKFLOWS` more,
+    so the Planner says it could not look rather than guess. A name the facts can't hold fails
+    here, inside the section, as before."""
+    ordered = list(use_cases)
+    if len(ordered) > WORKFLOW_FACTS:
+        named = {u.use_case_id for u in ordered if _says_whole(request, u.name)}
+        ordered.sort(key=lambda u: u.use_case_id not in named)
     others = [u.name for u in ordered[WORKFLOW_FACTS:]]
     if len(others) > OTHER_WORKFLOWS:
         return None
-    return WorkflowsFacts([_fact(u) for u in ordered[:WORKFLOW_FACTS]], others)
+    return PlannerFacts(
+        workflows=[_fact(u) for u in ordered[:WORKFLOW_FACTS]], other_workflows=others or None
+    )
 
 
 def needs_you_fact(home: HomeOut) -> NeedsYouFact:
@@ -183,8 +182,8 @@ class PlannerFactsReader:
         workflows = await self._section("workflows", self._read_workflows(request))
         return PlannerFacts(
             watchlist=await self._section("watchlist", self._read_watchlist()),
-            workflows=None if workflows is None else workflows.detail,
-            other_workflows=None if workflows is None else workflows.others or None,
+            workflows=None if workflows is None else workflows.workflows,
+            other_workflows=None if workflows is None else workflows.other_workflows,
             needs_you=await self._section("needs_you", self._read_needs_you(viewer)),
             watchlist_schedule=await self._section("schedule", self._read_schedule()),
         )
@@ -212,7 +211,7 @@ class PlannerFactsReader:
             return None
         return WatchlistScheduleFact(day=view.schedule.day, at=view.schedule.at)
 
-    async def _read_workflows(self, request: str) -> WorkflowsFacts | None:
+    async def _read_workflows(self, request: str) -> PlannerFacts | None:
         return workflows_facts((await self._workflows.list_use_cases()).use_cases, request)
 
     async def _read_needs_you(self, viewer: Principal) -> NeedsYouFact:

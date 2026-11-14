@@ -83,11 +83,20 @@ async def test_a_word_inside_a_longer_name_is_not_that_workflow():
     assert [w.name for w in facts.workflows[:2]] == ["Check 1", "Check 60"], "not Check 10 to 19"
 
 
-async def test_with_few_workflows_there_are_no_other_names():
-    facts = await reader(workflows(3)).read(ALICE, "check my workflows")
+async def test_with_few_workflows_the_facts_are_as_before_whatever_the_request_names():
+    facts = await reader(workflows(3)).read(ALICE, "pause Check 1")
 
     assert [w.name for w in facts.workflows or []] == ["Check 3", "Check 2", "Check 1"]
     assert facts.other_workflows is None
+
+
+async def test_a_name_too_long_for_the_facts_leaves_out_the_workflows_alone():
+    listed = workflows(60)
+    listed[-1] = listed[-1].model_copy(update={"name": "x" * 81})
+
+    facts = await reader(listed).read(ALICE, "what needs me?")
+
+    assert (facts.workflows, facts.other_workflows) == (None, None)
 
 
 async def test_past_the_names_cap_the_section_is_left_out_so_the_planner_says_it_could_not_look():

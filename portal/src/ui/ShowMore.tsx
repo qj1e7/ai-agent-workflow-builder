@@ -11,15 +11,16 @@ export function shownWords(shown: number, total: number, failed = false): string
 
 /**
  * Where focus goes after a press of Show more, given the rows drawn when it was pressed and the rows drawn now. `waiting` until
- * the read lands. `kept` when new rows came and the button is still there, so focus stays on it. Once the last rows arrive the
- * button goes, and focus moves to the first new row in drawn order, or to the line when no row is new.
+ * new rows come or the read is over. Then `kept` while the button is still there, so focus stays on it. Once the last rows arrive
+ * the button goes, and focus moves to the first new row in drawn order, or to the line when no row is new.
  */
 export type Landing = 'waiting' | 'kept' | 'line' | { readonly row: string }
 
-export function landing(before: ReadonlySet<string>, keys: readonly string[], more: boolean, busy: boolean): Landing {
+export function landing(before: ReadonlySet<string>, keys: readonly string[], more: boolean, busy: boolean, readOver: boolean): Landing {
   if (busy) return 'waiting'
   const first = keys.find((key) => !before.has(key))
-  if (more) return first === undefined ? 'waiting' : 'kept'
+  if (first === undefined && !readOver) return 'waiting'
+  if (more) return 'kept'
   return first === undefined ? 'line' : { row: first }
 }
 
@@ -42,15 +43,18 @@ export function ShowMore({ shown, total, pager, keys, rowAttr }: ShowMoreProps) 
   const lineId = useId()
   const line = useRef<HTMLParagraphElement>(null)
   const before = useRef<ReadonlySet<string> | null>(null)
+  const read = useRef(false)
   const [pressed, setPressed] = useState(false)
   const more = shown < total
 
   useEffect(() => {
     const was = before.current
     if (was === null) return
-    const next = landing(was, keys, more, pager.busy)
+    if (pager.busy) read.current = true
+    const next = landing(was, keys, more, pager.busy, read.current)
     if (next === 'waiting') return
     before.current = null
+    read.current = false
     if (next === 'kept') return
     const row = next === 'line' ? null : line.current?.parentElement?.parentElement?.querySelector(`[${rowAttr}="${CSS.escape(next.row)}"]`)
     const target = row?.querySelector<HTMLElement>('a[href], button:not([aria-disabled="true"])') ?? line.current
@@ -69,6 +73,7 @@ export function ShowMore({ shown, total, pager, keys, rowAttr }: ShowMoreProps) 
           loading={pager.busy}
           onClick={() => {
             before.current = new Set(keys)
+            read.current = false
             setPressed(true)
             pager.showMore()
           }}

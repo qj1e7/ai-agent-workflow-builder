@@ -124,6 +124,8 @@ export function ApprovalCards({ items, total, nameOf, more }: ApprovalCardsProps
   useShowBesideOnWide(shown.length === 1 && only ? approvalItem(only.runId) : null)
   const main = useMainButton() === 'primary'
   const left = Math.max(0, total - shown.length)
+  // A card stays after its request is decided, but the total counts only what still waits, so only those are compared with it.
+  const stillWaiting = shown.filter((request) => items.some((item) => item.runId === request.runId)).length
   const pager: Pager | null = more
     ? {
         busy: more.busy,
@@ -131,7 +133,7 @@ export function ApprovalCards({ items, total, nameOf, more }: ApprovalCardsProps
         showMore: () => {
           setFollowed(shown)
           setWanted(shown.length + REQUESTS_SHOWN)
-          if (items.length < shown.length + REQUESTS_SHOWN) more.showMore()
+          if (items.length - stillWaiting < REQUESTS_SHOWN && items.length < total) more.showMore()
         },
       }
     : null
@@ -143,7 +145,7 @@ export function ApprovalCards({ items, total, nameOf, more }: ApprovalCardsProps
         </div>
       ))}
       {pager ? (
-        <ShowMore shown={shown.length} total={total} pager={pager} keys={shown.map((request) => request.runId)} rowAttr="data-run-card" />
+        <ShowMore shown={stillWaiting} total={total} pager={pager} keys={shown.map((request) => request.runId)} rowAttr="data-run-card" />
       ) : left > 0 ? (
         <p className={styles['more']}>
           <OpenButton item={{ kind: 'needs' }} to="/workflows">
