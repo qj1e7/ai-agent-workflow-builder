@@ -80,6 +80,17 @@ jobs:
         working-directory: ${{ matrix.project }}
         run: uv run pyright
 
+      # The platform-api tests search what its image holds; this searches the rest of the
+      # checkout. Only the design records under docs/ may still name the tick (ENGINE-PLAN D20).
+      - name: Nothing asks for the retired schedule tick
+        if: matrix.project == 'e2e'
+        working-directory: .
+        run: |
+          if git grep -n "/internal/v1/schedules/""tick" -- . ':!docs'; then
+            echo "The schedule tick went in ENGINE-PLAN E10. Nothing may ask for it." >&2
+            exit 1
+          fi
+
       - name: Check import rules
         if: matrix.project == 'platform-api'
         working-directory: ${{ matrix.project }}
