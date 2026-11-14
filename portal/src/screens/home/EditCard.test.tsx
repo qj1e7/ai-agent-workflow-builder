@@ -117,6 +117,7 @@ describe('the edit card while it proposes a change', () => {
     expect(sentence(html)).toBe('Which workflow should I change?')
     expect(text(html)).toContain('Question: Workflow Which workflow?')
     expect(buttons(html)).toEqual(['Morning new-ticket check', 'Weekly closed-ticket summary'])
+    expect(html, 'it is an edit card like every other state, with a heading that takes focus').toMatch(/<div data-card="edit"><section[^>]*><div[^>]*><h3[^>]*tabindex="-1">Change a workflow<\/h3>/)
   })
 
   it('reads “it” as the workflow the answer before was about, names it on the card, and lets her pick another', () => {
