@@ -6,41 +6,49 @@ cancelled, with nothing written and the workflow gone from n8n."""
 
 import secrets
 import urllib.parse
-from typing import cast
+from typing import Any
 
 import httpx
-from harness import N8N_OWNER, N8N_URL, Api, Json, approval_requested, bob_decides, tickets_for
+from harness import (
+    N8N_OWNER,
+    N8N_URL,
+    Api,
+    Json,
+    approval_requested,
+    bob_decides,
+    n8n_answer,
+    tickets_for,
+)
 from test_n8n_engine import set_up, ticket_count
-
-
-def owner_rows(method: str, path: str, body: object = None) -> list[Json]:
-    """n8n's /rest answers these two calls with a list."""
-    return cast(list[Json], N8N_OWNER.call(method, path, cast(Json | None, body)))
 
 
 class Member:
     """A staff member's n8n account, as the platform will make one once E7 lands: invited by the
-    owner and signed in to n8n's editor with their own session."""
+    owner and signed in to n8n's editor with their own session. Each step reads back what it
+    changed, because n8n's answer to a change is not proof of it."""
 
     def __init__(self, name: str) -> None:
-        email = f"{name}-{secrets.token_hex(4)}@example.com"
-        [invited] = owner_rows("POST", "/invitations", [{"email": email, "role": "global:member"}])
+        self.email = f"{name}-{secrets.token_hex(4)}@example.com"
+        invite = [{"email": self.email, "role": "global:member"}]
+        [invited] = N8N_OWNER.call("POST", "/invitations", invite)
         link = str(invited["user"]["inviteAcceptUrl"])
         token = urllib.parse.parse_qs(urllib.parse.urlparse(link).query)["token"][0]
         password = f"E6-{secrets.token_urlsafe(12)}a1A"
         self.client = httpx.Client(base_url=N8N_URL, timeout=30)
         accept = {"token": token, "firstName": name, "lastName": "Tester", "password": password}
-        self.client.post("/rest/invitations/accept", json=accept).raise_for_status()
-        login = {"emailOrLdapLoginId": email, "password": password}
-        self.client.post("/rest/login", json=login).raise_for_status()
-        projects = owner_rows("GET", "/projects")
-        self.project = next(p["id"] for p in projects if email in p["name"])
+        n8n_answer(self.client.post("/rest/invitations/accept", json=accept))
+        login = {"emailOrLdapLoginId": self.email, "password": password}
+        n8n_answer(self.client.post("/rest/login", json=login))
+        personal = self.call("GET", "/projects/personal")
+        assert personal["type"] == "personal", "signed in as the member, in their own space"
+        self.project = str(personal["id"])
 
-    def call(self, method: str, path: str, body: Json | None = None) -> Json:
-        answer = self.client.request(method, f"/rest{path}", json=body)
-        answer.raise_for_status()
-        data: Json = answer.json()["data"]
-        return data
+    def call(self, method: str, path: str, body: object = None) -> Any:
+        return n8n_answer(self.client.request(method, f"/rest{path}", json=body))
+
+    def can_open(self, workflow_id: str) -> bool:
+        """A member opens only what sits in their own project (P7 Q4: 403 once taken back)."""
+        return self.client.get(f"/rest/workflows/{workflow_id}").status_code == 200
 
     def publish_without_the_yes(self, workflow_id: str) -> str:
         """Deletes Ask for a yes in the editor, saves and publishes, as P7 Q4's member did."""
@@ -48,18 +56,62 @@ class Member:
         nodes = [node for node in held["nodes"] if node["name"] != "Ask for a yes"]
         connections = {k: v for k, v in held["connections"].items() if k != "Ask for a yes"}
         connections["Newer?"]["main"][0] = [{"node": "Create ticket", "type": "main", "index": 0}]
-        body = {"nodes": nodes, "connections": connections, "versionId": held["versionId"]}
-        draft = self.call("PATCH", f"/workflows/{workflow_id}", body)
-        activate = {"versionId": draft["versionId"], "expectedChecksum": draft["checksum"]}
+        # The editor sends the settings with every save; without them n8n clears them.
+        body = {
+            "nodes": nodes,
+            "connections": connections,
+            "settings": held["settings"],
+            "versionId": held["versionId"],
+        }
+        self.call("PATCH", f"/workflows/{workflow_id}", body)
+        saved = self.call("GET", f"/workflows/{workflow_id}")
+        assert saved["versionId"] != held["versionId"], "the edit was saved as a new draft"
+        assert "Ask for a yes" not in [node["name"] for node in saved["nodes"]]
+        activate = {"versionId": saved["versionId"], "expectedChecksum": saved["checksum"]}
         self.call("POST", f"/workflows/{workflow_id}/activate", activate)
-        published: str = draft["versionId"]
+        live = N8N_OWNER.call("GET", f"/workflows/{workflow_id}")
+        assert live["activeVersionId"] == saved["versionId"], "n8n has the member's version live"
+        timeline = N8N_OWNER.call(
+            "GET", f"/workflow-history/workflow/{workflow_id}/publish-timeline"
+        )
+        mine = [
+            event
+            for event in timeline
+            if event["versionId"] == saved["versionId"] and event["event"] == "activated"
+        ]
+        assert mine and mine[-1]["user"]["email"] == self.email, "the timeline names the member"
+        published: str = saved["versionId"]
         return published
 
 
-def held_by(member: Member, workflow_id: str) -> None:
-    """Open in n8n, done by hand until E7: the workflow moves to the member's own project."""
+LAID_OUT = {
+    "timezone": "Asia/Singapore",
+    "saveManualExecutions": True,
+    "saveExecutionProgress": True,
+}
+"""What every layout sets and the safety checker requires, beside the error workflow."""
+
+
+def settings_in_n8n(workflow_id: str, where: str) -> Json:
+    """The workflow's settings as n8n holds them now, which must still be the layout's."""
+    settings: Json = N8N_OWNER.call("GET", f"/workflows/{workflow_id}").get("settings") or {}
+    kept = {key: settings.get(key) for key in LAID_OUT}
+    assert kept == LAID_OUT and settings.get("errorWorkflow"), f"{where}: {settings}"
+    return settings
+
+
+def held_by(api: Api, member: Member, workflow_id: str) -> None:
+    """Open in n8n, done by hand until E7: the workflow moves to the member's own project. The
+    move is checked by reading the workflow back, not by the transfer's answer."""
     body = {"destinationProjectId": member.project}
     N8N_OWNER.call("PUT", f"/workflows/{workflow_id}/transfer", body)
+    api.poll("the member to hold the workflow", lambda: member.can_open(workflow_id))
+    held: Json = N8N_OWNER.call("GET", f"/workflows/{workflow_id}")
+    shares: list[Json] = held.get("shared") or []
+    home: Json = held.get("homeProject") or {}
+    projects = {share.get("projectId") for share in shares} | {home.get("id")}
+    named = {"shared", "homeProject"} & set(held)
+    assert not named or member.project in projects, f"n8n puts it in {projects}"
 
 
 def swept(api: Api, use_case_id: str, version: int) -> Json:
@@ -79,12 +131,15 @@ def test_a_version_published_in_n8n_is_kept_graded_and_carded_and_undo_restores(
     use_case_id, workflow_id = created["use_case_id"], created["n8n_workflow_id"]
     first = api.get("alice", f"/api/v1/use-cases/{use_case_id}/versions")["versions"][0]
     assert (first["version"], first["grade"]) == (1, "safe")
+    laid_out = settings_in_n8n(workflow_id, "as the platform laid it out")
     member = Member("dana")
-    held_by(member, workflow_id)
+    held_by(api, member, workflow_id)
+    assert settings_in_n8n(workflow_id, "once the member holds it") == laid_out
     published = member.publish_without_the_yes(workflow_id)
+    assert settings_in_n8n(workflow_id, "once the member published") == laid_out
 
     view = swept(api, use_case_id, 2)
-    assert view["grade"] == "writes_refused"
+    assert view["grade"] == "writes_refused", view["findings"]
     assert view["findings"] == ['"Create ticket" can run without a yes.']
     newest = api.get("alice", f"/api/v1/use-cases/{use_case_id}/versions")["versions"][0]
     assert (newest["made"], newest["by"], newest["publisher_unknown"]) == (

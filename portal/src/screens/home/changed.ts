@@ -1,5 +1,5 @@
 import type { ChangedInN8nReply } from '../../api/types'
-import { refusedLine, UNKNOWN_PUBLISHER, UNKNOWN_PUBLISHER_STOPS } from '../workflows/n8nChange'
+import { refusedLine, SETTINGS_SAVED, UNKNOWN_PUBLISHER, UNKNOWN_PUBLISHER_STOPS } from '../workflows/n8nChange'
 
 /** Where a Changed in n8n card is. It ends settled, or it shows why the platform said no. */
 export type Phase =
@@ -45,10 +45,12 @@ export interface ChangedWords {
 }
 
 export function wordsOf(reply: ChangedInN8nReply): ChangedWords {
+  // A save of the settings in n8n publishes nothing, and n8n names nobody for it.
+  const saved = reply.made === 'settings_changed_in_n8n'
   const by = reply.by === null ? UNKNOWN_PUBLISHER : (reply.by_name ?? reply.by)
   return {
-    who: `${reply.name}, version ${reply.version}, by ${by}.`,
-    unknown: reply.by === null ? UNKNOWN_PUBLISHER_STOPS : null,
+    who: saved ? `${reply.name}, version ${reply.version}. ${SETTINGS_SAVED}` : `${reply.name}, version ${reply.version}, by ${by}.`,
+    unknown: reply.by === null && !saved ? UNKNOWN_PUBLISHER_STOPS : null,
     changes: reply.changes,
     findings: reply.grade === 'needs_a_fix' ? reply.findings : [],
     refused: reply.grade === 'writes_refused' ? refusedLine(reply.changes) : null,

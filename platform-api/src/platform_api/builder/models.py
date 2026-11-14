@@ -505,7 +505,9 @@ class VersionChange(WireModel):
     schedule: ScheduleChangeView
 
 
-type VersionMade = Literal["published_in_n8n", "rolled_back", "yes_put_back"]
+type VersionMade = Literal[
+    "published_in_n8n", "settings_changed_in_n8n", "rolled_back", "yes_put_back"
+]
 
 
 class VersionView(WireModel):
@@ -534,8 +536,10 @@ class VersionView(WireModel):
     made: VersionMade | None = Field(
         default=None,
         description="How a version that is not a change of when it runs came about: "
-        "published_in_n8n by a person in n8n's editor, rolled_back to an earlier version, or "
-        "yes_put_back, which put Ask for a yes back before each write. Null otherwise.",
+        "published_in_n8n by a person in n8n's editor; settings_changed_in_n8n, the same version "
+        "in n8n with its settings saved there and nothing published, which n8n runs with the new "
+        "settings at once; rolled_back to an earlier version; or yes_put_back, which put Ask for "
+        "a yes back before each write. Null otherwise.",
     )
     grade: Grade | None = Field(
         default=None,
@@ -544,8 +548,9 @@ class VersionView(WireModel):
     )
     changes: list[str] = Field(
         default_factory=list[str],
-        description="For a version published in n8n, what changed from the version before, in "
-        "plain words, as the Changed in n8n card lists them. Empty otherwise.",
+        description="For a version published in n8n, or whose settings changed there, what "
+        "changed from the version before, in plain words, as the Changed in n8n card lists "
+        "them. Empty otherwise.",
     )
     rolled_back_to: int | None = Field(
         default=None, description="The version a roll back put back in use. Null otherwise."

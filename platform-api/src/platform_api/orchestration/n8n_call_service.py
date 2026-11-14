@@ -10,14 +10,14 @@ twice. Each call that finds the run working moves its deadline on.
 import asyncio
 import contextlib
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import timedelta
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from platform_api.db import Database, UnitOfWork
-from platform_api.monitoring import AgentEvent, user_actor
+from platform_api.monitoring import AgentEvent, PendingEvent, user_actor
 from platform_api.orchestration.agents import (
     AgentRejected,
     AgentRuntime,
@@ -128,6 +128,7 @@ from platform_api.orchestration.runs import (
     Rejected,
     RunState,
     Skipped,
+    StepName,
     Succeeded,
     Working,
     holder_of,
@@ -135,6 +136,7 @@ from platform_api.orchestration.runs import (
     run_created,
     skipped_events,
     state_name,
+    step_finished,
     working_on,
     write_done,
 )
@@ -304,6 +306,7 @@ class NodeCalls:
         tells: TellOutlet | None = None,
         failures: N8nFailures | None = None,
         switch: N8nSwitch | None = None,
+        nudge: Callable[[], None] | None = None,
     ) -> None:
         self._db = db
         self._activity = activity
@@ -321,6 +324,8 @@ class NodeCalls:
         self._tells = tells
         self._failures = failures
         self._switch = switch
+        self._nudge = nudge
+        """Wakes the orchestrator to send what a call put in its outbox now, as its own steps do."""
         self._store = Store()
         self._watch = WatchStore()
         self._book = CallBook()
@@ -483,7 +488,10 @@ class NodeCalls:
             return admitted
         work = await self._work(admitted, call)
         async with self._db.transaction("orchestration") as uow:
-            return await self._finish(uow, admitted, call, work)
+            result = await self._finish(uow, admitted, call, work)
+        if isinstance(result, Waiting) and self._nudge is not None:
+            self._nudge()
+        return result
 
     async def _take_off_if_deleted(self, execution: N8nExecutionId) -> None:
         """A deleted use case whose workflow n8n still runs, because the delete could not take it
@@ -1076,6 +1084,8 @@ class NodeCalls:
                     uow, call, admitted.run_id, answer, actions, call_id=admitted.call_id
                 ):
                     return BUSY
+                if earlier is None and (found := _found(call, state, answer, actions)) is not None:
+                    await self._activity.append(uow, admitted.run_id, [found])
                 return answer
 
     async def _ask(
@@ -1254,6 +1264,20 @@ class NodeCalls:
 
 def _one(person: UserId | None) -> tuple[UserId, ...]:
     return () if person is None else (person,)
+
+
+def _found(
+    call: NodeCall, working: Working, answer: Answer, actions: Sequence[Mapping[str, Any]]
+) -> PendingEvent | None:
+    """What an Agent block's agents found, kept in the run's log, which outlives the request
+    that shows it only while it waits. The Portal reads it from the agents' step, as before."""
+    summary = answer.items[0].get("summary") if call.kind == "agent" and answer.items else None
+    if not isinstance(summary, str) or not summary:
+        return None
+    outcome = "proposed" if actions else "nothing_to_write"
+    return step_finished(
+        StepName.RUN_AGENTS, call.execution_id, working.try_number, outcome, summary
+    )
 
 
 def _read_watchlist(task: Task) -> Done | Refused:

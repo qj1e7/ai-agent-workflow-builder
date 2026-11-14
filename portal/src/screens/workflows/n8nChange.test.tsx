@@ -99,6 +99,11 @@ describe('the Versions words', () => {
     expect(madeWords({ made: null })).toBeNull()
   })
 
+  it('names nobody for settings saved in n8n, because n8n names nobody', () => {
+    const saved = version({ made: 'settings_changed_in_n8n', by: null, changes: ['Changed its settings: the error workflow.'] })
+    expect(versionLine(saved, NOW, nameOf)).toBe('Today, 9:00. Changed its settings: the error workflow. Saved in n8n, with nothing published.')
+  })
+
   it('says what a roll back and a yes put back did, as the sketch’s messages', () => {
     expect(backToVersionToast(2, 5)).toBe('Back to version 2, saved as version 5.')
     expect(yesBackToast(5)).toBe('Version 5 has the yes back.')

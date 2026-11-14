@@ -8,7 +8,7 @@ from dataclasses import replace
 import pytest
 
 from platform_api.orchestration.agents import TaskOutput, WatchlistInputs
-from platform_api.orchestration.approvals import Refusal
+from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.jira import PRACTICE_SITE
 from platform_api.orchestration.n8n_calls import (
     NOT_A_WATCHLIST_RUN,
@@ -99,8 +99,10 @@ async def test_a_check_reads_its_own_list_and_raises_one_ticket_for_the_software
     await wl.tick()
     made = await wl.write("101", "Create tickets")
     assert isinstance(made, WriteAnswer) and (made.made, made.of) == (1, 1)
-    assert isinstance((await wl.run()).state, Succeeded)
-    assert [t.title for t in await wl.h.jira.tickets()] == [TICKET_TITLE]
+    run = await wl.run()
+    assert isinstance(run.state, Succeeded)
+    tickets = [(t.title, t.run_id) for t in await wl.h.jira.tickets()]
+    assert tickets == [(TICKET_TITLE, run.run_id)], "the ticket names the run that made it"
     [langgraph] = (await page(wl)).software.values()
     assert langgraph.status == "ticket_open"
     assert langgraph.facts.open_ticket is not None
@@ -223,3 +225,23 @@ async def test_an_empty_watchlist_s_slot_ends_quietly_and_makes_no_run(wl: Write
     assert await wl.call("101", AskCall(resume_url("101")), "Ask for a yes") == NothingToChange()
     assert await wl.runs() == []
     assert wl.h.agent.requests == []
+
+
+async def test_the_request_goes_to_teams_without_waiting_for_the_next_tick(wl: Writes):
+    """Asking puts the Teams card in the outbox, so the orchestrator is woken to send it now."""
+    assert isinstance(await check(wl, "101"), Waiting)
+    assert wl.nudged == [1]
+
+
+async def test_the_run_s_log_keeps_what_the_agents_found_once_the_request_is_decided(wl: Writes):
+    """The request shows the agents' summary only while it waits, so the log is its record."""
+    await check(wl, "101")
+    await wl.decide(BOB, Verdict.DECLINE)
+
+    run = await wl.run()
+    found = [
+        getattr(event.data, "detail", None)
+        for event in await wl.h.log.read_after(run.run_id, 0)
+        if event.kind == "step_finished"
+    ]
+    assert found == ["LangGraph has a new release: 1.2.16."]

@@ -96,9 +96,20 @@ class FakeN8n:
         self._activate(workflow_id, workflow["versionId"], user_id)
         return workflow["versionId"]
 
+    def save_settings(self, workflow_id: str, change: Callable[[dict[str, Any]], None]) -> None:
+        """A member changes the workflow's settings in n8n's editor and saves, publishing nothing.
+        n8n runs the live version with the new settings at once."""
+        workflow = self.workflows[workflow_id]
+        change(workflow["settings"])
+        workflow["versionId"] = _new_version()
+        workflow["checksum"] = _new_version()
+        self._remember(workflow_id)
+
     def _remember(self, workflow_id: str) -> None:
         workflow = self.workflows[workflow_id]
-        kept = {key: workflow[key] for key in ("name", "nodes", "connections", "settings")}
+        # n8n's history keeps a version's blocks and edges, never its settings, which the
+        # workflow holds once for every version (the live run of 26749b88 showed it).
+        kept = {key: workflow[key] for key in ("name", "nodes", "connections")}
         versions = self.history.setdefault(workflow_id, {})
         versions[workflow["versionId"]] = json.loads(json.dumps(kept))
 

@@ -39,6 +39,22 @@ describe('the Changed in n8n card’s words', () => {
   })
 })
 
+describe('the Changed in n8n card for settings saved in n8n', () => {
+  const SAVED: ChangedInN8nReply = { ...FIX, made: 'settings_changed_in_n8n', by: null, by_name: null, findings: ['Its failures do not go to the platform’s error workflow.'], changes: ['Changed its settings: the error workflow.'] }
+
+  it('says the settings changed, names nobody, and gives the checker’s reason', () => {
+    const words = wordsOf(SAVED)
+    expect(words.who).toBe(`${SAVED.name}, version ${SAVED.version}. Its settings were changed in n8n.`)
+    expect(words.unknown).toBeNull()
+    expect(words.changes).toEqual(['Changed its settings: the error workflow.'])
+    expect(words.findings).toEqual(SAVED.findings)
+  })
+
+  it('offers Undo, which puts the version before back, settings and all', () => {
+    expect(buttonsOf(SAVED, OPEN, true)).toEqual({ yes: false, undo: true })
+  })
+})
+
 describe('the Changed in n8n card’s buttons', () => {
   it('offers Add the yes back only for refused writes, and Undo for every grade', () => {
     expect(buttonsOf(REFUSED, OPEN, true)).toEqual({ yes: true, undo: true })

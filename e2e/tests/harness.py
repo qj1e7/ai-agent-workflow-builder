@@ -4,7 +4,7 @@ import time
 import uuid
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
-from typing import Any, NoReturn
+from typing import Any, NoReturn, cast
 
 import httpx
 import psycopg
@@ -32,7 +32,9 @@ def fail(message: str) -> NoReturn:
     pytest.fail(message, pytrace=False)
 
 
-OLD_ENGINE_KINDS = frozenset({"leg_dispatched", "step_started", "step_finished"})
+OLD_ENGINE_KINDS = frozenset({"leg_dispatched", "step_started"})
+"""Only the shared run workflow dispatches legs and starts steps. Both engines finish the agents'
+step, which keeps what they found in the run's log."""
 
 
 def assert_story(events: list[Json], story: list[str]) -> None:
@@ -359,7 +361,9 @@ class N8nOwner:
         }
         client.post("/rest/login", json=login).raise_for_status()
 
-    def call(self, method: str, path: str, body: Json | None = None) -> Json:
+    def call(self, method: str, path: str, body: object = None) -> Any:
+        """n8n's answer, as n8n_answer reads it. A call that changes something is checked by
+        reading back what it changed, never by its answer alone."""
         if self._client is None:
             self._client = httpx.Client(base_url=N8N_URL, timeout=30)
             self._sign_in(self._client)
@@ -367,9 +371,18 @@ class N8nOwner:
         if answer.status_code == 401:
             self._sign_in(self._client)
             answer = self._client.request(method, f"/rest{path}", json=body)
-        answer.raise_for_status()
-        data: Json = answer.json()["data"]
-        return data
+        return n8n_answer(answer)
+
+
+def n8n_answer(answer: httpx.Response) -> Any:
+    """What n8n's /rest gave for a 2xx: the `data` it wraps most answers in, the whole body when it
+    wraps nothing, or None for an empty body. Raises for any other status."""
+    answer.raise_for_status()
+    if not answer.content:
+        return None
+    found: object = answer.json()
+    wrapped = cast(dict[str, Any], found) if isinstance(found, dict) else {"data": found}
+    return wrapped.get("data", wrapped)
 
 
 N8N_OWNER = N8nOwner()
