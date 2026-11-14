@@ -423,6 +423,14 @@ async def build(settings: Settings) -> Services:
         # the shared run workflow moves to its own (ENGINE-PLAN 2.6, E10).
         log.info("restored to n8n: %s", await builder.moves.restore_if_asked())
         log.info("moved to n8n: %s", await builder.moves.move_all())
+    if builder.sweep is not None:
+        # This release's rules, such as a block the class file now turns off, grade every
+        # workflow before any of its runs starts (ENGINE-PLAN E11). n8n already refuses to load
+        # such a block, so a look that fails waits for the next start rather than stopping this one.
+        try:
+            log.info("graded again: %s", await builder.sweep.regrade())
+        except Exception:
+            log.exception("could not grade the workflows again")
     facts = builder.facts
     sources = ReadSources({CONFLUENCE_PAGE: confluence}, facts)
     tells, tell_flow = tell_outlet(settings, db)
