@@ -5860,6 +5860,17 @@
             "description": "Who declined it. Null unless the run was declined.",
             "title": "Declined By"
           },
+          "outcome": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunOutcome"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How a finished run ended: written, nothing_to_write, or test_passed for a test run that stopped before the yes and wrote nothing. Null until it succeeded."
+          },
           "proposed": {
             "description": "How many writes the run asked a yes for. Counted only while the run waits for a yes or after it was declined. 0 for a run that finished or stopped.",
             "title": "Proposed",

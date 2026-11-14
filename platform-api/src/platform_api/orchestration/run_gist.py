@@ -11,7 +11,7 @@ from platform_api.orchestration.runs import (
     state_name,
 )
 from platform_api.shared import Principal, RunId, UseCaseId, UserId
-from platform_api.wire import FailureReason, RunState
+from platform_api.wire import FailureReason, RunOutcome, RunState
 
 if TYPE_CHECKING:
     from platform_api.orchestration.service import RunDetail
@@ -45,6 +45,8 @@ class RunGist:
     """The run stopped and a retry may start it again."""
     reason: FailureReason | None
     """Why it stopped, for a stopped run."""
+    outcome: RunOutcome | None = None
+    """How a finished run ended: written, nothing_to_write or test_passed. None until then."""
 
 
 def gist_of(detail: RunDetail, viewer: Principal | None) -> RunGist:
@@ -77,4 +79,5 @@ def gist_of(detail: RunDetail, viewer: Principal | None) -> RunGist:
         you_can_decide=can_decide,
         retryable=failed is not None and failed.failure.retryable,
         reason=None if failed is None else failed.failure.reason.value,
+        outcome=state.outcome.value if isinstance(state, Succeeded) else None,
     )

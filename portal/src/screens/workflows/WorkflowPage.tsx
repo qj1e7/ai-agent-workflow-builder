@@ -24,6 +24,7 @@ import { templateLine } from './line'
 import { RecentRuns } from './RecentRuns'
 import { StatusPills } from './Status'
 import { Versions } from './Versions'
+import { DraftActions } from './DraftActions'
 import { When } from './When'
 import {
   bannerOf,
@@ -295,6 +296,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
         </section>
       )}
       <Versions useCase={useCase} now={now} nameOf={nameOf} />
+      <DraftActions useCase={useCase} viewer={viewer} />
       {mayPause || items.length > 0 ? (
         <div className={styles['actions']}>
           {mayPause ? (

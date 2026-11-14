@@ -54,7 +54,8 @@
     "tickets": false,
     "you_can_decide": false,
     "retryable": true,
-    "reason": "AgentError"
+    "reason": "AgentError",
+    "outcome": null
   },
   "left_out": [],
   "blocks": []

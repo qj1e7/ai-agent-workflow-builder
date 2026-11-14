@@ -1398,6 +1398,7 @@ async def test_a_declined_run_names_who_declined_and_why_and_writes_nothing(fron
         "you_can_decide": False,
         "retryable": False,
         "reason": None,
+        "outcome": None,
     }
 
 
@@ -1449,6 +1450,33 @@ async def test_a_test_run_is_the_run_the_platform_recorded_as_one(front: Front):
     )
     last = await last_run_of(front, "Tried")
     assert last is not None and last["test"] is True and last["state"] == "pending"
+
+
+async def test_a_test_run_that_passed_at_the_yes_says_so(front: Front):
+    use_case_id = await make_workflow(front, "Passed")
+    front.book.add(
+        use_case_id,
+        Succeeded(RunId("run_1"), Outcome.TEST_PASSED, ()),
+        LONG_AGO,
+        trigger="person",
+        test=True,
+        proposed=1,
+    )
+    last = await last_run_of(front, "Passed")
+    assert last is not None
+    assert (last["state"], last["test"], last["outcome"], last["written"]) == (
+        "succeeded",
+        True,
+        "test_passed",
+        0,
+    )
+
+
+async def test_a_run_that_has_not_finished_has_no_outcome(front: Front):
+    use_case_id = await make_workflow(front, "Going")
+    front.book.add(use_case_id, Pending(RunId("run_1"), 1, None, LONG_AGO), LONG_AGO)
+    last = await last_run_of(front, "Going")
+    assert last is not None and last["outcome"] is None
 
 
 async def test_a_run_by_hand_that_was_not_a_test_is_not_one(front: Front):

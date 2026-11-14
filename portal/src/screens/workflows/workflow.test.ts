@@ -63,6 +63,8 @@ import {
   type LastRun,
   type RunNowOutcome,
   type Viewer,
+  stageOfLast,
+  testPassed,
 } from './workflow'
 import { runPill, stageWords } from '../run/words'
 
@@ -81,7 +83,7 @@ const CAROL: Viewer = { id: 'carol', operator: true, approver: false }
 
 const NOW = new Date('2026-11-04T15:00:00+08:00')
 
-const LAST: LastRun = { run_id: 'run_07', state: 'rejected', at: '2026-10-26T01:41:00Z', test: false, declined_by: 'bob', decline_reason: null, approved_by: [], proposed: 3, written: 0, tickets: true, you_can_decide: false, retryable: false, reason: null }
+const LAST: LastRun = { run_id: 'run_07', state: 'rejected', at: '2026-10-26T01:41:00Z', test: false, declined_by: 'bob', decline_reason: null, approved_by: [], proposed: 3, written: 0, tickets: true, you_can_decide: false, retryable: false, reason: null, outcome: null }
 const lastOf = (change: Partial<LastRun>): Pick<UseCaseView, 'last_run'> => ({ last_run: { ...LAST, ...change } })
 
 describe('the status words', () => {
@@ -380,6 +382,25 @@ describe('where a row opens', () => {
 
   it('opens the workflow page for any other workflow', () => {
     expect(workflowPath(AGENTS)).toBe('/workflows/uc_01JD0')
+  })
+})
+
+describe('a draft’s test run, in the same words everywhere', () => {
+  const passed: LastRun = { ...LAST, state: 'succeeded', test: true, declined_by: null, proposed: 1, outcome: 'test_passed' }
+
+  it('says a test run that stopped at the yes passed and wrote nothing, on the row and in Recent runs, never Nothing new', () => {
+    expect(stageWords(stageOfLast(passed), (id) => id)).toBe('Test run passed up to the yes. Nothing was written.')
+    expect(runPill(stageOfLast(passed)).label).toBe('Test run passed')
+    expect(testPassed(passed)).toBe(true)
+    expect(testPassed({ ...passed, test: false, outcome: 'nothing_to_write' }), 'a real run with nothing new is no test').toBe(false)
+    expect(testPassed({ ...passed, state: 'failed', outcome: null })).toBe(false)
+  })
+
+  it('gives a draft no Run now and no Pause, only a test run, Turn it on once a test run passed, and Delete', () => {
+    const draft = { ...AGENTS, state: 'draft' as const, last_run: null }
+    expect(controlsOf(draft, ALICE)).toEqual(['test', 'delete'])
+    expect(controlsOf({ ...draft, last_run: passed }, ALICE)).toEqual(['test', 'turn_on', 'delete'])
+    expect(controlsOf({ ...draft, last_run: passed }, BOB)).toEqual([])
   })
 })
 

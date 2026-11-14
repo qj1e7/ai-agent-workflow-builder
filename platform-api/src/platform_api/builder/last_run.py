@@ -31,4 +31,5 @@ def last_run_view(gist: RunGist) -> LastRunView:
         you_can_decide=gist.you_can_decide,
         retryable=gist.retryable,
         reason=gist.reason,
+        outcome=gist.outcome,
     )
