@@ -144,6 +144,14 @@ class OwnWorkflow:
 
 
 @dataclass(frozen=True)
+class NothingToRun:
+    """A workflow of ours with nothing to run now, such as an empty watchlist. Its slot ends
+    quietly: no run is made, and nothing fails in n8n."""
+
+    why: str
+
+
+@dataclass(frozen=True)
 class AgentToRun:
     card_run: CardRun
     release_of: str | None = None
@@ -163,7 +171,7 @@ class CannotRun:
 class WorkflowFacts(Protocol):
     """What node calls need from the use case builder, which orchestration may not import."""
 
-    async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | None: ...
+    async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | NothingToRun | None: ...
 
     async def version(self, n8n_workflow_id: str, version_id: str) -> RanVersion | None: ...
 

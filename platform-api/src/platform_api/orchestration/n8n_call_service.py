@@ -49,6 +49,7 @@ from platform_api.orchestration.n8n_calls import (
     GITHUB_RELEASES,
     NO_EXECUTION,
     NO_TELL_FLOW,
+    NO_YES,
     NOT_A_WATCHLIST_RUN,
     NOT_FAILED,
     NOT_OUR_ERROR_WORKFLOW,
@@ -82,6 +83,7 @@ from platform_api.orchestration.n8n_calls import (
     NodeCatalog,
     NodeOption,
     NothingToChange,
+    NothingToRun,
     OptionKind,
     OwnWorkflow,
     ProposeCall,
@@ -342,7 +344,7 @@ class NodeCalls:
                 match await self._link(uow, execution):
                     case TryLater() as later:
                         return later
-                    case Refused(detail=detail):
+                    case Refused(detail=detail) | NothingToRun(why=detail):
                         return LeftAsIs(detail)
                     case linked:
                         run_id = linked
@@ -499,6 +501,8 @@ class NodeCalls:
             linked = await self._link(uow, call.execution_id)
             if isinstance(linked, TryLater):
                 return linked
+            if isinstance(linked, NothingToRun):
+                return self._nothing_to_run(call, linked)
             if isinstance(linked, Refused):
                 run_id = await self._book.linked_run(uow, call.execution_id)
                 return await self._refuse(uow, call, run_id, linked)
@@ -520,13 +524,33 @@ class NodeCalls:
         await self._book.keep(uow, call, run_id, refused)
         return refused
 
-    async def _link(self, uow: UnitOfWork, execution: N8nExecutionId) -> RunId | Refused | TryLater:
+    def _nothing_to_run(self, call: NodeCall, nothing: NothingToRun) -> CallResult:
+        """Each block gets the answer that ends its path without a fault, and no run is made. It
+        is not kept, since no run holds it, and a repeat gets the same answer."""
+        log.info("%s of n8n execution %s: %s", call.node_name, call.execution_id, nothing.why)
+        quiet: Answer | AskAnswer | Told | Refused
+        match call.kind:
+            case "ask":
+                quiet = NothingToChange()
+            case "write":
+                quiet = NO_YES
+            case "tell":
+                quiet = Told("nothing_to_report", NOTHING_TO_REPORT)
+            case _:
+                quiet = Answer(())
+        return quiet
+
+    async def _link(
+        self, uow: UnitOfWork, execution: N8nExecutionId
+    ) -> RunId | Refused | TryLater | NothingToRun:
         facts = await self._n8n.execution(execution)
         if facts is None:
             return NO_EXECUTION
         own = await self._workflows.workflow(facts.workflow_id)
         if own is None:
             return NOT_OURS
+        if isinstance(own, NothingToRun):
+            return own
         retried, version_id = None, facts.version_id
         if facts.retry_of is not None:
             retried = await self._book.linked_run(uow, facts.retry_of)

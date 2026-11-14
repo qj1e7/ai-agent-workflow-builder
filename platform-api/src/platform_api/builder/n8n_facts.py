@@ -27,6 +27,7 @@ from platform_api.orchestration import (
     CardSpec,
     KnownOptions,
     NodeOption,
+    NothingToRun,
     OwnWorkflow,
     Publisher,
     RanVersion,
@@ -53,6 +54,9 @@ _PLACES = """
       ON c.use_case_id = u.use_case_id AND c.version = u.current_version
     WHERE u.deleted_at IS NULL AND c.card_id = %(card)s AND c."values" ? %(input)s
 """
+
+
+NOTHING_ON_THE_LIST = "Nothing on the list to check."
 
 
 class Specs(Protocol):
@@ -94,7 +98,7 @@ class BuilderWorkflowFacts:
         agents = {WATCHLIST_CHECKER.id: [], **{c.card_id: card_spec(c).inputs for c in cards}}
         return known_options(agents, places, self._writes)
 
-    async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | None:
+    async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | NothingToRun | None:
         async with self._db.connection("builder") as conn:
             row = await (
                 await conn.execute(
@@ -106,8 +110,10 @@ class BuilderWorkflowFacts:
         if row is None:
             return None
         spec = await self._specs.run_spec_for(UseCaseId(row["use_case_id"]))
-        if not isinstance(spec, RunSpec):
+        if spec is None:
             return None
+        if not isinstance(spec, RunSpec):
+            return NothingToRun(NOTHING_ON_THE_LIST)
         holder = None if row["held_by"] is None else UserId(row["held_by"])
         return OwnWorkflow(spec, holder, on=not row["draft"] and row["paused_at"] is None)
 

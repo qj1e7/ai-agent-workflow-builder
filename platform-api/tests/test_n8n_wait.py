@@ -35,6 +35,7 @@ from platform_api.orchestration.n8n_calls import (
     NodeCall,
     NodeCatalog,
     NothingToChange,
+    NothingToRun,
     OwnWorkflow,
     ProposeCall,
     ReadCall,
@@ -130,10 +131,14 @@ class FakeLanding:
 @dataclass
 class SpecWorkflows(FakeWorkflows):
     spec: RunSpec = SPEC
+    nothing: NothingToRun | None = None
+    """Set when the use case has nothing to run now, such as an empty watchlist."""
 
-    async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | None:
+    async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | NothingToRun | None:
+        if self.nothing is not None:
+            return self.nothing
         own = await super().workflow(n8n_workflow_id)
-        return None if own is None else OwnWorkflow(self.spec, own.holder)
+        return OwnWorkflow(self.spec, own.holder) if isinstance(own, OwnWorkflow) else own
 
 
 @dataclass

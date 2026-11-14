@@ -16,6 +16,7 @@ from platform_api.orchestration.n8n_calls import (
     Answer,
     AskCall,
     NothingToChange,
+    NothingToRun,
     Publisher,
     RanVersion,
     ReadCall,
@@ -211,3 +212,14 @@ async def test_the_schedule_owner_the_portal_names_never_approves_a_scheduled_ru
     for party in (owner, publisher):
         assert await wl.decide(party) == DecisionRefused(Refusal.OWN_WORK), party.display
     assert not isinstance(await wl.decide(other), DecisionRefused), "another Approver can say yes"
+
+
+async def test_an_empty_watchlist_s_slot_ends_quietly_and_makes_no_run(wl: Writes):
+    """Nothing fails in n8n, so no alarm goes off, and no run waits on anyone."""
+    wl.workflows.nothing = NothingToRun("Nothing on the list to check.")
+    wl.started("101")
+
+    assert await wl.call("101", READ, "Read the watchlist") == Answer(())
+    assert await wl.call("101", AskCall(resume_url("101")), "Ask for a yes") == NothingToChange()
+    assert await wl.runs() == []
+    assert wl.h.agent.requests == []

@@ -40,6 +40,7 @@ from platform_api.orchestration.n8n_calls import (
     NodeCall,
     NodeCatalog,
     NodeOption,
+    NothingToRun,
     OwnWorkflow,
     ProposeCall,
     Publisher,
@@ -118,7 +119,7 @@ class FakeWorkflows:
     gone: set[str] = field(default_factory=set[str])
     """Workflows whose use case was deleted."""
 
-    async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | None:
+    async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | NothingToRun | None:
         if n8n_workflow_id not in (WORKFLOW, OTHER_WORKFLOW):
             return None
         return OwnWorkflow(SPEC, self.holder)

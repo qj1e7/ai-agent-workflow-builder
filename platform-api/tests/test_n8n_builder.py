@@ -22,6 +22,7 @@ from platform_api.orchestration import (
     AgentUnavailable,
     CannotRun,
     NodeOption,
+    OwnWorkflow,
     Publisher,
     RanVersion,
     ReadFailed,
@@ -247,7 +248,7 @@ async def test_node_calls_find_the_use_case_and_its_draft_s_grade(n8n_lab: N8nLa
     use_case_id = (await n8n_lab.create()).json()["use_case_id"]
     facts = n8n_lab.facts()
     own = await facts.workflow("wf1")
-    assert own is not None
+    assert isinstance(own, OwnWorkflow)
     assert (own.spec.use_case_id, own.holder) == (use_case_id, None)
     assert await facts.workflow("wf-someone-else") is None
     draft = n8n_lab.n8n.workflows["wf1"]["versionId"]

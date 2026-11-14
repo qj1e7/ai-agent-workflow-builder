@@ -20,6 +20,7 @@ from platform_api.builder.watchlist import (
 from platform_api.db import Database
 from platform_api.orchestration import (
     ChangedInN8n,
+    NothingToRun,
     RunSpec,
     RunStarted,
     ScheduleBook,
@@ -285,3 +286,14 @@ async def test_the_schedule_tick_leaves_a_moved_watchlist_to_its_schedule_trigge
         assert len(starts.specs) == 1, "after it, n8n's Schedule Trigger starts it, not the tick"
     finally:
         await db.close()
+
+
+async def test_an_empty_watchlist_has_nothing_on_the_list_to_check(world: World):
+    added = await world.on_n8n.add(ALICE, langgraph())
+    assert isinstance(added, WatchlistView)
+    await world.on_n8n.remove(added.software[0].id)
+    facts = Builder(world.db, Starts(), world.on_n8n, "").facts
+
+    workflow_id = (await world.use_case())["n8n_workflow_id"]
+
+    assert await facts.workflow(workflow_id) == NothingToRun("Nothing on the list to check.")
