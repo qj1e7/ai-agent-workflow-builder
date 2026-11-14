@@ -2,12 +2,14 @@
 the Schedule Trigger, and changes its schedule there under the version compare (2.5). The real
 drafts store runs on a fake n8n."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Any, LiteralString
 
 import pytest
 
-from platform_api.builder import Watchlist
+from platform_api.auth import DEV_PEOPLE
+from platform_api.builder import Builder, Watchlist
 from platform_api.builder.models import AddSoftware, ScheduleIn, WatchlistView
 from platform_api.builder.watchlist import (
     AlreadyOnN8n,
@@ -16,10 +18,18 @@ from platform_api.builder.watchlist import (
     WaitsForRun,
 )
 from platform_api.db import Database
-from platform_api.orchestration import ChangedInN8n, ScheduleBook
-from platform_api.shared import RunId, UseCaseId
+from platform_api.orchestration import (
+    ChangedInN8n,
+    RunSpec,
+    RunStarted,
+    ScheduleBook,
+    ScheduleTicker,
+)
+from platform_api.orchestration.people_store import People
+from platform_api.shared import Principal, RunId, UseCaseId
+from tests.conftest import PostgresUrls, truncate_all
 from tests.fake_n8n import FakeN8n
-from tests.support import ALICE, CAROL
+from tests.support import ALICE, CAROL, MovingClock
 from tests.test_n8n_builder import Drafts
 from tests.test_watchlist_builder import FakeFacts
 
@@ -76,6 +86,10 @@ class World:
 
 @pytest.fixture
 def world(db: Database) -> World:
+    return world_on(db)
+
+
+def world_on(db: Database) -> World:
     n8n, runs, facts, schedules = FakeN8n(), OpenRuns(), FakeFacts(), ScheduleBook(db)
     on = OnN8n(Drafts(n8n, db), runs, SOFTWARE_PAGE)
     return World(
@@ -238,3 +252,36 @@ async def test_a_schedule_change_over_an_edit_in_n8n_saves_nothing(world: World)
         "tuesday",
         "carol",
     )
+
+
+@dataclass
+class Starts:
+    specs: list[RunSpec] = field(default_factory=list[RunSpec])
+
+    async def start_run(self, spec: RunSpec, principal: Principal, idempotency_key: str):
+        self.specs.append(spec)
+        return RunStarted(RunId(f"run_{len(self.specs)}"), created=True)
+
+
+async def test_the_schedule_tick_leaves_a_moved_watchlist_to_its_schedule_trigger(
+    postgres: PostgresUrls,
+):
+    truncate_all(postgres.owner)
+    clock = MovingClock()
+    db = Database(postgres.contexts, clock=clock)
+    await db.open()
+    try:
+        assert await People(db).seed_dev(DEV_PEOPLE), "Carol, the schedule's owner, is an Operator"
+        world = world_on(db)
+        await watchlist_before_the_move(world)
+        starts = Starts()
+        ticker = ScheduleTicker(db, ScheduleBook(db), Builder(db, starts, world.on_n8n, ""), starts)
+        clock.now += timedelta(days=7)
+        assert len(await ticker.tick()) == 1, "before the move, the tick starts its check"
+
+        assert isinstance(await world.on_n8n.move_to_n8n(), MovedToN8n)
+        clock.now += timedelta(days=7)
+        assert await ticker.tick() == []
+        assert len(starts.specs) == 1, "after it, n8n's Schedule Trigger starts it, not the tick"
+    finally:
+        await db.close()

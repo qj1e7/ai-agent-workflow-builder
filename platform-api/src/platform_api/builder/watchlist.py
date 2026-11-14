@@ -825,8 +825,8 @@ class Watchlist:
         return MovedToN8n(draft.workflow_id, moved.version)
 
     async def _hold(self, uow: UnitOfWork) -> WatchlistRecord | None:
-        """The watchlist, locked as a list change and a pause lock it, in their order, so a move or
-        a schedule change never crosses either."""
+        """The watchlist, locked in the order a list change and a pause take their locks, so a
+        move or a schedule change never crosses either."""
         await uow.conn.execute("SELECT pg_advisory_xact_lock(hashtext('builder.watchlist'))")
         found = await _current(uow.conn, lock=False)
         if found is None:
