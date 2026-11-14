@@ -1,0 +1,30 @@
+{
+  "name": "self_test_failure",
+  "nodes": [
+    {
+      "id": "daily-6-00",
+      "name": "Daily 6:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "parameters": {
+        "rule": { "interval": [{ "field": "days", "triggerAtHour": 6, "triggerAtMinute": 0 }] }
+      }
+    },
+    {
+      "id": "fail-on-purpose",
+      "name": "Fail on purpose",
+      "type": "CUSTOM.wabRead",
+      "typeVersion": 1,
+      "position": [220, 0],
+      "parameters": { "source": "github_releases", "place": "self-test" }
+    }
+  ],
+  "connections": {
+    "Daily 6:00": { "main": [[{ "node": "Fail on purpose", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Singapore"
+  }
+}

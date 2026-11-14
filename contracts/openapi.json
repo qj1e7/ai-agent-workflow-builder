@@ -3395,7 +3395,7 @@
                 "type": "null"
               }
             ],
-            "description": "Who published it in n8n. Null when the People list can't match them, so its runs stop at their first block until an Operator matches the person.",
+            "description": "Who published it in n8n. Null when the People list can't match them, so its runs stop at their first block until an Operator matches the person, and for settings saved in n8n, which n8n does not name anyone for.",
             "title": "By"
           },
           "by_name": {
@@ -3434,6 +3434,15 @@
             "title": "In Use",
             "type": "integer"
           },
+          "made": {
+            "description": "published_in_n8n: someone published it in n8n's editor. settings_changed_in_n8n: someone saved its settings there and published nothing, and n8n runs the live version with them at once. n8n does not say who saved them, so by is null.",
+            "enum": [
+              "published_in_n8n",
+              "settings_changed_in_n8n"
+            ],
+            "title": "Made",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -3451,7 +3460,7 @@
             "type": "string"
           },
           "version": {
-            "description": "The version published in n8n.",
+            "description": "The version published in n8n, or whose settings changed.",
             "title": "Version",
             "type": "integer"
           }
@@ -3462,6 +3471,7 @@
           "use_case_id",
           "name",
           "version",
+          "made",
           "by",
           "by_name",
           "at",
@@ -5531,7 +5541,8 @@
           "status": {
             "enum": [
               "failed",
-              "left_as_is"
+              "left_as_is",
+              "self_test"
             ],
             "title": "Status",
             "type": "string"
@@ -8642,6 +8653,12 @@
       "ReadinessCheck": {
         "additionalProperties": false,
         "properties": {
+          "counts_for_ready": {
+            "default": true,
+            "description": "False for a check that only warns. Ready does not wait for it, so a probe never takes the platform out of traffic over it.",
+            "title": "Counts For Ready",
+            "type": "boolean"
+          },
           "detail": {
             "title": "Detail",
             "type": "string"
@@ -12184,6 +12201,7 @@
       "VersionMade": {
         "enum": [
           "published_in_n8n",
+          "settings_changed_in_n8n",
           "rolled_back",
           "yes_put_back",
           "moved_to_n8n"
@@ -12284,7 +12302,7 @@
             "description": "The change of when it runs. Null for version 1, for a version the Software watchlist published when its software changed, and for a version made otherwise."
           },
           "changes": {
-            "description": "For a version published in n8n, what changed from the version before, in plain words, as the Changed in n8n card lists them. Empty otherwise.",
+            "description": "For a version published in n8n, or whose settings changed there, what changed from the version before, in plain words, as the Changed in n8n card lists them. Empty otherwise.",
             "items": {
               "type": "string"
             },
@@ -12311,7 +12329,7 @@
                 "type": "null"
               }
             ],
-            "description": "How a version that is not a change of when it runs came about: published_in_n8n by a person in n8n's editor, rolled_back to an earlier version, yes_put_back, which put Ask for a yes back before each write, or moved_to_n8n, the version that moved it from the shared n8n workflow to its own. Null otherwise."
+            "description": "How a version that is not a change of when it runs came about: published_in_n8n by a person in n8n's editor; settings_changed_in_n8n, the same version in n8n with its settings saved there and nothing published, which n8n runs with the new settings at once; rolled_back to an earlier version; yes_put_back, which put Ask for a yes back before each write; or moved_to_n8n, the version that moved it from the shared n8n workflow to its own. Null otherwise."
           },
           "publisher_unknown": {
             "default": false,
@@ -20815,7 +20833,7 @@
     },
     "/internal/v1/n8n/failures": {
       "post": {
-        "description": "Report a failure, from our error workflow only. When n8n's own record says the execution failed, fails the run it carries with n8n's words for the block. A run that has ended, or that another attempt carries now, stays as it is.",
+        "description": "Report a failure, from our error workflow only. When n8n's own record says the execution failed, fails the run it carries with n8n's words for the block. A run that has ended, or that another attempt carries now, stays as it is. The daily self-test's failure is kept as the self-test's arrival, and fails no run.",
         "operationId": "failures_internal_v1_n8n_failures_post",
         "parameters": [
           {

@@ -20,6 +20,7 @@ from platform_api.orchestration.runs import (
     StepName,
     Working,
 )
+from platform_api.orchestration.workflow_check import ERROR_WORKFLOW, PLATFORM_SHAPES
 from platform_api.orchestration.write_actions import CONNECTOR_TIMEOUT
 
 WORKFLOWS_DIR = Path(__file__).parent / "workflows"
@@ -43,7 +44,6 @@ class NodeType(Enum):
     RESPOND = "n8n-nodes-base.respondToWebhook"
     HTTP_REQUEST = "n8n-nodes-base.httpRequest"
     IF = "n8n-nodes-base.if"
-    ERROR_TRIGGER = "n8n-nodes-base.errorTrigger"
     SCHEDULE_TRIGGER = "n8n-nodes-base.scheduleTrigger"
 
 
@@ -108,8 +108,6 @@ class WorkflowDefinition:
     http_nodes: Mapping[str, HttpNode]
     chains: Mapping[str, tuple[str, ...]]
     error_workflow: str | None
-    is_error_workflow: bool
-    starts_on_a_schedule: bool
 
     def webhook_path(self, leg: Leg) -> str:
         return f"{self.name.replace('_', '-')}/{leg.value}"
@@ -165,8 +163,6 @@ def parse(document: Mapping[str, Any]) -> WorkflowDefinition:
         http_nodes=http_nodes,
         chains=chains,
         error_workflow=str(error_workflow) if error_workflow is not None else None,
-        is_error_workflow=NodeType.ERROR_TRIGGER.value in node_types.values(),
-        starts_on_a_schedule=NodeType.SCHEDULE_TRIGGER.value in node_types.values(),
     )
 
 
@@ -197,9 +193,10 @@ def _chain(connections: Mapping[str, Any], start: str) -> tuple[str, ...]:
 
 
 def load_all(directory: Path = WORKFLOWS_DIR) -> tuple[WorkflowDefinition, ...]:
-    return tuple(
-        parse(json.loads(path.read_text())) for path in sorted(directory.glob("*.n8n.json"))
-    )
+    """The shared run workflow. The platform's own workflows, the error workflow
+    among them, are workflow_check's to check."""
+    definitions = (parse(json.loads(p.read_text())) for p in sorted(directory.glob("*.n8n.json")))
+    return tuple(d for d in definitions if d.name not in PLATFORM_SHAPES)
 
 
 def placeholders(definition: WorkflowDefinition) -> frozenset[str]:
@@ -252,26 +249,16 @@ class LiveState:
 def lint(
     definitions: Iterable[WorkflowDefinition], *, live: LiveState | None = None
 ) -> list[Finding]:
-    definitions = tuple(definitions)
     findings: list[Finding] = []
-    error_workflows = [d for d in definitions if d.is_error_workflow]
     base = PLATFORM_INTERNAL_URL if live is None else live.platform_internal_url
     for d in definitions:
         findings += _node_types(d)
         findings += _internal_urls(d, base)
         findings += _retry_waits(d)
-        if d.starts_on_a_schedule and not d.webhooks:
-            findings += _error_workflow_setting(d, error_workflows, live)
-        elif not d.is_error_workflow:
-            findings += _webhook_paths(d)
-            findings += _step_order(d)
-            findings += _deadlines(d)
-            findings += _error_workflow_setting(d, error_workflows, live)
-    if len(error_workflows) != 1:
-        names = ", ".join(d.name for d in error_workflows) or "none"
-        findings.append(
-            Finding(Rule.ERROR_WORKFLOW, "*", f"expected one error workflow, found {names}")
-        )
+        findings += _webhook_paths(d)
+        findings += _step_order(d)
+        findings += _deadlines(d)
+        findings += _error_workflow_setting(d, live)
     return findings
 
 
@@ -411,9 +398,7 @@ def _deadlines(d: WorkflowDefinition) -> list[Finding]:
     return findings
 
 
-def _error_workflow_setting(
-    d: WorkflowDefinition, error_workflows: list[WorkflowDefinition], live: LiveState | None
-) -> list[Finding]:
+def _error_workflow_setting(d: WorkflowDefinition, live: LiveState | None) -> list[Finding]:
     if live is None:
         if d.error_workflow != ERROR_WORKFLOW_ID:
             return [
@@ -424,9 +409,7 @@ def _error_workflow_setting(
                 )
             ]
         return []
-    if len(error_workflows) != 1:
-        return []
-    reporter = live.workflows.get(error_workflows[0].name)
+    reporter = live.workflows.get(ERROR_WORKFLOW)
     if reporter is None:
         return [Finding(Rule.ERROR_WORKFLOW, d.name, "the error workflow is not loaded in n8n")]
     findings: list[Finding] = []

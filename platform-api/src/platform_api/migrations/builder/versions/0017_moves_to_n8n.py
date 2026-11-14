@@ -3,8 +3,10 @@ from alembic import op
 revision = "0017"
 down_revision = "0016"
 
-MADE = "made IN ('published_in_n8n', 'rolled_back', 'yes_put_back'{more})"
-NOBODY = "(made IS NULL OR made IN ('published_in_n8n'{more}))"
+MADE = (
+    "made IN ('published_in_n8n', 'settings_changed_in_n8n', 'rolled_back', 'yes_put_back'{more})"
+)
+NOBODY = "(made IS NULL OR made IN ('published_in_n8n', 'settings_changed_in_n8n'{more}))"
 
 
 def upgrade() -> None:

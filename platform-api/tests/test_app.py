@@ -221,6 +221,7 @@ async def test_readiness_is_not_ready_before_bootstrap(db: Database):
     assert [(c.name, c.ok) for c in readiness.checks] == [
         ("activity_log", True),
         ("workflows", False),
+        ("self_test", False),
     ]
 
 

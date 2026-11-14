@@ -9,6 +9,7 @@ type Json = Record<string, unknown>
 
 export interface RunSnapshot {
   run_id: string
+  use_case_id: string
   state: string
   use_case_name: string
   started_by: string
@@ -108,12 +109,28 @@ export class Backend {
 
   /** Empties the watchlist, adds the software afresh with no ticket history and turns the schedule off. Answers the check's id. */
   async freshWatchlist(user = 'alice', software: readonly Software[] = [LANGGRAPH]): Promise<string> {
-    const { watchlist } = await this.get<{ watchlist: { software: { id: string }[] } | null }>(user, '/api/v1/watchlist')
+    const { watchlist } = await this.get<{ watchlist: { use_case_id: string; software: { id: string }[] } | null }>(user, '/api/v1/watchlist')
+    if (watchlist) await this.declineWaitingChecks(watchlist.use_case_id)
     for (const item of watchlist?.software ?? []) await this.delete(user, `/api/v1/watchlist/software/${item.id}`)
     let useCaseId = ''
     for (const item of software) useCaseId = (await this.post<{ use_case_id: string }>(user, '/api/v1/watchlist/software', item, {}, [201])).use_case_id
     await this.delete(user, '/api/v1/watchlist/schedule', [200, 404])
     return useCaseId
+  }
+
+  /**
+   * On its own n8n workflow the watchlist has at most one check waiting for a yes, and a check started while one waits is
+   * skipped (ADR 0026). Specs leave checks waiting on purpose, so Bob declines any that still wait, which writes nothing.
+   */
+  async declineWaitingChecks(useCaseId: string): Promise<void> {
+    for (const run of await this.runs()) {
+      if (run.use_case_id !== useCaseId || run.state !== 'awaiting_approval') continue
+      const approvalId = await this.approvalIdOf(run.run_id)
+      // A request already decided can still show its run waiting until n8n takes the answer.
+      const { digest, steps } = await this.get<{ digest: string; steps: { status: string }[] }>('bob', `/api/v1/approvals/${approvalId}`)
+      if (!steps.some((step) => step.status === 'open')) continue
+      await this.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest }, undefined, [201, 409])
+    }
   }
 
   async startCheck(user = 'alice', software: readonly Software[] = [LANGGRAPH]): Promise<string> {

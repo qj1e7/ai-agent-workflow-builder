@@ -23,8 +23,11 @@ from platform_api.orchestration.n8n_calls import (
     ExecutionFacts,
     FailedExecution,
     Finished,
+    PlatformWorkflow,
     Publisher,
+    TryLater,
 )
+from platform_api.orchestration.workflow_check import ERROR_WORKFLOW
 from platform_api.settings import N8nOwner
 from platform_api.shared import N8nExecutionId, UserId
 
@@ -68,12 +71,33 @@ class UpsertedWorkflow:
     created: bool
 
 
+N8N_UNREADABLE = TryLater("n8n cannot be read just now.")
+OWNS = "workflow:owner"
+"""The role n8n gives the project a workflow belongs to."""
+
+
 @dataclass(frozen=True)
 class WorkflowRecord:
     id: str
     name: str
     active: bool
     document: dict[str, Any]
+
+    @property
+    def project(self) -> str | None:
+        return home_project(self.document)
+
+
+def home_project(workflow: Mapping[str, Any]) -> str | None:
+    """The project a workflow belongs to, as n8n's public API lists who it is shared with."""
+    shared = workflow.get("shared")
+    entries = cast(list[object], shared) if isinstance(shared, list) else []
+    owners = [
+        str(cast(dict[str, Any], e).get("projectId"))
+        for e in entries
+        if isinstance(e, dict) and cast(dict[str, Any], e).get("role") == OWNS
+    ]
+    return owners[0] if len(owners) == 1 else None
 
 
 class N8nClient:
@@ -187,25 +211,33 @@ class N8nClient:
     def delete_credential(self, credential_id: str) -> None:
         self._public("DELETE", f"/credentials/{credential_id}")
 
-    def find_workflow(self, name: str) -> WorkflowRecord | None:
-        listed = self._public("GET", "/workflows", params={"name": name})
-        matches = [item for item in listed["data"] if item["name"] == name]
-        return _record(matches[0]) if matches else None
+    def platform_project(self) -> str:
+        """/rest: the owner's own project, where the platform keeps its workflows. No staff
+        account can reach it."""
+        return str(self._rest("GET", "/rest/projects/personal")["data"]["id"])
 
-    def upsert_workflow(self, body: dict[str, Any]) -> UpsertedWorkflow:
-        """An update never deactivates, because P4 saw webhooks answer 404 during a
-        deactivate and activate cycle, while a PUT on an active workflow had no gap.
-        """
-        existing = self.find_workflow(str(body["name"]))
-        if existing is None:
+    def workflows_named(self, name: str) -> list[WorkflowRecord]:
+        """In every project the owner sees, a member's included."""
+        listed = self._public("GET", "/workflows", params={"name": name})
+        return [_record(item) for item in listed["data"] if item["name"] == name]
+
+    def workflow(self, workflow_id: str) -> WorkflowRecord | None:
+        response = self._send("GET", f"/workflows/{workflow_id}")
+        return None if response.status_code == 404 else _record(_ok(response))
+
+    def save_workflow(self, body: dict[str, Any], workflow_id: str | None) -> UpsertedWorkflow:
+        """Creates the workflow in the owner's own project when `workflow_id` is None, else
+        updates that one. An update never deactivates, because P4 saw webhooks answer 404 during
+        a deactivate and activate cycle, while a PUT on an active workflow had no gap."""
+        if workflow_id is None:
             created = self._public("POST", "/workflows", json=body)
             workflow_id = str(created["id"])
             self._public("POST", f"/workflows/{workflow_id}/activate")
             return UpsertedWorkflow(workflow_id, created=True)
-        self._public("PUT", f"/workflows/{existing.id}", json=body)
-        if not existing.active:
-            self._public("POST", f"/workflows/{existing.id}/activate")
-        return UpsertedWorkflow(existing.id, created=False)
+        self._public("PUT", f"/workflows/{workflow_id}", json=body)
+        if not self.read_back(workflow_id).active:
+            self._public("POST", f"/workflows/{workflow_id}/activate")
+        return UpsertedWorkflow(workflow_id, created=False)
 
     def holds(self, workflow_id: str) -> bool:
         """Whether n8n has this workflow. An answer that is neither yes nor no raises."""
@@ -785,6 +817,13 @@ class N8nApi:
             return None
         return _workflow(_parse(_WorkflowOut, _expect(response)))
 
+    async def home_project(self, workflow_id: str) -> str | None:
+        """None when n8n no longer has the workflow."""
+        response = await self._public("GET", f"/workflows/{workflow_id}")
+        if response.status_code == 404:
+            return None
+        return home_project(_expect(response).json())
+
     async def delete(self, workflow_id: str) -> None:
         """A draft that was never published. n8n refuses a published one (P7 Q8)."""
         _expect(await self._public("DELETE", f"/workflows/{workflow_id}"), 200, 404)
@@ -989,9 +1028,6 @@ def _workflow(out: _WorkflowOut) -> N8nWorkflow:
     return N8nWorkflow(out.id, out.version_id, out.active_version_id, document)
 
 
-ERROR_WORKFLOW_NAME = "run_failure_reporter"
-
-
 class N8nExecutions:
     """n8n's records of executions, through its public API (ENGINE-PLAN 2.3)."""
 
@@ -1086,13 +1122,30 @@ class N8nWorkflows:
         self._db = db
 
     async def error_workflow_id(self) -> str | None:
-        """The platform's error workflow, as bootstrap last loaded it."""
+        """The error workflow, as the last bootstrap that was ready loaded it."""
+        loaded = (await self.platform_workflows()).get(ERROR_WORKFLOW)
+        return None if loaded is None else loaded.id
+
+    async def platform_workflows(self) -> dict[str, PlatformWorkflow]:
+        """As the last bootstrap that was ready recorded them."""
         async with self._db.connection("orchestration") as conn:
             row = await (
-                await conn.execute("SELECT workflows FROM orchestration.engine_status WHERE id = 1")
+                await conn.execute(
+                    "SELECT workflows FROM orchestration.engine_status WHERE id = 1 AND ready"
+                )
             ).fetchone()
         loaded: list[dict[str, Any]] = [] if row is None else row["workflows"]
-        return next((str(w["id"]) for w in loaded if w.get("name") == ERROR_WORKFLOW_NAME), None)
+        return {str(w["name"]): PlatformWorkflow(str(w["id"]), w.get("project")) for w in loaded}
+
+    async def in_place(self, workflow: PlatformWorkflow) -> bool | TryLater:
+        if workflow.project is None:
+            return False
+        try:
+            home = await self._api.home_project(workflow.id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not read where n8n holds workflow %s: %s", workflow.id, error)
+            return N8N_UNREADABLE
+        return home == workflow.project
 
     async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft:
         """Creates the workflow, then reads it back and compares, because n8n may keep something
@@ -1134,7 +1187,18 @@ class N8nWorkflows:
         return await self._api.workflow(workflow_id)
 
     async def kept(self, workflow_id: str, version_id: str) -> dict[str, Any] | None:
-        return await self._api.version(workflow_id, version_id)
+        """A version n8n holds, as n8n runs it (see as_run)."""
+        workflow = await self._api.workflow(workflow_id)
+        return None if workflow is None else await self._as_run(workflow, version_id)
+
+    async def _as_run(self, workflow: N8nWorkflow, version_id: str) -> dict[str, Any] | None:
+        """n8n's history keeps a version's blocks and edges, never its settings: the workflow holds
+        those once, and runs every version with them. So a version is graded and compared with the
+        workflow's settings now, which are what its runs would have."""
+        version = await self._api.version(workflow.id, version_id)
+        if version is None:
+            return None
+        return {**version, "settings": workflow.document["settings"]}
 
     async def timeline(self, workflow_id: str) -> list[PublishEvent]:
         return await self._api.publish_timeline(workflow_id)
@@ -1161,7 +1225,7 @@ class N8nWorkflows:
         ):
             return ChangedInN8n()
         if live and held is not None:
-            in_n8n = await self._api.version(workflow_id, held)
+            in_n8n = await self._as_run(now, held)
             if in_n8n is not None and same_as_sent(document, in_n8n):
                 await self._api.publish(workflow_id, held)
                 await self._live(workflow_id, held)
@@ -1194,7 +1258,7 @@ class N8nWorkflows:
             return None
         if record.status == "success":
             return Finished(execution_id)
-        return FailedExecution(execution_id, record.failed_node, record.error)
+        return FailedExecution(execution_id, record.workflow_id, record.failed_node, record.error)
 
     async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
         """The block that failed and n8n's words for it, from n8n's own record. None unless n8n
@@ -1206,4 +1270,4 @@ class N8nWorkflows:
             return None
         if record is None or record.status != "error":
             return None
-        return FailedExecution(execution_id, record.failed_node, record.error)
+        return FailedExecution(execution_id, record.workflow_id, record.failed_node, record.error)

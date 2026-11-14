@@ -13,8 +13,13 @@ from psycopg.types.json import Jsonb
 from platform_api.auth import ConfigError
 from platform_api.migrations import upgrade_all
 from platform_api.orchestration.n8n import PLATFORM_API_KEY_LABEL, N8nClient, N8nError
+from platform_api.orchestration.workflow_check import (
+    ERROR_WORKFLOW,
+    PLATFORM_WORKFLOWS_DIR,
+    SELF_TEST,
+    check_platform,
+)
 from platform_api.orchestration.workflows import (
-    Finding,
     LiveState,
     LiveWorkflow,
     WorkflowDefinition,
@@ -62,6 +67,12 @@ class LoadedWorkflow:
     id: str
     active: bool
     sha256: str
+    project: str | None = None
+
+
+class NotThePlatforms(Exception):
+    """Bootstrap cannot tell which n8n workflow is the platform's own. The words name workflows
+    and ids only."""
 
 
 def main(env: Mapping[str, str] | None = None) -> int:
@@ -76,11 +87,13 @@ def main(env: Mapping[str, str] | None = None) -> int:
     if not migrate_to_head(settings.owner_database_url, say):
         return _finish(settings, say, [], [], "the database holds old release-check data")
     definitions = load_all()
-    findings = lint(definitions)
+    findings = [str(finding) for finding in lint(definitions)]
     if findings:
         return _finish(settings, say, [], findings, "the workflow files fail the lint")
     try:
         loaded, findings = load_into_n8n(settings, definitions, say)
+    except NotThePlatforms as error:
+        return _finish(settings, say, [], [], str(error))
     except (N8nError, httpx.HTTPError) as error:
         say(f"could not load the workflows into n8n: {error}")
         detail = _detail_without_message("could not load the workflows into n8n", error)
@@ -113,11 +126,11 @@ def _finish(
     settings: BootstrapSettings,
     say: Say,
     loaded: list[LoadedWorkflow],
-    findings: list[Finding],
+    findings: Sequence[str],
     detail: str,
 ) -> int:
     for finding in findings:
-        say(str(finding))
+        say(finding)
     ready = not findings and bool(loaded)
     record_status(settings.owner_database_url, ready=ready, detail=detail, workflows=loaded)
     say(f"{'ready' if ready else 'NOT ready'}: {detail}")
@@ -126,16 +139,11 @@ def _finish(
 
 def load_into_n8n(
     settings: BootstrapSettings, definitions: tuple[WorkflowDefinition, ...], say: Say
-) -> tuple[list[LoadedWorkflow], list[Finding]]:
+) -> tuple[list[LoadedWorkflow], list[str]]:
     in_use = old_engine_in_use(settings.owner_database_url)
-    error_workflow = next(d for d in definitions if d.is_error_workflow)
-    other_workflows = [
-        d
-        for d in definitions
-        if not d.is_error_workflow and (in_use or d.name != SHARED_RUN_WORKFLOW)
-    ]
-    previous = previous_hashes(settings.owner_database_url)
-    recorded = recorded_ids(settings.owner_database_url)
+    shared = tuple(d for d in definitions if in_use or d.name != SHARED_RUN_WORKFLOW)
+    previous = _previous(settings.owner_database_url)
+    recorded = {w["name"]: w["id"] for w in previous}
     client = N8nClient(settings.n8n_base_url)
     try:
         client.wait_healthy()
@@ -151,23 +159,30 @@ def load_into_n8n(
         say(f"api key '{PLATFORM_API_KEY_LABEL}': {removed} removed, platform-api makes its own")
         values = {"PLATFORM_INTERNAL_URL": settings.platform_internal_url}
         credential_id = None
-        if any(_needs_step_key(d) for d in (error_workflow, *other_workflows)):
+        if any(_needs_step_key(d) for d in shared):
             credential_id = client.create_header_credential(
                 CREDENTIAL_NAME, STEP_KEY_HEADER, settings.step_key
             )
             say(f"credential '{CREDENTIAL_NAME}': created {credential_id}")
             values[CREDENTIAL_PLACEHOLDER] = credential_id
-        error_id, error_hash = _load(client, error_workflow, values, previous, say)
-        values["ERROR_WORKFLOW_ID"] = error_id
-        hashes = {error_id: error_hash}
-        for d in other_workflows:
-            workflow_id, digest = _load(client, d, values, previous, say)
+        place = Place(
+            client,
+            client.platform_project(),
+            recorded,
+            {w["name"]: w["sha256"] for w in previous},
+            say,
+        )
+        platform = load_platform_workflows(place)
+        values["ERROR_WORKFLOW_ID"] = platform.error_workflow
+        hashes: dict[str, str] = {}
+        for d in shared:
+            workflow_id, digest = _load(place, d, values)
             hashes[workflow_id] = digest
-        old = client.find_workflow(OLD_RUN_WORKFLOW)
-        if old is not None:
-            client.delete_workflow(old.id)
-            say(f"workflow {OLD_RUN_WORKFLOW} ({old.id}): removed, every run now goes through run")
-        retire_old_engine(client, recorded, in_use, say)
+        for old in client.workflows_named(OLD_RUN_WORKFLOW):
+            if old.project == place.project:
+                client.delete_workflow(old.id)
+                say(f"workflow {OLD_RUN_WORKFLOW} ({old.id}): removed, every run goes through run")
+        retire_old_engine(place, in_use)
         stale = [c for c in client.credentials_named(CREDENTIAL_NAME) if c != credential_id]
         for credential in stale:
             client.delete_credential(credential)
@@ -176,33 +191,109 @@ def load_into_n8n(
         records = [client.read_back(workflow_id) for workflow_id in hashes]
     finally:
         client.close()
+    loaded = [
+        *platform.loaded,
+        *(LoadedWorkflow(r.name, r.id, r.active, hashes[r.id], r.project) for r in records),
+    ]
     live = LiveState(
-        settings.platform_internal_url,
-        {r.name: LiveWorkflow(r.id, r.active) for r in records},
+        settings.platform_internal_url, {w.name: LiveWorkflow(w.id, w.active) for w in loaded}
     )
-    findings = lint((parse(r.document) for r in records), live=live)
-    loaded = [LoadedWorkflow(r.name, r.id, r.active, hashes[r.id]) for r in records]
+    findings = [
+        *platform.findings,
+        *(str(finding) for finding in lint((parse(r.document) for r in records), live=live)),
+        *(
+            f"{w.name} ({w.id}) is not in the platform's n8n project"
+            for w in loaded
+            if w.project != place.project
+        ),
+    ]
     return loaded, findings
 
 
+@dataclass(frozen=True)
+class Place:
+    """The owner's own n8n project, where the platform keeps its workflows, and what the last
+    bootstrap recorded of them."""
+
+    client: N8nClient
+    project: str
+    recorded: Mapping[str, str]
+    """Each workflow's id, by name."""
+    hashes: Mapping[str, str]
+    say: Say
+
+    def target(self, name: str) -> str | None:
+        """The workflow this name is the platform's for: the one recorded, else the only one of
+        that name in the platform's project, else none yet. A workflow of that name in a
+        member's project is never it."""
+        recorded = self.recorded.get(name)
+        held = None if recorded is None else self.client.workflow(recorded)
+        if held is not None and held.project != self.project:
+            raise NotThePlatforms(f"{name} ({held.id}) is no longer in the platform's n8n project")
+        if held is not None:
+            return held.id
+        named = self.client.workflows_named(name)
+        for unplaced in (w for w in named if w.project is None):
+            raise NotThePlatforms(
+                f"n8n listed {name} ({unplaced.id}) without its project, so bootstrap cannot tell "
+                "whose it is"
+            )
+        ours = [w.id for w in named if w.project == self.project]
+        if len(ours) > 1:
+            raise NotThePlatforms(
+                f"{len(ours)} workflows named {name} are in the platform's n8n project: "
+                f"{', '.join(ours)}"
+            )
+        return ours[0] if ours else None
+
+
+@dataclass(frozen=True)
+class PlatformLoaded:
+    error_workflow: str
+    loaded: list[LoadedWorkflow]
+    findings: list[str]
+
+
+def load_platform_workflows(place: Place) -> PlatformLoaded:
+    """The platform's own n8n workflows, each made active (ENGINE-PLAN 2.8): the error workflow
+    first, then the daily self-test, whose failures go to it. Each is checked as n8n holds it."""
+    error = platform_document(ERROR_WORKFLOW)
+    error_id = _upsert(place, error, _content_hash(error))
+    self_test = platform_document(SELF_TEST)
+    self_test["settings"] = {**self_test["settings"], "errorWorkflow": error_id}
+    self_test_id = _upsert(place, self_test, _content_hash(self_test))
+    loaded: list[LoadedWorkflow] = []
+    findings: list[str] = []
+    for workflow_id, body in ((error_id, error), (self_test_id, self_test)):
+        record = place.client.read_back(workflow_id)
+        digest = _content_hash(body)
+        loaded.append(LoadedWorkflow(record.name, record.id, record.active, digest, record.project))
+        findings += [f"{record.name}: {f.text}" for f in check_platform(record.document, error_id)]
+    return PlatformLoaded(error_id, loaded, findings)
+
+
+def platform_document(name: str) -> dict[str, Any]:
+    return json.loads((PLATFORM_WORKFLOWS_DIR / f"{name}.n8n.json").read_text())
+
+
 def _load(
-    client: N8nClient,
-    definition: WorkflowDefinition,
-    values: Mapping[str, str],
-    previous: Mapping[str, str],
-    say: Say,
+    place: Place, definition: WorkflowDefinition, values: Mapping[str, str]
 ) -> tuple[str, str]:
-    body = render(definition, values)
     digest = content_hash_without_credential(definition, values)
-    result = client.upsert_workflow(body)
+    return _upsert(place, render(definition, values), digest), digest
+
+
+def _upsert(place: Place, body: dict[str, Any], digest: str) -> str:
+    name = str(body["name"])
+    result = place.client.save_workflow(body, place.target(name))
     if result.created:
         change = "created"
-    elif previous.get(definition.name) == digest:
+    elif place.hashes.get(name) == digest:
         change = "updated in place, same content as last bootstrap"
     else:
         change = "updated in place, content changed"
-    say(f"workflow {definition.name} ({result.id}): {change}")
-    return result.id, digest
+    place.say(f"workflow {name} ({result.id}): {change}")
+    return result.id
 
 
 def old_engine_in_use(owner_url: str) -> bool:
@@ -214,25 +305,17 @@ def old_engine_in_use(owner_url: str) -> bool:
     return bool(row[0])
 
 
-def retire_old_engine(
-    client: N8nClient, recorded: Mapping[str, str], in_use: bool, say: Say
-) -> None:
+def retire_old_engine(place: Place, in_use: bool) -> None:
     """The schedule tick goes at once. The shared run workflow goes once nothing runs on it, so an
-    old deploy's waiting run still finishes there first. Each goes by the id bootstrap recorded
-    when it loaded it, never by its name alone, so a workflow staff named the same stays. A run
-    left behind by a delete that failed is no longer on record: the release that removes the old
-    engine's code removes it by name and content hash."""
+    old deploy's waiting run still finishes there first. Each is found as the platform finds its
+    own, by the id recorded, in the platform's n8n project, so a workflow staff named the same
+    stays. A run left behind by a delete that failed is no longer on record: the release that
+    removes the old engine's code removes it by name and content hash."""
     for name in (*RETIRED_WORKFLOWS, *(() if in_use else (SHARED_RUN_WORKFLOW,))):
-        workflow_id = recorded.get(name)
-        if workflow_id is None:
-            continue
-        try:
-            held = client.read_back(workflow_id)
-        except N8nError:
-            continue
-        if held.name == name:
-            client.delete_workflow(workflow_id)
-            say(f"workflow {name} ({workflow_id}): removed, every workflow runs as its own in n8n")
+        workflow_id = place.target(name)
+        if workflow_id is not None:
+            place.client.delete_workflow(workflow_id)
+            place.say(f"workflow {name} ({workflow_id}): removed, every workflow runs as its own")
 
 
 def _needs_step_key(definition: WorkflowDefinition) -> bool:
@@ -242,8 +325,11 @@ def _needs_step_key(definition: WorkflowDefinition) -> bool:
 def content_hash_without_credential(
     definition: WorkflowDefinition, values: Mapping[str, str]
 ) -> str:
-    masked = render(definition, {**values, CREDENTIAL_PLACEHOLDER: "<masked>"})
-    canonical = json.dumps(masked, sort_keys=True, separators=(",", ":"))
+    return _content_hash(render(definition, {**values, CREDENTIAL_PLACEHOLDER: "<masked>"}))
+
+
+def _content_hash(body: Mapping[str, Any]) -> str:
+    canonical = json.dumps(body, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
@@ -318,36 +404,31 @@ def ask_for_restore(owner_url: str, missing: Sequence[str], say: Say) -> None:
     say("n8n holds none of its workflows: platform-api restores the ones it kept as it starts")
 
 
-def recorded_ids(owner_url: str) -> dict[str, str]:
-    """Each workflow the last bootstrap loaded, by name."""
-    with psycopg.connect(owner_url) as conn:
-        row = conn.execute(
-            "SELECT workflows FROM orchestration.engine_status WHERE id = 1"
-        ).fetchone()
-    workflows: list[dict[str, str]] = [] if row is None else row[0]
-    return {w["name"]: w["id"] for w in workflows}
-
-
 def previous_hashes(owner_url: str) -> dict[str, str]:
+    return {w["name"]: w["sha256"] for w in _previous(owner_url)}
+
+
+def _previous(owner_url: str) -> list[dict[str, str]]:
     with psycopg.connect(owner_url) as conn:
         row = conn.execute(
             "SELECT workflows FROM orchestration.engine_status WHERE id = 1"
         ).fetchone()
-    if row is None:
-        return {}
-    workflows: list[dict[str, str]] = row[0]
-    return {w["name"]: w["sha256"] for w in workflows}
+    return [] if row is None else row[0]
 
 
 def record_status(
     owner_url: str, *, ready: bool, detail: str, workflows: list[LoadedWorkflow]
 ) -> None:
+    """A bootstrap that loaded nothing keeps the workflows the last one recorded, so the next
+    bootstrap still knows the platform's own by id. platform-api trusts them only while ready."""
     with psycopg.connect(owner_url) as conn:
         conn.execute(
             "INSERT INTO orchestration.engine_status (id, loaded_at, ready, detail, workflows) "
             "VALUES (1, now(), %s, %s, %s) "
             "ON CONFLICT (id) DO UPDATE SET loaded_at = EXCLUDED.loaded_at, "
-            "ready = EXCLUDED.ready, detail = EXCLUDED.detail, workflows = EXCLUDED.workflows",
+            "ready = EXCLUDED.ready, detail = EXCLUDED.detail, workflows = CASE "
+            "WHEN EXCLUDED.workflows = '[]'::jsonb THEN orchestration.engine_status.workflows "
+            "ELSE EXCLUDED.workflows END",
             (ready, detail, Jsonb([asdict(w) for w in workflows])),
         )
 

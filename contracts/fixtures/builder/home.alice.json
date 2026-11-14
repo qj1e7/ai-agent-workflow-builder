@@ -140,6 +140,7 @@
       "use_case_id": "uc_fastapi",
       "name": "FastAPI release check",
       "version": 4,
+      "made": "published_in_n8n",
       "by": "alice",
       "by_name": "Alice Tan",
       "at": "2026-11-09T02:05:00Z",

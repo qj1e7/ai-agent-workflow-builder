@@ -220,6 +220,7 @@ def home_for_alice(failure: Timeline) -> HomeOut:
                 use_case_id="uc_fastapi",
                 name="FastAPI release check",
                 version=4,
+                made="published_in_n8n",
                 by=UserId("alice"),
                 by_name="Alice Tan",
                 at=datetime(2026, 11, 9, 2, 5, tzinfo=UTC),

@@ -6,7 +6,9 @@ down_revision = "0015"
 
 def upgrade() -> None:
     # How a version that is not a schedule change came about (ENGINE-PLAN 2.5): published in n8n
-    # by a person there, a roll back, or the yes put back from the Portal, with who did it from
+    # by a person there, its settings changed in n8n with no publish (n8n runs the live version
+    # with the workflow's settings now), a roll back, or the yes put back from the Portal, with
+    # who did it from
     # the Portal and where. A version that republishes another's workflow keeps every author of
     # that workflow, its publisher and theirs before it, because a run of it is their work as
     # well (ADR 0026); each copy of a version row carries them on. A version that
@@ -17,7 +19,9 @@ def upgrade() -> None:
     op.execute("""
         ALTER TABLE builder.use_case_versions
             ADD COLUMN made text
-                CHECK (made IN ('published_in_n8n', 'rolled_back', 'yes_put_back')),
+                CHECK (made IN (
+                    'published_in_n8n', 'settings_changed_in_n8n', 'rolled_back', 'yes_put_back'
+                )),
             ADD COLUMN made_by text,
             ADD COLUMN made_via text CHECK (made_via IN ('page', 'chat')),
             ADD COLUMN back_to integer CHECK (back_to > 0 AND back_to < version),
@@ -25,8 +29,10 @@ def upgrade() -> None:
                 CHECK (jsonb_typeof(also) = 'array'),
             ADD COLUMN findings jsonb,
             ADD CONSTRAINT use_case_versions_made_whole CHECK (
-                (made IS NULL OR made = 'published_in_n8n') = (made_by IS NULL)
-                AND (made IS NULL OR made = 'published_in_n8n') = (made_via IS NULL)
+                (made IS NULL OR made IN ('published_in_n8n', 'settings_changed_in_n8n'))
+                    = (made_by IS NULL)
+                AND (made IS NULL OR made IN ('published_in_n8n', 'settings_changed_in_n8n'))
+                    = (made_via IS NULL)
                 AND (made = 'rolled_back') = (back_to IS NOT NULL)
             );
         ALTER TABLE builder.use_cases

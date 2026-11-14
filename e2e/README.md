@@ -67,7 +67,7 @@ There is one watchlist per team, so each test that needs it first removes whatev
 
 The specs pick elements by accessible role and name, by the backend's own strings and by URL. They do not read animation timing.
 
-On GitHub, a manual run of the `ci` workflow takes `live_grep`: `gh workflow run ci.yml --ref <branch> -f live_grep='scenario C'` runs only the live specs whose title matches, without the API suite, DAST or the load test. In CI the browser suite stops after 10 failures, so the errors and evidence are always printed and kept before the job's hour runs out.
+On GitHub, a manual run of the `ci` workflow takes `live_grep`: `gh workflow run ci.yml --ref <branch> -f live_grep='scenario C'` runs only the live specs whose title matches, and `-f api_k='versions and undo'` runs only the API tests that match that pytest `-k` expression. Either one skips DAST and the load test, and the suite not asked for. In CI the browser suite stops after 10 failures, so the errors and evidence are always printed and kept before the job's hour runs out.
 
 Evidence lands in `portal/e2e/out/live/` (gitignored). `shots/` has a 1440 by 900 screenshot per step and 390 by 844 shots of the run page and the first screen. `video/success-path.webm` records the whole success path.
 

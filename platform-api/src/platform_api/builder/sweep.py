@@ -20,12 +20,20 @@ from typing import Any, Protocol
 import httpx
 
 from platform_api.builder.moves import RESTORE_ASK_LIVES
-from platform_api.builder.versions import Held, Made, Publication, add_version
+from platform_api.builder.versions import (
+    Held,
+    Made,
+    Publication,
+    add_version,
+    authors_from,
+    settings_changed,
+)
 from platform_api.db import Database, UnitOfWork
 from platform_api.orchestration import (
     KnownOptions,
     N8nDrafts,
     N8nError,
+    N8nWorkflow,
     PublishEvent,
     grade,
     publisher_of,
@@ -43,7 +51,8 @@ LOOK_SECONDS = 10.0
 the next sweep, so it never holds up Undo or a schedule save for long."""
 
 _OWN = """
-    SELECT u.use_case_id, u.current_version, u.n8n_workflow_id, v.n8n_version_id
+    SELECT u.use_case_id, u.current_version, u.n8n_workflow_id, v.n8n_version_id, v.document,
+           v.published_by, v.published_in, v.also
     FROM builder.use_cases u
     JOIN builder.use_case_versions v
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
@@ -197,9 +206,50 @@ class VersionsSweep:
                 log.warning("n8n no longer has %s, the workflow of %s", workflow_id, use_case_id)
                 return Gone(use_case_id)
             live = workflow.active_version_id
-            if live is None or live == row["n8n_version_id"]:
+            if live is None:
                 return None
+            if live == row["n8n_version_id"]:
+                return await self._settings(uow, row, workflow, known, error_workflow)
             return await self._keep(uow, row, live, workflow.version_id, known, error_workflow)
+
+    async def _settings(
+        self,
+        uow: UnitOfWork,
+        row: Mapping[str, Any],
+        workflow: N8nWorkflow,
+        known: KnownOptions,
+        error_workflow: str | None,
+    ) -> Found | None:
+        """n8n runs the live version with the workflow's settings now, which a save in the editor
+        changes with no publish. Different settings make a new version of the same workflow,
+        graded again, with whose work it was carried on: n8n names nobody for the save."""
+        kept: Mapping[str, Any] = row["document"] or {}
+        settings: dict[str, Any] = workflow.document.get("settings") or {}
+        if settings_changed(kept.get("settings"), settings) is None:
+            return None
+        use_case_id, newest = row["use_case_id"], row["current_version"]
+        document = {**kept, "settings": settings}
+        graded = grade(document, error_workflow, known)
+        findings = tuple(f.text for f in graded.findings)
+        publisher = row["published_in"]
+        version = await add_version(
+            uow,
+            use_case_id,
+            newest,
+            newest,
+            Held(row["n8n_version_id"], document, graded.grade, findings),
+            Made("settings_changed_in_n8n", None, None),
+            None if publisher is None else Publication(row["published_by"], publisher),
+            authors_from(row["also"]),
+            workflow.version_id,
+        )
+        log.info(
+            "the settings of %s changed in n8n: version %d graded %s",
+            use_case_id,
+            version,
+            graded.grade,
+        )
+        return Found(use_case_id, version)
 
     async def _keep(
         self,
