@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import cant from '../../../../contracts/fixtures/planner/answer.cant.json'
 import checkLeftover from '../../../../contracts/fixtures/planner/answer.check_workflows.leftover.json'
 import ownTime from '../../../../contracts/fixtures/planner/answer.watchlist.own_time.json'
+import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
 import offline from '../../../../contracts/fixtures/planner/answer.offline.json'
 import part from '../../../../contracts/fixtures/planner/answer.part.json'
 import question from '../../../../contracts/fixtures/planner/answer.question.json'
@@ -37,7 +38,7 @@ import runUseCase from '../../../../contracts/fixtures/builder/use-case.json'
 import { OpensInPanel } from '../../ui/sidePanel'
 import { emptyModel, foldWire, type RunModel } from '../run/runModel'
 import { storyOf } from '../run/useRunStory'
-import type { TroubleshootingOut, CantReply, CantRowView, CapabilitiesView, DecisionsView, HomeOut, Me, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, UseCaseView, WatchlistReply } from '../../api/types'
+import type { TroubleshootingOut, CantReply, CantRowView, CapabilitiesView, DecisionsView, HomeOut, Me, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, UseCaseView, WatchlistReply, WatchlistView } from '../../api/types'
 import { Answer, type Page } from './AnswerCards'
 import { newCardMemory, type CardMemory } from './cardMemory'
 import { sayOf, switchedSay, whoOf } from './answers'
@@ -50,9 +51,10 @@ const PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => und
 /** The fixture's set-up card, as it is when she has no workflow of that name yet. */
 const SETUP: SetupCardReply = { ...(setupCard as SetupCardReply), similar: null }
 
-function draw(reply: PlannerReply, { typed = 'Every Friday, sum up the tickets we closed this week', leftovers = false, registry }: { typed?: string; leftovers?: boolean; registry?: CapabilitiesView } = {}): string {
+function draw(reply: PlannerReply, { typed = 'Every Friday, sum up the tickets we closed this week', leftovers = false, registry, watched }: { typed?: string; leftovers?: boolean; registry?: CapabilitiesView; watched?: WatchlistView } = {}): string {
   const queryClient = new QueryClient()
   if (registry) queryClient.setQueryData(['capabilities', createDevSession(null).cacheScope()], registry)
+  if (watched) queryClient.setQueryData(['watchlist', createDevSession(null).cacheScope()], watched)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={createDevSession(null)} platformFetch={fetch} origin="http://portal.test">
@@ -186,6 +188,24 @@ describe('a set-up card', () => {
     expect(text(html)).toContain('Weekly summary of closed tickets')
     expect(buttons(html)).toEqual(['Set up another', 'Open it'])
     expect(html).not.toContain('data-card=')
+  })
+})
+
+describe('the software card', () => {
+  const WATCHED = statuses as WatchlistView
+  const ask = (software: string, listed: { name: string; software_id: string } | null): WatchlistReply => ({ answer: 'watchlist', software, word: 'version', already_listed: listed, also: null, parts: [] })
+
+  it('names a watched software with its pill and where it stands, in the watchlist’s own words', () => {
+    const html = draw(ask('LangGraph', { name: 'LangGraph', software_id: 'sw_01JBW00000000000000000002' }), { watched: WATCHED })
+    expect(text(html)).toContain('LangGraph Newer out You run 1.2.14. Newest is 1.2.16.')
+    expect(buttons(html)).toEqual(['Open it'])
+    expect(text(html)).not.toContain('Already on the watchlist')
+  })
+
+  it('says it doesn’t know the version of software that isn’t on the watchlist, and offers Watch it', () => {
+    const html = draw(ask('Kubernetes', null))
+    expect(text(html)).toContain('Kubernetes It isn’t on the watchlist, so I don’t know which version you run.')
+    expect(buttons(html)).toEqual(['Watch it'])
   })
 })
 
