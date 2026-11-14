@@ -114,7 +114,7 @@ def test_a_version_published_in_n8n_is_kept_graded_and_carded_and_undo_restores(
     published = member.publish_without_the_yes(workflow_id)
 
     view = swept(api, use_case_id, 2)
-    assert view["grade"] == "writes_refused"
+    assert view["grade"] == "writes_refused", view["findings"]
     assert view["findings"] == ['"Create ticket" can run without a yes.']
     newest = api.get("alice", f"/api/v1/use-cases/{use_case_id}/versions")["versions"][0]
     assert (newest["made"], newest["by"], newest["publisher_unknown"]) == (
