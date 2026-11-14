@@ -126,7 +126,9 @@ export class Backend {
     for (const run of await this.runs()) {
       if (run.use_case_id !== useCaseId || run.state !== 'awaiting_approval') continue
       const approvalId = await this.approvalIdOf(run.run_id)
-      const { digest } = await this.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
+      // A request already decided can still show its run waiting until n8n takes the answer.
+      const { digest, steps } = await this.get<{ digest: string; steps: { status: string }[] }>('bob', `/api/v1/approvals/${approvalId}`)
+      if (!steps.some((step) => step.status === 'open')) continue
       await this.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest }, undefined, [201, 409])
     }
   }
