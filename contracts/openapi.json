@@ -12635,6 +12635,12 @@
               }
             ]
           },
+          "moving_to_n8n": {
+            "default": false,
+            "description": "The watchlist still runs on the shared run workflow because a check has not ended. It moves to its own n8n workflow the next time it is asked once that check ends: at the next Check now, or when the platform next starts.",
+            "title": "Moving To N8N",
+            "type": "boolean"
+          },
           "schedule": {
             "anyOf": [
               {
@@ -19419,6 +19425,16 @@
             },
             "description": "The watchlist does not exist yet"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Changed again since, in n8n. Nothing was saved."
+          },
           "503": {
             "content": {
               "application/json": {
@@ -19427,7 +19443,7 @@
                 }
               }
             },
-            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+            "description": "n8n did not take the change in time, so nothing changed. Or: sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
@@ -19444,7 +19460,7 @@
         ]
       },
       "put": {
-        "description": "Saves when the watchlist is checked on its own. The caller becomes the schedule owner, who can never approve a scheduled check.",
+        "description": "Saves when the watchlist is checked on its own. The caller becomes the schedule owner, who can never approve a scheduled check. On its own n8n workflow, the Schedule Trigger changes first, under the version compare, and nothing is saved when n8n does not take it.",
         "operationId": "save_schedule_api_v1_watchlist_schedule_put",
         "requestBody": {
           "content": {
@@ -19497,6 +19513,16 @@
             },
             "description": "The watchlist does not exist yet"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Changed again since, in n8n. Nothing was saved."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -19515,7 +19541,7 @@
                 }
               }
             },
-            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+            "description": "n8n did not take the change in time, so nothing changed. Or: sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
@@ -20876,6 +20902,25 @@
                 }
               ],
               "title": "Agent"
+            }
+          },
+          {
+            "description": "The n8n workflow the editor has open.",
+            "in": "query",
+            "name": "workflow",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The n8n workflow the editor has open.",
+              "title": "Workflow"
             }
           },
           {

@@ -270,8 +270,11 @@ async def options(
     source: Annotated[str | None, Query(max_length=200)] = None,
     action: Annotated[str | None, Query(max_length=200)] = None,
     agent: Annotated[str | None, Query(max_length=200)] = None,
+    workflow: Annotated[
+        str | None, Query(max_length=200, description="The n8n workflow the editor has open.")
+    ] = None,
 ) -> OptionsOut:
-    given = {"source": source, "action": action, "agent": agent}
+    given = {"source": source, "action": action, "agent": agent, "workflow": workflow}
     of = {name: value for name, value in given.items() if value is not None}
     found = await calls.options(kind, of)
     return OptionsOut(options=[OptionOut(id=option.id, name=option.name) for option in found])

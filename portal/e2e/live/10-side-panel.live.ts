@@ -248,9 +248,9 @@ test('the run card moves in place from the stream: stopped, retrying, waiting fo
   await context.close()
 })
 
-async function openRequest(page: Page, runId: string, kind: 'approval' | 'run' = 'approval'): Promise<Locator> {
+async function openRequest(page: Page, runId: string): Promise<Locator> {
   await ask(page, 'What needs me?')
-  const opener = newest(page).locator(`[data-opens="${kind}:${runId}"]`)
+  const opener = newest(page).locator(`[data-opens="approval:${runId}"]`)
   await opener.click()
   return opener
 }
@@ -283,72 +283,19 @@ test('APPR-panel: Alice declines in the side panel, focus goes to its heading, t
 })
 
 /**
- * Only a workflow on the shared run workflow has a test run that asks for a yes. A workflow's own n8n run stops its test run at
- * the gate and asks nobody (ENGINE-PLAN 2.3.3), so this view is kept on the Software watchlist, which E9 moves. E9 retires
- * this spec, and E10 the declined test run.
+ * A declined test run needed a workflow on the shared run workflow, and the Software watchlist was the last one the harness could
+ * make. The watchlist now runs as its own n8n workflow, where a test run stops at the gate and asks nobody (ENGINE-PLAN 2.3.3), so
+ * nobody can decline it.
  */
-async function declineWaiting(backend: Backend, runId: string): Promise<void> {
-  await backend.waitForState(runId, ['awaiting_approval'])
-  const approvalId = await backend.approvalIdOf(runId)
-  const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
-  await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest }, undefined, [201])
-}
-
-for (const width of [1280, 390]) {
-  test(`DECLINED-test-run at ${width} px: Alice’s declined test run is in her Needs you and in the side panel, in the record’s words, with no write`, async ({ browser, backend }, info) => {
-    const useCaseId = await backend.freshWatchlist('alice')
-    const started = await backend.post<{ run_id: string }>('alice', `/api/v1/use-cases/${useCaseId}/runs`, { test: true }, { 'Idempotency-Key': randomUUID() }, [201])
-    const runId = started.run_id
-    await backend.waitForState(runId, ['awaiting_approval'])
-    const approvalId = await backend.approvalIdOf(runId)
-    const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
-    // One of the watchlist's own quick reasons, which reads on in the record's sentence.
-    await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest, reason: 'Wrong version' }, undefined, [201])
-    await backend.waitForState(runId, ['rejected'])
-    const record = /Ended (at|on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2} · Bob declined: wrong version\. Nothing was written\./
-
-    const context = await devContext(browser, 'alice', { reducedMotion: true })
-    const page = await context.newPage()
-    await page.setViewportSize({ width, height: 900 })
-    let again = ''
-    try {
-      await page.goto('/workflows')
-      const onWorkflows = page.getByRole('main').locator(`li[data-home-item="declined:${runId}"]`)
-      await expect(onWorkflows, 'Needs you on Workflows says Bob declined it, as one plain row that opens the run').toContainText('Bob declined your test run')
-      const said = (await onWorkflows.innerText()).replace(/\s+/g, ' ').trim()
-      const tone = await onWorkflows.getAttribute('data-tone')
-      await shot(page, info, `r12-needs-you-declined-test-alice-${width}`)
-      await page.goto('/')
-      await openRequest(page, runId, 'run')
-      await expect(panel(page), 'the side panel gives the state and the record').toContainText(record, { timeout: 15_000 })
-      await expect(panel(page), 'and what happens next').toContainText('Change what it does, or run the test again.')
-      await expect(panel(page), 'its line stays, and says the write did not happen').toContainText('Nothing written')
-      await expect(panel(page), 'the panel shows no write').not.toContainText(/created|MOCK-\d/)
-      await shot(page, info, `r12-panel-declined-test-alice-${width}`)
-      await page.goto(`/runs/${runId}`)
-      await expect(page.getByRole('main'), 'the run page ends with what happens next').toContainText('Change what it does, or run the test again.')
-
-      await page.goto('/')
-      await ask(page, 'What needs me?')
-      const item = newest(page).locator(`li[data-home-item="declined:${runId}"]`)
-      await expect(item, 'the Needs card draws the very row Workflows draws, in its words').toHaveText(said, { useInnerText: true })
-      await expect(item, '…and its tone').toHaveAttribute('data-tone', tone ?? 'a tone')
-      await item.getByRole('button').click({ timeout: 5_000 })
-      await expect(panel(page), 'the row opens the run beside the chat, with its record').toContainText(record, { timeout: 15_000 })
-      await panel(page).getByRole('button', { name: 'Do a test run again' }).click({ timeout: 5_000 })
-      await expect(page, 'the new test run opens on its page').toHaveURL(/\/runs\/[^/]+$/)
-      again = page.url().split('/').at(-1) ?? ''
-      expect(again, 'a new run started').not.toBe(runId)
-      expect((await backend.run(again)).test, 'it is a test run, as last_run says').toBe(true)
-      expect((await backend.get<{ use_cases: { use_case_id: string; last_run: { test: boolean } | null }[] }>('alice', '/api/v1/use-cases')).use_cases.find((u) => u.use_case_id === useCaseId)?.last_run?.test).toBe(true)
-      await page.goto('/workflows')
-      await expect(page.getByText('Bob declined your test run'), 'a new run of the workflow takes it off Needs you').toHaveCount(0)
-    } finally {
-      await context.close()
-      if (again) await declineWaiting(backend, again)
-    }
-  })
-}
+test('a test run of the Software watchlist stops before the yes, asks nobody and writes nothing', async ({ backend }) => {
+  const useCaseId = await backend.freshWatchlist('alice')
+  const started = await backend.post<{ run_id: string }>('alice', `/api/v1/use-cases/${useCaseId}/runs`, { test: true }, { 'Idempotency-Key': randomUUID() }, [201])
+  const run = await backend.waitForState(started.run_id, ['succeeded'])
+  expect(run.outcome, 'it passed at the gate').toBe('test_passed')
+  const { events } = await backend.get<{ events: { kind: string }[] }>('alice', `/api/v1/runs/${started.run_id}/events?after=0`)
+  expect(events.map((event) => event.kind), 'nobody was asked').not.toContain('approval_requested')
+  expect((await backend.tickets()).filter((ticket) => ticket.run_id === started.run_id), 'nothing was written').toEqual([])
+})
 
 test('APPR-panel at 900 px: Alice approves in the full-window panel, and its record shows the write going on', async ({ browser, backend }, info) => {
   const runId = await carolsWaitingRun(backend)

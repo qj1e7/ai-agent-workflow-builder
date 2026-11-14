@@ -3,8 +3,8 @@ from harness import (
     Api,
     approval_requested,
     assert_gapless,
+    assert_story,
     bob_decides,
-    fixture_kinds,
     tickets_for,
 )
 
@@ -88,7 +88,20 @@ def test_a_watchlist_check_runs_through_approval_to_one_ticket(api: Api) -> None
 
     all_events = api.events_after("alice", run_id)
     assert_gapless(all_events, run_id)
-    assert [e["kind"] for e in all_events] == fixture_kinds("success")
+    assert_story(
+        all_events,
+        [
+            "run_created",
+            "execution_linked",
+            "write_action_proposed",
+            "approval_requested",
+            "approval_decided",
+            "execution_resumed",
+            "write_action_done",
+            "run_succeeded",
+        ],
+    )
+    assert "approval_announced" in [e["kind"] for e in all_events]
 
     cut = 10
     replayed = api.stream_until("alice", run_id, {"run_succeeded"}, last_event_id=cut)

@@ -13,19 +13,29 @@ import pytest
 
 from platform_api.builder import Builder
 from platform_api.builder.layout import schedule_rule
-from platform_api.builder.sweep import ASKED_GAP, VersionsSweep
+from platform_api.builder.models import RepublishIn, ScheduleIn, WatchlistView
+from platform_api.builder.sweep import ASKED_GAP, Found, VersionsSweep
 from platform_api.builder.versions import changes_between, schedule_of
-from platform_api.orchestration import N8nWorkflow, Publisher, RanVersion, Schedule
+from platform_api.builder.watchlist import MovedToN8n
+from platform_api.orchestration import (
+    ChangedInN8n,
+    N8nWorkflow,
+    Publisher,
+    RanVersion,
+    Schedule,
+)
 from platform_api.orchestration.schedule import DAYS
 from platform_api.shared import UseCaseId, UserId
 from tests.fake_n8n import FakeN8n
+from tests.support import ALICE, CAROL
 from tests.test_builder_lifecycle import Lab, ModelConnected, start_run
-from tests.test_n8n_builder import WRITES, N8nLab, lab
+from tests.test_n8n_builder import WRITES, Drafts, N8nLab, lab
 from tests.test_n8n_lifecycle import Workflows, made, move, version_row
+from tests.test_watchlist_n8n import Starts, World, watchlist_before_the_move, world
 
 pytestmark = pytest.mark.anyio
 
-__all__ = ["lab"]
+__all__ = ["lab", "world"]
 
 DAVE_IN_N8N = "n8n-user-dave"
 DAVE = UserId("dave")
@@ -496,3 +506,51 @@ async def test_safety_a_slow_n8n_never_holds_a_workflow_from_undo_for_long(v: Ve
     undone = await asyncio.wait_for(v.rollback("carol", use_case_id, 1, in_use=2), 5)
     assert undone.status_code == 200, undone.text
     assert await asyncio.wait_for(looking, 5) == [], "the slow look gave up, and changed nothing"
+
+
+async def test_the_watchlists_own_workflow_grades_safe_when_published_again_in_n8n(world: World):
+    """The sweep grades with what the editor's lists hold, the watchlist's own block and place
+    included, so a change in n8n that keeps them is safe, never Needs a fix."""
+    await watchlist_before_the_move(world)
+    moved = await world.on_n8n.move_to_n8n()
+    assert isinstance(moved, MovedToN8n)
+    builder = Builder(world.db, Starts(), world.on_n8n, "", n8n=Drafts(world.n8n, world.db))
+    assert builder.sweep is not None
+    assert await builder.sweep.sweep() == [], "the platform's own move is no publish in n8n"
+    world.n8n.publish_as(moved.workflow_id, DAVE_IN_N8N, at_seven_thirty)
+    [found] = await builder.sweep.sweep()
+    [row] = await world.rows(
+        "SELECT v.grade, v.findings, v.published_in FROM builder.use_case_versions v"
+        " JOIN builder.use_cases u ON u.use_case_id = v.use_case_id"
+        " WHERE v.version = u.current_version"
+    )
+    assert isinstance(found, Found)
+    assert row["findings"] == []
+    assert (row["grade"], row["published_in"]) == ("safe", "n8n")
+
+
+async def test_the_watchlists_schedule_save_compares_with_the_draft_after_a_roll_back(
+    world: World,
+):
+    """A roll back publishes a version n8n still holds and leaves n8n's draft where it was, so the
+    watchlist's own schedule save compares with that draft, not with the version in use."""
+    await watchlist_before_the_move(world)
+    moved = await world.on_n8n.move_to_n8n()
+    assert isinstance(moved, MovedToN8n)
+    builder = Builder(world.db, Starts(), world.on_n8n, "", n8n=Drafts(world.n8n, world.db))
+    assert builder.sweep is not None
+    world.n8n.publish_as(moved.workflow_id, DAVE_IN_N8N, at_seven_thirty)
+    [found] = await builder.sweep.sweep()
+    assert isinstance(found, Found)
+    use_case_id = (await world.use_case())["use_case_id"]
+    back = RepublishIn(via="page", in_use=found.version)
+    rolled = await builder.rollback_version(use_case_id, moved.version, CAROL, back)
+    assert not isinstance(rolled, ChangedInN8n) and rolled is not None
+    draft = world.n8n.workflows[moved.workflow_id]["versionId"]
+    assert world.n8n.workflows[moved.workflow_id]["activeVersionId"] != draft
+
+    saved = await world.on_n8n.save_schedule(ALICE, ScheduleIn(day="friday", at="08:00"))
+
+    assert isinstance(saved, WatchlistView), saved
+    [row] = await world.rows("SELECT n8n_draft_id FROM builder.use_cases")
+    assert row["n8n_draft_id"] == world.n8n.workflows[moved.workflow_id]["versionId"] != draft

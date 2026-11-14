@@ -6,7 +6,7 @@ workflow's run never writes, and its open request ends cancelled with its Approv
 
 import pytest
 
-from platform_api.orchestration.approvals import Ended
+from platform_api.orchestration.approvals import Ended, Refusal
 from platform_api.orchestration.n8n_calls import (
     DELETED_BEFORE,
     UNKNOWN_PUBLISHER,
@@ -14,6 +14,7 @@ from platform_api.orchestration.n8n_calls import (
     Answer,
     Publisher,
     RanVersion,
+    Waiting,
 )
 from platform_api.orchestration.n8n_starts import issue_start
 from platform_api.orchestration.runs import (
@@ -24,10 +25,15 @@ from platform_api.orchestration.runs import (
     Lost,
     RunState,
 )
+from platform_api.orchestration.schedule import Schedule
+from platform_api.orchestration.schedule_store import ScheduleBook
+from platform_api.orchestration.service import DecisionRefused
 from platform_api.orchestration.store import SHOW_OUTCOME, WAKE, Store
 from platform_api.shared import UseCaseId, UserId
-from tests.support import BOB, SPEC
+from tests.support import BOB, CAROL, SPEC
 from tests.test_n8n_calls import ALICE, DAVE, RELEASE, WORKFLOW, Calls, t
+from tests.test_n8n_wait import DAVE as DAVE_APPROVER
+from tests.test_n8n_wait import ERIN
 from tests.test_n8n_write import Writes, w
 
 pytestmark = pytest.mark.anyio
@@ -154,3 +160,19 @@ async def test_safety_the_publisher_joins_a_run_now_of_their_version(t: Calls):
     t.started("101", "webhook", nonce=str(start.body["nonce"]), version="v2")
     assert await t.call("101") == Answer((RELEASE,))
     assert DAVE in (await t.only_run()).parties
+
+
+async def test_safety_no_author_and_not_the_schedule_owner_approves_a_scheduled_run(w: Writes):
+    """Carol put back Erin's workflow from n8n, and Dave owns the schedule the Portal names: the
+    scheduled run is the work of all three, and of the use case's owner, so none of them may say
+    yes. Bob, who is none of them, may."""
+    w.workflows.versions = {
+        "v1": RanVersion("safe", Publisher(CAROL.user_id), (Publisher(ERIN.user_id),))
+    }
+    await ScheduleBook(w.h.db).save(SPEC.use_case_id, Schedule("tuesday", "07:30"), DAVE_APPROVER)
+    assert isinstance(await w.ask(), Waiting)
+    run = await w.run()
+    assert {CAROL.user_id, ERIN.user_id, DAVE_APPROVER.user_id, SPEC.owner} <= run.parties
+    for party in (ERIN, DAVE_APPROVER):
+        assert await w.decide(party) == DecisionRefused(Refusal.OWN_WORK), party.display
+    assert not isinstance(await w.decide(BOB), DecisionRefused)

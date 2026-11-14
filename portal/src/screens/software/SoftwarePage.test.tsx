@@ -70,6 +70,11 @@ const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;'
 const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))
 
 describe('the Software watchlist page', () => {
+  it('says the watchlist moves to n8n after the check that holds it back, and only then', () => {
+    expect(text(render({ ...statuses, moving_to_n8n: true }, ALICE))).toContain('Moving to n8n after this run.')
+    expect(text(render(statuses, ALICE))).not.toContain('Moving to n8n')
+  })
+
   it('lists each software as one link with its name, what it runs and what is newest, and its pill', () => {
     const html = render(statuses, ALICE)
     const words = text(html)

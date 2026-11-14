@@ -29,6 +29,8 @@ from platform_api.orchestration.n8n_calls import (
     UNKNOWN_PUBLISHER,
     UNKNOWN_START,
     VERSION_FAILED,
+    WATCHLIST_CHECKER,
+    WATCHLIST_PLACE,
     AgentCall,
     AgentToRun,
     Answer,
@@ -38,6 +40,7 @@ from platform_api.orchestration.n8n_calls import (
     NodeCall,
     NodeCatalog,
     NodeOption,
+    NothingToRun,
     OwnWorkflow,
     ProposeCall,
     Publisher,
@@ -73,6 +76,7 @@ from tests.test_orchestrator import Harness, mint, open_harness
 pytestmark = pytest.mark.anyio
 
 WORKFLOW = "wf_7"
+WATCHLIST_WORKFLOW = "wf_watch"
 OTHER_WORKFLOW = "wf_8"
 ALICE, BOB, DAVE = UserId("alice"), UserId("bob"), UserId("dave")
 REPO = "langchain-ai/langgraph"
@@ -116,7 +120,7 @@ class FakeWorkflows:
     gone: set[str] = field(default_factory=set[str])
     """Workflows whose use case was deleted."""
 
-    async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | None:
+    async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | NothingToRun | None:
         if n8n_workflow_id not in (WORKFLOW, OTHER_WORKFLOW):
             return None
         return OwnWorkflow(SPEC, self.holder)
@@ -126,6 +130,9 @@ class FakeWorkflows:
 
     async def agents(self) -> Sequence[NodeOption]:
         return [NodeOption(CARD.id, CARD.name)]
+
+    async def watchlist(self, n8n_workflow_id: str) -> bool:
+        return n8n_workflow_id == WATCHLIST_WORKFLOW
 
     async def deleted(self, n8n_workflow_id: str) -> bool:
         return n8n_workflow_id in self.gone
@@ -737,3 +744,20 @@ async def test_an_agent_whose_write_target_is_left_out_is_refused_not_defaulted(
         422, '"Compare" needs "Project", so our platform knows where its change goes.'
     )
     assert t.h.agent.requests == []
+
+
+async def test_only_the_watchlist_s_own_workflow_is_offered_its_checker_and_its_place(t: Calls):
+    """Anywhere else they would only be refused at run time, so the editor never offers them."""
+    releases = {"source": "github_releases"}
+    mine = {"workflow": WATCHLIST_WORKFLOW}
+    assert await t.calls.options("agents", mine) == [
+        WATCHLIST_CHECKER,
+        NodeOption(CARD.id, "Compare"),
+    ]
+    assert await t.calls.options("places", {**releases, **mine}) == [
+        WATCHLIST_PLACE,
+        NodeOption(REPO, "LangGraph"),
+    ]
+    for other in ({"workflow": WORKFLOW}, {}):
+        assert WATCHLIST_CHECKER not in await t.calls.options("agents", other)
+        assert WATCHLIST_PLACE not in await t.calls.options("places", {**releases, **other})

@@ -7,12 +7,10 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_LINK_MODE=copy \
     PATH=/opt/venv/bin:$PATH \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    CONTRACTS_DIR=/contracts
+    PYTHONDONTWRITEBYTECODE=1
 WORKDIR /e2e
 COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev
 COPY tests ./tests
-COPY --from=contracts fixtures /contracts/fixtures
 USER nobody
 CMD ["pytest", "-p", "no:cacheprovider", "tests"]

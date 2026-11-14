@@ -645,11 +645,12 @@ class Working:
         link: str,
         summary: str,
         left_out: tuple[str, ...] = (),
+        unread: tuple[str, ...] = (),
     ) -> Moved[AwaitingApproval]:
         """Ask for a yes in n8n: the run's proposal is what its blocks proposed, less what was
-        already made."""
+        already made. The Approver also sees what the run could not read."""
         return Moved(
-            AwaitingApproval(self.run_id, proposal[0], approval_id, summary),
+            AwaitingApproval(self.run_id, proposal[0], approval_id, summary, unread),
             (
                 _workflow_proposed(*proposal, left_out),
                 _approval_requested(approval_id, steps, link),
@@ -660,10 +661,11 @@ class Working:
         self,
         proposal: tuple[ProposalId, Digest, tuple[ActionLine, ...]],
         left_out: tuple[str, ...] = (),
+        unread: tuple[str, ...] = (),
     ) -> Moved[Succeeded]:
         """A test run shows what it would ask, asks nobody and writes nothing."""
         return Moved(
-            Succeeded(self.run_id, Outcome.TEST_PASSED, ()),
+            Succeeded(self.run_id, Outcome.TEST_PASSED, (), unread),
             (_workflow_proposed(*proposal, left_out), _test_passed()),
         )
 

@@ -15,10 +15,13 @@ from typing import Any
 
 from platform_api.builder.cards import VERSION_CHECKER_ID
 from platform_api.orchestration import (
+    GITHUB_RELEASES,
     NODE_TYPES,
     NOTHING_TO_CHANGE_BLOCK,
     TIME_ZONE,
     TYPE_OF,
+    WATCHLIST_CHECKER,
+    WATCHLIST_PLACE,
     BlockKind,
     Day,
     Document,
@@ -36,10 +39,6 @@ START = "Start from the Portal"
 ABOUT = "About this workflow"
 READ_WATCHLIST = "Read the watchlist"
 CHECK_WATCHLIST = "Check the watchlist"
-WATCHLIST_PLACE = "watchlist"
-"""The Read place that stands for every watched software (ENGINE-PLAN 2.5)."""
-WATCHLIST_AGENT = "watchlist_checker"
-"""The platform's fixed agent that checks every watched software (D11). E9 runs it."""
 REPO_INPUT = "GitHub repository"
 PROJECT_INPUT = "Jira project"
 
@@ -229,24 +228,23 @@ def agent_cards(plan: LayoutPlan) -> Document:
     return canvas.document(plan)
 
 
-def watchlist(plan: LayoutPlan, project: str) -> Document:
+def watchlist(plan: LayoutPlan) -> Document:
     """The Software watchlist (D11): read the watchlist, check every watched software at once,
-    and raise one upgrade ticket for each that is behind."""
+    and raise one upgrade ticket for each that is behind. The tickets go to the watchlist's own
+    Jira project, so the block does not name it again."""
     canvas = _Canvas(plan.use_case_id)
-    _about(canvas, plan, f"Checks every watched software and raises upgrade tickets in {project}.")
+    _about(
+        canvas,
+        plan,
+        "Checks every watched software and raises a ticket for each one behind.",
+    )
     starts = _starts(canvas, plan)
     read = canvas.node(
-        READ_WATCHLIST, "read", 1, 0, {"source": "github_releases", "place": WATCHLIST_PLACE}
+        READ_WATCHLIST, "read", 1, 0, {"source": GITHUB_RELEASES, "place": WATCHLIST_PLACE.id}
     )
     for start in starts:
         canvas.link(start, read)
-    check = canvas.node(
-        CHECK_WATCHLIST,
-        "agent",
-        2,
-        0,
-        _agent_parameters(WATCHLIST_AGENT, [(PROJECT_INPUT, project)]),
-    )
+    check = canvas.node(CHECK_WATCHLIST, "agent", 2, 0, _agent_parameters(WATCHLIST_CHECKER.id, []))
     write = canvas.node("Create tickets", "write", 3, 0)
     canvas.node(NOTHING_TO_CHANGE_BLOCK, "end", 3, 1)
     canvas.link(read, check)

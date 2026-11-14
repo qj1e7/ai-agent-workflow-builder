@@ -61,9 +61,19 @@ describe('Read', () => {
         method: 'GET',
         url: `${API_URL}/internal/v1/n8n/options`,
         headers: { 'X-Wab-Node-Key': NODE_KEY },
-        qs: { kind: 'places', source: 'jira_tickets' },
+        qs: { kind: 'places', source: 'jira_tickets', workflow: 'wf-7' },
         body: undefined,
       },
+    ]);
+  });
+
+  it('asks for the options of the workflow the editor has open, and of none before it is saved', async () => {
+    const api = new FakeApi().answers(200, { options: [] }).answers(200, { options: [] });
+    await new Read().methods.loadOptions.getPlaces.call(loadOptionsContext(api, { source: 'github_releases' }, 'wf-watch'));
+    await new Read().methods.loadOptions.getPlaces.call(loadOptionsContext(api, { source: 'github_releases' }, null));
+    expect(api.sent.map((sent) => sent.qs)).toEqual([
+      { kind: 'places', source: 'github_releases', workflow: 'wf-watch' },
+      { kind: 'places', source: 'github_releases' },
     ]);
   });
 });
@@ -108,7 +118,7 @@ describe('Agent', () => {
       loadOptionsContext(api, { agent: 'version-checker' }),
     );
     expect(options).toEqual([{ name: 'Repository', value: 'repo' }]);
-    expect(api.sent[0]?.qs).toEqual({ kind: 'agent_inputs', agent: 'version-checker' });
+    expect(api.sent[0]?.qs).toEqual({ kind: 'agent_inputs', agent: 'version-checker', workflow: 'wf-7' });
   });
 });
 

@@ -183,5 +183,6 @@
     "saved_at": "2026-11-16T03:00:12Z",
     "next_at": "2026-11-17T06:30:00+08:00",
     "held": null
-  }
+  },
+  "moving_to_n8n": false
 }

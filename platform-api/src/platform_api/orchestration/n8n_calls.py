@@ -90,6 +90,14 @@ class NodeOption:
     name: str
 
 
+WATCHLIST_PLACE = NodeOption("watchlist", "Software watchlist")
+"""The GitHub releases place that stands for every watched software (D11). Its Read lists the
+software the run checks."""
+WATCHLIST_CHECKER = NodeOption("watchlist_checker", "Watchlist checker")
+"""The platform's own agent that checks every watched software at once and proposes the upgrade
+tickets, with the same review as before the move (D11)."""
+
+
 @dataclass(frozen=True)
 class ExecutionFacts:
     """What n8n's own record of an execution says, read on its first call."""
@@ -151,6 +159,14 @@ class OwnWorkflow:
 
 
 @dataclass(frozen=True)
+class NothingToRun:
+    """A workflow of ours with nothing to run now, such as an empty watchlist. Its slot ends
+    quietly: no run is made, and nothing fails in n8n."""
+
+    why: str
+
+
+@dataclass(frozen=True)
 class AgentToRun:
     card_run: CardRun
     release_of: str | None = None
@@ -170,7 +186,7 @@ class CannotRun:
 class WorkflowFacts(Protocol):
     """What node calls need from the use case builder, which orchestration may not import."""
 
-    async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | None: ...
+    async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | NothingToRun | None: ...
 
     async def version(self, n8n_workflow_id: str, version_id: str) -> RanVersion | None: ...
 
@@ -180,6 +196,10 @@ class WorkflowFacts(Protocol):
 
     async def deleted(self, n8n_workflow_id: str) -> bool:
         """The workflow carries a use case that was deleted."""
+        ...
+
+    async def watchlist(self, n8n_workflow_id: str) -> bool:
+        """The workflow is the Software watchlist's own."""
         ...
 
     async def agent_run(
@@ -412,6 +432,7 @@ DENIED: Mapping[DenyReason, str] = {
 NOT_OUR_ERROR_WORKFLOW = Refused(403, "Only our error workflow may report a failure.")
 NOT_FAILED = Refused(409, "n8n does not say this execution failed.")
 NOTHING_READ = Refused(403, "A Tell reports only what this run read, and it has read nothing yet.")
+NOT_A_WATCHLIST_RUN = Refused(409, "Only the Software watchlist reads and checks the watchlist.")
 NO_TELL_FLOW = Refused(409, "This platform has no Tell flow, so it sends no notice.")
 CANNOT_SEAL = (
     "This platform cannot keep n8n's resume address safe, because SETTINGS_ENCRYPTION_KEY is not "
@@ -693,20 +714,40 @@ class NodeCatalog:
                 if "action" in of:
                     entry = self._writes.get(of["action"])
                     return [] if entry is None else list(entry.places)
-                return list(await self._sources.places(of.get("source", "")))
+                source = of.get("source", "")
+                listed = list(await self._sources.places(source))
+                if source == GITHUB_RELEASES and await self._in_watchlist(of):
+                    return [WATCHLIST_PLACE, *listed]
+                return listed
             case "agents":
-                return list(await self._facts.agents())
+                listed = list(await self._facts.agents())
+                return [WATCHLIST_CHECKER, *listed] if await self._in_watchlist(of) else listed
             case "agent_inputs":
                 inputs = await self._facts.agent_inputs(of.get("agent", ""))
                 return [NodeOption(item.name, item.name) for item in inputs]
             case "write_actions":
                 return [NodeOption(entry.id, entry.name) for entry in self._writes.values()]
 
+    async def _in_watchlist(self, of: Mapping[str, str]) -> bool:
+        """The editor offers the watchlist's own blocks only in the watchlist's own workflow. A
+        block anywhere else would be refused at run time."""
+        workflow = of.get("workflow")
+        return workflow is not None and await self._facts.watchlist(workflow)
+
     async def unknown_in(self, work: Work) -> Refused | None:
+        """The watchlist's place and checker are the platform's own and always known here. A run
+        of any other workflow refuses them when the block asks (NOT_A_WATCHLIST_RUN)."""
         match work:
+            case ReadCall(source, place) if (
+                source == GITHUB_RELEASES and place == WATCHLIST_PLACE.id
+            ):
+                pass
             case ReadCall(source, place):
                 if not await self._listed(self._sources.places(source), place):
                     return unknown("place", place)
+            case AgentCall(agent, inputs) if agent == WATCHLIST_CHECKER.id:
+                if inputs:
+                    return unknown("input", next(iter(inputs)))
             case AgentCall(agent, inputs):
                 if not await self._listed(self._facts.agents(), agent):
                     return unknown("agent", agent)

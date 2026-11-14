@@ -81,8 +81,6 @@ services:
     profiles: [e2e]
     build:
       context: ../e2e
-      additional_contexts:
-        contracts: ../contracts
     environment:
       PLATFORM_API_URL: http://platform-api:8000
       MOCK_GITHUB_URL: http://mock-github:8200
