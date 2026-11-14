@@ -103,7 +103,7 @@ from platform_api.builder.versions import (
     versions_of,
 )
 from platform_api.builder.views import template_view
-from platform_api.builder.watchlist import MovedToN8n, Watchlist
+from platform_api.builder.watchlist import Watchlist
 from platform_api.db import Connection, Database, UnitOfWork, hold_workflow, json
 from platform_api.orchestration import (
     GITHUB_RELEASES,
@@ -1044,9 +1044,10 @@ class Builder:
         """A test run of a draft stops at the approval gate (ADR 0044). Whether it is a draft
         is read under the lock, so a draft turned on since runs as any test run does."""
         view = await self.get_use_case(use_case_id)
-        watchlist = view is not None and view.template == SOFTWARE_WATCHLIST.key
-        # Its first check after a run that held it back runs on its own n8n workflow.
-        if watchlist and isinstance(await self._watchlist.move_to_n8n(), MovedToN8n):
+        if view is not None and view.template == SOFTWARE_WATCHLIST.key:
+            # Its first check after a run that held it back runs on its own n8n workflow. Read it
+            # again whatever the move answers, since a move may also have landed meanwhile.
+            await self._watchlist.move_to_n8n()
             view = await self.get_use_case(use_case_id)
         if view is None:
             return None
