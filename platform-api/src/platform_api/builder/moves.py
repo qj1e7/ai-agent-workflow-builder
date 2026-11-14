@@ -13,7 +13,7 @@ import contextlib
 import logging
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 import httpx
@@ -46,6 +46,15 @@ MOVES_EVERY = timedelta(seconds=60)
 NOT_TAKEN = "n8n did not take the workflow. It runs as before."
 NOT_LIVE = "n8n did not turn the workflow on. It runs as before."
 NOT_BACK = "n8n did not take the workflow back. The next start tries again."
+REFUSED_WORDS = (
+    "Not running. It could not move to its own n8n workflow: {finding} Fix that step, or ask for"
+    " help."
+)
+NOT_TAKEN_WORDS = (
+    "Not running. n8n did not take it yet, so it can't run on its schedule. The platform tries"
+    " again every minute. If this stays, ask for help."
+)
+"""What the workflow's page says while it cannot move, as nothing ticks its schedule (E10)."""
 
 type LayOut = Callable[
     [str, Mapping[str, Any], Schedule | None], Awaitable[Checked | DraftRefused | N8nNotReady]
@@ -75,7 +84,7 @@ type Restore = Restored | NotSafe | N8nNotReady
 _ROW = """
     SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
            u.draft, u.engine, u.n8n_workflow_id, u.deleted_in_n8n_at, u.current_version,
-           v.template, v.name, v.document, v.grade
+           u.move_refused, u.restoring_in_n8n, v.template, v.name, v.document, v.grade
     FROM builder.use_cases u
     JOIN builder.use_case_versions v
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
@@ -91,7 +100,7 @@ _LEFT = """
 _OWN = """
     SELECT use_case_id FROM builder.use_cases
     WHERE engine = 'own' AND n8n_workflow_id IS NOT NULL AND deleted_at IS NULL
-      AND deleted_in_n8n_at IS NULL
+      AND (deleted_in_n8n_at IS NULL OR deleted_in_n8n_at >= %s)
     ORDER BY created_at, use_case_id
 """
 
@@ -107,6 +116,33 @@ async def _name_in_n8n(uow: UnitOfWork, use_case_id: str, workflow_id: str | Non
         "UPDATE builder.use_cases SET n8n_workflow_id = %s WHERE use_case_id = %s",
         (workflow_id, use_case_id),
     )
+
+
+async def _restoring(uow: UnitOfWork, use_case_id: str, workflow_id: str | None) -> None:
+    await uow.conn.execute(
+        "UPDATE builder.use_cases SET restoring_in_n8n = %s WHERE use_case_id = %s",
+        (workflow_id, use_case_id),
+    )
+
+
+async def _says(uow: UnitOfWork, row: Mapping[str, Any], words: str | None) -> None:
+    """Keeps why it cannot move, for its page, and logs a refusal only when it is new."""
+    if row["move_refused"] == words:
+        return
+    if words is not None:
+        log.error("%s stays on the shared run workflow: %s", row["use_case_id"], words)
+    await uow.conn.execute(
+        "UPDATE builder.use_cases SET move_refused = %s WHERE use_case_id = %s",
+        (words, row["use_case_id"]),
+    )
+
+
+def refusal_words(refused: DraftRefused | N8nNotReady) -> str:
+    match refused:
+        case DraftRefused(findings=(first, *_)):
+            return REFUSED_WORDS.format(finding=first.text)
+        case _:
+            return NOT_TAKEN_WORDS
 
 
 async def _authors(conn: Connection, use_case_id: str, owner: UserId) -> list[UserId]:
@@ -197,20 +233,23 @@ class Moves:
                 return AlreadyOnN8n()
             if (open_run := await self._runs.open_run(UseCaseId(use_case_id))) is not None:
                 log.info("%s moves to n8n once run %s ends", use_case_id, open_run)
+                await _says(uow, row, None)
                 return WaitsForRun(open_run)
             saved = await self._schedules.get(UseCaseId(use_case_id))
             if saved is not None and saved.held is not None:
+                await _says(uow, row, None)
                 return ScheduleHeld(saved.held)
             if row["n8n_workflow_id"] is not None:
                 await discard(self._n8n, row["n8n_workflow_id"])
             laid = await self._lay_out(use_case_id, row, None if saved is None else saved.schedule)
             if not isinstance(laid, Checked):
-                log.error("%s stays on the shared run workflow: %s", use_case_id, laid)
+                await _says(uow, row, refusal_words(laid))
                 return laid
             try:
                 draft = await self._n8n.save_draft(laid.document)
             except (N8nError, httpx.HTTPError) as error:
                 log.warning("n8n did not take the workflow of %s: %s", use_case_id, error)
+                await _says(uow, row, NOT_TAKEN_WORDS)
                 return N8nNotReady(NOT_TAKEN)
             await _name_in_n8n(uow, use_case_id, draft.workflow_id)
         async with self._db.transaction("builder") as uow:
@@ -229,6 +268,7 @@ class Moves:
                 log.warning("n8n did not turn the workflow of %s on: %s", use_case_id, error)
                 await discard(self._n8n, draft.workflow_id)
                 await _name_in_n8n(uow, use_case_id, None)
+                await _says(uow, row, NOT_TAKEN_WORDS)
                 return N8nNotReady(NOT_LIVE)
             version = await _record(uow, row, draft, laid, live, saved)
         log.info(
@@ -236,11 +276,13 @@ class Moves:
         )
         return MovedToN8n(draft.workflow_id, version)
 
-    async def restore_all(self) -> dict[str, Restore]:
+    async def restore_all(self, asked_at: datetime) -> dict[str, Restore]:
         """After n8n lost its database: each workflow n8n no longer holds is saved there again
-        from the version in use, as the platform kept it (ENGINE-PLAN 7, n8n's database lost)."""
+        from the version in use, as the platform kept it (ENGINE-PLAN 7, n8n's database lost).
+        One marked deleted in n8n since the ask is among them: an older sweep took the loss for
+        a deletion. One marked before it was deleted by a person, and stays deleted."""
         async with self._db.connection("builder") as conn:
-            rows = await (await conn.execute(_OWN)).fetchall()
+            rows = await (await conn.execute(_OWN, (asked_at,))).fetchall()
         restored: dict[str, Restore] = {}
         for row in rows:
             try:
@@ -255,11 +297,15 @@ class Moves:
     async def restore(self, use_case_id: str) -> Restore | None:
         """Saves the version in use again as a new n8n workflow, under the move's rules: only when
         it grades safe now, inactive until the records name it, then live when it is on. None
-        when n8n still holds the workflow."""
+        when n8n still holds the workflow. A restore cut off after the save leaves its workflow
+        named as restoring, and the next one removes it and saves again."""
         async with self._db.transaction("builder") as uow:
             row = await _hold(uow, use_case_id)
             if row is None or row["engine"] != "own" or row["deleted_at"] is not None:
                 return None
+            if row["restoring_in_n8n"] is not None:
+                await discard(self._n8n, row["restoring_in_n8n"])
+                await _restoring(uow, use_case_id, None)
             lost = row["n8n_workflow_id"]
             try:
                 if await self._n8n.look(lost) is not None:
@@ -283,10 +329,10 @@ class Moves:
             except (N8nError, httpx.HTTPError) as error:
                 log.warning("n8n did not take %s back: %s", use_case_id, error)
                 return N8nNotReady(NOT_BACK)
-            await _name_in_n8n(uow, use_case_id, draft.workflow_id)
+            await _restoring(uow, use_case_id, draft.workflow_id)
         async with self._db.transaction("builder") as uow:
             row = await _hold(uow, use_case_id)
-            if row is None or row["n8n_workflow_id"] != draft.workflow_id:
+            if row is None or row["restoring_in_n8n"] != draft.workflow_id:
                 return None
             try:
                 if is_on(lifecycle_of(row)):
@@ -294,7 +340,7 @@ class Moves:
             except (N8nError, httpx.HTTPError) as error:
                 log.warning("n8n did not turn %s on again: %s", use_case_id, error)
                 await discard(self._n8n, draft.workflow_id)
-                await _name_in_n8n(uow, use_case_id, lost)
+                await _restoring(uow, use_case_id, None)
                 return N8nNotReady(NOT_BACK)
             await _keep_restored(uow, use_case_id, row["current_version"], draft)
         log.info("%s is back in n8n as workflow %s", use_case_id, draft.workflow_id)
@@ -310,7 +356,7 @@ class Moves:
             ).fetchone()
         if asked is None:
             return ()
-        restored = await self.restore_all()
+        restored = await self.restore_all(asked["asked_at"])
         if not any(isinstance(done, N8nNotReady) for done in restored.values()):
             async with self._db.transaction("builder") as uow:
                 await uow.conn.execute(
@@ -329,12 +375,13 @@ async def _record(
 ) -> int:
     """The moved version's publisher is whoever started its scheduled runs on the shared run
     workflow: the schedule's owner, else the person who set it up (D5). Everyone else whose work
-    its versions are joins its runs, so none of them can approve them either."""
+    its versions are joins its runs, so none of them can approve them either. One not live has
+    no publisher until someone puts it live, so all of them are its earlier authors."""
     use_case_id = row["use_case_id"]
     owner = UserId(row["owner"])
     publisher = owner if saved is None else saved.owner
-    authors = await _authors(uow.conn, use_case_id, owner)
-    also = [Publication(person, "portal") for person in authors if person != publisher]
+    authors = [*await _authors(uow.conn, use_case_id, owner), publisher]
+    also = [Publication(p, "portal") for p in dict.fromkeys(authors) if not live or p != publisher]
     version = await add_version(
         uow,
         use_case_id,
@@ -347,7 +394,8 @@ async def _record(
         draft.version_id,
     )
     await uow.conn.execute(
-        "UPDATE builder.use_cases SET engine = 'own' WHERE use_case_id = %s", (use_case_id,)
+        "UPDATE builder.use_cases SET engine = 'own', move_refused = NULL WHERE use_case_id = %s",
+        (use_case_id,),
     )
     return version
 
@@ -355,11 +403,13 @@ async def _record(
 async def _keep_restored(
     uow: UnitOfWork, use_case_id: str, version: int, draft: SavedDraft
 ) -> None:
-    """The version in use now names the workflow n8n holds for it. Its publisher and earlier
-    authors stay, because it is the same workflow: only the error workflow's id changed."""
+    """The version in use now names the workflow n8n holds for it, which n8n has again, so it
+    is no longer marked deleted there. Its publisher and earlier authors stay, because it is the
+    same workflow: only the error workflow's id changed."""
     await uow.conn.execute(
-        "UPDATE builder.use_cases SET n8n_draft_id = %s WHERE use_case_id = %s",
-        (draft.version_id, use_case_id),
+        "UPDATE builder.use_cases SET n8n_workflow_id = %s, n8n_draft_id = %s,"
+        " restoring_in_n8n = NULL, deleted_in_n8n_at = NULL WHERE use_case_id = %s",
+        (draft.workflow_id, draft.version_id, use_case_id),
     )
     await uow.conn.execute(
         "UPDATE builder.use_case_versions SET n8n_version_id = %s, document = %s"

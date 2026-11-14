@@ -169,6 +169,8 @@ def test_old_release_data_stops_bootstrap_before_any_migration_or_n8n_and_delete
 class FakeN8n:
     def __init__(self, existing: list[str], owner_exists: bool = False) -> None:
         self.owner_exists = owner_exists
+        self.unreadable = False
+        """Every read of one workflow fails, as when n8n is still starting."""
         self.workflows: dict[str, dict[str, Any]] = {
             f"W{n}": {"id": f"W{n}", "name": name, "active": True, "nodes": [], "settings": {}}
             for n, name in enumerate(existing, start=1)
@@ -222,6 +224,10 @@ class FakeN8n:
             return httpx.Response(200, json=self.workflows[workflow_id])
         if path.startswith("/api/v1/workflows/"):
             workflow_id = path.split("/")[4]
+            if method == "GET" and self.unreadable:
+                return httpx.Response(503, json={"message": "starting"})
+            if method == "GET" and workflow_id not in self.workflows:
+                return httpx.Response(404, json={"message": "Not Found"})
             self.calls.append(f"{method} {path.removeprefix('/api/v1/workflows/')}")
             if path.endswith("/activate"):
                 self.workflows[workflow_id]["active"] = True
@@ -460,20 +466,56 @@ def restore_pending(owner_url: str) -> bool:
     return row is not None
 
 
-def test_an_n8n_that_had_no_owner_asks_platform_api_to_restore_what_it_lost(
+def own_use_case(owner_url: str, use_case_id: str, workflow_id: str) -> None:
+    insert_use_case(owner_url, use_case_id, "agent_cards")
+    with psycopg.connect(owner_url, autocommit=True) as conn:
+        conn.execute(
+            "UPDATE builder.use_cases SET engine = 'own', n8n_workflow_id = %s"
+            " WHERE use_case_id = %s",
+            (workflow_id, use_case_id),
+        )
+
+
+def test_an_n8n_that_kept_its_owner_but_lost_every_workflow_asks_for_a_restore(
     postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
 ):
+    """On Azure n8n makes its owner from its settings on every start, so an emptied n8n still
+    has one. What tells is that n8n holds none of the workflows our records name."""
     truncate_all(postgres.owner)
-    serve(monkeypatch, FakeN8n([]))
+    serve(monkeypatch, FakeN8n([], owner_exists=True))
+    recorded(postgres.owner, {"run_failure_reporter": "W7"})
+    own_use_case(postgres.owner, "uc_own", "wf_gone")
     assert main(env_for(postgres.owner)) == 0
     assert restore_pending(postgres.owner)
 
 
-def test_an_n8n_that_kept_its_owner_asks_for_no_restore(
+def test_an_n8n_that_holds_a_workflow_our_records_name_asks_for_no_restore(
     postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
 ):
     truncate_all(postgres.owner)
-    serve(monkeypatch, FakeN8n([], owner_exists=True))
+    serve(monkeypatch, FakeN8n(["run_failure_reporter"], owner_exists=True))
+    recorded(postgres.owner, {"run_failure_reporter": "W1"})
+    own_use_case(postgres.owner, "uc_own", "wf_staff_deleted")
+    assert main(env_for(postgres.owner)) == 0
+    assert not restore_pending(postgres.owner)
+
+
+def test_an_n8n_that_cannot_be_read_is_never_taken_for_empty(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n([], owner_exists=True))
+    n8n.unreadable = True
+    own_use_case(postgres.owner, "uc_own", "wf_somewhere")
+    main(env_for(postgres.owner))
+    assert not restore_pending(postgres.owner)
+
+
+def test_a_new_n8n_with_nothing_on_record_asks_for_no_restore(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    truncate_all(postgres.owner)
+    serve(monkeypatch, FakeN8n([]))
     assert main(env_for(postgres.owner)) == 0
     assert not restore_pending(postgres.owner)
 

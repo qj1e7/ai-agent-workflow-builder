@@ -67,6 +67,7 @@ import {
   stageOfLast,
   testPassed,
 } from './workflow'
+import { needsFix } from './n8nChange'
 import { runPill, stageWords } from '../run/words'
 
 const WATCHLIST = watchlistUseCase as UseCaseView
@@ -683,6 +684,15 @@ describe('the status banner', () => {
 
   it('says a workflow that is on has its next run, and offers no button', () => {
     expect(bannerOf(facts({}))).toEqual({ tone: 'ok', text: 'On. Next run Mon 9 Nov, 9:00.', action: null })
+  })
+
+  it('says why a workflow that could not move to n8n starts no run, and never that it runs', () => {
+    const refused = 'Not running. It could not move to its own n8n workflow: "Compare" writes to a place the platform does not allow. Fix that step, or ask for help.'
+    const stuck = { ...on, next_run_at: null, move_refused: refused } as UseCaseView
+    expect(bannerOf(facts({ useCase: stuck }))).toEqual({ tone: 'bad', text: refused, action: null })
+    expect(nextRunWords(stuck, NOW)).toBe('Not running')
+    expect(rowLine(stuck, NOW, nameOf)).toBe('Mon 9:00, not running · no runs yet')
+    expect(needsFix(stuck)).toBe(true)
   })
 
   it('says a workflow with no schedule runs when an Operator presses Run now', () => {

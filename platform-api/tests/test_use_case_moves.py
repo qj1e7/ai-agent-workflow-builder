@@ -6,16 +6,18 @@ that run's request still resolves. Restore puts back only a version that grades 
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, replace
+from datetime import timedelta
 from typing import Any, LiteralString
 
+import psycopg
 import pytest
 
 from platform_api.bootstrap import ask_for_restore
 from platform_api.builder import Builder
 from platform_api.builder.layout import CREATE_TICKET, schedule_rule
 from platform_api.builder.models import UseCaseScheduleIn
-from platform_api.builder.moves import Moves, Restored, ScheduleHeld
-from platform_api.builder.n8n_draft import NotSafe
+from platform_api.builder.moves import NOT_BACK, Moves, Restored, ScheduleHeld
+from platform_api.builder.n8n_draft import DraftRefused, N8nNotReady, NotSafe
 from platform_api.builder.watchlist import AlreadyOnN8n, MovedToN8n, WaitsForRun
 from platform_api.db import json
 from platform_api.orchestration import Publisher, RanVersion, Schedule
@@ -281,6 +283,57 @@ async def test_a_paused_workflow_moves_off_with_no_publisher(m: Moving):
     assert m.n8n.workflows[moved.workflow_id]["activeVersionId"] is None
     version = await m.version(use_case_id, 4)
     assert (version["published_by"], version["published_in"]) == (None, None)
+    assert version["also"] == [
+        {"by": "carol", "in": "portal"},
+        {"by": "dave", "in": "portal"},
+        {"by": "alice", "in": "portal"},
+    ], "the schedule's owner is an author of it until someone resumes it and publishes it"
+
+
+async def refused_layout(m: Moving, use_case_id: str) -> None:
+    """Its card writes to a Jira project the platform no longer writes to."""
+    async with m.lab.h.db.transaction("builder") as uow:
+        await uow.conn.execute(
+            'UPDATE builder.use_case_cards SET "values" = jsonb_set("values",'
+            " '{Jira project}', '\"OPS\"') WHERE use_case_id = %s",
+            (use_case_id,),
+        )
+
+
+async def test_a_workflow_that_cannot_move_says_why_and_never_that_it_runs(
+    m: Moving, caplog: pytest.LogCaptureFixture
+):
+    use_case_id = await m.shared()
+    await refused_layout(m, use_case_id)
+
+    assert isinstance(await m.moves.move(use_case_id), DraftRefused)
+    assert isinstance(await m.moves.move(use_case_id), DraftRefused)
+
+    view = await m.builder.get_use_case(use_case_id)
+    assert view is not None and view.next_run_at is None and not view.moving_to_n8n
+    assert view.move_refused == (
+        "Not running. It could not move to its own n8n workflow:"
+        ' "Compare" writes to a place the platform does not allow.'
+        " Fix that step, or ask for help."
+    )
+    refusals = [r for r in caplog.records if r.levelname == "ERROR" and "stays" in r.message]
+    assert len(refusals) == 1, "a refusal is logged once, not on every pass"
+
+
+async def test_a_workflow_n8n_would_not_take_says_so_and_clears_once_it_moves(m: Moving):
+    use_case_id = await m.shared()
+    m.n8n.keeps = lambda document: {**document, "name": "Not what was sent"}
+    assert isinstance(await m.moves.move(use_case_id), N8nNotReady)
+    view = await m.builder.get_use_case(use_case_id)
+    assert view is not None and view.move_refused == (
+        "Not running. n8n did not take it yet, so it can't run on its schedule."
+        " The platform tries again every minute. If this stays, ask for help."
+    )
+
+    m.n8n.keeps = lambda document: document
+    assert isinstance(await m.moves.move(use_case_id), MovedToN8n)
+    view = await m.builder.get_use_case(use_case_id)
+    assert view is not None and view.move_refused is None
 
 
 async def test_a_held_schedule_stays_until_an_operator_saves_it(m: Moving):
@@ -377,6 +430,78 @@ async def test_safety_restore_never_puts_back_a_version_that_no_longer_grades_sa
     await lose_n8n(m)
     assert await m.moves.restore_if_asked() == [NotSafe()]
     assert m.n8n.workflows == {}
+
+
+async def test_safety_while_a_restore_is_asked_the_sweep_never_marks_a_lost_workflow_deleted(
+    m: Moving,
+):
+    use_case_id = await m.shared()
+    assert isinstance(await m.moves.move(use_case_id), MovedToN8n)
+    await lose_n8n(m)
+    assert m.builder.sweep is not None
+
+    await m.builder.sweep.sweep()
+
+    [row] = await m.rows(
+        "SELECT deleted_in_n8n_at FROM builder.use_cases WHERE use_case_id = %s", use_case_id
+    )
+    assert row["deleted_in_n8n_at"] is None
+    [restored] = await m.moves.restore_if_asked()
+    assert isinstance(restored, Restored)
+
+
+async def mark_deleted_in_n8n(m: Moving, use_case_id: str, since_the_ask: timedelta) -> None:
+    with psycopg.connect(m.owner_url, autocommit=True) as conn:
+        conn.execute(
+            "UPDATE builder.use_cases SET deleted_in_n8n_at ="
+            " (SELECT asked_at FROM builder.n8n_restore) + %s WHERE use_case_id = %s",
+            (since_the_ask, use_case_id),
+        )
+
+
+async def test_a_workflow_marked_deleted_after_the_restore_was_asked_comes_back(m: Moving):
+    """An older replica's sweep got there first, during a rolling deploy."""
+    use_case_id = await m.shared()
+    assert isinstance(await m.moves.move(use_case_id), MovedToN8n)
+    await lose_n8n(m)
+    await mark_deleted_in_n8n(m, use_case_id, timedelta(seconds=30))
+
+    [restored] = await m.moves.restore_if_asked()
+
+    assert isinstance(restored, Restored)
+    view = await m.builder.get_use_case(use_case_id)
+    assert view is not None and view.deleted_in_n8n_at is None
+
+
+async def test_a_workflow_deleted_in_n8n_before_the_restore_was_asked_stays_deleted(m: Moving):
+    use_case_id = await m.shared()
+    assert isinstance(await m.moves.move(use_case_id), MovedToN8n)
+    await lose_n8n(m)
+    await mark_deleted_in_n8n(m, use_case_id, -timedelta(days=1))
+
+    assert await m.moves.restore_if_asked() == []
+    assert m.n8n.workflows == {}
+
+
+async def test_a_restore_cut_off_before_it_went_live_is_finished_by_the_next(m: Moving):
+    use_case_id = await m.shared()
+    assert isinstance(await m.moves.move(use_case_id), MovedToN8n)
+    await lose_n8n(m)
+    live = m.store.go_live
+
+    async def dies(workflow_id: str, version_id: str) -> None:
+        raise RuntimeError("platform-api stopped")
+
+    m.store.go_live = dies  # type: ignore[method-assign]
+    assert await m.moves.restore_if_asked() == [N8nNotReady(NOT_BACK)]
+    m.store.go_live = live  # type: ignore[method-assign]
+
+    [restored] = await m.moves.restore_if_asked()
+
+    assert isinstance(restored, Restored)
+    assert list(m.n8n.workflows) == [restored.workflow_id], "the cut-off draft is gone"
+    version = await m.version(use_case_id, 4)
+    assert m.n8n.workflows[restored.workflow_id]["activeVersionId"] == version["n8n_version_id"]
 
 
 async def test_restore_leaves_a_workflow_n8n_still_holds(m: Moving):

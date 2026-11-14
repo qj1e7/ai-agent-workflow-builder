@@ -207,6 +207,14 @@ class N8nClient:
             self._public("POST", f"/workflows/{existing.id}/activate")
         return UpsertedWorkflow(existing.id, created=False)
 
+    def holds(self, workflow_id: str) -> bool:
+        """Whether n8n has this workflow. An answer that is neither yes nor no raises."""
+        response = self._send("GET", f"/workflows/{workflow_id}")
+        if response.status_code == 404:
+            return False
+        _ok(response)
+        return True
+
     def read_back(self, workflow_id: str) -> WorkflowRecord:
         return _record(self._public("GET", f"/workflows/{workflow_id}"))
 

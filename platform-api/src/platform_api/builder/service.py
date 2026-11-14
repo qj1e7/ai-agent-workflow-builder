@@ -156,7 +156,8 @@ log = logging.getLogger(__name__)
 
 _CURRENT_VERSION = """
     SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
-           u.draft, u.left_out, u.engine, u.n8n_workflow_id, u.deleted_in_n8n_at, v.version,
+           u.draft, u.left_out, u.engine, u.n8n_workflow_id, u.deleted_in_n8n_at,
+           u.move_refused, v.version,
            v.template, v.name, v.instruction, v.params, v.created_at, v.document,
            v.n8n_version_id, v.grade, v.findings
     FROM builder.use_cases u
@@ -280,6 +281,7 @@ def _view(
         findings=list(row["findings"] or []),
         deleted_in_n8n_at=row["deleted_in_n8n_at"],
         moving_to_n8n=moving,
+        move_refused=None if _own(row) else row["move_refused"],
     )
 
 

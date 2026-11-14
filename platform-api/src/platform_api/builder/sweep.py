@@ -94,6 +94,12 @@ def last_activation(version_id: str, timeline: Sequence[PublishEvent]) -> Publis
     return max(enumerate(activated), key=lambda pair: (pair[1].at, pair[0]))[1]
 
 
+async def _restore_asked(uow: UnitOfWork) -> bool:
+    """n8n lost every workflow it held, so one it no longer has was not deleted by a person."""
+    row = await (await uow.conn.execute("SELECT 1 FROM builder.n8n_restore")).fetchone()
+    return row is not None
+
+
 class VersionsSweep:
     def __init__(
         self,
@@ -173,6 +179,9 @@ class VersionsSweep:
                 return None
             workflow_id = row["n8n_workflow_id"]
             workflow = await self._n8n.look(workflow_id)
+            if workflow is None and await _restore_asked(uow):
+                log.info("n8n lost %s, which the restore asked for saves again", workflow_id)
+                return None
             if workflow is None:
                 await uow.conn.execute(
                     "UPDATE builder.use_cases SET deleted_in_n8n_at = %s WHERE use_case_id = %s",

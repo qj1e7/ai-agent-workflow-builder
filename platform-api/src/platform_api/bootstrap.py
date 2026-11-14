@@ -12,12 +12,7 @@ from psycopg.types.json import Jsonb
 
 from platform_api.auth import ConfigError
 from platform_api.migrations import upgrade_all
-from platform_api.orchestration.n8n import (
-    PLATFORM_API_KEY_LABEL,
-    N8nClient,
-    N8nError,
-    OwnerOutcome,
-)
+from platform_api.orchestration.n8n import PLATFORM_API_KEY_LABEL, N8nClient, N8nError
 from platform_api.orchestration.workflows import (
     Finding,
     LiveState,
@@ -147,10 +142,10 @@ def load_into_n8n(
         say("n8n is healthy")
         owner = client.ensure_owner(settings.n8n_owner_email, settings.n8n_owner_password)
         say(f"owner {settings.n8n_owner_email}: {owner.value}")
-        if owner is OwnerOutcome.CREATED:
-            ask_for_restore(settings.owner_database_url, say)
         removed = client.fresh_api_key(API_KEY_LABEL)
         say(f"api key '{API_KEY_LABEL}': created, {removed} older removed")
+        if n8n_lost_its_workflows(client, settings.owner_database_url, recorded, say):
+            ask_for_restore(settings.owner_database_url, say)
         removed = client.remove_api_keys(PLATFORM_API_KEY_LABEL)
         say(f"api key '{PLATFORM_API_KEY_LABEL}': {removed} removed, platform-api makes its own")
         values = {"PLATFORM_INTERNAL_URL": settings.platform_internal_url}
@@ -223,7 +218,9 @@ def retire_old_engine(
 ) -> None:
     """The schedule tick goes at once. The shared run workflow goes once nothing runs on it, so an
     old deploy's waiting run still finishes there first. Each goes by the id bootstrap recorded
-    when it loaded it, never by its name alone, so a workflow staff named the same stays."""
+    when it loaded it, never by its name alone, so a workflow staff named the same stays. A run
+    left behind by a delete that failed is no longer on record: the release that removes the old
+    engine's code removes it by name and content hash."""
     for name in (*RETIRED_WORKFLOWS, *(() if in_use else (SHARED_RUN_WORKFLOW,))):
         workflow_id = recorded.get(name)
         if workflow_id is None:
@@ -278,15 +275,40 @@ def _count_if_table_exists(
     return 0 if row is None else int(row[0])
 
 
+OWN_WORKFLOWS = """
+    SELECT n8n_workflow_id FROM builder.use_cases
+    WHERE engine = 'own' AND n8n_workflow_id IS NOT NULL AND deleted_at IS NULL
+      AND deleted_in_n8n_at IS NULL
+"""
+
+
+def n8n_lost_its_workflows(
+    client: N8nClient, owner_url: str, recorded: Mapping[str, str], say: Say
+) -> bool:
+    """Our records name workflows, and n8n holds none of them: its database is gone, whatever its
+    owner says, as n8n on Azure makes its owner from its settings at every start. Before it ever
+    held one, nothing is lost, and an n8n that cannot answer is never taken for empty."""
+    with psycopg.connect(owner_url) as conn:
+        own = [row[0] for row in conn.execute(OWN_WORKFLOWS).fetchall()]
+    named = [*recorded.values(), *own]
+    if not named:
+        return False
+    try:
+        return not any(client.holds(workflow_id) for workflow_id in named)
+    except (N8nError, httpx.HTTPError) as error:
+        say(f"could not tell whether n8n kept its workflows, so nothing is restored: {error}")
+        return False
+
+
 def ask_for_restore(owner_url: str, say: Say) -> None:
-    """n8n had no owner, so it starts empty: whatever workflows it held before are lost, and
-    platform-api saves each one again from the version it kept (Restore to n8n) as it starts."""
+    """n8n holds none of the workflows it held before, and platform-api saves each one again
+    from the version it kept (Restore to n8n) as it starts."""
     with psycopg.connect(owner_url) as conn:
         conn.execute(
             "INSERT INTO builder.n8n_restore (id, asked_at) VALUES (1, now())"
             " ON CONFLICT (id) DO UPDATE SET asked_at = EXCLUDED.asked_at"
         )
-    say("n8n was empty: platform-api restores the workflows it kept as it starts")
+    say("n8n holds none of its workflows: platform-api restores the ones it kept as it starts")
 
 
 def recorded_ids(owner_url: str) -> dict[str, str]:

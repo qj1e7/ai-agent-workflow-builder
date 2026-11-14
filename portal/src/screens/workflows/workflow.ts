@@ -131,8 +131,9 @@ const lowerFirst = (words: string): string => `${words.charAt(0).toLowerCase()}$
  * A workflow row's second line, as the sketch has it: "Daily 8:00 · last run today, an agent could not finish its work", or "Daily 8:00 · no runs yet".
  * The Workflows page and the chat's check card both read it, so they cannot disagree.
  */
-export function rowLine(useCase: Pick<UseCaseView, 'last_run' | 'schedule'>, now: Date, nameOf: NameOf): string {
-  const when = useCase.schedule ? scheduleShort(useCase.schedule) : 'No schedule'
+export function rowLine(useCase: Pick<UseCaseView, 'last_run' | 'schedule'> & Partial<Pick<UseCaseView, 'move_refused'>>, now: Date, nameOf: NameOf): string {
+  const schedule = useCase.schedule ? scheduleShort(useCase.schedule) : 'No schedule'
+  const when = useCase.move_refused ? `${schedule}, not running` : schedule
   const last = useCase.last_run
   return last ? `${when} · last run ${dayOf(last.at, now)}, ${lowerFirst(lastRunWhat(last, nameOf, 'line'))}` : `${when} · no runs yet`
 }
@@ -151,9 +152,9 @@ export function nextRunOf(useCase: Pick<UseCaseView, 'state' | 'next_run_at' | '
   return { at: useCase.next_run_at, zone: useCase.schedule?.time_zone }
 }
 
-export function nextRunWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule'>, now: Date): string {
+export function nextRunWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule'> & Partial<Pick<UseCaseView, 'move_refused'>>, now: Date): string {
   if (useCase.state === 'paused') return 'Paused'
-  if (useCase.schedule?.held) return 'Not running'
+  if (useCase.schedule?.held || useCase.move_refused) return 'Not running'
   return useCase.next_run_at ? nextRunAt(useCase.next_run_at, now, useCase.schedule?.time_zone) : 'Not scheduled'
 }
 
@@ -481,7 +482,7 @@ export interface Banner {
 }
 
 interface BannerFacts {
-  readonly useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule' | 'last_run'> & Partial<Pick<UseCaseView, 'grade' | 'findings' | 'blocks' | 'deleted_in_n8n_at' | 'version'>>
+  readonly useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule' | 'last_run'> & Partial<Pick<UseCaseView, 'grade' | 'findings' | 'blocks' | 'deleted_in_n8n_at' | 'version' | 'move_refused'>>
   readonly viewer: Viewer
   readonly now: Date
   readonly nameOf: NameOf
@@ -500,6 +501,8 @@ const sentence = (words: string): string => (/[.!?]$/.test(words) ? words : `${w
 export function bannerOf({ useCase, viewer, now, nameOf }: BannerFacts): Banner {
   const last = useCase.last_run
   if (useCase.deleted_in_n8n_at) return { tone: 'off', text: DELETED_IN_N8N, action: null }
+  // Still on the shared run workflow, it starts no scheduled run, so why leads, before any run or pause.
+  if (useCase.move_refused) return { tone: 'bad', text: useCase.move_refused, action: null }
   const version = useCase.version ?? 1
   // A version the safety checker graded unsafe leads, as in the sketch: it matters more than a pause or the last run.
   if (useCase.grade === 'writes_refused') return { tone: 'bad', text: refusedBanner(useCase.blocks), action: viewer.operator ? { kind: 'yes' } : null }

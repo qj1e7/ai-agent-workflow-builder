@@ -274,6 +274,12 @@ class UseCaseView(WireModel):
         "it has not ended. It moves to an n8n workflow of its own once that run ends "
         "(ENGINE-PLAN 2.6).",
     )
+    move_refused: str | None = Field(
+        default=None,
+        description="Why it is still on the shared n8n workflow and so starts no scheduled run, "
+        "in plain words with what to do: a step the safety checker refused, or n8n not taking "
+        "it yet. Null once it moved, and while it only waits for a run to end.",
+    )
 
 
 class UseCaseList(WireModel):
