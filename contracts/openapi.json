@@ -15213,7 +15213,7 @@
     },
     "/api/v1/n8n/sweep": {
       "post": {
-        "description": "Looks in n8n now for versions published in its editor, as the sweep does every minute: for one workflow, or for all when use_case_id is left out. The Portal asks when its tab regains focus, so a Changed in n8n card comes without the minute's wait. Each version found is graded and kept, and Home lists it. Asked again within a few seconds, it looks only once.",
+        "description": "Looks in n8n now for versions published in its editor, as the sweep does every minute: for one workflow, or for all when use_case_id is left out. The Portal asks when its tab regains focus, so a Changed in n8n card comes without the minute's wait. Each version found is graded and kept, and Home lists it. Asked again within a few seconds, it looks only once. Only Operators get the Changed in n8n card, so only they ask.",
         "operationId": "sweep_versions_api_v1_n8n_sweep_post",
         "parameters": [
           {
@@ -15262,7 +15262,7 @@
                 }
               }
             },
-            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+            "description": "Only an Operator can do this, or the person is not on the People list"
           },
           "422": {
             "content": {

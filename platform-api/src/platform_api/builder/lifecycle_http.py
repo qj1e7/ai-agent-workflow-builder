@@ -338,10 +338,10 @@ async def add_the_yes_back(
     "minute: for one workflow, or for all when use_case_id is left out. The Portal asks when its "
     "tab regains focus, so a Changed in n8n card comes without the minute's wait. Each version "
     "found is graded and kept, and Home lists it. Asked again within a few seconds, it looks "
-    "only once.",
-    responses={**SIGNED_IN},
+    "only once. Only Operators get the Changed in n8n card, so only they ask.",
+    responses={**OPERATORS_ONLY},
 )
 async def sweep_versions(
-    principal: CurrentPrincipal, builder: CurrentBuilder, use_case_id: str | None = None
+    principal: WorkflowOperator, builder: CurrentBuilder, use_case_id: str | None = None
 ) -> SweepOut:
     return await builder.sweep_now(use_case_id)
