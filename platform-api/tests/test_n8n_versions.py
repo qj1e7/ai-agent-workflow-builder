@@ -1,0 +1,412 @@
+"""The versions sweep, Changed in n8n, roll back and Add the yes back (ENGINE-PLAN 2.5, D5, D7):
+a version published in n8n's editor is kept and graded with its publisher matched, never
+guessed; only a safe version is put back in use, under the version compare; every author of a
+workflow a version puts back joins its runs; a delete cancels the open request, then archives
+and deletes in n8n; a workflow deleted in n8n keeps its runs and versions."""
+
+from collections.abc import AsyncIterator, Callable, Mapping
+from dataclasses import dataclass, field
+from typing import Any
+
+import pytest
+
+from platform_api.builder import Builder
+from platform_api.builder.layout import schedule_rule
+from platform_api.builder.versions import changes_between, schedule_of
+from platform_api.orchestration import Publisher, RanVersion, Schedule
+from platform_api.orchestration.schedule import DAYS
+from platform_api.shared import UseCaseId, UserId
+from tests.fake_n8n import FakeN8n
+from tests.test_builder_lifecycle import Lab, ModelConnected
+from tests.test_n8n_builder import WRITES, N8nLab, lab
+from tests.test_n8n_lifecycle import Workflows, made, move, version_row
+
+pytestmark = pytest.mark.anyio
+
+__all__ = ["lab"]
+
+DAVE_IN_N8N = "n8n-user-dave"
+DAVE = UserId("dave")
+CHANGED_SINCE = "Changed again since, in n8n. Nothing was saved."
+
+
+@dataclass
+class Accounts:
+    people: dict[str, UserId] = field(default_factory=lambda: {DAVE_IN_N8N: DAVE})
+
+    async def people_by_n8n_user(self) -> Mapping[str, UserId]:
+        return self.people
+
+
+@dataclass
+class Requests:
+    """The orchestrator's cancel, recorded with how far n8n had got when it was asked."""
+
+    n8n: FakeN8n
+    cancelled: list[tuple[str, int]] = field(default_factory=list[tuple[str, int]])
+
+    async def cancel_for_deleted(self, use_case_id: UseCaseId) -> int:
+        self.cancelled.append((use_case_id, len(self.n8n.calls)))
+        return 1
+
+
+@dataclass
+class Versions:
+    own: N8nLab
+    accounts: Accounts
+    requests: Requests
+
+    @property
+    def n8n(self) -> FakeN8n:
+        return self.own.n8n
+
+    @property
+    def builder(self) -> Builder:
+        return self.own.lab.builder
+
+    async def sweep(self) -> int:
+        assert self.builder.sweep is not None
+        return len(await self.builder.sweep.sweep())
+
+    async def call(self, user: str, method: str, path: str, body: Any = None) -> Any:
+        return await self.own.lab.call(user, method, path, body)
+
+    async def view(self, use_case_id: str) -> dict[str, Any]:
+        return (await self.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+
+    async def rollback(self, user: str, use_case_id: str, to: int, in_use: int | None) -> Any:
+        path = f"/api/v1/use-cases/{use_case_id}/versions/{to}/rollback"
+        return await self.call(user, "POST", path, {"via": "page", "in_use": in_use})
+
+    async def add_yes(self, user: str, use_case_id: str, in_use: int | None) -> Any:
+        path = f"/api/v1/use-cases/{use_case_id}/add-the-yes-back"
+        return await self.call(user, "POST", path, {"via": "chat", "in_use": in_use})
+
+    async def parties(self, use_case_id: str, version: int, workflow_id: str) -> set[UserId]:
+        row = await version_row(self.own, use_case_id, version)
+        ran = await self.own.lab.builder.facts.version(workflow_id, row["n8n_version_id"])
+        assert ran is not None
+        return set(ran.parties)
+
+
+@pytest.fixture
+async def v(lab: Lab) -> AsyncIterator[Versions]:
+    n8n = FakeN8n()
+    accounts, requests = Accounts(), Requests(n8n)
+    lab.builder = Builder(
+        lab.h.db,
+        lab.h.orchestrator,
+        lab.app.state.watchlist,
+        "https://portal.example",
+        ModelConnected(),
+        n8n=Workflows(n8n, lab.h.db),
+        writes=WRITES,
+        requests=requests,
+        accounts=accounts,
+    )
+    lab.app.state.builder = lab.builder
+    yield Versions(N8nLab(lab, n8n), accounts, requests)
+
+
+def without_yes(workflow: dict[str, Any]) -> None:
+    """Deletes Ask for a yes in n8n's editor and joins the block before it to the write."""
+    connections: dict[str, Any] = workflow["connections"]
+    write = connections.pop("Ask for a yes")["main"][1][0]["node"]
+    workflow["nodes"] = [n for n in workflow["nodes"] if n["name"] != "Ask for a yes"]
+    for outputs in connections.values():
+        for targets in outputs["main"]:
+            for target in targets:
+                if target["node"] == "Ask for a yes":
+                    target["node"] = write
+
+
+def adding(node_type: str) -> Callable[[dict[str, Any]], None]:
+    def change(workflow: dict[str, Any]) -> None:
+        workflow["nodes"].append(
+            {"name": "Added in n8n", "type": node_type, "parameters": {}, "position": [0, 0]}
+        )
+
+    return change
+
+
+def at_seven_thirty(workflow: dict[str, Any]) -> None:
+    for node in workflow["nodes"]:
+        if node["type"] == "n8n-nodes-base.scheduleTrigger":
+            node["parameters"] = schedule_rule(Schedule("every_day", "07:30"))
+
+
+async def on_and_changed(
+    v: Versions, change: Callable[[dict[str, Any]], None] = without_yes, by: str = DAVE_IN_N8N
+) -> tuple[str, str]:
+    use_case_id, workflow_id = await made(v.own, on=True)
+    v.n8n.publish_as(workflow_id, by, change)
+    assert await v.sweep() == 1
+    return use_case_id, workflow_id
+
+
+@pytest.mark.parametrize("day", DAYS)
+def test_the_schedule_is_read_back_from_the_rule_the_planner_lays_out(day: str):
+    schedule = Schedule(day, "07:30")  # type: ignore[arg-type]
+    trigger = {"type": "n8n-nodes-base.scheduleTrigger", "parameters": schedule_rule(schedule)}
+    assert schedule_of({"nodes": [trigger]}) == schedule
+
+
+def test_the_changes_are_a_plain_comparison_of_blocks_the_schedule_and_settings():
+    trigger = {
+        "name": "Daily 8:00",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "parameters": schedule_rule(Schedule("every_day", "08:00")),
+    }
+    ask = {"name": "Ask for a yes", "type": "CUSTOM.wabAskForYes", "parameters": {}}
+    make = {"name": "Create ticket", "type": "CUSTOM.wabMakeApprovedChanges", "parameters": {}}
+    before = {
+        "nodes": [trigger, ask, make],
+        "connections": {
+            "Daily 8:00": {"main": [[{"node": "Ask for a yes"}]]},
+            "Ask for a yes": {"main": [[], [{"node": "Create ticket"}]]},
+        },
+        "settings": {"timezone": "Asia/Singapore"},
+    }
+    moved = {**trigger, "parameters": schedule_rule(Schedule("monday", "07:30"))}
+    after = {
+        "nodes": [moved, make, {"name": "Tell you", "type": "CUSTOM.wabTell", "parameters": {}}],
+        "connections": {"Daily 8:00": {"main": [[{"node": "Create ticket"}]]}},
+        "settings": {"timezone": "Asia/Singapore", "saveManualExecutions": False},
+    }
+    assert changes_between(before, after) == [
+        "Now runs every Monday at 7:30.",
+        "Deleted “Ask for a yes”.",
+        "Added “Tell you”.",
+        "Changed its settings.",
+    ]
+    rewired = {**before, "connections": {"Daily 8:00": {"main": [[{"node": "Create ticket"}]]}}}
+    assert changes_between(before, rewired) == ["Changed how the blocks connect."]
+    assert changes_between(before, before) == ["Published again, with no change to its blocks."]
+
+
+async def test_safety_a_version_published_in_n8n_without_its_yes_is_kept_as_writes_refused(
+    v: Versions,
+):
+    use_case_id, workflow_id = await on_and_changed(v)
+    second = await version_row(v.own, use_case_id, 2)
+    assert (second["published_by"], second["published_in"]) == ("dave", "n8n")
+    assert second["n8n_version_id"] == v.n8n.workflows[workflow_id]["activeVersionId"]
+    view = await v.view(use_case_id)
+    assert (view["version"], view["grade"]) == (2, "writes_refused")
+    assert view["findings"] == ['"Create ticket" can run without a yes.']
+    ran = await v.builder.facts.version(workflow_id, second["n8n_version_id"])
+    assert ran == RanVersion("writes_refused", Publisher(DAVE))
+    [card] = await v.builder.changed_in_n8n(10)
+    assert (card.answer, card.version, card.by, card.grade, card.in_use) == (
+        "changed_in_n8n",
+        2,
+        DAVE,
+        "writes_refused",
+        2,
+    )
+    assert card.changes == ["Deleted “Ask for a yes”."]
+    assert card.findings == view["findings"]
+    assert await v.sweep() == 0, "a version is kept once"
+
+
+async def test_safety_a_publisher_the_people_list_cant_match_is_never_guessed(v: Versions):
+    v.accounts.people.clear()
+    use_case_id, workflow_id = await on_and_changed(v, at_seven_thirty)
+    second = await version_row(v.own, use_case_id, 2)
+    assert (second["published_by"], second["published_in"]) == (None, "n8n")
+    ran = await v.builder.facts.version(workflow_id, second["n8n_version_id"])
+    assert ran is not None and ran.unknown, "its runs stop at their first block (D5)"
+    versions = (await v.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}/versions")).json()
+    assert versions["versions"][0] | {"at": None} == versions["versions"][0] | {
+        "at": None,
+        "version": 2,
+        "by": None,
+        "made": "published_in_n8n",
+        "grade": "safe",
+        "changes": ["Now runs every day at 7:30."],
+        "publisher_unknown": True,
+    }
+    view = await v.view(use_case_id)
+    assert (view["schedule"]["day"], view["schedule"]["at"]) == ("every_day", "07:30")
+
+
+@pytest.mark.parametrize(
+    "node_type",
+    [
+        "n8n-nodes-base.httpRequest",
+        "n8n-nodes-base.code",
+        "n8n-nodes-base.webhook",
+        "n8n-nodes-base.somethingNobodyClassed",
+    ],
+)
+async def test_safety_a_block_that_is_not_on_needs_a_fix(v: Versions, node_type: str):
+    use_case_id, _ = await on_and_changed(v, adding(node_type))
+    view = await v.view(use_case_id)
+    assert view["grade"] == "needs_a_fix"
+    assert view["findings"] == [f'"Added in n8n" is a block that is not on: {node_type}.']
+
+
+async def test_the_platforms_own_publish_is_never_taken_for_one_made_in_n8n(v: Versions):
+    use_case_id, workflow_id = await made(v.own, on=True)
+    v.n8n.publish_as(workflow_id, v.n8n.timeline[workflow_id][-1]["user"]["id"], at_seven_thirty)
+    assert await v.sweep() == 0
+    assert (await v.view(use_case_id))["version"] == 1
+
+
+async def test_safety_undo_puts_the_version_before_back_as_n8n_still_holds_it(v: Versions):
+    use_case_id, workflow_id = await on_and_changed(v)
+    first = await version_row(v.own, use_case_id, 1)
+    draft = v.n8n.workflows[workflow_id]["versionId"]
+    undone = await v.rollback("carol", use_case_id, 1, in_use=2)
+    assert undone.status_code == 200, undone.text
+    assert (undone.json()["version"], undone.json()["grade"]) == (3, "safe")
+    third = await version_row(v.own, use_case_id, 3)
+    assert third["n8n_version_id"] == first["n8n_version_id"]
+    held = v.n8n.workflows[workflow_id]
+    assert held["activeVersionId"] == first["n8n_version_id"]
+    assert held["versionId"] == draft, "publishing a held version leaves the draft alone"
+    assert (third["published_by"], third["published_in"]) == ("carol", "portal")
+    again = await v.rollback("carol", use_case_id, 1, in_use=2)
+    assert (again.status_code, again.json()["version"]) == (200, 3), "asked again, the same"
+    path = f"/api/v1/use-cases/{use_case_id}/schedule"
+    later = await v.call("carol", "PUT", path, {"day": "monday", "at": "09:00"})
+    assert later.status_code == 200, "the compare checks the draft the platform last saw"
+
+
+async def test_safety_roll_back_writes_the_kept_workflow_once_n8n_has_forgotten_it(v: Versions):
+    use_case_id, workflow_id = await on_and_changed(v)
+    first = await version_row(v.own, use_case_id, 1)
+    del v.n8n.history[workflow_id][first["n8n_version_id"]]
+    undone = await v.rollback("carol", use_case_id, 1, in_use=2)
+    assert undone.status_code == 200, undone.text
+    third = await version_row(v.own, use_case_id, 3)
+    held = v.n8n.workflows[workflow_id]
+    assert held["activeVersionId"] == third["n8n_version_id"] != first["n8n_version_id"]
+    assert [n["name"] for n in held["nodes"]] == [n["name"] for n in first["document"]["nodes"]]
+
+
+async def test_safety_a_version_that_is_not_safe_is_never_put_back(v: Versions):
+    use_case_id, workflow_id = await on_and_changed(v)
+    await v.rollback("carol", use_case_id, 1, in_use=2)
+    live = v.n8n.workflows[workflow_id]["activeVersionId"]
+    refused = await v.rollback("carol", use_case_id, 2, in_use=3)
+    assert refused.status_code == 409
+    assert refused.json()["detail"].startswith("This version did not pass the safety check")
+    assert v.n8n.workflows[workflow_id]["activeVersionId"] == live
+    assert (await v.view(use_case_id))["version"] == 3
+
+
+async def test_safety_add_the_yes_back_puts_a_yes_before_the_write_and_publishes(v: Versions):
+    use_case_id, workflow_id = await on_and_changed(v)
+    fixed = await v.add_yes("carol", use_case_id, in_use=2)
+    assert fixed.status_code == 200, fixed.text
+    assert (fixed.json()["version"], fixed.json()["grade"]) == (3, "safe")
+    held = v.n8n.workflows[workflow_id]
+    third = await version_row(v.own, use_case_id, 3)
+    assert held["activeVersionId"] == third["n8n_version_id"]
+    asks = held["connections"]["Ask for a yes"]["main"]
+    assert asks[1] == [{"node": "Create ticket", "type": "main", "index": 0}]
+    again = await v.add_yes("carol", use_case_id, in_use=2)
+    assert (again.status_code, again.json()["version"]) == (200, 3)
+    moved_on = await v.rollback("carol", use_case_id, 1, in_use=2)
+    assert (moved_on.status_code, moved_on.json()["detail"]) == (
+        409,
+        "Another version is in use by now, so nothing changed.",
+    )
+
+
+async def test_safety_a_change_in_n8n_the_sweep_has_not_seen_is_never_overwritten(v: Versions):
+    use_case_id, workflow_id = await made(v.own, on=True)
+    v.n8n.publish_as(workflow_id, DAVE_IN_N8N, without_yes)
+    path = f"/api/v1/use-cases/{use_case_id}/schedule"
+    refused = await v.call("carol", "PUT", path, {"day": "monday", "at": "09:00"})
+    assert (refused.status_code, refused.json()["detail"]) == (409, CHANGED_SINCE)
+    await v.sweep()
+    v.n8n.edit(workflow_id)
+    draft = v.n8n.workflows[workflow_id]["versionId"]
+    refused = await v.add_yes("carol", use_case_id, in_use=2)
+    assert (refused.status_code, refused.json()["detail"]) == (409, CHANGED_SINCE)
+    assert v.n8n.workflows[workflow_id]["versionId"] == draft, "the editor's draft is kept"
+    assert (await v.view(use_case_id))["version"] == 2
+
+
+async def test_safety_every_author_of_the_n8n_version_a_run_used_is_a_party(v: Versions):
+    """Dave published in n8n, Carol put the yes back, Alice undid it, and Carol put Carol's
+    version back: n8n publishes the version it still holds, so the run is Dave's work too."""
+    use_case_id, workflow_id = await on_and_changed(v)
+    assert (await v.add_yes("carol", use_case_id, in_use=2)).status_code == 200
+    assert (await v.rollback("alice", use_case_id, 1, in_use=3)).status_code == 200
+    assert (await v.rollback("carol", use_case_id, 3, in_use=4)).status_code == 200
+    assert {UserId("carol"), DAVE} <= await v.parties(use_case_id, 5, workflow_id)
+
+
+async def test_safety_every_author_is_kept_when_the_kept_workflow_is_written_again(v: Versions):
+    use_case_id, workflow_id = await on_and_changed(v)
+    assert (await v.add_yes("carol", use_case_id, in_use=2)).status_code == 200
+    assert (await v.rollback("alice", use_case_id, 1, in_use=3)).status_code == 200
+    v.n8n.history[workflow_id].clear()
+    assert (await v.rollback("alice", use_case_id, 3, in_use=4)).status_code == 200
+    fifth = await version_row(v.own, use_case_id, 5)
+    third = await version_row(v.own, use_case_id, 3)
+    assert fifth["n8n_version_id"] != third["n8n_version_id"], "written again, a new version"
+    assert {UserId("alice"), UserId("carol"), DAVE} <= await v.parties(use_case_id, 5, workflow_id)
+
+
+async def test_safety_a_version_that_carries_the_same_workflow_keeps_every_author(v: Versions):
+    """A schedule save that n8n already holds carries the version before it: same workflow,
+    same authors, same findings."""
+    use_case_id, workflow_id = await on_and_changed(v)
+    assert (await v.add_yes("carol", use_case_id, in_use=2)).status_code == 200
+    async with v.own.lab.h.db.transaction("builder") as uow:
+        from platform_api.builder import service
+
+        await uow.conn.execute(
+            "UPDATE builder.use_cases SET current_version = 3 WHERE use_case_id = %s",
+            (use_case_id,),
+        )
+        await uow.conn.execute(
+            "INSERT INTO builder.use_case_versions (use_case_id, version, template, name,"
+            " instruction, params, created_at) SELECT use_case_id, 4, template, name,"
+            " instruction, params, created_at FROM builder.use_case_versions"
+            " WHERE use_case_id = %s AND version = 3",
+            (use_case_id,),
+        )
+        await service._carry_n8n(uow, use_case_id, 3)  # pyright: ignore[reportPrivateUsage]
+    carried = await v.own.row(
+        "SELECT a.also = b.also AND a.findings IS NOT DISTINCT FROM b.findings AS same"
+        " FROM builder.use_case_versions a JOIN builder.use_case_versions b"
+        " ON a.use_case_id = b.use_case_id WHERE a.use_case_id = %s"
+        " AND a.version = 4 AND b.version = 3",
+        use_case_id,
+    )
+    assert carried == {"same": True}
+    assert {UserId("carol"), DAVE} <= await v.parties(use_case_id, 4, workflow_id)
+
+
+async def test_safety_a_delete_cancels_the_open_request_then_archives_and_deletes(v: Versions):
+    use_case_id, workflow_id = await made(v.own, on=True)
+    assert (await move(v.own, "delete", use_case_id)).status_code == 200
+    [(cancelled, calls_then)] = v.requests.cancelled
+    assert cancelled == use_case_id
+    after = v.n8n.calls[calls_then:]
+    assert after == [
+        f"POST /api/v1/workflows/{workflow_id}/archive",
+        f"DELETE /api/v1/workflows/{workflow_id}",
+    ], "the request ends before n8n archives and deletes"
+    assert workflow_id not in v.n8n.workflows
+
+
+async def test_a_workflow_deleted_in_n8n_keeps_its_runs_and_versions(v: Versions):
+    use_case_id, workflow_id = await made(v.own, on=True)
+    del v.n8n.workflows[workflow_id]
+    assert await v.sweep() == 1
+    assert [c for c, _ in v.requests.cancelled] == [use_case_id]
+    view = await v.view(use_case_id)
+    assert view["deleted_in_n8n_at"] is not None and view["next_run_at"] is None
+    versions = (await v.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}/versions")).json()
+    assert [x["version"] for x in versions["versions"]] == [1]
+    assert await v.sweep() == 0
+    assert (await move(v.own, "pause", use_case_id)).status_code == 200
+    resumed = await move(v.own, "resume", use_case_id)
+    assert resumed.status_code == 503
+    assert "deleted in n8n" in resumed.json()["detail"]

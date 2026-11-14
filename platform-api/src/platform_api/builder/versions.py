@@ -79,6 +79,26 @@ class Version:
     """None for a workflow on the shared n8n workflow."""
     published: Publication | None = None
     """None for a version nobody has put live."""
+    also: tuple[Publication, ...] = ()
+    """Every earlier author of the workflow it puts back in use (ADR 0026)."""
+
+
+def authors_of(version: Version) -> tuple[Publication, ...]:
+    """Whose work a version's workflow is: its earlier authors, then its publisher. A version
+    that puts it back in use keeps them all, so none of them can approve its runs."""
+    found = (*version.also, *(() if version.published is None else (version.published,)))
+    return tuple(dict.fromkeys(found))
+
+
+def authors_json(authors: Sequence[Publication]) -> object:
+    return json([{"by": a.by, "in": a.where} for a in authors])
+
+
+def authors_from(value: object) -> tuple[Publication, ...]:
+    rows = cast(list[dict[str, Any]], value) if isinstance(value, list) else []
+    return tuple(
+        Publication(None if row.get("by") is None else UserId(row["by"]), row["in"]) for row in rows
+    )
 
 
 @dataclass(frozen=True)
@@ -327,7 +347,8 @@ async def versions_of(conn: Connection, use_case_id: str) -> list[Version]:
         await conn.execute(
             "SELECT v.version, v.created_at, c.changed_by, c.via, c.schedule_before,"
             " c.schedule_after, c.undid, v.made, v.made_by, v.made_via, v.back_to,"
-            " v.n8n_version_id, v.document, v.grade, v.published_by, v.published_in, v.findings"
+            " v.n8n_version_id, v.document, v.grade, v.published_by, v.published_in, v.findings,"
+            " v.also"
             " FROM builder.use_case_versions v"
             " LEFT JOIN builder.use_case_version_changes c"
             " ON c.use_case_id = v.use_case_id AND c.version = v.version"
@@ -353,6 +374,7 @@ async def versions_of(conn: Connection, use_case_id: str) -> list[Version]:
                 _made_of(row),
                 held,
                 published,
+                authors_from(row["also"]),
             )
         )
     return versions
@@ -366,20 +388,20 @@ async def add_version(
     held: Held,
     made: Made,
     published: Publication | None,
-    also: Publication | None,
+    also: Sequence[Publication],
     draft: str,
 ) -> int:
     """Writes the version after `newest`, the current one, as a copy of version `source`, its
     agents included, holding the workflow n8n holds now, and makes it the current one. `also` is
-    whose work the workflow it republishes was, who joins its runs (ADR 0026). `draft` is n8n's
+    every author of the workflow it puts back, who join its runs (ADR 0026). `draft` is n8n's
     draft after it. The caller holds the use case's row."""
     version = newest + 1
     await uow.conn.execute(
         "INSERT INTO builder.use_case_versions (use_case_id, version, template, name,"
         " instruction, params, created_at, n8n_version_id, document, grade, published_by,"
-        " published_in, made, made_by, made_via, back_to, also_by, also_in, findings)"
+        " published_in, made, made_by, made_via, back_to, also, findings)"
         " SELECT use_case_id, %s, template, name, instruction, params, %s, %s, %s, %s, %s, %s,"
-        " %s, %s, %s, %s, %s, %s, %s FROM builder.use_case_versions"
+        " %s, %s, %s, %s, %s, %s FROM builder.use_case_versions"
         " WHERE use_case_id = %s AND version = %s",
         (
             version,
@@ -393,8 +415,7 @@ async def add_version(
             made.by,
             made.via,
             made.back_to,
-            None if also is None else also.by,
-            None if also is None else also.where,
+            authors_json(also),
             json(list(held.findings)),
             use_case_id,
             source,

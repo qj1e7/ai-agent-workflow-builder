@@ -107,6 +107,7 @@ from platform_api.builder.versions import (
     Undo,
     Version,
     add_version,
+    authors_of,
     changes_between,
     publish,
     schedule_of,
@@ -794,7 +795,7 @@ class Builder:
                     put.held,
                     made(principal.user_id),
                     Publication(principal.user_id, "portal") if live else None,
-                    source.published,
+                    authors_of(source),
                     put.draft,
                 )
         return await self.get_use_case(use_case_id, principal)
@@ -1377,9 +1378,12 @@ class Builder:
 
 
 async def _store_in_n8n(uow: UnitOfWork, use_case_id: str, version: int, relaid: Relaid) -> None:
+    """A layout the Planner made again from the plan, which nobody can edit in n8n, so it has
+    no earlier authors and grades safe."""
     await uow.conn.execute(
         "UPDATE builder.use_case_versions SET n8n_version_id = %s, document = %s, grade = %s,"
-        " published_by = NULL, published_in = NULL WHERE use_case_id = %s AND version = %s",
+        " published_by = NULL, published_in = NULL, also = '[]'::jsonb, findings = NULL"
+        " WHERE use_case_id = %s AND version = %s",
         (relaid.version_id, json(relaid.document), relaid.grade, use_case_id, version),
     )
     await uow.conn.execute(
@@ -1389,11 +1393,13 @@ async def _store_in_n8n(uow: UnitOfWork, use_case_id: str, version: int, relaid:
 
 
 async def _carry_n8n(uow: UnitOfWork, use_case_id: str, newest: int) -> None:
-    """The version after `newest` holds what n8n holds until a new layout replaces it."""
+    """The version after `newest` holds what n8n holds until a new layout replaces it, with
+    every author of that workflow and the checker's words for it."""
     await uow.conn.execute(
         "UPDATE builder.use_case_versions n SET n8n_version_id = o.n8n_version_id,"
         " document = o.document, grade = o.grade, published_by = o.published_by,"
-        " published_in = o.published_in FROM builder.use_case_versions o"
+        " published_in = o.published_in, also = o.also, findings = o.findings"
+        " FROM builder.use_case_versions o"
         " WHERE n.use_case_id = %s AND n.version = %s AND o.use_case_id = n.use_case_id"
         " AND o.version = %s",
         (use_case_id, newest + 1, newest),

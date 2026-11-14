@@ -121,21 +121,21 @@ class RanVersion:
     grade: Grade
     publisher: Publisher | None
     """None for a draft that nobody published, which runs only by hand."""
-    also: Publisher | None = None
-    """For a version a roll back, an Undo or the yes put back made, the publisher of the workflow
-    it publishes again. A run of it is their work too (ADR 0026)."""
+    also: tuple[Publisher, ...] = ()
+    """Every other author of the workflow it runs: whoever published that same n8n version
+    before, and the authors of a workflow a roll back, an Undo or the yes put back published
+    again. A run of it is their work too (ADR 0026)."""
 
     @property
     def parties(self) -> tuple[UserId, ...]:
         """Whose work a run of this version is, as far as our People list knows them."""
-        return tuple(
-            p.person for p in (self.publisher, self.also) if p is not None and p.person is not None
-        )
+        everyone = (self.publisher, *self.also)
+        return tuple(dict.fromkeys(p.person for p in everyone if p is not None and p.person))
 
     @property
     def unknown(self) -> bool:
-        """Someone our People list can't match published it, or the workflow it republishes."""
-        return any(p is not None and p.person is None for p in (self.publisher, self.also))
+        """Someone our People list can't match published it, or authored what it republishes."""
+        return any(p is not None and p.person is None for p in (self.publisher, *self.also))
 
 
 @dataclass(frozen=True)

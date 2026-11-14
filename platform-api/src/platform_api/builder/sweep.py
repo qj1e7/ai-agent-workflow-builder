@@ -214,7 +214,7 @@ class VersionsSweep:
             Held(live, document, graded.grade, tuple(f.text for f in graded.findings)),
             Made("published_in_n8n", None, None),
             Publication(publisher.person, "n8n"),
-            None,
+            (),
             draft,
         )
         log.info(

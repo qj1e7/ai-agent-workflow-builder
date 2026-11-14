@@ -13,6 +13,7 @@ from platform_api.builder.card_store import CardLibrary
 from platform_api.builder.cards import VERSION_CHECKER_ID, card_spec
 from platform_api.builder.layout import REPO_INPUT
 from platform_api.builder.templates import TAG_PATTERN
+from platform_api.builder.versions import authors_from
 from platform_api.db import Database
 from platform_api.orchestration import (
     GITHUB_RELEASES,
@@ -116,26 +117,32 @@ class BuilderWorkflowFacts:
         return OwnWorkflow(spec, holder, on=not row["draft"] and row["paused_at"] is None)
 
     async def version(self, n8n_workflow_id: str, version_id: str) -> RanVersion | None:
-        """The grade stored when the version was saved. A version nobody published has no
-        publisher, and one published in n8n by someone we cannot match has Publisher(None). A
-        version that publishes another's workflow again names that one's publisher too."""
+        """The grade the newest version holding this n8n version was stored with, and its
+        publisher. A version nobody published has none, and one published in n8n by someone we
+        cannot match has Publisher(None). Every version that holds the same n8n version holds
+        the same workflow, so all their publishers and earlier authors are its authors too, and
+        a run of it is their work (ADR 0026)."""
         async with self._db.connection("builder") as conn:
-            row = await (
+            rows = await (
                 await conn.execute(
-                    "SELECT v.grade, v.published_by, v.published_in, v.also_by, v.also_in"
+                    "SELECT v.grade, v.published_by, v.published_in, v.also"
                     " FROM builder.use_case_versions v JOIN builder.use_cases u"
                     " ON u.use_case_id = v.use_case_id"
                     " WHERE u.n8n_workflow_id = %s AND v.n8n_version_id = %s"
-                    " ORDER BY v.version DESC LIMIT 1",
+                    " ORDER BY v.version DESC",
                     (n8n_workflow_id, version_id),
                 )
-            ).fetchone()
-        if row is None:
+            ).fetchall()
+        if not rows:
             return None
+        newest, *before = rows
+        authors = [
+            *(_publisher(row["published_by"], row["published_in"]) for row in before),
+            *(_publisher(a.by, a.where) for row in rows for a in authors_from(row["also"])),
+        ]
+        also = tuple(dict.fromkeys(a for a in authors if a is not None))
         return RanVersion(
-            row["grade"],
-            _publisher(row["published_by"], row["published_in"]),
-            _publisher(row["also_by"], row["also_in"]),
+            newest["grade"], _publisher(newest["published_by"], newest["published_in"]), also
         )
 
     async def agents(self) -> Sequence[NodeOption]:
