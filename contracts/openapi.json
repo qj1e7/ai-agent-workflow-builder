@@ -8643,6 +8643,12 @@
       "ReadinessCheck": {
         "additionalProperties": false,
         "properties": {
+          "counts_for_ready": {
+            "default": true,
+            "description": "False for a check that only warns. Ready does not wait for it, so a probe never takes the platform out of traffic over it.",
+            "title": "Counts For Ready",
+            "type": "boolean"
+          },
           "detail": {
             "title": "Detail",
             "type": "string"
