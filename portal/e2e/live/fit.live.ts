@@ -358,9 +358,10 @@ for (const width of WIDTHS) {
 }
 
 /**
- * The side panel's run line is the run page's line, small and without faces (RUN-line-panel). It shows one run held back to
- * when its agent was at work, then follows it from its stop, through a retry pressed in the panel, to its yes and to done, and
- * matches the run page's links at each state.
+ * The side panel's run line is the run page's line, small and without faces (RUN-line-panel). It follows one run from its stop,
+ * through a retry pressed in the panel, to its yes, shows it held back to when its agent was at work after the retry, then to
+ * done, and matches the run page's links at each state. With GitHub down, a workflow's own n8n run stops at its Read block,
+ * before any agent works, so the agent is first at work in the retry.
  */
 test('the side panel draws the same run line, small and without faces, at work, stopped, waiting for a yes and done, as an Operator at 1280 px', async ({ browser, backend }, info) => {
   test.slow()
@@ -397,20 +398,14 @@ test('the side panel draws the same run line, small and without faces, at work, 
     await page.goto('/')
     const box = page.getByLabel('Ask, or describe a task')
     const newest = page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
-    await holdRunAtWork(page, runId)
     await box.fill(`Why did ${name} stop?`)
     await box.press('Enter')
     await expect(newest).toHaveAttribute('data-answer', 'true')
     const opener = newest.locator(`[data-opens="run:${runId}"]`)
     await showRun(page, opener)
-    await reach('at-work')
-    await expect(panelLine.locator('[data-face]'), 'the panel draws no faces').toHaveCount(0)
-    await panel.getByRole('button', { name: 'Close' }).click()
-    await page.unrouteAll({ behavior: 'ignoreErrors' })
-
-    await opener.click()
     await reach('stopped')
     await expect(panelLine, 'the stop is named in words too').toContainText('Stopped here')
+    await expect(panelLine.locator('[data-face]'), 'the panel draws no faces').toHaveCount(0)
     await samePage('stopped')
 
     await panel.getByRole('button', { name: 'Retry', exact: true }).click()
@@ -419,6 +414,17 @@ test('the side panel draws the same run line, small and without faces, at work, 
       .toMatch(/^(solid )*(flow|wait)( todo)+$/)
     await reach('waiting')
     await samePage('waiting')
+
+    await panel.getByRole('button', { name: 'Close' }).click()
+    await holdRunAtWork(page, runId)
+    await opener.click()
+    await reach('at-work')
+    await expect(panelLine.locator('[data-face]'), 'the panel draws no faces').toHaveCount(0)
+    await panel.getByRole('button', { name: 'Close' }).click()
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
+
+    await opener.click()
+    await reach('waiting')
     await approve(backend, runId)
     await reach('done')
     await samePage('done')

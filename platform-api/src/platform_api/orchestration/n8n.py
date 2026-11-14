@@ -18,7 +18,13 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, ValidationError
 
 from platform_api.db import Database
-from platform_api.orchestration.n8n_calls import ExecutionFacts, FailedExecution, Publisher
+from platform_api.orchestration.n8n_calls import (
+    Ended,
+    ExecutionFacts,
+    FailedExecution,
+    Finished,
+    Publisher,
+)
 from platform_api.settings import N8nOwner
 from platform_api.shared import N8nExecutionId, UserId
 
@@ -292,9 +298,11 @@ PLATFORM_API_SCOPES = (
     "workflow:deactivate",
     "execution:read",
     "execution:list",
+    "execution:retry",
 )
 """Only what the platform's calls need, as n8n 2.42.6's public controllers check them: read covers
-history and versions, activate covers publish, move covers transfer."""
+history and versions, activate covers publish, move covers transfer, and the retry of an execution
+has a scope of its own."""
 KEY_LIFETIME = timedelta(days=3)
 """A key that leaks stops working within days. When n8n refuses it, the platform makes another."""
 STALE_KEY_AGE = timedelta(days=1)
@@ -302,12 +310,17 @@ START_TYPE = "CUSTOM.wabStartFromPortal"
 START_NAME = "Start from the Portal"
 VOUCHED = frozenset({"running", "waiting"})
 """The only execution statuses whose node calls our API takes: n8n says the execution is live."""
+ENDED = frozenset({"success", "error", "crashed", "canceled"})
+"""The statuses of an execution n8n will run no further."""
 LANDED = frozenset({"running", "success", "error"})
 """A wake that met a 409 after an earlier try still landed when n8n shows the execution running
 or finished: the earlier try resumed it, and only its answer was lost."""
 DOCUMENT_KEYS = ("name", "nodes", "connections", "settings")
 """What the public API's PUT takes, and so what the platform keeps of each version."""
 PUBLISH_WAIT_SECONDS = 20.0
+RETRY_WAIT_SECONDS = 30.0
+"""How long the platform waits on n8n's retry, which answers only when the retry stops (P7 Q5).
+No answer by then means n8n took the retry and is running it. It stays under the outbox lease."""
 
 
 @dataclass(frozen=True)
@@ -404,6 +417,20 @@ class ExecutionRecord:
 class Written:
     version_id: str
     document: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class StillRetrying:
+    """n8n had not answered the retry when the wait ran out: it may be running it, or may yet
+    refuse it."""
+
+
+@dataclass(frozen=True)
+class RetryRefused:
+    """n8n would not retry the execution, in its own words: it succeeded, a retry of it already
+    did, or n8n no longer holds it."""
+
+    detail: str
 
 
 @dataclass(frozen=True)
@@ -686,16 +713,22 @@ class N8nApi:
         path: str,
         json: Any | None = None,
         params: Mapping[str, str] | None = None,
+        timeout: httpx.Timeout | None = None,
     ) -> httpx.Response:
-        key = await self._api_key()
-        response = await self._http.request(
-            method, f"/api/v1{path}", json=json, params=params, headers={"X-N8N-API-KEY": key}
-        )
-        if response.status_code == 401:
-            key = await self._api_key(refused=key)
-            response = await self._http.request(
-                method, f"/api/v1{path}", json=json, params=params, headers={"X-N8N-API-KEY": key}
+        async def send(key: str) -> httpx.Response:
+            return await self._http.request(
+                method,
+                f"/api/v1{path}",
+                json=json,
+                params=params,
+                headers={"X-N8N-API-KEY": key},
+                timeout=timeout or httpx.USE_CLIENT_DEFAULT,
             )
+
+        key = await self._api_key()
+        response = await send(key)
+        if response.status_code == 401:
+            response = await send(await self._api_key(refused=key))
         return response
 
     async def create(self, document: Mapping[str, Any]) -> N8nWorkflow:
@@ -733,14 +766,63 @@ class N8nApi:
         body = {"versionId": version_id}
         _expect(await self._public("POST", f"/workflows/{workflow_id}/publish", body))
 
+    async def unpublish(self, workflow_id: str) -> None:
+        """Takes the workflow off, so none of its triggers runs it. Nothing to do when nothing is
+        published."""
+        workflow = await self.workflow(workflow_id)
+        if workflow is None or workflow.active_version_id is None:
+            return
+        _expect(await self._public("POST", f"/workflows/{workflow_id}/unpublish", {}))
+
+    async def run_draft(self, workflow_id: str, item: Mapping[str, Any]) -> str:
+        """/rest: runs the draft by hand from Start from the Portal with this item as its output,
+        and answers the execution's id at once (P7 Q3, body B). n8n runs the stored draft."""
+        body: dict[str, Any] = {
+            "triggerToStartFrom": {
+                "name": START_NAME,
+                "data": {
+                    "startTime": 0,
+                    "executionTime": 0,
+                    "source": [],
+                    "data": {"main": [[{"json": dict(item)}]]},
+                },
+            }
+        }
+        response = _expect(await self._rest("POST", f"/workflows/{workflow_id}/run", body))
+        execution = _parse(_Rest[dict[str, JsonValue]], response).data.get("executionId")
+        if not isinstance(execution, str | int) or isinstance(execution, bool) or not execution:
+            raise N8nError(f"n8n did not start a run of {workflow_id}")
+        return str(execution)
+
+    async def retry(
+        self, execution_id: str, wait: float = RETRY_WAIT_SECONDS
+    ) -> RetryRefused | StillRetrying | None:
+        """n8n's own retry, from the block that stopped, on the version that ran (P7 Q5). n8n
+        answers only once the retry stops, so a wait that runs out says nothing yet. None when
+        it took it. Raises when n8n could not be asked."""
+        try:
+            response = await self._public(
+                "POST",
+                f"/executions/{execution_id}/retry",
+                {"loadWorkflow": False},
+                timeout=httpx.Timeout(10.0, read=wait),
+            )
+        except httpx.ReadTimeout:
+            return StillRetrying()
+        if response.status_code in (400, 404, 409):
+            return RetryRefused(_short(response))
+        _expect(response)
+        return None
+
     async def transfer(self, workflow_id: str, project_id: str) -> None:
         body = {"destinationProjectId": project_id}
         _expect(await self._public("PUT", f"/workflows/{workflow_id}/transfer", body), 200, 204)
 
-    async def execution(self, execution_id: str) -> ExecutionRecord | None:
-        response = await self._public(
-            "GET", f"/executions/{execution_id}", params={"includeData": "true"}
-        )
+    async def execution(self, execution_id: str, data: bool = True) -> ExecutionRecord | None:
+        """With data, the start item and a failure's block and words too. Without, its status
+        and links only, which is all the sweep reads every few seconds."""
+        params = {"includeData": "true" if data else "false"}
+        response = await self._public("GET", f"/executions/{execution_id}", params=params)
         if response.status_code == 404:
             return None
         return _record_of(_parse(_ExecutionOut, _expect(response)))
@@ -800,12 +882,15 @@ class N8nApi:
         workflow_id: str,
         expected_version_id: str,
         change: Callable[[dict[str, Any]], Mapping[str, Any]],
+        *,
+        publish: bool = True,
     ) -> Written | ChangedInN8n:
         """Changes the draft and publishes it, refusing whenever the workflow changed under the
         platform (ENGINE-PLAN 2.5, P7 Q18). The public PUT cannot compare by itself, so: read and
         compare the draft's version, PUT without publishing, read back and compare what n8n
         holds, then publish through /rest with the draft's checksum, which n8n refuses with 409
-        when anything saved the draft in between. An open editor tab's autosave never wins."""
+        when anything saved the draft in between. An open editor tab's autosave never wins.
+        With publish False the change stays a draft, for a workflow that is not on."""
         before = await self.workflow(workflow_id)
         if before is None or before.version_id != expected_version_id:
             return ChangedInN8n()
@@ -815,8 +900,10 @@ class N8nApi:
         )
         ours = _parse(_WorkflowOut, _expect(put)).version_id
         after = await self.workflow(workflow_id)
-        if after is None or not same_as_sent(wanted, after.document):
+        if after is None or not same_as_sent(wanted, after.document) or after.version_id != ours:
             return ChangedInN8n()
+        if not publish:
+            return Written(after.version_id, after.document)
         draft = _parse(
             _Rest[_RestWorkflow], _expect(await self._rest("GET", f"/workflows/{workflow_id}"))
         ).data
@@ -852,9 +939,9 @@ class N8nExecutions:
     def __init__(self, api: N8nApi) -> None:
         self._api = api
 
-    async def _record(self, execution_id: str) -> ExecutionRecord | None:
+    async def _record(self, execution_id: str, data: bool = True) -> ExecutionRecord | None:
         try:
-            return await self._api.execution(execution_id)
+            return await self._api.execution(execution_id, data)
         except (N8nError, httpx.HTTPError) as error:
             log.warning("could not read n8n execution %s: %s", execution_id, error)
             return None
@@ -872,7 +959,7 @@ class N8nExecutions:
 
     async def landed(self, execution_id: N8nExecutionId) -> bool:
         """Whether n8n shows the execution running or finished, after a wake met a 409."""
-        record = await self._record(execution_id)
+        record = await self._record(execution_id, data=False)
         return record is not None and record.status in LANDED
 
 
@@ -885,13 +972,27 @@ class SavedDraft:
 
 
 class N8nDrafts(Protocol):
+    """Where the builder keeps each use case's own n8n workflow. Every call but remove raises
+    N8nError or httpx.HTTPError when n8n did not do what was asked."""
+
     async def error_workflow_id(self) -> str | None: ...
 
-    async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft:
-        """Raises N8nError or httpx.HTTPError when n8n did not keep it."""
-        ...
+    async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft: ...
 
     async def remove(self, workflow_id: str) -> None: ...
+
+    async def go_live(self, workflow_id: str, version_id: str) -> None:
+        """Publishes exactly this version and returns once n8n has every trigger live."""
+        ...
+
+    async def go_off(self, workflow_id: str) -> None: ...
+
+    async def change(
+        self, workflow_id: str, expected_version_id: str, document: Mapping[str, Any], live: bool
+    ) -> Written | ChangedInN8n:
+        """Saves the document over the version the platform last stored, under the version
+        compare, and puts it live when `live`."""
+        ...
 
 
 class N8nWorkflows:
@@ -927,11 +1028,45 @@ class N8nWorkflows:
         except (N8nError, httpx.HTTPError) as error:
             log.warning("could not remove n8n draft %s: %s", workflow_id, error)
 
-    async def failed_executions(self, workflow_id: str) -> Sequence[N8nExecutionId]:
-        """The newest hundred executions of the workflow that ended in an error. Raises when n8n
-        cannot be read, so the sweep tries again next time."""
-        records = await self._api.executions(workflow_id, status="error")
-        return [N8nExecutionId(record.id) for record in records if record.status == "error"]
+    async def go_live(self, workflow_id: str, version_id: str) -> None:
+        """The version the platform graded and stored, never whatever the draft holds now, so
+        what runs is what was checked (ENGINE-PLAN 2.5). n8n keeps the draft and the published
+        versions, so the stored one is there to publish."""
+        await self._api.publish(workflow_id, version_id)
+        await self._live(workflow_id, version_id)
+
+    async def go_off(self, workflow_id: str) -> None:
+        await self._api.unpublish(workflow_id)
+
+    async def change(
+        self, workflow_id: str, expected_version_id: str, document: Mapping[str, Any], live: bool
+    ) -> Written | ChangedInN8n:
+        written = await self._api.write(
+            workflow_id, expected_version_id, lambda _: dict(document), publish=live
+        )
+        if live and isinstance(written, Written):
+            await self._live(workflow_id, written.version_id)
+        return written
+
+    async def _live(self, workflow_id: str, version_id: str) -> None:
+        status = await self._api.wait_published(workflow_id)
+        if status.live_version_id != version_id:
+            raise N8nError(f"n8n has another version of {workflow_id} live")
+
+    async def ended(self, execution_id: N8nExecutionId) -> Ended | None:
+        """Its status alone, and its data only once it failed, for the block and the words."""
+        try:
+            record = await self._api.execution(execution_id, data=False)
+            if record is not None and record.status in ENDED - {"success"}:
+                record = await self._api.execution(execution_id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not read n8n execution %s: %s", execution_id, error)
+            return None
+        if record is None or record.status not in ENDED:
+            return None
+        if record.status == "success":
+            return Finished(execution_id)
+        return FailedExecution(execution_id, record.failed_node, record.error)
 
     async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
         """The block that failed and n8n's words for it, from n8n's own record. None unless n8n

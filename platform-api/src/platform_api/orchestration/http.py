@@ -622,8 +622,8 @@ async def retry_run(
     run_id: RunId, principal: Operator, orchestrator: CurrentOrchestrator
 ) -> RetryAccepted:
     match await orchestrator.retry(run_id, principal):
-        case Retried(state):
-            return RetryAccepted(state="acting" if isinstance(state, Acting) else "pending")
+        case Retried(resumes):
+            return RetryAccepted(state=resumes)
         case NotRetryable(detail):
             raise HTTPException(status_code=409, detail=detail)
         case NotFound():

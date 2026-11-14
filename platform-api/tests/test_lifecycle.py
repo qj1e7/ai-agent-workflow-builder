@@ -10,7 +10,6 @@ from platform_api.orchestration.approvals import Verdict
 from platform_api.orchestration.runs import (
     AwaitingApproval,
     Failed,
-    Pending,
     Rejected,
     RunState,
     Succeeded,
@@ -130,8 +129,7 @@ async def test_the_failure_then_retry_path(stack: Stack):
     before = len(recorded_kinds("failure"))
 
     stack.agent.mode = "finished"
-    retried = await stack.orchestrator.retry(run_id, ALICE)
-    assert isinstance(retried, Retried) and isinstance(retried.state, Pending)
+    assert await stack.orchestrator.retry(run_id, ALICE) == Retried("pending")
     stack.clock["now"] += timedelta(seconds=3)
     await stack.engine.drain()
     assert isinstance(await stack.state(run_id), AwaitingApproval)

@@ -52,6 +52,7 @@ from platform_api.orchestration.n8n_calls import (
     check_start,
     start_signature,
 )
+from platform_api.orchestration.n8n_starts import issue_start
 from platform_api.orchestration.runs import (
     DEADLINES,
     AwaitingApproval,
@@ -112,6 +113,8 @@ class FakeWorkflows:
     holder: UserId | None = None
     versions: dict[str, RanVersion] = field(default_factory=lambda: {"v1": SAFE_BY_ALICE})
     release_of: str | None = None
+    gone: set[str] = field(default_factory=set[str])
+    """Workflows whose use case was deleted."""
 
     async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | None:
         if n8n_workflow_id not in (WORKFLOW, OTHER_WORKFLOW):
@@ -124,11 +127,14 @@ class FakeWorkflows:
     async def agents(self) -> Sequence[NodeOption]:
         return [NodeOption(CARD.id, CARD.name)]
 
+    async def deleted(self, n8n_workflow_id: str) -> bool:
+        return n8n_workflow_id in self.gone
+
     async def agent_inputs(self, agent_id: str) -> Sequence[CardInput]:
         return CARD.inputs if agent_id == CARD.id else []
 
     async def agent_run(
-        self, agent_id: str, values: Mapping[str, str]
+        self, agent_id: str, values: Mapping[str, str], pinned: CardSpec | None = None
     ) -> AgentToRun | CannotRun | None:
         if agent_id != CARD.id:
             return None
@@ -230,7 +236,6 @@ async def t(postgres: PostgresUrls) -> AsyncIterator[Calls]:
             n8n,
             sources,
             {"jira": PRACTICE_SITE},
-            start_secret="test-start-secret",
         )
         yield Calls(h, n8n, workflows, sources, calls)
 
@@ -407,7 +412,7 @@ async def test_a_run_by_hand_is_the_holders_and_refused_when_nobody_holds_it(t: 
 
 async def test_a_start_links_the_pending_run_it_was_issued_for_and_is_used_once(t: Calls):
     run_id = await t.pending_run()
-    start = await t.calls.issue_start(run_id, "run_now", WORKFLOW, "hook-1")
+    start = await issue_start(t.h.db, "test-start-secret", run_id, "run_now", WORKFLOW, "hook-1")
     t.started("101", "webhook", nonce=str(start.body["nonce"]))
     assert await t.call("101") == Answer((RELEASE,))
     run = await t.only_run()
@@ -417,7 +422,7 @@ async def test_a_start_links_the_pending_run_it_was_issued_for_and_is_used_once(
 
 async def test_a_replayed_start_is_refused_and_starts_nothing(t: Calls):
     run_id = await t.pending_run()
-    start = await t.calls.issue_start(run_id, "run_now", WORKFLOW, "hook-1")
+    start = await issue_start(t.h.db, "test-start-secret", run_id, "run_now", WORKFLOW, "hook-1")
     nonce = str(start.body["nonce"])
     t.started("101", "webhook", nonce=nonce)
     t.started("102", "webhook", nonce=nonce)
@@ -450,7 +455,7 @@ async def test_a_forged_start_is_refused_and_never_taken_for_a_trigger(t: Calls)
 
 async def test_a_start_made_for_another_workflow_is_refused_and_stays_unused(t: Calls):
     run_id = await t.pending_run()
-    start = await t.calls.issue_start(run_id, "run_now", WORKFLOW, "hook-1")
+    start = await issue_start(t.h.db, "test-start-secret", run_id, "run_now", WORKFLOW, "hook-1")
     nonce = str(start.body["nonce"])
     t.started("101", "webhook", nonce=nonce, workflow=OTHER_WORKFLOW)
     assert await t.call("101") == START_OTHER_WORKFLOW
@@ -461,7 +466,7 @@ async def test_a_start_made_for_another_workflow_is_refused_and_stays_unused(t: 
 
 async def test_an_expired_start_is_refused(t: Calls):
     run_id = await t.pending_run()
-    start = await t.calls.issue_start(run_id, "run_now", WORKFLOW, "hook-1")
+    start = await issue_start(t.h.db, "test-start-secret", run_id, "run_now", WORKFLOW, "hook-1")
     t.h.advance(START_LIFETIME + timedelta(seconds=1))
     t.started("101", "webhook", nonce=str(start.body["nonce"]))
     assert await t.call("101") == START_EXPIRED
@@ -470,7 +475,7 @@ async def test_an_expired_start_is_refused(t: Calls):
 async def test_a_start_for_a_version_that_failed_the_check_stops_its_pending_run(t: Calls):
     t.workflows.versions["v2"] = RanVersion("needs_a_fix", Publisher(ALICE))
     run_id = await t.pending_run()
-    start = await t.calls.issue_start(run_id, "run_now", WORKFLOW, "hook-1")
+    start = await issue_start(t.h.db, "test-start-secret", run_id, "run_now", WORKFLOW, "hook-1")
     t.started("101", "webhook", nonce=str(start.body["nonce"]), version="v2")
     assert await t.call("101") == VERSION_FAILED
     run = await t.only_run()
@@ -522,7 +527,7 @@ async def test_a_retry_of_a_version_since_graded_failed_is_refused(t: Calls):
 async def test_a_retry_of_a_stop_that_cannot_be_retried_is_refused(t: Calls):
     t.workflows.versions["v2"] = RanVersion("needs_a_fix", Publisher(ALICE))
     run_id = await t.pending_run()
-    start = await t.calls.issue_start(run_id, "run_now", WORKFLOW, "hook-1")
+    start = await issue_start(t.h.db, "test-start-secret", run_id, "run_now", WORKFLOW, "hook-1")
     t.started("101", "webhook", nonce=str(start.body["nonce"]), version="v2")
     await t.call("101")
     t.workflows.versions["v2"] = SAFE_BY_ALICE
@@ -645,7 +650,7 @@ async def test_a_signed_start_lives_240_seconds_and_is_signed_as_the_block_check
 
 async def test_an_issued_start_expires_240_seconds_on_and_carries_its_signature(t: Calls):
     run_id = await t.pending_run()
-    start = await t.calls.issue_start(run_id, "test", WORKFLOW, "hook-1")
+    start = await issue_start(t.h.db, "test-start-secret", run_id, "test", WORKFLOW, "hook-1")
     expires = int((NOW + START_LIFETIME).timestamp())
     assert start.body == {"nonce": start.body["nonce"], "kind": "test", "expires": expires}
     assert start.signature == start_signature(

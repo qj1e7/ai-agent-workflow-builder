@@ -17791,7 +17791,7 @@
     },
     "/api/v1/use-cases/{use_case_id}/pause": {
       "post": {
-        "description": "Stops the workflow starting runs, on its schedule or by hand, until an Operator resumes it. A run that has started carries on. Pausing a paused workflow, or a draft, changes nothing.",
+        "description": "Stops the workflow starting runs, on its schedule or by hand, until an Operator resumes it. A run that has started carries on. Pausing a paused workflow, or a draft, changes nothing. A workflow n8n carries is taken off in n8n first.",
         "operationId": "pause_use_case_api_v1_use_cases__use_case_id__pause_post",
         "parameters": [
           {
@@ -17863,7 +17863,7 @@
                 }
               }
             },
-            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+            "description": "n8n did not take the change in time, so nothing changed. Or: sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
@@ -17936,6 +17936,16 @@
             },
             "description": "No such workflow"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "This version did not pass the safety check, so it cannot be turned on."
+          },
           "410": {
             "content": {
               "application/json": {
@@ -17964,7 +17974,7 @@
                 }
               }
             },
-            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+            "description": "n8n did not take the change in time, so nothing changed. Or: sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
@@ -17983,7 +17993,7 @@
     },
     "/api/v1/use-cases/{use_case_id}/resume": {
       "post": {
-        "description": "Turns a paused workflow back on. Its next run is the next slot of its schedule. Resuming a workflow that is on changes nothing, and a draft stays a draft until it is turned on.",
+        "description": "Turns a paused workflow back on. Its next run is the next slot of its schedule. Resuming a workflow that is on changes nothing, and a draft stays a draft until it is turned on. A workflow n8n carries reads on only once n8n has every trigger live.",
         "operationId": "resume_use_case_api_v1_use_cases__use_case_id__resume_post",
         "parameters": [
           {
@@ -18037,6 +18047,16 @@
             },
             "description": "No such workflow, or it is deleted"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "This version did not pass the safety check, so it cannot be turned on."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -18055,7 +18075,7 @@
                 }
               }
             },
-            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+            "description": "n8n did not take the change in time, so nothing changed. Or: sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
@@ -18278,7 +18298,7 @@
                 }
               }
             },
-            "description": "The Software watchlist's schedule is saved on the Software page."
+            "description": "The Software watchlist's schedule is saved on the Software page. Or: Changed again since, in n8n. Nothing was saved."
           },
           "422": {
             "content": {
@@ -18298,7 +18318,7 @@
                 }
               }
             },
-            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+            "description": "n8n did not take the change in time, so nothing changed. Or: sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
@@ -18317,7 +18337,7 @@
     },
     "/api/v1/use-cases/{use_case_id}/turn-on": {
       "post": {
-        "description": "Turns a draft on, publishing its version 1 (ADR 0044). Its next run is the next slot of its schedule, and a slot that fell while it was a draft never starts. Turning on a workflow that was turned on before, even one paused since, changes nothing. Not a write to Jira or Teams, so it needs no approval.",
+        "description": "Turns a draft on, publishing its version 1 (ADR 0044). Its next run is the next slot of its schedule, and a slot that fell while it was a draft never starts. Turning on a workflow that was turned on before, even one paused since, changes nothing. Not a write to Jira or Teams, so it needs no approval. A workflow n8n carries is published in n8n, and the answer says on only once n8n has every trigger live (ENGINE-PLAN 2.5). The caller is its publisher, whose scheduled runs are their work and who can never approve them.",
         "operationId": "turn_on_use_case_api_v1_use_cases__use_case_id__turn_on_post",
         "parameters": [
           {
@@ -18371,6 +18391,16 @@
             },
             "description": "No such workflow, or it is deleted"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "This version did not pass the safety check, so it cannot be turned on."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -18389,7 +18419,7 @@
                 }
               }
             },
-            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+            "description": "n8n did not take the change in time, so nothing changed. Or: sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
@@ -18582,7 +18612,7 @@
                 }
               }
             },
-            "description": "The workflow changed again since this version, so Undo would throw that change away. Or: Only a change of when the workflow runs can be undone."
+            "description": "The workflow changed again since this version, so Undo would throw that change away. Or: Only a change of when the workflow runs can be undone. Or: Changed again since, in n8n. Nothing was saved."
           },
           "422": {
             "content": {
@@ -18602,7 +18632,7 @@
                 }
               }
             },
-            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+            "description": "n8n did not take the change in time, so nothing changed. Or: sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [

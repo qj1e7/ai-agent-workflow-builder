@@ -3,8 +3,7 @@ it safe with the yes in front of the write (ENGINE-PLAN 2.5, E4)."""
 
 import os
 
-import httpx
-from harness import Api, Json
+from harness import N8N_OWNER, Api, Json
 
 N8N_URL = os.environ.get("N8N_BASE_URL", "http://n8n:5678")
 PLANTED = {"GitHub repository": "acme/planted", "Jira project": "MOCK"}
@@ -19,16 +18,8 @@ SKETCH_LOG = [
 
 
 def held_in_n8n(workflow_id: str) -> Json:
-    """The draft as n8n holds it, read as its owner, the way the platform reads it."""
-    login = {
-        "emailOrLdapLoginId": os.environ["N8N_OWNER_EMAIL"],
-        "password": os.environ["N8N_OWNER_PASSWORD"],
-    }
-    with httpx.Client(base_url=N8N_URL, timeout=30) as n8n:
-        n8n.post("/rest/login", json=login).raise_for_status()
-        answer = n8n.get(f"/rest/workflows/{workflow_id}")
-        answer.raise_for_status()
-        return answer.json()["data"]
+    """The draft as n8n holds it."""
+    return N8N_OWNER.call("GET", f"/workflows/{workflow_id}")
 
 
 def into(document: Json, target: str) -> list[tuple[str, int]]:

@@ -13,11 +13,13 @@ from platform_api.orchestration.n8n import (
     N8nExecutions,
     N8nWorkflows,
     PublishEvent,
+    RetryRefused,
+    StillRetrying,
     Written,
     publisher_of,
     same_as_sent,
 )
-from platform_api.orchestration.n8n_calls import FailedExecution, Publisher
+from platform_api.orchestration.n8n_calls import FailedExecution, Finished, Publisher
 from platform_api.settings import N8nOwner
 from platform_api.shared import N8nExecutionId, UserId
 from tests.fake_n8n import OWNER_EMAIL, OWNER_ID, OWNER_PASSWORD, FakeN8n
@@ -123,6 +125,7 @@ async def test_the_platform_s_key_has_only_the_scopes_it_uses_and_runs_out_in_da
     assert sorted(asked["scopes"]) == [
         "execution:list",
         "execution:read",
+        "execution:retry",
         "workflow:activate",
         "workflow:create",
         "workflow:deactivate",
@@ -309,12 +312,22 @@ def failures_for(n8n: FakeN8n) -> N8nWorkflows:
     return N8nWorkflows(api_for(n8n), None)  # type: ignore[arg-type]
 
 
-async def test_the_sweep_lists_only_the_workflow_s_executions_that_ended_in_an_error() -> None:
+async def test_the_sweep_reads_how_each_execution_ended_from_n8n_s_own_record() -> None:
     n8n = FakeN8n()
     n8n.execution("45", "error", failed=("Read release", "GitHub answered 503."))
     n8n.execution("46", "success")
-    n8n.execution("47", "error", workflow_id="wf2")
-    assert await failures_for(n8n).failed_executions("wf1") == ["45"]
+    for status in ("running", "waiting", "crashed"):
+        n8n.execution(status, status)
+    failures = failures_for(n8n)
+    ended = {e: await failures.ended(N8nExecutionId(e)) for e in ("45", "46", "running")}
+    assert ended == {
+        "45": FailedExecution(N8nExecutionId("45"), "Read release", "GitHub answered 503."),
+        "46": Finished(N8nExecutionId("46")),
+        "running": None,
+    }
+    assert await failures.ended(N8nExecutionId("waiting")) is None
+    assert isinstance(await failures.ended(N8nExecutionId("crashed")), FailedExecution)
+    assert await failures.ended(N8nExecutionId("gone")) is None
 
 
 async def test_a_failure_is_the_block_and_the_words_from_n8n_s_own_record() -> None:
@@ -337,3 +350,93 @@ async def test_an_execution_that_did_not_end_in_an_error_is_no_failure() -> None
     failures = failures_for(n8n)
     for status in ("success", "running", "waiting", "canceled", "gone"):
         assert await failures.failure(N8nExecutionId(status)) is None, status
+
+
+async def test_a_draft_runs_by_hand_from_start_from_the_portal_with_our_item() -> None:
+    """P7 Q3, body B: n8n ignores a bare item, so it goes as the trigger's task data."""
+    n8n = FakeN8n()
+    api = api_for(n8n)
+    created = await api.create(DOCUMENT)
+    item = {"nonce": "start_1", "kind": "test", "workflow_id": created.id}
+    execution = await api.run_draft(created.id, item)
+    [(workflow, body)] = n8n.draft_runs
+    assert (workflow, execution) == (created.id, "301")
+    assert body == {
+        "triggerToStartFrom": {
+            "name": "Start from the Portal",
+            "data": {
+                "startTime": 0,
+                "executionTime": 0,
+                "source": [],
+                "data": {"main": [[{"json": item}]]},
+            },
+        }
+    }
+
+
+async def test_n8n_s_retry_is_taken_when_it_stops_or_is_still_running_and_refused_in_its_words():
+    n8n = FakeN8n()
+    api = api_for(n8n)
+    assert await api.retry("45") is None
+    n8n.retry_answer = "slow"
+    assert await api.retry("46") == StillRetrying(), "the wait ran out, so it says nothing yet"
+    n8n.retry_answer = "succeeded"
+    refused = await api.retry("47")
+    assert isinstance(refused, RetryRefused) and "succeeded" in refused.detail
+    assert n8n.retries == ["45", "46", "47"]
+
+
+async def test_unpublish_takes_the_workflow_off_and_is_nothing_when_it_is_off() -> None:
+    n8n = FakeN8n()
+    api = api_for(n8n)
+    created = await api.create(DOCUMENT)
+    await api.unpublish(created.id)
+    assert not any(call.endswith("/unpublish") for call in n8n.calls), "nothing was published"
+    await api.publish(created.id, created.version_id)
+    await api.unpublish(created.id)
+    held = await api.workflow(created.id)
+    assert held is not None and held.active_version_id is None
+
+
+async def test_write_can_leave_the_change_a_draft_for_a_workflow_that_is_off() -> None:
+    n8n = FakeN8n()
+    api = api_for(n8n)
+    created = await api.create(DOCUMENT)
+    written = await api.write(created.id, created.version_id, renamed, publish=False)
+    assert isinstance(written, Written)
+    held = await api.workflow(created.id)
+    assert held is not None and (held.version_id, held.active_version_id) == (
+        written.version_id,
+        None,
+    )
+
+
+async def test_the_sweep_reads_an_execution_s_data_only_once_it_failed() -> None:
+    """Every few seconds for each open run: the status alone, and the data, which n8n sends in
+    full, only for a failure's block and words."""
+    n8n = FakeN8n()
+    n8n.execution("45", "running")
+    n8n.execution("46", "success")
+    n8n.execution("47", "error", failed=("Read release", "GitHub answered 503."))
+    failures = failures_for(n8n)
+    for execution in ("45", "46"):
+        await failures.ended(N8nExecutionId(execution))
+    assert await N8nExecutions(api_for(n8n)).landed(N8nExecutionId("46"))
+    assert n8n.data_reads == []
+    assert await failures.ended(N8nExecutionId("47")) == FailedExecution(
+        N8nExecutionId("47"), "Read release", "GitHub answered 503."
+    )
+    assert n8n.data_reads == ["47"]
+
+
+async def test_the_platform_keeps_its_n8n_session_and_signs_in_again_only_when_it_ends() -> None:
+    """n8n limits sign-ins to a few a minute, and the sweep and Turn it on read /rest often."""
+    n8n = FakeN8n()
+    api = api_for(n8n)
+    created = await api.create(DOCUMENT)
+    for _ in range(5):
+        await api.publication_status(created.id)
+    assert n8n.logins == 1
+    n8n.session_ends = True
+    status = await api.publication_status(created.id)
+    assert (status.status, n8n.logins) == ("published", 2)

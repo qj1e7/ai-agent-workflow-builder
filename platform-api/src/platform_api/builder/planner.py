@@ -30,6 +30,7 @@ from platform_api.builder.models import (
     Via,
     WatchlistView,
 )
+from platform_api.builder.n8n_draft import N8nNotReady, NotSafe
 from platform_api.builder.planning import FALLBACK_WORDS, STARTERS, FallbackWhy
 from platform_api.builder.templates import SOFTWARE_WATCHLIST
 from platform_api.orchestration import (
@@ -581,11 +582,11 @@ class Workflows(Protocol):
 
     async def pause_use_case(
         self, use_case_id: str, principal: Principal, via: Via
-    ) -> UseCaseView | None: ...
+    ) -> UseCaseView | N8nNotReady | NotSafe | None: ...
 
     async def resume_use_case(
         self, use_case_id: str, principal: Principal, via: Via
-    ) -> UseCaseView | None: ...
+    ) -> UseCaseView | N8nNotReady | NotSafe | None: ...
 
 
 class Listed(Protocol):
@@ -1010,7 +1011,9 @@ class PlannerFront:
         if one is not None and listed is None and _operates(viewer):
             move = self._workflows.pause_use_case if pausing else self._workflows.resume_use_case
             moved = await move(one.use_case_id, viewer, "chat")
-            if moved is not None:
+            # When n8n could not take the change, nothing changed, and she is offered the
+            # workflow again to try once more.
+            if isinstance(moved, UseCaseView):
                 return reply(
                     use_case_id=moved.use_case_id,
                     name=moved.name,

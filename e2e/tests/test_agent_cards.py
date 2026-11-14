@@ -28,9 +28,6 @@ FOLLOW_UP_TASK = (
 )
 PLANTED = {"GitHub repository": "acme/planted", "Jira project": "MOCK"}
 LANGGRAPH = {"GitHub repository": "langchain-ai/langgraph", "Jira project": "MOCK"}
-COULD_NOT_CHECK = (
-    "Could not check langchain-ai/langgraph: GitHub returned 503 Service Unavailable three times"
-)
 
 
 def run_agents(api: Api, card_id: str, values: dict[str, str], name: str) -> str:
@@ -192,8 +189,10 @@ def test_a_github_outage_stops_the_version_checker_before_its_model_can_ask_for_
     run_id = run_agents(api, "crd_version_checker", LANGGRAPH, "e2e outage")
     stopped = api.wait_for_state("alice", run_id, {"failed", "awaiting_approval"})
     assert stopped["state"] == "failed", "a check that read nothing must not ask for a yes"
-    assert (stopped["reason"], stopped["retryable"]) == ("AgentError", True)
-    assert stopped["message"] == f"UpstreamUnavailable: {COULD_NOT_CHECK}"
+    assert (stopped["reason"], stopped["retryable"]) == ("WorkflowNodeError", True)
+    assert stopped["message"].startswith(
+        'Stopped before it read anything. "Read release" failed in n8n'
+    ), "the release check reads GitHub in its own block, before the Version checker runs"
     events = api.events_after("alice", run_id)
     kinds = [e["kind"] for e in events]
     assert "write_action_proposed" not in kinds and "approval_requested" not in kinds

@@ -17,6 +17,7 @@ PLATFORM_API_URL = os.environ.get("PLATFORM_API_URL", "http://platform-api:8000"
 MOCK_GITHUB_URL = os.environ.get("MOCK_GITHUB_URL", "http://mock-github:8200")
 MOCK_MODEL_URL = os.environ.get("MOCK_MODEL_URL", "http://mock-model:8300")
 MOCK_CONFLUENCE_URL = os.environ.get("MOCK_CONFLUENCE_URL", "http://mock-confluence:8400")
+N8N_URL = os.environ.get("N8N_BASE_URL", "http://n8n:5678")
 STEP_KEY = os.environ.get("STEP_KEY", "")
 DATABASE_URL = os.environ.get("E2E_DATABASE_URL", "")
 WAIT_SECONDS = float(os.environ.get("E2E_WAIT_SECONDS", "90"))
@@ -341,8 +342,43 @@ def approval_requested(events: list[Json]) -> Json:
     return next(e["data"] for e in reversed(events) if e["kind"] == "approval_requested")
 
 
+class N8nOwner:
+    """n8n's /rest as its owner, the way the platform reads it, signed in once for the whole run:
+    n8n allows only a few sign-ins a minute. It signs in again only when n8n ends the session."""
+
+    def __init__(self) -> None:
+        self._client: httpx.Client | None = None
+
+    def _sign_in(self, client: httpx.Client) -> None:
+        login = {
+            "emailOrLdapLoginId": os.environ["N8N_OWNER_EMAIL"],
+            "password": os.environ["N8N_OWNER_PASSWORD"],
+        }
+        client.post("/rest/login", json=login).raise_for_status()
+
+    def call(self, method: str, path: str, body: Json | None = None) -> Json:
+        if self._client is None:
+            self._client = httpx.Client(base_url=N8N_URL, timeout=30)
+            self._sign_in(self._client)
+        answer = self._client.request(method, f"/rest{path}", json=body)
+        if answer.status_code == 401:
+            self._sign_in(self._client)
+            answer = self._client.request(method, f"/rest{path}", json=body)
+        answer.raise_for_status()
+        data: Json = answer.json()["data"]
+        return data
+
+
+N8N_OWNER = N8nOwner()
+
+
 def tickets_for(api: Api, run_id: str) -> list[Json]:
-    return [t for t in api.tickets() if t["run_id"] == run_id]
+    """The tickets a run wrote, by the run's own record of what it made, or by the run named in
+    a ticket's label. A change made under its subject's key, as a workflow's own n8n run makes
+    it (ENGINE-PLAN 2.3.8), is labelled with the subject, not the run."""
+    written: list[Json] = api.run_view("alice", run_id).get("written") or []
+    made = {w["external_reference"] for w in written}
+    return [t for t in api.tickets() if t["run_id"] == run_id or t["key"] in made]
 
 
 def bob_decides(api: Api, approval_id: str, verdict: str, digest: str) -> httpx.Response:

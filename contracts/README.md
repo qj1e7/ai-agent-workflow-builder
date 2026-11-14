@@ -14,6 +14,7 @@ Every shape that crosses a process boundary, plus recorded example runs. The Por
 | `fixtures/builder/*.json`, `fixtures/watchlist/*.json`, `fixtures/planner/*.json` | platform-api, use case builder context | `platform_api.contracts` |
 | `fixtures/troubleshooting/*.json` | platform-api, run monitoring context | `platform_api.contracts` |
 | `fixtures/agent/*.json` | agent-runtime | `agent_runtime.contracts` |
+| `n8n/cron_table.json` | spike P7 | A copy of `docs/evidence/prototypes/p7-n8n-engine-facts/cron_table.json`, n8n's own answers for when its Schedule Trigger fires. platform-api's schedule test reads this copy, because its image has `contracts/` and not `docs/`, and fails when the two differ. |
 | `n8n/node-types.json` | n8n-node-pack | `npm run manifest` in `n8n-node-pack`, which writes it beside the pack's own copy. The pack's tests fail when the two differ. platform-api's safety checker test reads this copy, because the platform-api image has `contracts/` and not the pack. |
 
 The owner's models are the source. To change a shape, change the model, regenerate, and commit the model and the files together.

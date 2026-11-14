@@ -89,9 +89,11 @@ from platform_api.orchestration.connections import (
     ConnectionState,
 )
 from platform_api.orchestration.n8n import (
+    ChangedInN8n,
     N8nDrafts,
     N8nError,
     SavedDraft,
+    Written,
 )
 from platform_api.orchestration.n8n_calls import (
     GITHUB_RELEASES,
@@ -106,6 +108,7 @@ from platform_api.orchestration.n8n_calls import (
     ReadItems,
     WriteEntry,
 )
+from platform_api.orchestration.n8n_schedule import next_run
 from platform_api.orchestration.people_store import ConfirmationRow
 from platform_api.orchestration.person_runs import (
     Ask,
@@ -146,6 +149,7 @@ from platform_api.orchestration.service import RunDetail
 from platform_api.orchestration.spec import (
     CardRun,
     CardsTask,
+    N8nTarget,
     RunSpec,
     RunStarted,
     RunStarter,
@@ -210,9 +214,13 @@ __all__ = [
     "known_options",
     "block_id",
     "Edge",
+    "ChangedInN8n",
     "N8nDrafts",
     "N8nError",
     "SavedDraft",
+    "Written",
+    "N8nTarget",
+    "next_run",
     "read_flow",
     "GITHUB_RELEASES",
     "AgentRejected",

@@ -183,7 +183,6 @@ def tell_platform(
         n8n,
         sources,
         {},
-        start_secret="test-start-secret",
         tells=TellFlow(FLOW_URL, SETUP, client),
     )
 

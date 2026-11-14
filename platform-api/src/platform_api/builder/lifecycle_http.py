@@ -12,8 +12,10 @@ from platform_api.builder.models import (
     UseCaseView,
     VersionList,
 )
-from platform_api.builder.service import ScheduleOnSoftwarePage, WatchlistStays
+from platform_api.builder.n8n_draft import DraftRefused, N8nNotReady, NotSafe
+from platform_api.builder.service import InN8nRefused, ScheduleOnSoftwarePage, WatchlistStays
 from platform_api.builder.versions import ChangedSince, NoSuchVersion, NotAScheduleChange
+from platform_api.orchestration import ChangedInN8n
 from platform_api.wire import error_response
 
 router = APIRouter(prefix="/api/v1", tags=["builder"])
@@ -26,38 +28,62 @@ CHANGED_SINCE = (
 )
 NOT_A_SCHEDULE_CHANGE = "Only a change of when the workflow runs can be undone."
 NO_UNDO_BODY = UndoIn()
+CHANGED_IN_N8N = "Changed again since, in n8n. Nothing was saved."
+N8N_NOT_READY = error_response(
+    "n8n did not take the change in time, so nothing changed. Or: sign-in could not be checked "
+    "because the identity provider's keys are unavailable"
+)
+N8N_CHANGED = error_response(CHANGED_IN_N8N)
+NOT_SAFE = "This version did not pass the safety check, so it cannot be turned on."
+
+
+def refused_in_n8n(refused: InN8nRefused | NotSafe) -> HTTPException:
+    """Why an own workflow's change was not made, as the words the Portal shows."""
+    match refused:
+        case N8nNotReady(detail):
+            return HTTPException(503, detail)
+        case ChangedInN8n():
+            return HTTPException(409, CHANGED_IN_N8N)
+        case NotSafe():
+            return HTTPException(409, NOT_SAFE)
+        case DraftRefused(findings):
+            return HTTPException(422, [{"loc": ["body"], "msg": f.text} for f in findings])
+
+
+def _moved(found: UseCaseView | N8nNotReady | NotSafe | None) -> UseCaseView:
+    match found:
+        case None:
+            raise HTTPException(404, NO_SUCH)
+        case N8nNotReady() | NotSafe():
+            raise refused_in_n8n(found)
+        case view:
+            return view
 
 
 @router.post(
     "/use-cases/{use_case_id}/pause",
     description="Stops the workflow starting runs, on its schedule or by hand, until an "
     "Operator resumes it. A run that has started carries on. Pausing a paused workflow, or a "
-    "draft, changes nothing.",
-    responses={**OPERATORS_ONLY, 404: NOT_FOUND},
+    "draft, changes nothing. A workflow n8n carries is taken off in n8n first.",
+    responses={**OPERATORS_ONLY, 404: NOT_FOUND, 503: N8N_NOT_READY},
 )
 async def pause_use_case(
     use_case_id: str, principal: WorkflowOperator, builder: CurrentBuilder
 ) -> UseCaseView:
-    view = await builder.pause_use_case(use_case_id, principal)
-    if view is None:
-        raise HTTPException(404, NO_SUCH)
-    return view
+    return _moved(await builder.pause_use_case(use_case_id, principal))
 
 
 @router.post(
     "/use-cases/{use_case_id}/resume",
     description="Turns a paused workflow back on. Its next run is the next slot of its "
     "schedule. Resuming a workflow that is on changes nothing, and a draft stays a draft until "
-    "it is turned on.",
-    responses={**OPERATORS_ONLY, 404: NOT_FOUND},
+    "it is turned on. A workflow n8n carries reads on only once n8n has every trigger live.",
+    responses={**OPERATORS_ONLY, 404: NOT_FOUND, 409: error_response(NOT_SAFE), 503: N8N_NOT_READY},
 )
 async def resume_use_case(
     use_case_id: str, principal: WorkflowOperator, builder: CurrentBuilder
 ) -> UseCaseView:
-    view = await builder.resume_use_case(use_case_id, principal)
-    if view is None:
-        raise HTTPException(404, NO_SUCH)
-    return view
+    return _moved(await builder.resume_use_case(use_case_id, principal))
 
 
 @router.post(
@@ -65,16 +91,15 @@ async def resume_use_case(
     description="Turns a draft on, publishing its version 1 (ADR 0044). Its next run is the next "
     "slot of its schedule, and a slot that fell while it was a draft never starts. Turning on a "
     "workflow that was turned on before, even one paused since, changes nothing. Not a write to "
-    "Jira or Teams, so it needs no approval.",
-    responses={**OPERATORS_ONLY, 404: NOT_FOUND},
+    "Jira or Teams, so it needs no approval. A workflow n8n carries is published in n8n, and "
+    "the answer says on only once n8n has every trigger live (ENGINE-PLAN 2.5). The caller is "
+    "its publisher, whose scheduled runs are their work and who can never approve them.",
+    responses={**OPERATORS_ONLY, 404: NOT_FOUND, 409: error_response(NOT_SAFE), 503: N8N_NOT_READY},
 )
 async def turn_on_use_case(
     use_case_id: str, principal: WorkflowOperator, builder: CurrentBuilder
 ) -> UseCaseView:
-    view = await builder.turn_on_use_case(use_case_id, principal)
-    if view is None:
-        raise HTTPException(404, NO_SUCH)
-    return view
+    return _moved(await builder.turn_on_use_case(use_case_id, principal))
 
 
 @router.delete(
@@ -107,7 +132,9 @@ async def delete_use_case(
     responses={
         **OPERATORS_ONLY,
         404: error_response(NO_SUCH),
+        409: error_response(NOT_SAFE),
         410: error_response("The workflow was deleted more than a day ago"),
+        503: N8N_NOT_READY,
     },
 )
 async def restore_use_case(
@@ -118,6 +145,8 @@ async def restore_use_case(
             raise HTTPException(
                 410, "This workflow was deleted more than a day ago, so it can't be put back."
             )
+        case N8nNotReady() | NotSafe() as refused:
+            raise refused_in_n8n(refused)
         case None:
             raise HTTPException(404, NO_SUCH)
         case view:
@@ -135,7 +164,8 @@ async def restore_use_case(
     responses={
         **OPERATORS_ONLY,
         404: NOT_FOUND,
-        409: error_response(SCHEDULE_ON_SOFTWARE_PAGE),
+        409: error_response(f"{SCHEDULE_ON_SOFTWARE_PAGE} Or: {CHANGED_IN_N8N}"),
+        503: N8N_NOT_READY,
     },
 )
 async def save_schedule(
@@ -144,6 +174,8 @@ async def save_schedule(
     match await builder.save_schedule(use_case_id, principal, body):
         case ScheduleOnSoftwarePage():
             raise HTTPException(409, SCHEDULE_ON_SOFTWARE_PAGE)
+        case N8nNotReady() | ChangedInN8n() | DraftRefused() as refused:
+            raise refused_in_n8n(refused)
         case None:
             raise HTTPException(404, NO_SUCH)
         case view:
@@ -174,7 +206,8 @@ async def list_versions(
     responses={
         **OPERATORS_ONLY,
         404: error_response("No such workflow, or it is deleted, or no such version"),
-        409: error_response(f"{CHANGED_SINCE} Or: {NOT_A_SCHEDULE_CHANGE}"),
+        409: error_response(f"{CHANGED_SINCE} Or: {NOT_A_SCHEDULE_CHANGE} Or: {CHANGED_IN_N8N}"),
+        503: N8N_NOT_READY,
     },
 )
 async def undo_version(
@@ -193,5 +226,7 @@ async def undo_version(
             raise HTTPException(409, CHANGED_SINCE)
         case NotAScheduleChange():
             raise HTTPException(409, NOT_A_SCHEDULE_CHANGE)
+        case N8nNotReady() | ChangedInN8n() | DraftRefused() as refused:
+            raise refused_in_n8n(refused)
         case view:
             return view

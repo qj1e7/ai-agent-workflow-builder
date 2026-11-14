@@ -465,9 +465,9 @@ async def test_the_failure_path_then_retry_runs_the_agents_again_with_a_new_task
     assert await h.kinds(run_id) == expected
     last_seq = len(expected)
 
-    retried = await h.orchestrator.retry(run_id, CAROL)
-    assert isinstance(retried, Retried) and isinstance(retried.state, Pending)
-    assert retried.state.attempt == 2
+    assert await h.orchestrator.retry(run_id, CAROL) == Retried("pending")
+    pending = await h.state(run_id)
+    assert isinstance(pending, Pending) and pending.attempt == 2
     events = await h.log.read_after(run_id, 0)
     assert (events[last_seq].kind, events[last_seq].seq) == ("run_retried", last_seq + 1)
     assert [e.seq for e in events] == list(range(1, len(events) + 1))
@@ -585,9 +585,9 @@ async def test_a_failed_write_is_retried_as_acting_and_makes_one_ticket(h: Harne
     )
     failed = await h.state(run_id)
     assert isinstance(failed, Failed)
-    retried = await h.orchestrator.retry(run_id, ALICE)
-    assert isinstance(retried, Retried) and isinstance(retried.state, Acting)
-    assert retried.state.attempt == 2
+    assert await h.orchestrator.retry(run_id, ALICE) == Retried("acting")
+    acting = await h.state(run_id)
+    assert isinstance(acting, Acting) and acting.attempt == 2
     h.advance(timedelta(seconds=3))
     await h.orchestrator.tick()
     assert h.engine.legs[-1][1] is Leg.ACT

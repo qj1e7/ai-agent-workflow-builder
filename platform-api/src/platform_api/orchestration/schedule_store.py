@@ -15,7 +15,7 @@ from platform_api.orchestration.schedule import (
     due_slot,
     slots,
 )
-from platform_api.orchestration.spec import RunSpec, RunStarter
+from platform_api.orchestration.spec import N8nTarget, RunSpec, RunStarter
 from platform_api.shared import Principal, Role, RunId, UseCaseId, UserId
 
 log = logging.getLogger(__name__)
@@ -245,6 +245,11 @@ class ScheduleTicker:
             async with self._db.transaction("orchestration") as uow:
                 await hold_workflow(uow.conn, saved.use_case_id, alone=False)
                 match await self._specs.check_spec(saved.use_case_id):
+                    case RunSpec(n8n=N8nTarget()):
+                        log.info(
+                            "left the slot of %s to its own n8n workflow's Schedule Trigger",
+                            saved.use_case_id,
+                        )
                     case RunSpec() as spec:
                         result = await self._runs.start_run(
                             replace(spec, trigger="schedule"),
