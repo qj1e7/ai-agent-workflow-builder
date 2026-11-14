@@ -4,7 +4,8 @@ import { useChatNavigate } from '../../ui/fromChat'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { newIdempotencyKey } from '../../api/idempotency'
-import { isConflict, useMe, useModelOff, useRetry, useStartRun, type RetryAfter } from '../../api/queries'
+import { RetriedFirst, useMe, useModelOff, useRetry, useStartRun, type RetryAfter } from '../../api/queries'
+import { useDisplayName } from '../../api/people'
 import type { DraftItem, WaitingItem } from '../../api/types'
 import { AgentFace } from '../../ui/AgentFace'
 import { Button, ButtonLink } from '../../ui/Button'
@@ -51,12 +52,13 @@ export function useRetryAfter(runId: string): RetryAfter {
   const place = useRunPlace()
   const note = useNote()
   const me = useMe().data?.id
+  const nameOf = useDisplayName()
   const say = place?.say ?? note
   const focus = backToTop ?? place?.focus ?? null
   return {
     retried: () => (focus ? focus() : navigate(`/runs/${runId}`)),
     retriedFirst: (by) => {
-      say(retriedFirstWords(by, me))
+      say(retriedFirstWords(by, me, nameOf))
       ;(focus ?? focusPageHeading)()
     },
   }
@@ -77,7 +79,7 @@ export function RetryButton({ runId, label, primary, describedBy }: { runId: str
       <Button variant={primary ? 'primary' : 'secondary'} loading={retry.isPending} onClick={press} aria-describedby={describedBy}>
         {label}
       </Button>
-      {retry.isError && !isConflict(retry.error) ? (
+      {retry.isError && !(retry.error instanceof RetriedFirst) ? (
         <p className={styles['problem']} role="alert">
           {retryProblem(retry.error, words)}
         </p>
