@@ -302,9 +302,10 @@ for (const width of [1280, 390]) {
     await backend.waitForState(runId, ['awaiting_approval'])
     const approvalId = await backend.approvalIdOf(runId)
     const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
-    await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest, reason: 'Something in it is wrong' }, undefined, [201])
+    // One of the watchlist's own quick reasons, which reads on in the record's sentence.
+    await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest, reason: 'Wrong version' }, undefined, [201])
     await backend.waitForState(runId, ['rejected'])
-    const record = /Ended (at|on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2} · Bob declined: something in it is wrong\. Nothing was written\./
+    const record = /Ended (at|on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2} · Bob declined: wrong version\. Nothing was written\./
 
     const context = await devContext(browser, 'alice', { reducedMotion: true })
     const page = await context.newPage()

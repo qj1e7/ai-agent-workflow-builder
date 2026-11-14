@@ -3,10 +3,8 @@ E5): set up off, a test run that writes nothing, Turn it on, Run now, Bob's yes 
 a retry after GitHub was down that picks up at Read. Then the safety tests of ENGINE-PLAN 4.1 that
 need a running n8n."""
 
-import os
 import time
-from collections.abc import Generator, Iterator
-from contextlib import contextmanager
+from collections.abc import Iterator
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -15,6 +13,8 @@ import psycopg
 import pytest
 from harness import (
     DATABASE_URL,
+    N8N_OWNER,
+    N8N_URL,
     Api,
     Json,
     MockGithub,
@@ -24,7 +24,6 @@ from harness import (
     tickets_for,
 )
 
-N8N_URL = os.environ.get("N8N_BASE_URL", "http://n8n:5678")
 LANGGRAPH = {"GitHub repository": "langchain-ai/langgraph", "Jira project": "MOCK"}
 SINGAPORE = ZoneInfo("Asia/Singapore")
 SCHEDULE_WAIT_SECONDS = 480
@@ -43,18 +42,6 @@ def set_up(api: Api, name: str, *, on: bool, at: str = "09:00") -> Json:
     return api.post("carol", "/api/v1/agent-use-cases", body, expect=(201,)).json()
 
 
-@contextmanager
-def owner() -> Generator[httpx.Client]:
-    """n8n as its owner signs in, the way the platform reads it, on a client of its own."""
-    login = {
-        "emailOrLdapLoginId": os.environ["N8N_OWNER_EMAIL"],
-        "password": os.environ["N8N_OWNER_PASSWORD"],
-    }
-    with httpx.Client(base_url=N8N_URL, timeout=30) as n8n:
-        n8n.post("/rest/login", json=login).raise_for_status()
-        yield n8n
-
-
 def ticket_count(api: Api) -> int:
     """Every ticket in the practice Jira, so "nothing was written" does not rest on the run's
     own record of what it wrote."""
@@ -62,17 +49,11 @@ def ticket_count(api: Api) -> int:
 
 
 def in_n8n(workflow_id: str) -> Json:
-    with owner() as n8n:
-        answer = n8n.get(f"/rest/workflows/{workflow_id}")
-        answer.raise_for_status()
-        return answer.json()["data"]
+    return N8N_OWNER.call("GET", f"/workflows/{workflow_id}")
 
 
 def publication(workflow_id: str) -> Json:
-    with owner() as n8n:
-        answer = n8n.get(f"/rest/workflows/{workflow_id}/publication-status")
-        answer.raise_for_status()
-        return answer.json()["data"]
+    return N8N_OWNER.call("GET", f"/workflows/{workflow_id}/publication-status")
 
 
 def linked_modes(events: list[Json]) -> list[str]:
@@ -198,20 +179,14 @@ def test_gate_removed(api: Api, mock_model: None):
     write with no yes anyway (ENGINE-PLAN 2.3.11)."""
     created = set_up(api, "e2e engine gate removed", on=True)
     use_case_id, workflow_id = created["use_case_id"], created["n8n_workflow_id"]
-    with owner() as n8n:
-        held = n8n.get(f"/rest/workflows/{workflow_id}").json()["data"]
-        nodes = [node for node in held["nodes"] if node["name"] != "Ask for a yes"]
-        connections = {k: v for k, v in held["connections"].items() if k != "Ask for a yes"}
-        connections["Newer?"]["main"][0] = [{"node": "Create ticket", "type": "main", "index": 0}]
-        body = {"nodes": nodes, "connections": connections, "versionId": held["versionId"]}
-        saved = n8n.patch(f"/rest/workflows/{workflow_id}", json=body)
-        saved.raise_for_status()
-        draft = saved.json()["data"]
-        published = n8n.post(
-            f"/rest/workflows/{workflow_id}/activate",
-            json={"versionId": draft["versionId"], "expectedChecksum": draft["checksum"]},
-        )
-        published.raise_for_status()
+    held = N8N_OWNER.call("GET", f"/workflows/{workflow_id}")
+    nodes = [node for node in held["nodes"] if node["name"] != "Ask for a yes"]
+    connections = {k: v for k, v in held["connections"].items() if k != "Ask for a yes"}
+    connections["Newer?"]["main"][0] = [{"node": "Create ticket", "type": "main", "index": 0}]
+    body = {"nodes": nodes, "connections": connections, "versionId": held["versionId"]}
+    draft = N8N_OWNER.call("PATCH", f"/workflows/{workflow_id}", body)
+    activate = {"versionId": draft["versionId"], "expectedChecksum": draft["checksum"]}
+    N8N_OWNER.call("POST", f"/workflows/{workflow_id}/activate", activate)
     api.poll(
         "n8n to publish the version without the yes",
         lambda: publication(workflow_id)["status"] == "published",

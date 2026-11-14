@@ -39,6 +39,8 @@ class FakeN8n:
     """The API keys n8n lists, each with its label, owner and when it was made."""
     key_requests: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
     logins: int = 0
+    session_ends: bool = False
+    """The owner's session runs out before the next /rest call."""
     minted: int = 0
     deleted_keys: int = 0
     calls: list[str] = field(default_factory=list[str])
@@ -79,6 +81,9 @@ class FakeN8n:
         if path == "/rest/login":
             return self._login(body)
         if path.startswith("/rest/"):
+            if self.session_ends:
+                self.session_ends = False
+                return httpx.Response(401, json={"message": "Unauthorized"})
             if "n8n-auth=owner" not in request.headers.get("cookie", ""):
                 return httpx.Response(401, json={"message": "Unauthorized"})
             return self._rest(request.method, path.removeprefix("/rest"), body)

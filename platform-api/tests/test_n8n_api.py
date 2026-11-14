@@ -427,3 +427,16 @@ async def test_the_sweep_reads_an_execution_s_data_only_once_it_failed() -> None
         N8nExecutionId("47"), "Read release", "GitHub answered 503."
     )
     assert n8n.data_reads == ["47"]
+
+
+async def test_the_platform_keeps_its_n8n_session_and_signs_in_again_only_when_it_ends() -> None:
+    """n8n limits sign-ins to a few a minute, and the sweep and Turn it on read /rest often."""
+    n8n = FakeN8n()
+    api = api_for(n8n)
+    created = await api.create(DOCUMENT)
+    for _ in range(5):
+        await api.publication_status(created.id)
+    assert n8n.logins == 1
+    n8n.session_ends = True
+    status = await api.publication_status(created.id)
+    assert (status.status, n8n.logins) == ("published", 2)
