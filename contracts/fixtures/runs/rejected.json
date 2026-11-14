@@ -254,6 +254,7 @@
           "decided_by": null,
           "decided_at": null,
           "reason": null,
+          "post": "waiting",
           "sent_to": [],
           "sent_at": null
         }
@@ -297,7 +298,10 @@
       "link": "/approvals/apr_01JBA",
       "sent_to": [
         [
-          "Bob"
+          {
+            "id": "bob",
+            "display": "Bob"
+          }
         ]
       ],
       "sent_at": "2026-11-05T02:14:10.612000Z"

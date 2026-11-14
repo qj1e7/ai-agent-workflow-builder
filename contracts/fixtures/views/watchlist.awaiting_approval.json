@@ -64,8 +64,12 @@
         "decided_by": null,
         "decided_at": null,
         "reason": null,
+        "post": "sent",
         "sent_to": [
-          "Bob"
+          {
+            "id": "bob",
+            "display": "Bob"
+          }
         ],
         "sent_at": "2026-11-20T02:14:11.400000Z"
       }

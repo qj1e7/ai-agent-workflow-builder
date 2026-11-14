@@ -146,6 +146,17 @@ type QuestionText = Annotated[
 """A question on a request, or its answer. It is a message, and decides nothing."""
 
 
+type TeamsPost = Literal["waiting", "sent", "failed"]
+
+
+class ApproverRef(WireModel):
+    """Someone a request was sent to: who, and their name on the People list. Two people may share
+    a name, so only the id tells them apart."""
+
+    id: UserId
+    display: str
+
+
 class ApprovalStepView(WireModel):
     index: int
     label: str
@@ -157,16 +168,19 @@ class ApprovalStepView(WireModel):
         description="Why the Approver declined this step, when they gave a reason. Null for "
         "any other step.",
     )
-    sent_to: list[str] = Field(
-        default_factory=list[str],
-        description="Who may decide this step, by name, once the request is in Teams: the "
-        "Approvers on the People list, minus the run's parties and whoever decided an earlier "
-        "step. Empty until it is sent.",
+    post: TeamsPost = Field(
+        default="waiting",
+        description="Where the request's post to Teams stands: waiting to be posted, sent, or "
+        "failed after every try. Only a sent request names who it went to.",
+    )
+    sent_to: list[ApproverRef] = Field(
+        default_factory=list[ApproverRef],
+        description="Who may decide this step once the request is in Teams: the Approvers on "
+        "the People list, minus the run's parties and whoever decided an earlier step. Empty "
+        "unless the post is sent.",
     )
     sent_at: datetime | None = Field(
-        default=None,
-        description="When the request was posted to Teams. Null until it is, and after a post "
-        "that failed.",
+        default=None, description="When the request was posted to Teams. Null unless it was."
     )
 
 

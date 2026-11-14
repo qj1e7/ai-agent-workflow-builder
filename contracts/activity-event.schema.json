@@ -597,10 +597,10 @@
           "title": "Sent At"
         },
         "sent_to": {
-          "description": "Who may decide each step, by name, in step order, as the request's steps named them when it was posted. Events from before names have none.",
+          "description": "Who may decide each step, in step order, as the request's steps named them when it was posted. Events from before names have none.",
           "items": {
             "items": {
-              "type": "string"
+              "$ref": "#/$defs/ApproverRef"
             },
             "type": "array"
           },
@@ -884,6 +884,11 @@
           "title": "Label",
           "type": "string"
         },
+        "post": {
+          "$ref": "#/$defs/TeamsPost",
+          "default": "waiting",
+          "description": "Where the request's post to Teams stands: waiting to be posted, sent, or failed after every try. Only a sent request names who it went to."
+        },
         "reason": {
           "anyOf": [
             {
@@ -908,13 +913,13 @@
             }
           ],
           "default": null,
-          "description": "When the request was posted to Teams. Null until it is, and after a post that failed.",
+          "description": "When the request was posted to Teams. Null unless it was.",
           "title": "Sent At"
         },
         "sent_to": {
-          "description": "Who may decide this step, by name, once the request is in Teams: the Approvers on the People list, minus the run's parties and whoever decided an earlier step. Empty until it is sent.",
+          "description": "Who may decide this step once the request is in Teams: the Approvers on the People list, minus the run's parties and whoever decided an earlier step. Empty unless the post is sent.",
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/ApproverRef"
           },
           "title": "Sent To",
           "type": "array"
@@ -929,6 +934,26 @@
         "status"
       ],
       "title": "ApprovalStepView",
+      "type": "object"
+    },
+    "ApproverRef": {
+      "additionalProperties": false,
+      "description": "Someone a request was sent to: who, and their name on the People list. Two people may share\na name, so only the id tells them apart.",
+      "properties": {
+        "display": {
+          "title": "Display",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "display"
+      ],
+      "title": "ApproverRef",
       "type": "object"
     },
     "DeniedReason": {
@@ -2009,6 +2034,14 @@
       ],
       "title": "SupportReportedData",
       "type": "object"
+    },
+    "TeamsPost": {
+      "enum": [
+        "waiting",
+        "sent",
+        "failed"
+      ],
+      "type": "string"
     },
     "Told": {
       "additionalProperties": false,

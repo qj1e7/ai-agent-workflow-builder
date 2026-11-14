@@ -87,7 +87,7 @@ from platform_api.orchestration.teams import approval_card, practice_text, with_
 from platform_api.orchestration.write_actions import WriteAction, describe_at, digest
 from platform_api.practice_jira.http import MockJiraTicket, MockJiraTickets
 from platform_api.shared import TEAM_TIME_ZONE, ApprovalId, ProposalId, RunId, UserId
-from platform_api.wire import ApprovalStepView, Trigger, WireModel
+from platform_api.wire import ApprovalStepView, ApproverRef, Trigger, WireModel
 
 ALICE = UserId("alice")
 BOB = UserId("bob")
@@ -202,7 +202,7 @@ class Timeline:
         return self.events[-1]
 
 
-SENT_TO = ["Bob"]
+SENT_TO = [ApproverRef(id=BOB, display="Bob")]
 """Who may decide: the Approvers on the People list, Alice and Bob, minus Alice, whose run it is."""
 ANNOUNCED_AT = 10.612
 """Seconds into the run when its request is posted to Teams."""
@@ -214,6 +214,7 @@ def open_step(sent_at: datetime | None = None) -> ApprovalStepView:
         index=0,
         label="Team approver",
         status="open",
+        post="sent" if sent_at else "waiting",
         sent_to=SENT_TO if sent_at else [],
         sent_at=sent_at,
     )
@@ -230,6 +231,7 @@ def decided_step(
         decided_by=BOB,
         decided_at=at,
         reason=reason,
+        post="sent" if sent_at else "waiting",
         sent_to=SENT_TO if sent_at else [],
         sent_at=sent_at,
     )

@@ -40,8 +40,12 @@
         "decided_by": "bob",
         "decided_at": "2026-11-05T02:18:11.903000Z",
         "reason": "Wrong version",
+        "post": "sent",
         "sent_to": [
-          "Bob"
+          {
+            "id": "bob",
+            "display": "Bob"
+          }
         ],
         "sent_at": "2026-11-05T02:14:10.612000Z"
       }

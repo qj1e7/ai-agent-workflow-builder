@@ -25,7 +25,7 @@ from platform_api.orchestration.approvals import (
     why_not,
 )
 from platform_api.orchestration.runs import Pending
-from platform_api.orchestration.service import Sent, steps_view
+from platform_api.orchestration.service import NotSent, Sent, steps_view
 from platform_api.orchestration.store import RunRecord
 from platform_api.shared import ApprovalId, Digest, Principal, ProposalId, Role, RunId, UserId
 from tests.support import SPEC
@@ -443,29 +443,49 @@ TWO_ANY = ApprovalPolicy(
 )
 
 
-def sent_names(
+def sent_to(
     policy: ApprovalPolicy, decisions: tuple[Decision, ...] = (), on_list=ON_THE_LIST
-) -> list[list[str]]:
-    return [s.sent_to for s in steps_view(request(policy), decisions, Sent(LATER, on_list))]
+) -> list[list[UserId]]:
+    """Who each step was sent to, by id."""
+    steps = steps_view(request(policy), decisions, Sent(LATER, on_list))
+    return [[person.id for person in step.sent_to] for step in steps]
 
 
 def test_a_request_names_no_one_until_it_is_sent():
     [step] = steps_view(request(), ())
-    assert (step.sent_to, step.sent_at) == ([], None)
+    assert (step.post, step.sent_to, step.sent_at) == ("waiting", [], None)
+
+
+def test_a_failed_post_names_no_one_and_says_it_failed():
+    [step] = steps_view(request(), (), NotSent())
+    assert (step.post, step.sent_to, step.sent_at) == ("failed", [], None)
 
 
 def test_one_step_is_sent_to_every_approver_but_the_runs_parties():
     [step] = steps_view(request(), (), Sent(LATER, ON_THE_LIST))
-    assert (step.sent_to, step.sent_at) == (["Bob", "Carol", "Dave"], LATER)
+    assert (step.post, step.sent_at) == ("sent", LATER)
+    assert [(p.id, p.display) for p in step.sent_to] == [
+        (BOB, "Bob"),
+        (CAROL, "Carol"),
+        (DAVE, "Dave"),
+    ]
+
+
+def test_two_approvers_who_share_a_name_are_both_listed_by_id():
+    bob_too = UserId("bob_2")
+    [step] = steps_view(request(), (), Sent(LATER, {**ON_THE_LIST, bob_too: "Bob"}))
+    assert [(p.id, p.display) for p in step.sent_to][:2] == [(BOB, "Bob"), (bob_too, "Bob")]
+    after_bob = sent_to(TWO_ANY, (decision(0, BOB),), {**ON_THE_LIST, bob_too: "Bob"})
+    assert after_bob[1] == [bob_too, CAROL, DAVE], "the other Bob may still say the second yes"
 
 
 def test_two_steps_each_name_their_own_approvers_in_turn():
-    assert sent_names(TWO_ANY) == [["Bob", "Carol", "Dave"], ["Bob", "Carol", "Dave"]]
-    after_bob = sent_names(TWO_ANY, (decision(0, BOB),))
-    assert after_bob == [["Bob", "Carol", "Dave"], ["Carol", "Dave"]], "Bob can't say yes twice"
-    assert sent_names(TWO_STEPS) == [["Bob", "Carol", "Dave"], ["Carol"]], "a step that names one"
+    assert sent_to(TWO_ANY) == [[BOB, CAROL, DAVE], [BOB, CAROL, DAVE]]
+    after_bob = sent_to(TWO_ANY, (decision(0, BOB),))
+    assert after_bob == [[BOB, CAROL, DAVE], [CAROL, DAVE]], "Bob can't say yes twice"
+    assert sent_to(TWO_STEPS) == [[BOB, CAROL, DAVE], [CAROL]], "a step that names one"
     without_carol = {user: name for user, name in ON_THE_LIST.items() if user != CAROL}
-    assert sent_names(TWO_STEPS, on_list=without_carol)[1] == [], "Carol lost the Approver role"
+    assert sent_to(TWO_STEPS, on_list=without_carol)[1] == [], "Carol lost the Approver role"
 
 
 @pytest.mark.parametrize("policy", [ONE_STEP, TWO_ANY, TWO_STEPS])
@@ -476,7 +496,7 @@ def test_the_names_are_exactly_who_a_yes_on_the_open_step_would_be_recorded_for(
         status = approval_status(request(policy), decisions)
         assert isinstance(status, Open)
         recorded = {
-            ON_THE_LIST[user]
+            user
             for user in ON_THE_LIST
             if isinstance(
                 decide(
@@ -491,4 +511,4 @@ def test_the_names_are_exactly_who_a_yes_on_the_open_step_would_be_recorded_for(
                 Recorded,
             )
         }
-        assert sorted(recorded) == sent_names(policy, decisions)[status.next_step]
+        assert set(sent_to(policy, decisions)[status.next_step]) == recorded

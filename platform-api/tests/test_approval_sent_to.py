@@ -15,6 +15,9 @@ __all__ = ["lab"]
 pytestmark = pytest.mark.anyio
 
 # The lab's People list: Alice, Bob, Dave and Erin hold the Approver role, Carol does not.
+BOB_ = {"id": "bob", "display": "Bob"}
+DAVE_ = {"id": "dave", "display": "Dave"}
+ERIN_ = {"id": "erin", "display": "Erin"}
 
 
 async def steps_of(lab: Lab, run_id: RunId) -> list[dict[str, Any]]:
@@ -41,15 +44,16 @@ async def test_one_step_names_every_approver_but_the_runs_parties_once_it_is_in_
     await h.orchestrator.on_step(run_id, StepName.ASK_APPROVAL, execution)
     assert isinstance(await h.state(run_id), AwaitingApproval)
     [before] = await steps_of(lab, run_id)
-    assert (before["sent_to"], before["sent_at"]) == ([], None), "nothing is sent before Teams"
+    assert (before["post"], before["sent_to"], before["sent_at"]) == ("waiting", [], None)
 
     await h.orchestrator.tick()
 
     event = await announced(lab, run_id)
-    assert event.data.sent_to == [["Bob", "Dave", "Erin"]], "never Alice, who owns it"
+    assert [[p.id for p in step] for step in event.data.sent_to] == [["bob", "dave", "erin"]]
     assert event.data.sent_at == event.ts
     [step] = await steps_of(lab, run_id)
-    assert step["sent_to"] == ["Bob", "Dave", "Erin"]
+    assert step["post"] == "sent"
+    assert step["sent_to"] == [BOB_, DAVE_, ERIN_], "never Alice, who owns it"
     assert datetime.fromisoformat(step["sent_at"]) == event.ts
 
 
@@ -60,11 +64,12 @@ async def test_two_steps_each_name_their_own_approvers_in_turn(lab: Lab):
     run_id = started.run_id
     await work(lab, run_id, cards=False)
 
-    assert (await announced(lab, run_id)).data.sent_to == [["Bob", "Dave", "Erin"]] * 2
-    assert [s["sent_to"] for s in await steps_of(lab, run_id)] == [["Bob", "Dave", "Erin"]] * 2
+    event = await announced(lab, run_id)
+    assert [[p.id for p in step] for step in event.data.sent_to] == [["bob", "dave", "erin"]] * 2
+    assert [s["sent_to"] for s in await steps_of(lab, run_id)] == [[BOB_, DAVE_, ERIN_]] * 2
 
     await decide_first_step(lab, "bob", run_id)
 
     first, second = await steps_of(lab, run_id)
-    assert (first["status"], first["sent_to"]) == ("approved", ["Bob", "Dave", "Erin"])
-    assert (second["status"], second["sent_to"]) == ("open", ["Dave", "Erin"]), "not Bob again"
+    assert (first["status"], first["sent_to"]) == ("approved", [BOB_, DAVE_, ERIN_])
+    assert (second["status"], second["sent_to"]) == ("open", [DAVE_, ERIN_]), "not Bob again"

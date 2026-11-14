@@ -18,6 +18,7 @@ from platform_api.orchestration.dispatch import (
     Identity,
     MessageRef,
 )
+from platform_api.orchestration.http import AwaitingApprovalView, get_approval, run_view
 from platform_api.orchestration.people_store import People
 from platform_api.orchestration.runs import Leg, Pending
 from platform_api.orchestration.service import Orchestrator
@@ -26,7 +27,7 @@ from platform_api.orchestration.teams import TeamsWorkflowsWebhook, approval_car
 from platform_api.orchestration.write_actions import WriteGateway
 from platform_api.shared import ApprovalId, Digest, N8nExecutionId, RunId
 from tests.conftest import PostgresUrls, truncate_all
-from tests.support import BOB, SPEC, SUMMARY, TICKET_TITLE
+from tests.support import ALICE, BOB, SPEC, SUMMARY, TICKET_TITLE
 from tests.test_orchestrator import (
     ASK_APPROVAL,
     PUBLIC_BASE_URL,
@@ -460,3 +461,30 @@ async def test_a_row_that_raises_outside_the_adapter_is_retried_then_given_up(h:
     assert (row["status"], row["attempt"]) == ("given_up", RETRY_POLICY.tries - 1)
     assert row["last_error"] == "the outbox could not send it (KeyError)"
     assert (await h.kinds(run_id))[-1] == "approval_announce_failed"
+
+
+async def test_a_post_that_failed_names_no_one_and_says_it_could_not_be_sent(h: Harness):
+    await People(h.db).seed_dev(DEV_PEOPLE)
+    channel = RecordingChannel()
+    channel.down_for = 100
+    through(h, channel)
+    run_id = await start(h)
+    await h.orchestrator.tick()
+    await h.orchestrator.on_step(run_id, RUN_AGENTS, N8nExecutionId("41"))
+    await h.orchestrator.on_step(run_id, ASK_APPROVAL, N8nExecutionId("41"))
+
+    async def steps() -> list[tuple[str, list[str], object]]:
+        detail = await h.orchestrator.get_run(run_id)
+        assert detail is not None
+        run = run_view(detail, BOB)
+        assert isinstance(run, AwaitingApprovalView)
+        approval = await get_approval(run.approval.approval_id, ALICE, h.orchestrator)
+        assert approval.steps == run.approval.steps, "the run and its request say the same"
+        return [(s.post, [p.display for p in s.sent_to], s.sent_at) for s in approval.steps]
+
+    assert await steps() == [("waiting", [], None)], "not tried yet"
+    for _ in range(14):
+        await h.orchestrator.tick()
+        h.advance(timedelta(seconds=10))
+    assert (await h.kinds(run_id))[-1] == "approval_announce_failed"
+    assert await steps() == [("failed", [], None)]

@@ -756,6 +756,21 @@ class Store:
         ).fetchall()
         return {UserId(row["id"]): str(row["display"]) for row in rows}
 
+    async def announce_given_up(
+        self, uow: UnitOfWork, approval_ids: Collection[ApprovalId]
+    ) -> set[ApprovalId]:
+        """The requests whose post to Teams the outbox gave up on."""
+        if not approval_ids:
+            return set()
+        rows = await (
+            await uow.conn.execute(
+                "SELECT DISTINCT payload->>'approval_id' AS approval_id FROM orchestration.outbox "
+                "WHERE kind = %s AND status = 'given_up' AND payload->>'approval_id' = ANY(%s)",
+                (ANNOUNCE, list(approval_ids)),
+            )
+        ).fetchall()
+        return {ApprovalId(row["approval_id"]) for row in rows}
+
     async def posted_at(
         self, uow: UnitOfWork, approval_ids: Collection[ApprovalId]
     ) -> dict[ApprovalId, datetime]:

@@ -14,6 +14,7 @@ from platform_api.monitoring.agent_events import (
 from platform_api.shared import ApprovalId, ProposalId, RunId, UserId
 from platform_api.wire import (
     ApprovalStepView,
+    ApproverRef,
     FailureReason,
     FailureStage,
     Leg,
@@ -100,10 +101,10 @@ class ApprovalAnnouncedData(WireModel):
     approval_id: ApprovalId
     channel: str
     link: str
-    sent_to: list[list[str]] = Field(
-        default_factory=list[list[str]],
-        description="Who may decide each step, by name, in step order, as the request's steps "
-        "named them when it was posted. Events from before names have none.",
+    sent_to: list[list[ApproverRef]] = Field(
+        default_factory=list[list[ApproverRef]],
+        description="Who may decide each step, in step order, as the request's steps named them "
+        "when it was posted. Events from before names have none.",
     )
     sent_at: datetime | None = Field(
         default=None, description="When it was posted. Events from before have none."
