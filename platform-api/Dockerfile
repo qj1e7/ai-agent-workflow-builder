@@ -16,7 +16,7 @@ COPY src ./src
 COPY tests ./tests
 RUN uv sync --locked
 USER nobody
-CMD ["pytest", "-p", "no:cacheprovider", "-rA", "-k", "cosmos or stress", "tests/test_ready.py", "tests/test_stress_248.py"]
+CMD ["pytest", "-p", "no:cacheprovider"]
 
 FROM base AS build
 RUN uv sync --locked --no-dev --no-install-project
