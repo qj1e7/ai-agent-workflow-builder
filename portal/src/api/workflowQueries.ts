@@ -213,6 +213,50 @@ export const testStarted = (queryClient: QueryClient, user: string, useCaseId: s
 
 export const testAgain = (queryClient: QueryClient, user: string, useCaseId: string, key: string): void => changeSetUp(queryClient, user, useCaseId, { testRunId: null, testKey: key })
 
+/**
+ * Starts a set-up's test run. The run the platform names is kept with the set-up here, in the mutation's own options, so it is kept even
+ * when the card that asked was drawn away before the answer came.
+ */
+export function startTestOptions(client: ApiClient, queryClient: QueryClient, user: string) {
+  return {
+    mutationFn: async ({ useCaseId, key }: { useCaseId: string; key: string }) =>
+      unwrap(
+        await client.POST('/api/v1/use-cases/{use_case_id}/runs', {
+          params: { path: { use_case_id: useCaseId }, header: { 'Idempotency-Key': key } },
+          body: { test: true },
+        }),
+      ),
+    onSuccess: (run: { readonly run_id: string }, { useCaseId }: { useCaseId: string }) => {
+      testStarted(queryClient, user, useCaseId, run.run_id)
+      void queryClient.invalidateQueries({ queryKey: ['runs'] })
+    },
+  }
+}
+
+export function useStartTest() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation(startTestOptions(client, queryClient, user))
+}
+
+/** What one press of Set up came to: the workflow it made as a draft, or why the platform refused it. */
+export type Made =
+  | { readonly kind: 'built'; readonly useCaseId: string; readonly draftKept: boolean; readonly newAgents: readonly string[] }
+  | { readonly kind: 'refused'; readonly said: readonly string[] }
+
+/** Kept under the press's own key, so a card drawn again while the platform answered still settles. */
+export function madeBySetUp(queryClient: QueryClient, user: string, press: string, made: Made): void {
+  queryClient.setQueryData<Made>(keys.made(user, press), made)
+}
+
+export function useMadeBySetUp(press: string | null): { readonly made: Made | undefined; readonly keep: (press: string, made: Made) => void } {
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  const made = useQuery<Made>({ queryKey: keys.made(user, press ?? ''), queryFn: skipToken, staleTime: Infinity, gcTime: Infinity, enabled: press !== null }).data
+  return { made: press === null ? undefined : made, keep: (key, value) => madeBySetUp(queryClient, user, key, value) }
+}
+
 /** Set up always makes a draft (ADR 0044): it never runs on its schedule, and only Turn it on publishes it. */
 export function setUpOffOptions(client: ApiClient, queryClient: QueryClient, user: string, now: () => number = Date.now, key: () => string = newIdempotencyKey) {
   return {

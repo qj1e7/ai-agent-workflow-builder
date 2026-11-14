@@ -212,7 +212,7 @@ describe('the software card', () => {
 describe('PartsList on a set-up card', () => {
   it('quotes a clause the Planner didn’t follow with a cross, and the button sets up the part it can', () => {
     const html = draw(setupCross as SetupCardReply)
-    expect(text(html)).toContain('Can’t do: Colour them by team. I didn’t follow this part.')
+    expect(text(html)).toContain('Can’t do: “colour them by team” I didn’t follow this part.')
     expect(text(html)).toContain('Will do: When Every Friday at 17:00, Singapore time')
     expect(buttons(html)).toContain('Set up the part I can')
     expect(buttons(html)).not.toContain('Turn it on')
@@ -247,7 +247,7 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     const html = draw(reply)
     expect(text(html)).not.toContain('What I can’t do yet')
     expect(text(html)).not.toContain('What I can do instead')
-    expect(text(cardOf(html))).toContain('Can’t do: Colour them by team. I didn’t follow this part.')
+    expect(text(cardOf(html))).toContain('Can’t do: “Colour them by team” I didn’t follow this part.')
     expect(buttons(html)).toContain('Set up the part I can')
     expect(sayOf(reply)).toBe('Here’s what I understood.')
     expect(draw(reply, { leftovers: true })).toBe('')
@@ -292,7 +292,7 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     const html = draw(mixed)
     expect(text(html)).toContain('I can\'t send email yet Run results show here, in the chat.')
     expect(text(html)).toContain('What I can do instead')
-    expect(text(cardOf(html))).toContain('Colour them by team. I didn’t follow this part.')
+    expect(text(cardOf(html))).toContain('“Colour them by team” I didn’t follow this part.')
     expect(text(cardOf(html))).not.toMatch(/email/i)
   })
 })

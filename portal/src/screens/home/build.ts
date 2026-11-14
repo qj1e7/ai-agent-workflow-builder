@@ -120,10 +120,14 @@ export interface TestAsk {
   readonly testAsked: string | null
 }
 
-export function testStep(ask: TestAsk | undefined, replayed: boolean, life: UseCaseState | undefined): TestStep {
+/**
+ * `askedHere` is true once this card asked. A card drawn again before the platform named the run asks again with the same key, which
+ * reaches the same run, so it never sits waiting on an answer that went to a card no longer drawn.
+ */
+export function testStep(ask: TestAsk | undefined, replayed: boolean, life: UseCaseState | undefined, askedHere = false): TestStep {
   if (ask === undefined || ask.testRunId !== null || life === 'on' || life === 'paused') return 'none'
   if (!replayed || life === undefined) return 'wait'
-  return ask.testAsked === ask.testKey ? 'none' : 'start'
+  return ask.testAsked === ask.testKey && askedHere ? 'none' : 'start'
 }
 
 /** The checks that passed so far, then how the test run went. A Tell in a test run sends nothing, and says what it would have sent. */

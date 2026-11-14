@@ -860,15 +860,17 @@ export const DEST_WORDS = 'one new Jira ticket'
 
 /** Where a set-up card is: open to change, being set up, built as a draft that builds and tests, or dropped. */
 export type CardPhase =
-  | { readonly kind: 'open' }
-  | { readonly kind: 'creating' }
+  /** `refused` holds the platform's words when a press of Set up was refused. */
+  | { readonly kind: 'open'; readonly refused?: readonly string[] }
+  /** `key` names the press, so a card drawn again before the answer finds what it came to. */
+  | { readonly kind: 'creating'; readonly key: string }
   | { readonly kind: 'built'; readonly useCaseId: string; readonly draftKept: boolean; readonly newAgents: readonly string[] }
   | { readonly kind: 'dropped' }
 
 export type CardPress =
-  | { readonly type: 'set_up' }
+  | { readonly type: 'set_up'; readonly key: string }
   | { readonly type: 'built'; readonly useCaseId: string; readonly draftKept: boolean; readonly newAgents: readonly string[] }
-  | { readonly type: 'refused' }
+  | { readonly type: 'refused'; readonly said?: readonly string[] }
   | { readonly type: 'never_mind' }
   | { readonly type: 'undo' }
 
@@ -876,11 +878,12 @@ export type CardPress =
 export function cardPhase(phase: CardPhase, press: CardPress): CardPhase {
   switch (press.type) {
     case 'set_up':
-      return phase.kind === 'open' ? { kind: 'creating' } : phase
+      return phase.kind === 'open' ? { kind: 'creating', key: press.key } : phase
     case 'built':
       return phase.kind === 'creating' ? { kind: 'built', useCaseId: press.useCaseId, draftKept: press.draftKept, newAgents: press.newAgents } : phase
     case 'refused':
-      return phase.kind === 'creating' ? { kind: 'open' } : phase
+      if (phase.kind !== 'creating') return phase
+      return press.said ? { kind: 'open', refused: press.said } : { kind: 'open' }
     case 'never_mind':
       return phase.kind === 'open' ? { kind: 'dropped' } : phase
     case 'undo':

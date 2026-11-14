@@ -6,7 +6,7 @@ import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
 import { refusedWords, useCheckPart, useDeleteDraft, usePlanFor, useReadAgentCards, useSaveDraft } from '../../api/plannerQueries'
 import { useAgentCards, useMe, useSaveCard, useTools, useWatchlist } from '../../api/queries'
-import { useSetUpOff } from '../../api/workflowQueries'
+import { useMadeBySetUp, useSetUpOff } from '../../api/workflowQueries'
 import type { DraftView, InputKind, SimilarWorkflow, ToolId, ToolView } from '../../api/types'
 import { Button, buttonClassName } from '../../ui/Button'
 import { Card } from '../../ui/Card'
@@ -265,7 +265,10 @@ function SettingUp({ start }: { start: CardStart }) {
   const [kept] = useState(memory.kept)
   const [form, setForm] = useState(kept?.form ?? start.form)
   const [draft, setDraft] = useState(kept ? kept.draft : start.draftId)
-  const [phase, act] = useReducer(cardPhase, kept?.phase ?? { kind: 'open' })
+  const [held, act] = useReducer(cardPhase, kept?.phase ?? { kind: 'open' })
+  // A press of Set up keeps what it came to under its own key, so a card drawn again while the platform answered settles from it.
+  const press = useMadeBySetUp(held.kind === 'creating' ? held.key : null)
+  const phase: Phase = held.kind === 'creating' && press.made ? (press.made.kind === 'built' ? { kind: 'built', useCaseId: press.made.useCaseId, draftKept: press.made.draftKept, newAgents: press.made.newAgents } : { kind: 'open', refused: press.made.said }) : held
   const [editing, setEditing] = useState<number | 'when' | null>(null)
   const [shown, setShown] = useState(false)
   const [refused, setRefused] = useState<readonly string[]>([])
@@ -330,6 +333,13 @@ function SettingUp({ start }: { start: CardStart }) {
   useEffect(() => {
     memory.keep({ form, draft, phase })
   })
+
+  const made = held.kind === 'creating' ? press.made : undefined
+  useEffect(() => {
+    if (!made) return
+    settingUp.current = made.kind === 'built'
+    act(made.kind === 'built' ? { type: 'built', useCaseId: made.useCaseId, draftKept: made.draftKept, newAgents: made.newAgents } : { type: 'refused', said: made.said })
+  }, [made])
 
   useEffect(() => {
     if (phase.kind !== 'open' || !dirty.current) return
@@ -432,7 +442,8 @@ function SettingUp({ start }: { start: CardStart }) {
     }
     setRefused([])
     settingUp.current = true
-    act({ type: 'set_up' })
+    const key = newIdempotencyKey()
+    act({ type: 'set_up', key })
     latch.run((settled) => {
       setUp(form, plan, draft, cards.current, {
         savedCard: async (card) => (me.data ? savedCopyOf(await readCards(), me.data.id, card) : null),
@@ -445,14 +456,13 @@ function SettingUp({ start }: { start: CardStart }) {
           void queryClient.invalidateQueries({ queryKey: ['agent-cards'] })
           const newAgents = plan.agents.filter((agent) => agent.card.kind === 'drafted' && !(reused?.has(agent.index) ?? false)).map((agent) => agent.name)
           memory.keep({ form, draft: null, phase: { kind: 'built', useCaseId, draftKept, newAgents } })
-          act({ type: 'built', useCaseId, draftKept, newAgents })
+          press.keep(key, { kind: 'built', useCaseId, draftKept, newAgents })
           if (params.get('draft') !== null) setParams({}, { replace: true })
         })
         .catch((error: unknown) => {
           const said = refusedWords(error)
           settingUp.current = false
-          act({ type: 'refused' })
-          setRefused(said.length > 0 ? said : [words(error)])
+          press.keep(key, { kind: 'refused', said: said.length > 0 ? said : [words(error)] })
         })
         .finally(settled)
     })
@@ -741,9 +751,9 @@ function SettingUp({ start }: { start: CardStart }) {
             {plan.notIncluded.length > 0 ? <li>Left out, because no tool does it yet: {plan.notIncluded.join(', ')}.</li> : null}
           </ul>
         ) : null}
-        {refused.length > 0 ? (
+        {[...(phase.kind === 'open' ? (phase.refused ?? []) : []), ...refused].length > 0 ? (
           <ul className={styles['refused']} role="alert">
-            {refused.map((said) => (
+            {[...(phase.kind === 'open' ? (phase.refused ?? []) : []), ...refused].map((said) => (
               <li key={said}>{said}</li>
             ))}
           </ul>

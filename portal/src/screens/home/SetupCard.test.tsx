@@ -15,7 +15,7 @@ import { createDevSession } from '../../api/session'
 import planUseOne from '../../../../contracts/fixtures/cards/plan.use-one.json'
 import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
 import type { Me, PlanOut, SetupCardReply, UseCaseCreated, UseCaseView, WatchlistView } from '../../api/types'
-import type { SetUp } from '../../api/workflowQueries'
+import type { Made, SetUp } from '../../api/workflowQueries'
 import { emptyModel, foldWire, type RunModel } from '../run/runModel'
 import { BuildingCard, type CardProps } from './Building'
 import { BuildPanel } from './BuildPanel'
@@ -39,19 +39,21 @@ interface World {
   /** The workflow's read failed. */
   readonly unread?: boolean
   readonly watched?: WatchlistView
+  readonly made?: { readonly key: string; readonly made: Made }
   readonly setUp?: SetUp | null
   readonly kept?: CardKept
 }
 
 const HELD: SetUp = { created: CREATED, at: Date.now() - 60_000, testRunId: null, testKey: 'k1', testAsked: null }
 
-function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false, watched }: World = {}): string {
+function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false, watched, made }: World = {}): string {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', scope], ALICE)
   if (unread) queryClient.getQueryCache().build(queryClient, { queryKey: keys.useCase(scope, useCase.use_case_id) }).setState({ status: 'error', error: new Error('no answer'), fetchStatus: 'idle' })
   else queryClient.setQueryData(keys.useCase(scope, useCase.use_case_id), useCase)
   if (setUp) queryClient.setQueryData(keys.setUp(scope, CREATED.use_case_id), setUp)
   if (watched) queryClient.setQueryData(keys.watchlist(scope), watched)
+  if (made) queryClient.setQueryData(keys.made(scope, made.key), made.made)
   const memory = newCardMemory()
   if (kept) memory.keep(kept)
   return renderToStaticMarkup(
@@ -110,7 +112,7 @@ describe('the set-up card before Set up', () => {
     const html = render(card(setupCross as SetupCardReply, 'Every Friday at 5pm, sum up the tickets we closed this week in MOCK and colour them by team'))
     const keys = [...html.matchAll(/data-part="([^"]+)"/g)].map((m) => m[1])
     expect(keys).toEqual(['Watch', 'When', 'Then', 'cross-0'])
-    expect(text(html), 'a cross in the sketch’s short form, her words as a sentence').toContain('Can’t do: Colour them by team. I didn’t follow this part.')
+    expect(text(html)).toContain('Can’t do: “colour them by team” I didn’t follow this part.')
     expect(buttons(html)).toContain('Set up the part I can')
   })
 
@@ -119,6 +121,22 @@ describe('the set-up card before Set up', () => {
     expect(pill(html)).toBe('Dropped')
     expect(text(html)).toContain('Nothing was set up.')
     expect(buttons(html)).toEqual([])
+  })
+
+  it('settles a card drawn again while it was being set up: built from what Set up made, or open with why it was refused', () => {
+    const form = cardFrom(SETUP.name, SETUP.rows, TYPED, SETUP.parts)
+    const built = render(card(SETUP), { kept: { form, draft: null, phase: { kind: 'creating', key: 'press_1' } }, made: { key: 'press_1', made: { kind: 'built', useCaseId: CREATED.use_case_id, draftKept: false, newAgents: [] } } })
+    expect(pill(built)).not.toBe('Draft')
+    expect(text(built)).not.toContain('Starting…')
+    const refused = render(card(SETUP), { kept: { form, draft: null, phase: { kind: 'creating', key: 'press_2' } }, made: { key: 'press_2', made: { kind: 'refused', said: ['Give the workflow a name.'] } } })
+    expect(pill(refused)).toBe('Draft')
+    expect(text(refused)).toContain('Give the workflow a name.')
+    expect(buttons(refused)).toContain('Set up')
+  })
+
+  it('keeps her own words quoted for a clause it didn’t follow, as the sketch does', () => {
+    const html = render(card(setupCross as SetupCardReply, 'Every Friday at 5pm, sum up the tickets we closed this week in MOCK and colour them by team'))
+    expect(text(html)).toContain('Can’t do: “colour them by team” I didn’t follow this part.')
   })
 
   it('leads with the workflow she already has when the name matches one', () => {

@@ -1,7 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useErrorWords } from '../../api/context'
-import { useStartRun, useUseCase } from '../../api/queries'
-import { useSetUp, useTestRunMarks, useTurnOn, type SetUp } from '../../api/workflowQueries'
+import { useUseCase } from '../../api/queries'
+import { useSetUp, useStartTest, useTestRunMarks, useTurnOn, type SetUp } from '../../api/workflowQueries'
 import type { UseCaseView } from '../../api/types'
 import { AgentFace } from '../../ui/AgentFace'
 import { Button } from '../../ui/Button'
@@ -96,22 +96,21 @@ export function Building(props: BuildingProps) {
   const setUp = useSetUp(props.useCaseId)
   const runId = setUp?.testRunId ?? null
   const [problem, setProblem] = useState<string | null>(null)
-  const start = useStartRun()
+  const start = useStartTest()
+  const askedHere = useRef(false)
   const marks = useTestRunMarks()
   const turnOn = useTurnOn()
   const words = useErrorWords()
   useShowBesideOnWide({ kind: 'build', id: props.useCaseId })
 
-  // The key and whether it was asked with live with the set-up, not the card, so a card drawn again never starts a second test run.
+  // The key lives with the set-up, not the card, so a card drawn again asks with the same key and reaches the same run, never a second one.
   const startTest = (life: UseCaseView['state'] | undefined, replayed: boolean) => {
-    if (testStep(setUp, replayed, life) !== 'start' || !setUp) return
+    if (testStep(setUp, replayed, life, askedHere.current) !== 'start' || !setUp) return
     const key = setUp.testKey
+    askedHere.current = true
     marks.asked(props.useCaseId, key)
     setProblem(null)
-    start.mutate(
-      { useCaseId: props.useCaseId, idempotencyKey: key, test: true },
-      { onSuccess: (run) => marks.started(props.useCaseId, run.run_id), onError: (error) => setProblem(`Could not start the test run. ${words(error)}`) },
-    )
+    start.mutate({ useCaseId: props.useCaseId, key }, { onError: (error) => setProblem(`Could not start the test run. ${words(error)}`) })
   }
   const pressTurnOn = () => {
     setProblem(null)
@@ -131,6 +130,7 @@ export function Building(props: BuildingProps) {
           onReplayed={startTest}
           onTestAgain={() => {
             setProblem(null)
+            askedHere.current = false
             marks.again(props.useCaseId)
           }}
           onTurnOn={pressTurnOn}

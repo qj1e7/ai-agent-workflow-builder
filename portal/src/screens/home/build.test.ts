@@ -80,9 +80,10 @@ describe('starting the test run, once', () => {
     expect(testStep(undefined, true, 'draft'), 'never without the set-up it belongs to').toBe('none')
   })
 
-  it('never asks twice with one key, so a card drawn again starts no second test run, and Test again asks with a new key', () => {
-    expect(testStep({ ...held, testAsked: 'k1' }, true, 'draft')).toBe('none')
-    expect(testStep({ ...held, testKey: 'k2', testAsked: 'k1' }, true, 'draft')).toBe('start')
+  it('asks once in a card, asks again with the same key in a card drawn again, which reaches the same run, and Test again asks with a new key', () => {
+    expect(testStep({ ...held, testAsked: 'k1' }, true, 'draft', true), 'once asked here, the answer or its problem is waited for').toBe('none')
+    expect(testStep({ ...held, testAsked: 'k1' }, true, 'draft', false), 'a card drawn again before the run was named asks again with the same key').toBe('start')
+    expect(testStep({ ...held, testKey: 'k2', testAsked: 'k1' }, true, 'draft', true)).toBe('start')
     expect(testStep({ ...held, testRunId: 'run_1' }, true, 'draft'), 'a run the platform named is followed, not started').toBe('none')
   })
 })

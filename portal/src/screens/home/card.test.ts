@@ -712,17 +712,18 @@ describe('pressing on the set-up card', () => {
   const built = { type: 'built', useCaseId: 'uc_1', draftKept: false, newAgents: [] } as const
 
   it('Set up makes it Building, the platform’s answer builds it, and a refusal opens the card again', () => {
-    expect(cardPhase({ kind: 'open' }, { type: 'set_up' })).toEqual({ kind: 'creating' })
-    expect(cardPhase({ kind: 'creating' }, built)).toEqual({ kind: 'built', useCaseId: 'uc_1', draftKept: false, newAgents: [] })
-    expect(cardPhase({ kind: 'creating' }, { type: 'refused' })).toEqual({ kind: 'open' })
-    expect(cardPhase({ kind: 'built', useCaseId: 'uc_1', draftKept: false, newAgents: [] }, { type: 'set_up' }), 'a second press sets up nothing more').toEqual({ kind: 'built', useCaseId: 'uc_1', draftKept: false, newAgents: [] })
+    expect(cardPhase({ kind: 'open' }, { type: 'set_up', key: 'press_1' }), 'a press keeps its key, so a card drawn again finds its answer').toEqual({ kind: 'creating', key: 'press_1' })
+    expect(cardPhase({ kind: 'creating', key: 'press_1' }, built)).toEqual({ kind: 'built', useCaseId: 'uc_1', draftKept: false, newAgents: [] })
+    expect(cardPhase({ kind: 'creating', key: 'press_1' }, { type: 'refused' })).toEqual({ kind: 'open' })
+    expect(cardPhase({ kind: 'creating', key: 'press_1' }, { type: 'refused', said: ['Name it.'] }), 'the card keeps the platform’s words').toEqual({ kind: 'open', refused: ['Name it.'] })
+    expect(cardPhase({ kind: 'built', useCaseId: 'uc_1', draftKept: false, newAgents: [] }, { type: 'set_up', key: 'press_2' }), 'a second press sets up nothing more').toEqual({ kind: 'built', useCaseId: 'uc_1', draftKept: false, newAgents: [] })
   })
 
   it('Never mind drops an open card, never one being set up, and Undo opens a dropped one again', () => {
     expect(cardPhase({ kind: 'open' }, { type: 'never_mind' })).toEqual({ kind: 'dropped' })
-    expect(cardPhase({ kind: 'creating' }, { type: 'never_mind' })).toEqual({ kind: 'creating' })
+    expect(cardPhase({ kind: 'creating', key: 'press_1' }, { type: 'never_mind' })).toEqual({ kind: 'creating', key: 'press_1' })
     expect(cardPhase({ kind: 'dropped' }, { type: 'undo' })).toEqual({ kind: 'open' })
-    expect(cardPhase({ kind: 'dropped' }, { type: 'set_up' })).toEqual({ kind: 'dropped' })
+    expect(cardPhase({ kind: 'dropped' }, { type: 'set_up', key: 'press_3' })).toEqual({ kind: 'dropped' })
   })
 })
 

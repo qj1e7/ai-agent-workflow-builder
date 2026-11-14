@@ -439,7 +439,7 @@ test.describe('with the AI model on', () => {
     await ask(page, `Every Friday at 5pm, ${STALE}. Colour them by team.`)
     await expect(thread(page).getByText('Here’s what I understood.')).toBeVisible()
     await expect(thread(page).getByRole('heading', { name: 'What I can’t do yet' }), 'a clause it didn’t follow is no can’t').toHaveCount(0)
-    await expect(crosses(page)).toHaveText(/Can’t do: Colour them by team\.\s*I didn’t follow this part\./)
+    await expect(crosses(page)).toHaveText(/Can’t do: “Colour them by team”\s*I didn’t follow this part\./)
     await expect(whenPart(page)).toContainText('Every Friday at 17:00, Singapore time')
     await expect(partCan(page)).toBeVisible()
     await fillTheRest(page, 'MOCK')

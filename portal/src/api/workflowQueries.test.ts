@@ -4,10 +4,10 @@ import watchlistUseCase from '../../../contracts/fixtures/builder/use-case.json'
 import setUpCreated from '../../../contracts/fixtures/builder/agent-use-case.off.created.json'
 import draftUseCase from '../../../contracts/fixtures/builder/use-case.draft.json'
 import type { UseCaseCreated, UseCaseView } from './types'
-import { QueryClient } from '@tanstack/react-query'
+import { MutationObserver, QueryClient } from '@tanstack/react-query'
 import { keys } from './queries'
 import type { ApiClient } from './client'
-import { applySavedView, holdSetUp, saveScheduleOptions, setUpOffOptions, testAgain, testAsked, testStarted, turnOnOptions, withView, type SetUp } from './workflowQueries'
+import { applySavedView, holdSetUp, madeBySetUp, startTestOptions, saveScheduleOptions, setUpOffOptions, testAgain, testAsked, testStarted, turnOnOptions, withView, type SetUp } from './workflowQueries'
 
 const NEWER = agentUseCase as UseCaseView
 const OLDER = watchlistUseCase as UseCaseView
@@ -95,5 +95,39 @@ describe('setting a workflow up as a draft, testing it and turning it on', () =>
 
     expect(sent).toEqual([['/api/v1/use-cases/{use_case_id}/turn-on', { params: { path: { use_case_id: draftView.use_case_id } } }]])
     expect(queryClient.getQueryData(keys.useCase('me', draftView.use_case_id))).toEqual(on)
+  })
+})
+
+describe('starting the test run, whatever the card does meanwhile', () => {
+  const created = setUpCreated as UseCaseCreated
+  const started = { run_id: 'run_01', events_url: '/api/v1/runs/run_01/events', state: 'pending' }
+
+  it('records the run the platform named even when the card that asked was taken away before the answer came', async () => {
+    const queryClient = new QueryClient()
+    holdSetUp(queryClient, 'me', created, 1_000, 'k1')
+    const sent: unknown[] = []
+    let answer: (value: unknown) => void = () => undefined
+    const client = { POST: (path: string, init: unknown) => (sent.push([path, init]), new Promise((done) => (answer = done))) } as unknown as ApiClient
+    const card = new MutationObserver(queryClient, startTestOptions(client, queryClient, 'me'))
+    const unsubscribe = card.subscribe(() => undefined)
+    const asked = card.mutate({ useCaseId: created.use_case_id, key: 'k1' }).catch(() => undefined)
+    while (sent.length === 0) await new Promise((done) => setTimeout(done, 0))
+    unsubscribe()
+    card.reset()
+    answer({ data: started, response: { ok: true, status: 201 } })
+    await asked
+    await new Promise((done) => setTimeout(done, 0))
+    expect(sent).toEqual([['/api/v1/use-cases/{use_case_id}/runs', { params: { path: { use_case_id: created.use_case_id }, header: { 'Idempotency-Key': 'k1' } }, body: { test: true } }]])
+    expect(queryClient.getQueryData<SetUp>(keys.setUp('me', created.use_case_id))?.testRunId, 'the card drawn again finds the run').toBe('run_01')
+  })
+})
+
+describe('setting up, whatever the card does meanwhile', () => {
+  it('keeps what Set up made, or why it was refused, under the press’s own key, so a card drawn again settles', () => {
+    const queryClient = new QueryClient()
+    madeBySetUp(queryClient, 'me', 'press_1', { kind: 'built', useCaseId: 'uc_1', draftKept: false, newAgents: [] })
+    madeBySetUp(queryClient, 'me', 'press_2', { kind: 'refused', said: ['Name it.'] })
+    expect(queryClient.getQueryData(keys.made('me', 'press_1'))).toEqual({ kind: 'built', useCaseId: 'uc_1', draftKept: false, newAgents: [] })
+    expect(queryClient.getQueryData(keys.made('me', 'press_2'))).toEqual({ kind: 'refused', said: ['Name it.'] })
   })
 })

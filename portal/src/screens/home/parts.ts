@@ -82,7 +82,8 @@ const asSentence = (text: string): string => {
 export function crossLabel(part: PartView, when?: When, short = false): string {
   const chosen = when && isClash(part) ? clashChosen(when, part) : null
   const others = chosen === null ? [] : part.choices.filter((choice) => choice !== chosen)
-  if (short) return asSentence(others.length > 0 ? andList(others) : part.text)
+  // A clause it didn't follow stays in her own words, quoted, as the sketch keeps it.
+  if (short && part.reason !== 'not_followed' && part.reason !== null) return asSentence(others.length > 0 ? andList(others) : part.text)
   return others.length > 0 ? andList(others.map(quote)) : quote(part.text)
 }
 
