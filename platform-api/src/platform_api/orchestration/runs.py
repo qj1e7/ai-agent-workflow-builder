@@ -272,6 +272,33 @@ class Failed:
                 )
                 return Moved(acting, _retried(by, Leg.ACT, attempt))
 
+    def retry_in_n8n(self, by: Actor) -> PendingEvent:
+        """A retry n8n carries itself, from the block that stopped, on the version that ran. The
+        run stays failed until the retry's first call joins it (ENGINE-PLAN 2.3.10)."""
+        leg = Leg.ACT if isinstance(self.resume, ResumeAct) else Leg.WORK
+        return PendingEvent(
+            by,
+            "run_retried",
+            f"{by.display} retried the run. n8n picks it up at the block that stopped.",
+            RunRetriedData(leg=leg.value, attempt=self.resume.attempt),
+        )
+
+    def start_again(self, by: Actor, now: datetime) -> Moved[Pending] | None:
+        """A run that stopped before n8n ran any of it starts again with a new start. None when
+        it stopped while making changes, which only n8n's retry of its execution may carry on."""
+        match self.resume:
+            case ResumeWork(attempt):
+                pending = Pending(self.run_id, attempt, None, deadline(Pending, now))
+                retried = PendingEvent(
+                    by,
+                    "run_retried",
+                    f"{by.display} retried the run. It starts again in n8n.",
+                    RunRetriedData(leg=Leg.WORK.value, attempt=attempt),
+                )
+                return Moved(pending, (retried,))
+            case ResumeAct():
+                return None
+
 
 def _retried(by: Actor, leg: Leg, attempt: int) -> tuple[PendingEvent, ...]:
     retried = PendingEvent(

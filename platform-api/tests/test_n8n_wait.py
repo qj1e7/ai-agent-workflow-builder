@@ -219,7 +219,6 @@ async def w(postgres: PostgresUrls) -> AsyncIterator[Wait]:
             n8n,
             sources,
             {"jira": PRACTICE_SITE},
-            start_secret="test-start-secret",
             box=box,
         )
         waits = FakeN8nWaits()

@@ -61,6 +61,16 @@ type Task = Annotated[WatchlistTask | CardsTask, Field(discriminator="kind")]
 
 
 @dataclass(frozen=True)
+class N8nTarget:
+    """The use case's own n8n workflow, which carries its runs (ENGINE-PLAN 2.3)."""
+
+    workflow_id: str
+    webhook_id: str | None
+    """Start from the Portal's webhookId in the version that runs, where Run now is sent. None
+    in a workflow without that block, which only its schedule or a test run starts."""
+
+
+@dataclass(frozen=True)
 class RunSpec:
     use_case_id: UseCaseId
     use_case_version: int
@@ -79,6 +89,10 @@ class RunSpec:
     nothing (ADR 0044). A row stored without it reads False."""
     expires_after: timedelta = EXPIRES_AFTER
     """How long its request waits for a yes, in working hours, before it expires (ADR 0024)."""
+    n8n: N8nTarget | None = None
+    """Set when the use case runs as its own n8n workflow. None runs it through the shared run
+    workflow, as every use case did before (ENGINE-PLAN 2.6). A row stored without it reads
+    None."""
 
 
 @dataclass(frozen=True)

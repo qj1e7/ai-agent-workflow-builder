@@ -2,7 +2,7 @@ import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import httpx
 
@@ -28,6 +28,7 @@ from platform_api.builder.lifecycle import (
     TooLate,
     comes_on,
     delete,
+    is_on,
     lifecycle_of,
     pause,
     restore,
@@ -62,7 +63,15 @@ from platform_api.builder.models import (
     VersionList,
     Via,
 )
-from platform_api.builder.n8n_draft import ADDING, SAVED, DraftRefused, blocks_of, check_draft
+from platform_api.builder.n8n_draft import (
+    ADDING,
+    SAVED,
+    Checked,
+    DraftRefused,
+    N8nNotReady,
+    blocks_of,
+    check_draft,
+)
 from platform_api.builder.n8n_facts import BuilderWorkflowFacts, ReleaseReader
 from platform_api.builder.planning import (
     CardPlanner,
@@ -96,11 +105,15 @@ from platform_api.builder.watchlist import Watchlist
 from platform_api.db import Connection, Database, UnitOfWork, hold_workflow, json
 from platform_api.orchestration import (
     GITHUB_RELEASES,
+    TYPE_OF,
     CardRun,
     CardsTask,
+    ChangedInN8n,
+    Grade,
     Graded,
     N8nDrafts,
     N8nError,
+    N8nTarget,
     NotOn,
     RunSpec,
     RunStarted,
@@ -113,6 +126,7 @@ from platform_api.orchestration import (
     WriteEntry,
     card_bindings,
     cards_policy,
+    next_run,
     tools_used,
     write_tools_used,
 )
@@ -122,17 +136,23 @@ log = logging.getLogger(__name__)
 
 _CURRENT_VERSION = """
     SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
-           u.draft, u.left_out, v.version, v.template, v.name, v.instruction, v.params,
-           v.created_at, v.document
+           u.draft, u.left_out, u.engine, u.n8n_workflow_id, v.version, v.template, v.name,
+           v.instruction, v.params, v.created_at, v.document, v.n8n_version_id
     FROM builder.use_cases u
     JOIN builder.use_case_versions v
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
 """
 
 _USE_CASE_ROW = (
-    "SELECT current_version, paused_at, paused_by, deleted_at, deleted_by, draft"
-    " FROM builder.use_cases WHERE use_case_id = %s"
+    "SELECT current_version, paused_at, paused_by, deleted_at, deleted_by, draft, engine,"
+    " n8n_workflow_id FROM builder.use_cases WHERE use_case_id = %s"
 )
+_IN_N8N = (
+    "SELECT name, document, n8n_version_id FROM builder.use_case_versions"
+    " WHERE use_case_id = %s AND version = %s"
+)
+"""Read once the use case's row is locked. Locking it joined to its version would drop the row
+when a save waited on the lock had moved the current version on."""
 
 
 def _schedule_view(saved: SavedSchedule) -> UseCaseSchedule:
@@ -143,6 +163,38 @@ def _schedule_view(saved: SavedSchedule) -> UseCaseSchedule:
         owner_name=saved.owner_name,
         held=saved.held,
     )
+
+
+def _own(row: Mapping[str, Any]) -> bool:
+    """Carried by an n8n workflow of its own, not the shared run workflow (ENGINE-PLAN 2.6)."""
+    return row["engine"] == "own" and row["n8n_workflow_id"] is not None
+
+
+def _start_webhook(document: Mapping[str, Any] | None) -> str | None:
+    """Where Run now is sent: Start from the Portal's webhookId, in a document the checker
+    graded before it was stored."""
+    for node in cast(list[dict[str, Any]], (document or {}).get("nodes", [])):
+        if node.get("type") == TYPE_OF["start"] and not node.get("disabled"):
+            hook = node.get("webhookId")
+            return hook if isinstance(hook, str) else None
+    return None
+
+
+def _target(row: Mapping[str, Any]) -> N8nTarget | None:
+    if not _own(row):
+        return None
+    return N8nTarget(row["n8n_workflow_id"], _start_webhook(row["document"]))
+
+
+def _next_run_at(
+    row: Mapping[str, Any], schedule: SavedSchedule | None, now: datetime
+) -> datetime | None:
+    """An own workflow runs when n8n's Schedule Trigger fires, to the second n8n adds to it
+    (ENGINE-PLAN 2.4). The rest run on the platform's schedule tick."""
+    if _own(row):
+        document = row["document"]
+        return None if document is None else next_run(document, row["n8n_workflow_id"], now)
+    return None if schedule is None else schedule.next_run(now)
 
 
 def _state(state: Lifecycle) -> UseCaseState:
@@ -180,7 +232,7 @@ def _view(
         owner=UserId(row["owner"]),
         created_at=row["created_at"],
         state=state,
-        next_run_at=schedule.next_run(now) if state == "on" and schedule is not None else None,
+        next_run_at=_next_run_at(row, schedule, now) if state == "on" else None,
         schedule=None if schedule is None else _schedule_view(schedule),
         plan=plan,
         agents=[
@@ -216,19 +268,26 @@ class AgentUseCaseRefused:
 
 
 @dataclass(frozen=True)
-class N8nNotReady:
-    """n8n could not take the draft, so nothing was set up."""
-
-    detail: str
-
-
-@dataclass(frozen=True)
 class InN8n:
     """The draft saved in n8n, and what happened while it was laid out."""
 
     saved: SavedDraft
     graded: Graded
     log: tuple[BuildLineView, ...]
+
+
+@dataclass(frozen=True)
+class Relaid:
+    """A version as n8n holds it after the platform laid it out again."""
+
+    version_id: str
+    document: dict[str, Any]
+    grade: Grade
+
+
+type InN8nRefused = N8nNotReady | DraftRefused | ChangedInN8n
+"""Why a change to an own workflow was not made: n8n did not take it, the checker refused the
+layout, or someone changed the workflow in n8n since the platform stored it."""
 
 
 @dataclass(frozen=True)
@@ -379,34 +438,46 @@ class Builder:
 
     async def pause_use_case(
         self, use_case_id: str, principal: Principal, via: Via = "page"
-    ) -> UseCaseView | None:
+    ) -> UseCaseView | N8nNotReady | None:
         moved = await self._move(
             use_case_id,
             lambda state, _, now: pause(state, now, principal.user_id),
+            principal.user_id,
             Recorded("pause", principal.user_id, via),
         )
-        if moved is None or isinstance(moved, AlreadyDeleted):
-            return None
-        return await self.get_use_case(use_case_id, principal)
+        return await self._after(use_case_id, principal, moved)
 
     async def resume_use_case(
         self, use_case_id: str, principal: Principal, via: Via = "page"
-    ) -> UseCaseView | None:
+    ) -> UseCaseView | N8nNotReady | None:
         moved = await self._move(
             use_case_id,
             lambda state, _template, _now: resume(state),
+            principal.user_id,
             Recorded("resume", principal.user_id, via),
         )
-        if moved is None or isinstance(moved, AlreadyDeleted):
-            return None
-        return await self.get_use_case(use_case_id, principal)
+        return await self._after(use_case_id, principal, moved)
 
-    async def turn_on_use_case(self, use_case_id: str, principal: Principal) -> UseCaseView | None:
-        """Publishes a draft's version 1 and turns it on. Asking again changes nothing."""
-        moved = await self._move(use_case_id, lambda state, _template, _now: turn_on(state))
-        if moved is None or isinstance(moved, AlreadyDeleted):
-            return None
-        return await self.get_use_case(use_case_id, principal)
+    async def turn_on_use_case(
+        self, use_case_id: str, principal: Principal
+    ) -> UseCaseView | N8nNotReady | None:
+        """Publishes a draft's version 1 and turns it on. An own workflow reads On only once n8n
+        has every trigger live (ENGINE-PLAN 2.5). Asking again changes nothing."""
+        moved = await self._move(
+            use_case_id, lambda state, _template, _now: turn_on(state), principal.user_id
+        )
+        return await self._after(use_case_id, principal, moved)
+
+    async def _after(
+        self, use_case_id: str, principal: Principal, moved: Moved | N8nNotReady | None
+    ) -> UseCaseView | N8nNotReady | None:
+        match moved:
+            case None | AlreadyDeleted():
+                return None
+            case N8nNotReady():
+                return moved
+            case _:
+                return await self.get_use_case(use_case_id, principal)
 
     async def delete_use_case(
         self, use_case_id: str, principal: Principal
@@ -416,7 +487,7 @@ class Builder:
                 return WatchlistStays()
             return delete(state, now, principal.user_id)
 
-        match await self._move(use_case_id, move):
+        match await self._move(use_case_id, move, principal.user_id):
             case Deleted() as deleted:
                 return UseCaseDeleted(
                     use_case_id=use_case_id,
@@ -430,10 +501,13 @@ class Builder:
 
     async def restore_use_case(
         self, use_case_id: str, principal: Principal
-    ) -> UseCaseView | TooLate | None:
-        match await self._move(use_case_id, lambda state, _, now: restore(state, now)):
-            case TooLate() as late:
-                return late
+    ) -> UseCaseView | TooLate | N8nNotReady | None:
+        moved = await self._move(
+            use_case_id, lambda state, _, now: restore(state, now), principal.user_id
+        )
+        match moved:
+            case TooLate() | N8nNotReady():
+                return moved
             case None:
                 return None
             case _:
@@ -441,10 +515,11 @@ class Builder:
 
     async def save_schedule(
         self, use_case_id: str, principal: Principal, body: UseCaseScheduleIn
-    ) -> UseCaseView | ScheduleOnSoftwarePage | None:
+    ) -> UseCaseView | ScheduleOnSoftwarePage | InN8nRefused | None:
         """The same save as the watchlist's: the caller becomes the owner, which lifts a hold.
         A new schedule publishes a new version. Saving the same one again publishes none.
-        Saving is not a write to Jira or Confluence, so it needs no approval."""
+        Saving is not a write to Jira or Confluence, so it needs no approval. An own workflow's
+        new schedule is saved in n8n first (ENGINE-PLAN 2.5)."""
         # Read the workflow before the lock, so the lock holds one connection and no more.
         view = await self.get_use_case(use_case_id, principal)
         if view is None:
@@ -452,9 +527,13 @@ class Builder:
         if view.template == SOFTWARE_WATCHLIST.key:
             return ScheduleOnSoftwarePage()
         after = Schedule(body.day, body.at)
-        if await self._publish(use_case_id, principal, body.via, lambda _: Publish(after)) is None:
-            return None
-        return await self.get_use_case(use_case_id, principal)
+        match await self._publish(use_case_id, principal, body.via, lambda _: Publish(after)):
+            case None:
+                return None
+            case N8nNotReady() | DraftRefused() | ChangedInN8n() as refused:
+                return refused
+            case _:
+                return await self.get_use_case(use_case_id, principal)
 
     async def list_versions(self, use_case_id: str) -> VersionList | None:
         async with self._db.connection("builder") as conn:
@@ -472,7 +551,7 @@ class Builder:
 
     async def undo_version(
         self, use_case_id: str, version: int, principal: Principal, body: UndoIn
-    ) -> UseCaseView | NoSuchVersion | NotAScheduleChange | ChangedSince | None:
+    ) -> UseCaseView | NoSuchVersion | NotAScheduleChange | ChangedSince | InN8nRefused | None:
         """Publishes the schedule of the version before `version` again, as a new version.
         Asking again once it is undone answers the same."""
         match await self._publish(use_case_id, principal, body.via, lambda vs: undo(vs, version)):
@@ -489,7 +568,7 @@ class Builder:
         principal: Principal,
         via: Via,
         decide: Callable[[Sequence[Version]], Undo],
-    ) -> Undo | None:
+    ) -> Undo | InN8nRefused | None:
         """Publishes what `decide` makes of the versions, and saves its schedule. The builder
         cannot write orchestration's schedules, so the schedule is saved in its own transaction,
         before the version's commits. A save that fails leaves no version naming it.
@@ -500,7 +579,11 @@ class Builder:
         version. Version 1 and the watchlist's versions record no schedule, so against them it
         is judged on the live schedule, and the first change after version 1 stays without a
         version if its commit is lost. A draft has published no version, so a change to it
-        saves its schedule and publishes none."""
+        saves its schedule and publishes none.
+
+        An own workflow is laid out again with the new schedule, checked, and written to n8n
+        under the version compare before anything here: live when it is on, as a draft else.
+        Each version keeps what n8n holds of it, so what runs is what was checked."""
         async with self._db.transaction("builder") as uow:
             # A delete holds this lock alone, so it waits until the schedule is stored, and a
             # delete that came first is seen here. The row lock puts changes in turn.
@@ -518,6 +601,17 @@ class Builder:
             decided = decide(versions)
             if not isinstance(decided, Publish):
                 return decided
+            in_n8n = None
+            if _own(row):
+                version = row["current_version"]
+                current = await (await uow.conn.execute(_IN_N8N, (use_case_id, version))).fetchone()
+                assert current is not None
+                row = {**row, **current}
+                in_n8n = await self._schedule_in_n8n(use_case_id, row, decided.after, is_on(state))
+                if isinstance(in_n8n, N8nNotReady | DraftRefused | ChangedInN8n):
+                    return in_n8n
+            if draft and in_n8n is not None:
+                await _store_in_n8n(uow, use_case_id, row["current_version"], in_n8n)
             if not draft:
                 recorded = versions[0].change
                 if recorded is None:
@@ -529,7 +623,14 @@ class Builder:
                     change = ScheduleChange(
                         principal.user_id, via, before, decided.after, decided.undid
                     )
-                    await publish(uow, use_case_id, row["current_version"], change)
+                    newest = row["current_version"]
+                    await publish(uow, use_case_id, newest, change)
+                    if _own(row):
+                        await _carry_n8n(uow, use_case_id, newest)
+                    if in_n8n is not None:
+                        await _store_in_n8n(uow, use_case_id, newest + 1, in_n8n)
+                        if is_on(state):
+                            await _mark_published(uow, use_case_id, newest + 1, principal.user_id)
             if decided.after is None:
                 await self._schedules.delete(UseCaseId(use_case_id))
             else:
@@ -537,14 +638,17 @@ class Builder:
         return decided
 
     async def _move(
-        self, use_case_id: str, move: Move, recorded: Recorded | None = None
-    ) -> Moved | None:
+        self, use_case_id: str, move: Move, by: UserId, recorded: Recorded | None = None
+    ) -> Moved | N8nNotReady | None:
+        """An own workflow's n8n state follows the move before it is recorded: on is published
+        with every trigger live, anything else is off. The lock is held across n8n's answer, so
+        moves of one workflow never cross there either."""
         async with self._db.transaction("builder") as uow:
             await hold_workflow(uow.conn, use_case_id, alone=True)
             row = await (
                 await uow.conn.execute(
                     "SELECT u.paused_at, u.paused_by, u.deleted_at, u.deleted_by, u.draft,"
-                    " v.template"
+                    " u.engine, u.n8n_workflow_id, u.current_version, v.template, v.n8n_version_id"
                     " FROM builder.use_cases u JOIN builder.use_case_versions v"
                     " ON v.use_case_id = u.use_case_id AND v.version = u.current_version"
                     " WHERE u.use_case_id = %s FOR UPDATE OF u",
@@ -556,6 +660,11 @@ class Builder:
             before = lifecycle_of(row)
             after = move(before, row["template"], uow.now)
             if isinstance(after, Draft | On | Paused | Deleted) and after != before:
+                if _own(row) and is_on(after) != is_on(before):
+                    if (refused := await self._follow_in_n8n(row, after)) is not None:
+                        return refused
+                    if is_on(after):
+                        await _mark_published(uow, use_case_id, row["current_version"], by)
                 columns = to_columns(after)
                 await uow.conn.execute(
                     "UPDATE builder.use_cases SET paused_at = %s, paused_by = %s,"
@@ -577,6 +686,82 @@ class Builder:
                     # leaves the workflow off, missing only a slot the tick would have skipped.
                     await self._schedules.use_up_slots_until(UseCaseId(use_case_id), uow.now)
         return after
+
+    async def _schedule_in_n8n(
+        self, use_case_id: str, row: Mapping[str, Any], schedule: Schedule | None, live: bool
+    ) -> Relaid | InN8nRefused | None:
+        """The workflow laid out again with this schedule, and saved in n8n over the version the
+        platform stored. None when n8n already holds that layout."""
+        laid = await self._laid_out_again(use_case_id, row, schedule)
+        if not isinstance(laid, Checked):
+            return laid
+        if laid.document == row["document"]:
+            return None
+        assert self._n8n is not None
+        expected = row["n8n_version_id"]
+        if expected is None:
+            return N8nNotReady("This version is not saved in n8n, so it cannot be changed there.")
+        try:
+            written = await self._n8n.change(row["n8n_workflow_id"], expected, laid.document, live)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("n8n did not take the new schedule of %s: %s", use_case_id, error)
+            if live:
+                await self._put_back(row["n8n_workflow_id"], expected)
+            return N8nNotReady("n8n did not take the change. Nothing changed. Try again.")
+        if isinstance(written, ChangedInN8n):
+            return written
+        return Relaid(written.version_id, written.document, laid.graded.grade)
+
+    async def _laid_out_again(
+        self, use_case_id: str, row: Mapping[str, Any], schedule: Schedule | None
+    ) -> Checked | DraftRefused | N8nNotReady:
+        version = row["current_version"]
+        pinned = (await self._cards.agents_of([(use_case_id, version)])).get(
+            (use_case_id, version), []
+        )
+        chosen = [(agent.card, agent.values) for agent in pinned]
+        return await self._laid_out(use_case_id, row["name"], schedule, chosen)
+
+    async def _follow_in_n8n(self, row: Mapping[str, Any], after: Lifecycle) -> N8nNotReady | None:
+        """Puts the version on live in n8n, or takes the workflow off. A delete takes it off as
+        best it can: a deleted use case's runs are refused at their first call whatever n8n
+        does. A publish that did not finish is taken off again, so n8n never runs what the
+        records say is off."""
+        workflow_id = row["n8n_workflow_id"]
+        version_id = row["n8n_version_id"]
+        if self._n8n is None:
+            return N8nNotReady("This platform is not connected to n8n.")
+        if is_on(after) and version_id is None:
+            return N8nNotReady("This version is not saved in n8n. Change when it runs to save it.")
+        try:
+            if is_on(after):
+                await self._n8n.go_live(workflow_id, version_id)
+            else:
+                await self._n8n.go_off(workflow_id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("n8n did not follow the move of %s: %s", workflow_id, error)
+            if isinstance(after, Deleted):
+                return None
+            if is_on(after):
+                await self._take_off(workflow_id)
+                return N8nNotReady("n8n did not turn it on in time. Nothing changed. Try again.")
+            return N8nNotReady("n8n did not take it off. Nothing changed. Try again.")
+        return None
+
+    async def _take_off(self, workflow_id: str) -> None:
+        assert self._n8n is not None
+        try:
+            await self._n8n.go_off(workflow_id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.error("could not take %s off again in n8n: %s", workflow_id, error)
+
+    async def _put_back(self, workflow_id: str, version_id: str) -> None:
+        """The version the records hold live again, after a change that did not finish."""
+        assert self._n8n is not None
+        try:
+            await self._n8n.go_live(workflow_id, version_id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.error("could not put %s version %s back in n8n: %s", workflow_id, version_id, error)
 
     async def save_draft(
         self, principal: Principal, draft_id: str, draft: DraftIn
@@ -670,6 +855,10 @@ class Builder:
                 raise
         if drafted is None:
             return UseCaseCreated(use_case_id=use_case_id, version=1)
+        if body.on:
+            # Born a draft in n8n, and on only once n8n has every trigger live. When n8n does not
+            # turn it on, it stays a draft and its page says so.
+            await self.turn_on_use_case(use_case_id, principal)
         return UseCaseCreated(
             use_case_id=use_case_id,
             version=1,
@@ -688,23 +877,9 @@ class Builder:
     ) -> InN8n | DraftRefused | N8nNotReady:
         clock = self._db.clock
         started = BuildLineView(at=clock(), kind="status", text=ADDING)
-        error_workflow = await n8n.error_workflow_id()
-        if error_workflow is None:
-            return N8nNotReady("n8n is not ready yet: its error workflow is not loaded.")
         schedule = None if body.schedule is None else Schedule(body.schedule.day, body.schedule.at)
-        plan = LayoutPlan(
-            use_case_id,
-            body.name,
-            f"{self.public_base_url}/workflows/{use_case_id}",
-            schedule,
-            tuple(_planned(card, values) for card, values in chosen),
-            error_workflow,
-        )
-        repos = [values[REPO_INPUT] for _, values in chosen if REPO_INPUT in values]
-        known = await self.facts.known({GITHUB_RELEASES: repos})
-        checked = check_draft(lay_out(plan), use_case_id, error_workflow, known)
-        if isinstance(checked, DraftRefused):
-            log.error("the safety checker refused the layout of %s: %s", use_case_id, checked)
+        checked = await self._laid_out(use_case_id, body.name, schedule, chosen)
+        if not isinstance(checked, Checked):
             return checked
         at = clock()
         lines = [BuildLineView(at=at, kind=kind, text=text) for kind, text in checked.lines]
@@ -715,6 +890,33 @@ class Builder:
             return N8nNotReady("n8n did not take the draft. Try again in a minute.")
         done = BuildLineView(at=clock(), kind="status", text=SAVED)
         return InN8n(saved, checked.graded, (started, *lines, done))
+
+    async def _laid_out(
+        self,
+        use_case_id: str,
+        name: str,
+        schedule: Schedule | None,
+        chosen: Sequence[tuple[CardView, Mapping[str, str]]],
+    ) -> Checked | DraftRefused | N8nNotReady:
+        """The use case laid out as its own n8n workflow, with the yes put in and graded."""
+        assert self._n8n is not None
+        error_workflow = await self._n8n.error_workflow_id()
+        if error_workflow is None:
+            return N8nNotReady("n8n is not ready yet: its error workflow is not loaded.")
+        plan = LayoutPlan(
+            use_case_id,
+            name,
+            f"{self.public_base_url}/workflows/{use_case_id}",
+            schedule,
+            tuple(_planned(card, values) for card, values in chosen),
+            error_workflow,
+        )
+        repos = [values[REPO_INPUT] for _, values in chosen if REPO_INPUT in values]
+        known = await self.facts.known({GITHUB_RELEASES: repos})
+        checked = check_draft(lay_out(plan), use_case_id, error_workflow, known)
+        if isinstance(checked, DraftRefused):
+            log.error("the safety checker refused the layout of %s: %s", use_case_id, checked)
+        return checked
 
     async def _insert_agent_use_case(
         self,
@@ -735,7 +937,7 @@ class Builder:
                     principal.user_id,
                     uow.now,
                     body.left_out,
-                    not body.on,
+                    drafted is not None or not body.on,
                     engine,
                     workflow_id,
                 ),
@@ -774,6 +976,13 @@ class Builder:
         view = await self.get_use_case(use_case_id)
         return None if view is None else await self._spec_of(view)
 
+    async def _target(self, use_case_id: str) -> N8nTarget | None:
+        async with self._db.connection("builder") as conn:
+            row = await (
+                await conn.execute(_CURRENT_VERSION + " WHERE u.use_case_id = %s", (use_case_id,))
+            ).fetchone()
+        return None if row is None else _target(row)
+
     async def _spec_of(self, view: UseCaseView) -> RunSpec | NothingToCheck:
         use_case_id = UseCaseId(view.use_case_id)
         template = TEMPLATES[view.template]
@@ -808,6 +1017,7 @@ class Builder:
             task=task,
             bindings=template.bindings_for(params),
             approval_policy=policy,
+            n8n=await self._target(use_case_id),
         )
 
     async def check_spec(self, use_case_id: UseCaseId) -> RunSpec | NotOn | None:
@@ -866,6 +1076,36 @@ class Builder:
                     return await self._runs.start_run(trial, principal, idempotency_key)
                 case On():
                     return await self._runs.start_run(spec, principal, idempotency_key)
+
+
+async def _store_in_n8n(uow: UnitOfWork, use_case_id: str, version: int, relaid: Relaid) -> None:
+    await uow.conn.execute(
+        "UPDATE builder.use_case_versions SET n8n_version_id = %s, document = %s, grade = %s,"
+        " published_by = NULL, published_in = NULL WHERE use_case_id = %s AND version = %s",
+        (relaid.version_id, json(relaid.document), relaid.grade, use_case_id, version),
+    )
+
+
+async def _carry_n8n(uow: UnitOfWork, use_case_id: str, newest: int) -> None:
+    """The version after `newest` holds what n8n holds until a new layout replaces it."""
+    await uow.conn.execute(
+        "UPDATE builder.use_case_versions n SET n8n_version_id = o.n8n_version_id,"
+        " document = o.document, grade = o.grade, published_by = o.published_by,"
+        " published_in = o.published_in FROM builder.use_case_versions o"
+        " WHERE n.use_case_id = %s AND n.version = %s AND o.use_case_id = n.use_case_id"
+        " AND o.version = %s",
+        (use_case_id, newest + 1, newest),
+    )
+
+
+async def _mark_published(uow: UnitOfWork, use_case_id: str, version: int, by: UserId) -> None:
+    """The person who put a version live from the Portal is its publisher, whose scheduled runs
+    are their work and who can never approve them (D5). A version keeps its first publisher."""
+    await uow.conn.execute(
+        "UPDATE builder.use_case_versions SET published_by = %s, published_in = 'portal'"
+        " WHERE use_case_id = %s AND version = %s AND published_in IS NULL",
+        (by, use_case_id, version),
+    )
 
 
 async def _lifecycle_now(conn: Connection, use_case_id: str) -> Lifecycle | None:

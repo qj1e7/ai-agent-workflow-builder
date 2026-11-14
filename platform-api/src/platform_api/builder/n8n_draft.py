@@ -49,6 +49,13 @@ class Checked:
 
 
 @dataclass(frozen=True)
+class N8nNotReady:
+    """n8n could not do what was asked, so nothing changed here."""
+
+    detail: str
+
+
+@dataclass(frozen=True)
 class DraftRefused:
     """The checker would not let this layout be saved."""
 

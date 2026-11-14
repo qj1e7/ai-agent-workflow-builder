@@ -19,7 +19,7 @@ from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timedelta
 from typing import Literal, Protocol
 
-from platform_api.orchestration.agents import CardInput, InputKind
+from platform_api.orchestration.agents import CardInput, CardSpec, InputKind
 from platform_api.orchestration.approvals import (
     ApprovalRequest,
     Approved,
@@ -130,6 +130,9 @@ class OwnWorkflow:
     spec: RunSpec
     holder: UserId | None
     """Who has the workflow open in n8n now, if anyone."""
+    on: bool = True
+    """Turned on, and neither paused nor a draft, so its schedule may start runs. Our records
+    decide this, whatever n8n has live."""
 
 
 @dataclass(frozen=True)
@@ -161,8 +164,11 @@ class WorkflowFacts(Protocol):
     async def agent_inputs(self, agent_id: str) -> Sequence[CardInput]: ...
 
     async def agent_run(
-        self, agent_id: str, values: Mapping[str, str]
-    ) -> AgentToRun | CannotRun | None: ...
+        self, agent_id: str, values: Mapping[str, str], pinned: CardSpec | None = None
+    ) -> AgentToRun | CannotRun | None:
+        """`pinned` is the card as the use case's version pinned it, which runs in place of the
+        card's newest version (ENGINE-PLAN 2.3)."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -349,6 +355,7 @@ NOT_OURS = Refused(403, "This workflow is not one our platform runs.")
 NOBODY_HOLDS = Refused(403, "Nobody holds this workflow, so nobody may run it by hand.")
 VERSION_FAILED = Refused(403, "This version failed the check.")
 UNKNOWN_PUBLISHER = Refused(403, "Published by someone we don't know.")
+NOT_ON = Refused(409, "This workflow is not on, so its schedule does not run it.")
 START_UNKNOWN = Refused(403, "This start is not one our platform made.")
 START_USED = Refused(403, "This start was already used.")
 START_OTHER_WORKFLOW = Refused(403, "This start was made for another workflow.")
@@ -473,6 +480,7 @@ def decide_link(
     holder: UserId | None,
     version: RanVersion | None,
     now: datetime,
+    on: bool = True,
 ) -> Link:
     """Which run an execution belongs to, in 2.3's order. A retry copies its original's start
     item, so its used nonce is expected there. A start item that does not check out is refused,
@@ -495,6 +503,8 @@ def decide_link(
             return NOBODY_HOLDS
         return problem or NewRun(holder, "person")
     if facts.mode == "trigger":
+        if not on:
+            return NOT_ON
         if problem is not None:
             return problem
         assert version is not None
@@ -550,17 +560,29 @@ class FailedExecution:
     message: str | None
 
 
+@dataclass(frozen=True)
+class Finished:
+    """n8n ran the execution to its end."""
+
+    execution_id: N8nExecutionId
+
+
+type Ended = Finished | FailedExecution
+
+
 class N8nFailures(Protocol):
-    """n8n's record of failed executions. A report is checked against it, and the sweep reads it
-    for any report that never came: from a workflow held in a member's project, or a run by
-    hand, which reaches no error workflow (P7 Q13 and Q22)."""
+    """n8n's record of how executions ended. A report is checked against it, and the sweep reads
+    it for any end no call or report brought: a failure in a workflow held in a member's project
+    or in a run by hand, which reaches no error workflow (P7 Q13 and Q22), and a run that ended
+    without asking for a yes."""
 
     async def error_workflow_id(self) -> str | None:
         """The platform's own error workflow, the only one whose executions may report."""
         ...
 
-    async def failed_executions(self, workflow_id: str) -> Sequence[N8nExecutionId]:
-        """GET /api/v1/executions?status=error&workflowId=…"""
+    async def ended(self, execution_id: N8nExecutionId) -> Ended | None:
+        """How the execution ended, from n8n's own record. None while it runs or waits, or when
+        n8n cannot be read."""
         ...
 
     async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:

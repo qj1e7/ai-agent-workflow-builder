@@ -1,5 +1,4 @@
 import asyncio
-from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -51,6 +50,7 @@ from platform_api.orchestration.model_settings import KeyBox, ModelSettings
 from platform_api.orchestration.n8n import N8nApi, N8nExecutions, N8nWorkflows
 from platform_api.orchestration.n8n_call_service import NodeCalls
 from platform_api.orchestration.n8n_calls import (
+    Ended,
     ExecutionFacts,
     FailedExecution,
     N8nFailures,
@@ -60,6 +60,7 @@ from platform_api.orchestration.n8n_calls import (
     ReadSources,
     WriteEntry,
 )
+from platform_api.orchestration.n8n_starts import N8nStarts
 from platform_api.orchestration.people_store import People
 from platform_api.orchestration.planning import (
     CapabilityRegistry,
@@ -108,6 +109,7 @@ class Services:
     waker: N8nWaker | None = None
     practice_jira: PracticeJira | None = None
     n8n: N8nApi | None = None
+    starts: N8nStarts | None = None
     tell_flow: TellFlow | None = None
 
 
@@ -176,8 +178,8 @@ class NoN8nReads:
     async def error_workflow_id(self) -> str | None:
         return None
 
-    async def failed_executions(self, workflow_id: str) -> Sequence[N8nExecutionId]:
-        return []
+    async def ended(self, execution_id: N8nExecutionId) -> Ended | None:
+        return None
 
     async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
         return None
@@ -361,6 +363,11 @@ async def build(settings: Settings) -> Services:
     )
     gateway = WriteGateway(db, [JiraWriteConnector(jira, db, site)])
     n8n = n8n_parts(settings, db)
+    starts = (
+        None
+        if n8n.api is None
+        else N8nStarts(db, n8n.api, settings.n8n_base_url, settings.start_secret)
+    )
     orchestrator = Orchestrator(
         db,
         activity,
@@ -375,6 +382,7 @@ async def build(settings: Settings) -> Services:
         time_zone=settings.team_time_zone,
         waker=waker,
         landing=n8n.landing,
+        starts=starts,
     )
     schedules = ScheduleBook(db)
     watchlist = Watchlist(
@@ -411,7 +419,6 @@ async def build(settings: Settings) -> Services:
         sources,
         gateway.sites,
         model_settings,
-        start_secret=settings.start_secret,
         box=box,
         time_zone=settings.team_time_zone,
         gateway=gateway,
@@ -456,6 +463,7 @@ async def build(settings: Settings) -> Services:
         teams_webhook=webhook,
         waker=waker,
         n8n=n8n.api,
+        starts=starts,
         tell_flow=tell_flow,
     )
 
@@ -483,6 +491,8 @@ class Runner:
             await self._services.teams_webhook.close()
         if self._services.waker is not None:
             await self._services.waker.close()
+        if self._services.starts is not None:
+            await self._services.starts.close()
         if self._services.n8n is not None:
             await self._services.n8n.close()
         await self._services.request_channel.close()

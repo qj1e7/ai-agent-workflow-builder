@@ -114,6 +114,12 @@ SHOW_OUTCOME = "show_outcome"
 so cancelling a run's outbox leaves these rows."""
 WAKE = "wake"
 """Tells the n8n execution that waits for a request what the records decided. One per request."""
+START = "start"
+"""Starts a pending run in the use case's own n8n workflow: Run now through the signed start, a
+test run through a run of the draft (ENGINE-PLAN 2.3.2 and 2.3.3)."""
+RETRY = "retry"
+"""Asks n8n to retry a failed execution. n8n answers only when the retry stops, so it never runs
+inside a request (ENGINE-PLAN 2.3.10)."""
 
 
 SOMEONE = "someone on this run"
@@ -668,6 +674,27 @@ class Store:
             "WHERE run_id = %s AND status = 'pending' AND kind <> %s",
             (run_id, SHOW_OUTCOME),
         )
+
+    async def outbox_pending(self, uow: UnitOfWork, run_id: RunId, kind: str) -> bool:
+        row = await (
+            await uow.conn.execute(
+                "SELECT 1 FROM orchestration.outbox WHERE run_id = %s AND kind = %s "
+                "AND status = 'pending' LIMIT 1",
+                (run_id, kind),
+            )
+        ).fetchone()
+        return row is not None
+
+    async def newest_execution(self, uow: UnitOfWork, run_id: RunId) -> N8nExecutionId | None:
+        """The n8n execution that joined the run last, which is the one a retry picks up."""
+        row = await (
+            await uow.conn.execute(
+                "SELECT execution_id FROM orchestration.executions WHERE run_id = %s "
+                "ORDER BY linked_at DESC, execution_id DESC LIMIT 1",
+                (run_id,),
+            )
+        ).fetchone()
+        return None if row is None else N8nExecutionId(row["execution_id"])
 
     async def announcement_pending(self, uow: UnitOfWork, approval_id: ApprovalId) -> bool:
         row = await (

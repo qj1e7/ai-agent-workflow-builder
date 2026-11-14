@@ -1,8 +1,8 @@
 """Failures reported through Report a failure, or found by the sweep (ENGINE-PLAN 2.3.9 and 2.8):
 each fails the run its execution carried, with the block's words, and never a run that ended."""
 
-from collections.abc import AsyncIterator, Sequence
-from dataclasses import dataclass, field
+from collections.abc import AsyncIterator
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import pytest
@@ -20,8 +20,10 @@ from platform_api.orchestration.n8n_calls import (
     NOT_FAILED,
     NOT_OUR_ERROR_WORKFLOW,
     AskCall,
+    Ended,
     ExecutionFacts,
     FailedExecution,
+    Finished,
     NodeCall,
     NodeCatalog,
     ProposeCall,
@@ -38,6 +40,7 @@ from platform_api.orchestration.runs import (
     Stage,
     Succeeded,
 )
+from platform_api.orchestration.spec import N8nTarget
 from platform_api.orchestration.store import RunRecord, Store
 from platform_api.shared import ApprovalId, N8nExecutionId, ProposalId, RunId
 from tests.conftest import PostgresUrls
@@ -64,12 +67,15 @@ class FakeFailures:
     words: dict[str, tuple[str, str]] = field(default_factory=dict[str, tuple[str, str]])
     error_workflow: str | None = ERROR_WORKFLOW
     read: list[str] = field(default_factory=list[str])
+    finished: set[str] = field(default_factory=set[str])
 
     async def error_workflow_id(self) -> str | None:
         return self.error_workflow
 
-    async def failed_executions(self, workflow_id: str) -> Sequence[N8nExecutionId]:
-        return [N8nExecutionId(e) for e in self.errored.get(workflow_id, [])]
+    async def ended(self, execution_id: N8nExecutionId) -> Ended | None:
+        if execution_id in self.finished:
+            return Finished(execution_id)
+        return await self.failure(execution_id)
 
     async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
         self.read.append(execution_id)
@@ -144,7 +150,6 @@ async def r(postgres: PostgresUrls) -> AsyncIterator[Reports]:
             n8n,
             FakeSources(),
             {},
-            start_secret="test-start-secret",
             failures=failures,
         )
         yield Reports(h, n8n, workflows, failures, calls)
@@ -373,6 +378,41 @@ async def test_the_sweep_fails_an_open_run_from_its_error_execution(r: Reports):
     assert state.failure.message == '"Read release" failed in n8n: GitHub did not answer.'
     assert r.failures.read == ["101"]
     assert await r.calls.sweep() == []
+
+
+async def test_the_sweep_closes_a_run_whose_execution_ended_without_asking_for_a_yes(r: Reports):
+    """A Tell-only workflow, or a branch that ended at Nothing to change: n8n ran to its end, and
+    nothing waits for a change, so the run never times out (ENGINE-PLAN 2.3)."""
+    r.started("101")
+    await r.call("101", READ, "Read release")
+    [run] = await r.runs()
+    assert await r.calls.sweep() == [], "n8n still runs it"
+    r.failures.finished.add("101")
+    assert await r.calls.sweep() == [run.run_id]
+    assert await r.state() == Succeeded(run.run_id, Outcome.NOTHING_TO_WRITE, ())
+    assert (await r.h.kinds(run.run_id))[-1] == "run_succeeded"
+    assert await r.calls.sweep() == []
+
+
+async def test_the_sweep_fails_a_test_run_whose_execution_failed_before_any_block_called(
+    r: Reports,
+):
+    """A failing run by hand reaches no error workflow (P7 Q22), so our API watches the test
+    run's execution by the id n8n answered the run with."""
+    run_id = RunId("run_test")
+    claimed = Pending(run_id, 1, N8nExecutionId("101"), NOW)
+    own = replace(SPEC, n8n=N8nTarget(WORKFLOW, "hook-1"))
+    record = RunRecord(run_id, own, SPEC.owner, NOW, NOW, 1, claimed, (), None)
+    async with r.h.db.transaction("orchestration") as uow:
+        await Store().insert_run(uow, record, "portal:test")
+    r.failures.errored[WORKFLOW] = ["101"]
+    r.failures.words["101"] = ("Read release", "The node is not set up")
+    assert await r.calls.sweep() == [run_id]
+    state = await r.state()
+    assert isinstance(state, Failed) and state.stage is Stage.PENDING
+    assert state.failure.message == (
+        'Stopped before it read anything. "Read release" failed in n8n: The node is not set up.'
+    )
 
 
 async def test_the_sweep_never_fails_a_run_that_finished(r: Reports):

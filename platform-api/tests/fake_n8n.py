@@ -15,6 +15,8 @@ OWNER_ID = "ef530bdb-d627-4255-ad0a-b678b6c7c5bb"
 ACTIVATED = {"status": "published", "triggers": "activated"}
 
 type Hook = Callable[[str], None]
+type RunHook = Callable[[str, dict[str, Any] | None, str | None], None]
+"""A new execution's id, with the item a run of the draft starts from, or what it retries."""
 
 
 def _new_version() -> str:
@@ -29,7 +31,8 @@ class FakeN8n:
         default_factory=dict[str, list[dict[str, Any]]]
     )
     publishing: list[str] = field(default_factory=list[str])
-    """publication-status answers still to give, in_progress first, before published."""
+    """publication-status answers still to give, in_progress first, before published. One read
+    "published with a trigger pending" says published while a trigger has not moved yet."""
     projects: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
     keys: list[str] = field(default_factory=list[str])
     listed_keys: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
@@ -43,6 +46,16 @@ class FakeN8n:
     after_checksum_read: Hook | None = None
     keeps: Callable[[dict[str, Any]], dict[str, Any]] = lambda document: document
     """What n8n keeps of a document it is sent. Unchanged unless a test says otherwise."""
+    draft_runs: list[tuple[str, dict[str, Any]]] = field(
+        default_factory=list[tuple[str, dict[str, Any]]]
+    )
+    """Each run of a draft by hand: the workflow, and the body n8n was sent."""
+    retries: list[str] = field(default_factory=list[str])
+    retry_answer: str = "stops"
+    """How n8n answers a retry: "stops" once the retry stopped, "slow" never in time, or with
+    "succeeded" when the execution needs no retry."""
+    on_run: RunHook | None = None
+    next_execution: int = 300
 
     def client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(transport=httpx.MockTransport(self.handle), base_url="http://n8n")
@@ -105,9 +118,10 @@ class FakeN8n:
                 self._activate(workflow_id, body["versionId"])
                 return httpx.Response(200, json={"data": {"versionId": body["versionId"]}})
             case "GET", ["workflows", workflow_id, "publication-status"]:
-                status = self.publishing.pop(0) if self.publishing else "published"
+                said = self.publishing.pop(0) if self.publishing else "published"
                 live = self.workflows[workflow_id]["activeVersionId"]
-                trigger = "activated" if status == "published" else "pending"
+                trigger = "activated" if said == "published" else "pending"
+                status = "published" if said.startswith("published") else said
                 answer = {
                     "status": status,
                     "liveVersionId": live,
@@ -119,14 +133,29 @@ class FakeN8n:
                 return httpx.Response(200, json={"data": self.timeline.get(workflow_id, [])})
             case "GET", ["projects"]:
                 return httpx.Response(200, json={"data": self.projects})
+            case "POST", ["workflows", workflow_id, "run"] if workflow_id in self.workflows:
+                self.draft_runs.append((workflow_id, body))
+                item = body["triggerToStartFrom"]["data"]["data"]["main"][0][0]["json"]
+                execution = self._execution_started(item=item)
+                return httpx.Response(200, json={"data": {"executionId": execution}})
             case _:
                 return httpx.Response(404, json={"message": f"no /rest{path} in the fake"})
 
     def _activate(self, workflow_id: str, version_id: str, user_id: str = OWNER_ID) -> None:
         self.workflows[workflow_id]["activeVersionId"] = version_id
+        self.workflows[workflow_id]["active"] = True
         self.timeline.setdefault(workflow_id, []).append(
             {"versionId": version_id, "event": "activated", "user": {"id": user_id}}
         )
+
+    def _execution_started(
+        self, item: dict[str, Any] | None = None, retry_of: str | None = None
+    ) -> str:
+        self.next_execution += 1
+        execution = str(self.next_execution)
+        if self.on_run is not None:
+            self.on_run(execution, item, retry_of)
+        return execution
 
     def _public(self, request: httpx.Request, path: str, body: Any) -> httpx.Response:
         parts = path.strip("/").split("/")
@@ -160,8 +189,30 @@ class FakeN8n:
                     self.after_put(workflow_id)
                 return answer
             case "POST", ["workflows", workflow_id, "publish"]:
-                self._activate(workflow_id, body["versionId"])
+                version = body.get("versionId", self.workflows[workflow_id]["versionId"])
+                self._activate(workflow_id, version)
                 return httpx.Response(200, json=self.workflows[workflow_id])
+            case "POST", ["workflows", workflow_id, "unpublish"]:
+                workflow = self.workflows[workflow_id]
+                self.timeline.setdefault(workflow_id, []).append(
+                    {
+                        "versionId": workflow["activeVersionId"],
+                        "event": "deactivated",
+                        "user": {"id": OWNER_ID},
+                    }
+                )
+                workflow.update(activeVersionId=None, active=False)
+                return httpx.Response(200, json=workflow)
+            case "POST", ["executions", execution_id, "retry"]:
+                self.retries.append(execution_id)
+                if self.retry_answer == "succeeded":
+                    message = "The execution succeeded, so it cannot be retried."
+                    return httpx.Response(409, json={"message": message})
+                retry = self._execution_started(retry_of=execution_id)
+                if self.retry_answer == "slow":
+                    raise httpx.ReadTimeout("n8n is still running the retry")
+                answer = {"id": retry, "mode": "retry", "retryOf": execution_id}
+                return httpx.Response(200, json={**answer, "status": "waiting"})
             case "PUT", ["workflows", workflow_id, "transfer"]:
                 self.workflows[workflow_id]["projectId"] = body["destinationProjectId"]
                 return httpx.Response(204)

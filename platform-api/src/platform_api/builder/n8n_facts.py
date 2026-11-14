@@ -22,6 +22,7 @@ from platform_api.orchestration import (
     CannotRun,
     CardInput,
     CardRun,
+    CardSpec,
     KnownOptions,
     NodeOption,
     OwnWorkflow,
@@ -95,8 +96,8 @@ class BuilderWorkflowFacts:
         async with self._db.connection("builder") as conn:
             row = await (
                 await conn.execute(
-                    "SELECT use_case_id, held_by FROM builder.use_cases WHERE n8n_workflow_id = %s"
-                    " AND engine = 'own' AND deleted_at IS NULL",
+                    "SELECT use_case_id, held_by, draft, paused_at FROM builder.use_cases"
+                    " WHERE n8n_workflow_id = %s AND engine = 'own' AND deleted_at IS NULL",
                     (n8n_workflow_id,),
                 )
             ).fetchone()
@@ -106,7 +107,7 @@ class BuilderWorkflowFacts:
         if not isinstance(spec, RunSpec):
             return None
         holder = None if row["held_by"] is None else UserId(row["held_by"])
-        return OwnWorkflow(spec, holder)
+        return OwnWorkflow(spec, holder, on=not row["draft"] and row["paused_at"] is None)
 
     async def version(self, n8n_workflow_id: str, version_id: str) -> RanVersion | None:
         """The grade stored when the version was saved. A version nobody published has no
@@ -138,18 +139,22 @@ class BuilderWorkflowFacts:
         return [] if card is None else card_spec(card).inputs
 
     async def agent_run(
-        self, agent_id: str, values: Mapping[str, str]
+        self, agent_id: str, values: Mapping[str, str], pinned: CardSpec | None = None
     ) -> AgentToRun | CannotRun | None:
-        """None for an agent nobody saved. A write whose target the block left out is refused in
-        words, never sent to a default place."""
-        card = await self._cards.get(agent_id)
-        if card is None:
-            return None
-        spec = card_spec(card)
+        """None for an agent nobody saved. The card the use case pinned runs, and the newest
+        version only for an agent the use case does not pin. A write whose target the block left
+        out is refused in words, never sent to a default place."""
+        if pinned is not None and pinned.id == agent_id:
+            spec = pinned
+        else:
+            card = await self._cards.get(agent_id)
+            if card is None:
+                return None
+            spec = card_spec(card)
         try:
             bindings = card_bindings(spec, values)
         except ValueError:
-            return CannotRun(missing_target(card.name, spec.inputs, values))
+            return CannotRun(missing_target(spec.name, spec.inputs, values))
         release_of = values.get(REPO_INPUT) if agent_id == VERSION_CHECKER_ID else None
         return AgentToRun(CardRun(spec, dict(values), bindings), release_of)
 

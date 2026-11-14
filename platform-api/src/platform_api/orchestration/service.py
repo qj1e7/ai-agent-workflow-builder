@@ -5,7 +5,7 @@ import traceback
 from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 from zoneinfo import ZoneInfo
 
 from platform_api.db import Database, UnitOfWork
@@ -13,6 +13,7 @@ from platform_api.monitoring import (
     PLATFORM,
     SAFETY_CHECKER,
     ActivityEvent,
+    Actor,
     AgentEvent,
     ApprovalAnnouncedData,
     ApprovalAnnounceFailedData,
@@ -81,6 +82,8 @@ from platform_api.orchestration.dispatch import (
     WorkflowEngine,
     without_addresses,
 )
+from platform_api.orchestration.n8n_calls import StartKind
+from platform_api.orchestration.n8n_starts import RunStarts
 from platform_api.orchestration.person_runs import PersonRuns, runs_of
 from platform_api.orchestration.questions import (
     Answer,
@@ -115,6 +118,7 @@ from platform_api.orchestration.runs import (
     Refuse,
     Rejected,
     Replay,
+    ResumeAct,
     RunState,
     Skipped,
     StepName,
@@ -127,6 +131,7 @@ from platform_api.orchestration.runs import (
     fail,
     holder_of,
     referee,
+    run_created,
     state_name,
     step_finished,
     unread_in,
@@ -139,7 +144,9 @@ from platform_api.orchestration.spec import (
 )
 from platform_api.orchestration.store import (
     ANNOUNCE,
+    RETRY,
     SHOW_OUTCOME,
+    START,
     START_LEG,
     WAKE,
     DecisionConflict,
@@ -344,7 +351,8 @@ type AnswerResult = QuestionAnswered | AnswerRefused | NotFound
 
 @dataclass(frozen=True)
 class Retried:
-    state: Pending | Acting
+    resumes: Literal["pending", "acting"]
+    """Where the run picks up: before n8n has run it, or while it makes the approved changes."""
 
 
 @dataclass(frozen=True)
@@ -559,6 +567,7 @@ class Orchestrator:
         waker: Waker | None = None,
         wake_policy: WakePolicy = WAKE_POLICY,
         landing: WakeLanding | None = None,
+        starts: RunStarts | None = None,
     ) -> None:
         self._db = db
         self._public_base_url = public_base_url.rstrip("/")
@@ -577,6 +586,7 @@ class Orchestrator:
         self._waker = waker
         self._wake_policy = wake_policy
         self._landing = landing
+        self._starts = starts
         self._wake = asyncio.Event()
 
     async def start_run(
@@ -599,20 +609,31 @@ class Orchestrator:
             record, created = await self._store.insert_run(uow, record, idempotency_key)
             if not created:
                 return RunStarted(record.run_id, False)
-            await self._store.record_leg_attempt(uow, run_id, Leg.WORK, 1, None)
-            await self._enqueue_leg(uow, record, Leg.WORK, uow.now)
-            await self._activity.append(
-                uow,
-                run_id,
-                created_events(
+            by = user_actor(principal.user_id, principal.display)
+            if spec.n8n is None:
+                await self._store.record_leg_attempt(uow, run_id, Leg.WORK, 1, None)
+                await self._enqueue_leg(uow, record, Leg.WORK, uow.now)
+                events = created_events(
                     spec.use_case_id,
                     spec.use_case_version,
                     spec.use_case_name,
-                    user_actor(principal.user_id, principal.display),
+                    by,
                     1,
                     spec.trigger,
-                ),
-            )
+                )
+            else:
+                kind: StartKind = "test" if spec.test or spec.stops_at_gate else "run_now"
+                await self._enqueue_start(uow, run_id, kind, 1, uow.now)
+                events = (
+                    run_created(
+                        spec.use_case_id,
+                        spec.use_case_version,
+                        spec.use_case_name,
+                        by,
+                        spec.trigger,
+                    ),
+                )
+            await self._activity.append(uow, run_id, events)
         self.nudge()
         return RunStarted(run_id, True)
 
@@ -1149,13 +1170,43 @@ class Orchestrator:
                 return NotRetryable(f"The run is {state_name(state)}, not failed")
             if not state.failure.retryable:
                 return NotRetryable(cannot_retry(state.stage, state.failure))
-            moved = state.retry(user_actor(principal.user_id, principal.display), uow.now)
-            record = await self._commit(uow, record, moved, retried_by=principal.user_id)
-            leg = Leg.ACT if isinstance(moved.state, Acting) else Leg.WORK
-            await self._store.record_leg_attempt(uow, run_id, leg, moved.state.attempt, None)
-            await self._enqueue_leg(uow, record, leg, uow.now + self._retry.operator_retry_delay)
+            by = user_actor(principal.user_id, principal.display)
+            at = uow.now + self._retry.operator_retry_delay
+            if record.spec.n8n is not None:
+                retried = await self._retry_in_n8n(uow, record, state, by, at)
+            else:
+                moved = state.retry(by, uow.now)
+                record = await self._commit(uow, record, moved, retried_by=principal.user_id)
+                leg = Leg.ACT if isinstance(moved.state, Acting) else Leg.WORK
+                await self._store.record_leg_attempt(uow, run_id, leg, moved.state.attempt, None)
+                await self._enqueue_leg(uow, record, leg, at)
+                retried = Retried("acting" if leg == Leg.ACT else "pending")
         self.nudge()
-        return Retried(moved.state)
+        return retried
+
+    async def _retry_in_n8n(
+        self, uow: UnitOfWork, record: RunRecord, state: Failed, by: Actor, at: datetime
+    ) -> RetryResult:
+        """n8n's own retry of the run's newest execution, from the block that stopped (2.3.10),
+        never Failed.retry(): the retry execution joins the run on its first call. A run n8n
+        never ran starts again. A second press while a retry is on its way adds nothing."""
+        execution = await self._store.newest_execution(uow, record.run_id)
+        resumes: Literal["pending", "acting"] = (
+            "acting" if isinstance(state.resume, ResumeAct) else "pending"
+        )
+        if execution is None:
+            moved = state.start_again(by, uow.now)
+            if moved is None:
+                return NotRetryable("n8n holds no execution of this run to retry.")
+            await self._commit(uow, record, moved, retried_by=UserId(by.id))
+            await self._enqueue_start(uow, record.run_id, "retry", moved.state.attempt, at)
+            return Retried(resumes)
+        if await self._store.outbox_pending(uow, record.run_id, RETRY):
+            return Retried(resumes)
+        await self._store.save_run(uow, record, state, retried_by=UserId(by.id))
+        await self._activity.append(uow, record.run_id, [state.retry_in_n8n(by)])
+        await self._store.enqueue(uow, record.run_id, RETRY, {"execution_id": execution}, at)
+        return Retried(resumes)
 
     async def get_run(self, run_id: RunId) -> RunDetail | None:
         async with self._db.transaction("orchestration") as uow:
@@ -1297,6 +1348,10 @@ class Orchestrator:
                 await self._dispatch_outcome(row)
             elif row.kind == WAKE:
                 await self._dispatch_wake(row)
+            elif row.kind == START:
+                await self._dispatch_start(row)
+            elif row.kind == RETRY:
+                await self._dispatch_retry(row)
             else:
                 raise DispatchFailure(f"unknown outbox kind {row.kind}")
         except DispatchFailure as error:
@@ -1321,6 +1376,44 @@ class Orchestrator:
                     await self._store.save_run(uow, record, acting.claim(execution))
                 case _:
                     pass
+
+    async def _dispatch_start(self, row: OutboxRow) -> None:
+        """Starts a pending run in its own n8n workflow. A run that moved on since is left."""
+        async with self._db.transaction("orchestration") as uow:
+            record = await self._store.load_run(uow, row.run_id)
+        attempt = int(row.payload["attempt"])
+        target = None if record is None else record.spec.n8n
+        if record is None or target is None or not _pending_at(record.state, attempt):
+            async with self._db.transaction("orchestration") as uow:
+                await self._store.outbox_sent(uow, row.id)
+            return
+        if self._starts is None:
+            raise DispatchFailure("this platform cannot start n8n workflows of their own")
+        execution = await self._starts.start(row.run_id, target, row.payload["kind"])
+        async with self._db.transaction("orchestration") as uow:
+            await self._store.outbox_sent(uow, row.id)
+            record = await self._store.load_run(uow, row.run_id, lock=True)
+            if execution is None or record is None:
+                return
+            match record.state:
+                case Pending(claimant=None) as pending if pending.attempt == attempt:
+                    await self._store.save_run(uow, record, pending.claim(execution))
+                case _:
+                    pass
+
+    async def _dispatch_retry(self, row: OutboxRow) -> None:
+        """n8n answers its retry only once the retry stops, so the outbox waits on it a while and
+        no request ever does. What the retry does, the run hears from its blocks' calls."""
+        if self._starts is None:
+            raise DispatchFailure("this platform cannot retry n8n workflows of their own")
+        execution = N8nExecutionId(row.payload["execution_id"])
+        refused = await self._starts.retry(execution)
+        async with self._db.transaction("orchestration") as uow:
+            if refused is None:
+                await self._store.outbox_sent(uow, row.id)
+                return
+            await self._store.outbox_give_up(uow, row.id, refused.detail)
+        log.warning("n8n would not retry execution %s: %s", execution, refused.detail)
 
     def approval_url(self, approval_id: ApprovalId) -> str:
         """The approval page as an absolute address, for a card read outside the Portal."""
@@ -1584,11 +1677,14 @@ class Orchestrator:
                 case Pending() | Acting() as state if attempt is not None and state.attempt == int(
                     attempt
                 ):
+                    what = (
+                        "n8n did not take the start"
+                        if row.kind == START
+                        else f"The workflow engine did not take the "
+                        f"{row.payload.get('leg', 'next')} leg"
+                    )
                     failure = Failure(
-                        FailureReason.DISPATCH_FAILED,
-                        f"The workflow engine did not take the "
-                        f"{row.payload.get('leg', 'next')} leg: {error}",
-                        retryable=True,
+                        FailureReason.DISPATCH_FAILED, f"{what}: {error}", retryable=True
                     )
                     await self._commit(uow, record, fail(state, failure))
                     await self._store.cancel_outbox(uow, row.run_id)
@@ -1657,6 +1753,11 @@ class Orchestrator:
         await self._watch.run_moved(uow, record, moved.state)
         return saved
 
+    async def _enqueue_start(
+        self, uow: UnitOfWork, run_id: RunId, kind: StartKind, attempt: int, at: datetime
+    ) -> None:
+        await self._store.enqueue(uow, run_id, START, {"kind": kind, "attempt": attempt}, at)
+
     async def _enqueue_leg(
         self, uow: UnitOfWork, record: RunRecord, leg: Leg, next_at: datetime
     ) -> None:
@@ -1668,6 +1769,10 @@ class Orchestrator:
             {"workflow": record.spec.workflow, "leg": leg.value, "attempt": attempt},
             next_at,
         )
+
+
+def _pending_at(state: RunState, attempt: int) -> bool:
+    return isinstance(state, Pending) and state.attempt == attempt
 
 
 def _active(state: RunState) -> Pending | Working | Proposed | Acting:

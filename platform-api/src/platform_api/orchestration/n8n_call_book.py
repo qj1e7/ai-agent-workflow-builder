@@ -266,20 +266,33 @@ class CallBook:
             for row in rows
         )
 
-    async def open_executions(self, uow: UnitOfWork) -> dict[str, set[N8nExecutionId]]:
-        """The executions that carry a run our API has not closed, by workflow."""
+    async def open_executions(self, uow: UnitOfWork) -> list[N8nExecutionId]:
+        """The executions that carry a run our API has not closed, and the test runs n8n named
+        before any of their blocks called."""
         rows = await (
             await uow.conn.execute(
-                "SELECT e.execution_id, e.n8n_workflow_id FROM orchestration.executions e "
+                "SELECT e.execution_id FROM orchestration.executions e "
                 "JOIN orchestration.runs r ON r.run_id = e.run_id "
                 "WHERE (r.state = 'Working' AND r.state_data ->> 'execution' = e.execution_id) "
-                "OR (r.state = 'Acting' AND r.state_data ->> 'claimant' = e.execution_id)"
+                "OR (r.state = 'Acting' AND r.state_data ->> 'claimant' = e.execution_id) "
+                "UNION SELECT r.state_data ->> 'claimant' FROM orchestration.runs r "
+                "WHERE r.state = 'Pending' AND r.state_data ->> 'claimant' IS NOT NULL "
+                "AND jsonb_typeof(r.spec -> 'n8n') = 'object' ORDER BY 1"
             )
         ).fetchall()
-        open_: dict[str, set[N8nExecutionId]] = {}
-        for row in rows:
-            open_.setdefault(row["n8n_workflow_id"], set()).add(N8nExecutionId(row["execution_id"]))
-        return open_
+        return [N8nExecutionId(row["execution_id"]) for row in rows]
+
+    async def claimed_run(self, uow: UnitOfWork, execution: N8nExecutionId) -> RunId | None:
+        """The pending run of an own workflow whose start n8n answered with this execution, before
+        any of its blocks called."""
+        row = await (
+            await uow.conn.execute(
+                "SELECT run_id FROM orchestration.runs WHERE state = 'Pending' "
+                "AND state_data ->> 'claimant' = %s AND jsonb_typeof(spec -> 'n8n') = 'object'",
+                (execution,),
+            )
+        ).fetchone()
+        return None if row is None else RunId(row["run_id"])
 
     async def answered_in_run(
         self, uow: UnitOfWork, run_id: RunId, call: NodeCall

@@ -68,6 +68,7 @@ from platform_api.orchestration.n8n_calls import (
     CannotRun,
     Carry,
     FailedExecution,
+    Finished,
     IssuedStart,
     N8nFailures,
     N8nReads,
@@ -83,7 +84,6 @@ from platform_api.orchestration.n8n_calls import (
     ReadFailed,
     Refused,
     SourceReads,
-    StartKind,
     StopRun,
     StopStart,
     TellCall,
@@ -99,7 +99,6 @@ from platform_api.orchestration.n8n_calls import (
     failure_words,
     rejoin,
     run_stopped,
-    start_signature,
     unknown,
     write_answer,
 )
@@ -187,17 +186,9 @@ from platform_api.shared import (
 
 log = logging.getLogger(__name__)
 
-SWEEP_EVERY = timedelta(minutes=1)
-"""How often the sweep reads n8n's failed executions, so a failure no report brought is lost for
-a minute at most (ENGINE-PLAN 2.8)."""
-
-
-@dataclass(frozen=True)
-class SignedStart:
-    """What the Portal's start sends to the trigger: the body, and its X-Wab-Signature."""
-
-    body: Mapping[str, str | int]
-    signature: str
+SWEEP_EVERY = timedelta(seconds=5)
+"""How often the sweep reads how each open run's execution ended, so a run that ended with no
+call or report saying so shows its end within seconds (ENGINE-PLAN 2.3.3 and 2.8)."""
 
 
 @dataclass(frozen=True)
@@ -274,7 +265,6 @@ class NodeCalls:
         sites: Sites,
         models: ActiveModel | None = None,
         *,
-        start_secret: str | None = None,
         box: Sealer | None = None,
         time_zone: ZoneInfo = TEAM_TIME_ZONE,
         gateway: WriteGateway | None = None,
@@ -291,7 +281,6 @@ class NodeCalls:
         self._sources = sources
         self._sites = sites
         self._models = models
-        self._start_secret = start_secret
         self._box = box
         self._time_zone = time_zone
         self._gateway = gateway
@@ -303,20 +292,6 @@ class NodeCalls:
 
     async def options(self, kind: OptionKind, of: Mapping[str, str]) -> list[NodeOption]:
         return await self._catalog.options(kind, of)
-
-    async def issue_start(
-        self, run_id: RunId, kind: StartKind, workflow_id: str, webhook_id: str
-    ) -> SignedStart:
-        """A start for one pending run of one workflow, signed for that workflow's trigger."""
-        if self._start_secret is None:
-            raise RuntimeError("WAB_START_SECRET is not set, so no start can be signed.")
-        async with self._db.transaction("orchestration") as uow:
-            start = await self._book.issue_start(uow, run_id, kind, workflow_id)
-        expires = int(start.expires_at.timestamp())
-        signature = start_signature(
-            self._start_secret, workflow_id, webhook_id, start.nonce, kind, expires
-        )
-        return SignedStart({"nonce": start.nonce, "kind": kind, "expires": expires}, signature)
 
     async def report(self, reporter: N8nExecutionId, failed: N8nExecutionId) -> FailureResult:
         """Report a failure, from the error workflow (ENGINE-PLAN 2.8). Nothing in the report is
@@ -341,7 +316,9 @@ class NodeCalls:
         execution = failed.execution_id
         async with self._db.transaction("orchestration") as uow:
             await self._book.hold_execution(uow, execution)
-            run_id = await self._book.linked_run(uow, execution)
+            run_id = await self._book.linked_run(uow, execution) or await self._book.claimed_run(
+                uow, execution
+            )
             if run_id is None:
                 match await self._link(uow, execution):
                     case TryLater() as later:
@@ -366,22 +343,45 @@ class NodeCalls:
         return FailedRun(run_id)
 
     async def sweep(self) -> list[RunId]:
-        """Fails each open run whose execution n8n says ended in an error, for a failure no report
-        brought. A run that has ended is not open, so it is never failed."""
+        """Settles each open run whose execution n8n says ended, for an end no call or report
+        brought: a failure fails it with the block's words, and an execution that ran to its end
+        without asking for a yes closes it, since nothing waits for a change (ENGINE-PLAN 2.3.3
+        and 2.8). A run that has ended is not open, so it is never settled twice."""
         if self._failures is None:
             return []
         async with self._db.transaction("orchestration") as uow:
             open_ = await self._book.open_executions(uow)
-        failed: list[RunId] = []
-        for workflow_id, executions in sorted(open_.items()):
-            errored = await self._failures.failed_executions(workflow_id)
-            for execution in (e for e in errored if e in executions):
-                found = await self._failures.failure(execution)
-                if found is None:
-                    continue
-                if isinstance(result := await self._fail_run(found), FailedRun):
-                    failed.append(result.run_id)
-        return failed
+        settled: list[RunId] = []
+        for execution in open_:
+            match await self._failures.ended(execution):
+                case FailedExecution() as found:
+                    result = await self._fail_run(found)
+                    run_id = result.run_id if isinstance(result, FailedRun) else None
+                case Finished():
+                    run_id = await self._close(execution)
+                case None:
+                    run_id = None
+            if run_id is not None:
+                settled.append(run_id)
+        return settled
+
+    async def _close(self, execution: N8nExecutionId) -> RunId | None:
+        """A run whose execution n8n ran to its end while the run was still working never asked
+        for a yes, so it had nothing to change: a Tell-only workflow, or a branch that ended at
+        Nothing to change."""
+        async with self._db.transaction("orchestration") as uow:
+            await self._book.hold_execution(uow, execution)
+            run_id = await self._book.linked_run(uow, execution)
+            record = None if run_id is None else await self._store.load_run(uow, run_id, lock=True)
+            if record is None:
+                return None
+            match record.state:
+                case Working(execution=live) as working if live == execution:
+                    await self._commit(uow, record, working.nothing_to_change())
+                    await self._store.cancel_outbox(uow, record.run_id)
+                    return record.run_id
+                case _:
+                    return None
 
     async def sweep_forever(self, stop: asyncio.Event, every: timedelta = SWEEP_EVERY) -> None:
         while not stop.is_set():
@@ -495,7 +495,7 @@ class NodeCalls:
         version = None
         if version_id is not None:
             version = await self._workflows.version(facts.workflow_id, version_id)
-        link = decide_link(facts, retried, start, own.holder, version, uow.now)
+        link = decide_link(facts, retried, start, own.holder, version, uow.now, own.on)
 
         async def linked(run_id: RunId) -> RunId:
             await self._book.link(
@@ -636,7 +636,14 @@ class NodeCalls:
                 return Done(Answer(()), _recorded(at_sites((proposed,), self._sites), subject))
 
     async def _run_agent(self, admitted: Admitted, agent: str, inputs: Mapping[str, str]) -> Work:
-        match await self._workflows.agent_run(agent, inputs):
+        record = admitted.record
+        task = record.spec.task
+        pinned = (
+            next((run.card for run in task.agents if run.card.id == agent), None)
+            if isinstance(task, CardsTask)
+            else None
+        )
+        match await self._workflows.agent_run(agent, inputs, pinned):
             case None:
                 return unknown("agent", agent)
             case CannotRun(detail):
@@ -646,11 +653,14 @@ class NodeCalls:
         release = None if release_of is None else await self._newest_release(release_of)
         if isinstance(release, TryLater):
             return release
-        model = None
-        if self._models is not None:
-            async with self._db.transaction("orchestration") as uow:
-                model = await self._models.access(uow)
-        record = admitted.record
+        async with self._db.transaction("orchestration") as uow:
+            model = None if self._models is None else await self._models.access(uow)
+            last_start = await self._store.last_finished_start(
+                uow, record.spec.use_case_id, record.run_id
+            )
+        # The last run's own day in the team's zone, as the old engine tells the agent, so a card
+        # that searches since its last run leaves no gap.
+        last_run_on = None if last_start is None else last_start.astimezone(self._time_zone).date()
         assert isinstance(record.state, Working)
         url, token = self._mint_callback(
             admitted.run_id, admitted.task_id, record.state.callback_expires_at
@@ -662,7 +672,7 @@ class NodeCalls:
             inputs=CardsInputs(
                 agents=[CardToRun(card=card_run.card, values=dict(card_run.values))]
             ),
-            carry_forward=CarryForward(),
+            carry_forward=CarryForward(last_run_on=last_run_on),
             time_zone=self._time_zone.key,
             callback=Callback(url=url, token=token),
             model=model,

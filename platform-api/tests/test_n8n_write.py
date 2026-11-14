@@ -152,7 +152,6 @@ async def w(postgres: PostgresUrls) -> AsyncIterator[Writes]:
             n8n,
             sources,
             {"jira": PRACTICE_SITE},
-            start_secret="test-start-secret",
             box=box,
             gateway=gateway,
         )
