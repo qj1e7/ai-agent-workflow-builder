@@ -76,7 +76,6 @@ from platform_api.orchestration.http import (
     RefusalOut,
     StepResponseOut,
     TeamsStubMessages,
-    TickOut,
     WorkflowFailureIn,
     run_view_adapter,
 )
@@ -284,8 +283,6 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "watchlist/schedule.off.json": TypeAdapter(WatchlistView),
     "watchlist/schedule.held.json": TypeAdapter(WatchlistView),
     "watchlist/paused.json": TypeAdapter(WatchlistView),
-    "internal/tick.started.json": TypeAdapter(TickOut),
-    "internal/tick.nothing-due.json": TypeAdapter(TickOut),
     "views/scheduled.pending.json": run_view_adapter,
     "watchlist/before-check.json": TypeAdapter(WatchlistView),
     "people/list.json": TypeAdapter(PeopleOut),

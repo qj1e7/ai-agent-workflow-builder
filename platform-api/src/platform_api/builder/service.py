@@ -27,7 +27,6 @@ from platform_api.builder.lifecycle import (
     On,
     Paused,
     TooLate,
-    comes_on,
     delete,
     is_on,
     lifecycle_of,
@@ -132,7 +131,6 @@ from platform_api.orchestration import (
     N8nDrafts,
     N8nError,
     N8nTarget,
-    NotOn,
     OpenRuns,
     RunSpec,
     RunStarted,
@@ -213,17 +211,16 @@ def _target(row: Mapping[str, Any]) -> N8nTarget | None:
     return N8nTarget(row["n8n_workflow_id"], _start_webhook(row["document"]))
 
 
-def _next_run_at(
-    row: Mapping[str, Any], schedule: SavedSchedule | None, now: datetime
-) -> datetime | None:
+def _next_run_at(row: Mapping[str, Any], now: datetime) -> datetime | None:
     """An own workflow runs when n8n's Schedule Trigger fires, to the second n8n adds to it
-    (ENGINE-PLAN 2.4). The rest run on the platform's schedule tick."""
-    if _own(row):
-        document = row["document"]
-        if document is None or row["deleted_in_n8n_at"] is not None:
-            return None
-        return next_run(document, row["n8n_workflow_id"], now)
-    return None if schedule is None else schedule.next_run(now)
+    (ENGINE-PLAN 2.4). One still on the shared run workflow starts no scheduled run until it
+    moves (E10)."""
+    if not _own(row):
+        return None
+    document = row["document"]
+    if document is None or row["deleted_in_n8n_at"] is not None:
+        return None
+    return next_run(document, row["n8n_workflow_id"], now)
 
 
 def _state(state: Lifecycle) -> UseCaseState:
@@ -262,7 +259,7 @@ def _view(
         owner=UserId(row["owner"]),
         created_at=row["created_at"],
         state=state,
-        next_run_at=_next_run_at(row, schedule, now) if state == "on" else None,
+        next_run_at=_next_run_at(row, now) if state == "on" else None,
         schedule=None
         if schedule is None
         else _schedule_view(schedule, row["document"] if _own(row) else None),
@@ -1008,11 +1005,6 @@ class Builder:
                 )
                 if recorded is not None:
                     await _record(uow, use_case_id, recorded)
-                if comes_on(before, after):
-                    # The builder's role cannot write orchestration's schedules, so this is its
-                    # own transaction. It commits before the move does: a move that then fails
-                    # leaves the workflow off, missing only a slot the tick would have skipped.
-                    await self._schedules.use_up_slots_until(UseCaseId(use_case_id), uow.now)
         return after
 
     async def _schedule_in_n8n(
@@ -1343,24 +1335,6 @@ class Builder:
             approval_policy=policy,
             n8n=await self._target(use_case_id),
         )
-
-    async def check_spec(self, use_case_id: UseCaseId) -> RunSpec | NotOn | None:
-        """What the schedule tick asks for. None means nothing to check. The tick holds the
-        workflow's lock around this read and the run insert, so this read does not take it."""
-        async with self._db.connection("builder") as conn:
-            state = await _lifecycle_now(conn, use_case_id)
-        match state:
-            case None:
-                return None
-            case Draft():
-                return NotOn("draft")
-            case Paused():
-                return NotOn("paused")
-            case Deleted():
-                return NotOn("deleted")
-            case On():
-                spec = await self.run_spec_for(use_case_id)
-                return None if isinstance(spec, NothingToCheck) else spec
 
     async def start_run(
         self,

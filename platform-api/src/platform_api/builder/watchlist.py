@@ -293,14 +293,14 @@ type Move = MovedToN8n | AlreadyOnN8n | WaitsForRun | NoWatchlist | N8nNotReady 
 def schedule_view(
     saved: SavedSchedule | None, now: datetime, on: bool, n8n: InN8n | None = None
 ) -> ScheduleView | None:
-    """On its own n8n workflow, the next check is when n8n's Schedule Trigger fires, to the
-    second n8n adds to it (ENGINE-PLAN 2.4)."""
+    """The next check is when its own n8n workflow's Schedule Trigger fires, to the second n8n
+    adds to it (ENGINE-PLAN 2.4). Still on the shared run workflow, it starts none until it
+    moves."""
     if saved is None:
         return None
-    if n8n is None:
-        next_at = saved.next_run(now)
-    else:
-        next_at = None if n8n.document is None else next_run(n8n.document, n8n.workflow_id, now)
+    next_at = None
+    if n8n is not None and n8n.document is not None:
+        next_at = next_run(n8n.document, n8n.workflow_id, now)
     return ScheduleView(
         day=saved.schedule.day,
         at=saved.schedule.at,

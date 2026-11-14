@@ -26,6 +26,7 @@ from platform_api.orchestration.workflows import (
     lint,
     load_all,
     parse,
+    placeholders,
     render,
 )
 from platform_api.settings import BootstrapSettings, bootstrap_settings_from_env
@@ -33,10 +34,24 @@ from platform_api.settings import BootstrapSettings, bootstrap_settings_from_env
 API_KEY_LABEL = "platform-bootstrap"
 CREDENTIAL_NAME = "X-Step-Key"
 STEP_KEY_HEADER = "X-Step-Key"
+CREDENTIAL_PLACEHOLDER = "STEP_KEY_CREDENTIAL_ID"
 # Only this exact name is removed: staff build their own workflows in the same n8n (ADR 0027).
 OLD_RUN_WORKFLOW = "release_check"
 OLD_TEMPLATE = "release_check"
 OLD_TASK_KIND = "release"
+SHARED_RUN_WORKFLOW = "run"
+RETIRED_WORKFLOWS = ("schedule_tick",)
+"""Removed by these exact names, as they are the platform's own. Nothing ticks schedules since
+E10: each workflow's own n8n workflow has its Schedule Trigger."""
+OLD_ENGINE_IN_USE = """
+    SELECT EXISTS (
+        SELECT 1 FROM builder.use_cases WHERE engine = 'shared_run' AND deleted_at IS NULL
+    ) OR EXISTS (
+        SELECT 1 FROM orchestration.runs
+        WHERE jsonb_typeof(spec -> 'n8n') IS DISTINCT FROM 'object'
+          AND state IN ('Pending', 'Working', 'Proposed', 'AwaitingApproval', 'Acting')
+    )
+"""
 RESET_HINT = (
     "This stack holds data from before the release check was retired, which the platform can "
     "no longer read. Reset a local practice stack with "
@@ -117,8 +132,13 @@ def _finish(
 def load_into_n8n(
     settings: BootstrapSettings, definitions: tuple[WorkflowDefinition, ...], say: Say
 ) -> tuple[list[LoadedWorkflow], list[Finding]]:
+    in_use = old_engine_in_use(settings.owner_database_url)
     error_workflow = next(d for d in definitions if d.is_error_workflow)
-    other_workflows = [d for d in definitions if not d.is_error_workflow]
+    other_workflows = [
+        d
+        for d in definitions
+        if not d.is_error_workflow and (in_use or d.name != SHARED_RUN_WORKFLOW)
+    ]
     previous = previous_hashes(settings.owner_database_url)
     client = N8nClient(settings.n8n_base_url)
     try:
@@ -132,14 +152,14 @@ def load_into_n8n(
         say(f"api key '{API_KEY_LABEL}': created, {removed} older removed")
         removed = client.remove_api_keys(PLATFORM_API_KEY_LABEL)
         say(f"api key '{PLATFORM_API_KEY_LABEL}': {removed} removed, platform-api makes its own")
-        credential_id = client.create_header_credential(
-            CREDENTIAL_NAME, STEP_KEY_HEADER, settings.step_key
-        )
-        say(f"credential '{CREDENTIAL_NAME}': created {credential_id}")
-        values = {
-            "PLATFORM_INTERNAL_URL": settings.platform_internal_url,
-            "STEP_KEY_CREDENTIAL_ID": credential_id,
-        }
+        values = {"PLATFORM_INTERNAL_URL": settings.platform_internal_url}
+        credential_id = None
+        if any(_needs_step_key(d) for d in (error_workflow, *other_workflows)):
+            credential_id = client.create_header_credential(
+                CREDENTIAL_NAME, STEP_KEY_HEADER, settings.step_key
+            )
+            say(f"credential '{CREDENTIAL_NAME}': created {credential_id}")
+            values[CREDENTIAL_PLACEHOLDER] = credential_id
         error_id, error_hash = _load(client, error_workflow, values, previous, say)
         values["ERROR_WORKFLOW_ID"] = error_id
         hashes = {error_id: error_hash}
@@ -150,6 +170,7 @@ def load_into_n8n(
         if old is not None:
             client.delete_workflow(old.id)
             say(f"workflow {OLD_RUN_WORKFLOW} ({old.id}): removed, every run now goes through run")
+        retire_old_engine(client, in_use, say)
         stale = [c for c in client.credentials_named(CREDENTIAL_NAME) if c != credential_id]
         for credential in stale:
             client.delete_credential(credential)
@@ -187,10 +208,33 @@ def _load(
     return result.id, digest
 
 
+def old_engine_in_use(owner_url: str) -> bool:
+    """A workflow still on the shared run workflow, or a run of it that has not ended, still needs
+    that workflow and its step key. Once neither is left, nothing calls them (ENGINE-PLAN E10)."""
+    with psycopg.connect(owner_url) as conn:
+        row = conn.execute(OLD_ENGINE_IN_USE).fetchone()
+    assert row is not None
+    return bool(row[0])
+
+
+def retire_old_engine(client: N8nClient, in_use: bool, say: Say) -> None:
+    """The schedule tick goes at once. The shared run workflow goes once nothing runs on it, so an
+    old deploy's waiting run still finishes there first."""
+    for name in (*RETIRED_WORKFLOWS, *(() if in_use else (SHARED_RUN_WORKFLOW,))):
+        old = client.find_workflow(name)
+        if old is not None:
+            client.delete_workflow(old.id)
+            say(f"workflow {name} ({old.id}): removed, every workflow runs as its own in n8n")
+
+
+def _needs_step_key(definition: WorkflowDefinition) -> bool:
+    return CREDENTIAL_PLACEHOLDER in placeholders(definition)
+
+
 def content_hash_without_credential(
     definition: WorkflowDefinition, values: Mapping[str, str]
 ) -> str:
-    masked = render(definition, {**values, "STEP_KEY_CREDENTIAL_ID": "<masked>"})
+    masked = render(definition, {**values, CREDENTIAL_PLACEHOLDER: "<masked>"})
     canonical = json.dumps(masked, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()
 

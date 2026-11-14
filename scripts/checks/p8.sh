@@ -13,7 +13,6 @@
 #   e2e <src> <project> <tag> <portal> <api> <n8n>   scripts/e2e.sh with E2E_SUITES=api in an exported tree
 #   lane <name> <api-port> [arguments]    one lane of p8_lanes.py against http://localhost:<api-port>, saved under $EVID/<name>
 #   lane1 <trunk-api-port> <head-api-port>  lane 1 against a trunk stack and a head stack that are both up
-#   lane3 <head-src> [portal api n8n]     lane 3 on its own stack (project p8-build-l3, default ports 43080 43000 43678)
 #   dast <src> <project> <tag>            lane 10: scripts/dast.sh in an exported tree; writes $EVID/lane-10/p8-zap.txt
 #   perf <trunk-api-port> <head-api-port> [rounds]  seeds 50 workflows on each, then scripts/p95.py interleaved
 #   perf-table <dir>                      the p95 medians and the rule: head at most trunk plus 20 ms
@@ -168,16 +167,6 @@ lane1() {
   lanes_py lane1 "http://localhost:$trunk" "$EVID/lane-1" "http://localhost:$head"
 }
 
-lane3() {
-  local src=$1 portal=${2:-43080} api=${3:-43000} n8n=${4:-43678} project=p8-build-l3 key status=0
-  key=$(sed -n 's/^STEP_KEY=//p' "$ENV_FILE")
-  [ -n "$key" ] || die "no STEP_KEY in $ENV_FILE"
-  up "$src" "$project" p8build "$portal" "$api" "$n8n"
-  lanes_py lane3 "http://localhost:$api" "$EVID/lane-3" "$key" || status=$?
-  down "$src" "$project" >/dev/null 2>&1 || true
-  return "$status"
-}
-
 dast() {
   local src=$1 project=$2 tag=$3 out="$EVID/lane-10" status=0
   own_tag "$tag"
@@ -259,7 +248,7 @@ cleanup() {
 }
 
 command=${1:-}
-[ -n "$command" ] || die "usage: p8.sh <disk|export|pg-up|pg-down|gates|up|down|e2e|lane|lane1|lane3|dast|perf|perf-table|cleanup> ..."
+[ -n "$command" ] || die "usage: p8.sh <disk|export|pg-up|pg-down|gates|up|down|e2e|lane|lane1|dast|perf|perf-table|cleanup> ..."
 shift
 case "$command" in
   disk) disk ;;
@@ -267,6 +256,6 @@ case "$command" in
   pg-up) pg_up ;;
   pg-down) pg_down ;;
   perf-table) perf_table "$@" ;;
-  gates | up | down | e2e | lane | lane1 | lane3 | dast | perf | cleanup) "$command" "$@" ;;
+  gates | up | down | e2e | lane | lane1 | dast | perf | cleanup) "$command" "$@" ;;
   *) die "unknown command $command" ;;
 esac

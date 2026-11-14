@@ -1,5 +1,6 @@
 import json
 from collections.abc import Iterator
+from dataclasses import replace
 from typing import Any
 
 import httpx
@@ -173,6 +174,7 @@ class FakeN8n:
             for n, name in enumerate(existing, start=1)
         }
         self.deleted: list[str] = []
+        self.credentials: list[str] = []
         self.unpublishing: set[str] = set()
         self.calls: list[str] = []
         self.scopes: list[str] = []
@@ -201,9 +203,14 @@ class FakeN8n:
             self.scopes = list(body["scopes"])
             return httpx.Response(200, json={"data": {"rawApiKey": "key"}})
         if path == "/api/v1/credentials" and method == "POST":
+            self.credentials.append("cred1")
             return httpx.Response(200, json={"id": "cred1"})
         if path == "/api/v1/credentials" and method == "GET":
-            return httpx.Response(200, json={"data": [{"id": "cred1", "name": "X-Step-Key"}]})
+            listed = [{"id": c, "name": "X-Step-Key"} for c in self.credentials]
+            return httpx.Response(200, json={"data": listed})
+        if path.startswith("/api/v1/credentials/") and method == "DELETE":
+            self.credentials.remove(path.removeprefix("/api/v1/credentials/"))
+            return httpx.Response(200, json={})
         if path == "/api/v1/workflows" and method == "GET":
             wanted = request.url.params.get("name")
             listed = [w for w in self.workflows.values() if wanted in (None, w["name"])]
@@ -337,6 +344,71 @@ def test_old_release_data_stops_migrate_before_any_migration(
     assert RESET_HINT in capsys.readouterr().out
 
 
+def settings_for(owner_url: str) -> BootstrapSettings:
+    return BootstrapSettings(
+        owner_database_url=owner_url,
+        n8n_base_url=N8N,
+        n8n_owner_email="owner@example.com",
+        n8n_owner_password="Aa1secret",
+        step_key="step-key",
+        platform_internal_url="http://platform-api:8000",
+    )
+
+
+def names_in(n8n: FakeN8n) -> list[str]:
+    return sorted(w["name"] for w in n8n.workflows.values())
+
+
+def test_while_a_workflow_runs_on_the_shared_run_workflow_bootstrap_keeps_it(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n(["run", "schedule_tick"]))
+    insert_use_case(postgres.owner, "uc_cards", "agent_cards")
+
+    loaded, findings = load_into_n8n(settings_for(postgres.owner), load_all(), lambda _: None)
+
+    assert findings == []
+    assert sorted(w.name for w in loaded) == ["run", "run_failure_reporter"]
+    assert names_in(n8n) == ["run", "run_failure_reporter"], "the schedule tick goes at once"
+    assert n8n.credentials == ["cred1"], "the run workflow's steps still need the step key"
+
+
+def test_a_run_that_has_not_ended_keeps_the_shared_run_workflow(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    """Its workflow was deleted, but its yes may still come, and its write runs there."""
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n(["run"]))
+    spec = TypeAdapter(RunSpec).dump_python(replace(SPEC, n8n=None), mode="json")
+    insert_run(postgres.owner, "run_waiting", spec)
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute("UPDATE orchestration.runs SET state = 'AwaitingApproval'")
+
+    load_into_n8n(settings_for(postgres.owner), load_all(), lambda _: None)
+
+    assert names_in(n8n) == ["run", "run_failure_reporter"]
+
+
+def test_once_nothing_runs_on_it_bootstrap_removes_the_shared_run_and_tick_workflows(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n(["run", "schedule_tick", "Staff access review"]))
+    insert_use_case(postgres.owner, "uc_moved", "agent_cards")
+    insert_run(postgres.owner, "run_done", TypeAdapter(RunSpec).dump_python(SPEC, mode="json"))
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute("UPDATE builder.use_cases SET engine = 'own', n8n_workflow_id = 'wf_moved'")
+    said: list[str] = []
+
+    loaded, _ = load_into_n8n(settings_for(postgres.owner), load_all(), said.append)
+
+    assert [w.name for w in loaded] == ["run_failure_reporter"]
+    assert names_in(n8n) == ["Staff access review", "run_failure_reporter"]
+    assert any(line.startswith("workflow run (W1): removed") for line in said)
+    assert n8n.credentials == ["cred1"], "kept while the error workflow still reports with it"
+
+
 def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_else(
     postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
 ):
@@ -344,20 +416,12 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
     n8n = serve(
         monkeypatch, FakeN8n([OLD_RUN_WORKFLOW, "Staff access review", f"{OLD_RUN_WORKFLOW} copy"])
     )
-    settings = BootstrapSettings(
-        owner_database_url=postgres.owner,
-        n8n_base_url=N8N,
-        n8n_owner_email="owner@example.com",
-        n8n_owner_password="Aa1secret",
-        step_key="step-key",
-        platform_internal_url="http://platform-api:8000",
-    )
     said: list[str] = []
 
-    loaded, findings = load_into_n8n(settings, load_all(), said.append)
+    loaded, findings = load_into_n8n(settings_for(postgres.owner), load_all(), said.append)
 
     assert findings == []
-    assert sorted(w.name for w in loaded) == ["run", "run_failure_reporter", "schedule_tick"]
+    assert sorted(w.name for w in loaded) == ["run_failure_reporter"]
     assert all(w.active for w in loaded)
     assert n8n.deleted == ["W1"]
     assert [c for c in n8n.calls if c.split()[1].split("/")[0] == "W1"] == [
@@ -368,9 +432,7 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
     assert sorted(w["name"] for w in n8n.workflows.values()) == [
         "Staff access review",
         f"{OLD_RUN_WORKFLOW} copy",
-        "run",
         "run_failure_reporter",
-        "schedule_tick",
     ]
     assert "workflow:delete" in n8n.scopes
     assert any(line.startswith(f"workflow {OLD_RUN_WORKFLOW} (W1): removed") for line in said)

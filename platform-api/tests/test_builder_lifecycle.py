@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
@@ -23,7 +23,6 @@ from platform_api.builder.lifecycle import (
     On,
     Paused,
     TooLate,
-    comes_on,
     delete,
     from_columns,
     is_on,
@@ -40,12 +39,10 @@ from platform_api.orchestration import (
     DraftResult,
     LibraryCard,
     NoModel,
-    NotOn,
     RuntimeDown,
     SavedSchedule,
     Schedule,
     ScheduleBook,
-    ScheduleTicker,
 )
 from platform_api.orchestration.people_store import People
 from platform_api.orchestration.runs import AwaitingApproval, StepName
@@ -122,22 +119,6 @@ def test_only_a_use_case_that_is_on_runs(state: Lifecycle, running: bool):
 
 
 @pytest.mark.parametrize(
-    ("before", "after", "back_on"),
-    [
-        (Paused(NOW, ALICE_ID), On(), True),
-        (Deleted(NOW, ALICE_ID, On()), On(), True),
-        (On(), On(), False),
-        (Deleted(LATER, ALICE_ID, Paused(NOW, CAROL_ID)), Paused(NOW, CAROL_ID), False),
-        (On(), Paused(NOW, ALICE_ID), False),
-    ],
-)
-def test_a_move_comes_on_only_when_it_turns_a_paused_or_deleted_use_case_on(
-    before: Lifecycle, after: Lifecycle, back_on: bool
-):
-    assert comes_on(before, after) is back_on
-
-
-@pytest.mark.parametrize(
     "state",
     [
         On(),
@@ -156,22 +137,22 @@ def test_the_columns_of_a_deleted_paused_use_case_keep_both_times():
     )
 
 
-def test_a_paused_watchlist_s_schedule_shows_no_next_check():
+def test_a_watchlist_still_on_the_shared_run_workflow_shows_no_next_check():
+    """Nothing ticks schedules since E10: it starts no check until it moves to its own n8n
+    workflow, whose Schedule Trigger runs it."""
     saved = SavedSchedule(
         UseCaseId("uc_w"),
         Schedule("monday", "09:00"),
         CAROL_ID,
         "Carol",
         NOW,
-        None,
         frozenset({Role.OPERATOR}),
     )
 
     on = schedule_view(saved, NOW, on=True)
-    paused = schedule_view(saved, NOW, on=False)
 
-    assert on is not None and on.next_at == FIRST_MONDAY_SLOT
-    assert paused == on.model_copy(update={"next_at": None})
+    assert on is not None and on.next_at is None
+    assert schedule_view(saved, NOW, on=False) == on
 
 
 class ModelConnected:
@@ -282,7 +263,7 @@ def at(text: str | None) -> datetime | None:
 async def test_alice_pauses_a_workflow_and_its_next_run_reads_paused(lab: Lab):
     use_case_id = await watchlist_workflow(lab)
     [before] = await lab.listed()
-    assert (before["state"], at(before["next_run_at"])) == ("on", FIRST_MONDAY_SLOT)
+    assert before["state"] == "on"
 
     paused = await lab.move("alice", "pause", use_case_id)
 
@@ -302,7 +283,6 @@ async def test_resuming_shows_the_next_run_again(lab: Lab):
 
     assert resumed.status_code == 200
     assert resumed.json()["state"] == "on"
-    assert at(resumed.json()["next_run_at"]) == FIRST_MONDAY_SLOT + timedelta(days=7)
     assert await lab.paused_columns(use_case_id) == (None, None, None, None)
     again = await lab.move("carol", "resume", use_case_id)
     assert (again.status_code, again.json()) == (200, resumed.json())
@@ -325,7 +305,6 @@ async def test_a_held_schedule_names_no_next_run_until_an_operator_saves_it_agai
     body = {"day": "monday", "at": "09:00"}
     assert (await lab.call("carol", "PUT", "/api/v1/watchlist/schedule", body)).status_code == 200
     [taken] = await lab.listed()
-    assert at(taken["next_run_at"]) == FIRST_MONDAY_SLOT
     assert (taken["schedule"]["held"], taken["schedule"]["owner_name"]) == (None, "Carol")
 
 
@@ -347,7 +326,6 @@ async def test_a_schedule_whose_owner_left_the_list_names_no_next_run_until_it_i
     body = {"day": "monday", "at": "09:00"}
     assert (await lab.call("alice", "PUT", "/api/v1/watchlist/schedule", body)).status_code == 200
     taken = (await lab.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
-    assert at(taken["next_run_at"]) == FIRST_MONDAY_SLOT
     assert (taken["schedule"]["held"], taken["schedule"]["owner_name"]) == (None, "Alice")
 
 
@@ -382,22 +360,15 @@ async def test_a_schedule_set_up_with_a_new_workflow_is_held_once_its_creator_ca
     use_case_id = made.json()["use_case_id"]
     name = owner.capitalize()
 
-    async def shown() -> list[tuple[datetime | None, str | None, str]]:
+    async def shown() -> list[tuple[str | None, str]]:
         [listed] = (await lab.call("bob", "GET", "/api/v1/use-cases")).json()["use_cases"]
         read = (await lab.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
-        return [
-            (at(v["next_run_at"]), v["schedule"]["held"], v["schedule"]["owner_name"])
-            for v in (listed, read)
-        ]
+        return [(v["schedule"]["held"], v["schedule"]["owner_name"]) for v in (listed, read)]
 
-    assert await shown() == [(FIRST_MONDAY_SLOT, None, name)] * 2
+    assert await shown() == [(None, name)] * 2
     by, method, path, change_body = change
     assert (await lab.call(by, method, path, change_body)).status_code in (200, 204)
-    assert await shown() == [(None, held, name)] * 2
-    ticker = ScheduleTicker(lab.h.db, ScheduleBook(lab.h.db), lab.builder, lab.h.orchestrator)
-    lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(minutes=1)
-    assert await ticker.tick() == []
-    assert (await lab.call("bob", "GET", "/api/v1/runs")).json()["runs"] == []
+    assert await shown() == [(held, name)] * 2
 
 
 async def test_a_workflow_with_no_schedule_has_no_next_run(lab: Lab):
@@ -512,18 +483,6 @@ async def test_a_pause_waits_for_a_start_that_has_read_the_state(lab: Lab):
     assert (run["run_id"], run["state"]) == (started.json()["run_id"], "pending")
     refused = await lab.call("alice", "POST", f"/api/v1/use-cases/{use_case_id}/runs")
     assert refused.status_code == 409
-
-
-async def test_a_pause_waits_for_a_scheduled_start_that_has_read_the_state(lab: Lab):
-    use_case_id = await watchlist_workflow(lab)
-    held = HeldStart(lab.h.orchestrator)
-    ticker = ScheduleTicker(lab.h.db, ScheduleBook(lab.h.db), lab.builder, held)
-    lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(minutes=1)
-
-    started = await pause_waits_for(lab, held, asyncio.create_task(ticker.tick()), use_case_id)
-
-    [run] = await lab.runs()
-    assert started == [RunId(run["run_id"])]
 
 
 async def test_pausing_twice_keeps_the_first_pause(lab: Lab):
@@ -708,56 +667,6 @@ async def test_every_lifecycle_route_needs_a_signed_in_user(lab: Lab, action: st
     assert r.status_code == 401
 
 
-async def test_a_tick_while_the_watchlist_is_paused_starts_no_run(lab: Lab):
-    use_case_id = await watchlist_workflow(lab)
-    ticker = ScheduleTicker(lab.h.db, ScheduleBook(lab.h.db), lab.builder, lab.h.orchestrator)
-    await lab.move("alice", "pause", use_case_id)
-    lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(minutes=1)
-
-    assert await ticker.tick() == []
-
-    assert await lab.runs() == []
-    await lab.move("alice", "resume", use_case_id)
-    assert await ticker.tick() == []
-    lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(days=7, minutes=1)
-    [run_id] = await ticker.tick()
-    assert [(r["run_id"], r["trigger"]) for r in await lab.runs()] == [(run_id, "schedule")]
-
-
-async def scheduled_agent_workflow(lab: Lab) -> str:
-    use_case_id = await agent_workflow(lab)
-    await ScheduleBook(lab.h.db).save(UseCaseId(use_case_id), Schedule("monday", "09:00"), CAROL)
-    return use_case_id
-
-
-@pytest.mark.parametrize(
-    ("away", "back", "make"),
-    [
-        pytest.param("pause", "resume", watchlist_workflow, id="resume"),
-        pytest.param("delete", "restore", scheduled_agent_workflow, id="restore"),
-    ],
-)
-async def test_a_slot_that_falls_while_it_is_off_never_starts_even_with_no_tick_before_it_is_back(
-    lab: Lab, away: str, back: str, make: Callable[[Lab], Awaitable[str]]
-):
-    use_case_id = await make(lab)
-    ticker = ScheduleTicker(lab.h.db, ScheduleBook(lab.h.db), lab.builder, lab.h.orchestrator)
-    lab.h.clock["now"] = FIRST_MONDAY_SLOT - timedelta(minutes=5)
-    assert (await lab.move("alice", away, use_case_id)).status_code == 200
-    lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(minutes=7)
-
-    back_on = await lab.move("alice", back, use_case_id)
-
-    assert back_on.json()["state"] == "on"
-    assert at(back_on.json()["next_run_at"]) == FIRST_MONDAY_SLOT + timedelta(days=7)
-    lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(minutes=12)
-    assert await ticker.tick() == []
-    assert await lab.runs() == []
-    lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(days=7, minutes=1)
-    [run_id] = await ticker.tick()
-    assert [(r["run_id"], r["trigger"]) for r in await lab.runs()] == [(run_id, "schedule")]
-
-
 async def test_while_the_watchlist_is_paused_its_view_reads_paused_with_no_next_check(lab: Lab):
     use_case_id = await watchlist_workflow(lab)
     await lab.move("alice", "pause", use_case_id)
@@ -769,16 +678,7 @@ async def test_while_the_watchlist_is_paused_its_view_reads_paused_with_no_next_
     assert (added["state"], added["schedule"]["next_at"]) == ("paused", None)
     await lab.move("alice", "resume", use_case_id)
     resumed = (await lab.call("alice", "GET", "/api/v1/watchlist")).json()["watchlist"]
-    assert (resumed["state"], at(resumed["schedule"]["next_at"])) == ("on", FIRST_MONDAY_SLOT)
-
-
-async def test_the_tick_is_told_a_paused_or_deleted_workflow_is_not_on(lab: Lab):
-    use_case_id = await agent_workflow(lab)
-    await lab.move("alice", "pause", use_case_id)
-    assert await lab.builder.check_spec(UseCaseId(use_case_id)) == NotOn("paused")
-    await lab.move("alice", "delete", use_case_id)
-    assert await lab.builder.check_spec(UseCaseId(use_case_id)) == NotOn("deleted")
-    assert await lab.builder.check_spec(UseCaseId("uc_nope")) is None
+    assert resumed["state"] == "on"
 
 
 def stamp(moment: datetime) -> str:
@@ -1011,9 +911,7 @@ async def test_an_operator_changes_a_workflows_schedule_and_becomes_its_owner(la
         "Asia/Singapore",
     )
     assert (schedule["owner_name"], schedule["held"]) == ("Carol", None)
-    assert at(view["next_run_at"]) == datetime(
-        2026, 11, 6, 17, 30, tzinfo=ZoneInfo("Asia/Singapore")
-    )
+    assert view["next_run_at"] is None, "on the shared run workflow it starts no run"
     [listed] = await lab.listed()
     assert listed["schedule"] == schedule
     assert await lab.runs() == [], "saving a schedule starts no run and asks for no approval"
@@ -1032,7 +930,6 @@ async def test_saving_a_schedule_takes_over_a_held_workflow_whose_owner_left_the
         None,
         "Alice",
     )
-    assert at(taken.json()["next_run_at"]) == FIRST_MONDAY_SLOT
 
 
 async def test_a_workflow_held_for_a_former_operator_is_taken_over_only_by_an_operator(lab: Lab):
@@ -1067,7 +964,7 @@ async def test_a_workflow_with_no_schedule_gets_one_and_a_paused_one_stays_pause
     assert (view["state"], view["next_run_at"]) == ("paused", None)
     assert (view["schedule"]["day"], view["schedule"]["owner_name"]) == ("monday", "Alice")
     resumed = await lab.move("alice", "resume", use_case_id)
-    assert at(resumed.json()["next_run_at"]) == FIRST_MONDAY_SLOT
+    assert (resumed.status_code, resumed.json()["state"]) == (200, "on")
 
 
 async def test_a_schedule_cannot_be_saved_for_a_workflow_that_is_gone_or_the_watchlist(lab: Lab):
@@ -1252,7 +1149,6 @@ async def test_undo_publishes_the_schedule_from_before_as_a_new_version_and_agai
         "09:00",
     )
     assert view["schedule"]["owner_name"] == "Carol", "an Undo saves the schedule, as a save does"
-    assert at(view["next_run_at"]) == FIRST_MONDAY_SLOT
     assert changes(await versions(lab, use_case_id))[:2] == [
         (3, "carol", "chat", moved(EVERY_FRIDAY, EVERY_MONDAY), 2, True),
         (2, "alice", "chat", moved(EVERY_MONDAY, EVERY_FRIDAY), None, False),

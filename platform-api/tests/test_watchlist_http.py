@@ -83,17 +83,11 @@ class Renamed:
         )
 
 
-class FakeTicker:
-    async def tick(self) -> list[RunId]:
-        return [RunId("run_01A"), RunId("run_01B")]
-
-
 @pytest.fixture
 async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
     app = create_app(LOCAL_ENV)
     app.state.people = await people_in(db)
     app.state.watchlist = Watchlist(db, NothingLearned(), ScheduleBook(db))
-    app.state.schedule_ticker = FakeTicker()
     app.state.connections = FakeConnections()
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
@@ -309,8 +303,7 @@ async def test_the_first_add_saves_the_default_schedule_for_the_person_who_added
         "09:00",
         "Asia/Singapore",
     )
-    assert schedule["next_at"].endswith("+08:00")
-    assert schedule["next_at"] > schedule["saved_at"]
+    assert schedule["next_at"] is None, "on the shared run workflow it starts no check"
 
     second = await client.post("/api/v1/watchlist/software", json=REDIS, headers=ALICE)
     assert second.json()["schedule"] == schedule, "a later add leaves the schedule and its owner"
@@ -328,7 +321,7 @@ async def test_saving_a_schedule_makes_the_caller_its_owner_and_answers_the_watc
     assert [row["name"] for row in view["software"]] == ["LangGraph"]
     schedule = view["schedule"]
     assert (schedule["day"], schedule["at"], schedule["owner"]) == ("every_day", "06:30", "alice")
-    assert schedule["next_at"].endswith("06:30:00+08:00")
+    assert schedule["next_at"] is None, "on the shared run workflow it starts no check"
     got = await client.get("/api/v1/watchlist", headers=BOB)
     assert got.json() == {"watchlist": view}
 
@@ -348,7 +341,7 @@ async def test_a_schedule_whose_owner_left_the_list_is_held_until_an_operator_sa
     assert taken.status_code == 200
     schedule = taken.json()["schedule"]
     assert (schedule["owner"], schedule["owner_name"], schedule["held"]) == ("alice", "Alice", None)
-    assert schedule["next_at"].endswith("09:00:00+08:00")
+    assert schedule["next_at"] is None, "on the shared run workflow it starts no check"
 
 
 async def test_a_schedule_whose_owner_is_now_only_an_approver_is_held_and_they_cannot_take_it_back(
@@ -373,7 +366,7 @@ async def test_a_schedule_whose_owner_is_now_only_an_approver_is_held_and_they_c
     ).status_code == 403
     taken = (await client.put("/api/v1/watchlist/schedule", json=body, headers=CAROL)).json()
     assert (taken["schedule"]["owner"], taken["schedule"]["held"]) == ("carol", None)
-    assert taken["schedule"]["next_at"].endswith("17:00:00+08:00")
+    assert taken["schedule"]["next_at"] is None, "on the shared run workflow it starts no check"
 
 
 async def test_turning_the_schedule_off_leaves_null_and_saving_again_turns_it_on(
@@ -429,17 +422,6 @@ async def test_a_bad_day_or_time_is_a_422_naming_the_field(
     r = await client.put("/api/v1/watchlist/schedule", json=body, headers=ALICE)
     assert r.status_code == 422
     assert [problem["loc"][-1] for problem in r.json()["detail"]] == [field]
-
-
-async def test_the_tick_checks_the_step_key_and_answers_the_runs_it_started(
-    client: httpx.AsyncClient,
-):
-    assert (await client.post("/internal/v1/schedules/tick")).status_code == 422
-    wrong = await client.post("/internal/v1/schedules/tick", headers={"X-Step-Key": "wrong"})
-    assert wrong.status_code == 401
-    assert (await client.post("/internal/v1/schedules/tick", headers=ALICE)).status_code == 422
-    ticked = await client.post("/internal/v1/schedules/tick", headers=STEP_KEY)
-    assert (ticked.status_code, ticked.json()) == (200, {"started": ["run_01A", "run_01B"]})
 
 
 async def test_the_row_carries_the_name_github_gave_and_the_new_address_replaces_the_saved_one(

@@ -18,7 +18,7 @@ from platform_api.builder.models import (
 )
 from platform_api.builder.watchlist import attention_first
 from platform_api.contracts.stories import SUCCESS, TICKET_BODY, TICKET_TITLE
-from platform_api.orchestration.http import PendingView, TickOut
+from platform_api.orchestration.http import PendingView
 from platform_api.practice_jira.http import MockJiraTicket
 from platform_api.shared import ApprovalId, RunId, SoftwareId, UserId
 from platform_api.wire import WireModel
@@ -293,8 +293,6 @@ def watchlist_fixtures() -> dict[str, WireModel | list[WireModel]]:
         "watchlist/schedule.saved.json": SCHEDULE_SAVED_VIEW,
         "watchlist/schedule.off.json": SCHEDULE_OFF_VIEW,
         "watchlist/schedule.held.json": SCHEDULE_HELD_VIEW,
-        "internal/tick.started.json": TickOut(started=[LAST_RUN]),
-        "internal/tick.nothing-due.json": TickOut(started=[]),
         "views/scheduled.pending.json": SCHEDULED_RUN,
         "stubs/mock-jira-ticket.done.json": DONE_TICKET,
     }

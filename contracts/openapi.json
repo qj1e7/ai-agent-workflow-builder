@@ -11413,23 +11413,6 @@
         "title": "TextRun",
         "type": "object"
       },
-      "TickOut": {
-        "additionalProperties": false,
-        "properties": {
-          "started": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Started",
-            "type": "array"
-          }
-        },
-        "required": [
-          "started"
-        ],
-        "title": "TickOut",
-        "type": "object"
-      },
       "TicketStatus": {
         "enum": [
           "To Do",
@@ -21645,59 +21628,6 @@
           }
         },
         "summary": "Run Step",
-        "tags": [
-          "internal"
-        ]
-      }
-    },
-    "/internal/v1/schedules/tick": {
-      "post": {
-        "description": "Asked every 5 minutes by the schedule_tick workflow. Starts one check for each schedule that is due and answers the runs it started.",
-        "operationId": "tick_schedules_internal_v1_schedules_tick_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Step-Key",
-            "required": true,
-            "schema": {
-              "title": "X-Step-Key",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TickOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            },
-            "description": "Bad step key"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Tick Schedules",
         "tags": [
           "internal"
         ]
