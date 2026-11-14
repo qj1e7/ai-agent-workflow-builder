@@ -17,6 +17,7 @@ from platform_api.builder.home import (
     StoppedItem,
     WaitingItem,
 )
+from platform_api.builder.planner import ChangedInN8nReply
 from platform_api.builder.team_requests import FollowingUpItem, ReplyView
 from platform_api.builder.templates import SOFTWARE_WATCHLIST
 from platform_api.contracts.stories import (
@@ -33,7 +34,7 @@ from platform_api.contracts.stories import (
 )
 from platform_api.monitoring.troubleshooter import explain
 from platform_api.orchestration import ConfirmationKind
-from platform_api.shared import RunId
+from platform_api.shared import RunId, UserId
 from platform_api.wire import WireModel
 
 CONFIRMATIONS_ASKED = datetime(2026, 11, 9, 3, 41, tzinfo=UTC)
@@ -103,6 +104,7 @@ def home_for_bob() -> HomeOut:
         workflows=1,
         addresses=[],
         connections=[],
+        changed_in_n8n=[],
     )
 
 
@@ -213,6 +215,21 @@ def home_for_alice(failure: Timeline) -> HomeOut:
                 expires_at=datetime(2026, 11, 18, 9, 0, tzinfo=UTC),
             ),
         ],
+        changed_in_n8n=[
+            ChangedInN8nReply(
+                use_case_id="uc_fastapi",
+                name="FastAPI release check",
+                version=4,
+                made="published_in_n8n",
+                by=UserId("alice"),
+                by_name="Alice Tan",
+                at=datetime(2026, 11, 9, 2, 5, tzinfo=UTC),
+                grade="writes_refused",
+                changes=["Now runs every day at 7:30.", "Deleted “Ask for a yes”."],
+                findings=['"Create ticket" can run without a yes.'],
+                in_use=4,
+            )
+        ],
     )
 
 
@@ -236,6 +253,7 @@ DAY_ONE = HomeOut(
     workflows=0,
     addresses=[],
     connections=[],
+    changed_in_n8n=[],
 )
 
 

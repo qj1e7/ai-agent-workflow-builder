@@ -124,6 +124,8 @@ class InN8n:
     workflow_id: str
     version_id: str | None
     document: Mapping[str, Any] | None
+    draft: str | None = None
+    """n8n's draft as the platform last saw it, which the version compare checks."""
 
 
 @dataclass(frozen=True)
@@ -373,8 +375,8 @@ def given_versions(record: WatchlistRecord) -> Mapping[SoftwareId, Given | None]
 
 _CURRENT = """
     SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
-           u.draft, u.engine, u.n8n_workflow_id, v.version, v.params, v.n8n_version_id,
-           v.document
+           u.draft, u.engine, u.n8n_workflow_id, u.n8n_draft_id, v.version, v.params,
+           v.n8n_version_id, v.document
     FROM builder.use_cases u
     JOIN builder.use_case_versions v
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
@@ -541,7 +543,9 @@ async def _current(conn: Connection, lock: bool) -> WatchlistRecord | None:
         str(row["params"]["ticket_project"]),
         await _software_of(conn, use_case_id, int(row["version"])),
         lifecycle_of(row),
-        InN8n(workflow_id, row["n8n_version_id"], row["document"]) if own and workflow_id else None,
+        InN8n(workflow_id, row["n8n_version_id"], row["document"], row["n8n_draft_id"])
+        if own and workflow_id
+        else None,
         None if own else workflow_id,
     )
 
@@ -562,10 +566,17 @@ async def _keep_in_n8n(
     published_by: UserId | None,
 ) -> None:
     """The version keeps what n8n holds of it, and who put it live from the Portal, whose
-    scheduled checks are their work (D5). A version not put live has no publisher yet."""
+    scheduled checks are their work (D5). A version not put live has no publisher yet. The layout
+    is the template's, which nobody edits in n8n, so it has no earlier authors. n8n's draft is
+    this layout now."""
+    await uow.conn.execute(
+        "UPDATE builder.use_cases SET n8n_draft_id = %s WHERE use_case_id = %s",
+        (held.version_id, use_case_id),
+    )
     await uow.conn.execute(
         "UPDATE builder.use_case_versions SET n8n_version_id = %s, document = %s, grade = %s,"
-        " published_by = %s, published_in = %s WHERE use_case_id = %s AND version = %s",
+        " published_by = %s, published_in = %s, also = '[]'::jsonb, findings = NULL"
+        " WHERE use_case_id = %s AND version = %s",
         (
             held.version_id,
             json(held.document),
@@ -761,13 +772,19 @@ class Watchlist:
                 return laid
             if laid.document == record.n8n.document:
                 return None
-            if record.n8n.version_id is None:
+            in_use = record.n8n.version_id
+            if in_use is None:
                 return N8nNotReady(
                     "This version is not saved in n8n, so it cannot be changed there."
                 )
             live = is_on(record.lifecycle)
             written = await write_in_n8n(
-                self._n8n.drafts, record.n8n.workflow_id, record.n8n.version_id, laid.document, live
+                self._n8n.drafts,
+                record.n8n.workflow_id,
+                record.n8n.draft or in_use,
+                in_use,
+                laid.document,
+                live,
             )
             if not isinstance(written, Written):
                 return written
@@ -1078,10 +1095,10 @@ class Watchlist:
         await uow.conn.execute(
             "INSERT INTO builder.use_case_versions (use_case_id, version, template, name, "
             "instruction, params, created_at, n8n_version_id, document, grade, published_by, "
-            "published_in) "
+            "published_in, also, findings) "
             "SELECT use_case_id, %s, template, name, instruction, "
             "jsonb_set(params, '{ticket_project}', to_jsonb(%s::text)), %s, n8n_version_id, "
-            "document, grade, published_by, published_in "
+            "document, grade, published_by, published_in, also, findings "
             "FROM builder.use_case_versions WHERE use_case_id = %s AND version = %s",
             (version, project, uow.now, record.use_case_id, record.version),
         )

@@ -1,6 +1,7 @@
 import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PauseReply, PlannerReply, QuestionReply, ResumeReply, RowKind, UnderstoodRowView } from '../../api/types'
 import { count } from '../run/words'
 import { isRunning, type Row } from '../workflows/workflow'
+import { sayChanged } from './changed'
 import { cantOnCard } from './parts'
 
 /** The words for each part of a request. They match the names the removed New workflow screen used. */
@@ -169,6 +170,8 @@ export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | 
       return asker === 'operator' ? reply.message : APPROVER_OFFLINE[reply.why]
     case 'question':
       return reply.text
+    case 'changed_in_n8n':
+      return sayChanged(reply)
     case 'edit':
     case 'check_workflows':
     case 'why_stopped':

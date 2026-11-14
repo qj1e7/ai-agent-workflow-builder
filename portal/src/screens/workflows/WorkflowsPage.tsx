@@ -22,6 +22,7 @@ import { draftPath, savedLeft } from '../home/card'
 import { draftWords, moreWords, needsOf } from '../home/home'
 import { NeedRows } from '../home/NeedsSection'
 import { useArrivalScroll } from './arrival'
+import { needsFix } from './n8nChange'
 import { StatusPills } from './Status'
 import { RequestView } from './RequestView'
 import { REQUEST_PARAM } from './requests'
@@ -79,7 +80,7 @@ export function WorkflowRow({ row, index, arrive, now, nameOf }: RowProps) {
         </span>
       </span>
       <span id={`${ids}-pill`}>
-        <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} test={useCase.last_run?.test === true} />
+        <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} fix={needsFix(useCase)} test={useCase.last_run?.test === true} />
       </span>
     </>
   )

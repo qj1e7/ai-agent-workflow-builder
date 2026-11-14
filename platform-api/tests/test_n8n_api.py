@@ -235,9 +235,10 @@ async def test_the_publish_timeline_names_each_publisher_by_n8n_user_id() -> Non
     n8n = FakeN8n()
     api = api_for(n8n)
     workflow_id = await published_workflow(n8n, api)
-    await api.publish(workflow_id, "v-old")
+    held = n8n.workflows[workflow_id]["versionId"]
+    await api.publish(workflow_id, held)
     [event] = await api.publish_timeline(workflow_id)
-    assert (event.version_id, event.event, event.user_id) == ("v-old", "activated", OWNER_ID)
+    assert (event.version_id, event.event, event.user_id) == (held, "activated", OWNER_ID)
 
 
 def timeline(*events: tuple[str, str, str, str]) -> list[PublishEvent]:

@@ -5,6 +5,7 @@ from typing import Protocol
 from pydantic import Field
 
 from platform_api.builder.models import DraftView, UseCaseView, WatchedSoftwareView
+from platform_api.builder.planner import ChangedInN8nReply
 from platform_api.builder.service import Builder
 from platform_api.builder.team_requests import FollowingUpItem, TeamRequests
 from platform_api.monitoring import Advice, RunFailedData, explain_failure
@@ -225,6 +226,10 @@ class HomeOut(WireModel):
         "out soon, as the last check left them, and the AI model while none is set up, as its "
         "settings say now. Home never starts a check."
     )
+    changed_in_n8n: list[ChangedInN8nReply] = Field(
+        description="For an Operator, the versions published in n8n's editor in the last day, "
+        "the newest first, at most 10, each as the chat's Changed in n8n card shows it."
+    )
 
 
 class RunsForPerson(Protocol):
@@ -435,6 +440,7 @@ class Home:
         connections = await self._connections.needing_attention() if operator else []
         addresses = await self._addresses.needing_attention() if operator else []
         replied = await self._requests.replied(viewer)
+        changed = await self._builder.changed_in_n8n(SHOWN) if operator else []
         return HomeOut(
             approvals=[_approval(a, names) for a in runs.asks[:SHOWN]],
             approvals_total=len(runs.asks),
@@ -455,4 +461,5 @@ class Home:
             workflows=len(use_cases),
             addresses=[_address(a) for a in addresses],
             connections=[_connection(c) for c in connections],
+            changed_in_n8n=changed,
         )

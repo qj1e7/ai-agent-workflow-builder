@@ -1,9 +1,10 @@
+import { useEffect } from 'react'
 import { skipToken, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { unwrap, type ApiClient } from './client'
 import { useApiClient, useCacheScope } from './context'
 import { newIdempotencyKey } from './idempotency'
 import { keys } from './queries'
-import type { CreateAgentUseCase, ScheduleIn, UseCaseCreated, UseCaseView, VersionView, WatchlistView } from './types'
+import type { CreateAgentUseCase, RepublishIn, ScheduleIn, UseCaseCreated, UseCaseView, VersionView, WatchlistView } from './types'
 
 type Move = 'pause' | 'resume' | 'restore'
 
@@ -142,6 +143,87 @@ export function undoOptions(client: ApiClient, queryClient: QueryClient, user: s
     onSuccess: (view: UseCaseView) => applySavedView(queryClient, user, view),
     onSettled: (_view: unknown, _error: unknown, { useCaseId }: { useCaseId: string }) => rereadChanged(queryClient, user, useCaseId),
   }
+}
+
+/** What a roll back or a put-back of the yes asks: who saw which version in use, and where in the Portal it was pressed. */
+export interface Republish {
+  readonly useCaseId: string
+  readonly inUse: number
+  readonly via: RepublishIn['via']
+}
+
+/** The workflow, its versions and Home read again, so every place that says what is in use says the new version. */
+function rereadAfterRepublish(queryClient: QueryClient, user: string, useCaseId: string): void {
+  void queryClient.invalidateQueries({ queryKey: keys.useCase(user, useCaseId) })
+  void queryClient.invalidateQueries({ queryKey: ['versions', user, useCaseId] })
+  void queryClient.invalidateQueries({ queryKey: ['home'] })
+  void queryClient.invalidateQueries({ queryKey: keys.useCases(user) })
+}
+
+/** Rolls back to `version`: the platform publishes it again as a new version, and answers 409 when another version is in use by now. */
+export function rollbackOptions(client: ApiClient, queryClient: QueryClient, user: string) {
+  return {
+    mutationFn: async ({ useCaseId, version, inUse, via }: Republish & { version: number }) =>
+      unwrap(await client.POST('/api/v1/use-cases/{use_case_id}/versions/{version}/rollback', { params: { path: { use_case_id: useCaseId, version } }, body: { via, in_use: inUse } })),
+    onSuccess: (view: UseCaseView) => applySavedView(queryClient, user, view),
+    onSettled: (_view: unknown, _error: unknown, { useCaseId }: Republish) => rereadAfterRepublish(queryClient, user, useCaseId),
+  }
+}
+
+/** Puts Ask for a yes back before each write, as a new version. */
+export function addTheYesBackOptions(client: ApiClient, queryClient: QueryClient, user: string) {
+  return {
+    mutationFn: async ({ useCaseId, inUse, via }: Republish) =>
+      unwrap(await client.POST('/api/v1/use-cases/{use_case_id}/add-the-yes-back', { params: { path: { use_case_id: useCaseId } }, body: { via, in_use: inUse } })),
+    onSuccess: (view: UseCaseView) => applySavedView(queryClient, user, view),
+    onSettled: (_view: unknown, _error: unknown, { useCaseId }: Republish) => rereadAfterRepublish(queryClient, user, useCaseId),
+  }
+}
+
+export function useRollback() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation(rollbackOptions(client, queryClient, user))
+}
+
+export function useAddTheYesBack() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation(addTheYesBackOptions(client, queryClient, user))
+}
+
+/** Asks the platform to look in n8n now. The answer is never shown: a failure only means the minute's own sweep finds it. */
+export async function sweepNow(client: ApiClient, queryClient: QueryClient, useCaseId?: string): Promise<void> {
+  try {
+    await client.POST('/api/v1/n8n/sweep', useCaseId === undefined ? {} : { params: { query: { use_case_id: useCaseId } } })
+    void queryClient.invalidateQueries({ queryKey: ['home'] })
+    if (useCaseId !== undefined) void queryClient.invalidateQueries({ queryKey: ['use-case'] })
+  } catch {
+    // The sweep runs every minute on its own.
+  }
+}
+
+/**
+ * For an Operator, looks in n8n when the window regains focus or the tab becomes visible, so a Changed in n8n card comes without
+ * the minute's wait (ENGINE-PLAN 1, row 6). The platform looks at most once every few seconds, so a burst of focus events costs one look.
+ */
+export function useSweepOnFocus(enabled: boolean, useCaseId?: string): void {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    if (!enabled) return
+    const look = () => {
+      if (document.visibilityState === 'visible') void sweepNow(client, queryClient, useCaseId)
+    }
+    window.addEventListener('focus', look)
+    document.addEventListener('visibilitychange', look)
+    return () => {
+      window.removeEventListener('focus', look)
+      document.removeEventListener('visibilitychange', look)
+    }
+  }, [enabled, client, queryClient, useCaseId])
 }
 
 export function useChatScheduleChange() {

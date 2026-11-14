@@ -1827,6 +1827,48 @@ class Orchestrator:
             if wake is not None and await self._store.held_wait(uow, request.id) is not None:
                 await self._enqueue_wake(uow, run_id, request.id, wake)
 
+    async def cancel_for_deleted(self, use_case_id: UseCaseId) -> int:
+        """A workflow deleted while a request waits (ENGINE-PLAN D7). Each open request ends
+        cancelled, "Deleted before an answer. Nothing was written.", and its Approvers see that
+        on its card. The execution that waits for it is never woken, because n8n would still
+        run an archived workflow's write (P7 Q17). A yes n8n has not taken yet is lost the same
+        way, its wake held back. Asked again, it changes nothing. How many requests it ended."""
+        async with self._db.transaction("orchestration") as uow:
+            waiting = await self._store.waiting_runs(uow, use_case_id)
+        ended = 0
+        for run_id in waiting:
+            async with self._db.transaction("orchestration") as uow:
+                record = await self._store.load_run(uow, run_id, lock=True)
+                if record is None or not isinstance(record.state, AwaitingApproval):
+                    continue
+                request = await self._store.load_approval(uow, record.state.approval_id)
+                assert request is not None
+                decisions = await self._store.load_decisions(uow, request.id)
+                await self._store.cancel_outbox(uow, run_id)
+                match approval_status(request, decisions):
+                    case Open():
+                        await self._store.end_request(uow, request.id, Ended.CANCELLED)
+                        await self._commit(uow, record, record.state.cancel())
+                        await self._store.enqueue(
+                            uow,
+                            run_id,
+                            SHOW_OUTCOME,
+                            {
+                                "approval_id": request.id,
+                                "verdict": "cancelled",
+                                "by": [],
+                                "use_case_name": record.spec.use_case_name,
+                            },
+                            uow.now,
+                        )
+                        ended += 1
+                    case Approved():
+                        why = "its workflow was deleted before n8n took the yes."
+                        await self._commit(uow, record, record.state.lose(why))
+                    case _:
+                        pass
+        return ended
+
     async def _enqueue_wake(
         self, uow: UnitOfWork, run_id: RunId, approval_id: ApprovalId, decision: WakeDecision
     ) -> None:

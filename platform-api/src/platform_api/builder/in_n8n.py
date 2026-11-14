@@ -16,16 +16,20 @@ log = logging.getLogger(__name__)
 async def write_in_n8n(
     n8n: N8nDrafts,
     workflow_id: str,
-    expected_version_id: str,
+    expected_draft: str,
+    in_use: str,
     document: Mapping[str, Any],
     live: bool,
 ) -> Written | ChangedInN8n | N8nNotReady:
+    """`expected_draft` is n8n's draft as the platform last saw it, which the compare checks.
+    `in_use` is the version the records hold live, put back when a live write did not finish. They
+    differ once an earlier version was published again, which leaves the draft where it was."""
     try:
-        return await n8n.change(workflow_id, expected_version_id, document, live)
+        return await n8n.change(workflow_id, expected_draft, document, live)
     except (N8nError, httpx.HTTPError) as error:
         log.warning("n8n did not take the change to %s: %s", workflow_id, error)
         if live:
-            await put_back(n8n, workflow_id, expected_version_id)
+            await put_back(n8n, workflow_id, in_use)
         return N8nNotReady("n8n did not take the change. Nothing changed. Try again.")
 
 

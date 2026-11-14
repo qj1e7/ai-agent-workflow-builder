@@ -63,6 +63,14 @@ class FakeN8n:
     """Each execution read with its data, which n8n sends in full."""
     on_run: RunHook | None = None
     next_execution: int = 300
+    history: dict[str, dict[str, dict[str, Any]]] = field(
+        default_factory=dict[str, dict[str, dict[str, Any]]]
+    )
+    """Each workflow's versions n8n still holds, by version id. A test prunes one as n8n does
+    after a day (P7 Q7)."""
+    archived: set[str] = field(default_factory=set[str])
+    made: int = 0
+    """How many workflows n8n has made: it never gives a deleted workflow's id to another."""
 
     def client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(transport=httpx.MockTransport(self.handle), base_url="http://n8n")
@@ -73,6 +81,37 @@ class FakeN8n:
         workflow["versionId"] = _new_version()
         workflow["checksum"] = _new_version()
         workflow["nodes"][0]["notes"] = "changed in the editor"
+        self._remember(workflow_id)
+
+    def publish_as(
+        self, workflow_id: str, user_id: str, change: Callable[[dict[str, Any]], None]
+    ) -> str:
+        """A member changes the draft in n8n's editor, saves it and publishes it, as P7 Q4 did:
+        the timeline names them by their n8n user id."""
+        workflow = self.workflows[workflow_id]
+        change(workflow)
+        workflow["versionId"] = _new_version()
+        workflow["checksum"] = _new_version()
+        self._remember(workflow_id)
+        self._activate(workflow_id, workflow["versionId"], user_id)
+        return workflow["versionId"]
+
+    def save_settings(self, workflow_id: str, change: Callable[[dict[str, Any]], None]) -> None:
+        """A member changes the workflow's settings in n8n's editor and saves, publishing nothing.
+        n8n runs the live version with the new settings at once."""
+        workflow = self.workflows[workflow_id]
+        change(workflow["settings"])
+        workflow["versionId"] = _new_version()
+        workflow["checksum"] = _new_version()
+        self._remember(workflow_id)
+
+    def _remember(self, workflow_id: str) -> None:
+        workflow = self.workflows[workflow_id]
+        # n8n's history keeps a version's blocks and edges, never its settings, which the
+        # workflow holds once for every version (the live run of 26749b88 showed it).
+        kept = {key: workflow[key] for key in ("name", "nodes", "connections")}
+        versions = self.history.setdefault(workflow_id, {})
+        versions[workflow["versionId"]] = json.loads(json.dumps(kept))
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -95,7 +134,8 @@ class FakeN8n:
         if (body["emailOrLdapLoginId"], body["password"]) != (OWNER_EMAIL, OWNER_PASSWORD):
             return httpx.Response(401, json={"message": "Wrong username or password."})
         self.logins += 1
-        return httpx.Response(200, json={"data": {}}, headers={"set-cookie": "n8n-auth=owner"})
+        answer = {"data": {"id": OWNER_ID, "email": OWNER_EMAIL}}
+        return httpx.Response(200, json=answer, headers={"set-cookie": "n8n-auth=owner"})
 
     def _rest(self, method: str, path: str, body: Any) -> httpx.Response:
         match method, path.strip("/").split("/"):
@@ -172,7 +212,8 @@ class FakeN8n:
         parts = path.strip("/").split("/")
         match request.method, parts:
             case "POST", ["workflows"]:
-                workflow_id = f"wf{len(self.workflows) + 1}"
+                self.made += 1
+                workflow_id = f"wf{self.made}"
                 self.workflows[workflow_id] = {
                     **self.keeps(json.loads(json.dumps(body))),
                     "id": workflow_id,
@@ -181,11 +222,25 @@ class FakeN8n:
                     "activeVersionId": None,
                     "active": False,
                 }
+                self._remember(workflow_id)
                 return httpx.Response(200, json=self.workflows[workflow_id])
             case "GET", ["workflows", workflow_id] if workflow_id in self.workflows:
                 return httpx.Response(200, json=self.workflows[workflow_id])
             case "DELETE", ["workflows", workflow_id] if workflow_id in self.workflows:
+                if self.workflows[workflow_id]["active"]:
+                    message = "Cannot delete a published workflow. Unpublish it before deleting."
+                    return httpx.Response(409, json={"message": message})
+                self.history.pop(workflow_id, None)
                 return httpx.Response(200, json=self.workflows.pop(workflow_id))
+            case "POST", ["workflows", workflow_id, "archive"] if workflow_id in self.workflows:
+                self.workflows[workflow_id].update(activeVersionId=None, active=False)
+                self.archived.add(workflow_id)
+                return httpx.Response(200, json=self.workflows[workflow_id])
+            case "GET", ["workflows", workflow_id, "versions", version_id]:
+                kept = self.history.get(workflow_id, {}).get(version_id)
+                if kept is None:
+                    return httpx.Response(404, json={"message": "Version not found"})
+                return httpx.Response(200, json={**kept, "versionId": version_id})
             case "PUT", ["workflows", workflow_id] if workflow_id in self.workflows:
                 if "versionId" in body:
                     return httpx.Response(400, json={"message": "versionId is read-only"})
@@ -193,6 +248,7 @@ class FakeN8n:
                 workflow.update(self.keeps(json.loads(json.dumps(body))))
                 workflow["versionId"] = _new_version()
                 workflow["checksum"] = _new_version()
+                self._remember(workflow_id)
                 if request.url.params.get("publishIfActive") != "false" and workflow["active"]:
                     self._activate(workflow_id, workflow["versionId"])
                 answer = httpx.Response(200, json=workflow)
@@ -201,6 +257,8 @@ class FakeN8n:
                 return answer
             case "POST", ["workflows", workflow_id, "publish"]:
                 version = body.get("versionId", self.workflows[workflow_id]["versionId"])
+                if version not in self.history.get(workflow_id, {}):
+                    return httpx.Response(404, json={"message": "Version not found"})
                 self._activate(workflow_id, version)
                 return httpx.Response(200, json=self.workflows[workflow_id])
             case "POST", ["workflows", workflow_id, "unpublish"]:

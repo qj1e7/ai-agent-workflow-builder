@@ -29,5 +29,6 @@
   "coming_up": null,
   "workflows": 1,
   "addresses": [],
-  "connections": []
+  "connections": [],
+  "changed_in_n8n": []
 }

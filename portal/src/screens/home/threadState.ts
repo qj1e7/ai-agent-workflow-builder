@@ -20,6 +20,8 @@ export type ThreadAction =
   | { readonly type: 'sent'; readonly text: string }
   | { readonly type: 'answered'; readonly reply: PlannerReply; readonly typed: string }
   | { readonly type: 'failed' }
+  /** A version someone published in n8n, found while the chat is open. It comes with no message from the person before it. */
+  | { readonly type: 'arrived'; readonly reply: PlannerReply }
   | { readonly type: 'resumed'; readonly start: CardStart }
   | { readonly type: 'asked_behind'; readonly text: string }
   | { readonly type: 'new_chat' }
@@ -36,6 +38,13 @@ export function threadReducer(state: Thread, action: ThreadAction): Thread {
     case 'asked_behind': {
       const me = state.last + 1
       return { messages: [...state.messages, { kind: 'me', id: me, text: action.text }, { kind: 'behind', id: me + 1 }], last: me + 1 }
+    }
+    case 'arrived': {
+      // A request still waiting for its answer stays last, so a failed send takes back only the request.
+      const card: Message = { kind: 'reply', id: state.last + 1, reply: action.reply, typed: '' }
+      const waiting = isThinking(state) ? state.messages.slice(-2) : []
+      const before = state.messages.slice(0, state.messages.length - waiting.length)
+      return { messages: [...before, card, ...waiting], last: state.last + 1 }
     }
     case 'failed':
       return { ...state, messages: state.messages.slice(0, -2) }
@@ -55,8 +64,9 @@ export const isThinking = (thread: Thread): boolean => thread.messages.some((m) 
 export type PreviousTurn = NonNullable<PlannerAnswerIn['previous']>
 
 export function previousOf(thread: Thread): PreviousTurn | null {
-  const last = thread.messages.findLast((m) => m.kind === 'reply')
-  if (last === undefined || last.kind !== 'reply' || last.reply.answer === 'offline') return null
+  // A Changed in n8n card answers no question, so a request typed after it follows on from the last answer to a person.
+  const last = thread.messages.findLast((m) => m.kind === 'reply' && m.reply.answer !== 'changed_in_n8n')
+  if (last === undefined || last.kind !== 'reply' || last.reply.answer === 'offline' || last.reply.answer === 'changed_in_n8n') return null
   const { reply, typed } = last
   return {
     request: typed,

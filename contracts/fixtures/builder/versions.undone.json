@@ -20,7 +20,12 @@
         }
       },
       "undid": 2,
-      "running": true
+      "running": true,
+      "made": null,
+      "grade": null,
+      "changes": [],
+      "rolled_back_to": null,
+      "publisher_unknown": false
     },
     {
       "version": 2,
@@ -42,7 +47,12 @@
         }
       },
       "undid": null,
-      "running": false
+      "running": false,
+      "made": null,
+      "grade": null,
+      "changes": [],
+      "rolled_back_to": null,
+      "publisher_unknown": false
     },
     {
       "version": 1,
@@ -51,7 +61,12 @@
       "via": null,
       "change": null,
       "undid": null,
-      "running": false
+      "running": false,
+      "made": null,
+      "grade": null,
+      "changes": [],
+      "rolled_back_to": null,
+      "publisher_unknown": false
     }
   ]
 }

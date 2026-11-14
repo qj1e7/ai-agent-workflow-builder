@@ -87,6 +87,7 @@ class Outcome(Enum):
 TEST_PASSED = "Test run passed up to the yes. Nothing was written."
 SKIPPED = "An earlier run is still waiting for a yes."
 NO_ANSWER = "No answer. Nothing was written."
+DELETED_BEFORE_AN_ANSWER = "Deleted before an answer. Nothing was written."
 
 
 @dataclass(frozen=True)
@@ -479,6 +480,19 @@ class AwaitingApproval:
         )
         return Moved(
             Expired(self.run_id, self.proposal_id, self.approval_id, self.unread), (expired,)
+        )
+
+    def cancel(self) -> Moved[Expired]:
+        """Its workflow was deleted before anyone answered (ENGINE-PLAN D7). Nothing was
+        written, and the request ends cancelled."""
+        cancelled = PendingEvent(
+            PLATFORM,
+            "run_expired",
+            DELETED_BEFORE_AN_ANSWER,
+            RunExpiredData(approval_id=self.approval_id),
+        )
+        return Moved(
+            Expired(self.run_id, self.proposal_id, self.approval_id, self.unread), (cancelled,)
         )
 
     def reject(

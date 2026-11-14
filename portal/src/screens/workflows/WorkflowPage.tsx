@@ -7,7 +7,7 @@ import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
 import { useMe, useRuns, useStartRun, useUseCase } from '../../api/queries'
 import type { Me, UseCaseView } from '../../api/types'
-import { useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
+import { useAddTheYesBack, useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow, useRollback, useSweepOnFocus } from '../../api/workflowQueries'
 import { OperatorsNote } from '../../shell/OperatorsNote'
 import { PageHead } from '../../shell/PageHead'
 import { ActionMenu, type MenuItem } from '../../ui/ActionMenu'
@@ -22,6 +22,7 @@ import { StatusBanner } from './Banner'
 import { useArrivalScroll } from './arrival'
 import { templateLine } from './line'
 import { RecentRuns } from './RecentRuns'
+import { backToVersionToast, needsFix, yesBackToast } from './n8nChange'
 import { StatusPills } from './Status'
 import { Versions } from './Versions'
 import { DraftActions } from './DraftActions'
@@ -161,6 +162,8 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const navigate = useNavigate()
   const viewer = viewerOf(me)
   const move = useMoveWorkflow()
+  const rollback = useRollback()
+  const addYes = useAddTheYesBack()
   const removal = useDeleteWorkflow()
   const reread = useRereadWorkflow()
   const changes = useLatch()
@@ -173,6 +176,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const [said, setSaid] = useState<Said | null>(null)
   const switchedTo = useRef<UseCaseView['state'] | null>(null)
   useArrivalScroll()
+  useSweepOnFocus(viewer.operator, id)
 
   const recent = runsOf(runs.data ?? [], id)
   const paused = useCase.state === 'paused'
@@ -202,6 +206,22 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
         setProblem(changeProblem(what, useCase.name, error, words))
       },
     })
+  }
+
+  function republish(action: Extract<NonNullable<typeof banner.action>, { kind: 'yes' | 'undo' }>) {
+    const answers = (toast: (saved: number) => string) => ({
+      onSuccess: (view: UseCaseView) => {
+        setProblem(null)
+        setSaid((before) => ({ id: (before?.id ?? 0) + 1, text: toast(view.version) }))
+      },
+      onError: (error: unknown) => {
+        rereadIfOutOfDate('switch')(error)
+        setProblem(words(error))
+      },
+    })
+    const send = { useCaseId: id, inUse: useCase.version, via: 'page' } as const
+    if (action.kind === 'yes') addYes.mutate(send, answers(yesBackToast))
+    else rollback.mutate({ ...send, version: action.to }, answers((saved) => backToVersionToast(action.to, saved)))
   }
 
   function confirmDelete() {
@@ -245,7 +265,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           <p className={styles['kind']}>Workflow</p>
           <h1 tabIndex={-1}>{useCase.name}</h1>
         </div>
-        <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} test={useCase.last_run?.test === true} large />
+        <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} test={useCase.last_run?.test === true} large fix={needsFix(useCase)} />
       </div>
       <p className={styles['sentence']}>{sentenceOf(useCase)}</p>
       {leftOutWords(useCase.left_out) ? <p className={styles['leftOut']}>{leftOutWords(useCase.left_out)}</p> : null}
@@ -254,7 +274,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           <OperatorsNote what="this workflow" />
         </p>
       )}
-      <StatusBanner banner={banner} resuming={move.isPending} onResume={() => pauseOrResume('resume')} />
+      <StatusBanner banner={banner} resuming={move.isPending} onResume={() => pauseOrResume('resume')} onRepublish={republish} republishing={rollback.isPending || addYes.isPending} />
       {runNow.error ? (
         <p className={styles['problem']} role="alert">
           {words(runNow.error)}
@@ -295,7 +315,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           )}
         </section>
       )}
-      <Versions useCase={useCase} now={now} nameOf={nameOf} />
+      <Versions useCase={useCase} now={now} nameOf={nameOf} operator={viewer.operator} say={(text) => setSaid((before) => ({ id: (before?.id ?? 0) + 1, text }))} />
       <DraftActions useCase={useCase} viewer={viewer} />
       {mayPause || items.length > 0 ? (
         <div className={styles['actions']}>

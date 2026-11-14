@@ -90,10 +90,15 @@ from platform_api.orchestration.connections import (
 )
 from platform_api.orchestration.n8n import (
     ChangedInN8n,
+    Expected,
     N8nDrafts,
     N8nError,
+    N8nWorkflow,
+    PublishEvent,
+    PutBack,
     SavedDraft,
     Written,
+    publisher_of,
 )
 from platform_api.orchestration.n8n_calls import (
     GITHUB_RELEASES,
@@ -219,10 +224,15 @@ __all__ = [
     "block_id",
     "Edge",
     "ChangedInN8n",
+    "Expected",
     "N8nDrafts",
     "N8nError",
+    "N8nWorkflow",
+    "PublishEvent",
+    "PutBack",
     "SavedDraft",
     "Written",
+    "publisher_of",
     "N8nTarget",
     "next_run",
     "read_flow",

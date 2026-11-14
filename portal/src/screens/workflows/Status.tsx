@@ -18,8 +18,10 @@ export function useChanges(value: string): number {
 const RUN_ICON = { wait: IconLock, bad: IconX, new: null, ok: null } as const
 
 /** One status, in the spec's words: Paused, else what the newest run needs, else On. A test run is marked beside it. */
-export function StatusPills({ state, fact, test = false, large = false }: { state: UseCaseView['state']; fact: Pill | null; test?: boolean; large?: boolean }) {
-  const run = state === 'on' && fact?.pill ? fact : null
+export function StatusPills({ state, fact, test = false, large = false, fix = false }: { state: UseCaseView['state']; fact: Pill | null; test?: boolean; large?: boolean; fix?: boolean }) {
+  // The sketch's wfState: Paused first, then Needs a fix whenever the version in use is not safe, then what the newest run needs.
+  const unsafe = state === 'on' && fix
+  const run = unsafe ? { tone: 'bad' as const, pill: 'Needs a fix' } : state === 'on' && fact?.pill ? fact : null
   const words = run?.pill ?? lifeWords(state)
   const changes = useChanges(words)
   const Icon = run ? RUN_ICON[run.tone] : state === 'paused' ? IconPause : state === 'draft' ? null : IconCheck

@@ -3370,6 +3370,119 @@
         "title": "ChangeOut",
         "type": "object"
       },
+      "ChangedInN8nReply": {
+        "additionalProperties": false,
+        "description": "A version published in n8n, as the versions sweep found and graded it (ENGINE-PLAN 2.5).\nHome lists the newest for Operators, and the chat shows each as the Changed in n8n card, whose\nUndo rolls back to the version before with POST\n/api/v1/use-cases/{use_case_id}/versions/{version}/rollback and whose Add the yes back is POST\n/api/v1/use-cases/{use_case_id}/add-the-yes-back, each with in_use set to version.",
+        "properties": {
+          "answer": {
+            "const": "changed_in_n8n",
+            "default": "changed_in_n8n",
+            "title": "Answer",
+            "type": "string"
+          },
+          "at": {
+            "description": "When the platform found it.",
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who published it in n8n. Null when the People list can't match them, so its runs stop at their first block until an Operator matches the person, and for settings saved in n8n, which n8n does not name anyone for.",
+            "title": "By"
+          },
+          "by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Their name. Null with by.",
+            "title": "By Name"
+          },
+          "changes": {
+            "description": "What changed from the version before, in plain words, one per line.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "findings": {
+            "description": "Why it is not safe, in the safety checker's words. Empty when it is safe.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "grade": {
+            "$ref": "#/components/schemas/Grade"
+          },
+          "in_use": {
+            "description": "The version in use now. Another number than version means someone has changed it since, so the card offers nothing more.",
+            "title": "In Use",
+            "type": "integer"
+          },
+          "made": {
+            "description": "published_in_n8n: someone published it in n8n's editor. settings_changed_in_n8n: someone saved its settings there and published nothing, and n8n runs the live version with them at once. n8n does not say who saved them, so by is null.",
+            "enum": [
+              "published_in_n8n",
+              "settings_changed_in_n8n"
+            ],
+            "title": "Made",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version published in n8n, or whose settings changed.",
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "parts",
+          "answer",
+          "use_case_id",
+          "name",
+          "version",
+          "made",
+          "by",
+          "by_name",
+          "at",
+          "grade",
+          "changes",
+          "findings",
+          "in_use"
+        ],
+        "title": "ChangedInN8nReply",
+        "type": "object"
+      },
       "CheckPartIn": {
         "additionalProperties": false,
         "properties": {
@@ -5606,6 +5719,14 @@
         "title": "FoundProjects",
         "type": "object"
       },
+      "Grade": {
+        "enum": [
+          "safe",
+          "writes_refused",
+          "needs_a_fix"
+        ],
+        "type": "string"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -5654,6 +5775,14 @@
           "approvals_total": {
             "title": "Approvals Total",
             "type": "integer"
+          },
+          "changed_in_n8n": {
+            "description": "For an Operator, the versions published in n8n's editor in the last day, the newest first, at most 10, each as the chat's Changed in n8n card shows it.",
+            "items": {
+              "$ref": "#/components/schemas/ChangedInN8nReply"
+            },
+            "title": "Changed In N8N",
+            "type": "array"
           },
           "coming_up": {
             "anyOf": [
@@ -5783,7 +5912,8 @@
           "coming_up",
           "workflows",
           "addresses",
-          "connections"
+          "connections",
+          "changed_in_n8n"
         ],
         "title": "HomeOut",
         "type": "object"
@@ -7675,6 +7805,7 @@
           "mapping": {
             "abilities": "#/components/schemas/AbilitiesReply",
             "cant": "#/components/schemas/CantReply",
+            "changed_in_n8n": "#/components/schemas/ChangedInN8nReply",
             "check_workflows": "#/components/schemas/CheckWorkflowsReply",
             "decide": "#/components/schemas/DecideReply",
             "decided": "#/components/schemas/DecidedReply",
@@ -7752,6 +7883,9 @@
           },
           {
             "$ref": "#/components/schemas/OfflineReply"
+          },
+          {
+            "$ref": "#/components/schemas/ChangedInN8nReply"
           }
         ]
       },
@@ -8780,6 +8914,30 @@
       "RepoName": {
         "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$",
         "type": "string"
+      },
+      "RepublishIn": {
+        "additionalProperties": false,
+        "properties": {
+          "in_use": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The version the person saw in use, as the Changed in n8n card names it. When another version is in use by now, nothing changes and the answer is 409, so a change made since is never thrown away.",
+            "title": "In Use"
+          },
+          "via": {
+            "$ref": "#/components/schemas/Via",
+            "default": "page",
+            "description": "Where the change was made: page, the workflow's page, or chat, the Planner's chat. The version keeps it."
+          }
+        },
+        "title": "RepublishIn",
+        "type": "object"
       },
       "RequestKind": {
         "enum": [
@@ -10757,6 +10915,21 @@
         "title": "SupportReportedData",
         "type": "object"
       },
+      "SweepOut": {
+        "additionalProperties": false,
+        "properties": {
+          "found": {
+            "description": "How many versions published in n8n this look found and kept.",
+            "title": "Found",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "found"
+        ],
+        "title": "SweepOut",
+        "type": "object"
+      },
       "SwitchChoice": {
         "additionalProperties": false,
         "properties": {
@@ -11756,6 +11929,38 @@
             "title": "Created At",
             "type": "string"
           },
+          "deleted_in_n8n_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the platform found its workflow deleted in n8n. It runs no more, and its runs and versions are kept (ENGINE-PLAN D7). Null while n8n has it.",
+            "title": "Deleted In N8N At"
+          },
+          "findings": {
+            "description": "Why the version in use is not safe, in the safety checker's words, one per problem. Empty when it is safe.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "grade": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Grade"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The safety checker's grade of the version in use, for a workflow n8n carries. writes_refused: a write can run without a yes, so the platform refuses this version's writes and asks nobody, until the yes is put back or the change undone. needs_a_fix: it uses a block that is not on, or cannot run as the platform expects, so each run stops at its first block. Null for a workflow on the shared n8n workflow."
+          },
           "instruction": {
             "title": "Instruction",
             "type": "string"
@@ -11985,6 +12190,15 @@
         "title": "VersionList",
         "type": "object"
       },
+      "VersionMade": {
+        "enum": [
+          "published_in_n8n",
+          "settings_changed_in_n8n",
+          "rolled_back",
+          "yes_put_back"
+        ],
+        "type": "string"
+      },
       "VersionSchedule": {
         "additionalProperties": false,
         "properties": {
@@ -12064,7 +12278,7 @@
                 "type": "null"
               }
             ],
-            "description": "Who changed it. Null when change is null.",
+            "description": "Who changed it: the person who saved the schedule, rolled back or put the yes back in the Portal, or who published it in n8n. Null for version 1, for a version the Software watchlist published, and for a version published in n8n by someone the People list can't match.",
             "title": "By"
           },
           "change": {
@@ -12076,7 +12290,55 @@
                 "type": "null"
               }
             ],
-            "description": "What changed. Null for version 1, and for a version the Software watchlist published when its software changed."
+            "description": "The change of when it runs. Null for version 1, for a version the Software watchlist published when its software changed, and for a version made otherwise."
+          },
+          "changes": {
+            "description": "For a version published in n8n, or whose settings changed there, what changed from the version before, in plain words, as the Changed in n8n card lists them. Empty otherwise.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "grade": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Grade"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The safety checker's grade of this version, for a workflow n8n carries. Null for a workflow on the shared n8n workflow."
+          },
+          "made": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionMade"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How a version that is not a change of when it runs came about: published_in_n8n by a person in n8n's editor; settings_changed_in_n8n, the same version in n8n with its settings saved there and nothing published, which n8n runs with the new settings at once; rolled_back to an earlier version; or yes_put_back, which put Ask for a yes back before each write. Null otherwise."
+          },
+          "publisher_unknown": {
+            "default": false,
+            "description": "True for a version published in n8n by someone the People list can't match. Its runs stop at their first block until an Operator matches the person.",
+            "title": "Publisher Unknown",
+            "type": "boolean"
+          },
+          "rolled_back_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The version a roll back put back in use. Null otherwise.",
+            "title": "Rolled Back To"
           },
           "running": {
             "description": "True for the version running now, which is the newest.",
@@ -12108,7 +12370,7 @@
                 "type": "null"
               }
             ],
-            "description": "Where it was changed. Null when change is null."
+            "description": "Where in the Portal it was changed. Null for a version made in n8n, and when by is null."
           }
         },
         "required": [
@@ -15044,6 +15306,94 @@
         ]
       }
     },
+    "/api/v1/n8n/sweep": {
+      "post": {
+        "description": "Looks in n8n now for versions published in its editor, as the sweep does every minute: for one workflow, or for all when use_case_id is left out. The Portal asks when its tab regains focus, so a Changed in n8n card comes without the minute's wait. Each version found is graded and kept, and Home lists it. Asked again within a few seconds, it looks only once. Only Operators get the Changed in n8n card, so only they ask.",
+        "operationId": "sweep_versions_api_v1_n8n_sweep_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "use_case_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Use Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SweepOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Sweep Versions",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
     "/api/v1/people": {
       "get": {
         "operationId": "list_people_api_v1_people_get",
@@ -17884,6 +18234,119 @@
         ]
       }
     },
+    "/api/v1/use-cases/{use_case_id}/add-the-yes-back": {
+      "post": {
+        "description": "Puts Ask for a yes back before each write that can run without one, in the version in use, and publishes that as a new version under the version compare, as a roll back does. When every write already waits for a yes, nothing changes. When the version still would not pass the safety check, nothing changes and the answer says why: undo it instead. The caller is its publisher, and whoever published the version it changes joins every run of it.",
+        "operationId": "add_the_yes_back_api_v1_use_cases__use_case_id__add_the_yes_back_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "use_case_id",
+            "required": true,
+            "schema": {
+              "title": "Use Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepublishIn",
+                "default": {
+                  "via": "page"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UseCaseView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such workflow, or it is deleted"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Another version is in use by now, so nothing changed. Or: Changed again since, in n8n. Nothing was saved. Or: This version did not pass the safety check, so it was not put in use. Or: This workflow was deleted in n8n, so it can't change there."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "n8n did not take the change in time, so nothing changed. Or: sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Add The Yes Back",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
     "/api/v1/use-cases/{use_case_id}/pause": {
       "post": {
         "description": "Stops the workflow starting runs, on its schedule or by hand, until an Operator resumes it. A run that has started carries on. Pausing a paused workflow, or a draft, changes nothing. A workflow n8n carries is taken off in n8n first.",
@@ -18617,6 +19080,128 @@
           }
         ],
         "summary": "List Versions",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/use-cases/{use_case_id}/versions/{version}/rollback": {
+      "post": {
+        "description": "Puts an earlier version back in use, as a new version, so the list only grows (ENGINE-PLAN 2.5). n8n publishes the version it still holds, or, after the day n8n keeps history for, the workflow the platform kept for it, each under the version compare: anything changed in n8n since the platform last looked answers 409 with \"Changed again since, in n8n.\" and changes nothing. Only a version that passes the safety check now is put back. A paused workflow stays paused, and the version is in use once it is resumed. The caller is its publisher, and whoever published the version it puts back joins every run of it, so neither can approve one. Rolling back again answers the same.",
+        "operationId": "rollback_version_api_v1_use_cases__use_case_id__versions__version__rollback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "use_case_id",
+            "required": true,
+            "schema": {
+              "title": "Use Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "title": "Version",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepublishIn",
+                "default": {
+                  "via": "page"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UseCaseView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such workflow, or it is deleted, or no such version"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Another version is in use by now, so nothing changed. Or: Changed again since, in n8n. Nothing was saved. Or: This version did not pass the safety check, so it was not put in use. Or: This workflow was deleted in n8n, so it can't change there."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "n8n did not take the change in time, so nothing changed. Or: sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Rollback Version",
         "tags": [
           "builder"
         ]
