@@ -139,3 +139,29 @@ export const IconInfo = drawn(
 )
 
 export const IconSend = drawn('IconSend', <path d="M4 12l16-8-6 16-2.5-6.5z" />, 2)
+
+/** An IF block: one way in, two ways out. */
+export const IconFork = drawn('IconFork', <path d="M3.5 12h5.5M9 12l4.5-6H20M9 12l4.5 6H20" />, 2.4)
+
+/** A block that ends the run quietly. */
+export const IconStop = drawn(
+  'IconStop',
+  <>
+    <circle cx="12" cy="12" r="8.2" />
+    <path d="M8.2 12h7.6" />
+  </>,
+  2.4,
+)
+
+/** A block that tells the person, in the app. */
+export const IconBell = drawn(
+  'IconBell',
+  <>
+    <path d="M6 17.1v-6a6 6 0 0 1 12 0v6l1.8 1.8H4.2z" />
+    <path d="M9.9 21a2.25 2.25 0 0 0 4.2 0" />
+  </>,
+  2.2,
+)
+
+/** An agent's block that weighs what was read. */
+export const IconCompare = drawn('IconCompare', <path d="M4 8.5h14l-3.5-3.5M20 15.5H6l3.5 3.5" />, 2.4)

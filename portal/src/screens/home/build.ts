@@ -1,6 +1,7 @@
 import type { BuildLineView, N8nBlockKind, N8nBlockView, UseCaseState } from '../../api/types'
 import type { Phase, RunModel, Station } from '../run/runModel'
 import { stageFactsOf, stageWords } from '../run/words'
+import { edgeKey, type EdgeState, type NodeState } from '../../ui/canvasLayout'
 
 /** The sketch's step between two blocks of the build, which the replay keeps between two lines of the log at the least. */
 export const LINE_STEP_MS = 320
@@ -114,16 +115,11 @@ export function shownOf(log: readonly BuildLineView[], lines: readonly BuildLine
   return { laid, yes: laid && (!noted || lines.some((line) => line.kind === 'note')) }
 }
 
-export type NodeState = 'off' | 'idle' | 'now' | 'ok' | 'added'
-export type EdgeState = 'off' | 'idle' | 'flow' | 'ok'
-
 export interface CanvasState {
   readonly nodes: Readonly<Record<string, NodeState>>
   /** Keyed `{from}->{to}`, by the blocks' names. */
   readonly edges: Readonly<Record<string, EdgeState>>
 }
-
-export const edgeKey = (from: string, to: string): string => `${from}->${to}`
 
 const ENTRIES: ReadonlySet<N8nBlockKind> = new Set(['start', 'manual'])
 const WORK: ReadonlySet<N8nBlockKind> = new Set(['read', 'agent', 'propose'])
