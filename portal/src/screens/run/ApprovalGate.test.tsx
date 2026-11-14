@@ -90,14 +90,34 @@ describe('the approval, waiting for Bob’s yes', () => {
     expect(html).toContain('Proposed by the AI workflow builder.')
   })
 
-  it('leaves out the Fields row, because the request doesn’t carry the ticket’s type, priority or labels', () => {
-    expect(text(draw(BOB))).not.toContain('Fields')
+  it('shows every other field the write carries as its own row, so nothing that will be written is hidden', () => {
+    const [ticket] = BOB.actions
+    if (!ticket) throw new Error('the fixture has one action')
+    const fields = { ...ticket.fields, issue_type: 'Task', priority: 'Medium', labels: ['upgrade', 'fastapi'], due: null, story_points: 3 }
+    const html = text(draw({ ...BOB, actions: [{ ...ticket, fields }] }))
+    expect(html).toContain(`Summary ${TITLE} Details LangGraph has 2 new releases`)
+    expect(html).toContain('Proposed by the AI workflow builder. Issue type Task Priority Medium Labels upgrade, fastapi Due None Story points 3')
+  })
+
+  it('shows a summary or details the write carries even when they are blank, rather than hide them', () => {
+    const [ticket] = BOB.actions
+    if (!ticket) throw new Error('the fixture has one action')
+    expect(text(draw({ ...BOB, actions: [{ ...ticket, fields: { title: '', body: 'Text' } }] }))).toContain('Summary Empty Details Text')
+  })
+
+  it('draws no Fields row when the write carries only its summary and details', () => {
+    expect(text(draw(BOB))).not.toMatch(/Fields|Issue type/)
   })
 
   it('offers Ask Alice, then Approve, then Decline last, with one main button', () => {
     const html = draw(BOB)
     expect(buttons(html)).toEqual(['Ask Alice', 'Approve', 'Decline'])
     expect(html.match(/class="[^"]*primary/g)).toHaveLength(1)
+  })
+
+  it('leaves its pill to the run page’s head, so the page shows one pill', () => {
+    expect(pill(draw(BOB, { page: true }))).toBe('')
+    expect(pill(draw(ALICE, { me: 'alice', page: true }))).toBe('')
   })
 
   it('in the side panel leaves the AI’s summary and Why you for the page', () => {
@@ -149,10 +169,12 @@ describe('the approval, for someone who can’t say yes', () => {
     expect(text(html)).toContain(words)
   })
 
-  it('names on the page how Alice is tied to the run', () => {
+  it('names on the page how Alice is tied to the run, once: the foot then only says who it waits for', () => {
     const html = text(draw(ALICE, { me: 'alice', page: true }))
     expect(html).toContain(`Why not you ${lockWords('own_work', STARTER)}`)
     expect(html).not.toContain('Why you No one')
+    expect(html).toMatch(/Waiting for an Approver\.$/)
+    expect(html).not.toContain('You can’t approve your own work.')
   })
 })
 
@@ -166,7 +188,8 @@ describe('two Approvers, one after the other', () => {
   it('tells the second Approver who said yes first, and that theirs is the second', () => {
     const html = text(draw(SECOND, { page: true }))
     expect(html).toContain('Step 2 of 2. Carol said yes first.')
-    expect(html).toContain('Why you Carol said yes. Your yes is the second of two.')
+    expect(html).toContain('Why you No one can approve their own work. Your yes is the second of two.')
+    expect(html.match(/Carol said yes/g), 'who said yes first is said once').toHaveLength(1)
     expect(buttons(draw(SECOND))).toEqual(['Ask Alice', 'Approve', 'Decline'])
   })
 

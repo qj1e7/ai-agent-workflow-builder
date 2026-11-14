@@ -14,7 +14,7 @@ import { motionAllowed } from '../../ui/motion'
 import { nextRunOf } from '../workflows/workflow'
 import { ApprovalGate, NotChecked } from './ApprovalGate'
 import { DECISION_ID, DecisionArea, LONG_LOG, StepLog } from './Chat'
-import { foundOf, partyOf, useDecision, useNotChecked, type Decision } from './decision'
+import { canDecideNow, foundOf, partyOf, useDecision, useNotChecked, type Decision } from './decision'
 import { POLL_FAILED_MS, useReconnectWhenBehind } from './follow'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { AnswerList, Outcome, StopAnswers, StopNext } from './Outcome'
@@ -300,7 +300,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
             {run.use_case_name}
           </h1>
         </div>
-        <RunPill facts={facts} />
+        <RunPill facts={facts} yours={waiting && approval !== undefined && canDecideNow(approval, decision)} />
       </div>
       <p className={styles['status']}>
         <span role="status">{statusWords(decision, live)}</span>

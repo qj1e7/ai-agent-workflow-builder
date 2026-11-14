@@ -4,11 +4,11 @@ import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { IconCheck, IconLock } from '../../ui/icons'
 import { TicketKeys } from '../jira/TicketKeys'
-import { approvalPill, approvalTitle, kindWords, recordWords, turnWords, waitingWords, whereWords, whyYouWords } from './approvalWords'
-import { APPROVE, standingOf, type Decision, type Standing } from './decision'
+import { approvalPill, approvalTitle, fieldRows, kindWords, recordWords, turnWords, waitingWords, whereWords, whyYouWords } from './approvalWords'
+import { APPROVE, canDecideNow, standingOf, type Decision, type Standing } from './decision'
 import { AskBox, QuestionThread } from './QuestionThread'
 import { useFocusAfter, type Questions } from './questions'
-import { bodyOf, lockWords, ticketKeysIn, titleOf, type NameOf, type Party, type StageFacts } from './words'
+import { lockWords, ticketKeysIn, type NameOf, type Party, type StageFacts } from './words'
 import styles from './panels.module.css'
 import pills from './RunPage.module.css'
 
@@ -33,28 +33,20 @@ export function NotChecked({ lines, level }: { lines: readonly string[]; level: 
   )
 }
 
-/** One write, exactly as the request holds it: where it goes, its summary and its details. */
+/** One write, exactly as the request holds it: where it goes, then every field it carries, so nothing written is hidden. */
 function Change({ action }: { action: ApprovalActionView }) {
-  const summary = titleOf(action)
-  const body = bodyOf(action)
   return (
     <dl className={styles['chg']}>
       <div>
         <dt>Where</dt>
         <dd>{whereWords(action)}</dd>
       </div>
-      {summary ? (
-        <div>
-          <dt>Summary</dt>
-          <dd>{summary}</dd>
+      {fieldRows(action.fields).map(({ key, label, value }) => (
+        <div key={key}>
+          <dt>{label}</dt>
+          <dd className={key === 'body' ? styles['chgBody'] : undefined}>{value}</dd>
         </div>
-      ) : null}
-      {body ? (
-        <div>
-          <dt>Details</dt>
-          <dd className={styles['chgBody']}>{body}</dd>
-        </div>
-      ) : null}
+      ))}
     </dl>
   )
 }
@@ -111,7 +103,10 @@ export interface PageDetails {
 
 export interface ApprovalGateProps {
   readonly approval: ApprovalView
-  /** Null in the side panel, which shows everything that will be written and the decision, and leaves the rest for the page. */
+  /**
+   * Null in the side panel, which shows everything that will be written and the decision, and leaves the rest for the page. On the
+   * run page the head's one pill speaks for the request, so the request draws none.
+   */
   readonly page: PageDetails | null
   readonly decision: Pick<Decision, 'pending' | 'recorded' | 'steps' | 'error' | 'decide'>
   /** The run, for what happened after the yes. Null where the run isn't read. */
@@ -160,8 +155,8 @@ function Record({ standing, words, facts, next }: { standing: Standing; words: s
  */
 export function ApprovalGate({ approval, page, decision, facts, notChecked, reasons, requester, questions, me, party, nameOf, next, now }: ApprovalGateProps) {
   const standing = standingOf(decision.steps ?? approval.steps)
+  const canDecide = canDecideNow(approval, decision)
   // Once this person's decision is recorded, the request offers them nothing more, though the next read may take a while to say so.
-  const canDecide = approval.you_can_decide && standing.is === 'open' && decision.recorded === null
   const whyNot = decision.recorded === null ? approval.why_not : 'decided_earlier_step'
   const busy = decision.pending !== null
   const [opened, setOpened] = useState<Opened | null>(null)
@@ -193,9 +188,11 @@ export function ApprovalGate({ approval, page, decision, facts, notChecked, reas
           <p className={pills['kind']}>{kindWords(approval, nameOf)}</p>
           <Title id={titleId}>{approvalTitle(approval.actions)}</Title>
         </div>
-        <span className={cx(pills['pill'], pills[pill.tone])} data-approval-pill>
-          {pill.label}
-        </span>
+        {page ? null : (
+          <span className={cx(pills['pill'], pills[pill.tone])} data-approval-pill>
+            {pill.label}
+          </span>
+        )}
       </div>
       {turn ? <p className={styles['turn']}>{turn}</p> : null}
       <section className={styles['sec']} aria-labelledby={`${titleId}-w`}>
@@ -214,7 +211,7 @@ export function ApprovalGate({ approval, page, decision, facts, notChecked, reas
         <dl className={styles['chg']}>
           <div>
             <dt>{canDecide ? 'Why you' : 'Why not you'}</dt>
-            <dd>{canDecide ? whyYouWords(standing, nameOf) : lockWords(whyNot, party)}</dd>
+            <dd>{canDecide ? whyYouWords(standing) : lockWords(whyNot, party)}</dd>
           </div>
         </dl>
       ) : null}
@@ -225,7 +222,7 @@ export function ApprovalGate({ approval, page, decision, facts, notChecked, reas
         ) : !canDecide ? (
           <p className={styles['waitLine']}>
             <IconLock size={18} />
-            <span>{waitingWords(whyNot)}</span>
+            <span>{waitingWords(whyNot, page === null)}</span>
           </p>
         ) : declining ? (
           <DeclineReasons

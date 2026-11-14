@@ -110,11 +110,17 @@ const CASES: readonly Case[] = [
     view: view(failedView, { state: 'lost' }),
     decision: { run_state: 'lost', written: 0 },
     pill: 'Lost',
-    words: /Approved, but n8n lost the run\. Nothing was written\./,
+    words: /Approved, but the run stopped before it could make the change\. Nothing was written\./,
   },
 ]
 
 describe('one run state, the same words on the card, the panel, the chat’s decided card and Recent runs', () => {
+  it('gives the run page one pill: Needs your yes for someone who may say yes, else the run’s own', () => {
+    const waiting = stageFactsOf(replay(success, 15))
+    expect(pills(wrap(<RunPill facts={waiting} yours />))).toEqual(['Needs your yes'])
+    expect(pills(wrap(<RunPill facts={waiting} />))).toEqual(['Waiting for a yes'])
+  })
+
   it('covers every state a run can be in', () => {
     const states: readonly RunState[] = ['pending', 'working', 'proposed', 'awaiting_approval', 'acting', 'succeeded', 'rejected', 'failed', 'skipped', 'expired', 'lost']
     expect(states.every((state) => CASES.some((one) => one.state === state))).toBe(true)

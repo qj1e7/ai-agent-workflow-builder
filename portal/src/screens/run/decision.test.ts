@@ -131,9 +131,9 @@ describe('the request’s words', () => {
     expect(turnWords(open, nameOf)).toBeNull()
     expect(turnWords(first, nameOf)).toBe('Step 1 of 2. It needs two Approvers, one after the other.')
     expect(turnWords(second, nameOf)).toBe('Step 2 of 2. Carol said yes first.')
-    expect(whyYouWords(open, nameOf)).toBe('No one can approve their own work.')
-    expect(whyYouWords(first, nameOf)).toBe('No one can approve their own work. Your yes is the first of two.')
-    expect(whyYouWords(second, nameOf)).toBe('Carol said yes. Your yes is the second of two.')
+    expect(whyYouWords(open)).toBe('No one can approve their own work.')
+    expect(whyYouWords(first)).toBe('No one can approve their own work. Your yes is the first of two.')
+    expect(whyYouWords(second)).toBe('No one can approve their own work. Your yes is the second of two.')
   })
 
   it('tells someone who can’t decide why, in a line where the buttons would be', () => {
@@ -141,11 +141,15 @@ describe('the request’s words', () => {
     expect(waitingWords('decided_earlier_step')).toBe('Waiting for another Approver. You said yes to the step before, and no one says yes twice.')
     expect(waitingWords('not_an_approver')).toBe('Waiting for an Approver. Only an Approver can decide.')
     expect(waitingWords(null)).toBe('Waiting for an Approver.')
+    expect(waitingWords('own_work', false), 'where the page already said why').toBe('Waiting for an Approver.')
+    expect(waitingWords('decided_earlier_step', false)).toBe('Waiting for another Approver.')
   })
 
-  it('leads the cards with the sketch’s line', () => {
-    expect(leadWords(1)).toBe('This needs your yes.')
-    expect(leadWords(3)).toBe('These need your yes.')
+  it('leads the cards with the sketch’s line, naming no Approver for a request that waits for someone else', () => {
+    expect(leadWords(1, true)).toBe('This needs your yes.')
+    expect(leadWords(3, true)).toBe('These need your yes.')
+    expect(leadWords(1, false)).toBe('This waits for an Approver’s yes.')
+    expect(leadWords(2, false)).toBe('These wait for an Approver’s yes.')
   })
 
   describe('the record', () => {
@@ -161,7 +165,7 @@ describe('the request’s words', () => {
       expect(record(approved, factsOf('awaiting_approval', { count: 1 })), 'the run’s own events lag').toBe('Approved by Bob at 9:04. Creating the ticket…')
       expect(record(approved, factsOf('succeeded', { count: 1, refs: ['MOCK-22'] }))).toBe('Approved by Bob at 9:04. MOCK-22 created.')
       expect(record(approved, factsOf('succeeded', { count: 2 }))).toBe('Approved by Bob at 9:04. 2 tickets created.')
-      expect(record(approved, factsOf('lost'))).toBe('Approved by Bob at 9:04. n8n lost the run. Nothing was written.')
+      expect(record(approved, factsOf('lost'))).toBe('Approved by Bob at 9:04, but the run stopped before it could make the change. Nothing was written.')
       expect(recordWords(approved, null, nameOf, QUICK, NOW), 'with no run to read').toBe('Approved by Bob at 9:04.')
     })
 

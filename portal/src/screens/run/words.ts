@@ -545,6 +545,9 @@ export function logRowsOf(items: readonly ChatItem[], nameOf: NameOf, quick: rea
 
 export type RunState = RunView['state']
 
+/** What a run lost after its yes left: it stopped before the write, so nothing was written. */
+export const LOST_TAIL = 'the run stopped before it could make the change. Nothing was written.'
+
 /**
  * What a run needs to say where it stands. Every place that names a run's state reads it: the card, the panel, the page, the chat's
  * decided card, a list's row, the banner, the strip and Recent runs, so they never disagree.
@@ -601,7 +604,7 @@ export function stageWords(run: StageFacts, nameOf: NameOf): string {
     case 'expired':
       return 'No answer. Nothing was written.'
     case 'lost':
-      return 'Approved, but n8n lost the run. Nothing was written.'
+      return `Approved, but ${LOST_TAIL}`
     case 'pending':
     case 'working':
     case 'proposed':

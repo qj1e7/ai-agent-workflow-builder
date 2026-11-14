@@ -111,6 +111,11 @@ export function decisionFor(approval: ApprovalView | undefined, choice: Choice):
   return choice.verdict === 'decline' && choice.reason ? { ...body, reason: choice.reason } : body
 }
 
+/** Whether this person may say yes now: the platform says so, the request is open, and they haven't just decided it here. */
+export function canDecideNow(approval: ApprovalView, decision: Pick<Decision, 'recorded' | 'steps'>): boolean {
+  return approval.you_can_decide && standingOf(decision.steps ?? approval.steps).is === 'open' && decision.recorded === null
+}
+
 export interface Decision {
   readonly pending: Verdict | null
   /** The verdict the platform recorded for this person on this page. */
