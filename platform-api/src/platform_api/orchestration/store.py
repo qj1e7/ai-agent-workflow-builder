@@ -675,12 +675,17 @@ class Store:
             (run_id, SHOW_OUTCOME),
         )
 
-    async def outbox_pending(self, uow: UnitOfWork, run_id: RunId, kind: str) -> bool:
+    async def retry_asked(
+        self, uow: UnitOfWork, run_id: RunId, execution: N8nExecutionId, since: datetime
+    ) -> bool:
+        """Whether a retry of this execution is on its way, or n8n took one since `since`. A retry
+        that joined the run and failed again leaves a newer execution to retry."""
         row = await (
             await uow.conn.execute(
                 "SELECT 1 FROM orchestration.outbox WHERE run_id = %s AND kind = %s "
-                "AND status = 'pending' LIMIT 1",
-                (run_id, kind),
+                "AND payload ->> 'execution_id' = %s "
+                "AND (status = 'pending' OR (status = 'sent' AND next_at > %s)) LIMIT 1",
+                (run_id, RETRY, execution, since),
             )
         ).fetchone()
         return row is not None

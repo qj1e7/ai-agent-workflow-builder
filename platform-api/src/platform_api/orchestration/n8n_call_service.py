@@ -72,6 +72,7 @@ from platform_api.orchestration.n8n_calls import (
     IssuedStart,
     N8nFailures,
     N8nReads,
+    N8nSwitch,
     NewRun,
     NodeCall,
     NodeCatalog,
@@ -270,6 +271,7 @@ class NodeCalls:
         gateway: WriteGateway | None = None,
         tells: TellOutlet | None = None,
         failures: N8nFailures | None = None,
+        switch: N8nSwitch | None = None,
     ) -> None:
         self._db = db
         self._activity = activity
@@ -286,6 +288,7 @@ class NodeCalls:
         self._gateway = gateway
         self._tells = tells
         self._failures = failures
+        self._switch = switch
         self._store = Store()
         self._watch = WatchStore()
         self._book = CallBook()
@@ -368,20 +371,26 @@ class NodeCalls:
     async def _close(self, execution: N8nExecutionId) -> RunId | None:
         """A run whose execution n8n ran to its end while the run was still working never asked
         for a yes, so it had nothing to change: a Tell-only workflow, or a branch that ended at
-        Nothing to change."""
+        Nothing to change. A test run n8n finished before any of its blocks called passed: it
+        reached no yes and wrote nothing."""
         async with self._db.transaction("orchestration") as uow:
             await self._book.hold_execution(uow, execution)
-            run_id = await self._book.linked_run(uow, execution)
+            run_id = await self._book.linked_run(uow, execution) or await self._book.claimed_run(
+                uow, execution
+            )
             record = None if run_id is None else await self._store.load_run(uow, run_id, lock=True)
             if record is None:
                 return None
             match record.state:
                 case Working(execution=live) as working if live == execution:
-                    await self._commit(uow, record, working.nothing_to_change())
-                    await self._store.cancel_outbox(uow, record.run_id)
-                    return record.run_id
+                    moved = working.nothing_to_change()
+                case Pending(claimant=claimant) as pending if claimant == execution:
+                    moved = pending.passed_test()
                 case _:
                     return None
+            await self._commit(uow, record, moved)
+            await self._store.cancel_outbox(uow, record.run_id)
+            return record.run_id
 
     async def sweep_forever(self, stop: asyncio.Event, every: timedelta = SWEEP_EVERY) -> None:
         while not stop.is_set():
@@ -397,11 +406,28 @@ class NodeCalls:
             return await self._write(call)
         async with self._db.transaction("orchestration") as uow:
             admitted = await self._admit(uow, call)
+        if admitted == NOT_OURS:
+            await self._take_off_if_deleted(call.execution_id)
         if not isinstance(admitted, Admitted):
             return admitted
         work = await self._work(admitted, call)
         async with self._db.transaction("orchestration") as uow:
             return await self._finish(uow, admitted, call, work)
+
+    async def _take_off_if_deleted(self, execution: N8nExecutionId) -> None:
+        """A deleted use case whose workflow n8n still runs, because the delete could not take it
+        off then, is taken off now, so it stops starting runs our API refuses."""
+        facts = await self._n8n.execution(execution)
+        if self._switch is None or facts is None:
+            return
+        if not await self._workflows.deleted(facts.workflow_id):
+            return
+        try:
+            await self._switch.go_off(facts.workflow_id)
+        except Exception as error:
+            log.warning(
+                "could not take deleted workflow %s off in n8n: %s", facts.workflow_id, error
+            )
 
     async def _admit(self, uow: UnitOfWork, call: NodeCall) -> Admitted | CallResult:
         linked = await self._linked_run(uow, call)

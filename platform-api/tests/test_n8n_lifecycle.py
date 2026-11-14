@@ -236,3 +236,31 @@ async def test_safety_the_person_who_turned_it_on_owns_its_scheduled_runs(own: N
     assert ran == RanVersion("safe", Publisher(UserId("carol")))
     fired = ExecutionFacts(workflow_id, "trigger", None, None, version_id)
     assert decide_link(fired, None, None, None, ran, NOW) == NewRun(UserId("carol"), "schedule")
+
+
+async def regrade(own: N8nLab, use_case_id: str, grade: str) -> None:
+    """What a later sweep would store, having graded the version again (E6)."""
+    async with own.lab.h.db.transaction("builder") as uow:
+        await uow.conn.execute(
+            "UPDATE builder.use_case_versions SET grade = %s WHERE use_case_id = %s",
+            (grade, use_case_id),
+        )
+
+
+async def test_safety_only_a_version_graded_safe_ever_goes_live(own: N8nLab):
+    use_case_id, workflow_id = await made(own, on=True)
+    assert (await move(own, "pause", use_case_id)).status_code == 200
+    await regrade(own, use_case_id, "writes_refused")
+    refused = await move(own, "resume", use_case_id)
+    assert (refused.status_code, refused.json()["detail"]) == (
+        409,
+        "This version did not pass the safety check, so it cannot be turned on.",
+    )
+    assert own.n8n.workflows[workflow_id]["activeVersionId"] is None
+    view = (await own.lab.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+    assert view["state"] == "paused"
+
+    draft_id, draft_workflow = await made(own)
+    await regrade(own, draft_id, "needs_a_fix")
+    assert (await move(own, "turn-on", draft_id)).status_code == 409
+    assert own.n8n.workflows[draft_workflow]["activeVersionId"] is None

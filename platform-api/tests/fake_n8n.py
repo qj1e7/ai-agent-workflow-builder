@@ -52,8 +52,11 @@ class FakeN8n:
     """Each run of a draft by hand: the workflow, and the body n8n was sent."""
     retries: list[str] = field(default_factory=list[str])
     retry_answer: str = "stops"
-    """How n8n answers a retry: "stops" once the retry stopped, "slow" never in time, or with
-    "succeeded" when the execution needs no retry."""
+    """How n8n answers a retry: "stops" once the retry stopped, "slow" never in time, "slow
+    refusal" never in time and with no retry made, or with "succeeded" when the execution needs
+    no retry."""
+    data_reads: list[str] = field(default_factory=list[str])
+    """Each execution read with its data, which n8n sends in full."""
     on_run: RunHook | None = None
     next_execution: int = 300
 
@@ -208,7 +211,13 @@ class FakeN8n:
                 if self.retry_answer == "succeeded":
                     message = "The execution succeeded, so it cannot be retried."
                     return httpx.Response(409, json={"message": message})
+                if self.retry_answer == "slow refusal":
+                    raise httpx.ReadTimeout("n8n has not answered yet")
                 retry = self._execution_started(retry_of=execution_id)
+                original = self.executions.get(execution_id, {}).get("workflowId")
+                workflow = original or next(iter(self.workflows), "wf1")
+                self.execution(retry, "running", workflow_id=workflow, mode="retry")
+                self.executions[retry]["retryOf"] = execution_id
                 if self.retry_answer == "slow":
                     raise httpx.ReadTimeout("n8n is still running the retry")
                 answer = {"id": retry, "mode": "retry", "retryOf": execution_id}
@@ -217,6 +226,8 @@ class FakeN8n:
                 self.workflows[workflow_id]["projectId"] = body["destinationProjectId"]
                 return httpx.Response(204)
             case "GET", ["executions", execution_id] if execution_id in self.executions:
+                if request.url.params.get("includeData") == "true":
+                    self.data_reads.append(execution_id)
                 return httpx.Response(200, json=self.executions[execution_id])
             case "GET", ["executions"]:
                 wanted = request.url.params.get("workflowId")

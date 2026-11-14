@@ -4,7 +4,7 @@ import logging
 import traceback
 from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Literal, Protocol
 from zoneinfo import ZoneInfo
 
@@ -347,6 +347,10 @@ class AnswerRefused:
 
 
 type AnswerResult = QuestionAnswered | AnswerRefused | NotFound
+
+
+RETRY_PATIENCE = timedelta(minutes=10)
+"""How long a retry n8n took may take to call our API before a new press asks n8n again."""
 
 
 @dataclass(frozen=True)
@@ -1189,7 +1193,9 @@ class Orchestrator:
     ) -> RetryResult:
         """n8n's own retry of the run's newest execution, from the block that stopped (2.3.10),
         never Failed.retry(): the retry execution joins the run on its first call. A run n8n
-        never ran starts again. A second press while a retry is on its way adds nothing."""
+        never ran starts again. A second press while a retry of the same execution is on its way,
+        or was taken by n8n and has not called yet, asks n8n nothing, so the run never carries two
+        retries."""
         execution = await self._store.newest_execution(uow, record.run_id)
         resumes: Literal["pending", "acting"] = (
             "acting" if isinstance(state.resume, ResumeAct) else "pending"
@@ -1201,11 +1207,14 @@ class Orchestrator:
             await self._commit(uow, record, moved, retried_by=UserId(by.id))
             await self._enqueue_start(uow, record.run_id, "retry", moved.state.attempt, at)
             return Retried(resumes)
-        if await self._store.outbox_pending(uow, record.run_id, RETRY):
+        since = uow.now - RETRY_PATIENCE
+        if await self._store.retry_asked(uow, record.run_id, execution, since):
             return Retried(resumes)
         await self._store.save_run(uow, record, state, retried_by=UserId(by.id))
         await self._activity.append(uow, record.run_id, [state.retry_in_n8n(by)])
-        await self._store.enqueue(uow, record.run_id, RETRY, {"execution_id": execution}, at)
+        assert record.spec.n8n is not None
+        payload = {"execution_id": execution, "workflow_id": record.spec.n8n.workflow_id}
+        await self._store.enqueue(uow, record.run_id, RETRY, payload, at)
         return Retried(resumes)
 
     async def get_run(self, run_id: RunId) -> RunDetail | None:
@@ -1407,7 +1416,7 @@ class Orchestrator:
         if self._starts is None:
             raise DispatchFailure("this platform cannot retry n8n workflows of their own")
         execution = N8nExecutionId(row.payload["execution_id"])
-        refused = await self._starts.retry(execution)
+        refused = await self._starts.retry(execution, row.payload["workflow_id"])
         async with self._db.transaction("orchestration") as uow:
             if refused is None:
                 await self._store.outbox_sent(uow, row.id)

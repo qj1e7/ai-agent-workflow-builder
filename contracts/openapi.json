@@ -17936,6 +17936,16 @@
             },
             "description": "No such workflow"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "This version did not pass the safety check, so it cannot be turned on."
+          },
           "410": {
             "content": {
               "application/json": {
@@ -18036,6 +18046,16 @@
               }
             },
             "description": "No such workflow, or it is deleted"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "This version did not pass the safety check, so it cannot be turned on."
           },
           "422": {
             "content": {
@@ -18370,6 +18390,16 @@
               }
             },
             "description": "No such workflow, or it is deleted"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "This version did not pass the safety check, so it cannot be turned on."
           },
           "422": {
             "content": {

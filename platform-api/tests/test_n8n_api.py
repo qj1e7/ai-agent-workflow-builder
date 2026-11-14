@@ -14,6 +14,7 @@ from platform_api.orchestration.n8n import (
     N8nWorkflows,
     PublishEvent,
     RetryRefused,
+    StillRetrying,
     Written,
     publisher_of,
     same_as_sent,
@@ -377,7 +378,7 @@ async def test_n8n_s_retry_is_taken_when_it_stops_or_is_still_running_and_refuse
     api = api_for(n8n)
     assert await api.retry("45") is None
     n8n.retry_answer = "slow"
-    assert await api.retry("46") is None, "a retry still running when the wait ends was taken"
+    assert await api.retry("46") == StillRetrying(), "the wait ran out, so it says nothing yet"
     n8n.retry_answer = "succeeded"
     refused = await api.retry("47")
     assert isinstance(refused, RetryRefused) and "succeeded" in refused.detail
@@ -407,3 +408,21 @@ async def test_write_can_leave_the_change_a_draft_for_a_workflow_that_is_off() -
         written.version_id,
         None,
     )
+
+
+async def test_the_sweep_reads_an_execution_s_data_only_once_it_failed() -> None:
+    """Every few seconds for each open run: the status alone, and the data, which n8n sends in
+    full, only for a failure's block and words."""
+    n8n = FakeN8n()
+    n8n.execution("45", "running")
+    n8n.execution("46", "success")
+    n8n.execution("47", "error", failed=("Read release", "GitHub answered 503."))
+    failures = failures_for(n8n)
+    for execution in ("45", "46"):
+        await failures.ended(N8nExecutionId(execution))
+    assert await N8nExecutions(api_for(n8n)).landed(N8nExecutionId("46"))
+    assert n8n.data_reads == []
+    assert await failures.ended(N8nExecutionId("47")) == FailedExecution(
+        N8nExecutionId("47"), "Read release", "GitHub answered 503."
+    )
+    assert n8n.data_reads == ["47"]

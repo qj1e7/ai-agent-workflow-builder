@@ -30,7 +30,7 @@ from platform_api.builder.models import (
     Via,
     WatchlistView,
 )
-from platform_api.builder.n8n_draft import N8nNotReady
+from platform_api.builder.n8n_draft import N8nNotReady, NotSafe
 from platform_api.builder.planning import FALLBACK_WORDS, STARTERS, FallbackWhy
 from platform_api.builder.templates import SOFTWARE_WATCHLIST
 from platform_api.orchestration import (
@@ -582,11 +582,11 @@ class Workflows(Protocol):
 
     async def pause_use_case(
         self, use_case_id: str, principal: Principal, via: Via
-    ) -> UseCaseView | N8nNotReady | None: ...
+    ) -> UseCaseView | N8nNotReady | NotSafe | None: ...
 
     async def resume_use_case(
         self, use_case_id: str, principal: Principal, via: Via
-    ) -> UseCaseView | N8nNotReady | None: ...
+    ) -> UseCaseView | N8nNotReady | NotSafe | None: ...
 
 
 class Listed(Protocol):

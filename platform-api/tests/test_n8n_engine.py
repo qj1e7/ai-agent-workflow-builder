@@ -19,6 +19,7 @@ from platform_api.orchestration.n8n import N8nApi
 from platform_api.orchestration.n8n_call_service import NodeCalls
 from platform_api.orchestration.n8n_calls import (
     NOT_ON,
+    NOT_OURS,
     START_OTHER_WORKFLOW,
     TEST_RUN_STOPS,
     TEST_RUN_WRITES_NOTHING,
@@ -132,11 +133,34 @@ class PinnedWorkflows(SpecWorkflows):
         return AgentToRun(CardRun(card, dict(values), {}))
 
 
+@dataclass
+class Switch:
+    """n8n's unpublish, as the platform asks for it."""
+
+    off: list[str] = field(default_factory=list[str])
+
+    async def go_off(self, workflow_id: str) -> None:
+        self.off.append(workflow_id)
+
+
 class Engine(Writes):
     trigger: Trigger
     records: N8nRecords
     pinned: PinnedWorkflows
     sources: FakeSources
+    switch: Switch
+
+    async def failed_run(self) -> tuple[RunId, str]:
+        """A run n8n started, whose Read failed and whose execution stopped."""
+        run_id = await self.start()
+        await self.tick()
+        execution = self.trigger.executions[-1]
+        self.records.execution(execution, "error", workflow_id=WORKFLOW)
+        self.sources.down = True
+        await self.call(execution, READ, "Read release")
+        await self.failed_by_its_deadline(run_id)
+        self.sources.down = False
+        return run_id, execution
 
     async def start(self, spec: RunSpec = OWN, by: Principal = ALICE) -> RunId:
         started = await self.orchestrator.start_run(spec, by, f"portal:{len(await self.runs())}")
@@ -184,6 +208,7 @@ async def e(postgres: PostgresUrls) -> AsyncIterator[Engine]:
             {"jira": PRACTICE_SITE},
             box=box,
             gateway=gateway,
+            switch=(switch := Switch()),
         )
         records = N8nRecords()
         records.workflows[WORKFLOW] = {"id": WORKFLOW, "versionId": "v1", "checksum": "c1"}
@@ -225,7 +250,7 @@ async def e(postgres: PostgresUrls) -> AsyncIterator[Engine]:
         )
         engine = Engine(h, reads, workflows, calls, waits, orchestrator, FakeLanding())
         engine.flaky, engine.trigger, engine.records = flaky, trigger, records
-        engine.pinned, engine.sources = workflows, sources
+        engine.pinned, engine.sources, engine.switch = workflows, sources, switch
         yield engine
         await starts.close()
 
@@ -339,7 +364,9 @@ async def test_retry_is_n8n_s_own_retry_of_the_run_s_newest_execution_from_the_o
     assert await e.orchestrator.retry(run_id, ALICE) == Retried("pending")
     assert await e.orchestrator.retry(run_id, ALICE) == Retried("pending"), "pressed twice"
     assert isinstance(await e.state(run_id), Failed), "nothing ran yet"
-    assert [row["payload"] for row in await e.outbox(RETRY)] == [{"execution_id": execution}]
+    assert [row["payload"] for row in await e.outbox(RETRY)] == [
+        {"execution_id": execution, "workflow_id": WORKFLOW}
+    ]
     assert (await e.h.kinds(run_id))[-1] == "run_retried"
     assert e.records.retries == [], "after the short delay, never inside the request"
 
@@ -357,17 +384,63 @@ async def test_retry_is_n8n_s_own_retry_of_the_run_s_newest_execution_from_the_o
     assert isinstance(await e.state(run_id), AwaitingApproval)
 
 
-async def test_a_retry_n8n_still_runs_after_the_wait_counts_as_taken(e: Engine):
-    run_id = await e.start()
-    await e.tick()
-    [execution] = e.trigger.executions
-    e.sources.down = True
-    await e.call(execution, READ, "Read release")
-    await e.failed_by_its_deadline(run_id)
+async def test_a_retry_n8n_still_runs_after_the_wait_counts_once_n8n_lists_it(e: Engine):
+    run_id, execution = await e.failed_run()
     e.records.retry_answer = "slow"
     await e.orchestrator.retry(run_id, ALICE)
     await e.tick(timedelta(seconds=3))
     assert [row["status"] for row in await e.outbox(RETRY)] == ["sent"]
+    assert e.records.retries == [execution]
+
+
+async def test_safety_a_retry_n8n_had_not_answered_in_time_is_never_read_as_taken(e: Engine):
+    """A refusal n8n gives slowly must not leave the run looking retried. The retry counts only
+    once n8n lists an execution that retries it, and a try that finds one asks nothing more."""
+    run_id, execution = await e.failed_run()
+    e.records.retry_answer = "slow refusal"
+    await e.orchestrator.retry(run_id, ALICE)
+    await e.tick(timedelta(seconds=3))
+    [row] = await e.outbox(RETRY)
+    assert row["status"] == "pending" and "lists no retry" in row["last_error"]
+    e.records.retry_answer = "succeeded"
+    await e.tick(timedelta(seconds=2))
+    [row] = await e.outbox(RETRY)
+    assert row["status"] == "given_up" and "409" in row["last_error"]
+    assert isinstance(await e.state(run_id), Failed)
+
+
+async def test_safety_a_second_press_after_n8n_took_the_retry_asks_n8n_nothing(e: Engine):
+    """The run stays failed until the retry's first call, so a second press then could start a
+    second retry of the same execution."""
+    run_id, execution = await e.failed_run()
+    await e.orchestrator.retry(run_id, ALICE)
+    await e.tick(timedelta(seconds=3))
+    assert e.records.retries == [execution]
+    assert isinstance(await e.state(run_id), Failed), "n8n took it, and nothing called yet"
+    assert await e.orchestrator.retry(run_id, BOB) == Retried("pending")
+    await e.tick(timedelta(seconds=3))
+    assert e.records.retries == [execution], "the second press asked n8n nothing"
+    assert len(await e.outbox(RETRY)) == 1
+
+    await e.tick(timedelta(minutes=11))
+    await e.orchestrator.retry(run_id, ALICE)
+    await e.tick(timedelta(seconds=3))
+    assert e.records.retries == [execution], "n8n already lists a retry of it, so none is sent"
+
+
+async def test_a_deleted_workflow_n8n_still_runs_is_taken_off_at_its_first_refused_call(
+    e: Engine,
+):
+    """The delete takes it off as best it can. When that failed, the first run n8n still starts
+    is refused, and n8n is told again."""
+    gone = "wf_gone"
+    e.pinned.gone.add(gone)
+    e.n8n.executions["901"] = ExecutionFacts(gone, "trigger", None, None, "v1")
+    assert await e.call("901", READ, "Read release") == NOT_OURS
+    assert e.switch.off == [gone]
+    e.n8n.executions["902"] = ExecutionFacts("wf_made_in_n8n", "trigger", None, None, "v1")
+    assert await e.call("902", READ, "Read release") == NOT_OURS
+    assert e.switch.off == [gone], "a workflow that is not a deleted use case is left alone"
 
 
 async def test_a_retry_n8n_refuses_is_given_up_and_the_run_stays_failed(e: Engine):

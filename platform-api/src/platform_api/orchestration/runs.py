@@ -713,6 +713,11 @@ class Pending:
             Skipped(self.run_id, waiting), (execution_linked(execution, mode), run_skipped(waiting))
         )
 
+    def passed_test(self) -> Moved[Succeeded]:
+        """A test run n8n ran to its end before any block called: it reached no yes and wrote
+        nothing."""
+        return Moved(Succeeded(self.run_id, Outcome.TEST_PASSED, ()), (_test_passed(),))
+
     def begin_work(self, execution: N8nExecutionId, now: datetime) -> Moved[Working]:
         working = Working(
             self.run_id,

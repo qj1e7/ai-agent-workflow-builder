@@ -163,6 +163,10 @@ class WorkflowFacts(Protocol):
 
     async def agent_inputs(self, agent_id: str) -> Sequence[CardInput]: ...
 
+    async def deleted(self, n8n_workflow_id: str) -> bool:
+        """The workflow carries a use case that was deleted."""
+        ...
+
     async def agent_run(
         self, agent_id: str, values: Mapping[str, str], pinned: CardSpec | None = None
     ) -> AgentToRun | CannotRun | None:
@@ -568,6 +572,12 @@ class Finished:
 
 
 type Ended = Finished | FailedExecution
+
+
+class N8nSwitch(Protocol):
+    """Takes a workflow off in n8n, so none of its triggers runs it."""
+
+    async def go_off(self, workflow_id: str) -> None: ...
 
 
 class N8nFailures(Protocol):

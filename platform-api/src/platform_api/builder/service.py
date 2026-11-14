@@ -69,6 +69,7 @@ from platform_api.builder.n8n_draft import (
     Checked,
     DraftRefused,
     N8nNotReady,
+    NotSafe,
     blocks_of,
     check_draft,
 )
@@ -438,7 +439,7 @@ class Builder:
 
     async def pause_use_case(
         self, use_case_id: str, principal: Principal, via: Via = "page"
-    ) -> UseCaseView | N8nNotReady | None:
+    ) -> UseCaseView | N8nNotReady | NotSafe | None:
         moved = await self._move(
             use_case_id,
             lambda state, _, now: pause(state, now, principal.user_id),
@@ -449,7 +450,7 @@ class Builder:
 
     async def resume_use_case(
         self, use_case_id: str, principal: Principal, via: Via = "page"
-    ) -> UseCaseView | N8nNotReady | None:
+    ) -> UseCaseView | N8nNotReady | NotSafe | None:
         moved = await self._move(
             use_case_id,
             lambda state, _template, _now: resume(state),
@@ -460,7 +461,7 @@ class Builder:
 
     async def turn_on_use_case(
         self, use_case_id: str, principal: Principal
-    ) -> UseCaseView | N8nNotReady | None:
+    ) -> UseCaseView | N8nNotReady | NotSafe | None:
         """Publishes a draft's version 1 and turns it on. An own workflow reads On only once n8n
         has every trigger live (ENGINE-PLAN 2.5). Asking again changes nothing."""
         moved = await self._move(
@@ -469,12 +470,12 @@ class Builder:
         return await self._after(use_case_id, principal, moved)
 
     async def _after(
-        self, use_case_id: str, principal: Principal, moved: Moved | N8nNotReady | None
-    ) -> UseCaseView | N8nNotReady | None:
+        self, use_case_id: str, principal: Principal, moved: Moved | N8nNotReady | NotSafe | None
+    ) -> UseCaseView | N8nNotReady | NotSafe | None:
         match moved:
             case None | AlreadyDeleted():
                 return None
-            case N8nNotReady():
+            case N8nNotReady() | NotSafe():
                 return moved
             case _:
                 return await self.get_use_case(use_case_id, principal)
@@ -501,12 +502,12 @@ class Builder:
 
     async def restore_use_case(
         self, use_case_id: str, principal: Principal
-    ) -> UseCaseView | TooLate | N8nNotReady | None:
+    ) -> UseCaseView | TooLate | N8nNotReady | NotSafe | None:
         moved = await self._move(
             use_case_id, lambda state, _, now: restore(state, now), principal.user_id
         )
         match moved:
-            case TooLate() | N8nNotReady():
+            case TooLate() | N8nNotReady() | NotSafe():
                 return moved
             case None:
                 return None
@@ -639,7 +640,7 @@ class Builder:
 
     async def _move(
         self, use_case_id: str, move: Move, by: UserId, recorded: Recorded | None = None
-    ) -> Moved | N8nNotReady | None:
+    ) -> Moved | N8nNotReady | NotSafe | None:
         """An own workflow's n8n state follows the move before it is recorded: on is published
         with every trigger live, anything else is off. The lock is held across n8n's answer, so
         moves of one workflow never cross there either."""
@@ -648,7 +649,8 @@ class Builder:
             row = await (
                 await uow.conn.execute(
                     "SELECT u.paused_at, u.paused_by, u.deleted_at, u.deleted_by, u.draft,"
-                    " u.engine, u.n8n_workflow_id, u.current_version, v.template, v.n8n_version_id"
+                    " u.engine, u.n8n_workflow_id, u.current_version, v.template, v.n8n_version_id,"
+                    " v.grade"
                     " FROM builder.use_cases u JOIN builder.use_case_versions v"
                     " ON v.use_case_id = u.use_case_id AND v.version = u.current_version"
                     " WHERE u.use_case_id = %s FOR UPDATE OF u",
@@ -722,7 +724,9 @@ class Builder:
         chosen = [(agent.card, agent.values) for agent in pinned]
         return await self._laid_out(use_case_id, row["name"], schedule, chosen)
 
-    async def _follow_in_n8n(self, row: Mapping[str, Any], after: Lifecycle) -> N8nNotReady | None:
+    async def _follow_in_n8n(
+        self, row: Mapping[str, Any], after: Lifecycle
+    ) -> N8nNotReady | NotSafe | None:
         """Puts the version on live in n8n, or takes the workflow off. A delete takes it off as
         best it can: a deleted use case's runs are refused at their first call whatever n8n
         does. A publish that did not finish is taken off again, so n8n never runs what the
@@ -733,6 +737,8 @@ class Builder:
             return N8nNotReady("This platform is not connected to n8n.")
         if is_on(after) and version_id is None:
             return N8nNotReady("This version is not saved in n8n. Change when it runs to save it.")
+        if is_on(after) and row["grade"] != "safe":
+            return NotSafe()
         try:
             if is_on(after):
                 await self._n8n.go_live(workflow_id, version_id)

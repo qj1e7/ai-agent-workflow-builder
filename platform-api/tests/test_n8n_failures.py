@@ -415,6 +415,20 @@ async def test_the_sweep_fails_a_test_run_whose_execution_failed_before_any_bloc
     )
 
 
+async def test_the_sweep_passes_a_test_run_n8n_finished_before_any_block_called(r: Reports):
+    """It reached no yes and wrote nothing, so it is not left to time out."""
+    run_id = RunId("run_test")
+    claimed = Pending(run_id, 1, N8nExecutionId("101"), NOW)
+    own = replace(SPEC, n8n=N8nTarget(WORKFLOW, "hook-1"))
+    record = RunRecord(run_id, own, SPEC.owner, NOW, NOW, 1, claimed, (), None)
+    async with r.h.db.transaction("orchestration") as uow:
+        await Store().insert_run(uow, record, "portal:test")
+    r.failures.finished.add("101")
+    assert await r.calls.sweep() == [run_id]
+    assert await r.state() == Succeeded(run_id, Outcome.TEST_PASSED, ())
+    assert await r.calls.sweep() == []
+
+
 async def test_the_sweep_never_fails_a_run_that_finished(r: Reports):
     run_id = await r.test_run_at_the_gate()
     r.failures.errored[WORKFLOW] = ["101"]

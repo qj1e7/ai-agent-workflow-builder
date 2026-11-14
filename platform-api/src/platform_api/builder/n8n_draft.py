@@ -56,6 +56,11 @@ class N8nNotReady:
 
 
 @dataclass(frozen=True)
+class NotSafe:
+    """The version on record did not grade safe, so it never goes live."""
+
+
+@dataclass(frozen=True)
 class DraftRefused:
     """The checker would not let this layout be saved."""
 

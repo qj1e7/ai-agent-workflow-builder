@@ -418,6 +418,12 @@ class Written:
 
 
 @dataclass(frozen=True)
+class StillRetrying:
+    """n8n had not answered the retry when the wait ran out: it may be running it, or may yet
+    refuse it."""
+
+
+@dataclass(frozen=True)
 class RetryRefused:
     """n8n would not retry the execution, in its own words: it succeeded, a retry of it already
     did, or n8n no longer holds it."""
@@ -788,10 +794,10 @@ class N8nApi:
 
     async def retry(
         self, execution_id: str, wait: float = RETRY_WAIT_SECONDS
-    ) -> RetryRefused | None:
+    ) -> RetryRefused | StillRetrying | None:
         """n8n's own retry, from the block that stopped, on the version that ran (P7 Q5). n8n
-        answers only once the retry stops, so a wait that runs out means it took the retry. None
-        when it took it. Raises when n8n could not be asked."""
+        answers only once the retry stops, so a wait that runs out says nothing yet. None when
+        it took it. Raises when n8n could not be asked."""
         try:
             response = await self._public(
                 "POST",
@@ -800,7 +806,7 @@ class N8nApi:
                 timeout=httpx.Timeout(10.0, read=wait),
             )
         except httpx.ReadTimeout:
-            return None
+            return StillRetrying()
         if response.status_code in (400, 404, 409):
             return RetryRefused(_short(response))
         _expect(response)
@@ -810,10 +816,11 @@ class N8nApi:
         body = {"destinationProjectId": project_id}
         _expect(await self._public("PUT", f"/workflows/{workflow_id}/transfer", body), 200, 204)
 
-    async def execution(self, execution_id: str) -> ExecutionRecord | None:
-        response = await self._public(
-            "GET", f"/executions/{execution_id}", params={"includeData": "true"}
-        )
+    async def execution(self, execution_id: str, data: bool = True) -> ExecutionRecord | None:
+        """With data, the start item and a failure's block and words too. Without, its status
+        and links only, which is all the sweep reads every few seconds."""
+        params = {"includeData": "true" if data else "false"}
+        response = await self._public("GET", f"/executions/{execution_id}", params=params)
         if response.status_code == 404:
             return None
         return _record_of(_parse(_ExecutionOut, _expect(response)))
@@ -930,9 +937,9 @@ class N8nExecutions:
     def __init__(self, api: N8nApi) -> None:
         self._api = api
 
-    async def _record(self, execution_id: str) -> ExecutionRecord | None:
+    async def _record(self, execution_id: str, data: bool = True) -> ExecutionRecord | None:
         try:
-            return await self._api.execution(execution_id)
+            return await self._api.execution(execution_id, data)
         except (N8nError, httpx.HTTPError) as error:
             log.warning("could not read n8n execution %s: %s", execution_id, error)
             return None
@@ -950,7 +957,7 @@ class N8nExecutions:
 
     async def landed(self, execution_id: N8nExecutionId) -> bool:
         """Whether n8n shows the execution running or finished, after a wake met a 409."""
-        record = await self._record(execution_id)
+        record = await self._record(execution_id, data=False)
         return record is not None and record.status in LANDED
 
 
@@ -1045,8 +1052,11 @@ class N8nWorkflows:
             raise N8nError(f"n8n has another version of {workflow_id} live")
 
     async def ended(self, execution_id: N8nExecutionId) -> Ended | None:
+        """Its status alone, and its data only once it failed, for the block and the words."""
         try:
-            record = await self._api.execution(execution_id)
+            record = await self._api.execution(execution_id, data=False)
+            if record is not None and record.status in ENDED - {"success"}:
+                record = await self._api.execution(execution_id)
         except (N8nError, httpx.HTTPError) as error:
             log.warning("could not read n8n execution %s: %s", execution_id, error)
             return None

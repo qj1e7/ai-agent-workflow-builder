@@ -113,6 +113,8 @@ class FakeWorkflows:
     holder: UserId | None = None
     versions: dict[str, RanVersion] = field(default_factory=lambda: {"v1": SAFE_BY_ALICE})
     release_of: str | None = None
+    gone: set[str] = field(default_factory=set[str])
+    """Workflows whose use case was deleted."""
 
     async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | None:
         if n8n_workflow_id not in (WORKFLOW, OTHER_WORKFLOW):
@@ -124,6 +126,9 @@ class FakeWorkflows:
 
     async def agents(self) -> Sequence[NodeOption]:
         return [NodeOption(CARD.id, CARD.name)]
+
+    async def deleted(self, n8n_workflow_id: str) -> bool:
+        return n8n_workflow_id in self.gone
 
     async def agent_inputs(self, agent_id: str) -> Sequence[CardInput]:
         return CARD.inputs if agent_id == CARD.id else []

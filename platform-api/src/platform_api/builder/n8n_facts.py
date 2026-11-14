@@ -134,6 +134,17 @@ class BuilderWorkflowFacts:
     async def agents(self) -> Sequence[NodeOption]:
         return [NodeOption(card.card_id, card.name) for card in await self._cards.list()]
 
+    async def deleted(self, n8n_workflow_id: str) -> bool:
+        async with self._db.connection("builder") as conn:
+            row = await (
+                await conn.execute(
+                    "SELECT 1 FROM builder.use_cases WHERE n8n_workflow_id = %s"
+                    " AND engine = 'own' AND deleted_at IS NOT NULL",
+                    (n8n_workflow_id,),
+                )
+            ).fetchone()
+        return row is not None
+
     async def agent_inputs(self, agent_id: str) -> Sequence[CardInput]:
         card = await self._cards.get(agent_id)
         return [] if card is None else card_spec(card).inputs

@@ -12,7 +12,7 @@ from platform_api.builder.models import (
     UseCaseView,
     VersionList,
 )
-from platform_api.builder.n8n_draft import DraftRefused, N8nNotReady
+from platform_api.builder.n8n_draft import DraftRefused, N8nNotReady, NotSafe
 from platform_api.builder.service import InN8nRefused, ScheduleOnSoftwarePage, WatchlistStays
 from platform_api.builder.versions import ChangedSince, NoSuchVersion, NotAScheduleChange
 from platform_api.orchestration import ChangedInN8n
@@ -34,24 +34,27 @@ N8N_NOT_READY = error_response(
     "because the identity provider's keys are unavailable"
 )
 N8N_CHANGED = error_response(CHANGED_IN_N8N)
+NOT_SAFE = "This version did not pass the safety check, so it cannot be turned on."
 
 
-def refused_in_n8n(refused: InN8nRefused) -> HTTPException:
+def refused_in_n8n(refused: InN8nRefused | NotSafe) -> HTTPException:
     """Why an own workflow's change was not made, as the words the Portal shows."""
     match refused:
         case N8nNotReady(detail):
             return HTTPException(503, detail)
         case ChangedInN8n():
             return HTTPException(409, CHANGED_IN_N8N)
+        case NotSafe():
+            return HTTPException(409, NOT_SAFE)
         case DraftRefused(findings):
             return HTTPException(422, [{"loc": ["body"], "msg": f.text} for f in findings])
 
 
-def _moved(found: UseCaseView | N8nNotReady | None) -> UseCaseView:
+def _moved(found: UseCaseView | N8nNotReady | NotSafe | None) -> UseCaseView:
     match found:
         case None:
             raise HTTPException(404, NO_SUCH)
-        case N8nNotReady():
+        case N8nNotReady() | NotSafe():
             raise refused_in_n8n(found)
         case view:
             return view
@@ -75,7 +78,7 @@ async def pause_use_case(
     description="Turns a paused workflow back on. Its next run is the next slot of its "
     "schedule. Resuming a workflow that is on changes nothing, and a draft stays a draft until "
     "it is turned on. A workflow n8n carries reads on only once n8n has every trigger live.",
-    responses={**OPERATORS_ONLY, 404: NOT_FOUND, 503: N8N_NOT_READY},
+    responses={**OPERATORS_ONLY, 404: NOT_FOUND, 409: error_response(NOT_SAFE), 503: N8N_NOT_READY},
 )
 async def resume_use_case(
     use_case_id: str, principal: WorkflowOperator, builder: CurrentBuilder
@@ -91,7 +94,7 @@ async def resume_use_case(
     "Jira or Teams, so it needs no approval. A workflow n8n carries is published in n8n, and "
     "the answer says on only once n8n has every trigger live (ENGINE-PLAN 2.5). The caller is "
     "its publisher, whose scheduled runs are their work and who can never approve them.",
-    responses={**OPERATORS_ONLY, 404: NOT_FOUND, 503: N8N_NOT_READY},
+    responses={**OPERATORS_ONLY, 404: NOT_FOUND, 409: error_response(NOT_SAFE), 503: N8N_NOT_READY},
 )
 async def turn_on_use_case(
     use_case_id: str, principal: WorkflowOperator, builder: CurrentBuilder
@@ -129,6 +132,7 @@ async def delete_use_case(
     responses={
         **OPERATORS_ONLY,
         404: error_response(NO_SUCH),
+        409: error_response(NOT_SAFE),
         410: error_response("The workflow was deleted more than a day ago"),
         503: N8N_NOT_READY,
     },
@@ -141,7 +145,7 @@ async def restore_use_case(
             raise HTTPException(
                 410, "This workflow was deleted more than a day ago, so it can't be put back."
             )
-        case N8nNotReady() as refused:
+        case N8nNotReady() | NotSafe() as refused:
             raise refused_in_n8n(refused)
         case None:
             raise HTTPException(404, NO_SUCH)

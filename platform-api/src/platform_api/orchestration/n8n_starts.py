@@ -15,7 +15,7 @@ import httpx
 
 from platform_api.db import Database
 from platform_api.orchestration.dispatch import DispatchFailure
-from platform_api.orchestration.n8n import N8nApi, N8nError, RetryRefused
+from platform_api.orchestration.n8n import N8nApi, N8nError, RetryRefused, StillRetrying
 from platform_api.orchestration.n8n_call_book import CallBook
 from platform_api.orchestration.n8n_calls import StartKind, start_signature
 from platform_api.orchestration.spec import N8nTarget
@@ -62,8 +62,9 @@ class RunStarts(Protocol):
         did not take it, to be tried again with a new nonce."""
         ...
 
-    async def retry(self, execution_id: N8nExecutionId) -> RetryRefused | None:
-        """None when n8n took the retry. Raises DispatchFailure when n8n could not be asked."""
+    async def retry(self, execution_id: N8nExecutionId, workflow_id: str) -> RetryRefused | None:
+        """None once n8n shows a retry of the execution. Raises DispatchFailure when n8n could
+        not be asked, or has not shown one yet, to be tried again."""
         ...
 
 
@@ -116,11 +117,25 @@ class N8nStarts:
         except (N8nError, httpx.HTTPError) as error:
             raise DispatchFailure(f"n8n did not run the draft: {_words(error)}") from None
 
-    async def retry(self, execution_id: N8nExecutionId) -> RetryRefused | None:
+    async def retry(self, execution_id: N8nExecutionId, workflow_id: str) -> RetryRefused | None:
+        """A retry n8n did not answer in time counts only once n8n lists it, so a refusal n8n
+        gave slowly never reads as taken. A try that finds one listed already asks n8n nothing,
+        so a slow retry is never sent twice."""
         try:
-            return await self._api.retry(execution_id)
+            if await self._retried(execution_id, workflow_id):
+                return None
+            answer = await self._api.retry(execution_id)
+            if not isinstance(answer, StillRetrying):
+                return answer
+            if await self._retried(execution_id, workflow_id):
+                return None
         except (N8nError, httpx.HTTPError) as error:
             raise DispatchFailure(f"n8n did not answer the retry: {_words(error)}") from None
+        raise DispatchFailure("n8n did not answer the retry in time and lists no retry of it")
+
+    async def _retried(self, execution_id: N8nExecutionId, workflow_id: str) -> bool:
+        listed = await self._api.executions(workflow_id)
+        return any(record.retry_of == execution_id for record in listed)
 
     async def close(self) -> None:
         await self._client.aclose()
