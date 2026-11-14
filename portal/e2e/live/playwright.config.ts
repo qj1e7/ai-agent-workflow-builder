@@ -7,6 +7,7 @@ export default defineConfig({
   reporter: [['list']],
   fullyParallel: false,
   workers: 1,
+  maxFailures: process.env['CI'] ? 10 : 0,
   timeout: 180_000,
   expect: { timeout: 10_000 },
   forbidOnly: Boolean(process.env['CI']),
