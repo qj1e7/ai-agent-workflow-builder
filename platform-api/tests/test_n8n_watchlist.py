@@ -99,8 +99,10 @@ async def test_a_check_reads_its_own_list_and_raises_one_ticket_for_the_software
     await wl.tick()
     made = await wl.write("101", "Create tickets")
     assert isinstance(made, WriteAnswer) and (made.made, made.of) == (1, 1)
-    assert isinstance((await wl.run()).state, Succeeded)
-    assert [t.title for t in await wl.h.jira.tickets()] == [TICKET_TITLE]
+    run = await wl.run()
+    assert isinstance(run.state, Succeeded)
+    tickets = [(t.title, t.run_id) for t in await wl.h.jira.tickets()]
+    assert tickets == [(TICKET_TITLE, run.run_id)], "the ticket names the run that made it"
     [langgraph] = (await page(wl)).software.values()
     assert langgraph.status == "ticket_open"
     assert langgraph.facts.open_ticket is not None
