@@ -51,7 +51,7 @@ describe('a Tell in the run\'s chat', () => {
 
 describe('the declined record', () => {
   const nameOf = (id: string) => ({ alice: 'Alice', bob: 'Bob' })[id] ?? id
-  const step = (index: number, change: Partial<ApprovalStepView>): ApprovalStepView => ({ index, label: `Step ${index}`, status: 'open', decided_by: null, decided_at: null, reason: null, ...change })
+  const step = (index: number, change: Partial<ApprovalStepView>): ApprovalStepView => ({ index, label: `Step ${index}`, status: 'open', decided_by: null, decided_at: null, reason: null, post: 'sent', ...change })
 
   it('says who declined, that nothing was written, and why when there is a reason', () => {
     expect(declinedRecord({ by: 'bob', approvedBy: [], reason: 'Wrong version' }, nameOf)).toBe('Declined by Bob. Nothing was written. Reason: Wrong version.')

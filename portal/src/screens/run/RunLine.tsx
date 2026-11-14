@@ -1,12 +1,12 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { AgentFace } from '../../ui/AgentFace'
 import { cx } from '../../ui/cx'
-import { IconCheck, IconClock, IconGate, IconPlay, IconSearch, IconTicket, IconX, type Icon } from '../../ui/icons'
+import { IconCheck, IconClock, IconGate, IconMessage, IconPlay, IconSearch, IconTicket, IconX, type Icon } from '../../ui/icons'
 import { usePauseUnseen } from '../../ui/loops'
 import { motionAllowed } from '../../ui/motion'
 import { TicketLink } from '../jira/TicketKeys'
 import type { Station, StationState, StepIcon, Under } from './runModel'
-import { workingWords, type Settled } from './words'
+import { sentToWords, UNSENT_WORDS, workingWords, type Settled } from './words'
 import styles from './RunLine.module.css'
 
 /** The state in words, for a screen reader: the line shows it by shape and colour. */
@@ -62,6 +62,15 @@ function UnderStep({ under, small }: { under: Under; small: boolean }) {
       ))
     case 'note':
       return <span>{under.text}</span>
+    case 'sent':
+      return (
+        <span className={styles['sent']} data-sent>
+          <IconMessage size={small ? 12 : 14} />
+          {sentToWords(under.to, small)}
+        </span>
+      )
+    case 'unsent':
+      return <span className={styles['unsent']}>{UNSENT_WORDS}</span>
   }
 }
 

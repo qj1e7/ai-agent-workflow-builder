@@ -44,6 +44,7 @@ from platform_api.contracts.stories import (
     WORKFLOW,
     Story,
     Timeline,
+    announced,
     open_step,
 )
 from platform_api.monitoring.agent_events import (
@@ -61,7 +62,6 @@ from platform_api.monitoring.events import (
     AgentStepFinished,
     AgentStepStarted,
     ApprovalAnnounced,
-    ApprovalAnnouncedData,
     ApprovalDecided,
     ApprovalDecidedData,
     ApprovalRequested,
@@ -365,9 +365,7 @@ def card_run_events() -> Timeline:
         14.6,
         PLATFORM,
         f"The approval request was posted to the Teams channel {CHANNEL}.",
-        ApprovalAnnouncedData(
-            approval_id=CARD_RUN.approval_id, channel=CHANNEL, link=CARD_RUN.approval_link
-        ),
+        announced(tl, 14.6),
     )
     decided = tl.add(
         ApprovalDecided,
