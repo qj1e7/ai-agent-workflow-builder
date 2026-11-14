@@ -52,10 +52,11 @@ const PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => und
 /** The fixture's set-up card, as it is when she has no workflow of that name yet. */
 const SETUP: SetupCardReply = { ...(setupCard as SetupCardReply), similar: null }
 
-function draw(reply: PlannerReply, { typed = 'Every Friday, sum up the tickets we closed this week', leftovers = false, registry, watched }: { typed?: string; leftovers?: boolean; registry?: CapabilitiesView; watched?: WatchlistView } = {}): string {
+function draw(reply: PlannerReply, { typed = 'Every Friday, sum up the tickets we closed this week', leftovers = false, registry, watched, useCase }: { typed?: string; leftovers?: boolean; registry?: CapabilitiesView; watched?: WatchlistView; useCase?: UseCaseView } = {}): string {
   const queryClient = new QueryClient()
   if (registry) queryClient.setQueryData(['capabilities', createDevSession(null).cacheScope()], registry)
   if (watched) queryClient.setQueryData(['watchlist', createDevSession(null).cacheScope()], watched)
+  if (useCase) queryClient.setQueryData(['use-case', createDevSession(null).cacheScope(), useCase.use_case_id], useCase)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={createDevSession(null)} platformFetch={fetch} origin="http://portal.test">
@@ -189,6 +190,19 @@ describe('a set-up card', () => {
     expect(text(html)).toContain('Weekly summary of closed tickets')
     expect(buttons(html)).toEqual(['Set up another', 'Open it'])
     expect(html).not.toContain('data-card=')
+  })
+
+  it('says the workflow she has already watches its software only while it is on', () => {
+    const reply = setupCard as SetupCardReply
+    const react: UseCaseView = {
+      ...(runUseCase as UseCaseView),
+      use_case_id: reply.similar?.use_case_id ?? '',
+      template: 'agent_cards',
+      name: reply.name,
+      agents: [{ card_id: 'crd_version_checker', card_version: 1, name: 'Version checker', values: { 'GitHub repository': 'facebook/react', 'Jira project': 'MOCK' } }],
+    }
+    expect(text(draw(reply, { useCase: react }))).toContain('It already watches facebook/react, every Monday at 9:00.')
+    for (const state of ['draft', 'paused'] as const) expect(text(draw(reply, { useCase: { ...react, state, next_run_at: null } })), `a ${state} workflow watches nothing yet`).not.toContain('already')
   })
 })
 
