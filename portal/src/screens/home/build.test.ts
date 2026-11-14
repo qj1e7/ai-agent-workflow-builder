@@ -17,7 +17,7 @@ const events = (raw: readonly { run_id: string; seq: number }[], upTo = Infinity
 const ended = (model: RunModel, outcome: 'test_passed' | 'nothing_to_write'): RunModel =>
   foldWire(model, [{ run_id: 'run_01JB8', seq: model.seq + 1, ts: '2026-11-14T03:00:09Z', actor: { kind: 'platform', id: 'platform', display: 'Platform' }, summary: '', kind: 'run_succeeded', data: { outcome } }], 'run_01JB8')
 
-/** The success fixture up to the agents' proposal, before any yes: what a test run reaches before it stops at the gate. */
+/** The success fixture through the agents' work, before any proposal or yes: where a test run ends before it stops at the gate. */
 const WORKING = events(success, 5)
 const PROPOSED = events(success, 8)
 const PASSED = ended(PROPOSED, 'test_passed')
