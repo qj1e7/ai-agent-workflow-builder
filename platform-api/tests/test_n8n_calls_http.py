@@ -253,3 +253,11 @@ def test_a_refused_resume_address_is_never_echoed(resume_url: str):
     for part in ("sig-7f3a", "signature", "evil.example", "n8n:5678", "webhook-waiting"):
         assert part not in response.text
     assert calls.calls == []
+
+
+def test_the_options_are_asked_for_the_workflow_the_editor_has_open():
+    calls = FakeNodeCalls()
+    client = TestClient(app_with(env=NODE_KEY_ENV, node_calls=calls))
+    path = "/internal/v1/n8n/options?kind=agents&workflow=wf_watch"
+    assert client.get(path, headers=NODE_KEY).status_code == 200
+    assert calls.asked == [("agents", {"workflow": "wf_watch"})]

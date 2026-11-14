@@ -297,3 +297,13 @@ async def test_an_empty_watchlist_has_nothing_on_the_list_to_check(world: World)
     workflow_id = (await world.use_case())["n8n_workflow_id"]
 
     assert await facts.workflow(workflow_id) == NothingToRun("Nothing on the list to check.")
+
+
+async def test_the_builder_knows_the_watchlist_s_own_workflow(world: World):
+    await world.on_n8n.add(ALICE, langgraph())
+    facts = Builder(world.db, Starts(), world.on_n8n, "").facts
+
+    workflow_id = (await world.use_case())["n8n_workflow_id"]
+
+    assert await facts.watchlist(workflow_id) is True
+    assert await facts.watchlist("wf-someone-else") is False

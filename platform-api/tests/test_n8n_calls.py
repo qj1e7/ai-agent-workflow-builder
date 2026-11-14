@@ -76,6 +76,7 @@ from tests.test_orchestrator import Harness, mint, open_harness
 pytestmark = pytest.mark.anyio
 
 WORKFLOW = "wf_7"
+WATCHLIST_WORKFLOW = "wf_watch"
 OTHER_WORKFLOW = "wf_8"
 ALICE, BOB, DAVE = UserId("alice"), UserId("bob"), UserId("dave")
 REPO = "langchain-ai/langgraph"
@@ -128,7 +129,10 @@ class FakeWorkflows:
         return self.versions.get(version_id)
 
     async def agents(self) -> Sequence[NodeOption]:
-        return [WATCHLIST_CHECKER, NodeOption(CARD.id, CARD.name)]
+        return [NodeOption(CARD.id, CARD.name)]
+
+    async def watchlist(self, n8n_workflow_id: str) -> bool:
+        return n8n_workflow_id == WATCHLIST_WORKFLOW
 
     async def deleted(self, n8n_workflow_id: str) -> bool:
         return n8n_workflow_id in self.gone
@@ -157,9 +161,7 @@ class FakeSources:
     )
 
     async def places(self, source: str) -> Sequence[NodeOption]:
-        return (
-            [WATCHLIST_PLACE, NodeOption(REPO, "LangGraph")] if source == "github_releases" else []
-        )
+        return [NodeOption(REPO, "LangGraph")] if source == "github_releases" else []
 
     async def read(self, source: str, place: str, query: str | None) -> ReadItems | ReadFailed:
         self.reads.append((source, place, query))
@@ -664,16 +666,12 @@ async def test_an_issued_start_expires_240_seconds_on_and_carries_its_signature(
 
 
 async def test_the_options_list_only_what_the_portal_allows(t: Calls):
-    assert await t.calls.options("agents", {}) == [
-        WATCHLIST_CHECKER,
-        NodeOption(CARD.id, "Compare"),
-    ]
+    assert await t.calls.options("agents", {}) == [NodeOption(CARD.id, "Compare")]
     assert await t.calls.options("agent_inputs", {"agent": CARD.id}) == [
         NodeOption("Project", "Project")
     ]
     assert await t.calls.options("places", {"source": "github_releases"}) == [
-        WATCHLIST_PLACE,
-        NodeOption(REPO, "LangGraph"),
+        NodeOption(REPO, "LangGraph")
     ]
     assert await t.calls.options("places", {"action": "jira.create_ticket"}) == [
         NodeOption("MOCK", "MOCK")
@@ -746,3 +744,20 @@ async def test_an_agent_whose_write_target_is_left_out_is_refused_not_defaulted(
         422, '"Compare" needs "Project", so our platform knows where its change goes.'
     )
     assert t.h.agent.requests == []
+
+
+async def test_only_the_watchlist_s_own_workflow_is_offered_its_checker_and_its_place(t: Calls):
+    """Anywhere else they would only be refused at run time, so the editor never offers them."""
+    releases = {"source": "github_releases"}
+    mine = {"workflow": WATCHLIST_WORKFLOW}
+    assert await t.calls.options("agents", mine) == [
+        WATCHLIST_CHECKER,
+        NodeOption(CARD.id, "Compare"),
+    ]
+    assert await t.calls.options("places", {**releases, **mine}) == [
+        WATCHLIST_PLACE,
+        NodeOption(REPO, "LangGraph"),
+    ]
+    for other in ({"workflow": WORKFLOW}, {}):
+        assert WATCHLIST_CHECKER not in await t.calls.options("agents", other)
+        assert WATCHLIST_PLACE not in await t.calls.options("places", {**releases, **other})

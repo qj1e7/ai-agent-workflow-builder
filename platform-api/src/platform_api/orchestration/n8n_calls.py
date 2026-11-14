@@ -183,6 +183,10 @@ class WorkflowFacts(Protocol):
         """The workflow carries a use case that was deleted."""
         ...
 
+    async def watchlist(self, n8n_workflow_id: str) -> bool:
+        """The workflow is the Software watchlist's own."""
+        ...
+
     async def agent_run(
         self, agent_id: str, values: Mapping[str, str], pinned: CardSpec | None = None
     ) -> AgentToRun | CannotRun | None:
@@ -669,20 +673,40 @@ class NodeCatalog:
                 if "action" in of:
                     entry = self._writes.get(of["action"])
                     return [] if entry is None else list(entry.places)
-                return list(await self._sources.places(of.get("source", "")))
+                source = of.get("source", "")
+                listed = list(await self._sources.places(source))
+                if source == GITHUB_RELEASES and await self._in_watchlist(of):
+                    return [WATCHLIST_PLACE, *listed]
+                return listed
             case "agents":
-                return list(await self._facts.agents())
+                listed = list(await self._facts.agents())
+                return [WATCHLIST_CHECKER, *listed] if await self._in_watchlist(of) else listed
             case "agent_inputs":
                 inputs = await self._facts.agent_inputs(of.get("agent", ""))
                 return [NodeOption(item.name, item.name) for item in inputs]
             case "write_actions":
                 return [NodeOption(entry.id, entry.name) for entry in self._writes.values()]
 
+    async def _in_watchlist(self, of: Mapping[str, str]) -> bool:
+        """The editor offers the watchlist's own blocks only in the watchlist's own workflow. A
+        block anywhere else would be refused at run time."""
+        workflow = of.get("workflow")
+        return workflow is not None and await self._facts.watchlist(workflow)
+
     async def unknown_in(self, work: Work) -> Refused | None:
+        """The watchlist's place and checker are the platform's own and always known here. A run
+        of any other workflow refuses them when the block asks (NOT_A_WATCHLIST_RUN)."""
         match work:
+            case ReadCall(source, place) if (
+                source == GITHUB_RELEASES and place == WATCHLIST_PLACE.id
+            ):
+                pass
             case ReadCall(source, place):
                 if not await self._listed(self._sources.places(source), place):
                     return unknown("place", place)
+            case AgentCall(agent, inputs) if agent == WATCHLIST_CHECKER.id:
+                if inputs:
+                    return unknown("input", next(iter(inputs)))
             case AgentCall(agent, inputs):
                 if not await self._listed(self._facts.agents(), agent):
                     return unknown("agent", agent)

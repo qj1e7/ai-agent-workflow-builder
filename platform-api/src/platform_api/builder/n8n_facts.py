@@ -12,7 +12,7 @@ from typing import Protocol
 from platform_api.builder.card_store import CardLibrary
 from platform_api.builder.cards import VERSION_CHECKER_ID, card_spec
 from platform_api.builder.layout import REPO_INPUT
-from platform_api.builder.templates import TAG_PATTERN
+from platform_api.builder.templates import SOFTWARE_WATCHLIST, TAG_PATTERN
 from platform_api.db import Database
 from platform_api.orchestration import (
     GITHUB_RELEASES,
@@ -96,6 +96,7 @@ class BuilderWorkflowFacts:
         listed = [option.id for option in await self.places(GITHUB_RELEASES)]
         places = {GITHUB_RELEASES: [*listed, *adding.get(GITHUB_RELEASES, ())]}
         agents = {WATCHLIST_CHECKER.id: [], **{c.card_id: card_spec(c).inputs for c in cards}}
+        listed.append(WATCHLIST_PLACE.id)
         return known_options(agents, places, self._writes)
 
     async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | NothingToRun | None:
@@ -140,9 +141,19 @@ class BuilderWorkflowFacts:
         return RanVersion(row["grade"], publisher)
 
     async def agents(self) -> Sequence[NodeOption]:
-        """The platform's watchlist checker, then the saved cards."""
-        cards = [NodeOption(card.card_id, card.name) for card in await self._cards.list()]
-        return [WATCHLIST_CHECKER, *cards]
+        return [NodeOption(card.card_id, card.name) for card in await self._cards.list()]
+
+    async def watchlist(self, n8n_workflow_id: str) -> bool:
+        async with self._db.connection("builder") as conn:
+            row = await (
+                await conn.execute(
+                    "SELECT 1 FROM builder.use_cases u JOIN builder.use_case_versions v"
+                    " ON v.use_case_id = u.use_case_id AND v.version = u.current_version"
+                    " WHERE u.n8n_workflow_id = %s AND u.engine = 'own' AND v.template = %s",
+                    (n8n_workflow_id, SOFTWARE_WATCHLIST.key),
+                )
+            ).fetchone()
+        return row is not None
 
     async def deleted(self, n8n_workflow_id: str) -> bool:
         async with self._db.connection("builder") as conn:
@@ -180,8 +191,9 @@ class BuilderWorkflowFacts:
         return AgentToRun(CardRun(spec, dict(values), bindings), release_of)
 
     async def places(self, source: str) -> Sequence[NodeOption]:
-        """GitHub releases: the watchlist as a whole, then the watched software and the
-        repositories the Version checker watches. Nothing else is set up to be read yet."""
+        """GitHub releases: the watched software and the repositories the Version checker
+        watches. Nothing else is set up to be read yet. The watchlist as a whole is offered only
+        in its own workflow (NodeCatalog)."""
         if source != GITHUB_RELEASES:
             return []
         async with self._db.connection("builder") as conn:
@@ -189,7 +201,7 @@ class BuilderWorkflowFacts:
                 await conn.execute(_PLACES, {"input": REPO_INPUT, "card": VERSION_CHECKER_ID})
             ).fetchall()
         named = {str(row["repo"]): str(row["name"]) for row in rows}
-        return [WATCHLIST_PLACE, *(NodeOption(repo, name) for repo, name in sorted(named.items()))]
+        return [NodeOption(repo, name) for repo, name in sorted(named.items())]
 
     async def read(self, source: str, place: str, query: str | None) -> ReadItems | ReadFailed:
         """A repository's counted releases, newest first, through the agent runtime, which holds

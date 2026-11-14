@@ -20331,6 +20331,25 @@
             }
           },
           {
+            "description": "The n8n workflow the editor has open.",
+            "in": "query",
+            "name": "workflow",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The n8n workflow the editor has open.",
+              "title": "Workflow"
+            }
+          },
+          {
             "in": "header",
             "name": "X-Wab-Node-Key",
             "required": false,

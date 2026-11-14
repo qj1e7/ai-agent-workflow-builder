@@ -66,12 +66,14 @@ class FakeNodeCalls:
         self._failure = failure or LeftAsIs("No run carries this execution.")
         self.calls: list[NodeCall] = []
         self.reports: list[tuple[N8nExecutionId, N8nExecutionId]] = []
+        self.asked: list[tuple[OptionKind, dict[str, str]]] = []
 
     async def call(self, call: NodeCall) -> CallResult:
         self.calls.append(call)
         return self._result
 
     async def options(self, kind: OptionKind, of: Mapping[str, str]) -> list[NodeOption]:
+        self.asked.append((kind, dict(of)))
         return [NodeOption("MOCK", "MOCK")] if kind == "places" else []
 
     async def report(self, reporter: N8nExecutionId, failed: N8nExecutionId) -> FailureResult:

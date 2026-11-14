@@ -154,9 +154,14 @@ export function webhookContext(options: {
   return { ctx: ctx as unknown as IWebhookFunctions, response };
 }
 
-export function loadOptionsContext(api: FakeApi, current: IDataObject = {}): ILoadOptionsFunctions {
+export function loadOptionsContext(
+  api: FakeApi,
+  current: IDataObject = {},
+  workflowId: string | null = 'wf-7',
+): ILoadOptionsFunctions {
   const ctx = {
     getNode: () => node('Block', 'CUSTOM.block'),
+    getWorkflow: () => ({ id: workflowId ?? undefined, name: 'Release check', active: true }),
     getCurrentNodeParameter: (name: string) => current[name],
     helpers: { httpRequest: api.httpRequest },
   };
