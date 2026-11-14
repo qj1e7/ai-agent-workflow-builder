@@ -4,13 +4,41 @@ import { useLatch } from '../../api/latch'
 import { useCapabilities } from '../../api/plannerQueries'
 import { isConflict, refusalOf, useDecide } from '../../api/queries'
 import type { ApprovalStepView, ApprovalView, CapabilityView, DecisionIn, DecisionView, UseCaseView, Verdict } from '../../api/types'
-import { starterName } from '../../api/labels'
 import { cardsOf } from '../workflows/workflow'
 import type { Declined } from './runModel'
-import { andList, CONFLICT_WORDS, declinedOfSteps, lockWords, type NameOf, type Party } from './words'
+import { andList, CONFLICT_WORDS, declinedOfSteps, lockWords, type Party } from './words'
 
 export function openStep(approval: ApprovalView): ApprovalStepView | null {
   return approval.steps.find((step) => step.status === 'open') ?? null
+}
+
+/**
+ * Where a request stands, from its steps: waiting at one step, or over. Only an open request takes a decision, so an expired,
+ * cancelled or decided one says why instead of offering buttons.
+ */
+export type Standing =
+  | { readonly is: 'open'; readonly step: number; readonly steps: number; readonly approvedBy: readonly string[] }
+  | { readonly is: 'approved'; readonly by: readonly string[]; readonly at: string | null }
+  | { readonly is: 'declined'; readonly record: Declined; readonly at: string | null }
+  | { readonly is: 'expired' | 'cancelled' }
+
+export function standingOf(steps: readonly ApprovalStepView[]): Standing {
+  const declined = steps.find((step) => step.status === 'declined')
+  if (declined) return { is: 'declined', record: declinedOfSteps(steps) ?? { by: declined.decided_by ?? '', approvedBy: [], reason: declined.reason ?? null }, at: declined.decided_at ?? null }
+  if (steps.some((step) => step.status === 'expired')) return { is: 'expired' }
+  if (steps.some((step) => step.status === 'cancelled')) return { is: 'cancelled' }
+  const approved = steps.filter((step) => step.status === 'approved')
+  const by = approved.flatMap((step) => (step.decided_by ? [step.decided_by] : []))
+  const open = steps.find((step) => step.status === 'open' || step.status === 'waiting')
+  if (open) return { is: 'open', step: open.index, steps: steps.length, approvedBy: by }
+  return { is: 'approved', by, at: approved.at(-1)?.decided_at ?? null }
+}
+
+/** The steps with this person's recorded decision in, until the platform's next read shows it. */
+export function stepsAfter(steps: readonly ApprovalStepView[], decision: DecisionView): readonly ApprovalStepView[] {
+  if (steps.find((step) => step.index === decision.step)?.status !== 'open') return steps
+  const status = decision.verdict === 'approve' ? ('approved' as const) : ('declined' as const)
+  return steps.map((step) => (step.index === decision.step ? { ...step, status, decided_by: decision.by, decided_at: decision.at, reason: decision.reason ?? null } : step))
 }
 
 /**
@@ -30,20 +58,6 @@ export function partyOf(approval: ApprovalView | undefined, me: string | undefin
 /** What the agents found. The activity has it for good, and the approval holds it only while the request waits. */
 export function foundOf(fromActivity: string, fromApproval: string | undefined): string {
   return fromActivity !== '' ? fromActivity : (fromApproval ?? '')
-}
-
-/** Who asked: the workflow, who set it up, and whether a schedule or a person started this run. */
-export function askedWords(approval: ApprovalView, nameOf: NameOf): string {
-  const starter = `${starterName(nameOf(approval.started_by), approval.trigger)} started this run.`
-  const retried = approval.retried_by.length > 0 ? ` ${andList(approval.retried_by.map(nameOf))} retried it.` : ''
-  return `${approval.use_case_name}, set up by ${nameOf(approval.owner)}. ${starter}${retried}`
-}
-
-/** What happens next. Under today's rule a waiting request never expires, so it names no stop time and no backup. */
-export function happensWords(approval: ApprovalView, canDecide: boolean): string {
-  const who = canDecide ? 'you say yes' : 'an Approver says yes'
-  const order = approval.steps.length > 1 ? ' It needs two Approvers, one after the other.' : ''
-  return `Nothing is written until ${who}.${order} The request waits until someone decides. ${canDecide ? 'If you decline' : 'If an Approver declines'}, the run stops there.`
 }
 
 /**
@@ -78,19 +92,6 @@ export function useNotChecked(approval: ApprovalView | undefined, useCase: Pick<
   return notCheckedWords(approval.not_checked, useCase ? cardsOf(useCase).map((card) => card.card_id) : [], capabilities.data?.capabilities)
 }
 
-/** The reader's part: why they can decide, which of two yeses is theirs, or why they can't. */
-export function yourPart(approval: ApprovalView, party: Party | null, nameOf: NameOf): string | null {
-  const step = openStep(approval)
-  if (!step) return null
-  if (!approval.you_can_decide) return lockWords(approval.why_not, party)
-  const before = approval.steps.filter((other) => other.index < step.index && other.status === 'approved')
-  if (before.length > 0 && approval.steps.length === 2) {
-    const said = andList(before.map((other) => (other.decided_by ? nameOf(other.decided_by) : 'Another Approver')))
-    return `${said} said yes. Your yes is the second of two.`
-  }
-  return 'You can decide because you didn’t set this up or start this run.'
-}
-
 /** What the person decides. Only a decline takes a reason, and it is optional (spec 10.4). */
 export type Choice = { readonly verdict: 'approve' } | { readonly verdict: 'decline'; readonly reason: string | null }
 
@@ -110,10 +111,9 @@ export function decisionFor(approval: ApprovalView | undefined, choice: Choice):
   return choice.verdict === 'decline' && choice.reason ? { ...body, reason: choice.reason } : body
 }
 
-/** The record of a decline the platform just recorded, ahead of the run's own events: the steps as they were, with the decline in. */
-export function declinedNow(steps: readonly ApprovalStepView[], decision: DecisionView): Declined | null {
-  const decided = steps.map((step) => (step.index === decision.step ? { ...step, status: 'declined' as const, decided_by: decision.by, decided_at: decision.at, reason: decision.reason ?? null } : step))
-  return declinedOfSteps(decided)
+/** Whether this person may say yes now: the platform says so, the request is open, and they haven't just decided it here. */
+export function canDecideNow(approval: ApprovalView, decision: Pick<Decision, 'recorded' | 'steps'>): boolean {
+  return approval.you_can_decide && standingOf(decision.steps ?? approval.steps).is === 'open' && decision.recorded === null
 }
 
 export interface Decision {
@@ -122,6 +122,8 @@ export interface Decision {
   readonly recorded: Verdict | null
   /** The record of the decline the platform recorded for this person on this page. */
   readonly declined: Declined | null
+  /** The request's steps with that decision in, ahead of the next read. Null until this person decides here. */
+  readonly steps: readonly ApprovalStepView[] | null
   readonly error: string | null
   decide(this: void, choice: Choice): void
 }
@@ -135,15 +137,14 @@ export function useDecision(approval: ApprovalView | undefined, party: Party | n
   const latch = useLatch()
   const user = useCacheScope()
   const errorWords = useErrorWords()
-  const [sent, setSent] = useState<{ by: string; verdict: Verdict; steps: readonly ApprovalStepView[] } | null>(null)
+  const [sent, setSent] = useState<{ by: string; verdict: Verdict } | null>(null)
   const mine = sent !== null && sent.by === user
 
   function decide(choice: Choice): void {
     const body = decisionFor(approval, choice)
     if (!body || !approval) return
-    const { steps } = approval
     latch.run((settled) => {
-      setSent({ by: user, verdict: choice.verdict, steps })
+      setSent({ by: user, verdict: choice.verdict })
       mutation.mutate(body, {
         onSuccess: (answer) => onRecorded?.(answer.decision),
         onSettled: settled,
@@ -158,11 +159,13 @@ export function useDecision(approval: ApprovalView | undefined, party: Party | n
     else if (isConflict(mutation.error)) error = CONFLICT_WORDS
     else error = errorWords(mutation.error)
   }
-  const recorded = mine && mutation.isSuccess ? { decision: mutation.data.decision, steps: sent.steps } : null
+  const recorded = mine && mutation.isSuccess ? mutation.data.decision : null
+  const steps = recorded && approval ? stepsAfter(approval.steps, recorded) : null
   return {
     pending: mine && mutation.isPending ? sent.verdict : null,
-    recorded: recorded ? recorded.decision.verdict : null,
-    declined: recorded?.decision.verdict === 'decline' ? declinedNow(recorded.steps, recorded.decision) : null,
+    recorded: recorded ? recorded.verdict : null,
+    declined: recorded?.verdict === 'decline' && steps ? declinedOfSteps(steps) : null,
+    steps,
     error,
     decide,
   }

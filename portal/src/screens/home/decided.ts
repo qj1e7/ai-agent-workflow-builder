@@ -1,6 +1,6 @@
 import type { DecidedReply, PastDecisionView } from '../../api/types'
-import { count, declineTail, factsOf, sentence, stageWords, type NameOf } from '../run/words'
-import { runWhen } from '../workflows/times'
+import { count, factsOf, stageWords, type NameOf } from '../run/words'
+import { lineWhen } from '../workflows/times'
 
 type Only = DecidedReply['only']
 
@@ -21,30 +21,13 @@ export function decidedSay(total: number, shown: number, only: Only): string {
   return shown < total ? `${said} The ${String(shown)} newest are here.` : said
 }
 
-/** " at 9:10 today", or ", Mon 26 Oct, 8:00", after "Approved by Bob". */
-function decidedAt(at: string, now: Date): string {
-  const when = runWhen(at, now)
-  return when.startsWith('Today, ') ? ` at ${when.slice('Today, '.length)} today` : `, ${when}`
-}
-
 /**
- * What the run did after a yes, in the stage words its run page, its card and the Workflows row use. The line already says who
- * approved, so the words don't name them again.
+ * The line under a decision in the sketch's decisions card: the day, then the reason for a decline ("Tue 4 Nov · Not this week"), or
+ * what the run did after a yes, in the stage words its run page, its card and the Workflows row use ("Today 9:10 · 1 ticket created").
  */
-function afterYes(decision: PastDecisionView, nameOf: NameOf): string {
+export function decisionSub(decision: PastDecisionView, now: Date, nameOf: NameOf): string {
+  const day = lineWhen(decision.at, now)
+  if (decision.verdict === 'decline') return decision.reason ? `${day} · ${decision.reason}` : day
   const facts = factsOf(decision.run_state, { count: decision.written, tickets: decision.tickets, declinedBy: decision.declined_by })
-  return sentence(stageWords(facts, nameOf))
-}
-
-/**
- * One decision in a line, as the run page and Teams say it: "Approved by Bob, Mon 26 Oct, 8:00. 1 ticket created.", or the
- * declined record with when, "Declined by Bob at 9:10 today. Nothing was written. Reason: Wrong version."
- */
-export function decisionLine(decision: PastDecisionView, me: string, now: Date, nameOf: NameOf): string {
-  const at = decidedAt(decision.at, now)
-  const who = nameOf(me)
-  if (decision.verdict === 'approve') return `Approved by ${who}${at}. ${afterYes(decision, nameOf)}`
-  const before = decision.approved_before.map(nameOf)
-  const head = before.length > 0 ? `Approved by ${before.join(', then ')}, then declined by ${who}${at}` : `Declined by ${who}${at}`
-  return `${head}. ${declineTail({ reason: decision.reason })}`
+  return `${day} · ${stageWords(facts, nameOf)}`
 }
