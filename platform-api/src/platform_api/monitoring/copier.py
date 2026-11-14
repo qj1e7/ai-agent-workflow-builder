@@ -93,7 +93,6 @@ class Copier:
         self._sweep_at: float | None = None
         self._work = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
-        self._copying: RunId | None = None
 
     @property
     def listening(self) -> bool:
@@ -119,14 +118,6 @@ class Copier:
         await self._hub.start()
 
     async def stop(self) -> None:
-        logger.info(
-            "#248 stop: behind=%s catching_up=%s queued=%s retries=%s copying=%s",
-            self.behind,
-            self._catching_up,
-            self._behind,
-            self._retries,
-            self._copying,
-        )
         await self._hub.stop()
         if self._task is None:
             return
@@ -153,17 +144,12 @@ class Copier:
 
     async def _follow_generation(self) -> Generation:
         self._checked_at = time.monotonic()
-        started = time.monotonic()
         try:
             async with asyncio.timeout(self._put_timeout):
                 generation = await self._copy.ensure()
-        except BaseException as error:
-            logger.info("#248 ensure ended by %r after %.3f s", error, time.monotonic() - started)
-            if not isinstance(error, Exception):
-                raise
+        except Exception:
             self._unreachable = True
             raise
-        logger.info("#248 ensure took %.3f s", time.monotonic() - started)
         self._unreachable = False
         if self._generation_seen not in (None, generation):
             self._catch_up_every_run()
@@ -212,7 +198,6 @@ class Copier:
         return 0 if row is None else int(row["seq"])
 
     def _note_run(self, run_id: RunId) -> None:
-        logger.info("#248 notice for %s", run_id)
         self._live.add(run_id)
         self._behind.add(run_id)
         self._work.set()
@@ -260,10 +245,8 @@ class Copier:
             logger.warning("Could not check the copy in Cosmos DB: %r", error)
 
     async def _sweep(self, now: float) -> None:
-        logger.info("#248 sweep starts")
         try:
             found = await self.runs_behind()
-            logger.info("#248 sweep found %s", found)
         except Exception as error:
             logger.warning("Could not catch up the copy: %r", error)
             self._sweep_at = now + self._retry_delay
@@ -276,25 +259,11 @@ class Copier:
         self._missing = False
 
     async def _copy_one_batch(self, run_id: RunId) -> None:
-        started = time.monotonic()
-        self._copying = run_id
-        logger.info("#248 copy of %s starts", run_id)
         try:
             batch = await self._copy_batch(run_id)
-            logger.info("#248 copy of %s: %r in %.3f s", run_id, batch, time.monotonic() - started)
-        except BaseException as error:
-            logger.info(
-                "#248 copy of %s ended by %r after %.3f s",
-                run_id,
-                error,
-                time.monotonic() - started,
-            )
-            if not isinstance(error, Exception):
-                raise
+        except Exception as error:
             self._retry_later(run_id, error)
             return
-        finally:
-            self._copying = None
         if batch.failure is not None:
             self._retry_later(run_id, batch.failure)
             return
