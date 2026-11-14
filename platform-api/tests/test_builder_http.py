@@ -12,7 +12,16 @@ from platform_api.app import create_app
 from platform_api.builder import Builder, PlannerFront, Watchlist
 from platform_api.builder import planner as planner_module
 from platform_api.builder.home import HomeOut
-from platform_api.builder.models import AddSoftware, CreateAgentUseCase
+from platform_api.builder.models import (
+    AddSoftware,
+    CardApprovalView,
+    CardBlock,
+    CardDefinition,
+    CardInput,
+    CardView,
+    CreateAgentUseCase,
+    UseCaseCreated,
+)
 from platform_api.builder.planner_facts import STATUS_WORDS, PlannerFactsReader
 from platform_api.db import Database
 from platform_api.orchestration import (
@@ -571,6 +580,37 @@ async def test_a_set_up_card_comes_back_with_its_rows_and_a_similar_workflow(fro
     existing = await make_workflow(front, "friday SUMMARY")
     again = await say(front)
     assert again["similar"] == {"use_case_id": existing, "name": "friday SUMMARY"}
+
+
+async def test_a_workflow_of_the_same_name_that_watches_no_software_is_not_the_one_she_asks_for(
+    front: Front,
+):
+    front.answers.result = answered(SetupCardAnswer(name="Friday summary", rows=FOUR_ROWS))
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
+    reader = await front.builder.create_card(
+        alice,
+        CardDefinition(
+            name="Ticket reader",
+            purpose="Raises a ticket.",
+            inputs=[CardInput(name="Where", kind="jira_project", example="MOCK")],
+            blocks=[CardBlock(say="Raise a ticket.", tool="jira.create_ticket")],
+            approvals=[CardApprovalView(tool="jira.create_ticket", approvers=1)],
+        ),
+    )
+    assert isinstance(reader, CardView)
+    made = await front.builder.create_agent_use_case(
+        alice,
+        CreateAgentUseCase.model_validate(
+            {
+                "name": "friday SUMMARY",
+                "instruction": "x",
+                "agents": [{"card_id": reader.card_id, "values": {"Where": "MOCK"}}],
+            }
+        ),
+    )
+    assert isinstance(made, UseCaseCreated)
+    reply = await say(front)
+    assert reply["answer"] == "setup_card" and reply["similar"] is None
 
 
 async def test_every_part_of_the_request_comes_back_with_its_mark_in_order(front: Front):
