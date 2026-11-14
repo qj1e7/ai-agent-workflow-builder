@@ -14,7 +14,12 @@ from pydantic import ConfigDict, Field, model_validator
 
 from platform_api.orchestration.cards import BODY_LIMIT, TITLE_LIMIT
 from platform_api.orchestration.dispatch import resume_path
-from platform_api.orchestration.n8n_call_service import FailedRun, LeftAsIs, NodeCalls
+from platform_api.orchestration.n8n_call_service import (
+    FailedRun,
+    LeftAsIs,
+    NodeCalls,
+    SelfTestArrived,
+)
 from platform_api.orchestration.n8n_calls import (
     AgentCall,
     Answer,
@@ -165,7 +170,7 @@ class FailureIn(_From):
 
 
 class FailureOut(WireModel):
-    status: Literal["failed", "left_as_is"]
+    status: Literal["failed", "left_as_is", "self_test"]
     run_id: str | None = Field(default=None, description="The run the report failed.")
     detail: str
 
@@ -362,7 +367,8 @@ async def tell(body: TellIn, calls: CurrentNodeCalls) -> TellOut | JSONResponse:
     response_model=FailureOut,
     description="Report a failure, from our error workflow only. When n8n's own record says the "
     "execution failed, fails the run it carries with n8n's words for the block. A run that has "
-    "ended, or that another attempt carries now, stays as it is.",
+    "ended, or that another attempt carries now, stays as it is. The daily self-test's failure "
+    "is kept as the self-test's arrival, and fails no run.",
     responses={
         401: REFUSALS[401],
         403: error_response("The report did not come from our error workflow"),
@@ -379,6 +385,10 @@ async def failures(body: FailureIn, calls: CurrentNodeCalls) -> FailureOut | JSO
             return FailureOut(status="failed", run_id=run_id, detail="The run failed.")
         case LeftAsIs(detail):
             return FailureOut(status="left_as_is", detail=detail)
+        case SelfTestArrived():
+            return FailureOut(
+                status="self_test", detail="The daily self-test arrived. No run failed."
+            )
         case Refused(status, detail):
             return JSONResponse(status_code=status, content={"detail": detail})
         case TryLater(detail):

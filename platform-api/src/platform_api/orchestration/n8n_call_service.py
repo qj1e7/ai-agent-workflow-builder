@@ -57,6 +57,7 @@ from platform_api.orchestration.n8n_calls import (
     NOT_OURS,
     NOTHING_READ,
     READ_LIMIT,
+    SELF_TEST_FAILS,
     START_TOO_LATE,
     START_USED,
     TEST_RUN_STOPS,
@@ -122,11 +123,13 @@ from platform_api.orchestration.runs import (
     Lost,
     Moved,
     Pending,
+    Proposed,
     Rejected,
     RunState,
     Skipped,
     Succeeded,
     Working,
+    holder_of,
     linked_events,
     run_created,
     skipped_events,
@@ -135,6 +138,7 @@ from platform_api.orchestration.runs import (
     write_done,
 )
 from platform_api.orchestration.schedule_store import schedule_owner
+from platform_api.orchestration.self_test import SelfTests
 from platform_api.orchestration.service import (
     DENIED_ON_THE_WIRE,
     ActiveModel,
@@ -260,7 +264,12 @@ class LeftAsIs:
     detail: str
 
 
-type FailureResult = FailedRun | LeftAsIs | Refused | TryLater
+@dataclass(frozen=True)
+class SelfTestArrived:
+    """The daily self-test's failure, reported by the error workflow. No run failed."""
+
+
+type FailureResult = FailedRun | LeftAsIs | SelfTestArrived | Refused | TryLater
 
 
 @dataclass(frozen=True)
@@ -313,6 +322,7 @@ class NodeCalls:
         self._store = Store()
         self._watch = WatchStore()
         self._book = CallBook()
+        self._self_tests = SelfTests()
 
     async def options(self, kind: OptionKind, of: Mapping[str, str]) -> list[NodeOption]:
         return await self._catalog.options(kind, of)
@@ -331,7 +341,32 @@ class NodeCalls:
         found = await self._failures.failure(failed)
         if found is None:
             return NOT_FAILED
-        return await self._fail_run(found)
+        if found.workflow_id == await self._failures.self_test_workflow_id():
+            async with self._db.transaction("orchestration") as uow:
+                await self._self_tests.arrived(uow, found.execution_id, found.workflow_id)
+            return SelfTestArrived()
+        leg = await self._fail_leg(found)
+        return leg if leg is not None else await self._fail_run(found)
+
+    async def _fail_leg(self, failed: FailedExecution) -> FailureResult | None:
+        """A failure of the shared run workflow, until E10 moves its last use case: the run the
+        leg carried fails with the block's words. None when no leg carried the execution."""
+        async with self._db.transaction("orchestration") as uow:
+            run_id = await self._store.run_for_execution(uow, failed.execution_id)
+            if run_id is None:
+                return None
+            record = await self._store.load_run(uow, run_id, lock=True)
+            assert record is not None
+            state = record.state
+            if not isinstance(state, Pending | Working | Proposed | Acting) or holder_of(
+                state
+            ) not in (None, failed.execution_id):
+                return LeftAsIs(f"The run is {state_name(state)}, so it stays as it is.")
+            words = failure_words(failed, read_anything=True)
+            failure = Failure(FailureReason.WORKFLOW_NODE_ERROR, words, retryable=True)
+            await self._commit(uow, record, state.fail(failure))
+            await self._store.cancel_outbox(uow, run_id)
+        return FailedRun(run_id)
 
     async def _fail_run(self, failed: FailedExecution) -> FailureResult:
         """Fails the run a failed execution carried, with the node's words (ENGINE-PLAN 2.3.9 and
@@ -581,7 +616,7 @@ class NodeCalls:
             return NO_EXECUTION
         own = await self._workflows.workflow(facts.workflow_id)
         if own is None:
-            return NOT_OURS
+            return await self._not_ours(uow, execution, facts.workflow_id)
         if isinstance(own, NothingToRun):
             return own
         retried, version_id = None, facts.version_id
@@ -652,6 +687,16 @@ class NodeCalls:
                     case Moved() as moved:
                         await self._commit(uow, record, moved, joined=_one(holder))
                         return await linked(run_id)
+
+    async def _not_ours(
+        self, uow: UnitOfWork, execution: N8nExecutionId, workflow_id: str
+    ) -> Refused:
+        """A workflow no use case runs. The platform's daily self-test is one: its Read is
+        refused on purpose, so the execution fails and the error workflow reports it."""
+        if self._failures is None or workflow_id != await self._failures.self_test_workflow_id():
+            return NOT_OURS
+        await self._self_tests.sent(uow, execution, workflow_id)
+        return SELF_TEST_FAILS
 
     async def _pending_for(
         self, uow: UnitOfWork, issued: IssuedStart, execution: N8nExecutionId

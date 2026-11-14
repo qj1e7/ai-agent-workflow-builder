@@ -25,6 +25,7 @@ from platform_api.orchestration.n8n_calls import (
     Finished,
     Publisher,
 )
+from platform_api.orchestration.workflow_check import ERROR_WORKFLOW, SELF_TEST
 from platform_api.settings import N8nOwner
 from platform_api.shared import N8nExecutionId, UserId
 
@@ -981,9 +982,6 @@ def _workflow(out: _WorkflowOut) -> N8nWorkflow:
     return N8nWorkflow(out.id, out.version_id, out.active_version_id, document)
 
 
-ERROR_WORKFLOW_NAME = "run_failure_reporter"
-
-
 class N8nExecutions:
     """n8n's records of executions, through its public API (ENGINE-PLAN 2.3)."""
 
@@ -1078,13 +1076,19 @@ class N8nWorkflows:
         self._db = db
 
     async def error_workflow_id(self) -> str | None:
-        """The platform's error workflow, as bootstrap last loaded it."""
+        return await self._loaded(ERROR_WORKFLOW)
+
+    async def self_test_workflow_id(self) -> str | None:
+        return await self._loaded(SELF_TEST)
+
+    async def _loaded(self, name: str) -> str | None:
+        """One of the platform's own workflows, as bootstrap last loaded it."""
         async with self._db.connection("orchestration") as conn:
             row = await (
                 await conn.execute("SELECT workflows FROM orchestration.engine_status WHERE id = 1")
             ).fetchone()
         loaded: list[dict[str, Any]] = [] if row is None else row["workflows"]
-        return next((str(w["id"]) for w in loaded if w.get("name") == ERROR_WORKFLOW_NAME), None)
+        return next((str(w["id"]) for w in loaded if w.get("name") == name), None)
 
     async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft:
         """Creates the workflow, then reads it back and compares, because n8n may keep something
@@ -1186,7 +1190,7 @@ class N8nWorkflows:
             return None
         if record.status == "success":
             return Finished(execution_id)
-        return FailedExecution(execution_id, record.failed_node, record.error)
+        return FailedExecution(execution_id, record.workflow_id, record.failed_node, record.error)
 
     async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
         """The block that failed and n8n's words for it, from n8n's own record. None unless n8n
@@ -1198,4 +1202,4 @@ class N8nWorkflows:
             return None
         if record is None or record.status != "error":
             return None
-        return FailedExecution(execution_id, record.failed_node, record.error)
+        return FailedExecution(execution_id, record.workflow_id, record.failed_node, record.error)

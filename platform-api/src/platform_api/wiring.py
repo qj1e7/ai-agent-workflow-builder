@@ -182,6 +182,9 @@ class NoN8nReads:
     async def error_workflow_id(self) -> str | None:
         return None
 
+    async def self_test_workflow_id(self) -> str | None:
+        return None
+
     async def ended(self, execution_id: N8nExecutionId) -> Ended | None:
         return None
 

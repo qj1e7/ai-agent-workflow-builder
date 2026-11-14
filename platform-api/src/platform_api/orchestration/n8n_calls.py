@@ -391,6 +391,11 @@ class TryLater:
 type CallResult = Answer | AskAnswer | WriteAnswer | Told | Refused | TryLater
 
 NOT_OURS = Refused(403, "This workflow is not one our platform runs.")
+SELF_TEST_FAILS = Refused(
+    409,
+    "The daily self-test fails here on purpose, to prove that n8n's error workflow reports to "
+    "the platform. Nothing is wrong.",
+)
 NOBODY_HOLDS = Refused(403, "Nobody holds this workflow, so nobody may run it by hand.")
 VERSION_FAILED = Refused(403, "This version failed the check.")
 UNKNOWN_PUBLISHER = Refused(403, "Published by someone we don't know.")
@@ -622,6 +627,7 @@ class FailedExecution:
     from n8n (ENGINE-PLAN 2.8)."""
 
     execution_id: N8nExecutionId
+    workflow_id: str
     node: str | None
     message: str | None
 
@@ -650,6 +656,10 @@ class N8nFailures(Protocol):
 
     async def error_workflow_id(self) -> str | None:
         """The platform's own error workflow, the only one whose executions may report."""
+        ...
+
+    async def self_test_workflow_id(self) -> str | None:
+        """The platform's daily self-test, whose failures prove the error workflow reports."""
         ...
 
     async def ended(self, execution_id: N8nExecutionId) -> Ended | None:

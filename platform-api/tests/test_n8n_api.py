@@ -322,7 +322,7 @@ async def test_the_sweep_reads_how_each_execution_ended_from_n8n_s_own_record() 
     failures = failures_for(n8n)
     ended = {e: await failures.ended(N8nExecutionId(e)) for e in ("45", "46", "running")}
     assert ended == {
-        "45": FailedExecution(N8nExecutionId("45"), "Read release", "GitHub answered 503."),
+        "45": FailedExecution(N8nExecutionId("45"), "wf1", "Read release", "GitHub answered 503."),
         "46": Finished(N8nExecutionId("46")),
         "running": None,
     }
@@ -337,10 +337,10 @@ async def test_a_failure_is_the_block_and_the_words_from_n8n_s_own_record() -> N
     n8n.execution("46", "error", last_node="Compare")
     failures = failures_for(n8n)
     assert await failures.failure(N8nExecutionId("45")) == FailedExecution(
-        N8nExecutionId("45"), "Read release", "GitHub answered 503."
+        N8nExecutionId("45"), "wf1", "Read release", "GitHub answered 503."
     )
     assert await failures.failure(N8nExecutionId("46")) == FailedExecution(
-        N8nExecutionId("46"), "Compare", None
+        N8nExecutionId("46"), "wf1", "Compare", None
     )
 
 
@@ -425,7 +425,7 @@ async def test_the_sweep_reads_an_execution_s_data_only_once_it_failed() -> None
     assert await N8nExecutions(api_for(n8n)).landed(N8nExecutionId("46"))
     assert n8n.data_reads == []
     assert await failures.ended(N8nExecutionId("47")) == FailedExecution(
-        N8nExecutionId("47"), "Read release", "GitHub answered 503."
+        N8nExecutionId("47"), "wf1", "Read release", "GitHub answered 503."
     )
     assert n8n.data_reads == ["47"]
 

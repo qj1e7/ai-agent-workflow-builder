@@ -15,10 +15,13 @@ from platform_api.orchestration.n8n_call_service import (
     FailureResult,
     LeftAsIs,
     NodeCalls,
+    SelfTestArrived,
 )
 from platform_api.orchestration.n8n_calls import (
     NOT_FAILED,
     NOT_OUR_ERROR_WORKFLOW,
+    NOT_OURS,
+    SELF_TEST_FAILS,
     AskCall,
     Ended,
     ExecutionFacts,
@@ -40,6 +43,7 @@ from platform_api.orchestration.runs import (
     Stage,
     Succeeded,
 )
+from platform_api.orchestration.self_test import SelfTests, SelfTestsSeen
 from platform_api.orchestration.spec import N8nTarget
 from platform_api.orchestration.store import RunRecord, Store
 from platform_api.shared import ApprovalId, N8nExecutionId, ProposalId, RunId
@@ -47,7 +51,7 @@ from tests.conftest import PostgresUrls
 from tests.declared import NODE_KEY, NODE_KEY_ENV, FakeNodeCalls, app_with, declared_status
 from tests.support import NOW, SPEC
 from tests.test_n8n_calls import JIRA, REPO, WORKFLOW, FakeN8n, FakeSources, FakeWorkflows
-from tests.test_orchestrator import Harness, mint, open_harness
+from tests.test_orchestrator import Harness, mint, open_harness, start
 
 pytestmark = pytest.mark.anyio
 
@@ -55,6 +59,7 @@ READ = ReadCall("github_releases", REPO, None)
 PROPOSE = ProposeCall("jira.create_ticket", "MOCK", "Upgrade LangGraph", "1.2.16 is out.", None)
 ASK = AskCall("http://n8n:5678/webhook-waiting/101?signature=abc")
 ERROR_WORKFLOW = "wf_errors"
+SELF_TEST = "wf_self_test"
 REPORTER = N8nExecutionId("900")
 
 
@@ -66,11 +71,15 @@ class FakeFailures:
     errored: dict[str, list[str]] = field(default_factory=dict[str, list[str]])
     words: dict[str, tuple[str, str]] = field(default_factory=dict[str, tuple[str, str]])
     error_workflow: str | None = ERROR_WORKFLOW
+    self_test: str | None = SELF_TEST
     read: list[str] = field(default_factory=list[str])
     finished: set[str] = field(default_factory=set[str])
 
     async def error_workflow_id(self) -> str | None:
         return self.error_workflow
+
+    async def self_test_workflow_id(self) -> str | None:
+        return self.self_test
 
     async def ended(self, execution_id: N8nExecutionId) -> Ended | None:
         if execution_id in self.finished:
@@ -79,10 +88,11 @@ class FakeFailures:
 
     async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
         self.read.append(execution_id)
-        if not any(execution_id in listed for listed in self.errored.values()):
+        workflow = next((w for w, listed in self.errored.items() if execution_id in listed), None)
+        if workflow is None:
             return None
         node, message = self.words.get(execution_id, ("Read release", "GitHub did not answer"))
-        return FailedExecution(execution_id, node, message)
+        return FailedExecution(execution_id, workflow, node, message)
 
 
 @dataclass
@@ -100,10 +110,14 @@ class Reports:
         return await self.calls.call(NodeCall(N8nExecutionId(execution), node, work))
 
     def errored(
-        self, execution: str = "101", node: str = "Compare", message: str = "The agent is down"
+        self,
+        execution: str = "101",
+        node: str = "Compare",
+        message: str = "The agent is down",
+        workflow: str = WORKFLOW,
     ) -> None:
         """n8n's record: the execution ended in an error at this block, with these words."""
-        self.failures.errored.setdefault(WORKFLOW, []).append(execution)
+        self.failures.errored.setdefault(workflow, []).append(execution)
         self.failures.words[execution] = (node, message)
 
     async def report(self, execution: str = "101", **said: str) -> FailureResult:
@@ -437,6 +451,83 @@ async def test_the_sweep_never_fails_a_run_that_finished(r: Reports):
     assert r.failures.read == []
 
 
+async def self_tests_seen(r: Reports) -> SelfTestsSeen:
+    async with r.h.db.transaction("orchestration") as uow:
+        return await SelfTests().seen(uow)
+
+
+async def outbox_and_events(r: Reports) -> tuple[int, int]:
+    """Everything a failed run would leave: a Teams card or a wake waiting to go, and an event
+    for the run page, the troubleshooter and the live view."""
+    async with r.h.db.transaction("orchestration") as uow:
+        outbox = await (
+            await uow.conn.execute("SELECT count(*) AS n FROM orchestration.outbox")
+        ).fetchone()
+    async with r.h.db.transaction("monitoring") as uow:
+        events = await (
+            await uow.conn.execute("SELECT count(*) AS n FROM monitoring.run_events")
+        ).fetchone()
+    assert outbox is not None and events is not None
+    return outbox["n"], events["n"]
+
+
+SELF_TEST_READ = ReadCall("github_releases", "self-test", None)
+
+
+async def test_the_self_test_s_read_is_refused_on_purpose_and_kept_as_sent(r: Reports):
+    r.n8n.executions["301"] = ExecutionFacts(SELF_TEST, "trigger", None, None, "v1")
+    assert await r.call("301", SELF_TEST_READ, "Fail on purpose") == SELF_TEST_FAILS
+    seen = await self_tests_seen(r)
+    assert seen.last_arrived is None and seen.last_unreported is not None
+    assert await r.runs() == []
+
+
+async def test_a_self_test_s_report_is_kept_as_its_arrival_and_fails_no_run(r: Reports):
+    """No failed run, so nothing for the Portal, the troubleshooter or the Approvers."""
+    r.n8n.executions["301"] = ExecutionFacts(SELF_TEST, "trigger", None, None, "v1")
+    await r.call("301", SELF_TEST_READ, "Fail on purpose")
+    reported = await r.report(
+        "301", node="Fail on purpose", message=SELF_TEST_FAILS.detail, workflow=SELF_TEST
+    )
+    assert reported == SelfTestArrived()
+    first = await self_tests_seen(r)
+    assert first.last_arrived is not None and first.last_unreported is None
+    assert await r.runs() == []
+    assert await outbox_and_events(r) == (0, 0)
+
+    assert await r.report("301", workflow=SELF_TEST) == SelfTestArrived()
+    assert await self_tests_seen(r) == first, "a repeated report keeps the first arrival"
+
+
+async def test_a_self_test_whose_read_never_reached_us_still_arrives(r: Reports):
+    """Our API was down when the schedule fired, and back by the time the report came."""
+    assert await r.report("302", workflow=SELF_TEST) == SelfTestArrived()
+    seen = await self_tests_seen(r)
+    assert seen.last_arrived is not None and seen.last_unreported is None
+
+
+async def test_a_report_is_a_self_test_only_by_n8n_s_record_of_its_workflow(r: Reports):
+    r.failures.self_test = None
+    r.n8n.executions["301"] = ExecutionFacts(SELF_TEST, "trigger", None, None, "v1")
+    assert await r.call("301", SELF_TEST_READ, "Fail on purpose") == NOT_OURS
+    assert isinstance(await r.report("301", workflow=SELF_TEST), LeftAsIs)
+    assert await self_tests_seen(r) == SelfTestsSeen(None, None)
+
+
+async def test_a_report_fails_a_run_of_the_shared_run_workflow_with_n8n_s_words(r: Reports):
+    """Until E10 moves the last use case off the shared run workflow, its legs report through
+    Report a failure too."""
+    run_id = await start(r.h)
+    await r.h.orchestrator.tick()
+    assert await r.report("41", node="Run agents", message="ECONNREFUSED") == FailedRun(run_id)
+    state = await r.h.state(run_id)
+    assert isinstance(state, Failed)
+    assert state.failure.reason is FailureReason.WORKFLOW_NODE_ERROR
+    assert state.failure.message == '"Run agents" failed in n8n: ECONNREFUSED.'
+    assert isinstance(await r.report("41"), LeftAsIs), "a run that failed stays as it failed"
+    assert await r.h.state(run_id) == state
+
+
 REPORT = {
     "execution_id": "900",
     "workflow_id": "wf_errors",
@@ -461,11 +552,12 @@ REPORT = {
             {"status": "failed", "run_id": "run_1", "detail": "The run failed."},
         ),
         (LeftAsIs("The run is succeeded."), 200, {"status": "left_as_is", "run_id": None}),
+        (SelfTestArrived(), 200, {"status": "self_test", "run_id": None}),
         (TryLater("n8n has no record of this execution yet."), 503, {"retryable": True}),
         (NOT_OUR_ERROR_WORKFLOW, 403, {"detail": NOT_OUR_ERROR_WORKFLOW.detail}),
         (NOT_FAILED, 409, {"detail": NOT_FAILED.detail}),
     ],
-    ids=["failed", "left-as-is", "try-later", "not-our-error-workflow", "not-failed"],
+    ids=["failed", "left-as-is", "self-test", "try-later", "not-our-error-workflow", "not-failed"],
 )
 def test_the_failure_route_maps_the_error_triggers_item(
     result: FailureResult, status: int, answer: dict[str, Any]

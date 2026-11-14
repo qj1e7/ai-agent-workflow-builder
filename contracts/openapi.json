@@ -5531,7 +5531,8 @@
           "status": {
             "enum": [
               "failed",
-              "left_as_is"
+              "left_as_is",
+              "self_test"
             ],
             "title": "Status",
             "type": "string"
@@ -20813,7 +20814,7 @@
     },
     "/internal/v1/n8n/failures": {
       "post": {
-        "description": "Report a failure, from our error workflow only. When n8n's own record says the execution failed, fails the run it carries with n8n's words for the block. A run that has ended, or that another attempt carries now, stays as it is.",
+        "description": "Report a failure, from our error workflow only. When n8n's own record says the execution failed, fails the run it carries with n8n's words for the block. A run that has ended, or that another attempt carries now, stays as it is. The daily self-test's failure is kept as the self-test's arrival, and fails no run.",
         "operationId": "failures_internal_v1_n8n_failures_post",
         "parameters": [
           {
