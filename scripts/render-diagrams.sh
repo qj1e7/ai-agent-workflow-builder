@@ -3,6 +3,7 @@
 # Then checks the routes, event kinds and identifiers in the file against the contracts and the code,
 # the ER diagrams' tables against the migrations, and the CI/CD diagram's jobs against .github/workflows/.
 # Needs Docker and python3. Prints PASS or FAIL.
+# With --check-only it skips the render, so it needs only python3 and leaves the PNGs alone.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,8 +17,13 @@ out="docs/evidence/diagrams"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-mkdir -p "$out"
-rm -f "$out"/*.png
+check_only=false
+[ "${1:-}" = "--check-only" ] && check_only=true
+
+if ! "$check_only"; then
+  mkdir -p "$out"
+  rm -f "$out"/*.png
+fi
 
 # Each block is named after the "## " heading above it.
 awk -v dir="$work" '
@@ -34,6 +40,7 @@ JSON
 
 status=0
 for source in "$work"/*.mmd; do
+  "$check_only" && break
   name="$(basename "$source" .mmd)"
   # The browser profile lives in memory, so a nearly full Docker disk cannot stop the render.
   if docker run --rm --tmpfs /tmp:size=512m -u "$(id -u):$(id -g)" -v "$work:/data" "$MERMAID_IMAGE" \
