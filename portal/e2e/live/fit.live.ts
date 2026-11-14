@@ -538,6 +538,12 @@ for (const width of WIDTHS) {
       await check('the edit card once saved', 'saved', ready)
       await editCard(ready).getByRole('button', { name: /^Undo/ }).click()
       await expect(editCard(ready)).toContainText('Back to ')
+      // Undo also says so in a timed toast at the foot of the page, where the sketch puts it. A pointer resting on a toast holds it,
+      // so the pointer moves off, and the card is measured once the toast has gone by itself.
+      const undoNote = page.getByRole('status').filter({ hasText: 'Back to version 2, saved as version 4.' })
+      await expect(undoNote).toHaveCount(1)
+      await page.mouse.move(0, 0)
+      await expect(undoNote, 'the toast leaves after its reading time').toHaveCount(0, { timeout: 15_000 })
       await check('the edit card once undone', 'undone', ready)
       const again = await askAndWait(page, `make the ${morning.name} run on Fridays only`)
       const reread = rereadOf(page, morning.id)

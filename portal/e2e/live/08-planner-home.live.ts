@@ -374,7 +374,7 @@ test.describe('with the AI model on', () => {
     await page.keyboard.press('Enter')
     expect((await asked).postDataJSON(), 'a changed part is checked by the Planner').toMatchObject({ kind: 'look_for', text: 'bug tickets in OPS, with no update for 10 days' })
     await expect(card(page).getByRole('button', { name: /^Bug tickets in OPS, with no update for 10 days/ }), 'focus and the sentence follow the change').toBeFocused()
-    await expect(card(page)).toContainText('bug tickets in OPS, with no update for 10 days')
+    await expect(card(page)).toContainText('Bug tickets in OPS, with no update for 10 days')
 
     await card(page).getByRole('button', { name: 'Every weekday', exact: true }).click()
     await card(page).getByRole('button', { name: 'Another time', exact: true }).click()
@@ -393,7 +393,7 @@ test.describe('with the AI model on', () => {
     await expect(row, 'the draft shows on Workflows with the card’s own reason').toContainText(/Needs |questions? to answer|Nothing is unclear/)
     await row.getByRole('link').click()
     await expect(page, 'Resume reopens the card on Home').toHaveURL(new RegExp(`/\\?draft=${id}`))
-    await expect(card(page)).toContainText('bug tickets in OPS, with no update for 10 days')
+    await expect(card(page)).toContainText('Bug tickets in OPS, with no update for 10 days')
     await expect(card(page)).toContainText('Every weekday')
     await shot(page, info, 'n11-resumed')
     await card(page).getByRole('button', { name: 'Never mind' }).click()
@@ -560,6 +560,8 @@ test.describe('with the AI model on', () => {
     const watch = watchPage(page)
     await page.goto('/')
     await ask(page, 'Monitor Redis releases')
+    await expect(thread(page), 'the software card says why it can’t name her version').toContainText('It isn’t on the watchlist, so I don’t know which version you run.')
+    await thread(page).getByRole('button', { name: 'Watch it', exact: true }).click()
     await expect(thread(page).getByRole('button', { name: 'Add Redis' })).toBeVisible()
     await thread(page).getByRole('button', { name: 'Never mind' }).click()
     await expect(thread(page)).toContainText('Not added. Nothing changed.')
@@ -577,6 +579,7 @@ test.describe('with the AI model on', () => {
     await page.goto('/')
     await ask(page, 'Monitor Redis releases')
     await expect(thread(page).getByText('Redis is software, so it belongs on the Software watchlist', { exact: false })).toBeVisible()
+    await thread(page).getByRole('button', { name: 'Watch it', exact: true }).click()
     await expect(thread(page).getByText('redis/redis', { exact: false })).toBeVisible()
     await shot(page, info, 'n10-08-watchlist')
     await thread(page).getByRole('button', { name: 'Add Redis' }).click()
@@ -867,7 +870,7 @@ test.describe('with the AI model on', () => {
     try {
       const page = await context.newPage()
       await page.goto(`/new?draft=${id}`)
-      await expect(thread(page).locator('[data-card]')).toContainText('tickets closed last week')
+      await expect(thread(page).locator('[data-card]')).toContainText('Tickets closed last week')
       await expect(page, 'once the card is open, the address no longer asks for the draft').toHaveURL(/\/$/)
     } finally {
       await context.close()
@@ -993,7 +996,7 @@ test.describe('the chat after the first message', () => {
       await rail.getByRole('link', { name: /^Workflows/ }).click()
       await page.locator(`li[data-draft="${id}"]`).getByRole('link').click()
       const resumed = thread(page).locator('[data-card]')
-      await expect(resumed).toContainText('tickets closed last week')
+      await expect(resumed).toContainText('Tickets closed last week')
       await expect(thread(page), 'the conversation before it stays').toContainText('What can you do?')
       await expect(resumed.getByRole('heading', { level: 3 }).first(), 'focus goes to the card').toBeFocused()
       await expect(page, 'the address no longer asks for the draft').toHaveURL(/\/$/)
@@ -1199,9 +1202,9 @@ test.describe('the edit card (spec 6.7)', () => {
 
     const hour = await askAndWait(page, `make the ${morning.name} run at 9`)
     await expect(editCard(hour)).toContainText('At 9:00 or 21:00?')
-    await expect(editCard(hour)).toHaveText(/After\s*Choose a time/)
+    await expect(editCard(hour), 'no time is guessed: the change is the question').toHaveText(/Weekdays 8:00\s*becomes\s*At 9:00 or 21:00\?/)
     await editCard(hour).getByRole('button', { name: '9:00', exact: true }).click()
-    await expect(editCard(hour)).toHaveText(/After\s*Every weekday at 9:00/)
+    await expect(editCard(hour)).toHaveText(/Weekdays 8:00\s*becomes\s*Weekdays 9:00/)
     await expect(editCard(hour).getByRole('button', { name: 'Save change' }), 'focus moves to Save change once the time is picked').toBeFocused()
 
     const it = await askAndWait(page, 'make it daily')
@@ -1349,7 +1352,7 @@ test.describe('the edit card (spec 6.7)', () => {
     await editCard(unread).getByRole('button', { name: 'Another time' }).click()
     await editCard(unread).getByLabel('Time, Singapore').fill('10:05')
     await editCard(unread).getByLabel('Time, Singapore').press('Enter')
-    await expect(editCard(unread)).toHaveText(/After\s*Every Monday at 10:05/)
+    await expect(editCard(unread)).toHaveText(/Weekdays 8:00\s*becomes\s*Mon 10:05/)
     expect(puts, 'Enter in Another time picks the time and saves nothing').toEqual([])
 
     await editCard(unread).getByRole('button', { name: 'Save change' }).click()
