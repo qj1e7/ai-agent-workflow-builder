@@ -140,7 +140,7 @@ export function Building(props: BuildingProps) {
   )
 }
 
-interface CardProps extends BuildingProps {
+export interface CardProps extends BuildingProps {
   readonly test: RunModel | null
   readonly runId: string | null
   readonly problem: string | null
@@ -152,7 +152,7 @@ interface CardProps extends BuildingProps {
   readonly onTurnOn: () => void
 }
 
-function BuildingCard({ useCaseId, title, parts, newAgents, draftKept, test, runId, problem, starting, turning, onReplayed, onTestAgain, onTurnOn }: CardProps) {
+export function BuildingCard({ useCaseId, title, parts, newAgents, draftKept, test, runId, problem, starting, turning, onReplayed, onTestAgain, onTurnOn }: CardProps) {
   const { setUp, useCase, replay, stage } = useBuilt(useCaseId, test)
   const beside = useShownInPanel({ kind: 'build', id: useCaseId })
   const [now] = useState(() => new Date())
