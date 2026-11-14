@@ -314,6 +314,9 @@ class ActivityLog:
         return {run_id: found.get(run_id, 0) for run_id in run_ids}
 
     async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
+        logger.info(
+            "#248 read_after %s after %s: copy behind=%s", run_id, after, self._copy_behind()
+        )
         if self._copy is None or self._copy_behind():
             return await self._postgres.read_after(run_id, after)
         return await self._read_when_copied(run_id, after)
