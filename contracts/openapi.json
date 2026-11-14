@@ -9970,7 +9970,7 @@
                 "type": "null"
               }
             ],
-            "description": "A workflow of the team's with the same name, when there is one."
+            "description": "A workflow of the team's with the same name that watches a GitHub repository, so it is the one asked for. Null when there is none."
           }
         },
         "required": [
