@@ -10,6 +10,7 @@ import { OpenButton } from '../../ui/OpenItem'
 import { useWatchlist } from '../../api/queries'
 import { sentenceFor, softwarePath, stateOf } from '../software/software'
 import softwareStyles from '../software/Software.module.css'
+import { ChangedInN8nAnswer } from './ChangedCard'
 import { AskTheTeam } from './AskTheTeam'
 import { useAsker } from './asker'
 import { cantLines, capabilityCard, oneLine, questionActions, refusalNext, SAY_ANOTHER_WAY, startingPoints, stateWords, switchedSay, watchlistSwitchNote, type Asker } from './answers'
@@ -435,6 +436,8 @@ export function Answer({ reply, typed, page }: AnswerProps) {
         </Card>
       )
     }
+    case 'changed_in_n8n':
+      return <ChangedInN8nAnswer reply={reply} />
     case 'edit':
     case 'check_workflows':
     case 'why_stopped':

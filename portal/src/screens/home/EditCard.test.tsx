@@ -34,7 +34,7 @@ const MORNING: UseCaseView = { ...(versioned as UseCaseView), use_case_id: 'uc_0
 const WATCHLIST = statuses as WatchlistView
 const SAVED: EditKept = { picks: { useCaseId: null, day: null, at: null }, phase: { kind: 'saved', target: { use_case_id: 'uc_01JB8', name: 'Morning new-ticket check', watchlist: false, before: { day: 'weekdays', at: '08:00' }, after: { day: 'monday', at: '08:00' } }, after: { day: 'monday', at: '08:00' }, version: 2 } }
 
-const version = (n: number, via: VersionView['via']): VersionView => ({ version: n, at: '2026-11-05T01:10:00Z', by: 'alice', via, change: null, undid: null, running: false })
+const version = (n: number, via: VersionView['via']): VersionView => ({ version: n, at: '2026-11-05T01:10:00Z', by: 'alice', via, change: null, undid: null, running: false, publisher_unknown: false })
 
 const WEEKDAYS: Schedule = { day: 'weekdays', at: '08:00' }
 const read = (schedule: Schedule | null, version = 2): Read => ({ kind: 'read', schedule, version })

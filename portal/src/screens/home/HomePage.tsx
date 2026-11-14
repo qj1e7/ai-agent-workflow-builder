@@ -6,6 +6,7 @@ import { useCacheScope } from '../../api/context'
 import { useHome } from '../../api/homeQueries'
 import { isOperator } from '../../api/me'
 import { useCapabilities, useDrafts } from '../../api/plannerQueries'
+import { useSweepOnFocus } from '../../api/workflowQueries'
 import { useMe, useModelSettings, useWatchlist } from '../../api/queries'
 import type { HomeOut, PlannerReply } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
@@ -125,7 +126,13 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
   const watching = useWatchlist({ enabled: operator }).data?.software.length
   const watched = !operator || (watching !== undefined && watching > 0)
   const suggestions = useMemo(() => (operator ? suggestionsOf(watching, capabilities.data) : APPROVER_SUGGESTIONS), [operator, watching, capabilities.data])
-  const { resume, type, setProblem } = chat
+  const { resume, type, setProblem, arrive } = chat
+
+  // A version someone published in n8n comes into the chat as a card, oldest first, and never twice.
+  useSweepOnFocus(operator)
+  useEffect(() => {
+    if (operator) arrive(home.changed_in_n8n)
+  }, [operator, arrive, home.changed_in_n8n])
 
   // Resume on Workflows lands here with the draft's id in the address, and the draft opens as the card it was, after any
   // conversation. The newest card writes its own draft's id there too, and that card is already shown.

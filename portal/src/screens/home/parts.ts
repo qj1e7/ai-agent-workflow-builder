@@ -124,6 +124,7 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
     case 'setup_card':
     case 'part':
     case 'edit':
+    case 'changed_in_n8n':
     case 'refused':
     case 'which_software':
     case 'ideas':

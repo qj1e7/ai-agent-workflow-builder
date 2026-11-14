@@ -4,6 +4,7 @@ import type { PastDecisionView, UseCaseView, WatchedSoftwareView, WatchlistView 
 import { OpenLink } from '../../../ui/OpenItem'
 import type { PanelItem } from '../../../ui/sidePanel'
 import { CHECKER, checksOnItsOwn, softwareLine, softwarePath, stateOf, watchRank } from '../../software/software'
+import { needsFix } from '../../workflows/n8nChange'
 import { StatusPills } from '../../workflows/Status'
 import { pillOf, rowLine, SOFTWARE_PAGE, workflowPath } from '../../workflows/workflow'
 import type { NameOf } from '../../run/words'
@@ -40,7 +41,7 @@ export function WorkflowRows({ useCases, label, now }: { useCases: readonly UseC
           to={workflowPath(useCase)}
           name={useCase.name}
           line={rowLine(useCase, now, nameOf)}
-          state={<StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} test={useCase.last_run?.test === true} />}
+          state={<StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} fix={needsFix(useCase)} test={useCase.last_run?.test === true} />}
           data={{ 'data-workflow-id': useCase.use_case_id }}
         />
       ))}

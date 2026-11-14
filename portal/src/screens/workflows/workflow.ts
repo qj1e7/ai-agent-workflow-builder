@@ -5,6 +5,7 @@ import { agentIdentity } from '../../ui/agents'
 import { andList, declinedOfSteps, declinedRecord, runPill, scheduleShort, stageWords, type NameOf, type NextRun, type StageFacts } from '../run/words'
 import { faceId } from '../agents/agents'
 import { heldWords, repeatWords, TAKE_OVER_WORDS } from '../software/software'
+import { DELETED_IN_N8N, madeWords, needsFixBanner, refusedBanner, UNKNOWN_PUBLISHER } from './n8nChange'
 import { lineWhen, nextRunAt, runWhen, scheduleZoneName, zoneWords } from './times'
 
 export type Tone = 'ok' | 'wait' | 'bad' | 'new'
@@ -277,6 +278,11 @@ export function sentenceOf(useCase: Pick<UseCaseView, 'schedule' | 'agents' | 'p
 
 /** What a version changed and who changed it, as the prototype's Versions list says it. */
 export function versionWords(version: VersionView, nameOf: NameOf): string {
+  const made = madeWords(version)
+  if (made !== null) {
+    const who = version.by && !version.publisher_unknown ? nameOf(version.by) : UNKNOWN_PUBLISHER
+    return `${made}${/[.!?]$/.test(made) ? '' : '.'} ${who.charAt(0).toUpperCase()}${who.slice(1)}.`
+  }
   const change = version.change?.schedule
   if (!change || !version.by) return version.version === 1 ? 'The version it was turned on with.' : 'A change to what it checks.'
   const who = nameOf(version.by)
@@ -460,7 +466,13 @@ export function changeProblem(change: Change, name: string, error: unknown, word
 
 export type BannerTone = 'ok' | 'wait' | 'bad' | 'off' | 'new'
 
-export type BannerAction = { readonly kind: 'decide' | 'open'; readonly runId: string } | { readonly kind: 'resume' }
+export type BannerAction =
+  | { readonly kind: 'decide' | 'open'; readonly runId: string }
+  | { readonly kind: 'resume' }
+  /** Add the yes back: publishes the version with Ask for a yes before each write. */
+  | { readonly kind: 'yes' }
+  /** Undo a version published in n8n: rolls back to `to`, naming the version the person saw in use. */
+  | { readonly kind: 'undo'; readonly to: number; readonly inUse: number }
 
 export interface Banner {
   readonly tone: BannerTone
@@ -469,7 +481,7 @@ export interface Banner {
 }
 
 interface BannerFacts {
-  readonly useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule' | 'last_run'>
+  readonly useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule' | 'last_run'> & Partial<Pick<UseCaseView, 'grade' | 'findings' | 'blocks' | 'deleted_in_n8n_at' | 'version'>>
   readonly viewer: Viewer
   readonly now: Date
   readonly nameOf: NameOf
@@ -487,6 +499,11 @@ const sentence = (words: string): string => (/[.!?]$/.test(words) ? words : `${w
  */
 export function bannerOf({ useCase, viewer, now, nameOf }: BannerFacts): Banner {
   const last = useCase.last_run
+  if (useCase.deleted_in_n8n_at) return { tone: 'off', text: DELETED_IN_N8N, action: null }
+  const version = useCase.version ?? 1
+  // A version the safety checker graded unsafe leads, as in the sketch: it matters more than a pause or the last run.
+  if (useCase.grade === 'writes_refused') return { tone: 'bad', text: refusedBanner(useCase.blocks), action: viewer.operator ? { kind: 'yes' } : null }
+  if (useCase.grade === 'needs_a_fix') return { tone: 'bad', text: needsFixBanner(useCase.findings ?? []), action: viewer.operator && version > 1 ? { kind: 'undo', to: version - 1, inUse: version } : null }
   if (useCase.state === 'paused') {
     return viewer.operator
       ? { tone: 'off', text: 'Paused. It won’t run until you resume it.', action: { kind: 'resume' } }

@@ -12,6 +12,7 @@ import { IconPause, IconPlay } from '../../ui/icons'
 import { useAfterPanelAction } from '../../ui/sidePanel'
 import { Troubleshooting } from '../run/Outcome'
 import { StatusBanner } from './Banner'
+import { needsFix } from './n8nChange'
 import { StatusPills } from './Status'
 import { bannerOf, changeProblem, changeWords, controlsOf, lastRunWords, leftOutWords, NO_RUNS, nextRunWords, pillOf, pressChange, REFRESH_MS, rereadWhenOutOfDate, sentenceOf, viewerOf, type Banner, type LastRun } from './workflow'
 import styles from './Workflows.module.css'
@@ -54,11 +55,12 @@ function Summary({ useCase, me, now }: { useCase: UseCaseView; me: Me; now: Date
   const stopped = stopOf(useCase, whole)
   const troubleshoot = useTroubleshoot(stopped?.run_id ?? '', stopped !== null, 0)
   // Resume is beside Pause, so the banner leaves it out. One primary action for the state.
-  const banner = whole.action?.kind === 'resume' ? { ...whole, action: null } : whole
+  // Add the yes back and Undo are on the workflow's page, so the panel shows none that it can't run.
+  const banner = whole.action?.kind === 'resume' || whole.action?.kind === 'yes' || whole.action?.kind === 'undo' ? { ...whole, action: null } : whole
   return (
     <>
       <div>
-        <StatusPills state={useCase.state} fact={last ? pillOf(last) : null} test={last?.test === true} />
+        <StatusPills state={useCase.state} fact={last ? pillOf(last) : null} test={last?.test === true} fix={needsFix(useCase)} />
       </div>
       <p>{sentenceOf(useCase)}</p>
       {leftOutWords(useCase.left_out) ? <p className="muted">{leftOutWords(useCase.left_out)}</p> : null}

@@ -1,10 +1,11 @@
 import { createContext, useCallback, useContext, useMemo, useReducer, useRef, type ReactNode } from 'react'
 import { useCacheScope } from '../../api/context'
 import { usePlannerAnswer } from '../../api/plannerQueries'
-import type { PlannerAnswerIn } from '../../api/types'
+import type { ChangedInN8nReply, PlannerAnswerIn } from '../../api/types'
 import type { PanelItem } from '../../ui/sidePanel'
 import { deskOf, desksReducer, panelOf, type DeskAction, type Desks, type Note } from './chatState'
 import { newCardMemory, type CardMemory } from './cardMemory'
+import { arrivalKey, unseenArrivals } from './changed'
 import type { CardStart } from './SetupCard'
 import { isThinking, previousOf, type Thread } from './threadState'
 
@@ -36,6 +37,8 @@ export interface Chat {
   /** Sends what is in the box, following on from the last answer. */
   readonly sendText: () => void
   readonly resume: (start: CardStart) => void
+  /** Shows each version published in n8n that this chat has not shown yet, oldest first. A new chat does not show one again. */
+  readonly arrive: (found: readonly ChangedInN8nReply[]) => void
   readonly newChat: () => void
   readonly readNote: () => void
   /** Shows words in Home's one message at the bottom of the page, as the side panel does after a decline. */
@@ -65,6 +68,7 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
   const [desks, dispatch] = useReducer(desksReducer, initial)
   const scrolls = useRef(new Map<string, number>())
   const cards = useRef(new Map<string, CardMemory>())
+  const arrived = useRef(new Map<string, Set<string>>())
   const desk = deskOf(desks, user)
   const panel = useMemo(() => panelOf(desk.panel), [desk.panel])
   const { thread } = desk
@@ -125,6 +129,14 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
         send(previous === null ? { text: typed } : { text: typed, previous }, typed, desk.text)
       },
       resume: (start) => here({ type: 'resumed', start }),
+      arrive: (found) => {
+        const seen = arrived.current.get(user) ?? new Set<string>()
+        arrived.current.set(user, seen)
+        for (const reply of unseenArrivals(found, seen)) {
+          seen.add(arrivalKey(reply))
+          here({ type: 'arrived', reply })
+        }
+      },
       // A card she hadn't finished saves itself as a draft as it leaves the page, so New chat only needs to know there was one.
       newChat: () => {
         const unfinished = thread.messages.some((message) => cards.current.get(`${user}:${String(message.id)}`)?.kept()?.phase.kind === 'open')

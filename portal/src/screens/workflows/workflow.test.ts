@@ -794,6 +794,7 @@ describe('the Versions words', () => {
     change: null,
     undid: null,
     running: false,
+    publisher_unknown: false,
     ...change,
   })
   const moved = (before: VersionSchedule | null, after: VersionSchedule | null) => ({ schedule: { before, after } })
