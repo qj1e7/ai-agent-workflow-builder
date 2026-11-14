@@ -390,6 +390,31 @@ async function platformNeeds(backend: Backend, user: string): Promise<number> {
 
 const strip = (page: Page) => page.getByRole('region', { name: 'Needs you', exact: true })
 
+/** Show more in the panel by keyboard: focus stays on it while there is more, the count is read out, and focus lands on the first new row at the end. */
+async function showMoreByKeyboard(page: Page, total: number): Promise<void> {
+  const rows = panel(page).locator('li[data-home-item]')
+  const line = panel(page).getByRole('status').filter({ hasText: /^Showing / })
+  const more = panel(page).getByRole('button', { name: 'Show more', exact: true })
+  await expect(line).toHaveText(`Showing ${String(await rows.count())} of ${String(total)}.`)
+  await more.focus()
+  while ((await more.count()) > 0) {
+    const before = await rows.evaluateAll((items) => items.map((item) => item.getAttribute('data-home-item')))
+    await page.keyboard.press('Enter')
+    await expect.poll(() => rows.count(), { message: 'the next page joins the same list' }).toBeGreaterThan(before.length)
+    const now = await rows.count()
+    if (now < total) {
+      await expect(more, 'focus stays on Show more while there is more').toBeFocused()
+      await expect(line, 'the new count is read out').toHaveText(`Showing ${String(now)} of ${String(total)}.`)
+      continue
+    }
+    await expect(more).toHaveCount(0)
+    await expect(line, 'the last count is read out').toHaveText(`Showing all ${String(total)}.`)
+    const landed = await page.evaluate(() => document.activeElement?.closest('li[data-home-item]')?.getAttribute('data-home-item') ?? null)
+    expect(landed, 'focus moves to a row that was not there before').not.toBeNull()
+    expect(before, 'focus moves to a new row').not.toContain(landed)
+  }
+}
+
 for (const width of [1440, 390]) {
   test(`PANEL-needs at ${String(width)} px: N more opens Needs you beside the chat, a row opens beside it with Back, More details is the full page, and Escape puts focus on N more`, async ({ browser, backend }, info) => {
     const tag = randomUUID().slice(0, 6)
@@ -410,9 +435,11 @@ for (const width of [1440, 390]) {
     await more.click()
     await expect(heading(page)).toHaveText('Needs you')
     await expect(heading(page), 'focus goes to the panel’s heading').toBeFocused()
+    const first = await panel(page).locator('li[data-home-item]').count()
+    expect(first, 'the panel lists the first page of needs').toBeGreaterThan(1)
+    if (first < total) await showMoreByKeyboard(page, total)
     const rows = await panel(page).locator('li[data-home-item]').count()
-    expect(rows, 'the panel lists the needs the platform returned, and the strip’s N more plus one is the count').toBeGreaterThan(1)
-    if (rows < total) await expect(panel(page).getByRole('link', { name: 'See all on Workflows' }), 'what the platform didn’t return is one link away').toBeVisible()
+    expect(rows, 'the panel holds every need, and the strip’s N more plus one is the count').toBe(total)
     await expect(panel(page).getByRole('heading', { name: 'Do now' })).toBeVisible()
     await expect(panel(page).getByRole('link', { name: 'More details' })).toHaveAttribute('href', '/workflows')
     await expectBesideOrCovering(page, width)
