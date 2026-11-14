@@ -353,7 +353,12 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
     loaded, findings = load_into_n8n(settings, load_all(), said.append)
 
     assert findings == []
-    assert sorted(w.name for w in loaded) == ["run", "run_failure_reporter", "schedule_tick"]
+    assert sorted(w.name for w in loaded) == [
+        "run",
+        "run_failure_reporter",
+        "schedule_tick",
+        "self_test_failure",
+    ]
     assert all(w.active for w in loaded)
     assert n8n.deleted == ["W1"]
     assert [c for c in n8n.calls if c.split()[1].split("/")[0] == "W1"] == [
@@ -367,10 +372,67 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
         "run",
         "run_failure_reporter",
         "schedule_tick",
+        "self_test_failure",
     ]
     assert "workflow:delete" in n8n.scopes
     assert any(line.startswith(f"workflow {OLD_RUN_WORKFLOW} (W1): removed") for line in said)
     assert n8n.api_keys == [{"id": "k2", "label": "Alice's own key"}], "platform-api makes its own"
+
+
+def loaded_names(owner_url: str) -> dict[str, str]:
+    """The workflows bootstrap recorded, by name, as platform-api reads them."""
+    with psycopg.connect(owner_url) as conn:
+        row = conn.execute("SELECT workflows FROM orchestration.engine_status").fetchone()
+    assert row is not None
+    return {w["name"]: w["id"] for w in row[0]}
+
+
+def test_the_error_workflow_and_the_self_test_are_loaded_active_and_every_failure_goes_there(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n([]))
+
+    assert main(env_for(postgres.owner)) == 0
+
+    held = {w["name"]: w for w in n8n.workflows.values()}
+    assert all(w["active"] for w in held.values()), "n8n skips an inactive error workflow"
+    reporter = held["run_failure_reporter"]
+    assert [n["type"] for n in reporter["nodes"]] == [
+        "n8n-nodes-base.errorTrigger",
+        "CUSTOM.wabReportFailure",
+    ], "Report a failure, not an HTTP node"
+    assert reporter["settings"]["callerPolicy"] == "any"
+    for name in ("self_test_failure", "run", "schedule_tick"):
+        assert held[name]["settings"]["errorWorkflow"] == reporter["id"], name
+    assert engine_status(postgres.owner) == READY
+    recorded = loaded_names(postgres.owner)
+    assert recorded["run_failure_reporter"] == reporter["id"]
+    assert recorded["self_test_failure"] == held["self_test_failure"]["id"]
+
+
+class DropsCallerPolicy(FakeN8n):
+    """An n8n that does not keep the error workflow's callerPolicy."""
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        response = super().handle(request)
+        for workflow in self.workflows.values():
+            workflow.get("settings", {}).pop("callerPolicy", None)
+        return response
+
+
+def test_bootstrap_is_not_ready_when_n8n_holds_the_error_workflow_out_of_shape(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    truncate_all(postgres.owner)
+    serve(monkeypatch, DropsCallerPolicy([]))
+
+    assert main(env_for(postgres.owner)) == 1
+
+    assert (
+        "run_failure_reporter: Its setting callerPolicy must be 'any'." in capsys.readouterr().out
+    )
+    assert engine_status(postgres.owner) == (False, "the live workflows fail the lint")
 
 
 SECRET_ADDRESS = "wab-secret-host.internal.example"

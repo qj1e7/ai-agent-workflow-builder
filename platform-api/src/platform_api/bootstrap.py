@@ -2,7 +2,7 @@ import hashlib
 import json
 import os
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any, LiteralString
 
@@ -13,8 +13,13 @@ from psycopg.types.json import Jsonb
 from platform_api.auth import ConfigError
 from platform_api.migrations import upgrade_all
 from platform_api.orchestration.n8n import PLATFORM_API_KEY_LABEL, N8nClient, N8nError
+from platform_api.orchestration.workflow_check import (
+    ERROR_WORKFLOW,
+    PLATFORM_WORKFLOWS_DIR,
+    SELF_TEST,
+    check_platform,
+)
 from platform_api.orchestration.workflows import (
-    Finding,
     LiveState,
     LiveWorkflow,
     WorkflowDefinition,
@@ -61,7 +66,7 @@ def main(env: Mapping[str, str] | None = None) -> int:
     if not migrate_to_head(settings.owner_database_url, say):
         return _finish(settings, say, [], [], "the database holds old release-check data")
     definitions = load_all()
-    findings = lint(definitions)
+    findings = [str(finding) for finding in lint(definitions)]
     if findings:
         return _finish(settings, say, [], findings, "the workflow files fail the lint")
     try:
@@ -98,11 +103,11 @@ def _finish(
     settings: BootstrapSettings,
     say: Say,
     loaded: list[LoadedWorkflow],
-    findings: list[Finding],
+    findings: Sequence[str],
     detail: str,
 ) -> int:
     for finding in findings:
-        say(str(finding))
+        say(finding)
     ready = not findings and bool(loaded)
     record_status(settings.owner_database_url, ready=ready, detail=detail, workflows=loaded)
     say(f"{'ready' if ready else 'NOT ready'}: {detail}")
@@ -111,9 +116,7 @@ def _finish(
 
 def load_into_n8n(
     settings: BootstrapSettings, definitions: tuple[WorkflowDefinition, ...], say: Say
-) -> tuple[list[LoadedWorkflow], list[Finding]]:
-    error_workflow = next(d for d in definitions if d.is_error_workflow)
-    other_workflows = [d for d in definitions if not d.is_error_workflow]
+) -> tuple[list[LoadedWorkflow], list[str]]:
     previous = previous_hashes(settings.owner_database_url)
     client = N8nClient(settings.n8n_base_url)
     try:
@@ -129,14 +132,14 @@ def load_into_n8n(
             CREDENTIAL_NAME, STEP_KEY_HEADER, settings.step_key
         )
         say(f"credential '{CREDENTIAL_NAME}': created {credential_id}")
+        platform = load_platform_workflows(client, previous, say)
         values = {
             "PLATFORM_INTERNAL_URL": settings.platform_internal_url,
             "STEP_KEY_CREDENTIAL_ID": credential_id,
+            "ERROR_WORKFLOW_ID": platform.error_workflow,
         }
-        error_id, error_hash = _load(client, error_workflow, values, previous, say)
-        values["ERROR_WORKFLOW_ID"] = error_id
-        hashes = {error_id: error_hash}
-        for d in other_workflows:
+        hashes: dict[str, str] = {}
+        for d in definitions:
             workflow_id, digest = _load(client, d, values, previous, say)
             hashes[workflow_id] = digest
         old = client.find_workflow(OLD_RUN_WORKFLOW)
@@ -151,13 +154,45 @@ def load_into_n8n(
         records = [client.read_back(workflow_id) for workflow_id in hashes]
     finally:
         client.close()
+    loaded = [
+        *platform.loaded,
+        *(LoadedWorkflow(r.name, r.id, r.active, hashes[r.id]) for r in records),
+    ]
     live = LiveState(
-        settings.platform_internal_url,
-        {r.name: LiveWorkflow(r.id, r.active) for r in records},
+        settings.platform_internal_url, {w.name: LiveWorkflow(w.id, w.active) for w in loaded}
     )
     findings = lint((parse(r.document) for r in records), live=live)
-    loaded = [LoadedWorkflow(r.name, r.id, r.active, hashes[r.id]) for r in records]
-    return loaded, findings
+    return loaded, [*platform.findings, *(str(finding) for finding in findings)]
+
+
+@dataclass(frozen=True)
+class PlatformLoaded:
+    error_workflow: str
+    loaded: list[LoadedWorkflow]
+    findings: list[str]
+
+
+def load_platform_workflows(
+    client: N8nClient, previous: Mapping[str, str], say: Say
+) -> PlatformLoaded:
+    """The platform's own n8n workflows, each made active (ENGINE-PLAN 2.8): the error workflow
+    first, then the daily self-test, whose failures go to it. Each is checked as n8n holds it."""
+    error = platform_document(ERROR_WORKFLOW)
+    error_id = _upsert(client, error, _content_hash(error), previous, say)
+    self_test = platform_document(SELF_TEST)
+    self_test["settings"] = {**self_test["settings"], "errorWorkflow": error_id}
+    self_test_id = _upsert(client, self_test, _content_hash(self_test), previous, say)
+    loaded: list[LoadedWorkflow] = []
+    findings: list[str] = []
+    for workflow_id, body in ((error_id, error), (self_test_id, self_test)):
+        record = client.read_back(workflow_id)
+        loaded.append(LoadedWorkflow(record.name, record.id, record.active, _content_hash(body)))
+        findings += [f"{record.name}: {f.text}" for f in check_platform(record.document, error_id)]
+    return PlatformLoaded(error_id, loaded, findings)
+
+
+def platform_document(name: str) -> dict[str, Any]:
+    return json.loads((PLATFORM_WORKFLOWS_DIR / f"{name}.n8n.json").read_text())
 
 
 def _load(
@@ -167,24 +202,32 @@ def _load(
     previous: Mapping[str, str],
     say: Say,
 ) -> tuple[str, str]:
-    body = render(definition, values)
     digest = content_hash_without_credential(definition, values)
+    return _upsert(client, render(definition, values), digest, previous, say), digest
+
+
+def _upsert(
+    client: N8nClient, body: dict[str, Any], digest: str, previous: Mapping[str, str], say: Say
+) -> str:
     result = client.upsert_workflow(body)
     if result.created:
         change = "created"
-    elif previous.get(definition.name) == digest:
+    elif previous.get(body["name"]) == digest:
         change = "updated in place, same content as last bootstrap"
     else:
         change = "updated in place, content changed"
-    say(f"workflow {definition.name} ({result.id}): {change}")
-    return result.id, digest
+    say(f"workflow {body['name']} ({result.id}): {change}")
+    return result.id
 
 
 def content_hash_without_credential(
     definition: WorkflowDefinition, values: Mapping[str, str]
 ) -> str:
-    masked = render(definition, {**values, "STEP_KEY_CREDENTIAL_ID": "<masked>"})
-    canonical = json.dumps(masked, sort_keys=True, separators=(",", ":"))
+    return _content_hash(render(definition, {**values, "STEP_KEY_CREDENTIAL_ID": "<masked>"}))
+
+
+def _content_hash(body: Mapping[str, Any]) -> str:
+    canonical = json.dumps(body, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 

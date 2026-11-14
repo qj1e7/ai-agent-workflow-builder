@@ -13,6 +13,8 @@ import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
+from itertools import pairwise
+from pathlib import Path
 from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
@@ -267,6 +269,73 @@ def grade(
         *_yes_before_writes(flow),
     ]
     return _graded(findings)
+
+
+ERROR_WORKFLOW = "run_failure_reporter"
+SELF_TEST = "self_test_failure"
+PLATFORM_WORKFLOWS_DIR = Path(__file__).parent / "workflows"
+"""Where bootstrap reads the platform's own n8n workflows, one `<name>.n8n.json` each."""
+
+
+@dataclass(frozen=True)
+class PlatformShape:
+    """The one shape one of the platform's own n8n workflows may have."""
+
+    chain: tuple[BlockKind, ...]
+    """Its blocks, from the trigger on, each leading to the next by its first exit."""
+    said: str
+    kept: Mapping[str, JsonValue]
+    """Settings it must keep as they are."""
+    graded: bool
+    """Graded as a use case's workflow is, so it runs on Singapore time and its failures go to
+    the error workflow."""
+
+
+PLATFORM_SHAPES: Mapping[str, PlatformShape] = {
+    ERROR_WORKFLOW: PlatformShape(
+        ("error", "report"),
+        "an Error Trigger, then Report a failure",
+        # Without it n8n refuses to report for a workflow held in a member's project (P7 Q13).
+        {"callerPolicy": "any"},
+        graded=False,
+    ),
+    SELF_TEST: PlatformShape(
+        ("schedule", "read"), "a Schedule Trigger, then a Read", {}, graded=True
+    ),
+}
+"""The platform's own n8n workflows, which bootstrap loads and checks (ENGINE-PLAN 2.8): the
+error workflow, and the daily self-test that fails on purpose to prove it reports."""
+
+
+def check_platform(document: Mapping[str, Any], error_workflow: str | None) -> tuple[Finding, ...]:
+    """Every way the document differs from its platform shape, none for a document in shape."""
+    name = str(document.get("name"))
+    shape = PLATFORM_SHAPES.get(name)
+    if shape is None:
+        return (_fix(None, f'"{name}" is not one of the platform\'s own workflows.'),)
+    try:
+        flow = read_flow(document)
+    except Unreadable as unreadable:
+        return (_fix(None, str(unreadable)),)
+    findings = [*_chain(flow, shape), *_kept(flow, shape.kept)]
+    if shape.graded:
+        findings += grade(document, error_workflow).findings
+    else:
+        findings += _unknown_blocks(flow)
+    return tuple(findings)
+
+
+def _chain(flow: Flow, shape: PlatformShape) -> Iterable[Finding]:
+    names = [block.name for kind in shape.chain for block in flow.of_kind(kind)]
+    edges = {Edge(source, 0, target) for source, target in pairwise(names)}
+    if len(names) != len(shape.chain) or len(flow.blocks) != len(names) or set(flow.edges) != edges:
+        yield _fix(None, f"It must be {shape.said}, and nothing else.")
+
+
+def _kept(flow: Flow, kept: Mapping[str, JsonValue]) -> Iterable[Finding]:
+    for key, value in kept.items():
+        if flow.settings.get(key) != value:
+            yield _fix(None, f"Its setting {key} must be {value!r}.")
 
 
 def _graded(findings: Sequence[Finding]) -> Graded:

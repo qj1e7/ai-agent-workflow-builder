@@ -10,31 +10,22 @@
       "parameters": {}
     },
     {
-      "id": "report-failure",
-      "name": "Report failure",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "id": "report-a-failure",
+      "name": "Report a failure",
+      "type": "CUSTOM.wabReportFailure",
+      "typeVersion": 1,
       "position": [220, 0],
       "retryOnFail": true,
       "maxTries": 5,
       "waitBetweenTries": 3000,
-      "credentials": { "httpHeaderAuth": { "id": "${STEP_KEY_CREDENTIAL_ID}", "name": "X-Step-Key" } },
-      "parameters": {
-        "method": "POST",
-        "url": "${PLATFORM_INTERNAL_URL}/internal/v1/workflow-failures",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={ \"execution_id\": \"{{ $json.execution.id }}\", \"workflow\": \"{{ $json.workflow.name }}\", \"last_node\": \"{{ $json.execution.lastNodeExecuted }}\", \"message\": {{ JSON.stringify($json.execution.error.message) }}, \"execution_url\": \"{{ $json.execution.url }}\" }",
-        "options": { "timeout": 30000 }
-      }
+      "parameters": {}
     }
   ],
   "connections": {
-    "Error Trigger": { "main": [[{ "node": "Report failure", "type": "main", "index": 0 }]] }
+    "Error Trigger": { "main": [[{ "node": "Report a failure", "type": "main", "index": 0 }]] }
   },
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "callerPolicy": "any"
   }
 }

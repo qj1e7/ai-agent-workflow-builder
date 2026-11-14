@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from platform_api.orchestration.runs import Leg, StepName
+from platform_api.orchestration.workflow_check import PLATFORM_SHAPES
 from platform_api.orchestration.workflows import (
     ERROR_WORKFLOW_ID,
     PLATFORM_INTERNAL_URL,
@@ -33,10 +34,12 @@ VALUES = {
 
 
 def documents() -> dict[str, Document]:
-    return {
+    """The shared run workflow and the tick, as committed."""
+    every = {
         path.name.removesuffix(".n8n.json"): json.loads(path.read_text())
         for path in WORKFLOWS_DIR.glob("*.n8n.json")
     }
+    return {name: document for name, document in every.items() if name not in PLATFORM_SHAPES}
 
 
 def node(document: Document, name: str) -> Document:
@@ -47,14 +50,9 @@ def by_name(definitions: tuple[WorkflowDefinition, ...], name: str) -> WorkflowD
     return next(d for d in definitions if d.name == name)
 
 
-def test_the_files_ship_three_workflows():
-    assert {d.name for d in load_all()} == {
-        "run",
-        "run_failure_reporter",
-        "schedule_tick",
-    }
+def test_the_lint_reads_the_run_and_tick_workflows_and_leaves_the_platform_s_own_to_the_checker():
+    assert {d.name for d in load_all()} == {"run", "schedule_tick"}
     assert by_name(load_all(), "schedule_tick").is_tick_workflow
-    assert by_name(load_all(), "run_failure_reporter").is_error_workflow
 
 
 def test_the_run_workflow_has_two_legs_with_the_steps_in_the_referees_order():
@@ -107,19 +105,13 @@ def test_render_escapes_the_value_for_json():
 
 
 def test_render_drops_id_and_active_from_a_read_back_document():
-    document = {**documents()["run_failure_reporter"], "id": "W1", "active": True}
+    document = {**documents()["run"], "id": "W1", "active": True}
     rendered = render(parse(document), VALUES)
     assert "id" not in rendered and "active" not in rendered
 
 
 def wrong_webhook_path(docs: dict[str, Document]) -> None:
     node(docs["run"], "Start act")["parameters"]["path"] = "run/write"
-
-
-def reporter_calls_the_internet(docs: dict[str, Document]) -> None:
-    node(docs["run_failure_reporter"], "Report failure")["parameters"]["url"] = (
-        "https://hooks.example.com/alerts"
-    )
 
 
 def run_id_read_from_json(docs: dict[str, Document]) -> None:
@@ -175,10 +167,6 @@ def no_timeout(docs: dict[str, Document]) -> None:
 
 def no_error_workflow_setting(docs: dict[str, Document]) -> None:
     del docs["run"]["settings"]["errorWorkflow"]
-
-
-def error_workflow_file_missing(docs: dict[str, Document]) -> None:
-    del docs["run_failure_reporter"]
 
 
 def a_set_node(docs: dict[str, Document]) -> None:
@@ -246,7 +234,6 @@ def tick_does_not_retry(docs: dict[str, Document]) -> None:
 
 MUTATIONS: list[tuple[Rule, Callable[[dict[str, Document]], None]]] = [
     (Rule.WEBHOOK_PATHS, wrong_webhook_path),
-    (Rule.INTERNAL_URLS, reporter_calls_the_internet),
     (Rule.STEP_ORDER, run_id_read_from_json),
     (Rule.STEP_ORDER, approval_step_missing),
     (Rule.STEP_ORDER, run_id_read_from_the_other_leg),
@@ -258,7 +245,6 @@ MUTATIONS: list[tuple[Rule, Callable[[dict[str, Document]], None]]] = [
     (Rule.DEADLINES, write_action_shorter_than_the_connector),
     (Rule.DEADLINES, no_timeout),
     (Rule.ERROR_WORKFLOW, no_error_workflow_setting),
-    (Rule.ERROR_WORKFLOW, error_workflow_file_missing),
     (Rule.NODE_TYPES, a_set_node),
     (Rule.TICK_SHAPE, tick_calls_another_internal_route),
     (Rule.TICK_SHAPE, tick_calls_a_run_step),
@@ -316,7 +302,7 @@ def test_a_run_workflow_with_a_schedule_trigger_is_held_to_the_tick_rules():
 
 def test_the_tick_workflow_has_no_run_steps_and_ships_the_step_key_credential():
     tick = by_name(load_all(), "schedule_tick")
-    assert tick.webhooks == () and tick.is_tick_workflow and not tick.is_error_workflow
+    assert tick.webhooks == () and tick.is_tick_workflow
     assert tick.document["settings"]["saveDataSuccessExecution"] == "none"
     assert placeholders(tick) == {
         "PLATFORM_INTERNAL_URL",
@@ -346,16 +332,17 @@ def test_the_live_lint_passes_when_the_error_workflow_is_wired_and_active():
     [
         ("ERR1", LiveWorkflow("ERR1", False)),
         ("ERR0", LiveWorkflow("ERR1", True)),
+        ("ERR1", None),
     ],
-    ids=["inactive", "points elsewhere"],
+    ids=["inactive", "points elsewhere", "not loaded"],
 )
 def test_the_live_lint_fails_rule_6_on_a_bad_error_workflow(
-    error_workflow_id: str, reporter: LiveWorkflow
+    error_workflow_id: str, reporter: LiveWorkflow | None
 ):
-    live = LiveState(
-        VALUES["PLATFORM_INTERNAL_URL"],
-        {"run_failure_reporter": reporter, "run": LiveWorkflow("W1", True)},
-    )
+    loaded = {"run": LiveWorkflow("W1", True)}
+    if reporter is not None:
+        loaded["run_failure_reporter"] = reporter
+    live = LiveState(VALUES["PLATFORM_INTERNAL_URL"], loaded)
     findings = lint(rendered_definitions(error_workflow_id), live=live)
     assert {f.rule for f in findings} == {Rule.ERROR_WORKFLOW}
 
