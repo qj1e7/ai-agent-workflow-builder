@@ -16,7 +16,7 @@ import {
   answerWhen,
   cardFrom,
   nextQuestion,
-  turnOnWords,
+  setUpWords,
   leftWords,
   savedLeft,
   setupLeft,
@@ -39,7 +39,7 @@ import {
   rowBlockers,
   savedCopyOf,
   scheduleOf,
-  turnOn,
+  setUp,
   valueOf,
   valueProblem,
   whenProblems,
@@ -49,7 +49,7 @@ import {
   type PartResult,
   type PlanAgent,
   type Row,
-  type TurnOnCalls,
+  type SetUpCalls,
 } from './card'
 
 const FOLLOW_UP = 'Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'
@@ -337,7 +337,7 @@ describe('step 4, turn it on', () => {
     expect(checkedRows(ready())[0]).toEqual({ ok: true, words: 'When: Every weekday at 15:00, as you asked.' })
   })
 
-  it('sends the name, the rows as the instruction, each agent’s values and the schedule, turned on', () => {
+  it('sends the name, the rows as the instruction, each agent’s values and the schedule, as a draft that is not on yet', () => {
     const form = { ...ready(), name: '  Follow up stale bugs ' }
     expect(createBody(form, planView(CLEAN_DRAFT, form.rows), { 0: 'crd_new' })).toEqual({
       name: 'Follow up stale bugs',
@@ -345,17 +345,17 @@ describe('step 4, turn it on', () => {
       agents: [{ card_id: 'crd_new', values: { 'Jira project': 'MOCK' } }],
       schedule: { day: 'weekdays', at: '15:00' },
       left_out: [],
-      on: true,
+      on: false,
     })
     const named = createBody({ ...form, name: '' }, planView(CLEAN_DRAFT, form.rows), { 0: 'crd_new' })
     expect(named.name).toBe('Stale bug follow-up')
   })
 })
 
-describe('pressing Turn it on', () => {
+describe('pressing Set up', () => {
   const form = (): Form => ({ ...enterWhen(read(ROWS)), step: 4, name: 'Follow up stale bugs' })
 
-  function fakeCalls(failing: number, saved: string | null = null): { readonly calls: TurnOnCalls; readonly seen: string[] } {
+  function fakeCalls(failing: number, saved: string | null = null): { readonly calls: SetUpCalls; readonly seen: string[] } {
     const seen: string[] = []
     const answer = <T>(said: string, value: T): Promise<T> => {
       seen.push(said)
@@ -376,15 +376,15 @@ describe('pressing Turn it on', () => {
     const { calls, seen } = fakeCalls(3)
     const cards = new Map<string, string>()
     const plan = planView(CLEAN_DRAFT, form().rows)
-    await expect(turnOn(form(), plan, 'd1', cards, calls)).rejects.toBeInstanceOf(ApiError)
+    await expect(setUp(form(), plan, 'd1', cards, calls)).rejects.toBeInstanceOf(ApiError)
     expect(seen).toEqual(['look for Stale bug follow-up', 'save Stale bug follow-up', 'create with crd_new'])
-    await expect(turnOn(form(), plan, 'd1', cards, calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: false })
+    await expect(setUp(form(), plan, 'd1', cards, calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: false })
     expect(seen).toEqual(['look for Stale bug follow-up', 'save Stale bug follow-up', 'create with crd_new', 'create with crd_new', 'delete draft d1'])
   })
 
   it('uses the agent the Operator already saved for the same plan, and saves no copy', async () => {
     const { calls, seen } = fakeCalls(0, 'crd_saved')
-    await expect(turnOn(form(), planView(CLEAN_DRAFT, form().rows), null, new Map(), calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: false })
+    await expect(setUp(form(), planView(CLEAN_DRAFT, form().rows), null, new Map(), calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: false })
     expect(seen).toEqual(['look for Stale bug follow-up', 'create with crd_saved'])
   })
 
@@ -436,13 +436,13 @@ describe('pressing Turn it on', () => {
 
   it('saves nothing new for a saved agent, and has no draft to delete for a workflow never saved as one', async () => {
     const { calls, seen } = fakeCalls(0)
-    await expect(turnOn(form(), planView(USE_ONE, form().rows), null, new Map(), calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: false })
+    await expect(setUp(form(), planView(USE_ONE, form().rows), null, new Map(), calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: false })
     expect(seen).toEqual(['create with crd_version_checker'])
   })
 
   it('still turns it on when the draft cannot be deleted, and says the draft is kept', async () => {
     const { calls, seen } = fakeCalls(4)
-    await expect(turnOn(form(), planView(CLEAN_DRAFT, form().rows), 'd1', new Map(), calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: true })
+    await expect(setUp(form(), planView(CLEAN_DRAFT, form().rows), 'd1', new Map(), calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: true })
     expect(seen).toEqual(['look for Stale bug follow-up', 'save Stale bug follow-up', 'create with crd_new', 'delete draft d1'])
   })
 })
@@ -569,9 +569,11 @@ describe('the Planner’s set-up card', () => {
     })
 
     it('is the one source of the footer line, with a count that follows the list', () => {
-      expect(leftWords({ choices: [], leftOut: [] })).toBe('Nothing is unclear. Turn it on when you’re ready.')
-      expect(leftWords({ choices: ['when it runs'], leftOut: [] })).toBe('1 choice left: when it runs.')
-      expect(leftWords({ choices: ['when it runs', 'the Jira project'], leftOut: [] })).toBe('2 choices left: when it runs and the Jira project.')
+      expect(leftWords({ choices: [], leftOut: [] }), 'nothing left to answer says nothing: the button says what it sets up').toBe('')
+      expect(leftWords({ choices: ['when it runs'], leftOut: [] })).toBe('1 question to answer')
+      expect(leftWords({ choices: ['when it runs', 'the Jira project'], leftOut: [] })).toBe('2 questions to answer')
+      expect(leftWords({ choices: ['the Planner to choose the agents'], leftOut: [] }), 'waiting on the Planner is no question for her').toBe('Waiting for the Planner…')
+      expect(leftWords({ choices: ['my check of your new words'], leftOut: [] })).toBe('Checking your new words…')
       expect(andList(['a', 'b', 'c'])).toBe('a, b and c')
     })
   })
@@ -656,15 +658,14 @@ describe('the Planner’s set-up card', () => {
       const form = cardFrom(CROSS.name, CROSS.rows, 'Every Friday at 5pm, sum up the tickets we closed this week in MOCK and colour them by team', CROSS.parts)
       const left = setupLeft(form, plan)
       expect(left).toEqual({ choices: [], leftOut: ['colour them by team'] })
-      expect(leftWords(left)).toBe('The part with a cross is left out.')
-      expect(turnOnWords(left)).toBe('Set up the part I can')
-      expect(leftWords({ choices: [], leftOut: ['a', 'b'] })).toBe('The 2 parts with a cross are left out.')
-      expect(turnOnWords(setupLeft(fresh(), plan))).toBe('Turn it on')
+      expect(leftWords(left), 'the cross is on the card, so the foot needn’t say it again').toBe('')
+      expect(setUpWords(left)).toBe('Set up the part I can')
+      expect(setUpWords(setupLeft(fresh(), plan))).toBe('Set up')
     })
 
     it('never says nothing is unclear while a part has a cross, and a choice still left comes first', () => {
       const form = cardFrom(CROSS.name, CROSS.rows.slice(1), 'sum up the tickets and colour them by team', CROSS.parts)
-      expect(leftWords(setupLeft(form, plan))).toBe('1 choice left: when it runs.')
+      expect(leftWords(setupLeft(form, plan))).toBe('1 question to answer')
     })
 
     it('names only the day left out once she picks one of two, and sends that as left_out', () => {

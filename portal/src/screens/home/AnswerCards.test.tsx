@@ -47,6 +47,8 @@ import { Thread } from './Thread'
 import { EMPTY, threadReducer } from './threadState'
 
 const PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => undefined }
+/** The fixture's set-up card, as it is when she has no workflow of that name yet. */
+const SETUP: SetupCardReply = { ...(setupCard as SetupCardReply), similar: null }
 
 function draw(reply: PlannerReply, { typed = 'Every Friday, sum up the tickets we closed this week', leftovers = false, registry }: { typed?: string; leftovers?: boolean; registry?: CapabilitiesView } = {}): string {
   const queryClient = new QueryClient()
@@ -63,7 +65,7 @@ function draw(reply: PlannerReply, { typed = 'Every Friday, sum up the tickets w
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<(?:button|a)\b[^>]*>([\s\S]*?)<\/(?:button|a)>/g)].map((m) => text(m[1] ?? ''))
 
-const cardOf = (html: string) => /<section\b[^>]*data-card=[\s\S]*?<\/section>/.exec(html)?.[0] ?? ''
+const cardOf = (html: string) => /<div\b[^>]*data-card=[\s\S]*?<\/section>/.exec(html)?.[0] ?? ''
 
 describe('the Planner’s short answers, as the chat-first sketch draws them', () => {
   const REGISTRY = capabilities as CapabilitiesView
@@ -152,31 +154,38 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
 })
 
 describe('a set-up card', () => {
-  it('is the card itself, with Turn it on and the footer line, and no hand-off to another screen', () => {
-    const html = draw(setupCard as SetupCardReply)
-    expect(buttons(html)).toContain('Turn it on')
+  it('is the card itself, a Draft with Never mind and Set up, and no hand-off to another screen', () => {
+    const html = draw(SETUP)
+    expect(buttons(html)).toEqual(expect.arrayContaining(['Never mind', 'Set up']))
+    expect(buttons(html)).not.toContain('Turn it on')
+    expect(text(cardOf(html))).toContain('Weekly summary of closed tickets Draft')
     expect(html).not.toContain('href="/new"')
     expect(text(html)).not.toContain('isn’t built yet')
   })
 
-  it('tags the Planner’s guess, its name included, and lists each part with its mark, the destination last', () => {
-    const html = text(draw(setupCard as SetupCardReply))
-    expect(html).toContain('Weekly summary of closed tickets Filled in by me')
-    expect(html).toContain('Will do: Which tickets tickets closed this week in MOCK')
+  it('lists what it understood as Watch, When and Then, each with its mark, and drops the old extras', () => {
+    const html = text(draw(SETUP))
+    expect(html).toContain('Will do: Watch Tickets closed this week in MOCK')
     expect(html).toContain('You said “the tickets we closed”. I read that as MOCK, the project on your list.')
-    expect(html).toContain('Will do: What it does sum them up in one new ticket')
-    expect(html).toContain('Will do: Where it goes in the MOCK project')
-    expect(html).toContain('one new Jira ticket , filled in by me, written after a yes. Change after a yes')
-    expect(html).toContain('You already have a workflow with this name.')
-    expect(html).not.toContain('What will happen')
+    expect(html).toContain('Will do: Then Sum them up in one new ticket')
+    expect(html).toContain('In the MOCK project')
+    expect(html).toContain('After a yes')
+    for (const gone of ['Filled in by me', 'Rename', 'How this workflow works', 'What needs a yes']) expect(html).not.toContain(gone)
   })
 
   it('never guesses a time: with no time said, it asks one question, the time, with choices and Another time', () => {
-    const html = draw(setupCard as SetupCardReply)
+    const html = draw(SETUP)
     expect(html.match(/data-mark="ask"/g)).toHaveLength(1)
     expect(text(html)).toContain('Question: When What time should it run?')
     expect(buttons(html)).toEqual(expect.arrayContaining(['8:00', '9:00', '13:00', '17:00', 'Another time']))
-    expect(text(html)).toMatch(/\d choices? left: when it runs/)
+    expect(text(html)).toMatch(/\d questions? to answer/)
+  })
+
+  it('is the already-have card when she has a workflow of that name, with Open it and a way to set up another', () => {
+    const html = draw(setupCard as SetupCardReply)
+    expect(text(html)).toContain('Weekly summary of closed tickets')
+    expect(buttons(html)).toEqual(['Set up another', 'Open it'])
+    expect(html).not.toContain('data-card=')
   })
 })
 
@@ -210,7 +219,7 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
   const reply: CantReply = {
     answer: 'cant',
     cant: [{ kind: 'look_for', text: 'Colour them by team', note: 'I didn’t follow this part.', needs: null, system: null, instead: null, unsupported: false }],
-    alternative: { ...(setupCard as SetupCardReply), parts: [] },
+    alternative: { ...SETUP, parts: [] },
     parts: [{ text: 'Every Friday', mark: 'will_do', reason: null, note: null, choices: [] }, NOT_FOLLOWED],
   }
 
@@ -220,7 +229,7 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     expect(text(html)).not.toContain('What I can do instead')
     expect(text(cardOf(html))).toContain('Can’t do: “Colour them by team” I didn’t follow this part.')
     expect(buttons(html)).toContain('Set up the part I can')
-    expect(sayOf(reply)).toBe('Here’s what I understood. I can’t do every part of it.')
+    expect(sayOf(reply)).toBe('Here’s what I understood.')
     expect(draw(reply, { leftovers: true })).toBe('')
   })
 
@@ -243,7 +252,7 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     const stale: CantReply = {
       answer: 'cant',
       cant: [emailRow],
-      alternative: { ...(setupCard as SetupCardReply), parts: [] },
+      alternative: { ...SETUP, parts: [] },
       parts: [
         { text: 'Every Friday', mark: 'will_do', reason: null, note: null, choices: [] },
         { text: 'list the stale tickets in MOCK', mark: 'question', reason: 'how_many_days', note: null, choices: [] },
@@ -252,11 +261,10 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     }
     const card = text(cardOf(draw(stale)))
     expect(card).toContain('“list the stale tickets in MOCK”')
-    expect(card).toMatch(/choices left: .*how many days/)
-    expect(card).not.toContain('Nothing is unclear')
+    expect(card).toMatch(/\d questions? to answer/)
     expect(card, 'the can’t stays on its own card').not.toContain('“email me”')
     const onCard: CantReply = { ...stale, cant: [{ ...emailRow, needs: 'new_tool' }] }
-    expect(text(cardOf(draw(onCard)))).toMatch(/choices left: .*how many days/)
+    expect(text(cardOf(draw(onCard)))).toMatch(/\d questions? to answer/)
   })
 
   it('still names a real can’t on its own card, with the clause crossed on the card it sets up instead', () => {
@@ -312,8 +320,8 @@ describe('an answer that is partly a can’t', () => {
     const html = draw(part as PartReply)
     expect(text(cardOf(html))).toContain('Can’t do: “email it to the team” I can\'t send email yet.')
     expect(buttons(html)).toEqual(expect.arrayContaining(['Set up the part I can', 'Ask the team']))
-    const rows = text(cardOf(html)).split('Can’t do:')[0]?.split('Question: When')[1] ?? ''
-    expect(rows, 'the ticked rows hold only the part it can do').toContain('sum them up')
+    const rows = text(cardOf(html)).split('Can’t do:')[0]?.split(' Draft ')[1] ?? ''
+    expect(rows, 'the ticked rows hold only the part it can do').toContain('Sum them up')
     expect(rows).not.toMatch(/email/i)
   })
 
@@ -325,7 +333,7 @@ describe('an answer that is partly a can’t', () => {
   it('shows the alternative under its own heading, with Ask the team first when there is no alternative', () => {
     const html = draw(cant as CantReply)
     expect(text(html)).toContain('What I can do instead')
-    expect(buttons(html)).toContain('Turn it on')
+    expect(buttons(html)).toContain('Set up')
     const bare = draw({ ...(cant as CantReply), alternative: null })
     expect(bare).not.toContain('What I can do instead')
     expect(buttons(bare)).toEqual(['Ask the team'])

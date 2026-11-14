@@ -78,7 +78,8 @@ describe('the sentence for each answer', () => {
   const answers: Record<string, PlannerReply> = { card: CARD, part: PART, cant: CANT, refused: refused as PlannerReply }
 
   it('never promises more than the answer’s own kind', () => {
-    expect(sayOf(answers['card']!)).toBe('Here’s what I understood. I filled in what I could.')
+    expect(sayOf({ ...(answers['card'] as SetupCardReply), similar: null })).toBe('Here’s what I understood.')
+    expect(sayOf(answers['card']!), 'a workflow of the same name leads with the one she has').toBe('You already have this one.')
     expect(sayOf(answers['part']!)).toContain('I can do part of that.')
     expect(sayOf(answers['cant']!)).toBe('I can’t do all of that, but I can set up something close.')
     expect(sayOf({ ...CANT, alternative: null }), 'its one-line card says it').toBeNull()

@@ -517,7 +517,7 @@ export function createBody(form: Form, plan: PlanView, savedDrafts: Readonly<Rec
     })),
     schedule: scheduleOf(form.when),
     left_out: leftOutOf(form),
-    on: true,
+    on: false,
   }
 }
 
@@ -546,19 +546,23 @@ export function reusedAgents(plan: PlanView | null, cards: readonly CardView[] |
   return new Set(plan.agents.flatMap((agent) => (agent.card.kind === 'drafted' && savedCopyOf(cards, owner, agent.card.definition) !== null ? [agent.index] : [])))
 }
 
-export interface TurnOnCalls {
+export interface SetUpCalls {
   readonly savedCard: (card: CardDefinition) => Promise<string | null>
   readonly saveCard: (card: CardDefinition) => Promise<string>
   readonly create: (body: CreateAgentUseCase) => Promise<UseCaseCreated>
   readonly deleteDraft: (draftId: string) => Promise<unknown>
 }
 
-export interface TurnedOn {
+export interface SetUpDone {
   readonly useCaseId: string
   readonly draftKept: boolean
 }
 
-export async function turnOn(form: Form, plan: PlanView, draftId: string | null, cards: Map<string, string>, calls: TurnOnCalls): Promise<TurnedOn> {
+/**
+ * Set up: saves each drafted agent once, then the workflow as a draft that isn't on yet (ADR 0044), then drops the card's saved
+ * draft, since the workflow now holds what it said. A failure keeps the agents it saved, so the next press reuses them.
+ */
+export async function setUp(form: Form, plan: PlanView, draftId: string | null, cards: Map<string, string>, calls: SetUpCalls): Promise<SetUpDone> {
   const task = taskWithoutSchedule(form.rows)
   const saved: Record<number, string> = {}
   for (const agent of plan.kind === 'agents' ? plan.agents : []) {
@@ -738,14 +742,21 @@ export const orList = (items: readonly string[]): string =>
 
 export const crossedWords = (count: number): string => (count === 1 ? 'The part with a cross is left out.' : `The ${count} parts with a cross are left out.`)
 
-/** The footer’s line. “Nothing is unclear” never shows while a part has a cross. */
-export function leftWords({ choices, leftOut }: Left): string {
-  if (choices.length > 0) return `${choices.length === 1 ? '1 choice left' : `${choices.length} choices left`}: ${andList(choices)}.`
-  return leftOut.length > 0 ? crossedWords(leftOut.length) : 'Nothing is unclear. Turn it on when you’re ready.'
+const WAITS: ReadonlySet<string> = new Set([LEFT_PLAN, LEFT_CHECKING, 'the Planner to answer'])
+
+/**
+ * The footer’s line, in the sketch’s words: how many questions are left for her, or what the card waits for. The rows show which,
+ * one question at a time, and a cross is on the card, so nothing left says nothing: the button says what it sets up.
+ */
+export function leftWords({ choices }: Left): string {
+  const asks = choices.filter((choice) => !WAITS.has(choice)).length
+  if (asks > 0) return asks === 1 ? '1 question to answer' : `${String(asks)} questions to answer`
+  if (choices.includes(LEFT_CHECKING)) return 'Checking your new words…'
+  return choices.length > 0 ? 'Waiting for the Planner…' : ''
 }
 
 /** “Set up the part I can” while any part has a cross, so the button never claims the whole request. */
-export const turnOnWords = (left: Left): string => (left.leftOut.length > 0 ? 'Set up the part I can' : 'Turn it on')
+export const setUpWords = (left: Left): string => (left.leftOut.length > 0 ? 'Set up the part I can' : 'Set up')
 
 /** Resume reopens the card on Home, where the draft's id sits in the address. */
 export const draftPath = (draftId: string) => `/?draft=${encodeURIComponent(draftId)}`

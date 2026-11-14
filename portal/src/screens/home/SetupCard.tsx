@@ -1,31 +1,26 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
-import { Link } from '../../ui/Link'
-import { useChatNavigate } from '../../ui/fromChat'
 import { useErrorWords, useSession } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
 import { refusedWords, useCheckPart, useDeleteDraft, usePlanFor, useReadAgentCards, useSaveDraft } from '../../api/plannerQueries'
-import { useAgentCards, useCreateAgentUseCase, useMe, useSaveCard, useStartRun, useTools, useUseCase } from '../../api/queries'
-import type { DraftView, SimilarWorkflow, ToolId, ToolView, UseCaseView } from '../../api/types'
-import { AgentFace } from '../../ui/AgentFace'
+import { useAgentCards, useMe, useSaveCard, useTools } from '../../api/queries'
+import { useSetUpOff } from '../../api/workflowQueries'
+import type { DraftView, InputKind, SimilarWorkflow, ToolId, ToolView } from '../../api/types'
 import { Button, buttonClassName } from '../../ui/Button'
-import { IconCheck } from '../../ui/icons'
-import { systemOf } from '../agents/agents'
-import { runWhen, timesZone } from '../workflows/workflow'
+import { Card } from '../../ui/Card'
 import { AskTheTeam } from './AskTheTeam'
-import { TAG_FILLED } from './answers'
+import { AlreadyHave } from './AlreadyHave'
+import { Building, DraftPill } from './Building'
 import {
   afterPartCheck,
   answerWhen,
   ASK_DAYS,
   canDrop,
   changeRow,
-  DEST_WORDS,
   draftContent,
   dropRow,
-  andList,
   leftWords,
   lowerFirst,
   nameProblem,
@@ -35,10 +30,10 @@ import {
   reusedAgents,
   cardBlockers,
   savedCopyOf,
+  setUp,
+  setUpWords,
   setupLeft,
   taskWithoutSchedule,
-  turnOn,
-  turnOnWords,
   valueKey,
   valueOf,
   valueProblem,
@@ -46,6 +41,7 @@ import {
   whenSaid,
   type Often,
   type Planned,
+  type PlanAgent,
   type PlanView,
   type Question,
   type Row,
@@ -56,7 +52,7 @@ import {
 } from './card'
 import { DiscardDialog } from '../workflows/Sections'
 import { CardMemoryContext } from './cardMemory'
-import { ASKED_NEXT, quote } from './parts'
+import { ASKED_NEXT, type Mark } from './parts'
 import { crossParts, PartsList, type Part } from './PartsList'
 import { CardLive, useMainButton } from './primary'
 import styles from './SetupCard.module.css'
@@ -72,8 +68,6 @@ export interface CardStart {
 }
 
 const SAVE_PAUSE_MS = 800
-const PROMISES = 'You can pause, change or delete it at any time. If it stops, the AI troubleshooter tells you why.'
-const DEST_ASK = 'Other places for a workflow’s result'
 
 const OFTEN: readonly (readonly [Exclude<Often, ''>, string])[] = [
   ['every_day', 'Every day'],
@@ -99,15 +93,14 @@ const HINT: Record<Row['state'], string> = {
   checking: 'checking your new words',
 }
 const NOT_SAID: Record<Row['kind'], string> = { schedule: 'when it runs', look_for: 'what to look for', do: 'what it does', where: 'where it goes' }
-/** The card’s parts, named as spec 7.1 names them. */
-const PART_LABEL: Record<Row['kind'], string> = { schedule: 'When', look_for: 'Which tickets', do: 'What it does', where: 'Where it goes' }
+
+/** The sketch's three parts of a request: what it watches, when, and what it does then. Where the result goes is part of Then. */
+export type PartKey = 'Watch' | 'When' | 'Then'
+const PART_OF: Readonly<Record<Row['kind'], PartKey>> = { schedule: 'When', look_for: 'Watch', do: 'Then', where: 'Then' }
+/** A value an agent needs belongs to the part it serves: the Jira project to Then, anything it reads to Watch. */
+const inputPart = (kind: InputKind): PartKey => (kind === 'jira_project' ? 'Then' : 'Watch')
 
 type ToolKinds = ReadonlyMap<ToolId, ToolView['kind']>
-
-function tagOf(tool: ToolId | null, kinds: ToolKinds): { readonly words: string; readonly writes: boolean } {
-  if (tool === null) return { words: 'No system access', writes: false }
-  return kinds.get(tool) === 'read' ? { words: `Reads ${systemOf(tool)}`, writes: false } : { words: 'Writes after a yes', writes: true }
-}
 
 function writesOf(plan: PlanView | null, kinds: ToolKinds): boolean | null {
   if (plan?.kind !== 'agents' || kinds.size === 0) return null
@@ -117,9 +110,10 @@ function writesOf(plan: PlanView | null, kinds: ToolKinds): boolean | null {
 /** A part reads inside a sentence, so its first letter drops to lower case, except for a name. */
 export const soften = (text: string): string => lowerFirst(text)
 
+const upperFirst = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
+
 function Chip({ row, index, open, editorId, onOpen }: { row: Row; index: number; open: boolean; editorId: string; onOpen: (index: number) => void }) {
-  const label = PART_LABEL[row.kind]
-  const shown = row.text === '' ? NOT_SAID[row.kind] : soften(row.text)
+  const shown = row.text === '' ? NOT_SAID[row.kind] : upperFirst(row.text)
   return (
     <button
       type="button"
@@ -129,13 +123,13 @@ function Chip({ row, index, open, editorId, onOpen }: { row: Row; index: number;
       data-kind={row.kind}
       aria-expanded={open}
       aria-controls={open ? editorId : undefined}
-      title={HINT[row.state].charAt(0).toUpperCase() + HINT[row.state].slice(1)}
+      title={upperFirst(HINT[row.state])}
       onClick={() => onOpen(index)}
     >
       {row.state === 'checking' ? <span className={styles['spin']} aria-hidden="true" /> : null}
       {shown}
       <span className="visually-hidden">
-        . {label}, {HINT[row.state]}. Change
+        . {PART_OF[row.kind]}, {HINT[row.state]}. Change
       </span>
     </button>
   )
@@ -163,33 +157,6 @@ function Editor({ id, label, row, onSave, onCancel }: { id: string; label: strin
           Save
         </Button>
         <Button onClick={onCancel}>Cancel</Button>
-      </div>
-    </div>
-  )
-}
-
-function DestEditor({ id, onDone }: { id: string; onDone: () => void }) {
-  const done = useRef<HTMLButtonElement>(null)
-  useEffect(() => done.current?.focus(), [])
-  return (
-    <div className={styles['editor']} id={id} role="group" aria-label="Where the result goes">
-      <p>
-        <b>One new Jira ticket</b>, created only after an Approver says yes.
-      </p>
-      <p className="muted">It’s the only place I can put the result today. Other places, such as Teams or email, aren’t built yet.</p>
-      <div className={styles['btns']}>
-        <Button
-          ref={done}
-          onClick={onDone}
-          onKeyDown={(event) => {
-            if (event.key !== 'Escape') return
-            event.preventDefault()
-            onDone()
-          }}
-        >
-          Done
-        </Button>
-        <AskTheTeam capability={DEST_ASK} starter={`I would like a workflow’s result to go somewhere other than a Jira ticket: `} />
       </div>
     </div>
   )
@@ -246,125 +213,49 @@ function WhenPicker({ when, problems, focus, onWhen, onDone }: { when: When; pro
   )
 }
 
-function HowItWorks({ plan, kinds, reused }: { plan: PlanView | null; kinds: ToolKinds; reused: ReadonlySet<number> | null }) {
-  let body
-  if (plan === null) body = <p className="muted">The Planner is still choosing the agents.</p>
-  else if (plan.kind === 'trouble') body = <p role="alert">{plan.message}</p>
-  else if (plan.kind === 'cannot') body = <p>I can’t set this up. {plan.reason}</p>
-  else
-    body = (
-      <>
-        {plan.agents.map((agent) => (
-          <div key={agent.index} className={styles['agent']}>
-            <div className={styles['agentHead']}>
-              <AgentFace id={agent.card.kind === 'saved' ? agent.card.id : agent.name} display={agent.name} size={28} />
-              <b>{agent.name}</b>
-              {agent.card.kind === 'drafted' && reused !== null && !reused.has(agent.index) ? (
-                <span className={styles['tag']} data-state="changed">
-                  New agent, saved under How it works, in Settings, when you turn this on
-                </span>
-              ) : null}
-            </div>
-            <ol aria-label={`What ${agent.name} does`}>
-              {agent.blocks.map((block, index) => {
-                const tag = tagOf(block.tool, kinds)
-                return (
-                  <li key={`${String(index)}:${block.say}`}>
-                    <span>{block.say}</span>
-                    <span className={styles['stepTag']} data-writes={tag.writes || undefined}>
-                      {tag.words}
-                    </span>
-                  </li>
-                )
-              })}
-            </ol>
-          </div>
-        ))}
-        {plan.problems.map((problem) => (
-          <p key={problem} className={styles['problem']}>
-            {problem}
-          </p>
-        ))}
-        {plan.notIncluded.length > 0 ? <p className={styles['problem']}>Left out, because no tool does it yet: {plan.notIncluded.join(', ')}.</p> : null}
-      </>
-    )
-  return (
-    <details className={styles['how']}>
-      <summary>How this workflow works</summary>
-      <div className={styles['howBody']}>{body}</div>
-    </details>
-  )
+/** Of a part's marks, the one it shows: the question asked now, else a part it can't do, else a question for later, else a tick. */
+function markOf(marks: readonly Mark[]): Mark {
+  for (const mark of ['ask', 'no', 'later'] as const) if (marks.includes(mark)) return mark
+  return 'ok'
 }
 
-function Done({ useCaseId, writes, draftKept, newAgents }: { useCaseId: string; writes: boolean | null; draftKept: boolean; newAgents: readonly string[] }) {
-  const useCase = useUseCase(useCaseId)
-  const start = useStartRun()
-  const latch = useLatch()
-  const navigate = useChatNavigate()
-  const words = useErrorWords()
-  const [key] = useState(newIdempotencyKey)
-  const [now] = useState(() => new Date())
-  const [problem, setProblem] = useState<string | null>(null)
-  const testRun = () =>
-    latch.run((settled) =>
-      start.mutate(
-        { useCaseId, idempotencyKey: key, test: true },
-        { onSuccess: (started) => navigate(`/runs/${started.run_id}`), onError: (error) => setProblem(words(error)), onSettled: settled },
-      ),
-    )
-  const name = useCase.data?.name
-  return (
-    <div className={styles['done']} role="status">
-      <span className={styles['tick']}>
-        <IconCheck size={20} strokeWidth={3} />
-      </span>
-      <div>
-        <p>
-          <b>{`${name ?? 'Your workflow'} ${useCase.data?.state === 'paused' ? 'is paused.' : 'is on.'}`}</b>
-        </p>
-        {useCase.data && useCase.data.left_out.length > 0 ? <p>Left out: {andList(useCase.data.left_out.map(quote))}.</p> : null}
-        {useCase.data ? <p>{firstRun(useCase.data, now)}</p> : null}
-        <p>
-          {writes === false
-            ? 'Nothing it does changes data, so no yes is needed.'
-            : 'Before it changes anything, any Approver on your team except you is asked for a yes in Teams.'}
-        </p>
-        {newAgents.length > 0 ? <p>{newAgents.length === 1 ? `The ${newAgents[0] ?? ''} is saved under How it works, in Settings.` : `${andList(newAgents.map((agent) => `the ${agent}`))} are saved under How it works, in Settings.`}</p> : null}
-        <p className="muted">{PROMISES}</p>
-        {draftKept ? <p className="muted">Your draft is still on Workflows. This workflow is already on, so there is no need to turn it on again.</p> : null}
-        <div className={styles['btns']}>
-          <Button variant="primary" loading={start.isPending} onClick={testRun}>
-            Do a test run
-          </Button>
-          <Link to={`/workflows/${encodeURIComponent(useCaseId)}`} className={styles['link']}>
-            See it on Workflows
-          </Link>
-        </div>
-        {problem ? (
-          <p className={styles['problem']} role="alert">
-            {problem}
-          </p>
-        ) : null}
-      </div>
-    </div>
-  )
+/** One of the card's three parts, from the pieces that belong to it. A part with nothing in it is left off. */
+function keyed(key: PartKey, pieces: readonly { readonly mark: Mark; readonly body: ReactNode }[]): Part[] {
+  if (pieces.length === 0) return []
+  return [{ key, mark: markOf(pieces.map((piece) => piece.mark)), label: key, body: pieces.map((piece, at) => <span key={at} className={styles['piece']}>{piece.body}</span>) }]
 }
 
-function firstRun(useCase: UseCaseView, now: Date): string {
-  if (useCase.state === 'paused') return 'It won’t run until you resume it.'
-  if (!useCase.next_run_at) return 'It runs when an Operator starts it.'
-  const zone = useCase.schedule?.time_zone
-  const at = runWhen(useCase.next_run_at, now, zone)
-  return `First run ${at.startsWith('Today, ') ? `today at ${at.slice('Today, '.length)}` : `on ${at}`}, ${timesZone(zone)}.`
+/** The parts once Set up is pressed: what it watches, when and what it does then, as words, each a tick. */
+export function frozenParts(form: Form, plan: PlanView | null, writes: boolean | null): Part[] {
+  const texts = (part: PartKey) => form.rows.filter((row) => row.kind !== 'schedule' && PART_OF[row.kind] === part && row.text !== '').map((row) => upperFirst(row.text))
+  const values = (part: PartKey) =>
+    plan?.kind === 'agents'
+      ? plan.agents.flatMap((agent) => agent.inputs.filter((input) => inputPart(input.kind) === part).map((input) => `${input.name}: ${valueOf(form, agent, input.name)}`))
+      : []
+  const line = (part: PartKey, extra: readonly string[] = []) => [...texts(part), ...values(part), ...extra].map((text) => ({ mark: 'ok' as const, body: text }))
+  return [
+    ...keyed('Watch', line('Watch')),
+    ...keyed('When', [{ mark: 'ok', body: whenSaid(form.when) ?? '' }]),
+    ...keyed('Then', line('Then', writes === false ? [] : ['After a yes'])),
+  ]
 }
 
-export type Phase = { readonly kind: 'open' } | { readonly kind: 'done'; readonly useCaseId: string; readonly draftKept: boolean; readonly newAgents: readonly string[] } | { readonly kind: 'never_mind' }
+export type Phase =
+  | { readonly kind: 'open' }
+  | { readonly kind: 'built'; readonly useCaseId: string; readonly draftKept: boolean; readonly newAgents: readonly string[] }
+  | { readonly kind: 'dropped' }
 
 /**
- * The set-up card (spec 7). One state, the form, drives the sentence, the footer line and the reason Turn it on waits. Every
- * change is saved as a draft after a short pause, so Resume on Workflows reopens it.
+ * The set-up card, in the sketch's shape: what it understood as Watch, When and Then, a cross for each part it can't do, and one
+ * question at a time. Every change is saved as a draft after a short pause, so Resume on Workflows reopens it. Set up makes the
+ * workflow as a draft, and the card goes on to build, test and turn it on.
  */
 export function SetupCard({ start }: { start: CardStart }) {
+  if (start.similar) return <AlreadyHave similar={start.similar} card={<SettingUp start={start} />} />
+  return <SettingUp start={start} />
+}
+
+function SettingUp({ start }: { start: CardStart }) {
   const main = useMainButton()
   const live = useContext(CardLive)
   const memory = useContext(CardMemoryContext)
@@ -375,11 +266,10 @@ export function SetupCard({ start }: { start: CardStart }) {
   const [form, setForm] = useState(kept?.form ?? start.form)
   const [draft, setDraft] = useState(kept ? kept.draft : start.draftId)
   const [phase, setPhase] = useState<Phase>(kept?.phase ?? { kind: 'open' })
-  const [editing, setEditing] = useState<number | 'dest' | 'when' | 'name' | null>(null)
+  const [editing, setEditing] = useState<number | 'when' | null>(null)
   const [shown, setShown] = useState(false)
   const [refused, setRefused] = useState<readonly string[]>([])
   const [saveProblem, setSaveProblem] = useState<string | null>(null)
-  const [filled, setFilled] = useState(true)
   const [asking, setAsking] = useState(false)
   const [discardProblem, setDiscardProblem] = useState<string | null>(null)
   const [undoProblem, setUndoProblem] = useState<string | null>(null)
@@ -390,7 +280,7 @@ export function SetupCard({ start }: { start: CardStart }) {
   const deleteDraft = useDeleteDraft()
   const saveCard = useSaveCard()
   const readCards = useReadAgentCards()
-  const create = useCreateAgentUseCase()
+  const create = useSetUpOff()
   const library = useAgentCards()
   const me = useMe()
   const tools = useTools()
@@ -411,9 +301,10 @@ export function SetupCard({ start }: { start: CardStart }) {
   const question = nextQuestion(form, plan)
   const problems = whenProblems(form.when)
   const timeText = whenSaid(form.when)
+  const writes = writesOf(plan, kinds)
 
   const dirty = useRef(false)
-  const turningOn = useRef(false)
+  const settingUp = useRef(false)
   const alive = useRef(true)
   const latest = useRef({ form, plan: null as Planned | null, draft, phase, live })
   useEffect(() => {
@@ -422,7 +313,7 @@ export function SetupCard({ start }: { start: CardStart }) {
 
   const persist = (onDone?: (saved: string) => void) => {
     const now = latest.current
-    if (now.phase.kind !== 'open' || turningOn.current || session.cacheScope() !== owner) return
+    if (now.phase.kind !== 'open' || settingUp.current || session.cacheScope() !== owner) return
     const saved = now.draft ?? newIdempotencyKey()
     latest.current = { ...now, draft: saved }
     memory.keep({ form: now.form, draft: saved, phase: now.phase })
@@ -437,10 +328,8 @@ export function SetupCard({ start }: { start: CardStart }) {
     memory.keep({ form, draft, phase })
   })
 
-  const watching = useRef(false)
   useEffect(() => {
     if (phase.kind !== 'open' || !dirty.current) return
-    watching.current = true
     const timer = setTimeout(
       () =>
         persist((saved) => {
@@ -476,10 +365,6 @@ export function SetupCard({ start }: { start: CardStart }) {
   }, [live])
 
   useEffect(() => {
-    if (editing === 'name') document.getElementById(`${id}-name`)?.focus()
-  }, [editing, id])
-
-  useEffect(() => {
     if (editing === null && back.current !== null) {
       document.getElementById(back.current)?.focus()
       back.current = null
@@ -496,7 +381,7 @@ export function SetupCard({ start }: { start: CardStart }) {
   useEffect(() => {
     if (!focusNext.current) return
     focusNext.current = false
-    const next = document.querySelector<HTMLElement>(`[data-card="${id}"] [data-mark="ask"] :is(button, input)`) ?? document.getElementById(`${id}-turn-on`)
+    const next = document.querySelector<HTMLElement>(`[data-card="${id}"] [data-mark="ask"] :is(button, input)`) ?? document.getElementById(`${id}-set-up`)
     next?.focus()
   })
 
@@ -533,19 +418,19 @@ export function SetupCard({ start }: { start: CardStart }) {
     if (part?.state === 'checking') checkPart(part)
   }
 
-  const open = (target: number | 'dest' | 'when' | 'name') => setEditing((now) => (now === target ? null : target))
+  const open = (target: number | 'when') => setEditing((now) => (now === target ? null : target))
 
-  const turnItOn = () => {
+  const pressSetUp = () => {
     if (plan?.kind !== 'agents') return
-    const problem = nameProblem(form.name === '' ? nameOf(form, plan) : form.name)
+    const problem = nameProblem(nameOf(form, plan))
     if (problem) {
       setRefused([problem])
       return
     }
     setRefused([])
-    turningOn.current = true
+    settingUp.current = true
     latch.run((settled) => {
-      turnOn(form, plan, draft, cards.current, {
+      setUp(form, plan, draft, cards.current, {
         savedCard: async (card) => (me.data ? savedCopyOf(await readCards(), me.data.id, card) : null),
         saveCard: async (card) => (await saveCard.mutateAsync({ cardId: null, card })).card_id,
         create: (body) => create.mutateAsync(body),
@@ -554,12 +439,14 @@ export function SetupCard({ start }: { start: CardStart }) {
         .then(({ useCaseId, draftKept }) => {
           void queryClient.invalidateQueries({ queryKey: ['home'] })
           void queryClient.invalidateQueries({ queryKey: ['agent-cards'] })
-          setPhase({ kind: 'done', useCaseId, draftKept, newAgents: plan.agents.filter((agent) => agent.card.kind === 'drafted' && !(reused?.has(agent.index) ?? false)).map((agent) => agent.name) })
+          const built: Phase = { kind: 'built', useCaseId, draftKept, newAgents: plan.agents.filter((agent) => agent.card.kind === 'drafted' && !(reused?.has(agent.index) ?? false)).map((agent) => agent.name) }
+          memory.keep({ form, draft: null, phase: built })
+          setPhase(built)
           if (params.get('draft') !== null) setParams({}, { replace: true })
         })
         .catch((error: unknown) => {
           const said = refusedWords(error)
-          turningOn.current = false
+          settingUp.current = false
           setRefused(said.length > 0 ? said : [words(error)])
         })
         .finally(settled)
@@ -567,7 +454,7 @@ export function SetupCard({ start }: { start: CardStart }) {
   }
 
   const leave = () => {
-    setPhase({ kind: 'never_mind' })
+    setPhase({ kind: 'dropped' })
     if (params.get('draft') !== null) setParams({}, { replace: true })
   }
 
@@ -596,16 +483,16 @@ export function SetupCard({ start }: { start: CardStart }) {
   }
 
   const undoNeverMind = () => {
-    const kept = start.resumed
-    if (kept === undefined) return
+    const before = start.resumed
+    if (before === undefined) return
     latch.run((settled) =>
       saveDraft.mutate(
-        { draftId: kept.draft_id, draft: { step: kept.step, content: kept.content, put_back: { created_at: kept.created_at, saved_at: kept.saved_at } } },
+        { draftId: before.draft_id, draft: { step: before.step, content: before.content, put_back: { created_at: before.created_at, saved_at: before.saved_at } } },
         {
           onSuccess: () => {
             setUndoProblem(null)
             setPhase({ kind: 'open' })
-            setParams({ draft: kept.draft_id }, { replace: true })
+            setParams({ draft: before.draft_id }, { replace: true })
           },
           onError: (error) => setUndoProblem(`Could not put it back. ${words(error)}`),
           onSettled: settled,
@@ -624,30 +511,34 @@ export function SetupCard({ start }: { start: CardStart }) {
     document.querySelector<HTMLElement>(`[data-card="${id}"] [data-mark="ask"] :is(button, input)`)?.focus()
   }
 
-  if (phase.kind === 'never_mind')
+  const title = nameOf(form, plan) || 'New workflow'
+  const crosses = crossParts(
+    form.marked.filter((part) => part.mark === 'cant'),
+    { when: form.when },
+    (part) => (part.reason === 'cant_do' ? <AskTheTeam capability={part.text} starter={`I asked the Planner for: ${form.text}\n\nWhat it can't do yet: ${part.text}`} /> : null),
+  )
+
+  if (phase.kind === 'dropped')
     return (
-      <div>
-        <p className="muted">All right, never mind.</p>
-        {start.resumed !== undefined ? (
-          <>
-            <Button loading={saveDraft.isPending} onClick={undoNeverMind}>
-              Undo
-            </Button>
-            {undoProblem ? (
-              <p className={styles['problem']} role="alert">
-                {undoProblem}
-              </p>
-            ) : null}
-          </>
-        ) : null}
+      <div data-card={id}>
+        <Card title={title} pill={<DraftPill label="Dropped" tone="quiet" />} status={<span role="status">Nothing was set up.</span>} actions={start.resumed !== undefined ? <Button loading={saveDraft.isPending} onClick={undoNeverMind}>Undo</Button> : undefined}>
+          {undoProblem ? (
+            <p className={styles['problem']} role="alert">
+              {undoProblem}
+            </p>
+          ) : null}
+        </Card>
       </div>
     )
-  if (phase.kind === 'open' && !live) return <p className="muted">Saved as a draft. Open it from Workflows to carry on.</p>
-  if (phase.kind === 'done') return <Done useCaseId={phase.useCaseId} writes={writesOf(plan, kinds)} draftKept={phase.draftKept} newAgents={phase.newAgents} />
+  if (phase.kind === 'built')
+    return (
+      <div data-card={id}>
+        <Building useCaseId={phase.useCaseId} title={title} parts={[...frozenParts(form, plan, writes), ...crosses]} newAgents={phase.newAgents} draftKept={phase.draftKept} />
+      </div>
+    )
+  if (!live) return <p className="muted">Saved as a draft. Open it from Workflows to carry on.</p>
 
-  const title = nameOf(form, plan) || 'New workflow'
-  const rowsOf = (kind: Row['kind']) => form.rows.flatMap((row, index) => (row.kind === kind ? [{ row, index }] : []))
-  const whyWaiting = left.choices.length > 0
+  const creating = create.isPending || saveCard.isPending
   const asked = (words: string, body: ReactNode) => (
     <>
       <span className={styles['pq']} id={`${id}-q`}>
@@ -664,7 +555,7 @@ export function SetupCard({ start }: { start: CardStart }) {
       back.current = `${id}-chip-${index}`
       setEditing(null)
     }
-    return <Editor id={`${id}-editor`} label={PART_LABEL[row.kind]} row={row} onSave={(text) => changePart(index, text)} onCancel={close} />
+    return <Editor id={`${id}-editor`} label={PART_OF[row.kind]} row={row} onSave={(text) => changePart(index, text)} onCancel={close} />
   }
   const noteOf = (row: Row): string | null => (row.state === 'edited' && row.planner?.text ? `Your request said: “${row.planner.text}”.` : row.state === 'changed' || row.state === 'cant_do' ? row.note : null)
   const askedRow = (q: Question | null, index: number): q is Extract<Question, { kind: 'row' }> => q?.kind === 'row' && q.index === index
@@ -679,12 +570,10 @@ export function SetupCard({ start }: { start: CardStart }) {
         onDone={() => setEditing(null)}
       />
     ) : null
-  const whenPart: Part =
+  const whenPiece =
     question?.kind === 'when'
       ? {
-          key: 'when',
-          mark: 'ask',
-          label: PART_LABEL.schedule,
+          mark: 'ask' as const,
           body: asked(
             question.words,
             <>
@@ -705,32 +594,24 @@ export function SetupCard({ start }: { start: CardStart }) {
           ),
         }
       : {
-          key: 'when',
-          mark: 'ok',
-          label: PART_LABEL.schedule,
+          mark: 'ok' as const,
           body: (
             <>
               <span>{timeText ?? ''}, Singapore time</span>
-              <Button aria-expanded={editing === 'when'} onClick={() => open('when')}>
+              <button type="button" className={styles['link']} aria-expanded={editing === 'when'} onClick={() => open('when')}>
                 Change<span className="visually-hidden"> when it runs</span>
-              </Button>
+              </button>
               {picker}
             </>
           ),
         }
 
-  const rowPart = ({ row, index }: { row: Row; index: number }): Part => {
-    const kind = row.kind
-    const key = `${kind}-${String(index)}`
+  const rowPiece = (row: Row, index: number): { readonly mark: Mark; readonly body: ReactNode } => {
     if (row.state === 'missing')
-      return askedRow(question, index)
-        ? { key, mark: 'ask', label: PART_LABEL[kind], body: asked(question.words, <>{chipOf(row, index)}{editorOf(index)}</>) }
-        : { key, mark: 'later', label: PART_LABEL[kind], body: ASKED_NEXT }
+      return askedRow(question, index) ? { mark: 'ask', body: asked(question.words, <>{chipOf(row, index)}{editorOf(index)}</>) } : { mark: 'later', body: <span className="muted">{ASKED_NEXT}</span> }
     const note = noteOf(row)
     return {
-      key,
       mark: row.state === 'cant_do' ? 'no' : row.state === 'checking' ? 'later' : 'ok',
-      label: PART_LABEL[kind],
       body: (
         <>
           {chipOf(row, index)}
@@ -746,238 +627,131 @@ export function SetupCard({ start }: { start: CardStart }) {
     }
   }
 
-  const firstLook = rowsOf('look_for')[0]
-  const dayParts: Part[] = form.marked
+  const rowPieces = (part: PartKey) => form.rows.flatMap((row, index) => (row.kind !== 'schedule' && PART_OF[row.kind] === part ? [rowPiece(row, index)] : []))
+
+  const firstLook = form.rows.findIndex((row) => row.kind === 'look_for')
+  const dayPieces = form.marked
     .filter((part) => part.reason === 'how_many_days')
-    .map((part, at) => ({
-      key: `days-${String(at)}`,
-      mark: question?.kind === 'days' ? 'ask' : 'later',
-      label: quote(part.text),
+    .map((part) => ({
+      mark: question?.kind === 'days' ? ('ask' as const) : ('later' as const),
       body:
         question?.kind === 'days' ? (
           asked(
             ASK_DAYS,
-            firstLook ? (
-              <button type="button" className={styles['choice']} onClick={() => open(firstLook.index)}>
+            firstLook >= 0 ? (
+              <button type="button" className={styles['choice']} onClick={() => open(firstLook)}>
                 Change which tickets
               </button>
             ) : null,
           )
         ) : (
-          ASKED_NEXT
+          <span className="muted">{`“${part.text}”: ${ASKED_NEXT.toLowerCase()}`}</span>
         ),
     }))
 
-  const inputParts: Part[] =
-    plan?.kind === 'agents'
-      ? plan.agents
-          .flatMap((agent) => agent.inputs.map((input) => ({ agent, input })))
-          .sort((a, b) => Number(b.input.kind === 'jira_project') - Number(a.input.kind === 'jira_project'))
-          .map(({ agent, input }): Part => {
-            const fieldId = `${id}-value-${String(agent.index)}-${input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
-            const key = valueKey(agent.index, input.name)
-            const value = valueOf(form, agent, input.name)
-            const problem = valueProblem(input.kind, value)
-            const said = shown || value !== '' ? problem : null
-            const now = question?.kind === 'input' && question.agent === agent.index && question.input === input.name ? question : null
-            const part = { key: `input-${key}`, label: input.name }
-            if (problem !== null && now === null) return { ...part, mark: 'later', body: ASKED_NEXT }
-            const field = (
-              <>
-                <input
-                  id={fieldId}
-                  className={styles['value']}
-                  type="text"
-                  aria-label={input.name}
-                  value={value}
-                  aria-invalid={said ? true : undefined}
-                  aria-describedby={`${fieldId}-help${said ? ` ${fieldId}-error` : ''}`}
-                  onChange={(event) => edit((before) => ({ ...before, typed: { ...before.typed, [key]: event.target.value } }))}
-                />
-                {problem === null && form.typed[key] === undefined ? (
-                  <span className={styles['tag']} data-state="changed">
-                    {TAG_FILLED}
-                  </span>
-                ) : null}
-                <span className={styles['help']} id={`${fieldId}-help`}>
-                  {input.what}
-                </span>
-                {said ? (
-                  <span className={styles['problem']} id={`${fieldId}-error`}>
-                    {said}
-                  </span>
-                ) : null}
-              </>
-            )
-            return { ...part, mark: now ? 'ask' : 'ok', body: now ? asked(now.words, field) : field }
-          })
-      : []
-
-  const whereRows = rowsOf('where')
-  const whereAsked = whereRows.find(({ index }) => askedRow(question, index))
-  const destPart: Part = {
-    key: 'dest',
-    mark: whereAsked ? 'ask' : whereRows.some(({ row }) => row.state === 'missing') ? 'later' : whereRows.some(({ row }) => row.state === 'cant_do') ? 'no' : 'ok',
-    label: PART_LABEL.where,
-    body: (
+  const inputPiece = (agent: PlanAgent, input: PlanAgent['inputs'][number]): { readonly mark: Mark; readonly body: ReactNode } => {
+    const fieldId = `${id}-value-${String(agent.index)}-${input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+    const key = valueKey(agent.index, input.name)
+    const value = valueOf(form, agent, input.name)
+    const problem = valueProblem(input.kind, value)
+    const said = shown || value !== '' ? problem : null
+    const now = question?.kind === 'input' && question.agent === agent.index && question.input === input.name ? question : null
+    if (problem !== null && now === null) return { mark: 'later', body: <span className="muted">{`${input.name}: ${ASKED_NEXT.toLowerCase()}`}</span> }
+    const field = (
       <>
-        {whereAsked && question ? (
-          <span className={styles['pq']} id={`${id}-q`}>
-            {question.words}
+        <label className={styles['valueLabel']} htmlFor={fieldId}>
+          {input.name}
+        </label>
+        <input
+          id={fieldId}
+          className={styles['value']}
+          type="text"
+          value={value}
+          aria-invalid={said ? true : undefined}
+          aria-describedby={`${fieldId}-help${said ? ` ${fieldId}-error` : ''}`}
+          onChange={(event) => edit((before) => ({ ...before, typed: { ...before.typed, [key]: event.target.value } }))}
+        />
+        <span className={styles['help']} id={`${fieldId}-help`}>
+          {input.what}
+        </span>
+        {said ? (
+          <span className={styles['problem']} id={`${fieldId}-error`}>
+            {said}
           </span>
-        ) : null}
-        {whereRows.map(({ row, index }) => (
-          <span key={index} className={styles['pnote']}>
-            {chipOf(row, index)}
-            {editorOf(index)}
-          </span>
-        ))}
-        <button
-          type="button"
-          id={`${id}-dest`}
-          className={styles['chip']}
-          data-state="changed"
-          aria-expanded={editing === 'dest'}
-          aria-controls={editing === 'dest' ? `${id}-editor` : undefined}
-          title="Filled in by me. It’s written after a yes."
-          onClick={() => open('dest')}
-        >
-          {DEST_WORDS}
-          <span className="visually-hidden">, filled in by me, written after a yes. Change</span>
-        </button>
-        <span>after a yes</span>
-        {editing === 'dest' ? (
-          <DestEditor
-            id={`${id}-editor`}
-            onDone={() => {
-              back.current = `${id}-dest`
-              setEditing(null)
-            }}
-          />
         ) : null}
       </>
-    ),
+    )
+    return { mark: now ? 'ask' : 'ok', body: now ? asked(now.words, field) : field }
   }
 
-  const crosses = crossParts(
-    form.marked.filter((part) => part.mark === 'cant'),
-    { when: form.when },
-    (part) => (part.reason === 'cant_do' ? <AskTheTeam capability={part.text} starter={`I asked the Planner for: ${form.text}\n\nWhat it can't do yet: ${part.text}`} /> : null),
-  )
+  const inputPieces = (part: PartKey) =>
+    plan?.kind === 'agents' ? plan.agents.flatMap((agent) => agent.inputs.filter((input) => inputPart(input.kind) === part).map((input) => inputPiece(agent, input))) : []
+
+  const parts: Part[] = [
+    ...keyed('Watch', [...rowPieces('Watch'), ...dayPieces, ...inputPieces('Watch')]),
+    ...keyed('When', [whenPiece]),
+    ...keyed('Then', [...rowPieces('Then'), ...inputPieces('Then'), ...(writes === false ? [] : [{ mark: 'ok' as const, body: <span className={styles['after']}>After a yes</span> }])]),
+    ...crosses,
+  ]
+  const asks = left.choices.length > 0
 
   return (
-    <section className={styles['card']} aria-labelledby={`${id}-title`} data-card={id}>
-      <div className={styles['head']}>
-        {editing === 'name' ? (
-          <div className={styles['rename']}>
-            <label className="visually-hidden" htmlFor={`${id}-name`}>
-              Workflow name
-            </label>
-            <input
-              id={`${id}-name`}
-              type="text"
-              value={form.name}
-              onChange={(event) => {
-                setFilled(false)
-                edit((before) => ({ ...before, name: event.target.value }))
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === 'Escape') {
-                  event.preventDefault()
-                  back.current = `${id}-rename`
-                  setEditing(null)
-                }
-              }}
-            />
-            <Button
-              onClick={() => {
-                back.current = `${id}-rename`
-                setEditing(null)
-              }}
-            >
-              Done
-            </Button>
-          </div>
-        ) : (
-          <>
-            <h3 id={`${id}-title`} tabIndex={-1}>
-              {title}
-            </h3>
-            {filled ? (
-              <span className={styles['tag']} data-state="changed">
-                {TAG_FILLED}
-              </span>
+    <div data-card={id}>
+      <Card
+        title={title}
+        pill={<DraftPill label={creating ? 'Building' : 'Draft'} tone={creating ? 'new' : 'quiet'} />}
+        status={
+          <span id={`${id}-left`} role="status">
+            {creating ? 'Starting…' : leftWords(left)}
+          </span>
+        }
+        actions={
+          creating ? undefined : (
+            <>
+              <Button onClick={neverMind}>Never mind</Button>
+              <button type="button" id={`${id}-set-up`} className={buttonClassName(main)} aria-describedby={`${id}-left`} onClick={asks ? pointAtWhatIsLeft : pressSetUp}>
+                {setUpWords(left)}
+              </button>
+            </>
+          )
+        }
+      >
+        <PartsList parts={parts} short />
+        {plan?.kind === 'cannot' || plan?.kind === 'trouble' || planQuery.isError ? (
+          <div className={styles['trouble']}>
+            {plan?.kind === 'cannot' ? <p className={styles['problem']}>I can’t set this up. {plan.reason}</p> : null}
+            {plan?.kind === 'trouble' || planQuery.isError ? (
+              <>
+                <p className={styles['problem']} role="alert">
+                  {plan?.kind === 'trouble' ? plan.message : planQuery.isError ? words(planQuery.error) : ''}
+                </p>
+                <Button onClick={() => void planQuery.refetch()}>Try again</Button>
+              </>
             ) : null}
-            <button type="button" id={`${id}-rename`} className={styles['link']} onClick={() => open('name')}>
-              Rename<span className="visually-hidden"> {title}</span>
-            </button>
-          </>
-        )}
-      </div>
-
-      <PartsList parts={[whenPart, ...rowsOf('look_for').map(rowPart), ...dayParts, ...inputParts, ...rowsOf('do').map(rowPart), destPart, ...crosses]} />
-
-      {start.similar || plan?.kind === 'cannot' || plan?.kind === 'trouble' || planQuery.isError ? (
-        <div className={styles['part']}>
-          {start.similar ? (
-            <p className={styles['similar']}>
-              You already have a workflow with this name. <Link to={`/workflows/${encodeURIComponent(start.similar.use_case_id)}`}>Open {start.similar.name}</Link>
-            </p>
-          ) : null}
-          {plan?.kind === 'cannot' ? <p className={styles['problem']}>I can’t set this up. {plan.reason}</p> : null}
-          {plan?.kind === 'trouble' || planQuery.isError ? (
-            <div>
-              <p className={styles['problem']} role="alert">
-                {plan?.kind === 'trouble' ? plan.message : planQuery.isError ? words(planQuery.error) : ''}
-              </p>
-              <Button onClick={() => void planQuery.refetch()}>Try again</Button>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      <div className={styles['part']}>
-        <h4>What needs a yes</h4>
-        <p>
-          {writesOf(plan, kinds) === false
-            ? 'Nothing in this workflow changes data, so it needs no yes.'
-            : 'Anything that changes data, such as creating the Jira ticket, waits for a yes in Teams on each run. Any Approver on your team except you can say yes.'}
-        </p>
-      </div>
-
-      <HowItWorks plan={plan} kinds={kinds} reused={reused} />
-
-      <div className={styles['foot']}>
-        <button
-          type="button"
-          id={`${id}-turn-on`}
-          className={buttonClassName(main)}
-          aria-describedby={`${id}-left`}
-          aria-busy={create.isPending || saveCard.isPending || undefined}
-          onClick={whyWaiting ? pointAtWhatIsLeft : turnItOn}
-        >
-          {turnOnWords(left)}
-        </button>
-        <span className={styles['left']} id={`${id}-left`}>
-          {leftWords(left)}
-        </span>
-        <button type="button" className={styles['link']} onClick={neverMind}>
-          Never mind
-        </button>
-      </div>
-      {refused.length > 0 ? (
-        <ul className={styles['refused']} role="alert">
-          {refused.map((said) => (
-            <li key={said}>{said}</li>
-          ))}
-        </ul>
-      ) : null}
-      {saveProblem ? (
-        <p className={styles['problem']} role="alert">
-          {saveProblem}
-        </p>
-      ) : null}
+          </div>
+        ) : null}
+        {plan?.kind === 'agents' && (plan.problems.length > 0 || plan.notIncluded.length > 0) ? (
+          <ul className={styles['refused']}>
+            {plan.problems.map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+            {plan.notIncluded.length > 0 ? <li>Left out, because no tool does it yet: {plan.notIncluded.join(', ')}.</li> : null}
+          </ul>
+        ) : null}
+        {refused.length > 0 ? (
+          <ul className={styles['refused']} role="alert">
+            {refused.map((said) => (
+              <li key={said}>{said}</li>
+            ))}
+          </ul>
+        ) : null}
+        {saveProblem ? (
+          <p className={styles['problem']} role="alert">
+            {saveProblem}
+          </p>
+        ) : null}
+      </Card>
       {asking ? <DiscardDialog name={title} busy={deleteDraft.isPending} problem={discardProblem} onClose={() => setAsking(false)} onConfirm={confirmDiscard} /> : null}
-    </section>
+    </div>
   )
 }

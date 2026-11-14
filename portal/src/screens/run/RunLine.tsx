@@ -78,6 +78,10 @@ interface RunLineProps {
   readonly settled: Settled | null
   /** Cards and the side panel: smaller, and without the agents' faces. */
   readonly small?: boolean
+  /** Steps not built yet, as the set-up card adds them one by one. They keep their place and fade in. */
+  readonly hidden?: ReadonlySet<string>
+  /** The step the safety checker added, ringed in its colour. */
+  readonly added?: string | null
 }
 
 /** How a run ended, as the one line the page, the panel and the card keep for it. */
@@ -90,7 +94,7 @@ export function SettledLine({ settled }: { settled: Settled }) {
   )
 }
 
-export function RunLine({ stations, arrivedLive, settled, small = false }: RunLineProps) {
+export function RunLine({ stations, arrivedLive, settled, small = false, hidden, added = null }: RunLineProps) {
   const pauseUnseen = usePauseUnseen()
   const moving = motionAllowed()
   const [replaying, setReplaying] = useState(() => moving && stations.some((station) => station.state === 'err'))
@@ -119,6 +123,9 @@ export function RunLine({ stations, arrivedLive, settled, small = false }: RunLi
                 aria-current={state === 'now' || state === 'wait' ? 'step' : undefined}
                 data-state={state}
                 data-replay={(replaying && state === 'err') || undefined}
+                data-off={hidden?.has(station.key) || undefined}
+                data-added={station.key === added || undefined}
+                aria-hidden={hidden?.has(station.key) || undefined}
               >
                 {link ? (
                   <span
@@ -126,6 +133,7 @@ export function RunLine({ stations, arrivedLive, settled, small = false }: RunLi
                     data-link={link}
                     data-march={(moving && MARCHES.has(link)) || undefined}
                     data-replay={(replaying && next?.state === 'err') || undefined}
+                    data-off={(next && hidden?.has(next.key)) || undefined}
                     aria-hidden="true"
                   />
                 ) : null}
