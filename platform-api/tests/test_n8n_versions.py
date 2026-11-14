@@ -410,3 +410,26 @@ async def test_a_workflow_deleted_in_n8n_keeps_its_runs_and_versions(v: Versions
     resumed = await move(v.own, "resume", use_case_id)
     assert resumed.status_code == 503
     assert "deleted in n8n" in resumed.json()["detail"]
+
+
+async def test_safety_a_roll_back_never_publishes_over_a_newer_publish_in_n8n(v: Versions):
+    """n8n still holds version 1, so the roll back would publish it as it is: only the version
+    compare stops it hiding a publish the sweep has not seen yet."""
+    use_case_id, workflow_id = await on_and_changed(v)
+    newer = v.n8n.publish_as(workflow_id, DAVE_IN_N8N, at_seven_thirty)
+    refused = await v.rollback("carol", use_case_id, 1, in_use=2)
+    assert (refused.status_code, refused.json()["detail"]) == (409, CHANGED_SINCE)
+    assert v.n8n.workflows[workflow_id]["activeVersionId"] == newer
+
+
+async def test_safety_a_version_published_again_from_n8ns_history_keeps_its_authors(v: Versions):
+    """Dave publishes, in n8n, the version Carol turned on: a run of it is Carol's work too."""
+    use_case_id, workflow_id = await made(v.own, on=True)
+    assert (await move(v.own, "pause", use_case_id, "carol")).status_code == 200
+    assert (await move(v.own, "resume", use_case_id, "carol")).status_code == 200
+    first = await version_row(v.own, use_case_id, 1)
+    v.n8n.publish_as(workflow_id, DAVE_IN_N8N, without_yes)
+    await v.sweep()
+    v.n8n._activate(workflow_id, first["n8n_version_id"], DAVE_IN_N8N)  # pyright: ignore[reportPrivateUsage]
+    assert await v.sweep() == 1
+    assert {UserId("alice"), DAVE} <= await v.parties(use_case_id, 3, workflow_id)
