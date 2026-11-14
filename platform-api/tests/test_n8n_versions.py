@@ -24,12 +24,13 @@ from platform_api.orchestration import (
     RanVersion,
     Schedule,
 )
+from platform_api.orchestration.n8n_calls import VERSION_FAILED, ExecutionFacts, decide_link
 from platform_api.orchestration.schedule import DAYS
 from platform_api.shared import UseCaseId, UserId
 from tests.fake_n8n import FakeN8n
-from tests.support import ALICE, CAROL
+from tests.support import ALICE, CAROL, NOW
 from tests.test_builder_lifecycle import Lab, ModelConnected, start_run
-from tests.test_n8n_builder import WRITES, Drafts, N8nLab, lab
+from tests.test_n8n_builder import ERROR_WORKFLOW, WRITES, Drafts, N8nLab, lab
 from tests.test_n8n_lifecycle import Workflows, made, move, version_row
 from tests.test_watchlist_n8n import Starts, World, watchlist_before_the_move, world
 
@@ -189,7 +190,7 @@ def test_the_changes_are_a_plain_comparison_of_blocks_the_schedule_and_settings(
         "Now runs every Monday at 7:30.",
         "Deleted “Ask for a yes”.",
         "Added “Tell you”.",
-        "Changed its settings.",
+        "Changed its settings: keeping its test runs.",
     ]
     rewired = {**before, "connections": {"Daily 8:00": {"main": [[{"node": "Create ticket"}]]}}}
     assert changes_between(before, rewired) == ["Changed how the blocks connect."]
@@ -577,3 +578,66 @@ async def test_safety_undo_puts_the_settings_back_that_a_change_in_n8n_took_away
     assert held["activeVersionId"] != first["n8n_version_id"], (
         "written again, not published as held"
     )
+
+
+def no_error_workflow(settings: dict[str, Any]) -> None:
+    settings.pop("errorWorkflow")
+
+
+async def test_safety_settings_changed_in_n8n_with_no_publish_stop_the_next_run(v: Versions):
+    """n8n runs the live version with the workflow's settings now, so a save that clears the
+    error workflow, with no publish, needs a fix at once, and the next run stops before it reads."""
+    use_case_id, workflow_id = await made(v.own, on=True)
+    live = v.n8n.workflows[workflow_id]["activeVersionId"]
+    v.n8n.save_settings(workflow_id, no_error_workflow)
+    assert await v.sweep() == 1
+    view = await v.view(use_case_id)
+    assert (view["version"], view["grade"]) == (2, "needs_a_fix")
+    assert view["findings"] == ["Its failures do not go to the platform's error workflow."]
+    second = await version_row(v.own, use_case_id, 2)
+    assert second["n8n_version_id"] == live, "the same version runs, with other settings"
+    versions = (await v.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}/versions")).json()
+    newest = versions["versions"][0]
+    assert (newest["made"], newest["by"], newest["changes"]) == (
+        "settings_changed_in_n8n",
+        None,
+        ["Changed its settings: the error workflow."],
+    )
+    ran = await v.builder.facts.version(workflow_id, live)
+    assert ran is not None and ran.grade == "needs_a_fix"
+    fired = ExecutionFacts(workflow_id, "trigger", None, None, live)
+    assert decide_link(fired, None, None, None, ran, NOW) == VERSION_FAILED
+    [card] = await v.builder.changed_in_n8n(10)
+    assert (card.made, card.version, card.grade, card.by) == (
+        "settings_changed_in_n8n",
+        2,
+        "needs_a_fix",
+        None,
+    )
+    assert await v.sweep() == 0, "kept once"
+    undone = await v.rollback("carol", use_case_id, 1, in_use=2)
+    assert (undone.status_code, undone.json()["grade"]) == (200, "safe"), undone.text
+    assert v.n8n.workflows[workflow_id]["settings"]["errorWorkflow"] == ERROR_WORKFLOW
+
+
+async def test_settings_put_back_in_n8n_grade_safe_again(v: Versions):
+    use_case_id, workflow_id = await made(v.own, on=True)
+    v.n8n.save_settings(workflow_id, no_error_workflow)
+    await v.sweep()
+    v.n8n.save_settings(workflow_id, lambda s: s.update(errorWorkflow=ERROR_WORKFLOW))
+    assert await v.sweep() == 1
+    view = await v.view(use_case_id)
+    assert (view["version"], view["grade"], view["findings"]) == (3, "safe", [])
+
+
+async def test_settings_saved_in_another_order_are_no_change(v: Versions):
+    use_case_id, workflow_id = await made(v.own, on=True)
+
+    def reordered(settings: dict[str, Any]) -> None:
+        items = list(settings.items())
+        settings.clear()
+        settings.update(reversed(items))
+
+    v.n8n.save_settings(workflow_id, reordered)
+    assert await v.sweep() == 0
+    assert (await v.view(use_case_id))["version"] == 1

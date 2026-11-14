@@ -15,6 +15,7 @@ export const ADD_THE_YES_BACK = 'Add the yes back'
 export const UNDO = 'Undo'
 export const UNKNOWN_PUBLISHER = 'someone we don’t know'
 export const UNKNOWN_PUBLISHER_STOPS = 'We don’t know who published it in n8n, so its runs stop.'
+export const SETTINGS_SAVED = 'Its settings were changed in n8n.'
 export const DELETED_IN_N8N = 'Deleted in n8n. It won’t run again. Its runs and versions are kept.'
 
 /** What a refused write is called: the ticket when the write block is Create ticket, else its own name. */
@@ -47,6 +48,8 @@ export function madeWords(version: Pick<VersionView, 'made' | 'changes' | 'rolle
   switch (version.made) {
     case 'published_in_n8n':
       return ['Changed in n8n.', ...(version.changes ?? [])].join(' ')
+    case 'settings_changed_in_n8n':
+      return [...(version.changes ?? []), 'Saved in n8n, with nothing published.'].join(' ')
     case 'rolled_back':
       return version.rolled_back_to === null || version.rolled_back_to === undefined ? 'Rolled back' : `Rolled back to version ${version.rolled_back_to}`
     case 'yes_put_back':

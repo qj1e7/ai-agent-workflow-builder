@@ -175,9 +175,10 @@ def version_view(version: Version, running: int, before: Version | None = None) 
     """`before` is the version before it, whose workflow a version published in n8n is compared
     with."""
     change, made, held, published = version.change, version.made, version.held, version.published
-    in_n8n = made is not None and made.kind == "published_in_n8n"
+    published_there = made is not None and made.kind == "published_in_n8n"
+    in_n8n = made is not None and made.kind in ("published_in_n8n", "settings_changed_in_n8n")
     by = change.by if change is not None else made.by if made is not None else None
-    if in_n8n and published is not None:
+    if published_there and published is not None:
         by = published.by
     changes: list[str] = []
     if in_n8n and held is not None:
@@ -200,7 +201,7 @@ def version_view(version: Version, running: int, before: Version | None = None) 
         grade=None if held is None else held.grade,
         changes=changes,
         rolled_back_to=None if made is None else made.back_to,
-        publisher_unknown=in_n8n and published is not None and published.by is None,
+        publisher_unknown=published_there and published is not None and published.by is None,
     )
 
 
@@ -270,6 +271,36 @@ def schedule_words(schedule: Schedule) -> str:
     return f"{DAY_WORDS[schedule.day]} at {int(hour)}:{minute}"
 
 
+SETTING_WORDS: Mapping[str, str] = {
+    "errorWorkflow": "the error workflow",
+    "timezone": "the time zone",
+    "saveManualExecutions": "keeping its test runs",
+    "saveExecutionProgress": "saving its progress",
+    "callerPolicy": "who may call it",
+    "executionTimeout": "its time limit",
+    "executionOrder": "the order its blocks run in",
+}
+
+
+def _settings(settings: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Settings as n8n runs with them: a setting with no value is one left out."""
+    return {key: value for key, value in (settings or {}).items() if value is not None}
+
+
+def settings_changed(
+    before: Mapping[str, Any] | None, after: Mapping[str, Any] | None
+) -> str | None:
+    """Which settings differ, in plain words, the safety checker's first, or None when none do.
+    The order n8n keeps them in is no change."""
+    old, new = _settings(before), _settings(after)
+    keys = {key for key in old.keys() | new.keys() if old.get(key) != new.get(key)}
+    if not keys:
+        return None
+    named = [key for key in SETTING_WORDS if key in keys]
+    others = sorted(keys - set(SETTING_WORDS))
+    return ", ".join([*(SETTING_WORDS[key] for key in named), *(f"“{key}”" for key in others)])
+
+
 def changes_between(before: Mapping[str, Any] | None, after: Mapping[str, Any]) -> list[str]:
     """What a version published in n8n changed, in the Changed in n8n card's words: when it
     runs, each block deleted, added or changed by name, then how the blocks connect and its
@@ -302,8 +333,8 @@ def changes_between(before: Mapping[str, Any] | None, after: Mapping[str, Any]) 
             lines.append(f"Changed “{name}”.")
     if set(old.blocks) == set(new.blocks) and set(old.edges) != set(new.edges):
         lines.append("Changed how the blocks connect.")
-    if dict(old.settings) != dict(new.settings):
-        lines.append("Changed its settings.")
+    if (settings := settings_changed(old.settings, new.settings)) is not None:
+        lines.append(f"Changed its settings: {settings}.")
     return lines or ["Published again, with no change to its blocks."]
 
 

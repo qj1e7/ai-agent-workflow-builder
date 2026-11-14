@@ -892,19 +892,20 @@ class Builder:
         return SweepOut(found=len(found))
 
     async def changed_in_n8n(self, limit: int) -> list[ChangedInN8nReply]:
-        """The versions published in n8n in the last day, newest first, with what each changed
-        from the version before it. Names are the caller's to add."""
+        """The versions published in n8n, or whose settings changed there, in the last day, newest
+        first, with what each changed from the version before it. Names are the caller's to add."""
         since = self._db.clock() - CHANGED_IN_N8N_SINCE
         async with self._db.connection("builder") as conn:
             rows = await (
                 await conn.execute(
                     "SELECT v.use_case_id, v.version, v.created_at, v.published_by, v.grade,"
-                    " v.findings, v.document, v.name, u.current_version,"
+                    " v.findings, v.document, v.name, v.made, u.current_version,"
                     " p.document AS before FROM builder.use_case_versions v"
                     " JOIN builder.use_cases u ON u.use_case_id = v.use_case_id"
                     " LEFT JOIN builder.use_case_versions p"
                     " ON p.use_case_id = v.use_case_id AND p.version = v.version - 1"
-                    " WHERE v.made = 'published_in_n8n' AND v.created_at > %s"
+                    " WHERE v.made IN ('published_in_n8n', 'settings_changed_in_n8n')"
+                    " AND v.created_at > %s"
                     " AND u.deleted_at IS NULL"
                     " ORDER BY v.created_at DESC, v.use_case_id, v.version DESC LIMIT %s",
                     (since, limit),
@@ -915,7 +916,10 @@ class Builder:
                 use_case_id=row["use_case_id"],
                 name=row["name"],
                 version=row["version"],
-                by=None if row["published_by"] is None else UserId(row["published_by"]),
+                made=row["made"],
+                by=None
+                if row["published_by"] is None or row["made"] != "published_in_n8n"
+                else UserId(row["published_by"]),
                 by_name=None,
                 at=row["created_at"],
                 grade=row["grade"],

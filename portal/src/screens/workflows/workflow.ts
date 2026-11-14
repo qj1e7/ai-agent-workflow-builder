@@ -279,6 +279,8 @@ export function sentenceOf(useCase: Pick<UseCaseView, 'schedule' | 'agents' | 'p
 /** What a version changed and who changed it, as the prototype's Versions list says it. */
 export function versionWords(version: VersionView, nameOf: NameOf): string {
   const made = madeWords(version)
+  // n8n names nobody for a save of the settings, so the line names nobody either.
+  if (made !== null && version.made === 'settings_changed_in_n8n') return made
   if (made !== null) {
     const who = version.by && !version.publisher_unknown ? nameOf(version.by) : UNKNOWN_PUBLISHER
     return `${made}${/[.!?]$/.test(made) ? '' : '.'} ${who.charAt(0).toUpperCase()}${who.slice(1)}.`

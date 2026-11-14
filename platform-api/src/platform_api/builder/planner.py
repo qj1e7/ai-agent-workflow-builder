@@ -476,10 +476,16 @@ class ChangedInN8nReply(Reply):
     answer: Literal["changed_in_n8n"] = "changed_in_n8n"
     use_case_id: str
     name: str
-    version: int = Field(description="The version published in n8n.")
+    version: int = Field(description="The version published in n8n, or whose settings changed.")
+    made: Literal["published_in_n8n", "settings_changed_in_n8n"] = Field(
+        description="published_in_n8n: someone published it in n8n's editor. "
+        "settings_changed_in_n8n: someone saved its settings there and published nothing, and n8n "
+        "runs the live version with them at once. n8n does not say who saved them, so by is null."
+    )
     by: UserId | None = Field(
         description="Who published it in n8n. Null when the People list can't match them, so "
-        "its runs stop at their first block until an Operator matches the person."
+        "its runs stop at their first block until an Operator matches the person, and for "
+        "settings saved in n8n, which n8n does not name anyone for."
     )
     by_name: str | None = Field(description="Their name. Null with by.")
     at: AwareDatetime = Field(description="When the platform found it.")
