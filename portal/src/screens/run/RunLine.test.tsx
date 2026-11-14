@@ -1,3 +1,5 @@
+/// <reference types="node" />
+import { readFileSync } from 'node:fs'
 import useCase from '@contracts/fixtures/builder/use-case.json'
 import failure from '@contracts/fixtures/runs/failure.json'
 import rejected from '@contracts/fixtures/runs/rejected.json'
@@ -197,6 +199,15 @@ describe('the links between the steps', () => {
   it('stay solid into a decline, and fade into the write it skipped', () => {
     withReducedMotion(false)
     expect(links(line(replay(rejected)))).toEqual(['solid', 'solid', 'dead'])
+  })
+
+  it('let every animation that plays once end and let go, so the waiting gate’s Sent line leaves a page that can settle', () => {
+    // Vitest blanks a CSS import, so the rules are read from the file. A finished animation that fills forwards stays in
+    // document.getAnimations() for good, and the run page then never settles.
+    const css = readFileSync(new URL('./RunLine.module.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    const once = [...css.matchAll(/animation(-fill-mode)?:\s*([^;]+);/g)].map((match) => match[2] ?? '').filter((value) => !/\binfinite\b/.test(value))
+    expect(once.some((value) => value.startsWith('ping ')), 'the Sent line pings in').toBe(true)
+    expect(once.filter((value) => /\b(forwards|both)\b/.test(value))).toEqual([])
   })
 
   it('hold still with reduced motion, and keep the same look', () => {
