@@ -7,7 +7,9 @@ import { useMoveWorkflow } from '../../api/workflowQueries'
 import { Button, ButtonLink } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { OpenButton } from '../../ui/OpenItem'
-import { softwarePath } from '../software/software'
+import { useWatchlist } from '../../api/queries'
+import { sentenceFor, softwarePath, stateOf } from '../software/software'
+import softwareStyles from '../software/Software.module.css'
 import { AskTheTeam } from './AskTheTeam'
 import { useAsker } from './asker'
 import { cantLines, capabilityCard, oneLine, questionActions, refusalNext, SAY_ANOTHER_WAY, startingPoints, stateWords, switchedSay, watchlistSwitchNote, type Asker } from './answers'
@@ -112,31 +114,66 @@ export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }
   )
 }
 
+/**
+ * The sketch's software card: a watched software's name, its pill and where it stands, in the watchlist's own words, or that the
+ * version she runs isn't known because it isn't on the watchlist yet, with Watch it. Watch it adds it to the Software watchlist,
+ * which is where watched software lives here, after finding its GitHub project.
+ */
+function SoftwareCard({ name, listed }: { name: string; listed: WatchlistReply['already_listed'] }) {
+  const main = useMainButton()
+  const operator = useAsker() === 'operator'
+  const watchlist = useWatchlist({ enabled: listed !== null })
+  const [watching, setWatching] = useState(false)
+  const row = listed ? watchlist.data?.software.find((software) => software.id === listed.software_id) : undefined
+  const state = row ? stateOf(row) : null
+  if (listed) {
+    return (
+      <Card
+        title={row?.name ?? listed.name}
+        pill={
+          state ? (
+            <span className={softwareStyles['pill']} data-tone={state.tone}>
+              {state.words}
+            </span>
+          ) : undefined
+        }
+        actions={
+          <OpenButton variant={main} item={{ kind: 'software', id: listed.software_id }} to={softwarePath(listed.software_id)}>
+            Open it
+          </OpenButton>
+        }
+      >
+        <p>{row ? sentenceFor(row) : `${listed.name} is on the Software watchlist.`}</p>
+      </Card>
+    )
+  }
+  return (
+    <Card
+      title={name}
+      actions={
+        operator && !watching ? (
+          <Button variant={main} onClick={() => setWatching(true)}>
+            Watch it
+          </Button>
+        ) : undefined
+      }
+    >
+      <p className="muted">It isn’t on the watchlist, so I don’t know which version you run.</p>
+      {watching ? <AddToWatchlist name={name} /> : null}
+    </Card>
+  )
+}
+
 export function WatchlistAnswer({ reply, typed }: { reply: WatchlistReply; typed: string }) {
   const listed = reply.already_listed
   const main = useMainButton()
   return (
     <>
-      <Card title={listed ? 'Already on the watchlist' : 'The Software watchlist'}>
-        {listed ? (
-          <>
-            <p>{listed.name} is on the Software watchlist.</p>
-            <div className={styles['buttons']}>
-              <OpenButton variant={main} item={{ kind: 'software', id: listed.software_id }} to={softwarePath(listed.software_id)}>
-                Open it
-              </OpenButton>
-            </div>
-          </>
-        ) : reply.software ? (
-          <AddToWatchlist name={reply.software} />
-        ) : (
-          <div className={styles['buttons']}>
-            <ButtonLink variant={main} to="/software">
-              Open the Software watchlist
-            </ButtonLink>
-          </div>
-        )}
-      </Card>
+      {listed || reply.software ? (
+        <SoftwareCard name={listed?.name ?? reply.software ?? ''} listed={listed} />
+      ) : (
+        <Card title="The Software watchlist" actions={<ButtonLink variant={main} to="/software">Open the Software watchlist</ButtonLink>} />
+      )}
       {reply.also ? (
         <>
           <p>The rest of your request:</p>

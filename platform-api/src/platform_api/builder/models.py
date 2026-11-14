@@ -19,6 +19,7 @@ from platform_api.orchestration import (
 from platform_api.shared import ApprovalId, RunId, SoftwareId, UserId
 from platform_api.wire import FailureReason as FailureReasonName
 from platform_api.wire import RepoName, WireIn, WireModel
+from platform_api.wire import RunOutcome as RunOutcomeName
 from platform_api.wire import RunState as RunStateName
 
 type BlockKind = Literal["agent", "approval", "write_action"]
@@ -193,6 +194,11 @@ class LastRunView(WireModel):
     retryable: bool = Field(description="True when the run stopped and a retry may start it again.")
     reason: FailureReasonName | None = Field(
         description="Why a stopped run stopped. Null for any other run."
+    )
+    outcome: RunOutcomeName | None = Field(
+        default=None,
+        description="How a finished run ended: written, nothing_to_write, or test_passed for a "
+        "test run that stopped before the yes and wrote nothing. Null until it succeeded.",
     )
 
 

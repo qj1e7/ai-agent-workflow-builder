@@ -354,3 +354,82 @@ button.chip:hover {
   border-radius: var(--r-ctl);
   font: inherit;
 }
+
+/* One piece of a part: a chip, a field or a line of words, each on its own line in the part. */
+.piece {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-width: 0;
+}
+
+.after {
+  color: var(--muted);
+}
+
+.valueLabel {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.trouble {
+  display: grid;
+  gap: 8px;
+}
+
+/* The safety checker's note, beside its face. */
+.note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--safety) 8%, var(--surface));
+  color: var(--safety);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.good,
+.bad {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.good {
+  color: var(--green-ink);
+}
+
+.bad {
+  color: var(--red-ink);
+}
+
+.checks {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checks li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--red-ink);
+  font-weight: 600;
+}
+
+.checks li[data-ok] {
+  color: var(--green-ink);
+}
+
+.footnote {
+  color: var(--muted);
+  font-size: 0.875rem;
+}

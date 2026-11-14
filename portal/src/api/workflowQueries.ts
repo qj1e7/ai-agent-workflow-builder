@@ -1,8 +1,9 @@
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { skipToken, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { unwrap, type ApiClient } from './client'
 import { useApiClient, useCacheScope } from './context'
+import { newIdempotencyKey } from './idempotency'
 import { keys } from './queries'
-import type { ScheduleIn, UseCaseView, VersionView, WatchlistView } from './types'
+import type { CreateAgentUseCase, ScheduleIn, UseCaseCreated, UseCaseView, VersionView, WatchlistView } from './types'
 
 type Move = 'pause' | 'resume' | 'restore'
 
@@ -182,4 +183,126 @@ export function useVersions(useCaseId: string, version: number) {
     enabled: version > 1,
     placeholderData: (before) => before,
   })
+}
+
+/**
+ * What Set up made, held for the set-up card and the build panel: the platform's answer with its build log and blocks, when it came,
+ * which the log's replay counts from, and the test run the card started. Only the card writes it. The panel reads it.
+ */
+export interface SetUp {
+  readonly created: UseCaseCreated
+  readonly at: number
+  readonly testRunId: string | null
+  /** The idempotency key the next test run asks with, kept here so a card drawn again asks with the same one. Test again makes a new one. */
+  readonly testKey: string
+  /** The key a start was last asked with, so no card asks twice with it. */
+  readonly testAsked: string | null
+}
+
+export function holdSetUp(queryClient: QueryClient, user: string, created: UseCaseCreated, at: number, testKey: string): void {
+  queryClient.setQueryData<SetUp>(keys.setUp(user, created.use_case_id), { created, at, testRunId: null, testKey, testAsked: null })
+}
+
+const changeSetUp = (queryClient: QueryClient, user: string, useCaseId: string, change: Partial<SetUp>): void => {
+  queryClient.setQueryData<SetUp>(keys.setUp(user, useCaseId), (held) => (held ? { ...held, ...change } : held))
+}
+
+export const testAsked = (queryClient: QueryClient, user: string, useCaseId: string, key: string): void => changeSetUp(queryClient, user, useCaseId, { testAsked: key })
+
+export const testStarted = (queryClient: QueryClient, user: string, useCaseId: string, runId: string): void => changeSetUp(queryClient, user, useCaseId, { testRunId: runId })
+
+export const testAgain = (queryClient: QueryClient, user: string, useCaseId: string, key: string): void => changeSetUp(queryClient, user, useCaseId, { testRunId: null, testKey: key })
+
+/**
+ * Starts a set-up's test run. The run the platform names is kept with the set-up here, in the mutation's own options, so it is kept even
+ * when the card that asked was drawn away before the answer came.
+ */
+export function startTestOptions(client: ApiClient, queryClient: QueryClient, user: string) {
+  return {
+    mutationFn: async ({ useCaseId, key }: { useCaseId: string; key: string }) =>
+      unwrap(
+        await client.POST('/api/v1/use-cases/{use_case_id}/runs', {
+          params: { path: { use_case_id: useCaseId }, header: { 'Idempotency-Key': key } },
+          body: { test: true },
+        }),
+      ),
+    onSuccess: (run: { readonly run_id: string }, { useCaseId }: { useCaseId: string }) => {
+      testStarted(queryClient, user, useCaseId, run.run_id)
+      void queryClient.invalidateQueries({ queryKey: ['runs'] })
+    },
+  }
+}
+
+export function useStartTest() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation(startTestOptions(client, queryClient, user))
+}
+
+/** What one press of Set up came to: the workflow it made as a draft, or why the platform refused it. */
+export type Made =
+  | { readonly kind: 'built'; readonly useCaseId: string; readonly draftKept: boolean; readonly newAgents: readonly string[] }
+  | { readonly kind: 'refused'; readonly said: readonly string[] }
+
+/** Kept under the press's own key, so a card drawn again while the platform answered still settles. */
+export function madeBySetUp(queryClient: QueryClient, user: string, press: string, made: Made): void {
+  queryClient.setQueryData<Made>(keys.made(user, press), made)
+}
+
+export function useMadeBySetUp(press: string | null): { readonly made: Made | undefined; readonly keep: (press: string, made: Made) => void } {
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  const made = useQuery<Made>({ queryKey: keys.made(user, press ?? ''), queryFn: skipToken, staleTime: Infinity, gcTime: Infinity, enabled: press !== null }).data
+  return { made: press === null ? undefined : made, keep: (key, value) => madeBySetUp(queryClient, user, key, value) }
+}
+
+/** Set up always makes a draft (ADR 0044): it never runs on its schedule, and only Turn it on publishes it. */
+export function setUpOffOptions(client: ApiClient, queryClient: QueryClient, user: string, now: () => number = Date.now, key: () => string = newIdempotencyKey) {
+  return {
+    mutationFn: async (body: CreateAgentUseCase) => unwrap(await client.POST('/api/v1/agent-use-cases', { body: { ...body, on: false } })),
+    onSuccess: (created: UseCaseCreated) => {
+      holdSetUp(queryClient, user, created, now(), key())
+      rereadWorkflowsAndWatchlist(queryClient)
+    },
+  }
+}
+
+/** Turn it on publishes the draft. The card and the panel say On only from the view the platform answers with. */
+export function turnOnOptions(client: ApiClient, queryClient: QueryClient, user: string) {
+  return {
+    mutationFn: async (useCaseId: string) => unwrap(await client.POST('/api/v1/use-cases/{use_case_id}/turn-on', { params: { path: { use_case_id: useCaseId } } })),
+    onSuccess: (view: UseCaseView) => applySavedView(queryClient, user, view),
+  }
+}
+
+export function useSetUpOff() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation(setUpOffOptions(client, queryClient, user))
+}
+
+export function useTurnOn() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation(turnOnOptions(client, queryClient, user))
+}
+
+/** The set-up as the card holds it. Nothing is read from the platform: the build log comes only with Set up's answer. */
+export function useSetUp(useCaseId: string): SetUp | undefined {
+  const user = useCacheScope()
+  return useQuery<SetUp>({ queryKey: keys.setUp(user, useCaseId), queryFn: skipToken, staleTime: Infinity, gcTime: Infinity }).data
+}
+
+/** What the card writes to its set-up about the test run: the key it asked with, the run the platform named, and a new key for Test again. */
+export function useTestRunMarks() {
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return {
+    asked: (useCaseId: string, key: string) => testAsked(queryClient, user, useCaseId, key),
+    started: (useCaseId: string, runId: string) => testStarted(queryClient, user, useCaseId, runId),
+    again: (useCaseId: string) => testAgain(queryClient, user, useCaseId, newIdempotencyKey()),
+  }
 }

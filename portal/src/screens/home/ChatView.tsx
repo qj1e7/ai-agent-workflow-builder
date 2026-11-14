@@ -19,6 +19,8 @@ interface ChatViewProps {
   /** The Planner's box and the chips that stay under it, docked at the bottom. */
   readonly box: ReactNode
   readonly chips: ReactNode
+  /** Home's toast, drawn in the dock above the box, so it never covers the box, the chips or a card's buttons. */
+  readonly toast: ReactNode
   readonly onNewChat: () => void
 }
 
@@ -31,7 +33,7 @@ const openersOf = (root: HTMLElement | null, item: PanelItem): HTMLElement[] => 
  * the box with its chips and New chat docked at the bottom. The scroll position is kept by the chat, so coming back from another page
  * finds the conversation where it was left. An item opened from a card shows in the side panel beside it (spec 3.3).
  */
-export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewProps) {
+export function ChatView({ home, now, page, box, chips, toast, onNewChat }: ChatViewProps) {
   const chat = useChat()
   const column = useRef<HTMLDivElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
@@ -176,6 +178,7 @@ export function ChatView({ home, now, page, box, chips, onNewChat }: ChatViewPro
           </OpensInPanel.Provider>
           <div className={styles['chatDock']}>
             <div className={styles['dock']}>
+              {toast}
               {box}
               <div className={styles['dockRow']}>
                 {chips}

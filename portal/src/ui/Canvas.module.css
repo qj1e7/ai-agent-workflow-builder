@@ -1,0 +1,135 @@
+/* The sketch's n8n canvas: a dotted ground, blocks with a hairline, and the run's dashes in the accent colour. */
+.canvas {
+  overflow-x: auto;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-card);
+  background:
+    radial-gradient(circle, #d3d8de 1px, transparent 1.3px) 0 0 / 18px 18px,
+    #fafbfc;
+}
+
+.canvas:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  min-width: min(var(--w), 640px);
+  height: auto;
+}
+
+.node {
+  color: var(--ink);
+  transition: opacity var(--dur-panel) ease;
+  transition-delay: calc(var(--i, 0) * 60ms);
+}
+
+.box {
+  fill: var(--surface);
+  stroke: var(--rail);
+  stroke-width: 2;
+  transition:
+    stroke var(--dur-small) ease,
+    fill var(--dur-small) ease;
+}
+
+.label {
+  font: 700 13px var(--font);
+  fill: var(--ink);
+}
+
+.sub {
+  font: 600 11px var(--font);
+  fill: var(--muted);
+}
+
+.ours {
+  fill: color-mix(in srgb, var(--safety) 14%, var(--surface));
+}
+
+.oursText {
+  font: 700 9.5px var(--font);
+  fill: var(--safety);
+}
+
+.port {
+  fill: var(--surface);
+  stroke: var(--rail);
+  stroke-width: 1.5;
+}
+
+.tick {
+  opacity: 0;
+  transition: opacity var(--dur-small) ease;
+}
+
+.tick circle {
+  fill: var(--green);
+}
+
+.tick path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.node[data-state='off'] {
+  opacity: 0;
+  transition-delay: 0ms;
+}
+
+.node[data-state='ok'] .box {
+  stroke: var(--green);
+}
+
+.node[data-state='ok'] .tick {
+  opacity: 1;
+}
+
+.node[data-state='now'] .box {
+  stroke: var(--accent);
+  stroke-width: 3.5;
+}
+
+.node[data-state='added'] .box {
+  stroke: var(--safety);
+  stroke-width: 3.5;
+}
+
+.edge path {
+  fill: none;
+  stroke: #b4bcc6;
+  stroke-width: 2.5;
+  transition:
+    opacity var(--dur-panel) ease,
+    stroke var(--dur-small) ease;
+}
+
+.edge text {
+  font: 600 11px var(--font);
+  fill: var(--muted);
+}
+
+.edge[data-state='off'] {
+  opacity: 0;
+}
+
+.edge[data-state='ok'] path {
+  stroke: var(--green);
+}
+
+.edge[data-state='flow'] path {
+  stroke: var(--accent);
+  stroke-dasharray: 8 6;
+  animation: march 0.6s linear infinite;
+}
+
+@keyframes march {
+  to {
+    stroke-dashoffset: -14;
+  }
+}

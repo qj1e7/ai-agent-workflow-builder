@@ -225,7 +225,8 @@ class SetupCardReply(Reply):
     name: str
     rows: list[UnderstoodRowView]
     similar: SimilarWorkflow | None = Field(
-        description="A workflow of the team's with the same name, when there is one."
+        description="A workflow of the team's with the same name that watches a GitHub "
+        "repository, so it is the one asked for. Null when there is none."
     )
 
 
@@ -922,12 +923,26 @@ class PlannerFront:
         return (await self._workflows.list_use_cases()).use_cases
 
     async def _similar(self, name: str) -> SimilarWorkflow | None:
+        """The workflow she already has that is the one she asks for: the same name, and it
+        watches a GitHub repository, as a release check does. A same-named workflow that watches
+        none may do something else, so her request is set up as she asked."""
         wanted = _norm(name)
+        named = [
+            u
+            for u in await self._use_cases()
+            if u.template != SOFTWARE_WATCHLIST.key and _norm(u.name) == wanted
+        ]
+        if not named:
+            return None
+        repos = {
+            card.card_id: [i.name for i in card.inputs if i.kind == "github_repo"]
+            for card in (await self._workflows.list_cards()).cards
+        }
         return next(
             (
                 SimilarWorkflow(use_case_id=u.use_case_id, name=u.name)
-                for u in await self._use_cases()
-                if u.template != SOFTWARE_WATCHLIST.key and _norm(u.name) == wanted
+                for u in named
+                if any(a.values.get(i) for a in u.agents for i in repos.get(a.card_id, []))
             ),
             None,
         )

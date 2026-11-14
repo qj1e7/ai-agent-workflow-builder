@@ -204,7 +204,7 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
 
   const hero: BotState = offline ? 'sorry' : busy ? 'thinking' : text.trim() !== '' ? 'listening' : 'idle'
   const look = ((text.length % 24) - 12) / 12
-  const toast = <Toast message={chat.note} onDismiss={chat.readNote} focusAfter={() => boxRef.current ?? document.querySelector<HTMLElement>('main h1')} />
+  const toast = <Toast inline message={chat.note} onDismiss={chat.readNote} focusAfter={() => boxRef.current ?? document.querySelector<HTMLElement>('main h1')} />
 
   if (offline && !operator) {
     return (
@@ -285,13 +285,13 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
           page={page}
           box={box}
           chips={chips}
+          toast={toast}
           onNewChat={() => {
             chat.newChat()
             if (wanted !== null) setParams({}, { replace: true })
             setTimeout(() => boxRef.current?.focus(), 0)
           }}
         />
-        {toast}
       </>
     )
   }
@@ -302,11 +302,11 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
       <p className={styles['hi']}>{greeting}</p>
       <h1 tabIndex={-1}>{operator ? OPERATOR_HEADING : approverHeading(home)}</h1>
       <div className={styles['dock']}>
+        {toast}
         {box}
         {chips}
       </div>
       <NeedRows needs={needs.shown} now={now} more={<More needs={needs} full={!operator} />} />
-      {toast}
     </div>
   )
 }

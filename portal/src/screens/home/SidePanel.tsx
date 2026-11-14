@@ -10,6 +10,7 @@ import { SoftwarePanel } from '../software/SoftwarePanel'
 import { softwarePath } from '../software/software'
 import { workflowPath } from '../workflows/workflow'
 import { WorkflowPanel } from '../workflows/WorkflowPanel'
+import { BuildPanel } from './BuildPanel'
 import { CONNECTIONS_PATH, ConnectionPanel, connectionTitle } from './panels/ConnectionPanel'
 import { WatchlistPanel, WorkflowsPanel } from './panels/ListPanel'
 import { NeedsPanel } from './panels/NeedsPanel'
@@ -30,7 +31,7 @@ const TAB_STOPS = 'a[href], button:not([disabled]), input:not([disabled]), selec
  * stays put while the view loads, and the title follows the item.
  */
 function useHead(item: PanelItem): PanelHead {
-  const useCase = useUseCase(item.kind === 'workflow' ? item.id : '')
+  const useCase = useUseCase(item.kind === 'workflow' || item.kind === 'build' ? item.id : '')
   const run = useRun(item.kind === 'run' || item.kind === 'approval' ? item.id : '')
   const watchlist = useWatchlist({ enabled: item.kind === 'software' })
   const home = useHome({ enabled: item.kind === 'connection' })
@@ -42,7 +43,7 @@ function useHead(item: PanelItem): PanelHead {
     case 'watchlist':
       return { title: 'Watchlist', page: '/software' }
     case 'build':
-      return { title: 'Build', page: null }
+      return { title: useCase.data?.name ?? 'Build', page: null }
     case 'workflow': {
       const shown = useCase.isError ? undefined : useCase.data
       return shown ? { title: shown.name, page: workflowPath(shown) } : { title: 'Workflow', page: null }
@@ -171,7 +172,7 @@ function View({ item, now, onOpen }: { item: PanelItem; now: Date; onOpen: ((ite
     case 'connection':
       return <ConnectionPanel id={item.id} now={now} />
     case 'build':
-      return null
+      return <BuildPanel id={item.id} />
   }
 }
 

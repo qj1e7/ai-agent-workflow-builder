@@ -249,6 +249,19 @@ describe('the stage words, one function for the row, the banner, the strip and R
     expect(stage({ state: 'rejected' })).toBe('Declined. Nothing was written.')
   })
 
+  it('says a test run passed and wrote nothing, never that it is done or found nothing new', () => {
+    expect(stage({ outcome: 'test_passed' })).toBe('Test run passed up to the yes. Nothing was written.')
+    expect(stage({ outcome: 'nothing_to_write', test: true })).toBe('Test run passed. There was nothing new to write.')
+    expect(runPill({ ...base, outcome: 'test_passed' })).toEqual({ label: 'Test run passed', tone: 'ok' })
+    expect(runPill({ ...base, outcome: 'nothing_to_write', test: true })).toEqual({ label: 'Test run passed', tone: 'ok' })
+  })
+
+  it('reads a test run’s outcome from its own events', () => {
+    const end = { run_id: 'run_01JB8', seq: 9, ts: '2026-11-03T02:14:06Z', actor: { kind: 'platform', id: 'platform', display: 'Platform' }, summary: '', kind: 'run_succeeded', data: { outcome: 'test_passed' } }
+    const passed = foldWire(emptyModel, [...success.slice(0, 8), end], 'run_01JB8')
+    expect(stageWords(stageFactsOf(passed), (id) => id)).toBe('Test run passed up to the yes. Nothing was written.')
+  })
+
   it('has one pill for each run state, in the sketch’s words', () => {
     expect(runPill({ ...base, state: 'failed' })).toEqual({ label: 'Stopped', tone: 'bad' })
     expect(runPill({ ...base, state: 'working' })).toEqual({ label: 'Running', tone: 'new' })

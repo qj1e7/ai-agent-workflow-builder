@@ -66,9 +66,10 @@ export function cantLine(row: Pick<CantRowView, 'text' | 'note'>): CantLine {
 export const cantLines = (rows: readonly CantRowView[]): CantLine[] => rows.map(cantLine)
 
 export const SAY = {
-  setup_card: 'Here’s what I understood. I filled in what I could.',
-  setupCrossed: 'Here’s what I understood. I can’t do every part of it.',
-  part: 'I can do part of that. Here is the part I can do, and the part I can’t do yet.',
+  setup_card: 'Here’s what I understood.',
+  setupCrossed: 'Here’s what I understood.',
+  alreadyHave: 'You already have this one.',
+  part: 'Here’s what I understood.',
   cant: 'I can’t do that yet.',
   cantWithAlternative: 'I can’t do all of that, but I can set up something close.',
   which_software: 'Which software should I watch?',
@@ -143,6 +144,7 @@ export const needsSay = (total: number): string => (total === 0 ? SAY.nothingNee
 export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | null {
   switch (reply.answer) {
     case 'setup_card':
+      if (reply.similar) return SAY.alreadyHave
       return reply.parts.some((part) => part.mark === 'cant') ? SAY.setupCrossed : SAY.setup_card
     case 'part':
       return SAY.part

@@ -442,3 +442,25 @@
     transform: scale(0.85);
   }
 }
+
+/* A step not built yet keeps its place, and fades in when the set-up card's build log adds it. */
+.step {
+  transition:
+    opacity var(--dur-small) ease,
+    transform var(--dur-small) var(--ease-out);
+}
+
+.step[data-off] {
+  opacity: 0;
+  transform: scale(0.8);
+}
+
+.link[data-off] {
+  opacity: 0;
+}
+
+/* The yes the safety checker added, ringed in its colour until the workflow is on. */
+.step[data-added] .dot {
+  border-color: var(--safety);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--safety) 25%, transparent);
+}

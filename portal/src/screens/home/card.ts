@@ -384,7 +384,7 @@ const OFTEN_CHOICES: readonly WhenChoice[] = (Object.entries(OFTEN_NAMES) as [Ex
 const DAY_CHOICES: readonly WhenChoice[] = DAY_NAMES.map((day) => ({ label: DAY_WORD(day), set: { day } }))
 export const TIMES = ['08:00', '09:00', '13:00', '17:00']
 const ASK_ROW: Readonly<Record<RowKind, string>> = {
-  schedule: 'How often should it run?',
+  schedule: 'How often?',
   look_for: 'Which tickets should it find?',
   do: 'What should it do with them?',
   where: 'Where should the result go?',
@@ -402,11 +402,23 @@ function clashQuestion(form: Form, reason: PartReason, field: WhenField): Questi
   return choices.length >= 2 ? { kind: 'when', field, words: `${orList(choices.map((choice) => choice.label))}?`, choices } : null
 }
 
+/** The sketch's time question, in the words of how often it runs: "Mondays, at what time?" or "Every day, at what time?". */
+export function timeWords(when: When): string {
+  const often = when.often === 'week' && when.day !== '' ? `${DAY_WORD(when.day)}s` : when.often === 'weekdays' ? 'Every weekday' : 'Every day'
+  return `${often}, at what time?`
+}
+
 function timeQuestion(form: Form): Question {
   const hour = bareHour(form.rows.find((row) => row.kind === 'schedule')?.text || form.text)
   const times = hour === null ? TIMES : hourChoices(hour)
   const choices = times.map((at) => ({ label: clockWords(at), set: { at } }))
-  return { kind: 'when', field: 'at', words: hour === null ? 'What time should it run?' : `At ${orList(choices.map((choice) => choice.label))}?`, choices }
+  return { kind: 'when', field: 'at', words: hour === null ? timeWords(form.when) : `At ${orList(choices.map((choice) => choice.label))}?`, choices }
+}
+
+/** The name of another workflow like one she has: the next number after it, so no two share a name. */
+export function secondName(name: string): string {
+  const numbered = /^(.*\S) (\d+)$/.exec(name.trim())
+  return numbered ? `${numbered[1] ?? ''} ${String(Number(numbered[2]) + 1)}` : `${name.trim()} 2`
 }
 
 function inputQuestion(form: Form, plan: PlanView | null, first: boolean): Question | null {
@@ -432,8 +444,8 @@ function rowQuestion(form: Form, kind: RowKind): Question | null {
  */
 export function nextQuestion(form: Form, plan: PlanView | null): Question | null {
   const { often, day } = form.when
-  if (often === '') return clashQuestion(form, 'one_frequency', 'often') ?? { kind: 'when', field: 'often', words: 'How often should it run?', choices: OFTEN_CHOICES }
-  if (often === 'week' && day === '') return clashQuestion(form, 'one_day', 'day') ?? { kind: 'when', field: 'day', words: 'Which day should it run?', choices: DAY_CHOICES }
+  if (often === '') return clashQuestion(form, 'one_frequency', 'often') ?? { kind: 'when', field: 'often', words: 'How often?', choices: OFTEN_CHOICES }
+  if (often === 'week' && day === '') return clashQuestion(form, 'one_day', 'day') ?? { kind: 'when', field: 'day', words: 'Which day?', choices: DAY_CHOICES }
   if (whenProblems(form.when).at !== undefined) return clashQuestion(form, 'one_time', 'at') ?? timeQuestion(form)
   return (
     rowQuestion(form, 'look_for') ??
@@ -517,7 +529,7 @@ export function createBody(form: Form, plan: PlanView, savedDrafts: Readonly<Rec
     })),
     schedule: scheduleOf(form.when),
     left_out: leftOutOf(form),
-    on: true,
+    on: false,
   }
 }
 
@@ -546,19 +558,23 @@ export function reusedAgents(plan: PlanView | null, cards: readonly CardView[] |
   return new Set(plan.agents.flatMap((agent) => (agent.card.kind === 'drafted' && savedCopyOf(cards, owner, agent.card.definition) !== null ? [agent.index] : [])))
 }
 
-export interface TurnOnCalls {
+export interface SetUpCalls {
   readonly savedCard: (card: CardDefinition) => Promise<string | null>
   readonly saveCard: (card: CardDefinition) => Promise<string>
   readonly create: (body: CreateAgentUseCase) => Promise<UseCaseCreated>
   readonly deleteDraft: (draftId: string) => Promise<unknown>
 }
 
-export interface TurnedOn {
+export interface SetUpDone {
   readonly useCaseId: string
   readonly draftKept: boolean
 }
 
-export async function turnOn(form: Form, plan: PlanView, draftId: string | null, cards: Map<string, string>, calls: TurnOnCalls): Promise<TurnedOn> {
+/**
+ * Set up: saves each drafted agent once, then the workflow as a draft that isn't on yet (ADR 0044), then drops the card's saved
+ * draft, since the workflow now holds what it said. A failure keeps the agents it saved, so the next press reuses them.
+ */
+export async function setUp(form: Form, plan: PlanView, draftId: string | null, cards: Map<string, string>, calls: SetUpCalls): Promise<SetUpDone> {
   const task = taskWithoutSchedule(form.rows)
   const saved: Record<number, string> = {}
   for (const agent of plan.kind === 'agents' ? plan.agents : []) {
@@ -719,11 +735,11 @@ function choicesLeft(form: Form, plan: PlanView | null): string[] {
   if (form.marked.some((part) => part.reason === 'how_many_days')) add(LEFT_DAYS)
   if (cardBlockers(form.rows).length > 0) return left
   if (plan === null) add(LEFT_PLAN)
-  else if (plan.kind === 'cannot') add('a request I can do')
+  else if (plan.kind === 'cannot') add(LEFT_REQUEST)
   else if (plan.kind === 'trouble') add('the Planner to answer')
   else {
-    if (plan.problems.length > 0) add('a fix for the new agent’s problems')
-    if (plan.notIncluded.length > 0) add('nothing left out for want of a tool')
+    if (plan.problems.length > 0) add(LEFT_FIX)
+    if (plan.notIncluded.length > 0) add(LEFT_TOOL)
     for (const agent of plan.agents)
       for (const input of agent.inputs) if (valueProblem(input.kind, valueOf(form, agent, input.name)) !== null) add(`the ${lowerFirst(input.name)}`)
   }
@@ -738,14 +754,39 @@ export const orList = (items: readonly string[]): string =>
 
 export const crossedWords = (count: number): string => (count === 1 ? 'The part with a cross is left out.' : `The ${count} parts with a cross are left out.`)
 
-/** The footer’s line. “Nothing is unclear” never shows while a part has a cross. */
-export function leftWords({ choices, leftOut }: Left): string {
-  if (choices.length > 0) return `${choices.length === 1 ? '1 choice left' : `${choices.length} choices left`}: ${andList(choices)}.`
-  return leftOut.length > 0 ? crossedWords(leftOut.length) : 'Nothing is unclear. Turn it on when you’re ready.'
+const LEFT_REQUEST = 'a request I can do'
+const LEFT_FIX = 'a fix for the new agent’s problems'
+const LEFT_TOOL = 'nothing left out for want of a tool'
+const QUESTIONS: ReadonlySet<string> = new Set([...Object.values(LEFT_NAME), LEFT_WHEN, LEFT_DAYS])
+
+
+/** What else holds Set up, in the words that say what to do about it. */
+const NOT_QUESTIONS: Readonly<Record<string, string>> = {
+  [LEFT_CANT]: 'Change the part I can’t do yet, or leave it out.',
+  [LEFT_CHECKING]: 'Checking your new words…',
+  [LEFT_PLAN]: 'Waiting for the Planner…',
+  'the Planner to answer': 'Waiting for the Planner…',
+  [LEFT_REQUEST]: 'Change your words to something I can do.',
+  [LEFT_FIX]: 'The new agent has a problem. Change your words to fix it.',
+  [LEFT_TOOL]: 'Part of it needs a tool I don’t have. Change your words to leave it out.',
+}
+
+/** What the card asks her as a question, one at a time: a part not said, when it runs, how many days, or a value an agent needs ("the Jira project"). */
+export const isQuestion = (choice: string): boolean => QUESTIONS.has(choice) || (/^the /.test(choice) && NOT_QUESTIONS[choice] === undefined)
+
+/**
+ * The footer’s line, in the sketch’s words: how many questions are left for her, else what else holds Set up. The rows show which,
+ * one question at a time, and a cross is on the card, so nothing left says nothing: the button says what it sets up.
+ */
+export function leftWords({ choices }: Left): string {
+  const asks = choices.filter(isQuestion).length
+  if (asks > 0) return asks === 1 ? '1 question to answer' : `${String(asks)} questions to answer`
+  const other = choices[0]
+  return other === undefined ? '' : (NOT_QUESTIONS[other] ?? '')
 }
 
 /** “Set up the part I can” while any part has a cross, so the button never claims the whole request. */
-export const turnOnWords = (left: Left): string => (left.leftOut.length > 0 ? 'Set up the part I can' : 'Turn it on')
+export const setUpWords = (left: Left): string => (left.leftOut.length > 0 ? 'Set up the part I can' : 'Set up')
 
 /** Resume reopens the card on Home, where the draft's id sits in the address. */
 export const draftPath = (draftId: string) => `/?draft=${encodeURIComponent(draftId)}`
@@ -816,3 +857,36 @@ export function whenSaid(when: When): string | null {
 }
 
 export const DEST_WORDS = 'one new Jira ticket'
+
+/** Where a set-up card is: open to change, being set up, built as a draft that builds and tests, or dropped. */
+export type CardPhase =
+  /** `refused` holds the platform's words when a press of Set up was refused. */
+  | { readonly kind: 'open'; readonly refused?: readonly string[] }
+  /** `key` names the press, so a card drawn again before the answer finds what it came to. */
+  | { readonly kind: 'creating'; readonly key: string }
+  | { readonly kind: 'built'; readonly useCaseId: string; readonly draftKept: boolean; readonly newAgents: readonly string[] }
+  | { readonly kind: 'dropped' }
+
+export type CardPress =
+  | { readonly type: 'set_up'; readonly key: string }
+  | { readonly type: 'built'; readonly useCaseId: string; readonly draftKept: boolean; readonly newAgents: readonly string[] }
+  | { readonly type: 'refused'; readonly said?: readonly string[] }
+  | { readonly type: 'never_mind' }
+  | { readonly type: 'undo' }
+
+/** What a press does to the card. Only an open card sets up or drops, and only a card being set up is built or opened again. */
+export function cardPhase(phase: CardPhase, press: CardPress): CardPhase {
+  switch (press.type) {
+    case 'set_up':
+      return phase.kind === 'open' ? { kind: 'creating', key: press.key } : phase
+    case 'built':
+      return phase.kind === 'creating' ? { kind: 'built', useCaseId: press.useCaseId, draftKept: press.draftKept, newAgents: press.newAgents } : phase
+    case 'refused':
+      if (phase.kind !== 'creating') return phase
+      return press.said ? { kind: 'open', refused: press.said } : { kind: 'open' }
+    case 'never_mind':
+      return phase.kind === 'open' ? { kind: 'dropped' } : phase
+    case 'undo':
+      return phase.kind === 'dropped' ? { kind: 'open' } : phase
+  }
+}

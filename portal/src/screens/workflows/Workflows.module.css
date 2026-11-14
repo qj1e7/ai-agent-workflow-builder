@@ -727,3 +727,15 @@ details.rule > p {
     background: var(--sunk);
   }
 }
+
+/* A draft's own controls: Test run, and Turn it on once a test run passed. */
+.draft {
+  display: grid;
+  gap: 8px;
+}
+
+.draftButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

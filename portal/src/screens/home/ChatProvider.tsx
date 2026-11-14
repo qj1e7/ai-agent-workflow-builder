@@ -148,6 +148,13 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>
 }
 
+/** Home's one message at the bottom of the page, for a card's short note. Outside the chat, as in a test of one card, it says nothing. */
+export function useNote(): (text: string) => void {
+  return useContext(ChatContext)?.say ?? NO_NOTE
+}
+
+const NO_NOTE = (): void => undefined
+
 export function useChat(): Chat {
   const chat = useContext(ChatContext)
   if (!chat) throw new Error('ChatProvider is missing above this component.')

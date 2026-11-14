@@ -7,6 +7,12 @@ export type Mark = 'ok' | 'no' | 'ask' | 'later'
 
 export const MARK_WORDS: Readonly<Record<Mark, string>> = { ok: 'Will do', no: 'Can’t do', ask: 'Question', later: 'Question for later' }
 
+/** The mark of one of the set-up card's parts, Watch, When or Then, from what it holds: the question asked now, else a part it can't do, else a question for later, else a tick. */
+export function partMark(marks: readonly Mark[]): Mark {
+  for (const mark of ['ask', 'no', 'later'] as const) if (marks.includes(mark)) return mark
+  return 'ok'
+}
+
 export const ASKED_NEXT = 'Asked next'
 
 export const quote = (text: string): string => `“${text}”`
@@ -37,6 +43,8 @@ export interface CrossContext {
   readonly watchlist?: ScheduleView | null
   readonly operators?: string
   readonly workflow?: string
+  /** The set-up card names each cross in the sketch's short form, her words as a sentence, rather than quoted. */
+  readonly short?: boolean
 }
 
 /** “every weekday except Friday” leaves a day out, which no schedule here can hold. Anything else reads as how often. */
@@ -65,10 +73,17 @@ export function crossWords(part: PartView, context: CrossContext = {}): string {
   return REASON_WORDS[part.reason]
 }
 
-/** Her words for a cross, quoted. Once she picks one of a clash’s choices, only the others are named. */
-export function crossLabel(part: PartView, when?: When): string {
+const asSentence = (text: string): string => {
+  const said = text.trim().replace(/[.!?]+$/, '')
+  return `${said.charAt(0).toUpperCase()}${said.slice(1)}.`
+}
+
+/** Her words for a cross, quoted, or as a sentence in the short form. Once she picks one of a clash’s choices, only the others are named. */
+export function crossLabel(part: PartView, when?: When, short = false): string {
   const chosen = when && isClash(part) ? clashChosen(when, part) : null
   const others = chosen === null ? [] : part.choices.filter((choice) => choice !== chosen)
+  // A clause it didn't follow stays in her own words, quoted, as the sketch keeps it.
+  if (short && part.reason !== 'not_followed' && part.reason !== null) return asSentence(others.length > 0 ? andList(others) : part.text)
   return others.length > 0 ? andList(others.map(quote)) : quote(part.text)
 }
 

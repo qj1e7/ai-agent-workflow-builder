@@ -52,7 +52,8 @@
     "tickets": true,
     "you_can_decide": true,
     "retryable": false,
-    "reason": null
+    "reason": null,
+    "outcome": null
   },
   "left_out": [],
   "blocks": []

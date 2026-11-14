@@ -2,7 +2,7 @@ import { OPEN_RUN_AGAIN_WORDS } from '../../api/errors'
 import { connectorLabel, failureReasonLabel, refusalLabel, starterName } from '../../api/labels'
 import { nextRunAt } from '../workflows/times'
 import type { SessionKind } from '../../api/session'
-import type { ApprovalStepView, Day, FailureReason, Refusal, RunView, UseCaseView, WriteActionView } from '../../api/types'
+import type { ApprovalStepView, Day, FailureReason, Refusal, RunOutcome, RunView, UseCaseView, WriteActionView } from '../../api/types'
 import { PRODUCT } from '../../shell/product'
 import type { LiveRun } from './liveRun'
 import type { AgentRef, ChatItem, Declined, PlanBlock, RunModel } from './runModel'
@@ -565,6 +565,10 @@ export interface StageFacts {
   readonly retried?: boolean
   /** What it wrote, by the names its own events give, so a run followed live says "MOCK-22 created". */
   readonly refs?: readonly string[]
+  /** How a finished run ended. A test run of a draft ends test_passed at the yes. */
+  readonly outcome?: RunOutcome | null
+  /** A test run, which never writes. */
+  readonly test?: boolean
 }
 
 /** A run's facts when only its state and a few facts are known, as the strip and the chat's decided card know it. */
@@ -585,8 +589,14 @@ export function stageFactsOf(model: RunModel): StageFacts {
     reason: phase.state === 'failed' ? phase.reason : null,
     retried: model.chat.some((item) => item.kind === 'retried'),
     refs: model.written.map((item) => item.ref).filter((ref) => ref !== ''),
+    outcome: phase.state === 'succeeded' ? phase.outcome : null,
   }
 }
+
+const TEST_PASSED = 'Test run passed up to the yes. Nothing was written.'
+
+/** A test run passed when it ran to the yes, or to the end with nothing new to write. Either way it wrote nothing. */
+const testPassed = (run: StageFacts): boolean => run.state === 'succeeded' && (run.outcome === 'test_passed' || (run.test === true && run.count === 0))
 
 /**
  * Where the run stands, in a short phrase that reads after "last run today," and on its own: "Waiting for a yes", "Retrying",
@@ -612,6 +622,7 @@ export function stageWords(run: StageFacts, nameOf: NameOf): string {
     case 'acting':
       return run.tickets ? `Creating the ${run.count > 1 ? 'tickets' : 'ticket'}` : 'Writing the changes'
     case 'succeeded': {
+      if (testPassed(run)) return run.outcome === 'test_passed' ? TEST_PASSED : 'Test run passed. There was nothing new to write.'
       if (run.count === 0) return 'Nothing new to write'
       const refs = run.refs ?? []
       const approvers = run.approvedBy.map(nameOf)
@@ -637,6 +648,7 @@ export function runPill(run: StageFacts): { readonly label: string; readonly ton
     case 'acting':
       return { label: 'Running', tone: 'new' }
     case 'succeeded':
+      if (testPassed(run)) return { label: 'Test run passed', tone: 'ok' }
       return run.count === 0 ? { label: 'Nothing new', tone: 'quiet' } : { label: 'Done', tone: 'ok' }
     case 'rejected':
       return { label: 'Declined', tone: 'quiet' }

@@ -21,10 +21,10 @@ function MarkIcon({ mark }: { mark: Mark }) {
 }
 
 /** Every part of a request with its mark (spec 6.5). The mark is said in words for a screen reader, so it is never colour alone. */
-export function PartsList({ parts }: { parts: readonly Part[] }) {
+export function PartsList({ parts, short = false }: { parts: readonly Part[]; short?: boolean }) {
   if (parts.length === 0) return null
   return (
-    <ul className={styles['parts']} aria-label="Each part of your request">
+    <ul className={styles['parts']} data-short={short || undefined} aria-label="Each part of your request">
       {parts.map((part) => (
         <li key={part.key} className={styles['part']} data-mark={part.mark} data-part={part.key}>
           <span className={styles['mark']} aria-hidden="true">
@@ -46,7 +46,7 @@ export function crossParts(parts: readonly PartView[], context: CrossContext = {
   return parts.map((part, index) => ({
     key: `cross-${String(index)}`,
     mark: part.mark === 'question' ? 'ask' : 'no',
-    label: crossLabel(part, context.when),
+    label: crossLabel(part, context.when, context.short),
     body: (
       <>
         <span>{crossWords(part, context)}</span>

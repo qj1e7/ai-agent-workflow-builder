@@ -331,6 +331,15 @@ describe('a check with nothing to write', () => {
   })
 })
 
+describe('a test run of a draft, which stops before the yes', () => {
+  it('shows the gate and the write as not reached, with nothing written under the write', () => {
+    const model = foldAll(replay(success, 8), [event(9, 'run_succeeded', { outcome: 'test_passed' })])
+    const stations = line(model)
+    expect(shape(stations)).toEqual(['trigger:done:idle', 'agent:0:done:success', 'gate:skip:idle', 'write:skip:idle'])
+    expect(stations.at(-1)?.under, 'a test run never writes, and the line says so').toEqual({ kind: 'note', text: 'Nothing written' })
+  })
+})
+
 describe('a run n8n skipped because an earlier run still waits for a yes', () => {
   const started = fold(emptyModel, event(1, 'run_created', { started_by: 'alice', use_case_id: 'uc_01', trigger: 'schedule' }))
   const linked = fold(started, event(2, 'execution_linked', { execution_id: '41', mode: 'trigger' }, { kind: 'workflow', id: 'n8n', display: 'Workflow engine' }))

@@ -1,5 +1,6 @@
 import type { Day, EditChoice, EditReply, PartView, UseCaseView, VersionView } from '../../api/types'
 import { clockWords, everyWords, repeatWords } from '../software/software'
+import { scheduleShort } from '../run/words'
 import { undoneWords } from '../workflows/workflow'
 import { hourChoices, orList, TIMES } from './card'
 import { howOftenWords } from './parts'
@@ -59,8 +60,11 @@ const WEEKDAYS: readonly Day[] = ['monday', 'tuesday', 'wednesday', 'thursday', 
 const dayName = (day: Day): string => everyWords(day).replace(/^every /, '')
 const upperFirst = (words: string): string => words.charAt(0).toUpperCase() + words.slice(1)
 
-/** "Every weekday at 8:00", as the card's Before and After say it. */
+/** "Every weekday at 8:00", as the sentences say it. */
 export const scheduleText = (schedule: Schedule): string => upperFirst(repeatWords(schedule))
+
+/** "Weekdays 8:00", as the card's one row says it, the old one struck and the new one after it. */
+export const scheduleOnCard = (schedule: Schedule | null): string => (schedule ? scheduleShort(schedule) : 'Not scheduled')
 
 /** The workflow the reply names, or the one she picked from its choices. */
 export function targetOf(reply: EditReply, picks: Picks): EditChoice | null {
@@ -194,14 +198,19 @@ export function doneSay(phase: Exclude<Phase, { kind: 'open' }>, now: Now, since
   }
 }
 
-/** The card's last line once saved or undone. Undo shows only while it can keep what it promises. */
+/**
+ * The card's last line once saved or undone, in the sketch's words. Undo shows only while it can keep what it promises: never once
+ * the workflow changed again, and never for a save that kept no version.
+ */
 export function doneLine(phase: Extract<Phase, { kind: 'saved' | 'undone' }>, now: Now, since: string | null): { readonly words: string; readonly undo: boolean } {
-  if (phase.kind === 'undone') return { words: `Undone, as version ${String(phase.version)}.${since ? ` ${since}` : ''}`, undo: false }
-  const later = now.paused ? 'It’s paused, so it won’t run until you resume it.' : now.next ? `Next run ${now.next}.` : ''
-  if (phase.version === null) return { words: since !== null ? `Saved. ${since}` : `Saved.${later ? ` ${later}` : ''}`, undo: false }
-  if (since !== null) return { words: `Saved as version ${String(phase.version)}. ${since}`, undo: false }
-  return { words: `Saved as version ${String(phase.version)}.${later ? ` ${later}` : ''}`, undo: true }
+  const later = since ? ` ${since}` : now.paused ? ' It’s paused, so it won’t run until you resume it.' : ''
+  if (phase.kind === 'undone') return { words: `Back to ${scheduleOnCard(phase.target.before)}.${since ? ` ${since}` : ''}`, undo: false }
+  if (phase.version === null) return { words: `Saved.${later}`, undo: false }
+  return { words: `Saved as version ${String(phase.version)}.${later}`, undo: since === null }
 }
+
+/** The note after Undo: the version it went back to, and the new version that holds it. */
+export const undoneNote = (undid: number, published: number): string => `Back to version ${String(undid - 1)}, saved as version ${String(published)}.`
 
 /**
  * The version a save published, or null when it published none. The schedule route publishes nothing when the schedule was

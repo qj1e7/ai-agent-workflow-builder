@@ -42,7 +42,7 @@ const said = (page: Page): Locator => page.getByRole('list', { name: 'Conversati
 export const newestAnswer = (page: Page): Locator => said(page).last()
 
 /** The edit card in an answer. */
-export const editCard = (answer: Locator): Locator => answer.locator('section[data-card="edit"]')
+export const editCard = (answer: Locator): Locator => answer.locator('[data-card="edit"]')
 
 /** Asks the Planner and waits for its answer to land. The answer is held by its place, so it stays this answer after later ones. */
 export async function askAndWait(page: Page, text: string): Promise<Locator> {

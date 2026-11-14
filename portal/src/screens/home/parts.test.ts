@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import editCant from '../../../../contracts/fixtures/planner/answer.edit.cant.json'
 import editUnclear from '../../../../contracts/fixtures/planner/answer.edit.unclear.json'
 import type { PartView, PlannerReply } from '../../api/types'
-import { crossWords, leftoverParts } from './parts'
+import { crossWords, leftoverParts, partMark } from './parts'
 
 const crossed = (text: string, reason: PartView['reason']): PartView => ({ text, mark: 'cant', reason, note: null, choices: [] })
 
@@ -25,5 +25,15 @@ describe('the edit answer’s parts', () => {
   it('leaves an edit’s parts to the edit card, which marks every one of them itself', () => {
     expect(leftoverParts(editCant as PlannerReply)).toEqual([])
     expect(leftoverParts(editUnclear as PlannerReply)).toEqual([])
+  })
+})
+
+describe('the mark of one of the card’s three parts, from the marks of what it holds', () => {
+  it('shows the question asked now first, then a part it can’t do, then a question for later, and a tick only when all is done', () => {
+    expect(partMark(['ok', 'later', 'ask'])).toBe('ask')
+    expect(partMark(['ok', 'later', 'no'])).toBe('no')
+    expect(partMark(['ok', 'later'])).toBe('later')
+    expect(partMark(['ok', 'ok'])).toBe('ok')
+    expect(partMark([]), 'a part with nothing in it is left off the card, so its mark is never read').toBe('ok')
   })
 })

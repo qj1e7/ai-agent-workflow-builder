@@ -21,8 +21,10 @@ export interface Viewer {
   readonly approver: boolean
 }
 
+const LIFE_WORDS: Readonly<Record<UseCaseView['state'], string>> = { on: 'On', paused: 'Paused', draft: 'Draft' }
+
 export function lifeWords(state: UseCaseView['state']): string {
-  return state === 'paused' ? 'Paused' : 'On'
+  return LIFE_WORDS[state]
 }
 
 const IN_PROGRESS: ReadonlySet<RunView['state']> = new Set(['pending', 'working', 'proposed', 'acting'])
@@ -67,12 +69,17 @@ export function stageOfLast(last: LastRun): StageFacts {
     approvedBy: last.approved_by,
     declinedBy: last.declined_by ?? null,
     reason: last.reason ?? null,
+    outcome: last.outcome ?? null,
+    test: last.test,
   }
 }
 
+/** A test run that ran to the yes, or to the end with nothing new: the one a draft must pass before Turn it on. It wrote nothing either way. */
+export const testPassed = (last: LastRun | null): boolean => last !== null && last.test && last.state === 'succeeded' && (last.outcome === 'test_passed' || last.outcome === 'nothing_to_write')
+
 /** A full run, in the same facts, so Recent runs and the list say the same words. */
 export function stageOfRun(run: RunView): StageFacts {
-  const none = { count: 0, tickets: true, approvedBy: [], declinedBy: null, reason: null } as const
+  const none = { count: 0, tickets: true, approvedBy: [], declinedBy: null, reason: null, test: run.test } as const
   switch (run.state) {
     case 'awaiting_approval':
     case 'acting': {
@@ -81,7 +88,7 @@ export function stageOfRun(run: RunView): StageFacts {
     }
     case 'succeeded': {
       const tickets = run.written.every((write) => write.operation === 'create_ticket')
-      return { ...none, state: run.state, count: run.outcome === 'nothing_to_write' ? 0 : run.written.length, tickets, approvedBy: [...new Set(run.written.flatMap((write) => write.approved_by))] }
+      return { ...none, state: run.state, outcome: run.outcome, count: run.outcome === 'written' ? run.written.length : 0, tickets, approvedBy: [...new Set(run.written.flatMap((write) => write.approved_by))] }
     }
     case 'rejected':
       return { ...none, state: run.state, declinedBy: declinedOfSteps(run.approval.steps)?.by ?? run.rejected_by }
@@ -135,7 +142,7 @@ export function lastRunWords({ last_run: last }: Pick<UseCaseView, 'last_run'>, 
   return `${lineWhen(last.at, now)}: ${lastRunWhat(last, nameOf, room)}`
 }
 
-export { formatterFactory, lineWhen, nextRunAt, runWhen, timesZone } from './times'
+export { firstRunWhen, formatterFactory, lineWhen, nextRunAt, runWhen, timesZone } from './times'
 
 /** When the workflow runs next, while its schedule will start a run. Null while it is paused, held or has no schedule. */
 export function nextRunOf(useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule'> | undefined): NextRun | null {
@@ -191,12 +198,12 @@ export function workflowPath(useCase: Pick<UseCaseView, 'template' | 'use_case_i
   return looksAfterOnSoftwarePage(useCase) ? SOFTWARE_PAGE : `/workflows/${useCase.use_case_id}`
 }
 
-export type Control = 'run' | 'pause' | 'resume' | 'delete'
+export type Control = 'run' | 'pause' | 'resume' | 'delete' | 'test' | 'turn_on'
 
 /** Pause and Resume sit apart from the More actions menu, which holds Run now and Delete. */
 export type Place = 'switch' | 'more'
 export const PLACES_IN_PAGE_ORDER: readonly Place[] = ['switch', 'more']
-const PLACE_OF: Record<Control, Place> = { run: 'more', pause: 'switch', resume: 'switch', delete: 'more' }
+const PLACE_OF: Record<Control, Place> = { run: 'more', pause: 'switch', resume: 'switch', delete: 'more', test: 'switch', turn_on: 'switch' }
 export const placeOf = (control: Control): Place => PLACE_OF[control]
 
 /** Only an Operator changes a schedule. The Software watchlist's is changed on the Software page. */
@@ -318,8 +325,13 @@ export function menuActionsOf(useCase: Pick<UseCaseView, 'template' | 'state'>, 
   return actions
 }
 
-export function controlsOf(useCase: Pick<UseCaseView, 'template' | 'state'>, viewer: Viewer): readonly Control[] {
+/**
+ * What an Operator can do to a workflow. A draft never runs on its schedule or by Run now, so it has a test run instead, and Turn it on
+ * once a test run passed (ADR 0044). Pausing a draft would change nothing, so it has no Pause.
+ */
+export function controlsOf(useCase: Pick<UseCaseView, 'template' | 'state'> & Partial<Pick<UseCaseView, 'last_run'>>, viewer: Viewer): readonly Control[] {
   if (!viewer.operator || looksAfterOnSoftwarePage(useCase)) return []
+  if (useCase.state === 'draft') return testPassed(useCase.last_run ?? null) ? ['test', 'turn_on', 'delete'] : ['test', 'delete']
   return useCase.state === 'paused' ? ['resume', 'delete'] : ['run', 'pause', 'delete']
 }
 

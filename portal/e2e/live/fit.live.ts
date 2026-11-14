@@ -472,7 +472,7 @@ for (const width of WIDTHS) {
       if (problems.length) found.push(`${state} at ${String(width)} px:\n${describeProblems(problems).replace(/^/gm, '    ')}`)
     }
     const states = [
-      ['a set-up card with ticks, a long cross and a question', 'card', `Find bug tickets in MOCK with no update for 10 days and create one ticket that lists them. ${LONG_CROSS}.`, 'How often should it run?'],
+      ['a set-up card with ticks, a long cross and a question', 'card', `Find bug tickets in MOCK with no update for 10 days and create one ticket that lists them. ${LONG_CROSS}.`, 'How often?'],
       ['the part I can do', 'part', 'Every Friday at 5pm, find tickets in MOCK with no update for 10 days that mention VPN and create one ticket that lists them', 'Ask the team'],
       ['a clash between two days', 'clash', 'Every Monday and Friday at 9am, find bug tickets in MOCK with no update for 10 days and create one ticket that lists them', 'Monday or Friday?'],
     ] as const
@@ -537,13 +537,13 @@ for (const width of WIDTHS) {
       await expect(editCard(hour)).toContainText('At 9:00 or 21:00?')
       await check('the edit card asking for the time', 'asking', hour)
       const ready = await askAndWait(page, `make the ${morning.name} run on Mondays only`)
-      await expect(editCard(ready)).toContainText('Every Monday at 8:00')
+      await expect(editCard(ready)).toContainText('Mon 8:00')
       await check('the edit card ready to save', 'ready', ready)
       await editCard(ready).getByRole('button', { name: 'Save change' }).click()
       await expect(editCard(ready)).toContainText('Saved as version 3.')
       await check('the edit card once saved', 'saved', ready)
       await editCard(ready).getByRole('button', { name: /^Undo/ }).click()
-      await expect(editCard(ready)).toContainText('Undone, as version 4.')
+      await expect(editCard(ready)).toContainText('Back to ')
       await check('the edit card once undone', 'undone', ready)
       const again = await askAndWait(page, `make the ${morning.name} run on Fridays only`)
       const reread = rereadOf(page, morning.id)

@@ -15,6 +15,7 @@ import { StatusBanner } from './Banner'
 import { StatusPills } from './Status'
 import { bannerOf, changeProblem, changeWords, controlsOf, lastRunWords, leftOutWords, NO_RUNS, nextRunWords, pillOf, pressChange, REFRESH_MS, rereadWhenOutOfDate, sentenceOf, viewerOf, type Banner, type LastRun } from './workflow'
 import styles from './Workflows.module.css'
+import { DraftActions } from './DraftActions'
 
 /** A workflow in the side panel (spec 3.3): its status, its sentence, a stop's three answers with Retry, its last and next run, Open the run, and Pause or Resume. */
 export function WorkflowPanel({ id, now }: { id: string; now: Date }) {
@@ -86,6 +87,7 @@ function Summary({ useCase, me, now }: { useCase: UseCaseView; me: Me; now: Date
       </dl>
       <div className={styles['panelBtns']}>
         <PauseOrResume useCase={useCase} me={me} now={now} />
+        <DraftActions useCase={useCase} viewer={viewerOf(me)} />
       </div>
     </>
   )

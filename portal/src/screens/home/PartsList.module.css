@@ -96,6 +96,16 @@
   border-top: 0;
 }
 
+/* The sketch's card: its three short keys, Watch, When and Then, in a narrow column, with no rule above the first part. */
+.parts[data-short] .part {
+  grid-template-columns: 22px 3.75rem minmax(0, 1fr);
+  padding: 10px 0;
+}
+
+.parts[data-short] .part:first-child {
+  border-top: 0;
+}
+
 @container parts (max-width: 520px) {
   .part {
     grid-template-columns: 22px minmax(0, 1fr);
@@ -103,5 +113,14 @@
 
   .body {
     grid-column: 2;
+  }
+
+  /* The sketch's keys are short enough to keep their column at any width. */
+  .parts[data-short] .part:not([data-mark='no']) {
+    grid-template-columns: 22px 3.75rem minmax(0, 1fr);
+  }
+
+  .parts[data-short] .part:not([data-mark='no']) .body {
+    grid-column: 3;
   }
 }
