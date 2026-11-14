@@ -210,7 +210,13 @@ class Place:
             raise NotThePlatforms(f"{name} ({held.id}) is no longer in the platform's n8n project")
         if held is not None:
             return held.id
-        ours = [w.id for w in self.client.workflows_named(name) if w.project == self.project]
+        named = self.client.workflows_named(name)
+        for unplaced in (w for w in named if w.project is None):
+            raise NotThePlatforms(
+                f"n8n listed {name} ({unplaced.id}) without its project, so bootstrap cannot tell "
+                "whose it is"
+            )
+        ours = [w.id for w in named if w.project == self.project]
         if len(ours) > 1:
             raise NotThePlatforms(
                 f"{len(ours)} workflows named {name} are in the platform's n8n project: "

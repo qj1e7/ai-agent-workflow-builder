@@ -89,6 +89,7 @@ from platform_api.orchestration.n8n_calls import (
     NothingToRun,
     OptionKind,
     OwnWorkflow,
+    PlatformWorkflow,
     ProposeCall,
     ReadCall,
     ReadFailed,
@@ -332,20 +333,33 @@ class NodeCalls:
         """Report a failure, from the error workflow (ENGINE-PLAN 2.8). Nothing in the report is
         taken as said: the reporter must be an execution of our error workflow, and the failed
         block and its words come from n8n's own record of a failed execution. While n8n cannot
-        be read, every report is refused."""
+        say where it holds our workflows, the block is asked to send the report again."""
         if self._failures is None:
             return NOT_OUR_ERROR_WORKFLOW
-        ours = await self._failures.platform_workflow(ERROR_WORKFLOW)
+        platform = await self._failures.platform_workflows()
+        ours = platform.get(ERROR_WORKFLOW)
         facts = await self._n8n.execution(reporter)
-        if not ours or facts is None or facts.workflow_id != ours:
+        if ours is None or facts is None or facts.workflow_id != ours.id:
             return NOT_OUR_ERROR_WORKFLOW
+        match await self._failures.in_place(ours):
+            case TryLater() as later:
+                return later
+            case False:
+                return NOT_OUR_ERROR_WORKFLOW
+            case True:
+                pass
         found = await self._failures.failure(failed)
         if found is None:
             return NOT_FAILED
-        if found.workflow_id == await self._failures.platform_workflow(SELF_TEST):
-            async with self._db.transaction("orchestration") as uow:
-                await self._self_tests.arrived(uow, found.execution_id, found.workflow_id)
-            return SelfTestArrived()
+        match await self._self_test(platform, found.workflow_id):
+            case TryLater() as later:
+                return later
+            case True:
+                async with self._db.transaction("orchestration") as uow:
+                    await self._self_tests.arrived(uow, found.execution_id, found.workflow_id)
+                return SelfTestArrived()
+            case False:
+                pass
         leg = await self._fail_leg(found)
         return leg if leg is not None else await self._fail_run(found)
 
@@ -691,15 +705,29 @@ class NodeCalls:
 
     async def _not_ours(
         self, uow: UnitOfWork, execution: N8nExecutionId, workflow_id: str
-    ) -> Refused:
+    ) -> Refused | TryLater:
         """A workflow no use case runs. The platform's daily self-test is one: its Read is
         refused on purpose, so the execution fails and the error workflow reports it."""
-        if self._failures is None or workflow_id != await self._failures.platform_workflow(
-            SELF_TEST
-        ):
+        if self._failures is None:
             return NOT_OURS
-        await self._self_tests.sent(uow, execution, workflow_id)
-        return SELF_TEST_FAILS
+        match await self._self_test(await self._failures.platform_workflows(), workflow_id):
+            case TryLater() as later:
+                return later
+            case False:
+                return NOT_OURS
+            case True:
+                await self._self_tests.sent(uow, execution, workflow_id)
+                return SELF_TEST_FAILS
+
+    async def _self_test(
+        self, platform: Mapping[str, PlatformWorkflow], workflow_id: str
+    ) -> bool | TryLater:
+        """Whether the workflow is the platform's daily self-test. n8n is asked where it holds
+        the self-test only for the self-test's own executions."""
+        self_test = platform.get(SELF_TEST)
+        if self._failures is None or self_test is None or self_test.id != workflow_id:
+            return False
+        return await self._failures.in_place(self_test)
 
     async def _pending_for(
         self, uow: UnitOfWork, issued: IssuedStart, execution: N8nExecutionId

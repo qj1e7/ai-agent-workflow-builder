@@ -642,6 +642,16 @@ class Finished:
 type Ended = Finished | FailedExecution
 
 
+@dataclass(frozen=True)
+class PlatformWorkflow:
+    """One of the platform's own n8n workflows, as the last bootstrap that was ready recorded
+    it."""
+
+    id: str
+    project: str | None
+    """The project n8n held it in then. None for a record made before projects were kept."""
+
+
 class N8nSwitch(Protocol):
     """Takes a workflow off in n8n, so none of its triggers runs it."""
 
@@ -654,10 +664,14 @@ class N8nFailures(Protocol):
     or in a run by hand, which reaches no error workflow (P7 Q13 and Q22), and a run that ended
     without asking for a yes."""
 
-    async def platform_workflow(self, name: str) -> str | None:
-        """One of the platform's own workflows, such as the error workflow, the only one whose
-        executions may report, or the daily self-test. None unless the last bootstrap recorded it
-        and n8n still holds it in the platform's project."""
+    async def platform_workflows(self) -> Mapping[str, PlatformWorkflow]:
+        """The platform's own workflows by name, from our records only: the error workflow, the
+        only one whose executions may report, and the daily self-test."""
+        ...
+
+    async def in_place(self, workflow: PlatformWorkflow) -> bool | TryLater:
+        """Whether n8n still holds it in the project bootstrap recorded, so a workflow a member
+        made or was handed is never it. TryLater while n8n cannot be read."""
         ...
 
     async def ended(self, execution_id: N8nExecutionId) -> Ended | None:

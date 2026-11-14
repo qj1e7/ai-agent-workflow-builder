@@ -29,6 +29,7 @@ from platform_api.orchestration.n8n_calls import (
     Finished,
     NodeCall,
     NodeCatalog,
+    PlatformWorkflow,
     ProposeCall,
     ReadCall,
     TryLater,
@@ -74,11 +75,24 @@ class FakeFailures:
     self_test: str | None = SELF_TEST
     read: list[str] = field(default_factory=list[str])
     finished: set[str] = field(default_factory=set[str])
+    unreadable: set[str] = field(default_factory=set[str])
+    """The platform workflows n8n cannot say where it holds just now."""
+    where_read: list[str] = field(default_factory=list[str])
 
-    async def platform_workflow(self, name: str) -> str | None:
-        return {"run_failure_reporter": self.error_workflow, "self_test_failure": self.self_test}[
-            name
-        ]
+    async def platform_workflows(self) -> dict[str, PlatformWorkflow]:
+        recorded = {
+            "run_failure_reporter": self.error_workflow,
+            "self_test_failure": self.self_test,
+        }
+        return {
+            name: PlatformWorkflow(workflow_id, "P-owner")
+            for name, workflow_id in recorded.items()
+            if workflow_id is not None
+        }
+
+    async def in_place(self, workflow: PlatformWorkflow) -> bool | TryLater:
+        self.where_read.append(workflow.id)
+        return TryLater("n8n cannot be read.") if workflow.id in self.unreadable else True
 
     async def ended(self, execution_id: N8nExecutionId) -> Ended | None:
         if execution_id in self.finished:
@@ -503,6 +517,37 @@ async def test_a_self_test_whose_read_never_reached_us_still_arrives(r: Reports)
     assert await r.report("302", workflow=SELF_TEST) == SelfTestArrived()
     seen = await self_tests_seen(r)
     assert seen.last_arrived is not None and seen.last_unreported is None
+
+
+@pytest.mark.parametrize("unreadable", [ERROR_WORKFLOW, SELF_TEST])
+async def test_a_self_test_report_n8n_cannot_place_yet_is_asked_again_and_arrives(
+    r: Reports, unreadable: str
+):
+    """A brief n8n error never turns a self-test into a report of nothing, which the block would
+    not send again: the block is asked to send it again, and it arrives then."""
+    r.failures.unreadable.add(unreadable)
+    assert isinstance(await r.report("301", workflow=SELF_TEST), TryLater)
+    assert await self_tests_seen(r) == SelfTestsSeen(None, None)
+    r.failures.unreadable.clear()
+    assert await r.report("301", workflow=SELF_TEST) == SelfTestArrived()
+    assert (await self_tests_seen(r)).last_arrived is not None
+    assert await r.runs() == []
+
+
+async def test_the_self_test_s_read_n8n_cannot_place_yet_is_asked_again(r: Reports):
+    r.n8n.executions["301"] = ExecutionFacts(SELF_TEST, "trigger", None, None, "v1")
+    r.failures.unreadable.add(SELF_TEST)
+    assert isinstance(await r.call("301", SELF_TEST_READ, "Fail on purpose"), TryLater)
+    r.failures.unreadable.clear()
+    assert await r.call("301", SELF_TEST_READ, "Fail on purpose") == SELF_TEST_FAILS
+
+
+async def test_a_run_s_report_asks_n8n_only_where_the_error_workflow_is(r: Reports):
+    """Where n8n holds the self-test matters only for the self-test's own failure."""
+    r.started("101")
+    await r.call("101", READ, "Read release")
+    await r.report()
+    assert r.failures.where_read == [ERROR_WORKFLOW]
 
 
 async def test_a_report_is_a_self_test_only_by_n8n_s_record_of_its_workflow(r: Reports):

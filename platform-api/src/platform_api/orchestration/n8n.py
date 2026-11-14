@@ -23,7 +23,9 @@ from platform_api.orchestration.n8n_calls import (
     ExecutionFacts,
     FailedExecution,
     Finished,
+    PlatformWorkflow,
     Publisher,
+    TryLater,
 )
 from platform_api.orchestration.workflow_check import ERROR_WORKFLOW
 from platform_api.settings import N8nOwner
@@ -69,6 +71,7 @@ class UpsertedWorkflow:
     created: bool
 
 
+N8N_UNREADABLE = TryLater("n8n cannot be read just now.")
 OWNS = "workflow:owner"
 """The role n8n gives the project a workflow belongs to."""
 
@@ -1112,24 +1115,11 @@ class N8nWorkflows:
 
     async def error_workflow_id(self) -> str | None:
         """The error workflow, as the last bootstrap that was ready loaded it."""
-        loaded = await self._loaded(ERROR_WORKFLOW)
-        return None if loaded is None else str(loaded["id"])
+        loaded = (await self.platform_workflows()).get(ERROR_WORKFLOW)
+        return None if loaded is None else loaded.id
 
-    async def platform_workflow(self, name: str) -> str | None:
-        """One of the platform's own workflows, by the id the last bootstrap that was ready
-        recorded, while n8n still holds it in the project it was recorded in. A workflow a member
-        made or was handed is never it. None also while n8n cannot be read."""
-        loaded = await self._loaded(name)
-        if loaded is None or loaded.get("project") is None:
-            return None
-        try:
-            home = await self._api.home_project(str(loaded["id"]))
-        except (N8nError, httpx.HTTPError) as error:
-            log.warning("could not read where n8n holds %s: %s", name, error)
-            return None
-        return str(loaded["id"]) if home == loaded["project"] else None
-
-    async def _loaded(self, name: str) -> dict[str, Any] | None:
+    async def platform_workflows(self) -> dict[str, PlatformWorkflow]:
+        """As the last bootstrap that was ready recorded them."""
         async with self._db.connection("orchestration") as conn:
             row = await (
                 await conn.execute(
@@ -1137,7 +1127,17 @@ class N8nWorkflows:
                 )
             ).fetchone()
         loaded: list[dict[str, Any]] = [] if row is None else row["workflows"]
-        return next((w for w in loaded if w.get("name") == name), None)
+        return {str(w["name"]): PlatformWorkflow(str(w["id"]), w.get("project")) for w in loaded}
+
+    async def in_place(self, workflow: PlatformWorkflow) -> bool | TryLater:
+        if workflow.project is None:
+            return False
+        try:
+            home = await self._api.home_project(workflow.id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not read where n8n holds workflow %s: %s", workflow.id, error)
+            return N8N_UNREADABLE
+        return home == workflow.project
 
     async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft:
         """Creates the workflow, then reads it back and compares, because n8n may keep something

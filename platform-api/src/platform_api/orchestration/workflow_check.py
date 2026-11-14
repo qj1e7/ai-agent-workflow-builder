@@ -286,9 +286,8 @@ class PlatformShape:
     said: str
     kept: Mapping[str, JsonValue]
     """Settings it must keep as they are."""
-    graded: bool
-    """Graded as a use case's workflow is, so it runs on Singapore time and its failures go to
-    the error workflow."""
+    reports_failures: bool
+    """Its failures go to the error workflow."""
 
 
 PLATFORM_SHAPES: Mapping[str, PlatformShape] = {
@@ -297,10 +296,13 @@ PLATFORM_SHAPES: Mapping[str, PlatformShape] = {
         "an Error Trigger, then Report a failure",
         # Without it n8n refuses to report for a workflow held in a member's project (P7 Q13).
         {"callerPolicy": "any"},
-        graded=False,
+        reports_failures=False,
     ),
     SELF_TEST: PlatformShape(
-        ("schedule", "read"), "a Schedule Trigger, then a Read", {}, graded=True
+        ("schedule", "read"),
+        "a Schedule Trigger, then a Read",
+        {"timezone": TIME_ZONE},
+        reports_failures=True,
     ),
 }
 """The platform's own n8n workflows, which bootstrap loads and checks (ENGINE-PLAN 2.8): the
@@ -317,11 +319,11 @@ def check_platform(document: Mapping[str, Any], error_workflow: str | None) -> t
         flow = read_flow(document)
     except Unreadable as unreadable:
         return (_fix(None, str(unreadable)),)
-    findings = [*_chain(flow, shape), *_kept(flow, shape.kept)]
-    if shape.graded:
-        findings += grade(document, error_workflow).findings
-    else:
-        findings += _unknown_blocks(flow)
+    findings = [*_chain(flow, shape), *_kept(flow, shape.kept), *_unknown_blocks(flow)]
+    findings += _schedules(flow)
+    reported = error_workflow is not None and flow.settings.get("errorWorkflow") == error_workflow
+    if shape.reports_failures and not reported:
+        findings.append(_fix(None, "Its failures do not go to the platform's error workflow."))
     return tuple(findings)
 
 

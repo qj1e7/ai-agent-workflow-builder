@@ -516,6 +516,36 @@ def test_a_recorded_workflow_moved_out_of_the_platform_project_stops_bootstrap(
     assert engine_status(postgres.owner) == moved
 
 
+class ListsWithoutProjects(FakeN8n):
+    """An n8n whose list of workflows does not say which project each belongs to."""
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        response = super().handle(request)
+        if request.url.path != "/api/v1/workflows" or request.method != "GET":
+            return response
+        listed = [{k: v for k, v in w.items() if k != "shared"} for w in response.json()["data"]]
+        return httpx.Response(200, json={"data": listed})
+
+
+def test_bootstrap_stops_when_n8n_lists_a_same_name_workflow_without_its_project(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    """Else a second workflow of the name would pass unseen, and the guard against two never
+    fires."""
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, ListsWithoutProjects(["run_failure_reporter"]))
+    before = json.loads(json.dumps(n8n.workflows))
+
+    assert main(env_for(postgres.owner)) == 1
+
+    assert engine_status(postgres.owner) == (
+        False,
+        "n8n listed run_failure_reporter (W1) without its project, so bootstrap cannot tell "
+        "whose it is",
+    )
+    assert n8n.workflows == before
+
+
 def test_bootstrap_keeps_to_the_workflow_it_recorded_over_a_copy_of_the_same_name(
     postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
 ):
