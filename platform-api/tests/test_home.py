@@ -77,11 +77,14 @@ EMPTY = {
     "declined_total": 0,
     "questions_for_me": [],
     "questions_for_me_total": 0,
+    "needs_next": None,
     "waiting_on_others": [],
     "waiting_on_others_total": 0,
+    "waiting_on_others_next": None,
     "drafts": [],
     "following_up": [],
     "following_up_total": 0,
+    "following_up_next": None,
     "replied": [],
     "coming_up": None,
     "workflows": 0,
@@ -145,6 +148,23 @@ class Lab:
 
     async def run_ids(self, user: str, part: str) -> list[str]:
         return [item["run_id"] for item in (await self.home(user))[part]]
+
+    async def page(self, user: str, path: str, after: str | None) -> dict[str, Any]:
+        response = await self.client.get(
+            path, params={} if after is None else {"after": after}, headers={"X-Dev-User": user}
+        )
+        assert response.status_code == 200, response.text
+        declared_status(self.app, "GET", path, response)
+        return response.json()
+
+    async def every_page(self, user: str, path: str, first: str | None) -> list[dict[str, Any]]:
+        """Home's cursor for a list, followed to its end: the pages after Home's first."""
+        pages: list[dict[str, Any]] = []
+        after = first
+        while after is not None:
+            pages.append(await self.page(user, path, after))
+            after = pages[-1]["next"]
+        return pages
 
 
 @pytest.fixture
@@ -346,6 +366,101 @@ async def test_the_newest_waiting_runs_come_first_and_home_counts_them_all(lab: 
 
     assert home["approvals_total"] == 12
     assert [a["run_id"] for a in home["approvals"]] == started[::-1][:10]
+
+
+async def waiting_runs(lab: Lab, count: int) -> list[RunId]:
+    """`count` runs alice started, each waiting for a yes, a second apart, the oldest first."""
+    started: list[RunId] = []
+    for n in range(count):
+        run = await lab.h.orchestrator.start_run(SPEC, ALICE, f"many-{n}-{uuid.uuid4()}")
+        started.append(run.run_id)
+        lab.h.advance(timedelta(seconds=1))
+    for run_id in started:
+        await work(lab, run_id, cards=False)
+    return started
+
+
+async def test_every_request_waiting_for_a_yes_is_reached_through_the_pages(lab: Lab):
+    started = await waiting_runs(lab, 27)
+
+    home = await lab.home("bob")
+    pages = await lab.every_page("bob", "/api/v1/home/needs", home["needs_next"])
+
+    reached = [a["run_id"] for a in home["approvals"]]
+    reached += [a["run_id"] for page in pages for a in page["approvals"]]
+    assert reached == started[::-1], "every request once, the newest first"
+    assert [len(page["approvals"]) for page in pages] == [10, 7]
+    assert {home["approvals_total"], *(page["approvals_total"] for page in pages)} == {27}
+    assert pages[-1]["next"] is None
+
+
+async def test_a_page_goes_on_where_the_last_one_ended_when_a_new_request_arrives(lab: Lab):
+    started = await waiting_runs(lab, 12)
+    first = await lab.home("bob")
+
+    (newest,) = await waiting_runs(lab, 1)
+    after = await lab.page("bob", "/api/v1/home/needs", first["needs_next"])
+
+    assert [a["run_id"] for a in after["approvals"]] == started[::-1][10:]
+    assert after["approvals_total"] == 13, "the count is the list as it is now"
+    assert [a["run_id"] for a in (await lab.home("bob"))["approvals"]][0] == newest
+
+
+async def test_every_stopped_run_is_reached_through_the_pages(lab: Lab):
+    stopped = [await stopped_run(lab, await workflow(lab, name=f"Check {n}")) for n in range(12)]
+
+    home = await lab.home("alice")
+    pages = await lab.every_page("alice", "/api/v1/home/needs", home["needs_next"])
+
+    reached = [s["run_id"] for s in home["stopped"]]
+    reached += [s["run_id"] for page in pages for s in page["stopped"]]
+    assert sorted(reached) == sorted(stopped) and len(reached) == 12
+    assert [home["stopped_total"], *(page["stopped_total"] for page in pages)] == [12, 12]
+    assert [page["approvals"] for page in pages] == [[]], "a part with no more sends no rows"
+
+
+async def test_every_run_waiting_on_others_is_reached_through_the_pages(lab: Lab):
+    started = await waiting_runs(lab, 52)
+
+    home = await lab.home("alice")
+    pages = await lab.every_page(
+        "alice", "/api/v1/home/waiting-on-others", home["waiting_on_others_next"]
+    )
+
+    reached = [w["run_id"] for w in home["waiting_on_others"]]
+    reached += [w["run_id"] for page in pages for w in page["waiting_on_others"]]
+    assert reached == started[::-1]
+    assert [len(home["waiting_on_others"]), *(len(p["waiting_on_others"]) for p in pages)] == [
+        50,
+        2,
+    ]
+    assert {page["waiting_on_others_total"] for page in pages} == {52}
+    bob = await lab.home("bob")
+    assert (bob["approvals_total"], len(bob["approvals"])) == (52, 10)
+
+
+async def test_a_page_read_with_no_cursor_is_homes_first_page(lab: Lab):
+    await waiting_runs(lab, 3)
+    home = await lab.home("bob")
+
+    first = await lab.page("bob", "/api/v1/home/needs", None)
+
+    assert first["approvals"] == home["approvals"]
+    assert first["next"] == home["needs_next"] is None
+
+
+@pytest.mark.parametrize(
+    "path", ["/api/v1/home/needs", "/api/v1/home/waiting-on-others", "/api/v1/home/following-up"]
+)
+async def test_a_cursor_this_list_did_not_give_out_is_refused(lab: Lab, path: str):
+    await waiting_runs(lab, 12)
+    other = (await lab.home("bob"))["needs_next"]
+    for after in ("not-a-cursor", "e30", other if path != "/api/v1/home/needs" else "W10"):
+        response = await lab.client.get(
+            path, params={"after": after}, headers={"X-Dev-User": "bob"}
+        )
+        assert response.status_code == 422, (after, response.text)
+        declared_status(lab.app, "GET", path, response)
 
 
 async def test_a_stopped_run_shows_to_the_operators_who_started_or_own_it_with_the_reason(
@@ -626,19 +741,25 @@ async def test_following_up_shows_a_persons_own_requests_with_the_latest_reply(l
     assert (await lab.home("erin"))["following_up"] == []
 
 
-async def test_following_up_shows_every_request_up_to_fifty_and_counts_them_all(lab: Lab):
-    for n in range(52):
+async def test_every_request_to_the_team_is_reached_through_the_pages(lab: Lab):
+    for n in range(103):
         await ask(
             lab,
             "alice",
             {"kind": "ask_the_team", "about": {"capability": "x"}, "note": f"n{n}"},
             f"k{n}",
         )
+        lab.h.advance(timedelta(seconds=1))
 
     home = await lab.home("alice")
+    pages = await lab.every_page("alice", "/api/v1/home/following-up", home["following_up_next"])
 
-    assert (len(home["following_up"]), home["following_up_total"]) == (50, 52)
-    assert home["following_up"][0]["note"] == "n51"
+    notes = [i["note"] for i in home["following_up"]]
+    notes += [i["note"] for page in pages for i in page["following_up"]]
+    assert notes == [f"n{n}" for n in range(102, -1, -1)]
+    assert [len(home["following_up"]), *(len(p["following_up"]) for p in pages)] == [50, 50, 3]
+    assert {home["following_up_total"], *(p["following_up_total"] for p in pages)} == {103}
+    assert (await lab.home("bob"))["following_up_next"] is None
 
 
 async def test_a_done_request_leaves_following_up_after_30_days(lab: Lab):
