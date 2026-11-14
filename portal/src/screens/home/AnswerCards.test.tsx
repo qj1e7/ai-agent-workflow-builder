@@ -178,7 +178,7 @@ describe('a set-up card', () => {
   it('never guesses a time: with no time said, it asks one question, the time, with choices and Another time', () => {
     const html = draw(SETUP)
     expect(html.match(/data-mark="ask"/g)).toHaveLength(1)
-    expect(text(html)).toContain('Question: When What time should it run?')
+    expect(text(html)).toContain('Question: When Fridays, at what time?')
     expect(buttons(html)).toEqual(expect.arrayContaining(['8:00', '9:00', '13:00', '17:00', 'Another time']))
     expect(text(html)).toMatch(/\d questions? to answer/)
   })
@@ -212,7 +212,7 @@ describe('the software card', () => {
 describe('PartsList on a set-up card', () => {
   it('quotes a clause the Planner didn’t follow with a cross, and the button sets up the part it can', () => {
     const html = draw(setupCross as SetupCardReply)
-    expect(text(html)).toContain('Can’t do: “colour them by team” I didn’t follow this part.')
+    expect(text(html)).toContain('Can’t do: Colour them by team. I didn’t follow this part.')
     expect(text(html)).toContain('Will do: When Every Friday at 17:00, Singapore time')
     expect(buttons(html)).toContain('Set up the part I can')
     expect(buttons(html)).not.toContain('Turn it on')
@@ -224,7 +224,7 @@ describe('PartsList on a set-up card', () => {
     expect(text(html)).toContain('Question: When Monday or Friday?')
     expect(buttons(html)).toEqual(expect.arrayContaining(['Monday', 'Friday']))
     expect(buttons(html)).not.toContain('Another time')
-    expect(text(html)).toContain('Can’t do: “Monday and Friday” I can only set one day.')
+    expect(text(html)).toContain('Can’t do: Monday and Friday. I can only set one day.')
   })
 
   it('marks every mark in words for a screen reader, never by colour alone', () => {
@@ -247,7 +247,7 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     const html = draw(reply)
     expect(text(html)).not.toContain('What I can’t do yet')
     expect(text(html)).not.toContain('What I can do instead')
-    expect(text(cardOf(html))).toContain('Can’t do: “Colour them by team” I didn’t follow this part.')
+    expect(text(cardOf(html))).toContain('Can’t do: Colour them by team. I didn’t follow this part.')
     expect(buttons(html)).toContain('Set up the part I can')
     expect(sayOf(reply)).toBe('Here’s what I understood.')
     expect(draw(reply, { leftovers: true })).toBe('')
@@ -262,7 +262,7 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     }
     const html = draw(filter)
     expect(text(html)).not.toContain('What I can’t do yet')
-    expect(text(cardOf(html))).toContain('Can’t do: “mention VPN” I can’t search by this yet. Ask the team')
+    expect(text(cardOf(html))).toContain('Can’t do: Mention VPN. I can’t search by this yet. Ask the team')
     expect(buttons(html)).toEqual(expect.arrayContaining(['Set up the part I can', 'Ask the team']))
   })
 
@@ -292,7 +292,7 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     const html = draw(mixed)
     expect(text(html)).toContain('I can\'t send email yet Run results show here, in the chat.')
     expect(text(html)).toContain('What I can do instead')
-    expect(text(cardOf(html))).toContain('“Colour them by team” I didn’t follow this part.')
+    expect(text(cardOf(html))).toContain('Colour them by team. I didn’t follow this part.')
     expect(text(cardOf(html))).not.toMatch(/email/i)
   })
 })
@@ -338,7 +338,7 @@ describe('the clauses an answer didn’t read', () => {
 describe('an answer that is partly a can’t', () => {
   it('crosses what it can’t do on the card, with the registry’s reason and Ask the team, and sets up the part it can', () => {
     const html = draw(part as PartReply)
-    expect(text(cardOf(html))).toContain('Can’t do: “email it to the team” I can\'t send email yet.')
+    expect(text(cardOf(html))).toContain('Can’t do: Email it to the team. I can\'t send email yet.')
     expect(buttons(html)).toEqual(expect.arrayContaining(['Set up the part I can', 'Ask the team']))
     const rows = text(cardOf(html)).split('Can’t do:')[0]?.split(' Draft ')[1] ?? ''
     expect(rows, 'the ticked rows hold only the part it can do').toContain('Sum them up')
@@ -347,7 +347,7 @@ describe('an answer that is partly a can’t', () => {
 
   it('keeps a can’t row as a cross even when no part names it, its note standing in for empty text', () => {
     const empty: PartReply = { ...(part as PartReply), parts: [], cant: [{ kind: 'do', text: '', note: 'Email isn’t connected.', needs: 'new_system', system: 'email', instead: null, unsupported: false }] }
-    expect(text(draw(empty))).toContain('Can’t do: “Email isn’t connected.”')
+    expect(text(draw(empty))).toContain('Can’t do: Email isn’t connected.')
   })
 
   it('shows the alternative under its own heading, with Ask the team first when there is no alternative', () => {

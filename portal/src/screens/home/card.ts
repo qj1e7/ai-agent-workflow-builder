@@ -384,7 +384,7 @@ const OFTEN_CHOICES: readonly WhenChoice[] = (Object.entries(OFTEN_NAMES) as [Ex
 const DAY_CHOICES: readonly WhenChoice[] = DAY_NAMES.map((day) => ({ label: DAY_WORD(day), set: { day } }))
 export const TIMES = ['08:00', '09:00', '13:00', '17:00']
 const ASK_ROW: Readonly<Record<RowKind, string>> = {
-  schedule: 'How often should it run?',
+  schedule: 'How often?',
   look_for: 'Which tickets should it find?',
   do: 'What should it do with them?',
   where: 'Where should the result go?',
@@ -402,11 +402,23 @@ function clashQuestion(form: Form, reason: PartReason, field: WhenField): Questi
   return choices.length >= 2 ? { kind: 'when', field, words: `${orList(choices.map((choice) => choice.label))}?`, choices } : null
 }
 
+/** The sketch's time question, in the words of how often it runs: "Mondays, at what time?" or "Every day, at what time?". */
+export function timeWords(when: When): string {
+  const often = when.often === 'week' && when.day !== '' ? `${DAY_WORD(when.day)}s` : when.often === 'weekdays' ? 'Every weekday' : 'Every day'
+  return `${often}, at what time?`
+}
+
 function timeQuestion(form: Form): Question {
   const hour = bareHour(form.rows.find((row) => row.kind === 'schedule')?.text || form.text)
   const times = hour === null ? TIMES : hourChoices(hour)
   const choices = times.map((at) => ({ label: clockWords(at), set: { at } }))
-  return { kind: 'when', field: 'at', words: hour === null ? 'What time should it run?' : `At ${orList(choices.map((choice) => choice.label))}?`, choices }
+  return { kind: 'when', field: 'at', words: hour === null ? timeWords(form.when) : `At ${orList(choices.map((choice) => choice.label))}?`, choices }
+}
+
+/** The name of another workflow like one she has: the next number after it, so no two share a name. */
+export function secondName(name: string): string {
+  const numbered = /^(.*\S) (\d+)$/.exec(name.trim())
+  return numbered ? `${numbered[1] ?? ''} ${String(Number(numbered[2]) + 1)}` : `${name.trim()} 2`
 }
 
 function inputQuestion(form: Form, plan: PlanView | null, first: boolean): Question | null {
@@ -432,8 +444,8 @@ function rowQuestion(form: Form, kind: RowKind): Question | null {
  */
 export function nextQuestion(form: Form, plan: PlanView | null): Question | null {
   const { often, day } = form.when
-  if (often === '') return clashQuestion(form, 'one_frequency', 'often') ?? { kind: 'when', field: 'often', words: 'How often should it run?', choices: OFTEN_CHOICES }
-  if (often === 'week' && day === '') return clashQuestion(form, 'one_day', 'day') ?? { kind: 'when', field: 'day', words: 'Which day should it run?', choices: DAY_CHOICES }
+  if (often === '') return clashQuestion(form, 'one_frequency', 'often') ?? { kind: 'when', field: 'often', words: 'How often?', choices: OFTEN_CHOICES }
+  if (often === 'week' && day === '') return clashQuestion(form, 'one_day', 'day') ?? { kind: 'when', field: 'day', words: 'Which day?', choices: DAY_CHOICES }
   if (whenProblems(form.when).at !== undefined) return clashQuestion(form, 'one_time', 'at') ?? timeQuestion(form)
   return (
     rowQuestion(form, 'look_for') ??

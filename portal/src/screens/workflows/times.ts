@@ -62,6 +62,23 @@ export function runWhen(iso: string, now: Date, zone = TIME_ZONE): string {
   return `${sameDay(at, today) ? 'Today' : dayWords(at, today)}, ${at.clock}`
 }
 
+const WEEKDAYS: Readonly<Record<string, string>> = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' }
+const DAY_MS = 86_400_000
+
+/**
+ * A first run as the set-up card says it, after "First run": "today, 9:00", "tomorrow, 9:00", "Monday, 9:00" within the week, else
+ * "Fri 20 Nov, 9:00". In the schedule's zone, as every next run is.
+ */
+export function firstRunWhen(iso: string, now: Date, zone = TIME_ZONE): string {
+  const at = new Date(iso)
+  const moment = momentOf(at, zone)
+  const today = momentOf(now, zone)
+  if (sameDay(moment, today)) return `today, ${moment.clock}`
+  if (sameDay(moment, momentOf(new Date(now.getTime() + DAY_MS), zone))) return `tomorrow, ${moment.clock}`
+  if (at.getTime() - now.getTime() < 6 * DAY_MS) return `${WEEKDAYS[moment.weekday] ?? moment.weekday}, ${moment.clock}`
+  return `${dayWords(moment, today)}, ${moment.clock}`
+}
+
 /** "Mon 23 Nov, 9:00", the Software page's form, which never says Today. In the zone, or in Singapore when the browser cannot read it. */
 export function dateAndClock(iso: string, zone = TIME_ZONE): string {
   const at = new Date(iso)

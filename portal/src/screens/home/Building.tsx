@@ -16,7 +16,7 @@ import { RunLine } from '../run/RunLine'
 import { emptyModel, stationsOf, type RunModel } from '../run/runModel'
 import { planOf } from '../run/useRunStory'
 import { scheduleShort } from '../run/words'
-import { nextRunAt } from '../workflows/times'
+import { firstRunWhen } from '../workflows/times'
 import { buildLine, buildStage, draftPill, LINE_STEP_MS, notesOf, replayAt, shownOf, testStatus, testStep, type BuildStage, type PillTone, type Replay } from './build'
 import { useShowBesideOnWide } from './autoOpen'
 import { PartsList, type Part } from './PartsList'
@@ -75,7 +75,7 @@ export function useBuilt(useCaseId: string, test: RunModel | null): Built {
 
 function firstRunWords(useCase: UseCaseView | undefined, now: Date): string {
   const next = useCase?.next_run_at
-  return next ? `On. First run ${nextRunAt(next, now, useCase.schedule?.time_zone)}.` : 'On.'
+  return next ? `On. First run ${firstRunWhen(next, now, useCase.schedule?.time_zone)}.` : 'On.'
 }
 
 interface BuildingProps {

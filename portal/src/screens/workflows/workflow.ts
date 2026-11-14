@@ -142,7 +142,7 @@ export function lastRunWords({ last_run: last }: Pick<UseCaseView, 'last_run'>, 
   return `${lineWhen(last.at, now)}: ${lastRunWhat(last, nameOf, room)}`
 }
 
-export { formatterFactory, lineWhen, nextRunAt, runWhen, timesZone } from './times'
+export { firstRunWhen, formatterFactory, lineWhen, nextRunAt, runWhen, timesZone } from './times'
 
 /** When the workflow runs next, while its schedule will start a run. Null while it is paused, held or has no schedule. */
 export function nextRunOf(useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule'> | undefined): NextRun | null {

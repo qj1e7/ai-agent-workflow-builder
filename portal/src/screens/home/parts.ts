@@ -43,6 +43,8 @@ export interface CrossContext {
   readonly watchlist?: ScheduleView | null
   readonly operators?: string
   readonly workflow?: string
+  /** The set-up card names each cross in the sketch's short form, her words as a sentence, rather than quoted. */
+  readonly short?: boolean
 }
 
 /** “every weekday except Friday” leaves a day out, which no schedule here can hold. Anything else reads as how often. */
@@ -71,10 +73,16 @@ export function crossWords(part: PartView, context: CrossContext = {}): string {
   return REASON_WORDS[part.reason]
 }
 
-/** Her words for a cross, quoted. Once she picks one of a clash’s choices, only the others are named. */
-export function crossLabel(part: PartView, when?: When): string {
+const asSentence = (text: string): string => {
+  const said = text.trim().replace(/[.!?]+$/, '')
+  return `${said.charAt(0).toUpperCase()}${said.slice(1)}.`
+}
+
+/** Her words for a cross, quoted, or as a sentence in the short form. Once she picks one of a clash’s choices, only the others are named. */
+export function crossLabel(part: PartView, when?: When, short = false): string {
   const chosen = when && isClash(part) ? clashChosen(when, part) : null
   const others = chosen === null ? [] : part.choices.filter((choice) => choice !== chosen)
+  if (short) return asSentence(others.length > 0 ? andList(others) : part.text)
   return others.length > 0 ? andList(others.map(quote)) : quote(part.text)
 }
 

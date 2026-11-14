@@ -17,6 +17,8 @@ import {
   cardFrom,
   nextQuestion,
   setUpWords,
+  secondName,
+  timeWords,
   cardPhase,
   isQuestion,
   leftWords,
@@ -601,12 +603,12 @@ describe('the Planner’s set-up card', () => {
 
     it('asks how often, then the day of a weekly run, then the time, one at a time, and nothing once the schedule is whole', () => {
       const start = said('')
-      expect(words(start)).toBe('How often should it run?')
+      expect(words(start)).toBe('How often?')
       expect(nextQuestion(start, null)).toMatchObject({ kind: 'when', choices: [{ label: 'Every day' }, { label: 'Every weekday' }, { label: 'Every week' }] })
       const weekly = pick(start, 'Every week')
-      expect(words(weekly)).toBe('Which day should it run?')
+      expect(words(weekly)).toBe('Which day?')
       const friday = pick(weekly, 'Friday')
-      expect(words(friday)).toBe('What time should it run?')
+      expect(words(friday)).toBe('Fridays, at what time?')
       expect(nextQuestion(friday, null)).toMatchObject({ choices: [{ label: '8:00' }, { label: '9:00' }, { label: '13:00' }, { label: '17:00' }] })
       const timed = pick(friday, '9:00')
       expect(whenSaid(timed.when)).toBe('Every Friday at 9:00')
@@ -614,7 +616,7 @@ describe('the Planner’s set-up card', () => {
     })
 
     it('never guesses a time: a named day with no time asks the time, and a bare hour asks morning or evening', () => {
-      expect(words(said('Every Friday'))).toBe('What time should it run?')
+      expect(words(said('Every Friday'))).toBe('Fridays, at what time?')
       const bare = said('Every Friday at 9')
       expect(words(bare)).toBe('At 9:00 or 21:00?')
       expect(whenSaid(pick(bare, '21:00').when)).toBe('Every Friday at 21:00')
@@ -731,5 +733,18 @@ describe('what the footer counts', () => {
     expect(leftWords({ choices: ['a request I can do'], leftOut: [] })).toBe('Change your words to something I can do.')
     expect(isQuestion('the Jira project')).toBe(true)
     expect(isQuestion('nothing left out for want of a tool')).toBe(false)
+  })
+})
+
+describe('a second workflow of the same name', () => {
+  it('gets the next number, so Set up another never makes two of one name', () => {
+    expect(secondName('LangGraph release check')).toBe('LangGraph release check 2')
+    expect(secondName('LangGraph release check 2')).toBe('LangGraph release check 3')
+  })
+
+  it('asks the time in the words of how often it runs', () => {
+    expect(timeWords({ often: 'every_day', day: '', at: '', filledFrom: null })).toBe('Every day, at what time?')
+    expect(timeWords({ often: 'weekdays', day: '', at: '', filledFrom: null })).toBe('Every weekday, at what time?')
+    expect(timeWords({ often: 'week', day: 'monday', at: '', filledFrom: null })).toBe('Mondays, at what time?')
   })
 })

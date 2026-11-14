@@ -69,7 +69,7 @@ export const SAY = {
   setup_card: 'Here’s what I understood.',
   setupCrossed: 'Here’s what I understood.',
   alreadyHave: 'You already have this one.',
-  part: 'I can do part of that. Here is the part I can do, and the part I can’t do yet.',
+  part: 'Here’s what I understood.',
   cant: 'I can’t do that yet.',
   cantWithAlternative: 'I can’t do all of that, but I can set up something close.',
   which_software: 'Which software should I watch?',

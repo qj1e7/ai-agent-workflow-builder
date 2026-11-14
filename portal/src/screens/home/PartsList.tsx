@@ -46,7 +46,7 @@ export function crossParts(parts: readonly PartView[], context: CrossContext = {
   return parts.map((part, index) => ({
     key: `cross-${String(index)}`,
     mark: part.mark === 'question' ? 'ask' : 'no',
-    label: crossLabel(part, context.when),
+    label: crossLabel(part, context.when, context.short),
     body: (
       <>
         <span>{crossWords(part, context)}</span>

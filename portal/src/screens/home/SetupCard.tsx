@@ -5,7 +5,7 @@ import { useErrorWords, useSession } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
 import { refusedWords, useCheckPart, useDeleteDraft, usePlanFor, useReadAgentCards, useSaveDraft } from '../../api/plannerQueries'
-import { useAgentCards, useMe, useSaveCard, useTools } from '../../api/queries'
+import { useAgentCards, useMe, useSaveCard, useTools, useWatchlist } from '../../api/queries'
 import { useSetUpOff } from '../../api/workflowQueries'
 import type { DraftView, InputKind, SimilarWorkflow, ToolId, ToolView } from '../../api/types'
 import { Button, buttonClassName } from '../../ui/Button'
@@ -31,6 +31,7 @@ import {
   reusedAgents,
   cardBlockers,
   savedCopyOf,
+  secondName,
   setUp,
   setUpWords,
   setupLeft,
@@ -221,19 +222,22 @@ function keyed(key: PartKey, pieces: readonly { readonly mark: Mark; readonly bo
   return [{ key, mark: partMark(pieces.map((piece) => piece.mark)), label: key, body: pieces.map((piece, at) => <span key={at} className={styles['piece']}>{piece.body}</span>) }]
 }
 
-/** The parts once Set up is pressed: what it watches, when and what it does then, as words, each a tick. */
-export function frozenParts(form: Form, plan: PlanView | null, writes: boolean | null): Part[] {
+/** The parts once Set up is pressed: what it watches, when and what it does then, as words, each a tick. A value already in the words isn't said again. */
+export function frozenParts(form: Form, plan: PlanView | null, writes: boolean | null, youRun: string | null): Part[] {
   const project = plan?.kind === 'agents' && plan.agents.some((agent) => agent.inputs.some((input) => input.kind === 'jira_project'))
   // Where it goes is said once: by the Jira project it was set up with, when an agent has one.
-  const said = (row: Row) => row.kind !== 'schedule' && row.text !== '' && !(row.kind === 'where' && project)
-  const texts = (part: PartKey) => form.rows.filter((row) => said(row) && PART_OF[row.kind] === part).map((row) => upperFirst(row.text))
+  const shown = (row: Row) => row.kind !== 'schedule' && row.text !== '' && !(row.kind === 'where' && project)
+  const texts = (part: PartKey) => form.rows.filter((row) => shown(row) && PART_OF[row.kind] === part).map((row) => upperFirst(row.text))
+  const said = (part: PartKey, value: string) => texts(part).some((text) => text.toLowerCase().includes(value.toLowerCase()))
   const values = (part: PartKey) =>
     plan?.kind === 'agents'
-      ? plan.agents.flatMap((agent) => agent.inputs.filter((input) => inputPart(input.kind) === part).map((input) => `${input.name}: ${valueOf(form, agent, input.name)}`))
+      ? plan.agents.flatMap((agent) =>
+          agent.inputs.filter((input) => inputPart(input.kind) === part && !said(part, valueOf(form, agent, input.name))).map((input) => `${input.name}: ${valueOf(form, agent, input.name)}`),
+        )
       : []
   const line = (part: PartKey, extra: readonly string[] = []) => [...texts(part), ...values(part), ...extra].map((text) => ({ mark: 'ok' as const, body: text }))
   return [
-    ...keyed('Watch', line('Watch')),
+    ...keyed('Watch', line('Watch', youRun ? [`You run ${youRun}`] : [])),
     ...keyed('When', [{ mark: 'ok', body: whenSaid(form.when) ?? '' }]),
     ...keyed('Then', line('Then', writes === false ? [] : ['After a yes'])),
   ]
@@ -247,7 +251,7 @@ export type Phase = CardPhase
  * workflow as a draft, and the card goes on to build, test and turn it on.
  */
 export function SetupCard({ start }: { start: CardStart }) {
-  if (start.similar) return <AlreadyHave similar={start.similar} card={<SettingUp start={start} />} />
+  if (start.similar) return <AlreadyHave similar={start.similar} card={<SettingUp start={{ ...start, form: { ...start.form, name: secondName(start.form.name || start.similar.name) } }} />} />
   return <SettingUp start={start} />
 }
 
@@ -298,6 +302,9 @@ function SettingUp({ start }: { start: CardStart }) {
   const problems = whenProblems(form.when)
   const timeText = whenSaid(form.when)
   const writes = writesOf(plan, kinds)
+  const repo = plan?.kind === 'agents' ? plan.agents.flatMap((agent) => agent.inputs.filter((input) => input.kind === 'github_repo').map((input) => valueOf(form, agent, input.name)))[0] : undefined
+  const watched = useWatchlist({ enabled: repo !== undefined })
+  const youRun = (repo && watched.data?.software.find((row) => row.source.ref.toLowerCase() === repo.toLowerCase())?.our_version) ?? null
 
   const dirty = useRef(false)
   const settingUp = useRef(false)
@@ -510,7 +517,7 @@ function SettingUp({ start }: { start: CardStart }) {
   const title = nameOf(form, plan) || 'New workflow'
   const crosses = crossParts(
     form.marked.filter((part) => part.mark === 'cant'),
-    { when: form.when },
+    { when: form.when, short: true },
     (part) => (part.reason === 'cant_do' ? <AskTheTeam capability={part.text} starter={`I asked the Planner for: ${form.text}\n\nWhat it can't do yet: ${part.text}`} /> : null),
   )
 
@@ -529,7 +536,7 @@ function SettingUp({ start }: { start: CardStart }) {
   if (phase.kind === 'built')
     return (
       <div data-card={id}>
-        <Building useCaseId={phase.useCaseId} title={title} parts={[...frozenParts(form, plan, writes), ...crosses]} newAgents={phase.newAgents} draftKept={phase.draftKept} />
+        <Building useCaseId={phase.useCaseId} title={title} parts={[...frozenParts(form, plan, writes, youRun), ...crosses]} newAgents={phase.newAgents} draftKept={phase.draftKept} />
       </div>
     )
   if (!live) return <p className="muted">Saved as a draft. Open it from Workflows to carry on.</p>
@@ -684,7 +691,7 @@ function SettingUp({ start }: { start: CardStart }) {
     plan?.kind === 'agents' ? plan.agents.flatMap((agent) => agent.inputs.filter((input) => inputPart(input.kind) === part).map((input) => inputPiece(agent, input))) : []
 
   const parts: Part[] = [
-    ...keyed('Watch', [...rowPieces('Watch'), ...dayPieces, ...inputPieces('Watch')]),
+    ...keyed('Watch', [...rowPieces('Watch'), ...dayPieces, ...inputPieces('Watch'), ...(youRun ? [{ mark: 'ok' as const, body: <span className={styles['pnote']}>You run {youRun}</span> }] : [])]),
     ...keyed('When', [whenPiece]),
     ...keyed('Then', [...rowPieces('Then'), ...inputPieces('Then'), ...(writes === false ? [] : [{ mark: 'ok' as const, body: <span className={styles['after']}>After a yes</span> }])]),
     ...crosses,

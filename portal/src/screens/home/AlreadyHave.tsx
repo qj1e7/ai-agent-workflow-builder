@@ -19,7 +19,9 @@ export function AlreadyHave({ similar, card }: { similar: SimilarWorkflow; card:
   const main = useMainButton()
   const useCase = useUseCase(similar.use_case_id).data
   if (another) return card
-  const runs = useCase?.schedule ? `It already runs ${repeatWords(useCase.schedule)}.` : useCase ? 'It already runs when an Operator starts it.' : null
+  const repo = useCase?.agents.flatMap((agent) => Object.entries(agent.values)).find(([input]) => /github/i.test(input))?.[1]
+  const when = useCase?.schedule ? repeatWords(useCase.schedule) : 'when an Operator starts it'
+  const runs = useCase ? (repo ? `It already watches ${repo}, ${when}.` : `It already runs ${when}.`) : null
   return (
     <Card
       title={useCase?.name ?? similar.name}

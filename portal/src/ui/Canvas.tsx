@@ -22,7 +22,7 @@ const PICTURE: Readonly<Record<N8nBlockKind, Icon>> = {
   other: IconX,
 }
 
-/** What each block is, under its name. The block says nothing of the system it reaches, so neither does this. */
+/** What each block is, under its name. A block names its kind, not the system it reaches, so this says the kind. */
 const SUB: Readonly<Record<N8nBlockKind, string>> = {
   schedule: 'Schedule',
   start: 'Start',

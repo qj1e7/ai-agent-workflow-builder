@@ -12,14 +12,17 @@ import setupCross from '../../../../contracts/fixtures/planner/answer.setup_card
 import { ApiProvider } from '../../api/context'
 import { keys } from '../../api/queries'
 import { createDevSession } from '../../api/session'
-import type { Me, SetupCardReply, UseCaseCreated, UseCaseView } from '../../api/types'
+import planUseOne from '../../../../contracts/fixtures/cards/plan.use-one.json'
+import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
+import type { Me, PlanOut, SetupCardReply, UseCaseCreated, UseCaseView, WatchlistView } from '../../api/types'
 import type { SetUp } from '../../api/workflowQueries'
 import { emptyModel, foldWire, type RunModel } from '../run/runModel'
 import { BuildingCard, type CardProps } from './Building'
 import { BuildPanel } from './BuildPanel'
-import { cardFrom } from './card'
+import { cardFrom, planView, taskWithoutSchedule } from './card'
+import { PartsList } from './PartsList'
 import { CardMemoryContext, newCardMemory, type CardKept } from './cardMemory'
-import { SetupCard } from './SetupCard'
+import { frozenParts, SetupCard } from './SetupCard'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator'] }
 const CREATED = created as UseCaseCreated
@@ -35,18 +38,20 @@ interface World {
   readonly useCase?: UseCaseView
   /** The workflow's read failed. */
   readonly unread?: boolean
+  readonly watched?: WatchlistView
   readonly setUp?: SetUp | null
   readonly kept?: CardKept
 }
 
 const HELD: SetUp = { created: CREATED, at: Date.now() - 60_000, testRunId: null, testKey: 'k1', testAsked: null }
 
-function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false }: World = {}): string {
+function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false, watched }: World = {}): string {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', scope], ALICE)
   if (unread) queryClient.getQueryCache().build(queryClient, { queryKey: keys.useCase(scope, useCase.use_case_id) }).setState({ status: 'error', error: new Error('no answer'), fetchStatus: 'idle' })
   else queryClient.setQueryData(keys.useCase(scope, useCase.use_case_id), useCase)
   if (setUp) queryClient.setQueryData(keys.setUp(scope, CREATED.use_case_id), setUp)
+  if (watched) queryClient.setQueryData(keys.watchlist(scope), watched)
   const memory = newCardMemory()
   if (kept) memory.keep(kept)
   return renderToStaticMarkup(
@@ -105,7 +110,7 @@ describe('the set-up card before Set up', () => {
     const html = render(card(setupCross as SetupCardReply, 'Every Friday at 5pm, sum up the tickets we closed this week in MOCK and colour them by team'))
     const keys = [...html.matchAll(/data-part="([^"]+)"/g)].map((m) => m[1])
     expect(keys).toEqual(['Watch', 'When', 'Then', 'cross-0'])
-    expect(text(html)).toContain('Can’t do: “colour them by team” I didn’t follow this part.')
+    expect(text(html), 'a cross in the sketch’s short form, her words as a sentence').toContain('Can’t do: Colour them by team. I didn’t follow this part.')
     expect(buttons(html)).toContain('Set up the part I can')
   })
 
@@ -118,8 +123,25 @@ describe('the set-up card before Set up', () => {
 
   it('leads with the workflow she already has when the name matches one', () => {
     const html = render(card(setupCard as SetupCardReply), { useCase: { ...ON, use_case_id: 'uc_01JB8', name: 'Weekly summary of closed tickets', schedule: { ...DRAFT.schedule!, day: 'friday', at: '17:00' } } })
-    expect(text(html)).toContain('It already runs every Friday at 17:00.')
+    expect(text(html)).toContain('It already watches langchain-ai/langgraph, every Friday at 17:00.')
     expect(buttons(html)).toEqual(['Set up another', 'Open it'])
+  })
+})
+
+describe('what the card knows about the software it watches', () => {
+  const plan = { task: 'Check it', answer: planUseOne as PlanOut }
+  const reply: SetupCardReply = { ...SETUP, rows: [{ kind: 'look_for', text: 'New releases of langchain-ai/langgraph', state: 'understood', note: null }, ...SETUP.rows.filter((row) => row.kind !== 'look_for')] }
+  const form = cardFrom(reply.name, reply.rows, TYPED, reply.parts)
+
+  it('says the version she runs under Watch, from the watchlist, when the software is on it', () => {
+    const html = render(<SetupCard start={{ form, plan: { ...plan, task: taskWithoutSchedule(form.rows) }, draftId: null, similar: null }} />, { watched: statuses as WatchlistView })
+    expect(text(html)).toContain('You run 1.2.14')
+  })
+
+  it('names the repository once after Set up, not again as a value', () => {
+    const html = renderToStaticMarkup(<PartsList parts={frozenParts(form, planView(planUseOne as PlanOut, form.rows), true, null)} short />)
+    expect(text(html)).toContain('New releases of langchain-ai/langgraph')
+    expect(text(html)).not.toContain('GitHub repository: langchain-ai/langgraph')
   })
 })
 
@@ -190,7 +212,7 @@ describe('the set-up card after Set up', () => {
     expect(pill(ready), 'pressing Turn it on is not On').toBe('Ready')
     const html = building(passed, { useCase: ON })
     expect(pill(html)).toBe('On')
-    expect(text(html)).toMatch(/On\. First run Mon 16 Nov, 8:00\./)
+    expect(text(html)).toMatch(/On\. First run (today|tomorrow|[A-Z][a-z]+day|[A-Z][a-z]{2} \d+ [A-Z][a-z]{2}), 8:00\./)
     expect(buttons(html)).toEqual([])
   })
 })

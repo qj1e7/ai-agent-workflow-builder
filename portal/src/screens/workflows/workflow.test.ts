@@ -49,6 +49,7 @@ import {
   sentenceOf,
   stageOfRun,
   runWhen,
+  firstRunWhen,
   runsOf,
   stepTag,
   timesZone,
@@ -187,6 +188,15 @@ describe('a workflow row’s line', () => {
     expect(pill('lost')).toEqual({ tone: 'bad', pill: 'Lost' })
     expect(pill('working')).toEqual({ tone: 'new', pill: null })
     for (const state of ['rejected', 'succeeded', 'skipped', 'expired'] as const) expect(pill(state)).toEqual({ tone: 'ok', pill: null })
+  })
+})
+
+describe('a first run, as the set-up card says it', () => {
+  it('says today or tomorrow, then the weekday within the week, then the date', () => {
+    expect(firstRunWhen('2026-11-04T09:00:00Z', NOW)).toBe('today, 17:00')
+    expect(firstRunWhen('2026-11-05T01:00:00Z', NOW)).toBe('tomorrow, 9:00')
+    expect(firstRunWhen('2026-11-09T01:00:00Z', NOW)).toBe('Monday, 9:00')
+    expect(firstRunWhen('2026-11-20T01:00:00Z', NOW)).toBe('Fri 20 Nov, 9:00')
   })
 })
 
