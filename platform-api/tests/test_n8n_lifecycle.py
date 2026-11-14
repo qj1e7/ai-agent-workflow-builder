@@ -134,13 +134,24 @@ async def test_pause_takes_it_off_in_n8n_and_resume_puts_the_same_version_back(o
     assert own.n8n.workflows[workflow_id]["activeVersionId"] == live
 
 
-async def test_delete_takes_it_off_in_n8n_and_restore_puts_it_back(own: N8nLab):
+async def test_delete_removes_it_from_n8n_and_restore_saves_it_there_again(own: N8nLab):
+    """D7: archived, which unpublishes, then deleted with its executions. Restoring saves the
+    version in use as a new n8n workflow from the one the platform kept, and puts it live."""
     use_case_id, workflow_id = await made(own, on=True)
-    live = own.n8n.workflows[workflow_id]["activeVersionId"]
+    kept = (await version_row(own, use_case_id, 1))["document"]
     assert (await move(own, "delete", use_case_id)).status_code == 200
-    assert own.n8n.workflows[workflow_id]["activeVersionId"] is None
-    assert (await move(own, "restore", use_case_id)).status_code == 200
-    assert own.n8n.workflows[workflow_id]["activeVersionId"] == live
+    assert workflow_id not in own.n8n.workflows
+    removed = [c for c in own.n8n.calls if c.endswith((f"{workflow_id}/archive", workflow_id))]
+    assert removed[-2:] == [
+        f"POST /api/v1/workflows/{workflow_id}/archive",
+        f"DELETE /api/v1/workflows/{workflow_id}",
+    ]
+    restored = await move(own, "restore", use_case_id)
+    assert (restored.status_code, restored.json()["state"]) == (200, "on"), restored.text
+    [again] = own.n8n.workflows
+    first = await version_row(own, use_case_id, 1)
+    assert own.n8n.workflows[again]["activeVersionId"] == first["n8n_version_id"]
+    assert [n["name"] for n in first["document"]["nodes"]] == [n["name"] for n in kept["nodes"]]
 
 
 async def test_a_new_schedule_of_a_workflow_that_is_on_is_published_in_n8n_and_undone(

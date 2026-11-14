@@ -44,6 +44,7 @@ from platform_api.orchestration.n8n_calls import (
     BUSY,
     CANNOT_SEAL,
     CHANGED_CALL,
+    DELETED_BEFORE,
     DENIED,
     GITHUB_RELEASES,
     NO_EXECUTION,
@@ -56,6 +57,7 @@ from platform_api.orchestration.n8n_calls import (
     START_TOO_LATE,
     START_USED,
     TEST_RUN_STOPS,
+    WRITES_REFUSED,
     AgentCall,
     AgentToRun,
     Answer,
@@ -98,6 +100,7 @@ from platform_api.orchestration.n8n_calls import (
     decide_link,
     fail_by_report,
     failure_words,
+    refuses_writes,
     rejoin,
     run_stopped,
     unknown,
@@ -453,6 +456,10 @@ class NodeCalls:
             case _:
                 why = f"it is {state_name(record.state)}, not working."
                 return await self._refuse(uow, call, run_id, run_stopped(why))
+        if call.kind == "ask" and isinstance(record.state, Working):
+            problem = await self._write_problem(uow, call.execution_id)
+            if problem is not None:
+                return await self._stop_writes(uow, call, record, problem)
         earlier = await self._book.answered_in_run(uow, run_id, call)
         if earlier is not None:
             answer = replayed(call.kind, earlier)
@@ -462,6 +469,33 @@ class NodeCalls:
             return BUSY
         call_id = await self._book.claim(uow, call, run_id)
         return Admitted(run_id, call_id, TaskId(f"{run_id}/{call_id}"), record)
+
+    async def _write_problem(self, uow: UnitOfWork, execution: N8nExecutionId) -> Refused | None:
+        """Why a linked execution may not ask for a yes or write: its workflow was deleted, or
+        the version it ran did not grade safe, as the sweep graded it."""
+        ran = await self._book.ran(uow, execution)
+        if ran is None:
+            return WRITES_REFUSED
+        workflow_id, version_id = ran
+        if await self._workflows.deleted(workflow_id):
+            return DELETED_BEFORE
+        version = None
+        if version_id is not None:
+            version = await self._workflows.version(workflow_id, version_id)
+        return WRITES_REFUSED if refuses_writes(version) else None
+
+    async def _stop_writes(
+        self, uow: UnitOfWork, call: NodeCall, record: RunRecord, problem: Refused
+    ) -> Refused:
+        """The run stops with the words, and the block shows them (ENGINE-PLAN 2.3.11)."""
+        failure = Failure(FailureReason.SAFETY_DENIED, problem.detail, retryable=False)
+        match record.state:
+            case Working() | Acting() as live:
+                await self._commit(uow, record, live.fail(failure))
+                await self._store.cancel_outbox(uow, record.run_id)
+            case _:
+                pass
+        return await self._refuse(uow, call, record.run_id, problem)
 
     async def _linked_run(self, uow: UnitOfWork, call: NodeCall) -> RunId | CallResult:
         """The run a block's call is for, linking its execution on the first call. A call this
@@ -538,9 +572,11 @@ class NodeCalls:
         match link:
             case Refused():
                 return link
-            case NewRun(started_by, trigger):
+            case NewRun(started_by, trigger, joined):
                 return await linked(
-                    await self._new_run(uow, own, started_by, trigger, execution, facts.mode)
+                    await self._new_run(
+                        uow, own, started_by, trigger, execution, facts.mode, joined
+                    )
                 )
             case StopStart(issued, why):
                 record = await self._pending_for(uow, issued, execution)
@@ -552,7 +588,7 @@ class NodeCalls:
                 await self._store.cancel_outbox(uow, record.run_id)
                 await linked(record.run_id)
                 return why
-            case ByStart(issued, holder):
+            case ByStart(issued, holder, joined):
                 record = await self._pending_for(uow, issued, execution)
                 if isinstance(record, Refused):
                     return record
@@ -566,7 +602,7 @@ class NodeCalls:
                     if waiting is None
                     else pending.skip(execution, facts.mode, waiting)
                 )
-                await self._commit(uow, record, moved, joined_by=holder)
+                await self._commit(uow, record, moved, joined=(*_one(holder), *joined))
                 return await linked(record.run_id)
             case ByRetry(run_id, holder):
                 record = await self._store.load_run(uow, run_id, lock=True)
@@ -575,7 +611,7 @@ class NodeCalls:
                     case Refused() as refused:
                         return refused
                     case Moved() as moved:
-                        await self._commit(uow, record, moved, joined_by=holder)
+                        await self._commit(uow, record, moved, joined=_one(holder))
                         return await linked(run_id)
 
     async def _pending_for(
@@ -597,6 +633,7 @@ class NodeCalls:
         trigger: Literal["person", "schedule"],
         execution: N8nExecutionId,
         mode: str,
+        joined: tuple[UserId, ...],
     ) -> RunId:
         spec = replace(own.spec, trigger=trigger)
         names = await self._store.names(uow, [started_by])
@@ -616,7 +653,9 @@ class NodeCalls:
         else:
             state = Skipped(run_id, waiting)
             events = skipped_events(created, execution, mode, waiting)
-        record = RunRecord(run_id, spec, started_by, uow.now, uow.now, 1, state, (), None)
+        record = RunRecord(
+            run_id, spec, started_by, uow.now, uow.now, 1, state, (), None, joined_by=joined
+        )
         await self._store.insert_run(uow, record, f"n8n:{execution}")
         await self._activity.append(uow, run_id, events)
         return run_id
@@ -932,6 +971,10 @@ class NodeCalls:
         run_id = linked
         record = await self._store.load_run(uow, run_id, lock=True)
         assert record is not None
+        if isinstance(record.state, Working | Acting | AwaitingApproval | Lost):
+            problem = await self._write_problem(uow, call.execution_id)
+            if problem is not None:
+                return await self._stop_writes(uow, call, record, problem)
         held = await self._the_request(uow, record.state)
         match admit_write(record.state, call.execution_id, held, uow.now):
             case Refused() as refused:
@@ -1014,12 +1057,16 @@ class NodeCalls:
         record: RunRecord,
         moved: Moved[Any],
         *,
-        joined_by: UserId | None = None,
+        joined: Sequence[UserId] = (),
     ) -> RunRecord:
-        saved = await self._store.save_run(uow, record, moved.state, joined_by=joined_by)
+        saved = await self._store.save_run(uow, record, moved.state, joined=joined)
         await self._activity.append(uow, record.run_id, moved.events)
         await self._watch.run_moved(uow, record, moved.state)
         return saved
+
+
+def _one(person: UserId | None) -> tuple[UserId, ...]:
+    return () if person is None else (person,)
 
 
 def _recorded(actions: Sequence[WriteAction], subject: str | None) -> tuple[Mapping[str, Any], ...]:

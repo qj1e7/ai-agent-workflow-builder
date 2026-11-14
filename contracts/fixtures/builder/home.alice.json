@@ -132,5 +132,26 @@
       "last_ok_at": "2026-11-09T01:00:00Z",
       "expires_at": "2026-11-18T09:00:00Z"
     }
+  ],
+  "changed_in_n8n": [
+    {
+      "parts": [],
+      "answer": "changed_in_n8n",
+      "use_case_id": "uc_fastapi",
+      "name": "FastAPI release check",
+      "version": 4,
+      "by": "alice",
+      "by_name": "Alice Tan",
+      "at": "2026-11-09T02:05:00Z",
+      "grade": "writes_refused",
+      "changes": [
+        "Now runs every day at 7:30.",
+        "Deleted \u201cAsk for a yes\u201d."
+      ],
+      "findings": [
+        "\"Create ticket\" can run without a yes."
+      ],
+      "in_use": 4
+    }
   ]
 }

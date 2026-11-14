@@ -439,6 +439,24 @@ class ChangedInN8n:
     did not land, or was not published. The Portal says "Changed again since, in n8n."."""
 
 
+@dataclass(frozen=True)
+class Expected:
+    """What the platform last saw of a workflow in n8n: its draft, and the version live, None
+    while nothing is."""
+
+    draft: str
+    live: str | None
+
+
+@dataclass(frozen=True)
+class PutBack:
+    version_id: str
+    """The version that is in use now, live or, for a workflow that is off, ready to publish."""
+    document: dict[str, Any]
+    draft: str
+    """n8n's draft after it. Publishing a version n8n holds leaves the draft where it was."""
+
+
 class _Data(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -472,6 +490,10 @@ class _Publication(_Data):
 
 class _User(_Data):
     id: str
+
+
+class _SignedIn(_Data):
+    data: _User | None = None
 
 
 class _TimelineEntry(_Data):
@@ -645,6 +667,7 @@ class N8nApi:
         self._clock = clock
         self._wall = wall
         self._signed_in = False
+        self._user: str | None = None
         self._key: str | None = None
         self._lock = asyncio.Lock()
 
@@ -658,7 +681,19 @@ class N8nApi:
         )
         if response.status_code != 200:
             raise N8nError(f"could not sign in to n8n as its owner: HTTP {response.status_code}")
+        signed_in = _SignedIn.model_validate(response.json())
+        self._user = None if signed_in.data is None else signed_in.data.id
         self._signed_in = True
+
+    async def platform_user(self) -> str:
+        """The owner account's n8n user id, which the publish timeline names for every publish
+        the platform makes itself."""
+        async with self._lock:
+            if self._user is None:
+                await self._sign_in()
+            if self._user is None:
+                raise N8nError("n8n's sign-in did not say who the owner account is")
+            return self._user
 
     async def _rest(
         self,
@@ -745,6 +780,22 @@ class N8nApi:
     async def delete(self, workflow_id: str) -> None:
         """A draft that was never published. n8n refuses a published one (P7 Q8)."""
         _expect(await self._public("DELETE", f"/workflows/{workflow_id}"), 200, 404)
+
+    async def archive(self, workflow_id: str) -> None:
+        """Unpublishes and keeps the workflow and its executions. A waiting execution of an
+        archived workflow still resumes if woken, so the platform never wakes one (P7 Q17)."""
+        _expect(await self._public("POST", f"/workflows/{workflow_id}/archive", {}), 200, 404)
+
+    async def delete_archived(self, workflow_id: str, timeout: float = 30) -> None:
+        """Deletes it with its executions. n8n finishes the unpublish of an archive in the
+        background and answers 409 until it is done (P7 Q17)."""
+        deadline = self._clock() + timeout
+        while True:
+            response = await self._public("DELETE", f"/workflows/{workflow_id}")
+            if response.status_code != 409 or self._clock() > deadline:
+                _expect(response, 200, 404)
+                return
+            await self._sleep(1)
 
     async def version(self, workflow_id: str, version_id: str) -> dict[str, Any] | None:
         """A version n8n still holds. Community keeps a day of history (P7 Q7)."""
@@ -994,6 +1045,29 @@ class N8nDrafts(Protocol):
         compare, and puts it live when `live`."""
         ...
 
+    async def look(self, workflow_id: str) -> N8nWorkflow | None:
+        """None when n8n no longer has the workflow."""
+        ...
+
+    async def kept(self, workflow_id: str, version_id: str) -> dict[str, Any] | None: ...
+
+    async def timeline(self, workflow_id: str) -> list[PublishEvent]: ...
+
+    async def platform_user(self) -> str: ...
+
+    async def put_back(
+        self,
+        workflow_id: str,
+        expected: Expected,
+        document: Mapping[str, Any],
+        live: bool,
+        held: str | None = None,
+    ) -> PutBack | ChangedInN8n:
+        """Puts a version in use under the version compare, live when `live`."""
+        ...
+
+    async def remove_for_good(self, workflow_id: str) -> None: ...
+
 
 class N8nWorkflows:
     """Where the builder saves the Planner's layouts, as drafts nobody has published, and where
@@ -1047,6 +1121,52 @@ class N8nWorkflows:
         if live and isinstance(written, Written):
             await self._live(workflow_id, written.version_id)
         return written
+
+    async def look(self, workflow_id: str) -> N8nWorkflow | None:
+        return await self._api.workflow(workflow_id)
+
+    async def kept(self, workflow_id: str, version_id: str) -> dict[str, Any] | None:
+        return await self._api.version(workflow_id, version_id)
+
+    async def timeline(self, workflow_id: str) -> list[PublishEvent]:
+        return await self._api.publish_timeline(workflow_id)
+
+    async def platform_user(self) -> str:
+        return await self._api.platform_user()
+
+    async def put_back(
+        self,
+        workflow_id: str,
+        expected: Expected,
+        document: Mapping[str, Any],
+        live: bool,
+        held: str | None = None,
+    ) -> PutBack | ChangedInN8n:
+        """Refuses when n8n's draft or live version is not what the platform last saw. A version
+        n8n still holds as the platform kept it is published as it is, which leaves the draft
+        alone so no open editor can overwrite it. Otherwise, after the day n8n keeps history
+        for, the kept document is written over the draft and published (ENGINE-PLAN 2.5)."""
+        now = await self._api.workflow(workflow_id)
+        if now is None or (now.version_id, now.active_version_id) != (
+            expected.draft,
+            expected.live,
+        ):
+            return ChangedInN8n()
+        if live and held is not None:
+            in_n8n = await self._api.version(workflow_id, held)
+            if in_n8n is not None and same_as_sent(document, in_n8n):
+                await self._api.publish(workflow_id, held)
+                await self._live(workflow_id, held)
+                return PutBack(held, in_n8n, now.version_id)
+        written = await self.change(workflow_id, expected.draft, document, live)
+        if isinstance(written, ChangedInN8n):
+            return written
+        return PutBack(written.version_id, written.document, written.version_id)
+
+    async def remove_for_good(self, workflow_id: str) -> None:
+        """Archive first, which unpublishes, then delete, which takes its executions too (D7)."""
+        await self._api.archive(workflow_id)
+        await self._api.delete_archived(workflow_id)
 
     async def _live(self, workflow_id: str, version_id: str) -> None:
         status = await self._api.wait_published(workflow_id)

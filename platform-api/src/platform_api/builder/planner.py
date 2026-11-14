@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Final, Literal, Protocol, Self
 
-from pydantic import ConfigDict, Field, StringConstraints, model_validator
+from pydantic import AwareDatetime, ConfigDict, Field, StringConstraints, model_validator
 
 from platform_api.builder import asks
 from platform_api.builder.models import (
@@ -50,6 +50,7 @@ from platform_api.orchestration import (
     EditCant,
     ExampleSpec,
     FactSection,
+    Grade,
     ModelProblem,
     NeedsMeAnswer,
     NoModel,
@@ -73,7 +74,7 @@ from platform_api.orchestration import (
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
-from platform_api.shared import Principal, Role
+from platform_api.shared import Principal, Role, UserId
 from platform_api.wire import WireIn, WireModel
 
 log = logging.getLogger(__name__)
@@ -465,6 +466,36 @@ class OfflineReply(Reply):
     starters: list[StarterView]
 
 
+class ChangedInN8nReply(Reply):
+    """A version published in n8n, as the versions sweep found and graded it (ENGINE-PLAN 2.5).
+    Home lists the newest for Operators, and the chat shows each as the Changed in n8n card, whose
+    Undo rolls back to the version before with POST
+    /api/v1/use-cases/{use_case_id}/versions/{version}/rollback and whose Add the yes back is POST
+    /api/v1/use-cases/{use_case_id}/add-the-yes-back, each with in_use set to version."""
+
+    answer: Literal["changed_in_n8n"] = "changed_in_n8n"
+    use_case_id: str
+    name: str
+    version: int = Field(description="The version published in n8n.")
+    by: UserId | None = Field(
+        description="Who published it in n8n. Null when the People list can't match them, so "
+        "its runs stop at their first block until an Operator matches the person."
+    )
+    by_name: str | None = Field(description="Their name. Null with by.")
+    at: AwareDatetime = Field(description="When the platform found it.")
+    grade: Grade
+    changes: list[str] = Field(
+        description="What changed from the version before, in plain words, one per line."
+    )
+    findings: list[str] = Field(
+        description="Why it is not safe, in the safety checker's words. Empty when it is safe."
+    )
+    in_use: int = Field(
+        description="The version in use now. Another number than version means someone has "
+        "changed it since, so the card offers nothing more."
+    )
+
+
 WatchlistReply.model_rebuild()
 
 type PlannerReply = Annotated[
@@ -486,7 +517,8 @@ type PlannerReply = Annotated[
     | OperatorsReply
     | DecidedReply
     | DecideReply
-    | OfflineReply,
+    | OfflineReply
+    | ChangedInN8nReply,
     Field(discriminator="answer"),
 ]
 

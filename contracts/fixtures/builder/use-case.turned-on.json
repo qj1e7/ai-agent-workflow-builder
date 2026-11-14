@@ -128,5 +128,8 @@
       "kind": "end",
       "next": []
     }
-  ]
+  ],
+  "grade": null,
+  "findings": [],
+  "deleted_in_n8n_at": null
 }

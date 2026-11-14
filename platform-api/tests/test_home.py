@@ -87,6 +87,7 @@ EMPTY = {
     "workflows": 0,
     "addresses": [],
     "connections": [],
+    "changed_in_n8n": [],
 }
 
 

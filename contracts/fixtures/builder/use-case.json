@@ -41,5 +41,8 @@
   "agents": [],
   "last_run": null,
   "left_out": [],
-  "blocks": []
+  "blocks": [],
+  "grade": null,
+  "findings": [],
+  "deleted_in_n8n_at": null
 }

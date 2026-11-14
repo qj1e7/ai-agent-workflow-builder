@@ -235,11 +235,12 @@ class Store:
         state: RunState,
         *,
         retried_by: UserId | None = None,
-        joined_by: UserId | None = None,
+        joined: Sequence[UserId] = (),
     ) -> RunRecord:
         name, data = dump_state(state)
         new_retried = record.retried_by + ((retried_by,) if retried_by else ())
-        new_joined = record.joined_by + ((joined_by,) if joined_by else ())
+        fresh = (person for person in joined if person not in record.joined_by)
+        new_joined = record.joined_by + tuple(dict.fromkeys(fresh))
         updated = await (
             await uow.conn.execute(
                 "UPDATE orchestration.runs SET state = %s, state_data = %s, deadline_at = %s, "
@@ -667,6 +668,16 @@ class Store:
             "WHERE id = %s AND status = 'pending'",
             (error[:500], row_id),
         )
+
+    async def waiting_runs(self, uow: UnitOfWork, use_case_id: str) -> list[RunId]:
+        rows = await (
+            await uow.conn.execute(
+                "SELECT run_id FROM orchestration.runs WHERE use_case_id = %s"
+                " AND state = 'AwaitingApproval' ORDER BY started_at",
+                (use_case_id,),
+            )
+        ).fetchall()
+        return [RunId(row["run_id"]) for row in rows]
 
     async def cancel_outbox(self, uow: UnitOfWork, run_id: RunId) -> None:
         await uow.conn.execute(

@@ -1,7 +1,7 @@
 import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Literal, cast
 
 import httpx
@@ -49,7 +49,9 @@ from platform_api.builder.models import (
     DraftView,
     LastRunView,
     PlanOut,
+    RepublishIn,
     SuggestOut,
+    SweepOut,
     ToolList,
     UndoIn,
     UseCaseAgentView,
@@ -74,6 +76,7 @@ from platform_api.builder.n8n_draft import (
     check_draft,
 )
 from platform_api.builder.n8n_facts import BuilderWorkflowFacts, ReleaseReader
+from platform_api.builder.planner import ChangedInN8nReply
 from platform_api.builder.planning import (
     CardPlanner,
     NoModelConnected,
@@ -81,6 +84,7 @@ from platform_api.builder.planning import (
     RuntimeNotAnswering,
     plan,
 )
+from platform_api.builder.sweep import N8nAccounts, NoN8nAccounts, OpenRequests, VersionsSweep
 from platform_api.builder.templates import (
     AGENT_CARDS,
     SOFTWARE_WATCHLIST,
@@ -90,13 +94,22 @@ from platform_api.builder.templates import (
 from platform_api.builder.versions import (
     AlreadyUndone,
     ChangedSince,
+    DeletedInN8n,
+    Held,
+    InUseChanged,
+    Made,
     NoSuchVersion,
     NotAScheduleChange,
+    NotSafeToPublish,
+    Publication,
     Publish,
     ScheduleChange,
     Undo,
     Version,
+    add_version,
+    changes_between,
     publish,
+    schedule_of,
     undo,
     version_view,
     versions_of,
@@ -110,6 +123,7 @@ from platform_api.orchestration import (
     CardRun,
     CardsTask,
     ChangedInN8n,
+    Expected,
     Grade,
     Graded,
     N8nDrafts,
@@ -125,8 +139,10 @@ from platform_api.orchestration import (
     ScheduleBook,
     Task,
     WriteEntry,
+    add_yes,
     card_bindings,
     cards_policy,
+    grade,
     next_run,
     tools_used,
     write_tools_used,
@@ -137,8 +153,9 @@ log = logging.getLogger(__name__)
 
 _CURRENT_VERSION = """
     SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
-           u.draft, u.left_out, u.engine, u.n8n_workflow_id, v.version, v.template, v.name,
-           v.instruction, v.params, v.created_at, v.document, v.n8n_version_id
+           u.draft, u.left_out, u.engine, u.n8n_workflow_id, u.deleted_in_n8n_at, v.version,
+           v.template, v.name, v.instruction, v.params, v.created_at, v.document,
+           v.n8n_version_id, v.grade, v.findings
     FROM builder.use_cases u
     JOIN builder.use_case_versions v
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
@@ -146,7 +163,8 @@ _CURRENT_VERSION = """
 
 _USE_CASE_ROW = (
     "SELECT current_version, paused_at, paused_by, deleted_at, deleted_by, draft, engine,"
-    " n8n_workflow_id FROM builder.use_cases WHERE use_case_id = %s"
+    " n8n_workflow_id, n8n_draft_id, deleted_in_n8n_at FROM builder.use_cases"
+    " WHERE use_case_id = %s"
 )
 _IN_N8N = (
     "SELECT name, document, n8n_version_id FROM builder.use_case_versions"
@@ -156,11 +174,14 @@ _IN_N8N = (
 when a save waited on the lock had moved the current version on."""
 
 
-def _schedule_view(saved: SavedSchedule) -> UseCaseSchedule:
+def _schedule_view(saved: SavedSchedule, document: Mapping[str, Any] | None) -> UseCaseSchedule:
+    """An own workflow runs when its Schedule Trigger says, which a version published in n8n
+    may have changed, so its day and time are read from the version in use."""
+    schedule = schedule_of(document) or saved.schedule
     return UseCaseSchedule(
-        day=saved.schedule.day,
-        at=saved.schedule.at,
-        time_zone=saved.schedule.time_zone,
+        day=schedule.day,
+        at=schedule.at,
+        time_zone=schedule.time_zone,
         owner_name=saved.owner_name,
         held=saved.held,
     )
@@ -194,7 +215,9 @@ def _next_run_at(
     (ENGINE-PLAN 2.4). The rest run on the platform's schedule tick."""
     if _own(row):
         document = row["document"]
-        return None if document is None else next_run(document, row["n8n_workflow_id"], now)
+        if document is None or row["deleted_in_n8n_at"] is not None:
+            return None
+        return next_run(document, row["n8n_workflow_id"], now)
     return None if schedule is None else schedule.next_run(now)
 
 
@@ -234,7 +257,9 @@ def _view(
         created_at=row["created_at"],
         state=state,
         next_run_at=_next_run_at(row, schedule, now) if state == "on" else None,
-        schedule=None if schedule is None else _schedule_view(schedule),
+        schedule=None
+        if schedule is None
+        else _schedule_view(schedule, row["document"] if _own(row) else None),
         plan=plan,
         agents=[
             UseCaseAgentView(
@@ -248,6 +273,9 @@ def _view(
         last_run=last_run,
         left_out=list(row["left_out"]),
         blocks=[] if row["document"] is None else blocks_of(row["document"]),
+        grade=row["grade"] if _own(row) else None,
+        findings=list(row["findings"] or []),
+        deleted_in_n8n_at=row["deleted_in_n8n_at"],
     )
 
 
@@ -289,6 +317,11 @@ class Relaid:
 type InN8nRefused = N8nNotReady | DraftRefused | ChangedInN8n
 """Why a change to an own workflow was not made: n8n did not take it, the checker refused the
 layout, or someone changed the workflow in n8n since the platform stored it."""
+
+type Republished = (
+    UseCaseView | NoSuchVersion | InUseChanged | NotSafeToPublish | DeletedInN8n | InN8nRefused
+)
+"""What a roll back or the yes put back did: the workflow as it is now, or why nothing changed."""
 
 
 @dataclass(frozen=True)
@@ -351,6 +384,21 @@ def _planned(card: CardView, values: Mapping[str, str]) -> PlannedAgent:
     )
 
 
+NOT_TAKEN = "n8n did not take the change. Nothing changed. Try again."
+DELETED_IN_N8N = (
+    "This workflow was deleted in n8n, so it can't run again. Its runs and versions are kept."
+)
+CHANGED_IN_N8N_SINCE = timedelta(days=1)
+"""How long Home lists a version published in n8n."""
+
+
+@dataclass(frozen=True)
+class InUse:
+    held: Held
+    draft: str
+    """n8n's draft after it."""
+
+
 class Builder:
     def __init__(
         self,
@@ -364,6 +412,8 @@ class Builder:
         n8n: N8nDrafts | None = None,
         releases: ReleaseReader | None = None,
         writes: Sequence[WriteEntry] = (),
+        requests: OpenRequests | None = None,
+        accounts: N8nAccounts | None = None,
     ) -> None:
         self._db = db
         self._runs = runs
@@ -377,6 +427,13 @@ class Builder:
         self.public_base_url = public_base_url
         self.facts = BuilderWorkflowFacts(db, self, releases, writes)
         """What node calls ask of the builder, and what a draft is graded against."""
+        self._requests = requests
+        self.sweep = (
+            None
+            if n8n is None
+            else VersionsSweep(db, n8n, self.facts, accounts or NoN8nAccounts(), requests)
+        )
+        """The versions sweep, for a platform that lays workflows out in n8n."""
 
     async def list_use_cases(self, viewer: Principal | None = None) -> UseCaseList:
         """Team-wide by design: one team, two roles, and Approvers need the context.
@@ -490,6 +547,7 @@ class Builder:
 
         match await self._move(use_case_id, move, principal.user_id):
             case Deleted() as deleted:
+                await self._removed(use_case_id)
                 return UseCaseDeleted(
                     use_case_id=use_case_id,
                     deleted_at=deleted.at,
@@ -548,7 +606,13 @@ class Builder:
                 return None
             versions = await versions_of(conn, use_case_id)
         running = row["current_version"]
-        return VersionList(versions=[version_view(version, running) for version in versions])
+        befores = [*versions[1:], None]
+        return VersionList(
+            versions=[
+                version_view(version, running, before)
+                for version, before in zip(versions, befores, strict=True)
+            ]
+        )
 
     async def undo_version(
         self, use_case_id: str, version: int, principal: Principal, body: UndoIn
@@ -638,6 +702,225 @@ class Builder:
                 await self._schedules.save(UseCaseId(use_case_id), decided.after, principal)
         return decided
 
+    async def rollback_version(
+        self, use_case_id: str, version: int, principal: Principal, body: RepublishIn
+    ) -> Republished | None:
+        """Puts version `version` back in use as a new version, under the version compare
+        (ENGINE-PLAN 2.5). Only a version that passes the safety check now is put back."""
+
+        def back_to(versions: Sequence[Version]) -> tuple[Version, Held] | NoSuchVersion:
+            target = next((v for v in versions if v.number == version), None)
+            if target is None or target.held is None:
+                return NoSuchVersion()
+            return target, target.held
+
+        return await self._republish(
+            use_case_id,
+            principal,
+            body,
+            back_to,
+            lambda v: v.made is not None and v.made.back_to == version,
+            lambda by: Made("rolled_back", by, body.via, version),
+        )
+
+    async def add_the_yes_back(
+        self, use_case_id: str, principal: Principal, body: RepublishIn
+    ) -> Republished | None:
+        """Puts Ask for a yes back before each write in the version in use, and publishes that
+        as a new version under the version compare."""
+
+        def with_yes(versions: Sequence[Version]) -> tuple[Version, Held] | NoSuchVersion:
+            current = versions[0]
+            if current.held is None:
+                return NoSuchVersion()
+            added = add_yes(current.held.document, use_case_id)
+            if not added.added_before:
+                return current, current.held
+            return current, Held(current.held.version_id, added.document, current.held.grade)
+
+        return await self._republish(
+            use_case_id,
+            principal,
+            body,
+            with_yes,
+            lambda v: v.made is not None and v.made.kind == "yes_put_back",
+            lambda by: Made("yes_put_back", by, body.via),
+        )
+
+    async def _republish(
+        self,
+        use_case_id: str,
+        principal: Principal,
+        body: RepublishIn,
+        pick: Callable[[Sequence[Version]], tuple[Version, Held] | NoSuchVersion],
+        done_already: Callable[[Version], bool],
+        made: Callable[[UserId], Made],
+    ) -> Republished | None:
+        """Puts a workflow in use as a new version: one n8n still holds, published as it is, or
+        the one the platform kept, written over the draft. Both under the version compare, and
+        only when it grades safe against what the editor's lists hold now. Its source's
+        publisher is kept with it, because its runs are their work too (ADR 0026). Asked again
+        once done, it answers the same."""
+        async with self._db.transaction("builder") as uow:
+            row = await (
+                await uow.conn.execute(_USE_CASE_ROW + " FOR UPDATE", (use_case_id,))
+            ).fetchone()
+            if row is None or not _own(row):
+                return None
+            state = lifecycle_of(row)
+            if not isinstance(state, On | Paused):
+                return None
+            if row["deleted_in_n8n_at"] is not None:
+                return DeletedInN8n()
+            versions = await versions_of(uow.conn, use_case_id)
+            current = versions[0]
+            picked = pick(versions)
+            if isinstance(picked, NoSuchVersion):
+                return picked
+            source, held = picked
+            stale = body.in_use is not None and body.in_use != current.number
+            if stale and not done_already(current):
+                return InUseChanged()
+            if not stale and held != current.held:
+                live = is_on(state)
+                put = await self._put_in_use(use_case_id, row, current, source, held, live)
+                if not isinstance(put, InUse):
+                    return put
+                await add_version(
+                    uow,
+                    use_case_id,
+                    current.number,
+                    source.number,
+                    put.held,
+                    made(principal.user_id),
+                    Publication(principal.user_id, "portal") if live else None,
+                    source.published,
+                    put.draft,
+                )
+        return await self.get_use_case(use_case_id, principal)
+
+    async def _put_in_use(
+        self,
+        use_case_id: str,
+        row: Mapping[str, Any],
+        current: Version,
+        source: Version,
+        held: Held,
+        live: bool,
+    ) -> InUse | NotSafeToPublish | InN8nRefused:
+        """In n8n, under the version compare: live when the workflow is on, else ready to publish
+        when it is resumed. n8n's live version and draft must be the ones the platform saw."""
+        assert self._n8n is not None and current.held is not None
+        error_workflow = await self._n8n.error_workflow_id()
+        graded = grade(held.document, error_workflow, await self.facts.known({}))
+        if graded.grade != "safe":
+            return NotSafeToPublish(tuple(f.text for f in graded.findings))
+        workflow_id = row["n8n_workflow_id"]
+        in_use = current.held.version_id
+        expected = Expected(row["n8n_draft_id"] or in_use, in_use if live else None)
+        kept = held.version_id if held == source.held else None
+        try:
+            put = await self._n8n.put_back(workflow_id, expected, held.document, live, held=kept)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("n8n did not put %s in use: %s", use_case_id, error)
+            if live:
+                await self._put_back(workflow_id, in_use)
+            return N8nNotReady(NOT_TAKEN)
+        if isinstance(put, ChangedInN8n):
+            return put
+        return InUse(Held(put.version_id, put.document, "safe"), put.draft)
+
+    async def _bring_back(
+        self, uow: UnitOfWork, use_case_id: str, row: Mapping[str, Any]
+    ) -> Mapping[str, Any] | N8nNotReady:
+        """A deleted workflow was removed from n8n (D7), so restoring it saves the version in
+        use again as a new n8n workflow, from the workflow the platform kept for it."""
+        assert self._n8n is not None
+        try:
+            if await self._n8n.look(row["n8n_workflow_id"]) is not None:
+                return row
+            saved = await self._n8n.save_draft(row["document"])
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("n8n did not take %s back: %s", use_case_id, error)
+            return N8nNotReady(NOT_TAKEN)
+        await uow.conn.execute(
+            "UPDATE builder.use_cases SET n8n_workflow_id = %s, n8n_draft_id = %s"
+            " WHERE use_case_id = %s",
+            (saved.workflow_id, saved.version_id, use_case_id),
+        )
+        await uow.conn.execute(
+            "UPDATE builder.use_case_versions SET n8n_version_id = %s, document = %s"
+            " WHERE use_case_id = %s AND version = %s",
+            (saved.version_id, json(saved.document), use_case_id, row["current_version"]),
+        )
+        return {
+            **row,
+            "n8n_workflow_id": saved.workflow_id,
+            "n8n_version_id": saved.version_id,
+            "document": saved.document,
+        }
+
+    async def _removed(self, use_case_id: str) -> None:
+        """After a delete (D7): the open request ends cancelled and its Approvers are told, then
+        n8n archives the workflow and deletes it with its executions. Deleting again tries each
+        step again. A run of a deleted workflow never asks or writes, whatever n8n does."""
+        async with self._db.connection("builder") as conn:
+            row = await (await conn.execute(_USE_CASE_ROW, (use_case_id,))).fetchone()
+        if row is None or not _own(row):
+            return
+        if self._requests is not None:
+            try:
+                await self._requests.cancel_for_deleted(UseCaseId(use_case_id))
+            except Exception:
+                log.exception("could not cancel the open request of deleted %s", use_case_id)
+        if self._n8n is None or row["deleted_in_n8n_at"] is not None:
+            return
+        try:
+            await self._n8n.remove_for_good(row["n8n_workflow_id"])
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not remove deleted %s from n8n: %s", use_case_id, error)
+
+    async def sweep_now(self, use_case_id: str | None) -> SweepOut:
+        if self.sweep is None:
+            return SweepOut(found=0)
+        found = await self.sweep.asked(use_case_id)
+        return SweepOut(found=len(found))
+
+    async def changed_in_n8n(self, limit: int) -> list[ChangedInN8nReply]:
+        """The versions published in n8n in the last day, newest first, with what each changed
+        from the version before it. Names are the caller's to add."""
+        since = self._db.clock() - CHANGED_IN_N8N_SINCE
+        async with self._db.connection("builder") as conn:
+            rows = await (
+                await conn.execute(
+                    "SELECT v.use_case_id, v.version, v.created_at, v.published_by, v.grade,"
+                    " v.findings, v.document, v.name, u.current_version,"
+                    " p.document AS before FROM builder.use_case_versions v"
+                    " JOIN builder.use_cases u ON u.use_case_id = v.use_case_id"
+                    " LEFT JOIN builder.use_case_versions p"
+                    " ON p.use_case_id = v.use_case_id AND p.version = v.version - 1"
+                    " WHERE v.made = 'published_in_n8n' AND v.created_at > %s"
+                    " AND u.deleted_at IS NULL"
+                    " ORDER BY v.created_at DESC, v.use_case_id, v.version DESC LIMIT %s",
+                    (since, limit),
+                )
+            ).fetchall()
+        return [
+            ChangedInN8nReply(
+                use_case_id=row["use_case_id"],
+                name=row["name"],
+                version=row["version"],
+                by=None if row["published_by"] is None else UserId(row["published_by"]),
+                by_name=None,
+                at=row["created_at"],
+                grade=row["grade"],
+                changes=changes_between(row["before"], row["document"]),
+                findings=list(row["findings"] or []),
+                in_use=row["current_version"],
+            )
+            for row in rows
+        ]
+
     async def _move(
         self, use_case_id: str, move: Move, by: UserId, recorded: Recorded | None = None
     ) -> Moved | N8nNotReady | NotSafe | None:
@@ -649,8 +932,8 @@ class Builder:
             row = await (
                 await uow.conn.execute(
                     "SELECT u.paused_at, u.paused_by, u.deleted_at, u.deleted_by, u.draft,"
-                    " u.engine, u.n8n_workflow_id, u.current_version, v.template, v.n8n_version_id,"
-                    " v.grade"
+                    " u.engine, u.n8n_workflow_id, u.current_version, u.deleted_in_n8n_at,"
+                    " v.template, v.n8n_version_id, v.grade, v.document"
                     " FROM builder.use_cases u JOIN builder.use_case_versions v"
                     " ON v.use_case_id = u.use_case_id AND v.version = u.current_version"
                     " WHERE u.use_case_id = %s FOR UPDATE OF u",
@@ -662,6 +945,11 @@ class Builder:
             before = lifecycle_of(row)
             after = move(before, row["template"], uow.now)
             if isinstance(after, Draft | On | Paused | Deleted) and after != before:
+                if _own(row) and isinstance(before, Deleted) and not isinstance(after, Deleted):
+                    back = await self._bring_back(uow, use_case_id, row)
+                    if isinstance(back, N8nNotReady):
+                        return back
+                    row = back
                 if _own(row) and is_on(after) != is_on(before):
                     if (refused := await self._follow_in_n8n(row, after)) is not None:
                         return refused
@@ -700,16 +988,18 @@ class Builder:
         if laid.document == row["document"]:
             return None
         assert self._n8n is not None
-        expected = row["n8n_version_id"]
-        if expected is None:
+        if row["deleted_in_n8n_at"] is not None:
+            return N8nNotReady(DELETED_IN_N8N)
+        if row["n8n_version_id"] is None:
             return N8nNotReady("This version is not saved in n8n, so it cannot be changed there.")
+        expected = row["n8n_draft_id"] or row["n8n_version_id"]
         try:
             written = await self._n8n.change(row["n8n_workflow_id"], expected, laid.document, live)
         except (N8nError, httpx.HTTPError) as error:
             log.warning("n8n did not take the new schedule of %s: %s", use_case_id, error)
             if live:
-                await self._put_back(row["n8n_workflow_id"], expected)
-            return N8nNotReady("n8n did not take the change. Nothing changed. Try again.")
+                await self._put_back(row["n8n_workflow_id"], row["n8n_version_id"])
+            return N8nNotReady(NOT_TAKEN)
         if isinstance(written, ChangedInN8n):
             return written
         return Relaid(written.version_id, written.document, laid.graded.grade)
@@ -735,6 +1025,8 @@ class Builder:
         version_id = row["n8n_version_id"]
         if self._n8n is None:
             return N8nNotReady("This platform is not connected to n8n.")
+        if is_on(after) and row["deleted_in_n8n_at"] is not None:
+            return N8nNotReady(DELETED_IN_N8N)
         if is_on(after) and version_id is None:
             return N8nNotReady("This version is not saved in n8n. Change when it runs to save it.")
         if is_on(after) and row["grade"] != "safe":
@@ -1089,6 +1381,10 @@ async def _store_in_n8n(uow: UnitOfWork, use_case_id: str, version: int, relaid:
         "UPDATE builder.use_case_versions SET n8n_version_id = %s, document = %s, grade = %s,"
         " published_by = NULL, published_in = NULL WHERE use_case_id = %s AND version = %s",
         (relaid.version_id, json(relaid.document), relaid.grade, use_case_id, version),
+    )
+    await uow.conn.execute(
+        "UPDATE builder.use_cases SET n8n_draft_id = %s WHERE use_case_id = %s",
+        (relaid.version_id, use_case_id),
     )
 
 

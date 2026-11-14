@@ -404,6 +404,7 @@ async def build(settings: Settings) -> Services:
         n8n=n8n.drafts,
         releases=agents,
         writes=node_writes(settings),
+        requests=orchestrator,
     )
     facts = builder.facts
     sources = ReadSources({CONFLUENCE_PAGE: confluence}, facts)
@@ -480,6 +481,8 @@ class Runner:
             asyncio.create_task(self._services.orchestrator.run_forever(self._stop)),
             asyncio.create_task(self._services.node_calls.sweep_forever(self._stop)),
         ]
+        if (sweep := self._services.builder.sweep) is not None:
+            self._tasks.append(asyncio.create_task(sweep.sweep_forever(self._stop)))
 
     async def stop(self) -> None:
         self._stop.set()

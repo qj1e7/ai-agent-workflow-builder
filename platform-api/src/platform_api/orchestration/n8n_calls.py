@@ -121,6 +121,21 @@ class RanVersion:
     grade: Grade
     publisher: Publisher | None
     """None for a draft that nobody published, which runs only by hand."""
+    also: Publisher | None = None
+    """For a version a roll back, an Undo or the yes put back made, the publisher of the workflow
+    it publishes again. A run of it is their work too (ADR 0026)."""
+
+    @property
+    def parties(self) -> tuple[UserId, ...]:
+        """Whose work a run of this version is, as far as our People list knows them."""
+        return tuple(
+            p.person for p in (self.publisher, self.also) if p is not None and p.person is not None
+        )
+
+    @property
+    def unknown(self) -> bool:
+        """Someone our People list can't match published it, or the workflow it republishes."""
+        return any(p is not None and p.person is None for p in (self.publisher, self.also))
 
 
 @dataclass(frozen=True)
@@ -359,6 +374,15 @@ NOT_OURS = Refused(403, "This workflow is not one our platform runs.")
 NOBODY_HOLDS = Refused(403, "Nobody holds this workflow, so nobody may run it by hand.")
 VERSION_FAILED = Refused(403, "This version failed the check.")
 UNKNOWN_PUBLISHER = Refused(403, "Published by someone we don't know.")
+WRITES_REFUSED = Refused(
+    403,
+    "Writes refused: this version can make a change without a yes. Add the yes back, or undo "
+    "the change, in the Portal.",
+)
+"""A version the safety checker graded anything but safe never asks for a yes and never writes
+(ENGINE-PLAN 2.3.11): its ask and its writes are refused, and the run stops."""
+DELETED_BEFORE = Refused(403, "This workflow was deleted. Nothing was written.")
+"""A run of a deleted workflow never asks and never writes, whatever n8n still does (D7)."""
 NOT_ON = Refused(409, "This workflow is not on, so its schedule does not run it.")
 START_UNKNOWN = Refused(403, "This start is not one our platform made.")
 START_USED = Refused(403, "This start was already used.")
@@ -440,17 +464,27 @@ def check_start(
 
 
 def version_problem(version: RanVersion | None) -> Refused | None:
-    """A version the sweep has not graded yet counts as failed. Writes refused is not a stop:
-    the run reads, and the gateway refuses the write for want of a yes (ENGINE-PLAN 2.3.11)."""
+    """A version the sweep has not graded yet counts as failed. A version published by someone we
+    can't match stops every run of it, however it started (D5). Writes refused is not a stop:
+    the run reads, and its ask and its writes are refused (ENGINE-PLAN 2.3.11)."""
     if version is None or version.grade == "needs_a_fix":
         return VERSION_FAILED
+    if version.unknown:
+        return UNKNOWN_PUBLISHER
     return None
+
+
+def refuses_writes(version: RanVersion | None) -> bool:
+    """Only a version graded safe may ask for a yes and write."""
+    return version is None or version.grade != "safe"
 
 
 @dataclass(frozen=True)
 class NewRun:
     started_by: UserId
     trigger: Trigger
+    joined: tuple[UserId, ...] = ()
+    """Whose work it also is: the version's publishers."""
 
 
 @dataclass(frozen=True)
@@ -458,6 +492,8 @@ class ByStart:
     start: IssuedStart
     holder: UserId | None
     """The holder joins as a party when the start came through a run by hand in n8n."""
+    joined: tuple[UserId, ...] = ()
+    """The version's publishers, whose work every run of it is (ADR 0026)."""
 
 
 @dataclass(frozen=True)
@@ -492,6 +528,7 @@ def decide_link(
     a webhook with no start item is refused: only the Schedule Trigger, trigger, makes a run
     credited to the publisher."""
     problem = version_problem(version)
+    joined = () if version is None else version.parties
     if facts.retry_of is not None and retried_run is not None:
         return problem or ByRetry(retried_run, holder)
     if facts.start_nonce is not None:
@@ -501,11 +538,11 @@ def decide_link(
             case IssuedStart() as checked:
                 if problem is not None:
                     return StopStart(checked, problem)
-                return ByStart(checked, holder if facts.mode == "manual" else None)
+                return ByStart(checked, holder if facts.mode == "manual" else None, joined)
     if facts.mode == "manual":
         if holder is None:
             return NOBODY_HOLDS
-        return problem or NewRun(holder, "person")
+        return problem or NewRun(holder, "person", _besides(holder, joined))
     if facts.mode == "trigger":
         if not on:
             return NOT_ON
@@ -515,8 +552,12 @@ def decide_link(
         publisher = version.publisher
         if publisher is None or publisher.person is None:
             return UNKNOWN_PUBLISHER
-        return NewRun(publisher.person, "schedule")
+        return NewRun(publisher.person, "schedule", _besides(publisher.person, joined))
     return UNKNOWN_START
+
+
+def _besides(person: UserId, joined: tuple[UserId, ...]) -> tuple[UserId, ...]:
+    return tuple(other for other in joined if other != person)
 
 
 def rejoin(

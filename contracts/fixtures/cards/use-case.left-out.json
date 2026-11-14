@@ -45,5 +45,8 @@
   "left_out": [
     "colour them by team"
   ],
-  "blocks": []
+  "blocks": [],
+  "grade": null,
+  "findings": [],
+  "deleted_in_n8n_at": null
 }

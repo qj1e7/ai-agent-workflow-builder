@@ -250,6 +250,8 @@ def approval_card(notice: ApprovalNotice) -> AdaptiveCard:
 def _decided(outcome: ApprovalOutcome) -> str:
     if outcome.verdict == "approved":
         return f"Approved by {listed(outcome.by)}"
+    if outcome.verdict == "cancelled":
+        return "Deleted before an answer"
     by = listed(outcome.by)
     if outcome.approved_first:
         return f"Approved by {', then '.join(outcome.approved_first)}, then declined by {by}"

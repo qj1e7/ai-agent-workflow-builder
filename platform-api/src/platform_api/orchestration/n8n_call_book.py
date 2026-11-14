@@ -337,6 +337,19 @@ class CallBook:
         ).fetchone()
         return None if row is None else row["version_id"]
 
+    async def ran(
+        self, uow: UnitOfWork, execution: N8nExecutionId
+    ) -> tuple[str, str | None] | None:
+        """The workflow and the version a linked execution ran."""
+        row = await (
+            await uow.conn.execute(
+                "SELECT n8n_workflow_id, version_id FROM orchestration.executions"
+                " WHERE execution_id = %s",
+                (execution,),
+            )
+        ).fetchone()
+        return None if row is None else (row["n8n_workflow_id"], row["version_id"])
+
     async def link(
         self,
         uow: UnitOfWork,

@@ -1,23 +1,28 @@
 """A workflow's versions. Changing when it runs publishes a new version, and Undo publishes the
 version before again, so the list only grows. Version 1 is the one it was set up with. The
 watchlist publishes its own versions when its software changes (watchlist.py), with no change
-recorded here."""
+recorded here. For a workflow n8n carries, a version published in n8n's editor, a roll back and
+the yes put back are versions too (ENGINE-PLAN 2.5), each with the workflow n8n holds for it."""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal, cast
 
+from platform_api.builder.layout import CRON_DAYS
 from platform_api.builder.models import (
     ScheduleChangeView,
     VersionChange,
+    VersionMade,
     VersionSchedule,
     VersionView,
     Via,
 )
 from platform_api.db import Connection, UnitOfWork, json
-from platform_api.orchestration import Schedule
+from platform_api.orchestration import Day, Grade, Schedule, Unreadable, read_flow
 from platform_api.shared import UserId
+
+type Where = Literal["portal", "n8n"]
 
 
 @dataclass(frozen=True)
@@ -33,11 +38,47 @@ class ScheduleChange:
 
 
 @dataclass(frozen=True)
+class Made:
+    """How a version that is not a schedule change came about. `by` and `via` are the Portal
+    person and place, None for a version published in n8n."""
+
+    kind: VersionMade
+    by: UserId | None
+    via: Via | None
+    back_to: int | None = None
+
+
+@dataclass(frozen=True)
+class Publication:
+    """Who put a version live, and from where (D5). `by` is None for a publish in n8n by
+    someone the People list can't match."""
+
+    by: UserId | None
+    where: Where
+
+
+@dataclass(frozen=True)
+class Held:
+    """The workflow n8n holds for a version, as the platform keeps it, and its grade."""
+
+    version_id: str
+    document: dict[str, Any]
+    grade: Grade
+    findings: tuple[str, ...] = ()
+    """Why it is not safe, in the safety checker's words."""
+
+
+@dataclass(frozen=True)
 class Version:
     number: int
     at: datetime
     change: ScheduleChange | None
     """None for the version it was set up with, and for a version the watchlist published."""
+    made: Made | None = None
+    held: Held | None = None
+    """None for a workflow on the shared n8n workflow."""
+    published: Publication | None = None
+    """None for a version nobody has put live."""
 
 
 @dataclass(frozen=True)
@@ -68,6 +109,23 @@ class ChangedSince:
     """A later version exists, and Undo would throw it away."""
 
 
+@dataclass(frozen=True)
+class InUseChanged:
+    """Another version is in use than the one the person saw, so nothing changed."""
+
+
+@dataclass(frozen=True)
+class NotSafeToPublish:
+    """The version would not pass the safety check now, so it is not put in use."""
+
+    findings: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class DeletedInN8n:
+    """n8n no longer has the workflow, so nothing can change there."""
+
+
 type Undo = Publish | AlreadyUndone | NoSuchVersion | NotAScheduleChange | ChangedSince
 
 
@@ -93,13 +151,22 @@ def _schedule_view(schedule: Schedule | None) -> VersionSchedule | None:
     return VersionSchedule(day=schedule.day, at=schedule.at, time_zone=schedule.time_zone)
 
 
-def version_view(version: Version, running: int) -> VersionView:
-    change = version.change
+def version_view(version: Version, running: int, before: Version | None = None) -> VersionView:
+    """`before` is the version before it, whose workflow a version published in n8n is compared
+    with."""
+    change, made, held, published = version.change, version.made, version.held, version.published
+    in_n8n = made is not None and made.kind == "published_in_n8n"
+    by = change.by if change is not None else made.by if made is not None else None
+    if in_n8n and published is not None:
+        by = published.by
+    changes: list[str] = []
+    if in_n8n and held is not None:
+        changes = changes_between(None if before is None else _document(before), held.document)
     return VersionView(
         version=version.number,
         at=version.at,
-        by=None if change is None else change.by,
-        via=None if change is None else change.via,
+        by=by,
+        via=change.via if change is not None else None if made is None else made.via,
         change=None
         if change is None
         else VersionChange(
@@ -109,7 +176,115 @@ def version_view(version: Version, running: int) -> VersionView:
         ),
         undid=None if change is None else change.undid,
         running=version.number == running,
+        made=None if made is None else made.kind,
+        grade=None if held is None else held.grade,
+        changes=changes,
+        rolled_back_to=None if made is None else made.back_to,
+        publisher_unknown=in_n8n and published is not None and published.by is None,
     )
+
+
+def _document(version: Version) -> dict[str, Any] | None:
+    return None if version.held is None else version.held.document
+
+
+SCHEDULE_TYPE = "n8n-nodes-base.scheduleTrigger"
+DAY_WORDS: Mapping[str, str] = {
+    "every_day": "every day",
+    "weekdays": "every weekday",
+    "monday": "every Monday",
+    "tuesday": "every Tuesday",
+    "wednesday": "every Wednesday",
+    "thursday": "every Thursday",
+    "friday": "every Friday",
+    "saturday": "every Saturday",
+    "sunday": "every Sunday",
+}
+_DAY_OF_CRON: Mapping[tuple[object, ...], Day] = {
+    tuple(days): day for day, days in CRON_DAYS.items()
+}
+
+
+def schedule_of(document: Mapping[str, Any] | None) -> Schedule | None:
+    """When the workflow runs, read back from its one Schedule Trigger, for a rule the Planner
+    could have laid out: every day, or on days of the week, at an hour and minute. None for no
+    schedule, or for a rule the Portal's schedule can't hold."""
+    triggers = [
+        node
+        for node in _objects(None if document is None else document.get("nodes"))
+        if node.get("type") == SCHEDULE_TYPE and not node.get("disabled")
+    ]
+    if len(triggers) != 1:
+        return None
+    rule = _object(_object(triggers[0].get("parameters")).get("rule"))
+    intervals = _objects(rule.get("interval"))
+    if len(intervals) != 1:
+        return None
+    interval = intervals[0]
+    hour, minute = interval.get("triggerAtHour"), interval.get("triggerAtMinute")
+    if not isinstance(hour, int) or not isinstance(minute, int):
+        return None
+    at = f"{hour:02d}:{minute:02d}"
+    field = interval.get("field", "days")
+    if field == "days" and interval.get("daysInterval", 1) == 1:
+        return Schedule("every_day", at)
+    days = interval.get("triggerAtDay")
+    if field == "weeks" and interval.get("weeksInterval", 1) == 1 and isinstance(days, list):
+        day = _DAY_OF_CRON.get(tuple(cast(list[object], days)))
+        return None if day is None else Schedule(day, at)
+    return None
+
+
+def _object(value: object) -> dict[str, Any]:
+    return cast(dict[str, Any], value) if isinstance(value, dict) else {}
+
+
+def _objects(value: object) -> list[dict[str, Any]]:
+    items = cast(list[object], value) if isinstance(value, list) else []
+    return [_object(item) for item in items if _object(item)]
+
+
+def schedule_words(schedule: Schedule) -> str:
+    """As "every day at 7:30"."""
+    hour, minute = schedule.at.split(":")
+    return f"{DAY_WORDS[schedule.day]} at {int(hour)}:{minute}"
+
+
+def changes_between(before: Mapping[str, Any] | None, after: Mapping[str, Any]) -> list[str]:
+    """What a version published in n8n changed, in the Changed in n8n card's words: when it
+    runs, each block deleted, added or changed by name, then how the blocks connect and its
+    settings. A plain comparison of the two workflows, never a guess at why."""
+    try:
+        new = read_flow(after)
+        old = None if before is None else read_flow(before)
+    except Unreadable:
+        return ["Changed in a way our platform can't read."]
+    if old is None:
+        return ["Published in n8n."]
+    lines: list[str] = []
+    when_before, when_after = schedule_of(before), schedule_of(after)
+    if when_before != when_after:
+        lines.append(
+            "No longer runs on a schedule."
+            if when_after is None
+            else f"Now runs {schedule_words(when_after)}."
+        )
+    schedule_said = when_before != when_after and when_after is not None
+    lines.extend(f"Deleted “{name}”." for name in old.blocks if name not in new.blocks)
+    for name, block in new.blocks.items():
+        was = old.blocks.get(name)
+        if was is None:
+            lines.append(f"Added “{name}”.")
+            continue
+        changed = (was.type, dict(was.parameters)) != (block.type, dict(block.parameters))
+        said = schedule_said and block.type == SCHEDULE_TYPE == was.type
+        if changed and not said:
+            lines.append(f"Changed “{name}”.")
+    if set(old.blocks) == set(new.blocks) and set(old.edges) != set(new.edges):
+        lines.append("Changed how the blocks connect.")
+    if dict(old.settings) != dict(new.settings):
+        lines.append("Changed its settings.")
+    return lines or ["Published again, with no change to its blocks."]
 
 
 def _schedule_json(schedule: Schedule | None) -> object:
@@ -139,19 +314,104 @@ def _version_of(row: Mapping[str, Any]) -> Version:
     return Version(row["version"], row["created_at"], change)
 
 
+def _made_of(row: Mapping[str, Any]) -> Made | None:
+    if row["made"] is None:
+        return None
+    by = None if row["made_by"] is None else UserId(row["made_by"])
+    return Made(row["made"], by, row["made_via"], row["back_to"])
+
+
 async def versions_of(conn: Connection, use_case_id: str) -> list[Version]:
     """Newest first."""
     rows = await (
         await conn.execute(
             "SELECT v.version, v.created_at, c.changed_by, c.via, c.schedule_before,"
-            " c.schedule_after, c.undid FROM builder.use_case_versions v"
+            " c.schedule_after, c.undid, v.made, v.made_by, v.made_via, v.back_to,"
+            " v.n8n_version_id, v.document, v.grade, v.published_by, v.published_in, v.findings"
+            " FROM builder.use_case_versions v"
             " LEFT JOIN builder.use_case_version_changes c"
             " ON c.use_case_id = v.use_case_id AND c.version = v.version"
             " WHERE v.use_case_id = %s ORDER BY v.version DESC",
             (use_case_id,),
         )
     ).fetchall()
-    return [_version_of(row) for row in rows]
+    versions: list[Version] = []
+    for row in rows:
+        held = None
+        if row["n8n_version_id"] is not None:
+            findings = tuple(row["findings"] or ())
+            held = Held(row["n8n_version_id"], row["document"], row["grade"], findings)
+        published = None
+        if row["published_in"] is not None:
+            by = None if row["published_by"] is None else UserId(row["published_by"])
+            published = Publication(by, row["published_in"])
+        versions.append(
+            Version(
+                row["version"],
+                row["created_at"],
+                _version_of(row).change,
+                _made_of(row),
+                held,
+                published,
+            )
+        )
+    return versions
+
+
+async def add_version(
+    uow: UnitOfWork,
+    use_case_id: str,
+    newest: int,
+    source: int,
+    held: Held,
+    made: Made,
+    published: Publication | None,
+    also: Publication | None,
+    draft: str,
+) -> int:
+    """Writes the version after `newest`, the current one, as a copy of version `source`, its
+    agents included, holding the workflow n8n holds now, and makes it the current one. `also` is
+    whose work the workflow it republishes was, who joins its runs (ADR 0026). `draft` is n8n's
+    draft after it. The caller holds the use case's row."""
+    version = newest + 1
+    await uow.conn.execute(
+        "INSERT INTO builder.use_case_versions (use_case_id, version, template, name,"
+        " instruction, params, created_at, n8n_version_id, document, grade, published_by,"
+        " published_in, made, made_by, made_via, back_to, also_by, also_in, findings)"
+        " SELECT use_case_id, %s, template, name, instruction, params, %s, %s, %s, %s, %s, %s,"
+        " %s, %s, %s, %s, %s, %s, %s FROM builder.use_case_versions"
+        " WHERE use_case_id = %s AND version = %s",
+        (
+            version,
+            uow.now,
+            held.version_id,
+            json(held.document),
+            held.grade,
+            None if published is None else published.by,
+            None if published is None else published.where,
+            made.kind,
+            made.by,
+            made.via,
+            made.back_to,
+            None if also is None else also.by,
+            None if also is None else also.where,
+            json(list(held.findings)),
+            use_case_id,
+            source,
+        ),
+    )
+    await uow.conn.execute(
+        "INSERT INTO builder.use_case_cards (use_case_id, version, position, card_id,"
+        ' card_version, "values") SELECT use_case_id, %s, position, card_id, card_version,'
+        ' "values" FROM builder.use_case_cards WHERE use_case_id = %s AND version = %s',
+        (version, use_case_id, source),
+    )
+    await uow.conn.execute(
+        "UPDATE builder.use_cases SET current_version = %s, n8n_draft_id = %s"
+        " WHERE use_case_id = %s",
+        (version, draft, use_case_id),
+    )
+    return version
 
 
 async def publish(uow: UnitOfWork, use_case_id: str, newest: int, change: ScheduleChange) -> None:

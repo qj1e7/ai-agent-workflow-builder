@@ -69,6 +69,12 @@ def missing_target(card_name: str, inputs: Sequence[CardInput], values: Mapping[
     return f'"{card_name}" needs {named}, so our platform knows where its change goes.'
 
 
+def _publisher(by: str | None, where: str | None) -> Publisher | None:
+    if where is None:
+        return None
+    return Publisher(None if by is None else UserId(by))
+
+
 class BuilderWorkflowFacts:
     def __init__(
         self,
@@ -111,11 +117,12 @@ class BuilderWorkflowFacts:
 
     async def version(self, n8n_workflow_id: str, version_id: str) -> RanVersion | None:
         """The grade stored when the version was saved. A version nobody published has no
-        publisher, and one published in n8n by someone we cannot match has Publisher(None)."""
+        publisher, and one published in n8n by someone we cannot match has Publisher(None). A
+        version that publishes another's workflow again names that one's publisher too."""
         async with self._db.connection("builder") as conn:
             row = await (
                 await conn.execute(
-                    "SELECT v.grade, v.published_by, v.published_in"
+                    "SELECT v.grade, v.published_by, v.published_in, v.also_by, v.also_in"
                     " FROM builder.use_case_versions v JOIN builder.use_cases u"
                     " ON u.use_case_id = v.use_case_id"
                     " WHERE u.n8n_workflow_id = %s AND v.n8n_version_id = %s"
@@ -125,11 +132,11 @@ class BuilderWorkflowFacts:
             ).fetchone()
         if row is None:
             return None
-        publisher = None
-        if row["published_in"] is not None:
-            by = row["published_by"]
-            publisher = Publisher(None if by is None else UserId(by))
-        return RanVersion(row["grade"], publisher)
+        return RanVersion(
+            row["grade"],
+            _publisher(row["published_by"], row["published_in"]),
+            _publisher(row["also_by"], row["also_in"]),
+        )
 
     async def agents(self) -> Sequence[NodeOption]:
         return [NodeOption(card.card_id, card.name) for card in await self._cards.list()]

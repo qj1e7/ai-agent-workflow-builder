@@ -6,6 +6,8 @@ from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.builder.http import NO_SUCH, NOT_FOUND, CurrentBuilder, WorkflowOperator
 from platform_api.builder.lifecycle import TooLate
 from platform_api.builder.models import (
+    RepublishIn,
+    SweepOut,
     UndoIn,
     UseCaseDeleted,
     UseCaseScheduleIn,
@@ -13,8 +15,20 @@ from platform_api.builder.models import (
     VersionList,
 )
 from platform_api.builder.n8n_draft import DraftRefused, N8nNotReady, NotSafe
-from platform_api.builder.service import InN8nRefused, ScheduleOnSoftwarePage, WatchlistStays
-from platform_api.builder.versions import ChangedSince, NoSuchVersion, NotAScheduleChange
+from platform_api.builder.service import (
+    InN8nRefused,
+    Republished,
+    ScheduleOnSoftwarePage,
+    WatchlistStays,
+)
+from platform_api.builder.versions import (
+    ChangedSince,
+    DeletedInN8n,
+    InUseChanged,
+    NoSuchVersion,
+    NotAScheduleChange,
+    NotSafeToPublish,
+)
 from platform_api.orchestration import ChangedInN8n
 from platform_api.wire import error_response
 
@@ -28,6 +42,9 @@ CHANGED_SINCE = (
 )
 NOT_A_SCHEDULE_CHANGE = "Only a change of when the workflow runs can be undone."
 NO_UNDO_BODY = UndoIn()
+NO_REPUBLISH_BODY = RepublishIn()
+IN_USE_CHANGED = "Another version is in use by now, so nothing changed."
+DELETED_IN_N8N = "This workflow was deleted in n8n, so it can't change there."
 CHANGED_IN_N8N = "Changed again since, in n8n. Nothing was saved."
 N8N_NOT_READY = error_response(
     "n8n did not take the change in time, so nothing changed. Or: sign-in could not be checked "
@@ -37,9 +54,24 @@ N8N_CHANGED = error_response(CHANGED_IN_N8N)
 NOT_SAFE = "This version did not pass the safety check, so it cannot be turned on."
 
 
-def refused_in_n8n(refused: InN8nRefused | NotSafe) -> HTTPException:
+NOT_PUT_IN_USE = "This version did not pass the safety check, so it was not put in use."
+
+
+def not_safe_to_publish(findings: tuple[str, ...]) -> str:
+    return " ".join((NOT_PUT_IN_USE, *findings))
+
+
+def refused_in_n8n(
+    refused: InN8nRefused | NotSafe | NotSafeToPublish | InUseChanged | DeletedInN8n,
+) -> HTTPException:
     """Why an own workflow's change was not made, as the words the Portal shows."""
     match refused:
+        case NotSafeToPublish(findings):
+            return HTTPException(409, not_safe_to_publish(findings))
+        case InUseChanged():
+            return HTTPException(409, IN_USE_CHANGED)
+        case DeletedInN8n():
+            return HTTPException(409, DELETED_IN_N8N)
         case N8nNotReady(detail):
             return HTTPException(503, detail)
         case ChangedInN8n():
@@ -230,3 +262,86 @@ async def undo_version(
             raise refused_in_n8n(refused)
         case view:
             return view
+
+
+def _republished(answer: Republished | None) -> UseCaseView:
+    match answer:
+        case None:
+            raise HTTPException(404, NO_SUCH)
+        case NoSuchVersion():
+            raise HTTPException(404, NO_SUCH_VERSION)
+        case UseCaseView() as view:
+            return view
+        case refused:
+            raise refused_in_n8n(refused)
+
+
+REPUBLISH_REFUSED = error_response(
+    f"{IN_USE_CHANGED} Or: {CHANGED_IN_N8N} Or: {NOT_PUT_IN_USE} Or: {DELETED_IN_N8N}"
+)
+
+
+@router.post(
+    "/use-cases/{use_case_id}/versions/{version}/rollback",
+    description="Puts an earlier version back in use, as a new version, so the list only grows "
+    "(ENGINE-PLAN 2.5). n8n publishes the version it still holds, or, after the day n8n keeps "
+    "history for, the workflow the platform kept for it, each under the version compare: "
+    'anything changed in n8n since the platform last looked answers 409 with "Changed again '
+    'since, in n8n." and changes nothing. Only a version that passes the safety check now is '
+    "put back. A paused workflow stays paused, and the version is in use once it is resumed. "
+    "The caller is its publisher, and whoever published the version it puts back joins every "
+    "run of it, so neither can approve one. Rolling back again answers the same.",
+    responses={
+        **OPERATORS_ONLY,
+        404: error_response("No such workflow, or it is deleted, or no such version"),
+        409: REPUBLISH_REFUSED,
+        503: N8N_NOT_READY,
+    },
+)
+async def rollback_version(
+    use_case_id: str,
+    version: int,
+    principal: WorkflowOperator,
+    builder: CurrentBuilder,
+    body: Annotated[RepublishIn, Body()] = NO_REPUBLISH_BODY,
+) -> UseCaseView:
+    return _republished(await builder.rollback_version(use_case_id, version, principal, body))
+
+
+@router.post(
+    "/use-cases/{use_case_id}/add-the-yes-back",
+    description="Puts Ask for a yes back before each write that can run without one, in the "
+    "version in use, and publishes that as a new version under the version compare, as a roll "
+    "back does. When every write already waits for a yes, nothing changes. When the version "
+    "still would not pass the safety check, nothing changes and the answer says why: undo it "
+    "instead. The caller is its publisher, and whoever published the version it changes joins "
+    "every run of it.",
+    responses={
+        **OPERATORS_ONLY,
+        404: NOT_FOUND,
+        409: REPUBLISH_REFUSED,
+        503: N8N_NOT_READY,
+    },
+)
+async def add_the_yes_back(
+    use_case_id: str,
+    principal: WorkflowOperator,
+    builder: CurrentBuilder,
+    body: Annotated[RepublishIn, Body()] = NO_REPUBLISH_BODY,
+) -> UseCaseView:
+    return _republished(await builder.add_the_yes_back(use_case_id, principal, body))
+
+
+@router.post(
+    "/n8n/sweep",
+    description="Looks in n8n now for versions published in its editor, as the sweep does every "
+    "minute: for one workflow, or for all when use_case_id is left out. The Portal asks when its "
+    "tab regains focus, so a Changed in n8n card comes without the minute's wait. Each version "
+    "found is graded and kept, and Home lists it. Asked again within a few seconds, it looks "
+    "only once.",
+    responses={**SIGNED_IN},
+)
+async def sweep_versions(
+    principal: CurrentPrincipal, builder: CurrentBuilder, use_case_id: str | None = None
+) -> SweepOut:
+    return await builder.sweep_now(use_case_id)

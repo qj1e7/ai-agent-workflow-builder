@@ -8,6 +8,7 @@ from platform_api.builder.templates import VERSION_PATTERN
 from platform_api.orchestration import (
     AT_PATTERN,
     Day,
+    Grade,
     InputKind,
     RowKind,
     RowState,
@@ -249,6 +250,24 @@ class UseCaseView(WireModel):
         "them, read from the workflow the platform keeps for the version. Empty for a workflow "
         "that runs on the shared n8n workflow.",
     )
+    grade: Grade | None = Field(
+        default=None,
+        description="The safety checker's grade of the version in use, for a workflow n8n "
+        "carries. writes_refused: a write can run without a yes, so the platform refuses this "
+        "version's writes and asks nobody, until the yes is put back or the change undone. "
+        "needs_a_fix: it uses a block that is not on, or cannot run as the platform expects, so "
+        "each run stops at its first block. Null for a workflow on the shared n8n workflow.",
+    )
+    findings: list[str] = Field(
+        default_factory=list[str],
+        description="Why the version in use is not safe, in the safety checker's words, one per "
+        "problem. Empty when it is safe.",
+    )
+    deleted_in_n8n_at: AwareDatetime | None = Field(
+        default=None,
+        description="When the platform found its workflow deleted in n8n. It runs no more, and "
+        "its runs and versions are kept (ENGINE-PLAN D7). Null while n8n has it.",
+    )
 
 
 class UseCaseList(WireModel):
@@ -459,6 +478,16 @@ class UndoIn(WireIn):
     via: Via = Field(default="page", description=VIA_WORDS)
 
 
+class RepublishIn(WireIn):
+    via: Via = Field(default="page", description=VIA_WORDS)
+    in_use: int | None = Field(
+        default=None,
+        description="The version the person saw in use, as the Changed in n8n card names it. "
+        "When another version is in use by now, nothing changes and the answer is 409, so a "
+        "change made since is never thrown away.",
+    )
+
+
 class VersionSchedule(WireModel):
     day: Day
     at: ClockTime
@@ -476,21 +505,60 @@ class VersionChange(WireModel):
     schedule: ScheduleChangeView
 
 
+type VersionMade = Literal["published_in_n8n", "rolled_back", "yes_put_back"]
+
+
 class VersionView(WireModel):
     version: int
     at: AwareDatetime = Field(
         description="When it was published. For version 1, when the workflow was set up."
     )
-    by: UserId | None = Field(description="Who changed it. Null when change is null.")
-    via: Via | None = Field(description="Where it was changed. Null when change is null.")
+    by: UserId | None = Field(
+        description="Who changed it: the person who saved the schedule, rolled back or put the "
+        "yes back in the Portal, or who published it in n8n. Null for version 1, for a version "
+        "the Software watchlist published, and for a version published in n8n by someone the "
+        "People list can't match."
+    )
+    via: Via | None = Field(
+        description="Where in the Portal it was changed. Null for a version made in n8n, and "
+        "when by is null."
+    )
     change: VersionChange | None = Field(
-        description="What changed. Null for version 1, and for a version the Software "
-        "watchlist published when its software changed."
+        description="The change of when it runs. Null for version 1, for a version the Software "
+        "watchlist published when its software changed, and for a version made otherwise."
     )
     undid: int | None = Field(
         description="The version this one undid, publishing the schedule from before it again."
     )
     running: bool = Field(description="True for the version running now, which is the newest.")
+    made: VersionMade | None = Field(
+        default=None,
+        description="How a version that is not a change of when it runs came about: "
+        "published_in_n8n by a person in n8n's editor, rolled_back to an earlier version, or "
+        "yes_put_back, which put Ask for a yes back before each write. Null otherwise.",
+    )
+    grade: Grade | None = Field(
+        default=None,
+        description="The safety checker's grade of this version, for a workflow n8n carries. "
+        "Null for a workflow on the shared n8n workflow.",
+    )
+    changes: list[str] = Field(
+        default_factory=list[str],
+        description="For a version published in n8n, what changed from the version before, in "
+        "plain words, as the Changed in n8n card lists them. Empty otherwise.",
+    )
+    rolled_back_to: int | None = Field(
+        default=None, description="The version a roll back put back in use. Null otherwise."
+    )
+    publisher_unknown: bool = Field(
+        default=False,
+        description="True for a version published in n8n by someone the People list can't "
+        "match. Its runs stop at their first block until an Operator matches the person.",
+    )
+
+
+class SweepOut(WireModel):
+    found: int = Field(description="How many versions published in n8n this look found and kept.")
 
 
 class VersionList(WireModel):
