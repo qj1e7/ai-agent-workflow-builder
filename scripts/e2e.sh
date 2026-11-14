@@ -83,7 +83,9 @@ fi
 if wanted ui; then
   portal_container=$("${compose[@]}" ps -q portal)
   set +e
-  portal/e2e/live/run.sh "$portal_container" 2>&1 | tee "$out/ui.log"
+  ui_args=()
+  [ -z "${LIVE_GREP:-}" ] || ui_args=(--grep "$LIVE_GREP")
+  portal/e2e/live/run.sh "$portal_container" ${ui_args[@]+"${ui_args[@]}"} 2>&1 | tee "$out/ui.log"
   ui_status="${PIPESTATUS[0]}"
   set -e
 fi
