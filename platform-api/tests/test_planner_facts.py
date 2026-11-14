@@ -137,3 +137,22 @@ async def test_workflows_that_need_someone_get_their_last_run_before_the_newest(
     assert [w.name for w in facts.workflows[:3]] == ["Old stop", "Paused one", "Unsafe one"]
     assert facts.workflows[0].last_run == "Stopped"
     assert facts.other_workflows is not None and "Old stop" not in facts.other_workflows
+
+
+async def test_with_50_workflows_or_fewer_the_runtime_gets_the_facts_it_got_before():
+    """The runtime refuses fields it doesn't know, and the two deploy in one apply but not in one
+    instant, so a runtime from before other_workflows still takes what is sent then."""
+    facts = await reader(workflows(3)).read(ALICE, "what needs me?")
+
+    sent = facts.model_dump(mode="json")
+
+    assert set(sent) == {"watchlist", "workflows", "needs_you", "watchlist_schedule"}
+
+
+async def test_past_50_the_names_and_the_count_are_sent():
+    facts = await reader(workflows(WORKFLOW_FACTS + OTHER_WORKFLOWS + 1)).read(ALICE, "hi")
+
+    sent = facts.model_dump(mode="json")
+
+    assert len(sent["other_workflows"]) == OTHER_WORKFLOWS
+    assert sent["left_out_workflows"] == 1

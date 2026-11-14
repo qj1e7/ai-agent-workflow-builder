@@ -519,8 +519,14 @@ class WatchlistScheduleFact(WireModel):
 class PlannerFacts(WireModel):
     watchlist: list[WatchedFact] | None = Field(default=None, max_length=100)
     workflows: list[WorkflowFact] | None = Field(default=None, max_length=WORKFLOW_FACTS)
-    other_workflows: list[WorkflowName] | None = Field(default=None, max_length=OTHER_WORKFLOWS)
-    left_out_workflows: int | None = Field(default=None, gt=0)
+    # Left out of the payload when None, so a runtime from before them takes the facts while the
+    # two services roll out.
+    other_workflows: list[WorkflowName] | None = Field(
+        default=None, max_length=OTHER_WORKFLOWS, exclude_if=lambda names: names is None
+    )
+    left_out_workflows: int | None = Field(
+        default=None, gt=0, exclude_if=lambda count: count is None
+    )
     needs_you: NeedsYouFact | None = None
     watchlist_schedule: WatchlistScheduleFact | None = None
 
