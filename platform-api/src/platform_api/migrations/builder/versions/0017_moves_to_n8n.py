@@ -16,7 +16,8 @@ def upgrade() -> None:
     op.execute(f"""
         CREATE TABLE builder.n8n_restore (
             id integer PRIMARY KEY CHECK (id = 1),
-            asked_at timestamptz NOT NULL
+            asked_at timestamptz NOT NULL,
+            missing text[] NOT NULL DEFAULT '{{}}'
         );
         GRANT SELECT, DELETE ON builder.n8n_restore TO wab_builder;
         ALTER TABLE builder.use_cases

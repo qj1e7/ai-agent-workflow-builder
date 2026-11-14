@@ -4,8 +4,9 @@ platform kept. A moved workflow writes only after its yes, keeps everyone whose 
 party, and keeps its history. A workflow whose run has not ended stays until the run ends, and
 that run's request still resolves. Restore puts back only a version that grades safe."""
 
+import asyncio
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from typing import Any, LiteralString
 
@@ -16,7 +17,13 @@ from platform_api.bootstrap import ask_for_restore
 from platform_api.builder import Builder
 from platform_api.builder.layout import CREATE_TICKET, schedule_rule
 from platform_api.builder.models import UseCaseScheduleIn
-from platform_api.builder.moves import NOT_BACK, Moves, Restored, ScheduleHeld
+from platform_api.builder.moves import (
+    NOT_BACK,
+    RESTORE_ASK_LIVES,
+    Moves,
+    Restored,
+    ScheduleHeld,
+)
 from platform_api.builder.n8n_draft import DraftRefused, N8nNotReady, NotSafe
 from platform_api.builder.watchlist import AlreadyOnN8n, MovedToN8n, WaitsForRun
 from platform_api.db import json
@@ -62,12 +69,24 @@ class Errors(Workflows):
 
 
 @dataclass
+class Cancels:
+    """The orchestrator's cancel of a deleted workflow's open request, as asked."""
+
+    asked: list[str] = field(default_factory=list[str])
+
+    async def cancel_for_deleted(self, use_case_id: UseCaseId) -> int:
+        self.asked.append(use_case_id)
+        return 1
+
+
+@dataclass
 class Moving:
     lab: Lab
     n8n: FakeN8n
     store: Errors
     builder: Builder
     owner_url: str
+    cancels: Cancels
 
     @property
     def moves(self) -> Moves:
@@ -128,6 +147,7 @@ class Moving:
 async def m(lab: Lab, postgres: PostgresUrls) -> AsyncIterator[Moving]:
     n8n = FakeN8n()
     store = Errors(n8n, lab.h.db)
+    cancels = Cancels()
     builder = Builder(
         lab.h.db,
         lab.h.orchestrator,
@@ -137,8 +157,9 @@ async def m(lab: Lab, postgres: PostgresUrls) -> AsyncIterator[Moving]:
         n8n=store,
         writes=WRITES,
         open_runs=WatchFacts(lab.h.db, lab.h.jira, lab.h.jira.site.identity),
+        requests=cancels,
     )
-    yield Moving(lab, n8n, store, builder, postgres.owner)
+    yield Moving(lab, n8n, store, builder, postgres.owner, cancels)
 
 
 def before(nodes: list[dict[str, Any]], connections: dict[str, Any], name: str) -> set[str]:
@@ -372,11 +393,31 @@ async def test_a_deleted_workflow_is_left_where_it_is(m: Moving):
     assert await m.moves.move(use_case_id) is None
 
 
-async def lose_n8n(m: Moving) -> None:
-    """n8n's database is lost: bootstrap set n8n up again and loaded the error workflow anew."""
+async def lose_n8n(m: Moving) -> list[str]:
+    """n8n's database is lost: bootstrap found none of the workflows on record, asked for a
+    restore of them, and loaded the error workflow anew."""
+    lost = [
+        row["n8n_workflow_id"]
+        for row in await m.rows(
+            "SELECT n8n_workflow_id FROM builder.use_cases WHERE engine = 'own'"
+        )
+    ]
     m.n8n.workflows.clear()
     m.store.error_workflow = NEW_ERROR_WORKFLOW
-    ask_for_restore(m.owner_url, lambda _: None)
+    ask_for_restore(m.owner_url, lost, lambda _: None)
+    return lost
+
+
+async def sweep(m: Moving) -> None:
+    assert m.builder.sweep is not None
+    await m.builder.sweep.sweep()
+
+
+async def marked(m: Moving, use_case_id: str) -> bool:
+    [row] = await m.rows(
+        "SELECT deleted_in_n8n_at FROM builder.use_cases WHERE use_case_id = %s", use_case_id
+    )
+    return row["deleted_in_n8n_at"] is not None
 
 
 async def test_restore_saves_each_lost_workflow_again_from_the_version_kept(m: Moving):
@@ -438,16 +479,62 @@ async def test_safety_while_a_restore_is_asked_the_sweep_never_marks_a_lost_work
     use_case_id = await m.shared()
     assert isinstance(await m.moves.move(use_case_id), MovedToN8n)
     await lose_n8n(m)
-    assert m.builder.sweep is not None
 
-    await m.builder.sweep.sweep()
+    await sweep(m)
 
-    [row] = await m.rows(
-        "SELECT deleted_in_n8n_at FROM builder.use_cases WHERE use_case_id = %s", use_case_id
-    )
-    assert row["deleted_in_n8n_at"] is None
+    assert not await marked(m, use_case_id) and m.cancels.asked == []
     [restored] = await m.moves.restore_if_asked()
     assert isinstance(restored, Restored)
+    await sweep(m)
+    assert not await marked(m, use_case_id), "n8n holds it again"
+
+
+async def test_safety_a_workflow_deleted_in_n8n_after_the_ask_is_marked_and_its_request_ends(
+    m: Moving,
+):
+    lost_one = await m.shared()
+    assert isinstance(await m.moves.move(lost_one), MovedToN8n)
+    await lose_n8n(m)
+    later = await m.shared()
+    moved = await m.moves.move(later)
+    assert isinstance(moved, MovedToN8n)
+    del m.n8n.workflows[moved.workflow_id]
+
+    await sweep(m)
+
+    assert (await marked(m, lost_one), await marked(m, later)) == (False, True)
+    assert m.cancels.asked == [later]
+
+
+async def test_safety_an_ask_never_answered_expires_and_the_sweep_marks_what_is_still_missing(
+    m: Moving,
+):
+    use_case_id = await m.shared()
+    assert isinstance(await m.moves.move(use_case_id), MovedToN8n)
+    await lose_n8n(m)
+    with psycopg.connect(m.owner_url, autocommit=True) as conn:
+        conn.execute(
+            "UPDATE builder.n8n_restore SET asked_at = now() - %s", (RESTORE_ASK_LIVES * 1.1,)
+        )
+
+    await sweep(m)
+
+    assert await marked(m, use_case_id) and m.cancels.asked == [use_case_id]
+
+
+async def test_one_restore_pass_answers_the_ask_even_when_n8n_did_not_take_a_workflow(
+    m: Moving,
+):
+    use_case_id = await m.shared()
+    assert isinstance(await m.moves.move(use_case_id), MovedToN8n)
+    await lose_n8n(m)
+    m.n8n.keeps = lambda document: {**document, "name": "Not what was sent"}
+
+    assert await m.moves.restore_if_asked() == [N8nNotReady(NOT_BACK)]
+
+    assert await m.rows("SELECT 1 FROM builder.n8n_restore") == []
+    await sweep(m)
+    assert await marked(m, use_case_id), "deleted in n8n, which a person may restore"
 
 
 async def mark_deleted_in_n8n(m: Moving, use_case_id: str, since_the_ask: timedelta) -> None:
@@ -490,10 +577,11 @@ async def test_a_restore_cut_off_before_it_went_live_is_finished_by_the_next(m: 
     live = m.store.go_live
 
     async def dies(workflow_id: str, version_id: str) -> None:
-        raise RuntimeError("platform-api stopped")
+        raise asyncio.CancelledError("platform-api stopped")
 
     m.store.go_live = dies  # type: ignore[method-assign]
-    assert await m.moves.restore_if_asked() == [N8nNotReady(NOT_BACK)]
+    with pytest.raises(asyncio.CancelledError):
+        await m.moves.restore_if_asked()
     m.store.go_live = live  # type: ignore[method-assign]
 
     [restored] = await m.moves.restore_if_asked()

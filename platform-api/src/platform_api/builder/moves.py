@@ -43,6 +43,9 @@ from platform_api.shared import UseCaseId, UserId
 log = logging.getLogger(__name__)
 
 MOVES_EVERY = timedelta(seconds=60)
+RESTORE_ASK_LIVES = timedelta(minutes=10)
+"""How long the sweep leaves the workflows a restore was asked for unmarked. After that, one
+still missing is taken for deleted in n8n, as any other."""
 NOT_TAKEN = "n8n did not take the workflow. It runs as before."
 NOT_LIVE = "n8n did not turn the workflow on. It runs as before."
 NOT_BACK = "n8n did not take the workflow back. The next start tries again."
@@ -100,7 +103,8 @@ _LEFT = """
 _OWN = """
     SELECT use_case_id FROM builder.use_cases
     WHERE engine = 'own' AND n8n_workflow_id IS NOT NULL AND deleted_at IS NULL
-      AND (deleted_in_n8n_at IS NULL OR deleted_in_n8n_at >= %s)
+      AND (deleted_in_n8n_at IS NULL
+           OR (deleted_in_n8n_at >= %s AND n8n_workflow_id = ANY(%s)))
     ORDER BY created_at, use_case_id
 """
 
@@ -276,13 +280,14 @@ class Moves:
         )
         return MovedToN8n(draft.workflow_id, version)
 
-    async def restore_all(self, asked_at: datetime) -> dict[str, Restore]:
+    async def restore_all(self, asked_at: datetime, missing: Sequence[str]) -> dict[str, Restore]:
         """After n8n lost its database: each workflow n8n no longer holds is saved there again
         from the version in use, as the platform kept it (ENGINE-PLAN 7, n8n's database lost).
-        One marked deleted in n8n since the ask is among them: an older sweep took the loss for
-        a deletion. One marked before it was deleted by a person, and stays deleted."""
+        One the ask named and that was marked deleted in n8n since is among them: an older sweep
+        took the loss for a deletion. Any other marked one was deleted by a person, and stays
+        deleted."""
         async with self._db.connection("builder") as conn:
-            rows = await (await conn.execute(_OWN, (asked_at,))).fetchall()
+            rows = await (await conn.execute(_OWN, (asked_at, list(missing)))).fetchall()
         restored: dict[str, Restore] = {}
         for row in rows:
             try:
@@ -347,21 +352,21 @@ class Moves:
         return Restored(draft.workflow_id)
 
     async def restore_if_asked(self) -> Sequence[Restore]:
-        """Bootstrap asks for a restore when it found n8n empty and set it up again. The ask is
-        answered once every workflow is back or cannot be, so a workflow n8n could not take yet
-        is tried again at the next start."""
+        """Bootstrap asks for a restore when n8n holds none of the workflows on record. One pass
+        answers the ask, whatever it could restore: a workflow n8n did not take back is then
+        marked deleted in n8n by the sweep, and a person may restore it from its page. A pass
+        cut off answers nothing, so the next start tries again."""
         async with self._db.connection("builder") as conn:
             asked = await (
-                await conn.execute("SELECT asked_at FROM builder.n8n_restore WHERE id = 1")
+                await conn.execute("SELECT asked_at, missing FROM builder.n8n_restore WHERE id = 1")
             ).fetchone()
         if asked is None:
             return ()
-        restored = await self.restore_all(asked["asked_at"])
-        if not any(isinstance(done, N8nNotReady) for done in restored.values()):
-            async with self._db.transaction("builder") as uow:
-                await uow.conn.execute(
-                    "DELETE FROM builder.n8n_restore WHERE asked_at = %s", (asked["asked_at"],)
-                )
+        restored = await self.restore_all(asked["asked_at"], asked["missing"])
+        async with self._db.transaction("builder") as uow:
+            await uow.conn.execute(
+                "DELETE FROM builder.n8n_restore WHERE asked_at = %s", (asked["asked_at"],)
+            )
         return list(restored.values())
 
 

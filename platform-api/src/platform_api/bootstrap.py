@@ -2,7 +2,7 @@ import hashlib
 import json
 import os
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any, LiteralString
 
@@ -144,8 +144,9 @@ def load_into_n8n(
         say(f"owner {settings.n8n_owner_email}: {owner.value}")
         removed = client.fresh_api_key(API_KEY_LABEL)
         say(f"api key '{API_KEY_LABEL}': created, {removed} older removed")
-        if n8n_lost_its_workflows(client, settings.owner_database_url, recorded, say):
-            ask_for_restore(settings.owner_database_url, say)
+        lost = lost_workflows(client, settings.owner_database_url, recorded, say)
+        if lost is not None:
+            ask_for_restore(settings.owner_database_url, lost, say)
         removed = client.remove_api_keys(PLATFORM_API_KEY_LABEL)
         say(f"api key '{PLATFORM_API_KEY_LABEL}': {removed} removed, platform-api makes its own")
         values = {"PLATFORM_INTERNAL_URL": settings.platform_internal_url}
@@ -282,31 +283,37 @@ OWN_WORKFLOWS = """
 """
 
 
-def n8n_lost_its_workflows(
+def lost_workflows(
     client: N8nClient, owner_url: str, recorded: Mapping[str, str], say: Say
-) -> bool:
-    """Our records name workflows, and n8n holds none of them: its database is gone, whatever its
-    owner says, as n8n on Azure makes its owner from its settings at every start. Before it ever
-    held one, nothing is lost, and an n8n that cannot answer is never taken for empty."""
+) -> list[str] | None:
+    """The workflows n8n lost when our records name workflows and n8n holds none of them: its
+    database is gone, whatever its owner says, as n8n on Azure makes its owner from its settings
+    at every start. None when nothing is lost: before n8n ever held one, while it holds any, and
+    while it cannot answer, which is never taken for empty."""
     with psycopg.connect(owner_url) as conn:
         own = [row[0] for row in conn.execute(OWN_WORKFLOWS).fetchall()]
     named = [*recorded.values(), *own]
     if not named:
-        return False
+        return None
     try:
-        return not any(client.holds(workflow_id) for workflow_id in named)
+        if any(client.holds(workflow_id) for workflow_id in named):
+            return None
     except (N8nError, httpx.HTTPError) as error:
         say(f"could not tell whether n8n kept its workflows, so nothing is restored: {error}")
-        return False
+        return None
+    return own
 
 
-def ask_for_restore(owner_url: str, say: Say) -> None:
+def ask_for_restore(owner_url: str, missing: Sequence[str], say: Say) -> None:
     """n8n holds none of the workflows it held before, and platform-api saves each one again
-    from the version it kept (Restore to n8n) as it starts."""
+    from the version it kept (Restore to n8n) as it starts. The ask names the use cases'
+    workflows that were missing, so the sweep takes none of those for deleted meanwhile."""
     with psycopg.connect(owner_url) as conn:
         conn.execute(
-            "INSERT INTO builder.n8n_restore (id, asked_at) VALUES (1, now())"
-            " ON CONFLICT (id) DO UPDATE SET asked_at = EXCLUDED.asked_at"
+            "INSERT INTO builder.n8n_restore (id, asked_at, missing) VALUES (1, now(), %s)"
+            " ON CONFLICT (id) DO UPDATE SET asked_at = EXCLUDED.asked_at,"
+            " missing = EXCLUDED.missing",
+            (list(missing),),
         )
     say("n8n holds none of its workflows: platform-api restores the ones it kept as it starts")
 

@@ -19,6 +19,7 @@ from typing import Any, Protocol
 
 import httpx
 
+from platform_api.builder.moves import RESTORE_ASK_LIVES
 from platform_api.builder.versions import Held, Made, Publication, add_version
 from platform_api.db import Database, UnitOfWork
 from platform_api.orchestration import (
@@ -94,9 +95,15 @@ def last_activation(version_id: str, timeline: Sequence[PublishEvent]) -> Publis
     return max(enumerate(activated), key=lambda pair: (pair[1].at, pair[0]))[1]
 
 
-async def _restore_asked(uow: UnitOfWork) -> bool:
-    """n8n lost every workflow it held, so one it no longer has was not deleted by a person."""
-    row = await (await uow.conn.execute("SELECT 1 FROM builder.n8n_restore")).fetchone()
+async def _restore_asked(uow: UnitOfWork, workflow_id: str) -> bool:
+    """n8n lost this workflow with every other it held, a short while ago, so a person did not
+    delete it, and the restore asked for saves it again. One lost after the ask was deleted."""
+    row = await (
+        await uow.conn.execute(
+            "SELECT 1 FROM builder.n8n_restore WHERE %s = ANY(missing) AND asked_at > now() - %s",
+            (workflow_id, RESTORE_ASK_LIVES),
+        )
+    ).fetchone()
     return row is not None
 
 
@@ -179,7 +186,7 @@ class VersionsSweep:
                 return None
             workflow_id = row["n8n_workflow_id"]
             workflow = await self._n8n.look(workflow_id)
-            if workflow is None and await _restore_asked(uow):
+            if workflow is None and await _restore_asked(uow, workflow_id):
                 log.info("n8n lost %s, which the restore asked for saves again", workflow_id)
                 return None
             if workflow is None:

@@ -460,10 +460,11 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
     assert n8n.api_keys == [{"id": "k2", "label": "Alice's own key"}], "platform-api makes its own"
 
 
-def restore_pending(owner_url: str) -> bool:
+def restore_pending(owner_url: str) -> list[str] | None:
+    """The workflows the restore was asked for, or None when none was asked."""
     with psycopg.connect(owner_url) as conn:
-        row = conn.execute("SELECT 1 FROM builder.n8n_restore").fetchone()
-    return row is not None
+        row = conn.execute("SELECT missing FROM builder.n8n_restore").fetchone()
+    return None if row is None else list(row[0])
 
 
 def own_use_case(owner_url: str, use_case_id: str, workflow_id: str) -> None:
@@ -486,7 +487,7 @@ def test_an_n8n_that_kept_its_owner_but_lost_every_workflow_asks_for_a_restore(
     recorded(postgres.owner, {"run_failure_reporter": "W7"})
     own_use_case(postgres.owner, "uc_own", "wf_gone")
     assert main(env_for(postgres.owner)) == 0
-    assert restore_pending(postgres.owner)
+    assert restore_pending(postgres.owner) == ["wf_gone"]
 
 
 def test_an_n8n_that_holds_a_workflow_our_records_name_asks_for_no_restore(
@@ -497,7 +498,7 @@ def test_an_n8n_that_holds_a_workflow_our_records_name_asks_for_no_restore(
     recorded(postgres.owner, {"run_failure_reporter": "W1"})
     own_use_case(postgres.owner, "uc_own", "wf_staff_deleted")
     assert main(env_for(postgres.owner)) == 0
-    assert not restore_pending(postgres.owner)
+    assert restore_pending(postgres.owner) is None
 
 
 def test_an_n8n_that_cannot_be_read_is_never_taken_for_empty(
@@ -508,7 +509,7 @@ def test_an_n8n_that_cannot_be_read_is_never_taken_for_empty(
     n8n.unreadable = True
     own_use_case(postgres.owner, "uc_own", "wf_somewhere")
     main(env_for(postgres.owner))
-    assert not restore_pending(postgres.owner)
+    assert restore_pending(postgres.owner) is None
 
 
 def test_a_new_n8n_with_nothing_on_record_asks_for_no_restore(
@@ -517,7 +518,7 @@ def test_a_new_n8n_with_nothing_on_record_asks_for_no_restore(
     truncate_all(postgres.owner)
     serve(monkeypatch, FakeN8n([]))
     assert main(env_for(postgres.owner)) == 0
-    assert not restore_pending(postgres.owner)
+    assert restore_pending(postgres.owner) is None
 
 
 SECRET_ADDRESS = "wab-secret-host.internal.example"
