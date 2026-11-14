@@ -136,7 +136,7 @@ class FakeWatchlist:
     async def save_schedule(self, principal: object, body: object) -> object:
         return NoWatchlist()
 
-    async def turn_off_schedule(self) -> object:
+    async def turn_off_schedule(self, principal: object) -> object:
         return NoWatchlist()
 
 

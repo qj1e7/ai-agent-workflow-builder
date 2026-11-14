@@ -7,7 +7,7 @@ from dataclasses import replace
 
 import pytest
 
-from platform_api.orchestration.agents import WatchlistInputs
+from platform_api.orchestration.agents import TaskOutput, WatchlistInputs
 from platform_api.orchestration.jira import PRACTICE_SITE
 from platform_api.orchestration.n8n_calls import (
     NOT_A_WATCHLIST_RUN,
@@ -21,11 +21,11 @@ from platform_api.orchestration.n8n_calls import (
     WriteAnswer,
 )
 from platform_api.orchestration.runs import Failed, FailureReason, Succeeded
-from platform_api.orchestration.spec import CardsTask
+from platform_api.orchestration.spec import CardsTask, WatchlistTask
 from platform_api.orchestration.watch import Given
 from platform_api.orchestration.watch_store import WatchFacts, WatchlistStanding
 from tests.conftest import PostgresUrls
-from tests.support import BOB, LANGGRAPH, NOW, SPEC
+from tests.support import BOB, LANGGRAPH, NOW, REDIS, SPEC, fixture, watched
 from tests.test_n8n_calls import CARD_RUN
 from tests.test_n8n_wait import resume_url
 from tests.test_n8n_write import Writes, open_writes
@@ -138,3 +138,45 @@ async def test_only_the_software_watchlist_reads_and_checks_the_watchlist(wl: Wr
     assert await wl.call("101", READ, "Read the watchlist") == NOT_A_WATCHLIST_RUN
     assert await wl.call("101", CHECK, "Check the watchlist") == NOT_A_WATCHLIST_RUN
     assert wl.h.agent.requests == []
+
+
+async def test_the_approver_is_told_which_software_the_check_could_not_read(wl: Writes):
+    assert isinstance(SPEC.task, WatchlistTask)
+    redis = watched(REDIS, "Redis", "redis/redis", "8.2.1")
+    wl.workflows.spec = replace(
+        SPEC, task=replace(SPEC.task, software=(*SPEC.task.software, redis))
+    )
+    output = fixture("agent/task-finished.json")["output"]
+    output["findings"].append(
+        {
+            "software_id": REDIS,
+            "state": "cant_check",
+            "newest": None,
+            "new_versions": [],
+            "detail": "GitHub returned 404 Not Found.",
+            "full_name": None,
+            "not_found": True,
+        }
+    )
+    wl.h.agent.output = TaskOutput.model_validate(output)
+
+    waiting = await check(wl, "101")
+
+    assert isinstance(waiting, Waiting)
+    shown = await wl.orchestrator.get_approval(waiting.request_id, BOB)
+    assert shown is not None
+    assert shown.not_checked == ("Redis",)
+    assert [a.fields["title"] for a in shown.proposal.actions] == [TICKET_TITLE]
+
+
+async def test_a_retry_once_github_answers_again_checks_again_and_asks(wl: Writes):
+    wl.h.agent.mode = "failed"
+    wl.started("101")
+    await wl.call("101", READ, "Read the watchlist")
+    assert isinstance(await wl.call("101", CHECK, "Check the watchlist"), Refused)
+
+    wl.h.agent.mode = "finished"
+    wl.retried("201", of="101")
+    assert isinstance(await wl.call("201", CHECK, "Check the watchlist"), Answer)
+    assert isinstance(await wl.call("201", AskCall(resume_url("201")), "Ask for a yes"), Waiting)
+    assert len(wl.h.agent.requests) == 2, "the check ran again, not its stopped answer"

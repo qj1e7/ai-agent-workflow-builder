@@ -174,5 +174,6 @@
     "state": "awaiting_approval",
     "started_at": "2026-11-16T01:00:12Z"
   },
-  "schedule": null
+  "schedule": null,
+  "moving_to_n8n": false
 }

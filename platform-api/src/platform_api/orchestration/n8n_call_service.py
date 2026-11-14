@@ -943,6 +943,7 @@ class NodeCalls:
         working = record.state
         assert isinstance(working, Working)
         actions, left_out = await self._still_to_make(uow, record)
+        unread = await self._watch.unread(uow, record)
         proposal = Proposal(ProposalId(new_id("prp")), record.run_id, actions, digest(actions))
         shown = (proposal.id, proposal.digest, tuple(describe(action) for action in actions))
         test = record.spec.stops_at_gate or await self._book.started_as_test(uow, record.run_id)
@@ -952,7 +953,7 @@ class NodeCalls:
         if not actions:
             result, moved = NothingToChange(), working.nothing_to_change(left_out)
         elif test:
-            result, moved = TEST_RUN_STOPS, working.stop_at_gate(shown, left_out)
+            result, moved = TEST_RUN_STOPS, working.stop_at_gate(shown, left_out, unread)
         elif self._box is None:
             failure = Failure(FailureReason.SAFETY_DENIED, CANNOT_SEAL, retryable=False)
             result, moved = run_stopped(CANNOT_SEAL), working.fail(failure)
@@ -964,7 +965,7 @@ class NodeCalls:
             steps = steps_view(request, ())
             result = Waiting(request.id)
             link = approval_link(request.id)
-            moved = working.ask(shown, request.id, steps, link, summary, left_out)
+            moved = working.ask(shown, request.id, steps, link, summary, left_out, unread)
         if not await self._book.keep(uow, call, record.run_id, result, call_id=admitted.call_id):
             return BUSY
         if actions:

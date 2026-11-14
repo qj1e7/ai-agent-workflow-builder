@@ -532,6 +532,12 @@ class WatchlistView(WireModel):
     )
     last_check: LastCheckView | None
     schedule: ScheduleView | None = Field(description="Null when the schedule is turned off.")
+    moving_to_n8n: bool = Field(
+        default=False,
+        description="The watchlist still runs on the shared run workflow because a check has "
+        "not ended. It moves to its own n8n workflow the next time it is asked once that check "
+        "ends: at the next Check now, or when the platform next starts.",
+    )
 
 
 class WatchlistOut(WireModel):

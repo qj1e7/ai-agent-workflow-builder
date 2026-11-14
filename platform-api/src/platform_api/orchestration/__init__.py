@@ -183,6 +183,7 @@ from platform_api.orchestration.watch import (
 )
 from platform_api.orchestration.watch_store import (
     LastCheck,
+    OpenRuns,
     WatchFacts,
     WatchlistFacts,
     WatchlistStanding,
@@ -393,6 +394,7 @@ __all__ = [
     "Task",
     "TeamsPost",
     "TeamsRequestChannel",
+    "OpenRuns",
     "WatchFacts",
     "WatchedSoftware",
     "WatchlistFacts",
