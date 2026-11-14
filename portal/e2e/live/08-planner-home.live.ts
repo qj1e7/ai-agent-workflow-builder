@@ -188,9 +188,10 @@ test.describe('with the AI model on', () => {
     await connectMockModel(String(baseURL))
   })
 
-  const card = (page: Page) => thread(page).locator('section[data-card]')
+  const card = (page: Page) => thread(page).locator('[data-card]')
   const left = (page: Page) => card(page).locator('[id$="-left"]')
-  const turnOn = (page: Page) => card(page).getByRole('button', { name: 'Turn it on', exact: true })
+  const setUp = (page: Page) => card(page).getByRole('button', { name: 'Set up', exact: true })
+  const pillOf = (page: Page) => card(page).last().locator('[data-draft-pill]')
 
   /** The card asks for what it lacks, and the plan may ask for the Jira project. Everything is filled from the keyboard, and a project the Planner already filled in is left as it is. */
   async function fillTheRest(page: Page, project: string): Promise<void> {
@@ -202,7 +203,7 @@ test.describe('with the AI model on', () => {
   }
 
   // 37 days appears in no other test, so the drafted agent's steps differ from every agent another test saved. The Planner then drafts a new one, whatever the library holds.
-  test('inconsistency I6: a new agent is saved to the library only when the workflow is turned on', async ({ browser, backend }, info) => {
+  test('inconsistency I6: a new agent is saved to the library only when Set up makes the workflow', async ({ browser, backend }, info) => {
     const owner = 'alice'
     const cards = async () => (await backend.get<{ cards: { name: string; owner: string }[] }>(owner, '/api/v1/agent-cards')).cards
     const context = await devContext(browser, owner)
@@ -214,15 +215,13 @@ test.describe('with the AI model on', () => {
     await card(page).getByRole('button', { name: /what it does|^Create/i }).first().click()
     await card(page).getByRole('group', { name: /^Change/ }).getByRole('textbox').fill('Raise one follow-up ticket that lists them')
     await page.keyboard.press('Enter')
-    await card(page).locator('summary').click()
-    await expect(card(page).locator('details')).toContainText('New agent, saved under How it works, in Settings, when you turn this on', { timeout: 30_000 })
     const before = await cards()
     await fillTheRest(page, 'MOCK')
-    await expect(left(page)).toHaveText('Nothing is unclear. Turn it on when you’re ready.', { timeout: 30_000 })
-    expect((await cards()).length, 'nothing is saved to the library before Turn it on').toBe(before.length)
-    await turnOn(page).click()
-    await expect(thread(page).getByRole('status')).toContainText('is saved under How it works, in Settings', { timeout: 30_000 })
-    expect((await cards()).length, 'the new agent is in the library after Turn it on').toBe(before.length + 1)
+    await expect(left(page)).toHaveText('', { timeout: 30_000 })
+    expect((await cards()).length, 'nothing is saved to the library before Set up').toBe(before.length)
+    await setUp(page).click()
+    await expect(card(page)).toContainText('is saved under How it works, in Settings', { timeout: 30_000 })
+    expect((await cards()).length, 'the new agent is in the library once Set up made the workflow').toBe(before.length + 1)
     await shot(page, info, 'n11-i6')
     assertClean(watch)
     await context.close()
@@ -267,7 +266,7 @@ test.describe('with the AI model on', () => {
   })
 
   for (const phone of [false, true]) {
-    test(`scenario A: a first-time Operator asks for the weekly follow-up, picks the time the card asks for, turns it on and finds it on Workflows (${phone ? '390' : '1440'} px)`, async ({ browser, backend }, info) => {
+    test(`scenario A, Ask in my words: a first-time Operator asks for the weekly follow-up, picks the time the card asks for, sets it up, sees it built and tested, and turns it on (${phone ? '390' : '1440'} px)`, async ({ browser, backend }, info) => {
       const before = (await backend.get<{ use_cases: { name: string }[] }>('alice', '/api/v1/use-cases')).use_cases.length
       const draftsBefore = (await backend.get<{ drafts: { draft_id: string }[] }>('alice', '/api/v1/drafts')).drafts.map((draft) => draft.draft_id)
       const context = await devContext(browser, 'alice', { phone })
@@ -277,46 +276,60 @@ test.describe('with the AI model on', () => {
       await ask(page, SUMMARY)
       await expect(card(page), 'the Planner answers with a set-up card').toBeVisible()
       const parts = card(page).getByRole('list', { name: 'Each part of your request' })
-      await expect(parts.locator('[data-part="dest"]')).toContainText('one new Jira ticket')
-      await expect(card(page).getByRole('button', { name: /^one new Jira ticket/ }), 'the destination is a visible chip').toBeVisible()
+      await expect(parts.locator('[data-part]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-part')))).resolves.toEqual(['Watch', 'When', 'Then'])
+      await expect(parts.locator('[data-part="Then"]'), 'what it writes waits for a yes, and says so').toContainText('After a yes')
+      await expect(pillOf(page)).toHaveText('Draft')
       await expect(parts.locator('[data-mark="ask"]'), 'one question at a time').toHaveCount(1)
-      await expect(parts.locator('[data-part="when"]'), 'a time is never guessed: it asks how often first').toContainText('How often should it run?')
-      await expect(turnOn(page), 'Turn it on is never shown dead').not.toHaveAttribute('aria-disabled', 'true')
-      await expect(left(page)).toContainText(/choices? left: .*when it runs/)
+      await expect(parts.locator('[data-part="When"]'), 'a time is never guessed: it asks how often first').toContainText('How often should it run?')
+      await expect(setUp(page), 'Set up is never shown dead').not.toHaveAttribute('aria-disabled', 'true')
+      await expect(left(page)).toContainText(/questions? to answer/)
       await shot(page, info, `n11-card-${phone ? '390' : '1440'}`)
 
-      await turnOn(page).focus()
+      await setUp(page).focus()
       await page.keyboard.press('Enter')
       const weekly = card(page).getByRole('button', { name: 'Every week', exact: true })
-      await expect(card(page).getByRole('button', { name: 'Every day', exact: true }), 'pressing Turn it on while the time is missing goes to the question').toBeFocused()
+      await expect(card(page).getByRole('button', { name: 'Every day', exact: true }), 'pressing Set up while the time is missing goes to the question').toBeFocused()
       await weekly.click()
-      await expect(parts.locator('[data-part="when"]')).toContainText('Which day should it run?')
+      await expect(parts.locator('[data-part="When"]')).toContainText('Which day should it run?')
       await card(page).getByRole('button', { name: 'Friday', exact: true }).click()
-      await expect(parts.locator('[data-part="when"]')).toContainText('What time should it run?')
+      await expect(parts.locator('[data-part="When"]')).toContainText('What time should it run?')
       await card(page).getByRole('button', { name: '17:00', exact: true }).click()
-      await expect(parts.locator('[data-part="when"]')).toContainText('Every Friday at 17:00, Singapore time')
-      await expect(parts.locator('[data-part="when"]')).toHaveAttribute('data-mark', 'ok')
+      await expect(parts.locator('[data-part="When"]')).toContainText('Every Friday at 17:00, Singapore time')
+      await expect(parts.locator('[data-part="When"]')).toHaveAttribute('data-mark', 'ok')
       await fillTheRest(page, 'MOCK')
-      await expect(left(page), 'the footer recounts from the same list').toHaveText('Nothing is unclear. Turn it on when you’re ready.', { timeout: 30_000 })
+      await expect(left(page), 'the footer recounts from the same list, and says nothing once nothing is left').toHaveText('', { timeout: 30_000 })
       await settled(page)
       await expectAccessible(page, path.join(OUT, 'axe'), `setup-card-${phone ? '390' : '1440'}`)
 
-      await turnOn(page).focus()
+      await setUp(page).focus()
       await page.keyboard.press('Enter')
-      await expect(card(page).or(thread(page).getByRole('status')).first()).toBeVisible()
-      await expect(thread(page).getByRole('status').getByText(/is on\./)).toBeVisible({ timeout: 30_000 })
-      await expect(thread(page).getByRole('button', { name: 'Do a test run' })).toBeVisible()
-      await expect(thread(page).getByRole('status')).toContainText('First run')
-      await expect(thread(page).getByRole('status')).toContainText('except you is asked for a yes in Teams')
-      await shot(page, info, `n11-on-${phone ? '390' : '1440'}`)
-      const draftsAfter = (await backend.get<{ drafts: { draft_id: string }[] }>('alice', '/api/v1/drafts')).drafts.map((draft) => draft.draft_id)
-      expect(draftsAfter, 'turning it on leaves no new draft behind').toEqual(draftsBefore)
+      await expect(pillOf(page), 'Set up makes a draft, and the card builds it').toHaveText(/Building|Ready/, { timeout: 30_000 })
+      const made = async () => (await backend.get<{ use_cases: { use_case_id: string; name: string; state: string; last_run: { test: boolean } | null }[] }>('alice', '/api/v1/use-cases')).use_cases
+      await expect.poll(async () => (await made()).length, { message: 'one workflow was set up' }).toBe(before + 1)
+      const draft = (await made())[0]
+      expect(draft?.state, 'Set up makes a draft that is not on').toBe('draft')
+      await expect(card(page), 'the line and the Tester’s test run follow the run’s own events').toContainText(/Test run passed/, { timeout: 90_000 })
+      await expect(pillOf(page)).toHaveText('Ready')
+      await expect(card(page)).toContainText(/Nothing was written|nothing new to write/)
+      const panel = page.locator('#side-panel')
+      if (!phone) {
+        await expect(panel, 'on a wide screen Set up shows the build beside the chat').toContainText(/Building( in n8n)?/)
+        await expect(panel.getByRole('list', { name: 'Checks' })).toContainText(/Test run passed/)
+        await expect(panel).toContainText('The builder saves a draft. It can’t publish by itself.')
+        await expect(panel, 'nothing unbuilt is claimed').not.toContainText('Only our blocks')
+      }
+      await shot(page, info, `n11-ready-${phone ? '390' : '1440'}`)
+      const draftsAfter = (await backend.get<{ drafts: { draft_id: string }[] }>('alice', '/api/v1/drafts')).drafts.map((one) => one.draft_id)
+      expect(draftsAfter, 'Set up leaves no draft of the card behind: the workflow holds it').toEqual(draftsBefore)
+      expect((await made())[0]?.last_run?.test, 'the card’s test run is a test run').toBe(true)
+      expect((await made())[0]?.state, 'a test run turns nothing on').toBe('draft')
 
-      await thread(page).getByRole('button', { name: 'Do a test run' }).click()
-      await expect(page).toHaveURL(/\/runs\/run_/, { timeout: 30_000 })
-      const after = (await backend.get<{ use_cases: { name: string; last_run: { test: boolean } | null }[] }>('alice', '/api/v1/use-cases')).use_cases
-      expect(after.length, 'one workflow was set up').toBe(before + 1)
-      expect(after[0]?.last_run?.test, 'Do a test run records a test run').toBe(true)
+      await card(page).getByRole('button', { name: 'Turn it on', exact: true }).click()
+      await expect(card(page)).toContainText(/On\. First run /, { timeout: 30_000 })
+      await expect(pillOf(page)).toHaveText('On')
+      expect((await made())[0]?.state, 'On only once the platform says it is on').toBe('on')
+      if (!phone) await expect(panel).toContainText(/On\. Version 1/)
+      await shot(page, info, `n11-on-${phone ? '390' : '1440'}`)
       assertClean(watch)
       await context.close()
     })
@@ -330,15 +343,15 @@ test.describe('with the AI model on', () => {
     await ask(page, SUMMARY)
     await expect(card(page)).toBeVisible()
     const asked = page.waitForRequest((request) => request.url().endsWith('/api/v1/planner/check-part') && request.method() === 'POST')
-    const chip = card(page).getByRole('button', { name: /^bug tickets in MOCK, with no update for 10 days/ })
+    const chip = card(page).getByRole('button', { name: /^Bug tickets in MOCK, with no update for 10 days/ })
     await chip.focus()
     await page.keyboard.press('Enter')
-    const editor = card(page).getByRole('group', { name: 'Change Which tickets' })
+    const editor = card(page).getByRole('group', { name: 'Change Watch' })
     await expect(editor).toBeVisible()
     await editor.getByRole('textbox').fill('bug tickets in OPS, with no update for 10 days')
     await page.keyboard.press('Enter')
     expect((await asked).postDataJSON(), 'a changed part is checked by the Planner').toMatchObject({ kind: 'look_for', text: 'bug tickets in OPS, with no update for 10 days' })
-    await expect(card(page).getByRole('button', { name: /^bug tickets in OPS, with no update for 10 days/ }), 'focus and the sentence follow the change').toBeFocused()
+    await expect(card(page).getByRole('button', { name: /^Bug tickets in OPS, with no update for 10 days/ }), 'focus and the sentence follow the change').toBeFocused()
     await expect(card(page)).toContainText('bug tickets in OPS, with no update for 10 days')
 
     await card(page).getByRole('button', { name: 'Every weekday', exact: true }).click()
@@ -355,16 +368,12 @@ test.describe('with the AI model on', () => {
 
     await page.goto('/workflows')
     const row = page.locator(`li[data-draft="${id}"]`)
-    await expect(row, 'the draft shows on Workflows with the card’s own reason').toContainText(/Needs |Nothing is unclear/)
+    await expect(row, 'the draft shows on Workflows with the card’s own reason').toContainText(/Needs |questions? to answer|Nothing is unclear/)
     await row.getByRole('link').click()
     await expect(page, 'Resume reopens the card on Home').toHaveURL(new RegExp(`/\\?draft=${id}`))
     await expect(card(page)).toContainText('bug tickets in OPS, with no update for 10 days')
     await expect(card(page)).toContainText('Every weekday')
     await shot(page, info, 'n11-resumed')
-    await card(page).getByRole('button', { name: 'Rename' }).click()
-    await page.getByLabel('Workflow name').fill('Stale bug chaser')
-    await page.getByRole('button', { name: 'Done' }).click()
-    await expect(card(page).getByRole('heading', { name: 'Stale bug chaser' }).locator('..').getByText('Filled in by me'), 'the tag goes once the person renames').toHaveCount(0)
     await card(page).getByRole('button', { name: 'Never mind' }).click()
     const sure = page.getByRole('alertdialog')
     await expect(sure, 'Never mind on a resumed draft asks first').toBeVisible()
@@ -373,7 +382,8 @@ test.describe('with the AI model on', () => {
     expect((await drafts()).some((draft) => draft.draft_id === id), 'keeping the draft leaves it saved').toBe(true)
     await card(page).getByRole('button', { name: 'Never mind' }).click()
     await page.getByRole('alertdialog').getByRole('button', { name: 'Discard draft' }).click()
-    await expect(thread(page)).toContainText('All right, never mind.')
+    await expect(pillOf(page), 'Never mind drops it').toHaveText('Dropped')
+    await expect(card(page)).toContainText('Nothing was set up.')
     await expect.poll(async () => (await drafts()).some((draft) => draft.draft_id === id), { timeout: 15_000 }).toBe(false)
     await thread(page).getByRole('button', { name: 'Undo' }).click()
     await expect(card(page), 'Undo puts the draft and its card back').toBeVisible()
@@ -389,16 +399,14 @@ test.describe('with the AI model on', () => {
   const STALE = 'find bug tickets in MOCK with no update for 10 days and create one ticket that lists them'
   const newestCard = (page: Page) => card(page).last()
   const partsOf = (page: Page) => newestCard(page).getByRole('list', { name: 'Each part of your request' })
-  const whenPart = (page: Page) => partsOf(page).locator('[data-part="when"]')
+  const whenPart = (page: Page) => partsOf(page).locator('[data-part="When"]')
   const crosses = (page: Page) => partsOf(page).locator('[data-mark="no"]')
   const partCan = (page: Page) => newestCard(page).getByRole('button', { name: 'Set up the part I can', exact: true })
-  const turnedOn = (page: Page) => thread(page).getByRole('status').filter({ hasText: /is on\./ })
 
-  async function leftOutOf(page: Page, backend: Backend): Promise<{ left_out: string[]; schedule: { day: string; at: string } | null }> {
-    await turnedOn(page).getByRole('link', { name: 'See it on Workflows' }).click()
-    await expect(page).toHaveURL(/\/workflows\/uc_/)
-    const id = decodeURIComponent(new URL(page.url()).pathname.split('/').pop() ?? '')
-    return backend.get(`alice`, `/api/v1/use-cases/${id}`)
+  /** The workflow Set up just made: alice's newest. */
+  async function leftOutOf(backend: Backend): Promise<{ use_case_id: string; left_out: string[]; schedule: { day: string; at: string } | null }> {
+    const newest = (await backend.get<{ use_cases: { use_case_id: string }[] }>('alice', '/api/v1/use-cases')).use_cases[0]
+    return backend.get('alice', `/api/v1/use-cases/${newest?.use_case_id ?? ''}`)
   }
 
   test('ANS-cross and ANS-left-out: a clause the Planner didn’t follow is crossed, the button sets up the part it can, and the workflow keeps it as Left out', async ({ browser, backend }, info) => {
@@ -407,19 +415,19 @@ test.describe('with the AI model on', () => {
     const watch = watchPage(page)
     await page.goto('/')
     await ask(page, `Every Friday at 5pm, ${STALE}. Colour them by team.`)
-    await expect(thread(page).getByText('Here’s what I understood. I can’t do every part of it.')).toBeVisible()
+    await expect(thread(page).getByText('Here’s what I understood.')).toBeVisible()
     await expect(thread(page).getByRole('heading', { name: 'What I can’t do yet' }), 'a clause it didn’t follow is no can’t').toHaveCount(0)
     await expect(crosses(page)).toHaveText(/Can’t do: “Colour them by team”\s*I didn’t follow this part\./)
     await expect(whenPart(page)).toContainText('Every Friday at 17:00, Singapore time')
     await expect(partCan(page)).toBeVisible()
     await fillTheRest(page, 'MOCK')
-    await expect(left(page).last(), 'the footer says what is left out').toHaveText('The part with a cross is left out.', { timeout: 30_000 })
-    await expect(newestCard(page), 'never Nothing is unclear while a part has a cross').not.toContainText('Nothing is unclear')
+    await expect(left(page).last(), 'nothing is left to answer, and the cross stays on the card').toHaveText('', { timeout: 30_000 })
+    await expect(crosses(page)).toHaveCount(1)
     await shot(page, info, 'r5-cross')
     await partCan(page).click()
-    await expect(turnedOn(page)).toContainText('Left out: “Colour them by team”.', { timeout: 30_000 })
-    const made = await leftOutOf(page, backend)
-    expect(made.left_out, 'the workflow keeps her words for the part with a cross').toEqual(['Colour them by team'])
+    await expect(crosses(page), 'the cross stays on the card as it builds').toHaveCount(1)
+    await expect.poll(async () => (await leftOutOf(backend)).left_out, { message: 'the workflow keeps her words for the part with a cross', timeout: 30_000 }).toEqual(['Colour them by team'])
+    await page.goto(`/workflows/${(await leftOutOf(backend)).use_case_id}`)
     await expect(main(page)).toContainText('Left out: “Colour them by team”. It was set up without that part.')
     await shot(page, info, 'r5-left-out-page')
     assertClean(watch)
@@ -440,11 +448,10 @@ test.describe('with the AI model on', () => {
     await expect(whenPart(page)).toContainText('Every Monday at 9:00, Singapore time')
     await expect(crosses(page)).toHaveText(/“Friday”\s*I can only set one day, so it runs on Monday only\./)
     await fillTheRest(page, 'MOCK')
-    await expect(left(page).last()).toHaveText('The part with a cross is left out.', { timeout: 30_000 })
+    await expect(left(page).last()).toHaveText('', { timeout: 30_000 })
     await partCan(page).click()
-    await expect(turnedOn(page)).toContainText('Left out: “Friday”.', { timeout: 30_000 })
-    const made = await leftOutOf(page, backend)
-    expect(made.left_out).toEqual(['Friday'])
+    await expect.poll(async () => (await leftOutOf(backend)).left_out, { timeout: 30_000 }).toEqual(['Friday'])
+    const made = await leftOutOf(backend)
     expect(made.schedule).toMatchObject({ day: 'monday', at: '09:00' })
     assertClean(watch)
     await context.close()
@@ -478,7 +485,7 @@ test.describe('with the AI model on', () => {
 
     await ask(page, `Every Friday at 9, ${STALE}`)
     await expect(whenPart(page), 'a bare hour asks morning or evening').toContainText('At 9:00 or 21:00?')
-    await expect(left(page).last()).toContainText('when it runs')
+    await expect(left(page).last()).toContainText(/questions? to answer/)
     assertClean(watch)
     await context.close()
     await forgetNewDrafts(backend, before)
@@ -838,7 +845,7 @@ test.describe('with the AI model on', () => {
     try {
       const page = await context.newPage()
       await page.goto(`/new?draft=${id}`)
-      await expect(thread(page).locator('section[data-card]')).toContainText('tickets closed last week')
+      await expect(thread(page).locator('[data-card]')).toContainText('tickets closed last week')
       await expect(page, 'once the card is open, the address no longer asks for the draft').toHaveURL(/\/$/)
     } finally {
       await context.close()
@@ -963,7 +970,7 @@ test.describe('the chat after the first message', () => {
       const rail = page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
       await rail.getByRole('link', { name: /^Workflows/ }).click()
       await page.locator(`li[data-draft="${id}"]`).getByRole('link').click()
-      const resumed = thread(page).locator('section[data-card]')
+      const resumed = thread(page).locator('[data-card]')
       await expect(resumed).toContainText('tickets closed last week')
       await expect(thread(page), 'the conversation before it stays').toContainText('What can you do?')
       await expect(resumed.getByRole('heading', { level: 3 }).first(), 'focus goes to the card').toBeFocused()
@@ -975,23 +982,20 @@ test.describe('the chat after the first message', () => {
   })
 
   test('a card keeps what she did on it across pages, and New chat saves it once as her draft and says so', async ({ browser, backend }) => {
-    const name = `Kept card ${randomUUID().slice(0, 6)}`
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     const saves = draftSaves(page)
     await page.goto('/')
     await ask(page, SUMMARY)
-    const card = thread(page).locator('section[data-card]')
+    const card = thread(page).locator('[data-card]')
     await expect(card.getByRole('heading', { level: 3 }).first(), 'a set-up card takes focus at its heading').toBeFocused()
-    await card.getByRole('button', { name: /^Rename/ }).click()
-    await card.getByLabel('Workflow name').fill(name)
-    await page.keyboard.press('Enter')
+    await card.getByRole('button', { name: 'Every week', exact: true }).click()
     await expect(page, 'the card saves her change as a draft').toHaveURL(/\?draft=/)
     const draftId = new URL(page.url()).searchParams.get('draft') ?? ''
     const rail = page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
     await rail.getByRole('link', { name: /^Workflows/ }).click()
     await rail.getByRole('link', { name: /^Chat/ }).click()
-    await expect(card.getByRole('heading', { level: 3, name }), 'the card comes back as she left it').toBeVisible()
+    await expect(card.locator('[data-part="When"]'), 'the card comes back as she left it').toContainText('Which day should it run?')
     const before = saves.length
     await page.getByRole('button', { name: 'New chat' }).click()
     await expect(page.getByRole('status').filter({ hasText: 'Your draft is saved. Find it on Workflows.' })).toBeVisible()
@@ -999,7 +1003,7 @@ test.describe('the chat after the first message', () => {
     await page.waitForTimeout(1_000)
     expect(saves.slice(before), 'New chat saves the card once, as alice').toEqual(['alice'])
     const drafts = await backend.get<{ drafts: { draft_id: string; content: unknown }[] }>('alice', '/api/v1/drafts')
-    expect(drafts.drafts.filter((draft) => JSON.stringify(draft.content).includes(name)).map((draft) => draft.draft_id), 'one draft, the card’s own').toEqual([draftId])
+    expect(drafts.drafts.filter((draft) => draft.draft_id === draftId), 'one draft, the card’s own').toHaveLength(1)
     await context.close()
     await backend.send('DELETE', 'alice', `/api/v1/drafts/${draftId}`)
   })
@@ -1010,14 +1014,14 @@ test.describe('the chat after the first message', () => {
     const saves = draftSaves(page)
     await page.goto('/')
     await ask(page, 'Every Friday at 4pm, follow up on bug tickets in MOCK with no update for 41 days')
-    await expect(thread(page).locator('section[data-card]')).toBeVisible()
+    await expect(thread(page).locator('[data-card]')).toBeVisible()
     await page.getByRole('button', { name: /Test controls/ }).click()
     await page.getByRole('button', { name: 'Bob', exact: true }).click()
     await expect(main(page).getByText(/^Good (morning|afternoon|evening), Bob$/)).toBeVisible()
     await page.waitForTimeout(1_000)
     expect(saves, 'no draft is saved as bob').not.toContain('bob')
     await page.getByRole('button', { name: 'Alice', exact: true }).click()
-    await expect(thread(page).locator('section[data-card]'), 'her card is there when she comes back').toBeVisible()
+    await expect(thread(page).locator('[data-card]'), 'her card is there when she comes back').toBeVisible()
     await context.close()
   })
 
@@ -1095,26 +1099,30 @@ test.describe('the edit card (spec 6.7)', () => {
   const sentenceOf = (answer: Locator) => answer.locator('p[id$="-sentence"]')
   const heading = (answer: Locator) => editCard(answer).getByRole('heading', { level: 3 })
 
-  test('ANS-edit-save: Save change publishes a version from the chat, the page lists it, and Undo publishes the one before again', async ({ browser, backend }) => {
+  test('Change by talking, ANS-edit-save: Save change publishes a version from the chat, Open shows it beside, the page lists it, and Undo publishes the one before again', async ({ browser, backend }) => {
     const morning = await scheduledWorkflow(backend, `Morning check ${tag()}`, WEEKDAYS_8)
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     const watch = watchPage(page)
     await page.goto('/')
     const answer = await askAndWait(page, `Make the ${morning.name} run on Mondays only`)
-    await expect(sentenceOf(answer)).toHaveText('Here’s the change. Nothing changes until you save it.')
+    await expect(sentenceOf(answer), 'the card needs no lead: its head says what changes').toHaveCount(0)
     await expect(heading(answer), 'the card takes focus on its heading').toBeFocused()
     await expect(heading(answer)).toHaveText(`Change ${morning.name}`)
-    await expect(editCard(answer)).toHaveText(/When it runs\s*Before\s*Every weekday at 8:00\s*After\s*Every Monday at 8:00/)
-    await expect(answer.getByRole('button', { name: 'Turn it on' }), 'no new set-up card').toHaveCount(0)
+    await expect(editCard(answer)).toContainText(/When\s*Weekdays 8:00\s*becomes\s*Mon 8:00/)
+    await expect(editCard(answer).locator('[data-edit-pill]')).toHaveText('Not saved')
+    await expect(answer.getByRole('button', { name: /^Set up/ }), 'no new set-up card').toHaveCount(0)
     expect((await versionsOf(backend, morning.id)).map((v) => v.version), 'nothing is saved before Save change').toEqual([2, 1])
 
     await editCard(answer).getByRole('button', { name: 'Save change' }).click()
-    await expect(editCard(answer)).toContainText(/Saved as version 3\. Next run .+, 8:00\./)
-    await expect(sentenceOf(answer)).toHaveText(`Saved. ${morning.name} runs every Monday at 8:00 now.`)
+    await expect(editCard(answer).locator('[data-edit-status]')).toHaveText('Saved as version 3.')
+    await expect(editCard(answer).locator('[data-edit-pill]')).toHaveText('Saved')
     await expect(editCard(answer).getByRole('button', { name: /^Undo/ })).toBeFocused()
     expect(await shown(backend, morning.id)).toMatchObject({ version: 3, schedule: { day: 'monday', at: '08:00' } })
     expect((await versionsOf(backend, morning.id))[0]).toMatchObject({ version: 3, by: 'alice', via: 'chat' })
+    await editCard(answer).getByRole('button', { name: `Open ${morning.name}` }).click()
+    await expect(page.locator('#side-panel').getByRole('heading', { level: 2 }), 'Open shows the workflow beside the chat').toHaveText(morning.name)
+    await page.locator('#side-panel').getByRole('button', { name: 'Close' }).click()
 
     const rail = page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
     await rail.getByRole('link', { name: /^Workflows/ }).click()
@@ -1126,8 +1134,9 @@ test.describe('the edit card (spec 6.7)', () => {
     const kept = newestAnswer(page)
     await expect(editCard(kept), 'the card keeps its Undo across pages').toContainText('Saved as version 3.')
     await editCard(kept).getByRole('button', { name: /^Undo/ }).click()
-    await expect(sentenceOf(kept)).toHaveText(`Undone, as version 4. ${morning.name} runs every weekday at 8:00 now.`)
-    await expect(editCard(kept)).toContainText('Undone, as version 4.')
+    await expect(editCard(kept).locator('[data-edit-status]')).toHaveText('Back to Weekdays 8:00.')
+    await expect(editCard(kept).locator('[data-edit-pill]')).toHaveText('Undone')
+    await expect(page.getByRole('status').filter({ hasText: 'Back to version 2, saved as version 4.' }), 'Undo says which version it went back to, and the version it saved').toHaveCount(1)
     expect(await shown(backend, morning.id)).toMatchObject({ version: 4, schedule: WEEKDAYS_8 })
     expect((await versionsOf(backend, morning.id))[0]).toMatchObject({ version: 4, via: 'chat', undid: 3 })
     await expectAccessible(page, path.join(OUT, 'axe'), 'r8-edit-card')
@@ -1156,7 +1165,6 @@ test.describe('the edit card (spec 6.7)', () => {
     await backend.post('alice', `/api/v1/use-cases/${morning.id}/pause`)
     const paused = await askAndWait(page, `Make the ${morning.name} run at 9am`)
     await editCard(paused).getByRole('button', { name: 'Save change' }).click()
-    await expect(sentenceOf(paused)).toHaveText(`Saved. ${morning.name} is paused, so it won’t run until you resume it.`)
     await expect(editCard(paused)).toContainText('Saved as version 5. It’s paused, so it won’t run until you resume it.')
     await context.close()
   })
@@ -1176,7 +1184,7 @@ test.describe('the edit card (spec 6.7)', () => {
 
     const it = await askAndWait(page, 'make it daily')
     await expect(heading(it), '“it” is the workflow the answer before was about').toHaveText(`Change ${morning.name}`)
-    await expect(editCard(it)).toHaveText(/Before\s*Every weekday at 8:00\s*After\s*Every day at 8:00/)
+    await expect(editCard(it)).toContainText(/Weekdays 8:00\s*becomes\s*Daily 8:00/)
 
     const days = await askAndWait(page, `make the ${morning.name} run on Mondays and Thursdays`)
     await expect(editCard(days)).toHaveText(/“Mondays and Thursdays”\s*I can only set one day\./)
@@ -1223,19 +1231,19 @@ test.describe('the edit card (spec 6.7)', () => {
     expect((await shown(backend, second.id)).state, 'only the one she picked').toBe('paused')
     expect((await shown(backend, first.id)).state).toBe('on')
     const both = await askAndWait(page, `how are my workflows doing? make the ${morning.name} run at 10am`)
-    await expect(editCard(both)).toHaveText(/Before\s*Every weekday at 8:00\s*After\s*Every weekday at 10:00/)
+    await expect(editCard(both)).toContainText(/Weekdays 8:00\s*becomes\s*Weekdays 10:00/)
 
     const next = await askAndWait(page, `when does the ${morning.name} run next?`)
     await expect(editCard(next), 'a question is never a change').toHaveCount(0)
     await expect(next).not.toContainText('I can only change')
     const asked = await askAndWait(page, `when does the ${morning.name} run? make it run daily`)
-    await expect(editCard(asked)).toHaveText(/Before\s*Every weekday at 8:00\s*After\s*Every day at 8:00/)
+    await expect(editCard(asked)).toContainText(/Weekdays 8:00\s*becomes\s*Daily 8:00/)
 
     const ten = await askAndWait(page, `make the ${weekly.name} run at 10am`)
-    await expect(editCard(ten), 'only the time changes, and the day stays').toHaveText(/Before\s*Every Friday at 16:00\s*After\s*Every Friday at 10:00/)
+    await expect(editCard(ten), 'only the time changes, and the day stays').toContainText(/Fri 16:00\s*becomes\s*Fri 10:00/)
     const how = await askAndWait(page, `how is the ${weekly.name} doing?`)
     await expect(editCard(how), 'FIX-name-not-command: a name with “weekly” in it asks nothing').toHaveCount(0)
-    await expect(how.getByRole('button', { name: 'Turn it on' })).toHaveCount(0)
+    await expect(how.getByRole('button', { name: /^Set up/ })).toHaveCount(0)
     await context.close()
   })
 
@@ -1249,16 +1257,16 @@ test.describe('the edit card (spec 6.7)', () => {
     try {
       await page.goto('/')
       const never = await askAndWait(page, 'Run the software check every day instead of every Monday')
-      await expect(editCard(never)).toHaveText(/Before\s*Every Monday at 9:00\s*After\s*Every day at 9:00[\s\S]*software on the watchlist are checked\. Saving makes you the owner of this schedule\./)
+      await expect(editCard(never)).toContainText(/Mon 9:00\s*becomes\s*Daily 9:00[\s\S]*software on the watchlist are checked\. Saving makes you the owner of this schedule\./)
       await editCard(never).getByRole('button', { name: 'Never mind' }).click()
-      await expect(sentenceOf(never)).toHaveText('No problem. Nothing changed.')
+      await expect(editCard(never).locator('[data-edit-pill]'), 'Never mind keeps the card, changing nothing').toHaveText('Not changed')
       await expect(box(page), 'Never mind hands focus back to the box').toBeFocused()
-      await expect(editCard(never)).toHaveCount(0)
+      await expect(editCard(never).getByRole('button'), 'nothing left to press on a card she backed out of').toHaveCount(0)
       expect((await backend.get<{ watchlist: { schedule: { day: string } } }>('alice', '/api/v1/watchlist')).watchlist.schedule.day, 'Never mind changed nothing').toBe('monday')
 
       const seven = await askAndWait(page, 'Run the software check every day at 7am')
       await editCard(seven).getByRole('button', { name: 'Save change' }).click()
-      await expect(sentenceOf(seven)).toHaveText(/^Saved\. Next run .+, 7:00\. You now own this schedule, so you can’t approve its checks\.$/)
+      await expect(editCard(seven).locator('[data-edit-status]')).toHaveText('Saved.')
       await expect(editCard(seven)).toContainText('and made you the owner of this schedule.')
       await expect(editCard(seven).getByRole('button', { name: /^Undo/ })).toHaveCount(0)
       await expect(editCard(seven).getByRole('link', { name: 'Change it on the Software page' })).toBeVisible()
@@ -1286,7 +1294,7 @@ test.describe('the edit card (spec 6.7)', () => {
     await expect(heading(which)).toBeFocused()
     await editCard(which).getByRole('button', { name: `Friday follow-up ${both}` }).click()
     await expect(heading(which)).toHaveText(`Change Friday follow-up ${both}`)
-    await expect(editCard(which)).toHaveText(/Before\s*Every weekday at 8:00\s*After\s*Every weekday at 10:00/)
+    await expect(editCard(which)).toContainText(/Weekdays 8:00\s*becomes\s*Weekdays 10:00/)
     await context.close()
   })
 
@@ -1352,7 +1360,7 @@ test.describe('bob asks the Planner questions only', () => {
   const said = (page: Page) => newest(page).locator('p').first()
   const panel = (page: Page) => page.locator('#side-panel')
   const OPS = /^Operators set up workflows\. Ask .+\.$/
-  const CHANGES = [/^Turn it on$/, /^Save/, /^Pause/, /^Resume/, /^Retry/, /^Run now$/, /^Check now$/, /^Add .*watchlist/i, /^Set it up with a yes$/, /^Approve/, /^Decline/]
+  const CHANGES = [/^Turn it on$/, /^Set up/, /^Watch it$/, /^Save/, /^Pause/, /^Resume/, /^Retry/, /^Run now$/, /^Check now$/, /^Add .*watchlist/i, /^Set it up with a yes$/, /^Approve/, /^Decline/]
 
   async function bobAsks(page: Page, text: string): Promise<void> {
     const before = await thread(page).locator(':scope > li[data-answer]').count()
@@ -1364,7 +1372,7 @@ test.describe('bob asks the Planner questions only', () => {
 
   async function noChangeControl(page: Page): Promise<void> {
     for (const name of CHANGES) await expect(thread(page).getByRole('button', { name }), `no ${String(name)} in any answer`).toHaveCount(0)
-    await expect(thread(page).locator('section[data-card]'), 'no set-up or edit card').toHaveCount(0)
+    await expect(thread(page).locator('[data-card]'), 'no set-up or edit card').toHaveCount(0)
   }
 
   /** A run Alice started that Bob declined, so he has a decision of his own to ask about. */

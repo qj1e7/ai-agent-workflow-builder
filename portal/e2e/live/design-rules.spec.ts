@@ -47,7 +47,7 @@ async function noDeadButtons(page: Page, state: string): Promise<void> {
 
 /** Principle 4: a clause the Planner didn't follow keeps its cross, and the card never says nothing is unclear while it does. */
 async function noPartDropped(page: Page, state: string): Promise<void> {
-  const card = main(page).locator('section[data-card]').last()
+  const card = main(page).locator('[data-card]').last()
   await expect(card.locator('[data-mark="no"]'), `Principle 4 (no part dropped): ${state} shows no cross`).not.toHaveCount(0)
   await expect(card, `Principle 4: ${state} says nothing is unclear while a part has a cross`).not.toContainText('Nothing is unclear')
   await expect(card.getByRole('button', { name: 'Set up the part I can' }), `Principle 4: ${state} offers to set up the whole request`).toBeVisible()
@@ -113,7 +113,7 @@ test('Home keeps the design rules in each of its states', async ({ browser, back
   await allRules(page, capabilities, 'the can’t answer')
 
   await ask(page, 'Every Friday at 5pm, find bug tickets in MOCK with no update for 10 days and create one ticket that lists them. Colour them by team.')
-  await expect(main(page).locator('section[data-card]').last()).toContainText('I didn’t follow this part.')
+  await expect(main(page).locator('[data-card]').last()).toContainText('I didn’t follow this part.')
   await noPartDropped(page, 'a set-up card with a clause it didn’t follow')
   await allRules(page, capabilities, 'a set-up card with a cross')
   await repair()
@@ -156,13 +156,13 @@ test('the edit card keeps the design rules in each of its states', async ({ brow
   await rules('the answer to a change the chat can’t make')
 
   const ready = await askAndWait(page, `make the ${morning.name} run on Mondays only`)
-  await expect(editCard(ready)).toContainText('Every Monday at 8:00')
+  await expect(editCard(ready)).toContainText('Mon 8:00')
   await rules('the edit card ready to save')
   await editCard(ready).getByRole('button', { name: 'Save change' }).click()
   await expect(editCard(ready)).toContainText('Saved as version 3.')
   await rules('the edit card once saved')
   await editCard(ready).getByRole('button', { name: /^Undo/ }).click()
-  await expect(editCard(ready)).toContainText('Undone, as version 4.')
+  await expect(editCard(ready)).toContainText('Back to ')
   await rules('the edit card once undone')
   await context.close()
 })
