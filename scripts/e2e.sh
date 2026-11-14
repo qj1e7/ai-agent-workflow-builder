@@ -12,6 +12,16 @@ case "$auth" in
 esac
 export E2E_AUTH="$auth"
 
+# E2E_SEED=old-engine starts the stack from a database made before ENGINE-PLAN E10 and runs only the
+# test of the move, on a project of its own.
+seed="${E2E_SEED:-}"
+case "$seed" in
+  "") ;;
+  old-engine) default_project=wab-e2e-seed default_suites=api files+=(-f deploy/compose.seed.yaml) ;;
+  *) echo "E2E_SEED takes old-engine, not '$seed'." >&2; exit 2 ;;
+esac
+export E2E_SEED="$seed"
+
 # Its own project name, so tearing it down never touches a stack that scripts/up.sh started.
 project="${E2E_PROJECT:-$default_project}"
 suites="${E2E_SUITES:-$default_suites}"
@@ -53,8 +63,16 @@ if [ "$auth" = oidc ] && wanted api; then
   exit 2
 fi
 
+# The seeded stack's own logs, in the job's log, when it fails.
+show_seed_logs() {
+  [ -n "$seed" ] || return 0
+  echo "--- seed, bootstrap and platform-api logs ---" >&2
+  "${compose[@]}" logs --no-color --tail 200 seed bootstrap platform-api >&2 || true
+}
+
 if ! "${compose[@]}" up --build --wait --wait-timeout "${WAIT_TIMEOUT:-300}" >"$out/up.log" 2>&1; then
   tail -n 30 "$out/up.log" >&2
+  show_seed_logs
   echo "FAIL: the stack did not become healthy. See $out/up.log and $out/compose.log." >&2
   exit 2
 fi
@@ -68,6 +86,7 @@ if wanted api; then
   [ -z "${API_K:-}" ] || api_args=(-e "PYTEST_ADDOPTS=-k '$API_K'")
   "${compose[@]}" --profile e2e run --rm --build ${api_args[@]+"${api_args[@]}"} e2e 2>&1 | tee "$out/e2e.log"
   api_status="${PIPESTATUS[0]}"
+  [ "$api_status" -eq 0 ] || show_seed_logs
   set -e
 fi
 

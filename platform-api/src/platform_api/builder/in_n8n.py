@@ -38,3 +38,13 @@ async def put_back(n8n: N8nDrafts, workflow_id: str, version_id: str) -> None:
         await n8n.go_live(workflow_id, version_id)
     except (N8nError, httpx.HTTPError) as error:
         log.error("could not put %s version %s back in n8n: %s", workflow_id, version_id, error)
+
+
+async def discard(n8n: N8nDrafts, workflow_id: str) -> None:
+    """A workflow the records never came to name is taken off and removed, so it never runs. n8n
+    keeps a published workflow, so it is taken off first."""
+    try:
+        await n8n.go_off(workflow_id)
+    except (N8nError, httpx.HTTPError) as error:
+        log.warning("could not take %s off in n8n: %s", workflow_id, error)
+    await n8n.remove(workflow_id)

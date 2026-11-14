@@ -33,7 +33,6 @@ from platform_api.orchestration.runs import (
     Working,
 )
 from platform_api.orchestration.runs import StepName as DomainStep
-from platform_api.orchestration.schedule_store import ScheduleTicker
 from platform_api.orchestration.service import (
     AnswerRefused,
     Decided,
@@ -337,10 +336,6 @@ class RetryLater(WireModel):
     detail: str
 
 
-class TickOut(WireModel):
-    started: list[RunId]
-
-
 class WorkflowFailureIn(WireIn):
     execution_id: str
     workflow: str
@@ -377,11 +372,6 @@ StepKey = Annotated[str, Header(alias="X-Step-Key")]
 def current_orchestrator(request: Request) -> Orchestrator:
     orchestrator: Orchestrator = request.app.state.orchestrator
     return orchestrator
-
-
-def current_ticker(request: Request) -> ScheduleTicker:
-    ticker: ScheduleTicker = request.app.state.schedule_ticker
-    return ticker
 
 
 def current_connections(request: Request) -> Connections:
@@ -826,31 +816,6 @@ async def run_step(
     except RetryLaterError as error:
         return _json(503, RetryLater(detail=str(error)))
     return StepResponseOut(proceed=reply.proceed, outcome=reply.outcome, detail=reply.detail)
-
-
-@router.post(
-    "/internal/v1/schedules/tick",
-    tags=["internal"],
-    description=(
-        "Asked every 5 minutes by the schedule_tick workflow. Starts one check for each "
-        "schedule that is due and answers the runs it started."
-    ),
-    responses={401: error_response("Bad step key")},
-)
-async def tick_schedules(
-    step_key: StepKey,
-    request: Request,
-    ticker: Annotated[ScheduleTicker, Depends(current_ticker)],
-    connections: Annotated[Connections, Depends(current_connections)],
-) -> TickOut:
-    check_step_key(request, step_key)
-    started = await ticker.tick()
-    try:
-        await connections.check_due()
-    except Exception as error:
-        # The runs are already started, so a check that fails must not fail the tick.
-        log.warning("the connection checks did not finish: %s", type(error).__name__)
-    return TickOut(started=started)
 
 
 @router.post(

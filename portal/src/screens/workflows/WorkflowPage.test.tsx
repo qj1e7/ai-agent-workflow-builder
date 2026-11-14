@@ -107,6 +107,20 @@ describe('a workflow page', () => {
     expect(mainOf(html)).toMatch(/data-life="on"[^>]*>.*On<\/span>/)
   })
 
+  it('says why a workflow that could not move to n8n starts no run, and never gives a next run', () => {
+    const refused = 'Not running. n8n did not take it yet, so it can\'t run on its schedule. The platform tries again every minute. If this stays, ask for help.'
+    const schedule = { day: 'tuesday', at: '07:30', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null } as const
+    const html = text(mainOf(render({ useCase: { ...AGENTS, schedule, next_run_at: null, move_refused: refused } })))
+    expect(html).toContain(refused)
+    expect(html).not.toContain('Not scheduled')
+    expect(html).not.toMatch(/Next run (Mon|Tue|Wed|Thu|Fri|Sat|Sun)/)
+  })
+
+  it('says it moves to its own n8n workflow after the run that holds it back, and only then', () => {
+    expect(text(mainOf(render({ useCase: { ...AGENTS, moving_to_n8n: true } })))).toContain('Moving to n8n after this run.')
+    expect(text(mainOf(render()))).not.toContain('Moving to n8n')
+  })
+
   it('says what it does in one sentence built from what the platform stored, never a guessed time', () => {
     expect(sentenceOfHtml(render())).toBe('Check langchain-ai/langgraph on GitHub for a new release when an Operator presses Run now. If there is one, create an upgrade ticket in Jira project MOCK, after a yes.')
     const html = render({ useCase: { ...AGENTS, next_run_at: '2026-11-05T00:00:00Z', schedule: { day: 'every_day', at: '08:00', time_zone: 'Asia/Singapore', owner_name: 'Alice' } } })

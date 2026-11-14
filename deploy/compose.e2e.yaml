@@ -87,7 +87,8 @@ services:
       MOCK_MODEL_URL: http://mock-model:8300
       MOCK_CONFLUENCE_URL: http://mock-confluence:8400
       E2E_WAIT_SECONDS: ${E2E_WAIT_SECONDS:-90}
-      STEP_KEY: ${STEP_KEY:?run deploy/make-env.sh}
+      # old-engine when the stack started from the old-engine seed, so only the move's test runs.
+      E2E_SEED: ${E2E_SEED:-}
       # Only to read the drafts the platform saves in n8n, as the platform itself does.
       N8N_BASE_URL: http://n8n:5678
       N8N_OWNER_EMAIL: ${N8N_OWNER_EMAIL:?run deploy/make-env.sh}

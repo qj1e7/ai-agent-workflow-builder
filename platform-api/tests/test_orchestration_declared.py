@@ -119,15 +119,6 @@ CASES = [
     ),
     pytest.param(
         "POST",
-        "/internal/v1/schedules/tick",
-        {"X-Step-Key": "wrong"},
-        None,
-        None,
-        401,
-        id="tick-401",
-    ),
-    pytest.param(
-        "POST",
         "/internal/v1/workflow-failures",
         {"X-Step-Key": "wrong"},
         {

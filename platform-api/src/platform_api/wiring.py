@@ -74,7 +74,7 @@ from platform_api.orchestration.planning import (
     ProjectFinding,
 )
 from platform_api.orchestration.runs import Leg
-from platform_api.orchestration.schedule_store import ScheduleBook, ScheduleTicker
+from platform_api.orchestration.schedule_store import ScheduleBook
 from platform_api.orchestration.service import Orchestrator
 from platform_api.orchestration.team_request_card import TeamsRequestChannel
 from platform_api.orchestration.teams import TeamsStub, TeamsWorkflowsWebhook
@@ -102,7 +102,6 @@ class Services:
     watchlist: Watchlist
     team_requests: TeamRequests
     request_channel: TeamsRequestChannel
-    schedule_ticker: ScheduleTicker
     teams_stub: TeamsStub
     jira: JiraRestAdapter
     jira_client: httpx.AsyncClient
@@ -164,7 +163,6 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.home = services.home
     app.state.watchlist = services.watchlist
     app.state.team_requests = services.team_requests
-    app.state.schedule_ticker = services.schedule_ticker
     app.state.teams_stub = services.teams_stub
     app.state.teams_webhook = services.teams_webhook
     app.state.jira = services.jira
@@ -406,8 +404,6 @@ async def build(settings: Settings) -> Services:
         None if n8n.drafts is None else OnN8n(n8n.drafts, watch_facts, software_page),
     )
     await watchlist.adopt_ticket_project()
-    if n8n.drafts is not None:
-        log.info("the watchlist's move to n8n: %s", await watchlist.move_to_n8n())
     builder = Builder(
         db,
         orchestrator,
@@ -420,7 +416,13 @@ async def build(settings: Settings) -> Services:
         releases=agents,
         writes=node_writes(settings),
         requests=orchestrator,
+        open_runs=watch_facts,
     )
+    if builder.moves is not None:
+        # Before any run can start: a workflow n8n lost comes back first, then whatever is left on
+        # the shared run workflow moves to its own (ENGINE-PLAN 2.6, E10).
+        log.info("restored to n8n: %s", await builder.moves.restore_if_asked())
+        log.info("moved to n8n: %s", await builder.moves.move_all())
     facts = builder.facts
     sources = ReadSources({CONFLUENCE_PAGE: confluence}, facts)
     tells, tell_flow = tell_outlet(settings, db)
@@ -467,7 +469,6 @@ async def build(settings: Settings) -> Services:
         watchlist=watchlist,
         team_requests=team_requests,
         request_channel=request_channel,
-        schedule_ticker=ScheduleTicker(db, schedules, builder, orchestrator),
         teams_stub=teams,
         jira=jira,
         jira_client=jira_client,
@@ -500,6 +501,11 @@ class Runner:
         ]
         if (sweep := self._services.builder.sweep) is not None:
             self._tasks.append(asyncio.create_task(sweep.sweep_forever(self._stop)))
+        if (moves := self._services.builder.moves) is not None:
+            self._tasks.append(asyncio.create_task(moves.move_forever(self._stop)))
+        self._tasks.append(
+            asyncio.create_task(self._services.connections.check_forever(self._stop))
+        )
 
     async def stop(self) -> None:
         self._stop.set()

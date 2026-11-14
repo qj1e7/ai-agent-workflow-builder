@@ -11,6 +11,7 @@ address or a new key starts with no history, and no screen shows what another co
 """
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Awaitable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -38,6 +39,9 @@ from platform_api.orchestration.jira_rest import JiraReach
 from platform_api.orchestration.model_settings import SettingsOff, SettingsState
 
 log = logging.getLogger(__name__)
+
+CHECK_EVERY = timedelta(minutes=5)
+"""As often as the schedule tick asked before E10."""
 
 type ConnectionId = Literal["jira", "github", "teams", "confluence", "model"]
 type Found = Literal["working", "needs_attention", "not_answering", "not_set_up"]
@@ -319,8 +323,18 @@ class Connections:
                 shown = None
         return self._present(entry, shown, self._db.clock())
 
+    async def check_forever(self, stop: asyncio.Event, every: timedelta = CHECK_EVERY) -> None:
+        """Checks what is due every few minutes, as the schedule tick did before E10."""
+        while not stop.is_set():
+            try:
+                await self.check_due()
+            except Exception as error:
+                log.warning("the connection checks did not finish: %s", type(error).__name__)
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(stop.wait(), every.total_seconds())
+
     async def check_due(self) -> None:
-        """The scheduled tick's part: checks what is due, and lets nothing go wrong on the way."""
+        """Checks what is due, and lets nothing go wrong on the way."""
         kept = await self._kept()
         now = self._db.clock()
         waiting = [

@@ -26,6 +26,7 @@ from platform_api.orchestration.workflows import (
     lint,
     load_all,
     parse,
+    placeholders,
     render,
 )
 from platform_api.settings import BootstrapSettings, bootstrap_settings_from_env
@@ -33,10 +34,24 @@ from platform_api.settings import BootstrapSettings, bootstrap_settings_from_env
 API_KEY_LABEL = "platform-bootstrap"
 CREDENTIAL_NAME = "X-Step-Key"
 STEP_KEY_HEADER = "X-Step-Key"
+CREDENTIAL_PLACEHOLDER = "STEP_KEY_CREDENTIAL_ID"
 # Only this exact name is removed: staff build their own workflows in the same n8n (ADR 0027).
 OLD_RUN_WORKFLOW = "release_check"
 OLD_TEMPLATE = "release_check"
 OLD_TASK_KIND = "release"
+SHARED_RUN_WORKFLOW = "run"
+RETIRED_WORKFLOWS = ("schedule_tick",)
+"""Removed by these exact names, as they are the platform's own. Nothing ticks schedules since
+E10: each workflow's own n8n workflow has its Schedule Trigger."""
+OLD_ENGINE_IN_USE = """
+    SELECT EXISTS (
+        SELECT 1 FROM builder.use_cases WHERE engine = 'shared_run' AND deleted_at IS NULL
+    ) OR EXISTS (
+        SELECT 1 FROM orchestration.runs
+        WHERE jsonb_typeof(spec -> 'n8n') IS DISTINCT FROM 'object'
+          AND state IN ('Pending', 'Working', 'Proposed', 'AwaitingApproval', 'Acting')
+    )
+"""
 RESET_HINT = (
     "This stack holds data from before the release check was retired, which the platform can "
     "no longer read. Reset a local practice stack with "
@@ -125,7 +140,10 @@ def _finish(
 def load_into_n8n(
     settings: BootstrapSettings, definitions: tuple[WorkflowDefinition, ...], say: Say
 ) -> tuple[list[LoadedWorkflow], list[str]]:
+    in_use = old_engine_in_use(settings.owner_database_url)
+    shared = tuple(d for d in definitions if in_use or d.name != SHARED_RUN_WORKFLOW)
     previous = _previous(settings.owner_database_url)
+    recorded = {w["name"]: w["id"] for w in previous}
     client = N8nClient(settings.n8n_base_url)
     try:
         client.wait_healthy()
@@ -134,33 +152,37 @@ def load_into_n8n(
         say(f"owner {settings.n8n_owner_email}: {owner.value}")
         removed = client.fresh_api_key(API_KEY_LABEL)
         say(f"api key '{API_KEY_LABEL}': created, {removed} older removed")
+        lost = lost_workflows(client, settings.owner_database_url, recorded, say)
+        if lost is not None:
+            ask_for_restore(settings.owner_database_url, lost, say)
         removed = client.remove_api_keys(PLATFORM_API_KEY_LABEL)
         say(f"api key '{PLATFORM_API_KEY_LABEL}': {removed} removed, platform-api makes its own")
-        credential_id = client.create_header_credential(
-            CREDENTIAL_NAME, STEP_KEY_HEADER, settings.step_key
-        )
-        say(f"credential '{CREDENTIAL_NAME}': created {credential_id}")
+        values = {"PLATFORM_INTERNAL_URL": settings.platform_internal_url}
+        credential_id = None
+        if any(_needs_step_key(d) for d in shared):
+            credential_id = client.create_header_credential(
+                CREDENTIAL_NAME, STEP_KEY_HEADER, settings.step_key
+            )
+            say(f"credential '{CREDENTIAL_NAME}': created {credential_id}")
+            values[CREDENTIAL_PLACEHOLDER] = credential_id
         place = Place(
             client,
             client.platform_project(),
-            {w["name"]: w["id"] for w in previous},
+            recorded,
             {w["name"]: w["sha256"] for w in previous},
             say,
         )
         platform = load_platform_workflows(place)
-        values = {
-            "PLATFORM_INTERNAL_URL": settings.platform_internal_url,
-            "STEP_KEY_CREDENTIAL_ID": credential_id,
-            "ERROR_WORKFLOW_ID": platform.error_workflow,
-        }
+        values["ERROR_WORKFLOW_ID"] = platform.error_workflow
         hashes: dict[str, str] = {}
-        for d in definitions:
+        for d in shared:
             workflow_id, digest = _load(place, d, values)
             hashes[workflow_id] = digest
         for old in client.workflows_named(OLD_RUN_WORKFLOW):
             if old.project == place.project:
                 client.delete_workflow(old.id)
                 say(f"workflow {OLD_RUN_WORKFLOW} ({old.id}): removed, every run goes through run")
+        retire_old_engine(place, in_use)
         stale = [c for c in client.credentials_named(CREDENTIAL_NAME) if c != credential_id]
         for credential in stale:
             client.delete_credential(credential)
@@ -274,10 +296,36 @@ def _upsert(place: Place, body: dict[str, Any], digest: str) -> str:
     return result.id
 
 
+def old_engine_in_use(owner_url: str) -> bool:
+    """A workflow still on the shared run workflow, or a run of it that has not ended, still needs
+    that workflow and its step key. Once neither is left, nothing calls them (ENGINE-PLAN E10)."""
+    with psycopg.connect(owner_url) as conn:
+        row = conn.execute(OLD_ENGINE_IN_USE).fetchone()
+    assert row is not None
+    return bool(row[0])
+
+
+def retire_old_engine(place: Place, in_use: bool) -> None:
+    """The schedule tick goes at once. The shared run workflow goes once nothing runs on it, so an
+    old deploy's waiting run still finishes there first. Each is found as the platform finds its
+    own, by the id recorded, in the platform's n8n project, so a workflow staff named the same
+    stays. A run left behind by a delete that failed is no longer on record: the release that
+    removes the old engine's code removes it by name and content hash."""
+    for name in (*RETIRED_WORKFLOWS, *(() if in_use else (SHARED_RUN_WORKFLOW,))):
+        workflow_id = place.target(name)
+        if workflow_id is not None:
+            place.client.delete_workflow(workflow_id)
+            place.say(f"workflow {name} ({workflow_id}): removed, every workflow runs as its own")
+
+
+def _needs_step_key(definition: WorkflowDefinition) -> bool:
+    return CREDENTIAL_PLACEHOLDER in placeholders(definition)
+
+
 def content_hash_without_credential(
     definition: WorkflowDefinition, values: Mapping[str, str]
 ) -> str:
-    return _content_hash(render(definition, {**values, "STEP_KEY_CREDENTIAL_ID": "<masked>"}))
+    return _content_hash(render(definition, {**values, CREDENTIAL_PLACEHOLDER: "<masked>"}))
 
 
 def _content_hash(body: Mapping[str, Any]) -> str:
@@ -312,6 +360,48 @@ def _count_if_table_exists(
         return 0
     row = conn.execute(f"SELECT count(*) FROM {table} WHERE {where}", (value,)).fetchone()
     return 0 if row is None else int(row[0])
+
+
+OWN_WORKFLOWS = """
+    SELECT n8n_workflow_id FROM builder.use_cases
+    WHERE engine = 'own' AND n8n_workflow_id IS NOT NULL AND deleted_at IS NULL
+      AND deleted_in_n8n_at IS NULL
+"""
+
+
+def lost_workflows(
+    client: N8nClient, owner_url: str, recorded: Mapping[str, str], say: Say
+) -> list[str] | None:
+    """The workflows n8n lost when our records name workflows and n8n holds none of them: its
+    database is gone, whatever its owner says, as n8n on Azure makes its owner from its settings
+    at every start. None when nothing is lost: before n8n ever held one, while it holds any, and
+    while it cannot answer, which is never taken for empty."""
+    with psycopg.connect(owner_url) as conn:
+        own = [row[0] for row in conn.execute(OWN_WORKFLOWS).fetchall()]
+    named = [*recorded.values(), *own]
+    if not named:
+        return None
+    try:
+        if any(client.holds(workflow_id) for workflow_id in named):
+            return None
+    except (N8nError, httpx.HTTPError) as error:
+        say(f"could not tell whether n8n kept its workflows, so nothing is restored: {error}")
+        return None
+    return own
+
+
+def ask_for_restore(owner_url: str, missing: Sequence[str], say: Say) -> None:
+    """n8n holds none of the workflows it held before, and platform-api saves each one again
+    from the version it kept (Restore to n8n) as it starts. The ask names the use cases'
+    workflows that were missing, so the sweep takes none of those for deleted meanwhile."""
+    with psycopg.connect(owner_url) as conn:
+        conn.execute(
+            "INSERT INTO builder.n8n_restore (id, asked_at, missing) VALUES (1, now(), %s)"
+            " ON CONFLICT (id) DO UPDATE SET asked_at = EXCLUDED.asked_at,"
+            " missing = EXCLUDED.missing",
+            (list(missing),),
+        )
+    say("n8n holds none of its workflows: platform-api restores the ones it kept as it starts")
 
 
 def previous_hashes(owner_url: str) -> dict[str, str]:

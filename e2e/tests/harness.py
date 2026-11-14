@@ -17,7 +17,6 @@ MOCK_GITHUB_URL = os.environ.get("MOCK_GITHUB_URL", "http://mock-github:8200")
 MOCK_MODEL_URL = os.environ.get("MOCK_MODEL_URL", "http://mock-model:8300")
 MOCK_CONFLUENCE_URL = os.environ.get("MOCK_CONFLUENCE_URL", "http://mock-confluence:8400")
 N8N_URL = os.environ.get("N8N_BASE_URL", "http://n8n:5678")
-STEP_KEY = os.environ.get("STEP_KEY", "")
 DATABASE_URL = os.environ.get("E2E_DATABASE_URL", "")
 WAIT_SECONDS = float(os.environ.get("E2E_WAIT_SECONDS", "90"))
 
@@ -155,16 +154,6 @@ class Api:
 
     def mark_done(self, user: str, key: str, *, expect: Iterable[int] = (200,)) -> httpx.Response:
         return self.post(user, f"/api/v1/mock-jira/tickets/{key}/done", expect=expect)
-
-    def tick(self, step_key: str, *, expect: Iterable[int] = (200,)) -> httpx.Response:
-        """What the schedule_tick workflow asks every 5 minutes. It signs in with the step key."""
-        return self.request(
-            None,
-            "POST",
-            "/internal/v1/schedules/tick",
-            expect=expect,
-            headers={"X-Step-Key": step_key},
-        )
 
     def watchlist(self, user: str = "alice") -> Json | None:
         return self.get(user, "/api/v1/watchlist")["watchlist"]
