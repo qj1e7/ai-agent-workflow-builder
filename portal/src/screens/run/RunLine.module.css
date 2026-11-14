@@ -359,10 +359,11 @@
   margin-left: 3px;
 }
 
-/* The request reached Teams: it pings in once, in the waiting colour. The icon starts the first line when the names wrap. */
+/* The request reached Teams: it pings in once, in the waiting colour. The icon starts the first line when the names wrap. The
+   ping ends on the line's own look, so it keeps no fill: a finished animation that fills stays alive, and the page never settles. */
 .sent {
   color: var(--amber-ink);
-  animation: ping 600ms var(--ease-out) both;
+  animation: ping 600ms var(--ease-out);
 }
 
 .sent svg {
