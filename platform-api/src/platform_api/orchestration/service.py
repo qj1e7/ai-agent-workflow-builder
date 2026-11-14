@@ -34,9 +34,7 @@ from platform_api.orchestration.agents import (
     CardsInputs,
     CardToRun,
     CarryForward,
-    GithubSource,
     ModelAccess,
-    SoftwareToCheck,
     TaskFailed,
     TaskFinished,
     TaskOutput,
@@ -160,6 +158,7 @@ from platform_api.orchestration.watch import (
     all_could_not_read,
     review,
     unread_of,
+    watchlist_inputs,
 )
 from platform_api.orchestration.watch_store import WatchStore
 from platform_api.orchestration.working_hours import after_working_time
@@ -925,22 +924,8 @@ class Orchestrator:
         spec = record.spec
         inputs: WatchlistInputs | CardsInputs
         match spec.task:
-            case WatchlistTask(tag_pattern, software):
-                inputs = WatchlistInputs(
-                    tag_pattern=tag_pattern,
-                    software=[
-                        SoftwareToCheck(
-                            id=s.id,
-                            name=s.name,
-                            source=GithubSource(ref=s.source.ref),
-                            our_version=s.our_version,
-                            open_ticket=s.open_ticket,
-                            awaiting_approval=s.awaiting_approval,
-                            from_first_check=s.from_first_check,
-                        )
-                        for s in software
-                    ],
-                )
+            case WatchlistTask() as task:
+                inputs = watchlist_inputs(task)
             case CardsTask(agents):
                 inputs = CardsInputs(
                     agents=[CardToRun(card=a.card, values=dict(a.values)) for a in agents]

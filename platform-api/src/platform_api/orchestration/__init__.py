@@ -97,10 +97,13 @@ from platform_api.orchestration.n8n import (
 )
 from platform_api.orchestration.n8n_calls import (
     GITHUB_RELEASES,
+    WATCHLIST_CHECKER,
+    WATCHLIST_PLACE,
     AgentToRun,
     CannotRun,
     Grade,
     NodeOption,
+    NothingToRun,
     OwnWorkflow,
     Publisher,
     RanVersion,
@@ -181,6 +184,7 @@ from platform_api.orchestration.watch import (
 )
 from platform_api.orchestration.watch_store import (
     LastCheck,
+    OpenRuns,
     WatchFacts,
     WatchlistFacts,
     WatchlistStanding,
@@ -223,6 +227,8 @@ __all__ = [
     "next_run",
     "read_flow",
     "GITHUB_RELEASES",
+    "WATCHLIST_CHECKER",
+    "WATCHLIST_PLACE",
     "AgentRejected",
     "AgentUnavailable",
     "ReadReleasesRequest",
@@ -232,6 +238,7 @@ __all__ = [
     "AgentToRun",
     "CannotRun",
     "NodeOption",
+    "NothingToRun",
     "OwnWorkflow",
     "Publisher",
     "RanVersion",
@@ -389,6 +396,7 @@ __all__ = [
     "Task",
     "TeamsPost",
     "TeamsRequestChannel",
+    "OpenRuns",
     "WatchFacts",
     "WatchedSoftware",
     "WatchlistFacts",

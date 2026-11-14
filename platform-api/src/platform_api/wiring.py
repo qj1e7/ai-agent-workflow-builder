@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -8,6 +9,7 @@ from fastapi import FastAPI
 from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
 from platform_api.builder import Builder, Home, PlannerFront, TeamRequests, Watchlist
 from platform_api.builder.planner_facts import PlannerFactsReader
+from platform_api.builder.watchlist import OnN8n
 from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
 from platform_api.orchestration.agents import HttpAgentRuntime
@@ -80,6 +82,8 @@ from platform_api.orchestration.write_actions import WriteGateway
 from platform_api.practice_jira import PRACTICE_EMAIL, PracticeJira, practice_token
 from platform_api.settings import Settings
 from platform_api.shared import N8nExecutionId, RunId, TaskId
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -385,14 +389,19 @@ async def build(settings: Settings) -> Services:
         starts=starts,
     )
     schedules = ScheduleBook(db)
+    watch_facts = WatchFacts(db, jira, site.identity)
+    software_page = f"{settings.public_base_url}/software"
     watchlist = Watchlist(
         db,
-        WatchFacts(db, jira, site.identity),
+        watch_facts,
         schedules,
         settings.watchlist_jira_project,
         ProjectFinding(agents),
+        None if n8n.drafts is None else OnN8n(n8n.drafts, watch_facts, software_page),
     )
     await watchlist.adopt_ticket_project()
+    if n8n.drafts is not None:
+        log.info("the watchlist's move to n8n: %s", await watchlist.move_to_n8n())
     builder = Builder(
         db,
         orchestrator,
@@ -425,6 +434,7 @@ async def build(settings: Settings) -> Services:
         tells=tells,
         failures=n8n.failures,
         switch=n8n.drafts,
+        nudge=orchestrator.nudge,
     )
     request_channel = request_channel_for(settings)
     team_requests = TeamRequests(

@@ -149,6 +149,21 @@ class WatchStore:
                 ),
             )
 
+    async def unread(self, uow: UnitOfWork, record: RunRecord) -> tuple[str, ...]:
+        """The software this run's check could not read, by name, in the watchlist's order."""
+        task = record.spec.task
+        if not isinstance(task, WatchlistTask):
+            return ()
+        rows = await (
+            await uow.conn.execute(
+                "SELECT software_id FROM orchestration.software_checks "
+                "WHERE run_id = %s AND problem IS NOT NULL",
+                (record.run_id,),
+            )
+        ).fetchall()
+        missed = {SoftwareId(row["software_id"]) for row in rows}
+        return tuple(software.name for software in task.software if software.id in missed)
+
     async def run_moved(self, uow: UnitOfWork, record: RunRecord, after: RunState) -> None:
         """Follows a watchlist run's tickets: written when the act leg wrote them, dropped when
         the run ended without writing them. The next check proposes dropped tickets again."""
@@ -323,6 +338,12 @@ class WatchlistFacts(Protocol):
     ) -> WatchlistStanding: ...
 
 
+class OpenRuns(Protocol):
+    """The builder's port to whether a use case has a run that has not ended yet."""
+
+    async def open_run(self, use_case_id: UseCaseId) -> RunId | None: ...
+
+
 class WatchFacts:
     def __init__(self, db: Database, tickets: TicketStatusPort, site: Identity) -> None:
         self._db = db
@@ -351,6 +372,18 @@ class WatchFacts:
             },
             last_check,
         )
+
+    async def open_run(self, use_case_id: UseCaseId) -> RunId | None:
+        async with self._db.connection("orchestration") as conn:
+            row = await (
+                await conn.execute(
+                    "SELECT run_id FROM orchestration.runs WHERE use_case_id = %s AND state IN "
+                    "('Pending', 'Working', 'Proposed', 'AwaitingApproval', 'Acting') "
+                    "ORDER BY started_at LIMIT 1",
+                    (use_case_id,),
+                )
+            ).fetchone()
+        return None if row is None else RunId(row["run_id"])
 
     async def _refresh(self, use_case_id: UseCaseId) -> None:
         async with self._db.transaction("orchestration") as uow:

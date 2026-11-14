@@ -314,6 +314,11 @@ function Loaded({ view, operator, answeredAt, now, rowId }: LoadedProps) {
           <AddSoftware software={software} onShowRow={(id) => void navigate(softwarePath(id))} onAdded={(name) => dispatch({ type: 'added', name })} />
         ) : null}
       </section>
+      {view?.moving_to_n8n ? (
+        <p className="muted" role="status">
+          Moving to n8n after this run.
+        </p>
+      ) : null}
       {view ? (
         <Schedule schedule={view.schedule} operator={operator} useCaseId={view.use_case_id} paused={paused} answeredAt={answeredAt} onResumed={() => dispatch({ type: 'resumed' })} />
       ) : null}

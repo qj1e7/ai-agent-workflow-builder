@@ -125,10 +125,12 @@ export async function loadOptions(
 ): Promise<INodePropertyOptions[]> {
   const node = ctx.getNode();
   const env = apiEnv(node);
+  // Our API offers the watchlist's own blocks only in the watchlist's own workflow.
+  const workflow = ctx.getWorkflow().id;
   const body = await send(ctx.helpers, node, {
     method: 'GET',
     url: `${env.base}/options`,
-    qs: { kind, ...filter },
+    qs: { kind, ...filter, ...(workflow ? { workflow } : {}) },
     headers: { [NODE_KEY_HEADER]: env.key },
     timeout: 15_000,
   });

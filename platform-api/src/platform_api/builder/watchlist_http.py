@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.builder.http import Operator
 from platform_api.builder.lifecycle import TooLate
+from platform_api.builder.lifecycle_http import N8N_CHANGED, N8N_NOT_READY, refused_in_n8n
 from platform_api.builder.models import (
     AddressIn,
     AddSoftware,
@@ -14,6 +15,7 @@ from platform_api.builder.models import (
     WatchlistOut,
     WatchlistView,
 )
+from platform_api.builder.n8n_draft import DraftRefused, N8nNotReady
 from platform_api.builder.watchlist import (
     NeverAtThatAddress,
     NoMoveReported,
@@ -24,6 +26,7 @@ from platform_api.builder.watchlist import (
     Watchlist,
     WatchlistFull,
 )
+from platform_api.orchestration import ChangedInN8n
 from platform_api.shared import SoftwareId
 from platform_api.wire import error_response
 
@@ -204,32 +207,46 @@ async def put_address_back(
             )
 
 
+SCHEDULE_REFUSED = {
+    **OPERATORS_ONLY,
+    404: error_response("The watchlist does not exist yet"),
+    409: N8N_CHANGED,
+    503: N8N_NOT_READY,
+}
+
+
 @router.put(
     "/watchlist/schedule",
     description=(
         "Saves when the watchlist is checked on its own. The caller becomes the schedule "
-        "owner, who can never approve a scheduled check."
+        "owner, who can never approve a scheduled check. On its own n8n workflow, the Schedule "
+        "Trigger changes first, under the version compare, and nothing is saved when n8n does "
+        "not take it."
     ),
-    responses={**OPERATORS_ONLY, 404: error_response("The watchlist does not exist yet")},
+    responses=SCHEDULE_REFUSED,
 )
 async def save_schedule(
     body: ScheduleIn, principal: Operator, watchlist: CurrentWatchlist
 ) -> WatchlistView:
-    match await watchlist.save_schedule(principal, body):
-        case WatchlistView() as saved:
-            return saved
-        case NoWatchlist():
-            raise HTTPException(404, "Add software first, then set the schedule")
+    return _scheduled(await watchlist.save_schedule(principal, body))
 
 
 @router.delete(
     "/watchlist/schedule",
     description="Turns the schedule off. Checks then start only when an Operator starts one.",
-    responses={**OPERATORS_ONLY, 404: error_response("The watchlist does not exist yet")},
+    responses=SCHEDULE_REFUSED,
 )
 async def turn_off_schedule(principal: Operator, watchlist: CurrentWatchlist) -> WatchlistView:
-    match await watchlist.turn_off_schedule():
-        case WatchlistView() as left:
-            return left
+    return _scheduled(await watchlist.turn_off_schedule(principal))
+
+
+def _scheduled(
+    saved: WatchlistView | NoWatchlist | N8nNotReady | DraftRefused | ChangedInN8n,
+) -> WatchlistView:
+    match saved:
+        case WatchlistView():
+            return saved
         case NoWatchlist():
             raise HTTPException(404, "Add software first, then set the schedule")
+        case N8nNotReady() | DraftRefused() | ChangedInN8n():
+            raise refused_in_n8n(saved)

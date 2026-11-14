@@ -16,6 +16,7 @@ from platform_api.builder.cards import (
     tool_list,
 )
 from platform_api.builder.drafts import Drafts, TooManyDrafts
+from platform_api.builder.in_n8n import write_in_n8n
 from platform_api.builder.last_run import RunHistory, last_run_view
 from platform_api.builder.layout import REPO_INPUT, LayoutPlan, PlannedAgent, lay_out
 from platform_api.builder.lifecycle import (
@@ -125,6 +126,7 @@ from platform_api.orchestration import (
     ScheduleBook,
     Task,
     WriteEntry,
+    Written,
     card_bindings,
     cards_policy,
     next_run,
@@ -703,14 +705,10 @@ class Builder:
         expected = row["n8n_version_id"]
         if expected is None:
             return N8nNotReady("This version is not saved in n8n, so it cannot be changed there.")
-        try:
-            written = await self._n8n.change(row["n8n_workflow_id"], expected, laid.document, live)
-        except (N8nError, httpx.HTTPError) as error:
-            log.warning("n8n did not take the new schedule of %s: %s", use_case_id, error)
-            if live:
-                await self._put_back(row["n8n_workflow_id"], expected)
-            return N8nNotReady("n8n did not take the change. Nothing changed. Try again.")
-        if isinstance(written, ChangedInN8n):
+        written = await write_in_n8n(
+            self._n8n, row["n8n_workflow_id"], expected, laid.document, live
+        )
+        if not isinstance(written, Written):
             return written
         return Relaid(written.version_id, written.document, laid.graded.grade)
 
@@ -760,14 +758,6 @@ class Builder:
             await self._n8n.go_off(workflow_id)
         except (N8nError, httpx.HTTPError) as error:
             log.error("could not take %s off again in n8n: %s", workflow_id, error)
-
-    async def _put_back(self, workflow_id: str, version_id: str) -> None:
-        """The version the records hold live again, after a change that did not finish."""
-        assert self._n8n is not None
-        try:
-            await self._n8n.go_live(workflow_id, version_id)
-        except (N8nError, httpx.HTTPError) as error:
-            log.error("could not put %s version %s back in n8n: %s", workflow_id, version_id, error)
 
     async def save_draft(
         self, principal: Principal, draft_id: str, draft: DraftIn
@@ -1054,6 +1044,11 @@ class Builder:
         """A test run of a draft stops at the approval gate (ADR 0044). Whether it is a draft
         is read under the lock, so a draft turned on since runs as any test run does."""
         view = await self.get_use_case(use_case_id)
+        if view is not None and view.template == SOFTWARE_WATCHLIST.key:
+            # Its first check after a run that held it back runs on its own n8n workflow. Read it
+            # again whatever the move answers, since a move may also have landed meanwhile.
+            await self._watchlist.move_to_n8n()
+            view = await self.get_use_case(use_case_id)
         if view is None:
             return None
         if view.state == "paused":

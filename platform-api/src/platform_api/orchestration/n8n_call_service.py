@@ -10,14 +10,14 @@ twice. Each call that finds the run working moves its deadline on.
 import asyncio
 import contextlib
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import timedelta
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from platform_api.db import Database, UnitOfWork
-from platform_api.monitoring import AgentEvent, user_actor
+from platform_api.monitoring import AgentEvent, PendingEvent, user_actor
 from platform_api.orchestration.agents import (
     AgentRejected,
     AgentRuntime,
@@ -29,6 +29,7 @@ from platform_api.orchestration.agents import (
     TaskFailed,
     TaskFinished,
     TaskRequest,
+    WatchlistInputs,
 )
 from platform_api.orchestration.cards import ReviewedCards, bind_cards, review_cards
 from platform_api.orchestration.dispatch import HeldWait, Sealer
@@ -48,6 +49,8 @@ from platform_api.orchestration.n8n_calls import (
     GITHUB_RELEASES,
     NO_EXECUTION,
     NO_TELL_FLOW,
+    NO_YES,
+    NOT_A_WATCHLIST_RUN,
     NOT_FAILED,
     NOT_OUR_ERROR_WORKFLOW,
     NOT_OURS,
@@ -56,6 +59,8 @@ from platform_api.orchestration.n8n_calls import (
     START_TOO_LATE,
     START_USED,
     TEST_RUN_STOPS,
+    WATCHLIST_CHECKER,
+    WATCHLIST_PLACE,
     AgentCall,
     AgentToRun,
     Answer,
@@ -78,6 +83,7 @@ from platform_api.orchestration.n8n_calls import (
     NodeCatalog,
     NodeOption,
     NothingToChange,
+    NothingToRun,
     OptionKind,
     OwnWorkflow,
     ProposeCall,
@@ -116,15 +122,18 @@ from platform_api.orchestration.runs import (
     Rejected,
     RunState,
     Skipped,
+    StepName,
     Succeeded,
     Working,
     linked_events,
     run_created,
     skipped_events,
     state_name,
+    step_finished,
     working_on,
     write_done,
 )
+from platform_api.orchestration.schedule_store import schedule_owner
 from platform_api.orchestration.service import (
     DENIED_ON_THE_WIRE,
     ActiveModel,
@@ -136,7 +145,7 @@ from platform_api.orchestration.service import (
     steps_view,
     write_denied,
 )
-from platform_api.orchestration.spec import CardsTask
+from platform_api.orchestration.spec import CardsTask, Task, WatchlistTask
 from platform_api.orchestration.store import RunRecord, Store
 from platform_api.orchestration.tell import (
     NOTHING_TO_REPORT,
@@ -155,19 +164,30 @@ from platform_api.orchestration.tell import (
     told_event,
     would_have_line,
 )
-from platform_api.orchestration.watch import Unusable
+from platform_api.orchestration.watch import (
+    Reviewed,
+    Unusable,
+    all_could_not_read,
+    listed,
+    review,
+    ticket_subject,
+    tickets_in,
+    watchlist_inputs,
+)
 from platform_api.orchestration.watch_store import WatchStore
 from platform_api.orchestration.write_actions import (
     AuthorizedWrite,
     Carried,
     Deny,
     Proposal,
+    ProposedIntent,
     Sites,
     UnboundIntent,
     WriteAction,
     WriteGateway,
     WritingRun,
     at_sites,
+    bind,
     check,
     describe,
     digest,
@@ -272,6 +292,7 @@ class NodeCalls:
         tells: TellOutlet | None = None,
         failures: N8nFailures | None = None,
         switch: N8nSwitch | None = None,
+        nudge: Callable[[], None] | None = None,
     ) -> None:
         self._db = db
         self._activity = activity
@@ -289,6 +310,8 @@ class NodeCalls:
         self._tells = tells
         self._failures = failures
         self._switch = switch
+        self._nudge = nudge
+        """Wakes the orchestrator to send what a call put in its outbox now, as its own steps do."""
         self._store = Store()
         self._watch = WatchStore()
         self._book = CallBook()
@@ -326,7 +349,7 @@ class NodeCalls:
                 match await self._link(uow, execution):
                     case TryLater() as later:
                         return later
-                    case Refused(detail=detail):
+                    case Refused(detail=detail) | NothingToRun(why=detail):
                         return LeftAsIs(detail)
                     case linked:
                         run_id = linked
@@ -412,7 +435,10 @@ class NodeCalls:
             return admitted
         work = await self._work(admitted, call)
         async with self._db.transaction("orchestration") as uow:
-            return await self._finish(uow, admitted, call, work)
+            result = await self._finish(uow, admitted, call, work)
+        if isinstance(result, Waiting) and self._nudge is not None:
+            self._nudge()
+        return result
 
     async def _take_off_if_deleted(self, execution: N8nExecutionId) -> None:
         """A deleted use case whose workflow n8n still runs, because the delete could not take it
@@ -483,6 +509,8 @@ class NodeCalls:
             linked = await self._link(uow, call.execution_id)
             if isinstance(linked, TryLater):
                 return linked
+            if isinstance(linked, NothingToRun):
+                return self._nothing_to_run(call, linked)
             if isinstance(linked, Refused):
                 run_id = await self._book.linked_run(uow, call.execution_id)
                 return await self._refuse(uow, call, run_id, linked)
@@ -504,13 +532,33 @@ class NodeCalls:
         await self._book.keep(uow, call, run_id, refused)
         return refused
 
-    async def _link(self, uow: UnitOfWork, execution: N8nExecutionId) -> RunId | Refused | TryLater:
+    def _nothing_to_run(self, call: NodeCall, nothing: NothingToRun) -> CallResult:
+        """Each block gets the answer that ends its path without a fault, and no run is made. It
+        is not kept, since no run holds it, and a repeat gets the same answer."""
+        log.info("%s of n8n execution %s: %s", call.node_name, call.execution_id, nothing.why)
+        quiet: Answer | AskAnswer | Told | Refused
+        match call.kind:
+            case "ask":
+                quiet = NothingToChange()
+            case "write":
+                quiet = NO_YES
+            case "tell":
+                quiet = Told("nothing_to_report", NOTHING_TO_REPORT)
+            case _:
+                quiet = Answer(())
+        return quiet
+
+    async def _link(
+        self, uow: UnitOfWork, execution: N8nExecutionId
+    ) -> RunId | Refused | TryLater | NothingToRun:
         facts = await self._n8n.execution(execution)
         if facts is None:
             return NO_EXECUTION
         own = await self._workflows.workflow(facts.workflow_id)
         if own is None:
             return NOT_OURS
+        if isinstance(own, NothingToRun):
+            return own
         retried, version_id = None, facts.version_id
         if facts.retry_of is not None:
             retried = await self._book.linked_run(uow, facts.retry_of)
@@ -616,7 +664,11 @@ class NodeCalls:
         else:
             state = Skipped(run_id, waiting)
             events = skipped_events(created, execution, mode, waiting)
-        record = RunRecord(run_id, spec, started_by, uow.now, uow.now, 1, state, (), None)
+        # The schedule's owner, as the Portal names them, is a party to every run it starts, even
+        # when someone else published the version that runs (D5).
+        owner = None if trigger != "schedule" else await schedule_owner(uow.conn, spec.use_case_id)
+        joined = () if owner is None else (owner,)
+        record = RunRecord(run_id, spec, started_by, uow.now, uow.now, 1, state, (), None, joined)
         await self._store.insert_run(uow, record, f"n8n:{execution}")
         await self._activity.append(uow, run_id, events)
         return run_id
@@ -637,12 +689,18 @@ class NodeCalls:
 
     async def _work(self, admitted: Admitted, call: NodeCall) -> Work:
         match call.work:
+            case ReadCall(source, place) if (
+                source == GITHUB_RELEASES and place == WATCHLIST_PLACE.id
+            ):
+                return _read_watchlist(admitted.record.spec.task)
             case ReadCall(source, place, query):
                 read = await self._sources.read(source, place, query)
                 if isinstance(read, ReadFailed):
                     return TryLater(read.detail)
                 items = tuple(read[:READ_LIMIT])
                 return Done(Answer(items, cut_off=len(read) > READ_LIMIT))
+            case AgentCall(agent) if agent == WATCHLIST_CHECKER.id:
+                return await self._check_watchlist(admitted)
             case AgentCall(agent, inputs):
                 return await self._run_agent(admitted, agent, inputs)
             case AskCall(resume_url):
@@ -679,30 +737,8 @@ class NodeCalls:
         release = None if release_of is None else await self._newest_release(release_of)
         if isinstance(release, TryLater):
             return release
-        async with self._db.transaction("orchestration") as uow:
-            model = None if self._models is None else await self._models.access(uow)
-            last_start = await self._store.last_finished_start(
-                uow, record.spec.use_case_id, record.run_id
-            )
-        # The last run's own day in the team's zone, as the old engine tells the agent, so a card
-        # that searches since its last run leaves no gap.
-        last_run_on = None if last_start is None else last_start.astimezone(self._time_zone).date()
-        assert isinstance(record.state, Working)
-        url, token = self._mint_callback(
-            admitted.run_id, admitted.task_id, record.state.callback_expires_at
-        )
-        request = TaskRequest(
-            task_id=admitted.task_id,
-            run_id=admitted.run_id,
-            instruction=record.spec.instruction,
-            inputs=CardsInputs(
-                agents=[CardToRun(card=card_run.card, values=dict(card_run.values))]
-            ),
-            carry_forward=CarryForward(last_run_on=last_run_on),
-            time_zone=self._time_zone.key,
-            callback=Callback(url=url, token=token),
-            model=model,
-        )
+        card = CardToRun(card=card_run.card, values=dict(card_run.values))
+        request = await self._request(admitted, CardsInputs(agents=[card]))
         match await self._agents.run_task(request):
             case AgentUnavailable(detail):
                 return TryLater(detail)
@@ -733,6 +769,86 @@ class NodeCalls:
                 if release_of is not None:
                     found |= {"newer": bool(actions), "version": release}
                 return Done(Answer((found,)), actions, tuple(events))
+
+    async def _request(
+        self, admitted: Admitted, inputs: CardsInputs | WatchlistInputs
+    ) -> TaskRequest:
+        record = admitted.record
+        async with self._db.transaction("orchestration") as uow:
+            model = None if self._models is None else await self._models.access(uow)
+            last_start = await self._store.last_finished_start(
+                uow, record.spec.use_case_id, record.run_id
+            )
+        # The last run's own day in the team's zone, as the old engine tells the agent, so a card
+        # that searches since its last run leaves no gap.
+        last_run_on = None if last_start is None else last_start.astimezone(self._time_zone).date()
+        assert isinstance(record.state, Working)
+        url, token = self._mint_callback(
+            admitted.run_id, admitted.task_id, record.state.callback_expires_at
+        )
+        return TaskRequest(
+            task_id=admitted.task_id,
+            run_id=admitted.run_id,
+            instruction=record.spec.instruction,
+            inputs=inputs,
+            carry_forward=CarryForward(last_run_on=last_run_on),
+            time_zone=self._time_zone.key,
+            callback=Callback(url=url, token=token),
+            model=model,
+        )
+
+    async def _check_watchlist(self, admitted: Admitted) -> Work:
+        """The watchlist's one Agent block (D11). The agents check every listed software, the same
+        review as before the move reads their answer, and each upgrade ticket names its software
+        and version as its subject, so a use case never raises it twice."""
+        record = admitted.record
+        task = record.spec.task
+        if not isinstance(task, WatchlistTask):
+            return NOT_A_WATCHLIST_RUN
+        match await self._agents.run_task(await self._request(admitted, watchlist_inputs(task))):
+            case AgentUnavailable(detail):
+                return TryLater(detail)
+            case AgentRejected(detail):
+                return Stopped(Failure(FailureReason.AGENT_ERROR, detail, retryable=False))
+            case TaskFailed(error=error, events=events, findings=findings):
+                unread = all_could_not_read(task, error, findings)
+                if unread is not None:
+                    await self._learn(record, unread)
+                detail = f"{error.type}: {error.message}"
+                failure = Failure(FailureReason.AGENT_ERROR, detail, retryable=error.retryable)
+                return Stopped(failure, tuple(events))
+            case TaskFinished(output=output, events=events):
+                pass
+        match review(task, output.findings, output.proposed):
+            case Unusable(detail):
+                failure = Failure(FailureReason.AGENT_ERROR, detail, retryable=False)
+                return Stopped(failure, tuple(events))
+            case Reviewed() as reviewed:
+                pass
+        intents = [ProposedIntent(p.kind, dict(p.fields), p.reason) for p in output.proposed]
+        bound = bind(intents, record.spec.bindings)
+        if isinstance(bound, UnboundIntent):
+            detail = f"No connector is bound for {', '.join(bound.kinds)}"
+            failure = Failure(FailureReason.UNBOUND_INTENT, detail, retryable=False)
+            return Stopped(failure, tuple(events))
+        await self._learn(record, reviewed)
+        subjects = {ticket.action_index: ticket_subject(ticket) for ticket in reviewed.tickets}
+        tickets = tuple(
+            replace(action, subject=subjects.get(index))
+            for index, action in enumerate(at_sites(bound, self._sites))
+        )
+        found = {
+            "summary": output.summary,
+            "findings": [f.model_dump(mode="json") for f in output.findings],
+        }
+        actions = tuple(actions_adapter.dump_python(tickets, mode="json"))
+        return Done(Answer((found,)), actions, tuple(events))
+
+    async def _learn(self, record: RunRecord, reviewed: Reviewed) -> None:
+        """What the check read about each software, kept once it is known, as before the move.
+        The same review again changes nothing."""
+        async with self._db.transaction("orchestration") as uow:
+            await self._watch.record_review(uow, record, reviewed, None)
 
     async def _newest_release(self, repo: str) -> str | None | TryLater:
         """Read by our API, not taken from the agent's words, so it can key the change across
@@ -854,6 +970,8 @@ class NodeCalls:
                     uow, call, admitted.run_id, answer, actions, call_id=admitted.call_id
                 ):
                     return BUSY
+                if earlier is None and (found := _found(call, state, answer, actions)) is not None:
+                    await self._activity.append(uow, admitted.run_id, [found])
                 return answer
 
     async def _ask(
@@ -864,6 +982,7 @@ class NodeCalls:
         working = record.state
         assert isinstance(working, Working)
         actions, left_out = await self._still_to_make(uow, record)
+        unread = await self._watch.unread(uow, record)
         proposal = Proposal(ProposalId(new_id("prp")), record.run_id, actions, digest(actions))
         shown = (proposal.id, proposal.digest, tuple(describe(action) for action in actions))
         test = record.spec.stops_at_gate or await self._book.started_as_test(uow, record.run_id)
@@ -873,7 +992,7 @@ class NodeCalls:
         if not actions:
             result, moved = NothingToChange(), working.nothing_to_change(left_out)
         elif test:
-            result, moved = TEST_RUN_STOPS, working.stop_at_gate(shown, left_out)
+            result, moved = TEST_RUN_STOPS, working.stop_at_gate(shown, left_out, unread)
         elif self._box is None:
             failure = Failure(FailureReason.SAFETY_DENIED, CANNOT_SEAL, retryable=False)
             result, moved = run_stopped(CANNOT_SEAL), working.fail(failure)
@@ -885,7 +1004,7 @@ class NodeCalls:
             steps = steps_view(request, ())
             result = Waiting(request.id)
             link = approval_link(request.id)
-            moved = working.ask(shown, request.id, steps, link, summary, left_out)
+            moved = working.ask(shown, request.id, steps, link, summary, left_out, unread)
         if not await self._book.keep(uow, call, record.run_id, result, call_id=admitted.call_id):
             return BUSY
         if actions:
@@ -893,6 +1012,9 @@ class NodeCalls:
         if request is not None and self._box is not None:
             held = HeldWait(call.execution_id, self._box.seal(url))
             await self._store.insert_approval(uow, request, held)
+            if isinstance(task := record.spec.task, WatchlistTask):
+                tickets = tickets_in(task, [action.subject for action in proposal.actions])
+                await self._watch.record_review(uow, record, Reviewed((), tickets), proposal)
         record = await self._commit(uow, record, moved)
         if isinstance(moved.state, AwaitingApproval) and request is not None:
             await enqueue_announcement(
@@ -1020,6 +1142,28 @@ class NodeCalls:
         await self._activity.append(uow, record.run_id, moved.events)
         await self._watch.run_moved(uow, record, moved.state)
         return saved
+
+
+def _found(
+    call: NodeCall, working: Working, answer: Answer, actions: Sequence[Mapping[str, Any]]
+) -> PendingEvent | None:
+    """What an Agent block's agents found, kept in the run's log, which outlives the request
+    that shows it only while it waits. The Portal reads it from the agents' step, as before."""
+    summary = answer.items[0].get("summary") if call.kind == "agent" and answer.items else None
+    if not isinstance(summary, str) or not summary:
+        return None
+    outcome = "proposed" if actions else "nothing_to_write"
+    return step_finished(
+        StepName.RUN_AGENTS, call.execution_id, working.try_number, outcome, summary
+    )
+
+
+def _read_watchlist(task: Task) -> Done | Refused:
+    """The software this check reads, from the run's own list, so the Read and the Agent block
+    name the same software."""
+    if not isinstance(task, WatchlistTask):
+        return NOT_A_WATCHLIST_RUN
+    return Done(Answer(listed(task)))
 
 
 def _recorded(actions: Sequence[WriteAction], subject: str | None) -> tuple[Mapping[str, Any], ...]:

@@ -180,6 +180,16 @@ class ScheduleBook:
                 await _use_up(uow.conn, use_case_id, slots(schedule, now).latest)
 
 
+async def schedule_owner(conn: Connection, use_case_id: UseCaseId) -> UserId | None:
+    """Who the Portal names as the owner of the use case's schedule, if it has one."""
+    row = await (
+        await conn.execute(
+            "SELECT owner_id FROM orchestration.schedules WHERE use_case_id = %s", (use_case_id,)
+        )
+    ).fetchone()
+    return None if row is None else UserId(row["owner_id"])
+
+
 async def _use_up(conn: Connection, use_case_id: UseCaseId, slot: datetime) -> None:
     await conn.execute(
         "UPDATE orchestration.schedules SET last_slot_started = %s "

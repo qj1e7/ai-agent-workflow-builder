@@ -69,8 +69,10 @@ function startRun(path) {
   })
 }
 
+// A workflow on its own n8n workflow has one run waiting for a yes at most, so a run started while one waits ends skipped
+// (ADR 0026). That is settled too.
 function settled(run) {
-  return run.state === 'awaiting_approval' || run.state === 'succeeded'
+  return run.state === 'awaiting_approval' || run.state === 'succeeded' || run.state === 'skipped'
 }
 
 function waitForSettled() {
@@ -79,7 +81,7 @@ function waitForSettled() {
     if (runs.every(settled)) return runs.length
     sleep(1)
   }
-  fail('the seeded runs never all settled: waiting at the approval gate, or ended with nothing to write')
+  fail('the seeded runs never all settled: waiting at the approval gate, skipped while one waits, or ended with nothing to write')
 }
 
 export function setup() {

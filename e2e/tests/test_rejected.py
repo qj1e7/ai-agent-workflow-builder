@@ -1,4 +1,4 @@
-from harness import Api, approval_requested, assert_gapless, bob_decides, fixture_kinds, tickets_for
+from harness import Api, approval_requested, assert_gapless, assert_story, bob_decides, tickets_for
 
 
 def test_declined_run_ends_rejected_and_writes_nothing(api: Api) -> None:
@@ -20,4 +20,14 @@ def test_declined_run_ends_rejected_and_writes_nothing(api: Api) -> None:
 
     all_events = api.events_after("alice", run_id)
     assert_gapless(all_events, run_id)
-    assert [e["kind"] for e in all_events] == fixture_kinds("rejected")
+    assert_story(
+        all_events,
+        [
+            "run_created",
+            "execution_linked",
+            "write_action_proposed",
+            "approval_requested",
+            "approval_decided",
+            "run_rejected",
+        ],
+    )

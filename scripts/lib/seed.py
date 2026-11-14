@@ -67,6 +67,9 @@ def seed() -> dict[str, str]:
         run = call("GET", f"/api/v1/runs/{run_id}")
         if run["state"] == "awaiting_approval":
             return ids_of(use_case_id, run)
+        if run["state"] == "skipped":
+            # Another check of the watchlist waits for a yes, and only one may (ADR 0026).
+            return ids_of(use_case_id, call("GET", f"/api/v1/runs/{run['waiting_run_id']}"))
         if run["state"] in ("failed", "rejected", "succeeded"):
             raise SystemExit(f"seed run ended as {run['state']}")
         time.sleep(1)

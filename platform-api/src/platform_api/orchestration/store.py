@@ -87,7 +87,8 @@ class RunRecord:
     retried_by: tuple[UserId, ...]
     carry_forward: str | None
     joined_by: tuple[UserId, ...] = ()
-    """People who joined the run in n8n: the holder of a run started or retried by hand there."""
+    """People whose work the run also is: the holder of a run started or retried by hand in n8n,
+    and the owner of the schedule that started it."""
 
     @property
     def parties(self) -> frozenset[UserId]:
