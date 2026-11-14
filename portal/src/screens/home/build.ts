@@ -1,6 +1,6 @@
 import type { BuildLineView, N8nBlockKind, N8nBlockView, UseCaseState } from '../../api/types'
 import type { Phase, RunModel, Station } from '../run/runModel'
-import { stageFactsOf, stageWords } from '../run/words'
+import { sentence, stageFactsOf, stageWords } from '../run/words'
 import { edgeKey, type EdgeState, type NodeState } from '../../ui/canvasLayout'
 
 /** The sketch's step between two blocks of the build, which the replay keeps between two lines of the log at the least. */
@@ -34,15 +34,28 @@ export function replayAt(log: readonly BuildLineView[], from: number, step: numb
   return { lines: log.slice(0, shown), done: shown === log.length, next: times[shown] ?? null }
 }
 
-/** Where a set-up stands: its log replays, its test run goes, it passed or stopped, and it is on once the platform says so. */
-export type BuildStage = { readonly kind: 'laying_out' } | { readonly kind: 'testing' } | { readonly kind: 'passed' } | { readonly kind: 'stopped' } | { readonly kind: 'on' }
+/**
+ * Where a set-up stands: its log replays, it is saved as a draft until the platform names a test run, the test run goes, it passed
+ * or stopped, and it is on once the platform says so.
+ */
+export type BuildStage =
+  | { readonly kind: 'laying_out' }
+  | { readonly kind: 'saved' }
+  | { readonly kind: 'testing' }
+  | { readonly kind: 'passed' }
+  | { readonly kind: 'stopped' }
+  | { readonly kind: 'on' }
 
 const RUNNING: ReadonlySet<Phase['state']> = new Set(['pending', 'working', 'proposed', 'awaiting_approval', 'acting'])
 
-/** `test` is the test run's phase from its own events, null before the platform started it. `life` is the workflow as the platform holds it. */
-export function buildStage(replayed: boolean, test: Phase | null, life: UseCaseState | undefined): BuildStage {
+/**
+ * `started` is true once the platform named the test run. `test` is its phase from its own events, null before they are read. `life` is
+ * the workflow as the platform holds it.
+ */
+export function buildStage(replayed: boolean, started: boolean, test: Phase | null, life: UseCaseState | undefined): BuildStage {
   if (life === 'on') return { kind: 'on' }
   if (!replayed) return { kind: 'laying_out' }
+  if (!started) return { kind: 'saved' }
   if (test === null || RUNNING.has(test.state)) return { kind: 'testing' }
   return test.state === 'succeeded' ? { kind: 'passed' } : { kind: 'stopped' }
 }
@@ -51,6 +64,7 @@ export type PillTone = 'new' | 'ok' | 'quiet'
 
 const PILLS: Readonly<Record<BuildStage['kind'], { readonly label: string; readonly tone: PillTone }>> = {
   laying_out: { label: 'Building', tone: 'new' },
+  saved: { label: 'Building', tone: 'new' },
   testing: { label: 'Building', tone: 'new' },
   passed: { label: 'Ready', tone: 'ok' },
   stopped: { label: 'Draft', tone: 'quiet' },
@@ -74,6 +88,7 @@ export function statusOf(stage: BuildStage, shown: readonly BuildLineView[], lai
       return lastStatus(shown) ?? 'Starting…'
     case 'testing':
       return 'Test run…'
+    case 'saved':
     case 'passed':
     case 'stopped':
       return lastStatus(shown) ?? 'Saved as a draft.'
@@ -91,7 +106,24 @@ export interface Check {
 export function testStatus(model: RunModel): Check | null {
   if (RUNNING.has(model.phase.state)) return null
   const words = stageWords({ ...stageFactsOf(model), test: true }, (id) => model.people[id] ?? id)
-  return model.phase.state === 'succeeded' ? { ok: true, text: words } : { ok: false, text: `The test run stopped. ${words}.` }
+  return model.phase.state === 'succeeded' ? { ok: true, text: words } : { ok: false, text: `The test run stopped. ${sentence(words)}` }
+}
+
+/** What the card does about the test run now: start it, wait for the log or the workflow's read, or nothing, because it was asked for or runs. */
+export type TestStep = 'start' | 'wait' | 'none'
+
+export interface TestAsk {
+  readonly testRunId: string | null
+  /** The key the next start asks with. Test again makes a new one. */
+  readonly testKey: string
+  /** The key a start was last asked with, so a card drawn again never asks twice with it. */
+  readonly testAsked: string | null
+}
+
+export function testStep(ask: TestAsk | undefined, replayed: boolean, life: UseCaseState | undefined): TestStep {
+  if (ask === undefined || ask.testRunId !== null || life === 'on' || life === 'paused') return 'none'
+  if (!replayed || life === undefined) return 'wait'
+  return ask.testAsked === ask.testKey ? 'none' : 'start'
 }
 
 /** The checks that passed so far, then how the test run went. A Tell in a test run sends nothing, and says what it would have sent. */

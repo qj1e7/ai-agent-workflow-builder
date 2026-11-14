@@ -1,6 +1,7 @@
 import { skipToken, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { unwrap, type ApiClient } from './client'
 import { useApiClient, useCacheScope } from './context'
+import { newIdempotencyKey } from './idempotency'
 import { keys } from './queries'
 import type { CreateAgentUseCase, ScheduleIn, UseCaseCreated, UseCaseView, VersionView, WatchlistView } from './types'
 
@@ -192,22 +193,32 @@ export interface SetUp {
   readonly created: UseCaseCreated
   readonly at: number
   readonly testRunId: string | null
+  /** The idempotency key the next test run asks with, kept here so a card drawn again asks with the same one. Test again makes a new one. */
+  readonly testKey: string
+  /** The key a start was last asked with, so no card asks twice with it. */
+  readonly testAsked: string | null
 }
 
-export function holdSetUp(queryClient: QueryClient, user: string, created: UseCaseCreated, at: number): void {
-  queryClient.setQueryData<SetUp>(keys.setUp(user, created.use_case_id), { created, at, testRunId: null })
+export function holdSetUp(queryClient: QueryClient, user: string, created: UseCaseCreated, at: number, testKey: string): void {
+  queryClient.setQueryData<SetUp>(keys.setUp(user, created.use_case_id), { created, at, testRunId: null, testKey, testAsked: null })
 }
 
-export function testStarted(queryClient: QueryClient, user: string, useCaseId: string, runId: string): void {
-  queryClient.setQueryData<SetUp>(keys.setUp(user, useCaseId), (held) => (held ? { ...held, testRunId: runId } : held))
+const changeSetUp = (queryClient: QueryClient, user: string, useCaseId: string, change: Partial<SetUp>): void => {
+  queryClient.setQueryData<SetUp>(keys.setUp(user, useCaseId), (held) => (held ? { ...held, ...change } : held))
 }
+
+export const testAsked = (queryClient: QueryClient, user: string, useCaseId: string, key: string): void => changeSetUp(queryClient, user, useCaseId, { testAsked: key })
+
+export const testStarted = (queryClient: QueryClient, user: string, useCaseId: string, runId: string): void => changeSetUp(queryClient, user, useCaseId, { testRunId: runId })
+
+export const testAgain = (queryClient: QueryClient, user: string, useCaseId: string, key: string): void => changeSetUp(queryClient, user, useCaseId, { testRunId: null, testKey: key })
 
 /** Set up always makes a draft (ADR 0044): it never runs on its schedule, and only Turn it on publishes it. */
-export function setUpOffOptions(client: ApiClient, queryClient: QueryClient, user: string, now: () => number = Date.now) {
+export function setUpOffOptions(client: ApiClient, queryClient: QueryClient, user: string, now: () => number = Date.now, key: () => string = newIdempotencyKey) {
   return {
     mutationFn: async (body: CreateAgentUseCase) => unwrap(await client.POST('/api/v1/agent-use-cases', { body: { ...body, on: false } })),
     onSuccess: (created: UseCaseCreated) => {
-      holdSetUp(queryClient, user, created, now())
+      holdSetUp(queryClient, user, created, now(), key())
       rereadWorkflowsAndWatchlist(queryClient)
     },
   }
@@ -241,8 +252,13 @@ export function useSetUp(useCaseId: string): SetUp | undefined {
   return useQuery<SetUp>({ queryKey: keys.setUp(user, useCaseId), queryFn: skipToken, staleTime: Infinity, gcTime: Infinity }).data
 }
 
-export function useTestStarted(): (useCaseId: string, runId: string) => void {
+/** What the card writes to its set-up about the test run: the key it asked with, the run the platform named, and a new key for Test again. */
+export function useTestRunMarks() {
   const queryClient = useQueryClient()
   const user = useCacheScope()
-  return (useCaseId, runId) => testStarted(queryClient, user, useCaseId, runId)
+  return {
+    asked: (useCaseId: string, key: string) => testAsked(queryClient, user, useCaseId, key),
+    started: (useCaseId: string, runId: string) => testStarted(queryClient, user, useCaseId, runId),
+    again: (useCaseId: string) => testAgain(queryClient, user, useCaseId, newIdempotencyKey()),
+  }
 }

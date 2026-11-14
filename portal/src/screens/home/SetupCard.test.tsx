@@ -33,14 +33,19 @@ const scope = session.cacheScope()
 
 interface World {
   readonly useCase?: UseCaseView
+  /** The workflow's read failed. */
+  readonly unread?: boolean
   readonly setUp?: SetUp | null
   readonly kept?: CardKept
 }
 
-function render(node: ReactNode, { useCase = DRAFT, setUp = { created: CREATED, at: Date.now() - 60_000, testRunId: null }, kept }: World = {}): string {
+const HELD: SetUp = { created: CREATED, at: Date.now() - 60_000, testRunId: null, testKey: 'k1', testAsked: null }
+
+function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false }: World = {}): string {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', scope], ALICE)
-  queryClient.setQueryData(keys.useCase(scope, useCase.use_case_id), useCase)
+  if (unread) queryClient.getQueryCache().build(queryClient, { queryKey: keys.useCase(scope, useCase.use_case_id) }).setState({ status: 'error', error: new Error('no answer'), fetchStatus: 'idle' })
+  else queryClient.setQueryData(keys.useCase(scope, useCase.use_case_id), useCase)
   if (setUp) queryClient.setQueryData(keys.setUp(scope, CREATED.use_case_id), setUp)
   const memory = newCardMemory()
   if (kept) memory.keep(kept)
@@ -82,7 +87,7 @@ function building(test: RunModel | null, world: World = {}, more: Partial<CardPr
     onTurnOn: () => undefined,
     ...more,
   }
-  return render(<BuildingCard {...props} />, world)
+  return render(<BuildingCard {...props} />, { setUp: { ...HELD, testRunId: test === null ? null : 'run_01JB8' }, ...world })
 }
 
 describe('the set-up card before Set up', () => {
@@ -120,20 +125,27 @@ describe('the set-up card before Set up', () => {
 
 describe('the set-up card after Set up', () => {
   it('shows nothing of the line before the build log says the blocks were added', () => {
-    const html = building(null, { setUp: { created: CREATED, at: Date.now() + 60_000, testRunId: null } })
+    const html = building(null, { setUp: { ...HELD, at: Date.now() + 60_000 } })
     expect(pill(html)).toBe('Building')
     expect(text(html)).toContain('Starting…')
     expect(html.match(/<li[^>]*data-off="true"/g)?.length, 'each of the four steps waits').toBe(4)
   })
 
-  it('shows the line and the safety checker’s note once the log has replayed, and starts the Tester’s test run', () => {
+  it('shows the line and the safety checker’s note once the log has replayed, and claims no test run before the platform names one', () => {
     const html = building(null)
     expect(pill(html)).toBe('Building')
     expect(html).not.toContain('data-off')
     expect(text(html)).toContain('Added a yes before the ticket.')
-    expect(text(html)).toContain('Test run…')
+    expect(text(html)).toContain('Saved as a draft in n8n.')
+    expect(text(html)).not.toContain('Test run…')
     expect(html, 'the yes the safety checker added is ringed').toContain('data-added="true"')
     expect(buttons(html)).toEqual([])
+  })
+
+  it('says it can’t read the workflow, with Try again, and starts no test run while it doesn’t know it is a draft', () => {
+    const html = building(null, { unread: true })
+    expect(text(html)).toContain('I couldn’t read the workflow just now, so the test run waits.')
+    expect(buttons(html)).toEqual(['Try again'])
   })
 
   it('follows the test run’s own events while it works, with no button to press', () => {
@@ -187,7 +199,7 @@ describe('Building in n8n', () => {
   it('draws the blocks, says what the builder did and lists the checks, with the footnote that holds today', () => {
     const html = render(<BuildPanel id={CREATED.use_case_id} />)
     expect(text(html)).toContain('Building in n8n')
-    expect(text(html)).toContain('Test run…')
+    expect(text(html)).toContain('Saved as a draft in n8n.')
     expect(html).toContain('<svg')
     expect(text(html)).toContain('The blocks fit together.')
     expect(text(html)).toContain('Every write waits for a yes.')
@@ -201,7 +213,7 @@ describe('Building in n8n', () => {
 
   it('never says n8n for a workflow the platform didn’t lay out there', () => {
     const shared = { ...CREATED, n8n_workflow_id: null, build_log: [], blocks: [] }
-    const html = text(render(<BuildPanel id={CREATED.use_case_id} />, { setUp: { created: shared, at: 0, testRunId: null } }))
+    const html = text(render(<BuildPanel id={CREATED.use_case_id} />, { setUp: { ...HELD, created: shared, at: 0 } }))
     expect(html).not.toContain('n8n')
   })
 })

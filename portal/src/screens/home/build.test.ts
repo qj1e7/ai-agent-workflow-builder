@@ -2,10 +2,11 @@ import created from '@contracts/fixtures/builder/agent-use-case.off.created.json
 import draft from '@contracts/fixtures/builder/use-case.draft.json'
 import success from '@contracts/fixtures/runs/success.json'
 import failure from '@contracts/fixtures/runs/failure.json'
+import rejected from '@contracts/fixtures/runs/rejected.json'
 import { describe, expect, it } from 'vitest'
 import type { BuildLineView, N8nBlockView, UseCaseView } from '../../api/types'
 import { emptyModel, foldWire, stationsOf, type PlanBlock, type RunModel } from '../run/runModel'
-import { buildLine, buildStage, canvasOf, checksOf, draftPill, lineTimes, notesOf, replayAt, statusOf, testStatus } from './build'
+import { buildLine, buildStage, canvasOf, checksOf, draftPill, lineTimes, notesOf, replayAt, statusOf, testStatus, testStep } from './build'
 
 const LOG = created.build_log as BuildLineView[]
 const BLOCKS = created.blocks as N8nBlockView[]
@@ -23,6 +24,7 @@ const PROPOSED = events(success, 8)
 const PASSED = ended(PROPOSED, 'test_passed')
 const NOTHING_NEW = ended(WORKING, 'nothing_to_write')
 const STOPPED = events(failure)
+const DECLINED = events(rejected)
 
 describe('the build log, replayed in order with its real gaps', () => {
   it('shows each line the sketch’s step after the one before, or after its real gap when that is longer', () => {
@@ -49,20 +51,39 @@ describe('the build log, replayed in order with its real gaps', () => {
 })
 
 describe('where the set-up stands, from the replay, the test run’s events and the workflow', () => {
-  it('lays out, then tests, then is ready, or back to a draft when the test stopped, and is on only once the platform says so', () => {
-    expect(buildStage(false, null, 'draft')).toEqual({ kind: 'laying_out' })
-    expect(buildStage(true, null, 'draft')).toEqual({ kind: 'testing' })
-    expect(buildStage(true, WORKING.phase, 'draft')).toEqual({ kind: 'testing' })
-    expect(buildStage(true, PASSED.phase, 'draft')).toEqual({ kind: 'passed' })
-    expect(buildStage(true, NOTHING_NEW.phase, 'draft'), 'a test with nothing new to write still ran end to end').toEqual({ kind: 'passed' })
-    expect(buildStage(true, STOPPED.phase, 'draft')).toEqual({ kind: 'stopped' })
-    expect(buildStage(true, PASSED.phase, undefined), 'not on before the workflow is read').toEqual({ kind: 'passed' })
-    expect(buildStage(true, PASSED.phase, 'on')).toEqual({ kind: 'on' })
+  it('lays out, waits for a test run to exist, tests, then is ready, or back to a draft when the test stopped, and is on only once the platform says so', () => {
+    expect(buildStage(false, false, null, 'draft')).toEqual({ kind: 'laying_out' })
+    expect(buildStage(true, false, null, 'draft'), 'no test run is claimed before the platform names one').toEqual({ kind: 'saved' })
+    expect(buildStage(true, true, null, 'draft')).toEqual({ kind: 'testing' })
+    expect(buildStage(true, true, WORKING.phase, 'draft')).toEqual({ kind: 'testing' })
+    expect(buildStage(true, true, PASSED.phase, 'draft')).toEqual({ kind: 'passed' })
+    expect(buildStage(true, true, NOTHING_NEW.phase, 'draft'), 'a test with nothing new to write still ran end to end').toEqual({ kind: 'passed' })
+    expect(buildStage(true, true, STOPPED.phase, 'draft')).toEqual({ kind: 'stopped' })
+    expect(buildStage(true, true, PASSED.phase, undefined), 'not on before the workflow is read').toEqual({ kind: 'passed' })
+    expect(buildStage(true, true, PASSED.phase, 'on')).toEqual({ kind: 'on' })
   })
 
   it('has the sketch’s pill for each stage', () => {
-    const pills = (['laying_out', 'testing', 'passed', 'stopped', 'on'] as const).map((kind) => draftPill({ kind }).label)
-    expect(pills).toEqual(['Building', 'Building', 'Ready', 'Draft', 'On'])
+    const pills = (['laying_out', 'saved', 'testing', 'passed', 'stopped', 'on'] as const).map((kind) => draftPill({ kind }).label)
+    expect(pills).toEqual(['Building', 'Building', 'Building', 'Ready', 'Draft', 'On'])
+  })
+})
+
+describe('starting the test run, once', () => {
+  const held = { testRunId: null, testKey: 'k1', testAsked: null }
+
+  it('starts it once the log has replayed and the platform says the workflow is a draft', () => {
+    expect(testStep(held, false, 'draft')).toBe('wait')
+    expect(testStep(held, true, undefined), 'not before the workflow is read').toBe('wait')
+    expect(testStep(held, true, 'draft')).toBe('start')
+    expect(testStep(held, true, 'on'), 'never for a workflow that is on').toBe('none')
+    expect(testStep(undefined, true, 'draft'), 'never without the set-up it belongs to').toBe('none')
+  })
+
+  it('never asks twice with one key, so a card drawn again starts no second test run, and Test again asks with a new key', () => {
+    expect(testStep({ ...held, testAsked: 'k1' }, true, 'draft')).toBe('none')
+    expect(testStep({ ...held, testKey: 'k2', testAsked: 'k1' }, true, 'draft')).toBe('start')
+    expect(testStep({ ...held, testRunId: 'run_1' }, true, 'draft'), 'a run the platform named is followed, not started').toBe('none')
   })
 })
 
@@ -72,6 +93,7 @@ describe('the build panel’s status line and checks', () => {
   it('says what the builder is doing, from the log, then the test run, then what the platform says', () => {
     expect(statusOf({ kind: 'laying_out' }, [], inN8n)).toBe('Starting…')
     expect(statusOf({ kind: 'laying_out' }, LOG.slice(0, 3), inN8n)).toBe('Safety checker is checking the write…')
+    expect(statusOf({ kind: 'saved' }, LOG, inN8n), 'until the platform names a test run, the last line of the log stands').toBe('Saved as a draft in n8n.')
     expect(statusOf({ kind: 'testing' }, LOG, inN8n)).toBe('Test run…')
     expect(statusOf({ kind: 'passed' }, LOG, inN8n)).toBe('Saved as a draft in n8n.')
     expect(statusOf({ kind: 'on' }, LOG, inN8n)).toBe('On. Version 1, published in n8n.')
@@ -91,6 +113,7 @@ describe('the build panel’s status line and checks', () => {
       { ok: true, text: 'Test run passed up to the yes. Nothing was written.' },
     ])
     expect(testStatus(STOPPED)).toEqual({ ok: false, text: 'The test run stopped. An agent could not finish its work.' })
+    expect(testStatus(DECLINED)?.text, 'words that end a sentence get no second full stop').toMatch(/[^.]\.$/)
     expect(testStatus(WORKING), 'nothing is said while it runs').toBeNull()
   })
 
