@@ -2,7 +2,7 @@ import hashlib
 import json
 import os
 import sys
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any, LiteralString
 
@@ -13,45 +13,36 @@ from psycopg.types.json import Jsonb
 from platform_api.auth import ConfigError
 from platform_api.migrations import upgrade_all
 from platform_api.orchestration.n8n import PLATFORM_API_KEY_LABEL, N8nClient, N8nError
+from platform_api.orchestration.node_classes import NODE_CLASSES
 from platform_api.orchestration.workflow_check import (
     ERROR_WORKFLOW,
     PLATFORM_WORKFLOWS_DIR,
     SELF_TEST,
     check_platform,
 )
-from platform_api.orchestration.workflows import (
-    LiveState,
-    LiveWorkflow,
-    WorkflowDefinition,
-    lint,
-    load_all,
-    parse,
-    placeholders,
-    render,
-)
 from platform_api.settings import BootstrapSettings, bootstrap_settings_from_env
 
 API_KEY_LABEL = "platform-bootstrap"
 CREDENTIAL_NAME = "X-Step-Key"
-STEP_KEY_HEADER = "X-Step-Key"
-CREDENTIAL_PLACEHOLDER = "STEP_KEY_CREDENTIAL_ID"
 # Only this exact name is removed: staff build their own workflows in the same n8n (ADR 0027).
 OLD_RUN_WORKFLOW = "release_check"
 OLD_TEMPLATE = "release_check"
 OLD_TASK_KIND = "release"
-SHARED_RUN_WORKFLOW = "run"
-RETIRED_WORKFLOWS = ("schedule_tick",)
+RETIRED_WORKFLOWS = ("schedule_tick", "run")
 """Removed by these exact names, as they are the platform's own. Nothing ticks schedules since
-E10: each workflow's own n8n workflow has its Schedule Trigger."""
-OLD_ENGINE_IN_USE = """
-    SELECT EXISTS (
-        SELECT 1 FROM builder.use_cases WHERE engine = 'shared_run' AND deleted_at IS NULL
-    ) OR EXISTS (
-        SELECT 1 FROM orchestration.runs
-        WHERE jsonb_typeof(spec -> 'n8n') IS DISTINCT FROM 'object'
-          AND state IN ('Pending', 'Working', 'Proposed', 'AwaitingApproval', 'Acting')
-    )
+E10: each workflow's own n8n workflow has its Schedule Trigger. The shared run workflow is made of
+Webhook, HTTP Request and Respond to Webhook blocks, which the allow list turns off (E11)."""
+OLD_RUNS_OPEN = """
+    SELECT count(*) FROM orchestration.runs
+    WHERE jsonb_typeof(spec -> 'n8n') IS DISTINCT FROM 'object'
+      AND state IN ('Pending', 'Working', 'Proposed', 'AwaitingApproval', 'Acting')
 """
+OLD_RUNS_LEFT = (
+    "{count} run(s) on the shared run workflow have not ended, and n8n's allow list leaves it no "
+    "block to finish them with. Let them end under the release before this one first"
+)
+SHOWN = 5
+"""How many of the types n8n loads beyond the allow list bootstrap names, when it loads more."""
 RESET_HINT = (
     "This stack holds data from before the release check was retired, which the platform can "
     "no longer read. Reset a local practice stack with "
@@ -86,12 +77,11 @@ def main(env: Mapping[str, str] | None = None) -> int:
         return 1
     if not migrate_to_head(settings.owner_database_url, say):
         return _finish(settings, say, [], [], "the database holds old release-check data")
-    definitions = load_all()
-    findings = [str(finding) for finding in lint(definitions)]
-    if findings:
-        return _finish(settings, say, [], findings, "the workflow files fail the lint")
+    left = old_runs_open(settings.owner_database_url)
+    if left:
+        return _finish(settings, say, [], [], OLD_RUNS_LEFT.format(count=left))
     try:
-        loaded, findings = load_into_n8n(settings, definitions, say)
+        loaded, findings = load_into_n8n(settings, say)
     except NotThePlatforms as error:
         return _finish(settings, say, [], [], str(error))
     except (N8nError, httpx.HTTPError) as error:
@@ -137,11 +127,7 @@ def _finish(
     return 0 if ready else 1
 
 
-def load_into_n8n(
-    settings: BootstrapSettings, definitions: tuple[WorkflowDefinition, ...], say: Say
-) -> tuple[list[LoadedWorkflow], list[str]]:
-    in_use = old_engine_in_use(settings.owner_database_url)
-    shared = tuple(d for d in definitions if in_use or d.name != SHARED_RUN_WORKFLOW)
+def load_into_n8n(settings: BootstrapSettings, say: Say) -> tuple[list[LoadedWorkflow], list[str]]:
     previous = _previous(settings.owner_database_url)
     recorded = {w["name"]: w["id"] for w in previous}
     client = N8nClient(settings.n8n_base_url)
@@ -150,6 +136,8 @@ def load_into_n8n(
         say("n8n is healthy")
         owner = client.ensure_owner(settings.n8n_owner_email, settings.n8n_owner_password)
         say(f"owner {settings.n8n_owner_email}: {owner.value}")
+        loaded_types = client.node_types()
+        say(f"n8n loads {len(loaded_types)} node types")
         removed = client.fresh_api_key(API_KEY_LABEL)
         say(f"api key '{API_KEY_LABEL}': created, {removed} older removed")
         lost = lost_workflows(client, settings.owner_database_url, recorded, say)
@@ -157,14 +145,6 @@ def load_into_n8n(
             ask_for_restore(settings.owner_database_url, lost, say)
         removed = client.remove_api_keys(PLATFORM_API_KEY_LABEL)
         say(f"api key '{PLATFORM_API_KEY_LABEL}': {removed} removed, platform-api makes its own")
-        values = {"PLATFORM_INTERNAL_URL": settings.platform_internal_url}
-        credential_id = None
-        if any(_needs_step_key(d) for d in shared):
-            credential_id = client.create_header_credential(
-                CREDENTIAL_NAME, STEP_KEY_HEADER, settings.step_key
-            )
-            say(f"credential '{CREDENTIAL_NAME}': created {credential_id}")
-            values[CREDENTIAL_PLACEHOLDER] = credential_id
         place = Place(
             client,
             client.platform_project(),
@@ -173,41 +153,45 @@ def load_into_n8n(
             say,
         )
         platform = load_platform_workflows(place)
-        values["ERROR_WORKFLOW_ID"] = platform.error_workflow
-        hashes: dict[str, str] = {}
-        for d in shared:
-            workflow_id, digest = _load(place, d, values)
-            hashes[workflow_id] = digest
         for old in client.workflows_named(OLD_RUN_WORKFLOW):
             if old.project == place.project:
                 client.delete_workflow(old.id)
-                say(f"workflow {OLD_RUN_WORKFLOW} ({old.id}): removed, every run goes through run")
-        retire_old_engine(place, in_use)
-        stale = [c for c in client.credentials_named(CREDENTIAL_NAME) if c != credential_id]
+                say(f"workflow {OLD_RUN_WORKFLOW} ({old.id}): removed")
+        retire_old_engine(place)
+        stale = client.credentials_named(CREDENTIAL_NAME)
         for credential in stale:
             client.delete_credential(credential)
         if stale:
-            say(f"credential '{CREDENTIAL_NAME}': removed {len(stale)} older")
-        records = [client.read_back(workflow_id) for workflow_id in hashes]
+            say(f"credential '{CREDENTIAL_NAME}': removed {len(stale)}")
     finally:
         client.close()
-    loaded = [
-        *platform.loaded,
-        *(LoadedWorkflow(r.name, r.id, r.active, hashes[r.id], r.project) for r in records),
-    ]
-    live = LiveState(
-        settings.platform_internal_url, {w.name: LiveWorkflow(w.id, w.active) for w in loaded}
-    )
     findings = [
+        *allow_list_findings(loaded_types),
         *platform.findings,
-        *(str(finding) for finding in lint((parse(r.document) for r in records), live=live)),
         *(
             f"{w.name} ({w.id}) is not in the platform's n8n project"
-            for w in loaded
+            for w in platform.loaded
             if w.project != place.project
         ),
     ]
-    return loaded, findings
+    return platform.loaded, findings
+
+
+def allow_list_findings(loaded: Collection[str]) -> list[str]:
+    """n8n must load exactly the types node_classes.json turns on (ADR 0045). One more could reach
+    anything, as when NODES_INCLUDE is unset, and one fewer is a block a workflow cannot run."""
+    wanted = set(NODE_CLASSES.included())
+    extra, missing = sorted(set(loaded) - wanted), sorted(wanted - set(loaded))
+    findings: list[str] = []
+    if extra:
+        named = ", ".join(extra[:SHOWN]) + (", …" if len(extra) > SHOWN else "")
+        findings.append(
+            f"n8n loads {len(extra)} node type(s) that node_classes.json does not turn on, "
+            f"{named}: NODES_INCLUDE is not the class file's allow list"
+        )
+    if missing:
+        findings.append(f"n8n does not load {', '.join(missing)}, which node_classes.json turns on")
+    return findings
 
 
 @dataclass(frozen=True)
@@ -276,13 +260,6 @@ def platform_document(name: str) -> dict[str, Any]:
     return json.loads((PLATFORM_WORKFLOWS_DIR / f"{name}.n8n.json").read_text())
 
 
-def _load(
-    place: Place, definition: WorkflowDefinition, values: Mapping[str, str]
-) -> tuple[str, str]:
-    digest = content_hash_without_credential(definition, values)
-    return _upsert(place, render(definition, values), digest), digest
-
-
 def _upsert(place: Place, body: dict[str, Any], digest: str) -> str:
     name = str(body["name"])
     result = place.client.save_workflow(body, place.target(name))
@@ -296,36 +273,26 @@ def _upsert(place: Place, body: dict[str, Any], digest: str) -> str:
     return result.id
 
 
-def old_engine_in_use(owner_url: str) -> bool:
-    """A workflow still on the shared run workflow, or a run of it that has not ended, still needs
-    that workflow and its step key. Once neither is left, nothing calls them (ENGINE-PLAN E10)."""
+def old_runs_open(owner_url: str) -> int:
+    """Runs on the shared run workflow that have not ended. Its blocks are off from E11, so only
+    the release before can finish them. A workflow still on it with no open run moves to its own
+    n8n workflow as platform-api starts (ENGINE-PLAN E10), and needs it no more."""
     with psycopg.connect(owner_url) as conn:
-        row = conn.execute(OLD_ENGINE_IN_USE).fetchone()
+        row = conn.execute(OLD_RUNS_OPEN).fetchone()
     assert row is not None
-    return bool(row[0])
+    return int(row[0])
 
 
-def retire_old_engine(place: Place, in_use: bool) -> None:
-    """The schedule tick goes at once. The shared run workflow goes once nothing runs on it, so an
-    old deploy's waiting run still finishes there first. Each is found as the platform finds its
+def retire_old_engine(place: Place) -> None:
+    """The schedule tick and the shared run workflow go. Each is found as the platform finds its
     own, by the id recorded, in the platform's n8n project, so a workflow staff named the same
     stays. A run left behind by a delete that failed is no longer on record: the release that
     removes the old engine's code removes it by name and content hash."""
-    for name in (*RETIRED_WORKFLOWS, *(() if in_use else (SHARED_RUN_WORKFLOW,))):
+    for name in RETIRED_WORKFLOWS:
         workflow_id = place.target(name)
         if workflow_id is not None:
             place.client.delete_workflow(workflow_id)
             place.say(f"workflow {name} ({workflow_id}): removed, every workflow runs as its own")
-
-
-def _needs_step_key(definition: WorkflowDefinition) -> bool:
-    return CREDENTIAL_PLACEHOLDER in placeholders(definition)
-
-
-def content_hash_without_credential(
-    definition: WorkflowDefinition, values: Mapping[str, str]
-) -> str:
-    return _content_hash(render(definition, {**values, CREDENTIAL_PLACEHOLDER: "<masked>"}))
 
 
 def _content_hash(body: Mapping[str, Any]) -> str:

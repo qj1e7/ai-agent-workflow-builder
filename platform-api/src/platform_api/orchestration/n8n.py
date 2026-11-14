@@ -179,6 +179,20 @@ class N8nClient:
         if response.status_code != 200:
             raise N8nError(f"could not sign in as {email}: HTTP {response.status_code}")
 
+    def node_types(self, tries: int = 10) -> set[str]:
+        """The node types n8n loaded, as its /types/nodes.json lists them to the signed-in owner.
+        Soon after a start the file can come back cut short (pack smoke), so a body that does not
+        parse is read again."""
+        for _ in range(tries - 1):
+            response = self._http.get("/types/nodes.json")
+            if response.status_code != 200:
+                raise N8nError(f"GET /types/nodes.json failed: {_short(response)}")
+            try:
+                return _type_names(response.json())
+            except ValueError:
+                self._sleep(3)
+        return _type_names(self._http.get("/types/nodes.json").raise_for_status().json())
+
     def remove_api_keys(self, label: str) -> int:
         listed = self._rest("GET", "/rest/api-keys")
         stale = [item for item in listed["data"]["items"] if item["label"] == label]
@@ -293,6 +307,16 @@ class N8nClient:
             params=params,
             headers={"X-N8N-API-KEY": self._api_key},
         )
+
+
+def _type_names(listed: object) -> set[str]:
+    if not isinstance(listed, list):
+        raise N8nError("n8n's /types/nodes.json is not a list of node types")
+    return {
+        str(cast(dict[str, Any], t).get("name"))
+        for t in cast(list[object], listed)
+        if isinstance(t, dict)
+    }
 
 
 def _ok(response: httpx.Response) -> dict[str, Any]:
