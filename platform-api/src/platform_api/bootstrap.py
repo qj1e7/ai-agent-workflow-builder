@@ -140,6 +140,7 @@ def load_into_n8n(
         if not d.is_error_workflow and (in_use or d.name != SHARED_RUN_WORKFLOW)
     ]
     previous = previous_hashes(settings.owner_database_url)
+    recorded = recorded_ids(settings.owner_database_url)
     client = N8nClient(settings.n8n_base_url)
     try:
         client.wait_healthy()
@@ -170,7 +171,7 @@ def load_into_n8n(
         if old is not None:
             client.delete_workflow(old.id)
             say(f"workflow {OLD_RUN_WORKFLOW} ({old.id}): removed, every run now goes through run")
-        retire_old_engine(client, in_use, say)
+        retire_old_engine(client, recorded, in_use, say)
         stale = [c for c in client.credentials_named(CREDENTIAL_NAME) if c != credential_id]
         for credential in stale:
             client.delete_credential(credential)
@@ -217,14 +218,23 @@ def old_engine_in_use(owner_url: str) -> bool:
     return bool(row[0])
 
 
-def retire_old_engine(client: N8nClient, in_use: bool, say: Say) -> None:
+def retire_old_engine(
+    client: N8nClient, recorded: Mapping[str, str], in_use: bool, say: Say
+) -> None:
     """The schedule tick goes at once. The shared run workflow goes once nothing runs on it, so an
-    old deploy's waiting run still finishes there first."""
+    old deploy's waiting run still finishes there first. Each goes by the id bootstrap recorded
+    when it loaded it, never by its name alone, so a workflow staff named the same stays."""
     for name in (*RETIRED_WORKFLOWS, *(() if in_use else (SHARED_RUN_WORKFLOW,))):
-        old = client.find_workflow(name)
-        if old is not None:
-            client.delete_workflow(old.id)
-            say(f"workflow {name} ({old.id}): removed, every workflow runs as its own in n8n")
+        workflow_id = recorded.get(name)
+        if workflow_id is None:
+            continue
+        try:
+            held = client.read_back(workflow_id)
+        except N8nError:
+            continue
+        if held.name == name:
+            client.delete_workflow(workflow_id)
+            say(f"workflow {name} ({workflow_id}): removed, every workflow runs as its own in n8n")
 
 
 def _needs_step_key(definition: WorkflowDefinition) -> bool:
@@ -273,11 +283,20 @@ def ask_for_restore(owner_url: str, say: Say) -> None:
     platform-api saves each one again from the version it kept (Restore to n8n) as it starts."""
     with psycopg.connect(owner_url) as conn:
         conn.execute(
-            "INSERT INTO orchestration.engine_status (id, loaded_at, ready, detail, workflows,"
-            " restore_pending) VALUES (1, now(), false, 'n8n was set up again', '[]', true)"
-            " ON CONFLICT (id) DO UPDATE SET restore_pending = true"
+            "INSERT INTO builder.n8n_restore (id, asked_at) VALUES (1, now())"
+            " ON CONFLICT (id) DO UPDATE SET asked_at = EXCLUDED.asked_at"
         )
     say("n8n was empty: platform-api restores the workflows it kept as it starts")
+
+
+def recorded_ids(owner_url: str) -> dict[str, str]:
+    """Each workflow the last bootstrap loaded, by name."""
+    with psycopg.connect(owner_url) as conn:
+        row = conn.execute(
+            "SELECT workflows FROM orchestration.engine_status WHERE id = 1"
+        ).fetchone()
+    workflows: list[dict[str, str]] = [] if row is None else row[0]
+    return {w["name"]: w["id"] for w in workflows}
 
 
 def previous_hashes(owner_url: str) -> dict[str, str]:

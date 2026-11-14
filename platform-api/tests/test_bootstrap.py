@@ -359,11 +359,23 @@ def names_in(n8n: FakeN8n) -> list[str]:
     return sorted(w["name"] for w in n8n.workflows.values())
 
 
+def recorded(owner_url: str, ids: dict[str, str]) -> None:
+    """What the last bootstrap loaded, as it records it."""
+    loaded = [{"name": name, "id": id, "active": True, "sha256": "x"} for name, id in ids.items()]
+    with psycopg.connect(owner_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO orchestration.engine_status (id, loaded_at, ready, detail, workflows)"
+            " VALUES (1, now(), true, 'loaded', %s)",
+            (json.dumps(loaded),),
+        )
+
+
 def test_while_a_workflow_runs_on_the_shared_run_workflow_bootstrap_keeps_it(
     postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
 ):
     truncate_all(postgres.owner)
     n8n = serve(monkeypatch, FakeN8n(["run", "schedule_tick"]))
+    recorded(postgres.owner, {"run": "W1", "schedule_tick": "W2"})
     insert_use_case(postgres.owner, "uc_cards", "agent_cards")
 
     loaded, findings = load_into_n8n(settings_for(postgres.owner), load_all(), lambda _: None)
@@ -380,6 +392,7 @@ def test_a_run_that_has_not_ended_keeps_the_shared_run_workflow(
     """Its workflow was deleted, but its yes may still come, and its write runs there."""
     truncate_all(postgres.owner)
     n8n = serve(monkeypatch, FakeN8n(["run"]))
+    recorded(postgres.owner, {"run": "W1"})
     spec = TypeAdapter(RunSpec).dump_python(replace(SPEC, n8n=None), mode="json")
     insert_run(postgres.owner, "run_waiting", spec)
     with psycopg.connect(postgres.owner, autocommit=True) as conn:
@@ -394,7 +407,8 @@ def test_once_nothing_runs_on_it_bootstrap_removes_the_shared_run_and_tick_workf
     postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
 ):
     truncate_all(postgres.owner)
-    n8n = serve(monkeypatch, FakeN8n(["run", "schedule_tick", "Staff access review"]))
+    n8n = serve(monkeypatch, FakeN8n(["run", "schedule_tick", "Staff access review", "run"]))
+    recorded(postgres.owner, {"run": "W1", "schedule_tick": "W2"})
     insert_use_case(postgres.owner, "uc_moved", "agent_cards")
     insert_run(postgres.owner, "run_done", TypeAdapter(RunSpec).dump_python(SPEC, mode="json"))
     with psycopg.connect(postgres.owner, autocommit=True) as conn:
@@ -404,7 +418,8 @@ def test_once_nothing_runs_on_it_bootstrap_removes_the_shared_run_and_tick_workf
     loaded, _ = load_into_n8n(settings_for(postgres.owner), load_all(), said.append)
 
     assert [w.name for w in loaded] == ["run_failure_reporter"]
-    assert names_in(n8n) == ["Staff access review", "run_failure_reporter"]
+    assert names_in(n8n) == ["Staff access review", "run", "run_failure_reporter"]
+    assert "W4" in n8n.workflows, "a staff workflow named run is not the platform's"
     assert any(line.startswith("workflow run (W1): removed") for line in said)
     assert n8n.credentials == ["cred1"], "kept while the error workflow still reports with it"
 
@@ -441,8 +456,8 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
 
 def restore_pending(owner_url: str) -> bool:
     with psycopg.connect(owner_url) as conn:
-        row = conn.execute("SELECT restore_pending FROM orchestration.engine_status").fetchone()
-    return row is not None and bool(row[0])
+        row = conn.execute("SELECT 1 FROM builder.n8n_restore").fetchone()
+    return row is not None
 
 
 def test_an_n8n_that_had_no_owner_asks_platform_api_to_restore_what_it_lost(

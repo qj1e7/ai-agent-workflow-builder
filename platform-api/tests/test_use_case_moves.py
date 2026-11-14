@@ -10,6 +10,7 @@ from typing import Any, LiteralString
 
 import pytest
 
+from platform_api.bootstrap import ask_for_restore
 from platform_api.builder import Builder
 from platform_api.builder.layout import CREATE_TICKET, schedule_rule
 from platform_api.builder.models import UseCaseScheduleIn
@@ -24,6 +25,7 @@ from platform_api.orchestration.schedule_store import ScheduleBook, schedule_own
 from platform_api.orchestration.service import Decided, DecisionRefused
 from platform_api.orchestration.watch_store import WatchFacts
 from platform_api.shared import N8nExecutionId, RunId, UseCaseId
+from tests.conftest import PostgresUrls
 from tests.fake_n8n import FakeN8n
 from tests.support import ALICE, BOB, CAROL, SPEC
 from tests.test_builder_lifecycle import Lab, ModelConnected
@@ -63,6 +65,7 @@ class Moving:
     n8n: FakeN8n
     store: Errors
     builder: Builder
+    owner_url: str
 
     @property
     def moves(self) -> Moves:
@@ -120,7 +123,7 @@ class Moving:
 
 
 @pytest.fixture
-async def m(lab: Lab) -> AsyncIterator[Moving]:
+async def m(lab: Lab, postgres: PostgresUrls) -> AsyncIterator[Moving]:
     n8n = FakeN8n()
     store = Errors(n8n, lab.h.db)
     builder = Builder(
@@ -133,7 +136,7 @@ async def m(lab: Lab) -> AsyncIterator[Moving]:
         writes=WRITES,
         open_runs=WatchFacts(lab.h.db, lab.h.jira, lab.h.jira.site.identity),
     )
-    yield Moving(lab, n8n, store, builder)
+    yield Moving(lab, n8n, store, builder, postgres.owner)
 
 
 def before(nodes: list[dict[str, Any]], connections: dict[str, Any], name: str) -> set[str]:
@@ -320,12 +323,7 @@ async def lose_n8n(m: Moving) -> None:
     """n8n's database is lost: bootstrap set n8n up again and loaded the error workflow anew."""
     m.n8n.workflows.clear()
     m.store.error_workflow = NEW_ERROR_WORKFLOW
-    async with m.lab.h.db.transaction("orchestration") as uow:
-        await uow.conn.execute(
-            "INSERT INTO orchestration.engine_status (id, loaded_at, ready, detail, workflows,"
-            " restore_pending) VALUES (1, now(), true, 'set up again', '[]', true)"
-            " ON CONFLICT (id) DO UPDATE SET restore_pending = true"
-        )
+    ask_for_restore(m.owner_url, lambda _: None)
 
 
 async def test_restore_saves_each_lost_workflow_again_from_the_version_kept(m: Moving):
@@ -347,7 +345,7 @@ async def test_restore_saves_each_lost_workflow_again_from_the_version_kept(m: M
         published["also"],
     )
     assert (await m.use_case(use_case_id))["n8n_workflow_id"] == restored.workflow_id
-    assert not await m.store.restore_pending()
+    assert await m.rows("SELECT 1 FROM builder.n8n_restore") == [], "the ask is answered"
     assert await m.moves.restore_if_asked() == ()
 
 

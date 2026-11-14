@@ -1068,14 +1068,6 @@ class N8nDrafts(Protocol):
 
     async def remove_for_good(self, workflow_id: str) -> None: ...
 
-    async def restore_pending(self) -> bool:
-        """Bootstrap found n8n empty and set it up again, so the workflows it held are lost."""
-        ...
-
-    async def restored(self) -> None:
-        """Every workflow n8n lost is back, or cannot be put back."""
-        ...
-
 
 class N8nWorkflows:
     """Where the builder saves the Planner's layouts, as drafts nobody has published, and where
@@ -1093,21 +1085,6 @@ class N8nWorkflows:
             ).fetchone()
         loaded: list[dict[str, Any]] = [] if row is None else row["workflows"]
         return next((str(w["id"]) for w in loaded if w.get("name") == ERROR_WORKFLOW_NAME), None)
-
-    async def restore_pending(self) -> bool:
-        async with self._db.connection("orchestration") as conn:
-            row = await (
-                await conn.execute(
-                    "SELECT restore_pending FROM orchestration.engine_status WHERE id = 1"
-                )
-            ).fetchone()
-        return row is not None and bool(row["restore_pending"])
-
-    async def restored(self) -> None:
-        async with self._db.transaction("orchestration") as uow:
-            await uow.conn.execute(
-                "UPDATE orchestration.engine_status SET restore_pending = false WHERE id = 1"
-            )
 
     async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft:
         """Creates the workflow, then reads it back and compares, because n8n may keep something

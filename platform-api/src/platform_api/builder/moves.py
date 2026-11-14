@@ -302,11 +302,18 @@ class Moves:
         """Bootstrap asks for a restore when it found n8n empty and set it up again. The ask is
         answered once every workflow is back or cannot be, so a workflow n8n could not take yet
         is tried again at the next start."""
-        if not await self._n8n.restore_pending():
+        async with self._db.connection("builder") as conn:
+            asked = await (
+                await conn.execute("SELECT asked_at FROM builder.n8n_restore WHERE id = 1")
+            ).fetchone()
+        if asked is None:
             return ()
         restored = await self.restore_all()
         if not any(isinstance(done, N8nNotReady) for done in restored.values()):
-            await self._n8n.restored()
+            async with self._db.transaction("builder") as uow:
+                await uow.conn.execute(
+                    "DELETE FROM builder.n8n_restore WHERE asked_at = %s", (asked["asked_at"],)
+                )
         return list(restored.values())
 
 

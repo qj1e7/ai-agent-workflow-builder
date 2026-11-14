@@ -9,8 +9,14 @@ NOBODY = "(made IS NULL OR made IN ('published_in_n8n'{more}))"
 
 def upgrade() -> None:
     # The version that moved a workflow off the shared run workflow is the platform's, made by
-    # nobody in the Portal (ENGINE-PLAN E10).
+    # nobody in the Portal (ENGINE-PLAN E10). Bootstrap asks for a restore when it finds n8n
+    # empty, and platform-api answers the ask once every workflow n8n lost is back.
     op.execute(f"""
+        CREATE TABLE builder.n8n_restore (
+            id integer PRIMARY KEY CHECK (id = 1),
+            asked_at timestamptz NOT NULL
+        );
+        GRANT SELECT, DELETE ON builder.n8n_restore TO wab_builder;
         ALTER TABLE builder.use_case_versions
             DROP CONSTRAINT use_case_versions_made_check,
             ADD CONSTRAINT use_case_versions_made_check
@@ -26,6 +32,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute(f"""
+        DROP TABLE builder.n8n_restore;
         UPDATE builder.use_case_versions SET made = NULL WHERE made = 'moved_to_n8n';
         ALTER TABLE builder.use_case_versions
             DROP CONSTRAINT use_case_versions_made_check,
