@@ -39,8 +39,13 @@ export function threadReducer(state: Thread, action: ThreadAction): Thread {
       const me = state.last + 1
       return { messages: [...state.messages, { kind: 'me', id: me, text: action.text }, { kind: 'behind', id: me + 1 }], last: me + 1 }
     }
-    case 'arrived':
-      return { messages: [...state.messages, { kind: 'reply', id: state.last + 1, reply: action.reply, typed: '' }], last: state.last + 1 }
+    case 'arrived': {
+      // A request still waiting for its answer stays last, so a failed send takes back only the request.
+      const card: Message = { kind: 'reply', id: state.last + 1, reply: action.reply, typed: '' }
+      const waiting = isThinking(state) ? state.messages.slice(-2) : []
+      const before = state.messages.slice(0, state.messages.length - waiting.length)
+      return { messages: [...before, card, ...waiting], last: state.last + 1 }
+    }
     case 'failed':
       return { ...state, messages: state.messages.slice(0, -2) }
     case 'resumed':
