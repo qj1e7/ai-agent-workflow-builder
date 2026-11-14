@@ -4,7 +4,6 @@ import time
 import uuid
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, NoReturn
 
 import httpx
@@ -21,7 +20,6 @@ N8N_URL = os.environ.get("N8N_BASE_URL", "http://n8n:5678")
 STEP_KEY = os.environ.get("STEP_KEY", "")
 DATABASE_URL = os.environ.get("E2E_DATABASE_URL", "")
 WAIT_SECONDS = float(os.environ.get("E2E_WAIT_SECONDS", "90"))
-CONTRACTS_DIR = Path(os.environ.get("CONTRACTS_DIR", Path(__file__).parents[2] / "contracts"))
 
 TERMINAL_STATES = frozenset({"succeeded", "rejected", "failed"})
 TERMINAL_EVENTS = frozenset({"run_succeeded", "run_rejected", "run_failed"})
@@ -34,11 +32,16 @@ def fail(message: str) -> NoReturn:
     pytest.fail(message, pytrace=False)
 
 
-def fixture_kinds(name: str) -> list[str]:
-    events: list[Json] = json.loads(
-        (CONTRACTS_DIR / "fixtures" / "runs" / f"{name}.json").read_text()
-    )
-    return [event["kind"] for event in events]
+OLD_ENGINE_KINDS = frozenset({"leg_dispatched", "step_started", "step_finished"})
+
+
+def assert_story(events: list[Json], story: list[str]) -> None:
+    """The run told these events in this order, with others between them, and ran on its own n8n
+    workflow, where no leg of the shared run workflow is dispatched."""
+    kinds = [event["kind"] for event in events]
+    rest = iter(kinds)
+    assert all(kind in rest for kind in story), f"{story} is not in order in {kinds}"
+    assert not OLD_ENGINE_KINDS & set(kinds), f"the shared run workflow ran it: {kinds}"
 
 
 @dataclass
