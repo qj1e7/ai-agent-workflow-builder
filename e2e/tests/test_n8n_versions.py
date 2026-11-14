@@ -137,8 +137,6 @@ def test_a_version_published_in_n8n_is_kept_graded_and_carded_and_undo_restores(
     assert settings_in_n8n(workflow_id, "once the member holds it") == laid_out
     published = member.publish_without_the_yes(workflow_id)
     assert settings_in_n8n(workflow_id, "once the member published") == laid_out
-    history = N8N_OWNER.call("GET", f"/workflow-history/workflow/{workflow_id}/version/{published}")
-    print(f"n8n's history keeps for a version: {sorted(history)}")
 
     view = swept(api, use_case_id, 2)
     assert view["grade"] == "writes_refused", view["findings"]

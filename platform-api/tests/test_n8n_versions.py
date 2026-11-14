@@ -554,3 +554,26 @@ async def test_the_watchlists_schedule_save_compares_with_the_draft_after_a_roll
     assert isinstance(saved, WatchlistView), saved
     [row] = await world.rows("SELECT n8n_draft_id FROM builder.use_cases")
     assert row["n8n_draft_id"] == world.n8n.workflows[moved.workflow_id]["versionId"] != draft
+
+
+def off_singapore_time(workflow: dict[str, Any]) -> None:
+    workflow["settings"] = {**workflow["settings"], "timezone": "America/New_York"}
+
+
+async def test_safety_undo_puts_the_settings_back_that_a_change_in_n8n_took_away(v: Versions):
+    """n8n keeps settings once for the workflow and runs every version with them, so a version it
+    still holds would run with the changed ones. Undo writes the kept workflow instead."""
+    use_case_id, workflow_id = await on_and_changed(v, off_singapore_time)
+    view = await v.view(use_case_id)
+    assert (view["grade"], view["findings"]) == (
+        "needs_a_fix",
+        ["It does not run on Singapore time."],
+    )
+    first = await version_row(v.own, use_case_id, 1)
+    undone = await v.rollback("carol", use_case_id, 1, in_use=2)
+    assert (undone.status_code, undone.json()["grade"]) == (200, "safe"), undone.text
+    held = v.n8n.workflows[workflow_id]
+    assert held["settings"]["timezone"] == "Asia/Singapore"
+    assert held["activeVersionId"] != first["n8n_version_id"], (
+        "written again, not published as held"
+    )

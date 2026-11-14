@@ -98,7 +98,9 @@ class FakeN8n:
 
     def _remember(self, workflow_id: str) -> None:
         workflow = self.workflows[workflow_id]
-        kept = {key: workflow[key] for key in ("name", "nodes", "connections", "settings")}
+        # n8n's history keeps a version's blocks and edges, never its settings, which the
+        # workflow holds once for every version (the live run of 26749b88 showed it).
+        kept = {key: workflow[key] for key in ("name", "nodes", "connections")}
         versions = self.history.setdefault(workflow_id, {})
         versions[workflow["versionId"]] = json.loads(json.dumps(kept))
 

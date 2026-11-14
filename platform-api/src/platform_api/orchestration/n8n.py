@@ -1126,7 +1126,18 @@ class N8nWorkflows:
         return await self._api.workflow(workflow_id)
 
     async def kept(self, workflow_id: str, version_id: str) -> dict[str, Any] | None:
-        return await self._api.version(workflow_id, version_id)
+        """A version n8n holds, as n8n runs it (see as_run)."""
+        workflow = await self._api.workflow(workflow_id)
+        return None if workflow is None else await self._as_run(workflow, version_id)
+
+    async def _as_run(self, workflow: N8nWorkflow, version_id: str) -> dict[str, Any] | None:
+        """n8n's history keeps a version's blocks and edges, never its settings: the workflow holds
+        those once, and runs every version with them. So a version is graded and compared with the
+        workflow's settings now, which are what its runs would have."""
+        version = await self._api.version(workflow.id, version_id)
+        if version is None:
+            return None
+        return {**version, "settings": workflow.document["settings"]}
 
     async def timeline(self, workflow_id: str) -> list[PublishEvent]:
         return await self._api.publish_timeline(workflow_id)
@@ -1153,7 +1164,7 @@ class N8nWorkflows:
         ):
             return ChangedInN8n()
         if live and held is not None:
-            in_n8n = await self._api.version(workflow_id, held)
+            in_n8n = await self._as_run(now, held)
             if in_n8n is not None and same_as_sent(document, in_n8n):
                 await self._api.publish(workflow_id, held)
                 await self._live(workflow_id, held)
