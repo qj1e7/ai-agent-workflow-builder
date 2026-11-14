@@ -223,3 +223,9 @@ async def test_an_empty_watchlist_s_slot_ends_quietly_and_makes_no_run(wl: Write
     assert await wl.call("101", AskCall(resume_url("101")), "Ask for a yes") == NothingToChange()
     assert await wl.runs() == []
     assert wl.h.agent.requests == []
+
+
+async def test_the_request_goes_to_teams_without_waiting_for_the_next_tick(wl: Writes):
+    """Asking puts the Teams card in the outbox, so the orchestrator is woken to send it now."""
+    assert isinstance(await check(wl, "101"), Waiting)
+    assert wl.nudged == [1]

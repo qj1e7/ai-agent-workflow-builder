@@ -10,7 +10,7 @@ twice. Each call that finds the run working moves its deadline on.
 import asyncio
 import contextlib
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import timedelta
 from typing import Any, Literal
@@ -290,6 +290,7 @@ class NodeCalls:
         tells: TellOutlet | None = None,
         failures: N8nFailures | None = None,
         switch: N8nSwitch | None = None,
+        nudge: Callable[[], None] | None = None,
     ) -> None:
         self._db = db
         self._activity = activity
@@ -307,6 +308,8 @@ class NodeCalls:
         self._tells = tells
         self._failures = failures
         self._switch = switch
+        self._nudge = nudge
+        """Wakes the orchestrator to send what a call put in its outbox now, as its own steps do."""
         self._store = Store()
         self._watch = WatchStore()
         self._book = CallBook()
@@ -430,7 +433,10 @@ class NodeCalls:
             return admitted
         work = await self._work(admitted, call)
         async with self._db.transaction("orchestration") as uow:
-            return await self._finish(uow, admitted, call, work)
+            result = await self._finish(uow, admitted, call, work)
+        if isinstance(result, Waiting) and self._nudge is not None:
+            self._nudge()
+        return result
 
     async def _take_off_if_deleted(self, execution: N8nExecutionId) -> None:
         """A deleted use case whose workflow n8n still runs, because the delete could not take it
