@@ -56,7 +56,13 @@ class Member:
         nodes = [node for node in held["nodes"] if node["name"] != "Ask for a yes"]
         connections = {k: v for k, v in held["connections"].items() if k != "Ask for a yes"}
         connections["Newer?"]["main"][0] = [{"node": "Create ticket", "type": "main", "index": 0}]
-        body = {"nodes": nodes, "connections": connections, "versionId": held["versionId"]}
+        # The editor sends the settings with every save; without them n8n clears them.
+        body = {
+            "nodes": nodes,
+            "connections": connections,
+            "settings": held["settings"],
+            "versionId": held["versionId"],
+        }
         self.call("PATCH", f"/workflows/{workflow_id}", body)
         saved = self.call("GET", f"/workflows/{workflow_id}")
         assert saved["versionId"] != held["versionId"], "the edit was saved as a new draft"
