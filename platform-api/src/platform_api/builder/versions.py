@@ -19,7 +19,7 @@ from platform_api.builder.models import (
     Via,
 )
 from platform_api.db import Connection, UnitOfWork, json
-from platform_api.orchestration import Day, Grade, Schedule, Unreadable, read_flow
+from platform_api.orchestration import Day, Grade, Schedule, Unreadable, read_flow, zone_name
 from platform_api.shared import UserId
 
 type Where = Literal["portal", "n8n"]
@@ -227,10 +227,18 @@ _DAY_OF_CRON: Mapping[tuple[object, ...], Day] = {
 }
 
 
-def schedule_of(document: Mapping[str, Any] | None) -> Schedule | None:
-    """When the workflow runs, read back from its one Schedule Trigger, for a rule the Planner
-    could have laid out: every day, or on days of the week, at an hour and minute. None for no
-    schedule, or for a rule the Portal's schedule can't hold."""
+def schedule_of(document: Mapping[str, Any] | None, team_zone: str) -> Schedule | None:
+    """When the workflow runs, read back from its one Schedule Trigger and the zone it runs on,
+    for a rule the Planner could have laid out: every day, or on days of the week, at an hour and
+    minute. None for no schedule, or for a rule the Portal's schedule can't hold."""
+    when = _when(document)
+    if when is None or document is None:
+        return None
+    return Schedule(*when, zone_name(_object(document.get("settings")), team_zone))
+
+
+def _when(document: Mapping[str, Any] | None) -> tuple[Day, str] | None:
+    """The day and time of day of its one Schedule Trigger."""
     triggers = [
         node
         for node in _objects(None if document is None else document.get("nodes"))
@@ -249,11 +257,11 @@ def schedule_of(document: Mapping[str, Any] | None) -> Schedule | None:
     at = f"{hour:02d}:{minute:02d}"
     field = interval.get("field", "days")
     if field == "days" and interval.get("daysInterval", 1) == 1:
-        return Schedule("every_day", at)
+        return "every_day", at
     days = interval.get("triggerAtDay")
     if field == "weeks" and interval.get("weeksInterval", 1) == 1 and isinstance(days, list):
         day = _DAY_OF_CRON.get(tuple(cast(list[object], days)))
-        return None if day is None else Schedule(day, at)
+        return None if day is None else (day, at)
     return None
 
 
@@ -266,10 +274,10 @@ def _objects(value: object) -> list[dict[str, Any]]:
     return [_object(item) for item in items if _object(item)]
 
 
-def schedule_words(schedule: Schedule) -> str:
+def schedule_words(day: Day, at: str) -> str:
     """As "every day at 7:30"."""
-    hour, minute = schedule.at.split(":")
-    return f"{DAY_WORDS[schedule.day]} at {int(hour)}:{minute}"
+    hour, minute = at.split(":")
+    return f"{DAY_WORDS[day]} at {int(hour)}:{minute}"
 
 
 SETTING_WORDS: Mapping[str, str] = {
@@ -314,12 +322,12 @@ def changes_between(before: Mapping[str, Any] | None, after: Mapping[str, Any]) 
     if old is None:
         return ["Published in n8n."]
     lines: list[str] = []
-    when_before, when_after = schedule_of(before), schedule_of(after)
+    when_before, when_after = _when(before), _when(after)
     if when_before != when_after:
         lines.append(
             "No longer runs on a schedule."
             if when_after is None
-            else f"Now runs {schedule_words(when_after)}."
+            else f"Now runs {schedule_words(*when_after)}."
         )
     schedule_said = when_before != when_after and when_after is not None
     lines.extend(f"Deleted “{name}”." for name in old.blocks if name not in new.blocks)

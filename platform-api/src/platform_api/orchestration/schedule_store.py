@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from platform_api.db import Connection, Database
 from platform_api.orchestration.people import roles_from
-from platform_api.orchestration.schedule import DEFAULT_AT, DEFAULT_DAY, TIME_ZONE, Schedule
+from platform_api.orchestration.schedule import DEFAULT_AT, DEFAULT_DAY, Schedule
 from platform_api.shared import Principal, Role, UseCaseId, UserId
 
 type ScheduleHold = Literal["owner_removed", "owner_not_an_operator"]
@@ -120,8 +120,9 @@ class ScheduleBook:
         assert row is not None
         return _saved(row)
 
-    async def save_default(self, use_case_id: UseCaseId, owner: Principal) -> None:
-        """Monday 09:00 for a new watchlist. A schedule already there, or one turned off, stays."""
+    async def save_default(self, use_case_id: UseCaseId, owner: Principal, time_zone: str) -> None:
+        """Monday 09:00 in the team time zone for a new watchlist. A schedule already there, or
+        one turned off, stays."""
         async with self._db.transaction("orchestration") as uow:
             await uow.conn.execute(
                 "INSERT INTO orchestration.schedules (use_case_id, day, at, time_zone, "
@@ -131,7 +132,7 @@ class ScheduleBook:
                     use_case_id,
                     DEFAULT_DAY,
                     DEFAULT_AT,
-                    TIME_ZONE,
+                    time_zone,
                     owner.user_id,
                     owner.display,
                     uow.now,

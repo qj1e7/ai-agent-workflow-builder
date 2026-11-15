@@ -69,6 +69,8 @@ services:
       DB_POSTGRESDB_USER: n8n
       DB_POSTGRESDB_PASSWORD: ${N8N_DB_PASSWORD:?run deploy/make-env.sh}
       WEBHOOK_URL: http://n8n:5678/
+      # A workflow set to n8n's default zone runs on the team's, as platform-api reads it.
+      GENERIC_TIMEZONE: ${TEAM_TIME_ZONE:-Asia/Singapore}
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?run deploy/make-env.sh}
       N8N_DIAGNOSTICS_ENABLED: "false"
       N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
@@ -148,6 +150,8 @@ services:
       N8N_OWNER_PASSWORD: ${N8N_OWNER_PASSWORD:?run deploy/make-env.sh}
       STEP_KEY: ${STEP_KEY:?run deploy/make-env.sh}
       PLATFORM_INTERNAL_URL: http://platform-api:8000
+      # The self-test runs on the team time zone, as every workflow does.
+      TEAM_TIME_ZONE: ${TEAM_TIME_ZONE:-Asia/Singapore}
 
   platform-api:
     <<: *platform-image
@@ -211,6 +215,9 @@ services:
       JIRA_BROWSE_URL: ${JIRA_BROWSE_URL:-}
       # The Jira project the watchlist raises tickets in. MOCK is the practice Jira's.
       WATCHLIST_JIRA_PROJECT: ${WATCHLIST_JIRA_PROJECT:-MOCK}
+      # The zone the team works in. The Portal's times, a new schedule, the agents' today and the
+      # Jira days are in it, and n8n runs on it.
+      TEAM_TIME_ZONE: ${TEAM_TIME_ZONE:-Asia/Singapore}
       # Confluence (ENGINE-PLAN E12). Unset keeps it not connected. The wiki's address, such as
       # https://your-site.atlassian.net/wiki, and the only pages read, as id=title separated by ;.
       CONFLUENCE_BASE_URL: ${CONFLUENCE_BASE_URL:-}

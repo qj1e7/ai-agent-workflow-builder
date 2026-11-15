@@ -636,6 +636,23 @@ def test_the_error_workflow_and_the_self_test_are_loaded_active_and_every_failur
     assert recorded["self_test_failure"] == held["self_test_failure"]["id"]
 
 
+@pytest.mark.parametrize(
+    ("setting", "zone"), [(None, "Asia/Singapore"), ("Europe/London", "Europe/London")]
+)
+def test_the_self_test_runs_on_the_team_time_zone(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch, setting: str | None, zone: str
+):
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n([]))
+    env = env_for(postgres.owner) | ({} if setting is None else {"TEAM_TIME_ZONE": setting})
+
+    assert main(env) == 0
+
+    [self_test] = by_name(n8n, "self_test_failure")
+    assert self_test["settings"]["timezone"] == zone
+    assert engine_status(postgres.owner) == READY
+
+
 class DropsCallerPolicy(FakeN8n):
     """An n8n that does not keep the error workflow's callerPolicy."""
 

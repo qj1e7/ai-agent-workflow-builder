@@ -5,6 +5,7 @@ Each draft must match its golden document in tests/golden/n8n/. After a delibera
 
 import json
 import os
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,7 @@ from platform_api.builder.n8n_draft import (
     check_draft,
 )
 from platform_api.orchestration import ASK_EXITS, Schedule, grade
+from tests.support import TEAM_ZONE
 
 GOLDEN = Path(__file__).parent / "golden" / "n8n"
 ERROR_WORKFLOW = "wfErrorReporter01"
@@ -46,25 +48,33 @@ RELEASE_CHECK = LayoutPlan(
     "uc_01JB8RELEASE",
     "LangGraph release check",
     LINK,
-    Schedule("every_day", "08:00"),
+    Schedule("every_day", "08:00", TEAM_ZONE),
     (CHECKER,),
     ERROR_WORKFLOW,
+    TEAM_ZONE,
 )
 AGENT_CARDS = LayoutPlan(
     "uc_01JB9CARDS",
     "Weekly release and sprint check",
     LINK,
-    Schedule("monday", "09:00"),
+    Schedule("monday", "09:00", TEAM_ZONE),
     (DIGEST, CHECKER),
     ERROR_WORKFLOW,
+    TEAM_ZONE,
 )
 WATCHLIST = LayoutPlan(
-    "uc_01JC2WATCH", "Software watchlist", LINK, Schedule("monday", "09:00"), (), ERROR_WORKFLOW
+    "uc_01JC2WATCH",
+    "Software watchlist",
+    LINK,
+    Schedule("monday", "09:00", TEAM_ZONE),
+    (),
+    ERROR_WORKFLOW,
+    TEAM_ZONE,
 )
 
 
 def drafted(laid: dict[str, Any], plan: LayoutPlan) -> Checked:
-    checked = check_draft(laid, plan.use_case_id, ERROR_WORKFLOW)
+    checked = check_draft(laid, plan.use_case_id, ERROR_WORKFLOW, plan.time_zone)
     assert isinstance(checked, Checked), checked
     return checked
 
@@ -131,7 +141,7 @@ def test_agent_cards_run_in_order_and_end_with_the_yes_and_the_write() -> None:
 
 
 def test_agent_cards_that_only_read_have_no_yes_and_no_write() -> None:
-    plan = LayoutPlan("uc_reads", "Sprint digest", LINK, None, (DIGEST,), ERROR_WORKFLOW)
+    plan = LayoutPlan("uc_reads", "Sprint digest", LINK, None, (DIGEST,), ERROR_WORKFLOW, TEAM_ZONE)
     checked = drafted(lay_out(plan), plan)
     kinds = {node["type"] for node in checked.document["nodes"]}
     assert "CUSTOM.wabAskForYes" not in kinds
@@ -146,13 +156,16 @@ def test_the_watchlist_reads_every_watched_software_then_checks_them_at_once() -
     assert checked.graded.grade == "safe"
 
 
-def test_the_schedule_always_names_its_hour_and_minute_in_singapore_time() -> None:
-    document = lay_out(RELEASE_CHECK)
+@pytest.mark.parametrize("zone", [TEAM_ZONE, "Europe/London"])
+def test_the_schedule_always_names_its_hour_and_minute_in_the_team_time_zone(zone: str) -> None:
+    plan = replace(RELEASE_CHECK, schedule=Schedule("every_day", "08:00", zone), time_zone=zone)
+    document = lay_out(plan)
     [when] = [n for n in document["nodes"] if n["type"] == "n8n-nodes-base.scheduleTrigger"]
     assert when["parameters"] == {
         "rule": {"interval": [{"field": "days", "triggerAtHour": 8, "triggerAtMinute": 0}]}
     }
-    assert document["settings"]["timezone"] == "Asia/Singapore"
+    assert document["settings"]["timezone"] == zone
+    assert drafted(document, plan).graded.grade == "safe"
 
 
 def test_the_same_use_case_always_gets_the_same_document() -> None:
@@ -164,13 +177,13 @@ def test_the_same_use_case_always_gets_the_same_document() -> None:
 @pytest.mark.parametrize("plan", [RELEASE_CHECK, AGENT_CARDS])
 def test_a_layout_on_its_own_would_be_refused_its_writes(plan: LayoutPlan) -> None:
     """The yes is the checker's: without it the layout grades writes_refused."""
-    assert grade(lay_out(plan), ERROR_WORKFLOW).grade == "writes_refused"
+    assert grade(lay_out(plan), ERROR_WORKFLOW, TEAM_ZONE).grade == "writes_refused"
 
 
 def test_a_layout_with_a_block_that_is_not_on_is_never_saved() -> None:
     laid = lay_out(RELEASE_CHECK)
     laid["nodes"].append({"id": "h", "name": "Post it", "type": "n8n-nodes-base.httpRequest"})
-    refused = check_draft(laid, RELEASE_CHECK.use_case_id, ERROR_WORKFLOW)
+    refused = check_draft(laid, RELEASE_CHECK.use_case_id, ERROR_WORKFLOW, TEAM_ZONE)
     assert isinstance(refused, DraftRefused)
     assert [f.block for f in refused.findings] == ["Post it"]
 
@@ -183,6 +196,6 @@ def test_a_write_the_checker_cannot_put_behind_one_yes_is_never_saved() -> None:
     laid["connections"]["Ask for a yes"]["main"][no] = [
         {"node": CREATE_TICKET, "type": "main", "index": 0}
     ]
-    refused = check_draft(laid, RELEASE_CHECK.use_case_id, ERROR_WORKFLOW)
+    refused = check_draft(laid, RELEASE_CHECK.use_case_id, ERROR_WORKFLOW, TEAM_ZONE)
     assert isinstance(refused, DraftRefused)
     assert {f.grade for f in refused.findings} == {"needs_a_fix"}

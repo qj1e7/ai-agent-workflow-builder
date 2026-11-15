@@ -44,9 +44,10 @@ interface Setup {
   readonly browseUrl?: string | null
   readonly home?: HomeOut
   readonly watchlist?: WatchlistView
+  readonly now?: Date
 }
 
-function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = null, home, watchlist }: Setup = {}): string {
+function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = null, home, watchlist, now = MORNING }: Setup = {}): string {
   const session = oidc ? oidcSession : createDevSession(null)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   const key = ['me', session.cacheScope()]
@@ -60,7 +61,7 @@ function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = nul
       <ApiProvider session={session} platformFetch={fetch} origin={ORIGIN}>
         <TicketLinksProvider config={{ jiraBrowseUrl: browseUrl }}>
           <MemoryRouter initialEntries={[path]}>
-            <App now={() => MORNING} />
+            <App now={() => now} />
           </MemoryRouter>
         </TicketLinksProvider>
       </ApiProvider>
@@ -245,6 +246,16 @@ describe('the pages', () => {
   it('open Home with the greeting in Singapore time, as a line above the heading', () => {
     const main = text(mainOf(render({ home: ALICE_HOME })))
     expect(main).toContain('Good morning, Alice What should run by itself?')
+  })
+
+  it('greet Alice and give Home’s times in the team time zone /api/v1/me names', () => {
+    const evening = new Date('2026-10-28T20:00:00Z')
+    const london = text(mainOf(render({ home: ALICE_HOME, me: { ...ALICE, time_zone: 'Europe/London' }, now: evening })))
+    expect(london).toContain('Good evening, Alice')
+    expect(london).toContain('Software watchlist stopped Wed 4 Nov at 2:14')
+    const singapore = text(mainOf(render({ home: ALICE_HOME, now: evening })))
+    expect(singapore, 'an answer that names no zone is Singapore’s').toContain('Good morning, Alice')
+    expect(singapore).toContain('Software watchlist stopped Wed 4 Nov at 10:14')
   })
 
   it('never use the retired names', () => {

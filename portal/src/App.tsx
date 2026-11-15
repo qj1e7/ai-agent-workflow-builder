@@ -4,6 +4,7 @@ import { isOperator, notOnTheList } from './api/me'
 import { useMe } from './api/queries'
 import { useNow } from './api/ticking'
 import { ChatProvider } from './screens/home/ChatProvider'
+import { setTeamZone } from './screens/workflows/times'
 import { AskToBeAdded } from './shell/AskToBeAdded'
 import { BackToChat } from './shell/BackToChat'
 import { Header } from './shell/Header'
@@ -55,6 +56,8 @@ const WALL_CLOCK = () => new Date()
 
 export function App({ now = WALL_CLOCK }: { now?: () => Date }) {
   const me = useMe()
+  // Here, not in an effect, so the pages below render their times in the zone from the start.
+  setTeamZone(me.data?.time_zone)
   const at = useNow(now)
   const { pathname } = useLocation()
   const fromChat = useFromChat()
