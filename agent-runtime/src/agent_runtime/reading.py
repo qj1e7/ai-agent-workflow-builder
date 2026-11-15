@@ -1201,7 +1201,7 @@ def render_schedule(schedule: str | None, text: str) -> Rendered:
 
 INSTRUCTION: Final = re.compile(
     r"\b(?:instructions?|rules|prompts?|developer\s+mode|pretend|ignore|disregard)\b|"
-    r"\b(?:reply|respond|answer|say|repeat|write)\s+(?:that|with|only|exactly|this|back)\b",
+    r"\b(?:reply|respond|answer|say|repeat)\s+(?:that|with|only|exactly|back)\b",
     re.IGNORECASE,
 )
 """Words that tell the Planner what to say or to drop its rules, as "Ignore all previous
