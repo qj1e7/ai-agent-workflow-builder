@@ -286,6 +286,8 @@ def test_every_job_is_registered_once() -> None:
         "answer",
         "anything",
         "reply",
+        "reply_gate",
+        "red_team",
     ]
 
 

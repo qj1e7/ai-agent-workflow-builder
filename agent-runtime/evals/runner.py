@@ -25,11 +25,22 @@ from evals.draft import DRAFT
 from evals.explain import EXPLAIN
 from evals.jobs import Answer, Case, Job, marked
 from evals.providers import PROVIDERS, Env, NotRun, Target, plan
-from evals.reply import REPLY
+from evals.red_team import RED_TEAM
+from evals.reply import REPLY, REPLY_GATE
 from evals.report import report
 from evals.summarise import SUMMARISE
 
-JOBS: tuple[Job[Any], ...] = (SUMMARISE, EXPLAIN, DRAFT, CHOOSE, ANSWER, ANYTHING, REPLY)
+JOBS: tuple[Job[Any], ...] = (
+    SUMMARISE,
+    EXPLAIN,
+    DRAFT,
+    CHOOSE,
+    ANSWER,
+    ANYTHING,
+    REPLY,
+    REPLY_GATE,
+    RED_TEAM,
+)
 PRICING = Path(__file__).parent / "pricing.json"
 # CI keeps the endpoints as secrets too. A URL can hold a password or a private host name.
 URL_ENVS = ("AZURE_OPENAI_ENDPOINT", "OLLAMA_BASE_URL", "AGENT_MODEL_BASE_URL")
