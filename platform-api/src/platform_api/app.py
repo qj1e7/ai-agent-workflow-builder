@@ -112,7 +112,7 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.step_key = settings.step_key
-    app.state.answer_limit = AnswerLimit()
+    app.state.answer_limit = AnswerLimit(per_minute=settings.planner_answers_per_minute)
     app.state.authenticator = auth.authenticator_for(settings.auth)
     app.add_middleware(RefuseNul)
     app.add_middleware(RefuseDeepJson, max_bytes=settings.max_body_bytes)

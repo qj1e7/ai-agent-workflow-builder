@@ -8,7 +8,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Final
 
-ANSWERS_PER_MINUTE: Final = 20
+from platform_api.shared import ANSWERS_PER_MINUTE
+
 TOO_MANY: Final = (
     "You've asked the Planner a lot in the last minute. Wait a moment, then ask again."
 )

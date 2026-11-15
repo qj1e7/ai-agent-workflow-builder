@@ -59,6 +59,9 @@ services:
   platform-api:
     environment:
       N8N_STAFF_ACCESS: "on"
+      # The browser suite sends many requests to the Planner as one person, far past the 20 a
+      # minute a person gets (ADR 0047).
+      PLANNER_ANSWERS_PER_MINUTE: "1000"
       CONFLUENCE_BASE_URL: http://mock-confluence:8400/wiki
       CONFLUENCE_EMAIL: bot@codesparks.test
       CONFLUENCE_API_TOKEN: mock-confluence-token

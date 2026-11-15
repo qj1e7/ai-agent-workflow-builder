@@ -9,6 +9,7 @@ import httpx
 import pytest
 
 from platform_api.app import create_app
+from platform_api.auth import ConfigError
 from platform_api.builder import Builder, PlannerFront, Watchlist
 from platform_api.builder import planner as planner_module
 from platform_api.builder.answer_limit import TOO_MANY, AnswerLimit
@@ -97,6 +98,7 @@ from platform_api.orchestration.runs import RunState as RunPhase
 from platform_api.orchestration.spec import Task
 from platform_api.orchestration.store import RunRecord
 from platform_api.orchestration.write_actions import Proposal, WriteAction
+from platform_api.settings import answers_per_minute_from_env
 from platform_api.shared import (
     ApprovalId,
     Digest,
@@ -2124,3 +2126,11 @@ def test_the_limit_counts_each_person_over_a_rolling_minute():
     assert not limit.allow("alice")
     now[0] = 60.0
     assert limit.allow("alice")
+
+
+def test_the_limit_is_a_setting():
+    assert answers_per_minute_from_env({}) == 20
+    assert answers_per_minute_from_env({"PLANNER_ANSWERS_PER_MINUTE": "1000"}) == 1000
+    for bad in ("0", "-3", "lots"):
+        with pytest.raises(ConfigError):
+            answers_per_minute_from_env({"PLANNER_ANSWERS_PER_MINUTE": bad})
