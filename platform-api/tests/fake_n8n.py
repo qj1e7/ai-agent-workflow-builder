@@ -77,6 +77,8 @@ class FakeN8n:
         default_factory=list[tuple[str, str | None]]
     )
     """Each account deleted, with the project its own space moved to."""
+    invite_link: str | None = None
+    """The password link n8n answers for an invite. Unset, each invite gets its own."""
     transfer_keeps: Callable[[dict[str, Any]], dict[str, Any]] = lambda settings: settings
     """What a transfer leaves of the workflow's settings. Unchanged, as E6 saw live."""
     transfer_answers: list[int] = field(default_factory=list[int])
@@ -452,7 +454,7 @@ class FakeN8n:
             self.projects.append(
                 {"id": f"proj-{user_id}", "type": "personal", "name": email, "creatorId": user_id}
             )
-        link = f"http://n8n/signup?token=secret-{user_id}-{len(self.calls)}"
+        link = self.invite_link or f"http://n8n/signup?token=secret-{user_id}-{len(self.calls)}"
         user = {"id": user_id, "email": email, "inviteAcceptUrl": link, "emailSent": False}
         return {"user": user, "error": ""}
 
