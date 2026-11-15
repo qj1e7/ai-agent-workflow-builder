@@ -76,8 +76,8 @@ class Staffed:
         await self.holding.release()
         return list(await self.staff.settle(self.holding.holds))
 
-    def bootstrapped(self, ready: bool) -> None:
-        loaded = LoadedWorkflow(ERROR_WORKFLOW_NAME, ERROR_WORKFLOW, True, "sha", PLATFORM_PROJECT)
+    def bootstrapped(self, ready: bool, project: str | None = PLATFORM_PROJECT) -> None:
+        loaded = LoadedWorkflow(ERROR_WORKFLOW_NAME, ERROR_WORKFLOW, True, "sha", project)
         record_status(self.postgres.owner, ready=ready, detail="d", workflows=[loaded])
 
     async def person(self, person: str) -> dict[str, Any]:
@@ -155,6 +155,17 @@ async def s(lab: Lab, postgres: PostgresUrls) -> AsyncIterator[Staffed]:
     staffed = Staffed(N8nLab(lab, n8n), staff, holding, postgres)
     staffed.bootstrapped(ready=True)
     yield staffed
+
+
+async def version_rows(s: Staffed, use_case_id: str) -> list[int]:
+    async with s.lab.h.db.connection("builder") as conn:
+        rows = await (
+            await conn.execute(
+                "SELECT version FROM builder.use_case_versions WHERE use_case_id = %s",
+                (use_case_id,),
+            )
+        ).fetchall()
+    return [row["version"] for row in rows]
 
 
 async def held(s: Staffed) -> tuple[str, str]:
@@ -343,13 +354,59 @@ async def test_a_publish_by_an_account_since_ended_is_kept_with_nobody_guessed(s
     assert (second["published_by"], second["published_in"]) == (None, "n8n")
 
 
-async def test_a_delete_ends_the_hold(s: Staffed):
+async def test_a_delete_takes_the_workflow_back_before_it_ends_the_hold(s: Staffed):
     await s.member()
-    use_case_id, _ = await held(s)
+    use_case_id, workflow_id = await held(s)
     assert (await s.open("carol", use_case_id)).status_code == 200
+    s.bootstrapped(ready=True, project=None)
+    refused = await s.lab.move("alice", "delete", use_case_id)
+    assert refused.status_code == 503, "n8n could not take it back, so nothing was deleted"
+    assert await s.held_by(use_case_id) == "carol"
+    assert s.n8n.home_of(workflow_id) != PLATFORM_PROJECT
+
+    s.bootstrapped(ready=True)
+    s.n8n.calls.clear()
     assert (await s.lab.move("alice", "delete", use_case_id)).status_code == 200
     assert await s.held_by(use_case_id) is None
     assert not await s.holding.holds(CAROL)
+    moved = s.n8n.calls.index(f"PUT /api/v1/workflows/{workflow_id}/transfer")
+    archived = s.n8n.calls.index(f"POST /api/v1/workflows/{workflow_id}/archive")
+    assert moved < archived, "back in the platform's project before n8n removes it"
+
+
+async def test_platform_writes_wait_while_someone_holds_the_workflow(s: Staffed):
+    n8n_user = await s.member()
+    use_case_id, workflow_id = await held(s)
+    assert (await s.open("carol", use_case_id)).status_code == 200
+
+    def later(workflow: dict[str, Any]) -> None:
+        workflow["nodes"][0]["notes"] = "changed by Carol in n8n"
+
+    s.n8n.publish_as(workflow_id, n8n_user, later)
+    assert s.lab.builder.sweep is not None
+    assert len(await s.lab.builder.sweep.sweep()) == 1
+    held_words = f"Carol has it open in n8n since {NOW.astimezone(s.holding._zone):%H:%M}."
+    take_it_back = f"{held_words} Take it back to change it here."
+    for path in (
+        f"/api/v1/use-cases/{use_case_id}/versions/1/rollback",
+        f"/api/v1/use-cases/{use_case_id}/add-the-yes-back",
+    ):
+        refused = await s.call("alice", "POST", path, {"via": "page", "in_use": 2})
+        assert (refused.status_code, refused.json()["detail"]) == (409, take_it_back), path
+    assert (await s.lab.move("alice", "pause", use_case_id)).status_code == 200, "pause still"
+    resumed = await s.lab.move("alice", "resume", use_case_id)
+    assert (resumed.status_code, resumed.json()["detail"]) == (409, take_it_back)
+    assert len(await version_rows(s, use_case_id)) == 2, "nothing was published over her work"
+
+    assert (await s.take_back("carol", use_case_id)).status_code == 200
+    assert (await s.lab.move("alice", "resume", use_case_id)).status_code == 200
+    rolled = await s.call(
+        "alice",
+        "POST",
+        f"/api/v1/use-cases/{use_case_id}/versions/1/rollback",
+        {"via": "page", "in_use": 2},
+    )
+    assert rolled.status_code == 200, rolled.text
 
 
 async def test_a_schedule_edit_is_refused_while_someone_holds_the_workflow(s: Staffed):
@@ -364,6 +421,7 @@ async def test_a_schedule_edit_is_refused_while_someone_holds_the_workflow(s: St
     )
     assert saved.status_code == 409
     assert saved.json()["detail"].startswith("Carol has it open in n8n since ")
+    assert saved.json()["detail"].endswith("Take it back to change it here.")
 
 
 async def test_my_n8n_shows_the_password_link_only_to_its_person_and_only_until_used(

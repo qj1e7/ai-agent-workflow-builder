@@ -85,11 +85,11 @@ def refused_in_n8n(
             return HTTPException(422, [{"loc": ["body"], "msg": f.text} for f in findings])
 
 
-def _moved(found: UseCaseView | N8nNotReady | NotSafe | None) -> UseCaseView:
+def _moved(found: UseCaseView | N8nNotReady | NotSafe | HeldInN8n | None) -> UseCaseView:
     match found:
         case None:
             raise HTTPException(404, NO_SUCH)
-        case N8nNotReady() | NotSafe():
+        case N8nNotReady() | NotSafe() | HeldInN8n():
             raise refused_in_n8n(found)
         case view:
             return view
@@ -141,11 +141,13 @@ async def turn_on_use_case(
     "/use-cases/{use_case_id}",
     description="Takes the workflow out of the list and stops it running. Nothing is erased: "
     "its past runs stay readable, a run waiting for a yes can still be decided, and it can be "
-    "restored for a day. Deleting it again answers the same.",
+    "restored for a day. Deleting it again answers the same. One someone holds in n8n is taken "
+    "back first, and stays theirs when n8n does not move it.",
     responses={
         **OPERATORS_ONLY,
         404: error_response(NO_SUCH),
         409: error_response(WATCHLIST_STAYS),
+        503: N8N_NOT_READY,
     },
 )
 async def delete_use_case(
@@ -156,6 +158,8 @@ async def delete_use_case(
             return deleted
         case WatchlistStays():
             raise HTTPException(409, WATCHLIST_STAYS)
+        case N8nNotReady() as refused:
+            raise refused_in_n8n(refused)
         case None:
             raise HTTPException(404, NO_SUCH)
 

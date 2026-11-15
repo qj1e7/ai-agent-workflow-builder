@@ -77,7 +77,7 @@ from platform_api.builder.n8n_draft import (
     check_draft,
 )
 from platform_api.builder.n8n_facts import BuilderWorkflowFacts, ReleaseReader
-from platform_api.builder.n8n_holds import HeldInN8n, Holding, let_go
+from platform_api.builder.n8n_holds import HeldInN8n, Holding
 from platform_api.builder.planner import ChangedInN8nReply
 from platform_api.builder.planning import (
     CardPlanner,
@@ -544,7 +544,7 @@ class Builder:
 
     async def pause_use_case(
         self, use_case_id: str, principal: Principal, via: Via = "page"
-    ) -> UseCaseView | N8nNotReady | NotSafe | None:
+    ) -> UseCaseView | N8nNotReady | NotSafe | HeldInN8n | None:
         moved = await self._move(
             use_case_id,
             lambda state, _, now: pause(state, now, principal.user_id),
@@ -555,7 +555,7 @@ class Builder:
 
     async def resume_use_case(
         self, use_case_id: str, principal: Principal, via: Via = "page"
-    ) -> UseCaseView | N8nNotReady | NotSafe | None:
+    ) -> UseCaseView | N8nNotReady | NotSafe | HeldInN8n | None:
         moved = await self._move(
             use_case_id,
             lambda state, _template, _now: resume(state),
@@ -566,7 +566,7 @@ class Builder:
 
     async def turn_on_use_case(
         self, use_case_id: str, principal: Principal
-    ) -> UseCaseView | N8nNotReady | NotSafe | None:
+    ) -> UseCaseView | N8nNotReady | NotSafe | HeldInN8n | None:
         """Publishes a draft's version 1 and turns it on. An own workflow reads On only once n8n
         has every trigger live (ENGINE-PLAN 2.5). Asking again changes nothing."""
         moved = await self._move(
@@ -575,19 +575,22 @@ class Builder:
         return await self._after(use_case_id, principal, moved)
 
     async def _after(
-        self, use_case_id: str, principal: Principal, moved: Moved | N8nNotReady | NotSafe | None
-    ) -> UseCaseView | N8nNotReady | NotSafe | None:
+        self,
+        use_case_id: str,
+        principal: Principal,
+        moved: Moved | N8nNotReady | NotSafe | HeldInN8n | None,
+    ) -> UseCaseView | N8nNotReady | NotSafe | HeldInN8n | None:
         match moved:
             case None | AlreadyDeleted():
                 return None
-            case N8nNotReady() | NotSafe():
+            case N8nNotReady() | NotSafe() | HeldInN8n():
                 return moved
             case _:
                 return await self.get_use_case(use_case_id, principal)
 
     async def delete_use_case(
         self, use_case_id: str, principal: Principal
-    ) -> UseCaseDeleted | WatchlistStays | None:
+    ) -> UseCaseDeleted | WatchlistStays | N8nNotReady | None:
         def move(state: Lifecycle, template: str, now: datetime) -> Lifecycle | WatchlistStays:
             if template == SOFTWARE_WATCHLIST.key:
                 return WatchlistStays()
@@ -601,8 +604,8 @@ class Builder:
                     deleted_at=deleted.at,
                     restore_until=deleted.restore_until,
                 )
-            case WatchlistStays() as stays:
-                return stays
+            case WatchlistStays() | N8nNotReady() as refused:
+                return refused
             case _:
                 return None
 
@@ -814,6 +817,7 @@ class Builder:
         publisher is kept with it, because its runs are their work too (ADR 0026). Asked again
         once done, it answers the same."""
         async with self._db.transaction("builder") as uow:
+            await hold_workflow(uow.conn, use_case_id, alone=True)
             row = await (
                 await uow.conn.execute(_USE_CASE_ROW + " FOR UPDATE", (use_case_id,))
             ).fetchone()
@@ -824,6 +828,10 @@ class Builder:
                 return None
             if row["deleted_in_n8n_at"] is not None:
                 return DeletedInN8n()
+            if self.holding is not None:
+                held = await self.holding.refused_while_held(uow.conn, use_case_id)
+                if held is not None:
+                    return held
             versions = await versions_of(uow.conn, use_case_id)
             current = versions[0]
             picked = pick(versions)
@@ -981,7 +989,7 @@ class Builder:
 
     async def _move(
         self, use_case_id: str, move: Move, by: UserId, recorded: Recorded | None = None
-    ) -> Moved | N8nNotReady | NotSafe | None:
+    ) -> Moved | N8nNotReady | NotSafe | HeldInN8n | None:
         """An own workflow's n8n state follows the move before it is recorded: on is published
         with every trigger live, anything else is off. The lock is held across n8n's answer, so
         moves of one workflow never cross there either."""
@@ -1003,6 +1011,15 @@ class Builder:
             before = lifecycle_of(row)
             after = move(before, row["template"], uow.now)
             if isinstance(after, Draft | On | Paused | Deleted) and after != before:
+                if _own(row) and row["held_by"] is not None and self.holding is not None:
+                    if isinstance(after, Deleted):
+                        # Back in the platform's project first, so a delete n8n does not finish
+                        # never leaves the workflow in a member's space with no hold on record.
+                        refused = await self.holding.back_in(uow, use_case_id, by)
+                        if refused is not None:
+                            return N8nNotReady(refused.words)
+                    elif is_on(after):
+                        return await self.holding.refused_while_held(uow.conn, use_case_id)
                 if _own(row) and isinstance(before, Deleted) and not isinstance(after, Deleted):
                     back = await self._bring_back(uow, use_case_id, row)
                     if isinstance(back, N8nNotReady):
@@ -1013,9 +1030,6 @@ class Builder:
                         return refused
                     if is_on(after):
                         await _mark_published(uow, use_case_id, row["current_version"], by)
-                if isinstance(after, Deleted) and row["held_by"] is not None:
-                    # A delete takes the workflow out of n8n, wherever it sits, so nobody holds it.
-                    await let_go(uow, use_case_id, by)
                 columns = to_columns(after)
                 await uow.conn.execute(
                     "UPDATE builder.use_cases SET paused_at = %s, paused_by = %s,"

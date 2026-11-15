@@ -10,7 +10,7 @@
     {
       "name": "About this workflow",
       "type": "n8n-nodes-base.stickyNote",
-      "kind": "note",
+      "kind": "other",
       "position": [
         0.0,
         -400.0

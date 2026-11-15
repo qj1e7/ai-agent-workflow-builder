@@ -2461,6 +2461,14 @@
         ],
         "type": "string"
       },
+      "BlockKind": {
+        "enum": [
+          "agent",
+          "approval",
+          "write_action"
+        ],
+        "type": "string"
+      },
       "BlockView": {
         "additionalProperties": false,
         "properties": {
@@ -2473,7 +2481,7 @@
             "type": "string"
           },
           "kind": {
-            "$ref": "#/components/schemas/platform_api__builder__models__BlockKind"
+            "$ref": "#/components/schemas/BlockKind"
           },
           "name": {
             "title": "Name",
@@ -6944,15 +6952,8 @@
             "type": "boolean"
           },
           "kind": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/platform_api__orchestration__node_classes__BlockKind"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "What the block is to the safety checker. Null for a type it does not know."
+            "$ref": "#/components/schemas/N8nBlockKind",
+            "description": "What the block does, as on the set-up card. other is a sticky note, one of n8n's data blocks, or a type the safety checker does not know; type says which."
           },
           "name": {
             "title": "Name",
@@ -13899,35 +13900,6 @@
         ],
         "title": "WriteOut",
         "type": "object"
-      },
-      "platform_api__builder__models__BlockKind": {
-        "enum": [
-          "agent",
-          "approval",
-          "write_action"
-        ],
-        "type": "string"
-      },
-      "platform_api__orchestration__node_classes__BlockKind": {
-        "enum": [
-          "schedule",
-          "start",
-          "manual",
-          "error",
-          "read",
-          "agent",
-          "propose",
-          "ask",
-          "write",
-          "tell",
-          "report",
-          "branch",
-          "merge",
-          "end",
-          "note",
-          "shape"
-        ],
-        "type": "string"
       }
     },
     "securitySchemes": {

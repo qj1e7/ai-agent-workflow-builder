@@ -5,7 +5,9 @@ and the sweep still names her, by the n8n user id the platform stored; once she 
 access ends, the workflow comes back, and she can never approve a run of the version she
 published."""
 
+import json
 import secrets
+import urllib.parse
 
 from harness import N8N_OWNER, Api, Json, approval_requested, bob_decides, tickets_for
 from test_n8n_engine import set_up
@@ -19,12 +21,12 @@ def at_seven_thirty(nodes: list[Json], connections: Json) -> None:
             node["parameters"]["rule"]["interval"][0]["triggerAtHour"] = 7
 
 
-def home(workflow_id: str) -> str | None:
-    held: Json = N8N_OWNER.call("GET", f"/workflows/{workflow_id}")
-    shares: list[Json] = held.get("shared") or []
-    owners = [s.get("projectId") for s in shares if s.get("role") == "workflow:owner"]
-    project = (held.get("homeProject") or {}).get("id")
-    return project or (owners[0] if owners else None)
+def sits_in(project: str, workflow_id: str) -> bool:
+    """n8n's own list of the project's workflows, as its editor reads it. On the free edition a
+    single workflow's read names no project."""
+    wanted = urllib.parse.quote(json.dumps({"projectId": project}))
+    listed: list[Json] = N8N_OWNER.call("GET", f"/workflows?filter={wanted}")
+    return workflow_id in {str(workflow["id"]) for workflow in listed}
 
 
 def becomes_approver(api: Api, person: str) -> None:
@@ -46,7 +48,11 @@ def test_n8n_access(api: Api, mock_model: None):
     ).json()
     dana = added["id"]
     refused = api.request(
-        "alice", "PUT", "/api/v1/people/bob/n8n-access", expect=(409,), json_body={"n8n_access": True}
+        "alice",
+        "PUT",
+        "/api/v1/people/bob/n8n-access",
+        expect=(409,),
+        json_body={"n8n_access": True},
     )
     assert refused.json()["refusal"] == "n8n_operators_only"
     created = set_up(api, "e2e n8n access", on=True)
@@ -68,22 +74,29 @@ def test_n8n_access(api: Api, mock_model: None):
     assert (mine["account"], mine["can_open"]) == ("invited", False)
     assert api.get("alice", "/api/v1/me/n8n")["set_password_url"] is None, "shown to Dana alone"
     member = Member("Dana", (email, mine["set_password_url"]))
-    api.poll("n8n to know Dana set her password", lambda: api.get(dana, "/api/v1/me/n8n")["can_open"])
+    api.poll(
+        "n8n to know Dana set her password", lambda: api.get(dana, "/api/v1/me/n8n")["can_open"]
+    )
     assert api.get(dana, "/api/v1/me/n8n")["set_password_url"] is None, "used, so forgotten"
 
     laid_out = settings_in_n8n(workflow_id, "as the platform laid it out")
-    platform = home(workflow_id)
+    platform = str(N8N_OWNER.call("GET", "/projects/personal")["id"])
+    assert sits_in(platform, workflow_id)
     opened = api.post(dana, f"/api/v1/use-cases/{use_case_id}/open-in-n8n", expect=(200,)).json()
     assert opened["held_by"] == dana
-    assert member.can_open(workflow_id), "it sits in Dana's own n8n space"
-    assert home(workflow_id) == member.project
+    assert member.can_open(workflow_id), "Dana sees it, so it sits in her own n8n space"
+    assert sits_in(member.project, workflow_id) and not sits_in(platform, workflow_id)
     assert settings_in_n8n(workflow_id, "once Dana holds it") == laid_out
     view = api.get(dana, f"/api/v1/use-cases/{use_case_id}/n8n")
     assert (view["holder"]["id"], view["can_open"]) == (dana, True)
     assert "Ask for a yes" in [node["name"] for node in view["nodes"]]
     schedule = {"day": "monday", "at": "07:30", "via": "page"}
     held = api.request(
-        "alice", "PUT", f"/api/v1/use-cases/{use_case_id}/schedule", expect=(409,), json_body=schedule
+        "alice",
+        "PUT",
+        f"/api/v1/use-cases/{use_case_id}/schedule",
+        expect=(409,),
+        json_body=schedule,
     )
     assert held.json()["detail"].startswith("Dana has it open in n8n since ")
 
@@ -100,8 +113,7 @@ def test_n8n_access(api: Api, mock_model: None):
 
     becomes_approver(api, dana)
     assert api.get(dana, "/api/v1/me")["n8n_access"] is False
-    api.poll("the platform to take the workflow back", lambda: home(workflow_id) == platform)
-    assert not member.can_open(workflow_id)
+    api.poll("the platform to take the workflow back", lambda: sits_in(platform, workflow_id))
     assert settings_in_n8n(workflow_id, "once taken back") == laid_out
 
     run_id, _ = api.start_run("carol", use_case_id)

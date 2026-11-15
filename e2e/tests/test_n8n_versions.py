@@ -53,7 +53,9 @@ class Member:
 
     def change_email(self, email: str) -> None:
         """In their n8n profile, which n8n applies at once without a mail server."""
-        changed = self.call("POST", "/change-email", {"email": email, "currentPassword": self.password})
+        changed = self.call(
+            "POST", "/change-email", {"email": email, "currentPassword": self.password}
+        )
         assert changed["status"] == "changed", changed
         self.email = email
 

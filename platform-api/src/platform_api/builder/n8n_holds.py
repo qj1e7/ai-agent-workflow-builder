@@ -5,6 +5,7 @@ workflow's settings, which carry its error workflow, time zone and saved progres
 or moves it no further. The platform takes back by itself every workflow held by someone who may
 hold none now: whose n8n access ended, or while staff access is off or the allow list unproven."""
 
+import contextlib
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -30,6 +31,7 @@ NO_SPACE = "n8n did not say where your n8n space is. Nothing changed. Try again.
 NO_HOME = "No bootstrap has recorded the platform's n8n project yet. Nothing changed."
 NOT_MOVED = "n8n did not move the workflow. Nothing changed. Try again."
 SETTINGS_LOST = "n8n lost the workflow's settings in the move, so it stayed where it was."
+TAKE_IT_BACK = "Take it back to change it here."
 NOT_YOURS = (
     "Only the person who has it open, or someone with n8n access, can take it back. "
     "An admin can add n8n access in Settings."
@@ -52,6 +54,11 @@ class N8nMoves(Protocol):
     async def platform_project(self) -> str | None: ...
 
     async def move(self, workflow_id: str, project_id: str) -> None: ...
+
+    async def triggers_live(self, workflow_id: str, version_id: str) -> None:
+        """Returns once n8n has this version live with every trigger. Raises N8nError when it
+        does not in time."""
+        ...
 
     async def keep_settings(
         self, workflow_id: str, expected_draft: str, settings: Mapping[str, Any]
@@ -150,7 +157,9 @@ class Holding:
     async def refused_while_held(self, conn: Connection, use_case_id: str) -> HeldInN8n | None:
         """Read with the workflow's row locked, so no Open in n8n crosses the write."""
         held = await held_in(conn, use_case_id)
-        return None if held is None else HeldInN8n(await self.words(held))
+        if held is None:
+            return None
+        return HeldInN8n(f"{await self.words(held)} {TAKE_IT_BACK}")
 
     async def holds(self, person: UserId) -> bool:
         async with self._db.connection("builder") as conn:
@@ -218,17 +227,29 @@ class Holding:
                 and not isinstance(await self._staff.access(actor.user_id), CanOpen)
             ):
                 return HoldRefused(403, NOT_YOURS)
-            if row["deleted_in_n8n_at"] is None:
-                home = await self._n8n.platform_project()
-                if home is None:
-                    return HoldRefused(503, NO_HOME)
-                moved = await self._move(held.workflow_id, home)
-                if isinstance(moved, HoldRefused):
-                    return moved
-            by = None if actor is None else actor.user_id
-            await let_go(uow, use_case_id, by)
-            log.info("%s took %s back from %s", by or "the platform", use_case_id, held.by)
-            return Free(use_case_id, held.workflow_id)
+            refused = await self.back_in(uow, use_case_id, None if actor is None else actor.user_id)
+            return refused or Free(use_case_id, held.workflow_id)
+
+    async def back_in(
+        self, uow: UnitOfWork, use_case_id: str, by: UserId | None
+    ) -> HoldRefused | None:
+        """Takes the workflow back inside the caller's transaction, which holds its row. The hold
+        ends only once the workflow is back in the platform's project, or n8n no longer has it.
+        Nothing to do when nobody holds it."""
+        row = await (await uow.conn.execute(_ROW, (use_case_id,))).fetchone()
+        held = None if row is None else held_of(use_case_id, row)
+        if row is None or held is None:
+            return None
+        if row["deleted_in_n8n_at"] is None:
+            home = await self._n8n.platform_project()
+            if home is None:
+                return HoldRefused(503, NO_HOME)
+            moved = await self._move(held.workflow_id, home)
+            if isinstance(moved, HoldRefused):
+                return moved
+        await let_go(uow, use_case_id, by)
+        log.info("%s took %s back from %s", by or "the platform", use_case_id, held.by)
+        return None
 
     async def release(self) -> list[str]:
         """Takes back every workflow whose holder may hold none now."""
@@ -252,8 +273,10 @@ class Holding:
         return taken
 
     async def _move(self, workflow_id: str, project: str) -> _MoveResult:
-        """Moves the workflow and reads it back. A move that changed its settings or the version
-        n8n runs puts the settings back, or else moves it back where it was."""
+        """Moves the workflow and reads it back. n8n takes a published workflow off and puts it
+        back on as it moves it, so the move waits for every trigger to be live again. A move that
+        changed the version n8n runs or the settings puts the settings back, or else moves it
+        back where it was."""
         try:
             before = await self._n8n.look(workflow_id)
             if before is None:
@@ -262,35 +285,46 @@ class Holding:
             if was == project:
                 return _Moved()
             await self._n8n.move(workflow_id, project)
-            after = await self._n8n.look(workflow_id)
-            if after is None or await self._n8n.home(workflow_id) != project:
-                return HoldRefused(503, NOT_MOVED)
-            if after.active_version_id != before.active_version_id or settings_changed(
-                before.document.get("settings"), after.document.get("settings")
-            ):
-                return await self._repair(workflow_id, before, after, was)
         except (N8nError, httpx.HTTPError) as error:
             log.warning("could not move %s in n8n: %s", workflow_id, error)
             return HoldRefused(503, NOT_MOVED)
-        return _Moved()
-
-    async def _repair(
-        self, workflow_id: str, before: N8nWorkflow, after: N8nWorkflow, was: str | None
-    ) -> _MoveResult:
-        log.warning("n8n changed %s as it moved it, which the platform puts right", workflow_id)
-        if after.active_version_id == before.active_version_id:
-            settings: dict[str, Any] = before.document.get("settings") or {}
-            kept = await self._n8n.keep_settings(workflow_id, after.version_id, settings)
-            now = await self._n8n.look(workflow_id)
-            if (
-                isinstance(kept, Written)
-                and now is not None
-                and not settings_changed(settings, now.document.get("settings"))
+        try:
+            if before.active_version_id is not None:
+                await self._n8n.triggers_live(workflow_id, before.active_version_id)
+            after = await self._n8n.look(workflow_id)
+            if after is None or await self._n8n.home(workflow_id) != project:
+                return HoldRefused(503, NOT_MOVED)
+            if after.active_version_id == before.active_version_id and not settings_changed(
+                before.document.get("settings"), after.document.get("settings")
             ):
                 return _Moved()
+            if await self._kept_settings(workflow_id, before, after):
+                return _Moved()
+            refused = HoldRefused(503, SETTINGS_LOST)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("n8n moved %s but did not finish: %s", workflow_id, error)
+            refused = HoldRefused(503, NOT_MOVED)
         if was is not None:
-            await self._n8n.move(workflow_id, was)
-        return HoldRefused(503, SETTINGS_LOST)
+            with contextlib.suppress(N8nError, httpx.HTTPError):
+                await self._n8n.move(workflow_id, was)
+        return refused
+
+    async def _kept_settings(
+        self, workflow_id: str, before: N8nWorkflow, after: N8nWorkflow
+    ) -> bool:
+        """Puts back the settings a move lost. A move that changed the version n8n runs is not
+        put right here."""
+        log.warning("n8n changed %s as it moved it, which the platform puts right", workflow_id)
+        if after.active_version_id != before.active_version_id:
+            return False
+        settings: dict[str, Any] = before.document.get("settings") or {}
+        kept = await self._n8n.keep_settings(workflow_id, after.version_id, settings)
+        now = await self._n8n.look(workflow_id)
+        return (
+            isinstance(kept, Written)
+            and now is not None
+            and not settings_changed(settings, now.document.get("settings"))
+        )
 
 
 def _cannot_open(row: Mapping[str, Any]) -> HoldRefused | None:

@@ -7,9 +7,10 @@ from typing import Any, Literal, Protocol
 
 from pydantic import Field
 
+from platform_api.builder.models import N8nBlockKind
 from platform_api.builder.n8n_holds import Held, Holding, StaffPort
 from platform_api.db import Database
-from platform_api.orchestration import NODE_TYPES, BlockKind, Unreadable, read_flow
+from platform_api.orchestration import NODE_TYPES, Unreadable, read_flow
 from platform_api.orchestration.n8n_run_view import NodeState, RunInN8n
 from platform_api.orchestration.n8n_staff import CanOpen
 from platform_api.shared import Principal, RunId, UserId
@@ -19,8 +20,9 @@ from platform_api.wire import WireModel
 class N8nNodeView(WireModel):
     name: str
     type: str
-    kind: BlockKind | None = Field(
-        description="What the block is to the safety checker. Null for a type it does not know."
+    kind: N8nBlockKind = Field(
+        description="What the block does, as on the set-up card. other is a sticky note, one of "
+        "n8n's data blocks, or a type the safety checker does not know; type says which."
     )
     position: list[float] = Field(description="Where n8n's editor draws it, as x and y.")
     disabled: bool
@@ -90,12 +92,15 @@ def graph(document: Mapping[str, Any] | None) -> tuple[list[N8nNodeView], list[N
     nodes: list[N8nNodeView] = []
     for node in document["nodes"]:
         spec = NODE_TYPES.get(str(node.get("type", "")))
+        kind: N8nBlockKind = (
+            "other" if spec is None or spec.kind in ("note", "shape") else spec.kind
+        )
         position = node.get("position") or [0, 0]
         nodes.append(
             N8nNodeView(
                 name=node["name"],
                 type=str(node.get("type", "")),
-                kind=None if spec is None else spec.kind,
+                kind=kind,
                 position=[float(position[0]), float(position[1])],
                 disabled=bool(node.get("disabled", False)),
             )

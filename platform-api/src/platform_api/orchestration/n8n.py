@@ -1385,6 +1385,9 @@ class N8nWorkflows:
     async def move(self, workflow_id: str, project_id: str) -> None:
         await self._api.transfer(workflow_id, project_id)
 
+    async def triggers_live(self, workflow_id: str, version_id: str) -> None:
+        await self._live(workflow_id, version_id)
+
     async def keep_settings(
         self, workflow_id: str, expected_draft: str, settings: Mapping[str, Any]
     ) -> Written | ChangedInN8n:
