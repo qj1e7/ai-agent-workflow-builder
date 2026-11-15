@@ -1,5 +1,4 @@
-import { ApiError } from '../../api/client'
-import { andList, crossedWords, type Left } from './card'
+import { andList, crossedWords, upperFirst, type Left } from './card'
 import { connectorLabel, starterName } from '../../api/labels'
 import type { AddressItem, CapabilitiesView, PlannerAnswerIn, ApprovalItem, ConfirmationItem, ConnectionItem, DeclinedItem, DraftItem, FollowingUpItem, HomeOut, QuestionItem, StoppedItem, WaitingItem } from '../../api/types'
 import { count, declineTail, factsOf, stageWords, withCurrentNames } from '../run/words'
@@ -480,11 +479,14 @@ export function stoppedActions(runId: string, retryable: boolean, modelOff = fal
     : [{ kind: 'open', label: 'See why it stopped', to: `/runs/${runId}`, item }]
 }
 
-const noLongerStopped = (error: unknown) => error instanceof ApiError && error.status === 409
-
 export function retryProblem(error: unknown, words: (error: unknown) => string): string {
-  if (noLongerStopped(error)) return 'It can’t be retried now. Someone may have retried it already, so look at the run.'
   return `Could not retry the run. ${words(error)}`
+}
+
+/** What a Retry press that lost the race says: who retried the run first, by the name its log gives them. */
+export function retriedFirstWords(by: string | null, me: string | undefined, nameOf: (id: string) => string): string {
+  if (by === null) return 'This run isn’t stopped any more. Someone may have retried it already.'
+  return `${by === me ? 'You' : upperFirst(nameOf(by))} already retried this run.`
 }
 
 export interface RowWords {

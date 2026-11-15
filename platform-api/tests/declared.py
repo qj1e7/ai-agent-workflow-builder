@@ -150,11 +150,6 @@ class FakeTeamRequests:
         return None
 
 
-class FakeTicker:
-    async def tick(self) -> list[Any]:
-        return []
-
-
 class FakeConnections:
     """Connections that answer from a list, and record what was asked."""
 
@@ -226,7 +221,6 @@ def app_with(
     app.state.practice_jira = FakeMockJira()
     app.state.watchlist = FakeWatchlist()
     app.state.team_requests = FakeTeamRequests()
-    app.state.schedule_ticker = FakeTicker()
     app.state.connections = FakeConnections()
     app.state.node_calls = node_calls or FakeNodeCalls()
     return app

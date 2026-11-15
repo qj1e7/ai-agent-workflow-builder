@@ -22,6 +22,7 @@ import { QuestionThread } from './QuestionThread'
 import { useQuestions } from './questions'
 import { RunLine } from './RunLine'
 import { RunPill } from './RunPill'
+import { RunPlaceContext, type RunPlace } from './place'
 import { isFinished, type RunModel } from './runModel'
 import { TROUBLE_FACE } from './troubleFace'
 import { useRunStory } from './useRunStory'
@@ -181,11 +182,13 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const fromChat = useFromChat()
   const [lands] = useState(() => fromApproval || LANDS_ON_DECISION.has(shown.phase.state))
   const logList = useRef<HTMLOListElement>(null)
+  const heading = useRef<HTMLHeadingElement>(null)
 
   const waiting = shown.phase.state === 'awaiting_approval'
   const saidByMe = me ? shown.chat.findLast((item) => item.kind === 'decided' && item.by === me.id) : undefined
   const [said, setSaid] = useState<ToastMessage | null>(null)
   const say = (text: string) => setSaid((before) => ({ id: (before?.id ?? 0) + 1, text }))
+  const place: RunPlace = { focus: () => heading.current?.focus(), say }
   const decision = useDecision(approval, partyOf(approval, me?.id), (recorded) => {
     if (recorded.verdict === 'decline') say(declinedNowWords({ reason: recorded.reason ?? null }))
   })
@@ -296,7 +299,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
       <div className={styles['head']}>
         <div>
           <p className={styles['kind']}>{story.kind}</p>
-          <h1 tabIndex={-1} data-page-moves-focus={lands || undefined}>
+          <h1 ref={heading} tabIndex={-1} data-page-moves-focus={lands || undefined}>
             {run.use_case_name}
           </h1>
         </div>
@@ -330,9 +333,11 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
         )}
       </section>
       {failure ? (
-        <div className={styles['foot']}>
-          <StopNext runId={run.run_id} failure={failure} {...story.stopped} safeId={safeId} />
-        </div>
+        <RunPlaceContext.Provider value={place}>
+          <div className={styles['foot']}>
+            <StopNext runId={run.run_id} failure={failure} {...story.stopped} safeId={safeId} />
+          </div>
+        </RunPlaceContext.Provider>
       ) : null}
       <div className="visually-hidden" aria-live="polite">
         {announce ? `${speakerName(announce.speaker)}: ${announce.text}` : ''}

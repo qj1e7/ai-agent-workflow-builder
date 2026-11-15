@@ -307,9 +307,12 @@ async def test_an_issuer_that_drips_its_keys_is_a_failed_load_at_the_deadline(
     monkeypatch.setattr("platform_api.oidc.FETCH_DEADLINE_SECONDS", 0.2)
     issuer.jwks_answer = httpx.Response(200, stream=Drip())
     app = oidc_app(issuer, clock)
-    async with async_client(app) as client, asyncio.timeout(1):
+    started = time.monotonic()
+    # The guard only stops a hang; a busy CI runner can take well over a second to answer.
+    async with async_client(app) as client, asyncio.timeout(10):
         response = await client.get(ME, headers=bearer(token()))
     unavailable(app, response)
+    assert time.monotonic() - started >= 0.2, "the drip was cut by the deadline, not before it"
     assert issuer.jwks_fetches == 1
 
 

@@ -14,7 +14,6 @@ from platform_api.builder.lifecycle import (
     Lifecycle,
     On,
     Paused,
-    comes_on,
     delete,
     from_columns,
     is_on,
@@ -25,18 +24,15 @@ from platform_api.builder.lifecycle import (
     turn_on,
 )
 from platform_api.monitoring.events import RunSucceeded, StepFinished, WriteActionProposed
-from platform_api.orchestration import NotOn, ScheduleBook, ScheduleTicker
 from platform_api.orchestration.runs import AwaitingApproval, Leg, Outcome, StepName, Succeeded
-from platform_api.shared import N8nExecutionId, RunId, UseCaseId
+from platform_api.shared import N8nExecutionId, RunId
 from tests import test_builder_lifecycle
 from tests.support import NOW
 from tests.test_builder_lifecycle import (
     ALICE_ID,
-    FIRST_MONDAY_SLOT,
     VALUES,
     WORK,
     Lab,
-    at,
     changes,
     versions,
 )
@@ -53,10 +49,9 @@ TEST_PASSED = "Test run passed up to the yes. Nothing was written."
 NOT_ON_YET = {"detail": "This workflow isn't on yet. Do a test run, or turn it on to run it."}
 
 
-def test_a_draft_is_not_on_and_turning_it_on_comes_on():
+def test_a_draft_is_not_on_and_turning_it_on_puts_it_on():
     assert is_on(Draft()) is False
     assert turn_on(Draft()) == On()
-    assert comes_on(Draft(), On()) is True
 
 
 def test_turning_on_changes_nothing_once_it_was_turned_on():
@@ -139,18 +134,7 @@ async def test_a_workflow_set_up_off_is_a_draft_with_its_schedule_and_no_next_ru
 async def test_a_workflow_set_up_without_on_is_on_as_before(lab: Lab):
     use_case_id = await set_up(lab, {"schedule": EVERY_MONDAY})
     view = await use_case(lab, use_case_id)
-    assert (view["state"], at(view["next_run_at"])) == ("on", FIRST_MONDAY_SLOT)
-
-
-async def test_a_draft_never_runs_on_its_schedule(lab: Lab):
-    use_case_id = await draft(lab)
-    ticker = ScheduleTicker(lab.h.db, ScheduleBook(lab.h.db), lab.builder, lab.h.orchestrator)
-    lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(minutes=1)
-
-    assert await ticker.tick() == []
-
-    assert await lab.runs() == []
-    assert await lab.builder.check_spec(UseCaseId(use_case_id)) == NotOn("draft")
+    assert view["state"] == "on"
 
 
 async def test_run_now_on_a_draft_is_refused_and_starts_nothing(lab: Lab):
@@ -233,7 +217,7 @@ async def test_a_test_run_of_a_workflow_that_is_on_still_asks_for_a_yes(lab: Lab
     assert len(await lab.h.teams.messages()) == 1
 
 
-async def test_turning_on_publishes_version_1_and_its_schedule_runs(lab: Lab):
+async def test_turning_on_publishes_version_1(lab: Lab):
     use_case_id = await draft(lab)
     lab.h.advance(timedelta(minutes=5))
 
@@ -241,12 +225,7 @@ async def test_turning_on_publishes_version_1_and_its_schedule_runs(lab: Lab):
 
     assert on.status_code == 200, on.text
     assert (on.json()["state"], on.json()["version"]) == ("on", 1)
-    assert at(on.json()["next_run_at"]) == FIRST_MONDAY_SLOT
     assert changes(await versions(lab, use_case_id)) == [(1, None, None, None, None, True)]
-    ticker = ScheduleTicker(lab.h.db, ScheduleBook(lab.h.db), lab.builder, lab.h.orchestrator)
-    lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(minutes=1)
-    [run_id] = await ticker.tick()
-    assert [(r["run_id"], r["trigger"]) for r in await lab.runs()] == [(run_id, "schedule")]
 
 
 async def test_turning_on_twice_answers_the_same_and_publishes_nothing_more(lab: Lab):
@@ -268,18 +247,6 @@ async def test_turning_on_a_paused_workflow_leaves_it_paused(lab: Lab):
     again = await turn_on_as(lab, "alice", use_case_id)
 
     assert (again.json()["state"], again.json()["next_run_at"]) == ("paused", None)
-
-
-async def test_a_slot_that_fell_while_it_was_a_draft_never_starts(lab: Lab):
-    use_case_id = await draft(lab)
-    ticker = ScheduleTicker(lab.h.db, ScheduleBook(lab.h.db), lab.builder, lab.h.orchestrator)
-    lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(minutes=7)
-
-    on = await turn_on_as(lab, "alice", use_case_id)
-
-    assert at(on.json()["next_run_at"]) == FIRST_MONDAY_SLOT + timedelta(days=7)
-    assert await ticker.tick() == []
-    assert await lab.runs() == []
 
 
 async def test_pause_and_resume_leave_a_draft_a_draft(lab: Lab):

@@ -268,6 +268,18 @@ class UseCaseView(WireModel):
         description="When the platform found its workflow deleted in n8n. It runs no more, and "
         "its runs and versions are kept (ENGINE-PLAN D7). Null while n8n has it.",
     )
+    moving_to_n8n: bool = Field(
+        default=False,
+        description="True while it still runs on the shared n8n workflow only because a run of "
+        "it has not ended. It moves to an n8n workflow of its own once that run ends "
+        "(ENGINE-PLAN 2.6).",
+    )
+    move_refused: str | None = Field(
+        default=None,
+        description="Why it is still on the shared n8n workflow and so starts no scheduled run, "
+        "in plain words with what to do: a step the safety checker refused, or n8n not taking "
+        "it yet. Null once it moved, and while it only waits for a run to end.",
+    )
 
 
 class UseCaseList(WireModel):
@@ -506,7 +518,7 @@ class VersionChange(WireModel):
 
 
 type VersionMade = Literal[
-    "published_in_n8n", "settings_changed_in_n8n", "rolled_back", "yes_put_back"
+    "published_in_n8n", "settings_changed_in_n8n", "rolled_back", "yes_put_back", "moved_to_n8n"
 ]
 
 
@@ -538,8 +550,9 @@ class VersionView(WireModel):
         description="How a version that is not a change of when it runs came about: "
         "published_in_n8n by a person in n8n's editor; settings_changed_in_n8n, the same version "
         "in n8n with its settings saved there and nothing published, which n8n runs with the new "
-        "settings at once; rolled_back to an earlier version; or yes_put_back, which put Ask for "
-        "a yes back before each write. Null otherwise.",
+        "settings at once; rolled_back to an earlier version; yes_put_back, which put Ask for "
+        "a yes back before each write; or moved_to_n8n, the version that moved it from the shared "
+        "n8n workflow to its own. Null otherwise.",
     )
     grade: Grade | None = Field(
         default=None,

@@ -312,6 +312,14 @@ _Avoid_: Checkpoint, watermark
 **Activity reader**:
 Where the live activity view, its replay and the AI troubleshooter read activity events: Cosmos DB or PostgreSQL. The setting `ACTIVITY_READER` picks `cosmos` or `postgres`. When Cosmos DB is set up, the copier runs whichever is picked. A place without Cosmos DB, such as a DevNet that does not allow it, reads PostgreSQL.
 
+**Error workflow**:
+The platform's own n8n workflow, `run_failure_reporter`, that n8n starts when any of our n8n workflows fails. Its Report a failure block tells our API which execution failed, and our API reads the block and the words from n8n's own record. n8n skips an error workflow that is not active, so bootstrap keeps it active.
+_Avoid_: Error handler, alert workflow
+
+**Daily self-test**:
+The platform's own n8n workflow, `self_test_failure`, that n8n runs once a day at 06:00 Singapore time and that fails on purpose. Its failure travels the error workflow to our API like a run's would, and our API keeps when it arrived. It is never a run. `/healthz/ready` warns when none arrived in 26 hours, because then the error workflow is not reporting.
+_Avoid_: Heartbeat, canary
+
 **Replica**:
 One running instance of a platform service, such as platform-api in Container Apps. Several replicas share one database, and PostgreSQL wakes each one when events are added or copied, so any replica can stream any run. Call the activity log in Cosmos DB the copy, never a replica.
 _Avoid_: Pod, node

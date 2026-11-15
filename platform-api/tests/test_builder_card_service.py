@@ -226,7 +226,7 @@ async def test_a_schedule_saved_with_the_use_case_belongs_to_the_person_who_set_
         "15:00",
         "Asia/Singapore",
     )
-    assert view.next_run_at is not None and view.next_run_at > db.clock()
+    assert view.next_run_at is None, "on the shared run workflow it starts no run"
     saved = await ScheduleBook(db).get(UseCaseId(made.use_case_id))
     assert saved is not None and (saved.owner, saved.owner_name) == ("alice", "Alice")
 

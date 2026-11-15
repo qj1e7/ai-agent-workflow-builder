@@ -27,7 +27,6 @@ from platform_api.builder.lifecycle import (
     On,
     Paused,
     TooLate,
-    comes_on,
     delete,
     is_on,
     lifecycle_of,
@@ -66,6 +65,7 @@ from platform_api.builder.models import (
     VersionList,
     Via,
 )
+from platform_api.builder.moves import Moves
 from platform_api.builder.n8n_draft import (
     ADDING,
     SAVED,
@@ -131,7 +131,7 @@ from platform_api.orchestration import (
     N8nDrafts,
     N8nError,
     N8nTarget,
-    NotOn,
+    OpenRuns,
     RunSpec,
     RunStarted,
     RunStarter,
@@ -156,7 +156,8 @@ log = logging.getLogger(__name__)
 
 _CURRENT_VERSION = """
     SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
-           u.draft, u.left_out, u.engine, u.n8n_workflow_id, u.deleted_in_n8n_at, v.version,
+           u.draft, u.left_out, u.engine, u.n8n_workflow_id, u.deleted_in_n8n_at,
+           u.move_refused, v.version,
            v.template, v.name, v.instruction, v.params, v.created_at, v.document,
            v.n8n_version_id, v.grade, v.findings
     FROM builder.use_cases u
@@ -211,17 +212,16 @@ def _target(row: Mapping[str, Any]) -> N8nTarget | None:
     return N8nTarget(row["n8n_workflow_id"], _start_webhook(row["document"]))
 
 
-def _next_run_at(
-    row: Mapping[str, Any], schedule: SavedSchedule | None, now: datetime
-) -> datetime | None:
+def _next_run_at(row: Mapping[str, Any], now: datetime) -> datetime | None:
     """An own workflow runs when n8n's Schedule Trigger fires, to the second n8n adds to it
-    (ENGINE-PLAN 2.4). The rest run on the platform's schedule tick."""
-    if _own(row):
-        document = row["document"]
-        if document is None or row["deleted_in_n8n_at"] is not None:
-            return None
-        return next_run(document, row["n8n_workflow_id"], now)
-    return None if schedule is None else schedule.next_run(now)
+    (ENGINE-PLAN 2.4). One still on the shared run workflow starts no scheduled run until it
+    moves (E10)."""
+    if not _own(row):
+        return None
+    document = row["document"]
+    if document is None or row["deleted_in_n8n_at"] is not None:
+        return None
+    return next_run(document, row["n8n_workflow_id"], now)
 
 
 def _state(state: Lifecycle) -> UseCaseState:
@@ -241,6 +241,7 @@ def _view(
     schedule: SavedSchedule | None,
     last_run: LastRunView | None,
     now: datetime,
+    moving: bool = False,
 ) -> UseCaseView:
     template = TEMPLATES[row["template"]]
     state = _state(lifecycle_of(row))
@@ -259,7 +260,7 @@ def _view(
         owner=UserId(row["owner"]),
         created_at=row["created_at"],
         state=state,
-        next_run_at=_next_run_at(row, schedule, now) if state == "on" else None,
+        next_run_at=_next_run_at(row, now) if state == "on" else None,
         schedule=None
         if schedule is None
         else _schedule_view(schedule, row["document"] if _own(row) else None),
@@ -279,6 +280,8 @@ def _view(
         grade=row["grade"] if _own(row) else None,
         findings=list(row["findings"] or []),
         deleted_in_n8n_at=row["deleted_in_n8n_at"],
+        moving_to_n8n=moving,
+        move_refused=None if _own(row) else row["move_refused"],
     )
 
 
@@ -417,6 +420,7 @@ class Builder:
         writes: Sequence[WriteEntry] = (),
         requests: OpenRequests | None = None,
         accounts: N8nAccounts | None = None,
+        open_runs: OpenRuns | None = None,
     ) -> None:
         self._db = db
         self._runs = runs
@@ -437,6 +441,21 @@ class Builder:
             else VersionsSweep(db, n8n, self.facts, accounts or NoN8nAccounts(), requests)
         )
         """The versions sweep, for a platform that lays workflows out in n8n."""
+        self._open_runs = open_runs
+        self.moves = (
+            None
+            if n8n is None or open_runs is None
+            else Moves(
+                db,
+                n8n,
+                open_runs,
+                self._schedules,
+                self._laid_out_again,
+                lambda: self.facts.known({}),
+                watchlist,
+            )
+        )
+        """The moves off the shared run workflow, and Restore to n8n (ENGINE-PLAN 2.6, E10)."""
 
     async def list_use_cases(self, viewer: Principal | None = None) -> UseCaseList:
         """Team-wide by design: one team, two roles, and Approvers need the context.
@@ -486,6 +505,7 @@ class Builder:
             )
         )
         now = self._db.clock()
+        moving = await self._moving(rows)
         return [
             _view(
                 row,
@@ -493,9 +513,21 @@ class Builder:
                 schedules.get(row["use_case_id"]),
                 last_run_view(gist) if (gist := newest.get(row["use_case_id"])) else None,
                 now,
+                row["use_case_id"] in moving,
             )
             for row in rows
         ]
+
+    async def _moving(self, rows: Sequence[Mapping[str, Any]]) -> set[str]:
+        """The workflows still on the shared run workflow only because a run has not ended."""
+        if self.moves is None or self._open_runs is None:
+            return set()
+        shared = [row["use_case_id"] for row in rows if row["engine"] == "shared_run"]
+        return {
+            use_case_id
+            for use_case_id in shared
+            if await self._open_runs.open_run(UseCaseId(use_case_id)) is not None
+        }
 
     async def pause_use_case(
         self, use_case_id: str, principal: Principal, via: Via = "page"
@@ -979,11 +1011,6 @@ class Builder:
                 )
                 if recorded is not None:
                     await _record(uow, use_case_id, recorded)
-                if comes_on(before, after):
-                    # The builder's role cannot write orchestration's schedules, so this is its
-                    # own transaction. It commits before the move does: a move that then fails
-                    # leaves the workflow off, missing only a slot the tick would have skipped.
-                    await self._schedules.use_up_slots_until(UseCaseId(use_case_id), uow.now)
         return after
 
     async def _schedule_in_n8n(
@@ -1315,24 +1342,6 @@ class Builder:
             n8n=await self._target(use_case_id),
         )
 
-    async def check_spec(self, use_case_id: UseCaseId) -> RunSpec | NotOn | None:
-        """What the schedule tick asks for. None means nothing to check. The tick holds the
-        workflow's lock around this read and the run insert, so this read does not take it."""
-        async with self._db.connection("builder") as conn:
-            state = await _lifecycle_now(conn, use_case_id)
-        match state:
-            case None:
-                return None
-            case Draft():
-                return NotOn("draft")
-            case Paused():
-                return NotOn("paused")
-            case Deleted():
-                return NotOn("deleted")
-            case On():
-                spec = await self.run_spec_for(use_case_id)
-                return None if isinstance(spec, NothingToCheck) else spec
-
     async def start_run(
         self,
         use_case_id: UseCaseId,
@@ -1343,10 +1352,15 @@ class Builder:
         """A test run of a draft stops at the approval gate (ADR 0044). Whether it is a draft
         is read under the lock, so a draft turned on since runs as any test run does."""
         view = await self.get_use_case(use_case_id)
+        # Its first run after a run that held it back runs on its own n8n workflow. Read it again
+        # whatever the move answers, since a move may also have landed meanwhile.
         if view is not None and view.template == SOFTWARE_WATCHLIST.key:
-            # Its first check after a run that held it back runs on its own n8n workflow. Read it
-            # again whatever the move answers, since a move may also have landed meanwhile.
             await self._watchlist.move_to_n8n()
+            view = await self.get_use_case(use_case_id)
+        elif (
+            view is not None and self.moves is not None and await self._target(use_case_id) is None
+        ):
+            await self.moves.move(use_case_id)
             view = await self.get_use_case(use_case_id)
         if view is None:
             return None

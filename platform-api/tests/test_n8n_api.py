@@ -4,8 +4,11 @@ that answers as spike P7 recorded n8n 2.42.6 answering."""
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import httpx
 import pytest
 
+from platform_api.bootstrap import LoadedWorkflow, record_status
+from platform_api.db import Database
 from platform_api.orchestration.n8n import (
     ChangedInN8n,
     N8nApi,
@@ -19,9 +22,17 @@ from platform_api.orchestration.n8n import (
     publisher_of,
     same_as_sent,
 )
-from platform_api.orchestration.n8n_calls import FailedExecution, Finished, Publisher
+from platform_api.orchestration.n8n_calls import (
+    FailedExecution,
+    Finished,
+    PlatformWorkflow,
+    Publisher,
+    TryLater,
+)
+from platform_api.orchestration.workflow_check import ERROR_WORKFLOW
 from platform_api.settings import N8nOwner
 from platform_api.shared import N8nExecutionId, UserId
+from tests.conftest import PostgresUrls
 from tests.fake_n8n import OWNER_EMAIL, OWNER_ID, OWNER_PASSWORD, FakeN8n
 
 pytestmark = pytest.mark.anyio
@@ -322,7 +333,7 @@ async def test_the_sweep_reads_how_each_execution_ended_from_n8n_s_own_record() 
     failures = failures_for(n8n)
     ended = {e: await failures.ended(N8nExecutionId(e)) for e in ("45", "46", "running")}
     assert ended == {
-        "45": FailedExecution(N8nExecutionId("45"), "Read release", "GitHub answered 503."),
+        "45": FailedExecution(N8nExecutionId("45"), "wf1", "Read release", "GitHub answered 503."),
         "46": Finished(N8nExecutionId("46")),
         "running": None,
     }
@@ -337,10 +348,10 @@ async def test_a_failure_is_the_block_and_the_words_from_n8n_s_own_record() -> N
     n8n.execution("46", "error", last_node="Compare")
     failures = failures_for(n8n)
     assert await failures.failure(N8nExecutionId("45")) == FailedExecution(
-        N8nExecutionId("45"), "Read release", "GitHub answered 503."
+        N8nExecutionId("45"), "wf1", "Read release", "GitHub answered 503."
     )
     assert await failures.failure(N8nExecutionId("46")) == FailedExecution(
-        N8nExecutionId("46"), "Compare", None
+        N8nExecutionId("46"), "wf1", "Compare", None
     )
 
 
@@ -425,7 +436,7 @@ async def test_the_sweep_reads_an_execution_s_data_only_once_it_failed() -> None
     assert await N8nExecutions(api_for(n8n)).landed(N8nExecutionId("46"))
     assert n8n.data_reads == []
     assert await failures.ended(N8nExecutionId("47")) == FailedExecution(
-        N8nExecutionId("47"), "Read release", "GitHub answered 503."
+        N8nExecutionId("47"), "wf1", "Read release", "GitHub answered 503."
     )
     assert n8n.data_reads == ["47"]
 
@@ -441,3 +452,61 @@ async def test_the_platform_keeps_its_n8n_session_and_signs_in_again_only_when_i
     n8n.session_ends = True
     status = await api.publication_status(created.id)
     assert (status.status, n8n.logins) == ("published", 2)
+
+
+@pytest.mark.parametrize(
+    ("recorded_in", "ready", "held_in", "answer"),
+    [
+        ("P-owner", True, "P-owner", True),
+        ("P-owner", True, "P-alice", False),
+        (None, True, "P-owner", False),
+        ("P-owner", False, "P-owner", None),
+        ("P-owner", True, None, False),
+        ("P-owner", True, "unreadable", "try later"),
+    ],
+    ids=[
+        "in-place",
+        "moved-to-a-member",
+        "recorded-before-projects",
+        "bootstrap-failed",
+        "gone",
+        "n8n-unreadable",
+    ],
+)
+async def test_a_platform_workflow_is_trusted_only_by_its_recorded_id_in_its_recorded_project(
+    db: Database,
+    postgres: PostgresUrls,
+    recorded_in: str | None,
+    ready: bool,
+    held_in: str | None,
+    answer: bool | str | None,
+) -> None:
+    """A report counts only from the error workflow bootstrap recorded, while n8n still holds it
+    in the platform's project: never one a member made or was handed. While n8n cannot say, the
+    report is asked again rather than taken as a report of nothing."""
+    loaded = LoadedWorkflow(ERROR_WORKFLOW, "wf_errors", True, "abc", recorded_in)
+    record_status(postgres.owner, ready=ready, detail="d", workflows=[loaded])
+    n8n = FakeN8n()
+    if held_in is not None:
+        shared = [{"role": "workflow:owner", "projectId": held_in}]
+        n8n.workflows["wf_errors"] = {"id": "wf_errors", "name": ERROR_WORKFLOW, "shared": shared}
+
+    def answers(request: httpx.Request) -> httpx.Response:
+        if held_in == "unreadable" and request.url.path == "/api/v1/workflows/wf_errors":
+            raise httpx.ConnectError("n8n is restarting", request=request)
+        return n8n.handle(request)
+
+    owner = N8nOwner(OWNER_EMAIL, OWNER_PASSWORD)
+    client = httpx.AsyncClient(transport=httpx.MockTransport(answers), base_url="http://n8n")
+    workflows = N8nWorkflows(N8nApi("http://n8n", owner, client), db)
+    recorded = (await workflows.platform_workflows()).get(ERROR_WORKFLOW)
+    if answer is None:
+        assert recorded is None, "a bootstrap that was not ready vouches for nothing"
+        return
+    assert recorded == PlatformWorkflow("wf_errors", recorded_in)
+    assert recorded is not None
+    placed = await workflows.in_place(recorded)
+    if answer == "try later":
+        assert isinstance(placed, TryLater)
+    else:
+        assert placed is answer

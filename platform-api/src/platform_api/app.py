@@ -8,6 +8,7 @@ from typing import Literal
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import Field
 
 from platform_api import auth, wiring
 from platform_api.body_guard import RefuseDeepJson, refuse_invalid_request
@@ -29,6 +30,7 @@ from platform_api.orchestration import (
     jira_reads_http,
     n8n_calls_http,
     people_http,
+    self_test,
     settings_http,
 )
 from platform_api.orchestration import http as orchestration_http
@@ -47,6 +49,11 @@ class ReadinessCheck(WireModel):
     name: str
     ok: bool
     detail: str
+    counts_for_ready: bool = Field(
+        default=True,
+        description="False for a check that only warns. Ready does not wait for it, so a probe "
+        "never takes the platform out of traffic over it.",
+    )
 
 
 class Readiness(WireModel):
@@ -184,6 +191,8 @@ async def readiness_of(
                 "FROM orchestration.engine_status WHERE id = 1"
             )
         ).fetchone()
+        seen = await self_test.SelfTests().seen(uow)
+        now = uow.now
     if row is None:
         checks.append(
             ReadinessCheck(name="workflows", ok=False, detail="bootstrap has not run yet")
@@ -196,7 +205,9 @@ async def readiness_of(
         if loaded:
             detail += f"; loaded: {loaded}"
         checks.append(ReadinessCheck(name="workflows", ok=bool(row["ready"]), detail=detail))
-    return Readiness(ready=all(c.ok for c in checks), checks=checks)
+    ok, detail = self_test.ready_line(seen, now)
+    checks.append(ReadinessCheck(name="self_test", ok=ok, detail=detail, counts_for_ready=False))
+    return Readiness(ready=all(c.ok for c in checks if c.counts_for_ready), checks=checks)
 
 
 def _copy_detail(copying: bool, behind: bool) -> str:

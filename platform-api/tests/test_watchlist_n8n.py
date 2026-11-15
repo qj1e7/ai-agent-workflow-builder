@@ -3,12 +3,10 @@ the Schedule Trigger, and changes its schedule there under the version compare (
 drafts store runs on a fake n8n."""
 
 from dataclasses import dataclass, field
-from datetime import timedelta
 from typing import Any, LiteralString
 
 import pytest
 
-from platform_api.auth import DEV_PEOPLE
 from platform_api.builder import Builder, Watchlist
 from platform_api.builder.models import AddSoftware, ScheduleIn, WatchlistView
 from platform_api.builder.watchlist import (
@@ -25,13 +23,10 @@ from platform_api.orchestration import (
     RunSpec,
     RunStarted,
     ScheduleBook,
-    ScheduleTicker,
 )
-from platform_api.orchestration.people_store import People
 from platform_api.shared import Principal, RunId, UseCaseId
-from tests.conftest import PostgresUrls, truncate_all
 from tests.fake_n8n import FakeN8n
-from tests.support import ALICE, CAROL, MovingClock
+from tests.support import ALICE, CAROL
 from tests.test_n8n_builder import Drafts
 from tests.test_watchlist_builder import FakeFacts
 
@@ -263,30 +258,6 @@ class Starts:
     async def start_run(self, spec: RunSpec, principal: Principal, idempotency_key: str):
         self.specs.append(spec)
         return RunStarted(RunId(f"run_{len(self.specs)}"), created=True)
-
-
-async def test_the_schedule_tick_leaves_a_moved_watchlist_to_its_schedule_trigger(
-    postgres: PostgresUrls,
-):
-    truncate_all(postgres.owner)
-    clock = MovingClock()
-    db = Database(postgres.contexts, clock=clock)
-    await db.open()
-    try:
-        assert await People(db).seed_dev(DEV_PEOPLE), "Carol, the schedule's owner, is an Operator"
-        world = world_on(db)
-        await watchlist_before_the_move(world)
-        starts = Starts()
-        ticker = ScheduleTicker(db, ScheduleBook(db), Builder(db, starts, world.on_n8n, ""), starts)
-        clock.now += timedelta(days=7)
-        assert len(await ticker.tick()) == 1, "before the move, the tick starts its check"
-
-        assert isinstance(await world.on_n8n.move_to_n8n(), MovedToN8n)
-        clock.now += timedelta(days=7)
-        assert await ticker.tick() == []
-        assert len(starts.specs) == 1, "after it, n8n's Schedule Trigger starts it, not the tick"
-    finally:
-        await db.close()
 
 
 async def test_an_empty_watchlist_has_nothing_on_the_list_to_check(world: World):

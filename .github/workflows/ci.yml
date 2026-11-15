@@ -85,6 +85,17 @@ jobs:
         working-directory: ${{ matrix.project }}
         run: uv run pyright
 
+      # The platform-api tests search what its image holds; this searches the rest of the
+      # checkout. Only the design records under docs/ may still name the tick (ENGINE-PLAN D20).
+      - name: Nothing asks for the retired schedule tick
+        if: matrix.project == 'e2e'
+        working-directory: .
+        run: |
+          if git grep -n "/internal/v1/schedules/""tick" -- . ':!docs'; then
+            echo "The schedule tick went in ENGINE-PLAN E10. Nothing may ask for it." >&2
+            exit 1
+          fi
+
       - name: Check import rules
         if: matrix.project == 'platform-api'
         working-directory: ${{ matrix.project }}
@@ -262,8 +273,9 @@ jobs:
   e2e:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    # The browser suite alone took 27 minutes on 13 Nov 2026, then ZAP and k6 need about 8 more.
-    timeout-minutes: 60
+    # The browser suite alone took 27 minutes on 13 Nov 2026, then ZAP and k6 need about 8 more,
+    # and the move from an old-engine database about 8.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -290,6 +302,21 @@ jobs:
         with:
           name: portal-live-evidence
           path: portal/e2e/out/live/
+          if-no-files-found: ignore
+
+      # A run that picks tests runs the move only when api_k names it, as in -f api_k=old_engine.
+      - name: Move an old-engine database to the new engine, with its history
+        if: ${{ !cancelled() && inputs.live_grep == '' && (inputs.api_k == '' || contains(inputs.api_k, 'old_engine')) }}
+        env:
+          E2E_SEED: old-engine
+        run: scripts/e2e.sh
+
+      - name: Keep the logs of the move
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-old-engine-logs
+          path: e2e/out/
           if-no-files-found: ignore
 
       # DAST and the load test share this job and its Docker layer cache. A failed e2e run does not hide them.

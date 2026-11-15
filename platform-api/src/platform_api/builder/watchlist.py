@@ -14,7 +14,7 @@ from typing import Any, Protocol
 import httpx
 
 from platform_api.builder import layout
-from platform_api.builder.in_n8n import write_in_n8n
+from platform_api.builder.in_n8n import discard, write_in_n8n
 from platform_api.builder.lifecycle import (
     RESTORE_WINDOW,
     Lifecycle,
@@ -290,27 +290,17 @@ type ScheduleRefused = N8nNotReady | DraftRefused | ChangedInN8n
 type Move = MovedToN8n | AlreadyOnN8n | WaitsForRun | NoWatchlist | N8nNotReady | DraftRefused
 
 
-async def _discard(n8n: N8nDrafts, workflow_id: str) -> None:
-    """A workflow the records never came to name is taken off and removed, so it never runs. n8n
-    keeps a published workflow, so it is taken off first."""
-    try:
-        await n8n.go_off(workflow_id)
-    except (N8nError, httpx.HTTPError) as error:
-        log.warning("could not take %s off in n8n: %s", workflow_id, error)
-    await n8n.remove(workflow_id)
-
-
 def schedule_view(
     saved: SavedSchedule | None, now: datetime, on: bool, n8n: InN8n | None = None
 ) -> ScheduleView | None:
-    """On its own n8n workflow, the next check is when n8n's Schedule Trigger fires, to the
-    second n8n adds to it (ENGINE-PLAN 2.4)."""
+    """The next check is when its own n8n workflow's Schedule Trigger fires, to the second n8n
+    adds to it (ENGINE-PLAN 2.4). Still on the shared run workflow, it starts none until it
+    moves."""
     if saved is None:
         return None
-    if n8n is None:
-        next_at = saved.next_run(now)
-    else:
-        next_at = None if n8n.document is None else next_run(n8n.document, n8n.workflow_id, now)
+    next_at = None
+    if n8n is not None and n8n.document is not None:
+        next_at = next_run(n8n.document, n8n.workflow_id, now)
     return ScheduleView(
         day=saved.schedule.day,
         at=saved.schedule.at,
@@ -816,7 +806,7 @@ class Watchlist:
                 log.info("the watchlist moves to n8n once run %s ends", open_run)
                 return WaitsForRun(open_run)
             if record.left_in_n8n is not None:
-                await _discard(on.drafts, record.left_in_n8n)
+                await discard(on.drafts, record.left_in_n8n)
             saved = await self._schedules.get(record.use_case_id)
             schedule = None if saved is None else saved.schedule
             laid = await self._laid_out(on, record.use_case_id, schedule)
@@ -838,7 +828,7 @@ class Watchlist:
                     await on.drafts.go_live(draft.workflow_id, draft.version_id)
             except (N8nError, httpx.HTTPError) as error:
                 log.warning("n8n did not put the watchlist's workflow live: %s", error)
-                await _discard(on.drafts, draft.workflow_id)
+                await discard(on.drafts, draft.workflow_id)
                 await _name_in_n8n(uow, record.use_case_id, None)
                 return N8nNotReady(
                     "n8n did not turn the watchlist's workflow on. It runs as before."

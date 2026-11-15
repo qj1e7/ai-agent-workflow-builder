@@ -5541,7 +5541,8 @@
           "status": {
             "enum": [
               "failed",
-              "left_as_is"
+              "left_as_is",
+              "self_test"
             ],
             "title": "Status",
             "type": "string"
@@ -8807,6 +8808,12 @@
       "ReadinessCheck": {
         "additionalProperties": false,
         "properties": {
+          "counts_for_ready": {
+            "default": true,
+            "description": "False for a check that only warns. Ready does not wait for it, so a probe never takes the platform out of traffic over it.",
+            "title": "Counts For Ready",
+            "type": "boolean"
+          },
           "detail": {
             "title": "Detail",
             "type": "string"
@@ -11578,23 +11585,6 @@
         "title": "TextRun",
         "type": "object"
       },
-      "TickOut": {
-        "additionalProperties": false,
-        "properties": {
-          "started": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Started",
-            "type": "array"
-          }
-        },
-        "required": [
-          "started"
-        ],
-        "title": "TickOut",
-        "type": "object"
-      },
       "TicketStatus": {
         "enum": [
           "To Do",
@@ -12139,6 +12129,24 @@
             "title": "Left Out",
             "type": "array"
           },
+          "move_refused": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it is still on the shared n8n workflow and so starts no scheduled run, in plain words with what to do: a step the safety checker refused, or n8n not taking it yet. Null once it moved, and while it only waits for a run to end.",
+            "title": "Move Refused"
+          },
+          "moving_to_n8n": {
+            "default": false,
+            "description": "True while it still runs on the shared n8n workflow only because a run of it has not ended. It moves to an n8n workflow of its own once that run ends (ENGINE-PLAN 2.6).",
+            "title": "Moving To N8N",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -12350,7 +12358,8 @@
           "published_in_n8n",
           "settings_changed_in_n8n",
           "rolled_back",
-          "yes_put_back"
+          "yes_put_back",
+          "moved_to_n8n"
         ],
         "type": "string"
       },
@@ -12475,7 +12484,7 @@
                 "type": "null"
               }
             ],
-            "description": "How a version that is not a change of when it runs came about: published_in_n8n by a person in n8n's editor; settings_changed_in_n8n, the same version in n8n with its settings saved there and nothing published, which n8n runs with the new settings at once; rolled_back to an earlier version; or yes_put_back, which put Ask for a yes back before each write. Null otherwise."
+            "description": "How a version that is not a change of when it runs came about: published_in_n8n by a person in n8n's editor; settings_changed_in_n8n, the same version in n8n with its settings saved there and nothing published, which n8n runs with the new settings at once; rolled_back to an earlier version; yes_put_back, which put Ask for a yes back before each write; or moved_to_n8n, the version that moved it from the shared n8n workflow to its own. Null otherwise."
           },
           "publisher_unknown": {
             "default": false,
@@ -21285,7 +21294,7 @@
     },
     "/internal/v1/n8n/failures": {
       "post": {
-        "description": "Report a failure, from our error workflow only. When n8n's own record says the execution failed, fails the run it carries with n8n's words for the block. A run that has ended, or that another attempt carries now, stays as it is.",
+        "description": "Report a failure, from our error workflow only. When n8n's own record says the execution failed, fails the run it carries with n8n's words for the block. A run that has ended, or that another attempt carries now, stays as it is. The daily self-test's failure is kept as the self-test's arrival, and fails no run.",
         "operationId": "failures_internal_v1_n8n_failures_post",
         "parameters": [
           {
@@ -22110,59 +22119,6 @@
           }
         },
         "summary": "Run Step",
-        "tags": [
-          "internal"
-        ]
-      }
-    },
-    "/internal/v1/schedules/tick": {
-      "post": {
-        "description": "Asked every 5 minutes by the schedule_tick workflow. Starts one check for each schedule that is due and answers the runs it started.",
-        "operationId": "tick_schedules_internal_v1_schedules_tick_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Step-Key",
-            "required": true,
-            "schema": {
-              "title": "X-Step-Key",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TickOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            },
-            "description": "Bad step key"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Tick Schedules",
         "tags": [
           "internal"
         ]

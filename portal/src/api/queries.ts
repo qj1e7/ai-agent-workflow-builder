@@ -324,15 +324,65 @@ export function useAnswerQuestion(approvalId: string) {
   })
 }
 
-export function useRetry(runId: string, onRetried: () => void) {
+/** The platform refused a Retry because the run had already left its stop: someone retried it first. */
+export class RetriedFirst extends Error {
+  /** Whose retry came after the run's newest stop, or null when the run names nobody, as when a retry started in n8n took it on. */
+  readonly by: string | null
+
+  constructor(by: string | null) {
+    super('Someone retried the run first.')
+    this.by = by
+  }
+}
+
+export interface RetryAfter {
+  readonly retried: () => void
+  /** Called before the page reads the run again, which takes Retry away, so it runs even when Retry has already gone. */
+  readonly retriedFirst: (by: string | null) => void
+}
+
+export function useRetry(runId: string, after: RetryAfter) {
   const client = useApiClient()
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async () =>
-      unwrap(await client.POST('/api/v1/runs/{run_id}/retry', { params: { path: { run_id: runId } } })),
-    onSuccess: onRetried,
+    mutationFn: async () => {
+      try {
+        return unwrap(await client.POST('/api/v1/runs/{run_id}/retry', { params: { path: { run_id: runId } } }))
+      } catch (error) {
+        throw isConflict(error) ? await whyRetryConflicts(client, runId, error) : error
+      }
+    },
+    onSuccess: after.retried,
+    onError: (error) => {
+      if (error instanceof RetriedFirst) after.retriedFirst(error.by)
+    },
     onSettled: () => refreshAfterChange(queryClient),
   })
+}
+
+/**
+ * A 409 means the run was not stopped any more, or that its stop can't be retried. Only the run says which. While it is still stopped,
+ * or can't be read, the platform's own words stand.
+ */
+async function whyRetryConflicts(client: ApiClient, runId: string, refusal: unknown): Promise<unknown> {
+  const [state, by] = await Promise.all([
+    client.GET('/api/v1/runs/{run_id}', { params: { path: { run_id: runId } } }).then(
+      (answer) => unwrap(answer).state,
+      () => null,
+    ),
+    retriedSinceTheStop(client, runId),
+  ])
+  return state === null || state === 'failed' ? refusal : new RetriedFirst(by)
+}
+
+async function retriedSinceTheStop(client: ApiClient, runId: string): Promise<string | null> {
+  try {
+    const { events } = await fetchEventPage(client, runId)
+    const retried = events.slice(events.findLastIndex((event) => event.kind === 'run_failed') + 1).find((event) => event.kind === 'run_retried')
+    return retried?.actor.kind === 'user' ? retried.actor.id : null
+  } catch {
+    return null
+  }
 }
 
 /** Keyed by attempt, so a second failure never shows the first one's cached advice. */

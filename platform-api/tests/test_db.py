@@ -12,8 +12,8 @@ pytestmark = pytest.mark.anyio
 def test_each_context_has_a_version_table_in_its_own_schema(postgres: PostgresUrls):
     with psycopg.connect(postgres.owner) as conn:
         for context, head in (
-            ("builder", "0016"),
-            ("orchestration", "0022"),
+            ("builder", "0017"),
+            ("orchestration", "0023"),
             ("monitoring", "0002"),
         ):
             table = sql.Identifier(context, "alembic_version")

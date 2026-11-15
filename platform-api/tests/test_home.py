@@ -17,7 +17,6 @@ from platform_api.orchestration import (
     AnyApprover,
     ApprovalPolicy,
     ApprovalStep,
-    Schedule,
     ScheduleBook,
     TeamsPost,
 )
@@ -44,16 +43,18 @@ from platform_api.shared import (
     Role,
     RunId,
     SeedPerson,
-    UseCaseId,
     UserId,
 )
 from tests.conftest import PostgresUrls
 from tests.declared import declared_status
+from tests.fake_n8n import FakeN8n
 from tests.support import ALICE, LOCAL_ENV, NOW, SPEC
 from tests.test_builder_http import NothingLearned
 from tests.test_builder_lifecycle import ModelConnected
 from tests.test_card_runs import output, ticket
 from tests.test_connections import DOWN, Rig
+from tests.test_n8n_builder import WRITES
+from tests.test_n8n_lifecycle import Workflows
 from tests.test_orchestrator import Harness, open_harness
 
 pytestmark = pytest.mark.anyio
@@ -680,42 +681,59 @@ async def test_a_long_draft_name_is_cut_to_what_a_row_can_show(lab: Lab):
     assert draft["name"].endswith("…")
 
 
+def on_n8n(lab: Lab) -> None:
+    """Each new workflow is laid out as its own n8n workflow, whose Schedule Trigger runs it."""
+    builder = Builder(
+        lab.h.db,
+        lab.h.orchestrator,
+        lab.app.state.watchlist,
+        "http://localhost:8000",
+        ModelConnected(),
+        n8n=Workflows(FakeN8n(), lab.h.db),
+        writes=WRITES,
+    )
+    lab.app.state.builder = builder
+    lab.app.state.home = Home(
+        builder,
+        lab.h.orchestrator,
+        lab.people,
+        lab.app.state.team_requests,
+        lab.rig.connections,
+        lab.app.state.watchlist,
+    )
+
+
+async def scheduled(lab: Lab, name: str, day: str, at: str) -> str:
+    body = {
+        "name": name,
+        "instruction": "Check LangGraph for new releases.",
+        "agents": [{"card_id": VERSION_CHECKER_ID, "values": VALUES}],
+        "schedule": {"day": day, "at": at},
+        "on": True,
+    }
+    response = await lab.call("alice", "POST", "/api/v1/agent-use-cases", body)
+    assert response.status_code == 201, response.text
+    return response.json()["use_case_id"]
+
+
 async def test_coming_up_names_the_next_scheduled_workflow_and_how_many_more(lab: Lab):
-    added = await lab.call(
-        "alice",
-        "POST",
-        "/api/v1/watchlist/software",
-        {"name": "LangGraph", "repo": "langchain-ai/langgraph", "our_version": "1.2.14"},
-    )
-    assert added.status_code == 201, added.text
-    scheduled = await lab.call(
-        "alice", "PUT", "/api/v1/watchlist/schedule", {"day": "monday", "at": "09:00"}
-    )
-    assert scheduled.status_code == 200, scheduled.text
+    on_n8n(lab)
+    await scheduled(lab, "Weekly", "monday", "09:00")
+    daily = await scheduled(lab, "Daily", "every_day", "08:00")
     await workflow(lab)
 
     home = await lab.home("bob")
 
-    assert home["workflows"] == 2
+    view = (await lab.call("bob", "GET", f"/api/v1/use-cases/{daily}")).json()
+    assert home["workflows"] == 3
     assert home["coming_up"] == {
-        "use_case_id": added.json()["use_case_id"],
-        "name": "Software watchlist",
-        "template": "software_watchlist",
-        "next_run_at": scheduled.json()["schedule"]["next_at"],
+        "use_case_id": daily,
+        "name": "Daily",
+        "template": "agent_cards",
+        "next_run_at": view["next_run_at"],
         "time_zone": "Asia/Singapore",
-        "more": 0,
+        "more": 1,
     }
-
-
-async def test_coming_up_carries_its_schedules_own_time_zone(lab: Lab):
-    use_case_id = await workflow(lab)
-    london = Schedule("every_day", "09:00", "Europe/London")
-    await ScheduleBook(lab.h.db).save(UseCaseId(use_case_id), london, ALICE_NOW)
-
-    coming_up = (await lab.home("bob"))["coming_up"]
-
-    assert coming_up["use_case_id"] == use_case_id
-    assert coming_up["time_zone"] == "Europe/London"
 
 
 async def test_someone_signed_in_but_not_on_the_list_is_refused(lab: Lab):

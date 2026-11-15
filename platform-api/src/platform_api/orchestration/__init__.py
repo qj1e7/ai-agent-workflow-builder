@@ -148,12 +148,9 @@ from platform_api.orchestration.schedule import (
     parse_at,
 )
 from platform_api.orchestration.schedule_store import (
-    CheckSpecs,
-    NotOn,
     SavedSchedule,
     ScheduleBook,
     ScheduleHold,
-    ScheduleTicker,
 )
 from platform_api.orchestration.service import RunDetail
 from platform_api.orchestration.spec import (
@@ -365,7 +362,6 @@ __all__ = [
     "RequestNotice",
     "RowKind",
     "RowState",
-    "NotOn",
     "RuntimeDown",
     "Stopped",
     "ToolId",
@@ -380,7 +376,6 @@ __all__ = [
     "confirmation_summary",
     "tools_used",
     "write_tools_used",
-    "CheckSpecs",
     "Checked",
     "CouldNotCheck",
     "FromFirstCheck",
@@ -402,7 +397,6 @@ __all__ = [
     "Schedule",
     "ScheduleBook",
     "ScheduleHold",
-    "ScheduleTicker",
     "SoftwareFacts",
     "SoftwareSource",
     "Standing",

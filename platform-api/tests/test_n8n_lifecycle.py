@@ -21,7 +21,6 @@ from platform_api.orchestration import (
 )
 from platform_api.orchestration.n8n import N8nWorkflows
 from platform_api.orchestration.n8n_calls import ExecutionFacts, NewRun, decide_link
-from platform_api.orchestration.schedule_store import ScheduleBook, ScheduleTicker
 from platform_api.shared import UseCaseId, UserId
 from tests.fake_n8n import FakeN8n
 from tests.support import NOW
@@ -215,15 +214,6 @@ async def test_a_run_carries_its_workflow_and_where_its_trigger_listens(own: N8n
     document = (await version_row(own, use_case_id, 1))["document"]
     [hook] = [n["webhookId"] for n in document["nodes"] if n["name"] == "Start from the Portal"]
     assert spec.n8n == N8nTarget(workflow_id, hook)
-
-
-async def test_the_schedule_tick_leaves_an_own_workflow_to_n8n(own: N8nLab):
-    use_case_id, _ = await made(own, on=True)
-    lab = own.lab
-    ticker = ScheduleTicker(lab.h.db, ScheduleBook(lab.h.db), lab.builder, lab.h.orchestrator)
-    lab.h.advance(timedelta(days=2))
-    assert await ticker.tick() == []
-    assert await lab.runs() == [], f"n8n's Schedule Trigger runs {use_case_id}"
 
 
 async def test_the_card_a_use_case_pinned_runs_not_the_newest(own: N8nLab):

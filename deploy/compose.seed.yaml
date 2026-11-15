@@ -1,0 +1,25 @@
+# The stack starts from a database made before ENGINE-PLAN E10, when every workflow ran on the
+# shared run workflow, so the e2e test of the move can check that nothing of it is lost.
+# scripts/e2e.sh adds this file when E2E_SEED=old-engine.
+services:
+  seed:
+    # The platform-api image, built as compose.yaml builds it, so the seed migrates with its code.
+    build:
+      context: ../platform-api
+      target: runtime
+    image: wab/platform-api:${WAB_IMAGE_TAG:-dev}
+    restart: "no"
+    command: ["python", "/seed/load.py", "/seed/seed.json"]
+    volumes:
+      - ../e2e/old_engine:/seed:ro
+    environment:
+      DATABASE_URL_SEED: postgresql://postgres:${POSTGRES_PASSWORD:?run deploy/make-env.sh}@postgres:5432/platform
+      DATABASE_URL_OWNER: postgresql://wab_owner:${WAB_OWNER_PASSWORD:?run deploy/make-env.sh}@postgres:5432/platform
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  bootstrap:
+    depends_on:
+      seed:
+        condition: service_completed_successfully
