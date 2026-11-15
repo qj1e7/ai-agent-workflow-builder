@@ -18858,7 +18858,7 @@
     },
     "/api/v1/use-cases/{use_case_id}": {
       "delete": {
-        "description": "Takes the workflow out of the list and stops it running. Nothing is erased: its past runs stay readable, a run waiting for a yes can still be decided, and it can be restored for a day. Deleting it again answers the same.",
+        "description": "Takes the workflow out of the list and stops it running. Nothing is erased: its past runs stay readable, a run waiting for a yes can still be decided, and it can be restored for a day. Deleting it again answers the same. One someone holds in n8n is taken back first, and stays theirs when n8n does not move it.",
         "operationId": "delete_use_case_api_v1_use_cases__use_case_id__delete",
         "parameters": [
           {
@@ -18940,7 +18940,7 @@
                 }
               }
             },
-            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+            "description": "n8n did not take the change in time, so nothing changed. Or: sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [

@@ -14,7 +14,7 @@ import pytest
 
 from platform_api.bootstrap import LoadedWorkflow, record_status
 from platform_api.builder import Builder
-from platform_api.builder.n8n_holds import Holding
+from platform_api.builder.n8n_holds import STRANDED, Holding
 from platform_api.builder.n8n_view import InN8nViews
 from platform_api.builder.planner import HERE_IN_N8N, WHICH_IN_N8N, AnswerIn, PlannerFront
 from platform_api.orchestration import Publisher
@@ -316,6 +316,30 @@ async def test_a_move_that_loses_the_settings_puts_them_back(s: Staffed):
     assert s.n8n.workflows[workflow_id]["settings"] == laid_out
     assert (await s.take_back("carol", use_case_id)).status_code == 200
     assert s.n8n.workflows[workflow_id]["settings"] == laid_out
+
+
+async def test_a_failed_move_that_cannot_go_back_is_stranded_until_release_moves_it(s: Staffed):
+    await s.member()
+    use_case_id, workflow_id = await held(s)
+    s.n8n.transfer_keeps = lambda settings: {}
+    s.n8n.after_put = s.n8n.edit
+    s.n8n.transfer_answers = [204, 500]
+    opened = await s.open("carol", use_case_id)
+    assert (opened.status_code, opened.json()["detail"]) == (503, STRANDED)
+    assert await s.held_by(use_case_id) is None
+    assert s.n8n.home_of(workflow_id) != PLATFORM_PROJECT, "it sits in Carol's space"
+    assert (await s.lab.move("alice", "pause", use_case_id)).status_code == 200, "pause still"
+    resumed = await s.lab.move("alice", "resume", use_case_id)
+    assert (resumed.status_code, resumed.json()["detail"]) == (409, STRANDED)
+
+    s.n8n.transfer_keeps = lambda settings: settings
+    s.n8n.after_put = None
+    s.n8n.transfer_answers = [500]
+    await s.settle()
+    assert s.n8n.home_of(workflow_id) != PLATFORM_PROJECT, "a refused retry keeps it stranded"
+    await s.settle()
+    assert s.n8n.home_of(workflow_id) == PLATFORM_PROJECT
+    assert (await s.lab.move("alice", "resume", use_case_id)).status_code == 200
 
 
 async def test_the_sweep_names_a_publish_by_the_stored_user_id_after_an_email_change(s: Staffed):

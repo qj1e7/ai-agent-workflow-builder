@@ -999,7 +999,8 @@ class Builder:
                 await uow.conn.execute(
                     "SELECT u.paused_at, u.paused_by, u.deleted_at, u.deleted_by, u.draft,"
                     " u.engine, u.n8n_workflow_id, u.current_version, u.deleted_in_n8n_at,"
-                    " u.held_by, v.template, v.n8n_version_id, v.grade, v.document"
+                    " u.held_by, u.n8n_stranded_at, v.template, v.n8n_version_id, v.grade,"
+                    " v.document"
                     " FROM builder.use_cases u JOIN builder.use_case_versions v"
                     " ON v.use_case_id = u.use_case_id AND v.version = u.current_version"
                     " WHERE u.use_case_id = %s FOR UPDATE OF u",
@@ -1011,7 +1012,8 @@ class Builder:
             before = lifecycle_of(row)
             after = move(before, row["template"], uow.now)
             if isinstance(after, Draft | On | Paused | Deleted) and after != before:
-                if _own(row) and row["held_by"] is not None and self.holding is not None:
+                away = row["held_by"] is not None or row["n8n_stranded_at"] is not None
+                if _own(row) and away and self.holding is not None:
                     if isinstance(after, Deleted):
                         # Back in the platform's project first, so a delete n8n does not finish
                         # never leaves the workflow in a member's space with no hold on record.

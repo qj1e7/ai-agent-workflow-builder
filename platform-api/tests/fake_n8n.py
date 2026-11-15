@@ -79,6 +79,8 @@ class FakeN8n:
     """Each account deleted, with the project its own space moved to."""
     transfer_keeps: Callable[[dict[str, Any]], dict[str, Any]] = lambda settings: settings
     """What a transfer leaves of the workflow's settings. Unchanged, as E6 saw live."""
+    transfer_answers: list[int] = field(default_factory=list[int])
+    """How n8n answers the next transfers, in turn. A transfer it refuses moves nothing."""
 
     def client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(transport=httpx.MockTransport(self.handle), base_url="http://n8n")
@@ -316,6 +318,9 @@ class FakeN8n:
                 answer = {"id": retry, "mode": "retry", "retryOf": execution_id}
                 return httpx.Response(200, json={**answer, "status": "waiting"})
             case "PUT", ["workflows", workflow_id, "transfer"]:
+                answer = self.transfer_answers.pop(0) if self.transfer_answers else 204
+                if answer != 204:
+                    return httpx.Response(answer, json={"message": "n8n did not move it"})
                 workflow = self.workflows[workflow_id]
                 project = body["destinationProjectId"]
                 workflow["projectId"] = project

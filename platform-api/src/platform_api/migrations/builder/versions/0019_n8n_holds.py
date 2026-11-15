@@ -7,7 +7,9 @@ down_revision = "0018"
 def upgrade() -> None:
     # Who opened each workflow in n8n, and who took it back and when (ENGINE-PLAN D14). The use
     # case's held_by says who holds it now; this keeps every hold. taken_back_by is empty when the
-    # platform took it back itself, as when the holder's n8n access ended.
+    # platform took it back itself, as when the holder's n8n access ended. n8n_stranded_at marks a
+    # workflow a failed move may have left outside the platform's project with nobody holding it:
+    # the platform moves it back until that works, and changes nothing else in it meanwhile.
     op.execute("""
         CREATE TABLE builder.n8n_holds (
             use_case_id text NOT NULL REFERENCES builder.use_cases (use_case_id),
@@ -21,6 +23,7 @@ def upgrade() -> None:
             ON builder.n8n_holds (use_case_id) WHERE taken_back_at IS NULL;
 
         ALTER TABLE builder.use_cases
+            ADD COLUMN n8n_stranded_at timestamptz,
             ADD CONSTRAINT use_cases_a_hold_has_its_time
                 CHECK ((held_by IS NULL) = (held_since IS NULL));
 
@@ -30,6 +33,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("""
-        ALTER TABLE builder.use_cases DROP CONSTRAINT use_cases_a_hold_has_its_time;
+        ALTER TABLE builder.use_cases
+            DROP CONSTRAINT use_cases_a_hold_has_its_time,
+            DROP COLUMN n8n_stranded_at;
         DROP TABLE builder.n8n_holds;
     """)
