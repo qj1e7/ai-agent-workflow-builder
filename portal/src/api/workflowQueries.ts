@@ -4,7 +4,7 @@ import { unwrap, type ApiClient } from './client'
 import { useApiClient, useCacheScope } from './context'
 import { newIdempotencyKey } from './idempotency'
 import { keys } from './queries'
-import type { CreateAgentUseCase, RepublishIn, ScheduleIn, UseCaseCreated, UseCaseView, VersionView, WatchlistView } from './types'
+import type { CreateAgentUseCase, RepublishIn, ScheduleIn, ScheduleSaveIn, UseCaseCreated, UseCaseView, VersionView, WatchlistView } from './types'
 
 type Move = 'pause' | 'resume' | 'restore'
 
@@ -83,10 +83,13 @@ export function useDeleteWorkflow() {
   })
 }
 
-/** Saving makes the caller the schedule owner, which lifts a hold, and a new schedule publishes a new version. The view that comes back says both. */
+/**
+ * Saving makes the caller the schedule owner, which lifts a hold, and a new schedule publishes a new version. The view that comes back
+ * says both. A save from a version no longer in use is a 409, and nothing is saved.
+ */
 export function saveScheduleOptions(client: ApiClient, queryClient: QueryClient, user: string, useCaseId: string) {
   return {
-    mutationFn: async (body: ScheduleIn) =>
+    mutationFn: async (body: ScheduleSaveIn) =>
       unwrap(await client.PUT('/api/v1/use-cases/{use_case_id}/schedule', { params: { path: { use_case_id: useCaseId } }, body: { ...body, via: 'page' } })),
     onSuccess: (view: UseCaseView) => applySavedView(queryClient, user, view),
   }
@@ -101,6 +104,8 @@ export function rereadChanged(queryClient: QueryClient, user: string, useCaseId:
 interface ScheduleChange {
   readonly useCaseId: string
   readonly schedule: ScheduleIn
+  /** The version the card read, so a save over a teammate's later change is refused. */
+  readonly known: number
 }
 
 /** What a save from the chat answered: the workflow as it is now, and its newest version, which says who published it. */
@@ -115,9 +120,9 @@ export interface ChatSaved {
  */
 export function chatScheduleOptions(client: ApiClient, queryClient: QueryClient, user: string) {
   return {
-    mutationFn: async ({ useCaseId, schedule }: ScheduleChange): Promise<ChatSaved> => {
+    mutationFn: async ({ useCaseId, schedule, known }: ScheduleChange): Promise<ChatSaved> => {
       const path = { params: { path: { use_case_id: useCaseId } } }
-      const view = unwrap(await client.PUT('/api/v1/use-cases/{use_case_id}/schedule', { ...path, body: { ...schedule, via: 'chat' } }))
+      const view = unwrap(await client.PUT('/api/v1/use-cases/{use_case_id}/schedule', { ...path, body: { ...schedule, via: 'chat', expected_version: known } }))
       const versions = await client.GET('/api/v1/use-cases/{use_case_id}/versions', path).catch(() => null)
       return { view, newest: versions?.data?.versions[0] }
     },
@@ -129,7 +134,7 @@ export function chatScheduleOptions(client: ApiClient, queryClient: QueryClient,
 /** The edit card's Save for the Software watchlist, through the watchlist's own route, which keeps no versions. */
 export function chatWatchlistOptions(client: ApiClient, queryClient: QueryClient, user: string) {
   return {
-    mutationFn: async ({ schedule }: ScheduleChange) => unwrap(await client.PUT('/api/v1/watchlist/schedule', { body: schedule })),
+    mutationFn: async ({ schedule, known }: ScheduleChange) => unwrap(await client.PUT('/api/v1/watchlist/schedule', { body: { ...schedule, expected_version: known } })),
     onSuccess: (view: WatchlistView) => queryClient.setQueryData(keys.watchlist(user), view),
     onSettled: (_saved: unknown, _error: unknown, { useCaseId }: ScheduleChange) => rereadChanged(queryClient, user, useCaseId),
   }

@@ -345,6 +345,35 @@ test('alice’s schedule changes publish versions the page lists read only, an U
   await context.close()
 })
 
+test('a schedule saved from an old read is refused, says so, and shows carol’s schedule in its place', async ({ browser, request }, info) => {
+  const workflow = await agentWorkflow(request, 'changed since')
+  const context = await devContext(browser, 'alice')
+  const page = await context.newPage()
+  await page.goto(`/workflows/${workflow.id}`)
+  await expect(heading(page)).toHaveText(workflow.name)
+  await changeWhen(page).click()
+  await page.getByLabel('Day').selectOption('monday')
+  await page.getByLabel('Time, Singapore').fill('09:00')
+
+  await saveSchedule(request, 'carol', workflow.id, { day: 'friday', at: '17:30' })
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+
+  await expect(page.getByRole('main').getByRole('alert')).toHaveText('Changed since you opened it. Nothing was saved.')
+  await expect(page.getByRole('form', { name: 'Change when it runs' }), 'the editor gives way to the schedule read again').toHaveCount(0)
+  await expect(page.getByRole('main')).toContainText('Every Friday at 17:30')
+  await expect(page.getByRole('main')).toContainText('Set by Carol.')
+  await expect(changeWhen(page), 'focus returns to Change, which opens on carol’s schedule').toBeFocused()
+  await shot(page, info, 'sched-changed-since')
+  const kept = await request.get(`/api/v1/use-cases/${workflow.id}`, { headers: { 'X-Dev-User': 'alice' } })
+  const view = (await kept.json()) as { version: number; schedule: { day: string; owner_name: string } }
+  expect([view.version, view.schedule.day, view.schedule.owner_name], 'alice’s stale save published nothing').toEqual([2, 'friday', 'Carol'])
+
+  await changeWhen(page).click()
+  await expect(page.getByLabel('Day')).toHaveValue('friday')
+  await expect(page.getByRole('main').getByRole('alert'), 'opening the editor again clears the refusal').toHaveCount(0)
+  await context.close()
+})
+
 for (const phone of [false, true]) {
   test(`the workflow page passes WCAG 2.2 AA, keeps reduced motion calm and does not scroll sideways at ${phone ? '390' : '1440'} px`, async ({ browser, request }, info) => {
     const workflow = await agentWorkflow(request, phone ? 'phone' : 'desktop')

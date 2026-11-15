@@ -119,6 +119,7 @@ export type ProjectGuess = Schemas['ProjectGuess']
 export type ScheduleView = Schemas['ScheduleView']
 export type ScheduleHold = Schemas['ScheduleHold']
 export type ScheduleIn = Schemas['ScheduleIn']
+export type ScheduleSaveIn = Schemas['ScheduleSaveIn']
 export type Day = Schemas['Day']
 export type Trigger = Schemas['Trigger']
 

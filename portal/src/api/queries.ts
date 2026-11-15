@@ -14,7 +14,7 @@ import type {
   QuestionView,
   RefusalOut,
   SaveIn,
-  ScheduleIn,
+  ScheduleSaveIn,
 } from './types'
 
 export const POLL_MS = 3000
@@ -532,13 +532,15 @@ export function usePutAddressBack() {
   return useSwitchAddress('address/undo')
 }
 
+/** A save from a version of the watchlist no longer in use is a 409 and saves nothing, so the watchlist is read again to show the new one. */
 export function useSaveSchedule() {
   const client = useApiClient()
   const queryClient = useQueryClient()
   const user = useCacheScope()
   return useMutation({
-    mutationFn: async (body: ScheduleIn) => unwrap(await client.PUT('/api/v1/watchlist/schedule', { body })),
+    mutationFn: async (body: ScheduleSaveIn) => unwrap(await client.PUT('/api/v1/watchlist/schedule', { body })),
     onSuccess: (view) => queryClient.setQueryData(keys.watchlist(user), view),
+    onError: () => void queryClient.invalidateQueries({ queryKey: keys.watchlist(user) }),
   })
 }
 

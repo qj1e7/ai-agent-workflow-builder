@@ -14,12 +14,13 @@ import undoneUseCase from '../../../../contracts/fixtures/builder/use-case.undon
 import changed from '../../../../contracts/fixtures/builder/versions.json'
 import undone from '../../../../contracts/fixtures/builder/versions.undone.json'
 import { App } from '../../App'
-import { ApiError } from '../../api/client'
+import { ApiError, type ApiClient } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import type { Me, PersonOut, RunView, TroubleshootingOut, UseCaseView, VersionView } from '../../api/types'
 import type { LastRun } from './workflow'
 import { formatterFactory } from './workflow'
+import { saveScheduleOptions } from '../../api/workflowQueries'
 import { WhenEditor } from './When'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
@@ -77,7 +78,7 @@ function renderEditor(schedule: UseCaseView['schedule']): string {
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
-        <WhenEditor schedule={schedule} isPending={false} save={() => undefined} onDone={() => undefined} />
+        <WhenEditor schedule={schedule} version={1} isPending={false} save={() => undefined} onDone={() => undefined} />
       </ApiProvider>
     </QueryClientProvider>,
   )
@@ -263,6 +264,22 @@ describe('a workflow page', () => {
     for (const me of [ALICE, BOB]) {
       expect(nextOf(render({ me, useCase: held }))).toContain('An Operator can take it over by saving the schedule.')
     }
+  })
+
+  it('lets an Operator take a held schedule over from When: Change opens on it, the save carries the version read, and the saved view names her and its next run', async () => {
+    const held: UseCaseView = { ...AGENTS, version: 3, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: 'owner_removed' } }
+    expect(buttons(render({ me: ALICE, useCase: held }))).toContain('Change when it runs')
+    expect(buttons(render({ me: BOB, useCase: held })).filter((label) => /when it runs/i.test(label)), 'only an Operator can take it over').toEqual([])
+    const taken: UseCaseView = { ...held, next_run_at: '2026-11-09T01:00:00Z', schedule: { ...held.schedule!, owner_name: 'Alice', held: null } }
+    const sent: unknown[] = []
+    const client = { PUT: (path: string, init: unknown) => (sent.push([path, init]), Promise.resolve({ data: taken, response: { ok: true, status: 200 } })) } as unknown as ApiClient
+
+    await saveScheduleOptions(client, new QueryClient(), 'me', held.use_case_id).mutationFn({ day: 'monday', at: '09:00', expected_version: 3 })
+
+    expect(sent).toEqual([['/api/v1/use-cases/{use_case_id}/schedule', { params: { path: { use_case_id: held.use_case_id } }, body: { day: 'monday', at: '09:00', expected_version: 3, via: 'page' } }]])
+    const after = render({ me: ALICE, useCase: taken })
+    expect(sectionText(after, 'When')).toContain('Set by Alice.')
+    expect(nextOf(after)).not.toContain('Not running')
   })
 
   it('gives an Approver who may approve and the recent runs, but no manage buttons', () => {

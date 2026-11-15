@@ -19,6 +19,8 @@ import { placeAfterRedraw } from '../../ui/focus'
 import { nextCheckWords, TAKE_OVER_WORDS } from '../software/software'
 import {
   bannerOf,
+  CHANGED_SINCE_OPENED,
+  changedSinceOpened,
   changeProblem,
   controlsOf,
   deleteWords,
@@ -640,8 +642,9 @@ describe('what happens when a schedule is saved', () => {
       say: (text) => seen.push(`said ${text}`),
       refocus: () => seen.push('focus'),
       reread: (id) => seen.push(`reread ${id}`),
+      stale: () => seen.push('closed, the workflow read again shows in its place'),
     })
-    save({ day: 'monday', at: '09:00' }, form)
+    save({ day: 'monday', at: '09:00', expected_version: 1 }, form)
     return seen
   }
 
@@ -656,6 +659,14 @@ describe('what happens when a schedule is saved', () => {
 
   it('only shows any other refusal', () => {
     expect(setup((answers) => answers.onError(new ApiError(403, { detail: 'x' })))).toEqual(['shown 403'])
+  })
+
+  it('gives way to the workflow read again when a teammate changed it since the form opened, so the new schedule shows', () => {
+    const changed = new ApiError(409, { detail: CHANGED_SINCE_OPENED })
+    expect(setup((answers) => answers.onError(changed))).toEqual(['closed, the workflow read again shows in its place', 'focus', 'reread uc_1'])
+    expect(CHANGED_SINCE_OPENED).toBe('Changed since you opened it. Nothing was saved.')
+    expect(changedSinceOpened(changed)).toBe(true)
+    expect(changedSinceOpened(new ApiError(409, { detail: 'Changed again since, in n8n. Nothing was saved.' })), 'a change made in n8n keeps the form open').toBe(false)
   })
 })
 

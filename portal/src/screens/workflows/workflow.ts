@@ -1,6 +1,6 @@
 import { ApiError } from '../../api/client'
 import { pressOnce, type Latch, type Outcome } from '../../api/latch'
-import type { BlockKind, Me, RunView, ScheduleIn, UseCaseView, VersionSchedule, VersionView } from '../../api/types'
+import type { BlockKind, Me, RunView, ScheduleSaveIn, UseCaseView, VersionSchedule, VersionView } from '../../api/types'
 import { agentIdentity } from '../../ui/agents'
 import { andList, declinedOfSteps, declinedRecord, runPill, scheduleShort, stageWords, type NameOf, type NextRun, type StageFacts } from '../run/words'
 import { faceId } from '../agents/agents'
@@ -235,19 +235,25 @@ interface SaverTies {
   readonly say: (words: string) => void
   readonly refocus: () => void
   readonly reread: (useCaseId: string) => void
+  /** A teammate changed the workflow since the form was opened, so the form gives way to the workflow as it is now. */
+  readonly stale: () => void
 }
 
-/** What a save does with the platform's answer: close the form and say so, or show the refusal and, if the workflow changed or is gone, read it again. */
-export function scheduleSaver(mutate: (body: ScheduleIn, answers: SavedAnswers) => void, { useCaseId, now, say, refocus, reread }: SaverTies) {
+/**
+ * What a save does with the platform's answer: close the form and say so, or show the refusal and, if the workflow changed or is gone,
+ * read it again. A change since the form was opened closes it, so the workflow read again shows the new schedule in its place.
+ */
+export function scheduleSaver(mutate: (body: ScheduleSaveIn, answers: SavedAnswers) => void, { useCaseId, now, say, refocus, reread, stale }: SaverTies) {
   const rereadIfOutOfDate = rereadWhenOutOfDate(useCaseId, refocus, reread)('schedule')
-  return (body: ScheduleIn, form: FormAnswers): void =>
+  return (body: ScheduleSaveIn, form: FormAnswers): void =>
     mutate(body, {
       onSuccess: (view) => {
         form.onSuccess()
         say(scheduleSavedWords(view, now))
       },
       onError: (failure) => {
-        form.onError(failure)
+        if (changedSinceOpened(failure)) stale()
+        else form.onError(failure)
         rereadIfOutOfDate(failure)
       },
     })
@@ -443,6 +449,11 @@ export function changeWords(change: Change, useCase: Pick<UseCaseView, 'name' | 
 const answered = (error: unknown, status: number) => error instanceof ApiError && error.status === status
 
 export const meansOutOfDate = (error: unknown) => answered(error, 409) || answered(error, 404)
+
+/** The platform's words when a save was made from a version no longer in use. Nothing was saved. */
+export const CHANGED_SINCE_OPENED = 'Changed since you opened it. Nothing was saved.'
+
+export const changedSinceOpened = (error: unknown): boolean => answered(error, 409) && error instanceof ApiError && error.message === CHANGED_SINCE_OPENED
 
 /** When the platform says the workflow changed or is gone, move focus off the pressed control and read it again. */
 export const rereadWhenOutOfDate =

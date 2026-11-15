@@ -572,7 +572,7 @@ describe('a schedule held because its owner can no longer run it', () => {
 
 describe('the schedule editor', () => {
   it('warns before saving that the person saving becomes the owner and cannot approve its checks', () => {
-    const html = render(statuses, ALICE, [], <ScheduleEditor schedule={(statuses as WatchlistView).schedule} onDone={() => undefined} />)
+    const html = render(statuses, ALICE, [], <ScheduleEditor schedule={(statuses as WatchlistView).schedule} version={(statuses as WatchlistView).version} onDone={() => undefined} onStale={() => undefined} />)
     expect(text(html)).toContain('Saving makes you the owner of this schedule. Its checks then count as your work, so you won’t be able to approve them.')
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*aria-describedby="sched-owner-note"/)
   })

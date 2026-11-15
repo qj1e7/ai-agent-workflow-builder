@@ -2,12 +2,12 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useSaveSchedule, useTurnOffSchedule } from '../../api/queries'
-import type { Day, ScheduleIn, ScheduleView } from '../../api/types'
+import type { Day, ScheduleSaveIn, ScheduleView } from '../../api/types'
 import { useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
 import { Button } from '../../ui/Button'
 import { useFocusAfterReread } from '../../ui/focus'
 import { IconPlay } from '../../ui/icons'
-import { rereadWhenOutOfDate } from '../workflows/workflow'
+import { CHANGED_SINCE_OPENED, changedSinceOpened, rereadWhenOutOfDate } from '../workflows/workflow'
 import { pressResume, SCHEDULE_PLACES_IN_PAGE_ORDER, schedulePlaces, type SchedulePlace } from './resume'
 import { checkClock, DAYS, dayOption, nextCheckWords, noScheduleWords, ONE_APPROVAL, scheduleOwnerWords, scheduleWords } from './software'
 import styles from './Software.module.css'
@@ -26,7 +26,7 @@ export function ScheduleNote({ schedule, operator, paused }: { schedule: Schedul
 
 /** What a save needs from its mutation, so the Software page and the workflow page share one form. */
 export interface SaveSchedule {
-  readonly mutate: (body: ScheduleIn, answers: { onSuccess: () => void; onError: (failure: unknown) => void }) => void
+  readonly mutate: (body: ScheduleSaveIn, answers: { onSuccess: () => void; onError: (failure: unknown) => void }) => void
   readonly isPending: boolean
 }
 
@@ -34,15 +34,20 @@ const ownerWarning = (work: string) => `Saving makes you the owner of this sched
 
 interface FormProps {
   readonly schedule: Pick<ScheduleView, 'day' | 'at'> | null
+  /** The version the form opened on. A save carries it, so a teammate's later change is never saved over. */
+  readonly version: number
   /** What the schedule starts, in the owner warning: "checks" or "runs". */
   readonly work: string
   readonly save: SaveSchedule
   readonly onDone: () => void
+  /** A teammate changed it since the form opened, so nothing was saved and the form gives way to the schedule read again. */
+  readonly onStale: () => void
 }
 
-export function ScheduleForm({ schedule, work, save, onDone }: FormProps) {
+export function ScheduleForm({ schedule, version, work, save, onDone, onStale }: FormProps) {
   const [day, setDay] = useState<Day>(schedule?.day ?? 'monday')
   const [at, setAt] = useState(schedule?.at ?? '09:00')
+  const [opened] = useState(version)
   const [error, setError] = useState<string | undefined>()
   const words = useErrorWords()
   const first = useRef<HTMLSelectElement>(null)
@@ -58,10 +63,10 @@ export function ScheduleForm({ schedule, work, save, onDone }: FormProps) {
     }
     setError(undefined)
     save.mutate(
-      { day, at: clock.value },
+      { day, at: clock.value, expected_version: opened },
       {
         onSuccess: onDone,
-        onError: (failure) => setError(words(failure)),
+        onError: (failure) => (changedSinceOpened(failure) ? onStale() : setError(words(failure))),
       },
     )
   }
@@ -100,8 +105,15 @@ export function ScheduleForm({ schedule, work, save, onDone }: FormProps) {
   )
 }
 
-export function ScheduleEditor({ schedule, onDone }: { schedule: ScheduleView | null; onDone: () => void }) {
-  return <ScheduleForm schedule={schedule} work="checks" save={useSaveSchedule()} onDone={onDone} />
+interface EditorProps {
+  readonly schedule: ScheduleView | null
+  readonly version: number
+  readonly onDone: () => void
+  readonly onStale: () => void
+}
+
+export function ScheduleEditor({ schedule, version, onDone, onStale }: EditorProps) {
+  return <ScheduleForm schedule={schedule} version={version} work="checks" save={useSaveSchedule()} onDone={onDone} onStale={onStale} />
 }
 
 export function useEditorThatRefocusesItsOpener() {
@@ -151,6 +163,8 @@ function useResume(useCaseId: string, shown: readonly SchedulePlace[], answeredA
 
 interface ScheduleProps {
   readonly schedule: ScheduleView | null
+  /** The watchlist's version, as read. */
+  readonly version: number
   readonly operator: boolean
   readonly paused: boolean
   readonly useCaseId: string
@@ -158,8 +172,13 @@ interface ScheduleProps {
   readonly onResumed: () => void
 }
 
-export function Schedule({ schedule, operator, paused, useCaseId, answeredAt, onResumed }: ScheduleProps) {
+export function Schedule({ schedule, version, operator, paused, useCaseId, answeredAt, onResumed }: ScheduleProps) {
   const { editing, opener, open, close } = useEditorThatRefocusesItsOpener()
+  const [refused, setRefused] = useState<string | null>(null)
+  const stale = () => {
+    setRefused(CHANGED_SINCE_OPENED)
+    close()
+  }
   const off = useTurnOffSchedule()
   const resume = useResume(useCaseId, schedulePlaces({ paused, scheduled: schedule !== null }), answeredAt, onResumed)
   const words = useErrorWords()
@@ -178,7 +197,14 @@ export function Schedule({ schedule, operator, paused, useCaseId, answeredAt, on
               Resume
             </Button>
           ) : null}
-          <Button ref={opener} data-place="schedule" onClick={open}>
+          <Button
+            ref={opener}
+            data-place="schedule"
+            onClick={() => {
+              setRefused(null)
+              open()
+            }}
+          >
             {schedule ? 'Change schedule' : 'Set a schedule'}
           </Button>
           {schedule ? (
@@ -198,7 +224,12 @@ export function Schedule({ schedule, operator, paused, useCaseId, answeredAt, on
           {words(off.error)}
         </p>
       ) : null}
-      {operator && editing ? <ScheduleEditor schedule={schedule} onDone={close} /> : null}
+      {refused ? (
+        <p className={styles['error']} role="alert">
+          {refused}
+        </p>
+      ) : null}
+      {operator && editing ? <ScheduleEditor schedule={schedule} version={version} onDone={close} onStale={stale} /> : null}
     </section>
   )
 }
