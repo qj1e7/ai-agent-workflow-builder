@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from typing import Final
 
-from agent_runtime.abilities import commands_a_change
+from agent_runtime.abilities import change_verbs_in, commands_a_change
 from agent_runtime.contract import (
     AbilitiesAnswer,
     CantAnswer,
@@ -70,6 +70,19 @@ question carries out."""
 ABOUT_THE_PLANNER: Final = re.compile(
     r"\byou\b.*\b(?:do|help|able|offer)\b|\b(?:abilities|capabilities)\b", re.IGNORECASE
 )
+"""A question about what the Planner can do, as "what can you do"."""
+HOW_TO_START: Final = re.compile(
+    r"^(?:please\s+)?help(?:\s+(?:me|us))?(?:\s+please)?$|"
+    r"\bhow\s+(?:do|can|should|could)\s+(?:i|we)\s+(?:start|begin|use|get\s+started)\b|"
+    r"\bhow\s+to\s+(?:start|begin|use|get\s+started)\b|"
+    r"\bhow\s+does\s+(?:this|it|the\s+app)\s+work\b|"
+    r"\bwhere\s+(?:do|should|can)\s+(?:i|we)\s+(?:start|begin)\b|"
+    r"\bwhat\s+(?:is|'s|’s)\s+this\b|"
+    r"\b(?:get(?:ting)?\s+started|steps|guide|tutorial|walkthrough|first\s+time|new\s+here)\b",
+    re.IGNORECASE,
+)
+"""A question about how to start using the app, as "how do I start", "list the steps to use this
+app" or "help"."""
 
 STATE_ANSWERS: Final = (CheckWorkflowsAnswer, WhyStoppedAnswer, NeedsMeAnswer, QuestionAnswer)
 """The answers that read platform state for a question, and set nothing up."""
@@ -103,9 +116,10 @@ def parts_of(
     text = visible_words(request)
     clauses = [c for c in clauses_of(text) if not polite(text[c[0] : c[1]])]
     if isinstance(answer, STATE_ANSWERS):
-        return _answered(text, clauses, _about_state(text, clauses, _names_of(answer)))
+        asked = _about_state(text, clauses, _names_of(answer))
+        return _answered(text, clauses, asked or _the_only_question(text, clauses))
     if isinstance(answer, AbilitiesAnswer):
-        about = [c for c in clauses if ABOUT_THE_PLANNER.search(text[c[0] : c[1]])]
+        about = [c for c in clauses if about_the_app(text[c[0] : c[1]])]
         return _answered(text, clauses, about)
     if isinstance(answer, EditAnswer | PauseAnswer | ResumeAnswer):
         marked = (
@@ -118,14 +132,22 @@ def parts_of(
             for m in marked
         ]
     crosses = _crosses(read, text, answer)
+    alone = len(clauses) == 1
     found: list[RequestPart] = []
     for clause in clauses:
         inside = [c for c in crosses if c.start < clause[1] and c.end > clause[0]]
         if inside:
-            found += [_crossed(text, clause, cross) for cross in inside]
+            found += [_crossed(text, clause, cross, alone) for cross in inside]
         else:
             found.append(_unmarked(answer, text, clause))
     return found
+
+
+def about_the_app(clause: str) -> bool:
+    """Whether the clause asks what the Planner can do or how to start using the app, and orders
+    nothing, so "help me close the done tickets" is no question about the app."""
+    asks = ABOUT_THE_PLANNER.search(clause) or HOW_TO_START.search(clause)
+    return bool(asks) and not _orders(clause) and not change_verbs_in(clause)
 
 
 def _asks(text: str, clause: Span) -> bool:
@@ -163,15 +185,23 @@ def _about_state(text: str, clauses: list[Span], names: list[str]) -> list[Span]
     ]
 
 
+def _the_only_question(text: str, clauses: list[Span]) -> list[Span]:
+    """The request's one clause when it orders nothing: the answer was chosen for it."""
+    return [c for c in clauses if len(clauses) == 1 and not _orders(text[c[0] : c[1]])]
+
+
 def _answered(text: str, clauses: list[Span], asked: list[Span]) -> list[RequestPart]:
     """An answer to a question sets nothing up: it ticks the clauses it answers. Every other
-    clause keeps a cross: a task or an order, asked on its own, gets its own answer, and
-    anything else was not followed."""
+    clause keeps a cross: a task or an order beside a clause it answers, asked on its own, gets
+    its own answer, and anything else was not followed."""
     return [
         _part(text, c, "will_do")
         if c in asked
         else _part(
-            text, c, "cant", "ask_on_its_own" if _a_task(text[c[0] : c[1]]) else "not_followed"
+            text,
+            c,
+            "cant",
+            "ask_on_its_own" if asked and _a_task(text[c[0] : c[1]]) else "not_followed",
         )
         for c in clauses
     ]
@@ -264,9 +294,10 @@ def locate(text: str, quote: str) -> Span | None:
     return None if found is None else (found.start(), found.end())
 
 
-def _crossed(text: str, clause: Span, cross: _Cross) -> RequestPart:
-    """The cross on its clause. A question that no structure read is asked on its own, whole."""
-    if cross.reason in ("not_followed", "cant_do") and _asks(text, clause):
+def _crossed(text: str, clause: Span, cross: _Cross, alone: bool) -> RequestPart:
+    """The cross on its clause. A question that no structure read, beside the rest of the
+    request, is asked on its own, whole. A question that is the whole request keeps its cross."""
+    if not alone and cross.reason in ("not_followed", "cant_do") and _asks(text, clause):
         return _part(text, clause, "cant", "ask_on_its_own")
     span = trim(text, max(cross.start, clause[0]), min(cross.end, clause[1]))
     part = _part(text, span, cross.mark, cross.reason, cross.note, cross.choices)
