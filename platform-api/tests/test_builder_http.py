@@ -36,8 +36,10 @@ from platform_api.orchestration import (
     CheckPartResult,
     CheckWorkflowsAnswer,
     ConnectionCheck,
+    DidntFollowAnswer,
     EditAnswer,
     ExampleSpec,
+    FreeReplyAnswer,
     Given,
     ModelProblem,
     NeedsMeAnswer,
@@ -50,6 +52,7 @@ from platform_api.orchestration import (
     PreviousTurn,
     QuestionAnswer,
     RefusedAnswer,
+    ReplyOffer,
     RequestPart,
     ResumeAnswer,
     RowKind,
@@ -2028,3 +2031,55 @@ async def test_a_time_it_cant_read_leaves_the_time_to_pick(front: Front):
     unclear = ScheduleChange(time_unclear=True)
     reply = await edit_reply(front, EditAnswer(workflow_words="morning check", schedule=unclear))
     assert reply["after"] == {"day": "weekdays", "at": None}
+
+
+CANT_EMAIL = FreeReplyAnswer(
+    form="cant",
+    text="I can't send email yet. I can watch software for new releases.",
+    offer=ReplyOffer(capability="github.releases", request="Keep track of the LangGraph version"),
+)
+
+
+async def test_a_free_reply_comes_back_in_the_planners_words_with_its_button(front: Front):
+    front.answers.result = Answered(answer=CANT_EMAIL, parts=[crossed("email me", "cant_do")])
+    assert await say(front, "email me") == {
+        "parts": [
+            {"text": "email me", "mark": "cant", "reason": "cant_do", "note": None, "choices": []}
+        ],
+        "answer": "reply",
+        "form": "cant",
+        "text": CANT_EMAIL.text,
+        "choices": [],
+        "offer": {
+            "capability": "github.releases",
+            "request": "Keep track of the LangGraph version",
+        },
+        "looked_at": [],
+    }
+
+
+async def test_a_clarifying_free_reply_carries_its_choices(front: Front):
+    front.answers.result = answered(
+        FreeReplyAnswer(form="clarify", text="Which one?", choices=["Releases", "Tickets"])
+    )
+    reply = await say(front, "help me keep an eye on things")
+    assert (reply["answer"], reply["form"], reply["choices"]) == (
+        "reply",
+        "clarify",
+        ["Releases", "Tickets"],
+    )
+
+
+async def test_someone_who_isnt_an_operator_gets_a_free_reply_with_no_set_up_button(front: Front):
+    front.answers.result = Answered(answer=CANT_EMAIL, parts=[done("how do I use this")])
+    reply = await ask_as_bob(front, "how do I use this?")
+    assert reply["answer"] == "reply" and reply["text"] == CANT_EMAIL.text
+    assert reply["offer"] is None
+
+
+async def test_the_fixed_fallback_comes_back_as_didnt_follow(front: Front):
+    front.answers.result = Answered(
+        answer=DidntFollowAnswer(), parts=[crossed("flibber", "not_followed")]
+    )
+    assert (await say(front, "flibber"))["answer"] == "didnt_follow"
+    assert (await ask_as_bob(front, "flibber"))["answer"] == "didnt_follow"

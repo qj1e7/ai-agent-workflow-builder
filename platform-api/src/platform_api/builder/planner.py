@@ -46,10 +46,12 @@ from platform_api.orchestration import (
     ConnectionCheck,
     ConnectionId,
     Day,
+    DidntFollowAnswer,
     EditAnswer,
     EditCant,
     ExampleSpec,
     FactSection,
+    FreeReplyAnswer,
     Grade,
     ModelProblem,
     NeedsMeAnswer,
@@ -64,6 +66,7 @@ from platform_api.orchestration import (
     PreviousTurn,
     QuestionAnswer,
     RefusedAnswer,
+    ReplyForm,
     RequestPart,
     ResumeAnswer,
     RowKind,
@@ -80,9 +83,10 @@ from platform_api.wire import WireIn, WireModel
 log = logging.getLogger(__name__)
 
 ANSWER_LIMIT_SECONDS: Final = 20.0
-"""The model gets 8 seconds for each of its two calls in the runtime: the reading, and the
-answer to a question about the person's data (ADR 0042). This is the platform's own limit around
-the whole call, so a runtime that hangs still gives the person an answer."""
+"""The model gets 8 seconds for each of its calls in the runtime: the reading, the answer to a
+question about the person's data (ADR 0042), and the free reply at a dead end (ADR 0047). This
+is the platform's own limit around the whole call, so a runtime that hangs still gives the
+person an answer."""
 
 type CapabilityState = Literal["ready", "needs_setup", "down", "planned", "unsupported"]
 type Intent = Literal[
@@ -311,6 +315,44 @@ class QuestionReply(Reply):
     )
 
 
+class ReplyOfferView(WireModel):
+    capability: str = Field(description="The Ready capability it stands for.")
+    request: str = Field(
+        description="The registry's example request. The Portal's button sends it as the "
+        "person's next message, so the Planner reads it again and any write still waits for a "
+        "yes."
+    )
+
+
+class FreeReply(Reply):
+    """The Planner's own words for a message no other answer fits, checked before they are sent
+    (ADR 0047). It changes nothing: a choice and an offer are sent as the next message."""
+
+    answer: Literal["reply"] = "reply"
+    form: ReplyForm = Field(
+        description="answer: a direct answer. clarify: one short question, with choices to tap. "
+        "cant: an honest can't, with offer as its button, or Ask the team when offer is null."
+    )
+    text: str = Field(description="Plain words only, to draw as text.")
+    choices: list[str] = Field(
+        description="For clarify only, 2 to 4 replies to tap, each sent as the next message."
+    )
+    offer: ReplyOfferView | None = Field(
+        description="For cant only: the closest Ready capability. Null on a can't means the "
+        "button is Ask the team. Always null for someone who isn't an Operator."
+    )
+    looked_at: list[FactSection] = Field(
+        description="The sections of the facts the reply used, as a question answer's are."
+    )
+
+
+class DidntFollowReply(Reply):
+    """The fixed fallback when the free reply failed or its checks refused it: the sketch's I
+    didn't follow that card, with Say it another way. The Portal words it for the person's role."""
+
+    answer: Literal["didnt_follow"] = "didnt_follow"
+
+
 class EditBefore(WireModel):
     day: Day
     at: ClockTime
@@ -518,6 +560,8 @@ type PlannerReply = Annotated[
     | WhyStoppedReply
     | NeedsMeReply
     | QuestionReply
+    | FreeReply
+    | DidntFollowReply
     | EditReply
     | PauseReply
     | ResumeReply
@@ -723,7 +767,16 @@ def _rows(rows: Sequence[UnderstoodRow]) -> list[UnderstoodRowView]:
 
 
 QUESTIONS: Final = frozenset(
-    {"needs_me", "check_workflows", "why_stopped", "question", "abilities", "decided"}
+    {
+        "needs_me",
+        "check_workflows",
+        "why_stopped",
+        "question",
+        "abilities",
+        "decided",
+        "reply",
+        "didnt_follow",
+    }
 )
 """The answers that change nothing, for someone who isn't an Operator (plan 3.2)."""
 
@@ -911,6 +964,19 @@ class PlannerFront:
                 return AbilitiesReply()
             case QuestionAnswer(text=text, looked_at=looked_at, about_software=software):
                 return QuestionReply(text=text, looked_at=looked_at, about_software=software)
+            case FreeReplyAnswer(form=form, text=text, choices=choices, offer=offer):
+                operator = Role.OPERATOR in viewer.roles
+                return FreeReply(
+                    form=form,
+                    text=text,
+                    choices=list(choices),
+                    offer=ReplyOfferView(capability=offer.capability, request=offer.request)
+                    if offer is not None and operator
+                    else None,
+                    looked_at=list(answer.looked_at),
+                )
+            case DidntFollowAnswer():
+                return DidntFollowReply()
             case EditAnswer() as edit:
                 return await self._edit(edit)
             case PauseAnswer() | ResumeAnswer():

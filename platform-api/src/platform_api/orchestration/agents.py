@@ -632,6 +632,42 @@ class QuestionAnswer(WireModel):
     )
 
 
+type ReplyForm = Literal["answer", "clarify", "cant"]
+
+
+class ReplyOffer(WireModel):
+    capability: str
+    request: str = Field(min_length=1, max_length=2000)
+
+
+class FreeReplyAnswer(WireModel):
+    """The model's own reply to a message no other answer fits, checked by the runtime's guard
+    before it is sent (ADR 0047)."""
+
+    kind: Literal["reply"] = "reply"
+    form: ReplyForm
+    text: str = Field(min_length=1, max_length=600)
+    choices: list[Annotated[str, Field(min_length=1, max_length=40)]] = Field(
+        default_factory=list[str], max_length=4
+    )
+    offer: ReplyOffer | None = None
+    looked_at: list[FactSection] = Field(default_factory=list[FactSection], max_length=3)
+
+    @model_validator(mode="after")
+    def _form_fits(self) -> Self:
+        if (self.form == "clarify") != (len(self.choices) >= 2) or (
+            self.form != "clarify" and self.choices
+        ):
+            raise ValueError("Only a clarifying question has choices, 2 to 4 of them")
+        if self.offer is not None and self.form != "cant":
+            raise ValueError("Only a can't offers something instead")
+        return self
+
+
+class DidntFollowAnswer(WireModel):
+    kind: Literal["didnt_follow"] = "didnt_follow"
+
+
 class _OnOrOff(WireModel):
     workflow_words: str | None = Field(default=None, max_length=80)
     software: str | None = Field(default=None, max_length=80)
@@ -695,7 +731,9 @@ type PlannerAnswer = Annotated[
     | QuestionAnswer
     | EditAnswer
     | PauseAnswer
-    | ResumeAnswer,
+    | ResumeAnswer
+    | FreeReplyAnswer
+    | DidntFollowAnswer,
     Field(discriminator="kind"),
 ]
 
