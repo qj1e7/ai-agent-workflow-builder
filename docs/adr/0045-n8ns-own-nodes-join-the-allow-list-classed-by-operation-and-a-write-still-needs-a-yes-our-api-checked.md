@@ -112,7 +112,9 @@ this ADR gives, or makes it stronger.
    they hold the workflow, because n8n lets a member's workflow use only the keys in the member's
    own space. On every take-back path (`take_back`, `release`, `back_in` and the recovery of a
    stranded move) the platform first runs the credential sweep, then puts its key back on each
-   block for a system by the block's type, and takes every other key off. n8n's Community edition
+   block for a system by the block's type, and takes every other key off. A block set to do what
+   its class turns off, such as a Slack delete, gets no key, so a test run, which runs the draft
+   in the platform's project, cannot run it with the platform's key. n8n's Community edition
    keeps a reference to a key the saver cannot use (spike P8), so the put-back is usually a check
    that changes nothing, and it covers the case where a reference was changed or dropped.
 4. **A key's record is never moved on from n8n.** The record holds what n8n answered the

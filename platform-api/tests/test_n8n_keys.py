@@ -473,6 +473,20 @@ async def test_the_holder_s_take_back_puts_the_keys_back(k: Keyed):
     put_back(k, workflow_id, hers)
 
 
+async def test_a_block_set_to_do_what_is_off_gets_no_key_back(k: Keyed):
+    """Her Slack block deletes with her key. Back home it gets no key, so a test run, which runs
+    the draft in the platform's project, cannot delete with the platform's key."""
+    use_case_id, workflow_id, space = await opened(k)
+    hers = k.n8n.add_credential(space, "slackApi")
+    block = slack_in(k, workflow_id)
+    block["parameters"] = {**block["parameters"], "operation": "delete", "timestamp": "1"}
+    block["credentials"] = {"slackApi": {"id": hers, "name": "mine"}}
+    k.n8n.edit(workflow_id)
+    assert (await k.s.take_back("carol", use_case_id)).status_code == 200
+    assert "credentials" not in slack_in(k, workflow_id)
+    assert hers not in k.n8n.credentials
+
+
 async def test_another_operator_s_take_back_puts_the_keys_back(k: Keyed):
     use_case_id, workflow_id, space = await opened(k)
     dana = await k.s.operator("dana")

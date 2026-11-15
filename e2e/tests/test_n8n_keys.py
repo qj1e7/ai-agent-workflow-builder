@@ -226,8 +226,14 @@ def test_member_hand_run_with_own_key_is_swept(api: Api, mock_model: None):
     use_case_id, workflow_id = created["use_case_id"], created["n8n_workflow_id"]
     ivan = staff_member(api, "Ivan")
     api.post(ivan.person, f"/api/v1/use-cases/{use_case_id}/open-in-n8n", expect=(200,))
-    homes = {k: v.get("shared") for k, v in keys_in_n8n().items() if k in PLATFORM_KEYS}
-    observed("where the platform's keys sit while a member holds a workflow", homes)
+    home = str(N8N_OWNER.call("GET", "/projects/personal")["id"])
+    homes = {
+        k: (v["homeProject"]["id"] == home, v["sharedWithProjects"])
+        for k, v in keys_in_n8n().items()
+        if k in PLATFORM_KEYS
+    }
+    observed("each platform key in the platform's project, and who it is shared with", homes)
+    assert homes == {k: (True, []) for k in PLATFORM_KEYS}, "no key comes to the holder"
     hers = ivan.member.call(
         "POST",
         "/credentials",
@@ -273,7 +279,5 @@ def test_member_hand_run_with_own_key_is_swept(api: Api, mock_model: None):
     back = N8N_OWNER.call("GET", f"/workflows/{workflow_id}")
     named: dict[str, Any] = {n["name"]: n.get("credentials") for n in back["nodes"]}
     observed("the keys the draft names once taken back", named)
-    assert named["Delete in Slack"] == {
-        "slackApi": {"id": "wab-slack-send", "name": "The platform's Slack key, posts only"}
-    }
+    assert named["Delete in Slack"] is None, "a Slack delete gets no key, not the platform's"
     api.delete("alice", f"/api/v1/use-cases/{use_case_id}", expect=(200,))
