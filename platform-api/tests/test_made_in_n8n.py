@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 import pytest
 
+from platform_api.builder.cards import VERSION_CHECKER_ID
 from platform_api.builder.made_in_n8n import FIX_IN_N8N, NOT_READ, SET_UP_ALREADY, MadeInN8n
 from platform_api.builder.models import (
     CardApprovalView,
@@ -24,12 +25,14 @@ from platform_api.builder.n8n_holds import NOT_MOVED
 from platform_api.builder.versions import authors_from
 from platform_api.orchestration import (
     TYPE_OF,
+    CardsTask,
     N8nWorkflow,
     OwnWorkflow,
     Publisher,
     RanVersion,
     RunSpec,
 )
+from platform_api.orchestration.cards import read_projects
 from platform_api.orchestration.n8n_calls import (
     ExecutionFacts,
     NewRun,
@@ -40,6 +43,7 @@ from platform_api.orchestration.n8n_calls import (
 from platform_api.orchestration.n8n_staff import NO_ACCESS, OFF, Ended, StaffAccounts
 from platform_api.shared import UseCaseId, UserId
 from tests.support import ALICE, NOW
+from tests.test_builder_lifecycle import VALUES
 from tests.test_n8n_access import PLATFORM_PROJECT, Staffed, lab, s, staff_for
 from tests.test_n8n_lifecycle import Workflows, made
 
@@ -430,3 +434,18 @@ async def test_its_requests_ask_as_many_approvers_as_the_cards_its_agent_blocks_
     spec = await s.lab.builder.run_spec_for(UseCaseId(created.json()["use_case_id"]))
     assert isinstance(spec, RunSpec)
     assert len(spec.approval_policy.steps) == 2, "the card asks two Approvers, one after the other"
+
+
+async def test_its_runs_read_and_write_where_its_agent_blocks_say(s: Staffed):
+    carol_n8n, carol_space = await space_of(s, "carol")
+    workflow_id = s.n8n.make_in(carol_space, named(await laid_out(s), "Reads MOCK"), carol_n8n)
+    created = await set_up(s, "carol", workflow_id)
+    assert created.status_code == 201, created.text
+    spec = await s.lab.builder.run_spec_for(UseCaseId(created.json()["use_case_id"]))
+    assert isinstance(spec, RunSpec) and isinstance(spec.task, CardsTask)
+    assert [(run.card.id, dict(run.values)) for run in spec.task.agents] == [
+        (VERSION_CHECKER_ID, VALUES)
+    ], "no card is pinned, so the task holds what its Agent block runs"
+    assert read_projects(spec.task) == {"MOCK"}, "so the agent may read the Jira project it names"
+    targets = [dict(b.target) for run in spec.task.agents for b in run.bindings.values()]
+    assert targets == [{"project": "MOCK"}], "and its change lands there"

@@ -1376,17 +1376,11 @@ class Builder:
             pinned = (await self._cards.agents_of([(use_case_id, view.version)])).get(
                 (use_case_id, view.version), []
             )
-            cards = tuple(
-                CardRun(
-                    card_spec(a.card), dict(a.values), card_bindings(card_spec(a.card), a.values)
-                )
-                for a in pinned
-            )
-            task = CardsTask(cards)
             named = await self._named_in_n8n(use_case_id, {a.card.card_id for a in pinned})
-            every = [*(a.card for a in pinned), *named]
-            asked = max((x.approvers for card in every for x in card.approvals), default=1)
-            policy = cards_policy([card_spec(card) for card in every], asked)
+            chosen = [*((a.card, dict(a.values)) for a in pinned), *named]
+            task = CardsTask(tuple(_bound(card, values) for card, values in chosen))
+            asked = max((x.approvers for card, _ in chosen for x in card.approvals), default=1)
+            policy = cards_policy([card_spec(card) for card, _ in chosen], asked)
         else:
             listed = await self._watchlist.task_for(use_case_id, view.version)
             if listed is None:
@@ -1405,10 +1399,13 @@ class Builder:
             n8n=await self._target(use_case_id),
         )
 
-    async def _named_in_n8n(self, use_case_id: str, pinned: set[str]) -> list[CardView]:
-        """The cards the Agent blocks of its own n8n workflow name beyond the pinned ones, as a
-        workflow made or changed in n8n may. Each runs its newest version, so the Approvers it
-        asks for count too."""
+    async def _named_in_n8n(
+        self, use_case_id: str, pinned: set[str]
+    ) -> list[tuple[CardView, dict[str, str]]]:
+        """The cards the Agent blocks of its own n8n workflow name beyond the pinned ones, with
+        each block's values, as a workflow made or changed in n8n may hold. Each runs its newest
+        version with those values, so what it may read and the Approvers it asks for count too.
+        The checker graded the values against the places the platform allows."""
         async with self._db.connection("builder") as conn:
             row = await (
                 await conn.execute(_CURRENT_VERSION + " WHERE u.use_case_id = %s", (use_case_id,))
@@ -1419,9 +1416,13 @@ class Builder:
             flow = read_flow(row["document"])
         except Unreadable:
             return []
-        named = {str(block.parameters.get("agent")) for block in flow.of_kind("agent")} - pinned
-        found = [await self._cards.get(card_id) for card_id in sorted(named)]
-        return [card for card in found if card is not None]
+        found: list[tuple[CardView, dict[str, str]]] = []
+        for block in flow.of_kind("agent"):
+            card_id = str(block.parameters.get("agent"))
+            card = None if card_id in pinned else await self._cards.get(card_id)
+            if card is not None:
+                found.append((card, _agent_values(block.parameters)))
+        return found
 
     async def start_run(
         self,
@@ -1474,6 +1475,28 @@ class Builder:
                     return await self._runs.start_run(trial, principal, idempotency_key)
                 case On():
                     return await self._runs.start_run(spec, principal, idempotency_key)
+
+
+def _bound(card: CardView, values: Mapping[str, str]) -> CardRun:
+    """A block that names no place for a write the card makes binds none, so its run is refused
+    at the write, never sent to a default place."""
+    spec = card_spec(card)
+    try:
+        return CardRun(spec, dict(values), card_bindings(spec, values))
+    except ValueError:
+        return CardRun(spec, dict(values), {})
+
+
+def _agent_values(parameters: Mapping[str, Any]) -> dict[str, str]:
+    """An Agent block's values, as its fixed collection of inputs holds them."""
+    inputs = parameters.get("inputs")
+    rows = cast(dict[str, Any], inputs).get("input") if isinstance(inputs, dict) else None
+    listed = cast(list[object], rows) if isinstance(rows, list) else []
+    return {
+        str(row["name"]): str(row["value"])
+        for row in (cast(dict[str, Any], r) for r in listed if isinstance(r, dict))
+        if "name" in row and isinstance(row.get("value"), str)
+    }
 
 
 async def _store_in_n8n(uow: UnitOfWork, use_case_id: str, version: int, relaid: Relaid) -> None:
