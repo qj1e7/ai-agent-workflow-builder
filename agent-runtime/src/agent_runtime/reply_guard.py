@@ -16,7 +16,7 @@ from typing import Final, Literal
 
 from agent_runtime.abilities import (
     CAPABILITIES,
-    EXAMPLES,
+    OFFER_REQUESTS,
     PAST_THE_NEWEST,
     change_verbs_in,
     other_systems,
@@ -491,14 +491,14 @@ BY_ID: Final = {c.id: c for c in CAPABILITIES}
 
 
 def offer_of(capability: str | None, given: Given) -> ReplyOffer | None:
-    """The button for a can't: the registry's example request for the capability, kept only
-    when it is Ready, not the platform's own work, has an example, and the person sets up
-    workflows. None means the button is Ask the team."""
+    """The button for a can't: the request `OFFER_REQUESTS` holds for the capability, kept only
+    when it is Ready, not the platform's own work, and the person sets up workflows. None means
+    the button is Ask the team."""
     spec = BY_ID.get((capability or "").strip())
     if spec is None or spec.state != "ready" or spec.platform or not given.sets_up:
         return None
-    example = next((e for e in EXAMPLES if spec.id in e.needs and e.kind != "learn"), None)
-    return None if example is None else ReplyOffer(capability=spec.id, request=example.text)
+    request = OFFER_REQUESTS.get(spec.id)
+    return None if request is None else ReplyOffer(capability=spec.id, request=request)
 
 
 def guarded(reply: ReplyEnvelope, given: Given) -> FreeReplyAnswer | GuardCheck:

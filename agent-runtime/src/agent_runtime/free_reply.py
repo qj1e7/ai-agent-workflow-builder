@@ -11,7 +11,12 @@ import uuid
 from dataclasses import dataclass
 from typing import Final
 
-from agent_runtime.abilities import CAPABILITIES, EXAMPLES, other_systems, vulnerability_phrase
+from agent_runtime.abilities import (
+    CAPABILITIES,
+    OFFER_REQUESTS,
+    other_systems,
+    vulnerability_phrase,
+)
 from agent_runtime.contract import (
     AbilitiesAnswer,
     AnswerRequest,
@@ -136,7 +141,7 @@ NO_FACTS: Final = "None were read."
 
 def _capability(spec: CapabilitySpec) -> str:
     if spec.state == "ready":
-        offer = any(spec.id in e.needs for e in EXAMPLES) and not spec.platform
+        offer = spec.id in OFFER_REQUESTS and not spec.platform
         return f"- {spec.id}: {spec.plain}. Ready.{'' if offer else ' Not an offer.'}"
     state = "Planned" if spec.state == "planned" else "Not on the plan"
     instead = f" Instead: {spec.instead}" if spec.instead else ""

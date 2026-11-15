@@ -371,14 +371,20 @@ EXAMPLES: Final = (
     ExampleSpec(
         text="Keep track of the LangGraph version", kind="monitor", needs=["github.releases"]
     ),
-    ExampleSpec(
-        text="Every Monday at 9am, list last week's new bugs in one new Jira ticket",
-        kind="automate",
-        needs=["jira.read", "jira.find_by_update", "summarise", "jira.create"],
-    ),
     ExampleSpec(text="What can you do?", kind="learn", needs=[]),
 )
 CAPABILITY_LIST: Final = CapabilityList(capabilities=list(CAPABILITIES), examples=list(EXAMPLES))
+
+WEEKLY_BUGS: Final = "Every Monday at 9am, list last week's new bugs in one new Jira ticket"
+OFFER_REQUESTS: Final = {
+    "github.releases": EXAMPLES[0].text,
+    "jira.read": WEEKLY_BUGS,
+    "jira.find_by_update": WEEKLY_BUGS,
+    "summarise": WEEKLY_BUGS,
+    "jira.create": WEEKLY_BUGS,
+}
+"""For each Ready capability a free reply's can't may offer, the request its button sends
+(ADR 0047). They are not Home's ideas, so they live here and not in `EXAMPLES`."""
 
 WRITES: Final = words(
     "close resolve cancel reopen delete remove purge erase wipe destroy trash discard drop archive "
