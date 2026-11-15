@@ -10,6 +10,7 @@ import { App } from '../../App'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import type { Me, PersonOut, UseCaseN8nView, UseCaseView } from '../../api/types'
+import { TakeItBackHere } from './InN8n'
 import { DRAFT, SAFE_BLOCKS } from './n8nHold'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator'], n8n_access: true }
@@ -67,6 +68,12 @@ describe('the workflow page’s Summary and In n8n tabs', () => {
     expect(tabs(render({ me: { ...ALICE, n8n_access: false } }))).toEqual([])
   })
 
+  it('says on Summary who has it open in n8n, in place of the Open in n8n editor that would be refused', () => {
+    const html = render({ view: { ...HELD, editor_url: null }, path: `/workflows/${ON.use_case_id}` })
+    expect(text(main(html))).toContain('Carol has it open in n8n since 13:40.')
+    expect(buttons(html)).not.toContain(OPEN)
+  })
+
   it('offers Open in n8n editor beside Pause on Summary too, as the sketch does', () => {
     const html = render({ path: `/workflows/${ON.use_case_id}` })
     expect(buttons(html)).toContain(OPEN)
@@ -116,5 +123,35 @@ describe('the In n8n tab', () => {
 
   it('says it is loading until the platform answers', () => {
     expect(text(main(render({ view: null })))).toContain('Loading the workflow in n8n')
+  })
+})
+
+describe('Take it back on a refused change', () => {
+  function drawTakeBack(me: Me, view: UseCaseN8nView, refused = true): string {
+    const session = createDevSession(null)
+    const scope = session.cacheScope()
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
+    queryClient.setQueryData(['me', scope], me)
+    queryClient.setQueryData(['use-case', scope, ON.use_case_id, 'n8n'], view)
+    return renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
+          <TakeItBackHere useCaseId={ON.use_case_id} refused={refused} say={() => undefined} />
+        </ApiProvider>
+      </QueryClientProvider>,
+    )
+  }
+  const all = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((m) => text(m[1] ?? ''))
+
+  it('offers Take it back to someone who may take it back, once the platform refused the change', () => {
+    expect(all(drawTakeBack(ALICE, { ...HELD, editor_url: null }))).toEqual(['Take it back'])
+    expect(all(drawTakeBack(CAROL, HELD)), 'its holder too').toEqual(['Take it back'])
+  })
+
+  it('offers nothing before a refusal, to someone without n8n access, or while nobody holds it', () => {
+    expect(all(drawTakeBack(ALICE, { ...HELD, editor_url: null }, false))).toEqual([])
+    expect(all(drawTakeBack({ ...ALICE, n8n_access: false }, { ...HELD, editor_url: null }))).toEqual([])
+    expect(all(drawTakeBack(ALICE, FREE))).toEqual([])
+    expect(all(drawTakeBack(ALICE, { ...HELD, editor_url: null, can_open: false, why_not: 'Set your n8n password first.' }))).toEqual([])
   })
 })

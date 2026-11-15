@@ -3,7 +3,7 @@ import free from '@contracts/fixtures/builder/use-case.n8n.json'
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../api/client'
 import type { UseCaseN8nView } from '../../api/types'
-import { DRAFT, GONE, heldLine, holdOf, inUseLine, mayOpen, n8nRefusalWords, openEditorTab, takenBackWords, theirsNote, type Hold } from './n8nHold'
+import { DRAFT, editorAddressOf, GONE, heldLine, NO_EDITOR, holdOf, inUseLine, mayOpen, n8nRefusalWords, openEditorTab, takenBackWords, theirsNote, type Hold } from './n8nHold'
 
 const FREE = free as UseCaseN8nView
 const HELD = held as UseCaseN8nView
@@ -76,6 +76,11 @@ describe('the In n8n tab’s words', () => {
     if (theirs.kind !== 'theirs') throw new Error('held by Carol')
     expect(theirsNote(theirs)).toBe('Anyone with n8n access can take it back from Carol.')
     expect(takenBackWords(theirs)).toBe('Taken back from Carol. You can change it here again.')
+  })
+
+  it('says why the editor can’t open when the platform names no address for it', () => {
+    expect(editorAddressOf({ editor_url: 'https://n8n.example/workflow/wf1' })).toEqual({ url: 'https://n8n.example/workflow/wf1' })
+    expect(editorAddressOf({ editor_url: null })).toEqual({ words: NO_EDITOR })
   })
 
   it('shows a refusal in the platform’s own words', () => {

@@ -28,7 +28,7 @@ import { StatusPills } from './Status'
 import { Versions } from './Versions'
 import { DraftActions } from './DraftActions'
 import { OpenInN8nEditor, WorkflowInN8n } from './InN8n'
-import { holdOf, mayOpen } from './n8nHold'
+import { heldLine, holdOf, mayOpen } from './n8nHold'
 import { When } from './When'
 import {
   bannerOf,
@@ -340,7 +340,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           )}
           <Versions useCase={useCase} now={now} nameOf={nameOf} operator={viewer.operator} say={say} />
           <DraftActions useCase={useCase} viewer={viewer} />
-          {mayPause || items.length > 0 || openable ? (
+          {mayPause || items.length > 0 || openable || hold?.kind === 'theirs' ? (
             <div className={styles['actions']}>
               {mayPause ? (
                 <Button icon={IconPause} data-place={placeOf('pause')} loading={move.isPending} onClick={() => pauseOrResume('pause')}>
@@ -349,6 +349,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
               ) : null}
               {openable ? <OpenInN8nEditor useCaseId={id} hold={openable} variant="secondary" /> : null}
               {items.length > 0 ? <ActionMenu items={items} buttonRef={moreButton} busy={runNow.pending} place={placeOf('run')} /> : null}
+              {hold?.kind === 'theirs' ? <p className={styles['heldLine']}>{heldLine(hold, now)}</p> : null}
             </div>
           ) : null}
         </>

@@ -122,6 +122,13 @@ describe('the Changed in n8n card', () => {
     expect(buttons(draw({ ...REFUSED, in_use: 6 }, { me: { ...ALICE, n8n_access: true }, inN8n: held })), 'a card about a version no longer in use offers nothing').toEqual([])
   })
 
+  it('tells an Operator without n8n access who can take it back, with no press she can’t make', () => {
+    const words = 'Carol has it open in n8n since 13:40. Ask Carol, or anyone with n8n access, to take it back.'
+    const html = draw(REFUSED, { phase: { kind: 'refused', words } })
+    expect(text(html)).toContain(words)
+    expect(buttons(html)).not.toContain('Take it back')
+  })
+
   it('uses no em dash', () => {
     for (const html of [draw(SAFE), draw(REFUSED), draw(FIX)]) expect(text(html)).not.toContain('—')
   })

@@ -1,11 +1,13 @@
+import { useEffect, useRef, useState } from 'react'
 import type { UseQueryResult } from '@tanstack/react-query'
 import { useErrorWords } from '../../api/context'
+import { useMe } from '../../api/queries'
 import type { Me, UseCaseN8nView, UseCaseView } from '../../api/types'
-import { useOpenInN8n, useSweepOnOpen, useTakeBack } from '../../api/workflowQueries'
+import { useOpenInN8n, useSweepOnOpen, useTakeBack, useUseCaseInN8n } from '../../api/workflowQueries'
 import { Button, ButtonAnchor, type ButtonVariant } from '../../ui/Button'
 import { Canvas } from '../../ui/Canvas'
 import { IconExternal, IconLock } from '../../ui/icons'
-import { heldLine, holdOf, inUseLine, mayOpen, mayTakeBack, n8nRefusalWords, NOT_OWN, OPEN_IN_N8N, openEditorTab, SAFE_BLOCKS, TAKE_IT_BACK, takenBackWords, theirsNote, type Held, type Hold } from './n8nHold'
+import { editorAddressOf, heldLine, heldOf, holdOf, inUseLine, mayOpen, mayTakeBack, n8nRefusalWords, NOT_OWN, OPEN_IN_N8N, openEditorTab, SAFE_BLOCKS, TAKE_IT_BACK, takenBackWords, theirsNote, type EditorTab, type Held, type Hold } from './n8nHold'
 import styles from './Workflows.module.css'
 
 interface OpenProps {
@@ -21,6 +23,17 @@ interface OpenProps {
 export function OpenInN8nEditor({ useCaseId, hold, variant }: OpenProps) {
   const open = useOpenInN8n()
   const words = useErrorWords()
+  const [noEditor, setNoEditor] = useState<string | null>(null)
+  // The answer's callbacks never run once the page has gone, so the tab still waiting for one is closed with it.
+  const waiting = useRef<EditorTab | null>(null)
+  useEffect(() => {
+    const close = () => waiting.current?.close()
+    window.addEventListener('pagehide', close)
+    return () => {
+      window.removeEventListener('pagehide', close)
+      close()
+    }
+  }, [])
   if (hold.kind === 'mine' && hold.editorUrl) {
     return (
       <ButtonAnchor href={hold.editorUrl} variant={variant}>
@@ -30,9 +43,21 @@ export function OpenInN8nEditor({ useCaseId, hold, variant }: OpenProps) {
   }
   const press = () => {
     const tab = openEditorTab(window)
+    waiting.current = tab
+    setNoEditor(null)
     open.mutate(useCaseId, {
-      onSuccess: (held) => (held.editor_url ? tab?.go(held.editor_url) : tab?.close()),
+      onSuccess: (held) => {
+        const address = editorAddressOf(held)
+        if ('url' in address) tab?.go(address.url)
+        else {
+          tab?.close()
+          setNoEditor(address.words)
+        }
+      },
       onError: () => tab?.close(),
+      onSettled: () => {
+        waiting.current = null
+      },
     })
   }
   return (
@@ -42,9 +67,9 @@ export function OpenInN8nEditor({ useCaseId, hold, variant }: OpenProps) {
         <IconExternal size={16} />
         <span className="visually-hidden"> (opens in a new tab)</span>
       </Button>
-      {open.isError ? (
+      {open.isError || noEditor ? (
         <p className={styles['actionProblem']} role="alert">
-          {n8nRefusalWords(open.error, words)}
+          {open.isError ? n8nRefusalWords(open.error, words) : noEditor}
         </p>
       ) : null}
     </>
@@ -60,6 +85,35 @@ export function useTakeBackPress(useCaseId: string, hold: Held | null, say: (tex
     pending: takeBack.isPending,
     problem: takeBack.isError ? n8nRefusalWords(takeBack.error, words) : null,
   }
+}
+
+interface TakeItBackHereProps {
+  readonly useCaseId: string
+  /** Whether the platform just refused a change to this workflow. Who holds it is read only then. */
+  readonly refused: boolean
+  readonly say: (text: string) => void
+}
+
+/** Take it back under a change the platform refused because someone holds the workflow, for whoever may press it. */
+export function TakeItBackHere({ useCaseId, refused, say }: TakeItBackHereProps) {
+  const me = useMe().data
+  const n8nAccess = refused && me?.n8n_access === true
+  const inN8n = useUseCaseInN8n(useCaseId, { enabled: n8nAccess })
+  const held = n8nAccess && me && inN8n.data ? heldOf(inN8n.data, me) : null
+  const takeBack = useTakeBackPress(useCaseId, held, say)
+  if (!held || !mayTakeBack(held)) return null
+  return (
+    <>
+      <Button loading={takeBack.pending} onClick={takeBack.press}>
+        {TAKE_IT_BACK}
+      </Button>
+      {takeBack.problem ? (
+        <p className={styles['problem']} role="alert">
+          {takeBack.problem}
+        </p>
+      ) : null}
+    </>
+  )
 }
 
 interface HeldProps {

@@ -1,5 +1,5 @@
 import { ApiError } from '../../api/client'
-import type { Me, UseCaseN8nView, UseCaseView } from '../../api/types'
+import type { HoldOut, Me, UseCaseN8nView, UseCaseView } from '../../api/types'
 import { UNKNOWN_PUBLISHER } from './n8nChange'
 import { publishedWhen, sinceWhen } from './times'
 
@@ -15,6 +15,12 @@ export const DRAFT = 'Turn it on first. A draft can’t be opened in n8n.'
 export const GONE = 'This workflow was deleted in n8n, so it can’t be opened there.'
 export const NOT_OWN = 'This workflow has no n8n workflow of its own yet.'
 const CANT_OPEN = 'n8n can’t be opened now.'
+/** The workflow moved to the person's n8n space, but the platform has no address set for n8n's editor (`N8N_EDITOR_URL`). */
+export const NO_EDITOR = 'It is open in your n8n space, but the platform has no address for n8n’s editor, so it can’t open it here. An admin can set it.'
+
+/** Where the opened tab goes, or why it can't go anywhere. */
+export const editorAddressOf = (held: Pick<HoldOut, 'editor_url'>): { readonly url: string } | { readonly words: string } =>
+  held.editor_url ? { url: held.editor_url } : { words: NO_EDITOR }
 
 /**
  * What this person can do with the workflow in n8n now. A hold comes first: its holder can always take it back, and so can anyone

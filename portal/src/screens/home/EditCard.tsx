@@ -42,6 +42,7 @@ import styles from './EditCard.module.css'
 import partsStyles from './PartsList.module.css'
 import setup from './SetupCard.module.css'
 import { teamPlace } from '../workflows/times'
+import { TakeItBackHere } from '../workflows/InN8n'
 
 type Focus = 'heading' | 'save' | 'undo'
 
@@ -375,6 +376,16 @@ export function EditCard({ reply, typed, page, say, now, about }: EditCardProps)
           <p className={styles['problem']} role="alert">
             {problem}
           </p>
+        ) : null}
+        {phase.kind === 'open' ? (
+          <TakeItBackHere
+            useCaseId={chosen.use_case_id}
+            refused={problem !== null}
+            say={(text) => {
+              setProblem(null)
+              note(text)
+            }}
+          />
         ) : null}
       </Card>
     </div>
