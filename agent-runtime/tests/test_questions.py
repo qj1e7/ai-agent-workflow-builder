@@ -26,7 +26,12 @@ from agent_runtime.contract import (
 )
 from agent_runtime.contracts import answer_request
 from agent_runtime.parts import parts_of
-from agent_runtime.questions import COULD_NOT_ANSWER, QUESTION_SYSTEM, QuestionReply
+from agent_runtime.questions import (
+    COULD_NOT_ANSWER,
+    QUESTION_SYSTEM,
+    QuestionReply,
+    workflows_rule,
+)
 from agent_runtime.reading import TicketRead
 from tests.fakes import ScriptedChat
 from tests.test_answers import follow_up
@@ -391,6 +396,53 @@ def test_why_stopped_goes_to_the_lane_when_no_run_has_stopped():
 def test_why_stopped_keeps_the_fixed_answer_when_a_run_has_stopped():
     out = _why(PlannerFacts(workflows=[_workflow("Done"), _workflow("Stopped")]))
     assert isinstance(out, WhyStoppedAnswer)
+
+
+def test_why_stopped_keeps_the_fixed_answer_when_some_last_runs_were_left_out():
+    out = _why(PlannerFacts(workflows=[_workflow("Done")], other_workflows=["Night check"]))
+    assert isinstance(out, WhyStoppedAnswer)
+
+
+def test_the_lane_is_told_which_workflows_came_by_name_only_and_to_say_it_could_not_look():
+    facts = PlannerFacts(workflows=[_workflow("Done")], other_workflows=["Night check"])
+    reply = QuestionReply(about_their_data=True, text="I couldn't look at Night check just now.")
+    result, chat = ask(reply, facts, "how is the night check doing?")
+    system = cast(tuple[str, str], chat.calls[1][0])[1]
+    assert workflows_rule(facts) in system and system.startswith(QUESTION_SYSTEM[:40])
+    assert "Only 1 of their 2 workflows came with a state and last run" in system
+    assert '"other_workflows":["Night check"]' in cast(tuple[str, str], chat.calls[1][1])[1]
+    assert result.answer.text == "I couldn't look at Night check just now."
+    _, plain = ask(reply, PlannerFacts(workflows=[_workflow("Done")]), "how are my workflows?")
+    assert plain.calls[1][0] == ("system", QUESTION_SYSTEM), "the rule only when it applies"
+
+
+def test_a_question_about_all_their_workflows_is_told_to_say_it_read_only_some():
+    facts = PlannerFacts(
+        workflows=[_workflow("Done")], other_workflows=["Night check"], left_out_workflows=3
+    )
+    rule = workflows_rule(facts)
+    assert "Only 1 of their 5 workflows came with a state and last run" in rule
+    assert "say the answer is from 1 of their 5 workflows" in rule
+
+
+def test_a_change_to_a_workflow_whose_name_was_not_sent_says_how_many_were_read():
+    facts = PlannerFacts(
+        workflows=[_workflow("Done")], other_workflows=["Night check"], left_out_workflows=1200
+    )
+    unused = QuestionReply(about_their_data=False)
+    result, _ = ask(unused, facts, "pause keep our software up to date", reading("change"))
+    assert isinstance(result, Answered)
+    assert result.answer == QuestionAnswer(
+        text="I could only read 2 of your 1,202 workflows, so I couldn't find the one you named.",
+        looked_at=["workflows"],
+    )
+
+
+def test_with_every_name_sent_a_change_to_an_unknown_name_is_crossed_as_before():
+    facts = PlannerFacts(workflows=[_workflow("Done")], other_workflows=["Night check"])
+    unused = QuestionReply(about_their_data=False)
+    result, _ = ask(unused, facts, "pause keep our software up to date", reading("change"))
+    assert isinstance(result, Answered) and not isinstance(result.answer, QuestionAnswer)
 
 
 @pytest.mark.parametrize("facts", [None, FACTS])

@@ -1,9 +1,9 @@
 import { useContext, useEffect, useMemo, useState } from 'react'
-import { useDecisions, useHome } from '../../api/homeQueries'
+import { useDecisions, useHome, useWaitingPages } from '../../api/homeQueries'
 import { useDisplayName } from '../../api/people'
 import { useMe, useRun, useUseCases, useWatchlist } from '../../api/queries'
 import { usePeopleList } from '../../api/settingsQueries'
-import type { DecidedReply, HomeOut } from '../../api/types'
+import type { DecidedReply, HomeOut, WaitingItem } from '../../api/types'
 import { operatorsSay } from '../../shell/OperatorsNote'
 import { ButtonLink } from '../../ui/Button'
 import { Card } from '../../ui/Card'
@@ -17,10 +17,11 @@ import { leadWords, waitingFor } from '../run/approvalWords'
 import { ApprovalCards } from './ApprovalCards'
 import { CardMemoryContext, type RequestRef } from './cardMemory'
 import { decidedSay } from './decided'
-import { approvalsOf, approverLine, needsOf, needsTotal, type Needs } from './home'
+import { approvalsOf, approverLine, needsTotal, type Needs } from './home'
 import { NeedRows } from './NeedsSection'
 import { DecisionRows, SoftwareRows, WorkflowRows } from './panels/ListRows'
 import { NeedsMore } from './panels/NeedsMore'
+import { usePagedNeeds } from './usePagedNeeds'
 import lists from './panels/Lists.module.css'
 
 const NOTHING: ReadonlySet<string> = new Set()
@@ -113,7 +114,7 @@ export function NeedsMeAnswer({ now, say }: { now: Date; say: Say }) {
   const home = useHome()
   const operator = useAsker() === 'operator'
   const nameOf = useDisplayName()
-  const needs = useMemo(() => (home.data ? needsOf(home.data) : null), [home.data])
+  const { needs, pager } = usePagedNeeds(home.data)
   const shown = useShownRequests()
   const requests = home.data && (shown !== undefined || onlyRequests(home.data, operator)) ? approvalsOf(home.data) : null
   const sentence = home.data ? (requests ? leadWords(shown?.length ?? requests.shown.length, true) : needsSentence(home.data, operator)) : null
@@ -136,7 +137,7 @@ export function NeedsMeAnswer({ now, say }: { now: Date; say: Say }) {
   if (needs.shown.length === 0) return <p>{sentence}</p>
   return (
     <Card title={sentence.replace(/\.$/, '')}>
-      <NeedRows needs={needs.shown} now={now} more={<NeedsMore needs={needs} />} />
+      <NeedRows needs={needs.shown} now={now} more={<NeedsMore needs={needs} pager={pager} />} />
     </Card>
   )
 }
@@ -177,7 +178,7 @@ export const NOTHING_TO_DECIDE = 'Nothing is waiting for your yes, so there’s 
 const requestItems = (needs: Needs): RequestRef[] => needs.shown.flatMap((need) => (need.kind === 'approval' ? [{ approvalId: need.item.approval_id, runId: need.item.run_id }] : []))
 
 /** The person's own requests that wait for someone else's yes, which the sketch shows as cards too. */
-const theirsWaiting = (home: HomeOut): RequestRef[] => home.waiting_on_others.map((item) => ({ approvalId: null, runId: item.run_id }))
+const theirsWaiting = (items: readonly WaitingItem[]): RequestRef[] => items.map((item) => ({ approvalId: null, runId: item.run_id }))
 
 /**
  * The requests waiting for this person’s yes, as the sketch's approval cards, the newest few and how many more. It is what an
@@ -212,6 +213,7 @@ function useWaitingFor(runId: string | null): readonly string[] | undefined {
 export function DecideAnswer({ say }: { say: Say }) {
   const home = useHome()
   const nameOf = useDisplayName()
+  const { items: waitingItems, total: waitingTotal, ...waitingPager } = useWaitingPages(home.data)
   const total = home.data?.approvals_total
   const shown = useShownRequests()
   const theirs = shown === undefined ? total === 0 && (home.data?.waiting_on_others_total ?? 0) > 0 : shown.length > 0 && shown.every((request) => request.approvalId === null)
@@ -225,7 +227,7 @@ export function DecideAnswer({ say }: { say: Say }) {
     return (
       <>
         <p>{sentence}</p>
-        <ApprovalCards items={theirsWaiting(home.data)} total={home.data.waiting_on_others_total} nameOf={nameOf} />
+        <ApprovalCards items={theirsWaiting(waitingItems)} total={waitingTotal} nameOf={nameOf} more={waitingPager} />
       </>
     )
   }

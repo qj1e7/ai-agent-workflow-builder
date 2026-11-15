@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from psycopg import sql
 from pydantic import TypeAdapter
 
-from platform_api import bootstrap, migrate
+from platform_api import bootstrap, migrate, old_runs
 from platform_api.app import create_app
 from platform_api.bootstrap import (
     OLD_RUN_WORKFLOW,
@@ -24,8 +24,8 @@ from platform_api.bootstrap import (
 from platform_api.db import PLATFORM_DATABASE, ROLE_OWNER
 from platform_api.migrations import MIGRATION_ORDER, downgrade, upgrade_all
 from platform_api.orchestration.n8n import N8nClient
+from platform_api.orchestration.node_classes import NODE_CLASSES
 from platform_api.orchestration.spec import RunSpec
-from platform_api.orchestration.workflows import load_all
 from platform_api.settings import BootstrapSettings
 from tests.conftest import PostgresUrls, truncate_all
 from tests.support import LOCAL_ENV, NOW, SPEC
@@ -207,6 +207,8 @@ class FakeN8n:
             {"id": "k1", "label": "platform-api"},
             {"id": "k2", "label": "Alice's own key"},
         ]
+        self.node_types = list(NODE_CLASSES.loaded())
+        """What n8n loaded, as NODES_INCLUDE from the class file makes it."""
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         path, method = request.url.path, request.method
@@ -217,6 +219,8 @@ class FakeN8n:
             return httpx.Response(400, json={"message": OWNER_EXISTS})
         if path in ("/rest/owner/setup", "/rest/login"):
             return httpx.Response(200, json={"data": {"id": "1"}})
+        if path == "/types/nodes.json":
+            return httpx.Response(200, json=[{"name": t, "version": 1} for t in self.node_types])
         if path == "/rest/projects/personal":
             return httpx.Response(200, json={"data": {"id": PLATFORM_PROJECT, "type": "personal"}})
         if path == "/rest/api-keys" and method == "GET":
@@ -403,28 +407,30 @@ def recorded(owner_url: str, ids: dict[str, str]) -> None:
         )
 
 
-def test_while_a_workflow_runs_on_the_shared_run_workflow_bootstrap_keeps_it(
+def test_a_workflow_still_on_the_shared_run_workflow_with_no_open_run_lets_it_go(
     postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
 ):
+    """The allow list turns its blocks off, and the workflow moves to its own as platform-api
+    starts (ENGINE-PLAN E10)."""
     truncate_all(postgres.owner)
     n8n = serve(monkeypatch, FakeN8n(["run", "schedule_tick"]))
+    n8n.credentials = ["cred0"]
     recorded(postgres.owner, {"run": "W1", "schedule_tick": "W2"})
     insert_use_case(postgres.owner, "uc_cards", "agent_cards")
 
-    loaded, findings = load_into_n8n(settings_for(postgres.owner), load_all(), lambda _: None)
+    assert main(env_for(postgres.owner)) == 0
 
-    assert findings == []
-    assert sorted(w.name for w in loaded) == ["run", "run_failure_reporter", "self_test_failure"]
-    assert names_in(n8n) == ["run", "run_failure_reporter", "self_test_failure"], (
-        "the schedule tick goes at once"
-    )
-    assert n8n.credentials == ["cred1"], "the run workflow's steps still need the step key"
+    assert names_in(n8n) == ["run_failure_reporter", "self_test_failure"]
+    assert n8n.credentials == [], "nothing needs the step key"
+    assert engine_status(postgres.owner) == READY
 
 
-def test_a_run_that_has_not_ended_keeps_the_shared_run_workflow(
-    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+def test_a_run_on_the_shared_run_workflow_that_has_not_ended_leaves_bootstrap_ready(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ):
-    """Its workflow was deleted, but its yes may still come, and its write runs there."""
+    """No block it needs can run under the allow list, so the shared run workflow goes, and
+    platform-api ends the run as it starts, saying so (ENGINE-PLAN E11). On Azure the apps
+    change before bootstrap runs, so a stop here could only hold every workflow back."""
     truncate_all(postgres.owner)
     n8n = serve(monkeypatch, FakeN8n(["run"]))
     recorded(postgres.owner, {"run": "W1"})
@@ -433,9 +439,51 @@ def test_a_run_that_has_not_ended_keeps_the_shared_run_workflow(
     with psycopg.connect(postgres.owner, autocommit=True) as conn:
         conn.execute("UPDATE orchestration.runs SET state = 'AwaitingApproval'")
 
-    load_into_n8n(settings_for(postgres.owner), load_all(), lambda _: None)
+    assert main(env_for(postgres.owner)) == 0
 
-    assert names_in(n8n) == ["run", "run_failure_reporter", "self_test_failure"]
+    assert engine_status(postgres.owner) == READY
+    assert names_in(n8n) == ["run_failure_reporter", "self_test_failure"]
+    assert old_runs.main({"DATABASE_URL_OWNER": postgres.owner}) == 0
+    listed = capsys.readouterr().out
+    assert f"run_waiting\t{SPEC.use_case_id}\tAwaitingApproval\tstarted " in listed, listed
+    assert listed.endswith("1 run(s) on the shared run workflow have not ended.\n")
+
+
+@pytest.mark.parametrize(
+    ("loads", "says"),
+    [
+        (
+            [*NODE_CLASSES.loaded(), "n8n-nodes-base.httpRequest", "n8n-nodes-base.code"],
+            "n8n loads 2 node type(s) that node_classes.json does not turn on, "
+            "n8n-nodes-base.code, n8n-nodes-base.httpRequest: NODES_INCLUDE is not the class "
+            "file's allow list",
+        ),
+        (
+            [t for t in NODE_CLASSES.loaded() if t != "CUSTOM.wabAskForYes"],
+            "n8n does not load CUSTOM.wabAskForYes, which node_classes.json says it loads",
+        ),
+        (
+            list(NODE_CLASSES.included()),
+            "n8n does not load n8n-nodes-base.dateTimeTool, which node_classes.json says it loads",
+        ),
+    ],
+    ids=["more", "fewer", "without-the-tool-n8n-makes"],
+)
+def test_bootstrap_is_not_ready_unless_n8n_loads_exactly_the_class_file_s_types(
+    postgres: PostgresUrls,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    loads: list[str],
+    says: str,
+):
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n([]))
+    n8n.node_types = loads
+
+    assert main(env_for(postgres.owner)) == 1
+
+    assert says in capsys.readouterr().out
+    assert engine_status(postgres.owner) == (False, "the live workflows fail the lint")
 
 
 def test_once_nothing_runs_on_it_bootstrap_removes_the_shared_run_and_tick_workflows(
@@ -450,7 +498,7 @@ def test_once_nothing_runs_on_it_bootstrap_removes_the_shared_run_and_tick_workf
         conn.execute("UPDATE builder.use_cases SET engine = 'own', n8n_workflow_id = 'wf_moved'")
     said: list[str] = []
 
-    loaded, _ = load_into_n8n(settings_for(postgres.owner), load_all(), said.append)
+    loaded, _ = load_into_n8n(settings_for(postgres.owner), said.append)
 
     assert [w.name for w in loaded] == ["run_failure_reporter", "self_test_failure"]
     assert names_in(n8n) == [
@@ -473,7 +521,7 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
     )
     said: list[str] = []
 
-    loaded, findings = load_into_n8n(settings_for(postgres.owner), load_all(), said.append)
+    loaded, findings = load_into_n8n(settings_for(postgres.owner), said.append)
 
     assert findings == []
     assert sorted(w.name for w in loaded) == ["run_failure_reporter", "self_test_failure"]
@@ -581,8 +629,7 @@ def test_the_error_workflow_and_the_self_test_are_loaded_active_and_every_failur
         "CUSTOM.wabReportFailure",
     ], "Report a failure, not an HTTP node"
     assert reporter["settings"]["callerPolicy"] == "any"
-    for name in ("self_test_failure", "run"):
-        assert held[name]["settings"]["errorWorkflow"] == reporter["id"], name
+    assert held["self_test_failure"]["settings"]["errorWorkflow"] == reporter["id"]
     assert engine_status(postgres.owner) == READY
     recorded = loaded_names(postgres.owner)
     assert recorded["run_failure_reporter"] == reporter["id"]
@@ -621,9 +668,9 @@ def test_a_same_name_workflow_in_a_member_s_project_is_left_alone(
     postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
 ):
     """A member could name a workflow of their own after the error workflow or the self-test.
-    Bootstrap never takes it for the platform's, and never writes to it."""
+    Bootstrap never takes it for the platform's, and never writes to it or removes it."""
     truncate_all(postgres.owner)
-    theirs = ["run_failure_reporter", "self_test_failure", "run"]
+    theirs = ["run_failure_reporter", "self_test_failure", "run", "schedule_tick"]
     n8n = serve(monkeypatch, FakeN8n([], theirs=theirs))
     insert_use_case(postgres.owner, "uc_cards", "agent_cards")
     untouched = json.loads(json.dumps(n8n.workflows))
@@ -632,11 +679,9 @@ def test_a_same_name_workflow_in_a_member_s_project_is_left_alone(
 
     assert {k: n8n.workflows[k] for k in untouched} == untouched
     recorded = loaded_names(postgres.owner)
-    for name in theirs:
+    for name in ("run_failure_reporter", "self_test_failure"):
         [ours] = [w for w in by_name(n8n, name) if w["shared"] == in_project(PLATFORM_PROJECT)]
         assert recorded[name] == ours["id"] not in untouched, name
-    run = n8n.workflows[recorded["run"]]
-    assert run["settings"]["errorWorkflow"] == recorded["run_failure_reporter"]
 
 
 def test_two_workflows_of_one_name_in_the_platform_project_stop_bootstrap(

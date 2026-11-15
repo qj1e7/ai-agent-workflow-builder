@@ -58,6 +58,12 @@ NOT_TAKEN_WORDS = (
     " again every minute. If this stays, ask for help."
 )
 """What the workflow's page says while it cannot move, as nothing ticks its schedule (E10)."""
+NOT_MOVED_YET = (
+    "Not running. It has not moved to its own n8n workflow yet. An Operator saving its schedule"
+    " moves it, or ask for help."
+)
+"""What Run now says for a workflow still on the shared run workflow with no refusal on its page:
+its schedule's owner can no longer start its runs."""
 
 type LayOut = Callable[
     [str, Mapping[str, Any], Schedule | None], Awaitable[Checked | DraftRefused | N8nNotReady]

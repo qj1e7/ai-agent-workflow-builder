@@ -4,47 +4,29 @@
 The grade is not the barrier. The write gateway checks our records at the moment of each write,
 and n8n's allow list leaves no block that can reach anything else. The grade tells a person,
 before anything runs, whether a workflow will be refused: `writes_refused` when a write can run
-without a yes, `needs_a_fix` when it cannot run as the platform expects at all.
+without a yes, `needs_a_fix` when it cannot run as the platform expects at all, as when a block,
+its version or what it was asked to do is off in the class file (ADR 0045).
 
 Pure. A document is the n8n workflow JSON as the public API takes it.
 """
 
+import hashlib
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
+from platform_api.orchestration import n8n_schedule, node_classes
 from platform_api.orchestration.agents import CardInput
 from platform_api.orchestration.n8n_calls import WRITE_TARGETS, Grade, WriteEntry
-from platform_api.orchestration.n8n_schedule import (
-    SCHEDULE_TRIGGER,
-    interval_problem,
-    schedule_intervals,
-)
+from platform_api.orchestration.n8n_schedule import interval_problem, schedule_intervals
+from platform_api.orchestration.node_classes import CLASS_FILE, NODE_CLASSES, BlockKind, Off
 from platform_api.orchestration.schedule import TIME_ZONE
-
-type BlockKind = Literal[
-    "schedule",
-    "start",
-    "manual",
-    "error",
-    "read",
-    "agent",
-    "propose",
-    "ask",
-    "write",
-    "tell",
-    "report",
-    "branch",
-    "merge",
-    "end",
-    "note",
-]
 
 type Document = dict[str, Any]
 
@@ -59,28 +41,29 @@ class NodeType:
     """It can start an execution."""
 
 
-NODE_TYPES: Mapping[str, NodeType] = {
-    "CUSTOM.wabStartFromPortal": NodeType("start", starts=True),
-    "CUSTOM.wabRead": NodeType("read", retried=True),
-    "CUSTOM.wabAgent": NodeType("agent", retried=True),
-    "CUSTOM.wabProposeChange": NodeType("propose", retried=True),
-    "CUSTOM.wabAskForYes": NodeType("ask"),
-    "CUSTOM.wabMakeApprovedChanges": NodeType("write", retried=True),
-    "CUSTOM.wabTell": NodeType("tell", retried=True),
-    "CUSTOM.wabReportFailure": NodeType("report"),
-    SCHEDULE_TRIGGER: NodeType("schedule", starts=True),
-    "n8n-nodes-base.manualTrigger": NodeType("manual", starts=True),
-    "n8n-nodes-base.errorTrigger": NodeType("error", starts=True),
-    "n8n-nodes-base.if": NodeType("branch"),
-    "n8n-nodes-base.merge": NodeType("merge"),
-    "n8n-nodes-base.noOp": NodeType("end"),
-    "n8n-nodes-base.stickyNote": NodeType("note"),
-}
-"""The allow list (ADR 0027): our node pack, as n8n names a custom extension's nodes
-(`CUSTOM.<name>`, P7 Q11), and n8n's three triggers, IF, Merge, No Op and Sticky Note. Any other
-type needs a fix."""
+STARTS: frozenset[BlockKind] = frozenset({"schedule", "start", "manual", "error"})
+RETRIED: frozenset[BlockKind] = frozenset({"read", "agent", "propose", "write", "tell"})
 
-TYPE_OF: Mapping[BlockKind, str] = {spec.kind: name for name, spec in NODE_TYPES.items()}
+NODE_TYPES: Mapping[str, NodeType] = {
+    name: NodeType(kind, retried=kind in RETRIED, starts=kind in STARTS)
+    for name, kind in NODE_CLASSES.blocks().items()
+}
+"""Every type the class file turns on: our node pack, as n8n names a custom extension's nodes
+(`CUSTOM.<name>`, P7 Q11), n8n's three triggers, IF, Merge, No Op, Sticky Note and its data
+nodes. Whether one block may run also depends on its version and what it does."""
+
+GRADING_RULES = hashlib.sha256(
+    b"".join(
+        Path(f).read_bytes()
+        for f in (__file__, node_classes.__file__, CLASS_FILE, n8n_schedule.__file__)
+    )
+).hexdigest()[:16]
+"""The rules a grade is made under: this checker, the class file and the schedule rules, as this
+release holds them. The versions sweep grades again a version graded under others."""
+
+TYPE_OF: Mapping[BlockKind, str] = {
+    spec.kind: name for name, spec in NODE_TYPES.items() if spec.kind != "shape"
+}
 
 ASK_EXITS = ("No answer", "Yes", "No", "Nothing to change")
 """Ask for a yes's exits in n8n's order. Output 0 is No answer, so an error path that n8n sends
@@ -167,6 +150,7 @@ class _Node(BaseModel):
     model_config = ConfigDict(extra="allow")
     name: str
     type: str = ""
+    typeVersion: JsonValue = None
     parameters: dict[str, JsonValue] = Field(default_factory=dict[str, JsonValue])
     position: list[float] = Field(default_factory=lambda: [0.0, 0.0])
 
@@ -185,6 +169,7 @@ class Block:
     name: str
     type: str
     parameters: Mapping[str, JsonValue]
+    version: JsonValue = None
 
     @property
     def spec(self) -> NodeType | None:
@@ -236,7 +221,10 @@ def parse(document: Mapping[str, Any]) -> N8nDocument:
 def read_flow(document: Mapping[str, Any]) -> Flow:
     """Raises Unreadable when the document is not an n8n workflow's shape."""
     parsed = parse(document)
-    blocks = {node.name: Block(node.name, node.type, node.parameters) for node in parsed.nodes}
+    blocks = {
+        node.name: Block(node.name, node.type, node.parameters, node.typeVersion)
+        for node in parsed.nodes
+    }
     edges = tuple(
         Edge(source, exit_index, target.node)
         for source, outputs in parsed.connections.items()
@@ -260,7 +248,7 @@ def grade(
     except Unreadable as unreadable:
         return _graded([Finding("needs_a_fix", None, str(unreadable))])
     findings: list[Finding] = [
-        *_unknown_blocks(flow),
+        *_off_blocks(flow),
         *_triggers(flow),
         *_settings(flow, error_workflow),
         *_parameters(flow),
@@ -319,7 +307,7 @@ def check_platform(document: Mapping[str, Any], error_workflow: str | None) -> t
         flow = read_flow(document)
     except Unreadable as unreadable:
         return (_fix(None, str(unreadable)),)
-    findings = [*_chain(flow, shape), *_kept(flow, shape.kept), *_unknown_blocks(flow)]
+    findings = [*_chain(flow, shape), *_kept(flow, shape.kept), *_off_blocks(flow)]
     findings += _schedules(flow)
     reported = error_workflow is not None and flow.settings.get("errorWorkflow") == error_workflow
     if shape.reports_failures and not reported:
@@ -356,10 +344,25 @@ def _fix(block: str | None, text: str) -> Finding:
     return Finding("needs_a_fix", block, text)
 
 
-def _unknown_blocks(flow: Flow) -> Iterable[Finding]:
+def _off_blocks(flow: Flow) -> Iterable[Finding]:
+    """Every block the class file does not let run: its type, its version, or what it was asked
+    to do. Unknown means off (ADR 0045)."""
     for block in flow.blocks.values():
-        if block.spec is None:
-            yield _fix(block.name, f'"{block.name}" is a block that is not on: {block.type}.')
+        verdict = NODE_CLASSES.verdict(block.type, block.version, block.parameters)
+        if isinstance(verdict, Off):
+            yield _fix(block.name, _off_words(block, verdict))
+
+
+def _off_words(block: Block, off: Off) -> str:
+    match off.because:
+        case "type":
+            return f'"{block.name}" uses a block that is off: {block.type}.'
+        case "version":
+            return f'"{block.name}" uses version {off.value} of {block.type}, which is off.'
+        case "expression":
+            return f'"{block.name}" picks what it does with an expression, so it is off.'
+        case "operation":
+            return f'"{block.name}" does something that is off: {off.value}.'
 
 
 def _triggers(flow: Flow) -> Iterable[Finding]:
@@ -380,9 +383,6 @@ def _settings(flow: Flow, error_workflow: str | None) -> Iterable[Finding]:
 
 
 def _parameters(flow: Flow) -> Iterable[Finding]:
-    for block in flow.of_kind("merge"):
-        if block.parameters.get("mode") == "combineBySql":
-            yield _fix(block.name, f'"{block.name}" combines by SQL, which is not allowed.')
     for block in flow.of_kind("tell"):
         if block.parameters.get("where", "channel") not in TELL_WHERE:
             yield _fix(block.name, f'"{block.name}" tells somewhere other than the fixed places.')

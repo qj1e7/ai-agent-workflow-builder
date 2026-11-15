@@ -179,6 +179,20 @@ class N8nClient:
         if response.status_code != 200:
             raise N8nError(f"could not sign in as {email}: HTTP {response.status_code}")
 
+    def node_types(self, tries: int = 10) -> set[str]:
+        """The node types n8n loaded, as its /types/nodes.json lists them to the signed-in owner.
+        Soon after a start the file can come back cut short (pack smoke), so a body that does not
+        parse is read again."""
+        for _ in range(tries - 1):
+            response = self._http.get("/types/nodes.json")
+            if response.status_code != 200:
+                raise N8nError(f"GET /types/nodes.json failed: {_short(response)}")
+            try:
+                return _type_names(response.json())
+            except ValueError:
+                self._sleep(3)
+        return _type_names(self._http.get("/types/nodes.json").raise_for_status().json())
+
     def remove_api_keys(self, label: str) -> int:
         listed = self._rest("GET", "/rest/api-keys")
         stale = [item for item in listed["data"]["items"] if item["label"] == label]
@@ -293,6 +307,16 @@ class N8nClient:
             params=params,
             headers={"X-N8N-API-KEY": self._api_key},
         )
+
+
+def _type_names(listed: object) -> set[str]:
+    if not isinstance(listed, list):
+        raise N8nError("n8n's /types/nodes.json is not a list of node types")
+    return {
+        str(cast(dict[str, Any], t).get("name"))
+        for t in cast(list[object], listed)
+        if isinstance(t, dict)
+    }
 
 
 def _ok(response: httpx.Response) -> dict[str, Any]:
@@ -1072,6 +1096,10 @@ class N8nDrafts(Protocol):
 
     async def error_workflow_id(self) -> str | None: ...
 
+    async def recorded_error_workflow_id(self) -> str | None:
+        """The error workflow the last bootstrap recorded, ready or not."""
+        ...
+
     async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft: ...
 
     async def remove(self, workflow_id: str) -> None: ...
@@ -1125,6 +1153,16 @@ class N8nWorkflows:
         """The error workflow, as the last bootstrap that was ready loaded it."""
         loaded = (await self.platform_workflows()).get(ERROR_WORKFLOW)
         return None if loaded is None else loaded.id
+
+    async def recorded_error_workflow_id(self) -> str | None:
+        """The error workflow the last bootstrap recorded, whether or not it was ready, as a
+        bootstrap that loads nothing keeps what the one before recorded."""
+        async with self._db.connection("orchestration") as conn:
+            row = await (
+                await conn.execute("SELECT workflows FROM orchestration.engine_status WHERE id = 1")
+            ).fetchone()
+        loaded: list[dict[str, Any]] = [] if row is None else row["workflows"]
+        return next((str(w["id"]) for w in loaded if w["name"] == ERROR_WORKFLOW), None)
 
     async def platform_workflows(self) -> dict[str, PlatformWorkflow]:
         """As the last bootstrap that was ready recorded them."""

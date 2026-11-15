@@ -65,7 +65,7 @@ from platform_api.builder.models import (
     VersionList,
     Via,
 )
-from platform_api.builder.moves import Moves
+from platform_api.builder.moves import NOT_MOVED_YET, Moves
 from platform_api.builder.n8n_draft import (
     ADDING,
     SAVED,
@@ -345,6 +345,14 @@ class UseCasePaused:
 @dataclass(frozen=True)
 class NotOnYet:
     """A draft runs by hand only as a test run."""
+
+
+@dataclass(frozen=True)
+class NotMovedYet:
+    """It is still on the shared run workflow, whose blocks are off (E11), so a run could only
+    fail. The words are what its page says."""
+
+    words: str
 
 
 @dataclass(frozen=True)
@@ -1356,7 +1364,7 @@ class Builder:
         principal: Principal,
         idempotency_key: str,
         test: bool = False,
-    ) -> RunStarted | None | NothingToCheck | NoModelToRun | UseCasePaused | NotOnYet:
+    ) -> RunStarted | None | NothingToCheck | NoModelToRun | UseCasePaused | NotOnYet | NotMovedYet:
         """A test run of a draft stops at the approval gate (ADR 0044). Whether it is a draft
         is read under the lock, so a draft turned on since runs as any test run does."""
         view = await self.get_use_case(use_case_id)
@@ -1379,6 +1387,9 @@ class Builder:
         spec = await self._spec_of(view)
         if isinstance(spec, NothingToCheck):
             return spec
+        if spec.n8n is None and self.moves is not None:
+            # The shared run workflow is made of blocks the allow list turns off (E11).
+            return NotMovedYet(view.move_refused or NOT_MOVED_YET)
         spec = replace(spec, test=test)
         if isinstance(spec.task, CardsTask) and not await self._planner.has_model():
             return NoModelToRun()

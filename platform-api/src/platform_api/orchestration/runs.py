@@ -69,6 +69,7 @@ class FailureReason(Enum):
     SAFETY_DENIED = "SafetyDenied"
     UNBOUND_INTENT = "UnboundIntent"
     OUT_OF_ORDER_STEP = "OutOfOrderStep"
+    STOPPED_BY_UPDATE = "StoppedByUpdate"
 
 
 class Stage(Enum):
@@ -88,6 +89,15 @@ TEST_PASSED = "Test run passed up to the yes. Nothing was written."
 SKIPPED = "An earlier run is still waiting for a yes."
 NO_ANSWER = "No answer. Nothing was written."
 DELETED_BEFORE_AN_ANSWER = "Deleted before an answer. Nothing was written."
+STOPPED_BEFORE_WRITING = (
+    "This run started before the update and couldn't finish. Nothing was written. Start it again."
+)
+STOPPED_WHILE_WRITING = (
+    "This run started before the update and may have partly finished. Check Jira before you "
+    "start it again."
+)
+"""What a run on the shared run workflow says when an update ends it (ENGINE-PLAN E11): the
+workflow it would carry on in is made of blocks the allow list turns off."""
 
 
 @dataclass(frozen=True)
@@ -482,6 +492,13 @@ class AwaitingApproval:
             Expired(self.run_id, self.proposal_id, self.approval_id, self.unread), (expired,)
         )
 
+    def stop_for_update(self) -> Moved[Failed]:
+        """An update ended the shared run workflow it waited in (ENGINE-PLAN E11). Nothing was
+        written, and its request ends closed, so a late yes is refused."""
+        failure = Failure(FailureReason.STOPPED_BY_UPDATE, STOPPED_BEFORE_WRITING, retryable=False)
+        failed = Failed(self.run_id, Stage.PROPOSED, failure, ResumeWork(1))
+        return Moved(failed, (run_failed(Stage.PROPOSED, failure),))
+
     def cancel(self) -> Moved[Expired]:
         """Its workflow was deleted before anyone answered (ENGINE-PLAN D7). Nothing was
         written, and the request ends cancelled."""
@@ -822,6 +839,13 @@ def deadline(state: type[ActiveState], now: datetime) -> datetime:
 
 def fail(state: ActiveState, failure: Failure) -> Moved[Failed]:
     return state.fail(failure)
+
+
+def stop_for_update(state: ActiveState) -> Moved[Failed]:
+    """An update ended the shared run workflow it ran in (ENGINE-PLAN E11). Only a run already
+    making its changes may have written some of them."""
+    words = STOPPED_WHILE_WRITING if isinstance(state, Acting) else STOPPED_BEFORE_WRITING
+    return state.fail(Failure(FailureReason.STOPPED_BY_UPDATE, words, retryable=False))
 
 
 def run_created(

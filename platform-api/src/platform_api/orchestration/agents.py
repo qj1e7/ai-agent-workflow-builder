@@ -482,8 +482,18 @@ class WatchedFact(WireModel):
         return value[:NEWEST_VERSION_LIMIT] if isinstance(value, str) else value
 
 
+WORKFLOW_FACTS: Final = 50
+"""The workflows sent with their state and last run. The names of the rest are sent alone."""
+OTHER_WORKFLOWS: Final = 250
+"""At the 80-character limit, 250 names are about 21 KB of the question's facts, less than a full
+watchlist section. Past it the facts count the names left out, and the Planner says it read only
+some."""
+
+type WorkflowName = Annotated[str, StringConstraints(max_length=80)]
+
+
 class WorkflowFact(WireModel):
-    name: str = Field(max_length=80)
+    name: WorkflowName
     state: Literal["draft", "on", "paused"]
     last_run: str | None = Field(max_length=40)
     last_run_at: datetime | None
@@ -508,7 +518,15 @@ class WatchlistScheduleFact(WireModel):
 
 class PlannerFacts(WireModel):
     watchlist: list[WatchedFact] | None = Field(default=None, max_length=100)
-    workflows: list[WorkflowFact] | None = Field(default=None, max_length=50)
+    workflows: list[WorkflowFact] | None = Field(default=None, max_length=WORKFLOW_FACTS)
+    # Left out of the payload when None, so a runtime from before them takes the facts while the
+    # two services roll out.
+    other_workflows: list[WorkflowName] | None = Field(
+        default=None, max_length=OTHER_WORKFLOWS, exclude_if=lambda names: names is None
+    )
+    left_out_workflows: int | None = Field(
+        default=None, gt=0, exclude_if=lambda count: count is None
+    )
     needs_you: NeedsYouFact | None = None
     watchlist_schedule: WatchlistScheduleFact | None = None
 

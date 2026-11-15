@@ -1,12 +1,19 @@
 from collections.abc import Callable
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.builder.card_store import NoSuchCard, StarterCard
-from platform_api.builder.home import Home, HomeOut
+from platform_api.builder.home import (
+    NEEDS_LISTS,
+    WAITING_LIST,
+    Home,
+    HomeOut,
+    NeedsPage,
+    WaitingPage,
+)
 from platform_api.builder.models import (
     BlockView,
     CardChecked,
@@ -31,6 +38,7 @@ from platform_api.builder.models import (
     UseCaseView,
 )
 from platform_api.builder.n8n_draft import DraftRefused
+from platform_api.builder.paging import Place, parse_cursor
 from platform_api.builder.planning import NoModelConnected, RuntimeNotAnswering
 from platform_api.builder.service import (
     AgentUseCaseRefused,
@@ -39,9 +47,11 @@ from platform_api.builder.service import (
     N8nNotReady,
     NoModelToRun,
     NothingToCheck,
+    NotMovedYet,
     NotOnYet,
     UseCasePaused,
 )
+from platform_api.builder.team_requests import FOLLOWING_UP, FollowingUpPage
 from platform_api.builder.templates import (
     AGENT_CARDS,
     SOFTWARE_WATCHLIST,
@@ -131,6 +141,65 @@ async def home(principal: CurrentPrincipal, home: CurrentHome) -> HomeOut:
     return await home.for_person(principal)
 
 
+BAD_CURSOR = "This isn’t a page this list gave out. Read the list again from its first page."
+PAGED = {**SIGNED_IN, 422: error_response(BAD_CURSOR)}
+AFTER = Query(
+    description="The `next` of the page before, or Home's cursor for the list. Leave it out for "
+    "the first page."
+)
+
+
+def _after(after: str | None, lists: tuple[str, ...]) -> dict[str, Place] | None:
+    if after is None:
+        return None
+    cursor = parse_cursor(after, lists)
+    if cursor is None:
+        raise HTTPException(422, BAD_CURSOR)
+    return cursor
+
+
+@router.get(
+    "/home/needs",
+    responses=PAGED,
+    description="A page of the parts of Needs you that can run long: runs waiting for this "
+    "person's yes, stopped runs, declined test runs and questions, each the newest first. Home "
+    "answers the first page. Each total counts every row, so the pages reach every one.",
+)
+async def home_needs(
+    principal: CurrentPrincipal,
+    home: CurrentHome,
+    after: Annotated[str | None, AFTER] = None,
+) -> NeedsPage:
+    return await home.needs(principal, _after(after, NEEDS_LISTS))
+
+
+@router.get(
+    "/home/waiting-on-others",
+    responses=PAGED,
+    description="A page of the runs waiting for someone else's yes that this person is part "
+    "of, the newest first.",
+)
+async def home_waiting_on_others(
+    principal: CurrentPrincipal,
+    home: CurrentHome,
+    after: Annotated[str | None, AFTER] = None,
+) -> WaitingPage:
+    return await home.waiting_on_others(principal, _after(after, (WAITING_LIST,)))
+
+
+@router.get(
+    "/home/following-up",
+    responses=PAGED,
+    description="A page of this person's own requests to the team, the newest first.",
+)
+async def home_following_up(
+    principal: CurrentPrincipal,
+    home: CurrentHome,
+    after: Annotated[str | None, AFTER] = None,
+) -> FollowingUpPage:
+    return await home.following_up(principal, _after(after, (FOLLOWING_UP,)))
+
+
 @router.get("/templates", responses=SIGNED_IN)
 def list_templates(principal: CurrentPrincipal) -> TemplateList:
     return TemplateList(templates=[template_view(t) for t in TEMPLATES.values()])
@@ -213,6 +282,8 @@ async def start_run(
         raise HTTPException(409, "This workflow is paused. Resume it to start a run.")
     if isinstance(started, NotOnYet):
         raise HTTPException(409, NOT_ON_YET)
+    if isinstance(started, NotMovedYet):
+        raise HTTPException(409, started.words)
     if not started.created:
         response.status_code = 200
     return RunStarted(run_id=started.run_id, events_url=f"/api/v1/runs/{started.run_id}/events")

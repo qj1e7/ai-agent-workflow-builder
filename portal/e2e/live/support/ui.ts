@@ -41,17 +41,25 @@ export async function shot(page: Page, info: TestInfo, name: string): Promise<vo
   info.annotations.push({ type: 'shot', description: name })
 }
 
+/** Presses Show more under a list until it goes, so every row the list counts is drawn, and says how many rows there are then. */
+export async function showEvery(list: Locator, rows: Locator): Promise<number> {
+  const more = list.getByRole('button', { name: 'Show more', exact: true })
+  while ((await more.count()) > 0) {
+    const before = await rows.count()
+    await more.click()
+    await expect.poll(async () => (await more.count()) === 0 || (await rows.count()) > before, { message: 'Show more drew the next rows' }).toBe(true)
+  }
+  return rows.count()
+}
+
 /**
- * What Needs you on Workflows counts: its rows, plus the rest its note says the platform has not listed yet. The heading carries
- * no number, as in the sketch, so this is the number the strip, the Planner's answer and an Approver's Home heading must match.
+ * The rows of Needs you on Workflows, every one, after Show more has read each page. The heading carries no number, as in the
+ * sketch, so this is the number the strip, the Planner's answer and an Approver's Home heading must match.
  */
 export async function needsOnWorkflows(page: Page): Promise<number> {
   const section = page.getByRole('main').getByRole('region', { name: 'Needs you' })
   await expect(section.locator('li[data-home-item]').first()).toBeVisible()
-  const rows = await section.locator('li[data-home-item]').count()
-  const note = section.locator('p').filter({ hasText: /\d+ more/ })
-  const more = (await note.count()) === 0 ? 0 : Number(/(\d+) more/.exec(await note.innerText())?.[1] ?? 0)
-  return rows + more
+  return showEvery(section, section.locator('li[data-home-item]'))
 }
 
 /** A page someone who isn't an Operator reads: one note naming the Operators, and no control there that is dead. */

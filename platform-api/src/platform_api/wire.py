@@ -126,9 +126,12 @@ type FailureReason = Literal[
     "SafetyDenied",
     "UnboundIntent",
     "OutOfOrderStep",
+    "StoppedByUpdate",
 ]
 type Trigger = Literal["person", "schedule"]
-type ApprovalStepStatus = Literal["waiting", "open", "approved", "declined", "expired", "cancelled"]
+type ApprovalStepStatus = Literal[
+    "waiting", "open", "approved", "declined", "expired", "cancelled", "closed"
+]
 
 
 DECLINE_REASON_MAX = 200

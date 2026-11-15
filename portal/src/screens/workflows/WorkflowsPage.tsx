@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useId, useState, type CSSProperties } from 'react'
 import { NavigationType, useLocation, useNavigate, useNavigationType, useSearchParams } from 'react-router'
 import { Link } from '../../ui/Link'
 import { useErrorWords } from '../../api/context'
@@ -19,8 +19,10 @@ import { IconSearch } from '../../ui/icons'
 import { OpenLink } from '../../ui/OpenItem'
 import { Toast, UNDO_ID, type ToastMessage } from '../../ui/Toast'
 import { draftPath, savedLeft } from '../home/card'
-import { draftWords, moreWords, needsOf } from '../home/home'
+import { draftWords } from '../home/home'
 import { NeedRows } from '../home/NeedsSection'
+import { NeedsMore } from '../home/panels/NeedsMore'
+import { usePagedNeeds } from '../home/usePagedNeeds'
 import { useArrivalScroll } from './arrival'
 import { needsFix } from './n8nChange'
 import { StatusPills } from './Status'
@@ -146,18 +148,17 @@ function useDeletedHandedOverOnce(): Deleted | null {
 
 /**
  * Needs you, as the sketch draws it on Workflows: a heading, then Do now and Set up in the very rows Home and the strip read, so a row
- * says the same words in the same tone everywhere, and the strip's "N more" counts these rows. Nothing shows while nothing needs the person.
+ * says the same words in the same tone everywhere, and the strip's "N more" counts these rows, every one a page at a time. Nothing
+ * shows while nothing needs the person.
  */
 function NeedsYou({ now }: { now: Date }) {
-  const home = useHome().data
+  const { needs, pager } = usePagedNeeds(useHome().data)
   const headingId = useId()
-  const needs = useMemo(() => (home ? needsOf(home) : null), [home])
   if (!needs || needs.shown.length === 0) return null
-  const more = moreWords(needs.more)
   return (
     <section className={styles['block']} aria-labelledby={headingId}>
       <h2 id={headingId}>Needs you</h2>
-      <NeedRows needs={needs.shown} now={now} level={3} more={more ? <p className={styles['moreNote']}>{more}</p> : null} />
+      <NeedRows needs={needs.shown} now={now} level={3} more={<NeedsMore needs={needs} pager={pager} />} />
     </section>
   )
 }
@@ -217,7 +218,6 @@ function Loaded({ handedOver, now, me, useCases }: LoadedProps) {
     document.getElementById(rowLinkId(restored ?? '')),
   )
 
-  const home = useHome().data
   const saved = useDrafts(viewer.operator).data
   const drafts = viewer.operator ? (saved ?? []) : []
 
@@ -292,7 +292,7 @@ function Loaded({ handedOver, now, me, useCases }: LoadedProps) {
           </ul>
         ) : null}
       </section>
-      {home ? <FollowingSection items={home.following_up} total={home.following_up_total} now={now} meId={me.id} /> : null}
+      <FollowingSection now={now} meId={me.id} />
       <Toast message={message} onDismiss={() => setNote(null)} focusAfter={() => document.getElementById('find-workflows') ?? document.querySelector<HTMLElement>('main h1')} />
     </>
   )

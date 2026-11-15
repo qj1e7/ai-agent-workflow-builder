@@ -20,13 +20,14 @@ export type Standing =
   | { readonly is: 'open'; readonly step: number; readonly steps: number; readonly approvedBy: readonly string[] }
   | { readonly is: 'approved'; readonly by: readonly string[]; readonly at: string | null }
   | { readonly is: 'declined'; readonly record: Declined; readonly at: string | null }
-  | { readonly is: 'expired' | 'cancelled' }
+  | { readonly is: 'expired' | 'cancelled' | 'closed' }
 
 export function standingOf(steps: readonly ApprovalStepView[]): Standing {
   const declined = steps.find((step) => step.status === 'declined')
   if (declined) return { is: 'declined', record: declinedOfSteps(steps) ?? { by: declined.decided_by ?? '', approvedBy: [], reason: declined.reason ?? null }, at: declined.decided_at ?? null }
   if (steps.some((step) => step.status === 'expired')) return { is: 'expired' }
   if (steps.some((step) => step.status === 'cancelled')) return { is: 'cancelled' }
+  if (steps.some((step) => step.status === 'closed')) return { is: 'closed' }
   const approved = steps.filter((step) => step.status === 'approved')
   const by = approved.flatMap((step) => (step.decided_by ? [step.decided_by] : []))
   const open = steps.find((step) => step.status === 'open' || step.status === 'waiting')

@@ -1,4 +1,6 @@
 from platform_api.orchestration.agents import (
+    OTHER_WORKFLOWS,
+    WORKFLOW_FACTS,
     AbilitiesAnswer,
     AgentRejected,
     AgentUnavailable,
@@ -194,6 +196,7 @@ from platform_api.orchestration.watch_store import (
 )
 from platform_api.orchestration.workflow_check import (
     ASK_EXITS,
+    GRADING_RULES,
     NODE_TYPES,
     NOTHING_TO_CHANGE_BLOCK,
     TYPE_OF,
@@ -217,6 +220,8 @@ from platform_api.orchestration.workflow_check import (
 from platform_api.orchestration.write_actions import Binding
 
 __all__ = [
+    "OTHER_WORKFLOWS",
+    "WORKFLOW_FACTS",
     "WriteEntry",
     "known_options",
     "block_id",
@@ -258,6 +263,7 @@ __all__ = [
     "N8nDocument",
     "TIME_ZONE",
     "NODE_TYPES",
+    "GRADING_RULES",
     "NOTHING_TO_CHANGE_BLOCK",
     "TYPE_OF",
     "BlockKind",

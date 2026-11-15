@@ -132,6 +132,7 @@ from platform_api.orchestration.runs import (
     run_created,
     state_name,
     step_finished,
+    stop_for_update,
     unread_in,
 )
 from platform_api.orchestration.spec import (
@@ -496,6 +497,7 @@ async def enqueue_announcement(
 ENDED_STEPS: Mapping[Ended, ApprovalStepStatus] = {
     Ended.EXPIRED: "expired",
     Ended.CANCELLED: "cancelled",
+    Ended.CLOSED: "closed",
 }
 """What a step nobody decided reads once its request ended."""
 
@@ -1868,6 +1870,46 @@ class Orchestrator:
                     case _:
                         pass
         return ended
+
+    async def stop_old_engine_runs(self) -> list[RunId]:
+        """Ends every run still on the shared run workflow, made of blocks the allow list turns
+        off (ENGINE-PLAN E11), so none waits for a workflow that is gone. Nothing is written by
+        it: a waiting request ends closed and its Approvers see that on its card, and a run that
+        was making its changes says to check Jira first. Asked again, it changes nothing. The
+        runs it ended."""
+        async with self._db.transaction("orchestration") as uow:
+            open_runs = await self._store.old_engine_runs(uow)
+        stopped: list[RunId] = []
+        for run_id in open_runs:
+            async with self._db.transaction("orchestration") as uow:
+                record = await self._store.load_run(uow, run_id, lock=True)
+                if record is None or record.spec.n8n is not None:
+                    continue
+                match record.state:
+                    case Pending() | Working() | Proposed() | Acting() as state:
+                        await self._commit(uow, record, stop_for_update(state))
+                    case AwaitingApproval() as state:
+                        await self._store.end_request(uow, state.approval_id, Ended.CLOSED)
+                        await self._commit(uow, record, state.stop_for_update())
+                        await self._store.enqueue(
+                            uow,
+                            run_id,
+                            SHOW_OUTCOME,
+                            {
+                                "approval_id": state.approval_id,
+                                "verdict": "closed",
+                                "by": [],
+                                "use_case_name": record.spec.use_case_name,
+                            },
+                            uow.now,
+                        )
+                    case _:
+                        continue
+                await self._store.cancel_outbox(uow, run_id)
+                stopped.append(run_id)
+        if stopped:
+            self.nudge()
+        return stopped
 
     async def _enqueue_wake(
         self, uow: UnitOfWork, run_id: RunId, approval_id: ApprovalId, decision: WakeDecision

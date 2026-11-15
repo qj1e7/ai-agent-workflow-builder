@@ -369,13 +369,13 @@ test('@lane10-setup one waiting run for the seed to copy', async () => {
   })
 })
 
-test('@lane10 with 50 runs waiting, bob’s Home shows the newest first and says how many more wait', async ({ browser }) => {
+test('@lane10 with 50 runs waiting, bob’s Home shows the newest first, says how many of how many, and offers Show more', async ({ browser }) => {
   const seed = savedBySetup<WaitingRun>(10, 'p11.sh lane10, which runs @lane10-setup and copies the run')
   await withBackend(async (_backend, api) => {
     const answer = await homeOf(api, 'bob')
     const page = await openHome(browser, 'bob')
     const keys = await needsYou(page).locator('li[data-home-item]').evaluateAll((all) => all.map((li) => li.getAttribute('data-home-item')))
-    const more = await page.getByText(/more runs? (is|are) waiting for your yes/).innerText()
+    const more = await needsYou(page).getByRole('status').filter({ hasText: /^Showing / }).innerText()
     await shotTo(page, 10, 'p11-many.png', true)
     save(10, 'p11-many.json', { seed, total: answer.approvals_total, keys, more, approvals: answer.approvals })
     expect(answer.approvals_total).toBeGreaterThanOrEqual(50)
@@ -383,7 +383,8 @@ test('@lane10 with 50 runs waiting, bob’s Home shows the newest first and says
     const times = answer.approvals.map((a) => a.started_at)
     expect(times, 'newest first').toEqual([...times].sort().reverse())
     expect(keys).toEqual(answer.approvals.slice(0, 10).map((a) => `approval:${a.approval_id}`))
-    expect(more).toContain(`${answer.approvals_total - 10} more runs are waiting for your yes`)
+    expect(more).toBe(`Showing ${String(keys.length)} of ${String(answer.approvals_total)}.`)
+    await expect(needsYou(page).getByRole('button', { name: 'Show more', exact: true })).toBeVisible()
     await page.context().close()
   })
 })

@@ -14,11 +14,13 @@ import pytest
 from platform_api.builder import Builder
 from platform_api.builder.layout import schedule_rule
 from platform_api.builder.models import RepublishIn, ScheduleSaveIn, WatchlistView
-from platform_api.builder.sweep import ASKED_GAP, Found, VersionsSweep
+from platform_api.builder.sweep import ASKED_GAP, Found, Regraded, VersionsSweep
 from platform_api.builder.versions import changes_between, schedule_of
 from platform_api.builder.watchlist import MovedToN8n
 from platform_api.orchestration import (
+    GRADING_RULES,
     ChangedInN8n,
+    N8nError,
     N8nWorkflow,
     Publisher,
     RanVersion,
@@ -252,11 +254,11 @@ async def test_safety_a_publisher_the_people_list_cant_match_is_never_guessed(v:
         "n8n-nodes-base.somethingNobodyClassed",
     ],
 )
-async def test_safety_a_block_that_is_not_on_needs_a_fix(v: Versions, node_type: str):
+async def test_safety_a_block_that_is_off_needs_a_fix(v: Versions, node_type: str):
     use_case_id, _ = await on_and_changed(v, adding(node_type))
     view = await v.view(use_case_id)
     assert view["grade"] == "needs_a_fix"
-    assert view["findings"] == [f'"Added in n8n" is a block that is not on: {node_type}.']
+    assert view["findings"] == [f'"Added in n8n" uses a block that is off: {node_type}.']
 
 
 async def test_the_platforms_own_publish_is_never_taken_for_one_made_in_n8n(v: Versions):
@@ -646,3 +648,132 @@ async def test_settings_saved_in_another_order_are_no_change(v: Versions):
     v.n8n.save_settings(workflow_id, reordered)
     assert await v.sweep() == 0
     assert (await v.view(use_case_id))["version"] == 1
+
+
+async def kept_before_the_allow_list(v: Versions, use_case_id: str) -> None:
+    """The version in use as a release before E11 kept it: graded safe with an HTTP Request block
+    in it, put back in use by Carol over Bob's earlier version, after a move to n8n."""
+    async with v.own.lab.h.db.transaction("builder") as uow:
+        await uow.conn.execute(
+            "UPDATE builder.use_case_versions SET document = jsonb_set(document, '{nodes}',"
+            " document -> 'nodes' || %s::jsonb), made = 'moved_to_n8n', also = %s::jsonb"
+            " WHERE use_case_id = %s AND version = 1",
+            (
+                '[{"name": "Send it out", "type": "n8n-nodes-base.httpRequest",'
+                ' "typeVersion": 4.2, "parameters": {}, "position": [0, 400]}]',
+                '[{"by": "bob", "in": "portal"}]',
+                use_case_id,
+            ),
+        )
+
+
+async def test_safety_the_sweep_grades_every_workflow_again_under_new_rules_and_keeps_whose_work(
+    v: Versions,
+):
+    """A block a new release turns off shows on the version in use at the next look, as at
+    start, before any run. The version is changed in place, so its publisher, its earlier
+    authors and how it came about stay, and so do the people who may not approve its runs."""
+    use_case_id, workflow_id = await made(v.own, on=True)
+    await kept_before_the_allow_list(v, use_case_id)
+    before = await version_row(v.own, use_case_id, 1)
+    parties = await v.parties(use_case_id, 1, workflow_id)
+    assert v.builder.sweep is not None
+
+    assert await v.builder.sweep.sweep() == [Regraded(use_case_id, 1, "needs_a_fix")]
+
+    view = await v.view(use_case_id)
+    assert (view["version"], view["grade"]) == (1, "needs_a_fix")
+    assert view["findings"] == [
+        '"Send it out" uses a block that is off: n8n-nodes-base.httpRequest.'
+    ]
+    assert await version_row(v.own, use_case_id, 1) == before
+    row = await v.own.row(
+        "SELECT made, also FROM builder.use_case_versions WHERE use_case_id = %s AND version = 1",
+        use_case_id,
+    )
+    assert row == {"made": "moved_to_n8n", "also": [{"by": "bob", "in": "portal"}]}
+    assert await v.parties(use_case_id, 1, workflow_id) == parties
+    ran = await v.builder.facts.version(workflow_id, before["n8n_version_id"])
+    assert ran is not None and ran.grade == "needs_a_fix"
+    fired = ExecutionFacts(workflow_id, "trigger", None, None, before["n8n_version_id"])
+    assert decide_link(fired, None, None, None, ran, NOW) == VERSION_FAILED
+    assert await v.builder.sweep.sweep() == [], "graded once under these rules"
+    marked = await v.own.row(
+        "SELECT graded_by FROM builder.use_case_versions WHERE use_case_id = %s AND version = 1",
+        use_case_id,
+    )
+    assert marked == {"graded_by": f"{GRADING_RULES} {ERROR_WORKFLOW}"}
+
+
+async def test_a_look_that_fails_is_graded_at_the_next_sweep(
+    v: Versions, monkeypatch: pytest.MonkeyPatch
+):
+    use_case_id, _ = await made(v.own, on=True)
+    await kept_before_the_allow_list(v, use_case_id)
+    assert v.builder.sweep is not None
+    sweep = v.builder.sweep
+    look = sweep._n8n.look  # pyright: ignore[reportPrivateUsage]
+
+    async def unreachable(workflow_id: str) -> N8nWorkflow | None:
+        raise N8nError(f"n8n did not answer for {workflow_id}")
+
+    monkeypatch.setattr(sweep._n8n, "look", unreachable)  # pyright: ignore[reportPrivateUsage]
+    assert await sweep.sweep() == []
+    assert (await v.view(use_case_id))["grade"] == "safe"
+    monkeypatch.setattr(sweep._n8n, "look", look)  # pyright: ignore[reportPrivateUsage]
+    assert await sweep.sweep() == [Regraded(use_case_id, 1, "needs_a_fix")]
+
+
+async def test_safety_while_bootstrap_is_not_ready_the_grade_uses_the_error_workflow_on_record(
+    v: Versions, monkeypatch: pytest.MonkeyPatch
+):
+    """A stale safe grade must not outlive a failed bootstrap: the version is graded against
+    the error workflow the last bootstrap recorded."""
+    use_case_id, _ = await made(v.own, on=True)
+    await kept_before_the_allow_list(v, use_case_id)
+    assert v.builder.sweep is not None
+    drafts = v.builder.sweep._n8n  # pyright: ignore[reportPrivateUsage]
+
+    async def not_ready() -> str | None:
+        return None
+
+    async def recorded() -> str | None:
+        return ERROR_WORKFLOW
+
+    monkeypatch.setattr(drafts, "error_workflow_id", not_ready)
+    monkeypatch.setattr(drafts, "recorded_error_workflow_id", recorded)
+    assert await v.builder.sweep.sweep() == [Regraded(use_case_id, 1, "needs_a_fix")]
+    assert (await v.view(use_case_id))["findings"] == [
+        '"Send it out" uses a block that is off: n8n-nodes-base.httpRequest.'
+    ]
+
+
+async def test_safety_with_no_error_workflow_on_record_every_workflow_needs_a_fix_until_one_is(
+    v: Versions, monkeypatch: pytest.MonkeyPatch
+):
+    use_case_id, _ = await made(v.own, on=True)
+    assert v.builder.sweep is not None
+    drafts = v.builder.sweep._n8n  # pyright: ignore[reportPrivateUsage]
+    ready = drafts.error_workflow_id
+
+    async def none() -> str | None:
+        return None
+
+    monkeypatch.setattr(drafts, "error_workflow_id", none)
+    monkeypatch.setattr(drafts, "recorded_error_workflow_id", none)
+    assert await v.builder.sweep.sweep() == [Regraded(use_case_id, 1, "needs_a_fix")]
+    assert (await v.view(use_case_id))["findings"] == [
+        "Its failures do not go to the platform's error workflow."
+    ]
+    monkeypatch.setattr(drafts, "error_workflow_id", ready)
+    assert await v.builder.sweep.sweep() == [Regraded(use_case_id, 1, "safe")]
+
+
+async def test_a_workflow_that_is_off_is_graded_again_as_it_was_kept(v: Versions):
+    """Nothing runs it, so its grade decides whether it may be turned on again."""
+    use_case_id, _ = await made(v.own, on=True)
+    paused = await v.call("alice", "POST", f"/api/v1/use-cases/{use_case_id}/pause")
+    assert paused.status_code == 200, paused.text
+    await kept_before_the_allow_list(v, use_case_id)
+    assert v.builder.sweep is not None
+    assert await v.builder.sweep.sweep() == [Regraded(use_case_id, 1, "needs_a_fix")]

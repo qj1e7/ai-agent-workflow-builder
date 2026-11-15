@@ -91,7 +91,7 @@ class N8nBlockView(WireModel):
         description="What the block does: schedule, start (Start from the Portal), manual and "
         "error start a run; read, agent, propose, ask (Ask for a yes), write (Make the approved "
         "changes), tell and report are our blocks; branch (IF), merge and end (No Op) are n8n's; "
-        "other is a block that is not on the allow list."
+        "other is one of n8n's data blocks, or a block that is off."
     )
     next: list[N8nExitView] = Field(description="Where each of its exits leads.")
 
@@ -260,7 +260,7 @@ class UseCaseView(WireModel):
         description="The safety checker's grade of the version in use, for a workflow n8n "
         "carries. writes_refused: a write can run without a yes, so the platform refuses this "
         "version's writes and asks nobody, until the yes is put back or the change undone. "
-        "needs_a_fix: it uses a block that is not on, or cannot run as the platform expects, so "
+        "needs_a_fix: it uses a block that is off, or cannot run as the platform expects, so "
         "each run stops at its first block. Null for a workflow on the shared n8n workflow.",
     )
     findings: list[str] = Field(

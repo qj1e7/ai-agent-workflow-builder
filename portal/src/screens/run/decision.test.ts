@@ -60,6 +60,7 @@ describe('where a request stands, from its steps', () => {
   it.each([
     ['expired', 'expired'],
     ['cancelled', 'cancelled'],
+    ['closed', 'closed'],
   ] as const)('is %s when nobody decided in time, and offers no decision', (status, is) => {
     expect(standingOf([step(0, status)])).toEqual({ is })
     expect(standingOf([step(0, 'approved', 'carol', EARLIER), step(1, status)])).toEqual({ is })
@@ -91,7 +92,7 @@ describe('what a decision posts', () => {
   })
 
   it('sends nothing on an expired, cancelled or decided request, even when an old read still says Bob may decide', () => {
-    for (const status of ['expired', 'cancelled', 'approved', 'declined'] as const) {
+    for (const status of ['expired', 'cancelled', 'closed', 'approved', 'declined'] as const) {
       expect(decisionFor({ ...BOB, steps: [step(0, status, 'carol', EARLIER)] }, APPROVE), status).toBeNull()
     }
   })
@@ -126,6 +127,7 @@ describe('the request’s words', () => {
     ['anyone, once declined', { is: 'declined', record: { by: 'bob', approvedBy: [], reason: null }, at: AT }, false, 'Declined', 'quiet'],
     ['anyone, once nobody answered', { is: 'expired' }, true, 'No answer', 'quiet'],
     ['anyone, once the workflow went', { is: 'cancelled' }, true, 'Cancelled', 'quiet'],
+    ['anyone, once an update closed it', { is: 'closed' }, true, 'Closed', 'quiet'],
   ] as const)('gives %s one pill', (_who, standing, can, label, tone) => {
     expect(approvalPill(standing, can)).toEqual({ label, tone })
   })
@@ -224,6 +226,7 @@ describe('the request’s words', () => {
     it('says why nobody can decide an expired or cancelled request', () => {
       expect(record({ is: 'expired' })).toBe('No one said yes in time. Nothing was written, and it can’t be decided now.')
       expect(record({ is: 'cancelled' })).toBe('The workflow was deleted before anyone decided. Nothing was written, and it can’t be decided now.')
+      expect(record({ is: 'closed' })).toBe('The platform was updated before anyone decided. Nothing was written, and it can’t be decided now.')
     })
   })
 
@@ -234,5 +237,6 @@ describe('the request’s words', () => {
     expect(cardStatusWords({ is: 'declined', record: { by: 'bob', approvedBy: [], reason: 'Not this week' }, at: AT }, null)).toBe('Declined. Nothing was written.')
     expect(cardStatusWords({ is: 'expired' }, null)).toBe('No answer. Nothing was written.')
     expect(cardStatusWords({ is: 'cancelled' }, null)).toBe('Cancelled. Nothing was written.')
+    expect(cardStatusWords({ is: 'closed' }, null)).toBe('Closed. Nothing was written.')
   })
 })

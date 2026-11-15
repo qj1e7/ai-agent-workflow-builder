@@ -1,7 +1,7 @@
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -23,7 +23,7 @@ from platform_api.orchestration.agents import (
     TaskRequest,
     task_result_adapter,
 )
-from platform_api.orchestration.approvals import Approved, Declined, Refusal, Verdict
+from platform_api.orchestration.approvals import Approved, Declined, Ended, Refusal, Verdict
 from platform_api.orchestration.dispatch import (
     ApprovalNotice,
     ApprovalOutcome,
@@ -33,9 +33,12 @@ from platform_api.orchestration.dispatch import (
 )
 from platform_api.orchestration.runs import (
     DEADLINES,
+    STOPPED_BEFORE_WRITING,
+    STOPPED_WHILE_WRITING,
     Acting,
     AwaitingApproval,
     Failed,
+    Failure,
     FailureReason,
     Leg,
     Pending,
@@ -45,6 +48,7 @@ from platform_api.orchestration.runs import (
     StepName,
     Succeeded,
     Working,
+    cannot_retry,
 )
 from platform_api.orchestration.service import (
     Decided,
@@ -56,8 +60,9 @@ from platform_api.orchestration.service import (
     RolesNow,
     StepReply,
 )
-from platform_api.orchestration.store import Store
-from platform_api.orchestration.teams import TeamsStub
+from platform_api.orchestration.spec import N8nTarget
+from platform_api.orchestration.store import SHOW_OUTCOME, Store
+from platform_api.orchestration.teams import TeamsStub, outcome_card
 from platform_api.orchestration.write_actions import WriteGateway
 from platform_api.shared import ApprovalId, Digest, N8nExecutionId, Principal, RunId, TaskId
 from tests.conftest import PostgresUrls, truncate_all
@@ -749,3 +754,119 @@ async def test_the_task_carries_the_model_the_operators_saved(h: Harness):
 async def test_without_a_saved_model_the_task_names_none(h: Harness):
     await work_leg_to_approval(h)
     assert h.agent.requests[0].model is None
+
+
+async def put(h: Harness, run_id: RunId, state: RunState) -> None:
+    async with h.db.transaction("orchestration") as uow:
+        record = await Store().load_run(uow, run_id, lock=True)
+        assert record is not None
+        await Store().save_run(uow, record, state)
+
+
+async def pending(h: Harness) -> RunId:
+    return await start(h)
+
+
+async def working(h: Harness) -> RunId:
+    run_id = await start(h)
+    await h.orchestrator.tick()
+    later = NOW + timedelta(minutes=10)
+    await put(h, run_id, Working(run_id, N8nExecutionId("41"), 1, 1, later, later))
+    return run_id
+
+
+async def proposed(h: Harness) -> RunId:
+    run_id = await start(h)
+    await h.orchestrator.tick()
+    await h.orchestrator.on_step(run_id, RUN_AGENTS, N8nExecutionId("41"))
+    assert isinstance(await h.state(run_id), Proposed)
+    return run_id
+
+
+async def acting(h: Harness) -> RunId:
+    run_id, _, approval_id = await work_leg_to_approval(h)
+    detail = await h.orchestrator.get_approval(approval_id, BOB)
+    assert detail is not None
+    await h.orchestrator.decide(approval_id, BOB, 0, Verdict.APPROVE, detail.request.digest)
+    assert isinstance(await h.state(run_id), Acting)
+    return run_id
+
+
+@pytest.mark.parametrize(
+    ("make", "says"),
+    [
+        (pending, STOPPED_BEFORE_WRITING),
+        (working, STOPPED_BEFORE_WRITING),
+        (proposed, STOPPED_BEFORE_WRITING),
+        (acting, STOPPED_WHILE_WRITING),
+    ],
+    ids=["pending", "working", "proposed", "acting"],
+)
+async def test_an_update_ends_each_run_left_on_the_shared_run_workflow_and_writes_nothing(
+    h: Harness, make: Any, says: str
+):
+    """From E11 the shared run workflow's blocks are off, so nothing could carry the run on. It
+    ends failed with words that say what to do, and nothing it queued is sent."""
+    run_id = await make(h)
+    legs = list(h.engine.legs)
+
+    assert await h.orchestrator.stop_old_engine_runs() == [run_id]
+
+    stopped = await h.state(run_id)
+    assert isinstance(stopped, Failed)
+    assert stopped.failure == Failure(FailureReason.STOPPED_BY_UPDATE, says, retryable=False)
+    h.advance(timedelta(minutes=30))
+    await h.orchestrator.tick()
+    assert h.engine.legs == legs, "nothing queued for the gone workflow is sent"
+    assert (await h.kinds(run_id))[-1] == "run_failed"
+    assert await h.jira.tickets() == []
+    assert await h.orchestrator.retry(run_id, ALICE) == NotRetryable(
+        cannot_retry(stopped.stage, stopped.failure)
+    )
+    assert await h.orchestrator.stop_old_engine_runs() == [], "asked again, nothing changes"
+
+
+async def test_an_update_closes_a_waiting_request_tells_its_approvers_and_refuses_a_late_yes(
+    h: Harness,
+):
+    run_id, _, approval_id = await work_leg_to_approval(h)
+
+    assert await h.orchestrator.stop_old_engine_runs() == [run_id]
+
+    stopped = await h.state(run_id)
+    assert isinstance(stopped, Failed)
+    assert (
+        stopped.failure.message
+        == STOPPED_BEFORE_WRITING
+        == (
+            "This run started before the update and couldn't finish. Nothing was written. "
+            "Start it again."
+        )
+    )
+    async with h.db.transaction("orchestration") as uow:
+        request = await Store().load_approval(uow, approval_id)
+    assert request is not None and request.ended is Ended.CLOSED
+    detail = await h.orchestrator.get_approval(approval_id, BOB)
+    assert detail is not None
+    late = await h.orchestrator.decide(approval_id, BOB, 0, Verdict.APPROVE, detail.request.digest)
+    assert late == DecisionRefused(Refusal.NOT_OPEN)
+    async with h.db.connection("orchestration") as conn:
+        outcomes = await (
+            await conn.execute(
+                "SELECT payload FROM orchestration.outbox WHERE run_id = %s AND kind = %s",
+                (run_id, SHOW_OUTCOME),
+            )
+        ).fetchall()
+    assert [o["payload"]["verdict"] for o in outcomes] == ["closed"]
+    closed = ApprovalOutcome("closed", (), SPEC.use_case_name, "https://portal.example/r")
+    said = outcome_card(closed).model_dump_json()
+    assert "closed by an update before an answer. Nothing was written." in said
+    assert (await h.kinds(run_id))[-1] == "run_failed"
+    assert await h.jira.tickets() == []
+
+
+async def test_a_run_on_its_own_n8n_workflow_is_left_as_it_is(h: Harness):
+    own = replace(SPEC, n8n=N8nTarget("wf_own", "hook_own"))
+    started = await h.orchestrator.start_run(own, ALICE, "own-1")
+    assert await h.orchestrator.stop_old_engine_runs() == []
+    assert isinstance(await h.state(started.run_id), Pending)

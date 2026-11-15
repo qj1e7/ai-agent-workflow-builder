@@ -85,6 +85,14 @@ services:
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
       NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.localFileTrigger"]'
       N8N_COMMUNITY_PACKAGES_ENABLED: "false"
+      # The allow list: n8n loads only these node types. scripts/nodes-include.sh writes it from
+      # platform-api's node_classes.json (ADR 0045), and CI fails when the two differ.
+      NODES_INCLUDE: '["CUSTOM.wabStartFromPortal","CUSTOM.wabRead","CUSTOM.wabAgent","CUSTOM.wabProposeChange","CUSTOM.wabAskForYes","CUSTOM.wabMakeApprovedChanges","CUSTOM.wabTell","CUSTOM.wabReportFailure","n8n-nodes-base.scheduleTrigger","n8n-nodes-base.manualTrigger","n8n-nodes-base.errorTrigger","n8n-nodes-base.if","n8n-nodes-base.merge","n8n-nodes-base.noOp","n8n-nodes-base.stickyNote","n8n-nodes-base.filter","n8n-nodes-base.switch","n8n-nodes-base.set","n8n-nodes-base.limit","n8n-nodes-base.aggregate","n8n-nodes-base.splitOut","n8n-nodes-base.removeDuplicates","n8n-nodes-base.summarize","n8n-nodes-base.renameKeys","n8n-nodes-base.dateTime","n8n-nodes-base.compareDatasets","n8n-nodes-base.splitInBatches","n8n-nodes-base.xml","n8n-nodes-base.markdown","n8n-nodes-base.executionData","n8n-nodes-base.stopAndError"]'
+      # n8n keeps 30 days of executions (ENGINE-PLAN D10). Our API keeps every node's answer, so the
+      # Portal loses nothing, and n8n never prunes a waiting execution (P7 Q16).
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: "720"
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
       # Our blocks call only this API, with this key, and check each start with the secret.
       WAB_API_URL: http://platform-api:8000
       WAB_NODE_KEY: ${WAB_NODE_KEY:?run deploy/make-env.sh}

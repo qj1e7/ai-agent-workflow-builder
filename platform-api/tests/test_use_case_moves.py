@@ -19,6 +19,7 @@ from platform_api.builder.layout import CREATE_TICKET, schedule_rule
 from platform_api.builder.models import UseCaseScheduleIn
 from platform_api.builder.moves import (
     NOT_BACK,
+    NOT_MOVED_YET,
     RESTORE_ASK_LIVES,
     Moves,
     Restored,
@@ -389,6 +390,33 @@ async def test_run_now_moves_it_first(m: Moving):
         ).fetchone()
     assert row is not None
     assert row["workflow_id"] == (await m.use_case(use_case_id))["n8n_workflow_id"]
+
+
+async def test_run_now_on_a_workflow_that_cannot_move_says_why_and_starts_nothing(m: Moving):
+    """The shared run workflow is gone from E11, so a run there could only fail. Run now says
+    what the workflow's page says (principle 9: no dead button)."""
+    use_case_id = await m.shared()
+    await refused_layout(m, use_case_id)
+    m.lab.app.state.builder = m.builder
+    started = await m.lab.call("alice", "POST", f"/api/v1/use-cases/{use_case_id}/runs")
+    view = await m.builder.get_use_case(use_case_id)
+    assert view is not None and view.move_refused is not None
+    assert (started.status_code, started.json()["detail"]) == (409, view.move_refused)
+    async with m.lab.h.db.connection("orchestration") as conn:
+        runs = await (await conn.execute("SELECT run_id FROM orchestration.runs")).fetchall()
+        sent = await (await conn.execute("SELECT kind FROM orchestration.outbox")).fetchall()
+    assert (runs, sent) == ([], [])
+
+
+async def test_run_now_on_a_workflow_whose_schedule_holds_it_back_says_what_to_do(m: Moving):
+    use_case_id = await m.shared()
+    async with m.lab.h.db.transaction("orchestration") as uow:
+        await uow.conn.execute(
+            "UPDATE orchestration.people SET removed_at = now() WHERE id = 'alice'"
+        )
+    m.lab.app.state.builder = m.builder
+    started = await m.lab.call("carol", "POST", f"/api/v1/use-cases/{use_case_id}/runs")
+    assert (started.status_code, started.json()["detail"]) == (409, NOT_MOVED_YET)
 
 
 async def test_a_deleted_workflow_is_left_where_it_is(m: Moving):

@@ -7,6 +7,13 @@ and its runs and versions stay.
 
 The sweep holds the use case's row while it looks, as every platform publish does, so a publish
 the Portal is making is never taken for one made in n8n.
+
+Each look also grades again the version in use when its grade was made under other rules, or
+another error workflow, than the ones in force now, and marks it, so a rule that changed with a
+release, such as a block the class file now turns off, shows on every workflow however many looks
+that takes (ENGINE-PLAN E11). The grade uses the error workflow the last bootstrap recorded, ready
+or not, so a stale safe grade never outlives a bootstrap that failed; with none recorded every
+workflow needs a fix, and none of its runs starts.
 """
 
 import asyncio
@@ -28,8 +35,11 @@ from platform_api.builder.versions import (
     authors_from,
     settings_changed,
 )
-from platform_api.db import Database, UnitOfWork
+from platform_api.db import Database, UnitOfWork, json
 from platform_api.orchestration import (
+    GRADING_RULES,
+    Grade,
+    Graded,
     KnownOptions,
     N8nDrafts,
     N8nError,
@@ -52,7 +62,7 @@ the next sweep, so it never holds up Undo or a schedule save for long."""
 
 _OWN = """
     SELECT u.use_case_id, u.current_version, u.n8n_workflow_id, v.n8n_version_id, v.document,
-           v.published_by, v.published_in, v.also
+           v.published_by, v.published_in, v.also, v.grade, v.findings, v.graded_by
     FROM builder.use_cases u
     JOIN builder.use_case_versions v
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
@@ -97,6 +107,20 @@ class Gone:
     use_case_id: str
 
 
+@dataclass(frozen=True)
+class Regraded:
+    """The version in use, graded again under the rules in force, with another grade. Its record
+    is changed in place, so its publisher, its earlier authors and how it came about stay as
+    they were."""
+
+    use_case_id: str
+    version: int
+    grade: Grade
+
+
+type Seen = Found | Gone | Regraded
+
+
 def last_activation(version_id: str, timeline: Sequence[PublishEvent]) -> PublishEvent | None:
     activated = [e for e in timeline if e.version_id == version_id and e.event == "activated"]
     if not activated:
@@ -136,13 +160,13 @@ class VersionsSweep:
         self._last: dict[str | None, datetime] = {}
         """When each workflow, or all of them as None, was last looked at."""
 
-    async def sweep(self, use_case_id: str | None = None) -> list[Found | Gone]:
+    async def sweep(self, use_case_id: str | None = None) -> list[Seen]:
         """One look at every workflow n8n carries, or at one."""
         async with self._lock:
             self._last[use_case_id] = self._db.clock()
             return await self._sweep(use_case_id)
 
-    async def asked(self, use_case_id: str | None = None) -> list[Found | Gone]:
+    async def asked(self, use_case_id: str | None = None) -> list[Seen]:
         """A look the Portal asked for, made at most once every few seconds."""
         async with self._lock:
             now = self._db.clock()
@@ -161,7 +185,7 @@ class VersionsSweep:
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), every.total_seconds())
 
-    async def _sweep(self, use_case_id: str | None) -> list[Found | Gone]:
+    async def _sweep(self, use_case_id: str | None) -> list[Seen]:
         async with self._db.connection("builder") as conn:
             where = "" if use_case_id is None else " AND u.use_case_id = %s"
             params = () if use_case_id is None else (use_case_id,)
@@ -169,12 +193,15 @@ class VersionsSweep:
         if not rows:
             return []
         known = await self._graders.known({})
-        error_workflow = await self._n8n.error_workflow_id()
-        found: list[Found | Gone] = []
+        error_workflow = (
+            await self._n8n.error_workflow_id() or await self._n8n.recorded_error_workflow_id()
+        )
+        mark = f"{GRADING_RULES} {error_workflow}"
+        found: list[Seen] = []
         for row in rows:
             try:
                 async with asyncio.timeout(self._look_seconds):
-                    seen = await self._look(row["use_case_id"], known, error_workflow)
+                    seen = await self._look(row["use_case_id"], known, error_workflow, mark)
             except (N8nError, httpx.HTTPError, TimeoutError) as error:
                 log.warning("could not look at %s in n8n: %s", row["use_case_id"], error)
                 continue
@@ -186,8 +213,8 @@ class VersionsSweep:
         return found
 
     async def _look(
-        self, use_case_id: str, known: KnownOptions, error_workflow: str | None
-    ) -> Found | Gone | None:
+        self, use_case_id: str, known: KnownOptions, error_workflow: str | None, mark: str
+    ) -> Seen | None:
         async with self._db.transaction("builder") as uow:
             mine = _OWN + " AND u.use_case_id = %s FOR UPDATE OF u"
             row = await (await uow.conn.execute(mine, (use_case_id,))).fetchone()
@@ -206,30 +233,34 @@ class VersionsSweep:
                 log.warning("n8n no longer has %s, the workflow of %s", workflow_id, use_case_id)
                 return Gone(use_case_id)
             live = workflow.active_version_id
-            if live is None:
+            if live is not None and live != row["n8n_version_id"]:
+                return await self._keep(uow, row, live, workflow.version_id, known, error_workflow)
+            if row["document"] is None:
                 return None
-            if live == row["n8n_version_id"]:
-                return await self._settings(uow, row, workflow, known, error_workflow)
-            return await self._keep(uow, row, live, workflow.version_id, known, error_workflow)
+            kept: dict[str, Any] = row["document"]
+            settings: dict[str, Any] = workflow.document.get("settings") or {}
+            changed = settings_changed(kept.get("settings"), settings)
+            drifted = live is not None and changed is not None
+            if not drifted and row["graded_by"] == mark:
+                return None
+            document = kept if live is None else {**kept, "settings": settings}
+            graded = grade(document, error_workflow, known)
+            if drifted:
+                return await self._settings(uow, row, workflow, document, graded)
+            return await _regraded(uow, row, graded, mark)
 
     async def _settings(
         self,
         uow: UnitOfWork,
         row: Mapping[str, Any],
         workflow: N8nWorkflow,
-        known: KnownOptions,
-        error_workflow: str | None,
-    ) -> Found | None:
+        document: dict[str, Any],
+        graded: Graded,
+    ) -> Found:
         """n8n runs the live version with the workflow's settings now, which a save in the editor
         changes with no publish. Different settings make a new version of the same workflow,
         graded again, with whose work it was carried on: n8n names nobody for the save."""
-        kept: Mapping[str, Any] = row["document"] or {}
-        settings: dict[str, Any] = workflow.document.get("settings") or {}
-        if settings_changed(kept.get("settings"), settings) is None:
-            return None
         use_case_id, newest = row["use_case_id"], row["current_version"]
-        document = {**kept, "settings": settings}
-        graded = grade(document, error_workflow, known)
         findings = tuple(f.text for f in graded.findings)
         publisher = row["published_in"]
         version = await add_version(
@@ -299,3 +330,26 @@ class VersionsSweep:
             graded.grade,
         )
         return Found(use_case_id, version)
+
+
+async def _regraded(
+    uow: UnitOfWork, row: Mapping[str, Any], graded: Graded, mark: str
+) -> Regraded | None:
+    findings = [f.text for f in graded.findings]
+    use_case_id, version = row["use_case_id"], row["current_version"]
+    await uow.conn.execute(
+        "UPDATE builder.use_case_versions SET grade = %s, findings = %s, graded_by = %s"
+        " WHERE use_case_id = %s AND version = %s",
+        (graded.grade, json(findings), mark, use_case_id, version),
+    )
+    if (graded.grade, findings) == (row["grade"], row["findings"] or []):
+        return None
+    log.warning(
+        "version %d of %s grades %s now, from %s: %s",
+        version,
+        use_case_id,
+        graded.grade,
+        row["grade"],
+        "; ".join(findings),
+    )
+    return Regraded(use_case_id, version, graded.grade)

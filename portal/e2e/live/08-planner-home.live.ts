@@ -8,7 +8,7 @@ import { connectMockModel } from './support/settings'
 import { SettingsApi } from './support/settings'
 import { REDIS, type Backend } from './support/stack'
 import { expect, test } from './support/test'
-import { devContext, needsOnWorkflows, OUT, shot } from './support/ui'
+import { devContext, needsOnWorkflows, OUT, showEvery, shot } from './support/ui'
 import { askAndWait, editCard, newestAnswer, rereadOf, scheduledWorkflow, shown, tag, versionsOf } from './support/edit'
 
 /** The sketch's question, Alice's Home heading; her greeting is the line above it. */
@@ -931,7 +931,10 @@ test.describe('the chat after the first message', () => {
     await expect(page.locator('#side-panel').locator('li[data-home-item] b').first(), 'the strip names the first row of the panel: one ranking').toHaveText(urgent)
     const held = await page.locator('#side-panel').locator('li[data-home-item]').count()
     expect(held, 'the panel holds the needs the platform returned').toBeGreaterThan(1)
-    if (held < total) await expect(page.locator('#side-panel').getByRole('link', { name: 'See all on Workflows' })).toBeVisible()
+    if (held < total) {
+      await expect(page.locator('#side-panel').getByRole('status').filter({ hasText: /^Showing / }), 'the panel says how many it shows of the count').toHaveText(`Showing ${String(held)} of ${String(total)}.`)
+      expect(await showEvery(page.locator('#side-panel'), page.locator('#side-panel').locator('li[data-home-item]')), 'Show more reaches every need N more counts').toBe(total)
+    }
     await page.locator('#side-panel').getByRole('link', { name: 'More details' }).click()
     await expect(page).toHaveURL(/\/workflows$/)
     expect(await needsOnWorkflows(page), 'N more plus one is the Needs you rows on Workflows').toBe(total)
@@ -977,7 +980,7 @@ test.describe('the chat after the first message', () => {
     await expect(thread(page)).toContainText(`${String(total)} ${total === 1 ? 'thing needs' : 'things need'} you`)
     const rows = await thread(page).locator('li[data-home-item]').count()
     expect(rows, 'one row each for the needs the platform returned').toBeGreaterThan(0)
-    if (rows < total) await expect(thread(page).getByRole('link', { name: 'See all on Workflows' })).toBeVisible()
+    if (rows < total) expect(await showEvery(thread(page), thread(page).locator('li[data-home-item]')), 'Show more under the answer reaches every need it counts').toBe(total)
     await repair()
     await context.close()
   })

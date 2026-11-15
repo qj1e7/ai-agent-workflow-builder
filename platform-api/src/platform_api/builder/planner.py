@@ -602,7 +602,7 @@ class Answering(Protocol):
 
 
 class FactsReading(Protocol):
-    async def read(self, viewer: Principal) -> PlannerFacts: ...
+    async def read(self, viewer: Principal, request: str) -> PlannerFacts: ...
 
 
 class Registry(Protocol):
@@ -857,7 +857,7 @@ class PlannerFront:
             async with asyncio.timeout(ANSWER_LIMIT_SECONDS):
                 result = await self._answers.answer(
                     text,
-                    await self._facts.read(viewer),
+                    await self._facts.read(viewer, text),
                     earlier,
                     changes_workflows=Role.OPERATOR in viewer.roles,
                 )

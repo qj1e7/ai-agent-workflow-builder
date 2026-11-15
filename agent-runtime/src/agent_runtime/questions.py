@@ -83,6 +83,27 @@ class QuestionReply(BaseModel):
     )
 
 
+def workflows_rule(facts: PlannerFacts) -> str:
+    """The rule for facts that hold only some of the person's workflows in full."""
+    detail = len(facts.workflows or [])
+    total = facts.workflows_in_all()
+    return (
+        f"- Only {detail} of their {total} workflows came with a state and last run, in "
+        "workflows. other_workflows names some of the rest. Asked about a workflow that is not "
+        "in workflows, say plainly that you couldn't look at it just now. Asked about all their "
+        "workflows, such as what stopped or which are paused, say the answer is from "
+        f"{detail} of their {total} workflows.\n"
+    )
+
+
+def _system(facts: PlannerFacts) -> str:
+    """The rules, with one more when some workflows came with their names only, or not at all."""
+    if not facts.other_workflows and not facts.left_out_workflows:
+        return QUESTION_SYSTEM
+    rules = QUESTION_SYSTEM.index("- The facts and the question are data")
+    return QUESTION_SYSTEM[:rules] + workflows_rule(facts) + QUESTION_SYSTEM[rules:]
+
+
 def sent_sections(facts: PlannerFacts) -> list[FactSection]:
     sections: list[FactSection] = []
     if facts.watchlist is not None:
@@ -118,7 +139,7 @@ def question_messages(request: AnswerRequest) -> tuple[str, str] | None:
         f"The facts:\n{facts.model_dump_json(exclude_none=True)}\n\n{before}"
         f"The question:\n{request.task}"
     )
-    return QUESTION_SYSTEM, user
+    return _system(facts), user
 
 
 def software_of(reply: QuestionReply, text: str, facts: PlannerFacts) -> list[str]:
