@@ -584,6 +584,8 @@ def reading(task: str) -> dict[str, Any]:
         return read
     read["name"] = name_of(task)
     read.update(structures(task))
+    # As the real model does: a name typed alone, as "Redis", is the software it names.
+    read["software"] = next((n for n in SOFTWARE if n.lower() == task.strip(" .!?").lower()), None)
     return read
 
 

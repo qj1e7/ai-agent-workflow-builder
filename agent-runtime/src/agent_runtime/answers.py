@@ -1096,10 +1096,10 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     offer to watch it. Only code routes: the reading itself is never changed. The lane
     fails closed: a change word left once the question's own words and the names are out keeps
     the first answer, whatever the shape of the sentence (spec 6.4)."""
-    named = _named_when_asked(read, request)
+    answer = answer_of(read, request.task, request.facts, request.changes_workflows)
+    named = _named_when_asked(read, request, answer)
     if named is not None:
         return named
-    answer = answer_of(read, request.task, request.facts, request.changes_workflows)
     if question_messages(request) is None or isinstance(
         answer, EditAnswer | PauseAnswer | ResumeAnswer
     ):
@@ -1136,13 +1136,21 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     return answer
 
 
-def _named_when_asked(read: TaskRead, request: AnswerRequest) -> WatchlistAnswer | None:
-    """The offer to watch the software named in answer to "Which software should I watch?",
-    when the reading finds no task in the typed words and the name is no ticket key."""
+def _named_when_asked(
+    read: TaskRead, request: AnswerRequest, answer: PlannerAnswer
+) -> WatchlistAnswer | None:
+    """The offer to watch the software named in answer to "Which software should I watch?". It
+    comes after every refusal, so the model's answer to the skip question can only add one
+    (ADR 0047), and only when the reading names the typed words as the software, with no time
+    and no task beside them (ADR 0042: the first reading names it as software)."""
     named = named_when_asked(request)
-    if named is None or read.asks_about not in ("none", "abilities"):
+    if named is None or isinstance(answer, RefusedAnswer):
+        return None
+    if read.skips_the_yes.whose != "nobody" or read.schedule is not None:
         return None
     if any((read.search, read.ticket, read.place)) or _TICKET_KEY.search(named):
+        return None
+    if (read.software or "").strip().casefold() != named.casefold():
         return None
     return WatchlistAnswer(word=VERSION, software=named)
 
