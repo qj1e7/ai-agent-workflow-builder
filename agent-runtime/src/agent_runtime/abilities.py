@@ -330,6 +330,67 @@ CAPABILITIES: Final = (
         "That needs a new tool. The team decides on new tools.",
     ),
     _not_yet(
+        "jira.block_read",
+        "Read Jira with n8n's own Jira block",
+        "read",
+        "Jira",
+        "jira",
+        "add n8n's Jira block for you",
+        "n8n's own blocks are set up in n8n, not from the chat. Someone with n8n access adds one "
+        "there, and it reads with the platform's key, which can only read.",
+    ),
+    _not_yet(
+        "github.block_read",
+        "Read GitHub with n8n's own GitHub block",
+        "read",
+        "GitHub",
+        "github",
+        "add n8n's GitHub block for you",
+        "n8n's own blocks are set up in n8n, not from the chat. Someone with n8n access adds one "
+        "there, and it reads with the platform's key, which can only read.",
+    ),
+    _not_yet(
+        "slack.post",
+        "Post in a Slack channel with n8n's Slack block",
+        "notify",
+        "Slack",
+        None,
+        "add n8n's Slack block for you",
+        "n8n's own blocks are set up in n8n, not from the chat. Someone with n8n access adds one "
+        "there. It posts only to the channel written in the block, with the platform's key, "
+        "which can only post.",
+    ),
+    _not_yet(
+        "teams.block_post",
+        "Post in Teams with n8n's Teams block",
+        "notify",
+        "Teams",
+        None,
+        "add n8n's Teams block for you",
+        "n8n's Teams block can post only with a person's own sign-in, so the platform has no key "
+        "for it. Run results reach Teams through the platform's own Tell.",
+    ),
+    _not_yet(
+        "outlook.send",
+        "Send email with n8n's Outlook block",
+        "notify",
+        "Outlook",
+        None,
+        "add n8n's Outlook block for you",
+        "n8n rewrites an Outlook app key each time it gets a token, so the platform can't check "
+        "the key stays the one it made. It has no Outlook key.",
+    ),
+    _not_yet(
+        "gmail.send",
+        "Send email with n8n's Gmail block",
+        "notify",
+        "Gmail",
+        None,
+        "add n8n's Gmail block for you",
+        "n8n's Gmail block asks Google for the right to change mail, so no key that can only "
+        "send works with it. The platform has no Gmail key.",
+    ),
+    _not_yet(
         "slack.send",
         "Send Slack or text messages",
         "write",
