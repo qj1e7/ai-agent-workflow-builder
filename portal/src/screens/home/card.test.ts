@@ -30,6 +30,7 @@ import {
   createBody,
   defaultName,
   draftContent,
+  draftWrites,
   dropRow,
   EMPTY_FORM,
   ROW_LABEL,
@@ -747,5 +748,60 @@ describe('a second workflow of the same name', () => {
     expect(timeWords({ often: 'every_day', day: '', at: '', filledFrom: null })).toBe('Every day, at what time?')
     expect(timeWords({ often: 'weekdays', day: '', at: '', filledFrom: null })).toBe('Every weekday, at what time?')
     expect(timeWords({ often: 'week', day: 'monday', at: '', filledFrom: null })).toBe('Mondays, at what time?')
+  })
+})
+
+describe('the card’s draft saves and deletes', () => {
+  /** A request the server has not answered yet, and the order the server handled each one. */
+  const server = () => {
+    const handled: string[] = []
+    const pending = (name: string) => {
+      let answer: (ok: boolean) => void = () => undefined
+      const request = new Promise<void>((resolve, reject) => {
+        answer = (ok) => {
+          handled.push(name)
+          if (ok) resolve()
+          else reject(new Error(`${name} failed`))
+        }
+      })
+      return { request, answer }
+    }
+    return { handled, pending }
+  }
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+  it('deletes only after a save still on its way has landed, so the save can’t bring the draft back (#190)', async () => {
+    const { handled, pending } = server()
+    const writes = draftWrites()
+    const save = pending('save')
+    void writes.saved(save.request)
+    const deleted = writes.afterSaves(() => {
+      handled.push('delete')
+      return Promise.resolve()
+    })
+    await tick()
+    expect(handled, 'the delete waits while the save is on its way').toEqual([])
+    save.answer(true)
+    await deleted
+    expect(handled).toEqual(['save', 'delete'])
+  })
+
+  it('still deletes after a save that failed, and at once when nothing is being saved', async () => {
+    const { handled, pending } = server()
+    const writes = draftWrites()
+    const save = pending('save')
+    writes.saved(save.request).catch(() => undefined)
+    const deleted = writes.afterSaves(() => {
+      handled.push('delete')
+      return Promise.resolve()
+    })
+    save.answer(false)
+    await deleted
+    expect(handled).toEqual(['save', 'delete'])
+    await writes.afterSaves(() => {
+      handled.push('delete again')
+      return Promise.resolve()
+    })
+    expect(handled.at(-1)).toBe('delete again')
   })
 })

@@ -21,6 +21,7 @@ import {
   canDrop,
   changeRow,
   draftContent,
+  draftWrites,
   dropRow,
   leftWords,
   lowerFirst,
@@ -266,6 +267,7 @@ function SettingUp({ start }: { start: CardStart }) {
   const [form, setForm] = useState(kept?.form ?? start.form)
   // A save names the draft before React draws the card again, so Set up and Never mind read the id here, not from the last drawing (#190).
   const draft = useRef(kept ? kept.draft : start.draftId)
+  const [draftOrder] = useState(draftWrites)
   const [held, act] = useReducer(cardPhase, kept?.phase ?? { kind: 'open' })
   // A press of Set up keeps what it came to under its own key, so a card drawn again while the platform answered settles from it.
   const press = useMadeBySetUp(held.kind === 'creating' ? held.key : null)
@@ -324,10 +326,12 @@ function SettingUp({ start }: { start: CardStart }) {
     const saved = draft.current ?? newIdempotencyKey()
     draft.current = saved
     memory.keep({ form: now.form, draft: saved, phase: now.phase })
-    saveDraft.mutate(
-      { draftId: saved, draft: { content: draftContent(now.form, now.plan) } },
-      { onSuccess: () => onDone?.(saved), onError: (error) => setSaveProblem(words(error)) },
-    )
+    draftOrder
+      .saved(saveDraft.mutateAsync({ draftId: saved, draft: { content: draftContent(now.form, now.plan) } }))
+      .then(
+        () => onDone?.(saved),
+        (error: unknown) => setSaveProblem(words(error)),
+      )
   }
 
   useEffect(() => {
@@ -449,7 +453,7 @@ function SettingUp({ start }: { start: CardStart }) {
         savedCard: async (card) => (me.data ? savedCopyOf(await readCards(), me.data.id, card) : null),
         saveCard: async (card) => (await saveCard.mutateAsync({ cardId: null, card })).card_id,
         create: (body) => create.mutateAsync(body),
-        deleteDraft: (draftId) => deleteDraft.mutateAsync(draftId),
+        deleteDraft: (draftId) => draftOrder.afterSaves(() => deleteDraft.mutateAsync(draftId)),
       })
         .then(({ useCaseId, draftKept }) => {
           void queryClient.invalidateQueries({ queryKey: ['home'] })
@@ -480,23 +484,25 @@ function SettingUp({ start }: { start: CardStart }) {
       setAsking(true)
       return
     }
-    if (saved !== null) deleteDraft.mutate(saved)
+    if (saved !== null) void draftOrder.afterSaves(() => deleteDraft.mutateAsync(saved)).catch(() => undefined)
     leave()
   }
 
   const confirmDiscard = () => {
     const saved = draft.current
     if (saved === null) return
-    latch.run((settled) =>
-      deleteDraft.mutate(saved, {
-        onSuccess: () => {
-          setAsking(false)
-          leave()
-        },
-        onError: (error) => setDiscardProblem(`Could not discard it. ${words(error)}`),
-        onSettled: settled,
-      }),
-    )
+    latch.run((settled) => {
+      void draftOrder
+        .afterSaves(() => deleteDraft.mutateAsync(saved))
+        .then(
+          () => {
+            setAsking(false)
+            leave()
+          },
+          (error: unknown) => setDiscardProblem(`Could not discard it. ${words(error)}`),
+        )
+        .finally(settled)
+    })
   }
 
   const undoNeverMind = () => {
