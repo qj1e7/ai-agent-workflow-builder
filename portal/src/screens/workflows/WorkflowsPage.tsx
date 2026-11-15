@@ -24,6 +24,7 @@ import { NeedRows } from '../home/NeedsSection'
 import { NeedsMore } from '../home/panels/NeedsMore'
 import { usePagedNeeds } from '../home/usePagedNeeds'
 import { useArrivalScroll } from './arrival'
+import { MadeInN8nSection } from './MadeInN8n'
 import { needsFix } from './n8nChange'
 import { StatusPills } from './Status'
 import { RequestView } from './RequestView'
@@ -292,6 +293,7 @@ function Loaded({ handedOver, now, me, useCases }: LoadedProps) {
           </ul>
         ) : null}
       </section>
+      <MadeInN8nSection me={me} />
       <FollowingSection now={now} meId={me.id} />
       <Toast message={message} onDismiss={() => setNote(null)} focusAfter={() => document.getElementById('find-workflows') ?? document.querySelector<HTMLElement>('main h1')} />
     </>
