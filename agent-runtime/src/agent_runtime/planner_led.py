@@ -14,6 +14,7 @@ the coverage check in `answer_of`) wins over anything the model proposes. A new 
 through that same reading and `answer_of`, so its card, its marks and its checks are the rules'
 own."""
 
+import json
 import logging
 import re
 from collections.abc import Callable, Mapping, Sequence
@@ -45,6 +46,7 @@ from agent_runtime.contract import (
     CheckWorkflowsAnswer,
     DidntFollowAnswer,
     EditAnswer,
+    FreeReplyAnswer,
     ModelProblem,
     NeedsMeAnswer,
     PartAnswer,
@@ -108,7 +110,8 @@ class WatchSoftware(_Tool):
     other_requests: list[str] = Field(
         default_factory=list[str],
         description="Each other request in the message this does not cover, in the person's "
-        "exact words. They get a button to ask each on its own.",
+        "exact words. They get a button to ask each on its own. A request left out is shown "
+        "ticked as done, so never leave one out.",
     )
 
 
@@ -220,6 +223,8 @@ class Led:
     tools: tuple[str, ...] = ()
     fell_back: str | None = None
     errors: tuple[str, ...] = ()
+    tried: tuple[str, ...] = ()
+    """What the model sent on each try, for the eval's record. Never logged."""
 
 
 # Each tool's act: parse, validate against the person's words and the facts, build the answer.
@@ -335,7 +340,10 @@ def _watch(raw: Mapping[str, Any], turn: Turn) -> Acted:
         )
     held = turn.request.facts.watchlist if turn.request.facts else None
     if any(w.name.strip().casefold() == name.strip().casefold() for w in held or []):
-        return Invalid(f"{name} is already on the Watchlist. Answer from the facts with reply.")
+        return Invalid(
+            f"The Watchlist already holds {name}. Use reply, form answer, and write it as: "
+            f"Your Watchlist already holds {name}. Then what the facts show about it."
+        )
     rules = turn.front.answer
     if isinstance(rules, WatchlistAnswer) and (rules.software or "").casefold() == name.casefold():
         return _answered(turn, rules, args.other_requests)
@@ -410,11 +418,30 @@ def _show(raw: Mapping[str, Any], turn: Turn) -> Acted:
             answer = WhyStoppedAnswer(workflow_words=words)
         case "needs_you":
             answer = NeedsMeAnswer()
-        case "how_to_start":
-            answer = AbilitiesAnswer(how_to_start=True)
-        case "abilities":
-            answer = AbilitiesAnswer()
+        case "how_to_start" | "abilities":
+            answer = AbilitiesAnswer(how_to_start=args.what == "how_to_start")
+            return _whole(turn, answer, args.other_requests)
     return _answered(turn, answer, args.other_requests)
+
+
+def _whole(turn: Turn, answer: AbilitiesAnswer, others: Sequence[str]) -> Acted:
+    """How to start, or what the Planner can do, answers the whole message, less each other ask
+    the model named: the rules' word routes would cross a "tour" they don't know."""
+    missing = [o for o in others if locate(turn.text, o) is None]
+    if missing:
+        return Invalid(f"other_requests must be the message's own words: {'; '.join(missing)}.")
+    spans = [s for o in others if (s := locate(turn.text, o)) is not None]
+    whole = parts_of(None, turn.request.task, FreeReplyAnswer(form="answer", text="-"))
+
+    def apart(part: RequestPart) -> bool:
+        at = locate(turn.text, part.text)
+        return at is not None and any(at[0] < end and start < at[1] for start, end in spans)
+
+    parts = [
+        p.model_copy(update={"mark": "cant", "reason": "ask_on_its_own"}) if apart(p) else p
+        for p in whole
+    ]
+    return Answered(answer=answer, parts=parts)
 
 
 def _refuse(raw: Mapping[str, Any], turn: Turn) -> Acted:
@@ -550,7 +577,11 @@ BRIEFING: Final = (
     "don't ask me each time, skips no yes.\n"
     "- reply: everything else. form answer for a question about the app or their own data, "
     "and for small talk. form clarify when a request is too vague to act on: one short "
-    "question, with 2 to 4 choices. form cant for something the platform can't do.\n\n"
+    "question, with 2 to 4 choices. form cant for something the platform can't do that is no "
+    "task.\n"
+    "A task with a part the platform can't do yet, such as an email, a post in Teams, or "
+    "closing, moving or deleting tickets, goes to set_up_workflow with their words: the card "
+    "shows each part it can't do in the registry's words, beside the nearest thing it can.\n\n"
     "Conversation:\n"
     "- When the message answers the question you asked in the turn before, finish the task "
     "with it. After Which software should I watch?, the message LangGraph means watch_software "
@@ -559,7 +590,8 @@ BRIEFING: Final = (
     "- When a detail you need is missing and no card asks for it, ask one short question. "
     "Never guess a time, a day, a project key, a name or a software.\n"
     "- When the message asks for several things, do the first that a tool can do and copy the "
-    "words of each other ask into other_requests, so the person can ask it on its own.\n"
+    "words of each other ask into other_requests, so the person can ask it on its own. An ask "
+    "left out is shown ticked as done, so never leave one out.\n"
     "- If the turn before was your own clarifying question, never ask another.\n\n"
     "Rules for reply:\n"
     "- text: plain words, at most four short sentences. No Markdown, list, link or HTML. For "
@@ -579,9 +611,13 @@ BRIEFING: Final = (
     "- Never offer or promise to do something. Do not write I'll, I will, let me, want me to, "
     "shall I or keep you posted. Tell the person what to type or tap.\n"
     "- About their own runs, tickets or requests, say what the facts show in plain words, or "
-    "name the page that shows it, such as Open Needs you.\n"
+    "name the page that shows it, such as Open Needs you. Say what a list holds, as Your "
+    "Watchlist holds Redis, never that something is on, is already on or is running.\n"
     "- For a greeting, thanks or small talk, reply in kind in one or two short sentences, then "
     "say where to start, such as typing what they want done in the box on Home.\n"
+    "- A cant says plainly what you can't do yet, then the nearest Ready thing, then Ask the "
+    "team, as: I can't post in Teams yet. The nearest thing is a weekly list of open bugs in "
+    "one new Jira ticket, after an Approver's yes. Tap Ask the team to ask for Teams posts.\n"
     "- Every sentence that names something the platform can't do says can't in it. When you "
     "say what you or the platform can do, name only Ready capabilities. For one that is "
     'Planned or Not on the plan, say "I can\'t ... yet" in the same part of the sentence. Name '
@@ -741,24 +777,32 @@ def led(request: AnswerRequest, chat_for: ChatFor, verify_with: ChatFor | None =
 def _two_tries(asked: list[BaseMessage], first: AIMessage | ModelProblem, turn: Turn) -> Led:
     tools: list[str] = []
     errors: list[str] = []
+    tried: list[str] = []
     message = first
     for attempt in (1, 2):
         if isinstance(message, ModelProblem):
-            return Led(_fallback(turn), tuple(tools), "call", tuple(errors))
+            return Led(_fallback(turn), tuple(tools), "call", tuple(errors), tuple(tried))
         acted, name = act_on(message, turn)
         tools.append(name)
+        tried += [json.dumps(c["args"]) for c in message.tool_calls] or [message.text[:600]]
         if isinstance(acted, Answered):
-            return Led(acted, tuple(tools), errors=tuple(errors))
+            return Led(acted, tuple(tools), errors=tuple(errors), tried=tuple(tried))
         errors.append(acted.why)
         log.warning("ai_led: %s call not used (try %d)", name, attempt)
         if attempt == 1:
             message = _lead([*asked, message, *_told(message, acted.why)], turn.chat_for)
-    return Led(_fallback(turn), tuple(tools), "invalid", tuple(errors))
+    return Led(_fallback(turn), tuple(tools), "invalid", tuple(errors), tuple(tried))
 
 
 def _fallback(turn: Turn) -> Answered:
+    """The rules' own answer when it is no dead end, as rules mode shows it before its free
+    reply. Otherwise the fixed card."""
+    front, task, facts = turn.front, turn.request.task, turn.request.facts
+    parts = parts_of(front.read, task, front.answer, facts)
+    if dead_end(front.answer, parts, task) is None:
+        return Answered(answer=front.answer, parts=parts)
     fallback = DidntFollowAnswer()
-    return Answered(answer=fallback, parts=parts_of(None, turn.request.task, fallback))
+    return Answered(answer=fallback, parts=parts_of(None, task, fallback))
 
 
 def answer_led(

@@ -10,6 +10,7 @@ from agent_runtime.answers import TaskRead
 from agent_runtime.api import Settings, SettingsError, create_app
 from agent_runtime.contract import (
     AbilitiesAnswer,
+    CantAnswer,
     Answered,
     AnswerRequest,
     DidntFollowAnswer,
@@ -163,7 +164,7 @@ def test_a_software_already_watched_is_answered_not_offered_again() -> None:
     )
 
     assert isinstance(shown(result), FreeReplyAnswer)
-    assert "already on the Watchlist" in result.errors[0]
+    assert "already holds LangGraph" in result.errors[0]
 
 
 def test_a_time_the_model_guesses_never_shows() -> None:
@@ -378,3 +379,32 @@ def test_a_turn_with_no_tool_call_goes_back_to_the_model_once() -> None:
     assert "exactly one tool" in result.errors[0]
     retry = next(c for c in chat.calls if any(m.text == "Hello there." for m in c))
     assert retry[-1].type == "human" and "exactly one tool" in retry[-1].text
+
+
+def test_a_second_miss_shows_the_rules_own_answer_when_it_is_no_dead_end() -> None:
+    task = "email me the list of stale tickets every Friday"
+    said_done = {"form": "cant", "text": "I emailed you the list."}
+
+    result, _ = run(
+        task,
+        tool("reply", **said_done),
+        tool("reply", call_id="c2", **said_done),
+        read=reading("none"),
+    )
+
+    assert result.fell_back == "invalid"
+    assert isinstance(shown(result), CantAnswer)
+
+
+def test_how_to_start_answers_the_whole_message_less_each_other_ask() -> None:
+    result, _ = run(
+        "give me a quick tour, and pause the morning check",
+        tool("show", what="how_to_start", other_requests=["pause the morning check"]),
+    )
+
+    assert isinstance(result.result, Answered)
+    marks = [(p.text, p.mark, p.reason) for p in result.result.parts]
+    assert marks == [
+        ("give me a quick tour", "will_do", None),
+        ("pause the morning check", "cant", "ask_on_its_own"),
+    ]

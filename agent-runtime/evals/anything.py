@@ -284,7 +284,7 @@ def ask_with(planner: Planner) -> Callable[[BaseChatModel, AnythingCase], Answer
         }
         if isinstance(outcome, Led):
             record |= {"tools": outcome.tools, "fell_back": outcome.fell_back}
-            record |= {"errors": outcome.errors}
+            record |= {"errors": outcome.errors, "tried": outcome.tried}
         return Answer(result, json.dumps(record), usage_of(replies.messages))
 
     return ask

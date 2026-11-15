@@ -382,6 +382,8 @@ def ask_led(model: BaseChatModel, case: ReplyCase) -> Answer:
     text = words_of(result.answer, case) if isinstance(result, Answered) else result.message
     shown = f"{text}\n(tools: {', '.join(outcome.tools) or 'none'}"
     shown += f"; fell back: {outcome.fell_back})" if outcome.fell_back else ")"
+    if outcome.errors:
+        shown += "".join(f"\n(tried: {t[:300]})" for t in outcome.tried)
     steps = LedSteps(outcome, tuple(timed.seconds))
     return Answer(outcome, shown, usage_of(timed.messages), steps)
 
