@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useCacheScope } from '../../api/context'
 import { useLatch } from '../../api/latch'
-import { useAddPerson, useAskApprover, useConfirmations, useDecideConfirmation, usePeopleList, useRemoveApprover, useSetOperator } from '../../api/settingsQueries'
+import { useAddPerson, useAskApprover, useConfirmations, useDecideConfirmation, useMyN8n, usePeopleList, useRemoveApprover, useSetN8nAccess, useSetOperator } from '../../api/settingsQueries'
 import type { ConfirmationOut, Me, PersonOut } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { focusIfFocusFell } from '../../ui/focus'
@@ -13,7 +13,10 @@ import {
   approverRemovedWords,
   askedApproverWords,
   canChangeSettings,
+  canHaveN8nAccess,
   decidedApproverWords,
+  N8N_OPERATORS_ONLY_WORDS,
+  n8nAccessWords,
   ONLY_OPERATORS_WORDS,
   operatorChangeWords,
   peopleRefusalOf,
@@ -37,6 +40,8 @@ export const PEOPLE_LEAD = 'Operators set up workflows and change settings. Appr
 
 const operatorBoxId = (personId: string) => `person-${personId}-operator`
 const approverBoxId = (personId: string) => `person-${personId}-approver`
+const n8nBoxId = (personId: string) => `person-${personId}-n8n`
+const n8nReasonId = (personId: string) => `person-${personId}-n8n-reason`
 const rowErrorId = (personId: string) => `person-${personId}-error`
 
 const NOTHING_SAID: PeopleSaid = { notice: null, problem: null, left: null }
@@ -49,7 +54,7 @@ interface Settled {
 
 interface Busy {
   readonly personId: string
-  readonly act: 'operator' | 'approver' | 'confirm' | 'not_now' | 'undo'
+  readonly act: 'operator' | 'approver' | 'n8n' | 'confirm' | 'not_now' | 'undo'
   readonly to?: boolean
 }
 
@@ -92,6 +97,7 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
   const setOperator = useSetOperator()
   const askApprover = useAskApprover()
   const removeApprover = useRemoveApprover()
+  const setN8nAccess = useSetN8nAccess()
   const decide = useDecideConfirmation()
   const latch = useLatch()
   const focus = useFocusOnNextRender()
@@ -139,6 +145,12 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
   function onOperator(person: PersonOut, to: boolean) {
     change(person, 'operator', to, (done) => setOperator.mutate({ personId: person.id, operator: to }, done), () =>
       tell({ personId: person.id, words: operatorChangeWords(person.display, to), undo: { name: person.display, operator: !to } }),
+    )
+  }
+
+  function onN8nAccess(person: PersonOut, to: boolean) {
+    change(person, 'n8n', to, (done) => setN8nAccess.mutate({ personId: person.id, n8nAccess: to }, done), () =>
+      tell({ personId: person.id, words: n8nAccessWords(person.display, to), undo: null }),
     )
   }
 
@@ -220,6 +232,7 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
             notice={notice?.personId === person.id ? noticeFor(person) : null}
             onOperator={(to) => onOperator(person, to)}
             onApprover={(to) => onApprover(person, to)}
+            onN8nAccess={(to) => onN8nAccess(person, to)}
             onDecide={(confirmation, verdict) => onDecide(person, confirmation, verdict)}
           />
         ))}
@@ -249,15 +262,18 @@ interface RowProps {
   notice: ReactNode
   onOperator: (to: boolean) => void
   onApprover: (to: boolean) => void
+  onN8nAccess: (to: boolean) => void
   onDecide: (confirmation: ConfirmationOut, verdict: 'confirm' | 'not_now') => void
 }
 
-function PersonRow({ person, me, operator, confirmation, askedByName, busy, problem, notice, onOperator, onApprover, onDecide }: RowProps) {
+function PersonRow({ person, me, operator, confirmation, askedByName, busy, problem, notice, onOperator, onApprover, onN8nAccess, onDecide }: RowProps) {
   const tone = personTone(person.display)
   const status = personStatusWords(person)
   const pending = person.pending_approver !== null
   const operatorTicked = busy?.act === 'operator' && busy.to !== undefined ? busy.to : person.operator
   const approverTicked = busy?.act === 'approver' && busy.to !== undefined ? busy.to : person.approver || pending
+  const n8nTicked = busy?.act === 'n8n' && busy.to !== undefined ? busy.to : person.n8n_access
+  const n8nAllowed = canHaveN8nAccess(person)
   const describedBy = problem ? rowErrorId(person.id) : undefined
   const can = pending ? pendingApproverFor(confirmation, person, me, confirmation?.asked_by_name ?? askedByName) : null
 
@@ -297,10 +313,29 @@ function PersonRow({ person, me, operator, confirmation, askedByName, busy, prob
             />
             Approver<span className="visually-hidden"> for {person.display}</span>
           </label>
+          <label className={styles['check']}>
+            <input
+              type="checkbox"
+              id={n8nBoxId(person.id)}
+              checked={n8nTicked}
+              disabled={!n8nAllowed}
+              aria-describedby={n8nAllowed ? describedBy : n8nReasonId(person.id)}
+              onChange={(event) => onN8nAccess(event.target.checked)}
+            />
+            n8n access<span className="visually-hidden"> for {person.display}</span>
+          </label>
         </div>
       ) : (
         <p className={styles['rolesText']}>{rolesWords(person)}</p>
       )}
+      {operator && !n8nAllowed ? (
+        <div className={styles['rowNote']}>
+          <span className={styles['small']} id={n8nReasonId(person.id)}>
+            {N8N_OPERATORS_ONLY_WORDS}
+          </span>
+        </div>
+      ) : null}
+      {me?.id === person.id && person.n8n_access ? <MyN8nLine /> : null}
       {pending ? (
         <div className={styles['rowNote']}>
           <span className={styles['pill']} data-tone="wait">
@@ -330,6 +365,26 @@ function PersonRow({ person, me, operator, confirmation, askedByName, busy, prob
       {notice ? <div className={styles['rowNote']}>{notice}</div> : null}
     </li>
   )
+}
+
+function MyN8nLine() {
+  const mine = useMyN8n(true)
+  const link = mine.data?.set_password_url ?? null
+  const whyNot = mine.data?.why_not ?? null
+  if (link) {
+    return (
+      <div className={styles['rowNote']}>
+        <a href={link} target="_blank" rel="noopener noreferrer">
+          Set your n8n password
+        </a>
+      </div>
+    )
+  }
+  return whyNot ? (
+    <div className={styles['rowNote']}>
+      <span className={styles['small']}>{whyNot}</span>
+    </div>
+  ) : null
 }
 
 type AddField = 'email' | 'display' | 'roles' | 'form'
