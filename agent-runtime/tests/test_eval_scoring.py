@@ -287,6 +287,7 @@ def test_every_job_is_registered_once() -> None:
         "anything",
         "reply",
         "reply_gate",
+        "reply_dev",
         "red_team",
     ]
 
@@ -653,7 +654,7 @@ def test_a_mixed_request_is_scored_on_the_watchlist_and_the_rest():
 def test_only_the_jobs_named_in_eval_jobs_run():
     assert [j.name for j in jobs_chosen({"EVAL_JOBS": "answer"})] == ["answer"]
     assert [j.name for j in jobs_chosen({"EVAL_JOBS": " choose, answer "})] == ["choose", "answer"]
-    assert jobs_chosen({}) == JOBS
+    assert jobs_chosen({}) == tuple(j for j in JOBS if j.name not in {"reply_gate", "reply_dev"})
     with pytest.raises(ValueError, match="no job: nope"):
         jobs_chosen({"EVAL_JOBS": "nope"})
 

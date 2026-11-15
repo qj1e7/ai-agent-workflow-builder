@@ -296,3 +296,20 @@ REPLY_GATE = _GateCases(
         "title": "The reply golden set's gate cases, for a pull request",
     }
 )
+
+
+class _DevCases(Job[ReplyCase]):
+    """The reply job less its held-out third, for the rounds that tune the prompts. The held-out
+    third runs only at the end, in the full `reply` job."""
+
+    def cases(self) -> list[ReplyCase]:
+        return [case for case in REPLY.cases() if not case.held_out]
+
+
+REPLY_DEV = _DevCases(
+    **{
+        **{f.name: getattr(REPLY, f.name) for f in fields(REPLY)},
+        "name": "reply_dev",
+        "title": "The reply golden set less its held-out third, for tuning",
+    }
+)

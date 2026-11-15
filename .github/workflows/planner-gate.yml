@@ -7,6 +7,10 @@ name: planner-gate
 # and $5, and the gate refuses a run with higher caps. There is no scheduled run: the nightly
 # runs ADR 0047 asks for wait for the team lead to set a budget for them. The judge's scores are
 # reported, and gate only once it has agreed with the team lead's own labels (REPLY_JUDGE_AGREED).
+#
+# Report-only for now. The bars are not met yet, so the gate comments its numbers on the pull
+# request and never fails it. The pull request that reaches the bars sets GATE_BLOCKS to 'true'
+# below, and from then on a run under the bars fails.
 on:
   pull_request:
     paths:
@@ -28,6 +32,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: planner-gate-${{ github.ref }}
@@ -73,11 +78,30 @@ jobs:
         working-directory: agent-runtime
         env:
           JUDGE_AGREED: ${{ vars.REPLY_JUDGE_AGREED }}
+          GATE_BLOCKS: 'false'
         run: |
           agreed=()
           if [ "${JUDGE_AGREED}" = "true" ]; then agreed=(--judge-agreed); fi
-          uv run --locked python -m evals.gate evals/out/results.json "${agreed[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
-          exit "${PIPESTATUS[0]}"
+          set +e
+          uv run --locked python -m evals.gate evals/out/results.json "${agreed[@]}" > evals/out/gate.md
+          code=$?
+          set -e
+          mode="report-only: it does not fail the pull request"
+          if [ "${GATE_BLOCKS}" = "true" ]; then mode="blocking"; fi
+          { echo "**Planner gate (${mode})**"; echo; cat evals/out/gate.md; } > evals/out/gate-comment.md
+          cat evals/out/gate-comment.md >> "$GITHUB_STEP_SUMMARY"
+          if [ "${code}" -ne 0 ]; then echo "::warning::The run is under the ADR 0047 bars."; fi
+          if [ "${GATE_BLOCKS}" = "true" ]; then exit "${code}"; fi
+
+      - name: Comment the numbers on the pull request
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          [ -f agent-runtime/evals/out/gate-comment.md ] || exit 0
+          gh pr comment "${PR}" --edit-last --body-file agent-runtime/evals/out/gate-comment.md \
+            || gh pr comment "${PR}" --body-file agent-runtime/evals/out/gate-comment.md
 
       - name: Keep the results
         if: ${{ !cancelled() }}

@@ -2,8 +2,8 @@ from typing import Any
 
 from evals.gate import GATE_MAX_CALLS, bars, gate
 from evals.red_team import RED_TEAM
-from evals.reply import REPLY, REPLY_GATE, ReplyCase
-from evals.runner import JOBS
+from evals.reply import REPLY, REPLY_DEV, REPLY_GATE, ReplyCase
+from evals.runner import JOBS, jobs_chosen
 
 from agent_runtime.contract import ReplyEnvelope
 from agent_runtime.reply_verifier import Verdict
@@ -211,3 +211,17 @@ def test_a_fallback_on_a_planted_instruction_is_no_reject():
     names = {bar.name: bar for bar in bars(planted + honest, judge_agreed=False)}
     rate = names["Free replies the guard or the verifier rejects, planted instructions aside"]
     assert rate.passed and rate.measured == "0 of 20"
+
+
+def test_the_tuning_job_never_runs_a_held_out_case() -> None:
+    held = {c.id for c in CASES.values() if c.held_out}
+    tuning = {case.id for case in REPLY_DEV.cases()}
+    assert held and tuning and not held & tuning
+    assert tuning | held == set(CASES)
+    assert REPLY_DEV in JOBS
+
+
+def test_a_run_of_every_job_runs_each_reply_case_once() -> None:
+    names = [job.name for job in jobs_chosen({})]
+    assert "reply" in names and "reply_gate" not in names and "reply_dev" not in names
+    assert [job.name for job in jobs_chosen({"EVAL_JOBS": "reply_dev"})] == ["reply_dev"]
