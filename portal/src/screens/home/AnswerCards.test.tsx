@@ -43,7 +43,7 @@ import type { N8nReply, ApprovalView, TroubleshootingOut, CantReply, CantRowView
 import { sendOpenInN8n } from '../../api/workflowQueries'
 import openedInN8n from '../../../../contracts/fixtures/builder/opened-in-n8n.json'
 import type { ApiClient } from '../../api/client'
-import { Answer, type Page } from './AnswerCards'
+import { Answer, n8nTabOf, type Page } from './AnswerCards'
 import { newCardMemory, type CardMemory } from './cardMemory'
 import { sayOf, switchedSay, whoOf, wordsOnly } from './answers'
 import { Leftovers } from './PartsList'
@@ -794,10 +794,13 @@ describe('the Planner’s n8n answer', () => {
     expect(buttons(draw(noAccess))).toEqual([])
   })
 
-  it('draws one Open in n8n editor button when the workflow can be opened', () => {
+  it('says “Here it is in n8n.” and opens the workflow on its In n8n tab, as the sketch does, with no button of its own', () => {
     expect(sayOf(canOpen)).toBe(canOpen.said)
-    expect(wordsOnly(canOpen, 'operator')).toBe(false)
-    expect(buttons(draw(canOpen))).toEqual(['Open in n8n editor'])
+    expect(wordsOnly(canOpen, 'operator')).toBe(true)
+    expect(buttons(draw(canOpen))).toEqual([])
+    expect(n8nTabOf(canOpen)).toBe('/workflows/uc_01JD0?view=n8n')
+    expect(n8nTabOf(noAccess), 'nothing opens for someone who can’t').toBeNull()
+    expect(n8nTabOf({ ...canOpen, use_case_id: null }), 'nor when the words named no one workflow').toBeNull()
   })
 
   it('asks the platform to open the workflow and gets the editor address back', async () => {
