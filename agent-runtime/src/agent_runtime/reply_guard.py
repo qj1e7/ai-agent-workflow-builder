@@ -1,13 +1,15 @@
 """The code checks on the Planner's free reply (ADR 0047).
 
-The model fills a closed envelope, `ReplyEnvelope`. Before the person sees it, the checks in
-`CHECKS` run in order, and the first that fails swaps in the fixed fallback. They lean strict: a
+The model fills a closed envelope, `ReplyEnvelope`. Its words are made into what the person will
+see once (`shown_of`), and the checks in `CHECKS` read only that, in order. The first that fails
+swaps in the fixed fallback. They lean strict: a
 strict check costs only a fallback, which the eval counts. Each check is a pure function of the
 envelope and of what the reply was given, so each has its own tests. A guard is a filter, not a
 proof. What slips past it can only mislead in words: the reply has no tool, and a write still
 needs a card and a yes."""
 
 import re
+import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final, Literal
@@ -30,6 +32,7 @@ from agent_runtime.contract import (
     FactSection,
     FreeReplyAnswer,
     ReplyEnvelope,
+    ReplyForm,
     ReplyOffer,
 )
 from agent_runtime.planner import visible_words
@@ -60,6 +63,34 @@ class Given:
     """True when the answer before was a clarifying question, so this one may not ask another."""
 
 
+def shown_words(text: str) -> str:
+    """The words as the person sees them: compatibility forms such as fullwidth letters folded to
+    plain ones (NFKC), invisible characters dropped, and spaces collapsed."""
+    return visible_words(unicodedata.normalize("NFKC", text))
+
+
+@dataclass(frozen=True)
+class Shown:
+    """The reply exactly as the person would see it. The checks take this, not the envelope, so
+    none of them reads the model's raw text, and nothing changes the words after they pass."""
+
+    form: ReplyForm
+    text: str
+    choices: tuple[str, ...]
+    offer: str | None
+    looked_at: tuple[str, ...]
+
+
+def shown_of(reply: ReplyEnvelope) -> Shown:
+    return Shown(
+        form=reply.form,
+        text=shown_words(reply.text),
+        choices=tuple(shown_words(c) for c in reply.choices),
+        offer=(reply.offer or "").strip() or None,
+        looked_at=tuple(reply.looked_at),
+    )
+
+
 def sentences(text: str) -> list[str]:
     return [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", text) if s.strip()]
 
@@ -78,21 +109,20 @@ def negated(sentence: str) -> bool:
 # 1. Shape.
 
 
-def fits_its_form(reply: ReplyEnvelope, given: Given) -> bool:
+def fits_its_form(reply: Shown, given: Given) -> bool:
     """The text fits, a clarifying question ends with "?" and has 2 to 4 short distinct choices,
     only a clarifying question has choices, and only a can't has an offer. A second clarifying
     question in a row is never asked."""
-    text = visible_words(reply.text)
-    choices = [visible_words(c) for c in reply.choices]
-    if not 1 <= len(text) <= REPLY_TEXT_LIMIT:
+    choices = reply.choices
+    if not 1 <= len(reply.text) <= REPLY_TEXT_LIMIT:
         return False
-    if reply.form != "cant" and (reply.offer or "").strip():
+    if reply.form != "cant" and reply.offer is not None:
         return False
     if reply.form != "clarify":
         return not choices
     return (
         not given.clarified_before
-        and text.endswith("?")
+        and reply.text.endswith("?")
         and 2 <= len(choices) <= 4
         and len({c.casefold() for c in choices}) == len(choices)
         and all(1 <= len(c) <= CHOICE_LIMIT for c in choices)
@@ -103,9 +133,13 @@ def fits_its_form(reply: ReplyEnvelope, given: Given) -> bool:
 
 MARKUP: Final = re.compile(
     r"\*\*|__|`|~~|\[[^\]]*\]\([^)]*\)|<\s*/?\s*[a-z!][^>]*>|&(?:[a-z]+|#\d+);"
-    r"|^\s{0,3}#{1,6}\s|^\s*(?:[-*+•]|\d+[.)])\s|^\s*>|(?<!\w)\*(?=\S)[^*\n]+(?<=\S)\*(?!\w)",
-    re.IGNORECASE | re.MULTILINE,
+    r"|(?:^|\s)#{1,6}\s|(?:^|[\s:])[-*+•]\s|(?:^|\s)1[.)]\s.*\s2[.)]\s|^>"
+    r"|(?<!\w)\*(?=\S)[^*]+(?<=\S)\*(?!\w)",
+    re.IGNORECASE,
 )
+"""Markdown and HTML, in words whose line breaks are already spaces: a heading, a list, a
+quote, emphasis, code, a link or a tag."""
+SHOWN_PUNCTUATION: Final = frozenset({"Pd", "Pi", "Pf", "Ps", "Pe", "Po", "Sc", "Zs"})
 LINK: Final = re.compile(
     r"\b(?:https?://|ftp://|www\.|mailto:)"
     r"|\b[\w-]+(?:\.[\w-]+)*\.(?:com|org|net|io|sg|gov|edu|co|ai|dev|app|info|me|uk|us)\b",
@@ -113,9 +147,20 @@ LINK: Final = re.compile(
 )
 
 
-def is_plain(reply: ReplyEnvelope, given: Given) -> bool:
-    """No Markdown, HTML or link anywhere: the Portal draws the reply as text."""
-    return not any(MARKUP.search(t) or LINK.search(t) for t in (reply.text, *reply.choices))
+def _plain_characters(text: str) -> bool:
+    """Every letter, digit and mark is plain ASCII, and anything else is punctuation, so a
+    look-alike letter from another script, or a mark laid over a letter, can't carry a word past
+    the other checks. An accented letter is refused too: the strict check costs a fallback."""
+    return all(c.isascii() or unicodedata.category(c) in SHOWN_PUNCTUATION for c in text)
+
+
+def is_plain(reply: Shown, given: Given) -> bool:
+    """Plain characters, and no Markdown, HTML or link anywhere: the Portal draws the reply as
+    text."""
+    return all(
+        _plain_characters(t) and not MARKUP.search(t) and not LINK.search(t)
+        for t in (reply.text, *reply.choices)
+    )
 
 
 # 3. No claim that something happened.
@@ -167,7 +212,7 @@ def _says_it_happened(sentence: str) -> bool:
     return IS_WRITTEN.search(sentence) is not None and not CONDITION.search(sentence)
 
 
-def claims_nothing_done(reply: ReplyEnvelope, given: Given) -> bool:
+def claims_nothing_done(reply: Shown, given: Given) -> bool:
     """The reply never says that anything was created, sent, approved, changed or the like, nor
     that something is done or is now on. It did nothing: it only replies."""
     return not any(_says_it_happened(s) for s in sentences(reply.text))
@@ -341,7 +386,7 @@ def _claims_fit(sentence: str, yours: frozenset[str]) -> bool:
     return True
 
 
-def claims_only_what_is_built(reply: ReplyEnvelope, given: Given) -> bool:
+def claims_only_what_is_built(reply: Shown, given: Given) -> bool:
     """Each sentence that says the platform, the Planner, "I" or "you" can do something fits a
     Ready line, or is an action in the app this person has. A sentence that names something
     unbuilt also says it can't be done yet, unless it points to Ask the team. A choice to tap
@@ -367,7 +412,7 @@ OFFERS_TO_ACT: Final = re.compile(
 )
 
 
-def offers_nothing(reply: ReplyEnvelope, given: Given) -> bool:
+def offers_nothing(reply: Shown, given: Given) -> bool:
     """The reply tells the person what to type or tap. It never promises to do it."""
     return OFFERS_TO_ACT.search(reply.text) is None
 
@@ -388,11 +433,11 @@ MAKES_A_TICKET: Final = re.compile(
 A_YES: Final = re.compile(r"\b(?:yes|approv\w*)\b", re.IGNORECASE)
 
 
-def keeps_every_yes(reply: ReplyEnvelope, given: Given) -> bool:
+def keeps_every_yes(reply: Shown, given: Given) -> bool:
     """The text and every choice pass the word rule that refuses a skipped yes before any model
     call. No sentence says someone approves their own work, and one that says a ticket is made
     also says it waits for a yes."""
-    if any(skip_of_a_yes(visible_words(t)) for t in (reply.text, *reply.choices)):
+    if any(skip_of_a_yes(t) for t in (reply.text, *reply.choices)):
         return False
     for sentence in sentences(reply.text):
         if negated(sentence):
@@ -417,14 +462,14 @@ def _seen(token: str, given: Given) -> bool:
     return re.search(rf"(?<![\w.]){re.escape(token)}(?!\w|\.\d)", held) is not None
 
 
-def makes_nothing_up(reply: ReplyEnvelope, given: Given) -> bool:
+def makes_nothing_up(reply: Shown, given: Given) -> bool:
     """A ticket key or a version number in the text appears in the facts sent or the message."""
     keys = TICKET_KEY.findall(reply.text)
     versions = [found.group(1) for found in VERSION.finditer(reply.text)]
     return all(_seen(token, given) for token in [*keys, *versions])
 
 
-CHECKS: Final[tuple[tuple[GuardCheck, Callable[[ReplyEnvelope, Given], bool]], ...]] = (
+CHECKS: Final[tuple[tuple[GuardCheck, Callable[[Shown, Given], bool]], ...]] = (
     ("shape", fits_its_form),
     ("plain_text", is_plain),
     ("claims_done", claims_nothing_done),
@@ -435,7 +480,7 @@ CHECKS: Final[tuple[tuple[GuardCheck, Callable[[ReplyEnvelope, Given], bool]], .
 )
 
 
-def failed_check(reply: ReplyEnvelope, given: Given) -> GuardCheck | None:
+def failed_check(reply: Shown, given: Given) -> GuardCheck | None:
     """The first check the reply fails, or None when it may be shown."""
     return next((name for name, passes in CHECKS if not passes(reply, given)), None)
 
@@ -457,14 +502,16 @@ def offer_of(capability: str | None, given: Given) -> ReplyOffer | None:
 
 
 def guarded(reply: ReplyEnvelope, given: Given) -> FreeReplyAnswer | GuardCheck:
-    """The reply the person sees, or the check it failed."""
-    failed = failed_check(reply, given)
+    """The reply the person sees, or the check it failed. The words are made into what is shown
+    once, checked, and shown as they were checked."""
+    shown = shown_of(reply)
+    failed = failed_check(shown, given)
     if failed is not None:
         return failed
     return FreeReplyAnswer(
-        form=reply.form,
-        text=visible_words(reply.text),
-        choices=[visible_words(c) for c in reply.choices],
-        offer=offer_of(reply.offer, given) if reply.form == "cant" else None,
-        looked_at=[s for s in given.sent if s in reply.looked_at],
+        form=shown.form,
+        text=shown.text,
+        choices=list(shown.choices),
+        offer=offer_of(shown.offer, given) if shown.form == "cant" else None,
+        looked_at=[s for s in given.sent if s in shown.looked_at],
     )

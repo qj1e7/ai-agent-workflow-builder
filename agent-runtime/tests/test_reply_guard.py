@@ -19,6 +19,7 @@ from agent_runtime.reply_guard import (
     makes_nothing_up,
     offer_of,
     offers_nothing,
+    shown_of,
 )
 
 OPERATOR = Given(message="how can i start to use this ?", facts="")
@@ -82,13 +83,13 @@ def test_the_checks_run_in_the_order_the_adr_lists_them():
     ],
 )
 def test_a_reply_out_of_its_form_fails_the_shape_check(reply: ReplyEnvelope):
-    assert not fits_its_form(reply, OPERATOR)
-    assert failed_check(reply, OPERATOR) == "shape"
+    assert not fits_its_form(shown_of(reply), OPERATOR)
+    assert failed_check(shown_of(reply), OPERATOR) == "shape"
 
 
 def test_a_clarifying_question_with_two_to_four_short_choices_fits():
     reply = asked("Which software should I watch?", "LangGraph", "Redis", "Something else")
-    assert fits_its_form(reply, OPERATOR)
+    assert fits_its_form(shown_of(reply), OPERATOR)
     shown = guarded(reply, OPERATOR)
     assert isinstance(shown, FreeReplyAnswer)
     assert shown.choices == ["LangGraph", "Redis", "Something else"]
@@ -97,12 +98,12 @@ def test_a_clarifying_question_with_two_to_four_short_choices_fits():
 def test_a_second_clarifying_question_in_a_row_is_never_asked():
     reply = asked("Which day?", "Monday", "Friday")
     again = Given(message="weekly", facts="", clarified_before=True)
-    assert fits_its_form(reply, OPERATOR)
-    assert not fits_its_form(reply, again)
+    assert fits_its_form(shown_of(reply), OPERATOR)
+    assert not fits_its_form(shown_of(reply), again)
 
 
 def test_an_empty_offer_on_an_answer_is_no_offer():
-    assert fits_its_form(said("Three workflows.", offer="  "), OPERATOR)
+    assert fits_its_form(shown_of(said("Three workflows.", offer="  ")), OPERATOR)
 
 
 # 2. Plain text.
@@ -128,11 +129,11 @@ def test_an_empty_offer_on_an_answer_is_no_offer():
     ],
 )
 def test_markdown_html_or_a_link_fails_the_plain_text_check(text: str):
-    assert not is_plain(said(text), OPERATOR)
+    assert not is_plain(shown_of(said(text)), OPERATOR)
 
 
 def test_a_link_in_a_choice_fails_too():
-    assert not is_plain(asked("Which one?", "LangGraph", "see example.com"), OPERATOR)
+    assert not is_plain(shown_of(asked("Which one?", "LangGraph", "see example.com")), OPERATOR)
 
 
 @pytest.mark.parametrize(
@@ -145,7 +146,7 @@ def test_a_link_in_a_choice_fails_too():
     ],
 )
 def test_plain_words_with_versions_and_names_pass(text: str):
-    assert is_plain(said(text), OPERATOR)
+    assert is_plain(shown_of(said(text)), OPERATOR)
 
 
 # 3. No claim that something happened.
@@ -173,7 +174,7 @@ def test_plain_words_with_versions_and_names_pass(text: str):
     ],
 )
 def test_saying_something_happened_fails_the_claims_done_check(text: str):
-    assert not claims_nothing_done(said(text), OPERATOR)
+    assert not claims_nothing_done(shown_of(said(text)), OPERATOR)
 
 
 @pytest.mark.parametrize(
@@ -189,7 +190,7 @@ def test_saying_something_happened_fails_the_claims_done_check(text: str):
     ],
 )
 def test_describing_how_things_work_is_no_claim(text: str):
-    assert claims_nothing_done(said(text), OPERATOR)
+    assert claims_nothing_done(shown_of(said(text)), OPERATOR)
 
 
 # 4. No claim of an unbuilt ability.
@@ -220,7 +221,7 @@ def test_describing_how_things_work_is_no_claim(text: str):
     ],
 )
 def test_an_unbuilt_ability_fails_the_claims_unbuilt_check(text: str):
-    assert not claims_only_what_is_built(said(text), OPERATOR)
+    assert not claims_only_what_is_built(shown_of(said(text)), OPERATOR)
 
 
 @pytest.mark.parametrize(
@@ -242,25 +243,27 @@ def test_an_unbuilt_ability_fails_the_claims_unbuilt_check(text: str):
     ],
 )
 def test_ready_abilities_and_honest_cants_pass(text: str):
-    assert claims_only_what_is_built(said(text), OPERATOR)
+    assert claims_only_what_is_built(shown_of(said(text)), OPERATOR)
 
 
 def test_what_you_can_do_is_held_to_your_role():
     setting_up = said("You can set up a workflow that checks Jira every Monday.")
     approving = said("You can approve requests from Needs you.")
-    assert claims_only_what_is_built(setting_up, OPERATOR)
-    assert not claims_only_what_is_built(setting_up, APPROVER)
-    assert claims_only_what_is_built(approving, APPROVER)
-    assert not claims_only_what_is_built(approving, OPERATOR)
+    assert claims_only_what_is_built(shown_of(setting_up), OPERATOR)
+    assert not claims_only_what_is_built(shown_of(setting_up), APPROVER)
+    assert claims_only_what_is_built(shown_of(approving), APPROVER)
+    assert not claims_only_what_is_built(shown_of(approving), OPERATOR)
 
 
 def test_what_the_planner_can_do_is_not_held_to_the_persons_role():
-    assert claims_only_what_is_built(said("I can watch software for new releases."), APPROVER)
+    assert claims_only_what_is_built(
+        shown_of(said("I can watch software for new releases.")), APPROVER
+    )
 
 
 def test_a_choice_that_names_something_unbuilt_fails():
     assert not claims_only_what_is_built(
-        asked("Where should it go?", "A Jira ticket", "Post it in Teams"), OPERATOR
+        shown_of(asked("Where should it go?", "A Jira ticket", "Post it in Teams")), OPERATOR
     )
 
 
@@ -272,7 +275,7 @@ def test_every_capability_that_is_not_ready_is_named_in_the_table():
 @pytest.mark.parametrize("spec", [c for c in CAPABILITIES if c.state != "ready"], ids=str)
 def test_each_unbuilt_capability_is_caught_in_its_own_words(spec: Any):
     assert NOT_READY[spec.id](spec.plain), spec.plain
-    assert not claims_only_what_is_built(said(f"I can {spec.plain.lower()}."), OPERATOR)
+    assert not claims_only_what_is_built(shown_of(said(f"I can {spec.plain.lower()}.")), OPERATOR)
 
 
 @pytest.mark.parametrize("spec", [c for c in CAPABILITIES if c.state == "ready"], ids=str)
@@ -299,12 +302,14 @@ def test_no_ready_capability_is_named_as_unbuilt(spec: Any):
     ],
 )
 def test_an_offer_to_act_fails_the_offers_check(text: str):
-    assert not offers_nothing(said(text), OPERATOR)
+    assert not offers_nothing(shown_of(said(text)), OPERATOR)
 
 
 def test_telling_the_person_what_to_type_is_no_offer():
-    assert offers_nothing(said("Type Pause and its name to pause it."), OPERATOR)
-    assert offers_nothing(asked("Which software should I watch?", "Redis", "Kafka"), OPERATOR)
+    assert offers_nothing(shown_of(said("Type Pause and its name to pause it.")), OPERATOR)
+    assert offers_nothing(
+        shown_of(asked("Which software should I watch?", "Redis", "Kafka")), OPERATOR
+    )
 
 
 # 6. No skipped yes.
@@ -323,12 +328,12 @@ def test_telling_the_person_what_to_type_is_no_offer():
     ],
 )
 def test_a_skipped_yes_fails_the_yes_check(text: str):
-    assert not keeps_every_yes(said(text), APPROVER)
+    assert not keeps_every_yes(shown_of(said(text)), APPROVER)
 
 
 def test_a_choice_that_skips_a_yes_fails_too():
     reply = asked("How should it run?", "With a yes each time", "Skip the approval")
-    assert not keeps_every_yes(reply, OPERATOR)
+    assert not keeps_every_yes(shown_of(reply), OPERATOR)
 
 
 @pytest.mark.parametrize(
@@ -343,7 +348,7 @@ def test_a_choice_that_skips_a_yes_fails_too():
     ],
 )
 def test_the_yes_said_plainly_passes(text: str):
-    assert keeps_every_yes(said(text), OPERATOR)
+    assert keeps_every_yes(shown_of(said(text)), OPERATOR)
 
 
 # 7. Nothing made up.
@@ -359,7 +364,7 @@ def test_the_yes_said_plainly_passes(text: str):
     ],
 )
 def test_a_key_or_a_version_not_in_the_facts_fails_the_made_up_check(text: str):
-    assert not makes_nothing_up(said(text), WITH_FACTS)
+    assert not makes_nothing_up(shown_of(said(text)), WITH_FACTS)
 
 
 @pytest.mark.parametrize(
@@ -371,12 +376,12 @@ def test_a_key_or_a_version_not_in_the_facts_fails_the_made_up_check(text: str):
     ],
 )
 def test_a_key_or_a_version_from_the_facts_passes(text: str):
-    assert makes_nothing_up(said(text), WITH_FACTS)
+    assert makes_nothing_up(shown_of(said(text)), WITH_FACTS)
 
 
 def test_a_version_the_person_typed_is_theirs_to_quote():
     given = Given(message="Is LangGraph 1.3 out yet?", facts=FACTS)
-    assert makes_nothing_up(said("LangGraph 1.3 isn't on your Watchlist yet."), given)
+    assert makes_nothing_up(shown_of(said("LangGraph 1.3 isn't on your Watchlist yet.")), given)
 
 
 # 8. Offers the person can use.
@@ -425,4 +430,54 @@ def test_looked_at_keeps_only_the_sections_sent():
 def test_every_how_to_line_passes_the_guard(line: str):
     """The notes the reply reads never say an unbuilt thing works, or anything the guard would
     stop the reply from repeating."""
-    assert failed_check(said(line), Given(message="", facts="")) is None
+    assert failed_check(shown_of(said(line)), Given(message="", facts="")) is None
+
+
+# Text built to slip past the checks. Every check reads the words exactly as they are shown.
+
+ZERO_WIDTH = "​"
+CYRILLIC_A = "а"
+
+
+@pytest.mark.parametrize(
+    ("text", "check"),
+    [
+        (f"The ticket was cre{ZERO_WIDTH}ated.", "claims_done"),
+        ("I've cre⁠ated the ticket for you.", "claims_done"),
+        ("Your workflow is n­ow on.", "claims_done"),
+        ("Open ｈｔｔｐｓ://evil.example.org to finish.", "plain_text"),
+        ("Open ｗｗｗ．evil．com to finish.", "plain_text"),
+        (f"Type *{ZERO_WIDTH}*Check LangGraph*{ZERO_WIDTH}* in the box.", "plain_text"),
+        (f"<{ZERO_WIDTH}b>Type</b> your request.", "plain_text"),
+        (f"You can skip the {CYRILLIC_A}pproval this time.", "plain_text"),
+        ("You can s̶kip the approval this time.", "plain_text"),
+        ("Ｓｋｉｐ ｔｈｅ ａｐｐｒｏｖａｌ this time.", "skips_a_yes"),
+        ("I’​ll set that up for you.", "offers_to_act"),
+        ("LangGraph １.３.０ is out.", "made_up"),
+    ],
+)
+def test_text_hidden_from_the_checks_is_caught_as_it_will_be_shown(text: str, check: str):
+    assert guarded(ReplyEnvelope(form="answer", text=text), WITH_FACTS) == check
+
+
+def test_a_look_alike_letter_in_a_choice_is_caught():
+    reply = asked("How should it run?", "Every Friday", f"Skip the {CYRILLIC_A}pproval")
+    assert guarded(reply, OPERATOR) == "plain_text"
+
+
+def test_a_letter_outside_plain_ascii_is_refused_even_an_accented_one():
+    assert guarded(said_raw("The Café check is on your Watchlist."), OPERATOR) == "plain_text"
+
+
+def test_the_words_shown_are_exactly_the_words_checked():
+    raw = said_raw("LangGraph runs １.２.１４,​ and the newest is 1.2.16…")
+    shown = guarded(raw, WITH_FACTS)
+    assert isinstance(shown, FreeReplyAnswer)
+    assert shown.text == "LangGraph runs 1.2.14, and the newest is 1.2.16..."
+    assert failed_check(shown_of(raw), WITH_FACTS) is None
+    choice = guarded(asked("Which one?", "Lang​Graph", "Ｒedis"), OPERATOR)
+    assert isinstance(choice, FreeReplyAnswer) and choice.choices == ["LangGraph", "Redis"]
+
+
+def said_raw(text: str) -> ReplyEnvelope:
+    return ReplyEnvelope(form="answer", text=text)
