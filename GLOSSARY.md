@@ -111,9 +111,6 @@ _Avoid_: Plugin, integration, custom nodes
 The node pack's trigger. It starts a workflow when someone presses Run now, Test run or Retry in the Portal, and only for a start our API signed for that workflow, within five minutes and once.
 _Avoid_: Webhook
 
-**Made in n8n**:
-A workflow someone built in n8n from our nodes and then registered in the Portal, rather than one the Planner laid out. Until an Operator names its Approvers, any Approver on the team decides its requests (ADR 0027). Planned.
-
 **Holder**:
 The person who has a workflow open in n8n, in their own n8n project. A run they start by hand in n8n is their work, so they cannot approve it. Take back ends the hold (ADR 0027).
 
@@ -129,7 +126,7 @@ The check the platform makes around every change it makes to a workflow's n8n wo
 _Avoid_: Lock
 
 **Made in n8n**:
-A workflow someone built in n8n rather than in the Portal. It runs on the platform only after an Operator with n8n access registers it on Workflows and names an Approver for its yes.
+A workflow someone with n8n access built in their own n8n space, rather than one the Planner laid out. It runs on the platform only once an Operator with n8n access sets it up on Workflows, which moves it to the platform's n8n project. Its maker is matched by the n8n account the platform made for them, never by a name. Neither its maker nor the person who set it up can approve its runs, and any other Approver decides them (ADR 0027).
 _Avoid_: External workflow, imported workflow
 
 **Holder**:
