@@ -59,7 +59,8 @@ def to(target: str) -> Json:
 def reads_then_tells(source_id: str, name: str) -> Json:
     """The release check's triggers and Read release, as the Planner laid them out, then n8n's own
     Jira search and n8n's own Slack post, naming the platform's keys by id, with the Slack post's
-    output pinned so a test run posts nothing."""
+    output pinned so a test run posts nothing. The search runs once, not once for each release
+    Read release finds, so a real run posts once."""
     laid = N8N_OWNER.call("GET", f"/workflows/{source_id}")
     kept = {"Start from the Portal", "Read release"}
     nodes: list[Json] = []
@@ -77,6 +78,7 @@ def reads_then_tells(source_id: str, name: str) -> Json:
             "type": "n8n-nodes-base.jira",
             "typeVersion": 1,
             "position": [440, 0],
+            "executeOnce": True,
             "parameters": {
                 "jiraVersion": "serverPat",
                 "operation": "getAll",
@@ -161,7 +163,7 @@ def test_builtin_read_and_notice(api: Api, mock_model: None):
         headers={"Idempotency-Key": f"t-{use_case_id}"},
     ).json()
     finished = api.wait_for_state("carol", test_run["run_id"], {"succeeded"})
-    assert finished["outcome"] == "test_passed"
+    assert (finished["outcome"], finished["written"]) == ("nothing_to_write", [])
     observed("posts to Slack after a test run", len(posts_to(CHANNEL)) - before)
     assert len(posts_to(CHANNEL)) == before, "a test run posts nothing"
 
