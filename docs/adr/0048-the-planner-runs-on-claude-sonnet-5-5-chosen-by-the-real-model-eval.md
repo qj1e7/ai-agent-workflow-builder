@@ -40,3 +40,7 @@ Most of the "type anything" failures come from our rules, not the model, and bot
 - **The gateway budget is shared and small.** The first eval runs used up the team lead's $32 budget. Eval runs now stop at a set number of calls and dollars, and a budget error from the gateway ends the run with plain words, never the raw error. The raw error named the key's owner, so the two runs that printed it were deleted.
 - **The local app and Azure each switch** in Settings, on the Model tab, once the budget allows a test call.
 - **`AGENTS.md`'s open decision on the model provider narrows** to the choice after handover.
+
+## Amended 15 Nov 2026
+
+**The Planner reaches Claude Sonnet 5.5 through Anthropic directly, with the AI Singapore gateway kept as the fallback.** The first eval runs used up the gateway's $32 budget. The team lead has a $200 monthly Anthropic credit, and added its key as the `ANTHROPIC_API_KEY` secret. Anthropic is already a known provider in Settings (ADR 0022), so the switch is made on the Model tab, with no code change. Eval runs name their Anthropic models as an input, and skip the gateway when only Anthropic models are named. Each run keeps its cap on calls and dollars. A monthly spend limit on the Anthropic console is the outer guard. Only test data reaches the model in this phase, and ADR 0032 still decides the model after handover.
