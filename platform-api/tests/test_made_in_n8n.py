@@ -13,7 +13,13 @@ import httpx
 import pytest
 
 from platform_api.builder.cards import VERSION_CHECKER_ID
-from platform_api.builder.made_in_n8n import FIX_IN_N8N, NOT_READ, SET_UP_ALREADY, MadeInN8n
+from platform_api.builder.made_in_n8n import (
+    CHANGED_AS_SET_UP,
+    FIX_IN_N8N,
+    NOT_READ,
+    SET_UP_ALREADY,
+    MadeInN8n,
+)
 from platform_api.builder.models import (
     CardApprovalView,
     CardBlock,
@@ -22,10 +28,12 @@ from platform_api.builder.models import (
     CardView,
 )
 from platform_api.builder.n8n_holds import NOT_MOVED
+from platform_api.builder.n8n_http import SEE_MADE_IN_N8N
 from platform_api.builder.versions import authors_from
 from platform_api.orchestration import (
     TYPE_OF,
     CardsTask,
+    ListedWorkflow,
     N8nWorkflow,
     OwnWorkflow,
     Publisher,
@@ -42,6 +50,7 @@ from platform_api.orchestration.n8n_calls import (
 )
 from platform_api.orchestration.n8n_staff import NO_ACCESS, OFF, Ended, StaffAccounts
 from platform_api.shared import UseCaseId, UserId
+from tests.fake_n8n import FakeN8n
 from tests.support import ALICE, NOW
 from tests.test_builder_lifecycle import VALUES
 from tests.test_n8n_access import PLATFORM_PROJECT, Staffed, lab, s, staff_for
@@ -57,15 +66,26 @@ SET_UP = "/api/v1/use-cases/from-n8n"
 
 
 class Looks(Workflows):
-    """n8n, which can be made to not show a workflow once."""
+    """n8n, which can be made to not show a workflow once, or to have a member change one in
+    their editor just after the platform listed it."""
 
     blind: int = 0
+    edited: tuple[FakeN8n, str] | None = None
 
     async def look(self, workflow_id: str) -> N8nWorkflow | None:
         if self.blind:
             self.blind -= 1
             raise httpx.ConnectError("n8n did not answer")
         return await super().look(workflow_id)
+
+    async def workflows_in(self, project_id: str) -> list[ListedWorkflow]:
+        listed = await super().workflows_in(project_id)
+        if self.edited is not None:
+            n8n, workflow_id = self.edited
+            n8n.workflows[workflow_id].update(without_the_yes(n8n.workflows[workflow_id]))
+            n8n.edit(workflow_id)
+            self.edited = None
+        return listed
 
 
 def made_in_n8n(s: Staffed, staff: StaffAccounts, n8n: Workflows) -> MadeInN8n:
@@ -145,9 +165,10 @@ def scheduled(workflow_id: str, version_id: str) -> ExecutionFacts:
 async def test_only_someone_who_can_open_n8n_lists_and_sets_up(s: Staffed):
     _, space = await space_of(s, "carol")
     workflow_id = s.n8n.make_in(space, named(await laid_out(s), "Carol's check"), "carol-n8n")
-    for user in ("bob", "alice"):
-        listed = await s.lab.call(user, "GET", LISTED, template=LISTED)
-        assert (listed.status_code, listed.json()["detail"]) == (403, NO_ACCESS), user
+    approver = await s.lab.call("bob", "GET", LISTED, template=LISTED)
+    assert (approver.status_code, approver.json()["detail"]) == (403, SEE_MADE_IN_N8N)
+    listed = await s.lab.call("alice", "GET", LISTED, template=LISTED)
+    assert (listed.status_code, listed.json()["detail"]) == (403, NO_ACCESS)
     refused = await set_up(s, "alice", workflow_id)
     assert (refused.status_code, refused.json()["detail"]) == (403, NO_ACCESS)
     assert (await set_up(s, "bob", workflow_id)).status_code == 403, "an Approver never"
@@ -350,6 +371,27 @@ async def test_a_move_n8n_refuses_sets_up_nothing(s: Staffed):
     assert (refused.status_code, refused.json()["detail"]) == (503, NOT_MOVED)
     assert s.n8n.home_of(workflow_id) == carol_space
     assert [w["workflow_id"] for w in await waiting(s, "carol")] == [workflow_id]
+    assert workflow_id not in await s.staff.makers(), "no note left for a workflow still hers"
+
+
+async def test_a_draft_changed_to_fail_the_check_as_it_is_set_up_goes_back_to_its_maker(
+    s: Staffed, looks: Looks
+):
+    _, carol_space = await space_of(s, "carol")
+    dana = await s.operator("dana")
+    await s.member(dana)
+    workflow_id = s.n8n.make_in(carol_space, named(await laid_out(s), "Edited meanwhile"))
+    looks.edited = (s.n8n, workflow_id)
+    refused = await set_up(s, dana, workflow_id)
+    assert (refused.status_code, refused.json()["detail"]) == (409, CHANGED_AS_SET_UP)
+    assert s.n8n.home_of(workflow_id) == carol_space, "back in her space, where she can fix it"
+    assert (
+        await s.own.row("SELECT 1 FROM builder.use_cases WHERE n8n_workflow_id = %s", workflow_id)
+        is None
+    ), "nothing set up"
+    assert workflow_id not in await s.staff.makers()
+    [listed] = await waiting(s, dana)
+    assert (listed["grade"], listed["can_set_up"]) == ("writes_refused", False)
 
 
 async def test_a_set_up_cut_off_after_the_move_is_finished_by_asking_again(

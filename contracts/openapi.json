@@ -16633,7 +16633,7 @@
     },
     "/api/v1/n8n/workflows": {
       "get": {
-        "description": "Every workflow made in n8n that waits to be set up (ENGINE-PLAN E15): those in the own n8n space of someone the platform made an n8n account for, and those n8n moved to the platform's project when their maker's account ended. Each names its maker, matched by the n8n account the platform made for them, and the safety checker's grade. Only for someone who can open n8n now.",
+        "description": "Every workflow made in n8n that waits to be set up (ENGINE-PLAN E15): those in the own n8n space of someone the platform made an n8n account for, and those n8n moved to the platform's project when their maker's account ended. Each names its maker, matched by the n8n account the platform made for them, and the safety checker's grade. The names and the checker's findings come from members' own workflows, so only an Operator who can open n8n now sees them.",
         "operationId": "made_in_n8n_api_v1_n8n_workflows_get",
         "responses": {
           "200": {
@@ -16664,7 +16664,7 @@
                 }
               }
             },
-            "description": "Only people with n8n access can open n8n. An admin can add it in Settings."
+            "description": "Only an Operator with n8n access can see workflows made in n8n. Or: Only people with n8n access can open n8n. An admin can add it in Settings."
           },
           "409": {
             "content": {

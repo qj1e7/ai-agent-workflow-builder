@@ -345,7 +345,12 @@ class Holding:
         home = await self._n8n.platform_project()
         if home is None:
             return HoldRefused(503, NO_HOME)
-        match await self._move(workflow_id, home):
+        return await self.send_back(workflow_id, home)
+
+    async def send_back(self, workflow_id: str, project_id: str) -> HoldRefused | None:
+        """Moves a workflow no use case names to a project, such as back to its maker's space
+        when its set-up is refused after the move. None once it is there."""
+        match await self._move(workflow_id, project_id):
             case _Moved():
                 return None
             case _Gone():

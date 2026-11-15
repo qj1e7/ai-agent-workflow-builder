@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import Field
 
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
-from platform_api.builder.http import NO_SUCH, NOT_FOUND, WorkflowOperator
+from platform_api.builder.http import NO_SUCH, NOT_FOUND, WorkflowOperator, operators_only
 from platform_api.builder.made_in_n8n import (
     FIX_IN_N8N,
     NOT_LOADED,
@@ -65,6 +65,8 @@ CurrentHolding = Annotated[Holding, Depends(_holding)]
 CurrentViews = Annotated[InN8nViews, Depends(_views)]
 CurrentMade = Annotated[MadeInN8n | None, Depends(_made)]
 NOT_WAITING = "No workflow made in n8n with this id waits to be set up."
+SEE_MADE_IN_N8N = "Only an Operator with n8n access can see workflows made in n8n."
+MadeInN8nOperator = Annotated[Principal, Depends(operators_only(SEE_MADE_IN_N8N))]
 
 
 def _with_access(principal: CurrentPrincipal) -> Principal:
@@ -165,15 +167,16 @@ async def run_in_n8n(run_id: RunId, principal: N8nViewer, views: CurrentViews) -
     description="Every workflow made in n8n that waits to be set up (ENGINE-PLAN E15): those in "
     "the own n8n space of someone the platform made an n8n account for, and those n8n moved to "
     "the platform's project when their maker's account ended. Each names its maker, matched by "
-    "the n8n account the platform made for them, and the safety checker's grade. Only for "
-    "someone who can open n8n now.",
+    "the n8n account the platform made for them, and the safety checker's grade. The names and "
+    "the checker's findings come from members' own workflows, so only an Operator who can open "
+    "n8n now sees them.",
     responses={
         **SIGNED_IN,
-        403: error_response(NO_ACCESS),
+        403: error_response(f"{SEE_MADE_IN_N8N} Or: {NO_ACCESS}"),
         409: error_response(f"{OFF} Or: n8n can't be opened now, in words to show"),
     },
 )
-async def made_in_n8n(principal: CurrentPrincipal, made: CurrentMade) -> MadeInN8nList:
+async def made_in_n8n(principal: MadeInN8nOperator, made: CurrentMade) -> MadeInN8nList:
     if made is None:
         raise HTTPException(409, OFF)
     match await made.waiting(principal):

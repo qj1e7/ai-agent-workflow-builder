@@ -103,9 +103,18 @@ class _Row:
     email: str
     access: bool
     on_list: bool
+    operator: bool
+    approver: bool
     n8n_user_id: str | None
     sealed_invite: str | None
     invited_at: datetime | None
+
+    @property
+    def may_hold(self) -> bool:
+        """n8n access, on the People list, as an Operator who is no Approver. The table refuses
+        any other row with the flag; this is asked again so no Approver opens n8n whatever a row
+        says."""
+        return self.access and self.on_list and self.operator and not self.approver
 
 
 @dataclass(frozen=True)
@@ -143,8 +152,8 @@ def _ready_or_not(row: _Row, account: AccountState) -> NotYet | CanOpen:
 
 
 _ROW = (
-    "SELECT id, email, n8n_access, removed_at IS NULL AS on_list, n8n_user_id,"
-    " n8n_invite, n8n_invited_at FROM orchestration.people"
+    "SELECT id, email, n8n_access, removed_at IS NULL AS on_list, is_operator, is_approver,"
+    " n8n_user_id, n8n_invite, n8n_invited_at FROM orchestration.people"
 )
 
 
@@ -154,6 +163,8 @@ def _row(row: Mapping[str, Any]) -> _Row:
         row["email"],
         row["n8n_access"],
         row["on_list"],
+        row["is_operator"],
+        row["is_approver"],
         row["n8n_user_id"],
         row["n8n_invite"],
         row["n8n_invited_at"],
@@ -219,6 +230,15 @@ class StaffAccounts:
                     (workflow_id, person, n8n_user_id, uow.now),
                 )
 
+    async def forget_made(self, workflow_ids: Iterable[str]) -> None:
+        """Drops the notes of workflows still in their maker's own space, where their creator
+        names the maker."""
+        async with self._db.transaction("orchestration") as uow:
+            await uow.conn.execute(
+                "DELETE FROM orchestration.n8n_makers WHERE workflow_id = ANY(%s)",
+                (list(workflow_ids),),
+            )
+
     async def display_of(self, person: UserId) -> str:
         async with self._db.connection("orchestration") as conn:
             row = await (
@@ -230,7 +250,7 @@ class StaffAccounts:
 
     async def access(self, person: UserId) -> StaffAccess:
         row = await self._person(person)
-        if row is None or not row.access or not row.on_list:
+        if row is None or not row.may_hold:
             return NoN8nAccess()
         if (closed := (await self.gate()).closed) is not None:
             return StaffClosed(closed)
@@ -238,7 +258,7 @@ class StaffAccounts:
 
     async def mine(self, person: UserId) -> MyN8n:
         row = await self._person(person)
-        if row is None or not row.access or not row.on_list:
+        if row is None or not row.may_hold:
             return MyN8n(False, "none", None, False, NO_ACCESS, None)
         account = await self._account(row)
         closed = (await self.gate()).closed
@@ -301,7 +321,7 @@ class StaffAccounts:
     async def _settle_one(
         self, row: _Row, gate: StaffGate, holds: Callable[[UserId], Awaitable[bool]]
     ) -> Settled | None:
-        wants = row.access and row.on_list
+        wants = row.may_hold
         if wants and row.n8n_user_id is None and gate.closed is None:
             return await self._make(row)
         if not wants and row.n8n_user_id is not None and not await holds(row.id):

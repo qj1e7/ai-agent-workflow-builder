@@ -45,7 +45,7 @@ def test_a_workflow_made_in_n8n_is_set_up_runs_and_bob_approves(api: Api, mock_m
     assert sits_in(erin.member.project, workflow_id)
 
     refused = api.request("bob", "GET", "/api/v1/n8n/workflows", expect=(403,))
-    assert refused.json()["detail"].startswith("Only people with n8n access")
+    assert refused.json()["detail"].startswith("Only an Operator with n8n access")
     waiting = {
         w["workflow_id"]: w for w in api.get(erin.person, "/api/v1/n8n/workflows")["workflows"]
     }

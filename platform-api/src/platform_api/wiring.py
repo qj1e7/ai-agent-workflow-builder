@@ -536,7 +536,7 @@ async def build(settings: Settings) -> Services:
         made_in_n8n=(
             None
             if holding is None or n8n.drafts is None
-            else MadeInN8n(db, n8n.drafts, staff, holding, facts)
+            else MadeInN8n(db, n8n.drafts, staff, holding, facts, settings.team_time_zone)
         ),
     )
 

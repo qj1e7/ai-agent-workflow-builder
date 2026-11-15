@@ -9,7 +9,8 @@ def upgrade() -> None:
     # (ENGINE-PLAN E15): the ones still in a person's space when their account ends, which n8n
     # moves to the platform's project, and one a registration is moving. n8n keeps no maker of
     # its own, and empties the publish timeline's user once an account is deleted, so this is the
-    # only record of whose work such a workflow is. The first maker noted stays.
+    # only record of whose work such a workflow is. The first maker noted stays. A note goes once
+    # its workflow is back in its maker's space, as when the move of a registration is refused.
     op.execute("""
         CREATE TABLE orchestration.n8n_makers (
             workflow_id text PRIMARY KEY,
@@ -18,7 +19,7 @@ def upgrade() -> None:
             noted_at timestamptz NOT NULL
         );
 
-        GRANT SELECT, INSERT ON orchestration.n8n_makers TO wab_orchestration;
+        GRANT SELECT, INSERT, DELETE ON orchestration.n8n_makers TO wab_orchestration;
     """)
 
 

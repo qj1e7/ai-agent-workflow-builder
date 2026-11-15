@@ -21,6 +21,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo
 
 import httpx
 from pydantic import Field
@@ -28,11 +29,11 @@ from pydantic import Field
 from platform_api.builder.models import UseCaseCreated
 from platform_api.builder.n8n_draft import blocks_of
 from platform_api.builder.n8n_holds import HoldRefused
+from platform_api.builder.sweep import grading_mark
 from platform_api.builder.templates import AGENT_CARDS
 from platform_api.builder.versions import Publication, authors_json
 from platform_api.db import Connection, Database, hold_workflow, json
 from platform_api.orchestration import (
-    GRADING_RULES,
     CanOpen,
     Grade,
     Graded,
@@ -44,7 +45,7 @@ from platform_api.orchestration import (
     StaffAccess,
     grade,
 )
-from platform_api.shared import Principal, UserId, new_id
+from platform_api.shared import TEAM_TIME_ZONE, Principal, UserId, new_id
 from platform_api.wire import WireIn, WireModel
 
 log = logging.getLogger(__name__)
@@ -52,6 +53,10 @@ log = logging.getLogger(__name__)
 SET_UP_ALREADY = "This workflow is set up already."
 NOT_LOADED = "n8n is not ready yet: its error workflow is not loaded."
 NOT_READ = "n8n did not show the workflow. Nothing is set up. Try again."
+CHANGED_AS_SET_UP = (
+    "It changed in n8n while it was being set up, and it no longer passes the check, so it went "
+    "back to its maker's n8n space. Fix it there first."
+)
 FIX_IN_N8N = (
     "Fix it in n8n first. It isn't published there, and only a workflow that passes the check "
     "can be turned on."
@@ -100,6 +105,8 @@ class Spaces(Protocol):
 
     async def kept(self, workflow_id: str, version_id: str) -> dict[str, Any] | None: ...
 
+    async def home(self, workflow_id: str) -> str | None: ...
+
 
 class Makers(Protocol):
     async def access(self, person: UserId) -> StaffAccess: ...
@@ -112,11 +119,15 @@ class Makers(Protocol):
         self, person: UserId, n8n_user_id: str, workflow_ids: Iterable[str]
     ) -> None: ...
 
+    async def forget_made(self, workflow_ids: Iterable[str]) -> None: ...
+
     async def display_of(self, person: UserId) -> str: ...
 
 
 class Mover(Protocol):
     async def take_in(self, workflow_id: str) -> HoldRefused | None: ...
+
+    async def send_back(self, workflow_id: str, project_id: str) -> HoldRefused | None: ...
 
 
 class Graders(Protocol):
@@ -129,6 +140,8 @@ class Maker:
     n8n_user_id: str | None
     """The account whose own space holds it now. None for one n8n moved to the platform's
     project as that account ended, whose maker was noted then."""
+    space: str
+    """The project it was listed in, where it goes back to when its set-up is refused."""
 
 
 @dataclass(frozen=True)
@@ -175,9 +188,16 @@ def _closed(access: StaffAccess) -> HoldRefused | None:
 
 class MadeInN8n:
     def __init__(
-        self, db: Database, n8n: Spaces, staff: Makers, mover: Mover, graders: Graders
+        self,
+        db: Database,
+        n8n: Spaces,
+        staff: Makers,
+        mover: Mover,
+        graders: Graders,
+        time_zone: ZoneInfo = TEAM_TIME_ZONE,
     ) -> None:
         self._db = db
+        self._zone = time_zone.key
         self._n8n = n8n
         self._staff = staff
         self._mover = mover
@@ -217,6 +237,7 @@ class MadeInN8n:
             if maker.n8n_user_id is not None:
                 await self._staff.note_made(maker.person, maker.n8n_user_id, [workflow_id])
             if (refused := await self._mover.take_in(workflow_id)) is not None:
+                await self._forget_unless_in(workflow_id, maker)
                 return refused
             try:
                 held = await self._held(workflow_id)
@@ -226,7 +247,10 @@ class MadeInN8n:
             if held is None:
                 return HoldRefused(503, NOT_READ)
             workflow, document = held
-            graded = grade(document, error_workflow, known)
+            graded = grade(document, error_workflow, self._zone, known)
+            if workflow.active_version_id is None and graded.grade != "safe":
+                await self._give_back(workflow_id, maker)
+                return HoldRefused(409, CHANGED_AS_SET_UP)
             use_case_id = new_id("uc")
             made_by = await self._staff.display_of(maker.person)
             await _insert(
@@ -235,7 +259,7 @@ class MadeInN8n:
                 workflow,
                 document,
                 graded,
-                f"{GRADING_RULES} {error_workflow}",
+                grading_mark(error_workflow, self._zone),
                 maker.person,
                 actor.user_id,
                 f"Made in n8n by {made_by}.",
@@ -257,6 +281,30 @@ class MadeInN8n:
             grade=graded.grade,
             blocks=blocks_of(document),
         )
+
+    async def _give_back(self, workflow_id: str, maker: Maker) -> None:
+        """A draft changed to fail the check while it moved can't be set up, so it goes back to
+        the space it came from, where its maker can fix it."""
+        if maker.n8n_user_id is None:
+            return
+        refused = await self._mover.send_back(workflow_id, maker.space)
+        if refused is not None:
+            log.error("could not move %s back to its maker: %s", workflow_id, refused.words)
+        await self._forget_unless_in(workflow_id, maker)
+
+    async def _forget_unless_in(self, workflow_id: str, maker: Maker) -> None:
+        """The maker note is for a workflow in the platform's project. One still in its maker's
+        own space is found there by its creator, so its note goes. When n8n can't say where it
+        is, the note stays."""
+        if maker.n8n_user_id is None:
+            return
+        try:
+            where = await self._n8n.home(workflow_id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not read where %s sits: %s", workflow_id, error)
+            return
+        if where == maker.space:
+            await self._staff.forget_made([workflow_id])
 
     async def _held(self, workflow_id: str) -> tuple[N8nWorkflow, dict[str, Any]] | None:
         """What n8n holds now, in the platform's project, where nobody else can change it: the
@@ -288,7 +336,7 @@ class MadeInN8n:
             document = await self._document(listed)
             if document is None:
                 continue
-            graded = grade(document, error_workflow, known)
+            graded = grade(document, error_workflow, self._zone, known)
             found[workflow.id] = Candidate(listed, maker, document, graded)
         return found
 
@@ -300,14 +348,14 @@ class MadeInN8n:
             if person is None:
                 continue
             for listed in await self._listed(space):
-                made.append((listed, Maker(person, n8n_user)))
+                made.append((listed, Maker(person, n8n_user, space)))
         home = await self._n8n.platform_project()
         noted = await self._staff.makers()
         if home is not None and noted:
             for listed in await self._listed(home):
                 maker = noted.get(listed.workflow.id)
                 if maker is not None:
-                    made.append((listed, Maker(maker, None)))
+                    made.append((listed, Maker(maker, None, home)))
         return made
 
     async def _listed(self, project_id: str) -> list[ListedWorkflow]:
