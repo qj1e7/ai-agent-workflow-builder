@@ -315,7 +315,7 @@ def _with_a_yes(rest: str, said: str) -> str:
     Planner nothing. Words that say it runs by itself ride with it. Otherwise empty, and the
     parts say why (principle 5). An offered rest goes back to the Planner as a new request, read
     and checked whole again, so a vague one ("just create it") is still offered."""
-    text = plain(rest, 2000)
+    text = re.sub(r"^\W+", "", plain(rest, 2000))
     if not text or said.casefold() in text.casefold() or skip_of_a_yes(text) is not None:
         return ""
     task = without_runs_by_itself(text)

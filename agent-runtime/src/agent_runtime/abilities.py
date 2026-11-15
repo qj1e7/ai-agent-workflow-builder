@@ -1431,11 +1431,11 @@ def orders_only_what_it_can(clauses: list[str]) -> bool:
 
 def changes_beyond_the_abilities(text: str) -> bool:
     """Whether the words ask for a change no ability makes, as "delete" or "set". A release
-    word that names a thing, as "upgrade" in "the LangGraph upgrade ticket", asks for none."""
+    word where it names a thing, as "upgrade" in "the LangGraph upgrade ticket", asks for none;
+    the same word where it is an order, as in "to upgrade Redis", does."""
     able = {verb for ability in ABILITIES for verb in ability.verbs}
     row = _tokens(text)
-    nouns = {row[at].bare for at in range(len(row)) if _release_noun(row, at)}
-    return any(verb not in able and verb not in nouns for verb in change_verbs_in(text))
+    return any(verb not in able and not _release_noun(row, at) for at, verb in _changes(row))
 
 
 def names_no_ability(note: str) -> bool:
@@ -1692,9 +1692,13 @@ def change_verbs_in(text: str) -> list[str]:
     """The verbs in the text that ask for a change, in base, -s or -ing form. A past form
     describes tickets ("tickets closed"), and "open" is also the state of a ticket, so neither
     counts."""
+    return [verb for _, verb in _changes(_tokens(text))]
+
+
+def _changes(row: Clause) -> list[tuple[int, str]]:
+    """Where each verb that asks for a change stands, with its base form."""
     reader = _reader(ABILITIES)
-    row = _tokens(text)
-    found: list[str] = []
+    found: list[tuple[int, str]] = []
     for at, word in enumerate(row):
         verb = reader.verb(word)
         if verb is None or word.proper or verb[1] == "ed":
@@ -1703,7 +1707,7 @@ def change_verbs_in(text: str) -> list[str]:
         if verb[0] == "open" and after not in OPENS_A_TICKET_BEFORE:
             continue
         if verb[0] in WRITE_VERBS:
-            found.append(verb[0])
+            found.append((at, verb[0]))
     return found
 
 
