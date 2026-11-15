@@ -119,6 +119,14 @@ from platform_api.orchestration.n8n_calls import (
     ReadItems,
     WriteEntry,
 )
+from platform_api.orchestration.n8n_credentials import (
+    KEYS,
+    KeyRemoved,
+    KeySpec,
+    LendRefused,
+    PlatformKeys,
+    credentials_named,
+)
 from platform_api.orchestration.n8n_run_view import NodeState, RunInN8n
 from platform_api.orchestration.n8n_schedule import next_run, zone_name
 from platform_api.orchestration.n8n_staff import (
@@ -211,6 +219,7 @@ from platform_api.orchestration.workflow_check import (
     BlockKind,
     Document,
     Edge,
+    Face,
     Finding,
     Graded,
     KnownOptions,
@@ -219,6 +228,7 @@ from platform_api.orchestration.workflow_check import (
     WithYes,
     add_yes,
     block_id,
+    face,
     free_name,
     grade,
     known_options,
@@ -228,6 +238,14 @@ from platform_api.orchestration.workflow_check import (
 from platform_api.orchestration.write_actions import Binding
 
 __all__ = [
+    "Face",
+    "face",
+    "KEYS",
+    "KeyRemoved",
+    "KeySpec",
+    "LendRefused",
+    "PlatformKeys",
+    "credentials_named",
     "NO_ACCESS",
     "OFF",
     "CanOpen",

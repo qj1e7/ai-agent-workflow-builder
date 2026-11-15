@@ -6985,6 +6985,13 @@
         ],
         "type": "string"
       },
+      "N8nBadge": {
+        "enum": [
+          "ours",
+          "n8n"
+        ],
+        "type": "string"
+      },
       "N8nBlockKind": {
         "enum": [
           "schedule",
@@ -7009,9 +7016,14 @@
       "N8nBlockView": {
         "additionalProperties": false,
         "properties": {
+          "badge": {
+            "$ref": "#/components/schemas/N8nBadge",
+            "default": "ours",
+            "description": "ours for a block of our node pack, which the sketch badges Our block; n8n for one of n8n's own, badged n8n block (ADR 0045, section 3)."
+          },
           "kind": {
             "$ref": "#/components/schemas/N8nBlockKind",
-            "description": "What the block does: schedule, start (Start from the Portal), manual and error start a run; read, agent, propose, ask (Ask for a yes), write (Make the approved changes), tell and report are our blocks; branch (IF), merge and end (No Op) are n8n's; other is one of n8n's data blocks; off is a block the class file turns off or does not know, which never runs."
+            "description": "What the block does: schedule, start (Start from the Portal), manual and error start a run; read, agent, propose, ask (Ask for a yes), write (Make the approved changes), tell and report are our blocks; branch (IF), merge and end (No Op) are n8n's; other is one of n8n's own blocks that shapes the data, reads a system or posts a notice, as its tag says; off is a block the class file turns off, or does not know, for what it is or what it was asked to do."
           },
           "name": {
             "description": "The block's name, as n8n, the canvas and the run line show it.",
@@ -7025,6 +7037,18 @@
             },
             "title": "Next",
             "type": "array"
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What one of n8n's own blocks does, by its class: Reads Jira, Posts in Slack, Shapes the data. Null for our blocks and n8n's flow blocks, and for a block that is off.",
+            "title": "Tag"
           }
         },
         "required": [
@@ -7116,13 +7140,18 @@
       "N8nNodeView": {
         "additionalProperties": false,
         "properties": {
+          "badge": {
+            "$ref": "#/components/schemas/N8nBadge",
+            "default": "ours",
+            "description": "ours for a block of our node pack, n8n for one of n8n's own (ADR 0045)."
+          },
           "disabled": {
             "title": "Disabled",
             "type": "boolean"
           },
           "kind": {
             "$ref": "#/components/schemas/N8nBlockKind",
-            "description": "What the block does, as on the set-up card. other is a sticky note or one of n8n's data blocks, and off a type the class file turns off or does not know; type says which."
+            "description": "What the block does, as on the set-up card. other is a sticky note or one of n8n's own blocks that shapes the data, reads a system or posts a notice, and off a block the class file turns off, or does not know, for what it is or what it was asked to do; type and tag say which."
           },
           "name": {
             "title": "Name",
@@ -7135,6 +7164,18 @@
             },
             "title": "Position",
             "type": "array"
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What one of n8n's own blocks does, by its class: Reads Jira, Posts in Slack, Shapes the data. Null for our blocks, n8n's flow blocks and sticky notes.",
+            "title": "Tag"
           },
           "type": {
             "title": "Type",

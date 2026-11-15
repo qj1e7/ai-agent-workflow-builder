@@ -60,6 +60,30 @@ locals {
     } : name => value if value != ""
   }
 
+  # The keys the platform makes in n8n for n8n's own Jira, GitHub and Slack blocks (ADR 0045,
+  # ENGINE-PLAN E16). Each secret sits in Key Vault, and platform-api makes the key in n8n only
+  # once the system shows it can only read or post. Unset makes no key: a Jira key then reads the
+  # practice Jira while it serves, and the other blocks never pass the check.
+  n8n_key_secrets = {
+    for name, value in {
+      "n8n-key-jira-token"   = var.n8n_key_jira_token
+      "n8n-key-github-token" = var.n8n_key_github_token
+      "n8n-key-slack-token"  = var.n8n_key_slack_token
+    } : name => value if nonsensitive(value != "")
+  }
+  n8n_key_env = {
+    "n8n-key-jira-token"   = "N8N_KEY_JIRA_TOKEN"
+    "n8n-key-github-token" = "N8N_KEY_GITHUB_TOKEN"
+    "n8n-key-slack-token"  = "N8N_KEY_SLACK_TOKEN"
+  }
+  n8n_key_settings = {
+    for name, value in {
+      N8N_KEY_JIRA_URL   = var.n8n_key_jira_url
+      N8N_KEY_JIRA_EMAIL = trimspace(var.n8n_key_jira_email)
+      N8N_KEY_GITHUB_URL = var.n8n_key_github_url
+    } : name => value if value != ""
+  }
+
   # The same for the Teams Workflows webhook (ADR 0036). Unset keeps the practice Teams copy.
   teams_webhook_set = nonsensitive(var.teams_webhook_url != "")
   # And for the Tell flow, which posts a run's notice and emails it (ENGINE-PLAN D1). Unset keeps
@@ -228,6 +252,7 @@ module "key_vault" {
     local.confluence_token_set ? { "confluence-api-token" = var.confluence_api_token } : {},
     local.teams_webhook_set ? { "teams-webhook-url" = var.teams_webhook_url } : {},
     local.teams_tell_webhook_set ? { "teams-tell-webhook-url" = var.teams_tell_webhook_url } : {},
+    local.n8n_key_secrets,
   )
 }
 
@@ -266,6 +291,12 @@ locals {
     "n8n-nodes-base.markdown",
     "n8n-nodes-base.executionData",
     "n8n-nodes-base.stopAndError",
+    "n8n-nodes-base.jira",
+    "n8n-nodes-base.github",
+    "n8n-nodes-base.microsoftTeams",
+    "n8n-nodes-base.microsoftOutlook",
+    "n8n-nodes-base.gmail",
+    "n8n-nodes-base.slack",
   ]
 }
 
@@ -312,6 +343,7 @@ locals {
         local.first_people,
         local.jira_settings,
         local.confluence_settings,
+        local.n8n_key_settings,
       )
       secrets = merge(
         {
@@ -335,6 +367,7 @@ locals {
         local.teams_tell_webhook_set ? {
           TEAMS_TELL_WEBHOOK_URL = local.secret["teams-tell-webhook-url"]
         } : {},
+        { for name in keys(local.n8n_key_secrets) : local.n8n_key_env[name] => local.secret[name] },
       )
     }
 

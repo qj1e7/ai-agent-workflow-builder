@@ -77,7 +77,7 @@ from platform_api.builder.n8n_draft import (
     blocks_of,
     check_draft,
 )
-from platform_api.builder.n8n_facts import BuilderWorkflowFacts, ReleaseReader
+from platform_api.builder.n8n_facts import BuilderWorkflowFacts, MadeKeys, ReleaseReader
 from platform_api.builder.n8n_holds import HeldInN8n, Holding
 from platform_api.builder.planner import ChangedInN8nReply
 from platform_api.builder.planning import (
@@ -161,7 +161,7 @@ log = logging.getLogger(__name__)
 _CURRENT_VERSION = """
     SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
            u.draft, u.left_out, u.engine, u.n8n_workflow_id, u.deleted_in_n8n_at,
-           u.move_refused, u.made_in_n8n_by, v.version,
+           u.move_refused, u.made_in_n8n_by, u.n8n_key_finding, v.version,
            v.template, v.name, v.instruction, v.params, v.created_at, v.document,
            v.n8n_version_id, v.grade, v.findings
     FROM builder.use_cases u
@@ -231,6 +231,14 @@ def _next_run_at(row: Mapping[str, Any], now: datetime, team_zone: str) -> datet
     return next_run(document, row["n8n_workflow_id"], now, team_zone)
 
 
+def _grade(row: Mapping[str, Any]) -> Grade | None:
+    """A key the credential sweep removed while someone held the workflow needs a fix too, until
+    the hold ends (ENGINE-PLAN E17)."""
+    if not _own(row):
+        return None
+    return "needs_a_fix" if row["n8n_key_finding"] else row["grade"]
+
+
 def _state(state: Lifecycle) -> UseCaseState:
     """A deleted workflow is never shown, so it has no word of its own."""
     match state:
@@ -286,8 +294,11 @@ def _view(
         last_run=last_run,
         left_out=list(row["left_out"]),
         blocks=[] if row["document"] is None else blocks_of(row["document"]),
-        grade=row["grade"] if _own(row) else None,
-        findings=list(row["findings"] or []),
+        grade=_grade(row),
+        findings=[
+            *(row["findings"] or []),
+            *([row["n8n_key_finding"]] if _own(row) and row["n8n_key_finding"] else []),
+        ],
         deleted_in_n8n_at=row["deleted_in_n8n_at"],
         moving_to_n8n=moving,
         move_refused=None if _own(row) else row["move_refused"],
@@ -448,6 +459,7 @@ class Builder:
         open_runs: OpenRuns | None = None,
         holding: Holding | None = None,
         time_zone: ZoneInfo = TEAM_TIME_ZONE,
+        keys: MadeKeys | None = None,
     ) -> None:
         self._db = db
         self._zone = time_zone.key
@@ -461,7 +473,7 @@ class Builder:
         self._history = history
         self._n8n = n8n
         self.public_base_url = public_base_url
-        self.facts = BuilderWorkflowFacts(db, self, releases, writes)
+        self.facts = BuilderWorkflowFacts(db, self, releases, writes, keys)
         """What node calls ask of the builder, and what a draft is graded against."""
         self._requests = requests
         self.holding = holding

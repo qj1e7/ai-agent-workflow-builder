@@ -434,3 +434,70 @@ variable "log_daily_quota_gb" {
   type        = number
   default     = 1
 }
+
+# The keys the platform makes in n8n for n8n's own blocks (ADR 0045, ENGINE-PLAN E16). Each must
+# be a key the system itself shows can only read or post, or platform-api refuses it and says why.
+
+variable "n8n_key_jira_token" {
+  description = "Optional key for n8n's own Jira block (N8N_KEY_JIRA_TOKEN), kept in Key Vault as n8n-key-jira-token: a personal access token for Data Center, or an API token for Cloud with n8n_key_jira_email, of an account that may only browse. Empty with the practice Jira lends its browse-only account; empty with a real Jira makes no key."
+  type        = string
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition     = var.n8n_key_jira_token == "" || can(regex("^[!-~]+$", var.n8n_key_jira_token))
+    error_message = "n8n_key_jira_token must be empty, or one line of plain letters, digits and symbols."
+  }
+}
+
+variable "n8n_key_jira_url" {
+  description = "Optional Jira the key reads (N8N_KEY_JIRA_URL). Empty reads jira_base_url. https only."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.n8n_key_jira_url == "" || can(regex("^https://[^\\s?#]+$", var.n8n_key_jira_url))
+    error_message = "n8n_key_jira_url must be empty, or an https address with no query or fragment."
+  }
+}
+
+variable "n8n_key_jira_email" {
+  description = "The account's email for a Cloud Jira key (N8N_KEY_JIRA_EMAIL). Not secret."
+  type        = string
+  default     = ""
+}
+
+variable "n8n_key_github_token" {
+  description = "Optional key for n8n's own GitHub block (N8N_KEY_GITHUB_TOKEN), kept in Key Vault as n8n-key-github-token: a classic token with read scopes only, or none, which reads public repositories. GitHub does not say what a fine-grained token may do, so platform-api refuses one."
+  type        = string
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition     = var.n8n_key_github_token == "" || can(regex("^[!-~]+$", var.n8n_key_github_token))
+    error_message = "n8n_key_github_token must be empty, or one line of plain letters, digits and symbols."
+  }
+}
+
+variable "n8n_key_github_url" {
+  description = "Optional GitHub API the key reads (N8N_KEY_GITHUB_URL), for GitHub Enterprise. Empty is https://api.github.com."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.n8n_key_github_url == "" || can(regex("^https://[^\\s?#]+$", var.n8n_key_github_url))
+    error_message = "n8n_key_github_url must be empty, or an https address with no query or fragment."
+  }
+}
+
+variable "n8n_key_slack_token" {
+  description = "Optional key for n8n's own Slack block (N8N_KEY_SLACK_TOKEN), kept in Key Vault as n8n-key-slack-token: a bot token with chat:write, and only scopes that read the lists of channels and people."
+  type        = string
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition     = var.n8n_key_slack_token == "" || can(regex("^[!-~]+$", var.n8n_key_slack_token))
+    error_message = "n8n_key_slack_token must be empty, or one line of plain letters, digits and symbols."
+  }
+}

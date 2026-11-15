@@ -35,6 +35,8 @@ export interface PlacedNode {
   readonly y: number
   /** One of the platform's own blocks, which every write goes through, rather than one of n8n's. */
   readonly ours: boolean
+  /** What one of n8n's own blocks does, by its class, such as Reads Jira or Posts in Slack (ADR 0045). */
+  readonly tag: string | null
 }
 
 export interface PlacedEdge {
@@ -101,7 +103,7 @@ export function layOut(blocks: readonly N8nBlockView[]): Laid {
   }
   const nodes = blocks.map((block): PlacedNode => {
     const { col, row } = placed.get(block.name) ?? { col: 0, row: 0 }
-    return { name: block.name, kind: block.kind, col, row, x: PAD_X + col * COL, y: PAD_TOP + row * ROW, ours: OURS.has(block.kind) }
+    return { name: block.name, kind: block.kind, tag: block.tag ?? null, col, row, x: PAD_X + col * COL, y: PAD_TOP + row * ROW, ours: OURS.has(block.kind) }
   })
   const nodeOf = new Map(nodes.map((node) => [node.name, node]))
   const edges = blocks.flatMap((block) =>

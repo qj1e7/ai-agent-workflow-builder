@@ -23,7 +23,7 @@ const PICTURE: Readonly<Record<N8nBlockKind, Icon>> = {
   off: IconX,
 }
 
-/** What each block is, under its name. A block names its kind, not the system it reaches, so this says the kind. */
+/** What each block is, under its name: its kind, or for one of n8n's own blocks the tag its class gives it, such as Posts in Slack. */
 const SUB: Readonly<Record<N8nBlockKind, string>> = {
   schedule: 'Schedule',
   start: 'Start',
@@ -121,7 +121,7 @@ export function Canvas({ blocks, name, nodes = {}, edges = {} }: CanvasProps) {
                 {node.name}
               </text>
               <text className={styles['sub']} x={42} y={121} textAnchor="middle">
-                {SUB[node.kind]}
+                {node.tag ?? SUB[node.kind]}
               </text>
             </g>
           )

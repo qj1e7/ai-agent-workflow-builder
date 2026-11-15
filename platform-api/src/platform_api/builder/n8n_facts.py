@@ -82,6 +82,12 @@ def _publisher(by: str | None, where: str | None) -> Publisher | None:
     return Publisher(None if by is None else UserId(by))
 
 
+class MadeKeys(Protocol):
+    async def made(self) -> dict[str, str]:
+        """Each key the platform made in n8n, by id, with its n8n credential type."""
+        ...
+
+
 class BuilderWorkflowFacts:
     def __init__(
         self,
@@ -89,21 +95,25 @@ class BuilderWorkflowFacts:
         specs: Specs,
         releases: ReleaseReader | None,
         writes: Sequence[WriteEntry],
+        keys: MadeKeys | None = None,
     ) -> None:
         self._db = db
         self._specs = specs
         self._releases = releases
         self._writes = writes
+        self._keys = keys
         self._cards = CardLibrary(db)
 
     async def known(self, adding: Mapping[str, Iterable[str]]) -> KnownOptions:
         """What the editor's lists hold now, and the places a use case about to be saved adds,
-        since saving it lists them."""
+        since saving it lists them, and the keys the platform made in n8n, the only ones a block
+        may name."""
         cards = await self._cards.list()
         listed = [option.id for option in await self.places(GITHUB_RELEASES)]
         places = {GITHUB_RELEASES: [*listed, WATCHLIST_PLACE.id, *adding.get(GITHUB_RELEASES, ())]}
         agents = {WATCHLIST_CHECKER.id: [], **{c.card_id: card_spec(c).inputs for c in cards}}
-        return known_options(agents, places, self._writes)
+        keys = {} if self._keys is None else await self._keys.made()
+        return known_options(agents, places, self._writes, keys)
 
     async def workflow(self, n8n_workflow_id: str) -> OwnWorkflow | NothingToRun | None:
         async with self._db.connection("builder") as conn:

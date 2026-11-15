@@ -9,6 +9,8 @@
       "name": "About this workflow",
       "type": "n8n-nodes-base.stickyNote",
       "kind": "other",
+      "badge": "n8n",
+      "tag": null,
       "position": [
         0.0,
         -400.0
@@ -19,6 +21,8 @@
       "name": "Mon 8:00",
       "type": "n8n-nodes-base.scheduleTrigger",
       "kind": "schedule",
+      "badge": "n8n",
+      "tag": null,
       "position": [
         0.0,
         0.0
@@ -29,6 +33,8 @@
       "name": "Start from the Portal",
       "type": "CUSTOM.wabStartFromPortal",
       "kind": "start",
+      "badge": "ours",
+      "tag": null,
       "position": [
         0.0,
         200.0
@@ -39,6 +45,8 @@
       "name": "Read release",
       "type": "CUSTOM.wabRead",
       "kind": "read",
+      "badge": "ours",
+      "tag": null,
       "position": [
         220.0,
         0.0
@@ -49,6 +57,8 @@
       "name": "Compare",
       "type": "CUSTOM.wabAgent",
       "kind": "agent",
+      "badge": "ours",
+      "tag": null,
       "position": [
         440.0,
         0.0
@@ -59,6 +69,8 @@
       "name": "Newer?",
       "type": "n8n-nodes-base.if",
       "kind": "branch",
+      "badge": "n8n",
+      "tag": null,
       "position": [
         660.0,
         0.0
@@ -69,6 +81,8 @@
       "name": "Ask for a yes",
       "type": "CUSTOM.wabAskForYes",
       "kind": "ask",
+      "badge": "ours",
+      "tag": null,
       "position": [
         880.0,
         0.0
@@ -79,6 +93,8 @@
       "name": "Create ticket",
       "type": "CUSTOM.wabMakeApprovedChanges",
       "kind": "write",
+      "badge": "ours",
+      "tag": null,
       "position": [
         1100.0,
         0.0
@@ -89,6 +105,8 @@
       "name": "Nothing to change",
       "type": "n8n-nodes-base.noOp",
       "kind": "end",
+      "badge": "n8n",
+      "tag": null,
       "position": [
         880.0,
         200.0
@@ -142,6 +160,8 @@
     {
       "name": "Mon 8:00",
       "kind": "schedule",
+      "badge": "n8n",
+      "tag": null,
       "next": [
         {
           "exit": null,
@@ -152,6 +172,8 @@
     {
       "name": "Start from the Portal",
       "kind": "start",
+      "badge": "ours",
+      "tag": null,
       "next": [
         {
           "exit": null,
@@ -162,6 +184,8 @@
     {
       "name": "Read release",
       "kind": "read",
+      "badge": "ours",
+      "tag": null,
       "next": [
         {
           "exit": null,
@@ -172,6 +196,8 @@
     {
       "name": "Compare",
       "kind": "agent",
+      "badge": "ours",
+      "tag": null,
       "next": [
         {
           "exit": null,
@@ -182,6 +208,8 @@
     {
       "name": "Newer?",
       "kind": "branch",
+      "badge": "n8n",
+      "tag": null,
       "next": [
         {
           "exit": "true",
@@ -196,6 +224,8 @@
     {
       "name": "Ask for a yes",
       "kind": "ask",
+      "badge": "ours",
+      "tag": null,
       "next": [
         {
           "exit": "Yes",
@@ -210,11 +240,15 @@
     {
       "name": "Create ticket",
       "kind": "write",
+      "badge": "ours",
+      "tag": null,
       "next": []
     },
     {
       "name": "Nothing to change",
       "kind": "end",
+      "badge": "n8n",
+      "tag": null,
       "next": []
     }
   ],

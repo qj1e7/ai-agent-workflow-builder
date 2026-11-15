@@ -367,11 +367,18 @@ PLATFORM_API_SCOPES = (
     "user:create",
     "user:read",
     "user:delete",
+    "credential:create",
+    "credential:read",
+    "credential:update",
+    "credential:delete",
+    "credential:list",
+    "credential:move",
 )
 """Only what the platform's calls need, as n8n 2.42.6's public controllers check them: read covers
 history and versions, activate covers publish, move covers transfer, list covers a project's
 workflows (E15), and the retry of an execution has a scope of its own. The user scopes make and
-end staff accounts (ENGINE-PLAN 2.9)."""
+end staff accounts (ENGINE-PLAN 2.9). The credential scopes make the platform's own keys, test
+them, lend them with a workflow, and remove every key the platform did not make (ADR 0045)."""
 KEY_LIFETIME = timedelta(days=3)
 """A key that leaks stops working within days. When n8n refuses it, the platform makes another."""
 STALE_KEY_AGE = timedelta(days=1)
@@ -469,6 +476,20 @@ class HistoryEntry:
     authors: str
     """A display name such as "Alice Tester", never an id (P7 Q4): a hint, never a party."""
     created_at: str
+
+
+@dataclass(frozen=True)
+class N8nCredential:
+    """A key in n8n's credential store, as the owner sees every one. Never its secret."""
+
+    id: str
+    name: str
+    kind: str
+    """n8n's credential type, such as slackApi."""
+    created_at: datetime
+    updated_at: datetime
+    project: str | None
+    """The project that owns it."""
 
 
 @dataclass(frozen=True)
@@ -678,6 +699,30 @@ class _Page[T](_Data):
     data: list[T]
 
 
+class _Sharing(_Data):
+    id: str
+    role: str
+
+
+class _CredentialOut(_Data):
+    id: str
+    name: str
+    type: str
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: datetime = Field(alias="updatedAt")
+    shared: list[_Sharing] = Field(default_factory=list[_Sharing])
+
+
+class _CredentialPage(_Data):
+    data: list[_CredentialOut]
+    next_cursor: str | None = Field(default=None, alias="nextCursor")
+
+
+class _CredentialTest(_Data):
+    status: str
+    message: str = ""
+
+
 class _Rest[T](_Data):
     data: T
 
@@ -690,6 +735,18 @@ def _parse[T](model: type[T], response: httpx.Response) -> T:
             f"{response.request.method} {response.request.url.path} answered in a shape the "
             "platform does not know"
         ) from None
+
+
+def _credential(out: _CredentialOut) -> N8nCredential:
+    owners = [s.id for s in out.shared if s.role == "credential:owner"]
+    return N8nCredential(
+        out.id,
+        out.name,
+        out.type,
+        out.created_at,
+        out.updated_at,
+        owners[0] if owners else None,
+    )
 
 
 def _expect(response: httpx.Response, *ok: int) -> httpx.Response:
@@ -1031,6 +1088,64 @@ class N8nApi:
     async def transfer(self, workflow_id: str, project_id: str) -> None:
         body = {"destinationProjectId": project_id}
         _expect(await self._public("PUT", f"/workflows/{workflow_id}/transfer", body), 200, 204)
+
+    async def credentials(self) -> list[N8nCredential]:
+        """Every key in n8n, in every project, page by page. Only the owner may list them all."""
+        params = {"limit": "250"}
+        found: list[N8nCredential] = []
+        while True:
+            response = _expect(await self._public("GET", "/credentials", params=params))
+            page = _parse(_CredentialPage, response)
+            found.extend(_credential(item) for item in page.data)
+            if not page.next_cursor:
+                return found
+            params = {**params, "cursor": page.next_cursor}
+
+    async def credential(self, credential_id: str) -> N8nCredential | None:
+        response = await self._public("GET", f"/credentials/{credential_id}")
+        if response.status_code == 404:
+            return None
+        return _credential(_parse(_CredentialOut, _expect(response)))
+
+    async def create_credential(
+        self,
+        credential_id: str,
+        name: str,
+        kind: str,
+        data: Mapping[str, str],
+        project_id: str,
+    ) -> N8nCredential:
+        """With the id the platform picks, so a key made again keeps every workflow that names
+        it. n8n answers 409 when a key with that id is there already."""
+        body = {
+            "id": credential_id,
+            "name": name,
+            "type": kind,
+            "data": dict(data),
+            "projectId": project_id,
+        }
+        created = _expect(await self._public("POST", "/credentials", body))
+        return _credential(_parse(_CredentialOut, created))
+
+    async def change_credential(self, credential_id: str, data: Mapping[str, str]) -> None:
+        """Replaces the key's data, as when Key Vault holds a new secret. It stays where it is."""
+        body = {"data": dict(data), "isPartialData": False}
+        _expect(await self._public("PATCH", f"/credentials/{credential_id}", body))
+
+    async def test_credential(self, credential_id: str) -> tuple[bool, str]:
+        """n8n's own connection test of a stored key: whether n8n reached the system with it, and
+        what n8n said."""
+        response = _expect(await self._public("POST", f"/credentials/{credential_id}/test"))
+        tested = _parse(_CredentialTest, response)
+        return tested.status == "OK", tested.message
+
+    async def delete_credential(self, credential_id: str) -> None:
+        _expect(await self._public("DELETE", f"/credentials/{credential_id}"), 200, 204, 404)
+
+    async def move_credential(self, credential_id: str, project_id: str) -> None:
+        body = {"destinationProjectId": project_id}
+        response = await self._public("PUT", f"/credentials/{credential_id}/transfer", body)
+        _expect(response, 200, 204)
 
     async def execution(self, execution_id: str, data: bool = True) -> ExecutionRecord | None:
         """With data, the start item and a failure's block and words too. Without, its status
@@ -1442,6 +1557,16 @@ class N8nWorkflows:
     async def member_project(self, n8n_user_id: str) -> str | None:
         """The member's own space, found by n8n's id for them, never by name or email (P7 Q9)."""
         return (await personal_spaces(self._api)).get(n8n_user_id)
+
+    async def own_workflow_ids(self) -> set[str]:
+        """Every workflow the platform recorded as its own, ready or not, so none waits to be set
+        up. M4's copy of the self-test in a member's space is to be recorded here too."""
+        async with self._db.connection("orchestration") as conn:
+            row = await (
+                await conn.execute("SELECT workflows FROM orchestration.engine_status WHERE id = 1")
+            ).fetchone()
+        loaded: list[dict[str, Any]] = [] if row is None else row["workflows"]
+        return {str(w["id"]) for w in loaded}
 
     async def spaces(self) -> dict[str, str]:
         """Each member's own space by n8n's id for the member, as n8n names its creator."""

@@ -81,6 +81,14 @@ jobs:
       # list, a plain variable that the Portal shows. Unset keeps the practice copy.
       TF_VAR_teams_tell_webhook_url: ${{ secrets.TEAMS_TELL_WEBHOOK_URL }}
       TF_VAR_tell_email_to: ${{ vars.TELL_EMAIL_TO }}
+      # Optional (ADR 0045, ENGINE-PLAN E16). The keys the platform makes in n8n for n8n's own Jira,
+      # GitHub and Slack blocks, each kept in Key Vault. Unset makes none.
+      TF_VAR_n8n_key_jira_token: ${{ secrets.N8N_KEY_JIRA_TOKEN }}
+      TF_VAR_n8n_key_jira_url: ${{ vars.N8N_KEY_JIRA_URL }}
+      TF_VAR_n8n_key_jira_email: ${{ vars.N8N_KEY_JIRA_EMAIL }}
+      TF_VAR_n8n_key_github_token: ${{ secrets.N8N_KEY_GITHUB_TOKEN }}
+      TF_VAR_n8n_key_github_url: ${{ vars.N8N_KEY_GITHUB_URL }}
+      TF_VAR_n8n_key_slack_token: ${{ secrets.N8N_KEY_SLACK_TOKEN }}
       # Optional, for a subscription that refuses Cosmos DB's free tier or its region (ADR 0031).
       TF_VAR_cosmos_location: ${{ vars.COSMOS_LOCATION }}
       TF_VAR_cosmos_serverless: ${{ vars.COSMOS_SERVERLESS || 'false' }}

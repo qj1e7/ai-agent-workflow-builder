@@ -35,6 +35,7 @@ from platform_api.orchestration import (
     settings_http,
 )
 from platform_api.orchestration import http as orchestration_http
+from platform_api.orchestration.n8n_credentials import key_test_line
 from platform_api.practice_jira import dev_router as practice_jira_dev_router
 from platform_api.practice_jira import router as practice_jira_router
 from platform_api.security_headers import SecurityHeaders
@@ -194,6 +195,12 @@ async def readiness_of(
             )
         ).fetchone()
         seen = await self_test.SelfTests().seen(uow)
+        planted = await (
+            await uow.conn.execute(
+                "SELECT planted_at, gone_at FROM orchestration.n8n_key_tests"
+                " ORDER BY planted_at DESC LIMIT 1"
+            )
+        ).fetchone()
         now = uow.now
     if row is None:
         checks.append(
@@ -209,6 +216,9 @@ async def readiness_of(
         checks.append(ReadinessCheck(name="workflows", ok=bool(row["ready"]), detail=detail))
     ok, detail = self_test.ready_line(seen, now)
     checks.append(ReadinessCheck(name="self_test", ok=ok, detail=detail, counts_for_ready=False))
+    last = None if planted is None else (planted["planted_at"], planted["gone_at"])
+    ok, detail = key_test_line(last, now)
+    checks.append(ReadinessCheck(name="key_sweep", ok=ok, detail=detail, counts_for_ready=False))
     return Readiness(ready=all(c.ok for c in checks if c.counts_for_ready), checks=checks)
 
 

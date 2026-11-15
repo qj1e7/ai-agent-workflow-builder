@@ -89,7 +89,7 @@ services:
       N8N_COMMUNITY_PACKAGES_ENABLED: "false"
       # The allow list: n8n loads only these node types. scripts/nodes-include.sh writes it from
       # platform-api's node_classes.json (ADR 0045), and CI fails when the two differ.
-      NODES_INCLUDE: '["CUSTOM.wabStartFromPortal","CUSTOM.wabRead","CUSTOM.wabAgent","CUSTOM.wabProposeChange","CUSTOM.wabAskForYes","CUSTOM.wabMakeApprovedChanges","CUSTOM.wabTell","CUSTOM.wabReportFailure","n8n-nodes-base.scheduleTrigger","n8n-nodes-base.manualTrigger","n8n-nodes-base.errorTrigger","n8n-nodes-base.if","n8n-nodes-base.merge","n8n-nodes-base.noOp","n8n-nodes-base.stickyNote","n8n-nodes-base.filter","n8n-nodes-base.switch","n8n-nodes-base.set","n8n-nodes-base.limit","n8n-nodes-base.aggregate","n8n-nodes-base.splitOut","n8n-nodes-base.removeDuplicates","n8n-nodes-base.summarize","n8n-nodes-base.renameKeys","n8n-nodes-base.dateTime","n8n-nodes-base.compareDatasets","n8n-nodes-base.splitInBatches","n8n-nodes-base.xml","n8n-nodes-base.markdown","n8n-nodes-base.executionData","n8n-nodes-base.stopAndError"]'
+      NODES_INCLUDE: '["CUSTOM.wabStartFromPortal","CUSTOM.wabRead","CUSTOM.wabAgent","CUSTOM.wabProposeChange","CUSTOM.wabAskForYes","CUSTOM.wabMakeApprovedChanges","CUSTOM.wabTell","CUSTOM.wabReportFailure","n8n-nodes-base.scheduleTrigger","n8n-nodes-base.manualTrigger","n8n-nodes-base.errorTrigger","n8n-nodes-base.if","n8n-nodes-base.merge","n8n-nodes-base.noOp","n8n-nodes-base.stickyNote","n8n-nodes-base.filter","n8n-nodes-base.switch","n8n-nodes-base.set","n8n-nodes-base.limit","n8n-nodes-base.aggregate","n8n-nodes-base.splitOut","n8n-nodes-base.removeDuplicates","n8n-nodes-base.summarize","n8n-nodes-base.renameKeys","n8n-nodes-base.dateTime","n8n-nodes-base.compareDatasets","n8n-nodes-base.splitInBatches","n8n-nodes-base.xml","n8n-nodes-base.markdown","n8n-nodes-base.executionData","n8n-nodes-base.stopAndError","n8n-nodes-base.jira","n8n-nodes-base.github","n8n-nodes-base.microsoftTeams","n8n-nodes-base.microsoftOutlook","n8n-nodes-base.gmail","n8n-nodes-base.slack"]'
       # n8n keeps 30 days of executions (ENGINE-PLAN D10). Our API keeps every node's answer, so the
       # Portal loses nothing, and n8n never prunes a waiting execution (P7 Q16).
       EXECUTIONS_DATA_PRUNE: "true"
@@ -224,6 +224,16 @@ services:
       CONFLUENCE_EMAIL: ${CONFLUENCE_EMAIL:-}
       CONFLUENCE_API_TOKEN: ${CONFLUENCE_API_TOKEN:-}
       CONFLUENCE_PAGES: ${CONFLUENCE_PAGES:-}
+      # The keys the platform makes in n8n for n8n's own Jira, GitHub and Slack blocks (ADR 0045).
+      # Each is made only once its system shows it can only read or post. With none for Jira, the
+      # practice Jira lends its browse-only account. SLACK_API_URL is where the platform asks Slack.
+      N8N_KEY_JIRA_URL: ${N8N_KEY_JIRA_URL:-}
+      N8N_KEY_JIRA_EMAIL: ${N8N_KEY_JIRA_EMAIL:-}
+      N8N_KEY_JIRA_TOKEN: ${N8N_KEY_JIRA_TOKEN:-}
+      N8N_KEY_GITHUB_URL: ${N8N_KEY_GITHUB_URL:-}
+      N8N_KEY_GITHUB_TOKEN: ${N8N_KEY_GITHUB_TOKEN:-}
+      N8N_KEY_SLACK_TOKEN: ${N8N_KEY_SLACK_TOKEN:-}
+      SLACK_API_URL: ${SLACK_API_URL:-}
     ports:
       - "${PLATFORM_API_HOST_PORT:-8000}:8000"
     healthcheck:
