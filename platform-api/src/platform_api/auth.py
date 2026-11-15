@@ -323,6 +323,12 @@ class Me(WireModel):
         json_schema_extra=_without_default,
         description="False when the sign-in is good but no Operator has added this person yet.",
     )
+    n8n_access: bool = Field(
+        default=False,
+        json_schema_extra=_without_default,
+        description="Whether an Operator gave this person n8n access. GET /api/v1/me/n8n says "
+        "whether n8n can be opened now.",
+    )
     time_zone: str = Field(
         default=TEAM_TIME_ZONE.key,
         json_schema_extra=_without_default,
@@ -359,6 +365,7 @@ def who_am_i(signed_in: CurrentSignIn, request: Request) -> Me:
         id=principal.user_id,
         display=principal.display,
         roles=[role for role in Role if role in principal.roles],
+        n8n_access=principal.n8n_access,
         time_zone=zone,
     )
 

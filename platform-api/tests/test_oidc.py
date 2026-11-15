@@ -112,6 +112,7 @@ def test_a_valid_token_signs_in_as_the_person_it_names(client: TestClient, key: 
         "display": "Alice",
         "roles": ["operator", "approver"],
         "on_list": True,
+        "n8n_access": False,
         "time_zone": "Asia/Singapore",
     }
 
@@ -546,6 +547,7 @@ def test_a_person_not_on_the_list_is_told_to_ask_an_operator(issuer: FakeIssuer,
         "display": "Nobody",
         "roles": [],
         "on_list": False,
+        "n8n_access": False,
         "time_zone": "Asia/Singapore",
     }
     declared_status(app, "GET", ME, me)

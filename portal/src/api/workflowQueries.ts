@@ -393,3 +393,16 @@ export function useTestRunMarks() {
     again: (useCaseId: string) => testAgain(queryClient, user, useCaseId, newIdempotencyKey()),
   }
 }
+
+export async function sendOpenInN8n(client: ApiClient, useCaseId: string) {
+  return unwrap(await client.POST('/api/v1/use-cases/{use_case_id}/open-in-n8n', { params: { path: { use_case_id: useCaseId } } }))
+}
+
+export function useOpenInN8n() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (useCaseId: string) => sendOpenInN8n(client, useCaseId),
+    onSettled: () => rereadWorkflowsAndWatchlist(queryClient),
+  })
+}

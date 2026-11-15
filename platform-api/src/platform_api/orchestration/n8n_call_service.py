@@ -75,6 +75,7 @@ from platform_api.orchestration.n8n_calls import (
     CallResult,
     CannotRun,
     Carry,
+    ExecutionFacts,
     FailedExecution,
     Finished,
     IssuedStart,
@@ -353,15 +354,19 @@ class NodeCalls:
                 return NOT_OUR_ERROR_WORKFLOW
             case True:
                 pass
-        found = await self._failures.failure(failed)
-        if found is None:
-            return NOT_FAILED
-        match await self._self_test(platform, found.workflow_id):
+        match await self._failures.failure(failed):
+            case TryLater() as later:
+                return later
+            case None:
+                return NOT_FAILED
+            case found:
+                pass
+        match await self._self_test(platform, found.facts.workflow_id):
             case TryLater() as later:
                 return later
             case True:
                 async with self._db.transaction("orchestration") as uow:
-                    await self._self_tests.arrived(uow, found.execution_id, found.workflow_id)
+                    await self._self_tests.arrived(uow, found.execution_id, found.facts.workflow_id)
                 return SelfTestArrived()
             case False:
                 pass
@@ -390,8 +395,9 @@ class NodeCalls:
 
     async def _fail_run(self, failed: FailedExecution) -> FailureResult:
         """Fails the run a failed execution carried, with the node's words (ENGINE-PLAN 2.3.9 and
-        2.8). An execution none of whose blocks had called is linked first, as its first call
-        would have linked it, so the Portal shows the run that stopped."""
+        2.8). An execution none of whose blocks had called is linked first, from n8n's record of
+        its failure, as its first call would have linked it, so the Portal shows the run that
+        stopped."""
         execution = failed.execution_id
         async with self._db.transaction("orchestration") as uow:
             await self._book.hold_execution(uow, execution)
@@ -399,7 +405,7 @@ class NodeCalls:
                 uow, execution
             )
             if run_id is None:
-                match await self._link(uow, execution):
+                match await self._link(uow, execution, failed.facts):
                     case TryLater() as later:
                         return later
                     case Refused(detail=detail) | NothingToRun(why=detail):
@@ -589,7 +595,10 @@ class NodeCalls:
             return BUSY
         run_id = await self._book.linked_run(uow, call.execution_id)
         if run_id is None:
-            linked = await self._link(uow, call.execution_id)
+            facts = await self._n8n.execution(call.execution_id)
+            if facts is None:
+                return NO_EXECUTION
+            linked = await self._link(uow, call.execution_id, facts)
             if isinstance(linked, TryLater):
                 return linked
             if isinstance(linked, NothingToRun):
@@ -633,14 +642,11 @@ class NodeCalls:
         return quiet
 
     async def _link(
-        self, uow: UnitOfWork, execution: N8nExecutionId
+        self, uow: UnitOfWork, execution: N8nExecutionId, facts: ExecutionFacts
     ) -> RunId | Refused | TryLater | NothingToRun:
         quiet = await self._book.quiet(uow, execution)
         if quiet is not None:
             return NothingToRun(quiet)
-        facts = await self._n8n.execution(execution)
-        if facts is None:
-            return NO_EXECUTION
         own = await self._workflows.workflow(facts.workflow_id)
         if own is None:
             return await self._not_ours(uow, execution, facts.workflow_id)

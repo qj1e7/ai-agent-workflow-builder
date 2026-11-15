@@ -1,0 +1,13 @@
+{
+  "id": "carol",
+  "display": "Carol",
+  "email": "carol@example.test",
+  "operator": true,
+  "approver": false,
+  "pending_approver": null,
+  "signed_in": true,
+  "n8n_access": true,
+  "n8n_account": "ready",
+  "added_by": "deploy",
+  "added_at": "2026-11-02T06:00:00Z"
+}

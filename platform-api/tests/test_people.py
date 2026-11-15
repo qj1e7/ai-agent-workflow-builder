@@ -266,7 +266,58 @@ class TestApproverRole:
         assert changed(rules.remove_approver(ALICE, TEAM, CAROL, pending=())).summary is None
 
     def test_a_confirmed_grant_sets_the_flag(self):
-        assert rules.grant_approver(DAVE).is_approver is True
+        assert rules.grant_approver(DAVE) == (replace(DAVE, is_approver=True), "")
+
+
+class TestN8nAccess:
+    def test_an_operator_gives_an_operator_n8n_access_and_ends_it(self):
+        given = changed(rules.set_n8n_access(ALICE, DAVE, True))
+        assert (given.person.n8n_access, given.summary) == (True, "Alice gave Dave n8n access.")
+        ended = changed(rules.set_n8n_access(CAROL, given.person, False))
+        assert (ended.person.n8n_access, ended.summary) == (
+            False,
+            "Carol removed Dave's n8n access.",
+        )
+
+    def test_only_an_operator_who_is_no_approver_may_hold_it(self):
+        for who in (ALICE, BOB):
+            assert refused(rules.set_n8n_access(CAROL, who, True)) is (
+                PeopleRefusal.N8N_OPERATORS_ONLY
+            )
+
+    def test_only_an_operator_changes_it(self):
+        assert refused(rules.set_n8n_access(BOB, DAVE, True)) is PeopleRefusal.NOT_AN_OPERATOR
+        assert refused(rules.set_n8n_access(GONE, DAVE, True)) is PeopleRefusal.NOT_AN_OPERATOR
+
+    def test_setting_it_as_it_is_changes_nothing(self):
+        assert changed(rules.set_n8n_access(ALICE, DAVE, False)).summary is None
+
+    def test_gaining_the_approver_role_ends_it_and_says_so(self):
+        holder = replace(DAVE, n8n_access=True)
+        approver, ended = rules.grant_approver(holder)
+        assert (approver.is_approver, approver.n8n_access) == (True, False)
+        assert ended == " Dave's n8n access ended, because Approvers can't have it."
+
+    def test_losing_the_operator_role_ends_it(self):
+        holder = replace(ALICE, n8n_access=True)
+        outcome = changed(rules.set_operator(CAROL, [holder, BOB, CAROL], holder, False))
+        assert outcome.person.n8n_access is False
+        assert outcome.summary == (
+            "Carol removed Alice's Operator role. Alice's n8n access ended, because only "
+            "Operators can have it."
+        )
+
+    def test_leaving_the_list_ends_it_and_coming_back_does_not_restore_it(self):
+        holder = replace(DAVE, n8n_access=True)
+        gone = changed(rules.remove_person(ALICE, [ALICE, BOB, CAROL, holder], holder, LATER))
+        assert gone.person.n8n_access is False
+        back = rules.add_person(
+            ALICE, [gone.person], DAVE.email, "Dave", True, False, LATER, new_id
+        )
+        assert isinstance(back, Added) and back.person.n8n_access is False
+
+    def test_the_principal_carries_it(self):
+        assert replace(DAVE, n8n_access=True).principal.n8n_access is True
 
 
 class TestRemovePerson:

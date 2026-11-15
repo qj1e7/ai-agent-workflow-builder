@@ -9,7 +9,7 @@ import asyncio
 import logging
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, Literal, Protocol, cast
@@ -363,10 +363,13 @@ PLATFORM_API_SCOPES = (
     "execution:read",
     "execution:list",
     "execution:retry",
+    "user:create",
+    "user:read",
+    "user:delete",
 )
 """Only what the platform's calls need, as n8n 2.42.6's public controllers check them: read covers
 history and versions, activate covers publish, move covers transfer, and the retry of an execution
-has a scope of its own."""
+has a scope of its own. The user scopes make and end staff accounts (ENGINE-PLAN 2.9)."""
 KEY_LIFETIME = timedelta(days=3)
 """A key that leaks stops working within days. When n8n refuses it, the platform makes another."""
 STALE_KEY_AGE = timedelta(days=1)
@@ -421,7 +424,8 @@ class PublishEvent:
     version_id: str
     event: str
     """activated or deactivated."""
-    user_id: str
+    user_id: str | None
+    """None once n8n deleted the account that published it."""
     at: str
 
 
@@ -444,7 +448,7 @@ def publisher_of(
     if not activated:
         return None
     last = max(enumerate(activated), key=lambda pair: (pair[1].at, pair[0]))[1]
-    return Publisher(people.get(last.user_id))
+    return Publisher(None if last.user_id is None else people.get(last.user_id))
 
 
 @dataclass(frozen=True)
@@ -460,6 +464,24 @@ class N8nProject:
     id: str
     type: str
     name: str
+    creator_id: str | None = None
+    """For a personal project, the n8n user whose own space it is."""
+
+
+@dataclass(frozen=True)
+class Invited:
+    """A staff account n8n made, and the link where its person sets their password. The link is
+    a secret until it is used, so it is never logged."""
+
+    user_id: str
+    link: str = field(repr=False)
+
+
+@dataclass(frozen=True)
+class N8nUser:
+    id: str
+    pending: bool
+    """Invited, with no password set yet."""
 
 
 @dataclass(frozen=True)
@@ -475,6 +497,9 @@ class ExecutionRecord:
     """The block whose error ended the execution, or the last block n8n ran."""
     error: str | None = None
     """n8n's error text, when the execution ended in an error."""
+    ran: Mapping[str, str] = field(default_factory=dict[str, str])
+    """Each block n8n ran, with the status of its last try, such as success or error. Read
+    only with the execution's data."""
 
 
 @dataclass(frozen=True)
@@ -563,7 +588,7 @@ class _SignedIn(_Data):
 class _TimelineEntry(_Data):
     version_id: str = Field(alias="versionId")
     event: str
-    user: _User
+    user: _User | None = None
     created_at: str = Field(default="", alias="createdAt")
 
 
@@ -577,6 +602,22 @@ class _ProjectOut(_Data):
     id: str
     type: str
     name: str = ""
+    creator_id: str | None = Field(default=None, alias="creatorId")
+
+
+class _InvitedUser(_Data):
+    id: str
+    invite_accept_url: str | None = Field(default=None, alias="inviteAcceptUrl")
+
+
+class _Invitation(_Data):
+    user: _InvitedUser | None = None
+    error: str = ""
+
+
+class _UserOut(_Data):
+    id: str
+    is_pending: bool = Field(alias="isPending")
 
 
 class _ExecutionOut(_Data):
@@ -709,7 +750,18 @@ def _record_of(execution: _ExecutionOut) -> ExecutionRecord:
         _start_nonce(execution),
         node if isinstance(node, str) else None,
         error if isinstance(error, str) else None,
+        _ran(execution),
     )
+
+
+def _ran(execution: _ExecutionOut) -> dict[str, str]:
+    ran: dict[str, str] = {}
+    for name, tries in _fields(_at(execution.data, "resultData", "runData")).items():
+        listed = cast(list[object], tries) if isinstance(tries, list) else []
+        status = _fields(listed[-1]).get("executionStatus") if listed else None
+        if isinstance(status, str):
+            ran[name] = status
+    return ran
 
 
 class N8nApi:
@@ -986,7 +1038,7 @@ class N8nApi:
             await self._rest("GET", f"/workflow-history/workflow/{workflow_id}/publish-timeline")
         )
         return [
-            PublishEvent(e.version_id, e.event, e.user.id, e.created_at)
+            PublishEvent(e.version_id, e.event, None if e.user is None else e.user.id, e.created_at)
             for e in _parse(_Rest[list[_TimelineEntry]], response).data
         ]
 
@@ -995,9 +1047,34 @@ class N8nApi:
         is 403 on Community (P7 Q9)."""
         response = _expect(await self._rest("GET", "/projects"))
         return [
-            N8nProject(p.id, p.type, p.name)
+            N8nProject(p.id, p.type, p.name, p.creator_id)
             for p in _parse(_Rest[list[_ProjectOut]], response).data
         ]
+
+    async def invite(self, email: str) -> Invited | None:
+        """A member account with this email, through the public API, which answers its invite
+        link on the free edition (P7 Q9). None when n8n made none, as when it already has an
+        account with this email: the platform never takes an account it did not make."""
+        body = [{"email": email, "role": "global:member"}]
+        response = _expect(await self._public("POST", "/users", body), 200, 201)
+        made = _parse(list[_Invitation], response)
+        users = [m.user for m in made if m.user is not None and not m.error]
+        if len(users) != 1 or users[0].invite_accept_url is None:
+            return None
+        return Invited(users[0].id, users[0].invite_accept_url)
+
+    async def user(self, user_id: str) -> N8nUser | None:
+        response = await self._public("GET", f"/users/{user_id}")
+        if response.status_code == 404:
+            return None
+        out = _parse(_UserOut, _expect(response))
+        return N8nUser(out.id, out.is_pending)
+
+    async def delete_user(self, user_id: str, transfer_to: str) -> None:
+        """Ends the account. What its own space still holds moves to `transfer_to`, so nothing
+        is deleted with it."""
+        params = {"transferId": transfer_to}
+        _expect(await self._public("DELETE", f"/users/{user_id}", params=params), 200, 204, 404)
 
     async def write(
         self,
@@ -1052,6 +1129,13 @@ def _workflow(out: _WorkflowOut) -> N8nWorkflow:
     return N8nWorkflow(out.id, out.version_id, out.active_version_id, document)
 
 
+def _facts(record: ExecutionRecord) -> ExecutionFacts:
+    retry_of = None if record.retry_of is None else N8nExecutionId(record.retry_of)
+    return ExecutionFacts(
+        record.workflow_id, record.mode, retry_of, record.start_nonce, record.version_id
+    )
+
+
 class N8nExecutions:
     """n8n's records of executions, through its public API (ENGINE-PLAN 2.3)."""
 
@@ -1071,15 +1155,18 @@ class N8nExecutions:
         record = await self._record(execution_id)
         if record is None or record.status not in VOUCHED:
             return None
-        retry_of = None if record.retry_of is None else N8nExecutionId(record.retry_of)
-        return ExecutionFacts(
-            record.workflow_id, record.mode, retry_of, record.start_nonce, record.version_id
-        )
+        return _facts(record)
 
     async def landed(self, execution_id: N8nExecutionId) -> bool:
         """Whether n8n shows the execution running or finished, after a wake met a 409."""
         record = await self._record(execution_id, data=False)
         return record is not None and record.status in LANDED
+
+    async def ran(self, execution_id: N8nExecutionId) -> Mapping[str, str] | None:
+        """Each block n8n ran in the execution, with its last try's status. None when n8n could
+        not say."""
+        record = await self._record(execution_id)
+        return None if record is None else record.ran
 
 
 @dataclass(frozen=True)
@@ -1139,6 +1226,17 @@ class N8nDrafts(Protocol):
         ...
 
     async def remove_for_good(self, workflow_id: str) -> None: ...
+
+
+async def platform_project(db: Database) -> str | None:
+    """Where the last bootstrap recorded the platform's own workflows, ready or not."""
+    async with db.connection("orchestration") as conn:
+        row = await (
+            await conn.execute("SELECT workflows FROM orchestration.engine_status WHERE id = 1")
+        ).fetchone()
+    loaded: list[dict[str, Any]] = [] if row is None else row["workflows"]
+    project = next((w.get("project") for w in loaded if w["name"] == ERROR_WORKFLOW), None)
+    return None if project is None else str(project)
 
 
 class N8nWorkflows:
@@ -1273,6 +1371,39 @@ class N8nWorkflows:
             return written
         return PutBack(written.version_id, written.document, written.version_id)
 
+    async def home(self, workflow_id: str) -> str | None:
+        return await self._api.home_project(workflow_id)
+
+    async def member_project(self, n8n_user_id: str) -> str | None:
+        """The member's own space, found by n8n's id for them, never by name or email (P7 Q9)."""
+        found = [
+            p.id
+            for p in await self._api.projects()
+            if p.type == "personal" and p.creator_id == n8n_user_id
+        ]
+        return found[0] if len(found) == 1 else None
+
+    async def platform_project(self) -> str | None:
+        return await platform_project(self._db)
+
+    async def move(self, workflow_id: str, project_id: str) -> None:
+        await self._api.transfer(workflow_id, project_id)
+
+    async def triggers_live(self, workflow_id: str, version_id: str) -> None:
+        await self._live(workflow_id, version_id)
+
+    async def keep_settings(
+        self, workflow_id: str, expected_draft: str, settings: Mapping[str, Any]
+    ) -> Written | ChangedInN8n:
+        """Puts these settings back on the draft, publishing nothing: n8n runs the live version
+        with the workflow's settings at once."""
+        return await self._api.write(
+            workflow_id,
+            expected_draft,
+            lambda document: {**document, "settings": dict(settings)},
+            publish=False,
+        )
+
     async def remove_for_good(self, workflow_id: str) -> None:
         """Archive first, which unpublishes, then delete, which takes its executions too (D7)."""
         await self._api.archive(workflow_id)
@@ -1296,16 +1427,16 @@ class N8nWorkflows:
             return None
         if record.status == "success":
             return Finished(execution_id)
-        return FailedExecution(execution_id, record.workflow_id, record.failed_node, record.error)
+        return FailedExecution(execution_id, _facts(record), record.failed_node, record.error)
 
-    async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
+    async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | TryLater | None:
         """The block that failed and n8n's words for it, from n8n's own record. None unless n8n
         has the execution and it ended in an error."""
         try:
             record = await self._api.execution(execution_id)
         except (N8nError, httpx.HTTPError) as error:
             log.warning("could not read n8n execution %s: %s", execution_id, error)
-            return None
+            return N8N_UNREADABLE
         if record is None or record.status != "error":
             return None
-        return FailedExecution(execution_id, record.workflow_id, record.failed_node, record.error)
+        return FailedExecution(execution_id, _facts(record), record.failed_node, record.error)

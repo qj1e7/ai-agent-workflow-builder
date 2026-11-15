@@ -58,6 +58,7 @@ services:
   # The mock Confluence's own bot and test token, not a secret. Only the inventory may be read.
   platform-api:
     environment:
+      N8N_STAFF_ACCESS: "on"
       CONFLUENCE_BASE_URL: http://mock-confluence:8400/wiki
       CONFLUENCE_EMAIL: bot@codesparks.test
       CONFLUENCE_API_TOKEN: mock-confluence-token
