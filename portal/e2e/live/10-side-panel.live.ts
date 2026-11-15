@@ -460,6 +460,7 @@ for (const width of [1440, 390]) {
     await expect(thread(page), 'the second click is the full page, with the chat gone').toHaveCount(0)
     await page.getByRole('link', { name: 'Back to the chat' }).click()
     await expect(panel(page), 'the panel is as it was on return').toBeVisible()
+    await expect(page.locator('#side-panel-h'), 'focus is in the panel before Escape').toBeFocused()
 
     await page.keyboard.press('Escape')
     await expect(panel(page)).toHaveCount(0)
