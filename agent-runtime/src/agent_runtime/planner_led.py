@@ -674,9 +674,22 @@ def _lead(messages: list[BaseMessage], chat_for: ChatFor) -> AIMessage | ModelPr
         system = _system(BRIEFING, model)
         reply = bound.invoke([system, *messages])
     except Exception as error:
-        log.warning("ai_led: the model's turn failed: %s", type(error).__name__)
+        log.warning("ai_led: the model's turn failed: %s%s", type(error).__name__, _shape(error))
         return problem_for(error, runs_fall_back=False)
     return reply
+
+
+def _shape(error: Exception) -> str:
+    """What a provider said was wrong with the request's shape. Only an invalid-request error's
+    own message is kept: it names fields of the request, never the key or the address."""
+    body: object = getattr(error, "body", None)
+    found = cast(dict[str, object], body).get("error") if isinstance(body, dict) else None
+    if not isinstance(found, dict):
+        return ""
+    said = cast(dict[str, object], found)
+    if said.get("type") != "invalid_request_error":
+        return ""
+    return f": {str(said.get('message', ''))[:300]}"
 
 
 def _told(message: AIMessage, why: str) -> list[ToolMessage]:
