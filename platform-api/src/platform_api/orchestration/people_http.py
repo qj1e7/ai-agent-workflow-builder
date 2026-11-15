@@ -24,6 +24,7 @@ from platform_api.orchestration.model_settings import (
     PendingChanged,
     SettingsOff,
 )
+from platform_api.orchestration.n8n_staff import StaffAccounts
 from platform_api.orchestration.people import (
     MAX_DISPLAY_CHARS,
     MAX_EMAIL_CHARS,
@@ -47,6 +48,7 @@ from platform_api.wire import ErrorBody, WireIn, WireModel, error_response
 router = APIRouter()
 
 type SettingsArea = Literal["people", "model"]
+type N8nAccountState = Literal["none", "invited", "ready"]
 
 
 class PendingApproverOut(WireModel):
@@ -65,6 +67,15 @@ class PersonOut(WireModel):
         description="Set while another Approver has still to confirm this person as an Approver."
     )
     signed_in: bool = Field(description="Whether this person has signed in at least once.")
+    n8n_access: bool = Field(
+        description="Whether this person may open workflows in n8n's editor. Only an Operator "
+        "who is no Approver holds it, and gaining the Approver role ends it."
+    )
+    n8n_account: N8nAccountState = Field(
+        description="The n8n account the platform made for this person. invited: they have not "
+        "set their n8n password yet. none: there is none, as while n8n access is off, or before "
+        "the platform has made it."
+    )
     added_by: UserId
     added_at: datetime
 
@@ -84,6 +95,10 @@ class AddPersonIn(WireIn):
 
 class OperatorIn(WireIn):
     operator: bool
+
+
+class N8nAccessIn(WireIn):
+    n8n_access: bool
 
 
 class PeopleRefusalOut(WireModel):
@@ -147,6 +162,23 @@ class SettingsHistoryOut(WireModel):
     changes: list[SettingsChangeOut]
 
 
+class MyN8nOut(WireModel):
+    access: bool = Field(description="Whether an Operator gave you n8n access.")
+    account: N8nAccountState
+    set_password_url: str | None = Field(
+        description="Your one link to set your n8n password, until you have used it. Shown "
+        "only to you, and never sent anywhere else."
+    )
+    can_open: bool = Field(description="Whether you can open workflows in n8n now.")
+    why_not: str | None = Field(description="Why not, in words to show. Null when you can.")
+    editor_url: str | None = Field(description="n8n's editor, while you can open it.")
+
+
+def current_staff(request: Request) -> StaffAccounts:
+    staff: StaffAccounts = request.app.state.staff
+    return staff
+
+
 def current_people(request: Request) -> People:
     people: People = request.app.state.people
     return people
@@ -180,6 +212,10 @@ def person_out(row: PersonRow) -> PersonOut:
             else None
         ),
         signed_in=p.bound_at is not None,
+        n8n_access=p.n8n_access,
+        n8n_account=(
+            "none" if p.n8n_account is None else "invited" if p.n8n_account.pending else "ready"
+        ),
         added_by=p.added_by,
         added_at=p.added_at,
     )
@@ -244,6 +280,29 @@ def _answer(outcome: Person | PersonRow | Refused | NotFound) -> PersonOut | JSO
             return _refusal(outcome)
 
 
+@router.get(
+    "/api/v1/me/n8n",
+    tags=["people"],
+    response_model=MyN8nOut,
+    description="Your own n8n account, and the link to set your n8n password while you have "
+    "not used it (ENGINE-PLAN 2.9).",
+    responses=SIGNED_IN,
+)
+async def my_n8n(
+    principal: CurrentPrincipal, staff: Annotated[StaffAccounts, Depends(current_staff)]
+) -> JSONResponse:
+    mine = await staff.mine(principal.user_id)
+    body = MyN8nOut(
+        access=mine.access,
+        account=mine.account,
+        set_password_url=mine.set_password_url,
+        can_open=mine.can_open,
+        why_not=mine.why_not,
+        editor_url=mine.editor_url,
+    )
+    return JSONResponse(body.model_dump(mode="json"), headers={"Cache-Control": "no-store"})
+
+
 @router.get("/api/v1/people", tags=["people"], responses=SIGNED_IN)
 async def list_people(principal: CurrentPrincipal, people: CurrentPeople) -> PeopleOut:
     return PeopleOut(people=[person_out(row) for row in await people.list_people()])
@@ -274,6 +333,20 @@ async def set_operator(
     person_id: UserId, body: OperatorIn, principal: Operator, people: CurrentPeople
 ) -> PersonOut | JSONResponse:
     return _answer(await people.set_operator(principal, person_id, body.operator))
+
+
+@router.put(
+    "/api/v1/people/{person_id}/n8n-access",
+    tags=["people"],
+    response_model=PersonOut,
+    description="Gives or ends n8n access. The platform makes or ends the person's n8n account "
+    "within a minute, and only while staff access to n8n is on.",
+    responses={**OPERATORS_ONLY, 404: NO_SUCH_PERSON, 409: RULE_REFUSED},
+)
+async def set_n8n_access(
+    person_id: UserId, body: N8nAccessIn, principal: Operator, people: CurrentPeople
+) -> PersonOut | JSONResponse:
+    return _answer(await people.set_n8n_access(principal, person_id, body.n8n_access))
 
 
 @router.post(

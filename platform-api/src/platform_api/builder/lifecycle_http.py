@@ -15,6 +15,7 @@ from platform_api.builder.models import (
     VersionList,
 )
 from platform_api.builder.n8n_draft import DraftRefused, N8nNotReady, NotSafe
+from platform_api.builder.n8n_holds import HeldInN8n
 from platform_api.builder.service import (
     InN8nRefused,
     Republished,
@@ -78,6 +79,8 @@ def refused_in_n8n(
             return HTTPException(409, CHANGED_IN_N8N)
         case NotSafe():
             return HTTPException(409, NOT_SAFE)
+        case HeldInN8n(words):
+            return HTTPException(409, words)
         case DraftRefused(findings):
             return HTTPException(422, [{"loc": ["body"], "msg": f.text} for f in findings])
 
@@ -206,7 +209,7 @@ async def save_schedule(
     match await builder.save_schedule(use_case_id, principal, body):
         case ScheduleOnSoftwarePage():
             raise HTTPException(409, SCHEDULE_ON_SOFTWARE_PAGE)
-        case N8nNotReady() | ChangedInN8n() | DraftRefused() as refused:
+        case N8nNotReady() | ChangedInN8n() | DraftRefused() | HeldInN8n() as refused:
             raise refused_in_n8n(refused)
         case None:
             raise HTTPException(404, NO_SUCH)
@@ -258,7 +261,7 @@ async def undo_version(
             raise HTTPException(409, CHANGED_SINCE)
         case NotAScheduleChange():
             raise HTTPException(409, NOT_A_SCHEDULE_CHANGE)
-        case N8nNotReady() | ChangedInN8n() | DraftRefused() as refused:
+        case N8nNotReady() | ChangedInN8n() | DraftRefused() | HeldInN8n() as refused:
             raise refused_in_n8n(refused)
         case view:
             return view

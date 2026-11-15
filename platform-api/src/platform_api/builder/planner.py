@@ -74,6 +74,7 @@ from platform_api.orchestration import (
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
+from platform_api.orchestration.n8n_staff import NO_ACCESS, OFF, CanOpen, StaffAccess
 from platform_api.shared import Principal, Role, UserId
 from platform_api.wire import WireIn, WireModel
 
@@ -502,6 +503,24 @@ class ChangedInN8nReply(Reply):
     )
 
 
+class N8nReply(Reply):
+    """Asked to open n8n (ENGINE-PLAN 2.9). Only an Operator with n8n access, while staff access
+    to n8n is on and the allow list proven, can: said tells everyone else why not."""
+
+    answer: Literal["n8n"] = "n8n"
+    said: str
+    can_open: bool
+    use_case_id: str | None = Field(
+        description="The workflow the request names, when exactly one name matches and you can "
+        "open it. Open it in n8n with POST /api/v1/use-cases/{use_case_id}/open-in-n8n."
+    )
+
+
+N8N_WORD = re.compile(r"(?<!\w)n8n(?!\w)", re.IGNORECASE)
+HERE_IN_N8N = "Here it is in n8n."
+WHICH_IN_N8N = "Say which workflow to open in n8n."
+
+
 WatchlistReply.model_rebuild()
 
 type PlannerReply = Annotated[
@@ -524,7 +543,8 @@ type PlannerReply = Annotated[
     | DecidedReply
     | DecideReply
     | OfflineReply
-    | ChangedInN8nReply,
+    | ChangedInN8nReply
+    | N8nReply,
     Field(discriminator="answer"),
 ]
 
@@ -632,6 +652,10 @@ class Listed(Protocol):
     async def view(self) -> WatchlistView | None: ...
 
 
+class N8nAccessPort(Protocol):
+    async def access(self, person: UserId) -> StaffAccess: ...
+
+
 class NoSuchWorkflow:
     """The workflow an intent names does not exist."""
 
@@ -654,6 +678,11 @@ def _cant_row(row: CantRow) -> CantRowView:
         instead=row.instead,
         unsupported=row.unsupported,
     )
+
+
+def _held_in(cases: Sequence[UseCaseView], wanted: str) -> list[UseCaseView]:
+    """Each workflow whose whole name the normalized words hold."""
+    return [u for u in cases if re.search(rf"(?<!\w){re.escape(_norm(u.name))}(?!\w)", wanted)]
 
 
 def _norm(name: str) -> str:
@@ -804,8 +833,10 @@ class PlannerFront:
         registry: Registry,
         connections: ConnectionStates,
         facts: FactsReading,
+        staff: N8nAccessPort | None = None,
     ) -> None:
         self._facts = facts
+        self._staff = staff
         self._answers = answers
         self._workflows = workflows
         self._watchlist = watchlist
@@ -813,6 +844,8 @@ class PlannerFront:
         self._connections = connections
 
     async def answer(self, body: AnswerIn, viewer: Principal) -> PlannerReply | NoSuchWorkflow:
+        if body.text is not None and N8N_WORD.search(body.text):
+            return await self._n8n(body.text, viewer)
         operator = Role.OPERATOR in viewer.roles
         decided = None if operator or body.text is None else past_decisions(body.text)
         if decided is not None:
@@ -915,6 +948,19 @@ class PlannerFront:
             case PauseAnswer() | ResumeAnswer():
                 return await self._switch(answer, viewer)
 
+    async def _n8n(self, text: str, viewer: Principal) -> N8nReply:
+        """Answered by the platform, never the model: who may open n8n is a rule, not a guess."""
+        if self._staff is None:
+            said = OFF if viewer.n8n_access else NO_ACCESS
+            return N8nReply(said=said, can_open=False, use_case_id=None)
+        access = await self._staff.access(viewer.user_id)
+        if not isinstance(access, CanOpen):
+            return N8nReply(said=access.words, can_open=False, use_case_id=None)
+        named = _held_in(await self._use_cases(), _norm(text))
+        one = named[0].use_case_id if len(named) == 1 else None
+        said = WHICH_IN_N8N if one is None else HERE_IN_N8N
+        return N8nReply(said=said, can_open=True, use_case_id=one)
+
     async def _alternative(
         self, alternative: SetupCardAnswer | WatchlistAnswer | None, viewer: Principal
     ) -> SetupCardReply | WatchlistReply | None:
@@ -1000,7 +1046,7 @@ class PlannerFront:
         cases = await self._use_cases()
         wanted = _norm(words)
         exact = [u for u in cases if _norm(u.name) == wanted]
-        held = [u for u in cases if re.search(rf"(?<!\w){re.escape(_norm(u.name))}(?!\w)", wanted)]
+        held = _held_in(cases, wanted)
         own = _own_words(words)
         watchlist = [u for u in cases if u.template == SOFTWARE_WATCHLIST.key]
         watched = await self._listed(software) if software is not None else None

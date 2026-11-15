@@ -71,6 +71,14 @@ class FakeN8n:
     archived: set[str] = field(default_factory=set[str])
     made: int = 0
     """How many workflows n8n has made: it never gives a deleted workflow's id to another."""
+    users: dict[str, dict[str, Any]] = field(default_factory=dict[str, dict[str, Any]])
+    """Each member account by n8n's id for it: its email and whether its invite is unused."""
+    deleted_users: list[tuple[str, str | None]] = field(
+        default_factory=list[tuple[str, str | None]]
+    )
+    """Each account deleted, with the project its own space moved to."""
+    transfer_keeps: Callable[[dict[str, Any]], dict[str, Any]] = lambda settings: settings
+    """What a transfer leaves of the workflow's settings. Unchanged, as E6 saw live."""
 
     def client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(transport=httpx.MockTransport(self.handle), base_url="http://n8n")
@@ -104,6 +112,22 @@ class FakeN8n:
         workflow["versionId"] = _new_version()
         workflow["checksum"] = _new_version()
         self._remember(workflow_id)
+
+    def accept(self, user_id: str) -> None:
+        """The member sets their password through the invite link."""
+        self.users[user_id]["isPending"] = False
+
+    def change_email(self, user_id: str, email: str) -> None:
+        """The member changes the email in their n8n profile."""
+        self.users[user_id]["email"] = email
+
+    def personal_project(self, user_id: str) -> str:
+        return next(p["id"] for p in self.projects if p.get("creatorId") == user_id)
+
+    def home_of(self, workflow_id: str) -> str | None:
+        shared = self.workflows[workflow_id].get("shared") or []
+        owners = [e["projectId"] for e in shared if e.get("role") == "workflow:owner"]
+        return owners[0] if owners else None
 
     def _remember(self, workflow_id: str) -> None:
         workflow = self.workflows[workflow_id]
@@ -292,7 +316,41 @@ class FakeN8n:
                 answer = {"id": retry, "mode": "retry", "retryOf": execution_id}
                 return httpx.Response(200, json={**answer, "status": "waiting"})
             case "PUT", ["workflows", workflow_id, "transfer"]:
-                self.workflows[workflow_id]["projectId"] = body["destinationProjectId"]
+                workflow = self.workflows[workflow_id]
+                project = body["destinationProjectId"]
+                workflow["projectId"] = project
+                workflow["shared"] = [{"projectId": project, "role": "workflow:owner"}]
+                workflow["settings"] = self.transfer_keeps(dict(workflow["settings"]))
+                return httpx.Response(204)
+            case "POST", ["users"]:
+                return httpx.Response(
+                    201,
+                    json=[
+                        self._invite(entry["email"])
+                        for entry in body
+                        if self._invitable(entry["email"])
+                    ],
+                )
+            case "GET", ["users", user_id]:
+                user = self.users.get(user_id)
+                if user is None:
+                    return httpx.Response(404, json={"message": "Could not find user"})
+                return httpx.Response(200, json={"id": user_id, **user})
+            case "DELETE", ["users", user_id]:
+                if self.users.pop(user_id, None) is None:
+                    return httpx.Response(404, json={"message": "not found"})
+                transfer = request.url.params.get("transferId")
+                own = f"proj-{user_id}"
+                for workflow in self.workflows.values():
+                    if transfer is not None and workflow.get("projectId") == own:
+                        workflow["projectId"] = transfer
+                        workflow["shared"] = [{"projectId": transfer, "role": "workflow:owner"}]
+                self.projects = [p for p in self.projects if p["id"] != own]
+                for events in self.timeline.values():
+                    for event in events:
+                        if event["user"] is not None and event["user"]["id"] == user_id:
+                            event["user"] = None
+                self.deleted_users.append((user_id, transfer))
                 return httpx.Response(204)
             case "GET", ["executions", execution_id] if execution_id in self.executions:
                 if request.url.params.get("includeData") == "true":
@@ -309,6 +367,22 @@ class FakeN8n:
                 return httpx.Response(200, json={"data": found})
             case _:
                 return httpx.Response(404, json={"message": f"no {path} in the fake"})
+
+    def _invitable(self, email: str) -> bool:
+        """n8n answers nothing for an email that already has an account in use."""
+        return not any(u["email"] == email and not u["isPending"] for u in self.users.values())
+
+    def _invite(self, email: str) -> dict[str, Any]:
+        user_id = next((i for i, u in self.users.items() if u["email"] == email), None)
+        if user_id is None:
+            user_id = f"n8n-user-{len(self.users) + len(self.deleted_users) + 1}"
+            self.users[user_id] = {"email": email, "isPending": True}
+            self.projects.append(
+                {"id": f"proj-{user_id}", "type": "personal", "name": email, "creatorId": user_id}
+            )
+        link = f"http://n8n/signup?token=secret-{user_id}-{len(self.calls)}"
+        user = {"id": user_id, "email": email, "inviteAcceptUrl": link, "emailSent": False}
+        return {"user": user, "error": ""}
 
     def execution(
         self,

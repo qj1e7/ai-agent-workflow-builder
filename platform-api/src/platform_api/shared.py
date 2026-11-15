@@ -76,6 +76,8 @@ class Principal:
     user_id: UserId
     roles: frozenset[Role]
     display: str
+    n8n_access: bool = False
+    """Only an Operator who is no Approver holds it (ENGINE-PLAN 2.9)."""
 
 
 @dataclass(frozen=True)

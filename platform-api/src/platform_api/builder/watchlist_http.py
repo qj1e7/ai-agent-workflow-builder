@@ -16,6 +16,7 @@ from platform_api.builder.models import (
     WatchlistView,
 )
 from platform_api.builder.n8n_draft import DraftRefused, N8nNotReady
+from platform_api.builder.n8n_holds import HeldInN8n
 from platform_api.builder.watchlist import (
     NeverAtThatAddress,
     NoMoveReported,
@@ -23,6 +24,7 @@ from platform_api.builder.watchlist import (
     NoWatchlist,
     RepoAddedAgainSinceRemoval,
     RepoAlreadyWatched,
+    ScheduleRefused,
     Watchlist,
     WatchlistFull,
 )
@@ -241,12 +243,12 @@ async def turn_off_schedule(principal: Operator, watchlist: CurrentWatchlist) ->
 
 
 def _scheduled(
-    saved: WatchlistView | NoWatchlist | N8nNotReady | DraftRefused | ChangedInN8n,
+    saved: WatchlistView | NoWatchlist | ScheduleRefused,
 ) -> WatchlistView:
     match saved:
         case WatchlistView():
             return saved
         case NoWatchlist():
             raise HTTPException(404, "Add software first, then set the schedule")
-        case N8nNotReady() | DraftRefused() | ChangedInN8n():
+        case N8nNotReady() | DraftRefused() | ChangedInN8n() | HeldInN8n():
             raise refused_in_n8n(saved)

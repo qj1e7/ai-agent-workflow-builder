@@ -77,6 +77,7 @@ from platform_api.builder.n8n_draft import (
     check_draft,
 )
 from platform_api.builder.n8n_facts import BuilderWorkflowFacts, ReleaseReader
+from platform_api.builder.n8n_holds import HeldInN8n, Holding, let_go
 from platform_api.builder.planner import ChangedInN8nReply
 from platform_api.builder.planning import (
     CardPlanner,
@@ -320,9 +321,10 @@ class Relaid:
     grade: Grade
 
 
-type InN8nRefused = N8nNotReady | DraftRefused | ChangedInN8n
+type InN8nRefused = N8nNotReady | DraftRefused | ChangedInN8n | HeldInN8n
 """Why a change to an own workflow was not made: n8n did not take it, the checker refused the
-layout, or someone changed the workflow in n8n since the platform stored it."""
+layout, someone changed the workflow in n8n since the platform stored it, or someone holds it in
+n8n now (D15)."""
 
 type Republished = (
     UseCaseView | NoSuchVersion | InUseChanged | NotSafeToPublish | DeletedInN8n | InN8nRefused
@@ -429,6 +431,7 @@ class Builder:
         requests: OpenRequests | None = None,
         accounts: N8nAccounts | None = None,
         open_runs: OpenRuns | None = None,
+        holding: Holding | None = None,
     ) -> None:
         self._db = db
         self._runs = runs
@@ -443,6 +446,8 @@ class Builder:
         self.facts = BuilderWorkflowFacts(db, self, releases, writes)
         """What node calls ask of the builder, and what a draft is graded against."""
         self._requests = requests
+        self.holding = holding
+        """Open in n8n and Take back, for a platform that gives staff n8n accounts."""
         self.sweep = (
             None
             if n8n is None
@@ -632,7 +637,7 @@ class Builder:
         match await self._publish(use_case_id, principal, body.via, lambda _: Publish(after)):
             case None:
                 return None
-            case N8nNotReady() | DraftRefused() | ChangedInN8n() as refused:
+            case N8nNotReady() | DraftRefused() | ChangedInN8n() | HeldInN8n() as refused:
                 return refused
             case _:
                 return await self.get_use_case(use_case_id, principal)
@@ -710,13 +715,17 @@ class Builder:
             if not isinstance(decided, Publish):
                 return decided
             in_n8n = None
+            if _own(row) and self.holding is not None:
+                held = await self.holding.refused_while_held(uow.conn, use_case_id)
+                if held is not None:
+                    return held
             if _own(row):
                 version = row["current_version"]
                 current = await (await uow.conn.execute(_IN_N8N, (use_case_id, version))).fetchone()
                 assert current is not None
                 row = {**row, **current}
                 in_n8n = await self._schedule_in_n8n(use_case_id, row, decided.after, is_on(state))
-                if isinstance(in_n8n, N8nNotReady | DraftRefused | ChangedInN8n):
+                if isinstance(in_n8n, N8nNotReady | DraftRefused | ChangedInN8n | HeldInN8n):
                     return in_n8n
             if draft and in_n8n is not None:
                 await _store_in_n8n(uow, use_case_id, row["current_version"], in_n8n)
@@ -982,7 +991,7 @@ class Builder:
                 await uow.conn.execute(
                     "SELECT u.paused_at, u.paused_by, u.deleted_at, u.deleted_by, u.draft,"
                     " u.engine, u.n8n_workflow_id, u.current_version, u.deleted_in_n8n_at,"
-                    " v.template, v.n8n_version_id, v.grade, v.document"
+                    " u.held_by, v.template, v.n8n_version_id, v.grade, v.document"
                     " FROM builder.use_cases u JOIN builder.use_case_versions v"
                     " ON v.use_case_id = u.use_case_id AND v.version = u.current_version"
                     " WHERE u.use_case_id = %s FOR UPDATE OF u",
@@ -1004,6 +1013,9 @@ class Builder:
                         return refused
                     if is_on(after):
                         await _mark_published(uow, use_case_id, row["current_version"], by)
+                if isinstance(after, Deleted) and row["held_by"] is not None:
+                    # A delete takes the workflow out of n8n, wherever it sits, so nobody holds it.
+                    await let_go(uow, use_case_id, by)
                 columns = to_columns(after)
                 await uow.conn.execute(
                     "UPDATE builder.use_cases SET paused_at = %s, paused_by = %s,"

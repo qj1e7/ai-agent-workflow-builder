@@ -41,6 +41,7 @@ from platform_api.builder.models import (
 )
 from platform_api.builder.n8n_draft import Checked as Laid
 from platform_api.builder.n8n_draft import DraftRefused, N8nNotReady, check_draft
+from platform_api.builder.n8n_holds import HeldInN8n, Holding
 from platform_api.builder.templates import (
     SOFTWARE_WATCHLIST,
     WATCHLIST_INSTRUCTION,
@@ -151,6 +152,7 @@ class OnN8n:
     runs: OpenRuns
     software_page: str
     """The Software page's address, which the workflow's note links to."""
+    holding: Holding | None = None
 
 
 @dataclass(frozen=True)
@@ -286,7 +288,7 @@ class NoWatchlist:
     pass
 
 
-type ScheduleRefused = N8nNotReady | DraftRefused | ChangedInN8n
+type ScheduleRefused = N8nNotReady | DraftRefused | ChangedInN8n | HeldInN8n
 type Move = MovedToN8n | AlreadyOnN8n | WaitsForRun | NoWatchlist | N8nNotReady | DraftRefused
 
 
@@ -757,6 +759,10 @@ class Watchlist:
             record = await self._hold(uow)
             if record is None or record.n8n is None:
                 return None
+            if self._n8n.holding is not None:
+                held = await self._n8n.holding.refused_while_held(uow.conn, record.use_case_id)
+                if held is not None:
+                    return held
             laid = await self._laid_out(self._n8n, record.use_case_id, schedule)
             if not isinstance(laid, Laid):
                 return laid
