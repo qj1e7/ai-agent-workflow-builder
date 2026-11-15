@@ -5,6 +5,7 @@ a key lent with a workflow comes back on every take-back path; a key an ending a
 kept unused; and the daily self-test plants a key the next sweep must remove."""
 
 import asyncio
+import contextlib
 import copy
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field, replace
@@ -14,7 +15,7 @@ from typing import Any
 import httpx
 import pytest
 
-from platform_api.builder import Builder
+from platform_api.builder import Builder, key_sweep
 from platform_api.builder.key_sweep import (
     KEY_ADDED,
     KEY_CHANGED,
@@ -1021,3 +1022,59 @@ async def test_a_version_n8n_does_not_show_stays_off_and_says_so(
     monkeypatch.setattr(drafts, "kept", silent)
     resumed = await k.s.lab.move("alice", "resume", use_case_id)
     assert (resumed.status_code, resumed.json()["detail"]) == (503, NOT_SHOWN)
+
+
+@contextlib.asynccontextmanager
+async def held_row(k: Keyed, use_case_id: str) -> AsyncIterator[None]:
+    """Another transaction holding the workflow's row, as Open in n8n or a take-back does."""
+    async with k.s.lab.h.db.transaction("builder") as uow:
+        await uow.conn.execute(
+            "SELECT 1 FROM builder.use_cases WHERE use_case_id = %s FOR UPDATE", (use_case_id,)
+        )
+        yield
+
+
+async def test_a_mark_that_waits_on_a_held_row_never_stops_a_take_off_and_is_made_next_sweep(
+    k: Keyed, monkeypatch: pytest.MonkeyPatch
+):
+    """A lock problem fails closed: what n8n would run unchecked is taken off all the same, and
+    the key's mark is made once the row is free."""
+    monkeypatch.setattr(key_sweep, "MARK_WAIT", "SET LOCAL lock_timeout = '100ms'")
+    use_case_id, _, space = await opened(k)
+    k.n8n.add_credential(space, "slackApi")
+    _, other = await held(k.s)
+    with_slack(k, other)
+    k.n8n.publish_as(other, await n8n_user(k), deletes_in_slack)
+    async with held_row(k, use_case_id):
+        swept = await k.sweep.sweep()
+    assert (swept.taken_off, swept.marked) == ((other,), ())
+    assert (await k.sweep.sweep()).marked == (use_case_id,)
+    assert await finding(k, use_case_id) == ("needs_a_fix", KEY_ADDED)
+
+
+async def test_a_take_off_whose_mark_waits_on_a_held_row_is_marked_next_sweep(
+    k: Keyed, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(key_sweep, "MARK_WAIT", "SET LOCAL lock_timeout = '100ms'")
+    await settled(k)
+    carol = await k.s.member()
+    use_case_id, workflow_id = await held(k.s)
+    with_slack(k, workflow_id)
+    k.n8n.publish_as(workflow_id, carol, deletes_in_slack)
+    async with held_row(k, use_case_id):
+        assert (await k.sweep.sweep()).taken_off == (workflow_id,)
+    view = (await k.s.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+    assert TAKEN_OFF not in view["findings"], "not marked while its row was held"
+    assert (await k.sweep.sweep()).taken_off == ()
+    assert await finding(k, use_case_id) == ("needs_a_fix", TAKEN_OFF)
+
+
+async def test_a_key_open_in_n8n_removes_marks_her_other_workflows_at_the_next_sweep(k: Keyed):
+    """Open in n8n removes keys alone, as it holds the row; the marks follow at the next sweep."""
+    use_case_id, _, space = await opened(k)
+    hers = k.n8n.add_credential(space, "slackApi")
+    other, _ = await held(k.s)
+    assert (await k.s.open("carol", other)).status_code == 200
+    assert hers not in k.n8n.credentials
+    assert use_case_id in (await k.sweep.sweep()).marked
+    assert await finding(k, use_case_id) == ("needs_a_fix", KEY_ADDED)

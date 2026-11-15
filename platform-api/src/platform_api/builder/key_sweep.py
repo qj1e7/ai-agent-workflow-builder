@@ -16,7 +16,7 @@ next sweep must delete within a minute, as the self-test of the whole guard.
 import asyncio
 import contextlib
 import logging
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any, Protocol
@@ -98,12 +98,20 @@ class KeySweep:
         self._n8n = n8n
         self._people = people
         self._lock = asyncio.Lock()
+        self._unmarked: list[KeyRemoved] = []
+        """Keys removed whose workflows are not marked yet: removed by a sweep of keys alone, or
+        whose mark waited too long on a row. The next sweep marks them."""
+        self._taken: set[str] = set()
+        """Workflows taken off whose use cases are not marked yet, for the same reason."""
 
     async def sweep(self) -> KeysSwept:
+        """Takes off first, so a mark that waits on a row never keeps anything unchecked live.
+        Marks wait at most MARK_WAIT, and one that waits too long is made at the next sweep."""
         async with self._lock:
             removed = await self._keys.sweep()
-            marked = await self._mark(removed)
+            self._unmarked += removed
             taken_off = await self._take_off()
+            marked = await self._mark()
             try:
                 await self._keys.plant()
             except (N8nError, httpx.HTTPError) as error:
@@ -114,10 +122,13 @@ class KeySweep:
         return await self._keys.made()
 
     async def clear(self) -> list[KeyRemoved]:
-        """The sweep of keys alone, marking nothing, for a take-back that holds the workflow's
+        """The sweep of keys alone, for Open in n8n or a take-back, which holds the workflow's
         row: a mark there would wait on it, so it does not wait for this sweep's lock either. The
-        keys' own lock keeps the two from crossing. The hold ends with that take-back anyway."""
-        return await self._keys.sweep()
+        keys' own lock keeps the two from crossing. What it removed is marked at the next
+        sweep."""
+        removed = await self._keys.sweep()
+        self._unmarked += removed
+        return removed
 
     async def sweep_forever(self, stop: asyncio.Event, every: timedelta = SWEEP_EVERY) -> None:
         while not stop.is_set():
@@ -128,28 +139,35 @@ class KeySweep:
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), every.total_seconds())
 
-    async def _mark(self, removed: Iterable[KeyRemoved]) -> list[str]:
+    async def _mark(self) -> list[str]:
         """Each workflow held by the person in whose n8n space a key was removed."""
-        found = [r for r in removed if r.project is not None]
+        pending = list(self._unmarked)
+        found = [r for r in pending if r.project is not None]
         if not found:
+            self._unmarked = self._unmarked[len(pending) :]
             return []
         owners = {project: user for user, project in (await self._n8n.spaces()).items()}
         people = await self._people.people_by_n8n_user()
         marked: list[str] = []
-        async with self._db.transaction("builder") as uow:
-            await uow.conn.execute(MARK_WAIT)
-            for key in found:
-                person = people.get(owners.get(str(key.project), ""))
-                if person is None:
-                    continue
-                rows = await (
-                    await uow.conn.execute(
-                        "UPDATE builder.use_cases SET n8n_key_finding = %s, n8n_key_found_at = %s"
-                        " WHERE held_by = %s RETURNING use_case_id",
-                        (KEY_CHANGED if key.changed else KEY_ADDED, uow.now, person),
-                    )
-                ).fetchall()
-                marked += [row["use_case_id"] for row in rows]
+        try:
+            async with self._db.transaction("builder") as uow:
+                await uow.conn.execute(MARK_WAIT)
+                for key in found:
+                    person = people.get(owners.get(str(key.project), ""))
+                    if person is None:
+                        continue
+                    rows = await (
+                        await uow.conn.execute(
+                            "UPDATE builder.use_cases SET n8n_key_finding = %s,"
+                            " n8n_key_found_at = %s WHERE held_by = %s RETURNING use_case_id",
+                            (KEY_CHANGED if key.changed else KEY_ADDED, uow.now, person),
+                        )
+                    ).fetchall()
+                    marked += [row["use_case_id"] for row in rows]
+        except psycopg.errors.LockNotAvailable:
+            log.error("a held row kept a removed key's workflows from being marked; next sweep")
+            return []
+        self._unmarked = self._unmarked[len(pending) :]
         for use_case_id in marked:
             log.warning("a key was removed while %s was held in n8n", use_case_id)
         return marked
@@ -181,15 +199,17 @@ class KeySweep:
                 continue
             log.warning("took %s off in n8n: it would run a block unchecked", workflow.id)
             taken.append(workflow.id)
-        if taken:
+        self._taken |= set(taken)
+        if self._taken:
             try:
                 async with self._db.transaction("builder") as uow:
                     await uow.conn.execute(MARK_WAIT)
                     await uow.conn.execute(
                         "UPDATE builder.use_cases SET n8n_key_finding = %s, n8n_key_found_at = %s"
                         " WHERE n8n_workflow_id = ANY(%s)",
-                        (TAKEN_OFF, uow.now, taken),
+                        (TAKEN_OFF, uow.now, sorted(self._taken)),
                     )
+                self._taken = set()
             except psycopg.errors.LockNotAvailable:
-                log.error("took %s off in n8n, but a held row kept them from being marked", taken)
+                log.error("took %s off in n8n; a held row kept it unmarked until next sweep", taken)
         return taken

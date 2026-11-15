@@ -151,8 +151,10 @@ this ADR gives, or makes it stronger.
    sweep, every minute, checks every published workflow in the platform's project, whether a use
    case names it or not, takes off each that breaks the rule, and marks the use case that names
    it. Nothing is deleted. A version n8n does not show counts as one that breaks it. Open in n8n
-   sweeps keys alone, since it holds the workflow's row and a mark would wait on it, and a mark
-   waits at most five seconds on any row, so a lock cycle fails in place of stopping the sweep.
+   sweeps keys alone, since it holds the workflow's row and a mark would wait on it. The sweep
+   takes off before it marks, and a mark waits at most five seconds on any row, so a lock cycle
+   fails in place of stopping the sweep. A mark that waited too long, or one for a key Open in
+   n8n removed, is made at the next sweep.
 7. **A test run posts nothing.** A layout pins the output of each notice block. n8n uses pinned
    output only in a run by hand, which is what a test run is, and ignores it in every other run. A
    test run of a draft whose notice block has no pinned output does not start.
