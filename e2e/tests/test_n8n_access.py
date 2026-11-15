@@ -79,7 +79,8 @@ def test_n8n_access(api: Api, mock_model: None):
     )
     ready = api.get(dana, "/api/v1/me/n8n")
     assert ready["set_password_url"] is None, "used, so forgotten"
-    assert mine["set_password_url"].startswith(f"{ready['editor_url']}/signup?"), (
+    shown = urllib.parse.urlsplit(str(mine["set_password_url"]))
+    assert f"{shown.scheme}://{shown.netloc}{shown.path}" == f"{ready['editor_url']}/signup", (
         "the link is at the address people open n8n from, not n8n's own inside the network"
     )
 
