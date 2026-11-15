@@ -183,3 +183,22 @@ Any yes, an answer that doesn't parse, an error or a timeout gives the fixed fal
 **The gate fits the budget.** The AI Singapore gateway's budget was spent on 15 Nov 2026, so the gate runs through Anthropic, on the team lead's key from a $200 monthly credit, with Claude Sonnet 5.5 as the Planner (ADR 0048) and as the judge. It runs on a pull request that changes the Planner, or by hand. Each run is capped at 250 calls and $5, and the gate refuses a run that stopped early or ran with higher caps. The judge's scores are reported, and gate only once it agrees with the team lead's own labels. The nightly runs wait for the team lead to set a budget for them.
 
 **Latency.** A dead end can now make four calls: the reading, the question lane, the free reply and the verifier. At the latencies measured on 7 Nov, that is a guess of well under 20 s. If all four run slowly, the platform's 20 s limit answers with the offline reply.
+
+## Amended again, 15 Nov 2026
+
+A second safety review found no must-fix left. It raised four points, and a run of the `anything` set raised a fifth. The team lead's coordinator agreed to these changes the same day.
+
+**The verifier has its own setting.** `PLANNER_VERIFIER_MODEL`, read once at start, names the model the verifier runs on, through the same connection as the Planner. Without it, the verifier runs on the connected model, which ADR 0048 sets to Claude Sonnet 5.5. That is the model the red-team set was proven on, and the gate measures it on every run.
+
+**The clarify cap trusts the Portal.** Whether the turn before was a clarifying question comes from `previous.kind`, which the Portal sends. A client that lies can make the Planner ask again. The rate limit bounds that. The platform keeps no conversation state on the server for now.
+
+**The rate limit is per process.** `answer_limit.py` counts in memory, so the real cap is 20 a minute times the number of platform-api replicas. Today Terraform runs one replica, so the cap is 20. Moving the count to PostgreSQL needs a table, a migration and a clean-up of old rows, so it waits until platform-api runs more than one replica.
+
+**A dead end gets 35 seconds.** Four 8-second calls can take 32 seconds, more than the platform's 20-second limit, so a slow verifier showed the offline card. The platform now waits 35 seconds for the Planner's answer. The verifier keeps its 8 seconds, because the reading and the free reply already take up to 24.
+
+**Two more dead ends, and one false refusal fixed.**
+
+- A can't whose every row names no ability, only the request's words before "I can only ...", is a dead end. An example is "I can't tell me a joke yet". The free reply answers it. If the reply falls back, the person sees the honest can't with Ask the team, not "I didn't follow that".
+- Words that say a write waits for an Approver's yes, such as "after the approver says yes", are no longer refused as a skip. This holds only when nothing else in the request is left over. "And the rest go straight in" or "with the approval skipped" are still refused. Over 576 phrasings, 12 honest requests are no longer refused, and nothing else changed.
+
+**The gate reports before it blocks.** Until a run meets the bars, `planner-gate.yml` comments its numbers on the pull request and doesn't fail it. The pull request that reaches the bars sets `GATE_BLOCKS` to `true`. Tuning runs use `reply_dev`, the reply set less its held-out third. The held-out third runs only at the end.
